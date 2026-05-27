@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/Button'
 import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { PageMeta } from '@/components/seo/PageMeta'
 import {
-  AdvancedDisclosure,
   SignersSection,
   YourIdentityHero,
 } from '@/components/account/YourIdentityHero'
@@ -69,32 +68,25 @@ export function AccountsPage(props: {
         ) : null}
 
         {!controller.loading && privyAuthed && me ? (
-          <AdvancedDisclosure
-            title="Advanced settings"
-            summary="Account setup workspace, linked providers, Arch B owner controls, recovery tools."
-          >
-            <div className="space-y-6 pt-4">
-              <AccountSetupWorkspaceView
-                context="accounts"
-                controller={controller}
-                summaryActions={
-                  <>
-                    <Button variant="secondary" asChild>
-                      <Link to="/leaderboard">Open leaderboard</Link>
-                    </Button>
-                    <button
-                      type="button"
-                      disabled={busyProvider === 'email'}
-                      onClick={() => void controller.onLinkProvider('email')}
-                      className="rounded-lg border border-white/15 px-3 py-2 text-xs text-zinc-300 hover:border-white/30"
-                    >
-                      {busyProvider === 'email' ? 'Syncing...' : 'Verify / update email'}
-                    </button>
-                  </>
-                }
-              />
-            </div>
-          </AdvancedDisclosure>
+          <AccountSetupWorkspaceView
+            context="accounts"
+            controller={controller}
+            summaryActions={
+              <>
+                <Button variant="secondary" asChild>
+                  <Link to="/leaderboard">Open leaderboard</Link>
+                </Button>
+                <button
+                  type="button"
+                  disabled={busyProvider === 'email'}
+                  onClick={() => void controller.onLinkProvider('email')}
+                  className="rounded-lg border border-white/15 px-3 py-2 text-xs text-zinc-300 hover:border-white/30"
+                >
+                  {busyProvider === 'email' ? 'Syncing...' : 'Verify / update email'}
+                </button>
+              </>
+            }
+          />
         ) : null}
       </div>
     </div>

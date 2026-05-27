@@ -53,7 +53,7 @@ describe('alfaclub vigilante — vercel wiring', () => {
     expect(entry).toBeDefined()
     // Must fire at least twice per hour so a single missed tick still leaves
     // headroom against Privy's 1-hour identity-token TTL.
-    expect(entry?.schedule).toBe('13,43 * * * *')
+    expect(entry?.schedule).toBe('*/10 * * * *')
   })
 
   it('allows MetaMask SDK websocket connections in the app CSP', async () => {

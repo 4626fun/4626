@@ -11,6 +11,7 @@
     "allowImportingTsExtensions": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
+    "types": ["vite/client", "node"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
@@ -42,6 +43,9 @@
     "src/lib/deploy/deploymentBatcherConfigError.ts",
     "src/lib/uniswap/swapQuoteSanitize.ts",
     "src/lib/xmtp/xmtpInteractive.ts",
+    "src/lib/api/**/*.ts",
+    "src/lib/auth/**/*.ts",
+    "src/lib/debank/**/*.ts",
     "src/components/account/trayPortfolioHelpers.ts",
     "src/lib/agent/erc8004AgentUriPolicy.ts",
     "src/lib/zora/migrationScan.ts",
@@ -49,6 +53,9 @@
     "shared/deploy/bytecode.generated.ts",
     "shared/deploy/create2Salts.ts",
     "shared/wallet/bytecode.ts",
-    "src/wallet/canonicalWalletPolicy.ts"
-  ]
+    "src/wallet/canonicalWalletPolicy.ts",
+    "src/lib/env/**/*.ts",
+    "src/lib/routes/**/*.ts"
+  ],
+  "exclude": ["src/**/*.test.ts"]
 }

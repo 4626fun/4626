@@ -330,7 +330,7 @@ export async function reserveTrendTickerViaUserOp(params: {
       walletId: null,
       status: 'already_deployed',
       userOpHash: '0x' as `0x${string}`,
-      smartWallet: params.issuer.smartWallet,
+      smartWallet: params.issuer.smartWallet as `0x${string}`,
     }
   }
 

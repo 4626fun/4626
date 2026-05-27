@@ -1,6 +1,4 @@
-type Db = {
-  sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
-}
+import type { Db } from './walletSync.js'
 
 export type DisconnectExternalWalletResult = {
   profileId: number

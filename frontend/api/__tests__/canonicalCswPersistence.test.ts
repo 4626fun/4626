@@ -45,7 +45,7 @@ describe('applyCanonicalCswPolicyToClassification', () => {
       activeOwnerWallet: null,
       canonicalSmartWallet: {
         address: '0x6c0ea422aa7bb7e1e17c5257f7023c8f05ddf9b3',
-        provider: 'zora',
+        provider: 'unknown',
       },
       canonicalSolanaWallet: null,
       operationalSolanaWallet: null,

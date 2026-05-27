@@ -45,7 +45,7 @@ describe('ensureShareMeshOvaultPreflight', () => {
   it('short-circuits when OVault mesh is not requested', async () => {
     const publicClient = { readContract: vi.fn() }
     const result = await ensureShareMeshOvaultPreflight({
-      publicClient,
+      publicClient: publicClient as any,
       finalizeCall: { to: BATCHER, data: FINALIZE_DATA },
       ovaultRequested: false,
     })
@@ -65,7 +65,7 @@ describe('ensureShareMeshOvaultPreflight', () => {
     vi.spyOn(shareBridge, 'assertShareBridgeOftWiringForFinalize').mockResolvedValue(undefined)
 
     const result = await ensureShareMeshOvaultPreflight({
-      publicClient,
+      publicClient: publicClient as any,
       finalizeCall: { to: BATCHER, data: FINALIZE_DATA },
       ovaultRequested: true,
     })
@@ -83,7 +83,7 @@ describe('ensureShareMeshOvaultPreflight', () => {
 
     await expect(
       ensureShareMeshOvaultPreflight({
-        publicClient,
+        publicClient: publicClient as any,
         finalizeCall: { to: BATCHER, data: FINALIZE_DATA },
         ovaultRequested: true,
       }),

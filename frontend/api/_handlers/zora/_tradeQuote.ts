@@ -72,7 +72,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       slippage: readSlippageFraction(body),
       signatures: Array.isArray(body.signatures) ? (body.signatures as any) : undefined,
     })
-    return res.status(200).json({ success: true, ...quote })
+    return res.status(200).json({ success: true, data: quote })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Zora trade quote failed'
     return res.status(502).json({ success: false, error: message })

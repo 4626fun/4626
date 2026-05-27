@@ -12,7 +12,7 @@ import {
   type TrayWalletSource,
 } from '../../../src/components/account/trayPortfolioHelpers.js'
 import { resolveTrayWalletPortfolio, type TrayPortfolioSource } from '../lens/trayPortfolioResolve.js'
-import { requireServerKey } from '../zora/_shared.js'
+import { requireServerKey } from '../../zora/_shared.js'
 
 const BASE_CHAIN_ID = 8453
 const DEFAULT_TOP_TOKEN_COUNT = 100
@@ -77,11 +77,10 @@ async function fetchZoraCoinRecord(address: string, chainId: number): Promise<Re
   if (!isAddress(address)) return null
 
   try {
-    const sdk: { setApiKey: (k: string) => void; getCoin: (p: { address: Address; chain: number }) => Promise<{ data?: { zora20Token?: unknown } }> } =
-      await import('@zoralabs/coins-sdk')
+    const sdk = await import('@zoralabs/coins-sdk')
     sdk.setApiKey(key)
     const response = await sdk.getCoin({ address: getAddress(address), chain: chainId })
-    const raw = response.data?.zora20Token
+    const raw = (response as { data?: { zora20Token?: unknown } }).data?.zora20Token
     return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null
   } catch {
     return null

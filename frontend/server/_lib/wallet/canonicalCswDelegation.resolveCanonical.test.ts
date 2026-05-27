@@ -63,6 +63,9 @@ function createMockDb(options: {
       if (text.startsWith('do $$')) return { rows: [] }
       if (text.startsWith('alter table profile_wallets')) return { rows: [] }
       if (text.includes('select id from profiles where privy_user_id =')) return { rows: [{ id: 11 }] }
+      if (text.includes('with direct as') && text.includes('privy_user_aliases')) {
+        return { rows: [{ id: 11, updated_at: null, created_at: null }] }
+      }
       if (text.includes('select pw.profile_id')) return { rows: canonicalRow ? [canonicalRow] : [] }
       if (text.includes('insert into wallets')) return { rows: [] }
       if (text.includes('update profile_wallets set is_canonical_smart_wallet = false')) return { rows: [] }
@@ -255,6 +258,9 @@ describe('resolveCanonicalCsw', () => {
         if (text.startsWith('do $$')) return { rows: [] }
         if (text.startsWith('alter table profile_wallets')) return { rows: [] }
         if (text.includes('select id from profiles where privy_user_id =')) return { rows: [] }
+        if (text.includes('with direct as') && text.includes('privy_user_aliases')) {
+          return { rows: [] }
+        }
         if (text.includes('select id from profiles where lower(email) =')) return { rows: [] }
         if (text.includes('select profile_id from profile_wallets where lower(address) =')) return { rows: [{ profile_id: 99 }] }
         if (text.includes('select pw.profile_id')) {

@@ -60,6 +60,7 @@ vi.mock('@/components/ui/LoadingState', () => ({
 import type { ArchBActionResult } from './useArchBDelegation'
 
 const mockEnable = vi.fn<() => Promise<ArchBActionResult>>(async () => ({ ok: true }))
+const mockEnsureDelegation = vi.fn<() => Promise<ArchBActionResult>>(async () => ({ ok: true }))
 const mockDisable = vi.fn<() => Promise<ArchBActionResult>>(async () => ({ ok: true }))
 const mockRefresh = vi.fn<() => void>()
 
@@ -68,6 +69,7 @@ const delegationState: UseArchBDelegationReturn = {
   caps: null,
   error: null,
   enable: mockEnable,
+  ensureDelegation: mockEnsureDelegation,
   disable: mockDisable,
   refresh: mockRefresh,
 }
@@ -102,6 +104,7 @@ describe('ArchBEnrollmentCard', () => {
     delegationState.caps = null
     delegationState.error = null
     mockEnable.mockReset()
+    mockEnsureDelegation.mockReset()
     mockDisable.mockReset()
     mockRefresh.mockReset()
     mockToastSuccess.mockReset()

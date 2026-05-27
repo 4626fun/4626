@@ -4,7 +4,14 @@ import { getTrustedRequestOrigins, normalizeOrigin } from '../_lib/infra/trust.j
 
 declare const process: { env: Record<string, string | undefined> }
 
-export type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+export type ApiEnvelope<T> = {
+  success: boolean
+  data?: T
+  error?: string
+  reason?: string
+  message?: string
+  details?: unknown
+}
 
 export const COOKIE_NONCE = 'cv_auth_nonce'
 export const COOKIE_SESSION = 'cv_auth_session'

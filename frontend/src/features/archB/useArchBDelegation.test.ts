@@ -133,6 +133,48 @@ describe('useArchBDelegation', () => {
     })
   })
 
+  it('ensureDelegation() skips delegateWallet when status already delegated', async () => {
+    mockApiFetch
+      .mockResolvedValueOnce(statusResponse('not_provisioned', true)) // initial fetch
+      .mockResolvedValueOnce(statusResponse('not_provisioned', true)) // ensureDelegation check
+
+    const { result } = renderHook(() => useArchBDelegation())
+
+    await waitFor(() => expect(result.current.status).toBe('not_delegated'))
+
+    let actionResult: Awaited<ReturnType<typeof result.current.ensureDelegation>> | undefined
+    await act(async () => {
+      actionResult = await result.current.ensureDelegation()
+    })
+
+    expect(actionResult?.ok).toBe(true)
+    expect(mockDelegateWallet).not.toHaveBeenCalled()
+    expect(mockApiFetch).not.toHaveBeenCalledWith('/api/arch-b/enroll', expect.anything())
+  })
+
+  it('ensureDelegation() calls delegateWallet when not yet delegated', async () => {
+    mockApiFetch
+      .mockResolvedValueOnce(statusResponse('not_provisioned', false)) // initial fetch
+      .mockResolvedValueOnce(statusResponse('not_provisioned', false)) // ensureDelegation check
+      .mockResolvedValueOnce(statusResponse('not_provisioned', true)) // post-delegate refetch
+
+    mockDelegateWallet.mockResolvedValue(undefined)
+
+    const { result } = renderHook(() => useArchBDelegation())
+
+    await waitFor(() => expect(result.current.status).toBe('not_delegated'))
+
+    await act(async () => {
+      await result.current.ensureDelegation()
+    })
+
+    expect(mockDelegateWallet).toHaveBeenCalledWith({
+      address: '0xownerEOA',
+      chainType: 'ethereum',
+    })
+    expect(mockApiFetch).not.toHaveBeenCalledWith('/api/arch-b/enroll', expect.anything())
+  })
+
   it('enable() delegation declined: delegateWallet throws → error status with code', async () => {
     mockApiFetch.mockResolvedValueOnce(statusResponse('not_provisioned', false))
     mockDelegateWallet.mockRejectedValue(new Error('User declined'))

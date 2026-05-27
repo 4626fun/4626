@@ -43,7 +43,7 @@ describe('creatorHasSolanaShareMeshEntitlement', () => {
         paymentVerifiedAt: new Date().toISOString(),
         metadata: {},
       },
-    ])
+    ] as any)
     await expect(creatorHasSolanaShareMeshEntitlement(CREATOR)).resolves.toBe(true)
   })
 
@@ -56,7 +56,7 @@ describe('creatorHasSolanaShareMeshEntitlement', () => {
         paymentVerifiedAt: new Date().toISOString(),
         metadata: {},
       },
-    ])
+    ] as any)
     await expect(creatorHasSolanaShareMeshEntitlement(CREATOR)).resolves.toBe(false)
   })
 })
@@ -73,7 +73,7 @@ describe('enqueueSolanaShareMeshProvisioning', () => {
         paymentVerifiedAt: new Date().toISOString(),
         metadata: {},
       },
-    ])
+    ] as any)
   })
 
   afterEach(() => {

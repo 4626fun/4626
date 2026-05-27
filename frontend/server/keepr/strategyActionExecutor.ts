@@ -468,13 +468,17 @@ export async function executeStrategyAction(
 
     let ownerContext: { ownerAddress: `0x${string}`; ownerIndex: number }
     try {
-      ownerContext = await resolvePrivyCoinbaseSmartWalletOwnerContext({
+      const resolvedOwner = await resolvePrivyCoinbaseSmartWalletOwnerContext({
         publicClient,
         walletId: automation.privyWalletId,
         smartWallet: automation.canonicalCswAddress,
         expectedOwnerAddress: automation.embeddedEoaAddress,
         maxScan: 512,
       })
+      ownerContext = {
+        ownerAddress: resolvedOwner.ownerAddress as `0x${string}`,
+        ownerIndex: resolvedOwner.ownerIndex,
+      }
     } catch (err) {
       const helperError = toKeeprStrategyErrorFromCoinbaseSmartWalletHelper(
         err,
@@ -662,7 +666,7 @@ export async function executeStrategyAction(
       publicClient,
       ownerAccount: account,
       charmVaultAddress,
-      cswAddress,
+      cswAddress: cswAddress as `0x${string}`,
     })
     return {
       txHash: viaUserOp.txHash,

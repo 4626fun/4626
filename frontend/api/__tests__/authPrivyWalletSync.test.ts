@@ -379,8 +379,8 @@ describe('auth privy wallet sync', () => {
     syncUserWalletsMock.mockResolvedValue({
       profileId: 1,
       canonicalSmartWallet: { address: '0x00000000000000000000000000000000000000aa', provider: 'coinbase_wallet' },
-      activeOwnerWallet: null,
-      embeddedEoa: null,
+      activeOwnerWallet: null as any,
+      embeddedEoa: null as any,
       connectedWallets: [],
       primaryWalletAddress: '0x00000000000000000000000000000000000000aa',
     })

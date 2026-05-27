@@ -8,7 +8,9 @@ type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>
 export const DEFAULT_EXPLORE_SPARKLINE_HYDRATE_MAX = 48
 export const DEFAULT_EXPLORE_SPARKLINE_HYDRATE_CONCURRENCY = 8
 
-type ExploreEdge = { node?: { address?: string; trend30d?: { values?: unknown } } }
+type ExploreEdge = {
+  node?: { address?: string; trend30d?: { values?: unknown; changePercent?: unknown } }
+}
 
 function edgeHasTrend30d(node: ExploreEdge['node']): boolean {
   return Array.isArray(node?.trend30d?.values) && node.trend30d.values.length >= 2

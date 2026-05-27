@@ -1,10 +1,30 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   shouldAttemptGrandfatheredKeeperFallback,
   validateKeeperVaultListing,
 } from '../../server/_lib/onchain/creatorRegistryVerification.js'
 import { AKITA_DEFAULTS } from '../../src/config/contracts.defaults.js'
+
+const { mockCreatorCoin } = vi.hoisted(() => ({
+  mockCreatorCoin: '0x5b674196812451b7cec024fe9d22d2c0b172fa75',
+}))
+
+vi.mock('viem', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('viem')>()
+  const { getAddress } = actual
+  const creatorCoin = getAddress(mockCreatorCoin)
+  return {
+    ...actual,
+    createPublicClient: vi.fn(() => ({
+      getBytecode: vi.fn(async () => '0x1234'),
+      readContract: vi.fn(async ({ functionName }: { functionName?: string }) => {
+        if (functionName === 'asset') return creatorCoin
+        return null
+      }),
+    })),
+  }
+})
 
 describe('shouldAttemptGrandfatheredKeeperFallback', () => {
   it('includes share_token_mismatch alongside inactive and vault_mismatch', () => {

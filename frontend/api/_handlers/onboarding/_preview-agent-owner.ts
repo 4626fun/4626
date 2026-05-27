@@ -82,12 +82,7 @@ type PreviewResponse =
   | {
       alreadyOwner: false
       agentWalletAddress: string
-      txRequest: {
-        chainId: 8453
-        to: `0x${string}`
-        data: `0x${string}`
-        value: '0x0'
-      }
+      txRequest: ReturnType<typeof prepareAddOwnerTx>
     }
 
 /**

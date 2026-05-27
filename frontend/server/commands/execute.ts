@@ -378,7 +378,7 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
         })
         const result = await executeHermitCommand({
           commandText: raw,
-          senderAddress: params.senderWallet,
+          senderAddress: params.senderWallet as `0x${string}`,
           sourceIdentity: isAlfaClubChatId(params.chatId) ? 'alfaclub-bridge-runner' : null,
           ...(hermitRoomContext.roomId ? { roomId: hermitRoomContext.roomId } : {}),
           ...(hermitRoomContext.userPreferences

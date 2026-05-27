@@ -115,13 +115,28 @@ export async function fetchZoraTradeQuoteFromApi(params: {
     }),
   })
 
-  const envelope = await parseApiEnvelope<ZoraTradeQuotePayload>(res)
-  if (!envelope || envelope.error) {
+  const envelope = await parseApiEnvelope<ZoraTradeQuotePayload & { call?: ZoraTradeQuotePayload['call'] }>(res)
+  if (!res.ok || !envelope?.success) {
     throw new Error(resolveApiErrorMessage(envelope, 'Zora trade quote failed'))
   }
 
-  const data = envelope.data
+  // Server handlers must return `{ success, data }`; accept legacy top-level spread as fallback.
+  const data =
+    envelope.data ??
+    (envelope.call?.target && envelope.call?.data
+      ? ({
+          call: envelope.call,
+          permits: (envelope as ZoraTradeQuotePayload).permits,
+          quote: (envelope as ZoraTradeQuotePayload).quote,
+        } as ZoraTradeQuotePayload)
+      : null)
+
   if (!data?.call?.target || !data?.call?.data) {
+    if (data?.permits?.length) {
+      throw new Error(
+        'Zora trade requires a Permit2 signature before the swap can be quoted. Open review and confirm in your wallet.',
+      )
+    }
     throw new Error('Zora trade quote response missing executable call')
   }
 

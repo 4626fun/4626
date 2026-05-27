@@ -152,13 +152,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         owners.push({
           index: i,
           ownerBytes: ownerBytes as `0x${string}`,
-          ownerAddress: ownerAddress ? getAddress(ownerAddress) : null,
+          ownerAddress: ownerAddress ? (getAddress(ownerAddress) as `0x${string}`) : null,
           isAddressOwner: Boolean(ownerAddress),
         })
       }
 
       const data: ResponseData = {
-        smartWallet: getAddress(smartWallet),
+        smartWallet: getAddress(smartWallet) as `0x${string}`,
         ownerCount: Number.isFinite(ownerCount) && ownerCount >= 0 ? ownerCount : owners.length,
         nextOwnerIndex,
         owners,

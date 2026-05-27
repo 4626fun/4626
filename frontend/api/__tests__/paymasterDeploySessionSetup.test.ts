@@ -1791,7 +1791,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
 describe('paymaster payout-router external approvals', () => {
   let restoreEnv: () => void
 
-  const creatorToken = getAddress('0x4444444444444444444444444444444444444444')
+  const creatorToken = getAddress('0x4444444444444444444444444444444444444444') as `0x${string}`
   const vault = getAddress('0x5555555555555555555555555555555555555555')
   const wrapper = getAddress('0x6666666666666666666666666666666666666666')
   const shareOFT = getAddress('0x7777777777777777777777777777777777777777')
@@ -1804,8 +1804,8 @@ describe('paymaster payout-router external approvals', () => {
   const permit2 = getAddress('0x000000000022D473030F116dDEE9F6B43aC78BA3')
   const create2Deployer = getAddress('0x74183076C7D33346880A5bf0e263B761FB4d38BA')
   const bytecodeStore = getAddress('0x6A578022609cdb65C614FF28912C49FC1EC97071')
-  const currentUniversalRouter = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43')
-  const unknownSpender = getAddress('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
+  const currentUniversalRouter = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43') as `0x${string}`
+  const unknownSpender = getAddress('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') as `0x${string}`
 
   const BATCHER_FINALIZE_PHASE2_ABI = [
     {
@@ -1914,7 +1914,7 @@ describe('paymaster payout-router external approvals', () => {
         },
       ],
     })
-    return { target: creatorVaultBatcher, value: 0n, data: finalizeData }
+    return { target: creatorVaultBatcher as `0x${string}`, value: 0n, data: finalizeData }
   }
 
   function buildRouterAdminCall(params: {
@@ -1955,7 +1955,7 @@ describe('paymaster payout-router external approvals', () => {
   function extractExpectedPayoutRouter(message: string): `0x${string}` {
     const match = /expectedPayoutRouter=(0x[a-fA-F0-9]{40})/.exec(message)
     if (!match) throw new Error(`Missing expectedPayoutRouter in debug payload: ${message}`)
-    return getAddress(match[1] as `0x${string}`)
+    return getAddress(match[1]) as `0x${string}`
   }
 
   async function discoverExpectedPayoutRouterAddress(): Promise<`0x${string}`> {

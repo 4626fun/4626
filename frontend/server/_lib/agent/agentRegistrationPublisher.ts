@@ -153,7 +153,7 @@ export async function publishAgentRegistrationToGrove(params: {
     const aclAddress = isAddressLike(aclAddressRaw) ? aclAddressRaw : account.address
     const chainId = parsePositiveInt(process.env.GROVE_PUBLISHER_CHAIN_ID) ?? getGroveChainId()
     const signer = {
-      address: account.address,
+      address: account.address as `0x${string}`,
       signMessage: async ({ message }: { message: string }) => account.signMessage({ message }),
     }
 

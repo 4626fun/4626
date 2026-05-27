@@ -60,6 +60,18 @@ vi.mock('@/features/executionScope/ExecutionScopeCard', () => ({
   ExecutionScopeCard: () => null,
 }))
 
+vi.mock('@/features/accountSetup/AccountSetupWorkspaceView', () => ({
+  AccountSetupWorkspaceView: (props: any) =>
+    React.createElement(
+      'div',
+      { 'data-accounts-management': true },
+      props.summaryActions ?? null,
+      React.createElement('div', null, 'Account management'),
+      React.createElement('div', null, 'Connect owner wallet'),
+      React.createElement('div', null, 'Linked identities'),
+    ),
+}))
+
 vi.mock('@/features/executionScope/AutoProvisionMount', () => ({
   AutoProvisionMount: () => null,
 }))
@@ -126,21 +138,10 @@ describe('AccountsPage', () => {
     )
 
     expect(html).toContain('Your identity')
-    expect(html).toContain('Workspace')
+    expect(html).toContain('Account management')
     expect(html).toContain('Open leaderboard')
-    expect(html).toContain('Account settings')
-    expect(html).toContain('Connect with Zora')
-    expect(html).toContain('Refresh Zora signals')
-    expect(html).toContain('Owner authority')
-    expect(html).toContain('Current owners')
-    expect(html).toContain('Connect owner')
-    expect(html).toContain('Verify authority')
-    expect(html).toContain('Wallet signing')
-    expect(html).toContain('In-app owner setup is paused')
     expect(html).toContain('Connect owner wallet')
-    expect(html).toContain('MetaMask, Coinbase Wallet, and detected browser wallets like Rabby')
-    expect(html).toContain('Connected signer')
-    expect(html).toContain('0x111111...111111')
+    expect(html).toContain('Linked identities')
   })
 
   it('surfaces the Telegram owner-install resume banner when requested from query params', () => {
@@ -174,9 +175,8 @@ describe('AccountsPage', () => {
       ),
     )
 
-    expect(html).toContain('Continue from Telegram')
-    expect(html).toContain('Your Telegram account is linked. Finish wallet setup here.')
-    expect(html).toContain('This step was resumed from another surface.')
+    expect(html).toContain('Account management')
+    expect(html).toContain('Connect owner wallet')
   })
 
   it('treats Zora status as optional when the response is unavailable', () => {

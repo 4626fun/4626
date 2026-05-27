@@ -115,7 +115,7 @@ describe('public manifest assets', () => {
     expect(appHtml).toContain(`"imageUrl":"${MINIAPP_HERO_URL}"`)
     expect(appHtml).toContain('<link rel="canonical" href="https://app.4626.fun/" />')
     expect(appHtml).toContain('<meta property="og:url" content="https://app.4626.fun/" />')
-    expect(appHtml).toContain('"url":"https://4626.fun/"')
+    expect(appHtml).toContain('"url": "https://4626.fun"')
     expect(appHtml).toContain(`"splashImageUrl":"${APP_SHELL_MINIAPP_SPLASH_URL}"`)
     expect(appHtml).not.toContain('"url":"https://app.4626.fun/"')
     expect(appHtml).not.toContain('https://app.4626.fun/app-hero.png')

@@ -682,7 +682,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               try {
                 const result = await executeDeterministicCommand({
                   groupId: convo.id,
-                  senderWallet: senderAddr.toLowerCase() as Address,
+                  senderWallet: senderAddr.toLowerCase() as `0x${string}`,
                   text: content.trim(),
                 })
                 const reply = resolveFallbackCommandReply({

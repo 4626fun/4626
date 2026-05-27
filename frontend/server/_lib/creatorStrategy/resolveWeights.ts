@@ -143,7 +143,13 @@ export async function resolveCreatorStrategyPlan(
       reasons: {
         charm: active.has(DEPLOY_GATING_FEATURE_KEYS.charm) ? 'paid' : 'unpaid',
         ajna: active.has(DEPLOY_GATING_FEATURE_KEYS.ajna) ? 'paid' : 'unpaid',
-        solana: 'paid' | 'unpaid' | 'share_auto_bridge',
+        solana:
+          active.has('solana_ovault_mesh') || active.has('solana_meteora_alpha_vault')
+            ? 'paid'
+            : active.has(DEPLOY_GATING_FEATURE_KEYS.charm) ||
+                active.has(DEPLOY_GATING_FEATURE_KEYS.ajna)
+              ? 'share_auto_bridge'
+              : 'unpaid',
       },
       activeFeatureKeys: Array.from(active),
     },

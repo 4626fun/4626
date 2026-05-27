@@ -29,9 +29,13 @@ vi.mock('./walletSync.js', () => ({
   syncUserWallets: syncUserWalletsMock,
 }))
 
-vi.mock('./walletMapping.js', () => ({
-  classifyLinkedAccounts: classifyLinkedAccountsMock,
-}))
+vi.mock('./walletMapping.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./walletMapping.js')>()
+  return {
+    ...actual,
+    classifyLinkedAccounts: classifyLinkedAccountsMock,
+  }
+})
 
 import { confirmOwnerState, getBaseRpcUrls } from './canonicalCswDelegation'
 
@@ -115,6 +119,25 @@ describe('confirmOwnerState', () => {
         if (text.includes('select pw.address from profile_wallets pw') && text.includes('left join wallets w')) {
           return { rows: [] }
         }
+        if (text.includes('with direct as') && text.includes('privy_user_aliases')) {
+          return { rows: [{ id: 11, updated_at: null, created_at: null }] }
+        }
+        if (text.includes('select primary_embedded_eoa, embedded_wallet from profiles where id =')) {
+          return {
+            rows: [
+              {
+                primary_embedded_eoa: '0x00000000000000000000000000000000000000ee',
+                embedded_wallet: null,
+              },
+            ],
+          }
+        }
+        if (
+          text.includes('select sub_account_address, parent_csw_address from command_issuer_execution_context')
+          && text.includes("provisioning_source = 'baseapp_waitlist'")
+        ) {
+          return { rows: [] }
+        }
 
         throw new Error(`Unhandled SQL in test: ${text}; values=${JSON.stringify(values)}`)
       }),
@@ -150,7 +173,10 @@ describe('confirmOwnerState', () => {
     process.env.BASE_RPC_URL = 'https://base.llamarpc.com,https://mainnet.base.org'
 
     try {
-      expect(getBaseRpcUrls()).toEqual(['https://mainnet.base.org'])
+      expect(getBaseRpcUrls()).toEqual([
+        'https://mainnet.base.org',
+        'https://base-mainnet.public.blastapi.io',
+      ])
     } finally {
       if (originalBaseRpcUrl === undefined) delete process.env.BASE_RPC_URL
       else process.env.BASE_RPC_URL = originalBaseRpcUrl

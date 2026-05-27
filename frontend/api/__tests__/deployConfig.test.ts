@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getAddress } from 'viem'
 
 import handler from '../_handlers/deploy/_config.ts'
 import { createMockReq, createMockRes } from './helpers'
@@ -119,8 +120,8 @@ describe('deploy config handler', () => {
       deployMode: 'no_eoa_strict',
       serverContinue: false,
       payoutRouterKeeperAddress: '0x4444444444444444444444444444444444444444',
-      payoutRouterApprovedExternalSwapTargets: ['0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
-      payoutRouterApprovedExternalSwapSpenders: ['0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
+      payoutRouterApprovedExternalSwapTargets: [getAddress('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')],
+      payoutRouterApprovedExternalSwapSpenders: [getAddress('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')],
       zoraToken: '0x3333333333333333333333333333333333333333',
       payoutRouterZoraWethFee: 123,
       payoutRouterWethCreatorFee: 456,

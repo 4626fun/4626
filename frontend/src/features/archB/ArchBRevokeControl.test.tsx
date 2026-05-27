@@ -89,6 +89,7 @@ vi.mock('@/components/ui/Modal', () => ({
 
 const mockDisable = vi.fn<() => Promise<ArchBActionResult>>(async () => ({ ok: true }))
 const mockEnable = vi.fn<() => Promise<ArchBActionResult>>(async () => ({ ok: true }))
+const mockEnsureDelegation = vi.fn<() => Promise<ArchBActionResult>>(async () => ({ ok: true }))
 const mockRefresh = vi.fn<() => void>()
 
 const delegationState: UseArchBDelegationReturn = {
@@ -96,6 +97,7 @@ const delegationState: UseArchBDelegationReturn = {
   caps: null,
   error: null,
   enable: mockEnable,
+  ensureDelegation: mockEnsureDelegation,
   disable: mockDisable,
   refresh: mockRefresh,
 }

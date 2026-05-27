@@ -45,7 +45,7 @@ export async function processXmtpAgentInput(
     if (menuRoute.kind === 'command' && routedText.startsWith('/')) {
       const deterministic = await executeDeterministicCommand({
         groupId: params.groupId,
-        senderWallet: params.senderWallet,
+        senderWallet: params.senderWallet as `0x${string}`,
         text: routedText,
       })
       return { responseText: deterministic.responseText }

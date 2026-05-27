@@ -38,7 +38,9 @@ describe('hydrateExploreSparklinesOnEdges', () => {
     })
 
     const db = {} as any
-    const edges = [{ node: { address: '0x2222222222222222222222222222222222222222' } }]
+    const edges: Array<{ node?: { address?: string; trend30d?: { values?: unknown; changePercent?: unknown } } }> = [
+      { node: { address: '0x2222222222222222222222222222222222222222' } },
+    ]
 
     const result = await hydrateExploreSparklinesOnEdges(db, edges, { sdk: {} })
     expect(result).toEqual({ hydrated: 1, attempted: 1 })

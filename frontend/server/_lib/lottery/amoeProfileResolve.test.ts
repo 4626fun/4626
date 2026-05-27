@@ -4,8 +4,8 @@ import { normalizeAmoeWallet, resolveAmoePointsProfile } from './amoeProfileReso
 
 describe('normalizeAmoeWallet', () => {
   it('lowercases valid addresses', () => {
-    expect(normalizeAmoeWallet('0xAbCdEf0123456789012345678901234567890abcd')).toBe(
-      '0xabcdef0123456789012345678901234567890abcd',
+    expect(normalizeAmoeWallet('0xAb6d5C10b03300326cd7fab7267ae192842967b5')).toBe(
+      '0xab6d5c10b03300326cd7fab7267ae192842967b5',
     )
   })
 })

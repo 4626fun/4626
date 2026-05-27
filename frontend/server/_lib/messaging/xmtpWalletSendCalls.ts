@@ -1,9 +1,21 @@
 import { toHex } from 'viem'
 
-import type { XmtpWalletSendCallsPayload } from '../../../src/lib/xmtp/xmtpInteractive.js'
 import { validateSwapTransactionPayload } from '../../uniswap/swapPayloadValidation.js'
 
 const BASE_MAINNET_CHAIN_ID = 8453
+
+export type XmtpWalletSendCallsPayload = {
+  version: string
+  chainId: string
+  from: string
+  calls: Array<{
+    to: string
+    value: string
+    data: string
+    gas?: string
+    metadata?: { description?: string; transactionType?: string }
+  }>
+}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)

@@ -75,7 +75,7 @@ export async function runZoraProfilesRefreshTick(): Promise<ProfileRefreshTickRe
   let cswIndexRowsUpdated = 0
 
   try {
-    scan = await scanTopProfilesFromExplore(db, apiKey)
+    scan = await scanTopProfilesFromExplore(db as any, apiKey)
     await writeLastTickState(db, {
       phase: 'scan_complete',
       completed_at: new Date().toISOString(),
@@ -100,7 +100,7 @@ export async function runZoraProfilesRefreshTick(): Promise<ProfileRefreshTickRe
   }
 
   try {
-    wallets = await enrichProfileWallets(db, apiKey)
+    wallets = await enrichProfileWallets(db as any, apiKey)
     ;({ rowsUpdated: cswIndexRowsUpdated } = await reconcileZoraProfilesCswIndexFlag())
   } catch (err) {
     const message = err instanceof Error ? err.message : 'profile_refresh_enrich_failed'

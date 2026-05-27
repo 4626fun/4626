@@ -616,9 +616,9 @@ export class XmtpService {
     }
 
     if (normalized.followUp === 'welcome-actions') {
-      await ctx.conversation.sendActions(buildWelcomeActions())
+      await ctx.conversation.sendActions(buildWelcomeActions() as any)
     } else if (normalized.followUp === 'keepr-status-followup') {
-      await ctx.conversation.sendActions(buildKeeprStatusFollowUpActions())
+      await ctx.conversation.sendActions(buildKeeprStatusFollowUpActions() as any)
     }
   }
 
@@ -654,7 +654,7 @@ export class XmtpService {
       await ctx.conversation.sendText(formatAiPromptGuidance())
       return
     }
-    await this.handleInboundContent(ctx as MessageContext<string>, command, 'intent')
+    await this.handleInboundContent(ctx as unknown as MessageContext<string>, command, 'intent')
   }
 
   private async handleIncoming(ctx: MessageContext<string>): Promise<void> {

@@ -66,6 +66,7 @@ export function ExecutionScopeCard() {
   if (scope.status === 'not_provisioned') {
     const signer = ownerCheck.preferredSigner
     const hasOwnerSigner = Boolean(signer)
+    const needsPrivyDelegation = scope.data?.delegated !== true
     return (
       <CardShell>
         <Header
@@ -87,22 +88,40 @@ export function ExecutionScopeCard() {
         {ownerCheck.loading ? (
           <p className="mt-3 text-[11px] text-zinc-600">Checking which wallet can sign…</p>
         ) : hasOwnerSigner ? (
-          <p className="mt-3 text-[11px] text-emerald-300/80">
-            {signer!.label === 'smart_wallet' ? (
-              <>
-                Signing through your 4626 smart-wallet co-signer (ERC-1271). Expect one Privy prompt
-                to approve the spend permission.
-              </>
-            ) : signer!.label === 'external' ? (
-              <>
-                Signing with your connected wallet{' '}
-                <code className="text-zinc-400">{shortAddr(signer!.address)}</code>. Expect one
-                wallet popup to approve the spend permission.
-              </>
-            ) : (
-              <>Signing with your Privy embedded signer. Expect one Privy prompt.</>
-            )}
-          </p>
+          <div className="mt-3 space-y-2">
+            {needsPrivyDelegation ? (
+              <p className="text-[11px] text-zinc-400">
+                Step 1 — Privy will ask you to delegate signing to the 4626 agent. Step 2 — your
+                CSW owner wallet signs the capped spend permission.
+              </p>
+            ) : null}
+            <p className="text-[11px] text-emerald-300/80">
+              {signer!.label === 'smart_wallet' ? (
+                <>
+                  {needsPrivyDelegation
+                    ? 'After delegation, signing goes through your 4626 smart-wallet co-signer (ERC-1271).'
+                    : 'Signing through your 4626 smart-wallet co-signer (ERC-1271). Expect one Privy prompt'}
+                  {!needsPrivyDelegation ? ' to approve the spend permission.' : null}
+                </>
+              ) : signer!.label === 'external' ? (
+                <>
+                  {needsPrivyDelegation
+                    ? 'After the Privy delegation prompt, your connected wallet '
+                    : 'Signing with your connected wallet '}
+                  <code className="text-zinc-400">{shortAddr(signer!.address)}</code>
+                  {needsPrivyDelegation
+                    ? ' signs the spend permission.'
+                    : '. Expect one wallet popup to approve the spend permission.'}
+                </>
+              ) : (
+                <>
+                  {needsPrivyDelegation
+                    ? 'After delegation, your Privy embedded signer approves the spend permission.'
+                    : 'Signing with your Privy embedded signer. Expect one Privy prompt.'}
+                </>
+              )}
+            </p>
+          </div>
         ) : (
           <div className="mt-3 space-y-2">
             <p className="text-[11px] text-amber-300/80">
@@ -305,6 +324,8 @@ export function ExecutionScopeCard() {
 
 function provisionBusyLabel(phase: ReturnType<typeof useReprovisionSubAccount>['phase']): string {
   switch (phase) {
+    case 'delegating':
+      return 'Approve in Privy…'
     case 'preparing':
       return 'Preparing…'
     case 'signing':

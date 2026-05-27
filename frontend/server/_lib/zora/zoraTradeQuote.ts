@@ -109,13 +109,29 @@ export async function fetchZoraTradeQuote(params: {
     throw new Error(`Zora quote API ${res.status}: ${errText.slice(0, 300)}`)
   }
 
-  const data = (await res.json()) as {
+  const raw = (await res.json()) as {
+    success?: boolean | string
+    error?: string
     call?: ZoraTradeQuoteCall
     permits?: ZoraTradeQuotePermit[]
     quote?: ZoraTradeQuoteResult['quote']
   }
 
+  const success =
+    raw.success === true || String(raw.success ?? '').toLowerCase() === 'true'
+  if (!success) {
+    const message = String(raw.error ?? '').trim() || 'Zora quote API returned an error'
+    throw new Error(message)
+  }
+
+  const data = raw
+
   if (!data.call?.target || !data.call?.data) {
+    if (data.permits?.length) {
+      throw new Error(
+        'Zora quote returned Permit2 authorization only. Sign permits and request a follow-up quote.',
+      )
+    }
     throw new Error('Invalid Zora quote response — missing call data')
   }
 

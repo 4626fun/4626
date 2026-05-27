@@ -12,7 +12,9 @@ import {
   resolveStoredCanonicalCswAddress,
 } from './canonicalCswPersistence.js'
 
-type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
+export type Db = {
+  sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[]; rowCount?: number }>
+}
 
 type ExistingProfile = { id: number; email: string | null }
 

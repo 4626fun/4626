@@ -3588,7 +3588,7 @@ async function executeTelegramNativeCommand(params: {
       }
     }
 
-    const creatorToken = getAddress('0x5b674196812451B7cEC024FE9d22D2c0b172fa75')
+    const creatorToken = getAddress('0x5b674196812451B7cEC024FE9d22D2c0b172fa75') as `0x${string}`
     const intentPayload: Record<string, unknown> = {
       deployType: 'vault',
       token: vaultDeployIntent.token,
@@ -5147,7 +5147,7 @@ function resolveVaultDeployContractsFromIntent(params: {
   const normalize = (value: unknown): `0x${string}` | null => {
     if (typeof value !== 'string') return null
     try {
-      return getAddress(value as Address)
+      return getAddress(value as Address) as `0x${string}`
     } catch {
       return null
     }

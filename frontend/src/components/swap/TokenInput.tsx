@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 
 import { TokenAvatar } from '@/components/swap/TokenAvatar'
 import { LoadingText } from '@/components/ui/LoadingState'
+import { formatSwapDisplayAmount } from '@/lib/swap/swapDisplayAmount'
 import { cn } from '@/lib/shared/utils'
 import type { TokenDisplay } from '@/lib/uniswap/swapUtils'
 
@@ -61,27 +62,26 @@ export function TokenInput({
   }, [amount, tokenBalanceValue])
 
   const sliderTrackBackground = useMemo(() => {
-    const active = 'rgb(var(--brand-primary) / 0.9)'
+    const active = 'rgb(var(--brand-primary) / 0.85)'
     const inactive = 'rgb(var(--vault-border-strong) / 0.35)'
     return `linear-gradient(90deg, ${active} 0%, ${active} ${sliderPercent}%, ${inactive} ${sliderPercent}%, ${inactive} 100%)`
   }, [sliderPercent])
 
-  const shellBackground =
-    label === 'Sell'
-      ? 'linear-gradient(165deg, rgb(var(--vault-card-raised) / 0.66), rgb(var(--vault-card) / 0.5))'
-      : 'linear-gradient(165deg, rgb(var(--vault-card-raised) / 0.66), rgb(var(--brand-primary) / 0.13))'
-
   const showSlider = !readOnly && tokenIdentityLoading === false && tokenBalanceValue !== null
 
-  return (
-    <div
-      className="rounded-2xl border border-white/[0.06] p-4 backdrop-blur-sm"
-      style={{ background: shellBackground }}
-    >
-      <span className="text-sm font-medium text-zinc-400">{label}</span>
+  const displayAmount = useMemo(() => {
+    if (readOnly && !amountLoading) {
+      return formatSwapDisplayAmount(amount, token.symbol)
+    }
+    return amount
+  }, [amount, amountLoading, readOnly, token.symbol])
 
-      <div className="mt-3 flex items-start gap-4">
-        <div className="min-h-[3.5rem] min-w-0 flex-1">
+  return (
+    <div className="rounded-[20px] border border-white/[0.08] bg-[rgb(var(--vault-card-raised)/0.72)] p-4">
+      <span className="text-[14px] font-medium leading-none text-zinc-400">{label}</span>
+
+      <div className="mt-2 flex items-start gap-3">
+        <div className="min-w-0 flex-1">
           <label htmlFor={`${label}-amount`} className="sr-only">
             {label} amount
           </label>
@@ -90,59 +90,58 @@ export function TokenInput({
             aria-label={inputAriaLabel}
             type="text"
             inputMode="decimal"
-            value={amountLoading && readOnly ? '' : amount}
+            value={amountLoading && readOnly ? '' : displayAmount}
             readOnly={readOnly}
             onChange={(event) => onAmountChange(event.target.value)}
             placeholder={readOnly ? (amountLoading ? '' : '0') : '0'}
             aria-busy={amountLoading || undefined}
             className={cn(
-              'w-full border-0 bg-transparent font-display text-[2.125rem] leading-none font-medium tracking-[-0.03em] text-vault-text outline-none',
+              'w-full border-0 bg-transparent p-0 font-sans text-[36px] leading-[44px] font-medium tabular-nums tracking-[-0.02em] outline-none',
+              readOnly ? 'cursor-default text-zinc-300' : 'text-white',
               'placeholder:text-zinc-600',
               amountLoading && readOnly ? 'text-zinc-500' : null,
             )}
           />
           {amountLoading && readOnly ? (
-            <div className="mt-2 text-sm text-zinc-500">
+            <div className="mt-1 text-[14px] text-zinc-500">
               <LoadingText intent="processing" size="sm" labelOverride="Fetching quote…" />
             </div>
           ) : amountUsd ? (
-            <div className="mt-2 text-sm font-medium tabular-nums text-zinc-500">{amountUsd}</div>
+            <div className="mt-0.5 text-[14px] font-normal tabular-nums text-zinc-500">{amountUsd}</div>
           ) : null}
         </div>
 
-        <div className="flex w-[8.25rem] shrink-0 flex-col items-stretch gap-1.5">
+        <div className="flex shrink-0 flex-col items-end gap-1">
           <button
             type="button"
             onClick={onSelectToken}
-            className="inline-flex h-10 w-full items-center justify-between gap-2 rounded-full bg-[rgb(var(--vault-card)/0.85)] px-3 py-2 transition-colors hover:bg-white/[0.08]"
+            className="inline-flex h-11 items-center gap-2 rounded-full bg-[rgb(var(--vault-card)/0.95)] px-3 py-2 transition-colors hover:bg-white/[0.08]"
             aria-label={`Select ${label} token`}
           >
-            <span className="flex min-w-0 items-center gap-2">
-              <TokenAvatar
-                token={{
-                  address: tokenAddress,
-                  symbol: token.symbol,
-                  logoUrl: token.logoUrl ?? undefined,
-                  logoUrls: token.logoUrls,
-                }}
-                symbol={token.symbol}
-                size={22}
-              />
-              <span className="truncate text-[15px] font-semibold text-vault-text">
-                {tokenIdentityLoading ? (
-                  <LoadingText intent="processing" size="sm" labelOverride="…" />
-                ) : (
-                  token.symbol
-                )}
-              </span>
+            <TokenAvatar
+              token={{
+                address: tokenAddress,
+                symbol: token.symbol,
+                logoUrl: token.logoUrl ?? undefined,
+                logoUrls: token.logoUrls,
+              }}
+              symbol={token.symbol}
+              size={24}
+            />
+            <span className="max-w-[5.5rem] truncate text-[16px] font-semibold leading-none text-white">
+              {tokenIdentityLoading ? (
+                <LoadingText intent="processing" size="sm" labelOverride="…" />
+              ) : (
+                token.symbol
+              )}
             </span>
-            <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500" />
+            <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400" />
           </button>
 
           {balanceLabel ? (
-            <div className="flex items-center justify-end gap-2 px-0.5">
+            <div className="flex max-w-full items-center justify-end gap-2">
               <span
-                className="truncate text-right text-xs font-medium tabular-nums tracking-tight text-zinc-500"
+                className="truncate text-right text-[13px] font-normal tabular-nums text-zinc-500"
                 aria-live="polite"
                 title={balanceLabel}
               >
@@ -152,7 +151,7 @@ export function TokenInput({
                 <button
                   type="button"
                   onClick={() => onQuickPercent(100, balanceAmountToken)}
-                  className="shrink-0 text-xs font-semibold text-brand-primary transition-colors hover:text-brand-200"
+                  className="shrink-0 text-[13px] font-medium text-brand-primary transition-colors hover:text-brand-200"
                 >
                   Max
                 </button>
@@ -163,7 +162,7 @@ export function TokenInput({
       </div>
 
       {showSlider ? (
-        <div className="mt-4">
+        <div className="mt-4 px-0.5">
           <input
             type="range"
             min={0}

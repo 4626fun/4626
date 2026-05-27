@@ -64,6 +64,8 @@ type CoinCandidate = {
   createdAt?: unknown
   marketCap?: unknown
   volume24h?: unknown
+  marketCapDelta24h?: unknown
+  uniqueHolders?: unknown
   chainId?: unknown
   market?: { protocolVersion?: unknown; feeBps?: unknown } | null
 }

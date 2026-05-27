@@ -64,8 +64,9 @@ describe('useAccountMe', () => {
       expect(result.current.me?.accountSignals?.executionTrack).toBe('legacy-owner-install')
     })
 
-    expect(apiFetchMock).toHaveBeenCalledTimes(1)
-    expect(apiFetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
+    expect(apiFetchMock).toHaveBeenCalledTimes(2)
+    const accountsMeCall = apiFetchMock.mock.calls.find((call) => call[0] === '/api/accounts/me')
+    expect(accountsMeCall?.[1]?.headers).toMatchObject({
       'X-Privy-Token': 'privy-access-token',
     })
   })

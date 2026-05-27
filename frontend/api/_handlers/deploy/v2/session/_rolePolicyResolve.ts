@@ -232,7 +232,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'rolePolicyId out of supported range (max 65535)' } satisfies ApiEnvelope<never>)
   }
 
-  const parties = await resolveCoinPartiesAndOwner(creatorToken)
+  const parties = await resolveCoinPartiesAndOwner(creatorToken as `0x${string}`)
   const creatorCoinOwner = normalizeAddress(parties.owner)
   const normalizedPrincipal = getAddress(principalAddress as Address)
   const isAdmin = isServerAdminAddress(normalizedPrincipal)

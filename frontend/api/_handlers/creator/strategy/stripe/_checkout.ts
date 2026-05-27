@@ -178,8 +178,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let session
   try {
     session = await createCheckoutSession({
-      creatorToken,
-      walletAddress: sessionAddress,
+      creatorToken: creatorToken as `0x${string}`,
+      walletAddress: sessionAddress as `0x${string}`,
       featureKey: feature.key,
       featureDisplayName: feature.displayName,
       featureDescription: feature.tagline,
