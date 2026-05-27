@@ -68,7 +68,7 @@ export function waitlistChatStatusMessage(status: WaitlistChatStatus): string {
     case 'executing':
       return 'Finalizing your waitlist group membership…'
     case 'executed':
-      return 'You were added. Syncing the group into this browser…'
+      return 'You were added. Pulling the group into this browser — this usually takes a few seconds.'
     case 'failed':
       return 'Could not add you to waitlist chat yet. Refresh and try Connect messaging again.'
     case 'blocked':

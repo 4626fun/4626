@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import { MessageSquare } from 'lucide-react'
 
 import { ChatWindow } from '@/components/chat/ChatWindow'
@@ -142,10 +142,14 @@ function WaitlistGroupChatSurface(props: {
     resetLocalState,
     resetInstallations,
     installationLimitInboxId,
+    refreshConversations,
+    ensureConversationById,
   } = useXmtp()
   const { prepare, walletReady } = usePrepareWaitlistMessagingWallet(props.signingReady && props.chatReady)
   const [prepareError, setPrepareError] = useState<string | null>(null)
   const [prepareBusy, setPrepareBusy] = useState(false)
+  const [refreshBusy, setRefreshBusy] = useState(false)
+  const [syncTimedOut, setSyncTimedOut] = useState(false)
 
   const handleConnectMessaging = useCallback(async () => {
     setPrepareError(null)
@@ -165,8 +169,59 @@ function WaitlistGroupChatSurface(props: {
   const groupConversation = useMemo(() => {
     const groupId = props.groupId
     if (!groupId) return null
-    return conversations.find((conversation) => conversation.type === 'group' && conversation.id === groupId) ?? null
+    return (
+      conversations.find(
+        (conversation) =>
+          conversation.type === 'group' &&
+          (conversation.id === groupId || conversation.id.toLowerCase() === groupId.toLowerCase()),
+      ) ?? null
+    )
   }, [conversations, props.groupId])
+
+  const handleRefreshGroup = useCallback(async () => {
+    if (!props.groupId) {
+      await refreshConversations()
+      return
+    }
+    setRefreshBusy(true)
+    setSyncTimedOut(false)
+    try {
+      await ensureConversationById(props.groupId)
+    } finally {
+      setRefreshBusy(false)
+    }
+  }, [ensureConversationById, props.groupId, refreshConversations])
+
+  useEffect(() => {
+    if (status !== 'connected' || props.joinStatus !== 'executed' || !props.groupId || groupConversation) {
+      setSyncTimedOut(false)
+      return
+    }
+
+    let cancelled = false
+    let attempts = 0
+    const maxAttempts = 40
+
+    const tick = async () => {
+      if (cancelled || attempts >= maxAttempts) return
+      attempts += 1
+      await ensureConversationById(props.groupId!)
+      if (cancelled) return
+      if (attempts >= maxAttempts) {
+        setSyncTimedOut(true)
+      }
+    }
+
+    void tick()
+    const intervalId = window.setInterval(() => {
+      void tick()
+    }, 3_000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+    }
+  }, [ensureConversationById, groupConversation, props.groupId, props.joinStatus, status])
 
   const isConnecting = status === 'signing' || status === 'connecting'
   const messagingReady = status === 'connected'
@@ -234,7 +289,19 @@ function WaitlistGroupChatSurface(props: {
             {statusMessage}
           </p>
         ) : null}
-        <Button type="button" variant="secondary" size="sm" onClick={() => void connect('user')}>
+        {syncTimedOut ? (
+          <p className="text-xs text-amber-200/90">
+            The group is still syncing. Try refresh below, or close other 4626 tabs and reconnect messaging.
+          </p>
+        ) : null}
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          loading={refreshBusy}
+          disabled={refreshBusy}
+          onClick={() => void handleRefreshGroup()}
+        >
           Refresh conversations
         </Button>
       </div>

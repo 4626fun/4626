@@ -198,6 +198,10 @@ type XmtpContextValue = {
   subscribeToMessages: (conversationId: string, cb: (msg: ChatMessage) => void) => () => void
   /** Resolve an XMTP inboxId to an Ethereum address (cached). */
   resolveInboxAddress: (inboxId: string) => Promise<string | null>
+  /** Re-sync the local conversation index from XMTP (safe while connected). */
+  refreshConversations: () => Promise<ChatConversation[]>
+  /** Sync + list, then fetch a single conversation by id if still missing. */
+  ensureConversationById: (conversationId: string) => Promise<ChatConversation | null>
 }
 
 type WaitlistMeData = {
@@ -342,6 +346,8 @@ const XmtpContext = createContext<XmtpContextValue>({
   startDmByInbox: async () => null,
   subscribeToMessages: () => noop,
   resolveInboxAddress: async () => null,
+  refreshConversations: async () => [],
+  ensureConversationById: async () => null,
 })
 
 export function useXmtp() {
@@ -1248,6 +1254,62 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     }
   }, [resolvePeerPresentation])
 
+  const applyConversationSummaries = useCallback((summaries: ChatConversation[]): ChatConversation[] => {
+    const sorted = [...summaries].sort(
+      (a, b) => (b.lastMessageAt?.getTime() ?? 0) - (a.lastMessageAt?.getTime() ?? 0),
+    )
+    let normalizedSummaries: ChatConversation[] = []
+    for (let i = sorted.length - 1; i >= 0; i -= 1) {
+      normalizedSummaries = upsertConversationSummary(normalizedSummaries, sorted[i]!)
+    }
+    conversationsRef.current = normalizedSummaries
+    if (mountedRef.current) setConversations(normalizedSummaries)
+    warmChatPeerIdentities(normalizedSummaries)
+    return normalizedSummaries
+  }, [warmChatPeerIdentities])
+
+  const refreshConversations = useCallback(async (): Promise<ChatConversation[]> => {
+    const client = clientRef.current
+    if (!client) return conversationsRef.current
+    await client.conversations.sync()
+    const convos = await client.conversations.list()
+    const summaries = await Promise.all(convos.map(buildConvoSummary))
+    return applyConversationSummaries(summaries)
+  }, [applyConversationSummaries, buildConvoSummary])
+
+  const ensureConversationById = useCallback(async (conversationId: string): Promise<ChatConversation | null> => {
+    const normalizedId = conversationId.trim()
+    if (!normalizedId) return null
+
+    const existing =
+      conversationsRef.current.find((conversation) => conversation.id === normalizedId) ?? null
+    if (existing) return existing
+
+    const summaries = await refreshConversations()
+    const fromList = summaries.find((conversation) => conversation.id === normalizedId) ?? null
+    if (fromList) return fromList
+
+    const client = clientRef.current
+    if (!client) return null
+    try {
+      const convo = await client.conversations.getConversationById(normalizedId)
+      if (!convo) return null
+      const summary = await buildConvoSummary(convo)
+      if (mountedRef.current) {
+        setConversations((prev) => {
+          const next = upsertConversationSummary(prev, summary)
+          conversationsRef.current = next
+          return next
+        })
+      } else {
+        conversationsRef.current = upsertConversationSummary(conversationsRef.current, summary)
+      }
+      return summary
+    } catch {
+      return null
+    }
+  }, [buildConvoSummary, refreshConversations])
+
   // ------- connect -------
   const resolveXmtpIdentityAddress = useCallback(async (
     connectedAddress: string,
@@ -1681,14 +1743,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         await client.conversations.sync()
         const convos = await client.conversations.list()
         const summaries = await Promise.all(convos.map(buildConvoSummary))
-        summaries.sort((a, b) => (b.lastMessageAt?.getTime() ?? 0) - (a.lastMessageAt?.getTime() ?? 0))
-        let normalizedSummaries: ChatConversation[] = []
-        for (let i = summaries.length - 1; i >= 0; i -= 1) {
-          normalizedSummaries = upsertConversationSummary(normalizedSummaries, summaries[i]!)
-        }
-        conversationsRef.current = normalizedSummaries
-        if (mountedRef.current) setConversations(normalizedSummaries)
-        warmChatPeerIdentities(normalizedSummaries)
+        const normalizedSummaries = applyConversationSummaries(summaries)
         const convoStream = await client.conversations.stream({
           onValue: async (convo: any) => {
             if (!mountedRef.current) return
@@ -2109,7 +2164,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         releaseTabLock()
       }
     }
-  }, [address, connector, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary, xmtpModeOverride, markLocalStateInvalid, acquireTabLock, startTabLockHeartbeat, releaseTabLock, stopTabLockHeartbeat, warmChatPeerIdentities])
+  }, [address, connector, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary, applyConversationSummaries, xmtpModeOverride, markLocalStateInvalid, acquireTabLock, startTabLockHeartbeat, releaseTabLock, stopTabLockHeartbeat])
 
   const reconnectFromLocalInstall = useCallback(async (): Promise<void> => {
     if (connectInFlightRef.current || resetLocalStateInFlightRef.current) return
@@ -3006,6 +3061,8 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         startDmByInbox,
         subscribeToMessages,
         resolveInboxAddress,
+        refreshConversations,
+        ensureConversationById,
       }}
     >
       {children}
