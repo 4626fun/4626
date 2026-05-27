@@ -11,6 +11,7 @@ import {
 import { ensureKeeprSchema } from '../../../../server/_lib/keepr/keeprSchema.js'
 import { isAuthorizedCron } from '../../../../server/_lib/lottery/cronAuth.js'
 import { enqueueKeeperJob, type KeeperJob } from '../../../../server/_lib/keeperJobs/keeperJobs.js'
+import { validateKeeperVaultListing } from '../../../../server/_lib/onchain/creatorRegistryVerification.js'
 
 type ActiveVaultEnqueueResponse = {
   enabled: boolean
@@ -96,6 +97,35 @@ function chainIdFilter(): number {
 function maxVaults(): number {
   const parsed = Number(env('KEEPER_ACTIVE_VAULT_LIMIT') || 5)
   return Number.isInteger(parsed) ? Math.min(50, Math.max(1, parsed)) : 5
+}
+
+function validateListingBeforeEnqueue(): boolean {
+  return env('KEEPER_ACTIVE_VAULT_VALIDATE_LISTING').toLowerCase() !== 'false'
+}
+
+async function rowPassesKeeperListing(row: ActiveVaultRow): Promise<boolean> {
+  const vaultAddress = normalizeAddress(row.vault_address)
+  const creatorCoinAddress = normalizeAddress(row.creator_coin_address)
+  if (!vaultAddress || !creatorCoinAddress) return false
+
+  const vaultCfg = vaultFromConfig(row.config_json)
+  const shareTokenAddress =
+    normalizeAddress(vaultCfg.shareTokenAddress) ?? normalizeAddress(row.share_token_address)
+
+  try {
+    const validation = await validateKeeperVaultListing({
+      creatorCoinAddress,
+      vaultAddress,
+      shareTokenAddress,
+    })
+    return validation.ok
+  } catch (error) {
+    console.warn('[keeper/enqueue-active-vaults] listing validation unavailable', {
+      vaultAddress,
+      message: error instanceof Error ? error.message : String(error),
+    })
+    return false
+  }
 }
 
 async function readVaultRows(): Promise<ActiveVaultRow[]> {
@@ -230,7 +260,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const rows = await readVaultRows()
   const jobs: KeeperJob[] = []
+  const shouldValidateListing = validateListingBeforeEnqueue()
   for (const row of rows) {
+    if (shouldValidateListing) {
+      const listingOk = await rowPassesKeeperListing(row)
+      if (!listingOk) {
+        console.warn('[keeper/enqueue-active-vaults] skipping vault — keeper listing validation failed', {
+          vaultAddress: normalizeAddress(row.vault_address),
+        })
+        continue
+      }
+    }
     if (workflows.includes('sweep')) {
       const payload = sweepPayload(row)
       const strategy = normalizeAddress((payload?.body as Record<string, unknown> | undefined)?.ccaStrategyAddress)

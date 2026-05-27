@@ -630,6 +630,7 @@ describe('keeper job coordination handlers', () => {
       KEEPER_ACTIVE_VAULT_ENQUEUE_ENABLED: '1',
       KEEPER_ACTIVE_VAULT_WORKFLOWS: 'sweep,tend,report,payout',
       KEEPER_ACTIVE_VAULT_LIMIT: '5',
+      KEEPER_ACTIVE_VAULT_VALIDATE_LISTING: 'false',
     })
     try {
       dbSqlMock

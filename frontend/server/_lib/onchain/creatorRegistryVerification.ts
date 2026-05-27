@@ -28,7 +28,7 @@ const CREATOR_REGISTRY_ABI = [
   },
 ] as const
 
-type CreatorRegistryValidationReason =
+export type CreatorRegistryValidationReason =
   | 'invalid_input'
   | 'creator_coin_inactive'
   | 'vault_mismatch'
@@ -170,12 +170,7 @@ async function validateGrandfatheredVaultBinding(
     })
 
     try {
-      const [vaultBytecode, shareBytecode] = await Promise.all([
-        client.getBytecode({ address: expectedVault }),
-        expectedShareToken
-          ? client.getBytecode({ address: expectedShareToken })
-          : Promise.resolve('0x' as `0x${string}`),
-      ])
+      const vaultBytecode = await client.getBytecode({ address: expectedVault })
 
       if (!vaultBytecode || vaultBytecode === '0x') {
         return { ok: false, reason: 'grandfathered_vault_not_deployed' }
@@ -197,10 +192,8 @@ async function validateGrandfatheredVaultBinding(
         return { ok: false, reason: 'grandfathered_vault_asset_mismatch' }
       }
 
-      if (expectedShareToken && (!shareBytecode || shareBytecode === '0x')) {
-        return { ok: false, reason: 'share_token_mismatch' }
-      }
-
+      // Stale or undeployed share_token_address in DB must not block grandfathered
+      // keeper listing when vault.asset() already binds the creator coin.
       return { ok: true, mode: 'grandfathered_onchain' }
     } catch (error) {
       lastError = error
@@ -209,6 +202,17 @@ async function validateGrandfatheredVaultBinding(
 
   if (lastError instanceof Error) throw lastError
   throw new Error('grandfathered_vault_verification_unreachable')
+}
+
+/** Strict registry reasons that may still pass via on-chain vault.asset() binding. */
+export function shouldAttemptGrandfatheredKeeperFallback(
+  reason: CreatorRegistryValidationReason,
+): boolean {
+  return (
+    reason === 'creator_coin_inactive'
+    || reason === 'vault_mismatch'
+    || reason === 'share_token_mismatch'
+  )
 }
 
 /**
@@ -222,7 +226,7 @@ export async function validateKeeperVaultListing(
   if (strict.ok) return strict
   if (!isGrandfatheredKeeperListingEnabled()) return strict
 
-  if (strict.reason === 'creator_coin_inactive' || strict.reason === 'vault_mismatch') {
+  if (shouldAttemptGrandfatheredKeeperFallback(strict.reason)) {
     const grandfathered = await validateGrandfatheredVaultBinding(input)
     if (grandfathered.ok) return grandfathered
   }
