@@ -197,8 +197,43 @@ Meteora DLMM is **permissionless for standard SPL mints** — no separate listin
 | **Activation time passed** | Pre-activation pools are not swappable | Default **`ACTIVATION_DELAY_SECONDS=0`**. Alpha Vault lane: `604800` + `METEORA_HAS_ALPHA_VAULT=1` |
 | **Initial liquidity seeded** | Empty pools do not swap | Bridge shares from Base, then add DLMM LP (UI or SDK) |
 | **Quote = WSOL/USDC** | Meteora UX default | `TOKEN_MINT_Y=NATIVE_MINT` (WSOL) unless product picks USDC |
-| **Display metadata (optional)** | Name/logo in explorers/wallets | `BADGE_TARGET=meteora pnpm -C kpr solana:prepare-token-badge` |
+| **Display metadata** | Wallets/Meteora/Jupiter read mint name/symbol | Set at **LZ share-mesh deploy** + `prepare-token-badge` (see below) |
 | **Token-2022 + TransferHook (B2 only)** | Pool create fails without admin badge | Meteora `token_badge` **before** pool create, or use standard SPL mesh (B1) |
+
+### Share mesh display naming (product convention)
+
+4626 share tokens use a **black-square prefix** in product UI (`frontend/src/lib/tokens/tokenSymbols.ts`):
+
+| Surface | AKITA example |
+|---------|----------------|
+| **4626 app / docs (target label)** | **`■AKITA`** (U+25A0 + ticker) |
+| **Base ShareOFT on-chain today (legacy)** | `wsAKITA` / `Wrapped AKITA Shares` — app maps `ws*` → `■AKITA` |
+| **Creator SPL `9JWh…` (wrong grain)** | `akita` / `akita` — **not** the share token |
+
+**Solana share mesh should use the product label on-chain**, not the legacy `wsAKITA` ticker and not creator-coin lowercase `akita`.
+
+At **LayerZero share-mesh OFT deploy** (Phase A), set Solana mint metadata to:
+
+| Field | AKITA value |
+|-------|-------------|
+| **Symbol** | `■AKITA` |
+| **Name** | `Akita Share Token` (or `Wrapped AKITA Shares` if matching Base name exactly) |
+
+`■AKITA` is 8 UTF-8 bytes — within bridge/token-list symbol limits. Do **not** reuse the creator-coin lowercase wrap (`akita`/`akita`).
+
+After the mint exists, publish wallet/indexer JSON:
+
+```bash
+TOKEN_MINT=<share_mesh_mint_pubkey> \
+TOKEN_NAME="Akita Share Token" \
+TOKEN_SYMBOL='■AKITA' \
+TOKEN_METADATA_URI=<stable_https_or_ipfs_uri> \
+CREATOR_TOKEN=0x5b674196812451b7cec024fe9d22d2c0b172fa75 \
+BADGE_TARGET=meteora \
+pnpm -C kpr solana:prepare-token-badge
+```
+
+Greenfield creators: deploy UI already derives `■<TICKER>` for new ShareOFT lanes; AKITA is grandfathered with `wsAKITA` on Base only.
 
 **Share-mesh target (Path 2):** pair **LZ share-mesh mint** + WSOL — not legacy bridge-wrapped creator SPL (`9JWh…`).
 

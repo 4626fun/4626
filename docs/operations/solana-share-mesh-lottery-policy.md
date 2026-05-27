@@ -130,7 +130,7 @@ Checklist:
 1. **Pool the tradable mint** — for Path 2 target, that is the **LZ share mesh mint**, not bridge-wrapped creator SPL (`9JWh…`). Script: `kpr/scripts/solana/launch/create-dlmm-pool.ts`.
 2. **Start trading immediately** — default `ACTIVATION_DELAY_SECONDS=0`. Scheduled Alpha Vault launches: set `METEORA_HAS_ALPHA_VAULT=1` and `ACTIVATION_DELAY_SECONDS=604800` (legacy provisioner auto-pool uses this).
 3. **Seed LP** after pool create. Creating the pool account alone is not enough for swaps or Jupiter routes.
-4. **Display metadata (optional)** — run `prepare-token-badge` with `TOKEN_MINT`, `TOKEN_NAME`, `TOKEN_SYMBOL`, stable `TOKEN_METADATA_URI`, and `CREATOR_TOKEN` for logo proxy.
+4. **Display metadata** — at LZ deploy set symbol **`■AKITA`** (product convention, U+25A0 + ticker). Then run `prepare-token-badge` with `TOKEN_SYMBOL='■AKITA'`, `TOKEN_NAME='Akita Share Token'`, stable `TOKEN_METADATA_URI`, and `CREATOR_TOKEN` for logo proxy. Do **not** use creator-SPL lowercase `akita` or legacy Base `wsAKITA` on Solana.
 5. **Token-2022 + TransferHook on the pool mint (B2 only)** — pool create fails without Meteora admin `token_badge`. If badge is blocked, use B1 (standard SPL mesh + Meteora) and keep Base-only hook lottery until product changes direction.
 6. **Confirm in UI** — search mint or pool PDA on [app.meteora.ag/pools](https://app.meteora.ag/pools).
 

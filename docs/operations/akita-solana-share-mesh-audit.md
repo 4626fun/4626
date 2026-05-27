@@ -106,6 +106,7 @@ Meteora **permissioned** Token-2022 extensions (incl. `TransferHook`) require ad
 1. Read on-chain: `OVaultHubComposer.creatorMesh(0x5b6741…)` and batcher `getOVaultRuntimeConfig()`.
 2. If mesh unset: operator wiring via `OperationalWiring.s.sol` / registry peer seeding + `configureCreatorMesh` (asset mesh + **share mesh** tokens, peers, EID 30168).
 3. Bridge AKITA ShareOFT `0x4df30f…` → Solana share mesh (record mint pubkey as **canonical lottery Solana mint**).
+4. **Set Solana mint display to product convention:** symbol **`■AKITA`**, name **`Akita Share Token`** (not `wsAKITA`, not creator SPL `akita`/`akita`). Run `prepare-token-badge` after mint is live.
 
 ### Phase B — Pool + lottery relay
 
