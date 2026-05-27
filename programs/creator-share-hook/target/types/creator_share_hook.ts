@@ -85,7 +85,7 @@ export type CreatorShareHook = {
       ]
     },
     {
-      "name": "drainEntries",
+      "name": "relayEntries",
       "docs": [
         "Keeper-only: read and clear PendingEntries for relay to Base.",
         "Returns entries to the keeper for batch relay via SolanaBridgeAdapter."
@@ -150,7 +150,7 @@ export type CreatorShareHook = {
         {
           "name": "pendingEntries",
           "docs": [
-            "PendingEntries PDA — zero-copy, mutable to drain entries."
+            "PendingEntries PDA — zero-copy, mutable to record and clear relayed entries."
           ],
           "writable": true
         }
@@ -158,7 +158,7 @@ export type CreatorShareHook = {
       "args": []
     },
     {
-      "name": "flushFees",
+      "name": "settleFees",
       "docs": [
         "Keeper-only: harvest withheld fees via Token-2022 CPI.",
         "Fees are collected to a designated account for bridging to Base."
@@ -912,7 +912,7 @@ export type CreatorShareHook = {
     {
       "name": "updateConfig",
       "docs": [
-        "Update CreatorConfig parameters (fee_bps, flush_threshold, etc.)."
+        "Update CreatorConfig parameters (fee_bps, settlement_threshold, etc.)."
       ],
       "discriminator": [
         29,
@@ -1028,7 +1028,7 @@ export type CreatorShareHook = {
   ],
   "events": [
     {
-      "name": "entriesDrained",
+      "name": "entriesRelayed",
       "discriminator": [
         15,
         188,
@@ -1054,7 +1054,7 @@ export type CreatorShareHook = {
       ]
     },
     {
-      "name": "feesFlushed",
+      "name": "feesSettled",
       "discriminator": [
         236,
         120,
@@ -1139,8 +1139,8 @@ export type CreatorShareHook = {
     },
     {
       "code": 6006,
-      "name": "noPendingEntries",
-      "msg": "No pending entries to drain"
+      "name": "noEntriesToRelay",
+      "msg": "No pending entries to relay"
     },
     {
       "code": 6007,
@@ -1195,7 +1195,7 @@ export type CreatorShareHook = {
             "name": "keeperAuthority",
             "docs": [
               "Authorized keeper pubkey — the only signer allowed to call",
-              "`flush_fees`, `drain_entries`, and `record_winner`."
+              "`settle_fees`, `relay_entries`, and `record_winner`."
             ],
             "type": "pubkey"
           },
@@ -1232,10 +1232,10 @@ export type CreatorShareHook = {
             "type": "u16"
           },
           {
-            "name": "flushThreshold",
+            "name": "settlementThreshold",
             "docs": [
-              "Minimum fee amount (in token smallest units) before `flush_fees`",
-              "will execute. Set to 0 to flush on every call."
+              "Minimum fee amount (in token smallest units) before `settle_fees`",
+              "will execute. Set to 0 to settle on every call."
             ],
             "type": "u64"
           },
@@ -1291,9 +1291,9 @@ export type CreatorShareHook = {
       }
     },
     {
-      "name": "entriesDrained",
+      "name": "entriesRelayed",
       "docs": [
-        "Emitted when entries are drained by the keeper for relay to Base."
+        "Emitted when entries are relayed by the keeper for delivery to Base."
       ],
       "type": {
         "kind": "struct",
@@ -1333,9 +1333,9 @@ export type CreatorShareHook = {
       }
     },
     {
-      "name": "feesFlushed",
+      "name": "feesSettled",
       "docs": [
-        "Emitted when fees are flushed by the keeper."
+        "Emitted when fees are settled by the keeper."
       ],
       "type": {
         "kind": "struct",
@@ -1395,9 +1395,9 @@ export type CreatorShareHook = {
             "type": "u16"
           },
           {
-            "name": "flushThreshold",
+            "name": "settlementThreshold",
             "docs": [
-              "Minimum withheld fee amount before flush_fees will execute."
+              "Minimum withheld fee amount before settle_fees will execute."
             ],
             "type": "u64"
           },
@@ -1524,7 +1524,7 @@ export type CreatorShareHook = {
         "12KB buffer on the SBF stack. The runtime memory-maps the account data",
         "directly, keeping stack usage minimal.",
         "",
-        "The keeper drains this buffer periodically and relays entries to Base.",
+        "The keeper relays this buffer periodically and delivers entries to Base.",
         "Overflow policy: drop-oldest (head advances, oldest overwritten)."
       ],
       "serialization": "bytemuck",
@@ -1644,9 +1644,9 @@ export type CreatorShareHook = {
             }
           },
           {
-            "name": "flushThreshold",
+            "name": "settlementThreshold",
             "docs": [
-              "New flush_threshold (None = keep current)."
+              "New settlement_threshold (None = keep current)."
             ],
             "type": {
               "option": "u64"

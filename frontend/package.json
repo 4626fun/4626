@@ -77,6 +77,7 @@
     "ajna:admin:backfill:safe": "tsx scripts/ops/ajna-admin-backfill-safe.ts",
     "batcher:solana:config:safe": "tsx scripts/ops/propose-batcher-solana-config-safe.ts",
     "ops:pipe-a-devnet-rehearsal": "tsx scripts/ops/pipe-a-devnet-rehearsal.ts",
+    "ops:pipe-b-devnet-rehearsal": "tsx scripts/ops/pipe-b-devnet-rehearsal.ts",
     "privy:user:migrate": "tsx scripts/migrate-privy-user.ts",
     "db:migrate": "pnpm -C .. dlx supabase@latest migration up --linked",
     "db:types": "pnpm -C .. dlx supabase@latest gen types typescript --project-id qajpnuvqlcfseghnldkl > server/_lib/db/supabase.types.ts",

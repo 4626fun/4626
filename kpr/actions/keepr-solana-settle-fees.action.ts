@@ -11,8 +11,6 @@
  *   4. Call SolanaBridgeAdapter.receiveFeeFromSolana() on Base
  */
 
-// FIX: MED-01 — Replace require('crypto') with ES module import
-import * as crypto from 'node:crypto';
 import { Connection, PublicKey, Transaction, sendAndConfirmTransaction } from '@solana/web3.js';
 import {
   TOKEN_2022_PROGRAM_ID,
@@ -40,12 +38,9 @@ const WORKFLOW_NAME = 'keepr-solana-settle-fees';
 // Minimum fee amount (in Solana token units) before settlement.
 const MIN_FEE_THRESHOLD = BigInt(1_000_000); // 0.001 tokens at 9 decimals
 
-// FIX: MED-01 — Use imported crypto module instead of require('crypto')
-const SETTLE_FEES_DISCRIMINATOR = crypto
-  .createHash('sha256')
-  .update('global:settle_fees')
-  .digest()
-  .subarray(0, 8);
+import { settleFeesInstructionDiscriminator } from '../utils/hookInstructionDiscriminators.js';
+
+const SETTLE_FEES_DISCRIMINATOR = settleFeesInstructionDiscriminator();
 
 export interface FeeSettlementResult {
   feesSettled: boolean;

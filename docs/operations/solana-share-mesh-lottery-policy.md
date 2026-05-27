@@ -74,6 +74,8 @@ SOLANA_CREATOR_MINTS=<mint_pubkey>   # must match PendingEntries mint
 
 Execution steps, costs, and commands: [solana-share-mesh-budget-paths.md](./solana-share-mesh-budget-paths.md). Per-creator LZ + registry checklist: [solana-share-mesh-creator-provisioning.md](./solana-share-mesh-creator-provisioning.md).
 
+**B2 hook upgrade (canonical ix names):** [creator-share-hook-mainnet-upgrade.md](./creator-share-hook-mainnet-upgrade.md) — required before enabling `relay_entries` against live mainnet bytecode.
+
 ## Deprecated (not share lottery)
 
 | Path | Why |

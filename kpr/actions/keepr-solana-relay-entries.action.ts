@@ -5,7 +5,6 @@
  * SolanaBridgeAdapter.processLotteryEntryFromSolana().
  */
 
-// FIX: MED-01 — Replace require('crypto') with ES module import
 import * as crypto from 'node:crypto';
 import { Connection, PublicKey, Transaction, sendAndConfirmTransaction } from '@solana/web3.js';
 import {
@@ -18,7 +17,8 @@ import { writeContract } from '../utils/onchain.js';
 import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
 import { loadKeeperKeypair, solanaPubkeyToBytes32 } from '../utils/solana.js';
 import { collectKeeperBaseWritePreflight, formatKeeperPreflightSummary } from '../utils/solanaKeeperPreflight.js';
-// FIX: HGH-02 — Import isAddress for shareOFT validation
+import { relayEntriesInstructionDiscriminator } from '../utils/hookInstructionDiscriminators.js';
+import { parsePendingEntriesBuffer } from '../utils/pendingEntriesBuffer.js';
 import { isAddress } from 'viem';
 
 const WORKFLOW_NAME = 'keepr-solana-relay-entries';
@@ -30,17 +30,7 @@ export interface EntryRelayResult {
   emergencyRelay: boolean;
 }
 
-const PDA_HEADER_SIZE = 8 + 32 + 4 + 4 + 8 + 1;
-const ENTRY_SIZE = 48;
-const MAX_PENDING_ENTRIES = 256;
-const EMERGENCY_RELAY_THRESHOLD = Math.floor(MAX_PENDING_ENTRIES * 0.8);
-
-// FIX: MED-01 — Use imported crypto module instead of require('crypto')
-const RELAY_ENTRIES_DISCRIMINATOR = crypto
-  .createHash('sha256')
-  .update('global:relay_entries')
-  .digest()
-  .subarray(0, 8);
+const RELAY_ENTRIES_DISCRIMINATOR = relayEntriesInstructionDiscriminator();
 
 function deriveSolanaEntryDedupeId(params: {
   creatorMint: string;
@@ -122,52 +112,42 @@ export async function executeSolanaRelayEntries(): Promise<EntryRelayResult> {
       const accountInfo = await connection.getAccountInfo(pendingEntriesPda);
       if (!accountInfo?.data) continue;
 
-      const data = accountInfo.data as Buffer;
-      const head = data.readUInt32LE(40);
-      const count = data.readUInt32LE(44);
-      const overflowCount = Number(data.readBigUInt64LE(48));
+      const parsed = parsePendingEntriesBuffer(accountInfo.data as Buffer);
+      if (!parsed || parsed.count === 0) continue;
 
-      if (overflowCount > 0) {
-        result.overflowCount += overflowCount;
-        await alertWarning(WORKFLOW_NAME, `Overflow detected for mint ${mintStr}`, { overflowCount });
+      if (parsed.overflowCount > 0) {
+        result.overflowCount += parsed.overflowCount;
+        await alertWarning(WORKFLOW_NAME, `Overflow detected for mint ${mintStr}`, {
+          overflowCount: parsed.overflowCount,
+        });
       }
 
-      if (count >= EMERGENCY_RELAY_THRESHOLD) {
+      if (parsed.emergencyRelay) {
         result.emergencyRelay = true;
-        await alertWarning(WORKFLOW_NAME, `Buffer near capacity for mint ${mintStr}`, { count });
+        await alertWarning(WORKFLOW_NAME, `Buffer near capacity for mint ${mintStr}`, {
+          count: parsed.count,
+        });
       }
 
-      if (count === 0) continue;
-
-      const startIdx = (count as number) < MAX_PENDING_ENTRIES ? 0 : head;
-      for (let i = 0; i < count; i++) {
-        const idx = (startIdx + i) % MAX_PENDING_ENTRIES;
-        const offset = PDA_HEADER_SIZE + idx * ENTRY_SIZE;
-        if (offset + ENTRY_SIZE > data.length) break;
-
-        const buyerBytes = data.subarray(offset, offset + 32);
-        const amount = data.readBigUInt64LE(offset + 32);
-        const slot = data.readBigUInt64LE(offset + 40);
-
-        if (buyerBytes.every((b: number) => b === 0)) continue;
-
+      for (const entry of parsed.entries) {
+        const buyerBytes = Buffer.from(entry.buyerSolanaPubkey.slice(2), 'hex');
         allEntries.push({
-          buyerSolanaPubkey: ('0x' + Buffer.from(buyerBytes).toString('hex')) as `0x${string}`,
+          buyerSolanaPubkey: entry.buyerSolanaPubkey,
           shareOFT,
-          amountSolanaUnits: amount,
+          amountSolanaUnits: entry.amountSolanaUnits,
           solanaTxSig: deriveSolanaEntryDedupeId({
             creatorMint: mintStr,
-            buyerBytes: Buffer.from(buyerBytes),
-            amount,
-            slot,
+            buyerBytes,
+            amount: entry.amountSolanaUnits,
+            slot: entry.slot,
           }),
         });
       }
 
-      await alertInfo(WORKFLOW_NAME, `Relaying ${count} pending entries for mint ${mintStr}`);
+      await alertInfo(WORKFLOW_NAME, `Relaying ${parsed.count} pending entries for mint ${mintStr}`);
 
-      // FIX: CRT-01 — Collect entries first, defer Solana flush until after Base write confirms
-      result.entriesQueued += count;
+      // Collect entries first; clear Solana buffer only after Base write confirms.
+      result.entriesQueued += parsed.count;
     }
 
     if (allEntries.length === 0) {
@@ -190,7 +170,7 @@ export async function executeSolanaRelayEntries(): Promise<EntryRelayResult> {
 
     const keeperBytes32 = solanaPubkeyToBytes32(keeperPubkey);
 
-    // FIX: CRT-01 — Submit Base write FIRST; only flush Solana PDA buffer after Base confirms
+    // Submit Base write first; clear Solana PDA only after Base confirms.
     const txResult = await writeContract({
       address: solanaBridgeAdapter,
       abi: SOLANA_BRIDGE_ADAPTER_ABI,
@@ -204,7 +184,7 @@ export async function executeSolanaRelayEntries(): Promise<EntryRelayResult> {
         txHash: txResult.txHash,
       });
 
-      // FIX: CRT-01 — Now flush Solana PDA buffers only after Base write succeeded
+      // Clear Solana PDA buffers only after Base write succeeded.
       for (const mintStr of creatorMints) {
         const mint = new PublicKey(mintStr);
         const [creatorConfigPda] = PublicKey.findProgramAddressSync(
@@ -236,12 +216,12 @@ export async function executeSolanaRelayEntries(): Promise<EntryRelayResult> {
           await alertInfo(WORKFLOW_NAME, `Flushed Solana PDA buffer for ${mintStr}`, { sig });
         } catch (relayErr: unknown) {
           const msg = relayErr instanceof Error ? relayErr.message : String(relayErr);
-          await alertWarning(WORKFLOW_NAME, `relay_entries flush failed for ${mintStr}: ${msg}`);
+          await alertWarning(WORKFLOW_NAME, `relay_entries clear failed for ${mintStr}: ${msg}`);
         }
       }
     } else {
-      // FIX: CRT-01 — Base write failed; do NOT flush Solana buffers so entries are preserved for retry
-      await alertCritical(WORKFLOW_NAME, 'Failed to relay entries to Base — Solana buffers NOT flushed', {
+      // Base write failed; do not clear Solana buffers so entries are preserved for retry.
+      await alertCritical(WORKFLOW_NAME, 'Failed to relay entries to Base — Solana buffers preserved for retry', {
         error: txResult.error,
       });
     }

@@ -79,20 +79,20 @@
       ]
     },
     {
-      "name": "drain_entries",
+      "name": "relay_entries",
       "docs": [
-        "Keeper-only: read and clear PendingEntries for relay to Base.",
+        "Keeper-only: emit and clear PendingEntries for relay to Base.",
         "Returns entries to the keeper for batch relay via SolanaBridgeAdapter."
       ],
       "discriminator": [
-        105,
-        69,
-        123,
-        16,
-        122,
-        215,
-        121,
-        77
+        99,
+        52,
+        182,
+        187,
+        107,
+        100,
+        5,
+        39
       ],
       "accounts": [
         {
@@ -144,7 +144,7 @@
         {
           "name": "pending_entries",
           "docs": [
-            "PendingEntries PDA — zero-copy, mutable to drain entries."
+            "PendingEntries PDA — zero-copy, mutable to record and clear relayed entries."
           ],
           "writable": true
         }
@@ -152,20 +152,20 @@
       "args": []
     },
     {
-      "name": "flush_fees",
+      "name": "settle_fees",
       "docs": [
-        "Keeper-only: harvest withheld fees via Token-2022 CPI.",
+        "Keeper-only: settle withheld fees via Token-2022 CPI.",
         "Fees are collected to a designated account for bridging to Base."
       ],
       "discriminator": [
-        64,
-        201,
-        33,
-        26,
-        252,
-        245,
-        24,
-        79
+        60,
+        221,
+        130,
+        229,
+        183,
+        234,
+        6,
+        159
       ],
       "accounts": [
         {
@@ -906,7 +906,7 @@
     {
       "name": "update_config",
       "docs": [
-        "Update CreatorConfig parameters (fee_bps, flush_threshold, etc.)."
+        "Update CreatorConfig parameters (fee_bps, settlement_threshold, etc.)."
       ],
       "discriminator": [
         29,
@@ -1022,7 +1022,7 @@
   ],
   "events": [
     {
-      "name": "EntriesDrained",
+      "name": "EntriesRelayed",
       "discriminator": [
         15,
         188,
@@ -1048,7 +1048,7 @@
       ]
     },
     {
-      "name": "FeesFlushed",
+      "name": "FeesSettled",
       "discriminator": [
         236,
         120,
@@ -1133,8 +1133,8 @@
     },
     {
       "code": 6006,
-      "name": "NoPendingEntries",
-      "msg": "No pending entries to drain"
+      "name": "NoEntriesToRelay",
+      "msg": "No pending entries to relay"
     },
     {
       "code": 6007,
@@ -1189,7 +1189,7 @@
             "name": "keeper_authority",
             "docs": [
               "Authorized keeper pubkey — the only signer allowed to call",
-              "`flush_fees`, `drain_entries`, and `record_winner`."
+              "`settle_fees`, `relay_entries`, and `record_winner`."
             ],
             "type": "pubkey"
           },
@@ -1226,10 +1226,10 @@
             "type": "u16"
           },
           {
-            "name": "flush_threshold",
+            "name": "settlement_threshold",
             "docs": [
-              "Minimum fee amount (in token smallest units) before `flush_fees`",
-              "will execute. Set to 0 to flush on every call."
+              "Minimum fee amount (in token smallest units) before `settle_fees`",
+              "will execute. Set to 0 to settle on every call."
             ],
             "type": "u64"
           },
@@ -1285,9 +1285,9 @@
       }
     },
     {
-      "name": "EntriesDrained",
+      "name": "EntriesRelayed",
       "docs": [
-        "Emitted when entries are drained by the keeper for relay to Base."
+        "Emitted when entries are relayed by the keeper for delivery to Base."
       ],
       "type": {
         "kind": "struct",
@@ -1327,9 +1327,9 @@
       }
     },
     {
-      "name": "FeesFlushed",
+      "name": "FeesSettled",
       "docs": [
-        "Emitted when fees are flushed by the keeper."
+        "Emitted when fees are settled by the keeper."
       ],
       "type": {
         "kind": "struct",
@@ -1389,9 +1389,9 @@
             "type": "u16"
           },
           {
-            "name": "flush_threshold",
+            "name": "settlement_threshold",
             "docs": [
-              "Minimum withheld fee amount before flush_fees will execute."
+              "Minimum withheld fee amount before settle_fees will execute."
             ],
             "type": "u64"
           },
@@ -1518,7 +1518,7 @@
         "12KB buffer on the SBF stack. The runtime memory-maps the account data",
         "directly, keeping stack usage minimal.",
         "",
-        "The keeper drains this buffer periodically and relays entries to Base.",
+        "The keeper relays this buffer periodically and delivers entries to Base.",
         "Overflow policy: drop-oldest (head advances, oldest overwritten)."
       ],
       "serialization": "bytemuck",
@@ -1638,9 +1638,9 @@
             }
           },
           {
-            "name": "flush_threshold",
+            "name": "settlement_threshold",
             "docs": [
-              "New flush_threshold (None = keep current)."
+              "New settlement_threshold (None = keep current)."
             ],
             "type": {
               "option": "u64"

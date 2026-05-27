@@ -5,7 +5,7 @@
  *   1. initializeCreator — creates CreatorConfig, PendingEntries, WinnerRecord PDAs
  *   2. initializeExtraAccountMetaList — creates the extra account meta list PDA
  *   3. Admin operations — updateConfig, addAmmProgram, removeAmmProgram, rotateKeeper
- *   4. drainEntries — keeper drains the pending entries buffer
+ *   4. relayEntries — keeper relays the pending entries buffer
  *   5. recordWinner — keeper records a lottery winner
  *   6. Authorization checks — unauthorized callers are rejected
  */
@@ -104,7 +104,7 @@ describe("creator_share_hook", () => {
           hubCreatorCoin: HUB_CREATOR_COIN,
           hubShareOft: HUB_SHARE_OFT,
           feeBps: 690,
-          flushThreshold: new BN(1000),
+          settlementThreshold: new BN(1000),
           lotteryEnabled: true,
           knownAmmPrograms: [ammProgram1.publicKey],
         })
@@ -143,9 +143,9 @@ describe("creator_share_hook", () => {
       );
       assert.equal(config.feeBps, 690, "feeBps is 690");
       assert.equal(
-        config.flushThreshold.toNumber(),
+        config.settlementThreshold.toNumber(),
         1000,
-        "flushThreshold is 1000"
+        "settlementThreshold is 1000"
       );
       assert.equal(config.lotteryEnabled, true, "lottery enabled");
       assert.equal(config.ammProgramCount, 1, "1 AMM program");
@@ -190,7 +190,7 @@ describe("creator_share_hook", () => {
           hubCreatorCoin: HUB_CREATOR_COIN,
           hubShareOft: HUB_SHARE_OFT,
             feeBps: 690,
-            flushThreshold: new BN(0),
+            settlementThreshold: new BN(0),
             lotteryEnabled: true,
             knownAmmPrograms: [],
           })
@@ -220,7 +220,7 @@ describe("creator_share_hook", () => {
           hubCreatorCoin: HUB_CREATOR_COIN,
           hubShareOft: HUB_SHARE_OFT,
             feeBps: 10001,
-            flushThreshold: new BN(0),
+            settlementThreshold: new BN(0),
             lotteryEnabled: true,
             knownAmmPrograms: [],
           })
@@ -252,7 +252,7 @@ describe("creator_share_hook", () => {
           hubCreatorCoin: HUB_CREATOR_COIN,
           hubShareOft: HUB_SHARE_OFT,
             feeBps: 690,
-            flushThreshold: new BN(0),
+            settlementThreshold: new BN(0),
             lotteryEnabled: true,
             knownAmmPrograms: tooManyAmms,
           })
@@ -280,7 +280,7 @@ describe("creator_share_hook", () => {
           hubCreatorCoin: HUB_CREATOR_COIN,
           hubShareOft: HUB_SHARE_OFT,
           feeBps: 100,
-          flushThreshold: new BN(5000),
+          settlementThreshold: new BN(5000),
           lotteryEnabled: false,
           knownAmmPrograms: [],
         })
@@ -300,7 +300,7 @@ describe("creator_share_hook", () => {
       assert.equal(config.ammProgramCount, 0, "no AMMs");
     });
 
-    it("initializes with zero fee_bps and zero flush threshold", async () => {
+    it("initializes with zero fee_bps and zero settlement threshold", async () => {
       const mint5 = Keypair.generate();
       await program.methods
         .initializeCreator({
@@ -308,7 +308,7 @@ describe("creator_share_hook", () => {
           hubCreatorCoin: HUB_CREATOR_COIN,
           hubShareOft: HUB_SHARE_OFT,
           feeBps: 0,
-          flushThreshold: new BN(0),
+          settlementThreshold: new BN(0),
           lotteryEnabled: true,
           knownAmmPrograms: [],
         })
@@ -324,7 +324,7 @@ describe("creator_share_hook", () => {
         pdas5.creatorConfig
       );
       assert.equal(config.feeBps, 0);
-      assert.equal(config.flushThreshold.toNumber(), 0);
+      assert.equal(config.settlementThreshold.toNumber(), 0);
     });
 
     it("initializes with max valid fee_bps (10000)", async () => {
@@ -335,7 +335,7 @@ describe("creator_share_hook", () => {
           hubCreatorCoin: HUB_CREATOR_COIN,
           hubShareOft: HUB_SHARE_OFT,
           feeBps: 10000,
-          flushThreshold: new BN(0),
+          settlementThreshold: new BN(0),
           lotteryEnabled: true,
           knownAmmPrograms: [],
         })
@@ -364,7 +364,7 @@ describe("creator_share_hook", () => {
           hubCreatorCoin: null,
           hubShareOft: null,
           feeBps: 500,
-          flushThreshold: null,
+          settlementThreshold: null,
           lotteryEnabled: null,
         })
         .accounts({
@@ -378,20 +378,20 @@ describe("creator_share_hook", () => {
       );
       assert.equal(config.feeBps, 500, "fee_bps updated to 500");
       assert.equal(
-        config.flushThreshold.toNumber(),
+        config.settlementThreshold.toNumber(),
         1000,
-        "flushThreshold unchanged"
+        "settlementThreshold unchanged"
       );
       assert.equal(config.lotteryEnabled, true, "lottery unchanged");
     });
 
-    it("updates flush_threshold only", async () => {
+    it("updates settlement_threshold only", async () => {
       await program.methods
         .updateConfig({
           hubCreatorCoin: null,
           hubShareOft: null,
           feeBps: null,
-          flushThreshold: new BN(5000),
+          settlementThreshold: new BN(5000),
           lotteryEnabled: null,
         })
         .accounts({
@@ -405,9 +405,9 @@ describe("creator_share_hook", () => {
       );
       assert.equal(config.feeBps, 500, "fee_bps unchanged");
       assert.equal(
-        config.flushThreshold.toNumber(),
+        config.settlementThreshold.toNumber(),
         5000,
-        "flushThreshold updated"
+        "settlementThreshold updated"
       );
     });
 
@@ -417,7 +417,7 @@ describe("creator_share_hook", () => {
           hubCreatorCoin: null,
           hubShareOft: null,
           feeBps: null,
-          flushThreshold: null,
+          settlementThreshold: null,
           lotteryEnabled: false,
         })
         .accounts({
@@ -437,7 +437,7 @@ describe("creator_share_hook", () => {
           hubCreatorCoin: null,
           hubShareOft: null,
           feeBps: null,
-          flushThreshold: null,
+          settlementThreshold: null,
           lotteryEnabled: true,
         })
         .accounts({
@@ -453,7 +453,7 @@ describe("creator_share_hook", () => {
           hubCreatorCoin: null,
           hubShareOft: null,
           feeBps: 690,
-          flushThreshold: new BN(0),
+          settlementThreshold: new BN(0),
           lotteryEnabled: true,
         })
         .accounts({
@@ -466,7 +466,7 @@ describe("creator_share_hook", () => {
         pdas.creatorConfig
       );
       assert.equal(config.feeBps, 690);
-      assert.equal(config.flushThreshold.toNumber(), 0);
+      assert.equal(config.settlementThreshold.toNumber(), 0);
       assert.equal(config.lotteryEnabled, true);
     });
 
@@ -477,7 +477,7 @@ describe("creator_share_hook", () => {
           hubCreatorCoin: null,
           hubShareOft: null,
             feeBps: 10001,
-            flushThreshold: null,
+            settlementThreshold: null,
             lotteryEnabled: null,
           })
           .accounts({
@@ -502,7 +502,7 @@ describe("creator_share_hook", () => {
           hubCreatorCoin: null,
           hubShareOft: null,
             feeBps: 100,
-            flushThreshold: null,
+            settlementThreshold: null,
             lotteryEnabled: null,
           })
           .accounts({
@@ -693,13 +693,13 @@ describe("creator_share_hook", () => {
   });
 
   // ========================================================================
-  // drainEntries
+  // relayEntries
   // ========================================================================
-  describe("drainEntries", () => {
-    it("rejects drain when buffer is empty", async () => {
+  describe("relayEntries", () => {
+    it("rejects relay when buffer is empty", async () => {
       try {
         await program.methods
-          .drainEntries()
+          .relayEntries()
           .accounts({
             keeper: keeper.publicKey,
             creatorMint: mint.publicKey,
@@ -709,17 +709,17 @@ describe("creator_share_hook", () => {
         assert.fail("Should have thrown");
       } catch (e: any) {
         assert.ok(
-          e.message.includes("NoPendingEntries") ||
-            e.logs?.some((l: string) => l.includes("NoPendingEntries")),
-          "Expected NoPendingEntries error"
+          e.message.includes("NoEntriesToRelay") ||
+            e.logs?.some((l: string) => l.includes("NoEntriesToRelay")),
+          "Expected NoEntriesToRelay error"
         );
       }
     });
 
-    it("rejects drain from unauthorized keeper", async () => {
+    it("rejects relay from unauthorized keeper", async () => {
       try {
         await program.methods
-          .drainEntries()
+          .relayEntries()
           .accounts({
             keeper: fakeUser.publicKey,
             creatorMint: mint.publicKey,
@@ -862,7 +862,7 @@ describe("creator_share_hook", () => {
           hubCreatorCoin: HUB_CREATOR_COIN,
           hubShareOft: HUB_SHARE_OFT,
           feeBps: 300,
-          flushThreshold: new BN(500),
+          settlementThreshold: new BN(500),
           lotteryEnabled: false,
           knownAmmPrograms: [ammProgram1.publicKey, ammProgram3.publicKey],
         })

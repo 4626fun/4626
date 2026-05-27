@@ -178,4 +178,4 @@ Wrong-grain warning: do not point share-mesh Meteora or `relay_entries` at bridg
 | DeploymentBatcher | `0xa99058f424FB3ACC639F59355C65C40149030651` |
 | OVaultHubComposer | `0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1` |
 | Solana EID | `30168` |
-| creator-share-hook | `EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU` |
+| creator-share-hook | `EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU` (upgrade: [creator-share-hook-mainnet-upgrade.md](./creator-share-hook-mainnet-upgrade.md)) |
