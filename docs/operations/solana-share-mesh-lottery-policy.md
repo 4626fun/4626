@@ -2,28 +2,27 @@
 
 Canonical product policy for Solana-side vault shares, pools, and lottery entry.
 
-Related: [budget paths](./solana-share-mesh-budget-paths.md) (costs + runbooks), [AKITA gap audit](./akita-solana-share-mesh-audit.md), [Pipe C naming](./solana-bridge-naming-invariant.md) (creator SPL only — not share mesh).
+Related: [budget paths](./solana-share-mesh-budget-paths.md) (costs + runbooks), [AKITA gap audit](./akita-solana-share-mesh-audit.md).
 
 ## Decisions
 
 | # | Policy |
 |---|--------|
-| 1 | Tradable Solana shares = **ShareOFT bridged from Base** (`solana_ovault_mesh` + `OVaultHubComposer`). Not creator re-deposit, not Pipe C creator SPL. |
+| 1 | Tradable Solana shares = **ShareOFT bridged from Base** (`solana_ovault_mesh` + `OVaultHubComposer`). Not creator re-deposit, not bridge-wrapped creator SPL. |
 | 2 | **30% ShareOFT auto-bridges at `finalizePhase2`** when batcher OVault runtime is enabled (replaces deprecated `solana_bridge_strategy`). |
 | 3 | **Lottery = pool buy of tradable share token only** — not compose deposit, bridge receipt, or creator-coin trades. |
 | 4 | **Meteora base asset = share mesh mint** — not `wrap-token` creator SPL. |
 | 5 | **`relay_entries` off** until share-mesh pool exists **and** a live detection path is wired (**B2 hook today**; B1 off-chain relay not shipped). |
 | 6 | **Share symbol = `■<TICKER>`**, name = `{Creator} Share Token` — all creators, Base deploy UI + Solana LZ deploy (`frontend/src/lib/tokens/tokenSymbols.ts`). |
 
-## Three pipes
+## Two lanes (do not conflate)
 
 ```text
-A — Share mesh (lottery surface)     Base ShareOFT ──LZ──► Solana share mesh ──► Meteora pool buy
-B — Compose deposit (no lottery)     Solana asset mesh ──► OVaultHubComposer ──► ShareOFT on Base
-C — Strategy bridge (no lottery)     SolanaBridgeStrategy / creator SPL — orthogonal to A
+A — Share mesh (lottery surface)   Base ShareOFT ──LZ──► Solana share mesh ──► Meteora pool buy
+B — Compose deposit (no lottery)   Solana asset mesh ──► OVaultHubComposer ──► ShareOFT on Base
 ```
 
-Do not use Pipe C creator SPL (e.g. AKITA `9JWh…`) as the share-lottery token.
+Do not use bridge-wrapped creator SPL (e.g. AKITA `9JWh…` via `SolanaBridgeAdapter`) as the share-lottery token. That legacy adapter/provisioner grain is out of scope for share-mesh policy.
 
 ## B1 vs B2 (Phase B fork)
 
@@ -71,7 +70,6 @@ SOLANA_CREATOR_MINTS=<mint_pubkey>   # must match PendingEntries mint
 | **A** | LZ share mesh live; batcher peer set; supply bridged; mint metadata `■<TICKER>` |
 | **B1** | Meteora pool + LP on share mesh; Meteora/Jupiter swappable; `relay_entries` still off |
 | **B2** | B1 + hook PDAs + `relay_entries`; pool buy → Base lottery |
-| **C** | Strategy bridge / Meteora Alpha (optional; not user lottery) |
 
 Execution steps, costs, and commands: [solana-share-mesh-budget-paths.md](./solana-share-mesh-budget-paths.md).
 
@@ -80,7 +78,8 @@ Execution steps, costs, and commands: [solana-share-mesh-budget-paths.md](./sola
 | Path | Why |
 |------|-----|
 | `SOLANA_CREATOR_MINTS` = creator SPL + `relay_entries` | Wrong grain |
-| `POST /provision` DLMM on creator SPL | Pipe C / Alpha Vault only |
+| `POST /provision` DLMM on creator SPL | Legacy provisioner / Alpha Vault — not share lottery |
+| `solana_bridge_strategy` / `SolanaBridgeStrategy` TVL | Removed for greenfield; use Pipe A 30% finalize bridge |
 | Compose deposit | Valid vault entry; no lottery |
 | `SolanaBridgeAdapter.buyAndEnterLottery` | Non-canonical alternate |
 
@@ -89,5 +88,4 @@ Execution steps, costs, and commands: [solana-share-mesh-budget-paths.md](./sola
 ```bash
 pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts
 pnpm -C kpr preflight-orchestrator
-pnpm -C frontend exec tsx scripts/verify-solana-mint-parity.ts --creator 0x<creator>  # Pipe C only
 ```

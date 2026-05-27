@@ -7,7 +7,7 @@ Policy: [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy
 ## Scope
 
 - **In:** one LZ **share-mesh OFT** on Solana (EID `30168`) + `setSolanaShareOftPeer` + optional Meteora/lottery (B1/B2).
-- **Out:** Solana asset mesh (Pipe B), Pipe C creator SPL as lottery token, `POST /provision` auto-pool for share mesh.
+- **Out:** compose deposit lane (Pipe B), bridge-wrapped creator SPL as lottery token, `POST /provision` auto-pool for share mesh.
 
 Reused on mainnet: `creator-share-hook` (`EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU`) — **B2 relay only**, not a substitute for LZ share OFT.
 
@@ -101,7 +101,7 @@ P1a B1: Meteora pool + LP on share mesh       →  Solana trading (lottery on Ba
 P1b B2: badge + hook + pool + relay_entries   →  Solana pool-buy lottery
 ```
 
-Pipe C creator SPL naming: [solana-bridge-naming-invariant.md](./solana-bridge-naming-invariant.md).
+Wrong-grain warning: do not point share-mesh Meteora or `relay_entries` at bridge-wrapped creator SPL mints (e.g. AKITA `9JWh…`). Adapter/provisioner naming rules live in [solana-bridge-naming-invariant.md](./solana-bridge-naming-invariant.md) for historical parity checks only.
 
 ## Reference (mainnet)
 

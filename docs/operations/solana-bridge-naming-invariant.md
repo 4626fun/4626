@@ -19,11 +19,12 @@ Canonical reference for how creator coins' Solana-side display identity
 (bridge-wrapped Token-2022 mint `name` and `symbol`) is derived and
 enforced across the 4626 deploy pipeline.
 
-## Scope — Pipe C (this doc) vs share mesh (lottery)
+## Scope — bridge-wrapped creator SPL vs share mesh
 
 This document covers **bridge-wrapped creator SPL** mints registered on
-`SolanaBridgeAdapter` — **Pipe C / strategy bridge**, `POST /provision`,
-and legacy Meteora-on-creator-SPL lanes.
+`SolanaBridgeAdapter`, `POST /provision`, and legacy Meteora-on-creator-SPL
+lanes. That grain is **deprecated for greenfield vault lottery/trading** —
+do not treat it as a third parallel product lane alongside share mesh.
 
 It does **not** define the **LayerZero share-mesh OFT** mint used for
 user lottery / Pipe A. For that, read:
@@ -240,8 +241,8 @@ but Meteora infrastructure for a creator's **bridge-wrapped creator SPL**
 mint is NOT automatic. Setting up Meteora is an operator-side per-creator
 step, handled via KPR launch scripts plus a DB row.
 
-This runbook targets **Pipe C** (creator SPL + optional Alpha Vault). For
-**share-mesh** Meteora pools, use
+This runbook targets **legacy bridge-wrapped creator SPL** (+ optional Alpha
+Vault). For **share-mesh** Meteora pools, use
 [`create-dlmm-pool.ts`](../../kpr/scripts/solana/launch/create-dlmm-pool.ts)
 with the LZ share mint as `TOKEN_MINT_X` — see
 [solana-share-mesh-budget-paths.md](./solana-share-mesh-budget-paths.md).

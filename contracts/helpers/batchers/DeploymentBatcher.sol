@@ -198,7 +198,7 @@ contract DeploymentBatcherPhase3Helper {
             IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).transferAdmin(protocolAutomation);
         }
 
-        // Solana vault strategy (Pipe C) is removed for greenfield deploys.
+        // SolanaBridgeStrategy Phase-3 lane removed for greenfield deploys.
         // Solana share liquidity is seeded via the 30% ShareOFT auto-bridge at
         // finalizePhase2 instead of a Phase-3 SolanaBridgeStrategy allocation.
         if (params.solanaWeightBps != 0) revert InvalidWeight();

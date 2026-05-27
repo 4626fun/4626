@@ -30,10 +30,10 @@ Base ShareOFT Uniswap buys = **live lottery today**. Target Solana share display
 
 | Asset | Mint / mapping | Role |
 |-------|----------------|------|
-| Creator SPL | `9JWhbEAVpuHQdx1x5kSH62p6ZrWivqcBfARhvdLsLJdp` (`akita`/`akita`) | Pipe C only |
+| Creator SPL | `9JWhbEAVpuHQdx1x5kSH62p6ZrWivqcBfARhvdLsLJdp` (`akita`/`akita`) | Legacy adapter grain — not share mesh |
 | Current orchestrator env | `9JWh…` → ShareOFT | Misconfigured for policy |
 
-Parity check (Pipe C): `pnpm -C frontend exec tsx scripts/verify-solana-mint-parity.ts --creator 0x5b674196812451b7cec024fe9d22d2c0b172fa75`
+Adapter parity (not share mesh): `pnpm -C frontend exec tsx scripts/verify-solana-mint-parity.ts --creator 0x5b674196812451b7cec024fe9d22d2c0b172fa75`
 
 ## AKITA unblock sequence
 
