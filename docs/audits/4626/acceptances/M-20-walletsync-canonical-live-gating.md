@@ -36,7 +36,12 @@ present in the live classification, fall back to the live
    - `canonicalSmartWallet` falls back to the classification value (may be null).
    - `allWallets` does not contain the stale canonical.
 3. Same invariants hold for `activeOwnerWallet`.
-4. Solana behaviour is unchanged.
+4. Same invariants hold for `embeddedEoa` (M-20 symmetric): stale
+   `primary_embedded_eoa` / `embedded_wallet` rows must not reappear in
+   `embeddedEoa`, `allWallets`, or `connectedWallets` when Privy no longer
+   links that address. Canonical CSW may still be persisted when omitted from
+   Privy (product invariant).
+5. Solana behaviour is unchanged.
 
 ## Rollback
 Revert this PR. No DB migration, no env changes.

@@ -445,14 +445,26 @@ function applyPersistedIdentity(params: {
   if (!persisted) return classification
 
   const persistedCanonicalRaw = persisted?.canonicalSmartWallet ?? null
+  // M-20 symmetric: only resurrect persisted embedded/active-owner EOAs when still
+  // present in the live Privy classification (canonical CSW intentionally exempt).
+  const persistedEmbeddedEoa =
+    persisted?.embeddedEoa &&
+    isEvmWalletAddressInClassification(classification, persisted.embeddedEoa)
+      ? persisted.embeddedEoa
+      : null
+  const persistedActiveOwnerEoa =
+    persisted?.activeOwnerWallet &&
+    isEvmWalletAddressInClassification(classification, persisted.activeOwnerWallet)
+      ? persisted.activeOwnerWallet
+      : null
   // The canonical CSW is the asset-holding account and can disappear from a
   // fresh Privy payload even though it remains the deployed account on Base.
   // Keep the persisted CSW as source of truth so a newly surfaced Privy smart
   // wallet/counterfactual address cannot silently replace it.
   const persistedCanonical = resolveStoredCanonicalCswAddress({
     candidate: persistedCanonicalRaw,
-    embeddedEoa: persisted?.embeddedEoa ?? classification.embeddedEoa?.address ?? null,
-    activeOwnerEoa: persisted?.activeOwnerWallet ?? classification.activeOwnerWallet?.address ?? null,
+    embeddedEoa: persistedEmbeddedEoa ?? classification.embeddedEoa?.address ?? null,
+    activeOwnerEoa: persistedActiveOwnerEoa ?? classification.activeOwnerWallet?.address ?? null,
   })
   const persistedCanonicalSolana =
     persisted?.canonicalSolanaWallet &&
@@ -516,9 +528,9 @@ function applyPersistedIdentity(params: {
   )
   allWallets = withWalletIfMissing(
     allWallets,
-    persisted.embeddedEoa
+    persistedEmbeddedEoa
       ? {
-          address: persisted.embeddedEoa,
+          address: persistedEmbeddedEoa,
           walletType: 'embedded_eoa',
           provider: 'privy',
           chain: 'evm',
@@ -540,8 +552,8 @@ function applyPersistedIdentity(params: {
   // classification; otherwise the active owner must come from the classification
   // record (or null).
   const persistedActiveOwnerRecord =
-    persisted?.activeOwnerWallet && isEvmWalletAddressInClassification(classification, persisted.activeOwnerWallet)
-      ? allWallets.find((wallet) => walletAddressEquals(wallet.address, persisted.activeOwnerWallet))
+    persistedActiveOwnerEoa
+      ? allWallets.find((wallet) => walletAddressEquals(wallet.address, persistedActiveOwnerEoa))
       : null
   const activeOwnerWallet = classificationActiveOwnerRecord
     ? {
@@ -556,14 +568,15 @@ function applyPersistedIdentity(params: {
           walletType: persistedActiveOwnerRecord.walletType,
         }
       : null
-  const embeddedEoa =
-    persisted.embeddedEoa
+  const embeddedEoa = classification.embeddedEoa
+    ? classification.embeddedEoa
+    : persistedEmbeddedEoa
       ? {
-          address: persisted.embeddedEoa,
-          chainType: classification.embeddedEoa?.chainType ?? 'evm',
-          clientType: classification.embeddedEoa?.clientType ?? null,
+          address: persistedEmbeddedEoa,
+          chainType: 'evm',
+          clientType: null,
         }
-      : classification.embeddedEoa
+      : null
   const classificationCanonicalSolanaRecord =
     classification.canonicalSolanaWallet
       ? allWallets.find((wallet) => walletAddressEquals(wallet.address, classification.canonicalSolanaWallet?.address))
@@ -594,9 +607,9 @@ function applyPersistedIdentity(params: {
     : operationalSolanaFromClassification
 
   const primaryWalletAddress = resolveProfilesPrimaryWalletColumn({
-    embedded: embeddedEoa?.address ?? persisted.embeddedEoa ?? null,
+    embedded: embeddedEoa?.address ?? null,
     canonical: canonicalSmartWallet?.address ?? null,
-    activeOwner: activeOwnerWallet?.address ?? persisted.activeOwnerWallet ?? null,
+    activeOwner: activeOwnerWallet?.address ?? persistedActiveOwnerEoa ?? null,
     classificationPrimary:
       classification.primaryWalletAddress ??
       persisted.primaryWallet ??
@@ -875,22 +888,38 @@ export async function syncUserWallets(db: Db, privyUser: PrivyUserLike): Promise
   const persisted = existing?.id ? await readPersistedIdentity(db, existing.id) : null
 
   const zoraCanonicalRaw = await resolveCanonicalSmartWalletFromZora({ classification, persisted })
+  const persistedEmbeddedForPolicy =
+    persisted?.embeddedEoa &&
+    isEvmWalletAddressInClassification(classification, persisted.embeddedEoa)
+      ? persisted.embeddedEoa
+      : null
+  const persistedActiveOwnerForPolicy =
+    persisted?.activeOwnerWallet &&
+    isEvmWalletAddressInClassification(classification, persisted.activeOwnerWallet)
+      ? persisted.activeOwnerWallet
+      : null
   const zoraCanonical = resolveStoredCanonicalCswAddress({
     candidate: zoraCanonicalRaw,
-    embeddedEoa: persisted?.embeddedEoa ?? classification.embeddedEoa?.address ?? null,
-    activeOwnerEoa: persisted?.activeOwnerWallet ?? classification.activeOwnerWallet?.address ?? null,
+    embeddedEoa: persistedEmbeddedForPolicy ?? classification.embeddedEoa?.address ?? null,
+    activeOwnerEoa: persistedActiveOwnerForPolicy ?? classification.activeOwnerWallet?.address ?? null,
   })
   const persistedWithZora: PersistedIdentity | null = zoraCanonical
     ? {
         primaryWallet: persisted?.primaryWallet ?? null,
-        activeOwnerWallet: persisted?.activeOwnerWallet ?? null,
+        activeOwnerWallet: persistedActiveOwnerForPolicy,
         canonicalSmartWallet: zoraCanonical,
         canonicalSolanaWallet: persisted?.canonicalSolanaWallet ?? null,
         operationalSolanaWallet: persisted?.operationalSolanaWallet ?? null,
-        embeddedEoa: persisted?.embeddedEoa ?? null,
+        embeddedEoa: persistedEmbeddedForPolicy,
         preprovZoraHandle: persisted?.preprovZoraHandle ?? null,
       }
     : persisted
+    ? {
+        ...persisted,
+        embeddedEoa: persistedEmbeddedForPolicy,
+        activeOwnerWallet: persistedActiveOwnerForPolicy,
+      }
+    : null
 
   const effectiveClassification = applyCanonicalCswPolicyToClassification(
     applyPersistedIdentity({ classification, persisted: persistedWithZora }),
