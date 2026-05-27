@@ -105,12 +105,23 @@ CREATE2 infra + helpers + batcher shell deployed at epoch `v1.11.2-pipe-a`:
 | DeploymentBatcherUniV4Helper | `0xF71a6236586077CD29C971443D2cce37B543DcBB` |
 | DeploymentBatcherUtilsHelper | `0xD71C4910C7bB38FB1089Cca42b0883F1BFFfa28D` |
 
-**Still required before greenfield Pipe A finalize:**
+Safe queue on protocol treasury (`0x7d429e…`):
 
-1. Protocol treasury Safe: `wireDeploymentHelpers` + `setPhase1Module` + `setSolanaConfig` + `setOVaultRuntimeConfig` (+ `setSolanaShareOftPeer` when mesh peer is known).
-2. Re-run `DeployBaseMainnetDeployer.s.sol` (or manual `setAuthorizedDeployer`) to authorize batcher on create2 deployer after wiring.
-3. Cancel Safe nonce **77** (`setSolanaShareOftPeer` on old batcher) — do not execute.
-4. Production Vercel env + redeploy after config promotion.
+| Nonce | Action | Status |
+|-------|--------|--------|
+| 76 | `setOVaultRuntimeConfig` on old batcher | Executed (no-op) |
+| 77 | `setSolanaShareOftPeer` on **old** batcher | **Cancel** — pre–Pipe-A bytecode |
+| 78 | `wireDeploymentHelpers` on **new** batcher | Proposed — execute after review |
+| 79 | `setPhase1Module` | Proposed |
+| 80 | `setSolanaConfig` | Proposed |
+| 81 | `setOVaultRuntimeConfig` | Proposed |
+
+**Still required after Safe 78–81 execute:**
+
+1. Re-run `DeployBaseMainnetDeployer.s.sol` to authorize batcher + helpers on create2 deployer.
+2. Propose `setSolanaShareOftPeer` when ShareOFT mesh peer is known (separate Safe tx; do not reuse nonce 77).
+3. Update Vercel `CREATOR_VAULT_BATCHER*` env + production redeploy.
+4. Re-run `verify-batcher-pipe-a-readiness.ts` → exit 0.
 
 Safe wiring dry-run:
 
