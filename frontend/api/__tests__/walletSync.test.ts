@@ -632,6 +632,61 @@ describe('wallet mapping + sync', () => {
     ).toBe(false)
   })
 
+
+  it('does not resurrect stale embedded via profiles.primary_wallet when unlinked (M-20)', async () => {
+    const staleEmbedded = '0x00000000000000000000000000000000000000bb'
+    const canonicalCsw = '0x00000000000000000000000000000000000000aa'
+    const externalEoa = '0x0000000000000000000000000000000000000011'
+
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray, ..._values: any[]) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        const schemaReady = canonicalWalletSchemaReadyResult(text)
+        if (schemaReady) return schemaReady
+
+        if (text.includes('from profiles') && text.includes('where privy_user_id')) {
+          return { rows: [{ id: 101, email: 'user@example.com' }] }
+        }
+        if (text.includes('select') && text.includes('from profiles') && text.includes('where id') && text.includes('primary_smart_wallet')) {
+          return {
+            rows: [
+              {
+                primary_wallet: staleEmbedded,
+                primary_smart_wallet: canonicalCsw,
+                csw_address: canonicalCsw,
+                base_sub_account: null,
+                canonical_solana_wallet: null,
+                operational_solana_wallet: null,
+                solana_wallet: null,
+                primary_embedded_eoa: staleEmbedded,
+                embedded_wallet: staleEmbedded,
+              },
+            ],
+          }
+        }
+
+        return { rows: [] }
+      }),
+    }
+
+    const user = {
+      id: 'did:privy:stale-primary-wallet',
+      linkedAccounts: [
+        { type: 'wallet', address: externalEoa, walletClientType: 'metamask' },
+        { type: 'smart_wallet', address: canonicalCsw, walletClientType: 'coinbase_smart_wallet' },
+      ],
+    }
+
+    const result = await syncUserWallets(db as any, user as any)
+
+    expect(result.canonicalSmartWallet?.address).toBe(canonicalCsw)
+    expect(result.embeddedEoa).toBeNull()
+    expect(result.primaryWalletAddress?.toLowerCase()).not.toBe(staleEmbedded.toLowerCase())
+    expect(
+      result.connectedWallets.some((w) => w.address.toLowerCase() === staleEmbedded.toLowerCase()),
+    ).toBe(false)
+  })
+
   it('seeds Zora lookup from preprov_zora_handle when available', async () => {
     fetchZoraProfileMock.mockResolvedValue({
       linkedWallets: { edges: [] },
