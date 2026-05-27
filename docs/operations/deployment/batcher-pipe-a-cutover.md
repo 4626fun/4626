@@ -141,18 +141,23 @@ pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
 # exit 0
 ```
 
-**LZ Base↔Solana wire complete (2026-05-27).** Scaffold `/tmp/4626-oft-mainnet` with `layerzero.config.ts` → `contractName: 'AkitaShareOFT'`. Ran `lz:oft:solana:init-config` (1 tx) + `lz:oapp:wire` (13 txs). ULN verified **6-of-9** optional DVNs on both directions (`lz:oft:solana:debug --action peers`).
+**LZ Base↔Solana wire (2026-05-27) — operator correction required**
 
-| Item | Value / status |
-|------|----------------|
-| AKITA ShareOFT `peers(30168)` | `0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f` ✅ |
-| Solana mint metadata | `■AKITA` / `Akita Share Token` via `lz:oft:solana:update-metadata` (tx on Solscan mainnet) |
-| Registry `getRemoteOFTPeerBytes32(AKITA, 30168)` | **Zero** — AKITA creator coin not yet in `CreatorRegistry`; batcher default peer covers first finalize |
-| `configureCreatorMesh` | **Blocked** — grandfathered AKITA wrapper lacks `isBeneficiaryOperator` / beneficiary-operator wiring |
-| B2 devnet hook | **Blocked** — `COST_PROBE_HOOK_PROGRAM_KEYPAIR` not in env (program id `Ejpzi…`) |
-| Orchestrator | Re-seed on ops host after hook upgrade: `seed-solana-orchestrator-env.sh --hook-schema auto`; keep `SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0` |
+Solana share-mesh infra (oftStore `G3rfXFKv…`, mint `5puVV8…`, batcher `solanaShareOftPeer` bytes32) is live. **Do not treat legacy `wsAKITA` (`0x4df30fFf…`) as the Base mesh wire target** — it is the grandfathered vault ShareOFT (old bytecode, `totalSupply = 0`). A mistaken scaffold stub (`AkitaShareOFT.json` → that address) caused `lz:oapp:wire` to run ULN + `setPeer(30168)` against the legacy token. That peer set is **not** the intended Pipe A mesh leg.
 
-**Still before first live finalize bridge message:** optional explicit registry peer (after AKITA registered on registry) and composer mesh (`configureCreatorMesh` after wrapper upgrade). See [solana-share-mesh-creator-provisioning.md](../solana-share-mesh-creator-provisioning.md).
+| Item | Status |
+|------|--------|
+| Solana oftStore + mint + batcher default peer bytes32 | ✅ Platform infra |
+| Solana ULN 6-of-9 on oftStore | ✅ (init-config + wire touched Solana side) |
+| Solana mint metadata `■AKITA` | ✅ |
+| Base wire target | ❌ **Wrong** — legacy `wsAKITA` `0x4df30…`; use a **new** Base mesh OFT (scaffold `MyOFT` at `0x60F44…` or fresh deploy with `■AKITA` naming), not grandfathered ShareOFT |
+| Legacy `wsAKITA` `peers(30168)` | ⚠️ Set by mistake — do not bridge from this token; greenfield finalize uses **new** `CreatorShareOFT` per vault |
+| Registry `getRemoteOFTPeerBytes32(AKITA, 30168)` | Zero until AKITA registered on registry |
+| `configureCreatorMesh` | Blocked — grandfathered wrapper lacks beneficiary-operator wiring |
+
+**Correct Base-side next step:** point `layerzero.config.ts` at scaffold `MyOFT` (`0x60F44d0C9ceF94064e15aFf241912091ee92239E` or redeploy with proper name/symbol), re-run `init-config` + `wire` for **that** contract only. Greenfield vaults get their own CREATE2 `CreatorShareOFT` at phase 1; finalize calls `setPeer(30168, batcherDefault)` on **that** address, not `0x4df30…`.
+
+**Still before first live greenfield finalize bridge:** explicit registry peer (per creator), composer mesh (wrapper upgrade), and correct Base mesh OFT wire. See [solana-share-mesh-creator-provisioning.md](../solana-share-mesh-creator-provisioning.md).
 
 Mainnet OFT scaffold (operator-local, not committed): `/tmp/4626-oft-mainnet`. Rebuild with `OFT_ID=6ste36Y7fcbzJXkVQj3ApEqYb3wFZsZX63gT6wymhy3s anchor build` before program upgrade. If Hardhat `setAuthority` CU simulation fails on public RPC, use `spl-token authorize` (documented in creator provisioning Step 1).
 
