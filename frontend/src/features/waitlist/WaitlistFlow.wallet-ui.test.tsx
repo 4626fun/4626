@@ -207,6 +207,7 @@ const WAITLIST_ACCOUNT = {
   score: {
     points: 1234,
     tier: 1,
+    amoeCredits: 900,
   },
 }
 

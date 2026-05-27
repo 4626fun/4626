@@ -8,6 +8,7 @@ export const waitlistRouteLoaders: ApiRouteLoaders = {
   'lead': () => import('./waitlist/_lead.js'),
   'me': () => import('./waitlist/_me.js'),
   'position': () => import('./waitlist/_position.js'),
+  'points-activity': () => import('./waitlist/_pointsActivity.js'),
   'referrer': () => import('./waitlist/_referrer.js'),
   'stats': () => import('./waitlist/_stats.js'),
   'xmtp-join': () => import('./waitlist/_xmtpJoin.js'),

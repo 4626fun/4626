@@ -111,7 +111,7 @@ function mergeBootstrapSignals(
     appAccessStatus: payload?.appAccessStatus ?? null,
     baseSubAccount: payload?.baseSubAccount ?? bootstrap.baseSubAccount.address,
     linkedMethods: payload?.linkedMethods ?? {},
-    score: payload?.score ?? { points: 0, tier: 0 },
+    score: payload?.score ?? { points: 0, tier: 0, amoeCredits: 0 },
     accountSignals: {
       linked: baseSignals?.linked ?? false,
       canonicalCswAddress: baseSignals?.canonicalCswAddress ?? bootstrap.canonicalCswAddress ?? null,

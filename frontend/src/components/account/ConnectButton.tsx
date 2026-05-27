@@ -18,6 +18,7 @@ import {
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { fetchAccountTrayPortfolioBatch } from '@/lib/debank/client'
+import { fetchWaitlistPointsActivity, type PointsActivityRow } from '@/lib/waitlist/pointsActivity'
 import { apiFetch } from '@/lib/api/apiBase'
 import { filterHiddenInjectedConnectors } from '@/lib/wallet/wagmiConnectorSelection'
 import {
@@ -521,6 +522,15 @@ export function ConnectButton({
     retry: 0,
     queryFn: async () => fetchWaitlistPositionByWallet(trayPointsLookupWallet as string),
   })
+  const trayPointsActivityQuery = useQuery({
+    queryKey: ['account-tray', 'points-activity'],
+    enabled: auth.hasSession && showMenu && traySection === 'points',
+    staleTime: 15_000,
+    retry: 0,
+    queryFn: async () => fetchWaitlistPointsActivity(24),
+  })
+  const canonicalWaitlistPoints = accountMe?.score.points ?? trayPointsQuery.data?.points.total ?? 0
+  const canonicalAmoeCredits = accountMe?.score.amoeCredits ?? canonicalWaitlistPoints
   const buttonState = deriveConnectButtonState({
     sessionHydrated: auth.sessionHydrated,
     isConnected,
@@ -705,8 +715,12 @@ export function ConnectButton({
               ) : null}
               {auth.hasSession && traySection === 'points' ? (
                 <RelayTrayPointsModule
+                  waitlistPoints={canonicalWaitlistPoints}
+                  amoeCredits={canonicalAmoeCredits}
                   points={trayPointsQuery.data ?? null}
-                  loading={trayPointsQuery.isLoading}
+                  pointsLoading={trayPointsQuery.isLoading && !accountMe}
+                  activity={trayPointsActivityQuery.data?.activity ?? []}
+                  activityLoading={trayPointsActivityQuery.isLoading}
                 />
               ) : null}
               {!auth.hasSession ? (
@@ -864,8 +878,12 @@ export function ConnectButton({
                 />
               ) : (
                 <RelayTrayPointsModule
+                  waitlistPoints={canonicalWaitlistPoints}
+                  amoeCredits={canonicalAmoeCredits}
                   points={trayPointsQuery.data ?? null}
-                  loading={trayPointsQuery.isLoading}
+                  pointsLoading={trayPointsQuery.isLoading && !accountMe}
+                  activity={trayPointsActivityQuery.data?.activity ?? []}
+                  activityLoading={trayPointsActivityQuery.isLoading}
                 />
               )}
               {auth.error ? <div className="px-4 text-[11px] text-red-400/90">{auth.error}</div> : null}
@@ -1195,13 +1213,17 @@ function RelayTrayHoldingRow(props: { token: TrayAssetHolding; subtitle?: string
 }
 
 function RelayTrayPointsModule(props: {
+  waitlistPoints: number
+  amoeCredits: number
   points: WaitlistPositionSnapshot | null
-  loading: boolean
+  pointsLoading: boolean
+  activity: PointsActivityRow[]
+  activityLoading: boolean
 }) {
-  const total = props.points?.points.total ?? 0
   const totalRank = props.points?.rank.total ?? null
   const inviteRank = props.points?.rank.invite ?? null
   const totalCount = props.points?.totalCount ?? 0
+  const showAmoeNote = props.amoeCredits !== props.waitlistPoints
   const breakdown = [
     { label: 'Invites', value: props.points?.points.invite ?? 0 },
     { label: 'Signup', value: props.points?.points.signup ?? 0 },
@@ -1210,64 +1232,121 @@ function RelayTrayPointsModule(props: {
     { label: 'Social', value: props.points?.points.social ?? 0 },
     { label: 'Bonus', value: props.points?.points.bonus ?? 0 },
   ]
+  const activityRows = props.activity.slice(0, 24)
 
   return (
     <div className="px-4 pt-2 pb-3">
       <div className="rounded-xl bg-white/[0.02] p-3">
-        <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Points</div>
-        {props.loading ? (
+        <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Waitlist points</div>
+        {props.pointsLoading ? (
           <div className="mt-2 rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
             Loading points…
-          </div>
-        ) : !props.points ? (
-          <div className="mt-2 rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
-            No points profile found yet.
           </div>
         ) : (
           <>
             <div className="mt-2 text-[30px] font-semibold leading-none tracking-tight text-white tabular-nums">
-              {total.toLocaleString()}
+              {props.waitlistPoints.toLocaleString()}
             </div>
-            <div className="mt-1 text-[10px] text-zinc-500">AMOE eligible points</div>
-
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-                <div className="text-[10px] text-zinc-500">Total rank</div>
-                <div className="text-[13px] text-zinc-200 tabular-nums">
-                  {totalRank ? `#${totalRank.toLocaleString()}` : '—'}
-                </div>
+            {showAmoeNote ? (
+              <div className="mt-1 text-[10px] text-zinc-500 tabular-nums">
+                {props.amoeCredits.toLocaleString()} lottery credits (AMOE entry)
               </div>
-              <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-                <div className="text-[10px] text-zinc-500">Invite rank</div>
-                <div className="text-[13px] text-zinc-200 tabular-nums">
-                  {inviteRank ? `#${inviteRank.toLocaleString()}` : '—'}
-                </div>
-              </div>
-            </div>
+            ) : (
+              <div className="mt-1 text-[10px] text-zinc-500">Matches leaderboard rank score</div>
+            )}
 
-            <div className="mt-2 text-[10px] text-zinc-500">
-              Leaderboard pool: {Math.max(0, totalCount).toLocaleString()} profiles
-            </div>
+            {props.points ? (
+              <>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
+                    <div className="text-[10px] text-zinc-500">Total rank</div>
+                    <div className="text-[13px] text-zinc-200 tabular-nums">
+                      {totalRank ? `#${totalRank.toLocaleString()}` : '—'}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
+                    <div className="text-[10px] text-zinc-500">Invite rank</div>
+                    <div className="text-[13px] text-zinc-200 tabular-nums">
+                      {inviteRank ? `#${inviteRank.toLocaleString()}` : '—'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-2 text-[10px] text-zinc-500">
+                  Leaderboard pool: {Math.max(0, totalCount).toLocaleString()} profiles
+                </div>
+
+                <div className="mt-3 border-t border-white/8 pt-2">
+                  <div className="px-1 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">Breakdown</div>
+                  <div className="space-y-1">
+                    {breakdown.map((item) => (
+                      <div
+                        key={item.label}
+                        className="flex items-center justify-between rounded-lg border border-white/8 bg-black/20 px-3 py-2"
+                      >
+                        <span className="text-[11px] text-zinc-300">{item.label}</span>
+                        <span className="text-[11px] tabular-nums text-zinc-200">{item.value.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : null}
 
             <div className="mt-3 border-t border-white/8 pt-2">
-              <div className="px-1 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">Breakdown</div>
-              <div className="space-y-1">
-                {breakdown.map((item) => (
-                  <div
-                    key={item.label}
-                    className="flex items-center justify-between rounded-lg border border-white/8 bg-black/20 px-3 py-2"
-                  >
-                    <span className="text-[11px] text-zinc-300">{item.label}</span>
-                    <span className="text-[11px] tabular-nums text-zinc-200">{item.value.toLocaleString()}</span>
-                  </div>
-                ))}
-              </div>
+              <div className="px-1 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">Earn history</div>
+              {props.activityLoading ? (
+                <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
+                  Loading earn history…
+                </div>
+              ) : activityRows.length === 0 ? (
+                <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
+                  No point awards yet. Link accounts, invite friends, and complete tasks to earn waitlist points.
+                </div>
+              ) : (
+                <div className="space-y-1 max-h-52 overflow-y-auto">
+                  {activityRows.map((row) => (
+                    <div
+                      key={row.id}
+                      className="rounded-lg border border-white/8 bg-black/20 px-3 py-2"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-[11px] text-zinc-200">{row.label}</span>
+                        <span className="text-[11px] tabular-nums text-emerald-300/90">
+                          +{row.waitlistPoints > 0 ? row.waitlistPoints : row.amoeCredits}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 text-[10px] text-zinc-500">
+                        {row.waitlistPoints > 0
+                          ? `${row.waitlistPoints} waitlist`
+                          : row.amoeCredits > 0
+                            ? `${row.amoeCredits} lottery`
+                            : 'Recorded'}
+                        {row.createdAt ? ` · ${formatPointsActivityWhen(Date.parse(row.createdAt))}` : ''}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </>
         )}
       </div>
     </div>
   )
+}
+
+function formatPointsActivityWhen(timestampMs: number): string {
+  const deltaMs = Date.now() - timestampMs
+  if (!Number.isFinite(deltaMs) || deltaMs < 0) return 'Just now'
+  const minutes = Math.floor(deltaMs / 60_000)
+  if (minutes < 1) return 'Just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 48) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 14) return `${days}d ago`
+  return new Date(timestampMs).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 function useIsPhoneViewport(): boolean {

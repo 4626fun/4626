@@ -9,8 +9,11 @@ export type AccountLinkProvider =
   | 'zora_cross_app'
 
 export type AccountScore = {
+  /** Canonical waitlist points (leaderboard, tiers, account tray). */
   points: number
   tier: number
+  /** AMOE lottery credits — shown only when lottery entry is relevant. */
+  amoeCredits: number
 }
 
 export type AccountCreatorCoin = {

@@ -1,10 +1,7 @@
-import { useEffect, useState } from 'react'
 import { ArrowUpRight, Check } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import type { AccountScore } from '@/features/accountSetup/types'
-import { apiFetch } from '@/lib/api/apiBase'
-import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { ReferralShareBlock } from './ReferralShareBlock'
 import { useMyReferralCode } from './useMyReferralCode'
 import { computeProgress } from './waitlistTiers'
@@ -20,36 +17,12 @@ export function WaitlistUnlocksPanel({
   email,
   className = '',
 }: WaitlistUnlocksPanelProps) {
-  const [amoeEligiblePoints, setAmoeEligiblePoints] = useState<number | null>(null)
-  const fallbackPoints = typeof score?.points === 'number' ? score.points : 0
-  const points = amoeEligiblePoints ?? fallbackPoints
-  const progress = computeProgress(points)
+  const waitlistPoints = typeof score?.points === 'number' ? Math.max(0, Math.floor(score.points)) : 0
+  const amoeCredits =
+    typeof score?.amoeCredits === 'number' ? Math.max(0, Math.floor(score.amoeCredits)) : waitlistPoints
+  const progress = computeProgress(waitlistPoints)
   const referral = useMyReferralCode(email)
-
-  useEffect(() => {
-    let cancelled = false
-    const loadAmoePoints = async () => {
-      try {
-        // Keep waitlist points in sync with `/swap` by using the same
-        // AMOE eligibility endpoint and weighting rules.
-        const response = await apiFetch('/api/v1/lottery/amoe/credits', {
-          method: 'GET',
-          withCredentials: true,
-        })
-        const payload = (await response.json().catch(() => null)) as ApiEnvelope<{ credits?: number }> | null
-        if (!response.ok || !payload?.success) return
-        const credits = Number(payload.data?.credits ?? 0)
-        if (!Number.isFinite(credits)) return
-        if (!cancelled) setAmoeEligiblePoints(Math.max(0, Math.floor(credits)))
-      } catch {
-        // Fall back to unified waitlist score when credits are unavailable.
-      }
-    }
-    void loadAmoePoints()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  const showAmoeNote = amoeCredits !== waitlistPoints
 
   return (
     <div className={`space-y-3.5 ${className}`}>
@@ -63,13 +36,20 @@ export function WaitlistUnlocksPanel({
           </span>
           <ArrowUpRight className="h-3 w-3 text-zinc-400 transition-colors group-hover:text-brand-200" aria-hidden="true" />
         </Link>
-        <div className="flex items-baseline gap-2">
-          <span className="font-display text-xl leading-none text-white tabular-nums">
-            {progress.points.toLocaleString()}
-          </span>
-          <span className="text-[11px] text-zinc-400">
-            {progress.points === 1 ? 'point' : 'points'}
-          </span>
+        <div className="flex flex-col items-end gap-0.5">
+          <div className="flex items-baseline gap-2">
+            <span className="font-display text-xl leading-none text-white tabular-nums">
+              {progress.points.toLocaleString()}
+            </span>
+            <span className="text-[11px] text-zinc-400">
+              {progress.points === 1 ? 'waitlist point' : 'waitlist points'}
+            </span>
+          </div>
+          {showAmoeNote ? (
+            <span className="text-[10px] text-zinc-500 tabular-nums">
+              {amoeCredits.toLocaleString()} lottery credits
+            </span>
+          ) : null}
         </div>
       </div>
 

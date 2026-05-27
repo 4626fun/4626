@@ -3,7 +3,8 @@
  *
  * Mirrors the server-side `toScoreTier` in
  * `frontend/server/_lib/identity/accountsIdentity.ts` so the UI stays in sync
- * with the tier returned by `/onboarding/bootstrap`.
+ * with the tier returned by `/api/waitlist/bootstrap` and `/api/accounts/me`.
+ * Tier thresholds use canonical **waitlist points** (leaderboard score), not AMOE credits.
  *
  * Copy intentionally avoids promising product perks that aren't in place. Each
  * tier is phrased as a progression signal rather than an unlock claim.

@@ -14,6 +14,7 @@ import { isAuthorizedWalletForProfile } from '../../../server/_lib/wallet/canoni
 
 
 
+import { readWaitlistPointsBreakdown } from '../../../server/_lib/onboarding/waitlistScoring.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 
 type WaitlistPositionResponse = {
@@ -165,50 +166,15 @@ export default async function handler(req: any, res: any) {
   const referralCode = typeof row?.referral_code === 'string' ? String(row.referral_code) : null
   const borderTier = safeInt(row?.border_tier)
 
-  const pointsAgg = await db.sql`
-    SELECT
-      (
-        SELECT COALESCE(
-          ROUND(
-            SUM(
-              CASE
-                WHEN source IN ('amoe_entry_spend', 'amoe_twitter_daily', 'amoe_xmtp_daily', 'amoe_entry_refund') THEN 0
-                WHEN source IN ('waitlist_signup', 'referral_passthrough', 'csw_link', 'amoe_checkin') THEN amount * 1.00
-                WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
-                WHEN source LIKE 'social_%' THEN amount * 0.50
-                WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
-                WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
-                WHEN source IN (
-                  'link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram',
-                  'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin'
-                ) THEN amount * 0.60
-                ELSE 0
-              END
-            )
-          ),
-          0
-        )::int
-        FROM points
-        WHERE signup_id = ${signupId}
-      ) AS total,
-      COALESCE(ROUND(SUM(CASE WHEN source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN amount * 0.60 ELSE 0 END)), 0)::int AS invite,
-      COALESCE(ROUND(SUM(CASE WHEN source = 'waitlist_signup' THEN amount * 1.00 ELSE 0 END)), 0)::int AS signup,
-      COALESCE(ROUND(SUM(CASE WHEN source = 'task' THEN amount * 0.30 ELSE 0 END)), 0)::int AS tasks,
-      COALESCE(ROUND(SUM(CASE WHEN source = 'csw_link' THEN amount * 1.00 ELSE 0 END)), 0)::int AS csw,
-      COALESCE(ROUND(SUM(CASE WHEN source LIKE 'social_%' THEN amount * 0.50 ELSE 0 END)), 0)::int AS social,
-      COALESCE(ROUND(SUM(CASE WHEN source LIKE 'bonus_%' THEN amount * 0.30 ELSE 0 END)), 0)::int AS bonus
-    FROM points
-    WHERE signup_id = ${signupId};
-  `
-  const p = pointsAgg?.rows?.[0] ?? {}
+  const breakdown = await readWaitlistPointsBreakdown(db as any, signupId)
   const points = {
-    total: safeInt(p.total),
-    invite: safeInt(p.invite),
-    signup: safeInt(p.signup),
-    tasks: safeInt(p.tasks),
-    csw: safeInt(p.csw),
-    social: safeInt(p.social),
-    bonus: safeInt(p.bonus),
+    total: breakdown.total,
+    invite: breakdown.invite,
+    signup: breakdown.signup,
+    tasks: breakdown.tasks,
+    csw: breakdown.csw,
+    social: breakdown.social,
+    bonus: breakdown.bonus,
   }
 
   // Referral breakdown (pending vs qualified).

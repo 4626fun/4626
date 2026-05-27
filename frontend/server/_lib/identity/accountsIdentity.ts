@@ -21,6 +21,10 @@ import {
 import { sanitizePersistedSubAccountAddress } from '../wallet/sanitizeBaseSubAccount.js'
 import { fetchZoraProfile } from '../zora/zoraProfile.js'
 import {
+  readAmoeEligibleCreditsForSignupId,
+  readWaitlistPointsBreakdown,
+} from '../onboarding/waitlistScoring.js'
+import {
   listProfileIdsForPrivyUser,
   resolvePrimaryProfileIdForPrivyUser,
 } from './profileIdForPrivyUser.js'
@@ -40,8 +44,11 @@ export type AccountLinkProvider =
   | 'zora_cross_app'
 
 export type AccountScore = {
+  /** Canonical waitlist points (leaderboard, tiers, tray, setup). */
   points: number
   tier: number
+  /** AMOE lottery credits — only for lottery entry surfaces. */
+  amoeCredits: number
   multipliers?: Record<string, number>
 }
 
@@ -510,31 +517,17 @@ async function resolveOrCreateCanonicalProfileIdForPrivyUser(db: Db, privyUserId
 
 async function readUnifiedScore(db: Db, privyUserId: string): Promise<AccountScore> {
   await ensureWaitlistSchema(db)
-  const profileIds = await listProfileIdsForPrivyUser(db, privyUserId)
-  if (profileIds.length === 0) return { points: 0, tier: 0 }
+  const profileId = await resolvePrimaryProfileIdForPrivyUser(db, privyUserId)
+  if (!profileId) return { points: 0, tier: 0, amoeCredits: 0 }
 
-  const totalResult = await db.sql`
-    SELECT COALESCE(SUM(b.credits), 0)::INT AS points
-    FROM points_amoe_eligible_balance b
-    WHERE b.signup_id IN (
-      -- Resolver mirrors listProfileIdsForPrivyUser: alias first, then
-      -- direct privy_user_id, chased through tombstone pointers.
-      WITH direct AS (
-        SELECT p3.id, p3.merged_into_profile_id
-        FROM profiles p3
-        WHERE p3.id IN (SELECT profile_id FROM privy_user_aliases WHERE privy_user_id = ${privyUserId})
-           OR p3.privy_user_id = ${privyUserId}
-      )
-      SELECT p4.id
-      FROM direct d
-      JOIN profiles p4
-        ON p4.id = COALESCE(d.merged_into_profile_id, d.id)
-      WHERE p4.merged_into_profile_id IS NULL
-    );
-  `
-  const total = Number(totalResult.rows?.[0]?.points ?? 0) || 0
-  const tier = toScoreTier(total)
-  return { points: total, tier }
+  const breakdown = await readWaitlistPointsBreakdown(db, profileId)
+  const amoeCredits = await readAmoeEligibleCreditsForSignupId(db, profileId)
+  const points = breakdown.total
+  return {
+    points,
+    tier: toScoreTier(points),
+    amoeCredits,
+  }
 }
 
 async function refreshScore(db: Db, privyUserId: string): Promise<AccountScore> {
