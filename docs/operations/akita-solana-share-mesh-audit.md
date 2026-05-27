@@ -141,5 +141,7 @@ SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=1
 ## Cross-links
 
 - [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md) — canonical policy
+- [solana-share-mesh-budget-paths.md](./solana-share-mesh-budget-paths.md) — share-mesh costs and Meteora UI checklist
+- [solana-bridge-naming-invariant.md](./solana-bridge-naming-invariant.md) — Pipe C creator SPL naming + parity runbook
 - [akita-keeper-stack-activation.md](./akita-keeper-stack-activation.md) — Base Charm/Ajna + orchestrator turn-on
-- `scripts/verify-solana-mint-parity.ts` — bridge-wrapped creator SPL `9JWh…` (Pipe C / registration — **not** share mesh)
+- `scripts/verify-solana-mint-parity.ts` — bridge-wrapped creator SPL `9JWh…` (Pipe C — **not** share mesh)

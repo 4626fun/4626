@@ -273,4 +273,7 @@ frontend/.env.deploy-dry-run.example
 .env*.local
 docs/4626-control-plane-migration-diagram.html
 docs/4626-control-plane-visual.html
+# Local solana-test-validator artifacts (cost probes)
+test-ledger/
 kpr/test-ledger/
+

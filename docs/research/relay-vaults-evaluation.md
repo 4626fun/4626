@@ -259,7 +259,7 @@ Maps Relay Vault `handle` / `claim` / `outstandingDebt` patterns to 4626's Solan
 2. **Promote rebalance from plan-only to production** — set `KPR_SOLANA_REBALANCE_EXECUTE=1` and `SOLANA_ORCHESTRATOR_REBALANCE_ENABLED=1` with destination map populated.
 3. **Checkpoint bridge tx hashes** — mirror Relay nonce dedupe in `keepr_workflow_checkpoints`.
 4. **Adapter balance SLA alert** — if adapter `balanceOf(creatorToken)` > threshold for > N hours without successful reconcile, page ops (analogous to uncleared `outstandingDebt`).
-5. **Document “in flight” state** in [`docs/operations/solana-bridge-naming-invariant.md`](/operations/solana-bridge-naming-invariant) — explicit Base→Solana two-hop diagram matching Relay’s handle/claim vocabulary for operator clarity.
+5. **Document “in flight” state** in [`docs/operations/solana-bridge-naming-invariant.md`](../operations/solana-bridge-naming-invariant.md) — explicit Base→Solana two-hop diagram matching Relay’s handle/claim vocabulary for operator clarity.
 
 ---
 

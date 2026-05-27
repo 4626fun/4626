@@ -226,6 +226,10 @@ P1b (optional B2) badge + hook PDAs + pool + relay_entries  →  Solana pool-buy
 
 Asset mesh on Solana: **not in current plan.**
 
+**Pipe C (orthogonal):** bridge-wrapped creator SPL naming and adapter parity —
+[solana-bridge-naming-invariant.md](./solana-bridge-naming-invariant.md). Do not
+use that mint grain for share-mesh lottery.
+
 ---
 
 ## Reference addresses (current mainnet)
