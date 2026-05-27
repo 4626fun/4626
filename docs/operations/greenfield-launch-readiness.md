@@ -7,7 +7,7 @@ Repeatable gate for **new vault deploys** (not grandfather migrations). Policy: 
 | Milestone | Ready when | Solana lottery relay |
 |-----------|------------|----------------------|
 | **Base vault live** | Deploy session complete; Base ShareOFT buy → lottery works | Off (`relay_entries` paused) |
-| **Solana lottery live** | Share-mesh Meteora pool + hook; test pool buy confirms Base lottery | On |
+| **Solana lottery live** | Share-mesh Meteora pool + LP; **B2:** test pool buy confirms Base lottery via `relay_entries`. **B1:** Meteora trading only (relay not shipped) | On (**B2 only**) |
 
 Base launch does not require Solana lottery relay.
 
@@ -90,15 +90,17 @@ Expect `readyForPipeAFinalizeBridge: true`. The deprecated `solana_bridge_strate
 - If Solana enabled: session reaches `ovault_mesh_confirmed`  
 - Base smoke: deposit, withdraw, ShareOFT **buy** → lottery entry  
 
-## Solana lottery flip (Phase B)
+## Solana lottery flip (Phase B — **B2 only today**)
 
-After share-mesh Meteora pool + hook and one verified pool buy:
+After share-mesh Meteora pool + LP, and (**B2**) hook PDAs + one verified pool buy → Base lottery:
 
 ```bash
 KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay,relay_entries
 SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=1
-# SOLANA_CREATOR_MINTS + SOLANA_SHARE_OFT_MAPPING → share mesh mint (not creator SPL)
+# SOLANA_CREATOR_MINTS + SOLANA_SHARE_OFT_MAPPING → hook / share mint (not creator SPL 9JWh…)
 ```
+
+**B1 (Meteora trading without Solana lottery relay):** stop after pool + LP; keep `relay_entries` off; Base Uniswap lottery remains live.
 
 Redeploy Vercel; restart orchestrator on Vultr.
 

@@ -1,8 +1,8 @@
 # Solana share mesh + lottery policy
 
-Canonical product policy for Solana-side vault shares, pools, and lottery entry. Locked 2026-05-25.
+Canonical product policy for Solana-side vault shares, pools, and lottery entry. Locked 2026-05-25; **amended 2026-05-27** (B1/B2 mint fork + Meteora UI visibility).
 
-Related: [Solana share mesh budget paths](./solana-share-mesh-budget-paths.md), [AKITA Solana share-mesh audit](./akita-solana-share-mesh-audit.md), [AKITA keeper stack activation](./akita-keeper-stack-activation.md), [Solana bridge naming invariant](./solana-bridge-naming-invariant.md).
+Related: [Solana share mesh budget paths](./solana-share-mesh-budget-paths.md), [AKITA Solana share-mesh audit](./akita-solana-share-mesh-audit.md), [AKITA keeper stack activation](./akita-keeper-stack-activation.md).
 
 ## Decisions (locked)
 
@@ -10,9 +10,19 @@ Related: [Solana share mesh budget paths](./solana-share-mesh-budget-paths.md), 
 |---|--------|
 | 1 | Tradable Solana shares come from **bridging ShareOFT from Base** (LayerZero share mesh via `solana_ovault_mesh` + `OVaultHubComposer` wiring). Not from a creator re-deposit loop. |
 | 2 | **30% of minted ShareOFT auto-bridges to Solana at finalizePhase2** (LayerZero `send` to `solanaDestination` when OVault runtime is enabled on the batcher). This replaces the deprecated `solana_bridge_strategy` Phase-3 TVL lane. |
-| 3 | **Lottery fires only on pool buy** of the share mesh token. Not on compose deposit, not on bridge receipt, not on creator-coin trades. |
+| 3 | **Lottery fires only on pool buy** of the tradable share token (**B1:** LZ share mesh; **B2:** hook mint after badge). Not on compose deposit, not on bridge receipt, not on creator-coin trades. |
 | 4 | **Meteora DLMM** (or successor venue) pairs **share mesh** as the base asset — not bridge-wrapped creator SPL from the legacy `wrap-token` provisioner path. Pool parameters TBD. |
-| 5 | **`relay_entries` is paused** until a share-mesh pool exists and the transfer hook (or equivalent) fires on **share mesh pool buys**. |
+| 5 | **`relay_entries` is paused** until a share-mesh pool exists **and** a lottery detection path is live on that mint (today: **B2 hook + `PendingEntries` only**; B1 off-chain relay is not shipped). |
+
+## B1 vs B2 — implementation status (read before Phase B)
+
+| Capability | **B1** — LZ standard SPL mesh + Meteora | **B2** — Token-2022 + `TransferHook` |
+|------------|----------------------------------------|----------------------------------------|
+| Meteora pool + UI (with LP seed) | **Supported now** (`create-dlmm-pool.ts`) | **Supported after** Meteora admin `token_badge` |
+| Solana `relay_entries` → Base lottery | **Not wired in repo yet** — keep off; Base Uniswap lottery still works | **Supported now** (`keepr-solana-relay-entries`) |
+| `SOLANA_CREATOR_MINTS` target | Share mesh mint (for future B1 indexer) | Share mesh **or** hook mint — must match relay grain |
+
+**Default greenfield recommendation until B1 relay ships:** Path 1 + optional Meteora pool for Solana **trading visibility**; **Base ShareOFT buy lottery**; `relay_entries` **off**.
 
 ## Three pipes (do not conflate)
 
@@ -20,7 +30,7 @@ Related: [Solana share mesh budget paths](./solana-share-mesh-budget-paths.md), 
 PIPE A — User share distribution (lottery surface)
   Base ShareOFT ──LZ bridge──► Solana share mesh
        └── Meteora pool (share mesh + quote)
-       └── Pool buy ──► lottery entry ──► Base CreatorLotteryManager (VRF)
+       └── Pool buy ──► lottery entry (B2: hook relay today; B1: TBD) ──► Base CreatorLotteryManager (VRF)
 
 PIPE B — User vault entry from Solana (no lottery)
   Solana asset mesh (creator OFT) ──compose deposit──► OVaultHubComposer ──► ShareOFT on Base
@@ -74,32 +84,63 @@ Base ShareOFT Uniswap buys continue to enter the lottery on Base without Solana 
 
 ### Phase B — Pool + lottery relay
 
-1. Create Meteora DLMM (or chosen venue) with **share mesh mint** as base asset.
-2. Attach transfer hook to **share mesh mint** (or use venue-compatible fee plane); allowlist pool program in `CreatorConfig`.
-3. Update env:
+**Mint-type fork (do not skip):**
+
+| Lane | Share mint | Meteora pool | Hook / `relay_entries` |
+|------|------------|--------------|------------------------|
+| **B1 — Meteora UI default** | LZ **standard SPL** share mesh (Path 1) | Pool **share mesh + WSOL/USDC** | Off-chain swap detection or alternate relay — **not** `setup-creator-full` Token-2022 hook on the LZ mint |
+| **B2 — On-chain hook** | Token-2022 mint with `TransferHook` | Same mint only after Meteora **admin `token_badge`** | `setup-creator-full` PDAs + `relay_entries` |
+
+Path 1 LZ share mesh and legacy `setup-creator-full` hook mints are **different grains**. Do not point Meteora, hook PDAs, and `SOLANA_CREATOR_MINTS` at three different mints.
+
+1. **Pick lane** — B1 (LZ standard SPL mesh) or B2 (Token-2022 + `TransferHook` on a **single** tradable mint).
+2. **B2 only (before pool create):** Meteora admin **`token_badge`** → `setup-creator-full` hook PDAs → allowlist Meteora program in `CreatorConfig`.
+3. Create Meteora DLMM — **B1:** base = LZ share mesh mint; **B2:** base = hook mint from step 2. `ACTIVATION_DELAY_SECONDS=0` for immediate UI; `METEORA_HAS_ALPHA_VAULT=1` only for Alpha Vault launch lane.
+4. Seed LP after pool create (bridge share supply from Base first if needed).
+5. Update env (**B2 only today** — do not enable `relay_entries` for B1 until off-chain relay ships):
 
 ```bash
-# Example shape — use the actual share mesh mint pubkey, NOT creator SPL 9JWh…
-SOLANA_SHARE_OFT_MAPPING='{"<share_mesh_mint>":"0x4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57"}'
-SOLANA_CREATOR_MINTS=<share_mesh_mint>   # monitor PendingEntries on share mesh only
+# Example shape — use the actual share mesh / hook mint pubkey, NOT creator SPL 9JWh…
+SOLANA_SHARE_OFT_MAPPING='{"<mint_pubkey>":"<base_share_oft_address>"}'
+SOLANA_CREATOR_MINTS=<mint_pubkey>   # B2: PendingEntries mint; must match relay grain
 ```
 
-4. Re-enable:
+6. Re-enable (**B2 only**):
 
 ```bash
 KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay,relay_entries
 SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=1
 ```
 
-5. Verify one manual pool buy → PendingEntries PDA → `processLotteryEntryFromSolana` → `processSwapLottery` on Base.
+7. Verify one manual pool buy → **B2:** PendingEntries PDA → Base lottery; **B1:** confirm Meteora swap only (Solana lottery relay N/A until shipped).
+
+## Meteora UI visibility
+
+Meteora DLMM is **permissionless for standard SPL mints** — no manual “listing application.” A pool is discoverable on [app.meteora.ag](https://app.meteora.ag) when **pool + activation + liquidity** exist.
+
+**Two different “badge” concepts (do not conflate):**
+
+| Term | What it is | How to get it |
+|------|------------|---------------|
+| **Meteora admin `token_badge`** | On-chain PDA Meteora initializes for **permissioned Token-2022 extensions** (incl. `TransferHook`) | Meteora Google Form + Discord per [Token 2022 extensions](https://docs.meteora.ag/overview/products/dlmm/token-2022-extensions) — required **before** pool create on hook mints |
+| **`prepare-token-badge.ts` payload** | Off-chain metadata / token-list JSON for wallets and indexers | `BADGE_TARGET=meteora pnpm -C kpr solana:prepare-token-badge` — improves name/logo display; **does not** replace admin `token_badge` |
+
+Checklist:
+
+1. **Pool the tradable mint** — for Path 2 target, that is the **LZ share mesh mint**, not bridge-wrapped creator SPL (`9JWh…`). Script: `kpr/scripts/solana/launch/create-dlmm-pool.ts`.
+2. **Start trading immediately** — default `ACTIVATION_DELAY_SECONDS=0`. Scheduled Alpha Vault launches: set `METEORA_HAS_ALPHA_VAULT=1` and `ACTIVATION_DELAY_SECONDS=604800` (legacy provisioner auto-pool uses this).
+3. **Seed LP** after pool create. Creating the pool account alone is not enough for swaps or Jupiter routes.
+4. **Display metadata (optional)** — run `prepare-token-badge` with `TOKEN_MINT`, `TOKEN_NAME`, `TOKEN_SYMBOL`, stable `TOKEN_METADATA_URI`, and `CREATOR_TOKEN` for logo proxy.
+5. **Token-2022 + TransferHook on the pool mint (B2 only)** — pool create fails without Meteora admin `token_badge`. If badge is blocked, use B1 (standard SPL mesh + Meteora) and keep Base-only hook lottery until product changes direction.
+6. **Confirm in UI** — search mint or pool PDA on [app.meteora.ag/pools](https://app.meteora.ag/pools).
+
+Full checklist table: [solana-share-mesh-budget-paths.md](./solana-share-mesh-budget-paths.md#meteora-ui-visibility-required-for-discoverable-trading).
 
 ## Meteora + Token-2022 caveat
 
-Meteora DLMM rejects Token-2022 mints with Transfer Hook extension. If share mesh requires hook-on-mint for lottery detection:
+**B1 (typical LZ OFT = standard SPL):** permissionless Meteora DLMM after pool create + LP seed. Solana lottery relay stays on Base until a B1 swap-indexer relay is implemented.
 
-- Prefer **standard SPL share mesh** + off-chain or adapter relay keyed to pool swap events, **or**
-- Use a pool venue that supports Token-2022 + hook, **or**
-- Keep Solana lottery relay disabled and rely on Base pool buys until resolved.
+**B2 (Token-2022 + `TransferHook`):** Meteora treats `TransferHook` as **permissioned** — pool create fails until Meteora admin initializes **`token_badge`**. Then `setup-creator-full` PDAs + `relay_entries` match the shipped keeper path.
 
 Do not provision legacy bridge-wrapped creator SPL pools and call them “share lottery.”
 
@@ -130,5 +171,5 @@ pnpm -C kpr preflight-orchestrator
 | Phase | Done when |
 |-------|-----------|
 | **A** | Share mesh mint exists on Solana; supply bridged from Base ShareOFT |
-| **B** | Share mesh LP live; hook/relay mapped to share mesh → ShareOFT; `relay_entries` enabled |
+| **B** | Share mesh LP live on Meteora; **B2:** `relay_entries` on hook mint; **B1:** trading only until off-chain relay ships |
 | **C** | Strategy bridge / Meteora Alpha (optional); stays separate from user lottery pipe |

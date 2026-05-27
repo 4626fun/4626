@@ -1,8 +1,8 @@
 /**
- * Prepare Token-2022 badge metadata for the creator share token.
+ * Prepare token display metadata for Solana ecosystem indexers (wallets, Jupiter, etc.).
  *
- * Token badges are required for Solana ecosystem tools (e.g., Jupiter, Phantom)
- * to properly display Token-2022 tokens with extensions.
+ * This is NOT Meteora's on-chain admin `token_badge` (required for permissioned Token-2022
+ * extensions before DLMM pool create). See docs/operations/solana-share-mesh-lottery-policy.md.
  *
  * Usage:
  *   pnpm solana:prepare-token-badge
@@ -183,8 +183,9 @@ console.log();
 console.log('Wallet visibility checklist:');
 console.log('  1. Ensure TOKEN_METADATA_URI (or TOKEN_URI) resolves to valid JSON metadata');
 console.log('  2. Prefer CREATOR_TOKEN proxy fallback; use TOKEN_IMAGE override only when intentional');
-console.log('  3. Submit token-list entry to target indexers (Jupiter/Meteora/Orca as applicable)');
+console.log('  3. Submit token-list entry to target indexers where applicable (e.g. Jupiter strict list process)');
 console.log('  4. Keep metadata URI + logo URI stable after launch (avoid rotating URLs)');
+console.log('  5. For Token-2022 DLMM pools: Meteora admin token_badge is a separate on-chain step (see policy doc)');
 console.log();
 console.log('For Phantom/Backpack wallet display, the metadata will be read');
 console.log('from on-chain metadata pointer extension or the token registry.');

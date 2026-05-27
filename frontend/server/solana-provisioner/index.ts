@@ -808,6 +808,10 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
             BIN_STEP: binStep,
             ACTIVE_ID: '0',
             FEE_BPS: poolFeeBps,
+            // Legacy auto-pool lane creates Alpha Vault immediately after the pool.
+            METEORA_HAS_ALPHA_VAULT: '1',
+            ACTIVATION_DELAY_SECONDS:
+              process.env.SOLANA_POOL_ACTIVATION_DELAY_SECONDS ?? '604800',
           }
           const { stdout: poolOut, stderr: poolErr } = await execFileAsync(
             'node',

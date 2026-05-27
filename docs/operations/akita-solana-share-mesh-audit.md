@@ -59,7 +59,7 @@ pnpm -C frontend exec tsx scripts/verify-solana-mint-parity.ts \
 
 ## Bridge-wrapped creator SPL (legacy Pipe C — not lottery token)
 
-Legacy adapter `0x90F578…` / `HuY4…9ouR` may still hold historical mapping — **not** canonical; see [solana-bridge-naming-invariant.md](./solana-bridge-naming-invariant.md).
+Legacy adapter `0x90F578…` / `HuY4…9ouR` may still hold historical mapping — **not** canonical. Bridge-wrapped creator SPL parity: `pnpm -C frontend exec tsx scripts/verify-solana-mint-parity.ts --creator 0x<creator>`.
 
 ## Current orchestrator env (WRONG grain for lottery policy)
 
@@ -81,7 +81,7 @@ Enabling `relay_entries` today would relay hook entries keyed to **creator SPL**
 | LZ share mesh mint deployed + peered to Base ShareOFT | **Not confirmed** |
 | ShareOFT bridged Base → Solana for LP seed | **Not done** |
 | Meteora pool base asset = share mesh | **Not done** (existing provisioner path targets creator SPL) |
-| Transfer hook on share mesh + pool allowlist | **Not done** |
+| Transfer hook + pool on **same** mint | **Product fork** — B1: standard SPL mesh + Meteora; B2: Token-2022 + Meteora admin `token_badge` |
 | `relay_entries` enabled | **Should stay off** |
 
 ## Meteora / provisioner (legacy vs target)
@@ -89,9 +89,9 @@ Enabling `relay_entries` today would relay hook entries keyed to **creator SPL**
 | Path | Asset | Lottery? |
 |------|-------|----------|
 | `POST /provision` + `create-dlmm-pool` (today) | Bridge-wrapped creator SPL `9JWh…` | **No** (wrong token; trading only) |
-| Target Pipe A | Share mesh from Base ShareOFT bridge | **Yes** (pool buy only) |
+| Target Pipe A | Share mesh from Base ShareOFT bridge | **B2:** pool buy → Base lottery via `relay_entries`. **B1:** Meteora trading only |
 
-Meteora rejects Token-2022 + Transfer Hook — resolve before enabling Solana hook lottery on DLMM (see policy doc).
+Meteora **permissioned** Token-2022 extensions (incl. `TransferHook`) require admin `token_badge` before DLMM pool create — resolve B1 vs B2 fork before enabling Solana hook lottery (see policy doc).
 
 ## Recommended AKITA sequence
 
@@ -109,16 +109,19 @@ Meteora rejects Token-2022 + Transfer Hook — resolve before enabling Solana ho
 
 ### Phase B — Pool + lottery relay
 
-1. Create Meteora pool: **share mesh** + USDC/SOL (params TBD).
-2. Init hook PDAs on **share mesh mint**; allowlist Meteora program.
-3. Update orchestrator:
+1. **Pick B1 or B2** (see policy mint fork). **B2 only (before pool):** Meteora admin `token_badge` → hook PDAs on Token-2022 mint → allowlist Meteora program.
+2. Create Meteora pool: **B1** base = **share mesh**; **B2** base = hook mint from step 1. Quote USDC/SOL; `ACTIVATION_DELAY_SECONDS=0` unless Alpha Vault lane.
+3. Seed LP.
+4. Update orchestrator (**B2 only** — use hook mint pubkey when B2):
 
 ```bash
-SOLANA_CREATOR_MINTS=<share_mesh_mint_pubkey>
-SOLANA_SHARE_OFT_MAPPING='{"<share_mesh_mint_pubkey>":"0x4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57"}'
+SOLANA_CREATOR_MINTS=<mint_pubkey>   # B2: hook mint with PendingEntries; B1: share mesh (relay off)
+SOLANA_SHARE_OFT_MAPPING='{"<mint_pubkey>":"0x4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57"}'
+KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay,relay_entries
+SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=1
 ```
 
-4. Re-enable `relay_entries`; run one test buy and confirm Base `processSwapLottery`.
+5. Run one test pool buy → **B2:** confirm Base `processSwapLottery`. **B1:** confirm Meteora swap only.
 
 ### Optional (Pipe C — strategy)
 
@@ -132,11 +135,11 @@ SOLANA_SHARE_OFT_MAPPING='{"<share_mesh_mint_pubkey>":"0x4df30fFfDA1D4A81bcf4DC7
 | No share mesh mint / peer for AKITA | Pipe A entirely |
 | `relay_entries` on creator SPL | Wrong lottery entries if enabled |
 | Adapter not registered | Strategy bridge + some preflight paths |
-| Meteora + hook incompatibility | Solana pool-buy detection design |
+| Meteora + hook / badge fork unresolved | Solana pool-buy + lottery relay design (B1 vs B2) |
 | Grandfathered vault / no registry row | Keeper HTTP fan-out (separate — see keeper activation doc) |
 
 ## Cross-links
 
 - [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md) — canonical policy
 - [akita-keeper-stack-activation.md](./akita-keeper-stack-activation.md) — Base Charm/Ajna + orchestrator turn-on
-- [solana-bridge-naming-invariant.md](./solana-bridge-naming-invariant.md) — creator SPL `9JWh…` derivation (not share mesh)
+- `scripts/verify-solana-mint-parity.ts` — bridge-wrapped creator SPL `9JWh…` (Pipe C / registration — **not** share mesh)

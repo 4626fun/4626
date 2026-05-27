@@ -374,9 +374,9 @@ async function main() {
         new BN(0),
         new BN(100),
         DLMM.ActivationType.Timestamp,
-        true,
+        false,
         payer.publicKey,
-        new BN(Math.floor(Date.now() / 1000) + 604800),
+        new BN(Math.floor(Date.now() / 1000)),
         false,
         { cluster },
       );

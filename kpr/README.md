@@ -215,12 +215,15 @@ The command prints two artifacts:
 2. otherwise use `TOKEN_IMAGE` / `TOKEN_IMAGE_URL` (explicit image)
 3. if both are set, proxy wins by default; set `TOKEN_IMAGE_EXPLICIT_OVERRIDE=1` to force explicit image
 
-For reliable wallet/aggregator icon display (Phantom/Backpack/Jupiter/Meteora),
+For reliable wallet/aggregator icon display (Phantom/Backpack/Jupiter),
 complete all of the following:
 1. host a stable metadata URI (`TOKEN_METADATA_URI` or `TOKEN_URI`)
 2. use proxy fallback via `CREATOR_TOKEN` (or explicit image override when intentional)
-3. submit the generated token-list entry to the target ecosystem indexers
+3. submit the generated token-list entry to the target indexer process where one exists (Jupiter, etc.)
 4. avoid changing metadata/image URLs after launch
+
+Meteora DLMM pool visibility is **on-chain** (pool + activation + LP) — not driven by this script.
+Meteora admin **`token_badge`** for Token-2022 hook mints is a separate Meteora ops process.
 
 ## Solana Deployment Scripts
 
