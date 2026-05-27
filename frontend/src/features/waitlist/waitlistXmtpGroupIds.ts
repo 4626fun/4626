@@ -2,6 +2,7 @@ export function collectWaitlistGroupIdCandidates(input: {
   groupId: string | null | undefined
   envGroupId?: string | null | undefined
   vaultGroupId?: string | null | undefined
+  groupIdMismatch?: boolean
 }): string[] {
   const ids: string[] = []
   const add = (value: string | null | undefined) => {
@@ -10,6 +11,11 @@ export function collectWaitlistGroupIdCandidates(input: {
     if (!ids.some((id) => id.toLowerCase() === trimmed.toLowerCase())) {
       ids.push(trimmed)
     }
+  }
+
+  if (input.groupIdMismatch) {
+    add(input.vaultGroupId ?? input.groupId)
+    return ids
   }
 
   add(input.groupId)

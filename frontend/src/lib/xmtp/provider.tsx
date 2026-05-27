@@ -51,6 +51,7 @@ import {
   truncateAddress,
   conversationIdsEqual,
   resolveConversationById,
+  resolveConversationByIdWithSyncRetries,
 } from '@/lib/xmtp/xmtpHelpers'
 import {
   buildXmtpDbPath,
@@ -1330,7 +1331,10 @@ export function XmtpChatProvider({
       listGroups?: () => Promise<Array<Conversation | Dm | Group>>
     }
 
-    const convo = await resolveConversationById(conversationsApi, normalizedId)
+    const convo = await resolveConversationByIdWithSyncRetries(conversationsApi, normalizedId, {
+      rounds: identityHintAddressRef.current ? 5 : 3,
+      delayMs: 500,
+    })
     if (!convo) return null
 
     try {

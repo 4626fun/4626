@@ -261,8 +261,9 @@ function WaitlistGroupChatSurface(props: {
         groupId,
         envGroupId,
         vaultGroupId,
+        groupIdMismatch,
       }),
-    [envGroupId, groupId, vaultGroupId],
+    [envGroupId, groupId, groupIdMismatch, vaultGroupId],
   )
 
   const syncWaitlistGroups = useCallback(async () => {
@@ -477,11 +478,10 @@ function WaitlistGroupChatSurface(props: {
           joinStatus === 'executing') ? (
           <p className="text-xs text-red-300">{joinActionError}</p>
         ) : null}
-        {groupIdMismatch ? (
+        {groupIdMismatch && joinStatus !== 'executed' ? (
           <p className="text-xs text-amber-200/90">
-            Waitlist chat env group id ({envGroupId?.slice(0, 8)}…) differs from the live keepr
-            vault ({vaultGroupId?.slice(0, 8)}…). We are re-joining on the vault group and checking
-            both ids in this browser.
+            Waitlist chat is migrating to the live vault group ({vaultGroupId?.slice(0, 8)}…). We
+            will add you there automatically.
           </p>
         ) : null}
         {identityMismatch ? (
@@ -500,8 +500,14 @@ function WaitlistGroupChatSurface(props: {
         ) : null}
         {syncTimedOut ? (
           <p className="text-xs text-amber-200/90">
-            The group is still syncing. Try refresh below, reconnect messaging, or retry join.
+            The group is still syncing. Try refresh below, reset local messaging state, or reconnect
+            messaging.
           </p>
+        ) : null}
+        {syncTimedOut ? (
+          <Button type="button" variant="secondary" size="sm" onClick={() => void resetLocalState()}>
+            Reset local XMTP state
+          </Button>
         ) : null}
         <div className="flex flex-wrap gap-2">
           <Button

@@ -355,16 +355,28 @@ export async function resolveConversationById(
     // continue
   }
 
-  if (typeof conversationsApi.listGroups === 'function') {
+  return null
+}
+
+export async function resolveConversationByIdWithSyncRetries(
+  conversationsApi: ConversationsApiLike,
+  conversationId: string,
+  options?: { rounds?: number; delayMs?: number },
+): Promise<ConversationLike | null> {
+  const rounds = Math.max(1, options?.rounds ?? 3)
+  const delayMs = Math.max(0, options?.delayMs ?? 400)
+
+  for (let round = 0; round < rounds; round += 1) {
+    const resolved = await resolveConversationById(conversationsApi, conversationId)
+    if (resolved) return resolved
+    if (round + 1 >= rounds) break
     try {
-      const groups = await conversationsApi.listGroups()
-      const match = groups.find((convo) => conversationIdsEqual(convo.id, normalizedId)) ?? null
-      if (match) {
-        await syncConversationIfSupported(match)
-        return match
-      }
+      await conversationsApi.sync()
     } catch {
-      // continue
+      // best effort
+    }
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
     }
   }
 

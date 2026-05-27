@@ -13,6 +13,17 @@ describe('waitlistXmtpGroupIds', () => {
     ).toEqual(['Ed6FbDa3AAA', '543a2ed196de4aa6a02df5145c5fdfaf'])
   })
 
+  it('uses only the vault group id when env drift is flagged', () => {
+    expect(
+      collectWaitlistGroupIdCandidates({
+        groupId: 'ed6fbda34f2614536df5cec08dff2266',
+        envGroupId: '543a2ed196de4aa6a02df5145c5fdfaf',
+        vaultGroupId: 'ed6fbda34f2614536df5cec08dff2266',
+        groupIdMismatch: true,
+      }),
+    ).toEqual(['ed6fbda34f2614536df5cec08dff2266'])
+  })
+
   it('finds a group conversation across candidate ids', () => {
     const match = findWaitlistGroupConversation(
       [
