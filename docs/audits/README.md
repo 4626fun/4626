@@ -9,6 +9,7 @@ Security and trust artifacts for the public docs audience. These are **not** a s
 
 | Doc | Purpose |
 |-----|---------|
+| [bug-audit-worksheet.md](./bug-audit-worksheet.md) | **Start here** for bug audits — lane order, file checklists, tests, regression signals. |
 | [system.md](./system.md) | Protocol/system economic and governance review (long-form). |
 | [ajna/](./ajna/) | Ajna adversarial audit, executive brief, and Q&A compendium. |
 | [charm/](./charm/) | Charm V2 adversarial audit, executive brief, and master Q&A. |
