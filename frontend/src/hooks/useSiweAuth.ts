@@ -765,11 +765,13 @@ export function useSiweAuth() {
   const connectBaseAccountWalletForSignIn = useCallback(async (): Promise<boolean> => {
     if (typeof connectWallet !== 'function') return false
     try {
-      const result = await connectWallet({
-        walletList: [...BASE_ACCOUNT_WALLET_LOGIN_LIST],
-        walletChainType: 'ethereum-only',
-        description: 'Sign in with your Coinbase Smart Wallet on Base.',
-      }).catch((connectError: unknown) => {
+      const result = await Promise.resolve(
+        connectWallet({
+          walletList: [...BASE_ACCOUNT_WALLET_LOGIN_LIST],
+          walletChainType: 'ethereum-only',
+          description: 'Sign in with your Coinbase Smart Wallet on Base.',
+        }),
+      ).catch((connectError: unknown) => {
         const message = connectError instanceof Error ? connectError.message : String(connectError ?? '')
         if (message.toLowerCase().includes('user') && message.toLowerCase().includes('reject')) return null
         throw connectError
@@ -781,7 +783,9 @@ export function useSiweAuth() {
           : (result ?? null)
 
       if (selectedWallet && typeof setActiveWallet === 'function') {
-        await Promise.resolve(setActiveWallet(selectedWallet)).catch(() => null)
+        await Promise.resolve(setActiveWallet(selectedWallet as Parameters<typeof setActiveWallet>[0])).catch(
+          () => null,
+        )
       }
 
       return Boolean(selectedWallet ?? result)

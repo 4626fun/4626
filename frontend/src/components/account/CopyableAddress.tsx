@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, type MouseEvent } from 'react'
 import { Check, Copy } from 'lucide-react'
 
 /**
@@ -67,4 +67,51 @@ function formatShort(address: string): string {
   if (!address) return ''
   if (address.length <= 10) return address
   return `${address.slice(0, 6)}…${address.slice(-4)}`
+}
+
+/**
+ * Compact copy control for placing next to a primary address label.
+ * Copies the full address; shows a brief check after success.
+ */
+export function InlineAddressCopyButton({
+  address,
+  className,
+}: {
+  address: string
+  className?: string
+}) {
+  const [copied, setCopied] = useState(false)
+
+  const onCopy = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+      if (!address) return
+      try {
+        void navigator.clipboard.writeText(address)
+        setCopied(true)
+        window.setTimeout(() => setCopied(false), 1200)
+      } catch {
+        /* non-fatal */
+      }
+    },
+    [address],
+  )
+
+  return (
+    <button
+      type="button"
+      onClick={onCopy}
+      title={`Copy ${formatShort(address)}`}
+      aria-label={`Copy address ${formatShort(address)}`}
+      className={`inline-flex shrink-0 items-center justify-center rounded-md p-1 text-zinc-500 transition-colors hover:text-zinc-200 ${className ?? ''}`}
+    >
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-emerald-300" aria-hidden />
+      ) : (
+        <span className="text-sm leading-none" aria-hidden>
+          ⧉
+        </span>
+      )}
+    </button>
+  )
 }

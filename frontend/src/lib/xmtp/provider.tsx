@@ -53,7 +53,6 @@ import {
   shouldFallbackToOriginalXmtpRecipient,
   truncateAddress,
   conversationIdsEqual,
-  resolveConversationById,
   resolveConversationByIdWithSyncRetries,
   syncConversationsForGroupDiscovery,
   groupMembershipListOptions,
@@ -102,7 +101,7 @@ import {
   type AsyncStreamProxy,
 } from '@xmtp/browser-sdk'
 import { IdentifierKind } from '@xmtp/browser-sdk'
-import { encodeAbiParameters, recoverMessageAddress, hashMessage } from 'viem'
+import { encodeAbiParameters, getAddress, hashMessage, isAddress, recoverMessageAddress, type Address } from 'viem'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1237,12 +1236,14 @@ export function XmtpChatProvider({
       .map((summary) => summary.peerAddress)
       .filter((addr): addr is string => Boolean(addr))
     if (peerAddresses.length === 0) return
-    prefetchBasenameForAddresses(peerAddresses)
+    prefetchBasenameForAddresses(
+      peerAddresses.filter((addr): addr is Address => isAddress(addr)).map((addr) => getAddress(addr)),
+    )
     prefetchIdentities(peerAddresses)
   }, [])
 
   // ------- build conversation summary -------
-  const buildConvoSummary = useCallback(async (convo: Conversation | Dm | Group): Promise<ChatConversation> => {
+  const buildConvoSummary = useCallback(async (convo: Conversation<unknown> | Dm<unknown> | Group<unknown>): Promise<ChatConversation> => {
     const isDm = 'peerInboxId' in convo
     let name = ''
     let imageUrl: string | undefined
@@ -1329,16 +1330,16 @@ export function XmtpChatProvider({
       list: () => Promise<Array<Conversation | Dm | Group>>
       listGroups?: () => Promise<Array<Conversation | Dm | Group>>
     }
-    await syncConversationsForGroupDiscovery(conversationsApi, {
+    await syncConversationsForGroupDiscovery(conversationsApi as unknown as import('@/lib/xmtp/xmtpHelpers').ConversationsApiLike, {
       force: options?.force,
       lightweight: manualConnectOnlyRef.current && !options?.force,
     })
     const listOptions = groupMembershipListOptions()
     const convos = await client.conversations.list(listOptions)
-    let mergedConvos = [...convos]
+    let mergedConvos: Array<Conversation<unknown> | Dm<unknown> | Group<unknown>> = [...convos]
     if (typeof conversationsApi.listGroups === 'function') {
       try {
-        const groups = await conversationsApi.listGroups(listOptions)
+        const groups = await conversationsApi.listGroups()
         for (const group of groups) {
           if (!mergedConvos.some((convo) => conversationIdsEqual(convo.id, group.id))) {
             mergedConvos.push(group)
@@ -1642,7 +1643,7 @@ export function XmtpChatProvider({
       })
       if (settled) {
         connectWalletAddress = settled.address
-        connectWalletClient = settled.walletClient
+        connectWalletClient = settled.walletClient as typeof connectWalletClient
         connectWalletConnector = settled.connector ?? connectWalletConnector
       }
     }
@@ -1903,7 +1904,7 @@ export function XmtpChatProvider({
       const setupConversations = async (client: Client) => {
         await client.conversations.sync()
         const convos = await client.conversations.list()
-        let mergedConvos = [...convos]
+        let mergedConvos: Array<Conversation<unknown> | Dm<unknown> | Group<unknown>> = [...convos]
         const conversationsApi = client.conversations as {
           listGroups?: () => Promise<Array<Conversation | Dm | Group>>
         }
@@ -2958,7 +2959,8 @@ export function XmtpChatProvider({
     const client = clientRef.current
     if (!client) return []
     try {
-      let convo = await client.conversations.getConversationById(conversationId)
+      let convo: Conversation | Dm | Group | null | undefined =
+        await client.conversations.getConversationById(conversationId)
       if (!convo) {
         const conversationsApi = client.conversations as {
           sync: () => Promise<unknown>
@@ -3025,7 +3027,8 @@ export function XmtpChatProvider({
         >
       }
 
-      let convo = await client.conversations.getConversationById(conversationId)
+      let convo: Conversation | Dm | Group | null | undefined =
+        await client.conversations.getConversationById(conversationId)
       if (!convo) {
         evictConversationFromCache(conversationId)
         const resolved = await resolveConversationByIdWithSyncRetries(conversationsApi, conversationId, {

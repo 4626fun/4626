@@ -1560,7 +1560,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
               sender: smartWallet,
             },
           })
-          const rawSig = (await owner.sign({ hash: userOpHash })) as Hex
+          const rawSig = (await owner.sign!({ hash: userOpHash })) as Hex
           const parsed = parseCoinbaseSignatureWrapper(rawSig)
           if (
             parsed &&

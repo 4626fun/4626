@@ -207,7 +207,7 @@ export function useAccountMe(): {
 
   useEffect(() => {
     let cancelled = false
-    let retryTimeout: ReturnType<typeof setTimeout> | undefined
+    let retryTimeout: number | undefined
     // Reuse a successful module cache on first mount only. Do not skip when
     // `cached === null` — that often means Privy was not ready on the first
     // tick and we must refetch once `getAccessToken` becomes available.

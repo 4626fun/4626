@@ -24,7 +24,7 @@ Internal process runbooks (supply-chain setup, advisories triage, production par
 - `.github/workflows/security-scanning.yml` — gitleaks (incremental), pnpm audit summaries (root, `frontend/`, `kpr/`, `apps/docs-site/`), blocking Semgrep on `frontend/api` + `frontend/server/_lib` + `frontend/packages/server-core/src`, Slither (report-only).
 - `.github/workflows/security-scanning.yml` — launch branches (`launch/*`) also run a **blocking** Slither gate that fails on **high-impact** findings.
 - `.github/workflows/dependency-review.yml` — on PRs, blocks **new** **high** or **critical** vulnerabilities in **runtime and development** dependencies.
-- `.github/workflows/test.yml` — Forge tests, frontend lint/typecheck/tests.
+- `.github/workflows/test.yml` — Forge tests, frontend lint/typecheck/tests, **strategy-reallocator-guards** (KPR pass-loop + Foundry rebalance wiring).
 - `gitleaks.toml` — allowlists for vendored snapshots and test/doc noise.
 - `slither.config.json` — `filter_paths` to reduce vendored noise in Slither reports.
 

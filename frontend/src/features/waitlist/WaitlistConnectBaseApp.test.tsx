@@ -58,14 +58,6 @@ vi.mock('@/lib/wallet/subAccountBaseAppRegister', () => ({
   registerBaseAppSubAccountLink: (...args: unknown[]) => registerMock(...args),
 }))
 
-function jsonResponse(status: number, body: Record<string, unknown>): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body,
-  } as unknown as Response
-}
-
 function mockProvision(created = true) {
   hookState.provision.mockResolvedValueOnce({
     parentAddress: PARENT,
@@ -142,7 +134,7 @@ describe('WaitlistConnectBaseApp', () => {
     registerMock.mockResolvedValueOnce({ ok: true, message: '' })
     hookState.confirmOwner.mockResolvedValueOnce(null)
 
-    const onComplete = vi.fn()
+    void vi.fn()
     render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={() => {}} />)
     await act(async () => {
       fireEvent.click(screen.getByTestId('connect-base-app-button'))

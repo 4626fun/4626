@@ -201,7 +201,8 @@ export async function handler(): Promise<void> {
     strategyReallocatorResult = await executeVaultStrategyReallocator();
     console.log(
       `  vaults=${strategyReallocatorResult.totalVaults} rebalanced=${strategyReallocatorResult.rebalanced} ` +
-        `skipped=${strategyReallocatorResult.skipped} errors=${strategyReallocatorResult.errors}`,
+        `skipped=${strategyReallocatorResult.skipped} errors=${strategyReallocatorResult.errors} ` +
+        `maxPassesHit=${strategyReallocatorResult.maxPassesHit}`,
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

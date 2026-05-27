@@ -12,7 +12,7 @@ import { Spinner } from '@/components/ui/Spinner'
  * `/accounts` "Execution scopes" card.
  *
  * Surfaces the Arch B sub-account that the 4626 backend uses to execute
- * in-chat commands (`/coin buy`, `/coin sell`, `/keepr send`,
+ * XMTP chat commands (`/coin buy`, `/coin sell`, `/keepr send`,
  * `/coin trend reserve`) on behalf of the creator. The sub-account is
  * funded by the parent CSW via a signed SpendPermission with per-tx +
  * per-period caps enforced by the SpendPermissionManager contract.
@@ -55,7 +55,7 @@ export function ExecutionScopeCard() {
   if (scope.status === 'error') {
     return (
       <CardShell>
-        <Header title="4626.fun in-chat commands" subtitle="Status unavailable right now." />
+        <Header title="XMTP chat commands" subtitle="Status unavailable right now." />
         <p className="mt-3 text-xs text-zinc-500">
           We couldn't load your execution scope. Refresh the page or retry in a minute.
         </p>
@@ -69,14 +69,14 @@ export function ExecutionScopeCard() {
     return (
       <CardShell>
         <Header
-          title="4626.fun in-chat commands"
-          subtitle="Not enabled. In-chat trading (/coin buy, /keepr send) is disabled for your account."
+          title="XMTP chat commands"
+          subtitle="Not enabled. The 4626 agent cannot run /coin buy, /coin sell, or /keepr send in XMTP chat for your account."
         />
         <p className="mt-3 text-xs text-zinc-500">
-          Enabling creates a capped spend scope on your Coinbase Smart Wallet so 4626 can execute
-          in-chat commands without per-transaction popups. Caps are enforced by the{' '}
-          <code className="text-zinc-400">SpendPermissionManager</code> contract on Base. You can
-          revoke at any time.
+          Enabling lets the 4626 agent execute those chat commands from XMTP without asking you to
+          approve every transaction. Your Coinbase Smart Wallet funds a capped spend permission
+          enforced by the <code className="text-zinc-400">SpendPermissionManager</code> contract on
+          Base. You can revoke it any time.
         </p>
 
         {/* Owner-status hint. Covers three distinct signer paths + the
@@ -90,8 +90,8 @@ export function ExecutionScopeCard() {
           <p className="mt-3 text-[11px] text-emerald-300/80">
             {signer!.label === 'smart_wallet' ? (
               <>
-                Signing through your 4626 signer (ERC-1271). Expect one Privy prompt to approve
-                the spend permission.
+                Signing through your 4626 smart-wallet co-signer (ERC-1271). Expect one Privy prompt
+                to approve the spend permission.
               </>
             ) : signer!.label === 'external' ? (
               <>
@@ -100,7 +100,7 @@ export function ExecutionScopeCard() {
                 wallet popup to approve the spend permission.
               </>
             ) : (
-              <>Signing with your embedded signer. Expect one Privy prompt.</>
+              <>Signing with your Privy embedded signer. Expect one Privy prompt.</>
             )}
           </p>
         ) : (
@@ -129,7 +129,7 @@ export function ExecutionScopeCard() {
             className="inline-flex items-center gap-2 rounded-lg bg-white text-black text-xs font-medium px-3 py-2 hover:bg-zinc-200 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             {reprovision.busy ? <Spinner size="sm" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            {reprovision.busy ? provisionBusyLabel(reprovision.phase) : 'Enable in-chat commands'}
+            {reprovision.busy ? provisionBusyLabel(reprovision.phase) : 'Enable XMTP chat commands'}
           </button>
           {!hasOwnerSigner && !ownerCheck.loading ? (
             <a
@@ -166,7 +166,7 @@ export function ExecutionScopeCard() {
   return (
     <CardShell>
       <Header
-        title="4626.fun in-chat commands"
+        title="XMTP chat commands"
         subtitle={subtitleForStatus(scope.status)}
         status={scope.status}
       />
@@ -469,9 +469,9 @@ function formatDate(iso: string): string {
 function subtitleForStatus(status: ExecutionScopeStatus): string {
   switch (status) {
     case 'active':
-      return 'Enabled. 4626 can execute in-chat commands within your signed caps.'
+      return 'Enabled. The 4626 agent can run XMTP chat commands within your signed caps.'
     case 'revoked':
-      return 'This spend permission has been revoked. In-chat commands are refused.'
+      return 'This spend permission has been revoked. XMTP chat commands are refused.'
     case 'expired':
       return 'The spend permission window has ended. Re-provisioning is required.'
     default:

@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react'
 
 import { apiFetch } from '@/lib/api/apiBase'
+import { AppLoadingProvider } from '@/components/layout/AppLoadingOverlay'
 
 import { WaitlistFlow } from './WaitlistFlow'
 import { WaitlistSetupWorkspace } from './WaitlistSetupWorkspace'
@@ -74,12 +75,30 @@ const mockWagmiWalletClientState = {
   data: null as unknown,
 }
 
+vi.mock('@/lib/auth/canonicalization', () => ({
+  runCanonicalizationPipeline: vi.fn(async () => ({
+    onboardingBootstrapped: false,
+    flags: { needsEmbeddedWallet: false },
+    onboarding: null,
+  })),
+}))
+
+vi.mock('./useEmbeddedOwnerOnCsw', () => ({
+  useEmbeddedOwnerOnCsw: () => ({
+    status: 'not-owner',
+    isOwner: false,
+    needsInstall: true,
+    refresh: vi.fn(async () => undefined),
+  }),
+}))
+
 vi.mock('@privy-io/react-auth', () => ({
   usePrivy: () => ({
     authenticated: mockPrivyAuthenticated,
     getAccessToken: mockGetAccessToken,
     logout: mockPrivyLogout,
     linkEmail: mockLinkEmail,
+    linkEmailAccount: mockLinkEmail,
   }),
   useLogin: () => ({ login: mockLogin }),
   useConnectWallet: () => ({ connectWallet: () => undefined }),
@@ -180,7 +199,11 @@ function render(ui: React.ReactElement) {
     },
   })
 
-  return rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+  return rtlRender(
+    <QueryClientProvider client={queryClient}>
+      <AppLoadingProvider>{ui}</AppLoadingProvider>
+    </QueryClientProvider>,
+  )
 }
 
 const WAITLIST_ACCOUNT = {
@@ -191,8 +214,8 @@ const WAITLIST_ACCOUNT = {
   baseSubAccount: null,
   linkedMethods: { email: ['waitlisted@example.com'] },
   accountSignals: {
-    linked: true,
-    canonicalCswAddress: '0x1111111111111111111111111111111111111111',
+    linked: false,
+    canonicalCswAddress: null,
     baseSubAccount: {
       address: null,
       registered: false,
@@ -269,8 +292,8 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('heading', { name: /^waitlist$/i })).toBeTruthy()
-    expect(await screen.findByText(/activate your account/i)).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: /activate your account/i })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: /^waitlist$/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /^continue$/i })).toBeNull()
     expect(screen.queryByText(/climb the waitlist/i)).toBeNull()
     expect(screen.queryByText(/waitlist leaderboard/i)).toBeNull()
@@ -349,8 +372,8 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('heading', { name: /^waitlist$/i })).toBeTruthy()
-    expect(await screen.findByText(/activate your account/i)).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: /activate your account/i })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: /^waitlist$/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /^continue$/i })).toBeNull()
   })
 
@@ -378,7 +401,8 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/activate your account/i)).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: /activate your account/i })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /account settings/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /advanced account settings/i })).toBeNull()
   })
 
@@ -395,7 +419,7 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/activate your account/i)).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: /activate your account/i })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /enter app/i })).toBeNull()
   })
 

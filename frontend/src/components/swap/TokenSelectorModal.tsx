@@ -18,7 +18,7 @@ import {
   swapAssetBalanceQueryKey,
 } from '@/lib/swap/useSwapAssetBalance'
 import { isOpaqueInternalTokenLabel } from '@/lib/swap/swapTokenLabels'
-import { BASE_CHAIN_ID, NATIVE_TOKEN_ADDRESS, shortAddress, type TokenDisplay, type TokenOption } from '@/lib/uniswap/swapUtils'
+import { BASE_CHAIN_ID, shortAddress, type TokenDisplay, type TokenOption } from '@/lib/uniswap/swapUtils'
 
 export type SwapTokenOption = TokenOption & {
   sectionTag?: 'core' | 'creator' | 'content'

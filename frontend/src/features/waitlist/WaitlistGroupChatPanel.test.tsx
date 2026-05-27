@@ -5,8 +5,20 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { WaitlistGroupChatPanel } from './WaitlistGroupChatPanel'
 
+const providerMountOrder: string[] = []
+
+vi.mock('@/wallet/accountContext', () => ({
+  AccountContextProvider: ({ children }: { children: React.ReactNode }) => {
+    providerMountOrder.push('account-context')
+    return children
+  },
+}))
+
 vi.mock('@/lib/xmtp/provider', () => ({
-  XmtpChatProvider: ({ children }: { children: React.ReactNode }) => children,
+  XmtpChatProvider: ({ children }: { children: React.ReactNode }) => {
+    providerMountOrder.push('xmtp-provider')
+    return children
+  },
   useXmtp: () => ({
     status: 'idle',
     connect: vi.fn(),
@@ -72,7 +84,9 @@ describe('WaitlistGroupChatPanel', () => {
   })
 
   it('prompts to connect and join before messaging is ready', () => {
+    providerMountOrder.length = 0
     renderPanel(<WaitlistGroupChatPanel setupComplete signingReady />)
+    expect(providerMountOrder).toEqual(['account-context', 'xmtp-provider'])
     expect(screen.getByRole('region', { name: 'Waitlist group chat' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Connect & join waitlist chat/i })).toBeTruthy()
   })

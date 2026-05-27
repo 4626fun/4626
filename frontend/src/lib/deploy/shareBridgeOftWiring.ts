@@ -1,4 +1,6 @@
-import { getAddress, isAddress, type Address, type Hex, type PublicClient } from 'viem'
+import { getAddress, isAddress, type Address, type Hex } from 'viem'
+
+import type { ShareBridgeReadClient } from './shareBridgeReadClient'
 
 import { BASE_DEFAULTS } from '@/config/contracts.defaults'
 
@@ -69,7 +71,7 @@ function normalizeBytes32(value: unknown): Hex | null {
 }
 
 export async function readShareBridgeOftWiringStatus(params: {
-  publicClient: Pick<PublicClient, 'readContract'>
+  publicClient: ShareBridgeReadClient
   batcherAddress: Address
   finalizeCallData: Hex
   registryAddress?: Address
@@ -147,7 +149,7 @@ export async function readShareBridgeOftWiringStatus(params: {
 }
 
 export async function assertShareBridgeOftWiringForFinalize(params: {
-  publicClient: Pick<PublicClient, 'readContract'>
+  publicClient: ShareBridgeReadClient
   batcherAddress: Address
   finalizeCallData: Hex
   registryAddress?: Address

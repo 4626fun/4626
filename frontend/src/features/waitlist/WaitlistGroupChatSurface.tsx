@@ -179,7 +179,7 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
     <div className="flex flex-col justify-center space-y-3 py-2" style={shellStyle}>
       {phase === 'connecting' ? (
         <LoadingInline
-          label={status === 'signing' ? 'Sign to enable messaging…' : 'Connecting to XMTP…'}
+          labelOverride={status === 'signing' ? 'Sign to enable messaging…' : 'Connecting to XMTP…'}
         />
       ) : (
         <>

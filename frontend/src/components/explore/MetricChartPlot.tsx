@@ -31,7 +31,7 @@ export type MetricChartPlotProps = {
 }
 
 function handleScrubState(
-  state: { activeTooltipIndex?: number | string } | undefined,
+  state: { activeTooltipIndex?: number | string | null } | undefined,
   onScrub?: (index: number | undefined) => void,
 ) {
   if (!onScrub) return

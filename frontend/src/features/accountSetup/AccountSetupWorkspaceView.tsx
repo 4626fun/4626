@@ -182,7 +182,7 @@ export function AccountSetupWorkspaceView(props: {
 }) {
   const { context, controller, summaryActions, waitlistFooter, onSigningStepCompleteChange } = props
   const privyClientStatus = usePrivyClientStatus()
-  const hasPrivyProviderContext = privyClientStatus === 'ready'
+  void privyClientStatus
   // openStep: null = auto (first incomplete), 1/2/3 = manually opened
   const [openStep, setOpenStep] = useState<1 | 2 | 3 | null>(null)
   const {
@@ -191,7 +191,7 @@ export function AccountSetupWorkspaceView(props: {
     busyProvider,
     canonicalCswAddress,
     connectedOwnerReady,
-    connectedCanonicalWalletSelected,
+    connectedCanonicalWalletSelected: _connectedCanonicalWalletSelected,
     connectedSignerDetail,
     connectedSignerLabel,
     connectOwnerWallet,
@@ -220,6 +220,7 @@ export function AccountSetupWorkspaceView(props: {
     zoraCrossAppCount,
     zoraLinked,
   } = controller
+  void _connectedCanonicalWalletSelected
   const copyAddress = useCallback((addr: string) => {
     void navigator.clipboard.writeText(addr)
   }, [])

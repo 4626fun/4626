@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { encodeFunctionData, type Address, type Hex } from 'viem'
 
+import type { ShareBridgeReadClient } from './shareBridgeReadClient'
+
 import {
   FINALIZE_SHARE_BRIDGE_GAS_LIMIT,
   FINALIZE_SHARE_BRIDGE_MAX_SURPLUS_WEI,
@@ -146,7 +148,7 @@ type MockClientConfig = {
   solanaShareOftPeer?: Hex | null
 }
 
-function createMockPublicClient(config: MockClientConfig = {}) {
+function createMockPublicClient(config: MockClientConfig = {}): ShareBridgeReadClient {
   const {
     enabled = true,
     solanaEid = 30168,

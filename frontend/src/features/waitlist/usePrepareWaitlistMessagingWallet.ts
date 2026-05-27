@@ -11,6 +11,7 @@ import {
 import {
   isWaitlistMessagingWagmiConnector,
   prepareWaitlistMessagingWallet,
+  type PrepareWaitlistMessagingWalletInput,
 } from './prepareWaitlistMessagingWallet'
 
 function mergePrivyWalletRecords(primary: unknown[], secondary: unknown[]): unknown[] {
@@ -56,8 +57,8 @@ export function usePrepareWaitlistMessagingWallet(enabled: boolean) {
       wallets: mergedWallets,
       embeddedEoaAddress,
       ensureEmbeddedWallet,
-      setActiveWallet,
-      connectAsync,
+      setActiveWallet: setActiveWallet as PrepareWaitlistMessagingWalletInput['setActiveWallet'],
+      connectAsync: connectAsync as PrepareWaitlistMessagingWalletInput['connectAsync'],
       connectors,
       disconnectAsync,
       activeConnectorId: connector?.id ?? null,

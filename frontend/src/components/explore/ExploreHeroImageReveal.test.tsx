@@ -7,7 +7,7 @@ import { ExploreHeroImageReveal } from './ExploreHeroImageReveal'
 vi.mock('framer-motion', () => ({
   useReducedMotion: () => false,
   motion: new Proxy(
-    ((component: unknown) => component) as unknown,
+    ((component: object) => component) as any,
     {
       get: (_, tag: string) =>
         ({ children, ...props }: { children?: React.ReactNode }) =>

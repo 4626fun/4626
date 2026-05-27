@@ -26,6 +26,7 @@ export const zoraRouteLoaders: ApiRouteLoaders = {
   'trendReserve': () => import('./zora/_trendReserve.js'),
   'trendSentinelProcess': () => import('./zora/_trendSentinelProcess.js'),
   'topCreators': () => import('./zora/_topCreators.js'),
+  'tradeQuote': () => import('./zora/_tradeQuote.js'),
 }
 
 export function getZoraApiHandler(subpath: string) {

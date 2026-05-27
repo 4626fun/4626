@@ -18,6 +18,7 @@ import {
   rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
 import { executeVaultRebalanceStrategies } from '../../../server/_lib/controlPlane/executors/keeperVaultActions.js'
+import { parseMinDeviationBps } from '../../../server/_lib/keeper/strategyReallocEnv.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -48,8 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid vaultAddress' } satisfies ApiEnvelope<never>)
   }
 
-  const minDeviationBpsRaw = body?.minDeviationBps ?? 500
-  const minDeviationBps = BigInt(String(minDeviationBpsRaw))
+  const minDeviationBps = BigInt(parseMinDeviationBps(body?.minDeviationBps))
 
   try {
     const result = await executeVaultRebalanceStrategies(vaultAddress, minDeviationBps)

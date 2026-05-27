@@ -8,8 +8,9 @@ import {
   isAddress,
   type Address,
   type Hex,
-  type PublicClient,
 } from 'viem'
+
+import type { ShareBridgeReadClient } from './shareBridgeReadClient'
 
 /** Matches DeploymentBatcherPhase2Module.SOLANA_ALLOC_PERCENT */
 export const FINALIZE_SHARE_BRIDGE_SOLANA_PERCENT = 30n
@@ -231,6 +232,12 @@ const CREATOR_REGISTRY_REMOTE_PEER_ABI = [
   },
 ] as const
 
+export type FinalizePhase2SolanaIx = {
+  programId: Address
+  serializedAccounts: readonly Address[]
+  data: Hex
+}
+
 export type FinalizePhase2Params = {
   creatorToken: Address
   owner: Address
@@ -246,7 +253,7 @@ export type FinalizePhase2Params = {
   floorPriceQ96: bigint
   auctionSteps: Hex
   meteoraAlphaVault: Hex
-  solanaIxs: readonly unknown[]
+  solanaIxs: readonly FinalizePhase2SolanaIx[]
 }
 
 export type FinalizeShareBridgeQuote = {
@@ -382,7 +389,7 @@ export function buildFinalizePhase2CallData(params: FinalizePhase2Params): Hex {
   return encodeFunctionData({
     abi: FINALIZE_PHASE2_ABI,
     functionName: 'finalizePhase2',
-    args: [params],
+    args: [params as never],
   })
 }
 
@@ -409,7 +416,7 @@ function readOvaultRuntime(value: unknown): { enabled: boolean; solanaEid: numbe
 }
 
 export async function quoteFinalizeShareBridgeNativeFee(params: {
-  publicClient: Pick<PublicClient, 'readContract'>
+  publicClient: ShareBridgeReadClient
   batcherAddress: Address
   finalizeCallData: Hex
   registryAddress?: Address
@@ -576,7 +583,7 @@ export type DeploySessionStyleCall = {
 }
 
 export async function attachFinalizeShareBridgeValueToCalls<T extends DeploySessionStyleCall>(params: {
-  publicClient: Pick<PublicClient, 'readContract'>
+  publicClient: ShareBridgeReadClient
   calls: T[]
 }): Promise<T[]> {
   const out = [...params.calls]
@@ -616,7 +623,7 @@ export async function attachFinalizeShareBridgeValueToCalls<T extends DeploySess
 }
 
 export async function assertFinalizeShareBridgeCallValue(params: {
-  publicClient: Pick<PublicClient, 'readContract'>
+  publicClient: ShareBridgeReadClient
   batcherAddress: Address
   callData: Hex
   value: bigint

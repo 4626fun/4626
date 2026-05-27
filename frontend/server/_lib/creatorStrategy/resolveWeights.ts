@@ -60,7 +60,7 @@ export type ResolvedStrategyPlan = StrategyWeights & {
   reasons: {
     charm: 'paid' | 'unpaid'
     ajna: 'paid' | 'unpaid'
-    solana: 'share_auto_bridge'
+    solana: 'paid' | 'unpaid' | 'share_auto_bridge'
   }
   activeFeatureKeys: CreatorStrategyFeatureKey[]
 }
@@ -143,7 +143,7 @@ export async function resolveCreatorStrategyPlan(
       reasons: {
         charm: active.has(DEPLOY_GATING_FEATURE_KEYS.charm) ? 'paid' : 'unpaid',
         ajna: active.has(DEPLOY_GATING_FEATURE_KEYS.ajna) ? 'paid' : 'unpaid',
-        solana: 'share_auto_bridge',
+        solana: 'paid' | 'unpaid' | 'share_auto_bridge',
       },
       activeFeatureKeys: Array.from(active),
     },

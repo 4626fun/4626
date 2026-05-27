@@ -45,7 +45,7 @@ export function layoutToPolyline(points: ReadonlyArray<SparklineLayoutPoint>): s
 
 export function layoutToAreaPath(
   points: ReadonlyArray<SparklineLayoutPoint>,
-  width: number,
+  _width: number,
   height: number,
   padding = 2,
 ): string | null {

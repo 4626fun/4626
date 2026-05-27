@@ -2,6 +2,8 @@ export type ApiEnvelope<T> = {
   success: boolean
   data?: T
   error?: string
+  reason?: string
+  message?: string
   details?: unknown
 }
 

@@ -20,7 +20,7 @@ export function resolveCreatorCoinLabelsFromZora(
 ): { symbol: string; name: string } {
   const rawSymbol = (coin.symbol || '').trim()
   const rawName = (coin.name || '').trim()
-  const handle = formatCreatorHandleLabel(coin.creatorProfile?.handle || coin.creatorProfile?.username || '')
+  const handle = formatCreatorHandleLabel(coin.creatorProfile?.handle || '')
 
   if (!isOpaqueInternalTokenLabel(rawSymbol) && !isAddressLikeSwapSymbol(rawSymbol, address)) {
     const name = !isOpaqueInternalTokenLabel(rawName) && rawName ? rawName : handle || rawSymbol || 'Creator coin'
@@ -80,7 +80,9 @@ let basePublicClient: ReturnType<typeof createPublicClient> | null = null
 
 function getBasePublicClient() {
   if (!basePublicClient) {
-    basePublicClient = createPublicClient({ chain: base, transport: http() })
+    basePublicClient = createPublicClient({ chain: base, transport: http() }) as NonNullable<
+      typeof basePublicClient
+    >
   }
   return basePublicClient
 }
@@ -113,8 +115,8 @@ export async function resolveSwapTokenLabels(
     try {
       const client = getBasePublicClient()
       const [nameRaw, symbolRaw] = await Promise.all([
-        client.readContract({ address: checksummed, abi: erc20Abi, functionName: 'name' }).catch(() => null),
-        client.readContract({ address: checksummed, abi: erc20Abi, functionName: 'symbol' }).catch(() => null),
+        client!.readContract({ address: checksummed, abi: erc20Abi, functionName: 'name' }).catch(() => null),
+        client!.readContract({ address: checksummed, abi: erc20Abi, functionName: 'symbol' }).catch(() => null),
       ])
       const name = typeof nameRaw === 'string' ? nameRaw.trim() : ''
       const symbol = typeof symbolRaw === 'string' ? symbolRaw.trim() : ''

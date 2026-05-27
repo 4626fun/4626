@@ -46,6 +46,12 @@ import {
   type TransactionRequest,
 } from '@/lib/uniswap/tradingApi'
 import {
+  isZoraProviderQuote,
+  readZoraPermitsFromQuote,
+  refreshZoraTradeQuoteWithPermits,
+  signZoraQuotePermits,
+} from '@/lib/zora/zoraTradeApi'
+import {
   getSwapProviderLabel,
   requiresCanonicalExecutionForSwapMode,
   resolveSwapProviderSelection,
@@ -488,6 +494,7 @@ export function useSwapExecution(params: {
   amountInUnits: string
   parsedSlippage: number
   parsedDeadlineMinutes: number
+  preferZoraTradeRoute?: boolean
   chainId?: number
   signerType?: SignerType
   capabilities?: AccountCapabilities | null
@@ -1088,6 +1095,58 @@ export function useSwapExecution(params: {
     }
   }, [params.walletClient, params.signerAddress])
 
+  const finalizeZoraQuoteIfNeeded = useCallback(
+    async (nextQuote: TradeQuoteResponse, amount: string): Promise<TradeQuoteResponse> => {
+      if (!isZoraProviderQuote(nextQuote)) return nextQuote
+
+      const unsignedPermits = readZoraPermitsFromQuote(nextQuote).filter(
+        (item) => !item.signature?.trim() || item.signature === '0x',
+      )
+      if (unsignedPermits.length === 0) return nextQuote
+
+      if (!params.walletClient || !params.signerAddress || !params.publicClient) {
+        throw new Error('Permit2 signature is required for this Zora trade, but the owner signer is not available.')
+      }
+
+      const signer = params.walletClient as {
+        signTypedData: (args: Record<string, unknown>) => Promise<string>
+      }
+      if (typeof signer.signTypedData !== 'function') {
+        throw new Error('Connected wallet does not support typed-data signatures required for Zora Permit2.')
+      }
+
+      setStatus('Permit2 signature required. Confirm in wallet…')
+      const signatures = await signZoraQuotePermits({
+        quote: nextQuote,
+        signerAddress: params.signerAddress,
+        walletClient: signer,
+        publicClient: params.publicClient,
+      })
+
+      if (!params.executionAddress) {
+        throw new Error('Execution address is required to refresh the Zora trade quote.')
+      }
+
+      return refreshZoraTradeQuoteWithPermits({
+        tokenIn: effectiveTokenIn,
+        tokenOut: params.tokenOut,
+        amountIn: amount,
+        sender: params.executionAddress,
+        slippagePct: params.parsedSlippage,
+        signatures,
+      })
+    },
+    [
+      effectiveTokenIn,
+      params.executionAddress,
+      params.parsedSlippage,
+      params.publicClient,
+      params.signerAddress,
+      params.tokenOut,
+      params.walletClient,
+    ],
+  )
+
   const resetTradeState = useCallback(() => {
     quoteRunRef.current += 1
     setQuote(null)
@@ -1163,12 +1222,14 @@ export function useSwapExecution(params: {
         routingPreference: 'BEST_PRICE',
         permitAmount: permit2DisabledForSwap ? undefined : 'EXACT',
         walletModeKey: params.executionMode,
+        useZoraTradeRoute: params.preferZoraTradeRoute,
       })
       if (runId !== quoteRunRef.current) return
+      const isZoraQuote = isZoraProviderQuote(data)
       const isCdpQuote = String((data as any).provider ?? '')
         .trim()
         .toLowerCase() === 'cdp'
-      if (!isCdpQuote && !guardRoutingPolicy(data.routing)) return
+      if (!isZoraQuote && !isCdpQuote && !guardRoutingPolicy(data.routing)) return
       setQuote(data)
       setQuoteUpdatedAt(Date.now())
       syncPermitRequirement(data)
@@ -1216,6 +1277,7 @@ export function useSwapExecution(params: {
     syncPermitRequirement,
     swapSessionGate,
     swapCompletion,
+    params.preferZoraTradeRoute,
   ])
 
   const handleCheckApproval = useCallback(async () => {
@@ -1316,21 +1378,28 @@ export function useSwapExecution(params: {
     setError('')
     setStatus('')
     try {
-      const selectedQuote = pickSwapQuote(quote)
+      const amount = readQuoteInputAmount(quote)
+      const executableQuote = amount ? await finalizeZoraQuoteIfNeeded(quote, amount) : quote
+      const selectedQuote = pickSwapQuote(executableQuote)
       if (!selectedQuote) throw new Error('Quote does not contain executable swap payload')
-      const permitPayload = permit2DisabledForSwap ? {} : await signPermitIfRequired(quote)
+      const permitPayload =
+        isZoraProviderQuote(executableQuote) || permit2DisabledForSwap
+          ? {}
+          : await signPermitIfRequired(executableQuote)
       const requiresApprovalTx = hasApprovalTransaction(approvalData)
       const data = await buildSwap({
         quote: selectedQuote,
         ...permitPayload,
         includeGasInfo: false,
         refreshGasPrice: true,
-        permit2Disabled: permit2DisabledForSwap,
+        permit2Disabled: permit2DisabledForSwap || isZoraProviderQuote(executableQuote),
         simulateTransaction: shouldSimulateSwapTransaction(
           requiresApprovalTx,
           wrapNativeInputForSponsoredCanonical,
         ),
         deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
+        executionAddress: params.executionAddress ?? undefined,
+        chainId: Number(swapChainId),
       })
       assertValidSwapTransaction(data.swap)
       setSwapTx(data.swap)
@@ -1344,10 +1413,13 @@ export function useSwapExecution(params: {
     quote,
     approvalData,
     params.parsedDeadlineMinutes,
+    params.executionAddress,
     getErrorMessage,
     signPermitIfRequired,
+    finalizeZoraQuoteIfNeeded,
     permit2DisabledForSwap,
     wrapNativeInputForSponsoredCanonical,
+    swapChainId,
   ])
 
   const handleReviewTrade = useCallback(async () => {
@@ -1400,9 +1472,16 @@ export function useSwapExecution(params: {
         }))
       }
 
+      const hasUnsignedZoraPermits =
+        Boolean(quote) &&
+        isZoraProviderQuote(quote) &&
+        readZoraPermitsFromQuote(quote).some(
+          (item) => !item.signature?.trim() || item.signature === '0x',
+        )
       const canReuseCurrentQuote =
         Boolean(quote) &&
         !isQuoteStale() &&
+        !hasUnsignedZoraPermits &&
         (!permit2DisabledForSwap || !pickPermitData(quote)) &&
         readQuoteInputAmount(quote) === amount &&
         readQuoteInputToken(quote) === effectiveTokenIn.toLowerCase()
@@ -1420,12 +1499,16 @@ export function useSwapExecution(params: {
             routingPreference: 'BEST_PRICE',
             permitAmount: permit2DisabledForSwap ? undefined : 'EXACT',
             walletModeKey: params.executionMode,
+            useZoraTradeRoute: params.preferZoraTradeRoute,
           })
       if (runId !== quoteRunRef.current) return
+      const isZoraQuote = isZoraProviderQuote(nextQuote)
       const isCdpQuote = isCdpProviderQuote(nextQuote)
-      if (!isCdpQuote && !guardRoutingPolicy(nextQuote.routing)) return
+      if (!isZoraQuote && !isCdpQuote && !guardRoutingPolicy(nextQuote.routing)) return
       const nextApproval =
-        effectiveTokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS || isCdpQuote
+        isZoraQuote ||
+        effectiveTokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS ||
+        isCdpQuote
           ? ({ approval: null, cancel: null } as any)
           : await checkTradeApproval({
               walletAddress: params.executionAddress,
@@ -1469,9 +1552,17 @@ export function useSwapExecution(params: {
         return
       }
 
-      const selectedQuote = pickSwapQuote(nextQuote)
+      const executableQuote = await finalizeZoraQuoteIfNeeded(nextQuote, amount)
+      if (runId !== quoteRunRef.current) return
+      setQuote(executableQuote)
+      setQuoteUpdatedAt(Date.now())
+
+      const selectedQuote = pickSwapQuote(executableQuote)
       if (!selectedQuote) throw new Error('Quote does not contain executable swap payload')
-      const permitPayload = permit2DisabledForSwap ? {} : await signPermitIfRequired(nextQuote)
+      const permitPayload =
+        isZoraProviderQuote(executableQuote) || permit2DisabledForSwap
+          ? {}
+          : await signPermitIfRequired(executableQuote)
       if (runId !== quoteRunRef.current) return
       const requiresApprovalTx = hasApprovalTransaction(nextApproval)
       const built = await buildSwap({
@@ -1479,12 +1570,14 @@ export function useSwapExecution(params: {
         ...permitPayload,
         includeGasInfo: false,
         refreshGasPrice: true,
-        permit2Disabled: permit2DisabledForSwap,
+        permit2Disabled: permit2DisabledForSwap || isZoraProviderQuote(executableQuote),
         simulateTransaction: shouldSimulateSwapTransaction(
           requiresApprovalTx,
           wrapNativeInputForSponsoredCanonical,
         ),
         deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
+        executionAddress: params.executionAddress ?? undefined,
+        chainId: Number(swapChainId),
       })
       if (runId !== quoteRunRef.current) return
       assertValidSwapTransaction(built.swap)
@@ -1517,8 +1610,10 @@ export function useSwapExecution(params: {
     guardRoutingPolicy,
     syncPermitRequirement,
     signPermitIfRequired,
+    finalizeZoraQuoteIfNeeded,
     params.executionAddress,
     params.executionReady,
+    params.preferZoraTradeRoute,
     swapDebugEnabled,
     swapSessionGate,
     quote,

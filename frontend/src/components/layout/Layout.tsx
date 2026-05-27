@@ -23,11 +23,6 @@ const LazyChatSurface = lazy(async () => {
   return { default: mod.ChatSurface }
 })
 
-const LazyAccountWalletRail = lazy(async () => {
-  const mod = await import('../account/AccountWalletRail')
-  return { default: mod.AccountWalletRail }
-})
-
 type MobileNavItem = {
   label: string
   path: string
@@ -129,15 +124,6 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
   const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
   const isAdminRoute = location.pathname.startsWith('/admin')
   const showTopNavBar = !showWaitlistFocusedShell
-  const showAccountMode =
-    interactive &&
-    hostMode !== 'marketing' &&
-    !publicMode &&
-    (
-      location.pathname.startsWith('/deploy') ||
-      location.pathname.startsWith('/accounts') ||
-      location.pathname.startsWith('/status')
-    )
   const baseItems = publicMode || hostMode === 'marketing' || isWaitlistSurface ? navItemsPublic : navItems
   const items = isAdminRoute && hostMode !== 'marketing' ? [...baseItems, adminNavItem] : baseItems
   const shouldEnableChat = interactive && chatEnabled && hostMode === 'app' && !isWaitlistSurface
@@ -272,11 +258,6 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
   return (
     <div className={`vault-shell relative flex min-h-0 flex-1 flex-col bg-transparent ${showWaitlistFocusedShell ? 'min-h-dvh' : ''}`}>
       {showTopNavBar ? <VaultNavBar interactive={interactive} /> : null}
-      {showAccountMode ? (
-        <Suspense fallback={null}>
-          <LazyAccountWalletRail />
-        </Suspense>
-      ) : null}
 
       {/* Skip to content link */}
       <a

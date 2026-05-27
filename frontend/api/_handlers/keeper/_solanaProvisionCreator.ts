@@ -68,10 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const auth = requireKeeprApiKey(req)
-  if (!auth.ok) {
-    return res.status(401).json({ success: false, error: auth.error ?? 'unauthorized' } satisfies ApiEnvelope<never>)
-  }
+  if (!requireKeeprApiKey(req, res)) return
 
   const bodyRaw = await readBoundedJsonObjectBody(req, { maxBytes: 8_192 })
   const body = (bodyRaw && typeof bodyRaw === 'object' ? bodyRaw : {}) as Body

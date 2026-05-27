@@ -1,6 +1,8 @@
 import { getAddress } from 'viem'
 
 export type WaitlistMeData = {
+  appAccessStatus?: string | null
+  primaryEmbeddedEoa?: string | null
   cswAddress?: string | null
   primarySmartWallet?: string | null
   baseSubAccount?: string | null

@@ -56,16 +56,18 @@ Expected output highlights:
 
 ## What It Does
 
-Every 5 minutes, the unified `4626` workflow runs six tasks in sequence:
+Every 5 minutes, the unified `4626` workflow runs eight tasks in sequence:
 
-| Task | What | Impact |
-|------|------|--------|
-| **Vault Keeper** | Deploy idle funds (`tend`), harvest yields (`report`) | Revenue |
-| **Ajna Bucket Manager** | Move Ajna liquidity buckets using oracle TWAP + local liquidity | Risk/Execution |
-| **Charm Rebalance Manager** | Trigger Charm vault `rebalance()` when price deviates by >= configured threshold | Risk/Execution |
-| **CCA Finalization** | Attempt canonical completion for graduated CCA auctions (`sweepCurrency`, `migrate`, optional hook config, `sweepUnsoldTokens`) | Feature |
-| **Keepr Action Queue** | Process pending XMTP group ops + Neynar/Farcaster actions | Infrastructure |
-| **Bridge Integrity Monitor** | Monitor bridge signer overlap, canonical route/scalar drift, and liveness freshness | Risk/Integrity |
+| Step | Task | What | Impact |
+|------|------|------|--------|
+| 1 | **Vault Keeper** | Deploy idle funds (`tend`), harvest yields (`report`) | Revenue |
+| 2 | **Payout Router Harvest** | Claim/convert external revenue into burn stream | Revenue |
+| 3 | **Ajna Bucket Manager** | Move Ajna liquidity buckets using oracle TWAP + local liquidity | Risk/Execution |
+| 4 | **Charm Rebalance Manager** | Trigger Charm vault `rebalance()` when price deviates by >= configured threshold | Risk/Execution |
+| 5 | **CCA Finalization** | Attempt canonical completion for graduated CCA auctions | Feature |
+| 6 | **Keepr Action Queue** | Process pending XMTP group ops + Neynar/Farcaster actions | Infrastructure |
+| 7 | **Bridge Integrity Monitor** | Monitor bridge signer overlap, route/scalar drift, and liveness freshness | Risk/Integrity |
+| 8 | **Vault Strategy Reallocator** | Cross-strategy Charm ↔ Ajna TVL convergence via `rebalanceStrategies()` (multi-pass) | Risk/Execution |
 
 An optional always-on listener complements cron for lower-latency strategy reactions:
 
@@ -105,12 +107,13 @@ This KPR layer solves that by making execution deterministic, auditable, and ide
 | **KPR** | Verified offchain computation with deterministic trigger/capability orchestration | `kpr/kpr-workflows/**` |
 | **VRF 2.5** | Cryptographically verifiable randomness for fair lottery outcomes | `contracts/utilities/lottery/vrf/CreatorVRFConsumerV2_5.sol`, `contracts/utilities/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol` |
 
-## Roadmap (Including Rebalance Direction)
+## Roadmap
 
-- **Now:** deterministic KPR orchestration for indexing, data fetch, feed verification, and decision checkpointing.
-- **Next:** broaden low-latency event triggers and protocol guardrail workflows.
-- **Rebalance roadmap:** today automation handles strategy-specific rebalancing (Ajna bucket movement, Charm vault rebalance). Next phase adds cross-strategy reallocation between Ajna, Charm, and idle balances under deterministic policy constraints.
+- **Now:** deterministic KPR orchestration for indexing, data fetch, feed verification, decision checkpointing, and **cross-strategy vault reallocation** (`vault-strategy-reallocator` + keeper_jobs `rebalance` workflow).
+- **Next:** broaden low-latency event triggers and protocol guardrail workflows; expand keeper_jobs coverage for remaining split workflows (Ajna/Charm direct writers, Solana reconcile, payout-router fan-out).
 - **Later:** migrate more write paths to native KPR report receivers for end-to-end verifiable execution.
+
+Cross-strategy TVL moves are **shipped**, not roadmap. See `docs/operations/vault-strategy-reallocation.md` for queue order, planner math, automation surfaces, and regression gates.
 
 ### Payout Integrity Monitor
 

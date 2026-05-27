@@ -376,7 +376,7 @@ export const COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI = [
 
 export type TxState = {
   status: 'idle' | 'pending' | 'success' | 'error'
-  hash?: `0x${string}`
+  hash?: `0x${string}` | null
   error?: string
 }
 
@@ -630,7 +630,7 @@ export async function sendEmbeddedOwnerSmartWalletCall(params: {
   smartWallet: Address
   ownerAddress: Address
   calls: Array<{ to: Address; value?: bigint; data?: Hex }>
-}): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
+}): Promise<{ userOpHash: Hex; transactionHash: Hex | null }> {
   const { publicClient, embeddedProvider, bundlerUrl, smartWallet, ownerAddress, calls } = params
   const embeddedWalletClient = {
     request: async (args: { method: string; params?: any[] }) => embeddedProvider.request(args),

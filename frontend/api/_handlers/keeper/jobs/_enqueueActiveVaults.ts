@@ -12,6 +12,7 @@ import { ensureKeeprSchema } from '../../../../server/_lib/keepr/keeprSchema.js'
 import { isAuthorizedCron } from '../../../../server/_lib/lottery/cronAuth.js'
 import { enqueueKeeperJob, type KeeperJob } from '../../../../server/_lib/keeperJobs/keeperJobs.js'
 import { validateKeeperVaultListing } from '../../../../server/_lib/onchain/creatorRegistryVerification.js'
+import { parseMinDeviationBps } from '../../../../server/_lib/keeper/strategyReallocEnv.js'
 
 type ActiveVaultEnqueueResponse = {
   enabled: boolean
@@ -216,7 +217,7 @@ function vaultActionPayload(row: ActiveVaultRow, action: 'tend' | 'report'): Rec
 function rebalancePayload(row: ActiveVaultRow): Record<string, unknown> | null {
   const vaultAddress = normalizeAddress(row.vault_address)
   if (!vaultAddress) return null
-  const minDeviationBps = env('VAULT_STRATEGY_REALLOC_MIN_DEVIATION_BPS') || '500'
+  const minDeviationBps = String(parseMinDeviationBps(env('VAULT_STRATEGY_REALLOC_MIN_DEVIATION_BPS') || undefined))
   return {
     path: '/api/keeper/rebalance-strategies',
     body: { vaultAddress, minDeviationBps },

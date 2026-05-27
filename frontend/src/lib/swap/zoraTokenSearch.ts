@@ -6,12 +6,7 @@ import { fetchZoraCoin, fetchZoraProfile, fetchZoraProfileCoins } from '@/lib/zo
 import type { ZoraCoin } from '@/lib/zora/types'
 import { BASE_CHAIN_ID } from '@/lib/uniswap/swapUtils'
 
-import {
-  enrichSwapTokenOptions,
-  isAddressLikeSwapSymbol,
-  isOpaqueInternalTokenLabel,
-  resolveCreatorCoinLabelsFromZora,
-} from './swapTokenLabels'
+import { enrichSwapTokenOptions, resolveCreatorCoinLabelsFromZora } from './swapTokenLabels'
 
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/
 const MIN_ZORA_SEARCH_QUERY_LENGTH = 2

@@ -10,6 +10,15 @@ echo "== KPR workflow layout + typecheck =="
 bash kpr/kpr-workflows/scripts/validate-workflow-layout.sh
 bash kpr/kpr-workflows/scripts/typecheck-workflows.sh
 
+echo "== vault strategy reallocator wiring + unit tests =="
+node scripts/check-vault-strategy-reallocator-wiring.mjs
+pnpm -C kpr test vault-strategy-reallocator
+pnpm -C kpr test vault-strategy-reallocator-pass-loop
+pnpm -C kpr test strategyAllocation.fuzz
+
+echo "== Foundry cross-strategy rebalance gate =="
+forge test --match-path "test/vault/strategies/CreatorOVaultStrategies.Rebalance*"
+
 echo "== no TODO/FIXME markers (first-party paths) =="
 bash frontend/scripts/check-no-todo-markers.sh
 

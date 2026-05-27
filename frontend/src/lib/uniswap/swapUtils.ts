@@ -174,6 +174,7 @@ export function getNestedAmountOut(input: unknown): string | null {
     obj?.orderInfo?.outputs?.[0]?.startAmount,
     obj?.orderInfo?.outputs?.[0]?.amount,
     obj?.amountOut,
+    obj?.quote?.amountOut,
     obj?.outAmount,
     obj?.currencyAmountOut,
   ]

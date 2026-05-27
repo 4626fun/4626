@@ -35,13 +35,13 @@ const REGISTER_ERROR_MESSAGES: Record<string, string> = {
 function messageForRegisterError(errorCode: string, status: number): string {
   const normalized = errorCode.trim()
   if (normalized && REGISTER_ERROR_MESSAGES[normalized]) {
-    return REGISTER_ERROR_MESSAGES[normalized]
+    return REGISTER_ERROR_MESSAGES[normalized]!
   }
   if (status === 503) {
-    return REGISTER_ERROR_MESSAGES['feature_disabled']
+    return REGISTER_ERROR_MESSAGES['feature_disabled']!
   }
   if (status === 401) {
-    return REGISTER_ERROR_MESSAGES['unauthenticated']
+    return REGISTER_ERROR_MESSAGES['unauthenticated']!
   }
   return normalized || `Server returned ${status}.`
 }

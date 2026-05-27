@@ -85,8 +85,9 @@ export function useReprovisionSubAccount(): UseReprovisionReturn {
       // Decide up-front which signer path we'll use so we can log the
       // choice + surface it in telemetry when the commit succeeds.
       // Priority order is enforced by `pickOwnerSigner` in
-      // `cswOwnerCheck.ts`: smart_wallet > external > embedded.
-      const signerPath = ownerCheck.preferredSigner?.label ?? null
+      // `cswOwnerCheck.ts`: external > embedded > smart_wallet.
+      const preferredSigner = ownerCheck.preferredSigner
+      const signerPath = preferredSigner?.label ?? null
 
       if (!signerPath) {
         const msg =
@@ -179,8 +180,9 @@ export function useReprovisionSubAccount(): UseReprovisionReturn {
           })
         } else {
           const client = walletClient as unknown as NonNullable<typeof walletClient>
+          const signerAddress = preferredSigner?.address ?? (client.account?.address as Address)
           const signArgs = {
-            account: client.account?.address as Address,
+            account: signerAddress,
             domain: prep.eip712.domain,
             types: prep.eip712.types,
             primaryType: prep.eip712.primaryType,
@@ -243,7 +245,7 @@ export function useReprovisionSubAccount(): UseReprovisionReturn {
     // react-compiler preserve-manual-memoization: the callback body reads
     // `smartWalletClient` (line 99) and `ownerCheck.preferredSigner?.label`
     // (line 89), so both must be in the deps array alongside `walletClient`.
-    [walletClient, smartWalletClient, ownerCheck.preferredSigner?.label],
+    [walletClient, smartWalletClient, ownerCheck.preferredSigner],
   )
 
   return {
@@ -269,7 +271,7 @@ function humanizeProvisionError(code: string): string {
       return 'The connected wallet is not a current owner of your CSW. Switch to an owner wallet and retry.'
     case 'invalid_signature':
     case 'signature_verification_failed':
-      return "We couldn't verify your signature. Please retry — if it persists, try a different wallet."
+      return "We couldn't verify your signature. If you use an external wallet, connect it and retry. Otherwise try a different owner wallet."
     case 'privy_delegation_missing':
       return 'Privy delegation to 4626 is missing. Enable in-chat spending from the setup flow first.'
     case 'db_unavailable':

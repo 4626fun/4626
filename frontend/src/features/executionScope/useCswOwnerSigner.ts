@@ -75,7 +75,7 @@ export function useCswOwnerSigner(): OwnerCheckState {
     }
 
     const candidates: CswOwnerCandidate[] = []
-    // Priority matters for `pickOwnerSigner`: smart wallet > external > embedded.
+    // Priority matters for `pickOwnerSigner`: external > embedded > smart wallet.
     if (smartWalletAddr) candidates.push({ label: 'smart_wallet', address: smartWalletAddr })
     if (external) candidates.push({ label: 'external', address: external })
     if (embedded) candidates.push({ label: 'embedded', address: embedded })

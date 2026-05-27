@@ -11,6 +11,7 @@ const OPTIONAL_LOOKUP_TIMEOUT_MS = 1_200
 
 type BasenameProfileLite = {
   name: string | null
+  displayName?: string | null
   avatar?: string | null
 }
 

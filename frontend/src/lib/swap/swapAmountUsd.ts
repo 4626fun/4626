@@ -1,8 +1,28 @@
 import { getAddress, isAddress } from 'viem'
 
 import { CONTRACTS } from '@/config/contracts'
-import { formatUsd } from '@/features/explore/exploreShared'
 import { NATIVE_TOKEN_ADDRESS } from '@/lib/uniswap/swapUtils'
+
+/** Uniswap-like fiat under swap amounts: full dollars with grouping, not $2.05K. */
+const SWAP_USD_STANDARD = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
+const SWAP_USD_SMALL = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 6,
+})
+
+export function formatSwapUsd(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '$0.00'
+  if (value < 0.01) return SWAP_USD_SMALL.format(value)
+  return SWAP_USD_STANDARD.format(value)
+}
 
 const BASE_USD_STABLECOINS = new Set(
   [
@@ -79,13 +99,13 @@ export function deriveSwapUsdEstimates(params: {
   let sellUsd = amountIn != null ? humanAmountToUsd(amountIn, params.tokenIn, params.prices) : null
   let buyUsd = amountOut != null ? humanAmountToUsd(amountOut, params.tokenOut, params.prices) : null
 
-  // Exact-input swaps: when one leg has a USD mark, mirror it on the other for display parity.
+  // Exact-input swaps: mirror sell USD to buy only when we have a positive output amount.
   if (sellUsd == null && buyUsd != null) sellUsd = buyUsd
-  if (buyUsd == null && sellUsd != null) buyUsd = sellUsd
+  if (buyUsd == null && sellUsd != null && amountOut != null && amountOut > 0) buyUsd = sellUsd
 
   return {
-    amountInUsd: sellUsd != null ? formatUsd(sellUsd) : null,
-    estimatedOutUsd: buyUsd != null ? formatUsd(buyUsd) : null,
+    amountInUsd: sellUsd != null ? formatSwapUsd(sellUsd) : null,
+    estimatedOutUsd: buyUsd != null ? formatSwapUsd(buyUsd) : null,
   }
 }
 

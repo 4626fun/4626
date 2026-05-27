@@ -19,11 +19,11 @@ vi.mock('recharts', () => ({
 }))
 
 const baseProps = {
-  values: [1, 3, 2, 5],
+  values: [1, 3, 2, 5] as number[],
   yDomain: { min: 0, max: 10 },
   primaryColor: '#3b82f6',
   secondaryColor: '#22c55e',
-} as const
+}
 
 describe('MetricChartPlot', () => {
   it('renders line chart without error', () => {

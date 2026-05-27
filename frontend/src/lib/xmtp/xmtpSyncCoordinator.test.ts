@@ -33,8 +33,12 @@ describe('coordinatedConversationSync', () => {
     }
 
     await Promise.all([
-      coordinatedConversationSync(api, { lightweight: true }),
-      coordinatedConversationSync(api, { lightweight: true }),
+      coordinatedConversationSync(api as unknown as import('@/lib/xmtp/xmtpHelpers').ConversationsApiLike, {
+        lightweight: true,
+      }),
+      coordinatedConversationSync(api as unknown as import('@/lib/xmtp/xmtpHelpers').ConversationsApiLike, {
+        lightweight: true,
+      }),
     ])
 
     expect(syncCalls).toBe(1)
@@ -47,12 +51,20 @@ describe('coordinatedConversationSync', () => {
       }),
     }
 
-    await expect(coordinatedConversationSync(api, { force: true, lightweight: true })).rejects.toThrow(
+    await expect(
+      coordinatedConversationSync(api as unknown as import('@/lib/xmtp/xmtpHelpers').ConversationsApiLike, {
+        force: true,
+        lightweight: true,
+      }),
+    ).rejects.toThrow(
       /rate limit/i,
     )
     expect(xmtpSyncBlockedRemainingMs()).toBeGreaterThan(0)
 
-    const skipped = await coordinatedConversationSync(api, { lightweight: true })
+    const skipped = await coordinatedConversationSync(
+      api as unknown as import('@/lib/xmtp/xmtpHelpers').ConversationsApiLike,
+      { lightweight: true },
+    )
     expect(skipped).toBe('skipped_cooldown')
     expect(api.sync).toHaveBeenCalledTimes(1)
   })

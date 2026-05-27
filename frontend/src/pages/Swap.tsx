@@ -45,6 +45,7 @@ import {
 } from '@/lib/uniswap/liquidityApi'
 import { deriveSwapConnectGate, isConnectorAlreadyConnectedError } from '@/lib/swap/connectGate'
 import { resolveSwapBalanceOwner } from '@/lib/swap/resolveSwapBalanceOwner'
+import { isOpaqueInternalTokenLabel } from '@/lib/swap/swapTokenLabels'
 import {
   enrichDiscoveredSwapTokenOptions,
   normalizeSwapTokenSearchQuery,
@@ -1138,8 +1139,8 @@ export function Swap() {
     }
   }, [executionWalletClient])
   const swapAmoeWalletAddress = useMemo<Address | null>(() => {
-    if (executionMode === 'eoa') return executionSignerAddress ?? null
-    return null
+    if (executionMode !== 'eoa' || !executionSignerAddress) return null
+    return isAddress(executionSignerAddress) ? getAddress(executionSignerAddress) : null
   }, [executionMode, executionSignerAddress])
   const canonicalSignerGuardError =
     executionMode === 'canonical' && !canonicalSignerGate.ready ? canonicalSignerGate.reason : null
@@ -1280,8 +1281,7 @@ export function Swap() {
     setShowSwapWalletOptions(false)
     void signIn({
       method: executionMode === 'canonical' ? canonicalSignInMethod : 'auto',
-      preferBaseAccountWallet:
-        executionMode === 'canonical' && connectGate.state === 'wallet-required',
+      preferBaseAccountWallet: executionMode === 'canonical',
     })
   }, [
     authBusy,
@@ -1459,6 +1459,11 @@ export function Swap() {
     [tokenOut, swapTokenOptions],
   )
 
+  const preferZoraTradeRoute = useMemo(
+    () => tokenInOption?.group === 'creator' || tokenOutOption?.group === 'creator',
+    [tokenInOption?.group, tokenOutOption?.group],
+  )
+
   const tokenInIdentity = useTokenIdentity({ address: tokenIn, option: tokenInOption })
   const tokenOutIdentity = useTokenIdentity({ address: tokenOut, option: tokenOutOption })
   const tokenInDisplay = tokenInIdentity.display
@@ -1579,13 +1584,15 @@ export function Swap() {
     resetTradeState,
     swapCompletion,
     clearSwapCompletion,
-    txState,
   } = useSwapExecution({
     address,
     walletClient: executionWalletClient,
     publicClient,
-    canonicalAddress,
-    signerAddress: executionSignerAddress,
+    canonicalAddress: canonicalAddress as Address | null,
+    signerAddress:
+      executionSignerAddress && isAddress(executionSignerAddress)
+        ? getAddress(executionSignerAddress)
+        : null,
     executionMode,
     executionTrack: routerExecutionTrack,
     executionAddress,
@@ -1596,6 +1603,7 @@ export function Swap() {
     amountInUnits,
     parsedSlippage,
     parsedDeadlineMinutes,
+    preferZoraTradeRoute,
     chainId: swapChainId,
     signerType: executionSignerType,
     capabilities: executionCapabilities,

@@ -66,9 +66,9 @@ describe('sanitizeClassicQuoteForSwap', () => {
     expect((sanitized.input as { amount: string }).amount).toBe('80028000')
     expect((sanitized.output as { amount: string }).amount).toBe('1')
     expect(sanitized.gasPrice).toBe('1000000000')
-    const routePool = (sanitized.route as Array<Array<Record<string, unknown>>>)[0][0]
-    expect(routePool.amountIn).toBe('100')
-    expect(routePool.amountOut).toBe('200')
+    const routePool = (sanitized.route as Array<Array<Record<string, unknown>>>)[0]?.[0]
+    expect(routePool?.amountIn).toBe('100')
+    expect(routePool?.amountOut).toBe('200')
   })
 })
 

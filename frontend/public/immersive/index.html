@@ -1489,8 +1489,8 @@
               fadeTo(TARGET_VOL, FADE_IN_MS);
               started = true;
               setUI(true);
-            } catch (err) {
-              console.warn('audio play blocked', err);
+            } catch (_) {
+              /* autoplay blocked until user gesture */
             }
           }
         });

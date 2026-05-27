@@ -4,7 +4,11 @@
 // parallax, scroll parallax. Apple keynote energy.
 
 import * as THREE from 'three';
-import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { setConsoleFunction } from 'three';
+
+// Marketing homepage: keep DevTools clean (ANGLE/HLSL program-info noise, etc.).
+setConsoleFunction(() => {});
+
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -96,6 +100,7 @@ function init(host) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.debug.checkShaderErrors = false;
   host.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();

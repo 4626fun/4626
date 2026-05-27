@@ -61,16 +61,18 @@ export function renderPathRoutes(
   routes: PathRouteDef[],
   transformElement?: (element: ReactNode) => ReactNode,
 ) {
-  return routes.map(({ path, element, index, children }) => (
-    <Route
-      key={index ? `${path}:index` : path}
-      path={index ? undefined : path}
-      index={index}
-      element={transformElement ? transformElement(element) : element}
-    >
-      {children ? renderPathRoutes(children, transformElement) : null}
-    </Route>
-  ))
+  return routes.map(({ path, element, index, children }) => {
+    const rendered = transformElement ? transformElement(element) : element
+    const childRoutes = children ? renderPathRoutes(children, transformElement) : null
+    if (index) {
+      return <Route key={`${path}:index`} index element={rendered} />
+    }
+    return (
+      <Route key={path} path={path} element={rendered}>
+        {childRoutes}
+      </Route>
+    )
+  })
 }
 
 export const MARKETING_ONLY_ROUTES: PathRouteDef[] = [

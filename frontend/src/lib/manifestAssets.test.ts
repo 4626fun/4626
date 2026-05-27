@@ -33,7 +33,7 @@ const ANDROID_512 = `/assets/android-chrome-512x512.png?v=${BRAND_ASSET_VERSION}
 const OG_SOCIAL_IMAGE_URL = `https://4626.fun/assets/og-image.png?v=${BRAND_ASSET_VERSION}`
 const TWITTER_SOCIAL_IMAGE_URL = `https://4626.fun/assets/twitter-card.png?v=${BRAND_ASSET_VERSION}`
 const MINIAPP_HERO_URL = OG_SOCIAL_IMAGE_URL
-const MINIAPP_SPLASH_URL = `https://4626.fun${siteConfig.assets?.miniappSplash ?? MINIAPP_ICON_PATH}?v=${BRAND_ASSET_VERSION}`
+void `https://4626.fun${siteConfig.assets?.miniappSplash ?? MINIAPP_ICON_PATH}?v=${BRAND_ASSET_VERSION}`
 const APP_SHELL_MINIAPP_SPLASH_URL = `https://app.4626.fun${siteConfig.assets?.miniappSplash ?? MINIAPP_ICON_PATH}?v=${BRAND_ASSET_VERSION}`
 const SINGLE_FAVICON_TAG = '<link rel="icon" href="/favicon.ico" sizes="any" />'
 const APP_SHELL_FAVICON_TAG = '<link rel="icon" href="https://app.4626.fun/favicon.ico" sizes="any" />'

@@ -36,7 +36,6 @@ import {
   buildTrayHoldingsFromPortfolios,
   buildTrayTokenRowsFromPortfolios,
   buildTrayWalletSources,
-  isEvmAddress,
   type TrayAssetHolding,
   type TrayNetworkHolding,
   type TrayTokenHolding,
@@ -379,10 +378,7 @@ export function ConnectButton({
     [trayWalletSources],
   )
   const zoraTokenWalletSources = useMemo<TrayWalletSource[]>(() => trayWalletSources, [trayWalletSources])
-  const zoraTokenWalletKey = useMemo(
-    () => zoraTokenWalletSources.map((wallet) => wallet.address.toLowerCase()).sort().join(','),
-    [zoraTokenWalletSources],
-  )
+  void zoraTokenWalletSources
   const trayPortfolioQuery = useQuery({
     queryKey: ['account-tray', 'wallet-portfolio', trayWalletKey],
     enabled: auth.hasSession && trayWalletSources.length > 0 && showMenu,
@@ -1185,7 +1181,7 @@ function RelayTrayHoldingRow(props: { token: TrayAssetHolding; subtitle?: string
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] font-medium text-white">{props.token.symbol}</span>
         <span className="block truncate text-[11px] text-zinc-500">
-          {formatTokenAmount(props.amount)}
+          {formatTokenAmount(props.token.amount)}
           {props.subtitle ? ` · ${props.subtitle}` : ''}
         </span>
       </span>

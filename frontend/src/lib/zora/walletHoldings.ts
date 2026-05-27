@@ -2,7 +2,6 @@ import { getAddress, isAddress, type Address } from 'viem'
 
 import type { SwapTokenOption } from '@/components/swap/TokenSelectorModal'
 import type { TrayTokenHolding } from '@/components/account/trayPortfolioHelpers'
-import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { parseApiEnvelope } from '@/lib/api/apiEnvelope'
 import { BASE_CHAIN_ID } from '@/lib/uniswap/swapUtils'
 
@@ -117,7 +116,7 @@ export async function fetchWalletZoraHoldings(params: {
     headers: { Accept: 'application/json' },
   })
   const envelope = await parseApiEnvelope<ZoraWalletHoldingsResult>(res)
-  return envelope.data ?? null
+  return envelope?.data ?? null
 }
 
 export async function fetchWalletZoraHoldingsBundle(

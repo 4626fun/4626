@@ -84,6 +84,12 @@ describe('/api/keeper/rebalance-strategies', () => {
     expect(executeVaultRebalanceStrategiesMock).toHaveBeenCalledWith(VAULT, 750n)
   })
 
+  it('clamps invalid minDeviationBps before calling the executor', async () => {
+    const res = await postBody({ vaultAddress: VAULT, minDeviationBps: -5 })
+    expect(res.statusCode).toBe(200)
+    expect(executeVaultRebalanceStrategiesMock).toHaveBeenCalledWith(VAULT, 500n)
+  })
+
   it('returns 429 when rate limited', async () => {
     checkRateLimitMock.mockReturnValueOnce({
       allowed: false,

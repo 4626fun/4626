@@ -7,6 +7,13 @@ import { APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/env/host'
 import { buildCdpPriceRequest, executeCdpSwap, fetchCdpSwapPrice } from '@/lib/swap/cdpApi'
 import { resolveSwapProviderSelection, shouldFallbackToUniswap, type SwapProvider } from '@/lib/swap/providerConfig'
 import {
+  buildSwapFromZoraQuote,
+  fetchZoraTradeQuoteFromApi,
+  readZoraCallFromQuote,
+  shouldUseZoraTradeRoute,
+  zoraTradeQuoteToResponse,
+} from '@/lib/zora/zoraTradeApi'
+import {
   coerceSwapTransactionValue,
   normalizeSwapApiResponsePayload,
   sanitizeClassicQuoteForSwap,
@@ -39,6 +46,8 @@ export type TradeQuoteRequest = QuoteRequest & {
   xChainedActionsEnabled?: boolean
   chainedActionsEnabled?: boolean
   providerOverride?: 'uniswap' | 'cdp'
+  /** When true and pair is on Base, quote via Zora coins SDK (creator-coin pools). */
+  useZoraTradeRoute?: boolean
 }
 
 export type TradeQuoteResponse = QuoteResponse & Record<string, unknown>
@@ -444,6 +453,24 @@ export async function fetchTradeQuote(body: TradeQuoteRequest): Promise<TradeQuo
   if (pending) return pending
 
   const request = (async () => {
+    if (shouldUseZoraTradeRoute(normalizedBody, Boolean(normalizedBody.useZoraTradeRoute))) {
+      const swapper = String(normalizedBody.swapper ?? '').trim()
+      if (!swapper) throw new Error('Swapper address is required for Zora trade quotes')
+      const zoraPayload = await fetchZoraTradeQuoteFromApi({
+        tokenIn: normalizedBody.tokenIn,
+        tokenOut: normalizedBody.tokenOut,
+        amountIn: normalizedAmount,
+        sender: swapper,
+        slippagePct: Number(normalizedBody.slippageTolerance ?? 0.5),
+      })
+      return zoraTradeQuoteToResponse({
+        tokenIn: normalizedBody.tokenIn,
+        tokenOut: normalizedBody.tokenOut,
+        amountIn: normalizedAmount,
+        payload: zoraPayload,
+      })
+    }
+
     if (effectivePrimary === 'uniswap') {
       const quote = await fetchTradeQuoteFromUniswap(normalizedBody)
       return attachProviderMetadata(quote, 'uniswap')
@@ -495,12 +522,37 @@ export type BuildSwapParams = Omit<CreateSwapRequest, 'quote' | 'permitData'> & 
   permit2Disabled?: boolean
 }
 
-export async function buildSwap(body: BuildSwapParams): Promise<CreateSwapResponse> {
+export async function buildSwap(
+  body: BuildSwapParams & { executionAddress?: string; chainId?: number },
+): Promise<CreateSwapResponse> {
   const normalizedBody = body.permit2Disabled ? (stripPermit2Fields(body) as BuildSwapParams) : body
   const hasSignature = typeof normalizedBody.signature === 'string' && normalizedBody.signature.trim().length > 0
   const hasPermitData = typeof normalizedBody.permitData === 'object' && normalizedBody.permitData !== null
   if (hasSignature !== hasPermitData) {
     throw new Error('Permit2 signature and permitData must be provided together.')
+  }
+
+  const quoteRecord = normalizedBody.quote as Record<string, unknown>
+  const isZoraClassicQuote =
+    quoteRecord._provider === 'zora' ||
+    (isPlainObject(quoteRecord._zoraCall) &&
+      typeof (quoteRecord._zoraCall as Record<string, unknown>).target === 'string')
+  if (isZoraClassicQuote) {
+    const executionAddress = String(body.executionAddress ?? '').trim()
+    const chainId = Number(body.chainId ?? 8453)
+    if (!executionAddress) {
+      throw new Error('Execution address is required to build a Zora swap transaction')
+    }
+    return buildSwapFromZoraQuote({
+      quote: {
+        routing: 'CLASSIC',
+        provider: 'zora',
+        zoraCall: quoteRecord._zoraCall ?? readZoraCallFromQuote({ quote: quoteRecord } as TradeQuoteResponse),
+        quote: quoteRecord,
+      } as unknown as TradeQuoteResponse,
+      executionAddress,
+      chainId,
+    })
   }
 
   const cdpParams = buildCdpExecuteParamsFromQuote(normalizedBody)

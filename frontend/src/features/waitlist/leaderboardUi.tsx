@@ -148,9 +148,9 @@ export function LeaderboardPodium({
   return (
     <section aria-label="Top three" className="mb-6 sm:mb-8">
       <div className="grid grid-cols-3 gap-2 sm:gap-4 items-end">
-        <PodiumSlot entry={second} rank={2} isMe={meSignupId === second.signupId} />
-        <PodiumSlot entry={first} rank={1} isMe={meSignupId === first.signupId} />
-        <PodiumSlot entry={third} rank={3} isMe={meSignupId === third.signupId} />
+        <PodiumSlot entry={second!} rank={2} isMe={meSignupId === second?.signupId} />
+        <PodiumSlot entry={first!} rank={1} isMe={meSignupId === first?.signupId} />
+        <PodiumSlot entry={third!} rank={3} isMe={meSignupId === third?.signupId} />
       </div>
     </section>
   )

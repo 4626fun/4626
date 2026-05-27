@@ -211,7 +211,7 @@ export function CreatorImmersiveStatsBeat({
         const result = ScrollTrigger.normalizeScroll({
           type: 'wheel,touch',
           allowNestedScroll: true,
-          momentum: (self) => Math.min(1.6, Math.abs(self.velocityY / 950)),
+          momentum: (self: { velocityY: number }) => Math.min(1.6, Math.abs(self.velocityY / 950)),
         })
         if (result && typeof result === 'object' && 'kill' in result) {
           normalizeScroll = result as { kill: () => void }

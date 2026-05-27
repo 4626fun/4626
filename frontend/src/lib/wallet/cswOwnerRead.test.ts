@@ -25,7 +25,7 @@ describe('cswOwnerRead', () => {
     }
 
     const result = await readIsOwnerAddressIfDeployed({
-      publicClient,
+      publicClient: publicClient as Parameters<typeof readIsOwnerAddressIfDeployed>[0]['publicClient'],
       cswAddress: SUB,
       ownerAddress: EMBED,
     })
@@ -41,7 +41,7 @@ describe('cswOwnerRead', () => {
     }
 
     const result = await readIsOwnerAddressIfDeployed({
-      publicClient,
+      publicClient: publicClient as Parameters<typeof readIsOwnerAddressIfDeployed>[0]['publicClient'],
       cswAddress: SUB,
       ownerAddress: EMBED,
     })

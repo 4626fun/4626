@@ -63,6 +63,51 @@ Env tuning:
 - `VAULT_STRATEGY_REALLOC_MIN_DEVIATION_BPS` — default **500** (5% overweight band)
 - `VAULT_STRATEGY_REALLOC_MAX_PASSES` — default **4** on-chain calls per vault per tick
 
+Production enablement (keeper_jobs worker lane):
+
+```env
+KEEPER_ACTIVE_VAULT_ENQUEUE_ENABLED=1
+KEEPER_ACTIVE_VAULT_WORKFLOWS=sweep,tend,report,rebalance,payout
+VAULT_STRATEGY_REALLOC_MIN_DEVIATION_BPS=500
+VAULT_STRATEGY_REALLOC_MAX_PASSES=4
+```
+
+Enqueue order runs `tend` before `rebalance` so fresh idle/strategy NAV is available before cross-strategy moves.
+
+## Operations runbook
+
+| Signal | Meaning | Action |
+|--------|---------|--------|
+| `skippedReason=within_deviation_band` | Drift inside band | No action |
+| `skippedReason=single_strategy_vault` | Only one productive strategy | Expected for single-strategy vaults |
+| `convergenceIncomplete=true` / batch `maxPassesHit` | Still drifting after max passes | Inspect large skew, keeper auth, or raise `VAULT_STRATEGY_REALLOC_MAX_PASSES` temporarily |
+| `error=keeper_not_authorized` | Keeper lacks vault write auth | Fix `setKeeper` / ERC-4337 keeper lane for that vault |
+| HTTP bridge 500 | On-chain revert | Check Basescan trace for `rebalanceStrategies` |
+
+Batch metrics from `executeVaultStrategyReallocator()`:
+
+- `rebalanced` — vaults that executed at least one pass
+- `maxPassesHit` — vaults that still exceed the band after exhausting passes (needs operator review)
+
+## Regression gates
+
+CI and local guards prevent wiring drift:
+
+```bash
+# Wiring guard — route map, keeper_jobs workflow, runner, unified workflow step 8
+node scripts/check-vault-strategy-reallocator-wiring.mjs
+
+# KPR planner + pass-loop unit tests
+pnpm -C kpr test vault-strategy-reallocator
+pnpm -C kpr test vault-strategy-reallocator-pass-loop
+pnpm -C kpr test strategyAllocation.fuzz
+
+# Foundry — on-chain rebalance + sim harness
+forge test --match-path "test/vault/strategies/CreatorOVaultStrategies.Rebalance*"
+```
+
+`pnpm security:local` includes the guard + KPR tests above. CI job `strategy-reallocator-guards` in `.github/workflows/test.yml` runs the same subset on every PR.
+
 ## Charm ↔ Ajna full synergy (greenfield deploy)
 
 When **both** `charm_active_lp` and `ajna_sleeve` are paid and Phase 3 registers both strategies, `DeploymentBatcherPhase3Helper` now wires the direct borrow backstop automatically:

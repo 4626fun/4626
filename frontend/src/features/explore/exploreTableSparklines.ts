@@ -15,8 +15,17 @@ const STORAGE_KEY = '4626:explore:table-sparklines:v1'
 const STORAGE_MAX_AGE_MS = 6 * 60 * 60_000
 const SPARKLINE_FETCH_CHUNK_SIZE = 25
 
-function isValidSparkline(entry: ExploreTableSparkline | null | undefined): entry is ExploreTableSparkline {
+function isValidSparkline(
+  entry: { values: number[]; changePercent?: number | null } | null | undefined,
+): entry is ExploreTableSparkline {
   return Boolean(entry && Array.isArray(entry.values) && entry.values.length >= 2)
+}
+
+function toExploreTableSparkline(
+  entry: { values: number[]; changePercent?: number | null } | null | undefined,
+): ExploreTableSparkline | null {
+  if (!isValidSparkline(entry)) return null
+  return { values: entry.values, changePercent: entry.changePercent ?? null }
 }
 
 export function resolveExploreRowTrend30d(
@@ -27,12 +36,7 @@ export function resolveExploreRowTrend30d(
   if (!address) return null
   const cached = sparklines.get(address)
   if (isValidSparkline(cached)) return cached
-  if (isValidSparkline(coin?.trend30d)) {
-    return {
-      values: [...coin.trend30d.values],
-      changePercent: coin.trend30d.changePercent ?? null,
-    }
-  }
+  return toExploreTableSparkline(coin?.trend30d)
   return null
 }
 
@@ -44,11 +48,9 @@ export function seedSparklinesFromCoins(
   const map = new Map<string, ExploreTableSparkline>()
   for (const coin of coins) {
     const address = typeof coin.address === 'string' ? coin.address.toLowerCase() : ''
-    if (!address || !isValidSparkline(coin.trend30d)) continue
-    map.set(address, {
-      values: [...coin.trend30d.values],
-      changePercent: coin.trend30d.changePercent ?? null,
-    })
+    const sparkline = toExploreTableSparkline(coin.trend30d)
+    if (!address || !sparkline) continue
+    map.set(address, sparkline)
   }
   return map
 }

@@ -21,6 +21,7 @@ import {
   resolveProtocolAjnaKeeperAddress,
   resolveProtocolAutomationAddress,
 } from '../../../server/_lib/wallet/protocolTreasurySafe.js'
+import { hexAddressOrNull, hexAddresses } from '../../../server/_lib/onchain/hexAddress.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -73,7 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     null
 
   const data: DeployConfigResponse = {
-    creatorVaultBatcher: contracts.creatorVaultBatcher ?? null,
+    creatorVaultBatcher: hexAddressOrNull(contracts.creatorVaultBatcher ?? null),
     creatorVaultBatcherConfigError:
       contracts.creatorVaultBatcher == null
         ? deploymentBatcherNotConfiguredMessage(creatorVaultBatcherRawCandidate)
@@ -82,12 +83,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     allowApiContractOverrides: envBool('ALLOW_API_CONTRACT_OVERRIDES'),
     deployMode,
     serverContinue: envBool('VITE_DEPLOY_USE_SERVER_CONTINUE'),
-    protocolAutomation: resolveProtocolAutomationAddress() ?? null,
-    protocolAjnaKeeper: resolveProtocolAjnaKeeperAddress() ?? null,
-    payoutRouterKeeperAddress: payoutRouterKeeperAddress ?? null,
-    payoutRouterApprovedExternalSwapTargets: payoutRouterExternalApprovals.targets,
-    payoutRouterApprovedExternalSwapSpenders: payoutRouterExternalApprovals.spenders,
-    zoraToken: resolvePayoutRouterZoraToken(contracts.zora ?? null),
+    protocolAutomation: hexAddressOrNull(resolveProtocolAutomationAddress()),
+    protocolAjnaKeeper: hexAddressOrNull(resolveProtocolAjnaKeeperAddress()),
+    payoutRouterKeeperAddress: hexAddressOrNull(payoutRouterKeeperAddress),
+    payoutRouterApprovedExternalSwapTargets: hexAddresses(payoutRouterExternalApprovals.targets),
+    payoutRouterApprovedExternalSwapSpenders: hexAddresses(payoutRouterExternalApprovals.spenders),
+    zoraToken: hexAddressOrNull(resolvePayoutRouterZoraToken(contracts.zora ?? null)),
     payoutRouterZoraWethFee: payoutRouterFees.zoraWethFee,
     payoutRouterWethCreatorFee: payoutRouterFees.wethCreatorFee,
   }

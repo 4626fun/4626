@@ -101,7 +101,7 @@ async function connectEmbeddedWaitlistProvider(
         target: {
           id: WAITLIST_EMBEDDED_CONNECTOR_ID,
           name: 'Privy Embedded',
-          provider: () => provider,
+          provider: () => provider as any,
         },
       }),
     })

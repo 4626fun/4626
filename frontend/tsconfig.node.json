@@ -1,4 +1,5 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
     "skipLibCheck": true,
@@ -9,7 +10,11 @@
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "allowSyntheticDefaultImports": true,
-    "strict": true
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": [
     "vite.config.ts",
@@ -32,8 +37,12 @@
     "scripts/**/*.d.ts",
     "src/config/contracts.defaults.ts",
     "src/deploy/**/*.ts",
+    "src/lib/deploy/**/*.ts",
     "src/lib/deploy/create2Salts.ts",
     "src/lib/deploy/deploymentBatcherConfigError.ts",
+    "src/lib/uniswap/swapQuoteSanitize.ts",
+    "src/lib/xmtp/xmtpInteractive.ts",
+    "src/components/account/trayPortfolioHelpers.ts",
     "src/lib/agent/erc8004AgentUriPolicy.ts",
     "src/lib/zora/migrationScan.ts",
     "src/lib/viteManualChunks.ts",

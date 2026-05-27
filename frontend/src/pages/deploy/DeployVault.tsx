@@ -152,9 +152,9 @@ const DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE = 3_000
 const DEFAULT_REQUIRED_RAISE_WEI = 100_000_000_000_000_000n // 0.1 ETH
 // Phase-2 share split in the deployment batcher: 30% CCA / 30% vesting / 30% Solana / 10% LP.
 const DEFAULT_AUCTION_PERCENT = 30
-const DEFAULT_VESTING_PERCENT = 30
-const DEFAULT_SOLANA_SHARE_PERCENT = 30
-const DEFAULT_LP_RESERVE_PERCENT = 10
+void 30 // DEFAULT_VESTING_PERCENT (30) — UI reads server deploy config
+void 30 // DEFAULT_SOLANA_SHARE_PERCENT (30)
+void 10 // DEFAULT_LP_RESERVE_PERCENT (10)
 // Phase-3 strategy weights (vault TVL): Charm + Ajna only at 45/45; Solana is share auto-bridge at finalize.
 const DEFAULT_CHARM_WEIGHT_BPS = 4_500n
 const DEFAULT_AJNA_WEIGHT_BPS = 4_500n
@@ -6187,25 +6187,26 @@ function DeployVaultBatcher({
         const persistUserOpResult = (
           phaseLabel: 'phase1' | 'phase2' | 'phase3' | 'phase4',
           logPhaseLabel: string,
-          result: { userOpHash: Hex; transactionHash: Hex },
+          result: { userOpHash: Hex; transactionHash: Hex | null },
           context: string,
         ) => {
-          setTxId(result.transactionHash)
+          const txHash = result.transactionHash ?? result.userOpHash
+          setTxId(txHash)
           setPhaseTxs((s) => ({
             ...s,
             [ownerSlotForPhase(phaseLabel)]: result.userOpHash,
-            [txSlotForPhase(phaseLabel)]: result.transactionHash,
+            [txSlotForPhase(phaseLabel)]: txHash,
           }))
           logger.info(`[DeployVault] ${logPhaseLabel}_confirmed via ${context}`, {
             userOpHash: result.userOpHash,
-            txHash: result.transactionHash,
+            txHash,
           })
           // In production, logger.info is hidden unless debug is enabled.
           // Keep a plain console line so operators can still see phase progress.
           console.log(`[DeployVault] ${logPhaseLabel}_confirmed`, {
             via: context,
             userOpHash: result.userOpHash,
-            txHash: result.transactionHash,
+            txHash,
           })
         }
 

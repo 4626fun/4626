@@ -3,6 +3,7 @@ import { MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { LoadingInline } from '@/components/ui/LoadingState'
 import { XmtpChatProvider, useXmtp } from '@/lib/xmtp/provider'
+import { AccountContextProvider } from '@/wallet/accountContext'
 
 import {
   useWaitlistChatJoin,
@@ -30,18 +31,20 @@ function WaitlistGroupChatPanelInner(props: WaitlistGroupChatPanelProps) {
   const identityHintAddress = chatConfig?.xmtpMemberAddress ?? null
 
   return (
-    <XmtpChatProvider identityHintAddress={identityHintAddress} manualConnectOnly>
-      {statusQuery.isLoading && !chatConfig ? (
-        <WaitlistChatSection>
-          <LoadingInline label="Loading waitlist chat…" />
-        </WaitlistChatSection>
-      ) : (
-        <WaitlistGroupChatPanelBody
-          signingReady={signingReady}
-          statusQuery={statusQuery}
-        />
-      )}
-    </XmtpChatProvider>
+    <AccountContextProvider>
+      <XmtpChatProvider identityHintAddress={identityHintAddress} manualConnectOnly>
+        {statusQuery.isLoading && !chatConfig ? (
+          <WaitlistChatSection>
+            <LoadingInline labelOverride="Loading waitlist chat…" />
+          </WaitlistChatSection>
+        ) : (
+          <WaitlistGroupChatPanelBody
+            signingReady={signingReady}
+            statusQuery={statusQuery}
+          />
+        )}
+      </XmtpChatProvider>
+    </AccountContextProvider>
   )
 }
 
@@ -111,7 +114,7 @@ function WaitlistGroupChatPanelContent(props: {
     return <p className="text-xs text-zinc-400">{blockedMessage}</p>
   }
   if (statusQuery.isLoading) {
-    return <LoadingInline label="Loading waitlist chat…" />
+    return <LoadingInline labelOverride="Loading waitlist chat…" />
   }
   if (statusQuery.isError) {
     return (
