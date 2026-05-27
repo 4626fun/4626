@@ -457,6 +457,13 @@ function applyPersistedIdentity(params: {
     isEvmWalletAddressInClassification(classification, persisted.activeOwnerWallet)
       ? persisted.activeOwnerWallet
       : null
+  // profiles.primary_wallet often mirrors the embedded signer when both exist;
+  // gate it the same way so a stale column cannot re-inject an unlinked Privy EOA.
+  const persistedPrimaryWallet =
+    persisted?.primaryWallet &&
+    isEvmWalletAddressInClassification(classification, persisted.primaryWallet)
+      ? persisted.primaryWallet
+      : null
   // The canonical CSW is the asset-holding account and can disappear from a
   // fresh Privy payload even though it remains the deployed account on Base.
   // Keep the persisted CSW as source of truth so a newly surfaced Privy smart
@@ -480,9 +487,9 @@ function applyPersistedIdentity(params: {
   let allWallets = [...classification.allWallets]
   allWallets = withWalletIfMissing(
     allWallets,
-    persisted.primaryWallet
+    persistedPrimaryWallet
       ? {
-          address: persisted.primaryWallet,
+          address: persistedPrimaryWallet,
           walletType: 'external_eoa',
           provider: 'unknown',
           chain: 'evm',
@@ -612,7 +619,7 @@ function applyPersistedIdentity(params: {
     activeOwner: activeOwnerWallet?.address ?? persistedActiveOwnerEoa ?? null,
     classificationPrimary:
       classification.primaryWalletAddress ??
-      persisted.primaryWallet ??
+      persistedPrimaryWallet ??
       null,
   })
 
