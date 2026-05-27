@@ -49,7 +49,7 @@ import { useSwapAssetBalance } from '@/lib/swap/useSwapAssetBalance'
 import { isBaseAccountWallet, useSwapSubAccountRuntime } from '@/lib/swap/useSwapSubAccountRuntime'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
-import { resolveEffectiveExecutionTrack, deriveAccountChromeExecution } from '@/lib/wallet/userExecutionTrack'
+import { resolveEffectiveExecutionTrack, deriveAccountChromeExecution, shouldUseBaseAppSubAccountPath, isZoraLinkedFromAccountSignals } from '@/lib/wallet/userExecutionTrack'
 import { resolveEmbeddedOwnerOnCanonicalCsw } from '@/lib/wallet/cswOwnerRead'
 import { pickQuote } from '@/lib/uniswap/tradingApi'
 import { type WalletMode } from '@/lib/uniswap/walletMode'
@@ -888,6 +888,16 @@ export function Swap() {
   const subAccountTrack =
     effectiveExecutionTrack === 'sub-account' || effectiveExecutionTrack === 'migration-pending'
   const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
+  const shouldOfferBaseAppSubAccountSetup = useMemo(
+    () =>
+      shouldUseBaseAppSubAccountPath({
+        subAccountFlowEnabled,
+        parentEmbeddedOwnerOnChain: privyEmbeddedEoaCanOperateCanonicalQuery.data === true,
+        accountSignals: accountSignals ?? undefined,
+        zoraLinked: isZoraLinkedFromAccountSignals(accountSignals ?? undefined),
+      }),
+    [accountSignals, privyEmbeddedEoaCanOperateCanonicalQuery.data, subAccountFlowEnabled],
+  )
   const swapExecutionChrome = useMemo(
     () =>
       deriveAccountChromeExecution({
@@ -1120,7 +1130,7 @@ export function Swap() {
   const needsCanonicalSetupAction =
     executionMode === 'canonical' &&
     !accountMe.loading &&
-    subAccountFlowEnabled &&
+    !canonicalSignerGate.ready &&
     canonicalSetupGateCodes.has(canonicalSignerGate.code) &&
     !(
       canonicalSignerGate.code === 'embedded-wallet-not-owner' &&
@@ -1129,21 +1139,23 @@ export function Swap() {
   const canonicalSetupActionLabel =
     canonicalSignerGate.code === 'base-sub-account-provider-missing'
       ? 'Reconnect Base App'
-      : 'Open waitlist setup'
+      : shouldOfferBaseAppSubAccountSetup
+        ? 'Connect Base App'
+        : 'Enable 4626 signing'
   const handleEnableCanonicalSigning = useCallback(() => {
     const needsSubAccountSetup =
-      subAccountFlowEnabled &&
+      shouldOfferBaseAppSubAccountSetup &&
       (effectiveExecutionTrack === 'none-yet' ||
         (subAccountTrack && !subAccountRuntime.ready && canonicalSignerGate.code !== 'ok'))
     if (needsSubAccountSetup) {
       window.location.assign(buildWaitlistSetupUrl('base-app'))
       return
     }
-    window.location.assign('/waitlist?setup=owner-install')
+    window.location.assign(buildWaitlistSetupUrl('owner-install'))
   }, [
     canonicalSignerGate.code,
     effectiveExecutionTrack,
-    subAccountFlowEnabled,
+    shouldOfferBaseAppSubAccountSetup,
     subAccountRuntime.ready,
     subAccountTrack,
   ])

@@ -6,6 +6,7 @@ import { base } from 'viem/chains'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useAccountMe } from '@/hooks/useAccountMe'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
+import { useEmbeddedOwnerOnCsw } from '@/features/waitlist/useEmbeddedOwnerOnCsw'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import {
   deriveAccountChromeExecution,
@@ -226,11 +227,21 @@ export function useCanonicalIdentity(): CanonicalIdentity {
   })()
 
   const executionTrack = (accountMe.me?.accountSignals?.executionTrack ?? null) as CanonicalIdentity['executionTrack']
-  const embeddedSignerAuthorizedOnCsw =
-    accountMe.me?.accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw ?? null
+  const { isOwner: parentEmbeddedOwnerOnChain, status: embeddedOwnerProbeStatus } = useEmbeddedOwnerOnCsw({
+    cswAddress: csw,
+    embeddedEoaAddress: privyEmbeddedAddress,
+    enabled: Boolean(csw && privyEmbeddedAddress && auth.hasSession),
+  })
+  const embeddedSignerAuthorizedOnCsw = (() => {
+    if (parentEmbeddedOwnerOnChain) return true
+    if (embeddedOwnerProbeStatus === 'not-owner') return false
+    const serverFlag = accountMe.me?.accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw
+    return serverFlag ?? null
+  })()
   const accountSignals = accountMe.me?.accountSignals
   const accountChrome = deriveAccountChromeExecution({
     executionTrack,
+    parentEmbeddedOwnerOnChain,
     privyEmbeddedEoaIsOwnerOfCanonicalCsw: embeddedSignerAuthorizedOnCsw,
     subAccountFlowEnabled: waitlistSubAccountFlowFlag(),
     canonicalCswAddress: csw,
