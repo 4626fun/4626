@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   findLiveEmbeddedPrivyWallet,
+  isWaitlistMessagingWagmiConnector,
   prepareWaitlistMessagingWallet,
 } from './prepareWaitlistMessagingWallet'
 
@@ -17,7 +18,13 @@ describe('prepareWaitlistMessagingWallet', () => {
     expect(wallet?.address).toBe('0x2222222222222222222222222222222222222222')
   })
 
-  it('returns early when wagmi already has a wallet client', async () => {
+  it('recognizes waitlist messaging connectors', () => {
+    expect(isWaitlistMessagingWagmiConnector('privy-embedded-waitlist')).toBe(true)
+    expect(isWaitlistMessagingWagmiConnector('io.privy.wallet')).toBe(true)
+    expect(isWaitlistMessagingWagmiConnector('coinbaseWalletSDK')).toBe(false)
+  })
+
+  it('returns early when the embedded messaging wallet is already connected', async () => {
     const connectAsync = vi.fn()
     const result = await prepareWaitlistMessagingWallet({
       wallets: [],
@@ -25,10 +32,36 @@ describe('prepareWaitlistMessagingWallet', () => {
       ensureEmbeddedWallet: vi.fn(),
       connectAsync,
       connectors: [],
-      hasWagmiWallet: true,
+      messagingWalletReady: true,
     })
     expect(result).toEqual({ ok: true })
     expect(connectAsync).not.toHaveBeenCalled()
+  })
+
+  it('disconnects stale wagmi connectors before embedded connect', async () => {
+    const connectAsync = vi.fn(async () => ({ accounts: ['0x2222222222222222222222222222222222222222'] }))
+    const disconnectAsync = vi.fn(async () => undefined)
+    const result = await prepareWaitlistMessagingWallet({
+      wallets: [
+        {
+          address: '0x2222222222222222222222222222222222222222',
+          walletClientType: 'privy',
+          provider: { request: vi.fn() },
+        },
+      ],
+      embeddedEoaAddress: '0x2222222222222222222222222222222222222222',
+      ensureEmbeddedWallet: vi.fn(async () => ({
+        address: '0x2222222222222222222222222222222222222222',
+      })),
+      connectAsync,
+      disconnectAsync,
+      activeConnectorId: 'coinbaseWalletSDK',
+      connectors: [],
+      messagingWalletReady: false,
+    })
+    expect(result).toEqual({ ok: true })
+    expect(disconnectAsync).toHaveBeenCalledTimes(1)
+    expect(connectAsync).toHaveBeenCalledTimes(1)
   })
 
   it('connects injected fallback when Privy connector is unavailable', async () => {
@@ -47,7 +80,7 @@ describe('prepareWaitlistMessagingWallet', () => {
       })),
       connectAsync,
       connectors: [],
-      hasWagmiWallet: false,
+      messagingWalletReady: false,
     })
     expect(result).toEqual({ ok: true })
     expect(connectAsync).toHaveBeenCalledTimes(1)

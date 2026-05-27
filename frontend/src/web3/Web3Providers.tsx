@@ -40,9 +40,15 @@ export function AppQueryProvider({ children }: { children: ReactNode }) {
   )
 }
 
-export function WalletProviders({ children }: { children: ReactNode }) {
+export function WalletProviders({
+  children,
+  reconnectOnMount = true,
+}: {
+  children: ReactNode
+  reconnectOnMount?: boolean
+}) {
   return (
-    <WagmiProvider config={wagmiConfig} reconnectOnMount>
+    <WagmiProvider config={wagmiConfig} reconnectOnMount={reconnectOnMount}>
       <DeferWagmiConsumers>
         <ChainBrandThemeSync />
         {children}

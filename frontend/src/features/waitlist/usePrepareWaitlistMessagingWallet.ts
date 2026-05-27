@@ -1,22 +1,27 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useActiveWallet, useWallets } from '@privy-io/react-auth'
-import { useAccount, useConnect, useReconnect, useWalletClient } from 'wagmi'
+import { useAccount, useConnect, useDisconnect, useWalletClient } from 'wagmi'
 
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 
-import { prepareWaitlistMessagingWallet } from './prepareWaitlistMessagingWallet'
+import {
+  isWaitlistMessagingWagmiConnector,
+  prepareWaitlistMessagingWallet,
+} from './prepareWaitlistMessagingWallet'
 
 export function usePrepareWaitlistMessagingWallet(enabled: boolean) {
   const { embeddedEoaAddress, ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
   const { wallets } = useWallets()
   const { setActiveWallet } = useActiveWallet()
-  const { address } = useAccount()
+  const { address, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
   const { connectAsync, connectors } = useConnect()
-  const { reconnectAsync } = useReconnect()
+  const { disconnectAsync } = useDisconnect()
   const autoPrepareRef = useRef(false)
 
-  const hasWagmiWallet = Boolean(address && walletClient)
+  const messagingWalletReady = Boolean(
+    address && walletClient && isWaitlistMessagingWagmiConnector(connector?.id),
+  )
 
   const prepare = useCallback(async () => {
     return prepareWaitlistMessagingWallet({
@@ -26,31 +31,33 @@ export function usePrepareWaitlistMessagingWallet(enabled: boolean) {
       setActiveWallet,
       connectAsync,
       connectors,
-      reconnectAsync,
-      hasWagmiWallet,
+      disconnectAsync,
+      activeConnectorId: connector?.id ?? null,
+      messagingWalletReady,
     })
   }, [
     connectAsync,
+    connector?.id,
     connectors,
+    disconnectAsync,
     embeddedEoaAddress,
     ensureEmbeddedWallet,
-    hasWagmiWallet,
-    reconnectAsync,
+    messagingWalletReady,
     setActiveWallet,
     wallets,
   ])
 
   useEffect(() => {
-    if (!enabled || hasWagmiWallet || autoPrepareRef.current) return
+    if (!enabled || messagingWalletReady || autoPrepareRef.current) return
     autoPrepareRef.current = true
     void prepare().finally(() => {
       autoPrepareRef.current = false
     })
-  }, [enabled, hasWagmiWallet, prepare])
+  }, [enabled, messagingWalletReady, prepare])
 
   return {
     prepare,
-    walletReady: hasWagmiWallet,
+    walletReady: messagingWalletReady,
     embeddedEoaAddress,
   }
 }

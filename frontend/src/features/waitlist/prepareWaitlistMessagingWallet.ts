@@ -2,6 +2,14 @@ import { injected } from 'wagmi/connectors'
 
 import { isConnectorAlreadyConnectedError } from '@/lib/swap/connectGate'
 
+export const WAITLIST_EMBEDDED_CONNECTOR_ID = 'privy-embedded-waitlist'
+
+export function isWaitlistMessagingWagmiConnector(connectorId: string | null | undefined): boolean {
+  const id = String(connectorId ?? '').trim().toLowerCase()
+  if (!id) return false
+  return id === WAITLIST_EMBEDDED_CONNECTOR_ID || id.includes('privy')
+}
+
 export type PrepareWaitlistMessagingWalletInput = {
   wallets: unknown[]
   embeddedEoaAddress: string | null
@@ -9,8 +17,9 @@ export type PrepareWaitlistMessagingWalletInput = {
   setActiveWallet?: (wallet: unknown) => Promise<unknown> | unknown
   connectAsync: (variables: { connector: unknown }) => Promise<unknown>
   connectors: ReadonlyArray<{ id: string; name: string }>
-  reconnectAsync?: (variables?: { connectors?: ReadonlyArray<unknown> }) => Promise<unknown>
-  hasWagmiWallet: boolean
+  disconnectAsync?: () => Promise<unknown>
+  activeConnectorId?: string | null
+  messagingWalletReady: boolean
 }
 
 export type PrepareWaitlistMessagingWalletResult =
@@ -79,10 +88,35 @@ async function resolveEmbeddedProvider(wallet: Record<string, unknown>): Promise
   return null
 }
 
+async function connectEmbeddedWaitlistProvider(
+  input: Pick<PrepareWaitlistMessagingWalletInput, 'connectAsync'>,
+  provider: { request: (args: unknown) => Promise<unknown> },
+): Promise<PrepareWaitlistMessagingWalletResult> {
+  try {
+    await input.connectAsync({
+      connector: injected({
+        target: {
+          id: WAITLIST_EMBEDDED_CONNECTOR_ID,
+          name: 'Privy Embedded',
+          provider: () => provider,
+        },
+      }),
+    })
+    return { ok: true }
+  } catch (error) {
+    if (isConnectorAlreadyConnectedError(error)) return { ok: true }
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      ok: false,
+      error: message || 'Could not connect your embedded signer for messaging.',
+    }
+  }
+}
+
 export async function prepareWaitlistMessagingWallet(
   input: PrepareWaitlistMessagingWalletInput,
 ): Promise<PrepareWaitlistMessagingWalletResult> {
-  if (input.hasWagmiWallet) return { ok: true }
+  if (input.messagingWalletReady) return { ok: true }
 
   let embeddedAddress = normalizeAddress(input.embeddedEoaAddress)
   try {
@@ -120,19 +154,27 @@ export async function prepareWaitlistMessagingWallet(
     }
   }
 
+  const activeConnectorId = input.activeConnectorId ?? null
+  if (
+    activeConnectorId &&
+    !isWaitlistMessagingWagmiConnector(activeConnectorId) &&
+    typeof input.disconnectAsync === 'function'
+  ) {
+    try {
+      await input.disconnectAsync()
+    } catch {
+      // Best-effort — stale Coinbase/injected reconnects must not block embedded connect.
+    }
+  }
+
+  const embeddedConnect = await connectEmbeddedWaitlistProvider(input, provider)
+  if (embeddedConnect.ok) return embeddedConnect
+
   const privyConnector = input.connectors.find((connector) => {
     const id = connector.id.toLowerCase()
     const name = connector.name.toLowerCase()
     return id.includes('privy') || name.includes('privy')
   })
-
-  if (input.reconnectAsync) {
-    try {
-      await input.reconnectAsync(privyConnector ? { connectors: [privyConnector] } : undefined)
-    } catch (error) {
-      if (isConnectorAlreadyConnectedError(error)) return { ok: true }
-    }
-  }
 
   if (privyConnector) {
     try {
@@ -143,23 +185,5 @@ export async function prepareWaitlistMessagingWallet(
     }
   }
 
-  try {
-    await input.connectAsync({
-      connector: injected({
-        target: {
-          id: 'privy-embedded-waitlist',
-          name: 'Privy Embedded',
-          provider: () => provider,
-        },
-      }),
-    })
-    return { ok: true }
-  } catch (error) {
-    if (isConnectorAlreadyConnectedError(error)) return { ok: true }
-    const message = error instanceof Error ? error.message : String(error)
-    return {
-      ok: false,
-      error: message || 'Could not connect your embedded signer for messaging.',
-    }
-  }
+  return embeddedConnect
 }

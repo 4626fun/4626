@@ -19,7 +19,7 @@ type WaitlistSetupWorkspaceProps = {
 
 export function WaitlistSetupWorkspace(props: WaitlistSetupWorkspaceProps) {
   return (
-    <WalletProviders>
+    <WalletProviders reconnectOnMount={false}>
       <WaitlistSetupWorkspaceContent {...props} />
     </WalletProviders>
   )
