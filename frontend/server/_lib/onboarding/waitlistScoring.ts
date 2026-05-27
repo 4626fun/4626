@@ -1,3 +1,5 @@
+import { assertValidSignupId } from './profileSignupId.js'
+
 /**
  * Canonical waitlist score from Supabase `public.points` (see `waitlistPoints.ts`).
  * Used by leaderboard, `/api/waitlist/position`, and referrer lookups.
@@ -150,6 +152,7 @@ export async function readWaitlistPointsBreakdown(
   db: ScoringDb,
   signupId: number,
 ): Promise<WaitlistPointsBreakdown> {
+  const validId = assertValidSignupId(signupId)
   const pointsAgg = await db.sql`
     SELECT
       (
@@ -174,7 +177,7 @@ export async function readWaitlistPointsBreakdown(
           0
         )::int
         FROM points
-        WHERE signup_id = ${signupId}
+        WHERE signup_id = ${validId}
       ) AS total,
       COALESCE(ROUND(SUM(CASE WHEN source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN amount * 0.60 ELSE 0 END)), 0)::int AS invite,
       COALESCE(ROUND(SUM(CASE WHEN source = 'waitlist_signup' THEN amount * 1.00 ELSE 0 END)), 0)::int AS signup,
@@ -183,7 +186,7 @@ export async function readWaitlistPointsBreakdown(
       COALESCE(ROUND(SUM(CASE WHEN source LIKE 'social_%' THEN amount * 0.50 ELSE 0 END)), 0)::int AS social,
       COALESCE(ROUND(SUM(CASE WHEN source LIKE 'bonus_%' THEN amount * 0.30 ELSE 0 END)), 0)::int AS bonus
     FROM points
-    WHERE signup_id = ${signupId};
+    WHERE signup_id = ${validId};
   `
   const row = pointsAgg.rows?.[0] ?? {}
   return {
@@ -256,11 +259,12 @@ export async function listPointsActivityForSignupId(
   signupId: number,
   limit = 30,
 ): Promise<PointsActivityRow[]> {
+  const validId = assertValidSignupId(signupId)
   const cappedLimit = Math.min(Math.max(1, Math.floor(limit)), 100)
   const result = await db.sql`
     SELECT id, source, amount, created_at
     FROM points
-    WHERE signup_id = ${signupId}
+    WHERE signup_id = ${validId}
     ORDER BY created_at DESC, id DESC
     LIMIT ${cappedLimit};
   `

@@ -16,10 +16,15 @@ import {
   type AccountTrayOpenDetail,
 } from '@/components/account/trayEvents'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
+import { usePrivy } from '@privy-io/react-auth'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { fetchAccountTrayPortfolioBatch } from '@/lib/debank/client'
 import { resolvePublicPointsDisplay } from '@/lib/waitlist/canonicalAccountScore'
-import { fetchWaitlistPointsActivity, type PointsActivityRow } from '@/lib/waitlist/pointsActivity'
+import {
+  fetchAccountTrayPoints,
+  isAccountTrayPointsAuthError,
+} from '@/lib/waitlist/accountTrayPoints'
+import type { PointsActivityRow } from '@/lib/waitlist/pointsActivity'
 import { apiFetch } from '@/lib/api/apiBase'
 import { filterHiddenInjectedConnectors } from '@/lib/wallet/wagmiConnectorSelection'
 import {
@@ -192,7 +197,7 @@ async function mapWithLimit<T, R>(items: T[], limit: number, fn: (item: T) => Pr
   return output
 }
 
-type WaitlistPositionSnapshot = {
+type TrayPointsOverview = {
   points: {
     total: number
     invite: number
@@ -221,18 +226,6 @@ async function fetchZoraCoinViaApi(address: string): Promise<unknown | null> {
   if (!response.ok) return null
   const json = (await response.json().catch(() => null)) as { data?: unknown } | null
   return json?.data ?? null
-}
-
-async function fetchWaitlistPositionByWallet(wallet: string): Promise<WaitlistPositionSnapshot | null> {
-  const qs = new URLSearchParams({ wallet })
-  const response = await apiFetch(`/api/waitlist/position?${qs.toString()}`, {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
-  })
-  if (!response.ok) return null
-  const json = (await response.json().catch(() => null)) as { success?: boolean; data?: WaitlistPositionSnapshot | null } | null
-  if (!json?.success) return null
-  return json.data ?? null
 }
 
 export function deriveWalletIdentityPresentation(input: WalletIdentityPresentationInput): WalletIdentityPresentation {
@@ -337,8 +330,9 @@ export function ConnectButton({
   const { address, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
   const auth = useSiweAuth()
+  const { getAccessToken } = usePrivy()
   const canonicalIdentity = useCanonicalIdentity()
-  const { me: accountProfile, loading: accountProfileLoading, refresh: refreshAccountProfile } = useAccountMe()
+  const { me: accountProfile, refresh: refreshAccountProfile } = useAccountMe()
   const [disconnectingMainWallet, setDisconnectingMainWallet] = useState(false)
   const [trayTab, setTrayTab] = useState<'tokens' | 'activity'>('tokens')
   const [traySection, setTraySection] = useState<'account' | 'portfolio' | 'points'>('account')
@@ -500,39 +494,30 @@ export function ConnectButton({
   const trayHoldingsLoading = trayPortfolioQuery.isLoading
   const trayZoraTokensLoading = trayPortfolioQuery.isLoading || trayZoraTokensQuery.isLoading
   const sessionAddress = auth.authAddress ?? null
-  const trayPointsLookupWallet = useMemo(() => {
-    const candidate =
-      canonicalIdentity.cswAddress ??
-      canonicalIdentity.externalEoaAddress ??
-      canonicalIdentity.privyEmbeddedAddress ??
-      sessionAddress ??
-      address ??
-      null
-    return typeof candidate === 'string' && isEvmAddress(candidate) ? candidate : null
-  }, [
-    address,
-    canonicalIdentity.cswAddress,
-    canonicalIdentity.externalEoaAddress,
-    canonicalIdentity.privyEmbeddedAddress,
-    sessionAddress,
-  ])
-  const trayPointsQuery = useQuery({
-    queryKey: ['account-tray', 'waitlist-position', trayPointsLookupWallet],
-    enabled: auth.hasSession && Boolean(trayPointsLookupWallet) && showMenu,
+  const trayAccountPointsQuery = useQuery({
+    queryKey: ['account-tray', 'accounts-me-points'],
+    enabled: auth.hasSession && showMenu && privyStatus === 'ready',
     staleTime: 15_000,
-    retry: 0,
-    queryFn: async () => fetchWaitlistPositionByWallet(trayPointsLookupWallet as string),
+    retry: (failureCount, error) => !isAccountTrayPointsAuthError(error) && failureCount < 1,
+    queryFn: async () => {
+      const token =
+        typeof getAccessToken === 'function' ? await getAccessToken().catch(() => null) : null
+      return fetchAccountTrayPoints(40, token)
+    },
   })
-  const trayPointsActivityQuery = useQuery({
-    queryKey: ['account-tray', 'points-activity'],
-    enabled: auth.hasSession && showMenu && traySection === 'points',
-    staleTime: 15_000,
-    retry: 0,
-    queryFn: async () => fetchWaitlistPointsActivity(24),
-  })
+  const trayPointsAuthRequired = isAccountTrayPointsAuthError(trayAccountPointsQuery.error)
+  const trayPointsOverview = useMemo((): TrayPointsOverview | null => {
+    const tray = trayAccountPointsQuery.data
+    if (!tray || tray.signupId <= 0) return null
+    return {
+      points: tray.points,
+      rank: tray.rank,
+      totalCount: tray.totalCount,
+    }
+  }, [trayAccountPointsQuery.data])
   const trayPointsDisplay = resolvePublicPointsDisplay({
     score: accountProfile?.score ?? null,
-    positionTotal: trayPointsQuery.data?.points.total ?? null,
+    positionTotal: trayAccountPointsQuery.data?.points.total ?? null,
   })
   const buttonState = deriveConnectButtonState({
     sessionHydrated: auth.sessionHydrated,
@@ -719,10 +704,14 @@ export function ConnectButton({
               {auth.hasSession && traySection === 'points' ? (
                 <RelayTrayPointsModule
                   pointsTotal={trayPointsDisplay.points}
-                  position={trayPointsQuery.data ?? null}
-                  pointsLoading={trayPointsQuery.isLoading && accountProfileLoading}
-                  activity={trayPointsActivityQuery.data?.activity ?? []}
-                  activityLoading={trayPointsActivityQuery.isLoading}
+                  position={trayPointsOverview}
+                  pointsLoading={trayAccountPointsQuery.isLoading}
+                  activity={trayAccountPointsQuery.data?.activity ?? []}
+                  activityLoading={trayAccountPointsQuery.isLoading}
+                  activityError={trayAccountPointsQuery.isError && !trayPointsAuthRequired}
+                  activityAuthRequired={trayPointsAuthRequired}
+                  leaderboardEligible={trayAccountPointsQuery.data?.leaderboardEligible ?? false}
+                  hasAccountProfile={(trayAccountPointsQuery.data?.signupId ?? 0) > 0}
                 />
               ) : null}
               {!auth.hasSession ? (
@@ -881,10 +870,14 @@ export function ConnectButton({
               ) : (
                 <RelayTrayPointsModule
                   pointsTotal={trayPointsDisplay.points}
-                  position={trayPointsQuery.data ?? null}
-                  pointsLoading={trayPointsQuery.isLoading && accountProfileLoading}
-                  activity={trayPointsActivityQuery.data?.activity ?? []}
-                  activityLoading={trayPointsActivityQuery.isLoading}
+                  position={trayPointsOverview}
+                  pointsLoading={trayAccountPointsQuery.isLoading}
+                  activity={trayAccountPointsQuery.data?.activity ?? []}
+                  activityLoading={trayAccountPointsQuery.isLoading}
+                  activityError={trayAccountPointsQuery.isError && !trayPointsAuthRequired}
+                  activityAuthRequired={trayPointsAuthRequired}
+                  leaderboardEligible={trayAccountPointsQuery.data?.leaderboardEligible ?? false}
+                  hasAccountProfile={(trayAccountPointsQuery.data?.signupId ?? 0) > 0}
                 />
               )}
               {auth.error ? <div className="px-4 text-[11px] text-red-400/90">{auth.error}</div> : null}
@@ -1215,11 +1208,16 @@ function RelayTrayHoldingRow(props: { token: TrayAssetHolding; subtitle?: string
 
 function RelayTrayPointsModule(props: {
   pointsTotal: number
-  position: WaitlistPositionSnapshot | null
+  position: TrayPointsOverview | null
   pointsLoading: boolean
   activity: PointsActivityRow[]
   activityLoading: boolean
+  activityError?: boolean
+  activityAuthRequired?: boolean
+  leaderboardEligible: boolean
+  hasAccountProfile: boolean
 }) {
+  const [pointsTab, setPointsTab] = useState<'history' | 'overview'>('history')
   const totalRank = props.position?.rank.total ?? null
   const inviteRank = props.position?.rank.invite ?? null
   const totalCount = props.position?.totalCount ?? 0
@@ -1231,13 +1229,11 @@ function RelayTrayPointsModule(props: {
     { label: 'Social', value: props.position?.points.social ?? 0 },
     { label: 'Bonus', value: props.position?.points.bonus ?? 0 },
   ]
-  const activityRows = props.activity
-    .filter((row) => row.waitlistPoints > 0)
-    .slice(0, 24)
+  const activityRows = props.activity.filter((row) => row.waitlistPoints > 0)
 
   return (
-    <div className="px-4 pt-2 pb-3">
-      <div className="rounded-xl bg-white/[0.02] p-3">
+    <div className="flex min-h-0 flex-1 flex-col px-4 pt-2 pb-3">
+      <div className="flex min-h-0 flex-1 flex-col rounded-xl bg-white/[0.02] p-3">
         <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Points</div>
         {props.pointsLoading ? (
           <div className="mt-2 rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
@@ -1248,82 +1244,141 @@ function RelayTrayPointsModule(props: {
             <div className="mt-2 text-[30px] font-semibold leading-none tracking-tight text-white tabular-nums">
               {props.pointsTotal.toLocaleString()}
             </div>
-            <div className="mt-1 text-[10px] text-zinc-500">Same total as waitlist and leaderboard</div>
+            <div className="mt-1 text-[10px] text-zinc-400">Weighted total — waitlist, leaderboard, and lottery</div>
 
-            {props.position ? (
-              <>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-                    <div className="text-[10px] text-zinc-500">Total rank</div>
-                    <div className="text-[13px] text-zinc-200 tabular-nums">
-                      {totalRank ? `#${totalRank.toLocaleString()}` : '—'}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-                    <div className="text-[10px] text-zinc-500">Invite rank</div>
-                    <div className="text-[13px] text-zinc-200 tabular-nums">
-                      {inviteRank ? `#${inviteRank.toLocaleString()}` : '—'}
-                    </div>
-                  </div>
+            <div className="mt-3 flex items-center gap-2 border-b border-white/8 pb-1">
+              {(['history', 'overview'] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setPointsTab(value)}
+                  className={`rounded-md px-2 py-1 text-[12px] font-medium transition-colors ${
+                    pointsTab === value
+                      ? 'bg-white/[0.08] text-white'
+                      : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200'
+                  }`}
+                >
+                  {value === 'history' ? 'History' : 'Overview'}
+                </button>
+              ))}
+            </div>
+
+            {pointsTab === 'history' ? (
+              <div className="mt-3 flex min-h-0 flex-1 flex-col">
+                <div className="px-0.5 pb-1.5 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                  What you earned
                 </div>
-
-                <div className="mt-2 text-[10px] text-zinc-500">
-                  Leaderboard pool: {Math.max(0, totalCount).toLocaleString()} profiles
-                </div>
-
-                <div className="mt-3 border-t border-white/8 pt-2">
-                  <div className="px-1 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">Breakdown</div>
-                  <div className="space-y-1">
-                    {breakdown.map((item) => (
-                      <div
-                        key={item.label}
-                        className="flex items-center justify-between rounded-lg border border-white/8 bg-black/20 px-3 py-2"
-                      >
-                        <span className="text-[11px] text-zinc-300">{item.label}</span>
-                        <span className="text-[11px] tabular-nums text-zinc-200">{item.value.toLocaleString()}</span>
-                      </div>
+                {props.activityLoading ? (
+                  <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
+                    Loading point history…
+                  </div>
+                ) : props.activityAuthRequired ? (
+                  <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-400">
+                    Sign in with email (Privy) to load point history, then reopen the tray.
+                  </div>
+                ) : props.activityError ? (
+                  <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-400">
+                    Could not load history. Try again in a moment.
+                  </div>
+                ) : activityRows.length === 0 ? (
+                  <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-400">
+                    No point awards yet. Link accounts, invite friends, complete tasks, or check in on social to
+                    earn points.
+                  </div>
+                ) : (
+                  <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1 max-h-[min(52vh,28rem)]">
+                    {activityRows.map((row) => (
+                      <RelayTrayPointsHistoryRow key={row.id} row={row} />
                     ))}
                   </div>
-                </div>
-              </>
-            ) : null}
-
-            <div className="mt-3 border-t border-white/8 pt-2">
-              <div className="px-1 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">Earn history</div>
-              {props.activityLoading ? (
-                <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
-                  Loading earn history…
-                </div>
-              ) : activityRows.length === 0 ? (
-                <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
-                  No point awards yet. Link accounts, invite friends, and complete tasks to earn points.
-                </div>
-              ) : (
-                <div className="space-y-1 max-h-52 overflow-y-auto">
-                  {activityRows.map((row) => (
-                    <div
-                      key={row.id}
-                      className="rounded-lg border border-white/8 bg-black/20 px-3 py-2"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="text-[11px] text-zinc-200">{row.label}</span>
-                        <span className="text-[11px] tabular-nums text-emerald-300/90">
-                          +{row.waitlistPoints}
-                        </span>
-                      </div>
-                      {row.createdAt ? (
-                        <div className="mt-0.5 text-[10px] text-zinc-500">
-                          {formatPointsActivityWhen(Date.parse(row.createdAt))}
+                )}
+              </div>
+            ) : (
+              <div className="mt-3 space-y-3">
+                {props.position ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
+                        <div className="text-[10px] text-zinc-500">Total rank</div>
+                        <div className="text-[13px] text-zinc-200 tabular-nums">
+                          {totalRank ? `#${totalRank.toLocaleString()}` : '—'}
                         </div>
-                      ) : null}
+                      </div>
+                      <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
+                        <div className="text-[10px] text-zinc-500">Invite rank</div>
+                        <div className="text-[13px] text-zinc-200 tabular-nums">
+                          {inviteRank ? `#${inviteRank.toLocaleString()}` : '—'}
+                        </div>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    <div className="text-[10px] text-zinc-500">
+                      Leaderboard pool: {Math.max(0, totalCount).toLocaleString()} profiles
+                    </div>
+                    <div>
+                      <div className="px-0.5 pb-1.5 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                        Category breakdown
+                      </div>
+                      <div className="space-y-1">
+                        {breakdown.map((item) => (
+                          <div
+                            key={item.label}
+                            className="flex items-center justify-between rounded-lg border border-white/8 bg-black/20 px-3 py-2"
+                          >
+                            <span className="text-[11px] text-zinc-300">{item.label}</span>
+                            <span className="text-[11px] tabular-nums text-zinc-200">
+                              {item.value.toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-400">
+                    {!props.hasAccountProfile
+                      ? 'Verify your email on the waitlist to create your 4626 profile and earn points.'
+                      : !props.leaderboardEligible
+                        ? 'Complete email verification to appear on the leaderboard and see rank.'
+                        : 'Rank and breakdown are not available yet.'}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
+    </div>
+  )
+}
+
+function RelayTrayPointsHistoryRow(props: { row: PointsActivityRow }) {
+  const { row } = props
+  const signedPoints =
+    row.waitlistPoints > 0 ? `+${row.waitlistPoints}` : String(row.waitlistPoints)
+  const showRawAward = row.amount !== row.waitlistPoints
+
+  return (
+    <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
+      <div className="flex items-start justify-between gap-2">
+        <span className="min-w-0 text-[12px] font-medium leading-snug text-zinc-100">{row.label}</span>
+        <span
+          className={`shrink-0 text-[12px] font-medium tabular-nums ${
+            row.waitlistPoints >= 0 ? 'text-emerald-300/90' : 'text-red-300/90'
+          }`}
+        >
+          {signedPoints}
+        </span>
+      </div>
+      {showRawAward ? (
+        <div className="mt-0.5 text-[10px] text-zinc-500">
+          Ledger {row.amount > 0 ? `+${row.amount}` : row.amount} → {row.waitlistPoints} points counted
+        </div>
+      ) : null}
+      {row.createdAt ? (
+        <div className="mt-0.5 text-[10px] text-zinc-500">
+          {formatPointsActivityWhen(Date.parse(row.createdAt))}
+        </div>
+      ) : null}
     </div>
   )
 }

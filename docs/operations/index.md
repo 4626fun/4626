@@ -31,5 +31,6 @@ For XMTP agent operations, use the **[Eliza Runtime](/operations/deployment/eliz
 | **[Batcher Pipe A Cutover](/operations/deployment/batcher-pipe-a-cutover)** | Payable finalize + ShareOFT auto-bridge batcher deploy, Safe config, and readiness verification |
 | **[Solana Share Mesh + Lottery Policy](/operations/solana-share-mesh-lottery-policy)** | Locked Pipe A/B policy — 30% finalize bridge, pool-buy lottery, keeper relay gating |
 | **[Solana Share Mesh Budget Paths](/operations/solana-share-mesh-budget-paths)** | Greenfield cost buckets and ordered checklists — Path 1 (platform peer) vs Path 2 (full mesh + lottery) |
+| **[Solana Share Mesh Creator Provisioning](/operations/solana-share-mesh-creator-provisioning)** | Per-creator LZ deploy, DVN wire, registry peer, preflight, finalize checklist |
 | **[Domain Setup](/operations/domain-setup)** | Custom domain configuration |
 | **[Supabase Setup](/operations/supabase-setup)** | Database configuration |

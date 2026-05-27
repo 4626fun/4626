@@ -2,10 +2,10 @@
 
 import Safe from '@safe-global/protocol-kit'
 import { OperationType } from '@safe-global/types-kit'
-import { createPublicClient, encodeFunctionData, getAddress, http, isAddress, type Address, type Hex } from 'viem'
+import { createPublicClient, encodeFunctionData, getAddress, http, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 
-import { SPLIT_PHASE1_DEPLOYMENT_BATCHER } from '../../src/config/contracts.defaults.js'
+import { BASE_DEFAULTS, SPLIT_PHASE1_DEPLOYMENT_BATCHER } from '../../src/config/contracts.defaults.js'
 
 declare const process: {
   argv: string[]
@@ -83,9 +83,11 @@ async function main() {
     getArg('--batcher', SPLIT_PHASE1_DEPLOYMENT_BATCHER) as Address,
   )
   const safeAddress = getAddress(
-    getArg('--safe-address', process.env.PROTOCOL_TREASURY || '') as Address,
+    getArg(
+      '--safe-address',
+      process.env.PROTOCOL_TREASURY || BASE_DEFAULTS.protocolTreasury,
+    ) as Address,
   )
-  if (!isAddress(safeAddress)) throw new Error('Missing --safe-address or PROTOCOL_TREASURY')
 
   const data = encodeFunctionData({
     abi: SET_SOLANA_SHARE_OFT_PEER_ABI,

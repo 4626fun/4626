@@ -39,6 +39,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'onboarding/provision-agent-owner': () => import('./onboarding/_provision-agent-owner.js'),
   'onboarding/preview-agent-owner': () => import('./onboarding/_preview-agent-owner.js'),
   'accounts/me': () => import('./accounts/_me.js'),
+  'accounts/me/points': () => import('./accounts/_mePoints.js'),
   'accounts/link': () => import('./accounts/_link.js'),
   'accounts/unlink': () => import('./accounts/_unlink.js'),
   'wallet/sync': () => import('./wallet/_sync.js'),

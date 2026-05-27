@@ -14,7 +14,7 @@ import { isAuthorizedWalletForProfile } from '../../../server/_lib/wallet/canoni
 
 
 
-import { readWaitlistPointsBreakdown } from '../../../server/_lib/onboarding/waitlistScoring.js'
+import { readWaitlistPositionForSignupId } from '../../../server/_lib/onboarding/waitlistPositionForProfile.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 
 type WaitlistPositionResponse = {
@@ -62,11 +62,6 @@ function isValidEmail(v: string): boolean {
 
 function isValidEvmAddress(v: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(v)
-}
-
-function safeInt(v: any): number {
-  const n = typeof v === 'number' ? v : Number(v)
-  return Number.isFinite(n) ? Math.floor(n) : 0
 }
 
 export default async function handler(req: any, res: any) {
@@ -162,217 +157,20 @@ export default async function handler(req: any, res: any) {
 
   const resolvedEmail = typeof row?.email === 'string' ? normalizeEmail(String(row.email)) : email
   const exposedEmail = hasValidEmail ? resolvedEmail : null
-  const profileCompletedAt = row?.profile_completed_at ? String(row.profile_completed_at) : null
-  const referralCode = typeof row?.referral_code === 'string' ? String(row.referral_code) : null
-  const borderTier = safeInt(row?.border_tier)
 
-  const breakdown = await readWaitlistPointsBreakdown(db as any, signupId)
-  const points = {
-    total: breakdown.total,
-    invite: breakdown.invite,
-    signup: breakdown.signup,
-    tasks: breakdown.tasks,
-    csw: breakdown.csw,
-    social: breakdown.social,
-    bonus: breakdown.bonus,
-  }
-
-  // Referral breakdown (pending vs qualified).
-  // Qualified = referrals who linked CSW
-  const qualifiedQ = await db.sql`
-    SELECT COUNT(*)::int AS c
-    FROM referral_conversions
-    WHERE referrer_signup_id = ${signupId}
-      AND is_valid = TRUE
-      AND (status = 'csw_linked' OR status = 'qualified' OR qualified_at IS NOT NULL);
-  `
-  const qualifiedCount = safeInt(qualifiedQ?.rows?.[0]?.c)
-
-  // Pending = referrals who only signed up (haven't linked CSW yet)
-  const pendingQ = await db.sql`
-    SELECT COUNT(*)::int AS c
-    FROM referral_conversions
-    WHERE referrer_signup_id = ${signupId}
-      AND is_valid = TRUE
-      AND NOT (status = 'csw_linked' OR status = 'qualified' OR qualified_at IS NOT NULL);
-  `
-  const pendingCount = safeInt(pendingQ?.rows?.[0]?.c)
-  const pendingCap = 10
-  const pendingCountCapped = Math.min(pendingCount, pendingCap)
-
-  // Leaderboard rank mirrors `/api/waitlist/leaderboard` (Supabase points ledger).
-  const totalCountQ = await db.sql`
-    SELECT COUNT(*)::int AS c
-    FROM profiles
-    WHERE email IS NOT NULL
-      AND merged_into_profile_id IS NULL;
-  `
-  const totalCount = Math.max(0, safeInt(totalCountQ?.rows?.[0]?.c))
-
-  const inviteRankQ = await db.sql`
-    WITH point_totals AS (
-      SELECT
-        signup_id,
-        COALESCE(
-          ROUND(
-            SUM(
-              CASE
-                WHEN source IN ('amoe_entry_spend', 'amoe_twitter_daily', 'amoe_xmtp_daily', 'amoe_entry_refund') THEN 0
-                WHEN source IN ('waitlist_signup', 'referral_passthrough', 'csw_link', 'amoe_checkin') THEN amount * 1.00
-                WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
-                WHEN source LIKE 'social_%' THEN amount * 0.50
-                WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
-                WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
-                WHEN source IN (
-                  'link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram',
-                  'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin'
-                ) THEN amount * 0.60
-                ELSE 0
-              END
-            )
-          ),
-          0
-        )::int AS total_points
-      FROM points
-      GROUP BY signup_id
-    ),
-    eligible AS (
-      SELECT id
-      FROM profiles
-      WHERE email IS NOT NULL
-        AND merged_into_profile_id IS NULL
-    ),
-    scored AS (
-      SELECT
-        e.id AS signup_id,
-        COALESCE(pt.total_points, 0)::int AS total_points,
-        COALESCE(
-          ROUND(SUM(
-            CASE
-              WHEN l.source = 'referral_passthrough' THEN l.amount * 1.00
-              WHEN l.source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN l.amount * 0.60
-              ELSE 0
-            END
-          )),
-          0
-        )::int AS invite_points,
-        COALESCE(
-          ROUND(SUM(
-            CASE
-              WHEN l.source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN l.amount * 0.40
-              ELSE 0
-            END
-          )),
-          0
-        )::int AS agent_points
-      FROM eligible e
-      LEFT JOIN point_totals pt ON pt.signup_id = e.id
-      LEFT JOIN points l ON l.signup_id = e.id
-      GROUP BY e.id, pt.total_points
-    ),
-    ranked AS (
-      SELECT
-        signup_id,
-        ROW_NUMBER() OVER (ORDER BY invite_points DESC, total_points DESC, agent_points DESC, signup_id ASC)::int AS rank_invite
-      FROM scored
-    )
-    SELECT rank_invite
-    FROM ranked
-    WHERE signup_id = ${signupId}
-    LIMIT 1;
-  `
-  const inviteRank = typeof inviteRankQ?.rows?.[0]?.rank_invite === 'number' ? (inviteRankQ.rows[0].rank_invite as number) : null
-
-  const totalRankQ = await db.sql`
-    WITH point_totals AS (
-      SELECT
-        signup_id,
-        COALESCE(
-          ROUND(
-            SUM(
-              CASE
-                WHEN source IN ('amoe_entry_spend', 'amoe_twitter_daily', 'amoe_xmtp_daily', 'amoe_entry_refund') THEN 0
-                WHEN source IN ('waitlist_signup', 'referral_passthrough', 'csw_link', 'amoe_checkin') THEN amount * 1.00
-                WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
-                WHEN source LIKE 'social_%' THEN amount * 0.50
-                WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
-                WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
-                WHEN source IN (
-                  'link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram',
-                  'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin'
-                ) THEN amount * 0.60
-                ELSE 0
-              END
-            )
-          ),
-          0
-        )::int AS total_points
-      FROM points
-      GROUP BY signup_id
-    ),
-    eligible AS (
-      SELECT id
-      FROM profiles
-      WHERE email IS NOT NULL
-        AND merged_into_profile_id IS NULL
-    ),
-    scored AS (
-      SELECT
-        e.id AS signup_id,
-        COALESCE(pt.total_points, 0)::int AS total_points,
-        COALESCE(
-          ROUND(SUM(
-            CASE
-              WHEN l.source = 'referral_passthrough' THEN l.amount * 1.00
-              WHEN l.source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN l.amount * 0.60
-              ELSE 0
-            END
-          )),
-          0
-        )::int AS invite_points,
-        COALESCE(
-          ROUND(SUM(
-            CASE
-              WHEN l.source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN l.amount * 0.40
-              ELSE 0
-            END
-          )),
-          0
-        )::int AS agent_points
-      FROM eligible e
-      LEFT JOIN point_totals pt ON pt.signup_id = e.id
-      LEFT JOIN points l ON l.signup_id = e.id
-      GROUP BY e.id, pt.total_points
-    ),
-    ranked AS (
-      SELECT
-        signup_id,
-        ROW_NUMBER() OVER (ORDER BY total_points DESC, invite_points DESC, agent_points DESC, signup_id ASC)::int AS rank_total
-      FROM scored
-    )
-    SELECT rank_total
-    FROM ranked
-    WHERE signup_id = ${signupId}
-    LIMIT 1;
-  `
-  const totalRank = typeof totalRankQ?.rows?.[0]?.rank_total === 'number' ? (totalRankQ.rows[0].rank_total as number) : null
-
-  const totalAheadInvite = typeof inviteRank === 'number' && inviteRank > 0 ? inviteRank - 1 : null
-  const percentileInvite =
-    typeof inviteRank === 'number' && inviteRank > 0 && totalCount > 0 ? Math.min(100, Math.max(1, Math.round((inviteRank / totalCount) * 100))) : null
-
+  const snapshot = await readWaitlistPositionForSignupId(db as any, signupId)
   const data: WaitlistPositionResponse = {
     email: exposedEmail,
-    signupId,
-    profileCompletedAt,
-    referralCode,
-    borderTier,
-    points,
-    rank: { invite: inviteRank, total: totalRank },
-    totalCount,
-    totalAheadInvite,
-    percentileInvite,
-    referrals: { qualifiedCount, pendingCount, pendingCountCapped, pendingCap },
+    signupId: snapshot.signupId,
+    profileCompletedAt: snapshot.profileCompletedAt,
+    referralCode: snapshot.referralCode,
+    borderTier: snapshot.borderTier,
+    points: snapshot.points,
+    rank: snapshot.rank,
+    totalCount: snapshot.totalCount,
+    totalAheadInvite: snapshot.totalAheadInvite,
+    percentileInvite: snapshot.percentileInvite,
+    referrals: snapshot.referrals,
   }
 
   return res.status(200).json({ success: true, data } satisfies ApiEnvelope<WaitlistPositionResponse>)

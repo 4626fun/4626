@@ -404,6 +404,7 @@ function localApiRoutesPlugin(): Plugin {
         '/api/auth/logout': apiImport('./api/_handlers/auth/_logout'),
         '/api/onboarding/bootstrap': apiImport('./api/_handlers/onboarding/_bootstrap'),
         '/api/accounts/me': apiImport('./api/_handlers/accounts/_me'),
+        '/api/accounts/me/points': apiImport('./api/_handlers/accounts/_mePoints'),
         '/api/accounts/link': apiImport('./api/_handlers/accounts/_link'),
         '/api/accounts/unlink': apiImport('./api/_handlers/accounts/_unlink'),
         '/api/image/projects/create': apiImport('./api/_handlers/image/_projects-create'),

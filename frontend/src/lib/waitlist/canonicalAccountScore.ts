@@ -15,7 +15,7 @@ function normalizeNonNegativeInt(value: unknown): number {
 /** One public points total for tray, waitlist tiers, and account setup (leaderboard score). */
 export function resolvePublicPointsDisplay(input: {
   score?: AccountScore | null
-  /** Fallback from `/api/waitlist/position` before `/api/accounts/me` hydrates. */
+  /** Fallback from `/api/accounts/me/points` (tray) before `/api/accounts/me` score hydrates. */
   positionTotal?: number | null
 }): PublicPointsDisplay {
   const points = input.score

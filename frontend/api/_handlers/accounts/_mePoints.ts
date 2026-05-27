@@ -1,3 +1,5 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node'
+
 import {
   type ApiEnvelope,
   handleOptions,
@@ -10,16 +12,15 @@ import {
 } from '../../../packages/server-core/src/index.js'
 
 import { verifyPrivyForAccounts } from '../../../server/_lib/identity/accountsIdentity.js'
-import { buildAccountTrayPointsForPrivyUser } from '../../../server/_lib/onboarding/accountTrayPoints.js'
-import type { PointsActivityRow } from '../../../server/_lib/onboarding/waitlistScoring.js'
+import {
+  buildAccountTrayPointsForPrivyUser,
+  type AccountTrayPointsPayload,
+} from '../../../server/_lib/onboarding/accountTrayPoints.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 
-type WaitlistPointsActivityResponse = {
-  signupId: number
-  activity: PointsActivityRow[]
-}
+export type { AccountTrayPointsPayload as AccountTrayPointsResponse }
 
-export default async function handler(req: any, res: any) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
   if (handleOptions(req, res)) return
@@ -29,7 +30,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const clientIp = getClientIp(req)
-  const rateLimit = checkRateLimit(rateLimitKey('waitlist-points-activity', clientIp), {
+  const rateLimit = checkRateLimit(rateLimitKey('accounts-me-points', clientIp), {
     windowMs: 60_000,
     maxRequests: 60,
   })
@@ -39,25 +40,31 @@ export default async function handler(req: any, res: any) {
   }
 
   const db = await getDb()
-  if (!db) return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
+  if (!db) {
+    return res.status(503).json({ success: false, error: 'Database unavailable' } satisfies ApiEnvelope<never>)
+  }
 
   try {
     const context = await verifyPrivyForAccounts(req)
     await ensureWaitlistSchema(db as any)
 
-    const tray = await buildAccountTrayPointsForPrivyUser(
+    const data = await buildAccountTrayPointsForPrivyUser(
       db as any,
       context.privyUserId,
       typeof req.query?.limit === 'string' ? req.query.limit : req.query?.limit,
     )
 
-    return res.status(200).json({
-      success: true,
-      data: { signupId: tray.signupId, activity: tray.activity },
-    } satisfies ApiEnvelope<WaitlistPointsActivityResponse>)
+    return res.status(200).json({ success: true, data } satisfies ApiEnvelope<AccountTrayPointsPayload>)
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unauthorized'
-    const status = /token|unauthorized|forbidden|privy/i.test(message) ? 401 : 500
+    const message = error instanceof Error ? error.message : 'Failed to load points'
+    const status =
+      /token|unauthorized|forbidden|privy/i.test(message) ||
+      message === 'Missing Privy auth token'
+        ? 401
+        : message === 'invalid_signup_id' ||
+            message.startsWith('account_tray_points_')
+          ? 500
+          : 500
     return res.status(status).json({ success: false, error: message } satisfies ApiEnvelope<never>)
   }
 }

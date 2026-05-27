@@ -21,6 +21,55 @@ Reused on mainnet: `creator-share-hook` (`EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tq
 | Per vault | **`vault_full_deploy` $499 USDC** (bundles Charm + Ajna + share mesh + Meteora add-on) + LZ finalize fee | Same |
 | Ready when | `verify-batcher-pipe-a-readiness.ts` exit **0** | Path 1 + pool + LP (+ B2 env) |
 
+### Devnet rehearsal (before mainnet LZ)
+
+Rehearse Base wiring + Solana rent without touching mainnet batcher:
+
+```bash
+pnpm -C frontend ops:pipe-a-devnet-rehearsal
+```
+
+Runs Forge `ShareOftPeer` tests, Vitest wiring/fee suites, and optional `pnpm -C kpr solana:cost-probe-devnet` (Path 1 rent proxy). Set `SOLANA_PRIVATE_KEY` and a **paid** `SOLANA_RPC_URL` or `RPC_URL_SOLANA_TESTNET` — public `api.devnet.solana.com` often returns 429.
+
+Full LZ OFT store + peer bytes32 on devnet (EID **40168**) still uses LayerZero `create-lz-oapp` + `hardhat lz:oft:solana:create`. **Do not** call mainnet `setSolanaShareOftPeer` with a devnet peer — mainnet uses EID **30168**.
+
+### ULN security — 6-of-9 optional DVNs (mainnet)
+
+Share-mesh LZ wiring must **not** use a single-DVN `1/1` stack. Production **Base ↔ Solana** (EID `30184` ↔ `30168`) uses **no required DVNs** and **6-of-9 optional** — any six of nine independent verifiers must sign:
+
+```typescript
+// [ requiredDVN[], [ optionalDVN[], threshold ] ]
+const MAINNET_SHARE_MESH_OPTIONAL_DVNS = [
+  'LayerZero Labs',
+  'Google',
+  'Nethermind',
+  'Horizen',
+  'Deutsche Telekom',
+  'Nansen',
+  'Frax',
+  'Wyoming',
+  'P-OPS',
+] as const
+
+[[], [[...MAINNET_SHARE_MESH_OPTIONAL_DVNS], 6]]
+```
+
+All nine names appear on **both** `base` and `solana` in [LayerZero metadata](https://metadata.layerzero-api.com/v1/metadata) (16-chain intersection today). Re-verify before wire; do not include a name that exists on only one side.
+
+**Devnet ceiling:** `solana-testnet` ↔ `arbitrum-sepolia` shares only **three** DVNs (LayerZero Labs, Paxos, Anchorage). Rehearsal wiring uses **2-of-3 optional** — you cannot exercise full 6-of-9 on that pathway until mainnet or a testnet pair with ≥9 shared DVNs exists.
+
+After changing DVNs, re-run `hardhat lz:oft:solana:init-config` + `hardhat lz:oapp:wire --ci`, then confirm:
+
+```bash
+pnpm hardhat lz:oft:solana:debug --eid 40168 --dst-eids 40231 --action peers
+# devnet: optionalDVNThreshold: 2, optionalDVNs: LayerZero Labs, Paxos, Anchorage
+# mainnet: optionalDVNThreshold: 6, nine optional DVNs (no required list)
+```
+
+Trade-offs vs 2-of-2 required: higher DVN fees (~6 verifiers billed per message), slower tail latency (wait for sixth verifier), but no single-DVN failure mode and no two-operator collusion window.
+
+**Template + per-creator runbook:** copy [templates/layerzero-share-mesh.config.ts](./templates/layerzero-share-mesh.config.ts) into each `create-lz-oapp` scaffold; follow [solana-share-mesh-creator-provisioning.md](./solana-share-mesh-creator-provisioning.md) for creator #N (registry peer → preflight → finalize).
+
 ## Measured costs (2026-05-27, local validator)
 
 Rent formula matches mainnet. Reproduce: `pnpm -C kpr solana:cost-probe-devnet` (see `kpr/README.md`).

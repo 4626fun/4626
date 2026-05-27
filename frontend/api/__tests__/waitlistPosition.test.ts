@@ -126,6 +126,23 @@ function createPositionDb(params: { id: string | number; email: string }) {
         return { rows: [{ c: 1 }] }
       }
 
+      if (
+        text.includes('from profiles') &&
+        text.includes('where id =') &&
+        text.includes('referral_code') &&
+        text.includes('border_tier')
+      ) {
+        return {
+          rows: [
+            {
+              referral_code: 'AKITA',
+              profile_completed_at: '2026-02-25T00:00:00.000Z',
+              border_tier: 1,
+            },
+          ],
+        }
+      }
+
       if (text.includes('count(*)::int as c') && text.includes('from profiles')) {
         return { rows: [{ c: 8 }] }
       }
@@ -206,6 +223,23 @@ function createPositionDbHistoricalLinkedWallet(params: { id: string | number; e
 
       if (text.includes('from referral_conversions') && text.includes('not (status = \'csw_linked\'')) {
         return { rows: [{ c: 1 }] }
+      }
+
+      if (
+        text.includes('from profiles') &&
+        text.includes('where id =') &&
+        text.includes('referral_code') &&
+        text.includes('border_tier')
+      ) {
+        return {
+          rows: [
+            {
+              referral_code: 'AKITA',
+              profile_completed_at: '2026-02-25T00:00:00.000Z',
+              border_tier: 1,
+            },
+          ],
+        }
       }
 
       if (text.includes('count(*)::int as c') && text.includes('from profiles')) {

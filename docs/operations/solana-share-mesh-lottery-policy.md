@@ -14,6 +14,7 @@ Related: [budget paths](./solana-share-mesh-budget-paths.md) (costs + runbooks),
 | 4 | **Meteora base asset = share mesh mint** — not `wrap-token` creator SPL. |
 | 5 | **`relay_entries` off** until share-mesh pool exists **and** a live detection path is wired (**B2 hook today**; B1 off-chain relay not shipped). |
 | 6 | **Share symbol = `■<TICKER>`**, name = `{Creator} Share Token` — all creators, Base deploy UI + Solana LZ deploy (`frontend/src/lib/tokens/tokenSymbols.ts`). |
+| 7 | **LZ ULN = 6-of-9 optional DVNs** on mainnet Base ↔ Solana — never single-DVN `1/1`. Nine-name pool (all on both chains): LayerZero Labs, Google, Nethermind, Horizen, Deutsche Telekom, Nansen, Frax, Wyoming, P-OPS; threshold **6**. Devnet rehearsal maxes at **2-of-3** (only three shared DVNs on arbsep ↔ solana-testnet). See [budget paths § ULN](./solana-share-mesh-budget-paths.md#uln-security--6-of-9-optional-dvns-mainnet). |
 
 ## Two lanes (do not conflate)
 
@@ -71,7 +72,7 @@ SOLANA_CREATOR_MINTS=<mint_pubkey>   # must match PendingEntries mint
 | **B1** | Meteora pool + LP on share mesh; Meteora/Jupiter swappable; `relay_entries` still off |
 | **B2** | B1 + hook PDAs + `relay_entries`; pool buy → Base lottery |
 
-Execution steps, costs, and commands: [solana-share-mesh-budget-paths.md](./solana-share-mesh-budget-paths.md).
+Execution steps, costs, and commands: [solana-share-mesh-budget-paths.md](./solana-share-mesh-budget-paths.md). Per-creator LZ + registry checklist: [solana-share-mesh-creator-provisioning.md](./solana-share-mesh-creator-provisioning.md).
 
 ## Deprecated (not share lottery)
 

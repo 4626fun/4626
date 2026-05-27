@@ -15,11 +15,18 @@ export type WaitlistPointsActivityBatch = {
   activity: PointsActivityRow[]
 }
 
-export async function fetchWaitlistPointsActivity(limit = 30): Promise<WaitlistPointsActivityBatch | null> {
+export async function fetchWaitlistPointsActivity(
+  limit = 30,
+  privyAccessToken?: string | null,
+): Promise<WaitlistPointsActivityBatch | null> {
   const qs = new URLSearchParams({ limit: String(limit) })
+  const headers = new Headers()
+  const token = typeof privyAccessToken === 'string' ? privyAccessToken.trim() : ''
+  if (token) headers.set('X-Privy-Token', token)
   const response = await apiFetch(`/api/waitlist/points-activity?${qs.toString()}`, {
     method: 'GET',
     withCredentials: true,
+    headers,
   })
   const body = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistPointsActivityBatch> | null
   if (!response.ok || !body?.success || !body.data) return null

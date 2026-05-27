@@ -7,7 +7,9 @@
  *   pnpm -C kpr solana:cost-probe-devnet
  *
  * Optional env:
- *   SOLANA_RPC_URL                 — default https://api.devnet.solana.com
+ *   SOLANA_RPC_URL                 — devnet RPC (preferred)
+ *   RPC_URL_SOLANA_TESTNET         — LayerZero alias for devnet RPC
+ *   SOLANA_PRIVATE_KEY             — fallback when COST_PROBE_KEYPAIR unset
  *   COST_PROBE_KEYPAIR             — base58, JSON array, or keypair path
  *   COST_PROBE_TARGET_SOL          — funding target (default 6)
  *   COST_PROBE_HOOK_PROGRAM_KEYPAIR — path to Ejpzi program id keypair for one-time devnet hook deploy
@@ -104,15 +106,50 @@ function loadKeypairFromRaw(raw: string): Keypair {
   return Keypair.fromSecretKey(bs58.decode(raw));
 }
 
+function resolveDevnetRpcUrl(): string {
+  const explicit = String(process.env.SOLANA_RPC_URL ?? '').trim();
+  if (explicit) return explicit;
+  const lzAlias = String(process.env.RPC_URL_SOLANA_TESTNET ?? '').trim();
+  if (lzAlias) return lzAlias;
+  return DEFAULT_RPC;
+}
+
 function loadOrCreateKeypair(): Keypair {
-  const raw = String(process.env.COST_PROBE_KEYPAIR ?? '').trim();
+  const raw =
+    String(process.env.COST_PROBE_KEYPAIR ?? '').trim() ||
+    String(process.env.SOLANA_PRIVATE_KEY ?? '').trim();
   if (raw) return loadKeypairFromRaw(raw);
   if (existsSync(KEYPAIR_FILE)) {
     return loadKeypairFromRaw(KEYPAIR_FILE);
   }
   const kp = Keypair.generate();
   writeFileSync(KEYPAIR_FILE, JSON.stringify(Array.from(kp.secretKey)));
+  console.warn(
+    `No COST_PROBE_KEYPAIR or SOLANA_PRIVATE_KEY — generated ephemeral payer at ${KEYPAIR_FILE}. Fund devnet SOL or set SOLANA_PRIVATE_KEY.`,
+  );
   return kp;
+}
+
+async function assertRpcReachable(connection: Connection, rpcUrl: string): Promise<void> {
+  const maxAttempts = 5;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await connection.getLatestBlockhash('confirmed');
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const isRateLimit = message.includes('429') || message.toLowerCase().includes('too many requests');
+      if (attempt >= maxAttempts) {
+        if (isRateLimit && rpcUrl.includes('api.devnet.solana.com')) {
+          throw new Error(
+            `Solana devnet RPC rate-limited (429). Set SOLANA_RPC_URL or RPC_URL_SOLANA_TESTNET to a paid devnet endpoint, or use SOLANA_RPC_URL=http://127.0.0.1:8899 with solana-test-validator.`,
+          );
+        }
+        throw error;
+      }
+      await sleep(isRateLimit ? 4000 * attempt : 1000 * attempt);
+    }
+  }
 }
 
 function loadOrCreateProgramKeypair(path: string): Keypair {
@@ -279,13 +316,16 @@ async function ensureHookProgramDeployed(
 }
 
 async function main() {
-  const rpcUrl = process.env.SOLANA_RPC_URL ?? DEFAULT_RPC;
+  const rpcUrl = resolveDevnetRpcUrl();
   const connection = new Connection(rpcUrl, 'confirmed');
   const payer = loadOrCreateKeypair();
   const targetSol = Number(process.env.COST_PROBE_TARGET_SOL ?? '6');
 
   console.log('=== Solana share-mesh cost probe ===');
   console.log('RPC:   ', rpcUrl);
+  if (rpcUrl === DEFAULT_RPC) {
+    console.log('RPC note: public devnet often 429s — set SOLANA_RPC_URL or RPC_URL_SOLANA_TESTNET for rehearsal.');
+  }
   console.log('Cluster:', isLocalRpc(rpcUrl) ? 'local-test-validator' : isDevnetRpc(rpcUrl) ? 'devnet' : 'custom');
   console.log('Payer: ', payer.publicKey.toBase58());
   console.log('Hook:  ', HOOK_PROGRAM_ID.toBase58());
@@ -293,6 +333,8 @@ async function main() {
   console.log();
 
   writeFileSync(KEYPAIR_FILE, JSON.stringify(Array.from(payer.secretKey)));
+
+  await assertRpcReachable(connection, rpcUrl);
 
   const startBal = await fundPayer(connection, rpcUrl, payer, targetSol);
   console.log(`Funded balance: ${(startBal / LAMPORTS_PER_SOL).toFixed(4)} SOL`);
