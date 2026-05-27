@@ -99,6 +99,7 @@ Options:
   --batcher <address>   DeploymentBatcher (default: SPLIT_PHASE1_DEPLOYMENT_BATCHER / env)
   --rpc <url>           Base RPC (default: BASE_RPC_URL)
   --json                Machine-readable output only
+  --shell-only          Exit 0 when batcher shell is wired (peer may still be unset)
   --help                Show this help
 `)
 }
@@ -205,9 +206,14 @@ async function main() {
   ]
 
   const ready = checks.every((check) => check.ok)
+  const shellReady = checks
+    .filter((check) => check.id !== 'solana_share_oft_peer_configured')
+    .every((check) => check.ok)
+  const shellOnly = hasFlag('--shell-only')
   const payload = {
     batcher,
     readyForPipeAFinalizeBridge: ready,
+    readyForBatcherShell: shellReady,
     checks,
   }
 
@@ -216,13 +222,19 @@ async function main() {
   } else {
     process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`)
     process.stdout.write(
-      ready
-        ? 'Pipe A batcher readiness: PASS\n'
-        : 'Pipe A batcher readiness: FAIL — see checks above and docs/operations/deployment/batcher-pipe-a-cutover.md\n',
+      shellOnly
+        ? shellReady
+          ? 'Pipe A batcher shell readiness: PASS (share OFT peer may still be pending mesh)\n'
+          : 'Pipe A batcher shell readiness: FAIL — see checks above\n'
+        : ready
+          ? 'Pipe A batcher readiness: PASS\n'
+          : shellReady
+            ? 'Pipe A batcher readiness: PARTIAL — shell wired; set solanaShareOftPeer before greenfield finalize bridge\n'
+            : 'Pipe A batcher readiness: FAIL — see checks above and docs/operations/deployment/batcher-pipe-a-cutover.md\n',
     )
   }
 
-  process.exit(ready ? 0 : 2)
+  process.exit(shellOnly ? (shellReady ? 0 : 2) : ready ? 0 : shellReady ? 3 : 2)
 }
 
 main().catch((error) => {
