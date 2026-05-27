@@ -55,6 +55,7 @@ import {
   CREATOR_STRATEGY_FEATURE_CATALOG,
   DEPLOY_GATING_FEATURE_KEYS,
   getCreatorStrategyFeature,
+  getRetiredCreatorStrategyFeatureMessage,
   type CreatorStrategyFeatureKey,
 } from '../server/_lib/creatorStrategy/catalog.js'
 import {
@@ -133,6 +134,11 @@ async function main() {
     printHelp()
     process.exit(2)
   }
+  const retiredMessage = getRetiredCreatorStrategyFeatureMessage(cli.feature)
+  if (retiredMessage) {
+    console.error(`Error: ${retiredMessage}`)
+    process.exit(2)
+  }
   const feature = getCreatorStrategyFeature(cli.feature)
   if (!feature) {
     console.error(`Error: unknown --feature "${cli.feature}"`)
@@ -185,18 +191,17 @@ async function main() {
   console.log('(This assumes the creator currently has all prior deploy-gating features active.)')
   console.log()
 
-  // Upper bound: all three features paid.
+  // Upper bound: both deploy-gating features paid.
   const hypotheticalAllPaid = new Set<CreatorStrategyFeatureKey>([
     'charm_active_lp',
     'ajna_sleeve',
-    'solana_bridge_strategy',
   ])
   const planAllPaid = computeStrategyWeights(hypotheticalAllPaid)
   if (planAllPaid.ok) {
-    console.log('If the creator ends up with ALL THREE deploy-gating features active:')
+    console.log('If the creator ends up with BOTH deploy-gating features active:')
     console.log(`  charmWeightBps  = ${planAllPaid.weights.charmWeightBps} (${formatBps(planAllPaid.weights.charmWeightBps)})`)
     console.log(`  ajnaWeightBps   = ${planAllPaid.weights.ajnaWeightBps} (${formatBps(planAllPaid.weights.ajnaWeightBps)})`)
-    console.log(`  solanaWeightBps = ${planAllPaid.weights.solanaWeightBps} (${formatBps(planAllPaid.weights.solanaWeightBps)})`)
+    console.log(`  solanaWeightBps = ${planAllPaid.weights.solanaWeightBps} (${formatBps(planAllPaid.weights.solanaWeightBps)}) — always 0 (share auto-bridge at finalize)`)
     console.log(`  idleReserveBps  = ${planAllPaid.weights.idleReserveBps} (${formatBps(planAllPaid.weights.idleReserveBps)})`)
   }
   console.log()
@@ -231,10 +236,6 @@ async function main() {
     case 'ajna_sleeve':
       console.log('    codeIds:       AJNA_VAULT_AUTH + AJNA_ERC4626_VAULT + ERC4626_STRATEGY_ADAPTER')
       console.log('    Must also deploy the nested Ajna vault + auth bundle first')
-      break
-    case 'solana_bridge_strategy':
-      console.log('    codeId:        SOLANA_STRATEGY_CODE_ID')
-      console.log('    args:          (vault, creatorToken, admin, keeper, …solana params…)')
       break
   }
   console.log('  - TransferOwnership of the strategy to protocolTreasury.')

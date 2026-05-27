@@ -16,7 +16,10 @@ import {
 } from '../../../../../packages/server-core/src/index.js'
 import { getAddress, isAddress, type Address } from 'viem'
 
-import { getCreatorStrategyFeature } from '../../../../../server/_lib/creatorStrategy/catalog.js'
+import {
+  getCreatorStrategyFeature,
+  getRetiredCreatorStrategyFeatureMessage,
+} from '../../../../../server/_lib/creatorStrategy/catalog.js'
 import { insertStripeCheckoutActivation } from '../../../../../server/_lib/creatorStrategy/activations.js'
 import { upsertPaymentOrder } from '../../../../../server/_lib/creatorStrategy/paymentOrders.js'
 import {
@@ -118,6 +121,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const creatorToken = getAddress(creatorTokenRaw as Address)
 
   const featureKey = typeof body.featureKey === 'string' ? body.featureKey.trim() : ''
+  const retiredMessage = getRetiredCreatorStrategyFeatureMessage(featureKey)
+  if (retiredMessage) {
+    return res
+      .status(410)
+      .json({ success: false, error: retiredMessage } satisfies ApiEnvelope<never>)
+  }
   const feature = getCreatorStrategyFeature(featureKey)
   if (!feature) {
     return res

@@ -199,7 +199,7 @@ flowchart TD
 | P0 | **`sync-kpr-env-from-vercel.sh`** | One command local env sync (no dashboard copy/paste) |
 | P1 | **Post-settle hook** — `executeSettleVault` calls `ensureKeeperRegistryForVault` when `settlementStage=completed` | New deploys auto-seed registry if row missing |
 | P1 | **Enable `KEEPER_ACTIVE_VAULT_ENQUEUE_ENABLED=1`** with `tend,report` | Crons fan out vault keeper without KPR polling registry |
-| P2 | **Solana in deploy phase** — if `solana_bridge_strategy` paid, `registerSolanaBridgeToken` + provisioner run before "live" | No separate Phase 2 bridge ops |
+| P2 | **Solana share mesh (Pipe A)** — batcher `solanaShareOftPeer` + Path 1 LZ OFT before finalize bridge | Legacy `solana_bridge_strategy` / creator-SPL auto-pool retired |
 | P2 | **Ajna default `dry_run`** on seed, promote to `live` via control-plane only | Safe-by-default automation |
 
 ### One-time AKITA backfill (grandfathered vault)

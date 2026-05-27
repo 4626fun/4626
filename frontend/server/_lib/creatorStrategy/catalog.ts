@@ -36,7 +36,6 @@
 export type CreatorStrategyFeatureKey =
   | 'charm_active_lp'
   | 'ajna_sleeve'
-  | 'solana_bridge_strategy'
   | 'solana_ovault_mesh'
   | 'solana_meteora_alpha_vault'
   | `deploy_vanity_vault_prefix_len_${DeployVanityLength}`
@@ -58,6 +57,31 @@ export const DEPLOY_GATING_FEATURE_KEYS = {
   charm: 'charm_active_lp',
   ajna: 'ajna_sleeve',
 } as const satisfies Record<'charm' | 'ajna', CreatorStrategyFeatureKey>
+
+/** Retired keys may still exist on historical DB rows; they are not purchasable. */
+export const RETIRED_CREATOR_STRATEGY_FEATURE_KEYS = ['solana_bridge_strategy'] as const
+
+export type RetiredCreatorStrategyFeatureKey =
+  (typeof RETIRED_CREATOR_STRATEGY_FEATURE_KEYS)[number]
+
+export function isRetiredCreatorStrategyFeatureKey(
+  key: string,
+): key is RetiredCreatorStrategyFeatureKey {
+  return (RETIRED_CREATOR_STRATEGY_FEATURE_KEYS as readonly string[]).includes(key)
+}
+
+export function getRetiredCreatorStrategyFeatureMessage(key: string): string | null {
+  if (key === 'solana_bridge_strategy') {
+    return (
+      'solana_bridge_strategy was retired. Greenfield vaults seed Solana share liquidity via ' +
+      'the 30% ShareOFT auto-bridge at finalizePhase2. Activate solana_ovault_mesh for ' +
+      'cross-chain compose routing instead.'
+    )
+  }
+  return isRetiredCreatorStrategyFeatureKey(key)
+    ? `${key} is retired and cannot be purchased.`
+    : null
+}
 
 /**
  * Paid vanity feature keys used by deploy session validation.
@@ -176,24 +200,6 @@ export const CREATOR_STRATEGY_FEATURE_CATALOG: Record<
     ],
     estimatedActivationWindow: 'Instant — applied automatically at vault deploy once payment is verified.',
   },
-  solana_bridge_strategy: {
-    key: 'solana_bridge_strategy',
-    displayName: 'Solana bridge strategy (deprecated)',
-    tagline: 'Deprecated — replaced by the 30% ShareOFT auto-bridge at vault launch.',
-    description:
-      'Legacy Phase-3 `SolanaBridgeStrategy` activation. New greenfield deploys seed Solana ' +
-      'share liquidity via the fixed 30% ShareOFT LayerZero auto-bridge at finalizePhase2 ' +
-      'instead of allocating vault TVL through this strategy. Existing activations remain ' +
-      'recorded for audit only; do not purchase for new vaults. Use `solana_ovault_mesh` for ' +
-      'cross-chain compose routing and post-deploy `solana_meteora_alpha_vault` for Meteora.',
-    priceUsdc: DEFAULT_CREATOR_STRATEGY_PRICE_USDC,
-    provisionerTag: 'deprecated_phase3_strategy_solana_bridge',
-    requires: [
-      'Deprecated for new vault deploys — share mesh seeding is automatic at finalizePhase2',
-      'Activate `solana_ovault_mesh` instead when cross-chain OVault routing is required',
-    ],
-    estimatedActivationWindow: 'Not available for new vault deploys.',
-  },
   solana_ovault_mesh: {
     key: 'solana_ovault_mesh',
     displayName: 'Solana OVault composer mesh (Phase 2b)',
@@ -217,18 +223,17 @@ export const CREATOR_STRATEGY_FEATURE_CATALOG: Record<
     displayName: 'Solana Meteora liquidity',
     tagline: 'Activate a Meteora DLMM pool + Alpha Vault for your creator coin on Solana.',
     description:
-      'Creates a permissionless Meteora DLMM pool (SOL-paired) and an Alpha Vault ' +
-      'against your creator coin\'s bridge-wrapped Solana mint. Enables Solana-side ' +
-      'trading and unlocks the atomic bridge + deposit path used by your vault\'s ' +
-      'SolanaStrategy to auto-deploy bridged CREATOR supply into Meteora liquidity. ' +
-      'Payment funds ~1 SOL of Solana-side account rent plus operator gas; rent is ' +
-      'refundable to the protocol on account close.',
+      'Optional post-deploy Meteora DLMM pool + Alpha Vault on the **share-mesh mint** ' +
+      '(`■<TICKER>`) seeded by the 30% ShareOFT auto-bridge at finalizePhase2 — not ' +
+      'bridge-wrapped creator SPL. Enables Solana-side share trading after Path 1/2 ' +
+      'from docs/operations/solana-share-mesh-budget-paths.md. Payment funds operator ' +
+      'Solana rent + gas.',
     priceUsdc: DEFAULT_CREATOR_STRATEGY_PRICE_USDC,
     provisionerTag: 'solana_meteora',
     requires: [
-      '`solana_ovault_mesh` must already be active on the vault — Meteora routes through the share mesh seeded at finalizePhase2',
-      'Creator coin must pass lowercase-parity normalization so the Solana-side wrapped mint can be created (see docs/operations/solana-bridge-naming-invariant.md)',
-      'Creator coin registered on the canonical SolanaBridgeAdapter (verify with `scripts/verify-solana-mint-parity.ts`)',
+      '`solana_ovault_mesh` must already be active — share mesh seeded at finalizePhase2',
+      'Path 1 share-mesh OFT live with batcher `solanaShareOftPeer` wired before Meteora pool create',
+      'Use `create-dlmm-pool.ts` with the LZ share mint as `TOKEN_MINT_X` (see share-mesh budget runbook)',
     ],
     estimatedActivationWindow: 'Usually within 1 business day; longer if the Solana keeper needs funding.',
   },

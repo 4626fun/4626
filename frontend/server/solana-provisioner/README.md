@@ -79,7 +79,7 @@ wrap-token constraints (name<=32 bytes, symbol<=12 bytes, no null bytes).
 - `runner` (which CLI runner executed)
 - `tokenSymbol` (echo of the symbol used; equals `bridgeToken.symbol()` on Base)
 - `mintCompatibilityHints` (mint-compatibility diagnostics)
-- `pool` / `alphaVault` (when `SOLANA_AUTO_POOL=1`)
+- `pool` / `alphaVault` — **removed:** `SOLANA_AUTO_POOL` is retired (use share-mesh runbook instead)
 
 ## Request contract (`POST /meteora-ixs`)
 

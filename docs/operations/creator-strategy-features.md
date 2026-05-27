@@ -53,13 +53,17 @@ Paid features fall into two buckets:
    - `charm_active_lp` — $100 USDC — Charm active-LP on CREATOR/USDC
    - `ajna_sleeve` — $100 USDC — Ajna lending sleeve (USDC lending
      collateralized by CREATOR)
-   - `solana_bridge_strategy` — $100 USDC — SolanaStrategy + bridge
-     routing to Solana
+   - `solana_ovault_mesh` — $100 USDC — Phase 2b OVault compose routing +
+     share-mesh finalize bridge entitlement (not Phase 3 TVL)
 2. **Post-deploy features** — enable infra on top of an already-running
    vault. Current post-deploy features:
-   - `solana_meteora_alpha_vault` — $100 USDC — Meteora DLMM + Alpha
-     Vault layered on top of the base `solana_bridge_strategy`. Requires
-     `solana_bridge_strategy` to be active first.
+   - `solana_meteora_alpha_vault` — $100 USDC — Meteora DLMM on the
+     **share-mesh mint** (`■<TICKER>`). Requires `solana_ovault_mesh`
+     active first.
+
+**Retired:** `solana_bridge_strategy` (legacy Phase-3 `SolanaBridgeStrategy`).
+New purchases are blocked (HTTP 410). Greenfield Solana share liquidity
+is seeded by the 30% ShareOFT auto-bridge at finalizePhase2.
 
 All payments are one-time USDC on Base to the protocol treasury. Pricing
 is declared per-feature in the catalog; features can deviate from the
@@ -186,21 +190,19 @@ deploys that don't have a pre-existing pool must still pass a non-zero
 ### Code-ids are only required when used
 
 When a strategy is skipped, the corresponding entries in `StrategyCodeIds`
-can be `bytes32(0)`. The batcher only requires the code-id that will
-actually be deployed. Skipping Solana also relaxes the `solanaKeeper` /
-`solanaBridgeAddress` `ZeroAddress` check — pass `address(0)` for both
-when the creator hasn't paid for `solana_bridge_strategy`.
+can be `bytes32(0)`. Phase 3 `solanaWeightBps` is always zero on greenfield
+batchers — pass `address(0)` for `solanaKeeper` / `solanaBridgeAddress`.
 
 ## Adding a strategy post-deploy
 
 A creator can activate additional deploy-gating strategies AFTER their
 vault is live (e.g. they deployed with Charm only at 9_000 bps, and
-later want to add Solana). This is the "grow into your strategies" path.
+later want to add Ajna). This is the "grow into your strategies" path.
 
 ### High-level flow
 
-1. **Creator pays** $100 USDC to the treasury for the new feature (say
-   `solana_bridge_strategy`) and POSTs the tx hash to
+1. **Creator pays** $100 USDC to the treasury for the new feature (e.g.
+   `ajna_sleeve`) and POSTs the tx hash to
    `/api/creator/strategy/activate`. The activation row lands in
    `creator_strategy_features` with `status = 'pending'`.
 2. **Operator runbook** (manual for v1; see "Operator script" below):
@@ -210,13 +212,13 @@ later want to add Solana). This is the "grow into your strategies" path.
    2. Transfer ownership of the new strategy to `protocolTreasury`.
    3. Compute the new weight triple via
       `computeStrategyWeights({old active keys ∪ new key})`. Example —
-      adding Solana to a Charm-only vault: weights shift from
+      adding Ajna to a Charm-only vault: weights shift from
       `{charm: 9_000, idle: 1_000}` to
-      `{charm: 4_500, solana: 4_500, idle: 1_000}`.
+      `{charm: 4_500, ajna: 4_500, idle: 1_000}`.
    4. Call `setStrategyWeight(charm, 4_500)` on the existing strategy
       so it sheds half its weight (the vault is `management`-authorized
       to do this via the creator's 1-click AA session / multisig).
-   5. Call `addStrategy(solanaStrategy, 4_500)` on the vault to
+   5. Call `addStrategy(ajnaStrategy, 4_500)` on the vault to
       register the new strategy.
    6. Flip the DB row to `status = 'active'`,
       `provisioner_ref = '<strategy_address>'`.
@@ -227,11 +229,10 @@ later want to add Solana). This is the "grow into your strategies" path.
      90 %, should be 45 %). The keeper calls `deallocate` on Charm to
      pull the excess back into the idle reserve.
    - Idle is now above its target. The keeper calls `deployToStrategies`
-     to push the idle surplus into Solana (now 45 % target).
+     to push the idle surplus into Ajna (now 45 % target).
    - This can take multiple keeper ticks for each strategy's
      deallocation window to settle (Charm needs to exit its concentrated
-     LP position; Ajna needs to withdraw from its Ajna pool; Solana
-     needs to bridge). Expected convergence time is 1–4 hours depending
+     LP position; Ajna needs to withdraw from its Ajna pool). Expected convergence time is 1–4 hours depending
      on strategy liquidity.
 
 ### Key invariants during post-deploy addition
@@ -251,14 +252,10 @@ later want to add Solana). This is the "grow into your strategies" path.
   operator), and deployment pushes from vault idle into the new
   strategy. The creator's share price is preserved across the
   rebalance (minus normal strategy exit costs: LP impermanent loss
-  realization, Ajna interest accrual, Solana bridge fees).
-- **Solana-specific:** adding `solana_bridge_strategy` post-deploy
-  requires the creator coin's Solana mint to already be registered on
-  `SolanaBridgeAdapter`. If not, run
-  `/api/deploy/registerSolanaBridgeToken` first — that flow is
-  idempotent and can be triggered standalone.
+  realization, Ajna interest accrual). **`solana_bridge_strategy` post-deploy
+  addition is retired** — use Pipe A share mesh at deploy instead.
 
-### Operator script (follow-up, not yet implemented)
+### Operator script
 
 The manual runbook above will eventually be encapsulated in a single
 script:
@@ -266,7 +263,7 @@ script:
 ```bash
 pnpm -C frontend exec tsx scripts/activate-strategy-post-deploy.ts \
   --creator 0xCREATOR \
-  --feature-key solana_bridge_strategy
+  --feature ajna_sleeve
 ```
 
 The script will:
@@ -330,24 +327,11 @@ semantics as Charm.
 
 **Provisioning:** automatic.
 
-### `solana_bridge_strategy` — $100 USDC (deploy-gating)
+### `solana_bridge_strategy` — RETIRED
 
-Installs the `SolanaStrategy` contract, wires it to the canonical
-`SolanaBridgeAdapter`, and registers it on the vault at `3_000` bps.
-Provides the base Solana integration: bridges vault-held CREATOR tokens
-to Solana and reports NAV back via keeper updates. Prerequisite for the
-post-deploy `solana_meteora_alpha_vault` add-on (which layers Meteora
-DLMM + Alpha Vault routing on top of this strategy).
-
-**Prerequisites:**
-- Must be paid BEFORE deploy (deploy-gating).
-- Creator coin must pass lowercase-parity normalization so the Solana
-  wrapped mint can exist (see
-  [`docs/operations/solana-bridge-naming-invariant.md`](./solana-bridge-naming-invariant.md)).
-
-**Provisioning:** automatic at deploy. The SolanaBridgeAdapter
-registration (`registerToken`) happens post-Phase-3 via
-`/api/deploy/registerSolanaBridgeToken`.
+Legacy Phase-3 `SolanaBridgeStrategy` TVL lane. **Not purchasable.**
+Greenfield vaults seed Solana via Pipe A (30% ShareOFT auto-bridge at
+finalizePhase2). See `docs/operations/solana-share-mesh-lottery-policy.md`.
 
 ### `solana_meteora_alpha_vault` — $100 USDC
 

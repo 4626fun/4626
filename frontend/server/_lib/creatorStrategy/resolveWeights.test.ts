@@ -39,9 +39,9 @@ describe('computeStrategyWeights (scaling)', () => {
     expect(result.ok).toBe(false)
   })
 
-  it('ignores deprecated solana_bridge_strategy for Phase 3 weights', () => {
+  it('ignores legacy solana_bridge_strategy rows for Phase 3 weights', () => {
     const result = computeStrategyWeights(
-      new Set<CreatorStrategyFeatureKey>(['solana_bridge_strategy']),
+      new Set(['solana_bridge_strategy'] as unknown as Set<CreatorStrategyFeatureKey>),
     )
     expect(result.ok).toBe(false)
   })
