@@ -2285,7 +2285,7 @@ describe('deploy session optimistic concurrency', () => {
     expect(updateDeploySessionMock).toHaveBeenCalled()
   })
 
-  it('status blocks phase3_sent when legacy two-strategy payload omits Solana weight', async () => {
+  it('status advances phase3_sent when greenfield payload uses zero Solana vault strategy weight', async () => {
     const rec = {
       ...makeDeploySession('phase3_sent'),
       payload: JSON.stringify({

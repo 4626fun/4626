@@ -1352,23 +1352,28 @@ async function verifyPhase3PostState(params: {
       bridgeAddress: await readSolanaBridgeAddress({ publicClient: params.publicClient, strategy: entry.strategy }),
     })),
   )
-  const charm = strategyDetails.find((entry) => Boolean(entry.charmVault))
-  if (!charm) {
-    throw new Error('phase3 verification failed: charm strategy not registered on vault')
-  }
-  if (charm.weight !== info.charmWeightBps) {
-    throw new Error(
-      `phase3 verification failed: charm strategy weight ${charm.weight.toString()} does not match expected ${info.charmWeightBps.toString()}`,
-    )
-  }
-  if (!(await hasRuntimeCode(params.publicClient, charm.strategy))) {
-    throw new Error(`phase3 verification failed: charm strategy code missing at ${charm.strategy}`)
-  }
-  if (!(await hasRuntimeCode(params.publicClient, charm.charmVault ?? null))) {
-    throw new Error(`phase3 verification failed: charm vault code missing at ${String(charm.charmVault ?? '')}`)
+  let charm: (typeof strategyDetails)[number] | undefined
+  if (info.charmWeightBps > 0n) {
+    charm = strategyDetails.find((entry) => Boolean(entry.charmVault))
+    if (!charm) {
+      throw new Error('phase3 verification failed: charm strategy not registered on vault')
+    }
+    if (charm.weight !== info.charmWeightBps) {
+      throw new Error(
+        `phase3 verification failed: charm strategy weight ${charm.weight.toString()} does not match expected ${info.charmWeightBps.toString()}`,
+      )
+    }
+    if (!(await hasRuntimeCode(params.publicClient, charm.strategy))) {
+      throw new Error(`phase3 verification failed: charm strategy code missing at ${charm.strategy}`)
+    }
+    if (!(await hasRuntimeCode(params.publicClient, charm.charmVault ?? null))) {
+      throw new Error(`phase3 verification failed: charm vault code missing at ${String(charm.charmVault ?? '')}`)
+    }
   }
 
-  const remaining = strategyDetails.filter((entry) => entry.strategy.toLowerCase() !== charm.strategy.toLowerCase())
+  const remaining = charm
+    ? strategyDetails.filter((entry) => entry.strategy.toLowerCase() !== charm!.strategy.toLowerCase())
+    : [...strategyDetails]
 
   let ajna: (typeof strategyDetails)[number] | undefined
   let ajnaAuthAddress: Address | null = null

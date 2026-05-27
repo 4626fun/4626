@@ -3333,8 +3333,11 @@ function DeployVaultBatcher({
     let cancelled = false
     ;(async () => {
       const runtimeConfig = await fetchDeployRuntimeConfig().catch(() => null)
-      if (cancelled || !runtimeConfig) {
-        if (!cancelled) setRuntimeBatcherConfigError(null)
+      if (cancelled) return
+      if (!runtimeConfig) {
+        setRuntimeBatcherConfigError(
+          'Deploy runtime config is unavailable. Retry in a moment before submitting.',
+        )
         return
       }
       setRuntimeBatcherConfigError(runtimeConfig.creatorVaultBatcherConfigError ?? null)
