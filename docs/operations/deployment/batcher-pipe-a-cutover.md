@@ -141,7 +141,18 @@ pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
 # exit 0
 ```
 
-**Still before first live finalize bridge message:** Base↔Solana LZ DVN wire (6-of-9), Base-side `MyOFT` / per-creator `ShareOFT` peer to the Solana oftStore, registry peer seed, and AKITA `configureCreatorMesh` (composer beneficiary-operator). See [solana-share-mesh-creator-provisioning.md](../solana-share-mesh-creator-provisioning.md).
+**LZ Base↔Solana wire complete (2026-05-27).** Scaffold `/tmp/4626-oft-mainnet` with `layerzero.config.ts` → `contractName: 'AkitaShareOFT'`. Ran `lz:oft:solana:init-config` (1 tx) + `lz:oapp:wire` (13 txs). ULN verified **6-of-9** optional DVNs on both directions (`lz:oft:solana:debug --action peers`).
+
+| Item | Value / status |
+|------|----------------|
+| AKITA ShareOFT `peers(30168)` | `0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f` ✅ |
+| Solana mint metadata | `■AKITA` / `Akita Share Token` via `lz:oft:solana:update-metadata` (tx on Solscan mainnet) |
+| Registry `getRemoteOFTPeerBytes32(AKITA, 30168)` | **Zero** — AKITA creator coin not yet in `CreatorRegistry`; batcher default peer covers first finalize |
+| `configureCreatorMesh` | **Blocked** — grandfathered AKITA wrapper lacks `isBeneficiaryOperator` / beneficiary-operator wiring |
+| B2 devnet hook | **Blocked** — `COST_PROBE_HOOK_PROGRAM_KEYPAIR` not in env (program id `Ejpzi…`) |
+| Orchestrator | Re-seed on ops host after hook upgrade: `seed-solana-orchestrator-env.sh --hook-schema auto`; keep `SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0` |
+
+**Still before first live finalize bridge message:** optional explicit registry peer (after AKITA registered on registry) and composer mesh (`configureCreatorMesh` after wrapper upgrade). See [solana-share-mesh-creator-provisioning.md](../solana-share-mesh-creator-provisioning.md).
 
 Mainnet OFT scaffold (operator-local, not committed): `/tmp/4626-oft-mainnet`. Rebuild with `OFT_ID=6ste36Y7fcbzJXkVQj3ApEqYb3wFZsZX63gT6wymhy3s anchor build` before program upgrade. If Hardhat `setAuthority` CU simulation fails on public RPC, use `spl-token authorize` (documented in creator provisioning Step 1).
 

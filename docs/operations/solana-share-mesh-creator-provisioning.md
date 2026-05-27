@@ -111,6 +111,8 @@ cast call "$REGISTRY" \
 
 **Creator #1 only:** batcher `setSolanaShareOftPeer` can seed the first peer if registry was empty at finalize; still prefer explicit registry seed for auditability.
 
+**Grandfathered AKITA:** `setRemoteOFTPeerBytes32` reverts with `Token not registered` until the creator coin exists in `CreatorRegistry`. For AKITA, rely on batcher default peer at first finalize (registry registers during finalize) or call `registerCreatorCoin` first if seeding early.
+
 ---
 
 ## Step 4 — Preflight (greenlight finalize)
