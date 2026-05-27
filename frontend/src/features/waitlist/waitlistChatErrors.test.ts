@@ -13,4 +13,10 @@ describe('formatWaitlistChatError', () => {
     expect(formatWaitlistChatError(null)).toBeNull()
     expect(formatWaitlistChatError('   ')).toBeNull()
   })
+
+  it('maps XMTP rate-limit errors to user-safe copy', () => {
+    expect(formatWaitlistChatError('1 exceeds rate limit R23.240.54.118DEF')).toBe(
+      'XMTP is rate limiting welcome sync for this network. Wait about a minute, then tap Refresh.',
+    )
+  })
 })

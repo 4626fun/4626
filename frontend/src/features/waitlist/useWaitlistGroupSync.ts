@@ -9,6 +9,8 @@ import {
   findWaitlistGroupConversation,
 } from './waitlistXmtpGroupIds'
 import { resyncWaitlistGroupMembership } from './waitlistXmtpResync'
+import { formatWaitlistChatError } from './waitlistChatErrors'
+import { isXmtpRateLimitError } from '@/lib/xmtp/xmtpHelpers'
 
 type UseWaitlistGroupSyncParams = {
   groupId: string | null
@@ -19,7 +21,7 @@ type UseWaitlistGroupSyncParams = {
   messagingConnected: boolean
   conversations: ChatConversation[]
   ensureConversationById: (conversationId: string) => Promise<ChatConversation | null>
-  refreshConversations: () => Promise<ChatConversation[]>
+  refreshConversations: (options?: { force?: boolean }) => Promise<ChatConversation[]>
 }
 
 export function useWaitlistGroupSync(params: UseWaitlistGroupSyncParams) {
@@ -99,6 +101,12 @@ export function useWaitlistGroupSync(params: UseWaitlistGroupSyncParams) {
           await refreshConversations()
         }
         return resolved
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        if (isXmtpRateLimitError(message)) {
+          setResyncError(formatWaitlistChatError(message))
+        }
+        return groupConversationRef.current
       } finally {
         groupSyncInFlightRef.current = false
       }
@@ -139,13 +147,14 @@ export function useWaitlistGroupSync(params: UseWaitlistGroupSyncParams) {
 
   const refreshGroup = useCallback(async () => {
     if (groupIdCandidates.length === 0) {
-      await refreshConversations()
+      await refreshConversations({ force: true })
       return
     }
     setRefreshBusy(true)
     setSyncTimedOut(false)
     try {
       await syncWaitlistGroups({ resyncMembership: joinStatus !== 'executed' })
+      await refreshConversations({ force: true })
     } finally {
       setRefreshBusy(false)
     }

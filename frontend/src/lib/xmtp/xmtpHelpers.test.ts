@@ -1,6 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { isLocalXmtpStateInvalidError, isTransientXmtpStreamNetworkError, shouldFallbackToOriginalXmtpRecipient } from './xmtpHelpers'
+import { isLocalXmtpStateInvalidError, isTransientXmtpStreamNetworkError, isXmtpRateLimitError, shouldFallbackToOriginalXmtpRecipient } from './xmtpHelpers'
+import { resetXmtpSyncCoordinatorForTests } from './xmtpSyncCoordinator'
+
+beforeEach(() => {
+  resetXmtpSyncCoordinatorForTests()
+})
 
 describe('shouldFallbackToOriginalXmtpRecipient', () => {
   const original = '0xb05cf01231cf2ff99499682e64d3780d57c80fdd' as const
@@ -131,5 +136,15 @@ describe('isTransientXmtpStreamNetworkError', () => {
 
   it('ignores unrelated validation failures', () => {
     expect(isTransientXmtpStreamNetworkError('InboxValidationFailed: inbox mismatch')).toBe(false)
+  })
+})
+
+describe('isXmtpRateLimitError', () => {
+  it('matches QueryWelcomeMessages exhaustion errors', () => {
+    expect(
+      isXmtpRateLimitError(
+        "api client at endpoint \"/xmtp.mls.api.v1.MlsApi/QueryWelcomeMessages\" has error status: 'Some resource has been exhausted'",
+      ),
+    ).toBe(true)
   })
 })

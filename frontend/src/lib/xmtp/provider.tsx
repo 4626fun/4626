@@ -44,6 +44,7 @@ import {
   isOpfsAccessHandleError,
   isScwSignatureValidationError,
   isTransientXmtpStreamNetworkError,
+  isXmtpRateLimitError,
   isWrongChainIdError,
   isXmtpEnvironmentMismatchError,
   isXmtpNotRegisteredError,
@@ -57,6 +58,10 @@ import {
   syncConversationsForGroupDiscovery,
   groupMembershipListOptions,
 } from '@/lib/xmtp/xmtpHelpers'
+import {
+  markXmtpRateLimited,
+  xmtpSyncBlockedRemainingMs,
+} from '@/lib/xmtp/xmtpSyncCoordinator'
 import {
   buildXmtpDbPath,
   clearInstallationProvisioned,
@@ -210,7 +215,7 @@ type XmtpContextValue = {
   /** Resolve an XMTP inboxId to an Ethereum address (cached). */
   resolveInboxAddress: (inboxId: string) => Promise<string | null>
   /** Re-sync the local conversation index from XMTP (safe while connected). */
-  refreshConversations: () => Promise<ChatConversation[]>
+  refreshConversations: (options?: { force?: boolean }) => Promise<ChatConversation[]>
   /** Sync + list, then fetch a single conversation by id if still missing. */
   ensureConversationById: (conversationId: string) => Promise<ChatConversation | null>
 }
@@ -1315,7 +1320,7 @@ export function XmtpChatProvider({
     if (mountedRef.current) setConversations(next)
   }, [])
 
-  const refreshConversations = useCallback(async (): Promise<ChatConversation[]> => {
+  const refreshConversations = useCallback(async (options?: { force?: boolean }): Promise<ChatConversation[]> => {
     const client = clientRef.current
     if (!client) return conversationsRef.current
     const conversationsApi = client.conversations as {
@@ -1324,7 +1329,10 @@ export function XmtpChatProvider({
       list: () => Promise<Array<Conversation | Dm | Group>>
       listGroups?: () => Promise<Array<Conversation | Dm | Group>>
     }
-    await syncConversationsForGroupDiscovery(conversationsApi)
+    await syncConversationsForGroupDiscovery(conversationsApi, {
+      force: options?.force,
+      lightweight: manualConnectOnlyRef.current && !options?.force,
+    })
     const listOptions = groupMembershipListOptions()
     const convos = await client.conversations.list(listOptions)
     let mergedConvos = [...convos]
@@ -2353,6 +2361,7 @@ export function XmtpChatProvider({
 
   useEffect(() => {
     const recoverSoftly = async (): Promise<void> => {
+      if (xmtpSyncBlockedRemainingMs() > 0) return
       const refresh = refreshConversationsRef.current
       if (!refresh || !clientRef.current) return
       try {
@@ -2366,6 +2375,10 @@ export function XmtpChatProvider({
       const msg = error.message
       if (isLocalXmtpStateInvalidError(msg)) {
         markLocalStateInvalid(msg)
+        return
+      }
+      if (isXmtpRateLimitError(msg)) {
+        markXmtpRateLimited()
         return
       }
       if (isTransientXmtpStreamNetworkError(msg)) {

@@ -202,11 +202,27 @@ export function isTransientXmtpStreamNetworkError(message: string): boolean {
   return (
     m.includes('network error') ||
     m.includes('subscribewelcomemessages') ||
+    m.includes('querywelcomemessages') ||
     m.includes('failed to fetch') ||
     m.includes('load failed') ||
     m.includes('err_network') ||
     m.includes('connection reset')
   )
+}
+
+/** XMTP MLS API rate limits (QueryWelcomeMessages / welcome stream). */
+export function isXmtpRateLimitError(message: string): boolean {
+  const m = String(message || '').toLowerCase()
+  return (
+    m.includes('rate limit') ||
+    m.includes('resource has been exhausted') ||
+    m.includes('exceeds rate limit') ||
+    m.includes('querywelcomemessages')
+  )
+}
+
+export function isTransientXmtpStreamError(message: string): boolean {
+  return isTransientXmtpStreamNetworkError(message) || isXmtpRateLimitError(message)
 }
 
 // ---------------------------------------------------------------------------
@@ -386,19 +402,12 @@ export async function allowConversationIfUnknown(convo: ConversationLike): Promi
 
 export async function syncConversationsForGroupDiscovery(
   conversationsApi: ConversationsApiLike,
+  options?: { force?: boolean; lightweight?: boolean },
 ): Promise<void> {
-  if (typeof conversationsApi.syncAll === 'function') {
-    try {
-      await conversationsApi.syncAll([...GROUP_MEMBERSHIP_CONSENT_SYNC_STATES])
-      return
-    } catch {
-      // fall through to lightweight sync
-    }
-  }
-  try {
-    await conversationsApi.sync()
-  } catch {
-    // best effort
+  const { coordinatedConversationSync } = await import('@/lib/xmtp/xmtpSyncCoordinator')
+  const result = await coordinatedConversationSync(conversationsApi, options)
+  if (result === 'skipped_cooldown' || result === 'skipped_in_flight') {
+    return
   }
 }
 
@@ -483,7 +492,12 @@ export async function resolveConversationByIdWithSyncRetries(
     })
     if (resolved) return resolved
     if (round + 1 >= rounds) break
-    await syncConversationsForGroupDiscovery(conversationsApi)
+    try {
+      await syncConversationsForGroupDiscovery(conversationsApi)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (isXmtpRateLimitError(message)) break
+    }
     if (delayMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, delayMs))
     }

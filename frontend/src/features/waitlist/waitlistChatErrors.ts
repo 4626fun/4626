@@ -3,6 +3,9 @@ export function formatWaitlistChatError(raw: string | null | undefined): string 
   const message = raw.trim()
   if (!message) return null
 
+  if (message.includes('resource has been exhausted') || message.includes('rate limit')) {
+    return 'XMTP is rate limiting welcome sync for this network. Wait about a minute, then tap Refresh.'
+  }
   if (message.includes('PRIVY_WALLET_AUTHORIZATION_KEY')) {
     return 'Waitlist chat is still syncing. Try refresh in a moment.'
   }
