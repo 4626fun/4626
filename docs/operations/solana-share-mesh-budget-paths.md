@@ -1,292 +1,113 @@
-# Solana share mesh — budget paths (greenfield)
+# Solana share mesh — budget & runbook
 
-Operator budget and sequencing for Pipe A (30% ShareOFT auto-bridge at `finalizePhase2`) and optional Solana pool-buy lottery. Assumes current batcher cutover (`0xa99058f424FB3ACC639F59355C65C40149030651`) and policy in [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md) (**B1/B2 fork** — read policy implementation-status table before Phase B).
+Operator costs and sequencing for **Pipe A** (30% ShareOFT auto-bridge at `finalizePhase2`) and optional **Path 2** (Meteora + lottery).
 
-Related: [batcher-pipe-a-cutover.md](./deployment/batcher-pipe-a-cutover.md), [verify-batcher-pipe-a-readiness.ts](../../frontend/scripts/ops/verify-batcher-pipe-a-readiness.ts).
+Policy: [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md). Batcher: `0xa99058f424FB3ACC639F59355C65C40149030651`.
 
-## Scope (locked for current ops)
+## Scope
 
-**Solana side = share token only.**
+- **In:** one LZ **share-mesh OFT** on Solana (EID `30168`) + `setSolanaShareOftPeer` + optional Meteora/lottery (B1/B2).
+- **Out:** Solana asset mesh (Pipe B), Pipe C creator SPL as lottery token, `POST /provision` auto-pool for share mesh.
 
-- Deploy and peer one **LayerZero share-mesh OFT** on Solana (EID `30168`) — vault shares bridged from Base `CreatorShareOFT`.
-- Wire `solanaShareOftPeer(bytes32)` on the batcher to that mint’s peer address.
-- **Do not** deploy a separate Solana **asset mesh** (creator-coin OFT) for this milestone. Compose-deposit (Pipe B) is out of scope until product asks for it.
-
-What already exists and is reused:
-
-- **`creator-share-hook`** on mainnet (`EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU`) — **B2** on-chain lottery relay only; not a substitute for the LZ share OFT.
-
----
+Reused on mainnet: `creator-share-hook` (`EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU`) — **B2 relay only**, not a substitute for LZ share OFT.
 
 ## Path comparison
 
-| | **Path 1 — Share on Solana (minimum)** | **Path 2 — Pool + lottery (optional)** |
-|---|---|---|
-| **Goal** | Greenfield finalize bridges 30% ShareOFT → Solana share mint | Solana trading on Meteora (+ **B2:** pool-buy lottery relay to Base) |
-| **Solana deploy** | **Share-mesh OFT only** | Reuses Path 1 mint + Meteora pool (+ B2 hook PDAs if on-chain relay) |
-| **Solana lottery** | No — Base ShareOFT DEX buys only | **B2:** yes after pool + `relay_entries`. **B1:** Meteora trading only until off-chain relay ships |
-| **One-time platform cost** | **~3.0–4.0 SOL** (measured rent below) + Base gas | **+ ~0.25–0.65 SOL** DLMM pool; **+ ~0.10 SOL** hook rent if **B2** |
-| **Per vault (product)** | **`solana_ovault_mesh` — $100 USDC** | Same entitlement |
-| **Per finalize** | LZ bridge fee + `msg.value` | Same |
-| **Readiness** | `verify-batcher-pipe-a-readiness.ts` exit **0** | Path 1 + Meteora pool + LP; **B2** adds hook PDAs + keeper env |
+| | **Path 1 — minimum** | **Path 2 — optional** |
+|--|------------------------|------------------------|
+| Delivers | 30% ShareOFT → Solana share mint | Meteora trading (+ B2: pool-buy lottery relay) |
+| Solana lottery | No (Base ShareOFT buys) | B2: yes; B1: trading only |
+| Platform SOL (one-time) | **~4.0** | + **~0.25–0.6** pool; + **~0.10** hook if B2 |
+| Per vault | `solana_ovault_mesh` $100 USDC + LZ finalize fee | Same |
+| Ready when | `verify-batcher-pipe-a-readiness.ts` exit **0** | Path 1 + pool + LP (+ B2 env) |
 
-### Measured costs (2026-05-27, local test validator + `solana rent`)
+## Measured costs (2026-05-27, local validator)
 
-Public **devnet faucet was rate-limited** (`429` on `api.devnet.solana.com`). Costs were measured on a **local `solana-test-validator`** instead — rent uses the **same lamports/byte formula as mainnet**, so these numbers apply to production without spending real SOL.
+Rent formula matches mainnet. Reproduce: `pnpm -C kpr solana:cost-probe-devnet` (see `kpr/README.md`).
 
-Reproduce:
+| Component | SOL | Notes |
+|-----------|-----|--------|
+| LZ OFT program (~560 KB) | **3.99** | Dominates Path 1 |
+| Mint + OFT store + peer | **~0.02** | |
+| **Path 1 subtotal** | **~4.0** | |
+| Meteora DLMM pool | **~0.25–0.6** | Estimate until first measured pool tx |
+| Hook PDAs (B2) | **~0.10** | |
+| Buffer + fees | **~0.1** | |
+| **Ops wallet load** | **6** | Expect **~4.0–4.5** Path 1; + pool (+ hook if B2) |
 
-```bash
-# Terminal 1 — local validator (unlimited faucet)
-solana-test-validator --reset --quiet
+## Path 1 — Share mesh live
 
-# Terminal 2 — Path 1 program deploy proxy
-solana airdrop 20 $(solana-keygen pubkey /tmp/4626-devnet-cost-probe.json) \
-  --url http://127.0.0.1:8899 --keypair /tmp/4626-devnet-cost-probe.json
-SOLANA_RPC_URL=http://127.0.0.1:8899 SKIP_METEORA=1 SKIP_HOOK=1 \
-  pnpm -C kpr solana:cost-probe-devnet
-```
-
-| Component | Bytes | Measured (SOL) | How |
-|-----------|-------|----------------|-----|
-| **Path 1 — program deploy proxy** (323 KB hook `.so` ≈ LZ OFT size class) | 323,432 | **2.255** | Payer balance delta on local validator |
-| **Path 1 — LZ OFT program (560 KB, LZ docs size)** | 573,440 | **3.992** | `solana rent 573440` (same formula as deploy) |
-| Mint + escrow + OFT Store + PeerConfig | ~2 KB | **~0.02** | `solana rent` on account layout |
-| **Path 1 subtotal (560 KB OFT + accounts)** | | **~4.0** | |
-| **Path 2 — Token-2022 mint** (TransferFee + TransferHook) | 346 | **0.0033** | `solana rent` — **B2 only** |
-| CreatorConfig PDA | 501 | **0.0044** | `solana rent` — **B2 only** |
-| PendingEntries PDA | 12,352 | **0.0869** | `solana rent` — **B2 only** |
-| WinnerRecord PDA | 89 | **0.0015** | `solana rent` — **B2 only** |
-| **Path 2 hook subtotal (rent only)** | | **~0.10** | **B2 only** |
-| **Path 2 — Meteora DLMM pool create** | multi-acct | **~0.25–0.6** | Not tx-measured (devnet clone missing token-launch proof); rent/docs estimate |
-| **Path 1 + 2 (560 KB OFT + hook + pool)** | | **~4.4–4.7** | Full B2 stack; B1 omits ~0.10 hook rent |
-| Tx fees + one retry buffer | | **~0.1** | |
-| **Recommended ops wallet load** | | **6 SOL** | |
-| **Expected actual spend (Path 1 deploy only)** | | **~4.0–4.5 SOL** | Dominated by 560 KB LZ OFT program rent; add ~0.25–0.6 SOL for Meteora pool (B1/B2) |
-
-Replace Meteora pool row with a payer delta from the first successful devnet/mainnet pool create when token-launch proof accounts are wired.
-
-**Devnet hook prerequisite:** `creator-share-hook` (`EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU`) is **not** on public devnet by default. The cost probe measures hook PDAs via rent when the program is missing; full tx measurement requires a one-time devnet deploy with the program-id keypair:
-
-```bash
-# After building: cd programs/creator-share-hook && anchor build
-COST_PROBE_HOOK_PROGRAM_KEYPAIR=/path/to/Ejpzi-keypair.json \
-  SOLANA_RPC_URL=https://api.devnet.solana.com \
-  pnpm -C kpr solana:cost-probe-devnet
-```
-
-When devnet faucet is limited, use local validator (same rent formula):
-
-```bash
-solana-test-validator --reset --url devnet --clone-upgradeable-program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo --quiet
-SOLANA_RPC_URL=http://127.0.0.1:8899 pnpm -C kpr solana:cost-probe-devnet
-```
-
-**Old wide bracket (2–8 SOL) was retired** — it mixed asset mesh, Alpha Vault, and worst-case retries. Current scope is share OFT + hook + DLMM pool only.
-
-### Why ~2–4 SOL (not a wide 2–8 band)
-
-Path 1 is **one** LZ OFT on Solana (share mesh), not asset mesh + share mesh. The repo has **no measured mainnet quote** for that deploy yet — the bracket is order-of-magnitude until the first LZ run:
-
-| Component | Typical range | Notes |
-|-----------|---------------|--------|
-| Solana account rent (mint, OFT store, peer config) | **~0.02 SOL** | Measured via `solana rent` |
-| LZ OFT program deploy | **~2.8–3.9 SOL** | Dominates Path 1; 560 KB ≈ 3.90 SOL per LZ docs |
-| Deploy / init txs + retries | **~0.1–0.3 SOL** | Buffer |
-| **`setSolanaShareOftPeer`** | Base gas only | Already scripted |
-| **Asset mesh on Solana** | **$0 for this milestone** | Explicitly out of scope |
-
-Replace the measured table above with Solscan payer deltas after the first mainnet run.
-
----
-
-## Path 1 — Share token on Solana
-
-**Unlocks:** Greenfield `finalizePhase2` with 30% ShareOFT auto-bridge to the Solana share mint.
-
-### Budget
-
-| Item | Est. cost | Payer |
-|------|-----------|-------|
-| LayerZero **share-mesh OFT** on Solana (EID `30168`) + peer to Base ShareOFT | **~4.0 SOL** (560 KB program rent + accounts) | Protocol (one-time, platform-wide) |
-| Safe `setSolanaShareOftPeer(bytes32)` on batcher | **<$5** Base gas | Protocol treasury |
-| Optional: per-vault registry peer seed | Base gas | Protocol |
-| **`solana_ovault_mesh`** per vault | **$100 USDC** | Creator |
-| 30% ShareOFT LZ `send` at finalize | **Variable** (LZ quote) | Creator tx |
-
-### Checklist
-
-1. **Deploy + peer (LayerZero ops, external to repo)**
-   - Solana **share** OFT for EID `30168` (not creator/asset mesh)
-   - Peer to Base `CreatorShareOFT` / share-mesh topology
-   - Record **share-mesh peer bytes32** → batcher
-
-2. **Wire batcher**
+1. **Deploy + peer** (LayerZero ops): Solana share OFT EID `30168`, peer to Base `CreatorShareOFT`; set mint metadata **`■<TICKER>`** / **`{Creator} Share Token`**.
+2. **Wire batcher:**
    ```bash
    pnpm -C frontend exec tsx scripts/ops/execute-batcher-share-oft-peer-safe.ts \
-     --share-oft-peer 0x<64-hex-share-mesh-peer>
+     --share-oft-peer 0x<64-hex-peer>
    ```
-
-3. **Verify**
+3. **Verify:**
    ```bash
    pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
      --batcher 0xa99058f424FB3ACC639F59355C65C40149030651
    ```
+4. Creator activates `solana_ovault_mesh`; `finalizePhase2` bridges 30% ShareOFT.
+5. Keeper until Path 2: `KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay`, `SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0`.
 
-4. **Greenfield deploy**
-   - Creator activates `solana_ovault_mesh`
-   - Payable `finalizePhase2` includes LZ fee for 30% bridge to share mint
+## Path 2 — Meteora (+ optional B2 lottery)
 
-5. **Keeper (until Phase 2)**
-   ```bash
-   KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay
-   SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0
-   ```
+Prerequisite: Path 1 complete.
 
-**Done when:** readiness exit `0`; one greenfield finalize lands share supply on the Solana share mint.
+### B1 (default) — trading
 
----
+1. `TOKEN_MINT_X=<share_mesh_mint>`, `TOKEN_MINT_Y=WSOL`, `ACTIVATION_DELAY_SECONDS=0` — no alpha vault flag.
+2. `pnpm -C kpr solana:create-dlmm-pool`
+3. Bridge shares from Base; seed LP.
+4. `prepare-token-badge` (below). Keep `relay_entries` **off**.
 
-## Path 2 — Pool + lottery (optional, after Path 1)
+### B2 — on-chain lottery relay
 
-**Prerequisite:** Path 1 complete — share mint live and batcher peer set.
+1. Meteora admin **`token_badge`** → `setup-creator-full` PDAs → allowlist Meteora program (**before** pool).
+2. Pool on **same** hook mint; seed LP.
+3. Enable orchestrator env (see policy). Test pool buy → `PendingEntries` → Base lottery.
 
-### Budget (incremental)
+### Meteora UI + display
 
-| Item | Est. cost | Lane |
-|------|-----------|------|
-| Bridge ShareOFT Base → Solana share mint (LP seed) | LZ fee on Base (not SOL) | B1 or B2 |
-| Meteora DLMM on tradable share mint + quote | **~0.25–0.6 SOL** | B1 or B2 |
-| Hook PDAs (`creator-share-hook`) | **~0.10 SOL** rent | **B2 only** |
-| `relay_entries` orchestration | Ongoing SOL + Base gas | **B2 only** (keeper shipped) |
+Pool appears on [app.meteora.ag](https://app.meteora.ag) when **pool + activation passed + LP seeded**.
 
-`configureCreatorMesh` / asset mesh on Base or Solana is **only required if** product later enables Pipe B compose-deposit — not for Path 1 or Path 2 lottery.
+| Gate | Action |
+|------|--------|
+| Correct mint | Share mesh LZ mint — not creator SPL `9JWh…` |
+| Pool + activation | `create-dlmm-pool`; default immediate activation |
+| Liquidity | Bridge + add LP |
+| Symbol/name | **`■<TICKER>`** at LZ deploy + badge script |
 
-### Phase B checklist
-
-See mint-type fork in [policy Phase B](./solana-share-mesh-lottery-policy.md#phase-b--pool--lottery-relay). Summary:
-
-1. **Pick lane** — **B1:** LZ standard SPL share mesh; **B2:** Token-2022 + `TransferHook` (one mint for pool + relay; not creator SPL `9JWh…`).
-2. **B2 only (before pool create):** Meteora admin `token_badge` → `setup-creator-full` hook PDAs → allowlist Meteora program in `CreatorConfig`.
-3. Meteora DLMM — **B1:** base = LZ share mesh mint; **B2:** base = hook mint from step 2. Quote = WSOL/USDC. `ACTIVATION_DELAY_SECONDS=0`; `METEORA_HAS_ALPHA_VAULT=1` only for Alpha Vault lane.
-4. Seed LP (bridge share supply from Base first if needed).
-5. Orchestrator env (**B2 only** — skip for B1 Meteora-only):
-   ```bash
-   SOLANA_CREATOR_MINTS=<mint_pubkey>
-   SOLANA_SHARE_OFT_MAPPING='{"<mint_pubkey>":"<base_share_oft_address>"}'
-   KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay,relay_entries
-   SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=1
-   ```
-6. **B2:** test pool buy → `PendingEntries` → Base lottery. **B1:** test Meteora swap only; Base lottery via Uniswap.
-
-### Meteora UI visibility (required for discoverable trading)
-
-See also [policy — B1 vs B2 implementation status](./solana-share-mesh-lottery-policy.md#b1-vs-b2--implementation-status-read-before-phase-b).
-
-Meteora DLMM is **permissionless for standard SPL mints** — no separate listing team. A pool shows on [app.meteora.ag](https://app.meteora.ag) when **pool + activation + liquidity** exist.
-
-**Do not conflate:**
-
-- **Meteora admin `token_badge`** — on-chain PDA for permissioned Token-2022 extensions (`TransferHook`, etc.). Required **before** pool create on hook mints. Process: [Token 2022 extensions](https://docs.meteora.ag/overview/products/dlmm/token-2022-extensions).
-- **`prepare-token-badge.ts`** — generates wallet/token-list JSON for display. Run with `CREATOR_TOKEN` + stable `TOKEN_METADATA_URI`; does **not** submit to Meteora admin.
-
-| Gate | Why it matters | Ops action |
-|------|----------------|------------|
-| **Correct mint** | Wrong grain = wrong pool | **Share mesh** LZ mint as `TOKEN_MINT_X` — not creator SPL `9JWh…` |
-| **Pool exists on-chain** | UI indexes DLMM pair PDAs | `pnpm -C kpr solana:create-dlmm-pool` |
-| **Activation time passed** | Pre-activation pools are not swappable | Default **`ACTIVATION_DELAY_SECONDS=0`**. Alpha Vault lane: `604800` + `METEORA_HAS_ALPHA_VAULT=1` |
-| **Initial liquidity seeded** | Empty pools do not swap | Bridge shares from Base, then add DLMM LP (UI or SDK) |
-| **Quote = WSOL/USDC** | Meteora UX default | `TOKEN_MINT_Y=NATIVE_MINT` (WSOL) unless product picks USDC |
-| **Display metadata** | Wallets/Meteora/Jupiter read mint name/symbol | Set at **LZ share-mesh deploy** + `prepare-token-badge` (see below) |
-| **Token-2022 + TransferHook (B2 only)** | Pool create fails without admin badge | Meteora `token_badge` **before** pool create, or use standard SPL mesh (B1) |
-
-### Share mesh display naming (product convention — all creators)
-
-Same rule for **every** creator, including AKITA. No special cases, no alternate tickers.
-
-Formula (`frontend/src/lib/tokens/tokenSymbols.ts`):
-
-| Field | Rule | Examples |
-|-------|------|----------|
-| **Symbol** | `■` + uppercase underlying ticker | `■AKITA`, `■JESSE`, `■MYCOIN` |
-| **Name** | `{Creator} Share Token` | `Akita Share Token`, `Jesse Share Token` |
-
-At **LayerZero share-mesh OFT deploy** (Phase A), set Solana mint metadata to that symbol/name for the vault’s creator ticker.
-
-**Wrong grains (do not use for share mesh):**
-
-| Grain | Example | Why |
-|-------|---------|-----|
-| Creator SPL (Pipe C) | `akita` / `akita` on `9JWh…` | Creator coin wrap, not vault shares |
-| `ws*` / unprefixed share tickers | `wsAKITA` | Not the product symbol; use **`■<TICKER>`** |
-
-After the mint exists, publish wallet/indexer JSON (substitute per creator):
+**Two “badge” types:** Meteora admin `token_badge` (B2 Token-2022 only) ≠ `prepare-token-badge.ts` (wallet/Jupiter JSON).
 
 ```bash
-TOKEN_MINT=<share_mesh_mint_pubkey> \
+TOKEN_MINT=<share_mesh_mint> \
 TOKEN_NAME="<Creator> Share Token" \
 TOKEN_SYMBOL='■<TICKER>' \
-TOKEN_METADATA_URI=<stable_https_or_ipfs_uri> \
+TOKEN_METADATA_URI=<https_or_ipfs_uri> \
 CREATOR_TOKEN=0x<creator_coin> \
 BADGE_TARGET=meteora \
 pnpm -C kpr solana:prepare-token-badge
 ```
 
-AKITA instance: `TOKEN_SYMBOL='■AKITA'`, `TOKEN_NAME='Akita Share Token'`, `CREATOR_TOKEN=0x5b674196812451b7cec024fe9d22d2c0b172fa75`.
-
-Deploy UI derives `■<TICKER>` for all vault deploys; Solana LZ deploy must match.
-
-**Share-mesh target (Path 2):** pair **LZ share-mesh mint** + WSOL — not bridge-wrapped creator SPL (`9JWh…`).
-
-**Verify after provisioning:**
-
-```bash
-# 1) Pool PDA printed by create-dlmm-pool
-open "https://app.meteora.ag/pools?search=<share_mesh_mint_or_pool_pda>"
-
-# 2) Swap route exists (Jupiter aggregates Meteora when pool has liquidity)
-# Search mint on jup.ag — "all tokens" if not yet on strict list
-```
-
-**Deprecated provisioner path:** `SOLANA_AUTO_POOL=1` on `POST /provision` targets **creator SPL**, not share mesh — and passes `METEORA_HAS_ALPHA_VAULT=1` + 7-day activation for Alpha Vault launch. Do not use for Path 2 share-mesh lottery.
-
----
+**Do not use:** creator SPL lowercase wraps (`akita`/`akita`), `ws*` tickers, or `SOLANA_AUTO_POOL=1` provisioner path (creator SPL + 7-day activation).
 
 ## Sequencing
 
 ```text
-P0  LZ share OFT on Solana + setSolanaShareOftPeer  →  greenfield Pipe A live
-P1a (optional B1) Meteora pool + LP on LZ share mesh  →  Solana trading; Base lottery via Uniswap
-P1b (optional B2) badge + hook PDAs + pool + relay_entries  →  Solana pool-buy lottery relay
+P0  LZ share OFT + setSolanaShareOftPeer     →  Pipe A live
+P1a B1: Meteora pool + LP on share mesh       →  Solana trading (lottery on Base)
+P1b B2: badge + hook + pool + relay_entries   →  Solana pool-buy lottery
 ```
 
-Asset mesh on Solana: **not in current plan.**
+Pipe C creator SPL naming: [solana-bridge-naming-invariant.md](./solana-bridge-naming-invariant.md).
 
-**Pipe C (orthogonal):** bridge-wrapped creator SPL naming and adapter parity —
-[solana-bridge-naming-invariant.md](./solana-bridge-naming-invariant.md). Do not
-use that mint grain for share-mesh lottery.
-
----
-
-## Reference addresses (current mainnet)
+## Reference (mainnet)
 
 | Role | Address |
 |------|---------|
-| DeploymentBatcher (Pipe A) | `0xa99058f424FB3ACC639F59355C65C40149030651` |
+| DeploymentBatcher | `0xa99058f424FB3ACC639F59355C65C40149030651` |
 | OVaultHubComposer | `0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1` |
 | Solana EID | `30168` |
-| `creator-share-hook` program | `EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU` |
-
-## Verification
-
-```bash
-pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts
-pnpm -C frontend exec tsx scripts/ops/read-akita-ovault-mesh-onchain.ts
-```
-
-After share peer is wired:
-
-```bash
-pnpm -C frontend exec tsx scripts/ops/execute-batcher-share-oft-peer-safe.ts \
-  --share-oft-peer 0x<peer>
-```
+| creator-share-hook | `EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU` |
