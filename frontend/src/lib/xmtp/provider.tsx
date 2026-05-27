@@ -20,7 +20,9 @@ import { APP_ORIGIN } from '@/lib/env/host'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { shouldBlockSelfDm } from '@/lib/xmtp/dmGuard'
-import { getBasenameName } from '@/lib/xmtp/socialIdentity'
+import { resolvePeerChatPresentation } from '@/lib/xmtp/socialIdentity'
+import { prefetchBasenameForAddresses } from '@/hooks/useBasenameForAddress'
+import { prefetchIdentities } from '@/hooks/useIdentity'
 import { resolveModePreferredIdentity, shouldRequireAuthBackedXmtpIdentity } from '@/lib/xmtp/identityResolver'
 import { useAccountContext } from '@/wallet/accountContext'
 import {
@@ -65,6 +67,7 @@ import {
   shouldAttemptXmtpRestore,
   shouldRefuseAutoCreateAfterFailedRestore,
 } from '@/lib/xmtp/xmtpConnectPolicy'
+import { buildWrongOriginConnectError, evaluateXmtpConnectPrecheck } from '@/lib/xmtp/xmtpConnectGuard'
 import { finishRestoredXmtpClient } from '@/lib/xmtp/xmtpConnectOrchestrator'
 import {
   Client,
@@ -1170,30 +1173,33 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     console.warn('[xmtp] local state reset required:', errorMessage)
   }, [endActiveStreams, releaseTabLock, stopTabLockHeartbeat])
 
-  // ------- resolve address → display name (Basename / truncated) -------
-  const nameCache = useRef<Map<string, string>>(new Map())
+  // ------- resolve address → chat presentation (Basename + avatar / truncated) -------
+  const peerPresentationCache = useRef<Map<string, { name: string; imageUrl?: string }>>(new Map())
 
-  const resolveDisplayName = useCallback(async (address: string): Promise<string> => {
+  const resolvePeerPresentation = useCallback(async (address: string): Promise<{ name: string; imageUrl?: string }> => {
     const lower = address.toLowerCase()
-    const cached = nameCache.current.get(lower)
+    const cached = peerPresentationCache.current.get(lower)
     if (cached) return cached
 
-    const basename = await getBasenameName(address).catch(() => null)
-    if (basename) {
-      const short = basename.replace(/\.base\.eth$/i, '')
-      nameCache.current.set(lower, short)
-      return short
-    }
+    const presentation = await resolvePeerChatPresentation(address, truncateAddress)
+    peerPresentationCache.current.set(lower, presentation)
+    return presentation
+  }, [])
 
-    const truncated = truncateAddress(address)
-    nameCache.current.set(lower, truncated)
-    return truncated
+  const warmChatPeerIdentities = useCallback((summaries: ChatConversation[]): void => {
+    const peerAddresses = summaries
+      .map((summary) => summary.peerAddress)
+      .filter((addr): addr is string => Boolean(addr))
+    if (peerAddresses.length === 0) return
+    prefetchBasenameForAddresses(peerAddresses)
+    prefetchIdentities(peerAddresses)
   }, [])
 
   // ------- build conversation summary -------
   const buildConvoSummary = useCallback(async (convo: Conversation | Dm | Group): Promise<ChatConversation> => {
     const isDm = 'peerInboxId' in convo
     let name = ''
+    let imageUrl: string | undefined
     let peerInboxId: string | undefined
     let peerAddress: string | undefined
 
@@ -1203,15 +1209,19 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         const states = await clientRef.current?.preferences.fetchInboxStates([peerInboxId])
         const resolved = getEthereumAddressFromInboxState(states?.[0])
         peerAddress = resolved ?? undefined
-        // Resolve to Basename / ENS name, falling back to truncated address
-        name = resolved
-          ? await resolveDisplayName(resolved)
-          : truncateAddress(peerInboxId)
+        if (resolved) {
+          const presentation = await resolvePeerPresentation(resolved)
+          name = presentation.name
+          imageUrl = presentation.imageUrl
+        } else {
+          name = truncateAddress(peerInboxId)
+        }
       } catch {
         name = 'DM'
       }
     } else {
       name = (convo as Group).name ?? 'Group'
+      imageUrl = (convo as Group).imageUrl
     }
 
     let lastMessageText: string | undefined
@@ -1230,14 +1240,14 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       id: convo.id,
       type: isDm ? 'dm' : 'group',
       name,
-      imageUrl: isDm ? undefined : (convo as Group).imageUrl,
+      imageUrl,
       peerInboxId,
       peerAddress,
       lastMessageText,
       lastMessageAt,
       unreadCount: 0,
     }
-  }, [resolveDisplayName])
+  }, [resolvePeerPresentation])
 
   // ------- connect -------
   const resolveXmtpIdentityAddress = useCallback(async (
@@ -1416,35 +1426,28 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   }, [accountContext.activeAccount, accountContext.activeAccountType, accountContext.cswAddress, publicClient])
 
   const connect = useCallback(async (intent: ConnectIntent = 'auto') => {
-    if (!address || !walletClient) return
-    if (resetLocalStateInFlightRef.current) return
-    if (clientRef.current) return // already connected
-    if (connectInFlightRef.current) return
-    const now = Date.now()
-    if (connectCooldownUntilRef.current > now) {
-      const retryIn = Math.max(1, Math.ceil((connectCooldownUntilRef.current - now) / 1000))
-      if (mountedRef.current) {
-        setStatus('error')
-        setError(`XMTP reconnect is cooling down. Retry in ${retryIn}s.`)
-      }
-      return
-    }
-
-    // XMTP installations are scoped to a browser origin. Allowing messaging on
-    // preview/staging origins would create additional installations and can
-    // quickly hit 10/10 for users. We restrict to the canonical app origin.
     const canonicalAppOrigin = APP_ORIGIN.replace(/\/+$/, '')
     const currentOrigin = typeof window !== 'undefined' ? window.location.origin : ''
     const hostname = typeof window !== 'undefined' ? (window.location.hostname ?? '').toLowerCase() : ''
-    const isLocalDev = hostname === 'localhost' || hostname === '127.0.0.1'
-    const isCanonicalOrigin = currentOrigin === canonicalAppOrigin
-    if (!isCanonicalOrigin && !isLocalDev) {
-      const msg =
-        `Messaging is disabled on ${currentOrigin || 'this origin'} to prevent XMTP installation churn. ` +
-        `Open ${canonicalAppOrigin} to use chat.`
-      if (mountedRef.current) {
+    const precheck = evaluateXmtpConnectPrecheck({
+      walletAddress: address ?? null,
+      walletClientReady: Boolean(walletClient),
+      alreadyHasClient: Boolean(clientRef.current),
+      connectInFlight: connectInFlightRef.current,
+      resetLocalStateInFlight: resetLocalStateInFlightRef.current,
+      connectCooldownUntilMs: connectCooldownUntilRef.current,
+      nowMs: Date.now(),
+      currentOrigin,
+      canonicalAppOrigin,
+      hostname,
+    })
+    if (!precheck.allowed) {
+      if (precheck.reason === 'cooldown' && mountedRef.current) {
         setStatus('error')
-        setError(msg)
+        setError(`XMTP reconnect is cooling down. Retry in ${precheck.retryInSeconds ?? 1}s.`)
+      } else if (precheck.reason === 'wrong_origin' && mountedRef.current) {
+        setStatus('error')
+        setError(buildWrongOriginConnectError(currentOrigin, canonicalAppOrigin))
       }
       return
     }
@@ -1619,6 +1622,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         }
         conversationsRef.current = normalizedSummaries
         if (mountedRef.current) setConversations(normalizedSummaries)
+        warmChatPeerIdentities(normalizedSummaries)
         const convoStream = await client.conversations.stream({
           onValue: async (convo: any) => {
             if (!mountedRef.current) return
@@ -2059,7 +2063,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         releaseTabLock()
       }
     }
-  }, [address, connector, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary, xmtpModeOverride, markLocalStateInvalid, acquireTabLock, startTabLockHeartbeat, releaseTabLock, stopTabLockHeartbeat])
+  }, [address, connector, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary, xmtpModeOverride, markLocalStateInvalid, acquireTabLock, startTabLockHeartbeat, releaseTabLock, stopTabLockHeartbeat, warmChatPeerIdentities])
 
   const reconnectFromLocalInstall = useCallback(async (): Promise<void> => {
     if (connectInFlightRef.current || resetLocalStateInFlightRef.current) return

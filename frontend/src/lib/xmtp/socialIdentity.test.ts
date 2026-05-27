@@ -17,7 +17,7 @@ vi.mock('@/lib/api/apiBase', () => ({
   apiFetch: (...args: unknown[]) => apiFetchMock(...args),
 }))
 
-import { getBasenameAutocompleteCandidate, resolveDmRecipient } from './socialIdentity'
+import { getBasenameAutocompleteCandidate, resolveDmRecipient, resolvePeerChatPresentation } from './socialIdentity'
 
 describe('getBasenameAutocompleteCandidate', () => {
   it('normalizes short basename handles into full .base.eth names', () => {
@@ -182,6 +182,36 @@ describe('resolveDmRecipient', () => {
       wasCanonicalRemap: false,
       basenameHint: 'akita',
       avatarUrl: null,
+    })
+  })
+})
+
+describe('resolvePeerChatPresentation', () => {
+  const sampleAddress = '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5'
+  const truncate = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`
+
+  beforeEach(() => {
+    getBasenameProfileMock.mockReset()
+  })
+
+  it('returns basename display name and avatar when profile resolves', async () => {
+    getBasenameProfileMock.mockResolvedValue({
+      name: 'akita.base.eth',
+      displayName: 'Akita',
+      avatar: 'https://example.com/avatar.png',
+    })
+
+    await expect(resolvePeerChatPresentation(sampleAddress, truncate)).resolves.toEqual({
+      name: 'Akita',
+      imageUrl: 'https://example.com/avatar.png',
+    })
+  })
+
+  it('falls back to short handle and truncated address when profile misses', async () => {
+    getBasenameProfileMock.mockResolvedValue({ name: null, avatar: null })
+
+    await expect(resolvePeerChatPresentation(sampleAddress, truncate)).resolves.toEqual({
+      name: truncate(sampleAddress),
     })
   })
 })

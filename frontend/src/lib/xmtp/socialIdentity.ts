@@ -47,6 +47,40 @@ export async function getBasenameName(address: string): Promise<string | null> {
   return raw
 }
 
+export type PeerChatPresentation = {
+  name: string
+  imageUrl?: string
+}
+
+/**
+ * Resolve DM peer label + avatar for chat list/header at XMTP connect time.
+ * Uses Basename profile (display name + ENS avatar) with a bounded timeout.
+ */
+export async function resolvePeerChatPresentation(
+  address: string,
+  truncateFallback: (address: string) => string,
+): Promise<PeerChatPresentation> {
+  const profile = await withTimeout(
+    getBasenameProfile(address).catch(() => EMPTY_BASENAME_PROFILE),
+    OPTIONAL_LOOKUP_TIMEOUT_MS,
+    EMPTY_BASENAME_PROFILE,
+  )
+
+  const basename = profile.name?.trim() ?? null
+  if (basename?.toLowerCase().endsWith('.base.eth')) {
+    const shortHandle = basename.replace(/\.base\.eth$/i, '').trim()
+    const displayName = profile.displayName?.trim() || shortHandle
+    return {
+      name: displayName || truncateFallback(address),
+      imageUrl: profile.avatar?.trim() || undefined,
+    }
+  }
+
+  return {
+    name: truncateFallback(address),
+  }
+}
+
 export type DmRecipientResolution = {
   /** Final recipient used for DM creation (after canonical wallet mapping). */
   address: `0x${string}`

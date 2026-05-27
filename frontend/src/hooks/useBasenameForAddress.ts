@@ -61,6 +61,14 @@ async function resolveBasename(address: Address): Promise<BasenameEntry> {
   return promise
 }
 
+/** Warm the session cache as soon as wallet addresses are known (e.g. at app launch). */
+export function prefetchBasenameForAddresses(addresses: Array<Address | null | undefined>): void {
+  for (const address of addresses) {
+    if (!address || !isAddress(address)) continue
+    void resolveBasename(address)
+  }
+}
+
 export function useBasenameForAddress(address: Address | null | undefined): BasenameResult {
   const [resolvedAsync, setResolvedAsync] = useState<{ address: string; entry: BasenameEntry } | null>(
     null,

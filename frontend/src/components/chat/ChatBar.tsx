@@ -88,9 +88,14 @@ function ConversationItem({
   const identity = useIdentity(convo.type === 'dm' ? peerAddress : null)
   const agentIdentity = convo.type === 'dm' ? getAgentIdentity(peerAddress) : null
   const basenamePreferredName = identity.basenameDisplayName ?? identity.basename
+  const identityDisplayName = identity.source !== 'address' ? identity.displayName : null
+  const conversationNameLabel =
+    convo.name && !/^0x[a-fA-F0-9]{4}(?:…|\.{3})[a-fA-F0-9]{4}$/i.test(convo.name.trim())
+      ? convo.name
+      : null
   const displayName =
     convo.type === 'dm' && peerAddress
-      ? (agentIdentity?.name ?? basenamePreferredName ?? identity.displayName)
+      ? (agentIdentity?.name ?? basenamePreferredName ?? identityDisplayName ?? conversationNameLabel ?? convo.name)
       : convo.name
   const displaySecondary =
     convo.type === 'dm' && peerAddress

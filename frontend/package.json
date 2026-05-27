@@ -31,6 +31,7 @@
     "lint:a11y": "eslint -c eslint.a11y.config.js . --ext ts,tsx",
     "smoke:a11y": "tsx scripts/a11y-smoke.ts",
     "smoke:xmtp-canary": "tsx scripts/xmtp-connect-canary.ts",
+    "test:xmtp-connect": "vitest run src/lib/xmtp/xmtpConnectFlow.test.ts src/lib/xmtp/xmtpConnectOrchestrator.test.ts src/lib/xmtp/xmtpConnectHardening.test.ts src/lib/xmtp/xmtpConnectPolicy.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
     "preview": "vite preview --config vite.config.ts",
     "generate:brand-icons": "node scripts/generate-brand-icons.mjs --out public && node scripts/sync-static-favicon-head.mjs",

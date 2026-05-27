@@ -9,6 +9,14 @@ Run this guide **after** Layer 1/2 tests pass and **before** or **immediately af
 
 Layer 1/2 cover policy and orchestration in Vitest. Layer 3 is a **real browser + real wallet** pass on `app.4626.fun` (or a preview build pointed at production XMTP env).
 
+**Regression gate (run before deploy):**
+
+```bash
+pnpm -C frontend test:xmtp-connect
+```
+
+Expect **3,023** passing tests (1,000 flow + 1,000 orchestrator + 1,000 multi-user persona hardening + policy).
+
 ## Prerequisites
 
 | Requirement | Notes |
