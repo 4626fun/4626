@@ -1884,14 +1884,40 @@ export function useSwapExecution(params: {
         wrapNativeEthForCanonical: wrapNativeInputForSponsoredCanonical,
         getTokenDecimals,
       })
+      let swapTxForSend = swapTx
+      if (quote && isZoraProviderQuote(quote)) {
+        const amount = readQuoteInputAmount(quote)
+        if (!amount) {
+          throw new Error('Swap amount is missing. Refresh the quote and try again.')
+        }
+        setStatus('Confirming Permit2 signature…')
+        const executableQuote = await finalizeZoraQuoteIfNeeded(quote, amount)
+        const selectedQuote = pickSwapQuote(executableQuote)
+        if (!selectedQuote) {
+          throw new Error('Zora quote does not contain executable swap payload.')
+        }
+        const built = await buildSwap({
+          quote: selectedQuote,
+          permit2Disabled: true,
+          simulateTransaction: false,
+          executionAddress: params.executionAddress ?? undefined,
+          chainId: Number(swapChainId),
+          includeGasInfo: false,
+          refreshGasPrice: true,
+          deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
+        })
+        assertValidSwapTransaction(built.swap)
+        swapTxForSend = built.swap
+        setSwapTx(built.swap)
+      }
       const { routing, send } = wrapTx
         ? await buildAndSendCalls({
             context,
-            calls: [wrapTx, ...(approvalTx ? [approvalTx] : []), swapTx],
+            calls: [wrapTx, ...(approvalTx ? [approvalTx] : []), swapTxForSend],
           })
         : await buildAndSendSwap({
             context,
-            swapTx,
+            swapTx: swapTxForSend,
             approvalTx,
           })
       const userOpHash = send.userOpHash ?? null
@@ -2026,6 +2052,9 @@ export function useSwapExecution(params: {
     params.publicClient,
     updateAttemptDebug,
     updateTxDebugError,
+    quote,
+    finalizeZoraQuoteIfNeeded,
+    params.parsedDeadlineMinutes,
   ])
 
   const executeOrderNow = useCallback(async () => {

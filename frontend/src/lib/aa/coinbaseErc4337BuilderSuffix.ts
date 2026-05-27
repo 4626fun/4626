@@ -5,6 +5,7 @@ import { logger } from '@/lib/observability/logger'
 import { appendBuilderSuffixToHex, DATA_SUFFIX, isBaseChain } from '@/lib/base/baseBuilderCodes'
 
 const UNIVERSAL_ROUTER_EXECUTE_SELECTOR = '0x3593564c' as const
+const ZORA_UNIVERSAL_ROUTER_EXECUTE_SELECTOR = '0x24856bc3' as const
 const UNIVERSAL_ROUTER_BASE_CURRENT = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43').toLowerCase()
 const UNISWAP_UNIVERSAL_ROUTER_ABI = [
   {
@@ -15,6 +16,18 @@ const UNISWAP_UNIVERSAL_ROUTER_ABI = [
       { name: 'commands', type: 'bytes' },
       { name: 'inputs', type: 'bytes[]' },
       { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+] as const
+const ZORA_UNIVERSAL_ROUTER_ABI = [
+  {
+    type: 'function',
+    name: 'execute',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'commands', type: 'bytes' },
+      { name: 'inputs', type: 'bytes[]' },
     ],
     outputs: [],
   },
@@ -37,7 +50,24 @@ function stripKnownBuilderDataSuffix(data: Hex | undefined, dataSuffix: Hex | un
 
 function canonicalizeUniversalRouterExecuteCalldata(data: Hex | undefined): Hex | undefined {
   if (!data || data === '0x') return data
-  if (!data.toLowerCase().startsWith(UNIVERSAL_ROUTER_EXECUTE_SELECTOR)) return data
+  const lower = data.toLowerCase()
+  if (lower.startsWith(ZORA_UNIVERSAL_ROUTER_EXECUTE_SELECTOR)) {
+    try {
+      const decoded = decodeFunctionData({
+        abi: ZORA_UNIVERSAL_ROUTER_ABI,
+        data,
+      })
+      if (decoded.functionName !== 'execute') return data
+      return encodeFunctionData({
+        abi: ZORA_UNIVERSAL_ROUTER_ABI,
+        functionName: 'execute',
+        args: decoded.args,
+      })
+    } catch {
+      return data
+    }
+  }
+  if (!lower.startsWith(UNIVERSAL_ROUTER_EXECUTE_SELECTOR)) return data
 
   try {
     const decoded = decodeFunctionData({
@@ -83,10 +113,12 @@ export function applyBuilderDataSuffixToCalls(
     if (isUniversalRouterTarget(c.to)) {
       const cleanedData = stripKnownBuilderDataSuffix(c.data, dataSuffix)
       const candidateData = canonicalizeUniversalRouterExecuteCalldata(cleanedData ?? c.data)
+      const candidatePrefix = String(candidateData ?? '').slice(0, 10).toLowerCase()
       const isCanonical =
         !!candidateData &&
         candidateData !== '0x' &&
-        candidateData.toLowerCase().startsWith(UNIVERSAL_ROUTER_EXECUTE_SELECTOR)
+        (candidatePrefix === UNIVERSAL_ROUTER_EXECUTE_SELECTOR ||
+          candidatePrefix === ZORA_UNIVERSAL_ROUTER_EXECUTE_SELECTOR)
 
       if (debug) {
         logger.debug('[Builder] Universal Router call detected', {
@@ -94,16 +126,13 @@ export function applyBuilderDataSuffixToCalls(
           originalDataPrefix: String(c.data ?? '').slice(0, 30),
           cleanedDataPrefix: cleanedData?.slice(0, 30) ?? 'none',
           willPreserveCanonical: isCanonical,
+          routerExecuteVariant:
+            candidatePrefix === ZORA_UNIVERSAL_ROUTER_EXECUTE_SELECTOR ? 'zora' : 'uniswap',
         })
       }
 
-      if (isCanonical) {
-        if (debug) logger.info('[Builder] Preserving canonical Universal Router calldata (no suffix)')
-      } else if (debug) {
-        logger.warn('[Builder] Universal Router calldata is non-canonical; preserving without suffix mutation', {
-          target: c.to,
-          cleanedDataPrefix: cleanedData?.slice(0, 30) ?? 'none',
-        })
+      if (isCanonical && debug) {
+        logger.info('[Builder] Preserving canonical Universal Router calldata (no suffix)')
       }
 
       // Never append builder suffix to Universal Router calls.

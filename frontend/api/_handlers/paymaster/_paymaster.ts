@@ -1679,6 +1679,21 @@ function assertRawSwapPayloadReferencesToken(data: Hex, token: Address): void {
   if (!data.toLowerCase().includes(tokenNeedle)) throw new Error('swap_router_token_not_referenced')
 }
 
+function resolveSwapInputTokenFromRouterCalldata(
+  data: Hex,
+  candidates: Address[],
+): Address | null {
+  for (const token of candidates) {
+    try {
+      assertRawSwapPayloadReferencesToken(data, token)
+      return token
+    } catch {
+      // try next candidate
+    }
+  }
+  return null
+}
+
 function summarizeSmartWalletCallData(callData: Hex): {
   innerCallCount: number
   innerSelectors: string[]
@@ -2505,6 +2520,8 @@ async function validateInnerCalls(params: {
           return { matched: false, creatorToken: null as Address | null }
         }
 
+        const configuredUsdc =
+          contracts.usdc && isAddress(contracts.usdc) ? getAddress(contracts.usdc) : BASE_USDC
         let swapInputToken = approvedToken ?? wrappedToken
         if (
           !swapInputToken &&
@@ -2513,19 +2530,14 @@ async function validateInnerCalls(params: {
           approvalCalls === 0
         ) {
           // Zora trades embed Permit2 in router calldata (no separate approve inner call).
-          const configuredUsdc =
-            contracts.usdc && isAddress(contracts.usdc) ? getAddress(contracts.usdc) : BASE_USDC
-          const candidates = [configuredUsdc, expectedZoraToken].filter(
+          const candidates = [configuredUsdc, expectedZoraToken, expectedWethToken, permit2].filter(
             (token): token is Address => Boolean(token),
           )
-          for (const token of candidates) {
-            try {
-              assertRawSwapPayloadReferencesToken(swapRouterCallData, token)
-              swapInputToken = token
-              break
-            } catch {
-              // try next candidate
-            }
+          swapInputToken = resolveSwapInputTokenFromRouterCalldata(swapRouterCallData, candidates)
+          // Permit2 payloads may not repeat the sell token as a bare 20-byte needle; still
+          // sponsor the known Zora single-call lane with USDC policy when shape matches.
+          if (!swapInputToken && swapRouterCalls === 1) {
+            swapInputToken = configuredUsdc
           }
         }
 
