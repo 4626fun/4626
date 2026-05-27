@@ -19,6 +19,7 @@ import {
   collectWaitlistGroupIdCandidates,
   findWaitlistGroupConversation,
 } from './waitlistXmtpGroupIds'
+import { resyncWaitlistGroupMembership } from './waitlistXmtpResync'
 
 type WaitlistGroupChatPanelProps = {
   setupComplete: boolean
@@ -268,6 +269,7 @@ function WaitlistGroupChatSurface(props: {
   const mismatchRejoinRef = useRef(false)
   const autoRecoveryRef = useRef(false)
   const [autoRecoveryBusy, setAutoRecoveryBusy] = useState(false)
+  const [resyncError, setResyncError] = useState<string | null>(null)
 
   const groupIdCandidates = useMemo(
     () =>
@@ -280,7 +282,15 @@ function WaitlistGroupChatSurface(props: {
     [envGroupId, groupId, groupIdMismatch, vaultGroupId],
   )
 
-  const syncWaitlistGroups = useCallback(async () => {
+  const syncWaitlistGroups = useCallback(async (options?: { resyncMembership?: boolean }) => {
+    if (options?.resyncMembership && joinStatus === 'executed') {
+      const resync = await resyncWaitlistGroupMembership()
+      if (!resync.ok) {
+        setResyncError(resync.error)
+      } else {
+        setResyncError(null)
+      }
+    }
     let resolved = null
     for (const candidateId of groupIdCandidates) {
       resolved = await ensureConversationById(candidateId)
@@ -290,7 +300,7 @@ function WaitlistGroupChatSurface(props: {
       await refreshConversations()
     }
     return resolved
-  }, [ensureConversationById, groupIdCandidates, refreshConversations])
+  }, [ensureConversationById, groupIdCandidates, joinStatus, refreshConversations])
 
   const handleConnectMessaging = useCallback(async (options?: { skipJoinRetry?: boolean }) => {
     setPrepareError(null)
@@ -310,7 +320,7 @@ function WaitlistGroupChatSurface(props: {
       if (!options?.skipJoinRetry && joinStatus !== 'executed') {
         retryJoin()
       }
-      await syncWaitlistGroups()
+      await syncWaitlistGroups({ resyncMembership: joinStatus === 'executed' })
     } catch (err) {
       setPrepareError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -336,6 +346,10 @@ function WaitlistGroupChatSurface(props: {
     [conversations, groupIdCandidates],
   )
 
+  const effectiveGroupId =
+    groupConversation?.id ??
+    (joinStatus === 'executed' && groupIdCandidates[0] ? groupIdCandidates[0] : null)
+
   const handleRefreshGroup = useCallback(async () => {
     if (groupIdCandidates.length === 0) {
       await refreshConversations()
@@ -344,7 +358,7 @@ function WaitlistGroupChatSurface(props: {
     setRefreshBusy(true)
     setSyncTimedOut(false)
     try {
-      await syncWaitlistGroups()
+      await syncWaitlistGroups({ resyncMembership: true })
     } finally {
       setRefreshBusy(false)
     }
@@ -365,7 +379,7 @@ function WaitlistGroupChatSurface(props: {
 
   useEffect(() => {
     if (joinStatus !== 'executed' || !messagingReady || groupConversation) return
-    void syncWaitlistGroups()
+    void syncWaitlistGroups({ resyncMembership: true })
   }, [groupConversation, joinStatus, messagingReady, syncWaitlistGroups])
 
   useEffect(() => {
@@ -407,7 +421,8 @@ function WaitlistGroupChatSurface(props: {
     const tick = async () => {
       if (cancelled || attempts >= maxAttempts) return
       attempts += 1
-      await syncWaitlistGroups()
+      const shouldResync = attempts === 1 || attempts % 3 === 0
+      await syncWaitlistGroups({ resyncMembership: shouldResync })
       if (cancelled) return
       if (attempts >= maxAttempts) {
         setSyncTimedOut(true)
@@ -516,7 +531,7 @@ function WaitlistGroupChatSurface(props: {
     )
   }
 
-  if (!groupConversation) {
+  if (!effectiveGroupId) {
     return (
       <div className="space-y-2">
         {statusMessage ? (
@@ -526,6 +541,7 @@ function WaitlistGroupChatSurface(props: {
               : statusMessage}
           </p>
         ) : null}
+        {resyncError ? <p className="text-xs text-red-300">{resyncError}</p> : null}
         {joinActionError &&
         (joinStatus === 'failed' ||
           joinStatus === 'error' ||
@@ -597,14 +613,22 @@ function WaitlistGroupChatSurface(props: {
 
   return (
     <div className="space-y-2">
+      {!groupConversation && joinStatus === 'executed' ? (
+        <p className="text-[11px] text-zinc-500" role="status" aria-live="polite">
+          {autoRecoveryBusy
+            ? 'Refreshing your waitlist chat inbox…'
+            : 'Opening waitlist chat. Messages may take a moment to appear.'}
+        </p>
+      ) : null}
       {statusMessage && joinStatus !== 'executed' ? (
         <p className="text-[11px] text-zinc-500">{statusMessage}</p>
       ) : null}
+      {resyncError ? <p className="text-xs text-red-300">{resyncError}</p> : null}
       <ChatWindow
-        conversationId={groupConversation.id}
-        conversationName={groupConversation.name || groupName}
+        conversationId={effectiveGroupId}
+        conversationName={groupConversation?.name || groupName}
         conversationType="group"
-        conversationImageUrl={groupConversation.imageUrl}
+        conversationImageUrl={groupConversation?.imageUrl}
         minimized={false}
         variant="embedded"
         onMinimize={() => undefined}

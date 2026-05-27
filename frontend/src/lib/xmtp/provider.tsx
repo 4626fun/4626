@@ -2852,7 +2852,28 @@ export function XmtpChatProvider({
     const client = clientRef.current
     if (!client) return []
     try {
-      const convo = await client.conversations.getConversationById(conversationId)
+      let convo = await client.conversations.getConversationById(conversationId)
+      if (!convo) {
+        const conversationsApi = client.conversations as {
+          sync: () => Promise<unknown>
+          syncAll?: (consentStates?: import('@xmtp/browser-sdk').ConsentState[]) => Promise<unknown>
+          getConversationById: (id: string) => Promise<Conversation | Dm | Group | null>
+          list: (options?: { consentStates?: import('@xmtp/browser-sdk').ConsentState[] }) => Promise<
+            Array<Conversation | Dm | Group>
+          >
+          listGroups?: (options?: { consentStates?: import('@xmtp/browser-sdk').ConsentState[] }) => Promise<
+            Array<Conversation | Dm | Group>
+          >
+        }
+        const resolved = await resolveConversationByIdWithSyncRetries(conversationsApi, conversationId, {
+          rounds: 5,
+          delayMs: 500,
+          preferencesApi: client.preferences,
+        })
+        if (resolved) {
+          convo = resolved as Conversation | Dm | Group
+        }
+      }
       if (!convo) return []
       await convo.sync()
       const msgs = await convo.messages()
@@ -2886,7 +2907,28 @@ export function XmtpChatProvider({
     const wireContent = encodeWireContent(trimmed, options)
     const optimisticParsed = parseWireContent(wireContent)
     try {
-      const convo = await client.conversations.getConversationById(conversationId)
+      let convo = await client.conversations.getConversationById(conversationId)
+      if (!convo) {
+        const conversationsApi = client.conversations as {
+          sync: () => Promise<unknown>
+          syncAll?: (consentStates?: import('@xmtp/browser-sdk').ConsentState[]) => Promise<unknown>
+          getConversationById: (id: string) => Promise<Conversation | Dm | Group | null>
+          list: (options?: { consentStates?: import('@xmtp/browser-sdk').ConsentState[] }) => Promise<
+            Array<Conversation | Dm | Group>
+          >
+          listGroups?: (options?: { consentStates?: import('@xmtp/browser-sdk').ConsentState[] }) => Promise<
+            Array<Conversation | Dm | Group>
+          >
+        }
+        const resolved = await resolveConversationByIdWithSyncRetries(conversationsApi, conversationId, {
+          rounds: 5,
+          delayMs: 500,
+          preferencesApi: client.preferences,
+        })
+        if (resolved) {
+          convo = resolved as Conversation | Dm | Group
+        }
+      }
       if (!convo) throw new Error('conversation_not_found')
       let sent: unknown
       if (replyToId && replyToSenderInboxId) {
