@@ -2,7 +2,9 @@ import { permit2ABI, permit2Address } from '@zoralabs/protocol-deployments'
 import { getAddress, isAddress, type Hex } from 'viem'
 import { base } from 'viem/chains'
 
+import { findCoinbaseSmartWalletOwnerIndex } from '@/lib/aa/coinbaseErc4337Owners'
 import { apiFetch } from '@/lib/api/apiBase'
+import { wrapCswOwnerSignature } from '@/lib/wallet/cswOwnerSignature'
 import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
 import {
   assertValidSwapTransaction,
@@ -35,6 +37,30 @@ export type ZoraTradeQuotePayload = {
 }
 
 const ZORA_TRADE_QUOTE_PATH = '/api/zora/tradeQuote'
+
+/** Zora embeds this in calldata and permit.signature until a real Permit2 sig is supplied. */
+export const ZORA_PERMIT_SIGNATURE_PLACEHOLDER = 'REPLACE_WITH_PERMIT_SIGNATURE'
+
+export function isZoraPermitSignaturePlaceholder(signature: string | undefined | null): boolean {
+  const sig = String(signature ?? '').trim()
+  if (!sig || sig === '0x') return true
+  return sig.includes(ZORA_PERMIT_SIGNATURE_PLACEHOLDER)
+}
+
+export function zoraCallDataContainsPermitPlaceholder(data: string | undefined | null): boolean {
+  return String(data ?? '').includes(ZORA_PERMIT_SIGNATURE_PLACEHOLDER)
+}
+
+export function quoteNeedsZoraPermitFinalization(
+  quote: TradeQuoteResponse | null | undefined,
+): boolean {
+  if (!isZoraProviderQuote(quote)) return false
+  if (readZoraPermitsFromQuote(quote).some((item) => isZoraPermitSignaturePlaceholder(item.signature))) {
+    return true
+  }
+  const call = readZoraCallFromQuote(quote)
+  return Boolean(call?.data && zoraCallDataContainsPermitPlaceholder(call.data))
+}
 
 function slippagePercentToFraction(slippagePct: number): number {
   const n = Number(slippagePct)
@@ -105,13 +131,16 @@ export async function fetchZoraTradeQuoteFromApi(params: {
   const res = await apiFetch(ZORA_TRADE_QUOTE_PATH, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+    body: jsonStringifyForApi({
       tokenIn: params.tokenIn,
       tokenOut: params.tokenOut,
       amountIn: params.amountIn,
       sender: params.sender,
       slippage: slippagePercentToFraction(params.slippagePct),
-      signatures: params.signatures,
+      signatures: params.signatures?.map((item) => ({
+        signature: item.signature,
+        permit: convertPermitAmountsToString(item.permit),
+      })),
     }),
   })
 
@@ -151,6 +180,11 @@ export function buildSwapFromZoraQuote(params: {
   const call = readZoraCallFromQuote(params.quote)
   if (!call?.target || !call.data) {
     throw new Error('Zora quote does not contain executable call data')
+  }
+  if (zoraCallDataContainsPermitPlaceholder(call.data)) {
+    throw new Error(
+      'Zora swap requires a Permit2 signature before it can execute. Confirm the permit in your wallet and try again.',
+    )
   }
 
   const executionAddress = String(params.executionAddress ?? '').trim()
@@ -201,29 +235,63 @@ const PERMIT_SINGLE_TYPES = {
   ],
 } as const
 
-function convertPermitAmountsToString(permit: ZoraTradeQuotePermit['permit']): ZoraTradeQuotePermit['permit'] {
+function convertPermitAmountsToString(
+  permit: ZoraTradeQuotePermit['permit'] | Record<string, unknown>,
+): ZoraTradeQuotePermit['permit'] {
+  const details = (permit as ZoraTradeQuotePermit['permit']).details
   return {
-    ...permit,
-    sigDeadline: String(permit.sigDeadline),
+    sigDeadline: String((permit as ZoraTradeQuotePermit['permit']).sigDeadline),
+    spender: String((permit as ZoraTradeQuotePermit['permit']).spender),
     details: {
-      ...permit.details,
-      amount: String(permit.details.amount),
+      token: String(details.token),
+      amount: String(details.amount),
+      expiration: Number(details.expiration),
+      nonce: Number(details.nonce),
     },
   }
 }
 
+/** Privy `eth_signTypedData_v4` JSON-stringifies the payload — no BigInt allowed. */
+function buildPermit2TypedDataMessage(params: {
+  token: `0x${string}`
+  spender: `0x${string}`
+  amount: string
+  expiration: number
+  nonce: number
+  sigDeadline: string
+}) {
+  return {
+    details: {
+      token: params.token,
+      amount: params.amount,
+      expiration: params.expiration,
+      nonce: params.nonce,
+    },
+    spender: params.spender,
+    sigDeadline: params.sigDeadline,
+  }
+}
+
+function jsonStringifyForApi(value: unknown): string {
+  return JSON.stringify(value, (_key, val) => (typeof val === 'bigint' ? val.toString() : val))
+}
+
 export async function signZoraQuotePermits(params: {
   quote: TradeQuoteResponse
+  /** Privy embedded EOA (or external signer) that signs Permit2 typed data. */
   signerAddress: string
+  /** CSW that holds sell tokens and executes the Zora call; required for ERC-20 sells. */
+  executionAddress?: string | null
   walletClient: {
     signTypedData: (args: Record<string, unknown>) => Promise<Hex | string>
   }
   publicClient: {
     readContract: (args: Record<string, unknown>) => Promise<unknown>
+    getBytecode?: (args: { address: `0x${string}` }) => Promise<Hex | undefined>
   }
 }): Promise<ZoraTradeQuotePermit[]> {
-  const pending = readZoraPermitsFromQuote(params.quote).filter(
-    (item) => !item.signature?.trim() || item.signature === '0x',
+  const pending = readZoraPermitsFromQuote(params.quote).filter((item) =>
+    isZoraPermitSignaturePlaceholder(item.signature),
   )
   if (pending.length === 0) return readZoraPermitsFromQuote(params.quote)
 
@@ -233,26 +301,34 @@ export async function signZoraQuotePermits(params: {
     const token = getAddress(permit.details.token as `0x${string}`)
     const spender = getAddress(permit.spender as `0x${string}`)
     const signer = getAddress(params.signerAddress)
+    const executionRaw = String(params.executionAddress ?? '').trim()
+    const executionAddress =
+      executionRaw && isAddress(executionRaw) ? getAddress(executionRaw) : null
+    const permitOwner = executionAddress ?? signer
+    let permitOwnerIsContract = executionAddress !== null && executionAddress !== signer
+    if (permitOwnerIsContract && params.publicClient.getBytecode) {
+      const bytecode = await params.publicClient.getBytecode({ address: permitOwner })
+      permitOwnerIsContract = Boolean(bytecode && bytecode !== '0x')
+    }
 
     const [, , nonce] = (await params.publicClient.readContract({
       abi: permit2ABI,
       address: permit2Address[base.id],
       functionName: 'allowance',
-      args: [signer, token, spender],
+      args: [permitOwner, token, spender],
     })) as [bigint, bigint, number]
 
-    const message = {
-      details: {
-        token,
-        amount: BigInt(permit.details.amount),
-        expiration: Number(permit.details.expiration),
-        nonce,
-      },
+    const permitForApi = convertPermitAmountsToString(permit)
+    const signMessage = buildPermit2TypedDataMessage({
+      token,
       spender,
-      sigDeadline: BigInt(permit.sigDeadline),
-    }
+      amount: permitForApi.details.amount,
+      expiration: permitForApi.details.expiration,
+      nonce: Number(nonce),
+      sigDeadline: permitForApi.sigDeadline,
+    })
 
-    const signature = (await params.walletClient.signTypedData({
+    let signature = (await params.walletClient.signTypedData({
       account: signer,
       domain: {
         name: 'Permit2',
@@ -261,12 +337,26 @@ export async function signZoraQuotePermits(params: {
       },
       primaryType: 'PermitSingle',
       types: PERMIT_SINGLE_TYPES,
-      message,
+      message: signMessage,
     })) as Hex
+
+    if (permitOwnerIsContract && executionAddress) {
+      const ownerLookup = await findCoinbaseSmartWalletOwnerIndex({
+        publicClient: params.publicClient,
+        smartWallet: executionAddress,
+        ownerAddress: signer,
+      })
+      if (ownerLookup.ownerIndex === null) {
+        throw new Error(
+          'Embedded signer is not an on-chain owner of your Coinbase Smart Wallet. Finish waitlist signing setup, then retry the swap.',
+        )
+      }
+      signature = wrapCswOwnerSignature(signature, ownerLookup.ownerIndex)
+    }
 
     signatures.push({
       signature,
-      permit: convertPermitAmountsToString(message as unknown as ZoraTradeQuotePermit['permit']),
+      permit: permitForApi,
     })
   }
 

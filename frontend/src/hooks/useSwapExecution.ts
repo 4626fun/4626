@@ -47,7 +47,7 @@ import {
 } from '@/lib/uniswap/tradingApi'
 import {
   isZoraProviderQuote,
-  readZoraPermitsFromQuote,
+  quoteNeedsZoraPermitFinalization,
   refreshZoraTradeQuoteWithPermits,
   signZoraQuotePermits,
 } from '@/lib/zora/zoraTradeApi'
@@ -1099,10 +1099,7 @@ export function useSwapExecution(params: {
     async (nextQuote: TradeQuoteResponse, amount: string): Promise<TradeQuoteResponse> => {
       if (!isZoraProviderQuote(nextQuote)) return nextQuote
 
-      const unsignedPermits = readZoraPermitsFromQuote(nextQuote).filter(
-        (item) => !item.signature?.trim() || item.signature === '0x',
-      )
-      if (unsignedPermits.length === 0) return nextQuote
+      if (!quoteNeedsZoraPermitFinalization(nextQuote)) return nextQuote
 
       if (!params.walletClient || !params.signerAddress || !params.publicClient) {
         throw new Error('Permit2 signature is required for this Zora trade, but the owner signer is not available.')
@@ -1119,6 +1116,7 @@ export function useSwapExecution(params: {
       const signatures = await signZoraQuotePermits({
         quote: nextQuote,
         signerAddress: params.signerAddress,
+        executionAddress: params.executionAddress,
         walletClient: signer,
         publicClient: params.publicClient,
       })
@@ -1393,10 +1391,9 @@ export function useSwapExecution(params: {
         includeGasInfo: false,
         refreshGasPrice: true,
         permit2Disabled: permit2DisabledForSwap || isZoraProviderQuote(executableQuote),
-        simulateTransaction: shouldSimulateSwapTransaction(
-          requiresApprovalTx,
-          wrapNativeInputForSponsoredCanonical,
-        ),
+        simulateTransaction:
+          !isZoraProviderQuote(executableQuote) &&
+          shouldSimulateSwapTransaction(requiresApprovalTx, wrapNativeInputForSponsoredCanonical),
         deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
         executionAddress: params.executionAddress ?? undefined,
         chainId: Number(swapChainId),
@@ -1472,12 +1469,7 @@ export function useSwapExecution(params: {
         }))
       }
 
-      const hasUnsignedZoraPermits =
-        Boolean(quote) &&
-        isZoraProviderQuote(quote) &&
-        readZoraPermitsFromQuote(quote).some(
-          (item) => !item.signature?.trim() || item.signature === '0x',
-        )
+      const hasUnsignedZoraPermits = Boolean(quote) && quoteNeedsZoraPermitFinalization(quote)
       const canReuseCurrentQuote =
         Boolean(quote) &&
         !isQuoteStale() &&
@@ -1571,10 +1563,9 @@ export function useSwapExecution(params: {
         includeGasInfo: false,
         refreshGasPrice: true,
         permit2Disabled: permit2DisabledForSwap || isZoraProviderQuote(executableQuote),
-        simulateTransaction: shouldSimulateSwapTransaction(
-          requiresApprovalTx,
-          wrapNativeInputForSponsoredCanonical,
-        ),
+        simulateTransaction:
+          !isZoraProviderQuote(executableQuote) &&
+          shouldSimulateSwapTransaction(requiresApprovalTx, wrapNativeInputForSponsoredCanonical),
         deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
         executionAddress: params.executionAddress ?? undefined,
         chainId: Number(swapChainId),

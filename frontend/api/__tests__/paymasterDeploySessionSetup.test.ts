@@ -1786,6 +1786,86 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     const errMsg = String(responseBody?.error?.message ?? '')
     expect(errMsg).toMatch(/swap_router_non_canonical_encoding/i)
   })
+
+  it('accepts Zora universal-router swap with permit embedded (execute bytes,bytes[] only)', async () => {
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'executeBatch',
+        stateMutability: 'nonpayable',
+        inputs: [
+          {
+            name: 'calls',
+            type: 'tuple[]',
+            components: [
+              { name: 'target', type: 'address' },
+              { name: 'value', type: 'uint256' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const ZORA_UNIVERSAL_ROUTER_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'payable',
+        inputs: [
+          { name: 'commands', type: 'bytes' },
+          { name: 'inputs', type: 'bytes[]' },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const baseUsdc = getAddress('0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')
+    const baseSwapRouter = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43')
+    const commandsWithUsdc = `0x${'00'.repeat(32)}${baseUsdc.slice(2).toLowerCase()}` as `0x${string}`
+    const zoraSwapData = encodeFunctionData({
+      abi: ZORA_UNIVERSAL_ROUTER_ABI,
+      functionName: 'execute',
+      args: [commandsWithUsdc, ['0x']],
+    })
+    expect(zoraSwapData.startsWith('0x24856bc3')).toBe(true)
+
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'executeBatch',
+      args: [[{ target: baseSwapRouter, value: 0n, data: zoraSwapData }]],
+    })
+
+    const validated = await validateSponsoredSmartWalletCalls({
+      sender,
+      sessionAddress,
+      calls: [{ to: baseSwapRouter, value: 0n, data: zoraSwapData }],
+    })
+
+    expect(validated.mode).toBe('swap')
+    expect(validated.expectedCreatorToken?.toLowerCase()).toBe(baseUsdc.toLowerCase())
+
+    const userOp = { sender, callData, initCode: '0x' }
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect(errMsg).not.toMatch(/missing_primary_call/i)
+  })
 })
 
 describe('paymaster payout-router external approvals', () => {

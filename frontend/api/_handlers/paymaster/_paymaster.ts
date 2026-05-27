@@ -738,6 +738,7 @@ const SELECTOR_COIN_SET_PAYOUT_RECIPIENT = '0x46bb5954'
 const SELECTOR_OWNABLE_TRANSFER_OWNERSHIP = '0xf2fde38b'
 const SELECTOR_PERMIT2_PERMIT_TRANSFER_FROM = '0x30f28b7a'
 const SELECTOR_SWAP_ROUTER_EXECUTE = '0x3593564c' // execute(bytes,bytes[],uint256)
+const SELECTOR_ZORA_SWAP_ROUTER_EXECUTE = '0x24856bc3' // execute(bytes,bytes[]) — Zora trade quotes on Universal Router
 const SELECTOR_SWAP_PROXY_EXECUTE = '0x2894adf9' // execute(address,address,uint256,bytes,bytes[],uint256)
 const SELECTOR_V3_SWAP_ROUTER_EXACT_INPUT_NO_DEADLINE = '0xb858183f'
 const SELECTOR_V3_SWAP_ROUTER_EXACT_INPUT_SINGLE_NO_DEADLINE = '0x04e45aaf'
@@ -1029,6 +1030,7 @@ const ZERO_BYTES32 = `0x${'0'.repeat(64)}` as const
 const ZERO_ADDRESS = getAddress(`0x${'0'.repeat(40)}`)
 
 const BASE_WETH = getAddress(`0x${'4200000000000000000000000000000000000006'}`)
+const BASE_USDC = getAddress(`0x${'833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'}`)
 // 4626-audit-2026-04-25 review: Zora ProtocolRewards canonical singleton on Base.
 // Mirrors PayoutRouter.DEFAULT_PROTOCOL_REWARDS — see contracts/utilities/routers/PayoutRouter.sol.
 // PayoutRouter accepts either `address(0)` (sentinel -> DEFAULT_PROTOCOL_REWARDS)
@@ -2453,9 +2455,11 @@ async function validateInnerCalls(params: {
           }
 
           const isUniversalRouterCall = allowedUniversalSwapRouters.has(c.target) && selector === SELECTOR_SWAP_ROUTER_EXECUTE
+          const isZoraUniversalRouterCall =
+            allowedUniversalSwapRouters.has(c.target) && selector === SELECTOR_ZORA_SWAP_ROUTER_EXECUTE
           const isSwapProxyCall = allowedSwapProxyRouters.has(c.target) && selector === SELECTOR_SWAP_PROXY_EXECUTE
           const isV3RouterCall = allowedPayoutRouterV3Routers.has(c.target) && ALLOWED_V3_SWAP_ROUTER_SELECTORS.has(selector)
-          if (isUniversalRouterCall || isSwapProxyCall || isV3RouterCall) {
+          if (isUniversalRouterCall || isZoraUniversalRouterCall || isSwapProxyCall || isV3RouterCall) {
             if (c.value !== 0n) throw new Error('swap_router_value_not_allowed')
             if (isUniversalRouterCall) assertCanonicalSwapRouterExecuteEncoding(c.data)
             sawSwapRouter = true
@@ -2463,7 +2467,13 @@ async function validateInnerCalls(params: {
             if (swapRouterCalls > 1) throw new Error('swap_router_call_count_not_allowed')
             swapRouterCallData = c.data
             swapRouterTarget = c.target
-            swapRouterKind = isUniversalRouterCall ? 'universal' : isSwapProxyCall ? 'swap-proxy' : 'v3'
+            swapRouterKind = isUniversalRouterCall
+              ? 'universal'
+              : isZoraUniversalRouterCall
+                ? 'zora-universal'
+                : isSwapProxyCall
+                  ? 'swap-proxy'
+                  : 'v3'
             continue
           }
 
@@ -2495,17 +2505,48 @@ async function validateInnerCalls(params: {
           return { matched: false, creatorToken: null as Address | null }
         }
 
-        const swapInputToken = approvedToken ?? wrappedToken
+        let swapInputToken = approvedToken ?? wrappedToken
+        if (
+          !swapInputToken &&
+          swapRouterKind === 'zora-universal' &&
+          swapRouterCallData &&
+          approvalCalls === 0
+        ) {
+          // Zora trades embed Permit2 in router calldata (no separate approve inner call).
+          const configuredUsdc =
+            contracts.usdc && isAddress(contracts.usdc) ? getAddress(contracts.usdc) : BASE_USDC
+          const candidates = [configuredUsdc, expectedZoraToken].filter(
+            (token): token is Address => Boolean(token),
+          )
+          for (const token of candidates) {
+            try {
+              assertRawSwapPayloadReferencesToken(swapRouterCallData, token)
+              swapInputToken = token
+              break
+            } catch {
+              // try next candidate
+            }
+          }
+        }
+
         if (sawSwapRouter && swapInputToken && swapRouterCallData) {
           if (swapRouterKind === 'universal') {
             assertSwapRouterPayloadReferencesToken(swapRouterCallData, swapInputToken)
           } else {
+            // Zora quotes use execute(bytes,bytes[]) without deadline; validate via raw calldata.
             assertRawSwapPayloadReferencesToken(swapRouterCallData, swapInputToken)
           }
         }
 
+        const zoraPermitEmbeddedSwap =
+          swapRouterKind === 'zora-universal' && approvalCalls === 0 && swapRouterCalls === 1
+
         return {
-          matched: sawSwapRouter && approvalCalls <= 1 && swapRouterCalls === 1 && !!swapInputToken,
+          matched:
+            sawSwapRouter &&
+            swapRouterCalls === 1 &&
+            !!swapInputToken &&
+            (approvalCalls <= 1 || zoraPermitEmbeddedSwap),
           creatorToken: swapInputToken,
         }
       })()
