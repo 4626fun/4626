@@ -7,7 +7,9 @@ import {
   isDeterministicUserOpExecutionError,
   isExecutionRevertedLikeError,
   isPreflightSimulationRejection,
+  mapUserOpExecutionFailureMessage,
   PreflightSimulationRejectionError,
+  resolveUserOpCallGasLimit,
 } from './coinbaseErc4337ErrorUtils'
 
 describe('extractUserOpReceiptTxHash', () => {
@@ -68,6 +70,38 @@ describe('buildUserOpGasEstimateFailureError', () => {
       '0x6fF5693b99212Da76ad316178A184AB56D299b43',
     )
     expect(err.message).toContain('Zora swap would revert')
+  })
+})
+
+describe('resolveUserOpCallGasLimit', () => {
+  it('buffers bundler estimate and keeps Zora floor when higher', () => {
+    expect(
+      resolveUserOpCallGasLimit({
+        estimatedCallGasLimit: 2_000_000n,
+        floorCallGasLimit: 1_800_000n,
+      }),
+    ).toBe(2_600_000n)
+    expect(
+      resolveUserOpCallGasLimit({
+        estimatedCallGasLimit: 1_000_000n,
+        floorCallGasLimit: 1_800_000n,
+      }),
+    ).toBe(1_800_000n)
+  })
+})
+
+describe('mapUserOpExecutionFailureMessage', () => {
+  it('maps unknown execution revert strings to swap copy', () => {
+    const err = mapUserOpExecutionFailureMessage(
+      {
+        name: 'RpcRequestError',
+        message: 'Execution reverted for an unknown reason.',
+        details: 'execution reverted',
+      },
+      { firstCallTo: '0x6fF5693b99212Da76ad316178A184AB56D299b43' },
+    )
+    expect(err).toBeInstanceOf(PreflightSimulationRejectionError)
+    expect(err?.message).toContain('Zora swap would revert')
   })
 })
 

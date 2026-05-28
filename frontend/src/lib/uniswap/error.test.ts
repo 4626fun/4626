@@ -54,4 +54,22 @@ describe('normalizeUniswapError', () => {
     expect(normalized.code).toBe('UNKNOWN')
     expect(normalized.message).toContain('weird edge case')
   })
+
+  it('does not blame balance for opaque execution reverts', () => {
+    const normalized = normalizeUniswapError({
+      name: 'RpcRequestError',
+      message: 'Execution reverted for an unknown reason.',
+      details: 'execution reverted',
+    })
+    expect(normalized.message).not.toContain('Check your balance')
+    expect(normalized.message).toContain('stale quote')
+  })
+
+  it('maps bundler rejection after local simulation', () => {
+    const normalized = normalizeUniswapError(
+      'Swap simulation passed but the sponsored UserOp was rejected by the bundler.',
+    )
+    expect(normalized.code).toBe('QUOTE_EXPIRED')
+    expect(normalized.message).toContain('Refresh the quote')
+  })
 })

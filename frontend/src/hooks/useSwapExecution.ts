@@ -2087,11 +2087,11 @@ export function useSwapExecution(params: {
           })
       }
     } catch (e: any) {
-      const message = getErrorMessage(e, 'Swap transaction failed')
-      setError(message)
-      updateTxDebugError(message)
+      const normalizedError = getErrorDetails(e, 'Swap transaction failed')
+      setError(normalizedError.message)
+      updateTxDebugError(normalizedError.message)
       setTxState('error')
-      throw new Error(message)
+      throw new Error(normalizedError.message)
     } finally {
       setBusy(null)
     }
@@ -2123,6 +2123,7 @@ export function useSwapExecution(params: {
     wrapNativeInputForSponsoredCanonical,
     normalizedCapabilities,
     getErrorMessage,
+    getErrorDetails,
     getTokenDecimals,
     estimatedOut,
     params.publicClient,

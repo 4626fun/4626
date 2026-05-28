@@ -19,6 +19,7 @@ import {
   waitForUserOperationReceipt,
 } from 'viem/account-abstraction'
 import { getProductionBaseReadClient } from '@/lib/base/productionBaseReadClient'
+import { assertZoraRouterCallExecutesFromCsw } from '@/lib/zora/zoraTradeApi'
 import { logger } from '@/lib/observability/logger'
 import { trackEvent } from '@/lib/analytics/analytics'
 import { DATA_SUFFIX } from '@/lib/base/baseBuilderCodes'
@@ -52,6 +53,9 @@ import {
   isImmediateUserOpRetrySuppressedError,
   isLikelyVerificationGasLimitError,
   buildPreflightSimulationRejectionError,
+  mapUserOpExecutionFailureMessage,
+  parseUserOpGasLimitField,
+  resolveUserOpCallGasLimit,
   isPreflightSimulationRejection,
   isPaymasterAuthPolicyError,
   isPaymasterPolicyError,
@@ -306,6 +310,10 @@ function inferZoraSwapCallGasLimit(
   return ZORA_SWAP_CALL_GAS_LIMIT
 }
 
+type BundlerUserOpGasEstimate = {
+  callGasLimit?: bigint
+}
+
 /** Fail fast when bundler simulation rejects a UserOp (stricter than eth_call preflight). */
 async function assertBundlerUserOpGasEstimate(params: {
   bundlerClient: any
@@ -315,7 +323,7 @@ async function assertBundlerUserOpGasEstimate(params: {
   nonce?: bigint
   callGasLimit?: bigint
   paymasterClient?: { getPaymasterData: any; getPaymasterStubData: any }
-}): Promise<void> {
+}): Promise<BundlerUserOpGasEstimate> {
   const { bundlerClient, account, calls, verificationGasLimit, paymasterClient } = params
   const client: any = bundlerClient as any
 
@@ -359,7 +367,7 @@ async function assertBundlerUserOpGasEstimate(params: {
       }
     }
 
-    if (!userOperation) return
+    if (!userOperation) return {}
 
     let estimate: unknown = null
     try {
@@ -375,11 +383,11 @@ async function assertBundlerUserOpGasEstimate(params: {
       const revertInfo = extractRevertInfo(e)
       const lowerError = String(revertInfo.error ?? '').toLowerCase()
       if (lowerError.includes('could not find an account to execute')) {
-        console.warn(
-          '[ERC-4337] estimateUserOperationGas skipped (account context missing); send may still fail',
-          { error: revertInfo.error },
-        )
-        return
+        console.warn('[ERC-4337] estimateUserOperationGas missing account context', {
+          error: revertInfo.error,
+          bundlerUsesProxy: isPaymasterProxyUrl(bundlerUrlForBundler),
+        })
+        throw buildUserOpGasEstimateFailureError(e, calls[0]?.to)
       }
       console.warn('[ERC-4337] estimateUserOperationGas failed', {
         error: revertInfo.error,
@@ -398,6 +406,13 @@ async function assertBundlerUserOpGasEstimate(params: {
     if (AA_DEBUG && estimate) {
       logger.debug('[ERC-4337] estimateUserOperationGas', formatGasEstimate(estimate))
     }
+
+    const estimatedCallGas = parseUserOpGasLimitField((estimate as Record<string, unknown> | null)?.callGasLimit)
+    const resolved = resolveUserOpCallGasLimit({
+      estimatedCallGasLimit: estimatedCallGas,
+      floorCallGasLimit: params.callGasLimit,
+    })
+    return resolved ? { callGasLimit: resolved } : {}
   } finally {
     if (!originalAccount) {
       delete client.account
@@ -1346,10 +1361,13 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
 
   const normalizedBundlerUrl = normalizeUrl(bundlerUrlInput)
   const paymasterUrl = normalizeUrl(paymasterUrlInput ?? bundlerUrlInput)
-  let bundlerUrlForBundler = resolveBundlerUrlForNonPaymaster(
-    normalizedBundlerUrl,
-    (import.meta.env as Record<string, string | undefined>)['VITE_CDP_BUNDLER_URL'],
-  )
+  // Keep same-origin paymaster proxy for bundler RPC in dev so estimate/send match receipt polling.
+  let bundlerUrlForBundler = isPaymasterProxyUrl(normalizedBundlerUrl)
+    ? normalizedBundlerUrl
+    : resolveBundlerUrlForNonPaymaster(
+        normalizedBundlerUrl,
+        (import.meta.env as Record<string, string | undefined>)['VITE_CDP_BUNDLER_URL'],
+      )
   let shouldSendSessionToBundler = isPaymasterProxyUrl(bundlerUrlForBundler)
   const shouldSendSessionToPaymaster = isSameOriginUrl(paymasterUrl)
   const canFallbackBundlerProbeToProxy =
@@ -2037,8 +2055,21 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     }
   }
   const zoraCallGasLimit = inferZoraSwapCallGasLimit(attributedCalls)
+  if (attributedCalls.some((call) => isZoraUniversalRouterTarget(call.to))) {
+    for (const call of attributedCalls) {
+      if (!isZoraUniversalRouterTarget(call.to) || !call.data) continue
+      await assertZoraRouterCallExecutesFromCsw({
+        executionAddress: smartWallet,
+        call: {
+          target: call.to,
+          data: call.data,
+          value: call.value != null ? String(call.value) : '0',
+        },
+      })
+    }
+  }
   const sendWithVerificationGasLimit = async (verificationGasLimit: bigint, usePaymaster: boolean) => {
-    await assertBundlerUserOpGasEstimate({
+    const bundlerGasEstimate = await assertBundlerUserOpGasEstimate({
       bundlerClient,
       account,
       calls: attributedCalls,
@@ -2047,12 +2078,23 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       callGasLimit: zoraCallGasLimit,
       paymasterClient: usePaymaster ? paymasterClient : undefined,
     })
+    const sendCallGasLimit = resolveUserOpCallGasLimit({
+      estimatedCallGasLimit: bundlerGasEstimate.callGasLimit,
+      floorCallGasLimit: zoraCallGasLimit,
+    })
+    if (AA_DEBUG && sendCallGasLimit) {
+      logger.debug('[ERC-4337] send callGasLimit', {
+        sendCallGasLimit: sendCallGasLimit.toString(),
+        zoraFloor: zoraCallGasLimit?.toString() ?? null,
+        fromEstimate: bundlerGasEstimate.callGasLimit?.toString() ?? null,
+      })
+    }
     return await sendUserOperation(bundlerClient, {
       account,
       calls: attributedCalls,
       verificationGasLimit,
       nonce: correctNonce,
-      ...(typeof zoraCallGasLimit === 'bigint' ? { callGasLimit: zoraCallGasLimit } : {}),
+      ...(typeof sendCallGasLimit === 'bigint' ? { callGasLimit: sendCallGasLimit } : {}),
       ...(usePaymaster
         ? {
             paymaster: {
@@ -2460,21 +2502,40 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
           'Wait about 30 seconds, then try again once. Do not click Swap repeatedly.',
       )
     }
-    const failureRevert = extractRevertInfo(lastError)
-    if (failureRevert.revertData?.slice(0, 10).toLowerCase() === '0x3b99b53d') {
-      throw new Error(
-        'Swap route data from Zora is malformed or stale. Refresh the quote and try again.',
-      )
+    const mappedExecutionFailure = mapUserOpExecutionFailureMessage(lastError, {
+      firstCallTo: attributedCalls[0]?.to,
+    })
+    if (mappedExecutionFailure) {
+      throw mappedExecutionFailure
     }
-    if (
-      triedEphemeralNonceKey &&
-      (isDeterministicUserOpExecutionError(lastError) ||
-        getErrorDiagnosticMessage(lastError).toLowerCase().includes('execution reverted'))
-    ) {
-      throw new Error(
-        'Swap simulation passed but the sponsored UserOp was rejected by the bundler. ' +
-          'Refresh the quote and try again once. If a prior swap is still pending on Base, wait for it to confirm first.',
+    if (lc.includes('reverted for an unknown reason')) {
+      const zoraCall = attributedCalls.find(
+        (call) => isZoraUniversalRouterTarget(call.to) && call.data,
       )
+      if (zoraCall?.data) {
+        try {
+          await assertZoraRouterCallExecutesFromCsw({
+            executionAddress: smartWallet,
+            call: {
+              target: zoraCall.to,
+              data: zoraCall.data,
+              value: zoraCall.value != null ? String(zoraCall.value) : '0',
+            },
+          })
+        } catch (zoraReplayError: unknown) {
+          throw zoraReplayError
+        }
+      }
+      if (
+        triedEphemeralNonceKey ||
+        isDeterministicUserOpExecutionError(lastError) ||
+        lc.includes('execution reverted')
+      ) {
+        throw new Error(
+          'Swap simulation passed but the sponsored UserOp was rejected by the bundler. ' +
+            'Refresh the quote and try again once. If a prior swap is still pending on Base, wait for it to confirm first.',
+        )
+      }
     }
     if (lc.includes('aa10') || lc.includes('sender already constructed')) {
       throw new Error('Smart wallet already exists at this address.')

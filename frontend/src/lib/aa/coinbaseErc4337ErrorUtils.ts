@@ -73,6 +73,42 @@ export function classifyUserOpErrorCode(error: unknown): string {
   return 'unknown'
 }
 
+function findHexRevertCandidates(value: unknown, depth = 0, out: Hex[] = []): Hex[] {
+  if (depth > 12 || value == null) return out
+  if (typeof value === 'string') {
+    const matches = value.match(/0x[a-fA-F0-9]{8,}/g)
+    if (matches) {
+      for (const match of matches) out.push(match as Hex)
+    }
+    return out
+  }
+  if (typeof value !== 'object') return out
+  const node = value as Record<string, unknown>
+  for (const key of ['data', 'revertData', 'returnData'] as const) {
+    const candidate = node[key]
+    if (typeof candidate === 'string' && candidate.startsWith('0x') && candidate.length >= 10) {
+      out.push(candidate as Hex)
+    }
+  }
+  if (node.cause) findHexRevertCandidates(node.cause, depth + 1, out)
+  if (Array.isArray(node.metaMessages)) {
+    for (const entry of node.metaMessages) findHexRevertCandidates(entry, depth + 1, out)
+  }
+  if (Array.isArray(node)) {
+    for (const entry of node) findHexRevertCandidates(entry, depth + 1, out)
+  } else {
+    for (const entry of Object.values(node)) findHexRevertCandidates(entry, depth + 1, out)
+  }
+  return out
+}
+
+function pickBestRevertData(candidates: Hex[]): Hex | undefined {
+  if (candidates.length === 0) return undefined
+  const executionFailed = candidates.find((c) => c.slice(0, 10).toLowerCase() === '0x2c4029e9')
+  if (executionFailed) return executionFailed
+  return [...candidates].sort((a, b) => b.length - a.length)[0]
+}
+
 function findNestedRevertData(value: unknown, depth = 0): Hex | undefined {
   if (depth > 8 || value == null || typeof value !== 'object') return undefined
   const node = value as Record<string, unknown>
@@ -93,7 +129,8 @@ function findNestedRevertData(value: unknown, depth = 0): Hex | undefined {
       if (match?.[0]) return match[0] as Hex
     }
   }
-  return undefined
+  const deep = pickBestRevertData(findHexRevertCandidates(value))
+  return deep
 }
 
 export function extractRevertInfo(e: unknown): { error: string; revertData?: Hex; errorName?: string } {
@@ -340,6 +377,69 @@ export class PreflightSimulationRejectionError extends Error {
 
 export function isPreflightSimulationRejection(error: unknown): error is PreflightSimulationRejectionError {
   return error instanceof PreflightSimulationRejectionError
+}
+
+export function parseUserOpGasLimitField(value: unknown): bigint | null {
+  if (typeof value === 'bigint' && value > 0n) return value
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return BigInt(Math.floor(value))
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    try {
+      const parsed = trimmed.startsWith('0x') ? BigInt(trimmed) : BigInt(trimmed)
+      return parsed > 0n ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+/** Prefer bundler-estimated call gas (buffered) over a static Zora floor when both exist. */
+export function resolveUserOpCallGasLimit(params: {
+  estimatedCallGasLimit?: bigint | null
+  floorCallGasLimit?: bigint | null
+  bufferNumerator?: bigint
+  bufferDenominator?: bigint
+}): bigint | undefined {
+  const numerator = params.bufferNumerator ?? 130n
+  const denominator = params.bufferDenominator ?? 100n
+  const estimated = params.estimatedCallGasLimit
+  const floor = params.floorCallGasLimit
+  let buffered: bigint | undefined
+  if (typeof estimated === 'bigint' && estimated > 0n) {
+    buffered = (estimated * numerator) / denominator
+  }
+  if (buffered && floor) return buffered > floor ? buffered : floor
+  return buffered ?? floor ?? undefined
+}
+
+export function mapUserOpExecutionFailureMessage(
+  error: unknown,
+  context?: { firstCallTo?: string },
+): Error | null {
+  const revertInfo = extractRevertInfo(error)
+  if (!revertInfo.revertData && !revertInfo.errorName) {
+    const lc = getErrorDiagnosticMessage(error).toLowerCase()
+    if (!lc.includes('execution reverted') && !lc.includes('reverted for an unknown reason')) {
+      return null
+    }
+  }
+  return buildPreflightSimulationRejectionError({
+    simResult: {
+      success: false,
+      error: revertInfo.error,
+      revertData: revertInfo.revertData,
+      errorName: revertInfo.errorName,
+      directCallResult: {
+        success: false,
+        error: revertInfo.error,
+        revertData: revertInfo.revertData,
+        errorName: revertInfo.errorName,
+      },
+    },
+    firstCallTo: context?.firstCallTo,
+  })
 }
 
 function extractExecutionFailedInnerSelector(revertData?: Hex): string | null {

@@ -28,6 +28,39 @@ const FALLBACK: NormalizedUniswapError = {
 
 import { isPreflightSimulationRejection } from '@/lib/aa/coinbaseErc4337ErrorUtils'
 
+function collectSwapErrorText(input: unknown): string {
+  const parts: string[] = []
+  const seen = new Set<unknown>()
+  let cursor: unknown = input
+  for (let depth = 0; depth < 8 && cursor != null && !seen.has(cursor); depth += 1) {
+    seen.add(cursor)
+    if (isPreflightSimulationRejection(cursor)) {
+      parts.push(cursor.message)
+      break
+    }
+    if (typeof cursor === 'string') {
+      parts.push(cursor)
+      break
+    }
+    if (cursor instanceof Error) {
+      parts.push(cursor.message)
+      const shortMessage = (cursor as Error & { shortMessage?: string }).shortMessage
+      if (typeof shortMessage === 'string' && shortMessage.trim()) parts.push(shortMessage)
+      cursor = (cursor as Error & { cause?: unknown }).cause
+      continue
+    }
+    if (typeof cursor === 'object') {
+      const record = cursor as Record<string, unknown>
+      if (typeof record.message === 'string' && record.message.trim()) parts.push(record.message)
+      if (typeof record.details === 'string' && record.details.trim()) parts.push(record.details)
+      cursor = record.cause
+      continue
+    }
+    break
+  }
+  return parts.join(' ')
+}
+
 export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
   if (isPreflightSimulationRejection(input)) {
     return {
@@ -37,11 +70,7 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
     }
   }
 
-  const raw = typeof input === 'string'
-    ? input
-    : (input && typeof input === 'object' && 'message' in input && typeof (input as Record<string, unknown>).message === 'string')
-      ? String((input as Record<string, unknown>).message)
-      : ''
+  const raw = collectSwapErrorText(input)
   const msg = raw.toLowerCase()
 
   if (!msg.trim()) return FALLBACK
@@ -78,11 +107,55 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
   }
 
   // CSW execute wrapper / Zora router leg reverted during simulation or gas estimate
-  if (msg.includes('0x2c4029e9') || msg.includes('executionfailed')) {
+  if (
+    msg.includes('0x2c4029e9') ||
+    msg.includes('executionfailed') ||
+    msg.includes('zora swap would revert') ||
+    msg.includes('swap route data from zora') ||
+    msg.includes('0x3b99b53d') ||
+    msg.includes('sliceoutofbounds') ||
+    msg.includes('malformed or stale')
+  ) {
     return {
       code: 'APPROVAL_REQUIRED',
       message:
-        'The Zora swap would revert on your smart wallet. Confirm the Permit2 signature, refresh the quote, and ensure the wallet holds enough of the token you are selling.',
+        'The Zora swap would revert on your smart wallet. Refresh the quote, re-sign Permit2 if prompted, then try again.',
+      retryable: true,
+    }
+  }
+
+  if (msg.includes('permit2 rejected') || msg.includes('0xb0669cbc') || msg.includes('invalidcontractsignature')) {
+    return {
+      code: 'APPROVAL_REQUIRED',
+      message:
+        'Permit2 rejected the smart-wallet signature. Refresh the quote, sign again when prompted, then retry.',
+      retryable: true,
+    }
+  }
+
+  if (
+    msg.includes('swap simulation passed but the sponsored') ||
+    msg.includes('bundler rejected') ||
+    msg.includes('bundler could not simulate')
+  ) {
+    return {
+      code: 'QUOTE_EXPIRED',
+      message:
+        'The swap looked valid locally but the sponsored transaction was rejected. Refresh the quote and try once more. If a prior swap is still confirming, wait ~30 seconds first.',
+      retryable: true,
+    }
+  }
+
+  if (
+    msg.includes('swap is already pending') ||
+    msg.includes('previous swap is still confirming') ||
+    msg.includes('aa25') ||
+    msg.includes('invalid account nonce')
+  ) {
+    return {
+      code: 'NONCE_CONFLICT',
+      message:
+        'A swap is already pending on this smart wallet. Wait about 30 seconds for it to confirm, then try again once.',
       retryable: true,
     }
   }
@@ -228,11 +301,12 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
     }
   }
 
-  // Generic contract revert — strip hex noise
+  // Generic contract revert — do not blame balance when the wallet already holds the sell token
   if (msg.includes('reverted') || msg.includes('execution reverted')) {
     return {
-      code: 'UNKNOWN',
-      message: 'Transaction failed. Check your balance and try again.',
+      code: 'QUOTE_EXPIRED',
+      message:
+        'The swap would revert on-chain (often a stale quote, Permit2 signature, or pool slippage). Refresh the quote and try again. Your USDC balance is not the blocker if it covers the amount shown.',
       retryable: true,
     }
   }
