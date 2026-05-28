@@ -14,7 +14,11 @@ import {
   formatAlfaClubDailyBrief,
   formatAlfaClubLeaderboardChat,
 } from '../../_lib/alfaclub/dailyBrief.js'
-import { buildAlfaClubRoomUrl, resolveCreatorRoomLinks } from '../../_lib/alfaclub/creatorRoomLinks.js'
+import {
+  buildAlfaClubRoomUrl,
+  resolveCreatorRoomLinks,
+  resolveRoomIdFromFriendKeyTokenId,
+} from '../../_lib/alfaclub/creatorRoomLinks.js'
 import { SCORECARD_DISCLAIMER } from '../../_lib/alfaclub/scorecard.js'
 import {
   readVigilanteFlags,
@@ -400,21 +404,24 @@ function formatStatus(flags: VigilanteFlags): string {
 
 function formatHelp(): string {
   return [
-    '**/alfa** — AlfaClub Integrity Vigilante',
+    '**/alfa** — AlfaClub leaderboard & room tools',
     '',
-    '  `/alfa` — compact top-N leaderboard (AlfaClub room links)',
+    '**Rooms**',
+    '  Creator links → `alfaclub.app/room/{id}` (their trading room).',
+    '  This chat is the **bot/ops room** (commands + digest) — not a creator room.',
+    '  Example: Flip Research (token #2) → room 2, not room 1043.',
+    '',
+    '**Commands**',
+    '  `/alfa` — compact top-N leaderboard',
     '  `/alfa brief` — full daily digest (markets + moves)',
-    '  `/alfa <address>` — detail for a specific creator address',
-    '  `/alfa creator <address>` — same, explicit form',
-    '  `/alfa chart [kind] [limit]` — render a room analytics chart',
-    '  `/alfa status` — pipeline phase flag status',
-    '  `/alfa quote-key <tokenId> [amount]` — preview room key cost',
-    '  `/alfa buy-key <tokenId> [amount]` — buy a room key through your CSW',
-    '  `/alfa create-room <json-or-base64>` — register a room using signed payload',
+    '  `/alfa <address>` — one creator (score + room link when known)',
+    '  `/alfa chart [kind] [limit]` — room analytics chart (IPFS image)',
+    '  `/alfa status` — pipeline flags',
+    '  `/alfa quote-key` · `/alfa buy-key` · `/alfa create-room` — onchain room keys',
     '',
-    'Chart kinds:',
-    '  `top-volume` · `tier-mix` · `pnl-distribution`',
-    '  charts render natively and serve from the 4626 IPFS gateway',
+    '**Hermit** (same room): `/gmeow` · `/meme` — GIF in chat first, then X link when posted.',
+    '',
+    'Chart kinds: `top-volume` · `tier-mix` · `pnl-distribution`',
     '',
     SCORECARD_DISCLAIMER,
   ].join('\n')
@@ -514,7 +521,14 @@ function formatCreatorDetail(params: {
   lines.push('')
   lines.push(`**Rank:** ${row.rank}`)
   lines.push(`**Room (FriendKey tokenId):** ${row.tokenId.toString()}`)
-  if (roomUrl) lines.push(`**AlfaClub room:** ${roomUrl}`)
+  if (roomUrl) {
+    lines.push(`**AlfaClub room:** ${roomUrl}`)
+  } else {
+    const fallbackRoomId = resolveRoomIdFromFriendKeyTokenId(row.tokenId.toString())
+    if (fallbackRoomId) {
+      lines.push(`**AlfaClub room (token match):** ${buildAlfaClubRoomUrl(fallbackRoomId)}`)
+    }
+  }
   lines.push(`**Supply:** ${row.totalSupply.toString()} (staked ${row.stakedSupply.toString()})`)
   lines.push(
     `**Hyperliquid:** account=${formatUsd(row.hlAccountValueUsd ?? null)} · pnl30d=${formatUsd(row.pnl30dUsd ?? null)}`,
@@ -1167,15 +1181,11 @@ export async function executeAlfaclubCommandFamily(params: {
     compact: true,
   })
   if (!built.ok) {
-    return {
-      ok: true,
-      response: formatLeaderboard({
-        flags,
-        snapshotTs: built.snapshotTs,
-        rows: [],
-        pubsByAddress: new Map(),
-      }),
-    }
+    const hint =
+      built.reason === 'no_snapshot'
+        ? 'No AlfaClub snapshot yet — the daily cron populates scores and room links.'
+        : 'Latest AlfaClub snapshot is empty.'
+    return { ok: false, response: hint }
   }
   return {
     ok: true,

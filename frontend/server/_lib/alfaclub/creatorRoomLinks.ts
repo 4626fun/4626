@@ -215,7 +215,25 @@ export async function resolveCreatorRoomLinks(
     }
   }
 
+  for (const hint of hints) {
+    const address = hint.address.trim().toLowerCase()
+    if (!address || merged.has(address)) continue
+    const roomId = resolveRoomIdFromFriendKeyTokenId(hint.tokenId)
+    if (roomId) merged.set(address, roomId)
+  }
+
   return merged
+}
+
+/**
+ * FriendKey token ids usually match AlfaClub trading room ids.
+ * Use only when policy/snapshot/chat did not resolve — never map ops rooms.
+ */
+export function resolveRoomIdFromFriendKeyTokenId(tokenId: string | undefined): string | null {
+  const normalized = String(tokenId ?? '').trim()
+  if (!/^\d+$/.test(normalized)) return null
+  if (readOperationalAlfaClubRoomIds().has(normalized)) return null
+  return normalized
 }
 
 export async function loadCreatorRoomIdByCoinAddress(
@@ -259,4 +277,11 @@ export function formatCreatorRoomLink(
   const roomId = roomIds.get(creatorAddress.toLowerCase())
   if (!roomId) return null
   return buildAlfaClubRoomUrl(roomId)
+}
+
+/** One-line context when the daily brief posts into an ops/bridge room (e.g. 1043). */
+export function formatAlfaClubBriefOpsRoomFooter(postingRoomId: string): string | null {
+  const roomId = String(postingRoomId ?? '').trim()
+  if (!roomId || !readOperationalAlfaClubRoomIds().has(roomId)) return null
+  return '_Digest posted in the bot/ops room. Creator links open their trading rooms on alfaclub.app — not this room._'
 }

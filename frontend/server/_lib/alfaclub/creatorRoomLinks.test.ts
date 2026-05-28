@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  formatAlfaClubBriefOpsRoomFooter,
   pickCreatorRoomIdFromSnapshotRows,
   readOperationalAlfaClubRoomIds,
+  resolveRoomIdFromFriendKeyTokenId,
 } from './creatorRoomLinks.js'
 
 describe('pickCreatorRoomIdFromSnapshotRows', () => {
@@ -32,5 +34,20 @@ describe('pickCreatorRoomIdFromSnapshotRows', () => {
 describe('readOperationalAlfaClubRoomIds', () => {
   it('includes default bridge room 1043', () => {
     expect(readOperationalAlfaClubRoomIds().has('1043')).toBe(true)
+  })
+})
+
+describe('resolveRoomIdFromFriendKeyTokenId', () => {
+  it('maps numeric token ids to trading rooms but not ops room 1043', () => {
+    expect(resolveRoomIdFromFriendKeyTokenId('2')).toBe('2')
+    expect(resolveRoomIdFromFriendKeyTokenId('1043')).toBeNull()
+    expect(resolveRoomIdFromFriendKeyTokenId('')).toBeNull()
+  })
+})
+
+describe('formatAlfaClubBriefOpsRoomFooter', () => {
+  it('explains when digest posts to ops room', () => {
+    expect(formatAlfaClubBriefOpsRoomFooter('1043')).toContain('alfaclub.app')
+    expect(formatAlfaClubBriefOpsRoomFooter('2')).toBeNull()
   })
 })

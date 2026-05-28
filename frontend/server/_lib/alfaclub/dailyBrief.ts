@@ -12,7 +12,15 @@ import {
   type PublicationRecord,
 } from './publicationLedger.js'
 import { readAlfaClubChatBridgeFlags, sendAlfaClubRoomText } from './chatBridge.js'
-import { formatCreatorRoomLink, resolveCreatorRoomLinks } from './creatorRoomLinks.js'
+import {
+  formatAlfaClubBriefOpsRoomFooter,
+  formatCreatorRoomLink,
+  resolveCreatorRoomLinks,
+} from './creatorRoomLinks.js'
+import {
+  readAutoSyncRoomPoliciesEnabled,
+  syncCreatorRoomPoliciesFromSnapshot,
+} from './roomPolicySync.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -1018,6 +1026,12 @@ export async function runAlfaClubDailyBrief(params: {
     }
   }
 
+  if (readAutoSyncRoomPoliciesEnabled()) {
+    await syncCreatorRoomPoliciesFromSnapshot().catch(() => {
+      // Non-fatal — token-id fallback still resolves most FriendKey rooms.
+    })
+  }
+
   const built = await buildAlfaClubBriefContext({
     topRows: flags.topRows,
     moverRows: flags.moverRows,
@@ -1039,7 +1053,11 @@ export async function runAlfaClubDailyBrief(params: {
     }
   }
 
-  const messageText = formatAlfaClubDailyBrief(built.formatInput)
+  let messageText = formatAlfaClubDailyBrief(built.formatInput)
+  const opsFooter = formatAlfaClubBriefOpsRoomFooter(flags.roomId)
+  if (opsFooter) {
+    messageText = `${messageText}\n\n${opsFooter}`
+  }
   const send = await sendAlfaClubRoomText({
     text: messageText,
     roomId: flags.roomId,

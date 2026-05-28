@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { MetricsSnapshotRow } from './publicationLedger.js'
+import { formatAlfaClubBriefOpsRoomFooter } from './creatorRoomLinks.js'
 import {
   formatAlfaClubDailyBrief,
   formatAlfaClubLeaderboardChat,
@@ -79,6 +80,12 @@ describe('formatAlfaClubDailyBrief', () => {
     expect(text).toContain('↓ dropped top-5')
     expect(text).toContain(ADDR_C.slice(0, 6))
     expect(text).toContain('partial leaderboard')
+  })
+
+  it('ops room footer clarifies digest vs creator trading rooms', () => {
+    const footer = formatAlfaClubBriefOpsRoomFooter('1043')
+    expect(footer).toContain('bot/ops')
+    expect(footer).not.toContain('room/1043')
   })
 
   it('leaderboard chat uses indexed scope and top rows only', () => {
