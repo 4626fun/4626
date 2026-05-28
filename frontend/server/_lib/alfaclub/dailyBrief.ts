@@ -84,10 +84,17 @@ export type AlfaClubDailyBriefResult = {
   messageText: string | null
 }
 
+function resolveDailyBriefRoomId(): string {
+  const explicit = normalizeRoomId(process.env.ALFACLUB_DAILY_BRIEF_ROOM_ID)
+  if (explicit) return explicit
+  const bridgeRoom = normalizeRoomId(process.env.ALFACLUB_CHAT_ROOM_ID)
+  return bridgeRoom ?? DEFAULT_ROOM_ID
+}
+
 export function readAlfaClubDailyBriefFlags(): DailyBriefFlags {
   return {
     enabled: parseBool(process.env.ALFACLUB_DAILY_BRIEF_ENABLED ?? '1'),
-    roomId: normalizeRoomId(process.env.ALFACLUB_DAILY_BRIEF_ROOM_ID) ?? DEFAULT_ROOM_ID,
+    roomId: resolveDailyBriefRoomId(),
     topRows: parsePositiveInt(process.env.ALFACLUB_DAILY_BRIEF_TOP_ROWS, DEFAULT_TOP_ROWS, 10),
     moverRows: parsePositiveInt(process.env.ALFACLUB_DAILY_BRIEF_MOVER_ROWS, DEFAULT_MOVER_ROWS, 10),
     majorRows: parsePositiveInt(

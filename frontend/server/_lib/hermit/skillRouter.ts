@@ -366,6 +366,40 @@ function readPinataHermitConfig(): { endpoint: string; bearer: string } | null {
   return { endpoint, bearer }
 }
 
+/**
+ * Whether /gmeow should call Pinata for an extra caption line.
+ *
+ * Default (env unset): local bundled GIF only — fastest, no OpenClaw hop.
+ * - `HERMIT_GMEOW_PINATA_CAPTION=always` — call Pinata on every /gmeow when configured.
+ * - `HERMIT_GMEOW_PINATA_CAPTION=prompt` — call Pinata only when the user adds text after /gmeow.
+ * - `HERMIT_GMEOW_PINATA_CAPTION=0` — never call Pinata for /gmeow.
+ */
+export function shouldRequestPinataGmeowCaption(userPromptAfterCommand: string): boolean {
+  const mode = asTrimmed(process.env.HERMIT_GMEOW_PINATA_CAPTION).toLowerCase()
+  if (mode === '0' || mode === 'false' || mode === 'no' || mode === 'off' || mode === 'never') {
+    return false
+  }
+  if (
+    mode === '1' ||
+    mode === 'true' ||
+    mode === 'yes' ||
+    mode === 'on' ||
+    mode === 'always' ||
+    mode === 'all'
+  ) {
+    return true
+  }
+  if (mode === 'prompt' || mode === 'args' || mode === 'text') {
+    return userPromptAfterCommand.trim().length > 0
+  }
+  // Legacy default before optimization: Pinata on every /gmeow when configured.
+  if (mode === 'legacy') {
+    return true
+  }
+  // Env unset: local-only unless the user supplied a custom prompt.
+  return userPromptAfterCommand.trim().length > 0
+}
+
 function toGatewaySocketUrl(rawEndpoint: string): { wsUrl: string; origin: string } | null {
   let parsed: URL
   try {
@@ -1418,23 +1452,27 @@ export async function executeHermitCommand(
     const explicitSignalSource = classifyExplicitSignal(args)
     let draft: PinataChatResult | null = null
     let fallbackReason: 'pinata_throw' | 'pinata_provider_error_text' | null = null
-    try {
-      draft = await runPinataDraft({
-        prompt: buildPinataPromptForGmeow({
-          userPrompt: args,
-          memeCaption: meme.caption,
-          memeTags: meme.tags,
-          userPreferences,
-        }),
-        senderAddress: params.senderAddress,
-        sourceIdentity: params.sourceIdentity ?? null,
-      })
-    } catch (error) {
-      fallbackReason = 'pinata_throw'
-      logger.warn('[hermit] /gmeow draft failed; using local fallback', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      draft = null
+    const pinataCaptionRequested =
+      shouldRequestPinataGmeowCaption(args) && readPinataHermitConfig() !== null
+    if (pinataCaptionRequested) {
+      try {
+        draft = await runPinataDraft({
+          prompt: buildPinataPromptForGmeow({
+            userPrompt: args,
+            memeCaption: meme.caption,
+            memeTags: meme.tags,
+            userPreferences,
+          }),
+          senderAddress: params.senderAddress,
+          sourceIdentity: params.sourceIdentity ?? null,
+        })
+      } catch (error) {
+        fallbackReason = 'pinata_throw'
+        logger.warn('[hermit] /gmeow draft failed; using local fallback', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+        draft = null
+      }
     }
     if (explicitSignalSource) {
       await persistExplicitDialectSignal(params, args, explicitSignalSource)
@@ -1455,6 +1493,7 @@ export async function executeHermitCommand(
     logger.info('[hermit] /gmeow resolved', {
       provider,
       fallbackReason,
+      pinataCaptionRequested,
       hasAttachment: Boolean(attachment),
       explicitSignalSource,
     })

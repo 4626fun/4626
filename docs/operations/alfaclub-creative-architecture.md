@@ -152,6 +152,18 @@ by code (the Hermit module never imports `chatTokenStore` /
 | `HERMIT_ALLOWED_USERS`        | No  | — | Comma-separated wallet allowlist for `/hermit`, `/meme`, `/gmeow` on **non-AlfaClub** surfaces (direct HTTP at `/api/v1/chat/hermit`, Telegram). On the AlfaClub bridge (chatId `alfaclub:<room>`) the slash commands are open to any room user; this allowlist is not consulted there. Bare `gmeow` is independently sender-locked to Manito9v9 and ignores this allowlist. |
 | `HERMIT_ALLOWED_ROOM_IDS`     | No  | derived from owner's AlfaClub holdings | Explicit room allowlist override. |
 
+#### `/gmeow` latency policy (default optimized)
+
+| `HERMIT_GMEOW_PINATA_CAPTION` | Behaviour |
+| --- | --- |
+| *(unset)* | **Local bundled GIF only** for bare `/gmeow`. Pinata runs only when the user adds text after the command (e.g. `/gmeow moon`). |
+| `always` / `1` | Pinata caption on every `/gmeow` when `HERMIT_PINATA_*` is set (legacy behaviour). |
+| `prompt` | Same as unset — explicit alias. |
+| `0` / `never` | Never call Pinata for `/gmeow`. |
+| `legacy` | Always call Pinata when configured (pre-optimization default). |
+
+This keeps the hot path (spammy bare `/gmeow`) off OpenClaw while `/meme` and `/hermit` still use Pinata.
+
 Failure modes:
 
 - Pinata HTTP path 5xx or hangs → `runPinataDraft` returns `null`. `/hermit`

@@ -71,6 +71,15 @@ function runChecks(): Check[] {
     note: 'AlfaClub uses media-first + optional X link; legacy X-first breaks room UX',
   })
 
+  const gmeowPinataMode = String(process.env.HERMIT_GMEOW_PINATA_CAPTION ?? '').trim().toLowerCase()
+  checks.push({
+    id: 'HERMIT_GMEOW_PINATA_CAPTION',
+    required: false,
+    present: !gmeowPinataMode || gmeowPinataMode === 'prompt' || gmeowPinataMode === 'args',
+    note:
+      'Unset or prompt = bare /gmeow is local-only (fast). Use always only if you want Pinata on every /gmeow.',
+  })
+
   checks.push({
     id: 'ALFACLUB_DAILY_BRIEF_ROOM_ID (optional split)',
     required: false,

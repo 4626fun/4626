@@ -5,6 +5,7 @@ import {
   _hermitPromptBuildersForTests,
   executeHermitCommand,
   shouldPreferPinataHttpDraft,
+  shouldRequestPinataGmeowCaption,
 } from './skillRouter'
 
 describe('executeHermitCommand', () => {
@@ -122,10 +123,47 @@ describe('executeHermitCommand', () => {
     ])
   })
 
-  it('uses pinata provider for /gmeow when pinata draft env is configured', async () => {
+  it('skips pinata for bare /gmeow when pinata is configured (local-only default)', async () => {
     restoreEnv = applyEnv({
       HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
       HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+    })
+
+    const result = await executeHermitCommand({
+      commandText: '/gmeow',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+
+    expect(result.kind).toBe('gmeow')
+    expect(result.provider).toBe('local')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('uses pinata for /gmeow when user supplies a prompt (default policy)', async () => {
+    restoreEnv = applyEnv({
+      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
+      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+    })
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ text: JSON.stringify({ line: 'custom cat line.' }) }),
+    } as Response)
+
+    const result = await executeHermitCommand({
+      commandText: '/gmeow moon mission',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+
+    expect(result.provider).toBe('pinata')
+    expect(result.reply).toContain('custom cat line.')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses pinata provider for /gmeow when HERMIT_GMEOW_PINATA_CAPTION=always', async () => {
+    restoreEnv = applyEnv({
+      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
+      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_GMEOW_PINATA_CAPTION: 'always',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -147,6 +185,7 @@ describe('executeHermitCommand', () => {
     restoreEnv = applyEnv({
       HERMIT_PINATA_CHAT_ENDPOINT: 'https://x7lmjaxx.agents.pinata.cloud',
       HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_GMEOW_PINATA_CAPTION: 'always',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -186,10 +225,16 @@ describe('executeHermitCommand', () => {
     ).toBe(false)
   })
 
+  it('shouldRequestPinataGmeowCaption respects env modes', () => {
+    expect(shouldRequestPinataGmeowCaption('')).toBe(false)
+    expect(shouldRequestPinataGmeowCaption('moon')).toBe(true)
+  })
+
   it('/gmeow falls back to local caption when pinata returns provider auth error text', async () => {
     restoreEnv = applyEnv({
       HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
       HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_GMEOW_PINATA_CAPTION: 'always',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -213,6 +258,7 @@ describe('executeHermitCommand', () => {
     restoreEnv = applyEnv({
       HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
       HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_GMEOW_PINATA_CAPTION: 'always',
     })
     fetchMock.mockRejectedValueOnce(new Error('socket hang up'))
 
