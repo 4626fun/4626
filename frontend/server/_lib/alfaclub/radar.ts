@@ -11,7 +11,7 @@ import {
 } from './publicationLedger.js'
 import {
   formatCreatorRoomLink,
-  loadCreatorRoomIdByCoinAddress,
+  resolveCreatorRoomLinks,
 } from './creatorRoomLinks.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -620,7 +620,7 @@ export async function runAlfaClubRadar(
   const addressSet = new Set<string>()
   for (const row of currentRows) addressSet.add(row.creatorAddress)
   for (const row of previousRows) addressSet.add(row.creatorAddress)
-  const roomIds = await loadCreatorRoomIdByCoinAddress([...addressSet])
+  const roomIds = await resolveCreatorRoomLinks([...addressSet])
   const built = buildAlfaClubRadarText({
     snapshotTs,
     previousSnapshotTs,

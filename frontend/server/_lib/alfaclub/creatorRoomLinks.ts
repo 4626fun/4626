@@ -25,6 +25,59 @@ export function buildAlfaClubRoomUrl(roomId: string): string {
   return `${readAlfaClubPageOrigin()}${path.replaceAll('{roomId}', encodeURIComponent(normalizedRoomId))}`
 }
 
+async function loadCreatorRoomIdFromChatActivity(addresses: string[]): Promise<Map<string, string>> {
+  const normalized = [...new Set(addresses.map((value) => value.trim().toLowerCase()).filter(Boolean))]
+  const out = new Map<string, string>()
+  if (normalized.length === 0) return out
+
+  const db = await getDb()
+  if (!db) return out
+  await ensureAlfaClubVigilanteSchema()
+
+  try {
+    const result = await db.sql`
+      SELECT DISTINCT ON (addr)
+        addr,
+        room_id
+      FROM (
+        SELECT
+          LOWER(sender_address) AS addr,
+          room_id,
+          COUNT(*)::bigint AS msg_count
+        FROM alfaclub.chat_ingest
+        WHERE LOWER(sender_address) = ANY(${normalized})
+          AND room_id IS NOT NULL
+          AND LENGTH(TRIM(room_id)) > 0
+        GROUP BY 1, 2
+      ) ranked
+      ORDER BY addr, msg_count DESC;
+    `
+    const rows = (result.rows ?? []) as Array<{ addr: string | null; room_id: string | null }>
+    for (const row of rows) {
+      const address = typeof row.addr === 'string' ? row.addr : ''
+      const roomId = typeof row.room_id === 'string' ? row.room_id.trim() : ''
+      if (address && roomId) out.set(address, roomId)
+    }
+  } catch {
+    // Best-effort fallback when policy rows are not seeded yet.
+  }
+  return out
+}
+
+/** Policy table first, then most-active AlfaClub chat room per creator wallet. */
+export async function resolveCreatorRoomLinks(addresses: string[]): Promise<Map<string, string>> {
+  const policy = await loadCreatorRoomIdByCoinAddress(addresses)
+  const unresolved = addresses.filter((address) => !policy.has(address.toLowerCase()))
+  if (unresolved.length === 0) return policy
+
+  const fromChat = await loadCreatorRoomIdFromChatActivity(unresolved)
+  const merged = new Map(policy)
+  for (const [address, roomId] of fromChat) {
+    if (!merged.has(address)) merged.set(address, roomId)
+  }
+  return merged
+}
+
 export async function loadCreatorRoomIdByCoinAddress(
   addresses: string[],
 ): Promise<Map<string, string>> {

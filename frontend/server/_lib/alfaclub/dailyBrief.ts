@@ -12,10 +12,7 @@ import {
   type PublicationRecord,
 } from './publicationLedger.js'
 import { readAlfaClubChatBridgeFlags, sendAlfaClubRoomText } from './chatBridge.js'
-import {
-  formatCreatorRoomLink,
-  loadCreatorRoomIdByCoinAddress,
-} from './creatorRoomLinks.js'
+import { formatCreatorRoomLink, resolveCreatorRoomLinks } from './creatorRoomLinks.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -23,7 +20,10 @@ const DEFAULT_ROOM_ID = '1043'
 const DEFAULT_MARKET_TIMEOUT_MS = 12_000
 const DEFAULT_TOP_ROWS = 5
 const DEFAULT_MOVER_ROWS = 5
+const DEFAULT_MAJOR_ROWS = 6
 const DEFAULT_RECENT_PUBLICATIONS_LIMIT = 500
+const SCORE_MOVE_EPSILON = 0.005
+const MAX_MOVE_LINES = 6
 const MAJOR_TOKENS = [
   { symbol: 'BTC', id: 'bitcoin' },
   { symbol: 'ETH', id: 'ethereum' },
@@ -42,6 +42,8 @@ type DailyBriefFlags = {
   roomId: string
   topRows: number
   moverRows: number
+  majorRows: number
+  compact: boolean
   forceSend: boolean
   marketTimeoutMs: number
 }
@@ -80,6 +82,12 @@ export function readAlfaClubDailyBriefFlags(): DailyBriefFlags {
     roomId: normalizeRoomId(process.env.ALFACLUB_DAILY_BRIEF_ROOM_ID) ?? DEFAULT_ROOM_ID,
     topRows: parsePositiveInt(process.env.ALFACLUB_DAILY_BRIEF_TOP_ROWS, DEFAULT_TOP_ROWS, 10),
     moverRows: parsePositiveInt(process.env.ALFACLUB_DAILY_BRIEF_MOVER_ROWS, DEFAULT_MOVER_ROWS, 10),
+    majorRows: parsePositiveInt(
+      process.env.ALFACLUB_DAILY_BRIEF_MAJOR_ROWS,
+      DEFAULT_MAJOR_ROWS,
+      MAJOR_TOKENS.length,
+    ),
+    compact: parseBool(process.env.ALFACLUB_DAILY_BRIEF_COMPACT ?? '1'),
     forceSend: parseBool(process.env.ALFACLUB_DAILY_BRIEF_FORCE_SEND),
     marketTimeoutMs: parsePositiveInt(
       process.env.ALFACLUB_DAILY_BRIEF_MARKET_TIMEOUT_MS,
@@ -366,7 +374,227 @@ async function fetchMajorTokenPrices(timeoutMs: number): Promise<MarketRow[]> {
   }
 }
 
-function buildNarrative(params: {
+function formatBriefSnapshotDate(iso: string): string {
+  const parsed = Date.parse(iso)
+  if (!Number.isFinite(parsed)) return iso
+  return new Date(parsed).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  })
+}
+
+function formatUsdCompact(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return 'n/a'
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`
+  if (value >= 1000) return `$${(value / 1000).toFixed(1)}k`
+  if (value >= 1) return `$${value.toFixed(0)}`
+  if (value >= 0.01) return `$${value.toFixed(2)}`
+  return `$${value.toExponential(1)}`
+}
+
+function formatSupplyCount(value: bigint): string {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return value.toString()
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 10_000) return `${Math.round(n / 1000)}k`
+  return n.toLocaleString('en-US')
+}
+
+function hasMeaningfulScoreMove(delta: SnapshotDelta): boolean {
+  if (delta.isNew) return true
+  if (delta.rankDelta !== null && delta.rankDelta !== 0) return true
+  if (delta.scoreDelta === null) return false
+  return Math.abs(delta.scoreDelta) >= SCORE_MOVE_EPSILON
+}
+
+function formatCompactRankLine(
+  row: MetricsSnapshotRow,
+  labels: CreatorLabelMap,
+  roomIds: Map<string, string>,
+): string {
+  const stake = formatRatioPct(stakeRatio(row))
+  const roomUrl = formatCreatorRoomLink(row.creatorAddress, roomIds)
+  const core = `${row.rank}. ${creatorIdentity(row, labels)} — ${formatScore(row.score)} · ${stake} staked · supply ${formatSupplyCount(row.totalSupply)}`
+  return roomUrl ? `${core}\n   ${roomUrl}` : core
+}
+
+function buildCompactMoveLines(params: {
+  deltas: SnapshotDelta[]
+  currentRows: MetricsSnapshotRow[]
+  previousRows: MetricsSnapshotRow[]
+  topRows: number
+  labels: CreatorLabelMap
+  roomIds: Map<string, string>
+}): string[] {
+  const lines: string[] = []
+  const previousTopSet = new Set(
+    params.previousRows.slice(0, params.topRows).map((row) => row.creatorAddress.toLowerCase()),
+  )
+  const currentTopSet = new Set(
+    params.currentRows.slice(0, params.topRows).map((row) => row.creatorAddress.toLowerCase()),
+  )
+
+  const entrants = params.currentRows
+    .filter((row) => row.rank <= params.topRows && !previousTopSet.has(row.creatorAddress.toLowerCase()))
+    .slice(0, 3)
+  for (const row of entrants) {
+    lines.push(
+      appendCreatorRoomLink(
+        `↑ entered top-${params.topRows}: ${creatorIdentity(row, params.labels)} (${formatScore(row.score)})`,
+        row.creatorAddress,
+        params.roomIds,
+      ),
+    )
+  }
+
+  const exits = params.previousRows
+    .filter((row) => row.rank <= params.topRows && !currentTopSet.has(row.creatorAddress.toLowerCase()))
+    .slice(0, 3)
+  for (const row of exits) {
+    lines.push(
+      appendCreatorRoomLink(
+        `↓ dropped top-${params.topRows}: was #${row.rank} ${creatorIdentity(row, params.labels)}`,
+        row.creatorAddress,
+        params.roomIds,
+      ),
+    )
+  }
+
+  const scoreMovers = [...params.deltas]
+    .filter((delta) => hasMeaningfulScoreMove(delta))
+    .filter((delta) => !entrants.some((row) => row.creatorAddress === delta.current.creatorAddress))
+    .filter((delta) => !exits.some((row) => row.creatorAddress === delta.current.creatorAddress))
+    .sort((a, b) => Math.abs(b.scoreDelta ?? 0) - Math.abs(a.scoreDelta ?? 0))
+    .slice(0, 3)
+
+  for (const delta of scoreMovers) {
+    const scorePart =
+      delta.scoreDelta === null
+        ? 'new'
+        : `${delta.scoreDelta > 0 ? '+' : ''}${delta.scoreDelta.toFixed(3)}`
+    lines.push(
+      appendCreatorRoomLink(
+        `• #${delta.current.rank} ${creatorIdentity(delta.current, params.labels)} — ${formatRankDelta(delta.rankDelta)} · score ${scorePart}`,
+        delta.current.creatorAddress,
+        params.roomIds,
+      ),
+    )
+  }
+
+  return lines.slice(0, MAX_MOVE_LINES)
+}
+
+function buildCompactNarrative(params: {
+  deltas: SnapshotDelta[]
+  newCreators: number
+  activeCreators24h: number
+  publications24h: number
+  entrantCount: number
+  exitCount: number
+}): string {
+  const parts: string[] = []
+  if (params.newCreators > 0) parts.push(`${params.newCreators} new tracked`)
+  if (params.publications24h > 0) parts.push(`${params.publications24h} pubs (24h)`)
+  if (params.activeCreators24h > 0) parts.push(`${params.activeCreators24h} active (24h)`)
+  if (params.entrantCount > 0) parts.push(`${params.entrantCount} entered top ranks`)
+  if (params.exitCount > 0) parts.push(`${params.exitCount} fell out of top ranks`)
+
+  const biggestMover = [...params.deltas]
+    .filter((delta) => delta.scoreDelta !== null && Math.abs(delta.scoreDelta) >= SCORE_MOVE_EPSILON)
+    .sort((a, b) => Math.abs(b.scoreDelta ?? 0) - Math.abs(a.scoreDelta ?? 0))[0]
+
+  const lead = parts.length > 0 ? parts.join(' · ') + '.' : 'Leaderboard stable vs prior snapshot.'
+  if (!biggestMover) return lead
+  const mover = `${creatorLabel(biggestMover.current)} ${formatRankDelta(biggestMover.rankDelta)} (score ${formatScore(biggestMover.current.score)}).`
+  return `${lead} Biggest score move: ${mover}`
+}
+
+function buildCompactBriefText(params: {
+  snapshotTs: string
+  previousSnapshotTs: string | null
+  currentRows: MetricsSnapshotRow[]
+  previousRows: MetricsSnapshotRow[]
+  creatorsTracked: number
+  recentPublications: PublicationRecord[]
+  marketRows: MarketRow[]
+  topRows: number
+  majorRows: number
+  labels: CreatorLabelMap
+  roomIds: Map<string, string>
+}): string {
+  const deltas = buildDeltas(params.currentRows, params.previousRows)
+  const newCreators = deltas.filter((delta) => delta.isNew).length
+  const pubs24h = params.recentPublications.filter((pub) => {
+    const ts = Date.parse(pub.createdAt)
+    return Number.isFinite(ts) && ts >= Date.now() - 24 * 60 * 60 * 1000
+  })
+  const activeCreators24h = new Set(pubs24h.map((pub) => pub.creatorAddress.toLowerCase())).size
+
+  const previousTopSet = new Set(
+    params.previousRows.slice(0, params.topRows).map((row) => row.creatorAddress.toLowerCase()),
+  )
+  const currentTopSet = new Set(
+    params.currentRows.slice(0, params.topRows).map((row) => row.creatorAddress.toLowerCase()),
+  )
+  const entrantCount = params.currentRows.filter(
+    (row) => row.rank <= params.topRows && !previousTopSet.has(row.creatorAddress.toLowerCase()),
+  ).length
+  const exitCount = params.previousRows.filter(
+    (row) => row.rank <= params.topRows && !currentTopSet.has(row.creatorAddress.toLowerCase()),
+  ).length
+
+  const lines: string[] = []
+  const snapLabel = formatBriefSnapshotDate(params.snapshotTs)
+  const prevLabel = params.previousSnapshotTs ? formatBriefSnapshotDate(params.previousSnapshotTs) : null
+  lines.push(`**AlfaClub Daily** · ${snapLabel}${prevLabel ? ` vs ${prevLabel}` : ''}`)
+  lines.push(
+    `${params.creatorsTracked.toLocaleString('en-US')} tracked · ${params.currentRows.length.toLocaleString('en-US')} ranked · ${newCreators} new · ${activeCreators24h} active (24h)`,
+  )
+
+  const majorParts = params.marketRows
+    .slice(0, params.majorRows)
+    .map((row) => `${row.symbol} ${formatUsdCompact(row.priceUsd)} (${formatPct(row.change24hPct)})`)
+  if (majorParts.length > 0) {
+    lines.push('')
+    lines.push(`**Markets** ${majorParts.join(' · ')}`)
+  }
+
+  lines.push('')
+  lines.push(`**Top ${params.topRows}**`)
+  for (const row of params.currentRows.slice(0, params.topRows)) {
+    lines.push(formatCompactRankLine(row, params.labels, params.roomIds))
+  }
+
+  const moveLines = buildCompactMoveLines({
+    deltas,
+    currentRows: params.currentRows,
+    previousRows: params.previousRows,
+    topRows: params.topRows,
+    labels: params.labels,
+    roomIds: params.roomIds,
+  })
+  if (moveLines.length > 0) {
+    lines.push('')
+    lines.push('**Moves**')
+    lines.push(...moveLines)
+  }
+
+  const narrative = buildCompactNarrative({
+    deltas,
+    newCreators,
+    activeCreators24h,
+    publications24h: pubs24h.length,
+    entrantCount,
+    exitCount,
+  })
+  lines.push('')
+  lines.push(narrative)
+
+  return lines.join('\n')
+}
+
+function buildLegacyNarrative(params: {
   deltas: SnapshotDelta[]
   newCreators: number
   activeCreators24h: number
@@ -398,7 +626,7 @@ function buildNarrative(params: {
   return [lead, second, third].join(' ')
 }
 
-function buildBriefText(params: {
+function buildLegacyBriefText(params: {
   snapshotTs: string
   previousSnapshotTs: string | null
   currentRows: MetricsSnapshotRow[]
@@ -553,7 +781,7 @@ function buildBriefText(params: {
   lines.push('')
   lines.push('**Read**')
   lines.push(
-    buildNarrative({
+    buildLegacyNarrative({
       deltas,
       newCreators,
       activeCreators24h,
@@ -562,6 +790,53 @@ function buildBriefText(params: {
     }),
   )
   return lines.join('\n')
+}
+
+export type AlfaClubDailyBriefFormatInput = {
+  snapshotTs: string
+  previousSnapshotTs: string | null
+  currentRows: MetricsSnapshotRow[]
+  previousRows: MetricsSnapshotRow[]
+  creatorsTracked: number
+  recentPublications: PublicationRecord[]
+  marketRows: MarketRow[]
+  topRows: number
+  moverRows: number
+  majorRows: number
+  compact: boolean
+  labels: CreatorLabelMap
+  roomIds: Map<string, string>
+}
+
+export function formatAlfaClubDailyBrief(input: AlfaClubDailyBriefFormatInput): string {
+  if (input.compact) {
+    return buildCompactBriefText({
+      snapshotTs: input.snapshotTs,
+      previousSnapshotTs: input.previousSnapshotTs,
+      currentRows: input.currentRows,
+      previousRows: input.previousRows,
+      creatorsTracked: input.creatorsTracked,
+      recentPublications: input.recentPublications,
+      marketRows: input.marketRows,
+      topRows: input.topRows,
+      majorRows: input.majorRows,
+      labels: input.labels,
+      roomIds: input.roomIds,
+    })
+  }
+  return buildLegacyBriefText({
+    snapshotTs: input.snapshotTs,
+    previousSnapshotTs: input.previousSnapshotTs,
+    currentRows: input.currentRows,
+    previousRows: input.previousRows,
+    creatorsTracked: input.creatorsTracked,
+    recentPublications: input.recentPublications,
+    marketRows: input.marketRows,
+    topRows: input.topRows,
+    moverRows: input.moverRows,
+    labels: input.labels,
+    roomIds: input.roomIds,
+  })
 }
 
 export async function runAlfaClubDailyBrief(params: {
@@ -639,8 +914,8 @@ export async function runAlfaClubDailyBrief(params: {
   const addressSet = new Set<string>()
   for (const row of currentRows) addressSet.add(row.creatorAddress)
   for (const row of previousRows) addressSet.add(row.creatorAddress)
-  const roomIds = await loadCreatorRoomIdByCoinAddress([...addressSet])
-  const messageText = buildBriefText({
+  const roomIds = await resolveCreatorRoomLinks([...addressSet])
+  const messageText = formatAlfaClubDailyBrief({
     snapshotTs,
     previousSnapshotTs,
     currentRows,
@@ -650,6 +925,8 @@ export async function runAlfaClubDailyBrief(params: {
     marketRows,
     topRows: flags.topRows,
     moverRows: flags.moverRows,
+    majorRows: flags.majorRows,
+    compact: flags.compact,
     labels,
     roomIds,
   })

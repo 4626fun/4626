@@ -25,6 +25,8 @@ const FLAGS = {
   roomId: '1043',
   topRows: 5,
   moverRows: 5,
+  majorRows: 6,
+  compact: true,
   forceSend: false,
   marketTimeoutMs: 12000,
 }
