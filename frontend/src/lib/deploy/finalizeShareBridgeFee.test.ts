@@ -235,9 +235,9 @@ function createMockPublicClient(config: MockClientConfig = {}): ShareBridgeReadC
 }
 
 describe('finalizeShareBridgeFee', () => {
-  it('builds deterministic LayerZero type-3 executor lzReceive options for 200k gas', () => {
+  it('builds LayerZero type-3 executor lzReceive options matching OptionsBuilder wire format', () => {
     const options = buildShareBridgeExecutorLzReceiveOptions(200_000n)
-    expect(options.startsWith('0x000301')).toBe(true)
+    expect(options).toBe('0x00030100110100000000000000000000000000030d40')
     expect(buildShareBridgeExecutorLzReceiveOptions(FINALIZE_SHARE_BRIDGE_GAS_LIMIT)).toBe(options)
     expect(buildShareBridgeExecutorLzReceiveOptions(100_000n)).not.toBe(options)
   })

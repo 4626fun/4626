@@ -513,10 +513,13 @@ function readShareAddress(params: Record<string, unknown> | null | undefined): A
 }
 
 export function buildShareBridgeExecutorLzReceiveOptions(gasLimit = FINALIZE_SHARE_BRIDGE_GAS_LIMIT): Hex {
-  const option = encodePacked(['uint128'], [gasLimit])
+  const gasBytes = encodePacked(['uint128'], [gasLimit])
+  const gasByteLength = (gasBytes.length - 2) / 2
+  // LayerZero OptionsBuilder.addExecutorLzReceiveOption: 1-byte worker id + uint128 gas.
+  const optionByteLength = gasByteLength + 1
   return encodePacked(
     ['uint16', 'uint8', 'uint16', 'uint8', 'bytes'],
-    [3, 1, Number(option.length + 1), 1, option],
+    [3, 1, optionByteLength, 1, gasBytes],
   )
 }
 
