@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { encodeFunctionData, type Address, type Hex } from 'viem'
+import { encodeFunctionData, getAddress, type Address, type Hex } from 'viem'
 
 import type { ShareBridgeReadClient } from './shareBridgeReadClient'
 
@@ -13,9 +13,13 @@ import {
   attachFinalizeShareBridgeValueToCalls,
   buildShareBridgeExecutorLzReceiveOptions,
   decodeFinalizePhase2Call,
+  isLayerZeroNoPeerQuoteError,
   parseCallValue,
+  buildFinalizePhase2CallData,
   quoteFinalizeShareBridgeNativeFee,
 } from './finalizeShareBridgeFee'
+
+import { AKITA_DEFAULTS } from '@/config/contracts.defaults'
 
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
 const BATCHER = '0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8' as Address
@@ -146,6 +150,9 @@ type MockClientConfig = {
   solanaEidAsBigint?: boolean
   registryPeer?: Hex | null
   solanaShareOftPeer?: Hex | null
+  wrapperBytecode?: Hex | null
+  /** When true, quoteSend on the finalize target ShareOFT throws LayerZero NoPeer. */
+  quoteSendNoPeerOnTarget?: boolean
 }
 
 function createMockPublicClient(config: MockClientConfig = {}): ShareBridgeReadClient {
@@ -163,12 +170,22 @@ function createMockPublicClient(config: MockClientConfig = {}): ShareBridgeReadC
     solanaEidAsBigint = false,
     registryPeer = `0x${'cd'.repeat(32)}` as Hex,
     solanaShareOftPeer = null,
+    wrapperBytecode = '0x6001600055' as Hex,
+    quoteSendNoPeerOnTarget = false,
   } = config
 
   const runtimeEid = solanaEidAsBigint ? BigInt(solanaEid) : solanaEid
+  const referenceShareOft = getAddress(AKITA_DEFAULTS.shareOFT)
 
   return {
     readContract: vi.fn(async (req: { functionName: string; address?: Address }) => {
+      if (req.functionName === 'peers') {
+        const address = req.address ? getAddress(req.address) : null
+        if (address?.toLowerCase() === referenceShareOft.toLowerCase()) {
+          return registryPeer ?? (`0x${'ef'.repeat(32)}` as Hex)
+        }
+        return ZERO_BYTES32
+      }
       if (req.functionName === 'getOVaultRuntimeConfig') {
         const hubComposer = '0x9999999999999999999999999999999999999999'
         if (runtimeAsTuple) {
@@ -197,9 +214,22 @@ function createMockPublicClient(config: MockClientConfig = {}): ShareBridgeReadC
       }
       if (req.functionName === 'quoteSend') {
         if (quoteSendThrows) throw new Error('quoteSend reverted')
+        if (
+          quoteSendNoPeerOnTarget &&
+          req.address &&
+          getAddress(req.address).toLowerCase() === FINALIZE_PARAMS.shareOFT.toLowerCase()
+        ) {
+          throw new Error('execution reverted: custom error 0xf6ff4fb7')
+        }
         return { nativeFee, lzTokenFee: 0n }
       }
       throw new Error(`unexpected readContract: ${req.functionName}`)
+    }),
+    getBytecode: vi.fn(async ({ address }: { address: Address }) => {
+      if (address.toLowerCase() === FINALIZE_PARAMS.wrapper.toLowerCase()) {
+        return wrapperBytecode ?? undefined
+      }
+      return '0x6001600055'
     }),
   }
 }
@@ -262,8 +292,116 @@ describe('finalizeShareBridgeFee quote paths', () => {
     expect('required' in quote && quote.required).toBe(true)
     if ('required' in quote && quote.required) {
       expect(quote.nativeFee).toBe(nativeFee)
-      expect(quote.solanaAmount).toBe((previewShares * FINALIZE_SHARE_BRIDGE_SOLANA_PERCENT) / 100n)
     }
+  })
+
+  it('quotes via reference wired ShareOFT when greenfield target peer is unset (NoPeer)', async () => {
+    const referenceShareOft = getAddress(AKITA_DEFAULTS.shareOFT)
+    const client = createMockPublicClient({ quoteSendNoPeerOnTarget: true })
+    const quote = await quoteFinalizeShareBridgeNativeFee({
+      publicClient: client,
+      batcherAddress: BATCHER,
+      finalizeCallData: encodeFinalize(),
+    })
+    expect('required' in quote && quote.required).toBe(true)
+    const quoteSendCalls = (client.readContract as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (call) => call[0]?.functionName === 'quoteSend',
+    )
+    expect(quoteSendCalls.length).toBe(1)
+    expect(getAddress(quoteSendCalls[0]![0].address as Address)).toBe(referenceShareOft)
+  })
+
+  it('quotes on target ShareOFT when target is the wired reference ShareOFT', async () => {
+    const akitaShareOft = getAddress(AKITA_DEFAULTS.shareOFT)
+    const effectivePeer = `0x${'cd'.repeat(32)}` as Hex
+    const client = createMockPublicClient({ registryPeer: effectivePeer })
+    ;(client.readContract as ReturnType<typeof vi.fn>).mockImplementation(
+      async (req: { functionName: string; address?: Address }) => {
+        if (req.functionName === 'peers') {
+          return effectivePeer
+        }
+        return (createMockPublicClient({ registryPeer: effectivePeer }).readContract as ReturnType<typeof vi.fn>)(req)
+      },
+    )
+    ;(client.getBytecode as ReturnType<typeof vi.fn>).mockResolvedValue('0x6001600055')
+
+    const callData = buildFinalizePhase2CallData({
+      ...FINALIZE_PARAMS,
+      shareOFT: akitaShareOft,
+      creatorToken: getAddress(FINALIZE_PARAMS.creatorToken),
+      owner: getAddress(FINALIZE_PARAMS.owner),
+      vault: getAddress(FINALIZE_PARAMS.vault),
+      wrapper: getAddress(FINALIZE_PARAMS.wrapper),
+      gaugeController: getAddress(FINALIZE_PARAMS.gaugeController),
+      ccaStrategy: getAddress(FINALIZE_PARAMS.ccaStrategy),
+      oracle: getAddress(FINALIZE_PARAMS.oracle),
+      auctionSteps: FINALIZE_PARAMS.auctionSteps as Hex,
+      meteoraAlphaVault: FINALIZE_PARAMS.meteoraAlphaVault as Hex,
+    })
+
+    const quote = await quoteFinalizeShareBridgeNativeFee({
+      publicClient: client,
+      batcherAddress: BATCHER,
+      finalizeCallData: callData,
+    })
+    expect('required' in quote && quote.required).toBe(true)
+    const quoteSendCalls = (client.readContract as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (call) => call[0]?.functionName === 'quoteSend',
+    )
+    expect(quoteSendCalls.length).toBe(1)
+    expect(getAddress(quoteSendCalls[0]![0].address as Address)).toBe(akitaShareOft)
+  })
+
+  it('detects LayerZero NoPeer quote errors', () => {
+    expect(isLayerZeroNoPeerQuoteError('custom error 0xf6ff4fb7')).toBe(true)
+    expect(isLayerZeroNoPeerQuoteError('NoPeer(30168)')).toBe(true)
+    expect(isLayerZeroNoPeerQuoteError(new Error('short', { cause: new Error('0xf6ff4fb7') }))).toBe(true)
+    expect(isLayerZeroNoPeerQuoteError('quote_failed')).toBe(false)
+  })
+
+  it('skips unwired target ShareOFT and quotes via reference when peers unset', async () => {
+    const referenceShareOft = getAddress(AKITA_DEFAULTS.shareOFT)
+    const client = createMockPublicClient({ quoteSendNoPeerOnTarget: false })
+    ;(client.readContract as ReturnType<typeof vi.fn>).mockImplementation(
+      async (req: { functionName: string; address?: Address }) => {
+        if (req.functionName === 'peers') {
+          const address = req.address ? getAddress(req.address) : null
+          if (address?.toLowerCase() === FINALIZE_PARAMS.shareOFT.toLowerCase()) {
+            return ZERO_BYTES32
+          }
+          if (address?.toLowerCase() === referenceShareOft.toLowerCase()) {
+            return `0x${'ef'.repeat(32)}` as Hex
+          }
+        }
+        return (createMockPublicClient().readContract as ReturnType<typeof vi.fn>)(req)
+      },
+    )
+    const baseClient = createMockPublicClient()
+    client.readContract = vi.fn(async (req: { functionName: string; address?: Address }) => {
+      if (req.functionName === 'peers') {
+        const address = req.address ? getAddress(req.address) : null
+        if (address?.toLowerCase() === FINALIZE_PARAMS.shareOFT.toLowerCase()) {
+          return ZERO_BYTES32
+        }
+        if (address?.toLowerCase() === referenceShareOft.toLowerCase()) {
+          return `0x${'ef'.repeat(32)}` as Hex
+        }
+      }
+      return (baseClient.readContract as ReturnType<typeof vi.fn>)(req)
+    })
+    client.getBytecode = baseClient.getBytecode
+
+    const quote = await quoteFinalizeShareBridgeNativeFee({
+      publicClient: client,
+      batcherAddress: BATCHER,
+      finalizeCallData: encodeFinalize(),
+    })
+    expect('required' in quote && quote.required).toBe(true)
+    const quoteSendCalls = (client.readContract as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (call) => call[0]?.functionName === 'quoteSend',
+    )
+    expect(quoteSendCalls.length).toBe(1)
+    expect(getAddress(quoteSendCalls[0]![0].address as Address)).toBe(referenceShareOft)
   })
 
   it('fails closed when registry remote OFT peer is missing', async () => {
@@ -314,6 +452,14 @@ describe('finalizeShareBridgeFee attach + assert', () => {
       calls: [{ to: BATCHER, value: '0', data: encodeFinalize() }],
     })
     expect(calls[0]?.value).toBe(String(nativeFee))
+  })
+
+  it('defers finalize bridge value when wrapper bytecode is missing', async () => {
+    const calls = await attachFinalizeShareBridgeValueToCalls({
+      publicClient: createMockPublicClient({ nativeFee: 1_234n, wrapperBytecode: null }),
+      calls: [{ to: BATCHER, value: '0', data: encodeFinalize() }],
+    })
+    expect(calls[0]?.value).toBe('0')
   })
 
   it('fail-closes when finalize target is not a valid address', async () => {

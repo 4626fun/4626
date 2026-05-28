@@ -5,6 +5,7 @@ import {
   findCoinbaseSmartWalletOwnerIndex,
   pollUserOperationStatus,
   resetOwnerIndexCacheForTests,
+  resolvePriorPendingUserOpForSubmit,
   sendCoinbaseSmartWalletUserOperation,
   simulateSmartWalletCalls,
   verifyBundlerSupportsV06,
@@ -337,5 +338,48 @@ describe('coinbaseErc4337 nonce mismatch helpers', () => {
     expect(key).toBeGreaterThan(0n)
     expect(key).not.toBe(8453n)
     expect(key).toBeLessThan(1n << 192n)
+  })
+
+  it('resolvePriorPendingUserOpForSubmit prefers session storage then confirming hash', () => {
+    const wallet = SMART_WALLET as `0x${string}`
+    const sessionHash = `0x${'c'.repeat(64)}` as const
+    const confirmingHash = `0x${'d'.repeat(64)}` as const
+    const store = new Map<string, string>()
+    vi.stubGlobal('window', {})
+    vi.stubGlobal('sessionStorage', {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        store.set(key, value)
+      },
+      removeItem: (key: string) => {
+        store.delete(key)
+      },
+      key: (index: number) => Array.from(store.keys())[index] ?? null,
+      get length() {
+        return store.size
+      },
+      clear: () => store.clear(),
+    })
+    store.set(`cv:canonical4337:pending:${wallet.toLowerCase()}:18`, sessionHash)
+    expect(
+      resolvePriorPendingUserOpForSubmit({
+        smartWallet: wallet,
+        confirmingUserOpHash: confirmingHash,
+      }),
+    ).toBe(sessionHash)
+    store.clear()
+    expect(
+      resolvePriorPendingUserOpForSubmit({
+        smartWallet: wallet,
+        confirmingUserOpHash: confirmingHash,
+      }),
+    ).toBe(confirmingHash)
+    expect(
+      resolvePriorPendingUserOpForSubmit({
+        smartWallet: wallet,
+        confirmingUserOpHash: null,
+      }),
+    ).toBeNull()
+    vi.unstubAllGlobals()
   })
 })

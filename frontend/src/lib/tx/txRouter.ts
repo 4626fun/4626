@@ -89,6 +89,11 @@ export type TxRouterDebugEvent = {
   smartWalletDetected?: boolean
   supportsSendCallsHint?: boolean
   txHash?: string | null
+  userOpHash?: string | null
+  /** Wall time from `send_attempt` to `send_success` / `send_error` for this send leg. */
+  durationMs?: number
+  /** True when submit succeeded but on-chain bundle tx is not resolved yet (canonical fast return). */
+  confirmingOnChain?: boolean
   callsId?: string | null
   error?: string
 }
@@ -634,6 +639,7 @@ async function sendViaSendCalls(params: {
       callTargets: calls.map((call) => call.to),
       txHash: status.txHash,
       callsId,
+      durationMs: Math.max(0, Date.now() - startedAt),
     })
     return {
       mode: decision.mode,
@@ -747,6 +753,7 @@ async function sendViaCanonical4337(params: {
     sender,
     callTargets: calls.map((call) => call.to),
   })
+  const startedAt = Date.now()
   const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
   const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
   let result: Awaited<ReturnType<typeof sendCoinbaseSmartWalletUserOperation>>
@@ -804,6 +811,7 @@ async function sendViaCanonical4337(params: {
     }
     throw normalized
   }
+  const durationMs = Math.max(0, Date.now() - startedAt)
   context.debug?.({
     event: 'send_success',
     mode: decision.mode,
@@ -813,6 +821,9 @@ async function sendViaCanonical4337(params: {
     sender,
     callTargets: calls.map((call) => call.to),
     txHash: result.transactionHash,
+    userOpHash: result.userOpHash,
+    durationMs,
+    confirmingOnChain: !result.transactionHash && Boolean(result.userOpHash),
   })
   return {
     mode: decision.mode,

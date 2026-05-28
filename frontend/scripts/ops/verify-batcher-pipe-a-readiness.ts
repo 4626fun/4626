@@ -8,6 +8,10 @@ import {
   isDeprecatedCreatorVaultBatcherAddress,
 } from '../../src/config/contracts.defaults.js'
 import { deploymentBatcherNotConfiguredMessage } from '../../src/lib/deploy/deploymentBatcherConfigError.js'
+import {
+  BASE_MAINNET_CREATOR_REGISTRY,
+  readBatcherRegistryAuthorized,
+} from '../../server/_lib/deploy/ensureBatcherRegistryAuthorization.js'
 
 declare const process: {
   argv: string[]
@@ -153,13 +157,15 @@ async function main() {
   const rpcUrl = getArg('--rpc', process.env.BASE_RPC_URL || 'https://mainnet.base.org')
   const client = createPublicClient({ chain: base, transport: http(rpcUrl) })
 
-  const [phase1Module, phase2Module, adapter, destination, runtime, peerRead] = await Promise.all([
+  const [phase1Module, phase2Module, adapter, destination, runtime, peerRead, registryAuthorized] =
+    await Promise.all([
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'phase1Module' }),
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'phase2Module' }),
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'solanaBridgeAdapter' }),
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'solanaDestination' }),
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'getOVaultRuntimeConfig' }),
     readSolanaShareOftPeer(client, batcher),
+    readBatcherRegistryAuthorized({ publicClient: client, batcher, registry: BASE_MAINNET_CREATOR_REGISTRY }),
   ])
 
   const runtimeTuple = runtime as { hubComposer: Address; solanaEid: number; enabled: boolean }
@@ -190,6 +196,14 @@ async function main() {
       id: 'solana_destination',
       ok: typeof destination === 'string' && destination.toLowerCase() !== ZERO_BYTES32.toLowerCase(),
       detail: String(destination),
+    },
+    {
+      id: 'creator_registry_batcher_authorized',
+      ok: registryAuthorized === true,
+      detail:
+        registryAuthorized === true
+          ? `authorizedFactories(${batcher})=true on ${BASE_MAINNET_CREATOR_REGISTRY}`
+          : `authorizedFactories(${batcher})=false — run CreatorRegistry.setAuthorizedFactory before greenfield Phase 2 finalize`,
     },
     {
       id: 'solana_share_oft_peer_selector',

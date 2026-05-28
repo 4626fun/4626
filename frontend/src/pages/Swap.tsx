@@ -1583,6 +1583,7 @@ export function Swap() {
     isReady,
     quoteCooldownActive,
     quoteCooldownUntil,
+    txState,
     approvalRequired,
     fallbackActive,
     swapProviderLabel,
@@ -1879,10 +1880,10 @@ export function Swap() {
     // Keep submit/build gated by `executionReady`, but still show pricing while
     // the account needs 4626 signing setup.
     if (!executionAddress || !quoteReady || quoteCooldownActive) return
-    if (swapCompletion) return
+    if (txState === 'signing') return
     if (tokenInAmountExceedsBalance) return
     const timer = window.setTimeout(() => {
-      if (busyRef.current) return
+      if (busyRef.current === 'executeSwap') return
       void handleQuote()
     }, 450)
     return () => window.clearTimeout(timer)
@@ -1896,7 +1897,7 @@ export function Swap() {
     quoteReady,
     quoteCooldownActive,
     tokenInAmountExceedsBalance,
-    swapCompletion,
+    txState,
     handleQuote,
   ])
 

@@ -22,6 +22,7 @@ import {
   type SubAccountSetupStageEvent,
 } from '@/lib/wallet/subAccountSetup'
 import { registerBaseAppSubAccountLink } from '@/lib/wallet/subAccountBaseAppRegister'
+import { normalizeWalletAddress } from '@/lib/wallet/ensureCanonicalBaseAccountWallet'
 
 type SubAccountSetupState = {
   subAccountAddress: Address | null
@@ -128,16 +129,32 @@ export function useSubAccountSetup() {
     return err
   }, [])
 
-  const connectBaseAccountWallet = useCallback(async (): Promise<boolean> => {
+  const connectBaseAccountWallet = useCallback(async (opts?: {
+    canonicalCswAddress?: string | null
+    requireEmbeddedEoa?: boolean
+  }): Promise<boolean> => {
+    const expectedCanonical = normalizeWalletAddress(opts?.canonicalCswAddress)
+    const walletMatchesCanonical = (wallet: ConnectedWalletLike): boolean => {
+      if (!expectedCanonical) return true
+      return normalizeWalletAddress(wallet.address) === expectedCanonical
+    }
+
     const existing =
       baseAccountWallet ??
       connectedBaseAccountWalletRef.current ??
       findBaseAccountWallet(wallets)
-    if (existing) {
+    if (existing && walletMatchesCanonical(existing)) {
       connectedBaseAccountWalletRef.current = existing
+      if (typeof setActiveWallet === 'function') {
+        await Promise.resolve(setActiveWallet(existing as Parameters<typeof setActiveWallet>[0])).catch(
+          () => null,
+        )
+      }
       return true
     }
-    if (!embeddedWallet) {
+
+    const requireEmbeddedEoa = opts?.requireEmbeddedEoa ?? expectedCanonical == null
+    if (requireEmbeddedEoa && !embeddedWallet) {
       recordMissingSetupRequirements({
         baseAccountWallet: null,
         embeddedWallet: null,
@@ -177,6 +194,14 @@ export function useSubAccountSetup() {
       }
 
       if (selectedWallet) {
+        if (expectedCanonical && !walletMatchesCanonical(selectedWallet)) {
+          const err = new Error(
+            'Connected wallet does not match your canonical smart wallet. Sign out and use Sign in with Base.',
+          )
+          lastSetupErrorRef.current = err
+          setState((prev) => ({ ...prev, error: err }))
+          return false
+        }
         return true
       }
 

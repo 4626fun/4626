@@ -63,6 +63,7 @@ export function mapAddOwnerFundingErrorMessage(error: unknown): string | null {
   const lower = message.toLowerCase()
   if (
     lower.includes('enough funds') ||
+    lower.includes('error generating transaction') ||
     lower.includes('insufficient funds') ||
     lower.includes('insufficient balance') ||
     lower.includes("didn't pay prefund") ||

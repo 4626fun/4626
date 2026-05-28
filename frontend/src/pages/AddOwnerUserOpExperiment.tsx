@@ -4,6 +4,9 @@ import { usePublicClient } from 'wagmi'
 
 import { Button } from '@/components/ui/Button'
 import { PageMeta } from '@/components/seo/PageMeta'
+import { BaseAppCanonicalWalletLinkPanel } from '@/components/wallet/BaseAppCanonicalWalletLinkPanel'
+import { useEnsureCanonicalBaseAccountWallet } from '@/hooks/useEnsureCanonicalBaseAccountWallet'
+import { useSubAccountSetup } from '@/hooks/useSubAccountSetup'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import {
@@ -14,7 +17,7 @@ import { useAccountSetupController } from '@/features/accountSetup/useAccountSet
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 import { RELAY_ROUTER_BASE } from '@/lib/wallet/addOwnerCallShape'
 import { ENTRY_POINT_V06_BASE } from '@/lib/wallet/cswOwnerAbi'
-import { externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
+import { externalBrowserUrlFor, detectInAppEnvironment, isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { formatEthCompact } from '@/lib/wallet/cswEntryPointFunding'
 
 const BASE_ACCOUNT_LOGO = '/base/base-square-blue.svg'
@@ -37,6 +40,8 @@ export function AddOwnerUserOpExperiment() {
 
   const privyClientStatus = usePrivyClientStatus()
   const { signIn, signOut, busy: authBusy, error: authError } = useSiweAuth()
+  const { connectBaseAccountWallet } = useSubAccountSetup()
+  const inBaseApp = isBaseAppInAppContext(detectInAppEnvironment())
   const privyReady = privyClientStatus === 'ready'
   const authControlsDisabled = authBusy || !privyReady
   const authStatusLabel = !privyReady
@@ -55,8 +60,14 @@ export function AddOwnerUserOpExperiment() {
   const handleBaseSignIn = useCallback(async () => {
     if (authControlsDisabled) return
     const address = await signIn({ method: 'privy', preferBaseAccountWallet: true })
-    if (address) void loadMe({ showSpinner: true })
-  }, [authControlsDisabled, loadMe, signIn])
+    if (address) {
+      await connectBaseAccountWallet({
+        canonicalCswAddress,
+        requireEmbeddedEoa: false,
+      }).catch(() => false)
+      void loadMe({ showSpinner: true })
+    }
+  }, [authControlsDisabled, canonicalCswAddress, connectBaseAccountWallet, loadMe, signIn])
 
   const handleSignOut = useCallback(async () => {
     if (authBusy) return
@@ -74,6 +85,12 @@ export function AddOwnerUserOpExperiment() {
     const address = found?.address
     return typeof address === 'string' ? address.toLowerCase() : null
   }, [privyWallets])
+
+  const baseWalletLink = useEnsureCanonicalBaseAccountWallet({
+    enabled: Boolean(privyAuthed && inBaseApp && canonicalCswAddress),
+    canonicalCswAddress,
+    autoConnect: true,
+  })
 
   const userOpFlow = useAddUserOpOwnerInstall({
     canonicalCswAddress,
@@ -95,7 +112,8 @@ export function AddOwnerUserOpExperiment() {
     !userOpFlow.alreadyOwner &&
     !userOpFlow.prepareLoading &&
     !fundingBlocksSubmit &&
-    !fundingPending
+    !fundingPending &&
+    (!inBaseApp || baseWalletLink.ready)
 
   const fundingSnapshot = userOpFlow.fundingAssessment?.snapshot
 
@@ -183,7 +201,12 @@ export function AddOwnerUserOpExperiment() {
           </div>
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-xs text-zinc-400">
-            <span>Signed in with Privy. Need a different Base Account?</span>
+            <span>
+              Signed in with Privy (4626 session).{' '}
+              {inBaseApp
+                ? 'Submit still requires your Base Account wallet connected for signing — email alone is not enough.'
+                : 'Open in Base App and connect your Base Account wallet before submit.'}
+            </span>
             <Button type="button" variant="ghost" size="sm" disabled={authBusy} onClick={() => void handleSignOut()}>
               Sign out
             </Button>
@@ -219,6 +242,19 @@ export function AddOwnerUserOpExperiment() {
                 multicall.
               </div>
             )}
+
+            {inBaseApp ? (
+              <BaseAppCanonicalWalletLinkPanel
+                enabled={Boolean(privyAuthed && canonicalCswAddress)}
+                canonicalCswAddress={canonicalCswAddress}
+                ready={baseWalletLink.ready}
+                linking={baseWalletLink.linking}
+                linkError={baseWalletLink.linkError}
+                onLink={baseWalletLink.link}
+                onSignOut={() => void handleSignOut()}
+                signOutBusy={authBusy}
+              />
+            ) : null}
 
             <div className="card space-y-4 rounded-2xl border border-white/10 bg-black/40 p-6">
               <dl className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">

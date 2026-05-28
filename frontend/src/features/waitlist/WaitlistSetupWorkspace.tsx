@@ -1,6 +1,9 @@
 import { useCallback, useState } from 'react'
 import { Button } from '@/components/ui/Button'
+import { BaseAppCanonicalWalletLinkPanel } from '@/components/wallet/BaseAppCanonicalWalletLinkPanel'
+import { useEnsureCanonicalBaseAccountWallet } from '@/hooks/useEnsureCanonicalBaseAccountWallet'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
+import { externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
 import { AccountSetupWorkspaceView } from '@/features/accountSetup/AccountSetupWorkspaceView'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
@@ -11,6 +14,7 @@ import { WaitlistGroupChatPanel } from './WaitlistGroupChatPanel'
 type WaitlistSetupWorkspaceProps = {
   initialAccount: AccountSetupMe
   canEnterApp: boolean
+  inBaseApp?: boolean
   completionBusy: boolean
   onEnterApp: () => void | Promise<void>
   onSignOut: () => void | Promise<void>
@@ -29,6 +33,7 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
   const {
     initialAccount,
     canEnterApp,
+    inBaseApp = false,
     completionBusy,
     onEnterApp,
     onSignOut,
@@ -45,6 +50,11 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
   const waitlistJoined = initialAccount.emailVerified === true
   const setupComplete = controller.zoraLinked && Boolean(controller.canonicalCswAddress)
   const canEnterNow = canEnterApp
+  const baseWalletLink = useEnsureCanonicalBaseAccountWallet({
+    enabled: inBaseApp && !signingStepComplete && Boolean(controller.canonicalCswAddress),
+    canonicalCswAddress: controller.canonicalCswAddress,
+    autoConnect: true,
+  })
 
   return (
     <>
@@ -58,6 +68,18 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
           </p>
         </div>
       ) : null}
+      <BaseAppCanonicalWalletLinkPanel
+        enabled={inBaseApp && !signingStepComplete}
+        canonicalCswAddress={controller.canonicalCswAddress}
+        ready={baseWalletLink.ready}
+        linking={baseWalletLink.linking}
+        linkError={baseWalletLink.linkError}
+        onLink={baseWalletLink.link}
+        onSignOut={onSignOut}
+        signOutBusy={signOutBusy}
+        footerLinkHref={externalBrowserUrlFor('/add')}
+        footerLinkLabel="Open /add owner-install experiment"
+      />
       <AccountSetupWorkspaceView
       context="waitlist"
       controller={controller}

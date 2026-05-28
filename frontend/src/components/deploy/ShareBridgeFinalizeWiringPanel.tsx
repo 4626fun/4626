@@ -13,6 +13,8 @@ type ShareBridgeFinalizeWiringPanelProps = {
   publicClient: { readContract: (...args: any[]) => Promise<unknown> } | null | undefined
   batcherAddress: Address | null
   finalizeParams: FinalizePhase2Params | null
+  /** When false, Pipe A quote is deferred until Phase 1 wrapper bytecode exists. */
+  wrapperDeployed?: boolean | null
 }
 
 function shortBytes32(value: Hex | null): string {
@@ -31,17 +33,20 @@ export function ShareBridgeFinalizeWiringPanel({
   publicClient,
   batcherAddress,
   finalizeParams,
+  wrapperDeployed = null,
 }: ShareBridgeFinalizeWiringPanelProps) {
   const finalizeCallData =
     finalizeParams && batcherAddress ? buildFinalizePhase2CallData(finalizeParams) : null
+  const quoteAllowed = wrapperDeployed === true
 
   const wiringQuery = useQuery({
     queryKey: [
       'shareBridgeFinalizeWiring',
       batcherAddress,
       finalizeCallData,
+      quoteAllowed,
     ],
-    enabled: Boolean(enabled && publicClient && batcherAddress && finalizeCallData),
+    enabled: Boolean(enabled && quoteAllowed && publicClient && batcherAddress && finalizeCallData),
     staleTime: 20_000,
     retry: 0,
     queryFn: async () => {
@@ -74,6 +79,30 @@ export function ShareBridgeFinalizeWiringPanel({
     return (
       <div className="rounded-md border border-white/10 bg-black/10 px-3 py-3 text-[10px] text-zinc-500">
         Pipe A wiring status loads after expected deployment addresses resolve.
+      </div>
+    )
+  }
+
+  if (wrapperDeployed === null) {
+    return (
+      <div className="rounded-md border border-white/10 bg-black/10 px-3 py-3 text-[10px] text-zinc-500">
+        Checking Phase 1 wrapper deployment before Pipe A finalize quoting…
+      </div>
+    )
+  }
+
+  if (wrapperDeployed === false) {
+    return (
+      <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-3 text-[10px] text-amber-300/90 space-y-1">
+        <p>
+          Pipe A finalize bridge waits for a deployed wrapper at{' '}
+          <span className="font-mono">{finalizeParams.wrapper}</span>.
+        </p>
+        <p>
+          Complete <strong>Phase 1 core</strong> via <strong>1‑Click Deploy</strong> (vault + wrapper + ShareOFT
+          CREATE2 deploy). Pipe A LZ fee quoting unlocks automatically once wrapper bytecode is on Base — you do
+          not need to finalize Phase 2 first.
+        </p>
       </div>
     )
   }
@@ -111,8 +140,7 @@ export function ShareBridgeFinalizeWiringPanel({
   const { status, quote } = wiringQuery.data
   const batcherPeerSupported = status.batcherDefaultPeer !== null || status.registryPeer !== null
   const ready =
-    !status.bridgeRequired ||
-    (status.registryPeerConfigured && status.shareOftPeerConfigured && quote !== null)
+    !status.bridgeRequired || (status.registryPeerConfigured && quote !== null)
 
   return (
     <div className="rounded-md border border-white/10 bg-black/10 px-3 py-3 space-y-2">
@@ -146,12 +174,11 @@ export function ShareBridgeFinalizeWiringPanel({
       {!ready ? (
         <div className="text-[10px] text-amber-300/90 space-y-1">
           <p>
-            Finalize stays blocked until Pipe A wiring can quote a LayerZero send fee on this ShareOFT.
-          </p>
-          <p>
-            After Phase 1, run LZ Base <span className="font-mono">init-config</span> +{' '}
-            <span className="font-mono">wire</span> on the <strong>new</strong> ShareOFT (not legacy wsAKITA),
-            then re-check here. Ops script:{' '}
+            Pre-finalize LZ fees quote via a reference wired ShareOFT when your new ShareOFT peer
+            is not set yet (finalize wires it on-chain). After Phase 1, run LZ Base{' '}
+            <span className="font-mono">init-config</span> + <span className="font-mono">wire</span>{' '}
+            on the <strong>new</strong> ShareOFT if you need direct on-target quotes before finalize.
+            Ops script:{' '}
             <span className="font-mono">pnpm -C frontend ops:verify-post-phase1-mesh --share-oft …</span>
           </p>
         </div>

@@ -65,9 +65,15 @@ import {
 import { deploymentBatcherNotConfiguredMessage } from '@/lib/deploy/deploymentBatcherConfigError'
 import { evaluateDeployEligibility } from '@/lib/deploy/deployEligibility'
 import {
-  quoteFinalizeShareBridgeNativeFee,
+  attachFinalizeShareBridgeValueToCalls,
+  parseCallValue,
   type FinalizePhase2Params,
 } from '@/lib/deploy/finalizeShareBridgeFee'
+import {
+  mergePipeAFinalizeParams,
+  readDeployedPhase1CoreAddresses,
+} from '@/lib/deploy/phase1OnchainState'
+import { assertCreatorOvaultModuleStorageCompatible } from '@/lib/deploy/ovaultModuleIdentity'
 import { ShareBridgeFinalizeWiringPanel } from '@/components/deploy/ShareBridgeFinalizeWiringPanel'
 import { useAccountMe } from '@/hooks/useAccountMe'
 import { useCreatorAllowlist, useDeploymentTracker } from '@/hooks'
@@ -2879,8 +2885,10 @@ function DeployVaultBatcher({
     }
     if (lower.includes('0x5cfe78fe') || lower.includes('invalidmoduleaddress')) {
       return (
-        'The selected deployment batcher is wired to incompatible CreatorOVault modules (InvalidModuleAddress). ' +
-        'Switch to a module-compatible batcher/runtime deploy stack, then retry.'
+        'Phase 1 reverted: CreatorOVault rejected the batcher wired modules (InvalidModuleAddress / 0x5cfe78fe). ' +
+        'This usually means deploy bytecode expects a different moduleStorageVersion fingerprint than the live batcher modules. ' +
+        'Confirm UniversalBytecodeStore CreatorOVault bytecode matches CreatorOVaultModuleStorage.current on the wired modules, ' +
+        'or deploy fresh v2 modules and rotate the batcher before retrying.'
       )
     }
     if (
@@ -3971,11 +3979,35 @@ function DeployVaultBatcher({
   const expectedPayoutRouter = expected?.payoutRouter ?? null
   const expectedCreatorCoinPolicyController = expected?.creatorCoinPolicyController ?? null
 
+  const phase1BaseSalt = useMemo<Hex | null>(() => {
+    if (!creatorToken || !owner) return null
+    return deriveBaseSalt({
+      creatorToken,
+      owner,
+      chainId: base.id,
+      version: expectedDeploymentVersion,
+    })
+  }, [creatorToken, expectedDeploymentVersion, owner])
+
+  const phase1OnchainQuery = useQuery({
+    queryKey: ['creatorVaultBatcher', 'phase1Onchain', batcherAddress, phase1BaseSalt],
+    enabled: Boolean(publicClient && batcherAddress && phase1BaseSalt),
+    staleTime: 15_000,
+    retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
+    retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
+    queryFn: async () =>
+      readDeployedPhase1CoreAddresses({
+        publicClient: publicClient!,
+        batcherAddress: batcherAddress as Address,
+        baseSalt: phase1BaseSalt as Hex,
+      }),
+  })
+
   const pipeAFinalizeParams = useMemo<FinalizePhase2Params | null>(() => {
     if (!expected || !creatorToken || !owner) return null
     const floorPriceQ96ForBatcher =
       floorPriceQ96Aligned && floorPriceQ96Aligned > 0n ? floorPriceQ96Aligned : 1n
-    return {
+    const predicted: FinalizePhase2Params = {
       creatorToken,
       owner,
       vault: expected.vault,
@@ -3984,7 +4016,7 @@ function DeployVaultBatcher({
       gaugeController: expected.gaugeController,
       ccaStrategy: expected.ccaStrategy,
       oracle: expected.oracle,
-      version: deploymentVersion,
+      version: expectedDeploymentVersion,
       depositAmount: minFirstDeposit,
       requiredRaise: DEFAULT_REQUIRED_RAISE_WEI,
       floorPriceQ96: floorPriceQ96ForBatcher,
@@ -3992,13 +4024,26 @@ function DeployVaultBatcher({
       meteoraAlphaVault: ZERO_BYTES32 as Hex,
       solanaIxs: [],
     }
+    return mergePipeAFinalizeParams(predicted, phase1OnchainQuery.data ?? null)
   }, [
     creatorToken,
-    deploymentVersion,
     expected,
+    expectedDeploymentVersion,
     floorPriceQ96Aligned,
     minFirstDeposit,
     owner,
+    phase1OnchainQuery.data,
+  ])
+
+  const pipeAWrapperDeployed = useMemo<boolean | null>(() => {
+    if (phase1OnchainQuery.isLoading || phase1OnchainQuery.isFetching) return null
+    if (!phase1OnchainQuery.isSuccess) return null
+    return Boolean(phase1OnchainQuery.data?.wrapper)
+  }, [
+    phase1OnchainQuery.data,
+    phase1OnchainQuery.isFetching,
+    phase1OnchainQuery.isLoading,
+    phase1OnchainQuery.isSuccess,
   ])
 
   useEffect(() => {
@@ -5222,6 +5267,14 @@ function DeployVaultBatcher({
             'Update `VITE_CREATOR_VAULT_BATCHER` (and server `CREATOR_VAULT_BATCHER`) to the current batcher.',
         )
       }
+      if (isTwoStepBatcher && supportsVaultModuleGetters) {
+        const modulePreflight = await assertCreatorOvaultModuleStorageCompatible({
+          publicClient,
+        })
+        if (!modulePreflight.ok) {
+          throw new Error(modulePreflight.message)
+        }
+      }
       const supportsSplitPhase1NoSalt = (() => {
         if (!batcherBytecode || batcherBytecode === '0x') return false
         return (
@@ -5745,17 +5798,11 @@ function DeployVaultBatcher({
           functionName: 'finalizePhase2',
           args: [phase2FinalizeParams],
         })
-        const finalizeShareBridgeQuote = await quoteFinalizeShareBridgeNativeFee({
+        const attachedFinalizeCalls = await attachFinalizeShareBridgeValueToCalls({
           publicClient,
-          batcherAddress,
-          finalizeCallData: finalizePhase2Calldata,
+          calls: [{ to: batcherAddress, value: '0', data: finalizePhase2Calldata }],
         })
-        if ('code' in finalizeShareBridgeQuote) {
-          throw new Error(finalizeShareBridgeQuote.message)
-        }
-        const finalizeBridgeNativeFee = finalizeShareBridgeQuote.required
-          ? finalizeShareBridgeQuote.nativeFee
-          : 0n
+        const finalizeBridgeNativeFee = parseCallValue(attachedFinalizeCalls[0]?.value ?? '0')
 
         const phase1Calls: Array<{ target: Address; value: bigint; data: Hex }> = phase1CallsPrepared
 
@@ -7351,6 +7398,7 @@ function DeployVaultBatcher({
                   publicClient={publicClient}
                   batcherAddress={batcherAddress}
                   finalizeParams={pipeAFinalizeParams}
+                  wrapperDeployed={pipeAWrapperDeployed}
                 />
               </div>
               <div className="flex items-center justify-between gap-4 text-[11px] mb-3 mt-3">
@@ -7361,13 +7409,15 @@ function DeployVaultBatcher({
                 <div className="rounded-md border border-white/10 bg-black/10 px-3 py-3 mb-3 space-y-2">
                   <div className="text-[10px] font-medium text-zinc-500">Solana token lanes</div>
                   <div className="flex items-center justify-between gap-4 text-[11px]">
-                    <div className="text-zinc-500">Solana wrapped asset mint (Base/Solana bridge)</div>
+                    <div className="text-zinc-500">
+                      OVault compose asset lane <span className="text-zinc-600">(optional — not Pipe A)</span>
+                    </div>
                     <div className="font-mono text-zinc-200/90">
                       {String(depositSymbol ?? '').trim() ? String(depositSymbol).trim().toLowerCase() : '$asset'}
                     </div>
                   </div>
                   <div className="flex items-center justify-between gap-4 text-[11px]">
-                    <div className="text-zinc-500">Solana share token lane (LayerZero ShareOFT)</div>
+                    <div className="text-zinc-500">Share mesh tradable lane (LayerZero ShareOFT · Pipe A)</div>
                     <div className="font-mono text-zinc-200/90">
                       {String(shareSymbol ?? '').trim() ? String(shareSymbol).trim() : '■ASSET'}
                     </div>
@@ -9103,7 +9153,8 @@ function DeployVaultMain() {
       deployCodeIds.solanaStrategy,
     ],
     enabled: Boolean(publicClient && creatorVaultBatcherAddress),
-    staleTime: 60_000,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
     retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
     queryFn: async () => {
@@ -9247,12 +9298,34 @@ function DeployVaultMain() {
         })),
       })
 
-      const entries = codeEntries.map((c, i) => {
+      let entries = codeEntries.map((c, i) => {
         const r: any = pointerResults[i]
         const pointer = r?.status === 'success' ? (r.result as Address) : (ZERO_ADDRESS as Address)
         const ok = r?.status === 'success' && pointer !== ZERO_ADDRESS
         return { ...c, pointer, ok }
       })
+
+      const unresolved = entries.filter((e) => !e.ok)
+      if (unresolved.length > 0) {
+        const fallbackClient = createBaseFallbackClient()
+        entries = await Promise.all(
+          entries.map(async (entry) => {
+            if (entry.ok) return entry
+            try {
+              const pointer = (await fallbackClient.readContract({
+                address: bytecodeStoreAddress,
+                abi: UNIVERSAL_BYTECODE_STORE_POINTERS_ABI,
+                functionName: 'pointers',
+                args: [entry.codeId],
+              })) as Address
+              const ok = pointer !== ZERO_ADDRESS
+              return { ...entry, pointer, ok }
+            } catch {
+              return entry
+            }
+          }),
+        )
+      }
 
       const missing = entries.filter((e) => !e.ok).map((e) => e.label)
 

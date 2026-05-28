@@ -59,6 +59,7 @@ import {
   isImmediateUserOpRetrySuppressedError,
   isLikelyVerificationGasLimitError,
   buildPreflightSimulationRejectionError,
+  extractExecutionFailedInnerSelector,
   mapUserOpExecutionFailureMessage,
   parseUserOpGasLimitField,
   resolveUserOpCallGasLimit,
@@ -420,6 +421,7 @@ async function assertBundlerUserOpGasEstimate(params: {
         error: revertInfo.error,
         errorName: revertInfo.errorName,
         revertData: revertInfo.revertData,
+        innerSelector: extractExecutionFailedInnerSelector(revertInfo.revertData),
         ...(params.bundlerUrl
           ? { bundlerUsesProxy: isPaymasterProxyUrl(params.bundlerUrl) }
           : {}),
@@ -507,6 +509,21 @@ export function readPendingUserOpHash(smartWallet: Address, ownerIndex: number):
   } catch {
     return null
   }
+}
+
+/**
+ * Prior UserOp to wait on before a new canonical swap (Permit2 nonce / on-chain state).
+ * Prefers session storage; falls back to a confirming swap still polling for txHash.
+ */
+export function resolvePriorPendingUserOpForSubmit(params: {
+  smartWallet: Address
+  confirmingUserOpHash?: string | null
+}): Hex | null {
+  const fromSession = readAnyPendingUserOpHashForWallet(params.smartWallet)
+  if (fromSession) return fromSession
+  const raw = params.confirmingUserOpHash?.trim()
+  if (raw?.startsWith('0x')) return raw as Hex
+  return null
 }
 
 /** Any in-session pending UserOp for this smart wallet (owner-index lane storage). */
@@ -1024,7 +1041,8 @@ export async function simulateSmartWalletCalls(params: {
   let directCallResult: { success: boolean; error?: string; revertData?: Hex; errorName?: string } | undefined
   if (calls.length === 1 && calls[0]?.data && typeof client?.call === 'function') {
     const call = calls[0]!
-    const blockNumber = isZoraUniversalRouterTarget(call.to) ? 'latest' : 'pending'
+    // Match bundler/UserOp simulation timing — `latest` can pass while paymaster estimate reverts.
+    const blockNumber = 'pending'
     try {
       await client.call({
         to: call.to,

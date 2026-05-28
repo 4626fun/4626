@@ -1,4 +1,4 @@
-import type { Address } from 'viem'
+import type { Address, Hex } from 'viem'
 
 /** Narrow read surface for ShareOFT bridge fee helpers (mock-friendly in tests). */
 export type ShareBridgeReadClient = {
@@ -8,4 +8,5 @@ export type ShareBridgeReadClient = {
     functionName: string
     args?: readonly unknown[]
   }): Promise<unknown>
+  getBytecode?: (args: { address: Address }) => Promise<Hex | undefined>
 }

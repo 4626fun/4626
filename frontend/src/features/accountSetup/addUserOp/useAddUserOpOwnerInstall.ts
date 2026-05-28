@@ -65,6 +65,28 @@ async function refreshWalletAuthorization(walletRequest: WalletRequest): Promise
   await walletRequest({ method: 'eth_requestAccounts' })
 }
 
+async function assertWalletAccountsMatchCsw(
+  walletRequest: WalletRequest,
+  cswAddress: string,
+): Promise<void> {
+  const accountsRaw = await walletRequest({ method: 'eth_requestAccounts' })
+  const accounts = Array.isArray(accountsRaw) ? accountsRaw : []
+  const expected = getAddress(cswAddress).toLowerCase()
+  const matched = accounts.some((account) => {
+    if (typeof account !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(account)) return false
+    try {
+      return getAddress(account).toLowerCase() === expected
+    } catch {
+      return false
+    }
+  })
+  if (!matched) {
+    throw new Error(
+      'Base App is not connected as your canonical smart wallet. Tap Connect Base Account wallet (email Privy sign-in alone is not enough), then retry.',
+    )
+  }
+}
+
 export type AddUserOpOwnerInstallPublicClient = Pick<
   PublicClient,
   'getTransaction' | 'waitForTransactionReceipt' | 'readContract' | 'getBytecode'
@@ -256,6 +278,8 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       const walletRequest = await resolveWalletRequest()
       await ensureBaseMainnetWalletContext(walletRequest)
       await refreshWalletAuthorization(walletRequest)
+      await assertWalletAccountsMatchCsw(walletRequest, canonicalCswAddress)
+      appendEvent('preflight:wallet_accounts=canonical_csw')
 
       const csw = getAddress(canonicalCswAddress) as `0x${string}`
       const ownerToAdd = getAddress(privyEmbeddedEoaAddress) as `0x${string}`

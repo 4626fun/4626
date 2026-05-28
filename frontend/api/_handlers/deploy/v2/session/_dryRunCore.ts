@@ -29,6 +29,8 @@ import {
 } from '../../../../../packages/server-core/src/index.js'
 
 import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
+import { ensureBatcherRegistryAuthorizationOnFork } from '../../../../../server/_lib/deploy/ensureBatcherRegistryAuthorization.js'
+import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
 
 
 import {
@@ -90,6 +92,7 @@ const LOCAL_FORK_ONLY_ERROR =
 const DRY_RUN_GAS_BUFFER_BPS = 2_000n
 const DRY_RUN_MIN_GAS_BUFFER = 100_000n
 const DEPLOY_FAILED_SELECTOR = '0xb4f54111'
+const NOT_AUTHORIZED_SELECTOR = '0xea8e4eb5'
 const ERC20_INSUFFICIENT_BALANCE_SELECTOR = '0xe450d38c'
 const CCA_REQUIRED_RAISE_HINT_SELECTOR = '0x28e7b618'
 const PHASE2_MISSING_SELECTOR = '0xf79c143b'
@@ -330,6 +333,13 @@ function formatDryRunError(error: unknown): string {
       return (
         'DeployFailed(): CREATE2 deployment failed because a deterministic deployment address is already used. ' +
         'For local dry-runs, reset the fork or skip the already-completed deterministic phase before retrying.'
+      )
+    }
+    if (raw.toLowerCase().includes(NOT_AUTHORIZED_SELECTOR)) {
+      return (
+        'NotAuthorized(): CreatorRegistry rejected Phase 2 finalize because the DeploymentBatcher is not an authorized factory. ' +
+        'On mainnet, run CreatorRegistry.setAuthorizedFactory(batcher, true) from the registry owner (see script/SeedCreatorRegistry.s.sol). ' +
+        'Local dry-runs should auto-impersonate the registry owner on the fork before finalize.'
       )
     }
     const insufficientBalance = formatErc20InsufficientBalanceError(raw)
@@ -2126,6 +2136,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           phase1Batcher: phase1Batcher?.toLowerCase() ?? null,
         })
       }
+      if (phase1Batcher && phase2FinalizeCallsForPlan.length > 0) {
+        const registryPrep = await ensureBatcherRegistryAuthorizationOnFork({
+          publicClient,
+          walletClient,
+          waitForTransactionReceipt: (args) => publicClient.waitForTransactionReceipt(args as any),
+          forkRequest,
+          forkMode,
+          batcher: phase1Batcher,
+          ownerBalanceHex: FORK_BALANCE_HEX,
+        })
+        if (registryPrep.ensured) {
+          console.warn('[deploy/v2/session/dry-run] creator_registry_batcher_authorized_on_fork', {
+            batcher: phase1Batcher.toLowerCase(),
+          })
+        }
+      }
       const phasePlan: Array<{ name: DryRunPhaseName; calls: Call[] }> = [
         { name: 'phase1', calls: phase1Calls },
         { name: 'phase2Core', calls: phase2CoreCallsForPlan },
@@ -2272,7 +2298,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               smartWallet: smartWallet.toLowerCase(),
             })
           }
-          phaseCalls = simulationAlignedFinalizeCalls
+          phaseCalls = await attachFinalizeShareBridgeValueToCalls({
+            publicClient,
+            calls: simulationAlignedFinalizeCalls,
+          })
         }
         if (phaseEntry.name === 'phase4') {
           const { phase4Calls: alignedPhase4Calls, rewrote: rewrotePhase4PendingShare } =

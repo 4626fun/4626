@@ -1,4 +1,4 @@
-import { BASE_DEFAULTS } from '@/config/contracts.defaults'
+import { AKITA_DEFAULTS, BASE_DEFAULTS } from '@/config/contracts.defaults'
 
 import {
   decodeFunctionData,
@@ -20,6 +20,8 @@ export const FINALIZE_SHARE_BRIDGE_MAX_SURPLUS_WEI = 500_000_000_000_000n // 0.0
 
 export const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xbd4583fb'
 export const SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 = '0xab56c176'
+/** LayerZero OFT `NoPeer(uint32)` — greenfield ShareOFT peer is set inside finalizePhase2. */
+export const LZ_NO_PEER_SELECTOR = '0xf6ff4fb7'
 
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
 
@@ -232,6 +234,16 @@ const CREATOR_REGISTRY_REMOTE_PEER_ABI = [
   },
 ] as const
 
+const SHARE_OFT_PEER_ABI = [
+  {
+    type: 'function',
+    name: 'peers',
+    stateMutability: 'view',
+    inputs: [{ name: 'eid', type: 'uint32' }],
+    outputs: [{ type: 'bytes32' }],
+  },
+] as const
+
 export type FinalizePhase2SolanaIx = {
   programId: Address
   serializedAccounts: readonly Address[]
@@ -282,6 +294,217 @@ function getSelector(data: Hex): string {
 function normalizeAddress(value: unknown): Address | null {
   if (typeof value !== 'string' || !isAddress(value)) return null
   return getAddress(value as Address)
+}
+
+function normalizeBytes32Peer(value: unknown): Hex | null {
+  if (typeof value !== 'string' || !value.startsWith('0x') || value.length !== 66) return null
+  return value.toLowerCase() === ZERO_BYTES32.toLowerCase() ? null : (value as Hex)
+}
+
+export function isLayerZeroNoPeerQuoteError(error: unknown): boolean {
+  const message = formatUnknownError(error)
+  const lower = message.toLowerCase()
+  return (
+    lower.includes(LZ_NO_PEER_SELECTOR) ||
+    lower.includes(LZ_NO_PEER_SELECTOR.slice(2)) ||
+    /\bnopeer\s*\(/i.test(message)
+  )
+}
+
+function formatUnknownError(error: unknown): string {
+  const parts: string[] = []
+  let current: unknown = error
+  for (let depth = 0; depth < 6; depth += 1) {
+    if (current instanceof Error) {
+      if (current.message.trim()) parts.push(current.message)
+      current = current.cause
+      continue
+    }
+    if (typeof current === 'string' && current.trim()) {
+      parts.push(current)
+    }
+    break
+  }
+  return parts.join(' | ')
+}
+
+function readReferenceWiredShareOftCandidates(): Address[] {
+  const out: Address[] = []
+  const viteReference =
+    typeof import.meta !== 'undefined' && import.meta.env
+      ? String(import.meta.env.VITE_REFERENCE_WIRED_SHARE_OFT ?? '').trim()
+      : ''
+  for (const raw of [
+    typeof process !== 'undefined' ? process.env?.REFERENCE_WIRED_SHARE_OFT : undefined,
+    viteReference || undefined,
+    AKITA_DEFAULTS.shareOFT,
+  ]) {
+    const normalized = normalizeAddress(raw)
+    if (normalized && !out.some((entry) => entry.toLowerCase() === normalized.toLowerCase())) {
+      out.push(normalized)
+    }
+  }
+  return out
+}
+
+async function readShareOftPeerBytes32(params: {
+  publicClient: ShareBridgeReadClient
+  shareOft: Address
+  dstEid: number
+}): Promise<Hex | null> {
+  if (typeof params.publicClient.getBytecode === 'function') {
+    try {
+      const code = await params.publicClient.getBytecode({ address: params.shareOft })
+      if (!code || code === '0x') return null
+    } catch {
+      return null
+    }
+  }
+  try {
+    const peer = await params.publicClient.readContract({
+      address: params.shareOft,
+      abi: SHARE_OFT_PEER_ABI,
+      functionName: 'peers',
+      args: [params.dstEid],
+    })
+    return normalizeBytes32Peer(peer)
+  } catch {
+    return null
+  }
+}
+
+async function readShareOftPeerConfigured(params: {
+  publicClient: ShareBridgeReadClient
+  shareOft: Address
+  dstEid: number
+}): Promise<boolean | null> {
+  const peer = await readShareOftPeerBytes32(params)
+  if (peer === null) return null
+  return true
+}
+
+async function resolveReferenceWiredShareOftForQuote(params: {
+  publicClient: ShareBridgeReadClient
+  dstEid: number
+  exclude?: Address
+}): Promise<Address | null> {
+  for (const candidate of readReferenceWiredShareOftCandidates()) {
+    if (params.exclude && candidate.toLowerCase() === params.exclude.toLowerCase()) continue
+    const configured = await readShareOftPeerConfigured({
+      publicClient: params.publicClient,
+      shareOft: candidate,
+      dstEid: params.dstEid,
+    })
+    if (configured === false) continue
+    if (configured === null && typeof params.publicClient.getBytecode === 'function') {
+      try {
+        const code = await params.publicClient.getBytecode({ address: candidate })
+        if (!code || code === '0x') continue
+      } catch {
+        continue
+      }
+    }
+    return candidate
+  }
+  return null
+}
+
+function shareOftPeerMatchesEffective(params: {
+  shareOftPeer: Hex | null
+  effectivePeer: Hex
+}): boolean {
+  return (
+    params.shareOftPeer !== null &&
+    params.shareOftPeer.toLowerCase() === params.effectivePeer.toLowerCase()
+  )
+}
+
+async function resolveShareOftForLayerZeroQuote(params: {
+  publicClient: ShareBridgeReadClient
+  targetShareOft: Address
+  dstEid: number
+  effectivePeer: Hex
+}): Promise<
+  | { quoteShareOft: Address; quotedViaReferenceShareOft: boolean }
+  | FinalizeShareBridgeQuoteError
+> {
+  const referenceShareOft = await resolveReferenceWiredShareOftForQuote({
+    publicClient: params.publicClient,
+    dstEid: params.dstEid,
+    exclude: params.targetShareOft,
+  })
+
+  // Greenfield ShareOFTs are unwired until finalizePhase2 setPeer — never quoteSend on them
+  // when a distinct reference wired ShareOFT exists (AKITA / REFERENCE_WIRED_SHARE_OFT).
+  if (
+    referenceShareOft &&
+    referenceShareOft.toLowerCase() !== params.targetShareOft.toLowerCase()
+  ) {
+    return { quoteShareOft: referenceShareOft, quotedViaReferenceShareOft: true }
+  }
+
+  const targetPeer = await readShareOftPeerBytes32({
+    publicClient: params.publicClient,
+    shareOft: params.targetShareOft,
+    dstEid: params.dstEid,
+  })
+  if (
+    shareOftPeerMatchesEffective({
+      shareOftPeer: targetPeer,
+      effectivePeer: params.effectivePeer,
+    })
+  ) {
+    return { quoteShareOft: params.targetShareOft, quotedViaReferenceShareOft: false }
+  }
+
+  if (referenceShareOft) {
+    return { quoteShareOft: referenceShareOft, quotedViaReferenceShareOft: true }
+  }
+
+  return {
+    code: 'oft_peer_not_configured',
+    message:
+      `LayerZero NoPeer(${params.dstEid}): ${params.targetShareOft} is not wired for Solana yet — ` +
+      'greenfield finalize calls setPeer during finalizePhase2 before send. ' +
+      'Set batcher/registry solanaShareOftPeer, or configure REFERENCE_WIRED_SHARE_OFT for fee quoting via a wired reference ShareOFT.',
+  }
+}
+
+async function quoteNativeFeeOnShareOft(params: {
+  publicClient: ShareBridgeReadClient
+  shareOft: Address
+  baseSendParam: {
+    dstEid: number
+    to: Hex
+    amountLD: bigint
+    minAmountLD: bigint
+    extraOptions: Hex
+    composeMsg: Hex
+    oftCmd: Hex
+  }
+}): Promise<bigint> {
+  const quoteOft = (await params.publicClient.readContract({
+    address: params.shareOft,
+    abi: SHARE_OFT_QUOTE_ABI,
+    functionName: 'quoteOFT',
+    args: [params.baseSendParam],
+  })) as readonly [unknown, unknown, { amountReceivedLD?: bigint }]
+  const amountReceivedLD = BigInt(quoteOft?.[2]?.amountReceivedLD ?? 0n)
+  const sendParam = {
+    ...params.baseSendParam,
+    minAmountLD: amountReceivedLD,
+  }
+  const fee = (await params.publicClient.readContract({
+    address: params.shareOft,
+    abi: SHARE_OFT_QUOTE_ABI,
+    functionName: 'quoteSend',
+    args: [sendParam, false],
+  })) as { nativeFee?: bigint; lzTokenFee?: bigint }
+  const nativeFee = BigInt(fee?.nativeFee ?? 0n)
+  if (nativeFee <= 0n) {
+    throw new Error('LayerZero quoteSend returned zero nativeFee for finalize share bridge.')
+  }
+  return nativeFee
 }
 
 function readShareAddress(params: Record<string, unknown> | null | undefined): Address | null {
@@ -415,6 +638,22 @@ function readOvaultRuntime(value: unknown): { enabled: boolean; solanaEid: numbe
   return { enabled, solanaEid }
 }
 
+/** Returns false when wrapper address is known but has no Base bytecode yet (Phase 1 pending). */
+export async function readFinalizePhase2WrapperHasBytecode(params: {
+  publicClient: ShareBridgeReadClient
+  finalizeCallData: Hex
+}): Promise<boolean | null> {
+  const decoded = decodeFinalizePhase2Call(params.finalizeCallData)
+  if (!decoded?.params.wrapper || !isAddress(decoded.params.wrapper)) return null
+  if (typeof params.publicClient.getBytecode !== 'function') return null
+  try {
+    const code = await params.publicClient.getBytecode({ address: getAddress(decoded.params.wrapper) })
+    return Boolean(code && code !== '0x')
+  } catch {
+    return null
+  }
+}
+
 export async function quoteFinalizeShareBridgeNativeFee(params: {
   publicClient: ShareBridgeReadClient
   batcherAddress: Address
@@ -469,6 +708,14 @@ export async function quoteFinalizeShareBridgeNativeFee(params: {
     })) as bigint
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error ?? 'previewDeposit failed')
+    if (/returned no data|does not have any code|contract does not exist/i.test(message)) {
+      return {
+        code: 'quote_failed',
+        message:
+          `LayerZero finalize share bridge quote blocked: wrapper ${decoded.params.wrapper} is not deployed on Base yet. ` +
+          'Pipe A quoting needs a live CreatorOVaultWrapper — finish Phase 1 core (vault + wrapper CREATE2 deploy) and confirm bytecode on Basescan before finalize.',
+      }
+    }
     return { code: 'quote_failed', message: `LayerZero finalize share bridge quote failed: ${message}` }
   }
   const solanaAmount = (shareTokens * FINALIZE_SHARE_BRIDGE_SOLANA_PERCENT) / 100n
@@ -525,30 +772,26 @@ export async function quoteFinalizeShareBridgeNativeFee(params: {
     oftCmd: '0x' as Hex,
   }
 
+  const effectivePeer = (registryPeer ?? batcherDefaultPeer) as Hex
+  const quoteShareOftResolution = await resolveShareOftForLayerZeroQuote({
+    publicClient: params.publicClient,
+    targetShareOft: decoded.params.shareOFT,
+    dstEid: runtime.solanaEid,
+    effectivePeer,
+  })
+  if ('code' in quoteShareOftResolution) {
+    return quoteShareOftResolution
+  }
+  const { quoteShareOft, quotedViaReferenceShareOft } = quoteShareOftResolution
+
   try {
-    const quoteOft = (await params.publicClient.readContract({
-      address: decoded.params.shareOFT,
-      abi: SHARE_OFT_QUOTE_ABI,
-      functionName: 'quoteOFT',
-      args: [baseSendParam],
-    })) as readonly [unknown, unknown, { amountReceivedLD?: bigint }]
-    const amountReceivedLD = BigInt(quoteOft?.[2]?.amountReceivedLD ?? 0n)
-    const sendParam = {
-      ...baseSendParam,
-      minAmountLD: amountReceivedLD,
-    }
-    const fee = (await params.publicClient.readContract({
-      address: decoded.params.shareOFT,
-      abi: SHARE_OFT_QUOTE_ABI,
-      functionName: 'quoteSend',
-      args: [sendParam, false],
-    })) as { nativeFee?: bigint; lzTokenFee?: bigint }
-    const nativeFee = BigInt(fee?.nativeFee ?? 0n)
-    if (nativeFee <= 0n) {
-      return {
-        code: 'quote_failed',
-        message: 'LayerZero quoteSend returned zero nativeFee for finalize share bridge.',
-      }
+    let nativeFee = await quoteNativeFeeOnShareOft({
+      publicClient: params.publicClient,
+      shareOft: quoteShareOft,
+      baseSendParam,
+    })
+    if (quotedViaReferenceShareOft && nativeFee <= 0n) {
+      throw new Error('LayerZero quoteSend returned zero nativeFee for finalize share bridge.')
     }
     return {
       required: true,
@@ -558,7 +801,44 @@ export async function quoteFinalizeShareBridgeNativeFee(params: {
       destination,
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error ?? 'unknown quote failure')
+    if (
+      !quotedViaReferenceShareOft &&
+      isLayerZeroNoPeerQuoteError(error)
+    ) {
+      const referenceShareOft = await resolveReferenceWiredShareOftForQuote({
+        publicClient: params.publicClient,
+        dstEid: runtime.solanaEid,
+        exclude: decoded.params.shareOFT,
+      })
+      if (referenceShareOft) {
+        try {
+          const nativeFee = await quoteNativeFeeOnShareOft({
+            publicClient: params.publicClient,
+            shareOft: referenceShareOft,
+            baseSendParam,
+          })
+          return {
+            required: true,
+            nativeFee,
+            solanaAmount,
+            dstEid: runtime.solanaEid,
+            destination,
+          }
+        } catch (referenceError) {
+          error = referenceError
+        }
+      }
+    }
+    const message = formatUnknownError(error)
+    if (isLayerZeroNoPeerQuoteError(error) || message.toLowerCase().includes(LZ_NO_PEER_SELECTOR)) {
+      return {
+        code: 'oft_peer_not_configured',
+        message:
+          `LayerZero NoPeer(${runtime.solanaEid}): ${decoded.params.shareOFT} is not wired for Solana yet. ` +
+          'Greenfield finalize calls setPeer during finalizePhase2; pre-finalize fee quotes use a reference wired ShareOFT when available. ' +
+          'Ensure batcher solanaShareOftPeer / registry peer is set and REFERENCE_WIRED_SHARE_OFT (or AKITA shareOFT) has Solana peer wiring.',
+      }
+    }
     return { code: 'quote_failed', message: `LayerZero finalize share bridge quote failed: ${message}` }
   }
 }
@@ -604,6 +884,18 @@ export async function attachFinalizeShareBridgeValueToCalls<T extends DeploySess
       typeof call.to === 'string' && isAddress(call.to) ? getAddress(call.to as Address) : null
     if (!batcherAddress) {
       throw new Error('finalizePhase2 call target must be a valid deployment batcher address.')
+    }
+
+    const wrapperDeployed = await readFinalizePhase2WrapperHasBytecode({
+      publicClient: params.publicClient,
+      finalizeCallData: call.data as Hex,
+    })
+    if (wrapperDeployed === false) {
+      out[index] = {
+        ...call,
+        value: '0',
+      }
+      continue
     }
 
     const quote = await quoteFinalizeShareBridgeNativeFee({

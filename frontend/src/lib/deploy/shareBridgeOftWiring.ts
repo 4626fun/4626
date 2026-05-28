@@ -7,6 +7,7 @@ import { BASE_DEFAULTS } from '@/config/contracts.defaults'
 import {
   decodeFinalizePhase2Call,
   quoteFinalizeShareBridgeNativeFee,
+  readFinalizePhase2WrapperHasBytecode,
   type FinalizeShareBridgeQuoteError,
 } from './finalizeShareBridgeFee'
 
@@ -157,6 +158,12 @@ export async function assertShareBridgeOftWiringForFinalize(params: {
   if (!isAddress(params.batcherAddress)) {
     throw new ShareBridgeOftWiringError('bridge_not_configured', 'Deployment batcher address is invalid.')
   }
+
+  const wrapperDeployed = await readFinalizePhase2WrapperHasBytecode({
+    publicClient: params.publicClient,
+    finalizeCallData: params.finalizeCallData,
+  })
+  if (wrapperDeployed === false) return
 
   const status = await readShareBridgeOftWiringStatus(params)
   if ('code' in status) {
