@@ -122,6 +122,41 @@ function truncateWithEllipsis(value: string, maxLength: number): string {
   return `${value.slice(0, maxLength - 1).trimEnd()}…`
 }
 
+type HermitXPostPayload = {
+  text: string
+  media: { url: string } | null
+}
+
+/** Native X media upload when possible; otherwise fall back to URL-in-text. */
+function buildHermitXPostPayload(params: {
+  reply: string
+  fallbackCaption?: string
+  mediaUrl?: string | null
+}): HermitXPostPayload {
+  const mediaUrl =
+    typeof params.mediaUrl === 'string' && isLikelyImageUrl(params.mediaUrl.trim())
+      ? params.mediaUrl.trim()
+      : null
+  if (mediaUrl) {
+    const caption =
+      stripImageUrlsFromHermitReply(params.reply, mediaUrl) ||
+      params.fallbackCaption?.trim() ||
+      'cat laugh from the Hermit cave.'
+    return {
+      text: truncateWithEllipsis(caption, 280),
+      media: { url: mediaUrl },
+    }
+  }
+  return {
+    text: buildHermitTweetText({
+      reply: params.reply,
+      fallbackCaption: params.fallbackCaption,
+      mediaUrl: undefined,
+    }),
+    media: null,
+  }
+}
+
 function buildHermitTweetText(params: {
   reply: string
   fallbackCaption?: string
@@ -459,12 +494,14 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
               'cat laugh from the Hermit cave.'
           }
           if (isHermitAlfaClubXLinkAfterMediaEnabled() && mediaUrl) {
+            const xPost = buildHermitXPostPayload({
+              reply: result.reply,
+              fallbackCaption: result.meme?.caption,
+              mediaUrl: mediaUrl ?? result.meme?.url,
+            })
             const tweet = await postTweetFromSystem({
-              text: buildHermitTweetText({
-                reply: result.reply,
-                fallbackCaption: result.meme?.caption,
-                mediaUrl: mediaUrl ?? result.meme?.url,
-              }),
+              text: xPost.text,
+              ...(xPost.media ? { media: xPost.media } : {}),
               groupId: params.groupId,
               senderWallet: params.senderWallet,
             })
@@ -482,12 +519,14 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
           const shouldPostToXFirst =
             Boolean(mediaUrl) || (result.kind === 'gmeow' && isGmeowPostToXFirstEnabled())
           if (shouldPostToXFirst) {
+            const xPost = buildHermitXPostPayload({
+              reply: result.reply,
+              fallbackCaption: result.meme?.caption,
+              mediaUrl: mediaUrl ?? result.meme?.url,
+            })
             const tweet = await postTweetFromSystem({
-              text: buildHermitTweetText({
-                reply: result.reply,
-                fallbackCaption: result.meme?.caption,
-                mediaUrl: mediaUrl ?? result.meme?.url,
-              }),
+              text: xPost.text,
+              ...(xPost.media ? { media: xPost.media } : {}),
               groupId: params.groupId,
               senderWallet: params.senderWallet,
             })

@@ -204,6 +204,12 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     })
 
     expect(postTweetFromSystemMock).toHaveBeenCalledTimes(1)
+    expect(postTweetFromSystemMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: 'cat laugh alpha unlocked.',
+        media: { url: 'https://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif' },
+      }),
+    )
     expect(result.ok).toBe(true)
     expect(result.response).toBe('cat laugh alpha unlocked.')
     expect(result.response).not.toContain('giphy.gif')
@@ -257,6 +263,8 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
       expect.objectContaining({
         groupId: 'tg-room',
         senderWallet: ALICE,
+        text: 'cat laugh alpha unlocked.',
+        media: { url: 'https://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif' },
       }),
     )
     expect(result.ok).toBe(true)
