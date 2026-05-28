@@ -14,7 +14,7 @@ Deployed contract addresses for 4626.
 
 ## Base (Hub Chain)
 
-### Current Live Infrastructure (`v1.11.2-pipe-a` protocol contract release target)
+### Current Live Infrastructure (`v1.12.1` greenfield deploy target)
 
 | Contract | Address |
 |----------|---------|
@@ -25,20 +25,19 @@ Deployed contract addresses for 4626.
 | CreatorVRFConsumerV2_5 | `0xE4AcDD5316EcF4D98301509968F0728EEDaaB68E` |
 | SolanaBridgeAdapter | `0x700b4BBAf965c013123bAd02a6562FBa487aC0f1` |
 | UniversalBytecodeStoreV2 | `0x8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4` |
-| UniversalCreate2DeployerFromStore | `0x4760216AFd59B843671E0FdFCe6498Ec8CFf38a7` |
-| CreatorOVaultCoreModule | `0x9f8C2c5700A25b76759f3115B96A68f4d079CDbB` |
-| CreatorOVaultStrategiesModule | `0x98d82B137b7Ff9ba6f9c6fE83Cc2aBFF150782B0` |
-| CreatorOVaultAdminModule | `0x84cbD15c71f7F8127458eBAFaBBDd12415CA2097` |
+| UniversalCreate2DeployerFromStore | `0xF6538d7D18AfFe5057C6f109DBEd33c851A70c7E` |
+| CreatorOVaultCoreModule | `0xfaebF89F739769A348B871289488fc1b99F53140` |
+| CreatorOVaultStrategiesModule | `0xbd2E73f420FD4665013586c0128f0dEC1438F007` |
+| CreatorOVaultAdminModule | `0x3AA2e85589EEb57cBB5BbA240E5404A51eC824a7` |
 | DeploymentBatcher | `0xa99058f424FB3ACC639F59355C65C40149030651` |
-| DeploymentBatcherPhase1Module | `0xf3b20557ef8173510693A13EF71F884DB835E8c0` |
+| DeploymentBatcherPhase1Module | `0xcE369BE1D89634E7Ab3d6Dc0f943B2780BF2D889` |
 | DeploymentBatcherPhase2Module | `0x67FD8A34E5b26F875a9513DFf37521A1ca92d80f` |
 | DeploymentBatcherPhase3Helper | `0x3c89e20AbccE3d8F6344AFf6c63c82F5619EFFCB` |
 | DeploymentBatcherUniV4Helper | `0xF71a6236586077CD29C971443D2cce37B543DcBB` |
 | DeploymentBatcherUtilsHelper | `0xD71C4910C7bB38FB1089Cca42b0883F1BFFfa28D` |
 
 Notes:
-- Shared/global and split Phase-1 infra were redeployed in the v1.11.2-pipe-a epoch (`DEPLOYMENT_EPOCH_TAG=v1.11.2-pipe-a`).
-- The repo's canonical release target is `v1.11.2-pipe-a` for Pipe A (payable finalize + ShareOFT auto-bridge).
+- Shared/global and split Phase-1 infra shell remain from v1.11.2-pipe-a; **v1.12.1** rotated CreatorOVault modules to `CreatorOVaultModuleStorage.v2` and hot-swapped `DeploymentBatcherPhase1Module` via protocol treasury Safe (`setPhase1Module` tx `0x18a7c612…`).
 - `DeploymentBatcher` deploys as a slim shell; helpers and `DeploymentBatcherPhase1Module` wire post-deploy via protocol treasury Safe (`wireDeploymentHelpers` + `setPhase1Module`).
 - Pre-Pipe-A batcher `0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8` is deprecated — do not use for greenfield deploys.
 

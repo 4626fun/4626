@@ -6,15 +6,18 @@ import {
   CREATOR_OVAULT_STRATEGIES_MODULE,
 } from '@/config/contracts.defaults'
 
-/** Must match live mainnet CreatorOVault module deployments wired on the split Phase-1 batcher. */
-export const CREATOR_OVAULT_MODULE_STORAGE_CURRENT = keccak256(
-  encodePacked(['string'], ['CreatorOVaultModuleStorage.current']),
-) as Hex
-
-/** Greenfield target after fresh v2 modules + batcher cutover — not live on mainnet batcher yet. */
+/** Live batcher + store deploy fingerprint (CreatorOVaultModuleStorage.v2). */
 export const CREATOR_OVAULT_MODULE_STORAGE_V2 = keccak256(
   encodePacked(['string'], ['CreatorOVaultModuleStorage.v2']),
 ) as Hex
+
+/** Pre-v1.12.1 modules still on-chain for grandfathered vaults only. */
+export const CREATOR_OVAULT_MODULE_STORAGE_LEGACY_CURRENT = keccak256(
+  encodePacked(['string'], ['CreatorOVaultModuleStorage.current']),
+) as Hex
+
+/** Must match live mainnet CreatorOVault module deployments wired on the split Phase-1 batcher. */
+export const CREATOR_OVAULT_MODULE_STORAGE_CURRENT = CREATOR_OVAULT_MODULE_STORAGE_V2
 
 /** Fingerprint embedded in frontend deploy bytecode (CreatorOVault creation code). */
 export const DEPLOY_CREATOR_OVAULT_MODULE_STORAGE_VERSION = CREATOR_OVAULT_MODULE_STORAGE_V2
@@ -84,10 +87,10 @@ export async function assertCreatorOvaultModuleStorageCompatible(params: {
 
   if (moduleReports.toLowerCase() !== vaultExpects.toLowerCase()) {
     const expectsV2 = vaultExpects.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V2.toLowerCase()
-    const moduleIsCurrent =
-      moduleReports.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_CURRENT.toLowerCase()
+    const moduleIsLegacyCurrent =
+      moduleReports.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_LEGACY_CURRENT.toLowerCase()
     const hint =
-      expectsV2 && moduleIsCurrent
+      expectsV2 && moduleIsLegacyCurrent
         ? ' Deploy bytecode expects CreatorOVaultModuleStorage.v2 but the live batcher still wires .current modules. ' +
           'Re-seed CreatorOVault creation bytecode with the .current fingerprint or deploy fresh v2 modules and rotate the batcher.'
         : ' Re-seed deploy bytecode or rotate batcher/module wiring so vault and modules share one moduleStorageVersion fingerprint.'
