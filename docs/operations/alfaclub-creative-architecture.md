@@ -266,6 +266,13 @@ AlfaClub auth.
   be within the last ~30 minutes.
 - If `updated_by` is anything else, see
   [`eliza-runtime.md` § "Recovery"](deployment/eliza-runtime.md).
+- Ops room **1043**: `/bridge` or `/alfa status` for pipeline + JWT health;
+  `/help` for command list. Flip Research lives at `alfaclub.app/room/2`
+  (not 1043).
+- Local env checklist (no secrets printed):
+  `pnpm -C frontend exec tsx scripts/ops/alfaclub-env-preflight.ts`
+- Optional: post daily digest to a read-only room via
+  `ALFACLUB_DAILY_BRIEF_ROOM_ID` (leave unset to keep posting in the bridge room).
 
 ### Before merging changes that touch hermit seeds
 

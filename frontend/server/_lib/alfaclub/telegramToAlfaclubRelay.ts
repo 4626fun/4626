@@ -88,26 +88,46 @@ export function matchesTelegramToAlfaclubSource(params: {
   return threadId === config.sourceThreadId
 }
 
+const DEFAULT_TELEGRAM_TO_ALFACLUB_MAX_CHARS = 3_500
+
+function readTelegramToAlfaclubMaxChars(
+  env: Record<string, string | undefined> = process.env,
+): number {
+  const raw = parseOptionalPositiveInt(env.TELEGRAM_TO_ALFACLUB_MAX_CHARS, 20_000)
+  return raw ?? DEFAULT_TELEGRAM_TO_ALFACLUB_MAX_CHARS
+}
+
+function truncateRelayText(text: string, maxChars: number, opts?: { preserveNewlines?: boolean }): string {
+  const compact = opts?.preserveNewlines ? text.trim() : text.replace(/\s+/g, ' ').trim()
+  if (compact.length <= maxChars) return compact
+  return `${compact.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`
+}
+
 export function formatTelegramToAlfaclubBody(params: {
   text: string
   username?: string | null
   userId?: string | null
   prefix?: string
+  maxChars?: number
 }): string {
+  const maxChars = params.maxChars ?? readTelegramToAlfaclubMaxChars()
   const text = String(params.text ?? '').replace(/\s+/g, ' ').trim()
   const prefix = String(params.prefix ?? '').trim()
   const handle = String(params.username ?? '').trim()
   const userId = String(params.userId ?? '').trim()
   const who = handle ? `@${handle.replace(/^@/, '')}` : userId ? `tg:${userId}` : 'telegram'
   const core = text || '(no text)'
+  let body: string
   // Slash commands must lead with `/` so AlfaClub bridge command detection works.
   if (core.startsWith('/')) {
     const attribution = `(tg ${who})`
-    if (prefix) return `${prefix} ${core}\n${attribution}`.trim()
-    return `${core}\n${attribution}`.trim()
+    body = prefix ? `${prefix} ${core}\n${attribution}`.trim() : `${core}\n${attribution}`.trim()
+  } else if (prefix) {
+    body = `${prefix} ${who}: ${core}`.trim()
+  } else {
+    body = `${who}: ${core}`
   }
-  if (prefix) return `${prefix} ${who}: ${core}`.trim()
-  return `${who}: ${core}`
+  return truncateRelayText(body, maxChars, { preserveNewlines: core.startsWith('/') })
 }
 
 export type TelegramToAlfaclubRelayResult =

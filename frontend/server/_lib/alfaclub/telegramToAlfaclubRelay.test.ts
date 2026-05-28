@@ -83,6 +83,13 @@ describe('formatTelegramToAlfaclubBody', () => {
       }),
     ).toBe('@akitav: Trend signal pair')
   })
+
+  it('truncates very long relay bodies', () => {
+    const long = 'x'.repeat(5_000)
+    const out = formatTelegramToAlfaclubBody({ text: long, maxChars: 100 })
+    expect(out.length).toBeLessThanOrEqual(100)
+    expect(out.endsWith('…')).toBe(true)
+  })
 })
 
 describe('relayTelegramMessageToAlfaClub', () => {

@@ -202,6 +202,17 @@ function parseCreateRoomPayload(rawPayload: string): ParsedCreateRoomPayload | n
   }
 }
 
+function stripAlfaClubCommandPrefix(text: string): { bridge: boolean; cleaned: string } {
+  const trimmed = text.trim()
+  if (/^\/bridge(?:\s|$)/i.test(trimmed)) {
+    return { bridge: true, cleaned: trimmed.replace(/^\/bridge\s*/i, '').trim() }
+  }
+  return {
+    bridge: false,
+    cleaned: trimmed.replace(/^\/alfa(?:club)?\s*/i, '').trim(),
+  }
+}
+
 function parseSubcommand(text: string): {
   sub:
     | 'leaderboard'
@@ -220,10 +231,10 @@ function parseSubcommand(text: string): {
   chartKindRaw: string | null
   limit: number | null
 } {
-  const cleaned = text.trim().replace(/^\/alfa(?:club)?\s*/i, '').trim()
+  const { bridge, cleaned } = stripAlfaClubCommandPrefix(text)
   if (!cleaned) {
     return {
-      sub: 'leaderboard',
+      sub: bridge ? 'status' : 'leaderboard',
       address: null,
       tokenId: null,
       amount: null,

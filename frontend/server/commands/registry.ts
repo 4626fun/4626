@@ -125,6 +125,11 @@ const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
     aliases: ['alfaclub'],
   },
   {
+    head: 'bridge',
+    family: 'alfaclub',
+    aliases: [],
+  },
+  {
     head: 'vaults',
     family: 'vaults',
     telegramNative: true,

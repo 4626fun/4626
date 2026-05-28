@@ -24,6 +24,8 @@ describe('command registry', () => {
     expect(getCommandFamily('/get_id')).toBe('id')
     expect(getCommandFamily('/alfa')).toBe('alfaclub')
     expect(getCommandFamily('/alfaclub status')).toBe('alfaclub')
+    expect(getCommandFamily('/bridge')).toBe('alfaclub')
+    expect(getCommandFamily('/bridge status')).toBe('alfaclub')
     expect(getCommandFamily('/gmeow gm')).toBe('hermit')
     expect(getCommandFamily('/meme akita')).toBe('hermit')
     expect(getCommandFamily('/hermit help')).toBe('hermit')

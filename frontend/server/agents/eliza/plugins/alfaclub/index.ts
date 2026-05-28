@@ -78,8 +78,12 @@ function parseSubcommand(text: string): {
   sub: 'leaderboard' | 'creator' | 'status' | 'help' | null
   address: string | null
 } {
-  const cleaned = text.trim().replace(/^\/alfa(?:club)?\s*/i, '').trim()
-  if (!cleaned) return { sub: 'leaderboard', address: null }
+  const trimmed = text.trim()
+  const bridge = /^\/bridge(?:\s|$)/i.test(trimmed)
+  const cleaned = bridge
+    ? trimmed.replace(/^\/bridge\s*/i, '').trim()
+    : trimmed.replace(/^\/alfa(?:club)?\s*/i, '').trim()
+  if (!cleaned) return { sub: bridge ? 'status' : 'leaderboard', address: null }
 
   const parts = cleaned.split(/\s+/)
   const first = (parts[0] ?? '').toLowerCase()

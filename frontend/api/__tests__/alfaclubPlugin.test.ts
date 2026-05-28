@@ -129,6 +129,12 @@ describe('parseSubcommand', () => {
     expect(parseSubcommand('/alfaclub').sub).toBe('leaderboard')
     expect(parseSubcommand('/alfaclub status').sub).toBe('status')
   })
+
+  it('maps bare /bridge to bridge status', () => {
+    expect(parseSubcommand('/bridge').sub).toBe('status')
+    expect(parseSubcommand('/bridge status').sub).toBe('status')
+    expect(parseSubcommand('/bridge flags').sub).toBe('status')
+  })
 })
 
 describe('/alfa plugin — validation', () => {
