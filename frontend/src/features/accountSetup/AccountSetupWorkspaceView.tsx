@@ -5,6 +5,7 @@ import {
   lazy,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -22,10 +23,12 @@ import { LinkedIdentitiesSection } from '@/features/accountSetup/LinkedIdentitie
 import { AccountsManagementPanel } from '@/features/accountSetup/AccountsManagementPanel'
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
 import { shouldShowParentCswAddOwnerPanel, shouldShowBaseAppConnectPanel } from '@/features/waitlist/waitlistFlowState'
+import { WaitlistBaseAppWalletNudge } from '@/features/waitlist/WaitlistBaseAppWalletNudge'
 import { inferWaitlistEoaOwnerRoutingHint } from '@/lib/wallet/userExecutionTrack'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { useWaitlistSigningStepComplete } from '@/features/waitlist/useWaitlistSigningStepComplete'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { shortValue } from './shared'
 import type { useAccountSetupController } from './useAccountSetupController'
 
@@ -141,8 +144,12 @@ export function AccountSetupWorkspaceView(props: {
   const { context, controller, summaryActions, waitlistFooter, onSigningStepCompleteChange } = props
   const privyClientStatus = usePrivyClientStatus()
   void privyClientStatus
+  const inBaseApp = useMemo(() => isBaseAppInAppContext(), [])
   // openStep: null = auto (first incomplete), 1/2/3 = manually opened
   const [openStep, setOpenStep] = useState<1 | 2 | 3 | null>(null)
+  const goToWaitlistStepTwo = useCallback(() => {
+    setOpenStep(2)
+  }, [])
   const {
     advancedBusy,
     baseAppUrl,
@@ -444,6 +451,14 @@ export function AccountSetupWorkspaceView(props: {
               with an external wallet (EOA mode) if canonical signing is unavailable.
             </p>
           </div>
+        ) : null}
+
+        {inBaseApp && !signingStepComplete ? (
+          <WaitlistBaseAppWalletNudge
+            stepOneComplete={stepOneComplete}
+            showConnectPanel={showBaseAppConnectPanel}
+            onGoToStepTwo={goToWaitlistStepTwo}
+          />
         ) : null}
 
         {/* Heading — single line */}

@@ -17,9 +17,6 @@ import {
   WAITLIST_START_AUTH_QUERY_KEY,
 } from '@/lib/auth/waitlistEntry'
 import { getAppBaseUrl } from '@/lib/env/host'
-import { useSiweAuth } from '@/hooks/useSiweAuth'
-import { useSubAccountSetup } from '@/hooks/useSubAccountSetup'
-import { detectInAppEnvironment, isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
@@ -48,7 +45,6 @@ import {
   PRIVY_LOGOUT_SETTLE_ATTEMPTS,
   PRIVY_LOGOUT_SETTLE_DELAY_MS,
   RECOVERY_REQUIRED_MESSAGE,
-  RECOVERY_REQUIRED_BASE_APP_MESSAGE,
   SESSION_FINALIZING_RETRY_MESSAGE,
   SESSION_MISMATCH_MESSAGE,
   STALE_PRIVY_SESSION_MESSAGE,
@@ -78,7 +74,6 @@ type WaitlistStatsData = {
 }
 
 const HANDOFF_QUERY_KEY = 'cv_handoff'
-const BASE_ACCOUNT_LOGO = '/base/base-square-blue.svg'
 const WAITLIST_EASE: [number, number, number, number] = [0.4, 0, 0.2, 1]
 const WAITLIST_SPINNER_TIMEOUT_MESSAGE = 'Sign-in is taking longer than expected. Tap Continue to retry.'
 const WAITLIST_BUSY_WATCHDOG_MS = 25_000
@@ -205,9 +200,7 @@ function WaitlistAuthStep(props: {
   error: string | null
   recoveryRequired: boolean
   referralCode: string | null
-  inBaseApp: boolean
   onContinueAuth: () => void | Promise<void>
-  onContinueBaseAuth: () => void | Promise<void>
   onRecoverAccount: () => void | Promise<void>
   disableMotion?: boolean
 }) {
@@ -219,9 +212,7 @@ function WaitlistAuthStep(props: {
     error,
     recoveryRequired,
     referralCode,
-    inBaseApp,
     onContinueAuth,
-    onContinueBaseAuth,
     onRecoverAccount,
     disableMotion = false,
   } = props
@@ -292,76 +283,26 @@ function WaitlistAuthStep(props: {
 
           {/* CTA */}
           <motion.div {...stagger(1)} className="mt-4 space-y-2.5">
-            {inBaseApp ? (
-              <>
-                <Button
-                  type="button"
-                  variant="primary"
-                  disabled={busy}
-                  aria-disabled={buttonsDisabled}
-                  onClick={() => {
-                    if (buttonsDisabled) return
-                    void onContinueBaseAuth()
-                  }}
-                  className="inline-flex w-full items-center justify-center gap-2"
-                >
-                  {busy || !privyReady ? (
-                    <span className="inline-flex items-center gap-2 text-[13.5px] font-medium text-white/90">
-                      <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.92)" />
-                      <span>{busy ? authUi.busyLabel : 'Loading sign-in…'}</span>
-                    </span>
-                  ) : (
-                    <>
-                      <img src={BASE_ACCOUNT_LOGO} alt="" className="h-4 w-4 object-contain" aria-hidden />
-                      Sign in with Base
-                    </>
-                  )}
-                </Button>
-                <div className="relative flex items-center py-1">
-                  <div className="flex-1 border-t border-white/10" />
-                  <span className="px-3 text-[10px] uppercase tracking-wider text-zinc-500">or</span>
-                  <div className="flex-1 border-t border-white/10" />
-                </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={busy}
-                  aria-disabled={buttonsDisabled}
-                  onClick={() => {
-                    if (buttonsDisabled) return
-                    void onContinueAuth()
-                  }}
-                  className="w-full"
-                >
-                  Continue with email
-                </Button>
-                <p className="text-[11px] leading-relaxed text-zinc-500">
-                  Base App needs your Base Account wallet connected for signing — email alone is not enough for
-                  enable-signing steps later.
-                </p>
-              </>
-            ) : (
-              <Button
-                type="button"
-                variant="primary"
-                disabled={busy}
-                aria-disabled={buttonsDisabled}
-                onClick={() => {
-                  if (buttonsDisabled) return
-                  void onContinueAuth()
-                }}
-                className="w-full"
-              >
-                {busy || !privyReady ? (
-                  <span className="inline-flex items-center gap-2 text-[13.5px] font-medium text-white/90">
-                    <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.92)" />
-                    <span>{busy ? authUi.busyLabel : 'Loading sign-in…'}</span>
-                  </span>
-                ) : (
-                  authUi.ctaLabel
-                )}
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="primary"
+              disabled={busy}
+              aria-disabled={buttonsDisabled}
+              onClick={() => {
+                if (buttonsDisabled) return
+                void onContinueAuth()
+              }}
+              className="w-full"
+            >
+              {busy || !privyReady ? (
+                <span className="inline-flex items-center gap-2 text-[13.5px] font-medium text-white/90">
+                  <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.92)" />
+                  <span>{busy ? authUi.busyLabel : 'Loading sign-in…'}</span>
+                </span>
+              ) : (
+                authUi.ctaLabel
+              )}
+            </Button>
           </motion.div>
 
           {/* error */}
@@ -380,7 +321,7 @@ function WaitlistAuthStep(props: {
                   onClick={() => void onRecoverAccount()}
                   className="inline-flex items-center rounded-lg border border-rose-300/25 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-200 transition hover:bg-rose-500/20 disabled:opacity-60"
                 >
-                  {inBaseApp ? 'Sign in with Base' : 'Use existing account'}
+                  Use existing account
                 </button>
               ) : null}
             </motion.div>
@@ -393,23 +334,15 @@ function WaitlistAuthStep(props: {
 
 export function WaitlistFlow(props: {
   sectionId?: string
-  inBaseApp?: boolean
 }) {
   const sectionId = props.sectionId ?? 'waitlist'
-  const inBaseApp =
-    props.inBaseApp === true ||
-    (typeof window !== 'undefined' && isBaseAppInAppContext(detectInAppEnvironment()))
   const prefersReducedMotion = useReducedMotion()
   const baseInAppContext = useMemo(() => isBaseInAppContext(), [])
   const disableHeroMotion = Boolean(prefersReducedMotion || baseInAppContext)
 
-  const recoveryRequiredMessage = inBaseApp ? RECOVERY_REQUIRED_BASE_APP_MESSAGE : RECOVERY_REQUIRED_MESSAGE
-
   const privy = usePrivy()
   const privyClientStatus = usePrivyClientStatus()
   const { login } = useLogin()
-  const { signIn: signInSession } = useSiweAuth()
-  const { connectBaseAccountWallet } = useSubAccountSetup()
 
   const privyAuthed = privy.authenticated
   const shouldDestroyPrivySession = privyAuthed && privyClientStatus === 'ready'
@@ -454,8 +387,8 @@ export function WaitlistFlow(props: {
     if (!readWaitlistRecoveryGate()) return
     authBootstrapAutoAttemptedRef.current = true
     setRecoveryRequired(true)
-    setError(recoveryRequiredMessage)
-  }, [recoveryRequiredMessage, setError, setRecoveryRequired])
+    setError(RECOVERY_REQUIRED_MESSAGE)
+  }, [setError, setRecoveryRequired])
 
   const wrapClass = 'mx-auto w-full max-w-5xl px-4 py-6 sm:py-8'
   const activeReferralCode = useMemo(() => readStoredWaitlistReferralCode(), [])
@@ -594,47 +527,6 @@ export function WaitlistFlow(props: {
     })
     await waitForPrivyLogoutSettlement({ tokenOnly: true })
 
-    if (inBaseApp) {
-      const address = await signInSession({ method: 'privy', preferBaseAccountWallet: true })
-      if (!address) {
-        throw new Error('Sign in with Base was cancelled or could not complete. Try again.')
-      }
-      await connectBaseAccountWallet({
-        canonicalCswAddress: account?.accountSignals?.canonicalCswAddress ?? null,
-        requireEmbeddedEoa: false,
-      }).catch(() => false)
-
-      if (isOnCanonicalMarketingWaitlistPage()) {
-        authBootstrapAutoAttemptedRef.current = true
-        setRecoveryRequired(false)
-        setError(null)
-        await settleBootstrapAfterRecoverableLoginError({ bypassRecoveryCooldown: true })
-        return
-      }
-
-      let target = waitlistRecoveryUrl
-      const privyToken = await getAccessToken().catch(() => null)
-      if (target.startsWith('http') && typeof window !== 'undefined') {
-        try {
-          const parsed = new URL(target)
-          if (parsed.origin !== window.location.origin && privyToken) {
-            const handoffCode = await createAuthHandoffCode({ privyToken })
-            if (handoffCode) {
-              parsed.searchParams.set(HANDOFF_QUERY_KEY, handoffCode)
-              target = parsed.toString()
-            }
-          }
-        } catch {
-          // Keep original target if URL parsing fails.
-        }
-        window.location.href = target
-        return
-      }
-
-      window.location.assign(target)
-      return
-    }
-
     try {
       await runPrivyLoginWithTimeout(
         login as (options?: unknown) => Promise<unknown>,
@@ -683,17 +575,13 @@ export function WaitlistFlow(props: {
 
     window.location.assign(target)
   }, [
-    account?.accountSignals?.canonicalCswAddress,
-    connectBaseAccountWallet,
     getAccessToken,
-    inBaseApp,
     login,
     privy,
     recoveryRequiredBootstrapCooldownUntilRef,
     settleBootstrapAfterRecoverableLoginError,
     setError,
     setRecoveryRequired,
-    signInSession,
     waitlistRecoveryUrl,
     waitForPrivyLogoutSettlement,
   ])
@@ -752,7 +640,7 @@ export function WaitlistFlow(props: {
         writeWaitlistRecoveryGate(true)
         clearWaitlistAuthPending()
         setRecoveryRequired(true)
-        setError(recoveryRequiredMessage)
+        setError(RECOVERY_REQUIRED_MESSAGE)
         return
       }
       setError(
@@ -773,7 +661,6 @@ export function WaitlistFlow(props: {
     privyAuthed,
     privyClientStatus,
     recoveryRequiredBootstrapCooldownUntilRef,
-    recoveryRequiredMessage,
     resetStalePrivySessionAndRetryEmailLogin,
     redirectToCanonicalWaitlist,
     settleBootstrapAfterRecoverableLoginError,
@@ -781,70 +668,6 @@ export function WaitlistFlow(props: {
     setRecoveryRequired,
     tokenlessFinalizingBootstrapCooldownUntilRef,
     tryResumeExistingPrivySession,
-  ])
-
-  const onContinueBaseAuth = useCallback(async () => {
-    if (!beginAuthAttempt()) return
-    tokenlessFinalizingBootstrapCooldownUntilRef.current = 0
-    recoveryRequiredBootstrapCooldownUntilRef.current = 0
-    try {
-      if (privyClientStatus === 'disabled' && redirectToCanonicalWaitlist()) {
-        return
-      }
-      if (privyClientStatus !== 'ready') {
-        setError('Sign-in service is still loading. Please wait a moment and try again.')
-        return
-      }
-      clearStoredWaitlistSessionToken()
-      const address = await signInSession({ method: 'privy', preferBaseAccountWallet: true })
-      if (!address) {
-        setError('Base sign-in was cancelled or did not complete. Try again.')
-        return
-      }
-      await connectBaseAccountWallet({
-        canonicalCswAddress: account?.accountSignals?.canonicalCswAddress ?? null,
-        requireEmbeddedEoa: false,
-      }).catch(() => false)
-      await settleBootstrapAfterRecoverableLoginError({
-        bypassRecoveryCooldown: true,
-      })
-    } catch (authError: unknown) {
-      const isRecoveryRequired = isRecoveryRequiredAuthError(authError)
-      if (isRecoveryRequired) {
-        writeWaitlistRecoveryGate(true)
-        clearWaitlistAuthPending()
-        setRecoveryRequired(true)
-        setError(recoveryRequiredMessage)
-        return
-      }
-      if (isWalletProviderCollisionError(authError)) {
-        setError(getWalletProviderCollisionMessage())
-        return
-      }
-      setError(
-        isPrivyLoginBootstrapError(authError)
-          ? getSignInNetworkUnstableMessage()
-          : authError instanceof Error && authError.message.trim()
-            ? authError.message
-            : 'Failed to sign in with Base Account.',
-      )
-    } finally {
-      endAuthAttempt()
-    }
-  }, [
-    account?.accountSignals?.canonicalCswAddress,
-    beginAuthAttempt,
-    connectBaseAccountWallet,
-    endAuthAttempt,
-    privyClientStatus,
-    recoveryRequiredBootstrapCooldownUntilRef,
-    recoveryRequiredMessage,
-    redirectToCanonicalWaitlist,
-    settleBootstrapAfterRecoverableLoginError,
-    setError,
-    setRecoveryRequired,
-    signInSession,
-    tokenlessFinalizingBootstrapCooldownUntilRef,
   ])
 
   const clearStartAuthDeepLink = useCallback(() => {
@@ -887,7 +710,7 @@ export function WaitlistFlow(props: {
       if (isRecoveryRequiredAuthError(recoverError)) {
         writeWaitlistRecoveryGate(true)
         setRecoveryRequired(true)
-        setError(recoveryRequiredMessage)
+        setError(RECOVERY_REQUIRED_MESSAGE)
         return
       }
       setError(typeof recoverError?.message === 'string' ? recoverError.message : 'Failed to start account recovery sign-in.')
@@ -902,7 +725,6 @@ export function WaitlistFlow(props: {
     handoffIntoExistingAccount,
     privyClientStatus,
     recoveryRequiredBootstrapCooldownUntilRef,
-    recoveryRequiredMessage,
     redirectToCanonicalWaitlist,
     setError,
     setRecoveryRequired,
@@ -1022,14 +844,13 @@ export function WaitlistFlow(props: {
         writeWaitlistRecoveryGate(true)
         clearWaitlistAuthPending()
         setRecoveryRequired(true)
-        setError(recoveryRequiredMessage)
+        setError(RECOVERY_REQUIRED_MESSAGE)
         return
       }
       setError(isSessionMismatch ? SESSION_MISMATCH_MESSAGE : message)
     }
   }, [
     disableAggressiveSessionReset,
-    recoveryRequiredMessage,
     resetResolvedAccountState,
     setError,
     setRecoveryRequired,
@@ -1192,7 +1013,7 @@ export function WaitlistFlow(props: {
           if (isRecoveryRequired) {
             writeWaitlistRecoveryGate(true)
             setRecoveryRequired(true)
-            setError(recoveryRequiredMessage)
+            setError(RECOVERY_REQUIRED_MESSAGE)
             return
           }
 
@@ -1211,7 +1032,6 @@ export function WaitlistFlow(props: {
     authAttemptInFlightRef,
     busy,
     error,
-    recoveryRequiredMessage,
     requestBootstrap,
     resetResolvedAccountState,
     setBusy,
@@ -1236,9 +1056,7 @@ export function WaitlistFlow(props: {
             error={authVisibleError}
             recoveryRequired={recoveryRequired}
             referralCode={activeReferralCode}
-            inBaseApp={inBaseApp}
             onContinueAuth={onContinueAuth}
-            onContinueBaseAuth={onContinueBaseAuth}
             onRecoverAccount={onRecoverAccount}
             disableMotion
           />
@@ -1247,7 +1065,6 @@ export function WaitlistFlow(props: {
             <WaitlistSetupWorkspace
               initialAccount={account as AccountSetupMe}
               canEnterApp={canEnterApp}
-              inBaseApp={inBaseApp}
               completionBusy={completionBusy}
               onEnterApp={onEnterApp}
               onSignOut={onSignOut}
@@ -1267,9 +1084,7 @@ export function WaitlistFlow(props: {
               error={authVisibleError}
               recoveryRequired={recoveryRequired}
               referralCode={activeReferralCode}
-              inBaseApp={inBaseApp}
               onContinueAuth={onContinueAuth}
-              onContinueBaseAuth={onContinueBaseAuth}
               onRecoverAccount={onRecoverAccount}
             />
           ) : step === 'done' && account ? (
@@ -1283,7 +1098,6 @@ export function WaitlistFlow(props: {
               <WaitlistSetupWorkspace
                 initialAccount={account as AccountSetupMe}
                 canEnterApp={canEnterApp}
-                inBaseApp={inBaseApp}
                 completionBusy={completionBusy}
                 onEnterApp={onEnterApp}
                 onSignOut={onSignOut}

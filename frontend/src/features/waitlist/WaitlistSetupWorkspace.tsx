@@ -1,19 +1,17 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/Button'
-import { BaseAppCanonicalWalletLinkPanel } from '@/components/wallet/BaseAppCanonicalWalletLinkPanel'
-import { useEnsureCanonicalBaseAccountWallet } from '@/hooks/useEnsureCanonicalBaseAccountWallet'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
-import { externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
 import { AccountSetupWorkspaceView } from '@/features/accountSetup/AccountSetupWorkspaceView'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
+import { WalletProviders } from '@/web3/Web3Providers'
 import { WaitlistUnlocksPanel } from './WaitlistUnlocksPanel'
 import { WaitlistGroupChatPanel } from './WaitlistGroupChatPanel'
 
 type WaitlistSetupWorkspaceProps = {
   initialAccount: AccountSetupMe
   canEnterApp: boolean
-  inBaseApp?: boolean
   completionBusy: boolean
   onEnterApp: () => void | Promise<void>
   onSignOut: () => void | Promise<void>
@@ -21,14 +19,17 @@ type WaitlistSetupWorkspaceProps = {
 }
 
 export function WaitlistSetupWorkspace(props: WaitlistSetupWorkspaceProps) {
-  return <WaitlistSetupWorkspaceContent {...props} />
+  return (
+    <WalletProviders reconnectOnMount={false}>
+      <WaitlistSetupWorkspaceContent {...props} />
+    </WalletProviders>
+  )
 }
 
 function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
   const {
     initialAccount,
     canEnterApp,
-    inBaseApp = false,
     completionBusy,
     onEnterApp,
     onSignOut,
@@ -45,11 +46,7 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
   const waitlistJoined = initialAccount.emailVerified === true
   const setupComplete = controller.zoraLinked && Boolean(controller.canonicalCswAddress)
   const canEnterNow = canEnterApp
-  const baseWalletLink = useEnsureCanonicalBaseAccountWallet({
-    enabled: inBaseApp && !signingStepComplete && Boolean(controller.canonicalCswAddress),
-    canonicalCswAddress: controller.canonicalCswAddress,
-    autoConnect: true,
-  })
+  const inBaseApp = useMemo(() => isBaseAppInAppContext(), [])
 
   return (
     <>
@@ -57,76 +54,66 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
         <div className="mx-auto mb-6 max-w-[640px] space-y-2 text-center">
           <h2 className="text-2xl font-semibold text-white">You&apos;re on the waitlist</h2>
           <p className="text-sm text-zinc-400">
-            {canEnterApp
-              ? 'You&apos;re approved — enter the app when ready.'
-              : 'We&apos;ll notify you when your spot opens. Optional setup below unlocks swaps and chat sooner.'}
+            {inBaseApp && !signingStepComplete
+              ? 'Email verified — connect your Base Account wallet in Step 2 below to unlock swaps and chat.'
+              : canEnterApp
+                ? 'You&apos;re approved — enter the app when ready.'
+                : 'We&apos;ll notify you when your spot opens. Optional setup below unlocks swaps and chat sooner.'}
           </p>
         </div>
       ) : null}
-      <BaseAppCanonicalWalletLinkPanel
-        enabled={inBaseApp && !signingStepComplete}
-        canonicalCswAddress={controller.canonicalCswAddress}
-        ready={baseWalletLink.ready}
-        linking={baseWalletLink.linking}
-        linkError={baseWalletLink.linkError}
-        onLink={baseWalletLink.link}
-        onSignOut={onSignOut}
-        signOutBusy={signOutBusy}
-        footerLinkHref={externalBrowserUrlFor('/add')}
-        footerLinkLabel="Open /add owner-install experiment"
-      />
       <AccountSetupWorkspaceView
-      context="waitlist"
-      controller={controller}
-      onSigningStepCompleteChange={onSigningStepCompleteChange}
-      summaryActions={
-        <div className="w-full space-y-4">
-          <WaitlistUnlocksPanel score={initialAccount.score} email={initialAccount.email} />
+        context="waitlist"
+        controller={controller}
+        onSigningStepCompleteChange={onSigningStepCompleteChange}
+        summaryActions={
+          <div className="w-full space-y-4">
+            <WaitlistUnlocksPanel score={initialAccount.score} email={initialAccount.email} />
 
-          <WaitlistGroupChatPanel setupComplete={setupComplete} signingReady={signingStepComplete} />
+            <WaitlistGroupChatPanel setupComplete={setupComplete} signingReady={signingStepComplete} />
 
-          {canEnterNow ? (
-            <div className="space-y-2">
-              <Button
-                type="button"
-                variant="primary"
-                onClick={() => void onEnterApp()}
-                disabled={completionBusy}
-                loading={completionBusy}
-                className="w-full disabled:grayscale"
-              >
-                {`${SHARE_SYMBOL_PREFIX} Enter App`}
-              </Button>
-              {!setupComplete ? (
-                <p className="text-xs text-zinc-500">
-                  Complete optional setup below for the best in-app experience.
-                </p>
-              ) : null}
-            </div>
-          ) : waitlistJoined ? (
-            <div role="status" aria-live="polite" className="space-y-2">
-              <p className="text-sm text-zinc-300">Waiting for approval.</p>
-              <a
-                href="/leaderboard"
-                className="inline-flex h-9 items-center rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/[0.08]"
-              >
-                View leaderboard
-              </a>
-            </div>
-          ) : null}
-        </div>
-      }
-      waitlistFooter={
-        <button
-          type="button"
-          onClick={() => void onSignOut()}
-          disabled={signOutBusy}
-          className="text-xs text-zinc-400 transition hover:text-zinc-300 disabled:opacity-50"
-        >
-          {signOutBusy ? 'Signing out...' : 'Sign out'}
-        </button>
-      }
-    />
+            {canEnterNow ? (
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={() => void onEnterApp()}
+                  disabled={completionBusy}
+                  loading={completionBusy}
+                  className="w-full disabled:grayscale"
+                >
+                  {`${SHARE_SYMBOL_PREFIX} Enter App`}
+                </Button>
+                {!setupComplete ? (
+                  <p className="text-xs text-zinc-500">
+                    Complete optional setup below for the best in-app experience.
+                  </p>
+                ) : null}
+              </div>
+            ) : waitlistJoined ? (
+              <div role="status" aria-live="polite" className="space-y-2">
+                <p className="text-sm text-zinc-300">Waiting for approval.</p>
+                <a
+                  href="/leaderboard"
+                  className="inline-flex h-9 items-center rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/[0.08]"
+                >
+                  View leaderboard
+                </a>
+              </div>
+            ) : null}
+          </div>
+        }
+        waitlistFooter={
+          <button
+            type="button"
+            onClick={() => void onSignOut()}
+            disabled={signOutBusy}
+            className="text-xs text-zinc-400 transition hover:text-zinc-300 disabled:opacity-50"
+          >
+            {signOutBusy ? 'Signing out...' : 'Sign out'}
+          </button>
+        }
+      />
     </>
   )
 }

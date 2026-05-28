@@ -1,8 +1,6 @@
 export const RECOVERY_REQUIRED_MESSAGE =
   'This email already has a 4626 account. Use existing account sign-in to continue.'
-export const RECOVERY_REQUIRED_BASE_APP_MESSAGE =
-  'This email already has a 4626 account. Sign in with Base to open your existing account.'
-export const SESSION_MISMATCH_MESSAGE = 'Signed in as a different account. Click Continue with email to try again.'
+export const SESSION_MISMATCH_MESSAGE = 'Signed in as a different account. Tap Continue to try again.'
 export const SESSION_FINALIZING_RETRY_MESSAGE =
   'Sign-in session is still finalizing. We will keep retrying automatically.'
 export const STALE_PRIVY_SESSION_MESSAGE =

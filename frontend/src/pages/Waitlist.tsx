@@ -1,18 +1,17 @@
-import { Suspense, lazy, useMemo } from 'react'
+import { Suspense, lazy } from 'react'
 
 import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { PrivyClientProvider, usePrivyClientStatus } from '@/lib/privy/client'
 import { SmartWalletsRouteProvider } from '@/lib/privy/SmartWalletsRouteProvider'
-import { detectInAppEnvironment, isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
-import { AppQueryProvider, WalletProviders } from '@/web3/Web3Providers'
+import { AppQueryProvider } from '@/web3/Web3Providers'
 
 const LazyWaitlistFlow = lazy(async () => {
   const mod = await import('@/features/waitlist/WaitlistFlow')
   return { default: mod.WaitlistFlow }
 })
 
-function WaitlistFlowGate(props: { inBaseApp?: boolean }) {
+function WaitlistFlowGate() {
   const privyClientStatus = usePrivyClientStatus()
 
   if (privyClientStatus === 'disabled') {
@@ -32,38 +31,21 @@ function WaitlistFlowGate(props: { inBaseApp?: boolean }) {
 
   return (
     <Suspense fallback={<AppLoadingRegistrar />}>
-      <LazyWaitlistFlow sectionId="waitlist-page" inBaseApp={props.inBaseApp === true} />
+      <LazyWaitlistFlow sectionId="waitlist-page" />
     </Suspense>
   )
 }
 
-function readWaitlistPrivyShell() {
-  if (typeof window === 'undefined') {
-    return { inBaseApp: false, mode: 'waitlist-email-only' as const, showWalletLoginFirst: false }
-  }
-  const inBaseApp = isBaseAppInAppContext(detectInAppEnvironment())
-  return {
-    inBaseApp,
-    mode: inBaseApp ? ('default' as const) : ('waitlist-email-only' as const),
-    showWalletLoginFirst: inBaseApp,
-  }
-}
-
 export function Waitlist() {
-  const privyShell = useMemo(() => readWaitlistPrivyShell(), [])
-  const flow = (
-    <AppQueryProvider>
-      <SmartWalletsRouteProvider>
-        <WaitlistFlowGate inBaseApp={privyShell.inBaseApp} />
-      </SmartWalletsRouteProvider>
-    </AppQueryProvider>
-  )
-
   return (
     <>
       <PageMeta title={META.waitlist.title} description={META.waitlist.description} canonicalPath="/waitlist" />
-      <PrivyClientProvider showWalletLoginFirst={privyShell.showWalletLoginFirst} mode={privyShell.mode}>
-        <WalletProviders reconnectOnMount={false}>{flow}</WalletProviders>
+      <PrivyClientProvider showWalletLoginFirst={false} mode="waitlist-email-only">
+        <AppQueryProvider>
+          <SmartWalletsRouteProvider>
+            <WaitlistFlowGate />
+          </SmartWalletsRouteProvider>
+        </AppQueryProvider>
       </PrivyClientProvider>
     </>
   )
