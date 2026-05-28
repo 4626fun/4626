@@ -360,12 +360,13 @@ function WaitlistConnectBaseAppReady(props: Props) {
     if (!autoConnectOnMount) return
     if (parentCswSigningReady) return
     if (view.kind !== 'idle') return
+    if (!embeddedWallet?.address) return
     if (autoConnectStartedRef.current) return
     autoConnectStartedRef.current = true
     queueMicrotask(() => {
       void handleConnect()
     })
-  }, [autoConnectOnMount, handleConnect, parentCswSigningReady, view.kind])
+  }, [autoConnectOnMount, embeddedWallet?.address, handleConnect, parentCswSigningReady, view.kind])
 
   useEffect(() => {
     if (view.kind !== 'complete') return

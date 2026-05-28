@@ -108,6 +108,14 @@ describe('WaitlistConnectBaseApp', () => {
     await waitFor(() => expect(hookState.connectWallet).toHaveBeenCalled())
   })
 
+  it('waits for embedded wallet hydration before auto-connecting Base App', async () => {
+    hookState.embeddedAddress = ''
+    render(<WaitlistConnectBaseApp autoConnectOnMount onSkip={() => {}} onComplete={() => {}} />)
+
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(hookState.connectWallet).not.toHaveBeenCalled()
+  })
+
   it('single-step flow: connect wallet, provision, finalize signer, register, then optional owner install', async () => {
     mockProvision(true)
     registerMock.mockResolvedValueOnce({ ok: true, message: '' })

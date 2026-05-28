@@ -13,7 +13,6 @@ import {
   isOnCanonicalMarketingWaitlistPage,
   isWaitlistStartAuthSearchParam,
   readStoredWaitlistReferralCode,
-  readWaitlistSetupIntent,
   storeWaitlistReferralCode,
   WAITLIST_START_AUTH_QUERY_KEY,
 } from '@/lib/auth/waitlistEntry'
@@ -23,6 +22,7 @@ import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
 
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 
 import {
   applyWaitlistSubAccountConnectOverlay,
@@ -359,9 +359,9 @@ export function WaitlistFlow(props: {
   const subAccountStepCompletedAccountKeyRef = useRef<string | null>(null)
   const subAccountConnectOverlayRef = useRef<WaitlistSubAccountConnectOverlay | null>(null)
   const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
-  const requireBaseAppConnect = baseInAppContext && subAccountFlowEnabled
-  const autoConnectBaseApp =
-    requireBaseAppConnect || readWaitlistSetupIntent(searchParams.get('setup')) === 'base-app'
+  const baseAppInAppContext = useMemo(() => isBaseAppInAppContext(), [])
+  const requireBaseAppConnect = baseAppInAppContext && subAccountFlowEnabled
+  const autoConnectBaseApp = requireBaseAppConnect && Boolean(embeddedEoaAddress)
 
   const {
     busy,
