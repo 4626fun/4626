@@ -13,6 +13,7 @@ import {
   isOnCanonicalMarketingWaitlistPage,
   isWaitlistStartAuthSearchParam,
   readStoredWaitlistReferralCode,
+  readWaitlistSetupIntent,
   storeWaitlistReferralCode,
   WAITLIST_START_AUTH_QUERY_KEY,
 } from '@/lib/auth/waitlistEntry'
@@ -358,6 +359,9 @@ export function WaitlistFlow(props: {
   const subAccountStepCompletedAccountKeyRef = useRef<string | null>(null)
   const subAccountConnectOverlayRef = useRef<WaitlistSubAccountConnectOverlay | null>(null)
   const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
+  const requireBaseAppConnect = baseInAppContext && subAccountFlowEnabled
+  const autoConnectBaseApp =
+    requireBaseAppConnect || readWaitlistSetupIntent(searchParams.get('setup')) === 'base-app'
 
   const {
     busy,
@@ -1147,6 +1151,8 @@ export function WaitlistFlow(props: {
               }
               embeddedEoaAddress={embeddedEoaAddress ?? null}
               parentCswSigningReady={parentCswSigningReady}
+              autoConnectOnMount={autoConnectBaseApp}
+              requireBaseAppConnect={requireBaseAppConnect}
             />
           </div>
         ) : step === 'done' && account ? (
@@ -1194,6 +1200,8 @@ export function WaitlistFlow(props: {
                 }
                 embeddedEoaAddress={embeddedEoaAddress ?? null}
                 parentCswSigningReady={parentCswSigningReady}
+                autoConnectOnMount={autoConnectBaseApp}
+                requireBaseAppConnect={requireBaseAppConnect}
               />
             </motion.div>
           ) : step === 'done' && account ? (

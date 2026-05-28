@@ -93,6 +93,21 @@ describe('WaitlistConnectBaseApp', () => {
     expect(screen.getByTestId('skip-base-app-button')).toBeTruthy()
   })
 
+  it('hides skip when Base App connect is required', () => {
+    render(<WaitlistConnectBaseApp requireBaseAppConnect onSkip={() => {}} onComplete={() => {}} />)
+    expect(screen.getByTestId('connect-base-app-button')).toBeTruthy()
+    expect(screen.queryByTestId('skip-base-app-button')).toBeNull()
+  })
+
+  it('auto-starts Base App connect after Privy when autoConnectOnMount is true', async () => {
+    mockProvision(true)
+    registerMock.mockResolvedValueOnce({ ok: true, message: '' })
+
+    render(<WaitlistConnectBaseApp autoConnectOnMount onSkip={() => {}} onComplete={() => {}} />)
+
+    await waitFor(() => expect(hookState.connectWallet).toHaveBeenCalled())
+  })
+
   it('single-step flow: connect wallet, provision, finalize signer, register, then optional owner install', async () => {
     mockProvision(true)
     registerMock.mockResolvedValueOnce({ ok: true, message: '' })

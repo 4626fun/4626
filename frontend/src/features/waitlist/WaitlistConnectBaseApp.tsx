@@ -42,6 +42,10 @@ type Props = {
   embeddedEoaAddress?: string | null
   /** Population (c): embedded EOA already owns the parent CSW — skip sub-account UI. */
   parentCswSigningReady?: boolean
+  /** Start Base App wallet connect as soon as Privy email auth has finished. */
+  autoConnectOnMount?: boolean
+  /** Hide skip when Base App sign-in is required (in-app browser). */
+  requireBaseAppConnect?: boolean
 }
 
 type PendingProvision = {
@@ -194,6 +198,8 @@ function WaitlistConnectBaseAppReady(props: Props) {
     subAccountAddress,
     embeddedEoaAddress,
     parentCswSigningReady = false,
+    autoConnectOnMount = false,
+    requireBaseAppConnect = false,
   } = props
   const setup = useSubAccountSetup()
   const {
@@ -209,6 +215,7 @@ function WaitlistConnectBaseAppReady(props: Props) {
 
   const [view, setView] = useState<ViewState>({ kind: 'idle' })
   const cancelledRef = useRef(false)
+  const autoConnectStartedRef = useRef(false)
 
   useEffect(() => {
     return () => {
@@ -345,6 +352,21 @@ function WaitlistConnectBaseAppReady(props: Props) {
     void handleConnect()
   }, [handleConnect, view])
 
+  const showRecoveryPanel =
+    !parentCswSigningReady &&
+    Boolean(parentAddress?.trim() && subAccountAddress?.trim() && embeddedEoaAddress?.trim())
+
+  useEffect(() => {
+    if (!autoConnectOnMount) return
+    if (parentCswSigningReady) return
+    if (view.kind !== 'idle') return
+    if (autoConnectStartedRef.current) return
+    autoConnectStartedRef.current = true
+    queueMicrotask(() => {
+      void handleConnect()
+    })
+  }, [autoConnectOnMount, handleConnect, parentCswSigningReady, view.kind])
+
   useEffect(() => {
     if (view.kind !== 'complete') return
     const timer = window.setTimeout(() => {
@@ -352,10 +374,6 @@ function WaitlistConnectBaseAppReady(props: Props) {
     }, COMPLETE_AUTOADVANCE_MS)
     return () => window.clearTimeout(timer)
   }, [view, onComplete])
-
-  const showRecoveryPanel =
-    !parentCswSigningReady &&
-    Boolean(parentAddress?.trim() && subAccountAddress?.trim() && embeddedEoaAddress?.trim())
 
   if (parentCswSigningReady) {
     return (
@@ -382,7 +400,7 @@ function WaitlistConnectBaseAppReady(props: Props) {
     <div className="mx-auto w-full max-w-md space-y-6 text-center" data-testid="waitlist-connect-base-app">
       <div className="space-y-2">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgb(var(--brand-primary)/0.8)]">
-          {showRecoveryPanel ? 'Finish setup' : 'Optional · Base App'}
+          {showRecoveryPanel ? 'Finish setup' : requireBaseAppConnect ? 'Required · Base App' : 'Optional · Base App'}
         </p>
         <h2 className="text-[1.8rem] font-light leading-tight tracking-tight text-white">
           {showRecoveryPanel ? 'Enable 4626 signing' : 'Connect Base App'}
@@ -390,7 +408,9 @@ function WaitlistConnectBaseAppReady(props: Props) {
         <p className="text-sm leading-relaxed text-zinc-400">
           {showRecoveryPanel
             ? 'Your app wallet is linked. One Base App approval lets your embedded 4626 key sign for sponsored swaps.'
-            : 'Link your Base App wallet for sponsored swaps. We create a dedicated 4626 app wallet signed by your embedded key — your main Base App wallet stays unchanged.'}
+            : requireBaseAppConnect
+              ? 'Sign in with your Base App wallet to finish setup. We link a dedicated 4626 app wallet signed by your embedded key — your main Base App wallet stays unchanged.'
+              : 'Link your Base App wallet for sponsored swaps. We create a dedicated 4626 app wallet signed by your embedded key — your main Base App wallet stays unchanged.'}
         </p>
       </div>
 
@@ -432,14 +452,16 @@ function WaitlistConnectBaseAppReady(props: Props) {
                 setup={setup}
               />
             ) : null}
-            <button
-              type="button"
-              className="text-xs font-medium uppercase tracking-wider text-zinc-400 hover:text-zinc-300"
-              onClick={onSkip}
-              data-testid="skip-base-app-button"
-            >
-              Skip for now
-            </button>
+            {!requireBaseAppConnect ? (
+              <button
+                type="button"
+                className="text-xs font-medium uppercase tracking-wider text-zinc-400 hover:text-zinc-300"
+                onClick={onSkip}
+                data-testid="skip-base-app-button"
+              >
+                Skip for now
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -492,14 +514,16 @@ function WaitlistConnectBaseAppReady(props: Props) {
                 Try again
               </Button>
             ) : null}
-            <button
-              type="button"
-              className="text-xs font-medium uppercase tracking-wider text-zinc-400 hover:text-zinc-300"
-              onClick={onSkip}
-              data-testid="skip-base-app-button"
-            >
-              Skip for now
-            </button>
+            {!requireBaseAppConnect ? (
+              <button
+                type="button"
+                className="text-xs font-medium uppercase tracking-wider text-zinc-400 hover:text-zinc-300"
+                onClick={onSkip}
+                data-testid="skip-base-app-button"
+              >
+                Skip for now
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}
