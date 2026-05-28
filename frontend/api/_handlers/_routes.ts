@@ -46,6 +46,9 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'wallet/prepare-add-privy-owner': () => import('./wallet/_prepare-add-privy-owner.js'),
   'wallet/confirm-owner': () => import('./wallet/_confirm-owner.js'),
   'portfolio/me': () => import('./portfolio/_me.js'),
+  'base-mcp/prepare': () => import('./base-mcp/_prepare.js'),
+  'base-mcp/request-status': () => import('./base-mcp/_request-status.js'),
+  'base-mcp/request-update': () => import('./base-mcp/_request-update.js'),
   'vaults/active': () => import('./vaults/_activeProtected.js'),
 
   'creator-allowlist': () => import('./creator-access/_allowlist.js'),
