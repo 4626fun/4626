@@ -60,7 +60,6 @@ const REQUIRED_MANIFEST_KEYS = [
   'AjnaERC4626Vault',
   'ERC4626StrategyAdapter',
   'SolanaStrategy',
-  'DeploymentBatcherPhase3Helper',
 ] as const
 
 const FRONTEND_DEPLOY_KEYS = [
@@ -100,7 +99,7 @@ function storeAddress(): Address {
 function manifestPath(): string {
   const fromEnv = process.env.BYTECODE_MANIFEST?.trim()
   if (fromEnv) return resolve(fromEnv)
-  return resolve(process.cwd(), '../../deployments/base/v1.12.0-bytecode-manifest.json')
+  return resolve(import.meta.dirname, '../../../deployments/base/v1.12.0-bytecode-manifest.json')
 }
 
 async function main(): Promise<void> {
