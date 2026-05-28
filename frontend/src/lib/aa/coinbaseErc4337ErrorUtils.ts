@@ -337,9 +337,40 @@ export function isExecutionRevertedLikeError(error: unknown): boolean {
 
 const ZORA_UNIVERSAL_ROUTER_BASE = '0x6ff5693b99212da76ad316178a184ab56d299b43'
 
+/** Coinbase Smart Wallet `execute(address,uint256,bytes)` — bundlers often echo full UserOp callData in RPC errors. */
+const CSW_EXECUTE_SELECTOR = '0xb61d27f6'
+
+const ACTIONABLE_BUNDLER_REVERT_SELECTORS = new Set([
+  '0x2c4029e9', // ExecutionFailed(uint256,bytes)
+  '0xb0669cbc', // InvalidContractSignature()
+  '0x3b99b53d', // SliceOutOfBounds()
+  '0x08c379a0', // Error(string)
+  '0x4e487b71', // Panic(uint256)
+  '0x82b42900', // Unauthorized()
+])
+
+/** Long `0xb61d27f6…` payloads are echoed callData, not a decodable on-chain revert. */
+export function isEchoedBundlerUserOpCallData(revertData: Hex | undefined): boolean {
+  if (!revertData || revertData.length < 200) return false
+  return revertData.slice(0, 10).toLowerCase() === CSW_EXECUTE_SELECTOR
+}
+
+export function isActionableBundlerSimulationRevert(revertData: Hex | undefined): boolean {
+  if (!revertData || revertData.length < 10) return false
+  const selector = revertData.slice(0, 10).toLowerCase()
+  if (isEchoedBundlerUserOpCallData(revertData)) return false
+  return ACTIONABLE_BUNDLER_REVERT_SELECTORS.has(selector)
+}
+
+export function isRpcInvalidParametersEstimateError(error: unknown): boolean {
+  const lower = getErrorDiagnosticMessage(error).toLowerCase()
+  return lower.includes('invalid parameters were provided')
+}
+
 /**
  * Bundler gas estimate can fail while eth_call preflight still passes (stub sig, paymaster stub, state drift).
- * When a Zora floor callGasLimit is configured, proceed with that floor instead of blocking send.
+ * When a Zora floor callGasLimit is configured, proceed with that floor only for non-actionable estimate noise
+ * (invalid RPC params + echoed UserOp callData). Real execution reverts must block send.
  */
 export function shouldAdvisorySkipBundlerGasEstimate(params: {
   error: unknown
@@ -351,12 +382,15 @@ export function shouldAdvisorySkipBundlerGasEstimate(params: {
   const callTo = String(params.firstCallTo ?? '').toLowerCase()
   if (callTo !== ZORA_UNIVERSAL_ROUTER_BASE) return false
   const revertInfo = extractRevertInfo(params.error)
-  if (revertInfo.revertData && revertInfo.revertData.length >= 10) return true
+  if (isActionableBundlerSimulationRevert(revertInfo.revertData)) return false
   const lower = String(revertInfo.error ?? getErrorDiagnosticMessage(params.error)).toLowerCase()
+  if (isRpcInvalidParametersEstimateError(params.error)) {
+    return isEchoedBundlerUserOpCallData(revertInfo.revertData) || !revertInfo.revertData
+  }
+  if (isEchoedBundlerUserOpCallData(revertInfo.revertData)) return true
   return (
     lower.includes('execution reverted') ||
-    lower.includes('reverted for an unknown reason') ||
-    lower.includes('invalid parameters were provided')
+    lower.includes('reverted for an unknown reason')
   )
 }
 

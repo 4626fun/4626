@@ -1,5 +1,5 @@
 import { permit2ABI, permit2Address } from '@zoralabs/protocol-deployments'
-import { getAddress, hashTypedData, isAddress, type Hex, type PublicClient } from 'viem'
+import { getAddress, hashTypedData, isAddress, numberToHex, type Hex, type PublicClient } from 'viem'
 import { base } from 'viem/chains'
 
 import {
@@ -137,6 +137,15 @@ export function readZoraQuotedSlippagePct(quote: TradeQuoteResponse | null | und
     (quote as { quote?: { _zoraSlippage?: number } } | null | undefined)?.quote?._zoraSlippage
   if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) return null
   return raw >= 1 ? raw : raw * 100
+}
+
+/** Next slippage step after a bundler send failure when prepare-time simulation already passed. */
+export function pickNextZoraBundlerRetrySlippagePct(slippagePct: number): number {
+  const ladder = buildZoraSlippageEscalationLadder(Math.max(slippagePct, 5))
+  for (const pct of ladder) {
+    if (pct > slippagePct + 1e-9) return pct
+  }
+  return Math.min(15, slippagePct + 5)
 }
 
 /** Retry simulation with higher slippage when the router reverts (thin pools / stale minOut). */
@@ -297,6 +306,46 @@ export function formatZoraRouterSimulationFailure(error: unknown): Error {
   )
 }
 
+function isInvalidEthCallSenderParameterError(error: unknown): boolean {
+  const msg = String(error instanceof Error ? error.message : error).toLowerCase()
+  return msg.includes('invalid parameters were provided')
+}
+
+async function ethCallZoraRouterAsCsw(params: {
+  readClient: PublicClient
+  executionAddress: `0x${string}`
+  target: `0x${string}`
+  data: Hex
+  value: bigint
+}): Promise<void> {
+  const from = getAddress(params.executionAddress)
+  try {
+    await params.readClient.call({
+      to: params.target,
+      data: params.data,
+      value: params.value,
+      account: from,
+      blockNumber: 'latest',
+    })
+    return
+  } catch (e: unknown) {
+    if (!isInvalidEthCallSenderParameterError(e)) throw e
+  }
+
+  await params.readClient.transport.request({
+    method: 'eth_call',
+    params: [
+      {
+        to: params.target,
+        data: params.data,
+        value: numberToHex(params.value),
+        from,
+      },
+      'latest',
+    ],
+  })
+}
+
 /** Production-RPC eth_call: CSW → Zora router (catches stale/malformed route bytes before UserOp submit). */
 export async function assertZoraRouterCallExecutesFromCsw(params: {
   executionAddress: `0x${string}`
@@ -308,12 +357,12 @@ export async function assertZoraRouterCallExecutesFromCsw(params: {
   const value = BigInt(params.call.value ?? '0')
   // Match sponsored bundler simulation (chain head), not pending mempool state.
   try {
-    await readClient.call({
-      to: target,
+    await ethCallZoraRouterAsCsw({
+      readClient,
+      executionAddress: getAddress(params.executionAddress),
+      target,
       data,
       value,
-      account: getAddress(params.executionAddress),
-      blockNumber: 'latest',
     })
   } catch (e: unknown) {
     throw formatZoraRouterSimulationFailure(e)

@@ -94,28 +94,9 @@ export async function signOwnerSignatureForCswErc1271(params: {
   publicClient: PublicClient
   chainId?: number
 }): Promise<Hex> {
-  const chainId = params.chainId ?? base.id
-  const cswDomain = {
-    ...CSW_OWNER_EIP712_DOMAIN,
-    chainId,
-    verifyingContract: params.smartWallet,
-  }
-
-  if (typeof params.walletClient.signTypedData === 'function') {
-    try {
-      const ownerSig = (await params.walletClient.signTypedData({
-        account: params.signerAddress,
-        domain: cswDomain,
-        types: CSW_OWNER_MESSAGE_TYPES,
-        primaryType: 'CoinbaseSmartWalletMessage',
-        message: { hash: params.innerTypedDataDigest },
-      })) as Hex
-      return wrapCswOwnerSignature(ownerSig, params.ownerIndex)
-    } catch {
-      // Fall through to replaySafeHash + raw digest signing.
-    }
-  }
-
+  // Permit2 → CSW ERC-1271 must validate against replaySafeHash(permitDigest).
+  // Privy signTypedData on CoinbaseSmartWalletMessage{hash: permitDigest} can pass
+  // isValidSignature(permitDigest) in isolation but still fail inside the router leg.
   const replaySafeHash = await readCswReplaySafeHash({
     publicClient: params.publicClient,
     smartWallet: params.smartWallet,

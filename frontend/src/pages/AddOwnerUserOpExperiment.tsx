@@ -13,6 +13,7 @@ import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 import { RELAY_ROUTER_BASE } from '@/lib/wallet/addOwnerCallShape'
 import { ENTRY_POINT_V06_BASE } from '@/lib/wallet/cswOwnerAbi'
 import { externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
+import { formatEthCompact } from '@/lib/wallet/cswEntryPointFunding'
 
 function basescanTxUrl(hash: string): string {
   return `https://basescan.org/tx/${hash}`
@@ -48,10 +49,20 @@ export function AddOwnerUserOpExperiment() {
     onSuccess: () => loadMe({ showSpinner: false }),
   })
 
+  const fundingBlocksSubmit =
+    userOpFlow.fundingAssessment != null && !userOpFlow.fundingAssessment.ok
+  const fundingPending =
+    userOpFlow.fundingLoading ||
+    (userOpFlow.fundingAssessment == null && Boolean(publicClient && canonicalCswAddress))
+
   const canSubmitUserOp =
     Boolean(canonicalCswAddress && privyEmbeddedEoaAddress) &&
     !userOpFlow.alreadyOwner &&
-    !userOpFlow.prepareLoading
+    !userOpFlow.prepareLoading &&
+    !fundingBlocksSubmit &&
+    !fundingPending
+
+  const fundingSnapshot = userOpFlow.fundingAssessment?.snapshot
 
   return (
     <div className="relative min-h-0 w-full bg-transparent text-white">
@@ -150,6 +161,40 @@ export function AddOwnerUserOpExperiment() {
                   </dd>
                 </div>
               </dl>
+
+              {userOpFlow.fundingAssessment && !userOpFlow.fundingAssessment.ok ? (
+                <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 space-y-2 text-xs text-amber-100">
+                  <div className="font-semibold">Smart wallet needs gas prefund</div>
+                  <p className="leading-relaxed text-amber-100/90">
+                    Base App builds an ERC-4337 UserOp for this self-call. Your CSW currently has{' '}
+                    <span className="font-mono">
+                      {fundingSnapshot ? formatEthCompact(fundingSnapshot.totalAvailableWei) : '0 ETH'}
+                    </span>{' '}
+                    available for gas (native{' '}
+                    {fundingSnapshot ? formatEthCompact(fundingSnapshot.cswNativeWei) : '0 ETH'} + EntryPoint
+                    deposit{' '}
+                    {fundingSnapshot ? formatEthCompact(fundingSnapshot.entryPointDepositWei) : '0 ETH'}).
+                    Send about <strong className="font-medium">0.001 ETH</strong> to your canonical CSW in Base
+                    App (Assets → your wallet → Receive), then tap Rebuild preview.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={userOpFlow.fundingLoading || userOpFlow.busy}
+                    onClick={() => void userOpFlow.refreshFunding()}
+                  >
+                    {userOpFlow.fundingLoading ? 'Checking balance…' : 'Recheck CSW gas balance'}
+                  </Button>
+                </div>
+              ) : null}
+
+              {userOpFlow.fundingAssessment?.ok && fundingSnapshot ? (
+                <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-[10px] text-zinc-500">
+                  Gas prefund: {formatEthCompact(fundingSnapshot.totalAvailableWei)} available on CSW (
+                  native {formatEthCompact(fundingSnapshot.cswNativeWei)}, EntryPoint{' '}
+                  {formatEthCompact(fundingSnapshot.entryPointDepositWei)})
+                </div>
+              ) : null}
 
               {userOpFlow.busy && userOpFlow.submitPhase === 'awaiting_signature' ? (
                 <div className="rounded-xl border border-sky-400/25 bg-sky-500/10 px-3 py-2.5 text-xs text-sky-100">

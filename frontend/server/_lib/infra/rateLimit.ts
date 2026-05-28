@@ -137,14 +137,14 @@ export const RATE_LIMITS = {
   creatorQuickstart: { windowMs: 60_000, maxRequests: 20 },
   // Relay owner-mutation status polling: up to ~30 polls/min for 8 minutes
   relayIntentStatus: { windowMs: 60_000, maxRequests: 300 },
-  // Keeper runtime ingest reads: 120 per minute per client IP
-  creRuntimeIngestRead: { windowMs: 60_000, maxRequests: 120 },
-  // Keeper runtime ingest writes: 60 per minute per client IP
-  creRuntimeIngestWrite: { windowMs: 60_000, maxRequests: 60 },
-  // Keeper runtime decisions writes: 60 per minute per client IP
-  creRuntimeDecisionsWrite: { windowMs: 60_000, maxRequests: 60 },
-  // Keeper runtime trigger writes: 30 per minute per client IP
-  creRuntimeTriggerWrite: { windowMs: 60_000, maxRequests: 30 },
+  // Keeper machine-auth ingest reads: 120 per minute per client IP
+  keeperIngestRead: { windowMs: 60_000, maxRequests: 120 },
+  // Keeper machine-auth ingest writes: 60 per minute per client IP
+  keeperIngestWrite: { windowMs: 60_000, maxRequests: 60 },
+  // Keeper job / keepr-actions writes: 60 per minute per client IP
+  keeperDecisionsWrite: { windowMs: 60_000, maxRequests: 60 },
+  // Keeper onchain trigger endpoints: 30 per minute per client IP
+  keeperTriggerWrite: { windowMs: 60_000, maxRequests: 30 },
   // Ajna calldata build endpoints: 120 per minute per principal
   buildAjnaCalldata: { windowMs: 60_000, maxRequests: 120 },
   // Auction submitBid calldata build endpoint: 80 per minute per principal

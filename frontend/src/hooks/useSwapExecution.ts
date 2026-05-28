@@ -54,6 +54,7 @@ import {
   isZoraBundlerSendRetryable,
   isZoraProviderQuote,
   quoteNeedsZoraPermitFinalization,
+  pickNextZoraBundlerRetrySlippagePct,
   prepareZoraQuoteForExecute,
 } from '@/lib/zora/zoraTradeApi'
 import {
@@ -2007,14 +2008,17 @@ export function useSwapExecution(params: {
           if (!canRefreshZora) throw sendError
           const amount = readQuoteInputAmount(quote)
           if (!amount || !params.executionAddress) throw sendError
-          setStatus('Bundler simulation failed — refreshing Zora quote and retrying…')
+          const retrySlippagePct = pickNextZoraBundlerRetrySlippagePct(params.parsedSlippage)
+          setStatus(
+            `Bundler rejected the swap at ${params.parsedSlippage}% slippage — refreshing at ${retrySlippagePct}%…`,
+          )
           const executableQuote = await prepareZoraQuoteForExecute({
             quote,
             tokenIn: effectiveTokenIn,
             tokenOut: params.tokenOut,
             amountIn: amount,
             sender: params.executionAddress,
-            slippagePct: params.parsedSlippage,
+            slippagePct: retrySlippagePct,
             signerAddress: params.signerAddress,
             executionAddress: params.executionAddress,
             walletClient: params.walletClient as {

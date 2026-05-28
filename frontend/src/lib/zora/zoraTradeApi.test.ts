@@ -4,6 +4,7 @@ import { getAddress } from 'viem'
 import {
   buildSwapFromZoraQuote,
   buildZoraSlippageEscalationLadder,
+  pickNextZoraBundlerRetrySlippagePct,
   formatZoraRouterSimulationFailure,
   isZoraPermitSignaturePlaceholder,
   isZoraBundlerSendRetryable,
@@ -16,6 +17,14 @@ import {
 } from '@/lib/zora/zoraTradeApi'
 
 const EXECUTION_CSW = getAddress('0xAb6d5C10b03300326cd7fab7267ae192842967b5')
+
+describe('pickNextZoraBundlerRetrySlippagePct', () => {
+  it('steps up the slippage ladder after a failed send', () => {
+    expect(pickNextZoraBundlerRetrySlippagePct(5)).toBe(10)
+    expect(pickNextZoraBundlerRetrySlippagePct(7)).toBe(10)
+    expect(pickNextZoraBundlerRetrySlippagePct(10)).toBe(15)
+  })
+})
 
 describe('zoraTradeApi', () => {
   it('maps Zora quote payload into a classic-compatible trade quote', () => {

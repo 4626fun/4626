@@ -9,6 +9,12 @@ import {
   verifyEntryPointHandleOpsTransaction,
 } from '@/lib/wallet/addOwnerCallShape'
 import { addOwnerViaBaseAppSendCalls, encodeAddOwnerCall } from '@/lib/wallet/baseAppOwnerCalls'
+import {
+  assessCswUserOpFunding,
+  mapAddOwnerFundingErrorMessage,
+  readCswUserOpFundingSnapshot,
+  type CswFundingAssessment,
+} from '@/lib/wallet/cswEntryPointFunding'
 import { ENTRY_POINT_V06_BASE } from '@/lib/wallet/cswOwnerAbi'
 import { readIsOwnerAddressIfDeployed } from '@/lib/wallet/cswOwnerRead'
 import { detectInAppEnvironment, isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
@@ -23,6 +29,8 @@ type WalletRequest = (args: { method: string; params?: unknown[] }) => Promise<u
 const BASE_MAINNET_CHAIN_ID_HEX = '0x2105'
 
 function getErrorMessage(error: unknown): string {
+  const funding = mapAddOwnerFundingErrorMessage(error)
+  if (funding) return funding
   if (error instanceof Error && error.message.trim()) return error.message
   return 'UserOp owner install failed. Retry from Base App with your smart wallet connected.'
 }
@@ -96,6 +104,8 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     'idle' | 'awaiting_signature' | 'broadcasting' | 'confirming' | 'verifying'
   >('idle')
   const [preparedTx, setPreparedTx] = useState<PreparedOwnerTxRequest | null>(null)
+  const [fundingAssessment, setFundingAssessment] = useState<CswFundingAssessment | null>(null)
+  const [fundingLoading, setFundingLoading] = useState(false)
 
   const inBaseApp = isBaseAppInAppContext(detectInAppEnvironment())
 
@@ -167,6 +177,36 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     void loadPrepare()
   }, [enabled, loadPrepare])
 
+  const refreshFunding = useCallback(async () => {
+    if (!canonicalCswAddress || !publicClient) {
+      setFundingAssessment(null)
+      return null
+    }
+    setFundingLoading(true)
+    try {
+      const snapshot = await readCswUserOpFundingSnapshot({
+        publicClient,
+        cswAddress: canonicalCswAddress,
+      })
+      const assessment = assessCswUserOpFunding(snapshot)
+      setFundingAssessment(assessment)
+      return assessment
+    } catch {
+      setFundingAssessment(null)
+      return null
+    } finally {
+      setFundingLoading(false)
+    }
+  }, [canonicalCswAddress, publicClient])
+
+  useEffect(() => {
+    if (!enabled || !canonicalCswAddress || !publicClient) {
+      setFundingAssessment(null)
+      return
+    }
+    void refreshFunding()
+  }, [canonicalCswAddress, enabled, publicClient, refreshFunding])
+
   const handleSubmitUserOp = useCallback(async (): Promise<boolean> => {
     if (!canonicalCswAddress || !privyEmbeddedEoaAddress) {
       setPageError('Canonical wallet or embedded signer is unavailable. Sign in and retry.')
@@ -203,6 +243,15 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
         txRequest,
       })
       appendEvent('preflight:server_preview=self_call_shape_ok')
+
+      const funding = (await refreshFunding()) ?? fundingAssessment
+      if (funding && !funding.ok) {
+        appendEvent(`preflight:funding_${funding.reason}`)
+        throw new Error(getErrorMessage(new Error('insufficient funds for gas')))
+      }
+      if (funding?.ok) {
+        appendEvent(`preflight:funding_ok total=${funding.snapshot.totalAvailableWei.toString()} wei`)
+      }
 
       const walletRequest = await resolveWalletRequest()
       await ensureBaseMainnetWalletContext(walletRequest)
@@ -303,6 +352,8 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     privyEmbeddedEoaAddress,
     publicClient,
     resolveWalletRequest,
+    refreshFunding,
+    fundingAssessment,
   ])
 
   return {
@@ -317,6 +368,9 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     submitPhase,
     inBaseApp,
     preparedTx,
+    fundingAssessment,
+    fundingLoading,
+    refreshFunding,
     loadPrepare,
     handleSubmitUserOp,
   }

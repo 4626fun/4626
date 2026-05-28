@@ -53,6 +53,8 @@ import {
   isExecutionRevertedLikeError,
   buildUserOpGasEstimateFailureError,
   shouldAdvisorySkipBundlerGasEstimate,
+  isEchoedBundlerUserOpCallData,
+  isRpcInvalidParametersEstimateError,
   isExpectedUserOpTimeoutError,
   isImmediateUserOpRetrySuppressedError,
   isLikelyVerificationGasLimitError,
@@ -297,7 +299,7 @@ function formatGasEstimate(estimate: any) {
 
 const ZORA_UNIVERSAL_ROUTER_ADDRESS = '0x6ff5693b99212da76ad316178a184ab56d299b43' as const
 const ZORA_SWAP_EXECUTE_SELECTOR = '0x24856bc3' as const
-const ZORA_SWAP_CALL_GAS_LIMIT = 2_500_000n
+const ZORA_SWAP_CALL_GAS_LIMIT = 4_000_000n
 const ZORA_SEND_CALL_GAS_BUFFER_NUMERATOR = 150n
 const ZORA_SEND_CALL_GAS_BUFFER_DENOMINATOR = 100n
 
@@ -359,14 +361,41 @@ async function assertBundlerUserOpGasEstimate(params: {
     }
 
     let estimate: unknown = null
+    let estimateError: unknown = null
     try {
       estimate = await client.estimateUserOperationGas(estimateParams)
     } catch (e: unknown) {
-      const revertInfo = extractRevertInfo(e)
+      estimateError = e
+      const firstCallTo = calls[0]?.to
+      const canRetryWithoutPaymaster =
+        Boolean(paymaster) &&
+        isZoraUniversalRouterTarget(firstCallTo) &&
+        (isRpcInvalidParametersEstimateError(e) ||
+          isEchoedBundlerUserOpCallData(extractRevertInfo(e).revertData))
+      if (canRetryWithoutPaymaster) {
+        const { paymaster: _paymaster, ...estimateWithoutPaymaster } = estimateParams as {
+          paymaster?: unknown
+        }
+        try {
+          estimate = await client.estimateUserOperationGas(estimateWithoutPaymaster)
+          estimateError = null
+          if (AA_DEBUG) {
+            logger.debug('[ERC-4337] estimateUserOperationGas succeeded without paymaster stub', {
+              smartWallet: account.address,
+            })
+          }
+        } catch (retryError: unknown) {
+          estimateError = retryError
+        }
+      }
+    }
+
+    if (estimateError) {
+      const revertInfo = extractRevertInfo(estimateError)
       const firstCallTo = calls[0]?.to
       if (
         shouldAdvisorySkipBundlerGasEstimate({
-          error: e,
+          error: estimateError,
           firstCallTo,
           floorCallGasLimit: params.callGasLimit,
         })
@@ -402,7 +431,7 @@ async function assertBundlerUserOpGasEstimate(params: {
           errorName: revertInfo.errorName,
         })
       }
-      throw buildUserOpGasEstimateFailureError(e, firstCallTo)
+      throw buildUserOpGasEstimateFailureError(estimateError, firstCallTo)
     }
     if (AA_DEBUG && estimate) {
       logger.debug('[ERC-4337] estimateUserOperationGas', formatGasEstimate(estimate))
@@ -2565,7 +2594,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         if (mappedBundler) throw mappedBundler
         throw new Error(
           'The swap route passed a static read but the sponsored bundler simulation reverted. ' +
-            'The pool likely moved — increase slippage to 5%+, try a smaller amount, refresh the quote, and swap again. ' +
+            'On thin creator pools (e.g. AKITA), try 10–15% slippage, a smaller USDC size, refresh the quote, and re-sign Permit2. ' +
             'If a prior swap is still pending, wait ~30s first.',
         )
       }
