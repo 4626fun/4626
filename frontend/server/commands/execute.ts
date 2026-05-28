@@ -23,6 +23,11 @@ import { executeSendCommandFamily } from './families/send.js'
 import { executeTwitterCommandFamily } from './families/twitter.js'
 import { executeWhoisCommandFamily } from './families/whois.js'
 import { postTweetFromSystem } from '../twitter/commands.js'
+import {
+  formatHermitXCrossPostSkipMessage,
+  truncateWithEllipsis,
+  uniquifyHermitTweetCaption,
+} from './hermitXPostHelpers.js'
 
 function resolveVaultRole(params: {
   senderWallet: ExecuteCommandParams['senderWallet']
@@ -116,12 +121,6 @@ function isLikelyImageUrl(value: string): boolean {
   }
 }
 
-function truncateWithEllipsis(value: string, maxLength: number): string {
-  if (value.length <= maxLength) return value
-  if (maxLength <= 1) return '…'
-  return `${value.slice(0, maxLength - 1).trimEnd()}…`
-}
-
 type HermitXPostPayload = {
   text: string
   media: { url: string } | null
@@ -132,6 +131,7 @@ function buildHermitXPostPayload(params: {
   reply: string
   fallbackCaption?: string
   mediaUrl?: string | null
+  memeId?: string | null
 }): HermitXPostPayload {
   const mediaUrl =
     typeof params.mediaUrl === 'string' && isLikelyImageUrl(params.mediaUrl.trim())
@@ -141,9 +141,12 @@ function buildHermitXPostPayload(params: {
     const caption =
       stripImageUrlsFromHermitReply(params.reply, mediaUrl) ||
       params.fallbackCaption?.trim() ||
-      'cat laugh from the Hermit cave.'
+      'Hermit meme drop'
     return {
-      text: truncateWithEllipsis(caption, 280),
+      text: uniquifyHermitTweetCaption(caption, {
+        memeId: params.memeId,
+        mediaUrl,
+      }),
       media: { url: mediaUrl },
     }
   }
@@ -170,7 +173,7 @@ function buildHermitTweetText(params: {
 
   const mediaUrl = params.mediaUrl || lines.find((line) => isHttpUrl(line)) || ''
   const textLine =
-    lines.find((line) => !isHttpUrl(line)) || params.fallbackCaption || 'cat laugh from the Hermit cave.'
+    lines.find((line) => !isHttpUrl(line)) || params.fallbackCaption || 'Hermit meme drop'
 
   if (!mediaUrl) return truncateWithEllipsis(textLine, 280)
   const combined = `${textLine}\n${mediaUrl}`
@@ -489,15 +492,14 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
         if (alfaClubChat && mediaAttachments.length > 0) {
           response = stripImageUrlsFromHermitReply(response, mediaUrl)
           if (!response) {
-            response =
-              result.meme?.caption?.trim() ||
-              'cat laugh from the Hermit cave.'
+            response = result.meme?.caption?.trim() || 'Hermit meme drop'
           }
           if (isHermitAlfaClubXLinkAfterMediaEnabled() && mediaUrl) {
             const xPost = buildHermitXPostPayload({
               reply: result.reply,
               fallbackCaption: result.meme?.caption,
               mediaUrl: mediaUrl ?? result.meme?.url,
+              memeId: result.meme?.id,
             })
             const tweet = await postTweetFromSystem({
               text: xPost.text,
@@ -511,8 +513,8 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
                   ? tweet.action.tweetUrl
                   : extractTweetUrl(tweet.response)
               if (tweetUrl) alfaclubFollowUpText = tweetUrl
-            } else if (isHermitAlfaClubXLinkAfterMediaEnabled() && mediaUrl) {
-              response = `${response}\n_(X cross-post skipped — ${tweet.response?.slice(0, 120) || 'posting unavailable'}.)_`.trim()
+            } else {
+              response = `${response}\n_(${formatHermitXCrossPostSkipMessage(tweet.response)}.)_`.trim()
             }
           }
         } else {
@@ -523,6 +525,7 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
               reply: result.reply,
               fallbackCaption: result.meme?.caption,
               mediaUrl: mediaUrl ?? result.meme?.url,
+              memeId: result.meme?.id,
             })
             const tweet = await postTweetFromSystem({
               text: xPost.text,
@@ -539,6 +542,8 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
                 response = `Posted on X:\n${tweetUrl}`
                 outboundAttachments = []
               }
+            } else if (!tweet.ok) {
+              response = `${response}\n_(${formatHermitXCrossPostSkipMessage(tweet.response)}.)_`.trim()
             }
           }
         }

@@ -206,10 +206,12 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     expect(postTweetFromSystemMock).toHaveBeenCalledTimes(1)
     expect(postTweetFromSystemMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        text: 'cat laugh alpha unlocked.',
+        text: expect.stringMatching(/^cat laugh alpha unlocked\./),
         media: { url: 'https://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif' },
       }),
     )
+    const xPostArgs = postTweetFromSystemMock.mock.calls[0]?.[0] as { text?: string }
+    expect(xPostArgs?.text).toContain('catlaugh-1')
     expect(result.ok).toBe(true)
     expect(result.response).toBe('cat laugh alpha unlocked.')
     expect(result.response).not.toContain('giphy.gif')
@@ -263,7 +265,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
       expect.objectContaining({
         groupId: 'tg-room',
         senderWallet: ALICE,
-        text: 'cat laugh alpha unlocked.',
+        text: expect.stringMatching(/^cat laugh alpha unlocked\./),
         media: { url: 'https://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif' },
       }),
     )
@@ -296,7 +298,8 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     })
     postTweetFromSystemMock.mockResolvedValueOnce({
       ok: false,
-      response: 'Twitter posting unavailable',
+      response:
+        'Tweet failed (403): You are not allowed to create a Tweet with duplicate content.',
     })
 
     const { executeCommand } = await import('./execute.ts')
@@ -311,7 +314,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     expect(postTweetFromSystemMock).toHaveBeenCalledTimes(1)
     expect(result.ok).toBe(true)
     expect(result.response).toContain('cat laugh alpha unlocked.')
-    expect(result.response).toContain('X cross-post skipped')
+    expect(result.response).toContain('already posted this meme recently')
     expect(result.action).toEqual({
       action: 'hermit.command',
       kind: 'gmeow',
