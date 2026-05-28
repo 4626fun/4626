@@ -1908,6 +1908,7 @@ export function useSwapExecution(params: {
           walletClient: params.walletClient as {
             signTypedData: (args: Record<string, unknown>) => Promise<string>
             signMessage?: (args: Record<string, unknown>) => Promise<string>
+            request?: (args: { method: string; params?: unknown[] }) => Promise<unknown>
           },
           publicClient: params.publicClient,
         })

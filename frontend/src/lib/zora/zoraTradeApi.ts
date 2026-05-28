@@ -340,6 +340,16 @@ export function zoraPermitNonceDrifted(quotedNonce: number, chainNonce: number):
   return Number(quotedNonce) !== Number(chainNonce)
 }
 
+async function isDeployedSmartWalletExecutionAddress(
+  executionAddress?: string | null,
+): Promise<boolean> {
+  const executionRaw = String(executionAddress ?? '').trim()
+  if (!executionRaw || !isAddress(executionRaw)) return false
+  const readClient = getProductionBaseReadClient()
+  const bytecode = await readClient.getBytecode({ address: getAddress(executionRaw) })
+  return Boolean(bytecode && bytecode !== '0x')
+}
+
 async function signOneZoraQuotePermit(params: {
   permit: ZoraTradeQuotePermit['permit']
   signerAddress: string
@@ -443,6 +453,8 @@ export async function signZoraQuotePermits(params: {
   signerAddress: string
   /** CSW that holds sell tokens and executes the Zora call; required for ERC-20 sells. */
   executionAddress?: string | null
+  /** Re-sign every permit (e.g. CSW submit after a prior personal_sign quote). */
+  forceResignPermits?: boolean
   walletClient: {
     signTypedData: (args: Record<string, unknown>) => Promise<Hex | string>
     signMessage?: (args: Record<string, unknown>) => Promise<Hex | string>
@@ -458,11 +470,13 @@ export async function signZoraQuotePermits(params: {
 
   const signatures: ZoraTradeQuotePermit[] = []
   for (const item of allPermits) {
-    const needsResign = await zoraPermitNeedsResign({
-      item,
-      executionAddress: params.executionAddress,
-      publicClient: params.publicClient,
-    })
+    const needsResign =
+      params.forceResignPermits === true ||
+      (await zoraPermitNeedsResign({
+        item,
+        executionAddress: params.executionAddress,
+        publicClient: params.publicClient,
+      }))
     if (!needsResign) {
       signatures.push({
         signature: item.signature,
@@ -524,10 +538,13 @@ export async function prepareZoraQuoteForExecute(params: {
     throw new Error('Permit2 signature is required for this Zora trade, but the owner signer is not available.')
   }
 
+  const forceResignPermits = await isDeployedSmartWalletExecutionAddress(params.executionAddress)
+
   const signatures = await signZoraQuotePermits({
     quote: params.quote,
     signerAddress: params.signerAddress,
     executionAddress: params.executionAddress,
+    forceResignPermits,
     walletClient: params.walletClient,
     publicClient: params.publicClient,
   })

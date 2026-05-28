@@ -70,7 +70,11 @@ export function Modal({
                   <DialogPrimitive.Description className="text-sm text-muted-foreground">
                     {description}
                   </DialogPrimitive.Description>
-                ) : null}
+                ) : (
+                  <DialogPrimitive.Description className="sr-only">
+                    {title}
+                  </DialogPrimitive.Description>
+                )}
               </div>
               {showClose ? (
                 <DialogPrimitive.Close
@@ -82,9 +86,11 @@ export function Modal({
                 </DialogPrimitive.Close>
               ) : null}
             </div>
-          ) : description ? (
-            <DialogPrimitive.Description className="sr-only">{description}</DialogPrimitive.Description>
-          ) : null}
+          ) : (
+            <DialogPrimitive.Description className="sr-only">
+              {description ?? 'Dialog'}
+            </DialogPrimitive.Description>
+          )}
           <div>{children}</div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
