@@ -24,6 +24,7 @@ appears when two writers race the `chat_jwt` slot in Supabase. The
 single-writer invariant, anomaly detection, the redacted health endpoint,
 and the operator restore script are documented in
 [`docs/operations/alfaclub-auth-hardening.md`](./alfaclub-auth-hardening.md).
+Token rotation (browser triplet → DB + env): [`alfaclub-token-rotation.md`](./alfaclub-token-rotation.md).
 
 ## Components
 

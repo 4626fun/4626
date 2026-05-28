@@ -102,6 +102,14 @@ function runChecks(): Check[] {
     note: 'Default on — Vercel cron should not open live WS each minute',
   })
 
+  const proxyRecommended: Array<[string, string]> = [
+    ['ALFACLUB_CHAT_API_PROXY_URL', 'Cloudflare Worker egress for api.alfaclub.app'],
+    ['ALFACLUB_CHAT_API_PROXY_SECRET', 'Must match Worker PROXY_SHARED_SECRET'],
+  ]
+  for (const [key, note] of proxyRecommended) {
+    checks.push({ id: key, required: false, present: envPresent(key), note })
+  }
+
   return checks
 }
 
@@ -114,6 +122,8 @@ const MANUAL_REMINDERS = [
   'Railway XMTP primary: leave ALFACLUB_CHAT_BRIDGE_ENABLED and ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED unset.',
   'Vercel production: ALFACLUB_CHAT_BRIDGE_ENABLED=1; token refresh via cron only.',
   'After Privy/Telegram rotation: sync alfaclub_runtime_secret + Vercel env, then redeploy.',
+  'GitHub ALFACLUB_HEALTH_CRON_SECRET must match Vercel CRON_SECRET (see docs/operations/alfaclub-token-rotation.md).',
+  'Prod smoke: CRON_SECRET=… pnpm -C frontend exec tsx scripts/ops/alfaclub-prod-cron-smoke.ts',
 ]
 
 function main(): void {
