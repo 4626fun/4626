@@ -93,6 +93,23 @@ describe('WaitlistConnectBaseApp', () => {
     expect(screen.getByTestId('skip-base-app-button')).toBeTruthy()
   })
 
+  it('allows skip after a failed required Base App connect', async () => {
+    hookState.connectWallet.mockResolvedValueOnce(false)
+    hookState.getLastSetupError.mockReturnValue(new Error('Base Account SDK unavailable'))
+
+    render(<WaitlistConnectBaseApp requireBaseAppConnect onSkip={() => {}} onComplete={() => {}} />)
+
+    expect(screen.queryByTestId('skip-base-app-button')).toBeNull()
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('connect-base-app-button'))
+    })
+
+    expect(await screen.findByTestId('waitlist-connect-base-app-error')).toBeTruthy()
+    expect(screen.getByTestId('skip-base-app-button')).toBeTruthy()
+    expect(screen.getByText(/continue without base app/i)).toBeTruthy()
+  })
+
   it('single-step flow: connect wallet, provision, finalize signer, register, then optional owner install', async () => {
     mockProvision(true)
     registerMock.mockResolvedValueOnce({ ok: true, message: '' })

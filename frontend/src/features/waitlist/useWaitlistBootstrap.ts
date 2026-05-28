@@ -22,6 +22,7 @@ import {
   withTimeout,
 } from './waitlistBootstrapUtils'
 import { type WaitlistAccountsSummary, type WaitlistBootstrapResponse } from './waitlistAccountTypes'
+import { clearWaitlistRecoveryGate } from './waitlistRecoveryGate'
 
 type UseWaitlistBootstrapParams = {
   activeReferralCode: string | null
@@ -184,6 +185,7 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
       tokenlessFinalizingBootstrapCooldownUntilRef.current = 0
       recoveryRequiredBootstrapCooldownUntilRef.current = 0
       setRecoveryRequired(false)
+      clearWaitlistRecoveryGate()
       if (activeReferralCode) clearStoredWaitlistReferralCode()
       if (!nextAccount.emailVerified) {
         setStep('auth')

@@ -70,6 +70,11 @@ import {
 } from './waitlistBootstrapUtils'
 import { useWaitlistBootstrap } from './useWaitlistBootstrap'
 import { ReferrerGreetingBanner } from './ReferrerGreetingBanner'
+import {
+  clearWaitlistRecoveryGate,
+  readWaitlistRecoveryGate,
+  writeWaitlistRecoveryGate,
+} from './waitlistRecoveryGate'
 type AccountsSummary = WaitlistAccountsSummary
 
 type WaitlistStatsData = {
@@ -456,6 +461,13 @@ export function WaitlistFlow(props: {
   const privyAuthedRef = useRef(privyAuthed)
   const privyClientStatusRef = useRef(privyClientStatus)
 
+  useEffect(() => {
+    if (!readWaitlistRecoveryGate()) return
+    authBootstrapAutoAttemptedRef.current = true
+    setRecoveryRequired(true)
+    setError(RECOVERY_REQUIRED_MESSAGE)
+  }, [setError, setRecoveryRequired])
+
   const wrapClass = 'mx-auto w-full max-w-5xl px-4 py-6 sm:py-8'
   const activeReferralCode = useMemo(() => readStoredWaitlistReferralCode(), [])
   const enterAppUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl()), [])
@@ -661,6 +673,7 @@ export function WaitlistFlow(props: {
       recoveryRequiredBootstrapCooldownUntilRef.current = 0
       authBootstrapAutoAttemptedRef.current = true
       setRecoveryRequired(false)
+      clearWaitlistRecoveryGate()
       setError(null)
       await settleBootstrapAfterRecoverableLoginError({ bypassRecoveryCooldown: true })
       return
@@ -745,6 +758,7 @@ export function WaitlistFlow(props: {
     } catch (authError: any) {
       const isRecoveryRequired = isRecoveryRequiredAuthError(authError)
       if (isRecoveryRequired) {
+        writeWaitlistRecoveryGate(true)
         setRecoveryRequired(true)
         setError(RECOVERY_REQUIRED_MESSAGE)
         return
@@ -845,6 +859,7 @@ export function WaitlistFlow(props: {
       finalizingAutoRetryCountRef.current = 0
       finalizingBackgroundRetryCountRef.current = 0
       resetBootstrapCooldowns()
+      clearWaitlistRecoveryGate()
       setStep('auth')
       setBusy(false)
       setRecoveryRequired(false)
@@ -917,6 +932,7 @@ export function WaitlistFlow(props: {
     if (!shouldAutoBootstrapWaitlistSession({ step, privyAuthed, recoveryRequired })) {
       return
     }
+    if (readWaitlistRecoveryGate()) return
     if (authBootstrapAutoAttemptedRef.current) return
 
     setBusy(true)
@@ -925,6 +941,10 @@ export function WaitlistFlow(props: {
 
   useEffect(() => {
     if (!shouldAutoBootstrapWaitlistSession({ step, privyAuthed, recoveryRequired })) {
+      return
+    }
+    if (readWaitlistRecoveryGate()) {
+      authBootstrapAutoAttemptedRef.current = true
       return
     }
     if (authBootstrapAutoAttemptedRef.current) return
@@ -962,6 +982,7 @@ export function WaitlistFlow(props: {
           }
         }
         if (isRecoveryRequired) {
+          writeWaitlistRecoveryGate(true)
           if (!cancelled) {
             setRecoveryRequired(true)
             setError(RECOVERY_REQUIRED_MESSAGE)

@@ -356,6 +356,8 @@ function WaitlistConnectBaseAppReady(props: Props) {
     !parentCswSigningReady &&
     Boolean(parentAddress?.trim() && subAccountAddress?.trim() && embeddedEoaAddress?.trim())
 
+  const allowSkip = !requireBaseAppConnect || view.kind === 'error'
+
   useEffect(() => {
     if (!autoConnectOnMount) return
     if (parentCswSigningReady) return
@@ -453,14 +455,14 @@ function WaitlistConnectBaseAppReady(props: Props) {
                 setup={setup}
               />
             ) : null}
-            {!requireBaseAppConnect ? (
+            {allowSkip ? (
               <button
                 type="button"
                 className="text-xs font-medium uppercase tracking-wider text-zinc-400 hover:text-zinc-300"
                 onClick={onSkip}
                 data-testid="skip-base-app-button"
               >
-                Skip for now
+                {requireBaseAppConnect ? 'Continue without Base App' : 'Skip for now'}
               </button>
             ) : null}
           </div>
@@ -515,14 +517,14 @@ function WaitlistConnectBaseAppReady(props: Props) {
                 Try again
               </Button>
             ) : null}
-            {!requireBaseAppConnect ? (
+            {allowSkip ? (
               <button
                 type="button"
                 className="text-xs font-medium uppercase tracking-wider text-zinc-400 hover:text-zinc-300"
                 onClick={onSkip}
                 data-testid="skip-base-app-button"
               >
-                Skip for now
+                {requireBaseAppConnect ? 'Continue without Base App' : 'Skip for now'}
               </button>
             ) : null}
           </div>

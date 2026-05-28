@@ -3,6 +3,7 @@ import { Suspense, lazy } from 'react'
 import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { PrivyClientProvider, usePrivyClientStatus } from '@/lib/privy/client'
+import { SmartWalletsRouteProvider } from '@/lib/privy/SmartWalletsRouteProvider'
 import { AppQueryProvider } from '@/web3/Web3Providers'
 
 const LazyWaitlistFlow = lazy(async () => {
@@ -41,7 +42,9 @@ export function Waitlist() {
       <PageMeta title={META.waitlist.title} description={META.waitlist.description} canonicalPath="/waitlist" />
       <PrivyClientProvider showWalletLoginFirst={false} mode="waitlist-email-only">
         <AppQueryProvider>
-          <WaitlistFlowGate />
+          <SmartWalletsRouteProvider>
+            <WaitlistFlowGate />
+          </SmartWalletsRouteProvider>
         </AppQueryProvider>
       </PrivyClientProvider>
     </>

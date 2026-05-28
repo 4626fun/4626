@@ -137,10 +137,10 @@ export function useSubAccountSetup() {
       connectedBaseAccountWalletRef.current = existing
       return true
     }
-    if (!embeddedWallet || !baseAccountSdk) {
+    if (!embeddedWallet) {
       recordMissingSetupRequirements({
         baseAccountWallet: null,
-        embeddedWallet: embeddedWallet ?? null,
+        embeddedWallet: null,
         baseAccountSdk: baseAccountSdk ?? null,
       })
       return false

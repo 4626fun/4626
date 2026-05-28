@@ -1,4 +1,5 @@
 import { apiFetch } from '@/lib/api/apiBase'
+import { clearWaitlistRecoveryGate } from '@/features/waitlist/waitlistRecoveryGate'
 
 const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
 const SESSION_TOKEN_CHANGED_EVENT = 'cv-siwe-session-token-change'
@@ -85,6 +86,7 @@ export async function runWaitlistPrivyLogout(params: {
   shouldLogout?: boolean
 }): Promise<void> {
   clearStoredWaitlistSessionToken()
+  clearWaitlistRecoveryGate()
   const clearServerSessionPromise = clearServerWaitlistSession()
   const logout = params.logout
   const shouldLogout = params.shouldLogout !== false
