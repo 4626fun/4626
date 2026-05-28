@@ -205,22 +205,22 @@ describe('executeHermitCommand', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://x7lmjaxx.agents.pinata.cloud')
   })
 
-  it('shouldPreferPinataHttpDraft is true for bridge strict-json prompts', () => {
-    const prompt = _hermitPromptBuildersForTests.buildGmeow({
-      userPrompt: 'gmeow',
-      memeCaption: 'cat laugh from the Hermit cave.',
-      memeTags: ['laugh', 'cat', 'meme'],
-    })
+  it('shouldPreferPinataHttpDraft defaults to HTTP for bridge-runner', () => {
+    restoreEnv = applyEnv({ HERMIT_PINATA_BRIDGE_HTTP_ONLY: undefined })
     expect(
       shouldPreferPinataHttpDraft({
         sourceIdentity: 'alfaclub-bridge-runner',
-        prompt,
+        prompt: 'casual meme caption only',
       }),
     ).toBe(true)
+  })
+
+  it('shouldPreferPinataHttpDraft allows gateway when HERMIT_PINATA_BRIDGE_HTTP_ONLY=0', () => {
+    restoreEnv = applyEnv({ HERMIT_PINATA_BRIDGE_HTTP_ONLY: '0' })
     expect(
       shouldPreferPinataHttpDraft({
-        sourceIdentity: 'telegram',
-        prompt,
+        sourceIdentity: 'alfaclub-bridge-runner',
+        prompt: 'casual meme caption only',
       }),
     ).toBe(false)
   })

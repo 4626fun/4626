@@ -54,6 +54,7 @@ const DEFAULT_API_BASE_URL = 'https://api.alfaclub.app'
 const DEFAULT_WS_URL = 'wss://ws.alfaclub.app'
 const DEFAULT_POLL_INTERVAL_MS = 6_000
 const DEFAULT_HISTORY_LIMIT = 20
+const DEFAULT_CRON_HISTORY_LIMIT = 12
 const DEFAULT_SEND_TIMEOUT_MS = 10_000
 const DEFAULT_HTTP_TIMEOUT_MS = 8_000
 const DEFAULT_WS_LIVE_FALLBACK_ENABLED = true
@@ -209,6 +210,7 @@ type NormalizedHistoryMessage = {
   date: number
   sender: string
   text: string
+  isBot: boolean
   attachments: AlfaClubMessageAttachment[]
   replyAttachments: AlfaClubMessageAttachment[]
 }
@@ -495,6 +497,26 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
   }
 }
 
+/** Vercel cron ticks cannot keep a live WS between invocations — skip by default. */
+export function readAlfaClubCronSkipLiveWebSocket(): boolean {
+  const raw = normalizeEnvScalar(process.env.ALFACLUB_BRIDGE_CRON_SKIP_WS).toLowerCase()
+  if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') return false
+  return true
+}
+
+export function readAlfaClubChatBridgeFlagsForCronTick(): AlfaClubChatBridgeFlags {
+  const flags = readAlfaClubChatBridgeFlags()
+  const cronLimit = parsePositiveInt(
+    process.env.ALFACLUB_BRIDGE_CRON_HISTORY_LIMIT,
+    DEFAULT_CRON_HISTORY_LIMIT,
+    MAX_HISTORY_LIMIT,
+  )
+  return {
+    ...flags,
+    historyLimit: Math.min(flags.historyLimit, cronLimit),
+  }
+}
+
 export function buildAlfaClubOutboundFrame(params: {
   roomId: string
   text: string
@@ -524,6 +546,7 @@ function normalizeHistoryMessage(message: AlfaClubRoomHistoryMessage): Normalize
     date,
     sender,
     text,
+    isBot: message.isBot === true,
     attachments: normalizeAlfaClubAttachments(message.attachments),
     replyAttachments: normalizeAlfaClubAttachments(message.reply_attachments),
   }
@@ -566,6 +589,19 @@ function isTelegramRelayedSlashCommand(rawText: string, extractedCommandText: st
     /\(tg\s+(?:@[\w]+|tg:\d+)\)\s*$/i.test(text) ||
     /^(?:\[[^\]]+\]\s+)?(?:@[\w]+|tg:\d+):\s+\/\S+/i.test(text)
   )
+}
+
+/** Whether a history row could trigger the deterministic command executor. */
+export function isHistoryMessageCommandCandidate(message: AlfaClubRoomHistoryMessage): boolean {
+  const normalized = normalizeHistoryMessage(message)
+  if (!normalized || !normalized.text.trim()) return false
+  if (normalized.isBot) return false
+  const commandText = extractTelegramRelayCommandText(normalized.text)
+  const telegramRelayedCommand = isTelegramRelayedSlashCommand(normalized.text, commandText)
+  if (!isHexAddress(normalized.sender) && !telegramRelayedCommand) return false
+  if (normalized.sender === TARGET_CANONICAL_CSW_ADDRESS.toLowerCase()) return false
+  const trustedBareGmeow = isBareGmeowFromTrustedSender(commandText, normalized.sender)
+  return trustedBareGmeow || isAlfaClubSlashCommandText(commandText)
 }
 
 /**
@@ -620,6 +656,7 @@ export function collectAlfaClubCommandMessages(params: {
   const commands: AlfaClubCommandMessage[] = []
   for (const entry of normalized) {
     if (params.seenMessageIds.has(entry.id)) continue
+    if (entry.isBot) continue
     if (!entry.text.trim()) continue
     const commandText = extractTelegramRelayCommandText(entry.text)
     const telegramRelayedCommand = isTelegramRelayedSlashCommand(entry.text, commandText)
@@ -2565,6 +2602,7 @@ async function executeCommandBatch(params: {
   }
   const errors: Array<{ messageId: string; error: string }> = []
   let replied = 0
+  let latestMarkReadDate = 0
 
   for (const command of params.commands) {
     const commandHead = command.text.trim().split(/\s+/, 1)[0] ?? command.text.trim()
@@ -2734,15 +2772,7 @@ async function executeCommandBatch(params: {
           })
         }
       }
-      await markReadMessage({
-        apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
-        fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(params.flags),
-        proxySecret: resolveAlfaClubProxySecret(params.flags),
-        roomId: params.roomId,
-        jwt: params.jwt,
-        messageDate: command.date,
-        timeoutMs: params.flags.requestTimeoutMs,
-      })
+      latestMarkReadDate = Math.max(latestMarkReadDate, command.date)
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
       errors.push({
@@ -2755,6 +2785,26 @@ async function executeCommandBatch(params: {
         sender: command.sender,
         command: commandHead,
         error: detail.slice(0, 220),
+      })
+    }
+  }
+
+  if (latestMarkReadDate > 0) {
+    try {
+      await markReadMessage({
+        apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
+        fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(params.flags),
+        proxySecret: resolveAlfaClubProxySecret(params.flags),
+        roomId: params.roomId,
+        jwt: params.jwt,
+        messageDate: latestMarkReadDate,
+        timeoutMs: params.flags.requestTimeoutMs,
+      })
+    } catch (markReadError) {
+      const detail = markReadError instanceof Error ? markReadError.message : String(markReadError)
+      logger.warn('[alfaclub-chat] command_batch_mark_read_failed', {
+        roomId: params.roomId,
+        error: detail.slice(0, 180),
       })
     }
   }
@@ -2794,10 +2844,23 @@ function earlyTickResult(params: {
   }
 }
 
-type RunBridgeTickOptions = {
+export type RunBridgeTickOptions = {
   // Continuous in-process bridge mode seeds first and skips historical replay.
   // One-shot cron mode should process newly ingested commands immediately.
   seedHistoryOnlyOnFirstTick?: boolean
+  /** Serverless cron: skip WS connect (no cross-invocation session). Default on via readAlfaClubCronSkipLiveWebSocket(). */
+  skipLiveWebSocket?: boolean
+  /** Cron mode: upsert only slash-command candidates into chat_ingest (less DB write churn). */
+  ingestCommandCandidatesOnly?: boolean
+}
+
+function shouldConnectLiveWebSocket(
+  options: RunBridgeTickOptions,
+  flags: AlfaClubChatBridgeFlags,
+  ingestJwt: string | null,
+): boolean {
+  if (options.skipLiveWebSocket) return false
+  return Boolean(flags.wsIngestAllRoomsEnabled && ingestJwt)
 }
 
 async function kickPrivyRefreshOncePerTick(): Promise<void> {
@@ -2882,11 +2945,11 @@ async function runBridgeTick(
   const ingestJwt = explicitIngestJwt || commandJwt
 
   if (!commandJwt) {
-    if (flags.wsIngestAllRoomsEnabled && ingestJwt) {
+    if (shouldConnectLiveWebSocket(options, flags, ingestJwt)) {
       ensureLiveCommandSocket({
         websocketUrl: flags.websocketUrl,
         roomId,
-        jwt: ingestJwt,
+        jwt: ingestJwt as string,
         flags,
       })
     }
@@ -3017,11 +3080,11 @@ async function runBridgeTick(
     })
 
     bridgeState.liveFallbackActive = true
-    if (ingestJwt) {
+    if (shouldConnectLiveWebSocket(options, flags, ingestJwt)) {
       ensureLiveCommandSocket({
         websocketUrl: flags.websocketUrl,
         roomId,
-        jwt: ingestJwt,
+        jwt: ingestJwt as string,
         flags,
       })
     }
@@ -3059,7 +3122,10 @@ async function runBridgeTick(
   // in-memory state surviving between serverless cold starts.
   let newlyIngestedHistoryIds: Set<string> | null = null
   try {
-    const historyIngestRows: AlfaClubIngestMessage[] = fetchedMessages.flatMap((message) => {
+    const ingestSourceMessages = options.ingestCommandCandidatesOnly
+      ? fetchedMessages.filter(isHistoryMessageCommandCandidate)
+      : fetchedMessages
+    const historyIngestRows: AlfaClubIngestMessage[] = ingestSourceMessages.flatMap((message) => {
       const id = String(message.id ?? '').trim()
       const sender = String(message.sender ?? '').trim().toLowerCase()
       if (!id || !isHexAddress(sender)) return []
@@ -3136,11 +3202,11 @@ async function runBridgeTick(
   }
   recordBridgeHistorySuccess()
 
-  if (flags.wsIngestAllRoomsEnabled && ingestJwt) {
+  if (shouldConnectLiveWebSocket(options, flags, ingestJwt)) {
     ensureLiveCommandSocket({
       websocketUrl: flags.websocketUrl,
       roomId,
-      jwt: ingestJwt,
+      jwt: ingestJwt as string,
       flags,
     })
   }
@@ -3247,7 +3313,7 @@ async function runBridgeTick(
 }
 
 export async function runAlfaClubChatBridgeTickOnce(): Promise<RunAlfaClubChatBridgeTickOnceResult> {
-  const flags = readAlfaClubChatBridgeFlags()
+  const flags = readAlfaClubChatBridgeFlagsForCronTick()
   if (flags.killSwitch) {
     return {
       ok: false,
@@ -3281,7 +3347,11 @@ export async function runAlfaClubChatBridgeTickOnce(): Promise<RunAlfaClubChatBr
     }
   }
 
-  const data = await runBridgeTick(flags, { seedHistoryOnlyOnFirstTick: false })
+  const data = await runBridgeTick(flags, {
+    seedHistoryOnlyOnFirstTick: false,
+    skipLiveWebSocket: readAlfaClubCronSkipLiveWebSocket(),
+    ingestCommandCandidatesOnly: true,
+  })
   return {
     ok: true,
     intervalMs: flags.pollIntervalMs,

@@ -39,6 +39,12 @@ bridge alive:
   `ALFACLUB_API_KEY` (or the local `alfaclub_api_key` alias) is configured.
   If no bot token is configured, it falls back to the legacy WebSocket send
   transport.
+- **Cron tick optimizations (defaults on):** `ALFACLUB_BRIDGE_CRON_SKIP_WS=1`
+  skips live websocket connect (serverless cannot keep WS between ticks);
+  `ALFACLUB_BRIDGE_CRON_HISTORY_LIMIT=12` caps history fetch size;
+  ingest upserts only slash-command candidates (less Supabase churn);
+  one read-receipt per batch instead of per command; bridge-runner Pinata
+  calls use HTTP draft lane (no gateway WS echo).
 - `POST /api/v1/alfaclub/chat-token-refresh` — every 30 minutes (`13,43 * * * *`).
   Calls `runAlfaClubPrivyRefreshOnce`, which exchanges the existing access /
   refresh tokens with Privy and writes the rotated identity token back into

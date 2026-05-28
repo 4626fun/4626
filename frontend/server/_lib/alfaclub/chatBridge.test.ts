@@ -42,6 +42,7 @@ vi.mock('../../agents/core/executeDeterministicCommand.js', () => ({
   executeDeterministicCommand: executeDeterministicCommandMock,
 }))
 
+import { applyEnv } from '../../../api/__tests__/helpers'
 import {
   collectAlfaClubCommandMessages,
   _ensureLiveCommandSocketForTests,
@@ -49,7 +50,10 @@ import {
   _resetAlfaClubChatBridgeStateForTests,
   _runAlfaClubChatBridgeTickForTests,
   _sendRoomMessageViaWebSocketForTests,
+  isHistoryMessageCommandCandidate,
   readAlfaClubChatBridgeFlags,
+  readAlfaClubChatBridgeFlagsForCronTick,
+  readAlfaClubCronSkipLiveWebSocket,
   type AlfaClubChatBridgeFlags,
 } from './chatBridge.js'
 import {
@@ -658,5 +662,98 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     socket?.emit('close', { code: 1000, reason: 'ok' })
 
     await expect(lanePromise).resolves.toBe('websocket')
+  })
+
+  it('cron tick options skip live websocket connect', async () => {
+    mockHistorySuccess()
+    const flags = makeFlags({
+      wsIngestAllRoomsEnabled: true,
+      ingestJwt: 'jwt-ingest',
+    })
+    await _runAlfaClubChatBridgeTickForTests(flags, {
+      seedHistoryOnlyOnFirstTick: false,
+      skipLiveWebSocket: true,
+    })
+    expect(FakeWebSocket.instances).toHaveLength(0)
+  })
+
+  it('ingestCommandCandidatesOnly upserts slash commands only', async () => {
+    const nowMs = Date.now()
+    mockHistoryMessages([
+      {
+        id: 'm-chat',
+        date: nowMs - 5_000,
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: 'gm everyone',
+      },
+      {
+        id: 'm-gmeow',
+        date: nowMs - 4_000,
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: '/gmeow',
+      },
+    ])
+    upsertAlfaClubIngestMessagesMock.mockResolvedValueOnce([{ messageId: 'm-gmeow' }])
+
+    await _runAlfaClubChatBridgeTickForTests(makeFlags(), {
+      seedHistoryOnlyOnFirstTick: false,
+      ingestCommandCandidatesOnly: true,
+    })
+
+    const rows = upsertAlfaClubIngestMessagesMock.mock.calls[0]?.[0] ?? []
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.messageId).toBe('m-gmeow')
+  })
+})
+
+describe('AlfaClub chat bridge cron helpers', () => {
+  let restoreEnv: (() => void) | null = null
+
+  afterEach(() => {
+    restoreEnv?.()
+    restoreEnv = null
+  })
+
+  it('readAlfaClubCronSkipLiveWebSocket defaults on', () => {
+    restoreEnv = applyEnv({ ALFACLUB_BRIDGE_CRON_SKIP_WS: undefined })
+    expect(readAlfaClubCronSkipLiveWebSocket()).toBe(true)
+  })
+
+  it('readAlfaClubChatBridgeFlagsForCronTick caps history limit', () => {
+    restoreEnv = applyEnv({
+      ALFACLUB_CHAT_HISTORY_LIMIT: '40',
+      ALFACLUB_BRIDGE_CRON_HISTORY_LIMIT: '8',
+    })
+    expect(readAlfaClubChatBridgeFlagsForCronTick().historyLimit).toBe(8)
+  })
+
+  it('isHistoryMessageCommandCandidate ignores bot rows and plain chat', () => {
+    expect(
+      isHistoryMessageCommandCandidate({
+        id: '1',
+        date: Date.now(),
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: 'hello',
+        isBot: false,
+      }),
+    ).toBe(false)
+    expect(
+      isHistoryMessageCommandCandidate({
+        id: '2',
+        date: Date.now(),
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: '/gmeow',
+        isBot: false,
+      }),
+    ).toBe(true)
+    expect(
+      isHistoryMessageCommandCandidate({
+        id: '3',
+        date: Date.now(),
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: '/gmeow',
+        isBot: true,
+      }),
+    ).toBe(false)
   })
 })

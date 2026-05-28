@@ -434,6 +434,11 @@ function toPinataHttpChatUrl(rawEndpoint: string): string {
   }
 }
 
+function readPinataBridgeHttpOnlyDisabled(): boolean {
+  const raw = asTrimmed(process.env.HERMIT_PINATA_BRIDGE_HTTP_ONLY).toLowerCase()
+  return raw === '0' || raw === 'false' || raw === 'no' || raw === 'off'
+}
+
 function readPinataBridgeHttpOnlyEnabled(): boolean {
   const raw = asTrimmed(process.env.HERMIT_PINATA_BRIDGE_HTTP_ONLY).toLowerCase()
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
@@ -454,7 +459,11 @@ export function shouldPreferPinataHttpDraft(params: {
 }): boolean {
   if (readPinataBridgeHttpOnlyEnabled()) return true
   const source = asTrimmed(params.sourceIdentity).toLowerCase()
-  if (source !== 'alfaclub-bridge-runner') return false
+  if (source === 'alfaclub-bridge-runner') {
+    // Default on for Vercel bridge: faster than gateway WS and avoids duplicate
+    // OpenClaw channel echoes. Set HERMIT_PINATA_BRIDGE_HTTP_ONLY=0 to force gateway.
+    return !readPinataBridgeHttpOnlyDisabled()
+  }
   return isStrictJsonHermitWorkerPrompt(params.prompt)
 }
 

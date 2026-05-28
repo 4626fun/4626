@@ -95,8 +95,19 @@ function runChecks(): Check[] {
     present: separateBrief,
     note: 'Set 1 on production to stop auto-digest in the bridge/ops room',
   })
+  checks.push({
+    id: 'ALFACLUB_BRIDGE_CRON_SKIP_WS (recommended)',
+    required: false,
+    present: parseBool(process.env.ALFACLUB_BRIDGE_CRON_SKIP_WS ?? '1'),
+    note: 'Default on — Vercel cron should not open live WS each minute',
+  })
 
   return checks
+}
+
+function parseBool(raw: string | undefined): boolean {
+  const value = String(raw ?? '').trim().toLowerCase()
+  return value === '1' || value === 'true' || value === 'yes' || value === 'on'
 }
 
 const MANUAL_REMINDERS = [
