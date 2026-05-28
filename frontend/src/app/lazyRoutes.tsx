@@ -197,3 +197,4 @@ export const MetaballOsProbe = lazyNamed(
   'MetaballOsProbe',
 )
 export const AmoeQuickTasks = lazyNamed(() => import('../pages/AmoeQuickTasks'), 'AmoeQuickTasks')
+export const AddOwnerAttempt = lazyNamed(() => import('../pages/AddOwnerAttempt'), 'AddOwnerAttempt')

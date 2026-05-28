@@ -3,6 +3,7 @@ import { Navigate, Route } from 'react-router-dom'
 
 import {
   AccountsPage,
+  AddOwnerAttempt,
   AmoeQuickTasks,
   AdminAgentSetup,
   AdminCreatorAccess,
@@ -76,6 +77,7 @@ export function renderPathRoutes(
 }
 
 export const MARKETING_ONLY_ROUTES: PathRouteDef[] = [
+  { path: '/add', element: <AddOwnerAttempt /> },
   { path: '/faq', element: <Faq /> },
   { path: '/faq/how-it-works', element: <FaqHowItWorks /> },
   { path: '/cca', element: <DistributeCcaLaunch /> },
