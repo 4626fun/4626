@@ -6,22 +6,23 @@ declare const process: { env: Record<string, string | undefined> }
 const RECENT_MEME_IDS_MAX = 4
 let recentMemeIds: string[] = []
 
+/** Giphy direct URLs only — Tenor hotlinks 404 from Vercel/Twitter upload fetchers. */
 const DEFAULT_MEMES: HermitMeme[] = [
   {
     id: 'akita-black-cat-1',
-    url: 'https://media.tenor.com/l7VvM4YwU6oAAAAM/doge-cat.gif',
+    url: 'https://i.giphy.com/media/gT5LPbDmhlUwCIh1XW/giphy.gif',
     caption: 'Akita + black cat energy — chaos approved.',
     tags: ['akita', 'cat', 'chaos'],
   },
   {
     id: 'wagmi-huddle-1',
-    url: 'https://media.tenor.com/4mK7k8vF7nQAAAAM/stonks-meme.gif',
+    url: 'https://i.giphy.com/media/OuEB3NdPhGcDgBwoFs/giphy.gif',
     caption: 'Group chat when the number goes up.',
     tags: ['wagmi', 'alpha', 'group'],
   },
   {
     id: 'gm-vault-1',
-    url: 'https://media.tenor.com/2yQf2rN3M4AAAAAM/gm-good-morning.gif',
+    url: 'https://i.giphy.com/media/l0HlBOlRogctqMpFK/giphy.gif',
     caption: 'gm from the vault floor — coffee optional.',
     tags: ['gm', 'vault', 'daily'],
   },
@@ -45,7 +46,7 @@ const DEFAULT_MEMES: HermitMeme[] = [
   },
   {
     id: 'celebrate-1',
-    url: 'https://i.giphy.com/media/5GoVLqeAOo6PK/giphy.gif',
+    url: 'https://i.giphy.com/media/13CoYGA8cp704PBIAW/giphy.gif',
     caption: 'Tiny win — still counts on Base.',
     tags: ['win', 'celebrate', 'wagmi'],
   },
@@ -54,6 +55,18 @@ const DEFAULT_MEMES: HermitMeme[] = [
     url: 'https://i.giphy.com/media/mlvseq9vdhlba/giphy.gif',
     caption: 'Hermit calculating vibes per block.',
     tags: ['think', 'cat', 'meme'],
+  },
+  {
+    id: 'doge-zoom-1',
+    url: 'https://i.giphy.com/media/4N53X7mhWBTJgGZSO1/giphy.gif',
+    caption: 'Doge zoomies in the Hermit cave.',
+    tags: ['doge', 'chaos', 'meme'],
+  },
+  {
+    id: 'coffee-gm-1',
+    url: 'https://i.giphy.com/media/3o7abKhOpu0NwenH3O/giphy.gif',
+    caption: 'Coffee first, vault second.',
+    tags: ['gm', 'daily', 'meme'],
   },
 ]
 

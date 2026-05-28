@@ -22,6 +22,12 @@ describe('hermitXPostHelpers', () => {
     ).toBe('X cross-post skipped — already posted this meme recently.')
   })
 
+  it('formats media download skip copy for AlfaClub', () => {
+    expect(formatHermitXCrossPostSkipMessage('Failed to download Twitter media (404).')).toBe(
+      'X cross-post skipped — could not fetch GIF for upload (broken host link).',
+    )
+  })
+
   it('truncates long captions for X', () => {
     const long = 'a'.repeat(300)
     expect(truncateWithEllipsis(long, 280).length).toBeLessThanOrEqual(280)

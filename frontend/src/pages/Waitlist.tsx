@@ -63,11 +63,7 @@ export function Waitlist() {
     <>
       <PageMeta title={META.waitlist.title} description={META.waitlist.description} canonicalPath="/waitlist" />
       <PrivyClientProvider showWalletLoginFirst={privyShell.showWalletLoginFirst} mode={privyShell.mode}>
-        {privyShell.inBaseApp ? (
-          <WalletProviders reconnectOnMount={false}>{flow}</WalletProviders>
-        ) : (
-          flow
-        )}
+        <WalletProviders reconnectOnMount={false}>{flow}</WalletProviders>
       </PrivyClientProvider>
     </>
   )

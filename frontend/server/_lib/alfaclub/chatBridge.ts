@@ -126,6 +126,16 @@ type AlfaClubOutboundFrame = {
   }
 }
 
+/** Best-effort WS reaction — AlfaClub has no public bot-token reaction API. */
+type AlfaClubReactionFrame = {
+  type: 'reaction'
+  value: {
+    room: string
+    message_id: string
+    emoji: string
+  }
+}
+
 export type AlfaClubChatBridgeFlags = {
   killSwitch: boolean
   enabled: boolean
@@ -534,6 +544,27 @@ export function buildAlfaClubOutboundFrame(params: {
   }
 }
 
+export function buildAlfaClubReactionFrame(params: {
+  roomId: string
+  messageId: string
+  emoji: string
+}): AlfaClubReactionFrame {
+  return {
+    type: 'reaction',
+    value: {
+      room: params.roomId,
+      message_id: params.messageId,
+      emoji: params.emoji.trim().slice(0, 16),
+    },
+  }
+}
+
+export function readAlfaClubBridgeReactionsEnabled(): boolean {
+  const raw = normalizeEnvScalar(process.env.ALFACLUB_BRIDGE_REACTIONS_ENABLED).toLowerCase()
+  if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') return false
+  return true
+}
+
 function normalizeHistoryMessage(message: AlfaClubRoomHistoryMessage): NormalizedHistoryMessage | null {
   const id = String(message.id ?? '').trim()
   if (!id) return null
@@ -873,6 +904,13 @@ function extractAlfaClubFollowUpText(action: unknown): string | null {
   if (action.action !== 'hermit.command') return null
   const followUp = typeof action.alfaclubFollowUpText === 'string' ? action.alfaclubFollowUpText.trim() : ''
   return followUp.length > 0 ? followUp : null
+}
+
+function extractAlfaClubReactionEmoji(action: unknown): string | null {
+  if (!isJsonRecord(action)) return null
+  if (action.action !== 'hermit.command') return null
+  const emoji = typeof action.reactionEmoji === 'string' ? action.reactionEmoji.trim() : ''
+  return emoji.length > 0 ? emoji : null
 }
 
 /**
@@ -1556,6 +1594,244 @@ async function sendRoomMessageViaWebSocket(params: {
     socket.addEventListener('close', onClose)
     socket.addEventListener('error', onError)
   })
+}
+
+async function sendRoomReactionViaWebSocket(params: {
+  websocketUrl: string
+  wsProxyHttpSendUrl?: string | null
+  wsProxySecret?: string | null
+  jwt: string
+  roomId: string
+  messageId: string
+  emoji: string
+  timeoutMs: number
+}): Promise<void> {
+  const frame = buildAlfaClubReactionFrame({
+    roomId: params.roomId,
+    messageId: params.messageId,
+    emoji: params.emoji,
+  })
+
+  if (params.wsProxyHttpSendUrl) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), params.timeoutMs)
+    try {
+      const response = await fetch(params.wsProxyHttpSendUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...((params.wsProxySecret ?? '').trim()
+            ? { 'x-proxy-secret': String(params.wsProxySecret).trim() }
+            : {}),
+        },
+        body: JSON.stringify({
+          websocketUrl: params.websocketUrl,
+          jwt: params.jwt,
+          frame,
+        }),
+        signal: controller.signal,
+      })
+      if (!response.ok) {
+        throw new Error(`ws_proxy_reaction_failed:${response.status}`)
+      }
+      return
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
+  const WebSocketCtor = getBridgeWebSocketCtor()
+  if (!WebSocketCtor) throw new Error('ws_unavailable')
+
+  const wsUrl = new URL(params.websocketUrl)
+  wsUrl.searchParams.set('TOKEN', params.jwt)
+  wsUrl.searchParams.set('_k', '0')
+  const payload = JSON.stringify(frame)
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false
+    let opened = false
+    const socket = new WebSocketCtor(wsUrl.toString())
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      try {
+        socket.close()
+      } catch {}
+      reject(new Error('ws_reaction_timeout'))
+    }, params.timeoutMs)
+
+    const cleanup = (): void => {
+      clearTimeout(timer)
+      socket.removeEventListener('open', onOpen)
+      socket.removeEventListener('close', onClose)
+      socket.removeEventListener('error', onError)
+    }
+
+    const onOpen = (): void => {
+      opened = true
+      try {
+        socket.send(payload)
+      } catch (error) {
+        if (settled) return
+        settled = true
+        cleanup()
+        reject(error instanceof Error ? error : new Error(String(error)))
+        return
+      }
+      setTimeout(() => {
+        try {
+          socket.close()
+        } catch {}
+      }, DEFAULT_WS_CLOSE_DELAY_MS)
+    }
+
+    const onClose = (): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      if (!opened) {
+        reject(new Error('ws_reaction_closed_before_open'))
+        return
+      }
+      resolve()
+    }
+
+    const onError = (): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(new Error('ws_reaction_failed'))
+    }
+
+    socket.addEventListener('open', onOpen)
+    socket.addEventListener('close', onClose)
+    socket.addEventListener('error', onError)
+  })
+}
+
+async function reactToAlfaClubTriggerMessage(params: {
+  flags: AlfaClubChatBridgeFlags
+  jwt: string
+  roomId: string
+  messageId: string
+  emoji: string
+}): Promise<void> {
+  if (!readAlfaClubBridgeReactionsEnabled()) return
+  const emoji = params.emoji.trim()
+  if (!emoji) return
+  const jwt = params.jwt.trim()
+  if (!jwt) return
+
+  try {
+    await sendRoomReactionViaWebSocket({
+      websocketUrl: params.flags.websocketUrl,
+      wsProxyHttpSendUrl: params.flags.wsProxyHttpSendUrl,
+      wsProxySecret: params.flags.wsProxySecret,
+      jwt,
+      roomId: params.roomId,
+      messageId: params.messageId,
+      emoji,
+      timeoutMs: params.flags.sendTimeoutMs,
+    })
+    logger.info('[alfaclub-chat] command_reaction_sent', {
+      roomId: params.roomId,
+      messageId: params.messageId,
+      emoji,
+    })
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    logger.warn('[alfaclub-chat] command_reaction_failed', {
+      roomId: params.roomId,
+      messageId: params.messageId,
+      emoji,
+      error: detail.slice(0, 180),
+    })
+  }
+}
+
+async function sendCommandReplyToRoom(params: {
+  flags: AlfaClubChatBridgeFlags
+  jwt: string
+  roomId: string
+  text: string
+  attachments: AlfaClubMessageAttachment[]
+  replyToMessageId: string
+  commandMessageId: string
+}): Promise<string> {
+  const idempotencyKey = buildBotMessageIdempotencyKey({
+    roomId: params.roomId,
+    messageId: params.commandMessageId,
+  })
+  const hasAttachments = params.attachments.length > 0
+
+  if (hasAttachments) {
+    try {
+      const lane = await sendRoomMessageViaWebSocket({
+        websocketUrl: params.flags.websocketUrl,
+        wsProxyHttpSendUrl: params.flags.wsProxyHttpSendUrl,
+        wsProxySecret: params.flags.wsProxySecret,
+        jwt: params.jwt,
+        roomId: params.roomId,
+        text: params.text,
+        attachments: params.attachments,
+        replyToMessageId: params.replyToMessageId,
+        timeoutMs: params.flags.sendTimeoutMs,
+      })
+      return lane === 'ws_proxy_http' ? 'ws_proxy_http_with_reply_id' : 'websocket_with_reply_id'
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      logger.warn('[alfaclub-chat] ws_reply_with_attachments_failed', {
+        roomId: params.roomId,
+        messageId: params.commandMessageId,
+        error: detail.slice(0, 180),
+      })
+    }
+  }
+
+  if (params.flags.botToken) {
+    try {
+      const sendResult = await sendRoomMessageViaBotTokenWithProxyFallback({
+        apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
+        directApiBaseUrl: params.flags.apiBaseUrl,
+        botToken: params.flags.botToken,
+        roomId: params.roomId,
+        text: params.text,
+        replyToMessageId: params.replyToMessageId,
+        proxySecret: resolveAlfaClubProxySecret(params.flags),
+        idempotencyKey,
+        timeoutMs: params.flags.sendTimeoutMs,
+      })
+      if (!hasAttachments) {
+        return 'bot_token_with_reply_id'
+      }
+      logger.warn('[alfaclub-chat] bot_reply_text_only_attachments_dropped', {
+        roomId: params.roomId,
+        messageId: params.commandMessageId,
+        sendResult,
+      })
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      logger.warn('[alfaclub-chat] bot_reply_with_reply_id_failed', {
+        roomId: params.roomId,
+        messageId: params.commandMessageId,
+        error: detail.slice(0, 180),
+      })
+    }
+  }
+
+  const lane = await sendRoomMessageViaWebSocket({
+    websocketUrl: params.flags.websocketUrl,
+    wsProxyHttpSendUrl: params.flags.wsProxyHttpSendUrl,
+    wsProxySecret: params.flags.wsProxySecret,
+    jwt: params.jwt,
+    roomId: params.roomId,
+    text: params.text,
+    attachments: params.attachments,
+    replyToMessageId: params.replyToMessageId,
+    timeoutMs: params.flags.sendTimeoutMs,
+  })
+  return lane === 'ws_proxy_http' ? 'ws_proxy_http_fallback' : 'websocket_fallback'
 }
 
 type BridgeState = {
@@ -2646,104 +2922,30 @@ async function executeCommandBatch(params: {
         continue
       }
       const attachments = extractAlfaClubActionAttachments(result.action)
-      if (params.flags.botToken) {
-        const idempotencyKey = buildBotMessageIdempotencyKey({
-          roomId: params.roomId,
-          messageId: command.id,
-        })
-        let sent = false
-        try {
-          const sendResult = await sendRoomMessageViaBotTokenWithProxyFallback({
-            apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
-            directApiBaseUrl: params.flags.apiBaseUrl,
-            botToken: params.flags.botToken,
-            roomId: params.roomId,
-            text: responseText,
-            replyToMessageId: command.id,
-            proxySecret: resolveAlfaClubProxySecret(params.flags),
-            idempotencyKey,
-            timeoutMs: params.flags.sendTimeoutMs,
-          })
-          sent = true
-          logger.info('[alfaclub-chat] command_reply_sent', {
-            roomId: params.roomId,
-            messageId: command.id,
-            sender: command.sender,
-            lane: 'bot_token_with_reply_id',
-            sendResult,
-          })
-        } catch (error) {
-          const detail = error instanceof Error ? error.message : String(error)
-          logger.warn('[alfaclub-chat] bot_reply_with_reply_id_failed', {
-            roomId: params.roomId,
-            messageId: command.id,
-            error: detail.slice(0, 180),
-          })
-        }
-
-        if (!sent) {
-          try {
-            const sendResult = await sendRoomMessageViaBotTokenWithProxyFallback({
-              apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
-              directApiBaseUrl: params.flags.apiBaseUrl,
-              botToken: params.flags.botToken,
-              roomId: params.roomId,
-              text: responseText,
-              replyToMessageId: command.id,
-              proxySecret: resolveAlfaClubProxySecret(params.flags),
-              idempotencyKey,
-              timeoutMs: params.flags.sendTimeoutMs,
-            })
-            sent = true
-            logger.info('[alfaclub-chat] command_reply_sent', {
-              roomId: params.roomId,
-              messageId: command.id,
-              sender: command.sender,
-              lane: 'bot_token_with_reply_id_retry',
-              sendResult,
-            })
-          } catch (error) {
-            const detail = error instanceof Error ? error.message : String(error)
-            logger.warn('[alfaclub-chat] bot_reply_with_reply_id_retry_failed', {
-              roomId: params.roomId,
-              messageId: command.id,
-              error: detail.slice(0, 180),
-            })
-          }
-        }
-
-        if (!sent) {
-          const wsLane = await sendRoomMessageViaWebSocket({
-            websocketUrl: params.flags.websocketUrl,
-            jwt: params.jwt,
-            roomId: params.roomId,
-            text: responseText,
-            attachments,
-            replyToMessageId: command.id,
-            timeoutMs: params.flags.sendTimeoutMs,
-          })
-          logger.info('[alfaclub-chat] command_reply_sent', {
-            roomId: params.roomId,
-            messageId: command.id,
-            sender: command.sender,
-            lane: wsLane === 'ws_proxy_http' ? 'ws_proxy_http_fallback' : 'websocket_fallback',
-          })
-        }
-      } else {
-        const wsLane = await sendRoomMessageViaWebSocket({
-          websocketUrl: params.flags.websocketUrl,
+      const reactionEmoji = extractAlfaClubReactionEmoji(result.action)
+      const lane = await sendCommandReplyToRoom({
+        flags: params.flags,
+        jwt: params.jwt,
+        roomId: params.roomId,
+        text: responseText,
+        attachments,
+        replyToMessageId: command.id,
+        commandMessageId: command.id,
+      })
+      logger.info('[alfaclub-chat] command_reply_sent', {
+        roomId: params.roomId,
+        messageId: command.id,
+        sender: command.sender,
+        lane,
+        hasAttachments: attachments.length > 0,
+      })
+      if (reactionEmoji) {
+        await reactToAlfaClubTriggerMessage({
+          flags: params.flags,
           jwt: params.jwt,
           roomId: params.roomId,
-          text: responseText,
-          attachments,
-          replyToMessageId: command.id,
-          timeoutMs: params.flags.sendTimeoutMs,
-        })
-        logger.info('[alfaclub-chat] command_reply_sent', {
-          roomId: params.roomId,
           messageId: command.id,
-          sender: command.sender,
-          lane: wsLane === 'ws_proxy_http' ? 'ws_proxy_http_primary' : 'websocket_primary',
+          emoji: reactionEmoji,
         })
       }
       replied += 1

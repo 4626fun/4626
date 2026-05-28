@@ -16,6 +16,9 @@ export function formatHermitXCrossPostSkipMessage(tweetResponse: string): string
   if (isTwitterDuplicateContentError(tweetResponse)) {
     return 'X cross-post skipped — already posted this meme recently.'
   }
+  if (/Failed to download Twitter media/i.test(String(tweetResponse ?? ''))) {
+    return 'X cross-post skipped — could not fetch GIF for upload (broken host link).'
+  }
   const detail = String(tweetResponse ?? '').trim().slice(0, 120) || 'posting unavailable'
   return `X cross-post skipped — ${detail}.`
 }

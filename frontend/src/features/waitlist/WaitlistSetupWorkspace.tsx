@@ -7,7 +7,6 @@ import { externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
 import { AccountSetupWorkspaceView } from '@/features/accountSetup/AccountSetupWorkspaceView'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
-import { WalletProviders } from '@/web3/Web3Providers'
 import { WaitlistUnlocksPanel } from './WaitlistUnlocksPanel'
 import { WaitlistGroupChatPanel } from './WaitlistGroupChatPanel'
 
@@ -22,11 +21,7 @@ type WaitlistSetupWorkspaceProps = {
 }
 
 export function WaitlistSetupWorkspace(props: WaitlistSetupWorkspaceProps) {
-  return (
-    <WalletProviders reconnectOnMount={false}>
-      <WaitlistSetupWorkspaceContent {...props} />
-    </WalletProviders>
-  )
+  return <WaitlistSetupWorkspaceContent {...props} />
 }
 
 function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {

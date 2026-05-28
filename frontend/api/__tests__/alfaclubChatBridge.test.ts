@@ -479,6 +479,26 @@ describe('sendRoomMessageViaBotToken', () => {
     expect(JSON.parse(request?.body ?? '{}')).toEqual({ body: 'gmeow from Hermit' })
   })
 
+  it('builds websocket reaction frames for trigger messages', async () => {
+    const { buildAlfaClubReactionFrame } = await import(
+      '../../server/_lib/alfaclub/chatBridge.js'
+    )
+    expect(
+      buildAlfaClubReactionFrame({
+        roomId: '1043',
+        messageId: 'origin-message-123',
+        emoji: '😼',
+      }),
+    ).toEqual({
+      type: 'reaction',
+      value: {
+        room: '1043',
+        message_id: 'origin-message-123',
+        emoji: '😼',
+      },
+    })
+  })
+
   it('includes reply_id when responding to a triggering room message', async () => {
     const captured: CapturedRequest[] = []
     const restore = installFetchSpy(captured)

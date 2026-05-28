@@ -15,6 +15,7 @@ import {
   resolveHermitCooldownCommand,
 } from '../_lib/alfaclub/hermitCommandCooldown.js'
 import { executeHermitCommand } from '../_lib/hermit/skillRouter.js'
+import { pickHermitReactionEmoji } from '../_lib/hermit/reactionEmoji.js'
 import {
   executeKeeprCommandFamily,
   formatAssistantOnlyBlocked,
@@ -541,16 +542,24 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
           }
         }
 
+        const reactionEmoji = alfaClubChat
+          ? pickHermitReactionEmoji({
+              kind: result.kind,
+              tags: result.meme?.tags,
+            })
+          : null
+
         return {
           ok: true,
           response,
-          ...(outboundAttachments.length || alfaclubFollowUpText
+          ...(outboundAttachments.length || alfaclubFollowUpText || reactionEmoji
             ? {
                 action: {
                   action: 'hermit.command',
                   kind: result.kind,
                   ...(outboundAttachments.length ? { attachments: outboundAttachments } : {}),
                   ...(alfaclubFollowUpText ? { alfaclubFollowUpText } : {}),
+                  ...(reactionEmoji ? { reactionEmoji } : {}),
                 },
               }
             : {}),

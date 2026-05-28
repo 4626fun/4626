@@ -358,6 +358,16 @@ async function verifyTwitterConfig(config: TwitterOauthConfig): Promise<TwitterC
   }
 }
 
+export function isTweetMediaDownloadFailure(response: string): boolean {
+  return /Failed to download Twitter media/i.test(String(response ?? ''))
+}
+
+const TWEET_MEDIA_FETCH_HEADERS = {
+  accept: 'image/png,image/jpeg,image/webp,image/gif,*/*',
+  'user-agent':
+    'Mozilla/5.0 (compatible; 4626Hermit/1.0; +https://4626.fun) TwitterMediaFetcher',
+} as const
+
 async function downloadTweetMedia(input: TweetMediaInput): Promise<
   | { ok: true; bytes: Uint8Array; filename: string; contentType: string }
   | { ok: false; response: string }
@@ -370,7 +380,8 @@ async function downloadTweetMedia(input: TweetMediaInput): Promise<
   try {
     const response = await fetch(url, {
       method: 'GET',
-      headers: { accept: 'image/png,image/jpeg,image/webp,image/gif,*/*' },
+      headers: TWEET_MEDIA_FETCH_HEADERS,
+      redirect: 'follow',
     })
     if (!response.ok) {
       return { ok: false, response: `Failed to download Twitter media (${response.status}).` }
@@ -521,8 +532,18 @@ async function postTweet(params: {
         config: cfg.config,
         media: params.media,
       })
-      if (!uploaded.ok) return uploaded
-      mediaIds = [uploaded.mediaId]
+      if (!uploaded.ok) {
+        if (isTweetMediaDownloadFailure(uploaded.response)) {
+          logger.warn('[x/post] media download failed; posting text-only', {
+            url: params.media.url,
+            detail: uploaded.response,
+          })
+        } else {
+          return uploaded
+        }
+      } else {
+        mediaIds = [uploaded.mediaId]
+      }
     }
 
     const response = await fetch(url, {

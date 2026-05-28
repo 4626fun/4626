@@ -223,6 +223,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
         },
       ],
       alfaclubFollowUpText: 'https://x.com/i/web/status/1',
+      reactionEmoji: '😼',
     })
   })
 
@@ -322,6 +323,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
           type: 'image',
         },
       ],
+      reactionEmoji: '😼',
     })
   })
 

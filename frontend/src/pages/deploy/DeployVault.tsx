@@ -1,6 +1,6 @@
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
-import { useAccount, useChainId, useConfig, useConnect, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
+import { useAccount, useChainId, useConnect, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
 import { debugLogsFlag } from '@/lib/flags/featureFlags'
 import { base } from 'wagmi/chains'
 import type { Address, Hex } from 'viem'
@@ -56,6 +56,7 @@ import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 import { RequestCreatorAccess } from '@/components/deploy/RequestCreatorAccess'
 import { LaunchCoinCard } from '@/features/waitlist/LaunchCoinCard'
 import { CONTRACTS } from '@/config/contracts'
+import { wagmiConfig } from '@/config/wagmi'
 import {
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
   SPLIT_PHASE1_PHASE3_HELPER,
@@ -7967,7 +7968,6 @@ function DeployVaultBatcher({
 
 function DeployVaultMain() {
   const { address, isConnected, connector } = useAccount()
-  const wagmiConfig = useConfig()
   const chainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
   const { data: walletClient } = useWalletClient({ chainId: base.id })
@@ -8384,7 +8384,7 @@ function DeployVaultMain() {
         setExternalWalletConnectBusy(false)
       }
     })()
-  }, [address, connector?.id, ensureBaseChain, externalWalletConnectBusy, isConnected, wagmiConfig, wagmiConnectAsync, wagmiConnectors, walletClient])
+  }, [address, connector?.id, ensureBaseChain, externalWalletConnectBusy, isConnected, wagmiConnectAsync, wagmiConnectors, walletClient])
 
   useEffect(() => {
     if (isConnected) setExternalWalletConnectError(null)
