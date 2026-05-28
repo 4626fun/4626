@@ -42,11 +42,22 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
   const onSigningStepCompleteChange = useCallback((complete: boolean) => {
     setSigningStepComplete(complete)
   }, [])
+  const waitlistJoined = initialAccount.emailVerified === true
   const setupComplete = controller.zoraLinked && Boolean(controller.canonicalCswAddress)
-  const canEnterNow = canEnterApp && setupComplete
+  const canEnterNow = canEnterApp
 
   return (
     <>
+      {waitlistJoined ? (
+        <div className="mx-auto mb-6 max-w-[640px] space-y-2 text-center">
+          <h2 className="text-2xl font-semibold text-white">You&apos;re on the waitlist</h2>
+          <p className="text-sm text-zinc-400">
+            {canEnterApp
+              ? 'You&apos;re approved — enter the app when ready.'
+              : 'We&apos;ll notify you when your spot opens. Optional setup below unlocks swaps and chat sooner.'}
+          </p>
+        </div>
+      ) : null}
       <AccountSetupWorkspaceView
       context="waitlist"
       controller={controller}
@@ -58,19 +69,26 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
           <WaitlistGroupChatPanel setupComplete={setupComplete} signingReady={signingStepComplete} />
 
           {canEnterNow ? (
-            <Button
-              type="button"
-              variant="primary"
-              onClick={() => void onEnterApp()}
-              disabled={completionBusy}
-              loading={completionBusy}
-              className="w-full disabled:grayscale"
-            >
-              {`${SHARE_SYMBOL_PREFIX} Enter App`}
-            </Button>
-          ) : setupComplete && !canEnterApp ? (
+            <div className="space-y-2">
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => void onEnterApp()}
+                disabled={completionBusy}
+                loading={completionBusy}
+                className="w-full disabled:grayscale"
+              >
+                {`${SHARE_SYMBOL_PREFIX} Enter App`}
+              </Button>
+              {!setupComplete ? (
+                <p className="text-xs text-zinc-500">
+                  Complete optional setup below for the best in-app experience.
+                </p>
+              ) : null}
+            </div>
+          ) : waitlistJoined ? (
             <div role="status" aria-live="polite" className="space-y-2">
-              <p className="text-sm text-zinc-300">Setup complete. Waiting for admin approval.</p>
+              <p className="text-sm text-zinc-300">Waiting for approval.</p>
               <a
                 href="/leaderboard"
                 className="inline-flex h-9 items-center rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/[0.08]"

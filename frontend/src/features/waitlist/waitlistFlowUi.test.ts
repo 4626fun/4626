@@ -6,9 +6,9 @@ describe('deriveWaitlistAuthUi', () => {
   it('uses sign-in copy that supports both existing and new accounts', () => {
     expect(deriveWaitlistAuthUi()).toEqual({
       title: 'Waitlist',
-      subtitle: 'Secure sign-in to save your spot.',
+      subtitle: 'Sign in with email to save your spot.',
       ctaLabel: 'Continue',
-      busyLabel: 'Preparing your account...',
+      busyLabel: 'Setting up your account…',
     })
   })
 })

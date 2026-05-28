@@ -249,10 +249,11 @@ export function shouldShowBaseAppConnectPanel(params: {
 export function resolveWaitlistStep(params: {
   account: {
     emailVerified: boolean
-    appAccessStatus: string | null
+    appAccessStatus?: string | null
     baseSubAccount?: string | null
     accountSignals?: WaitlistAccountWithCanonical['accountSignals']
   }
+  /** Unused — kept for call-site stability while routing stays auth → done only. */
   subAccountFlowEnabled?: boolean
   embeddedEoaAvailable?: boolean
   subAccountStepCompleted?: boolean
@@ -260,65 +261,7 @@ export function resolveWaitlistStep(params: {
   zoraLinked?: boolean
   onchainEoaOwnerCount?: number
 }): WaitlistStep {
-  const {
-    account,
-    subAccountFlowEnabled,
-    embeddedEoaAvailable,
-    subAccountStepCompleted,
-    parentEmbeddedOwnerOnChain,
-    zoraLinked,
-    onchainEoaOwnerCount,
-  } = params
-  if (!account.emailVerified) return 'auth'
-
-  const track = account.accountSignals?.executionTrack
-  const hasSubAccount = hasRegisteredSubAccountExecution(track)
-  const signingReady = isWaitlistStepTwoSigningComplete({
-    accountSignals: account.accountSignals,
-    parentEmbeddedOwnerOnChain,
-    subAccountFlowEnabled: subAccountFlowEnabled === true,
-    ownerInstallRequested: false,
-  })
-  const hasCanonicalCsw = Boolean(
-    typeof account.accountSignals?.canonicalCswAddress === 'string' &&
-      account.accountSignals.canonicalCswAddress.trim(),
-  )
-
-  if (subAccountStepCompleted === true) {
-    return 'done'
-  }
-
-  if (
-    !shouldUseBaseAppSubAccountPath({
-      subAccountFlowEnabled: subAccountFlowEnabled === true,
-      parentEmbeddedOwnerOnChain,
-      accountSignals: account.accountSignals,
-      zoraLinked,
-      onchainEoaOwnerCount,
-    })
-  ) {
-    return 'done'
-  }
-
-  const subAccountAddress = resolveSubAccountAddress({
-    baseSubAccount: account.baseSubAccount ?? null,
-    accountSignals: account.accountSignals,
-  })
-
-  const shouldOfferSubAccountStep =
-    subAccountFlowEnabled === true && embeddedEoaAvailable === true && !hasSubAccount && hasCanonicalCsw
-
-  const shouldRecoverSubAccountOwner =
-    subAccountFlowEnabled === true &&
-    embeddedEoaAvailable === true &&
-    hasCanonicalCsw &&
-    Boolean(subAccountAddress) &&
-    !signingReady
-
-  if (shouldOfferSubAccountStep || shouldRecoverSubAccountOwner) {
-    return 'connect-base-app'
-  }
-
+  if (!params.account.emailVerified) return 'auth'
   return 'done'
 }
 
@@ -326,15 +269,12 @@ type CanonicalBootstrapResult = {
   canonicalCswAddress: string | null
 }
 
-export function shouldAutoBootstrapWaitlistSession(params: {
+export function shouldAutoBootstrapWaitlistSession(_params: {
   step: WaitlistStep
   privyAuthed: boolean
   recoveryRequired: boolean
 }): boolean {
-  if (params.step !== 'auth') return false
-  if (!params.privyAuthed) return false
-  if (params.recoveryRequired) return false
-  return true
+  return false
 }
 
 export function mergeCanonicalWaitlistAccount<T extends WaitlistAccountWithCanonical>(

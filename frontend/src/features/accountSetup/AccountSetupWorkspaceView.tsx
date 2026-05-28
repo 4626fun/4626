@@ -721,8 +721,8 @@ export function AccountSetupWorkspaceView(props: {
         {/* Advanced — identities + co-owner management. Collapsed by default. */}
         <WaitlistAdvancedSection controller={controller} />
 
-        {/* Enter App — only after all 3 steps */}
-        {allDone && summaryActions ? (
+        {/* Enter App / waitlist actions — approval-gated, not setup-gated */}
+        {summaryActions ? (
           <div className="pt-1">{summaryActions}</div>
         ) : null}
 

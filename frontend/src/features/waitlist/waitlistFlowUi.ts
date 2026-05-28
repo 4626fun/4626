@@ -13,8 +13,8 @@ export function canEnterAppFromAccountState(params: { appAccessStatus: string | 
 export function deriveWaitlistAuthUi(): WaitlistEmailUi {
   return {
     title: 'Waitlist',
-    subtitle: 'Secure sign-in to save your spot.',
+    subtitle: 'Sign in with email to save your spot.',
     ctaLabel: 'Continue',
-    busyLabel: 'Preparing your account...',
+    busyLabel: 'Setting up your account…',
   }
 }

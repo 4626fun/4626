@@ -11,6 +11,7 @@ import { AppLoadingProvider } from '@/components/layout/AppLoadingOverlay'
 
 import { WaitlistFlow } from './WaitlistFlow'
 import { WaitlistSetupWorkspace } from './WaitlistSetupWorkspace'
+import { clearWaitlistRecoveryGate } from './waitlistRecoveryGate'
 
 const collisionStateRef = vi.hoisted(() => ({
   current: {
@@ -206,6 +207,18 @@ function render(ui: React.ReactElement) {
   )
 }
 
+async function continueWaitlist() {
+  await act(async () => {
+    fireEvent.click(await screen.findByRole('button', { name: /^continue$/i }))
+  })
+}
+
+async function continueIntoWaitlistSetup() {
+  await continueWaitlist()
+  expect(await screen.findByRole('heading', { name: /you're on the waitlist/i })).toBeTruthy()
+  expect(await screen.findByRole('heading', { name: /activate your account/i })).toBeTruthy()
+}
+
 const WAITLIST_ACCOUNT = {
   privyUserId: 'did:privy:test-user',
   email: 'waitlisted@example.com',
@@ -262,6 +275,8 @@ describe('WaitlistFlow simplified completion UI', () => {
     })
     mockGetAccessToken.mockReset()
     mockGetAccessToken.mockImplementation(async () => (mockPrivyAuthenticated ? 'privy-token-default' : null))
+    clearWaitlistRecoveryGate()
+    sessionStorage.clear()
 
     vi.mocked(apiFetch).mockImplementation(async (input: string) => {
       if (input.startsWith('/api/waitlist/bootstrap')) {
@@ -296,21 +311,10 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('heading', { name: /activate your account/i })).toBeTruthy()
+    await continueIntoWaitlistSetup()
     expect(screen.queryByRole('heading', { name: /^waitlist$/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /^continue$/i })).toBeNull()
     expect(screen.queryByText(/climb the waitlist/i)).toBeNull()
-    expect(screen.queryByText(/waitlist leaderboard/i)).toBeNull()
-    expect(
-      vi
-        .mocked(apiFetch)
-        .mock.calls.some(([input]) => String(input).startsWith('/api/waitlist/position')),
-    ).toBe(false)
-    expect(
-      vi
-        .mocked(apiFetch)
-        .mock.calls.some(([input]) => String(input).startsWith('/api/waitlist/leaderboard')),
-    ).toBe(false)
   })
 
   it('keeps auth state to a single heading stack', () => {
@@ -376,7 +380,7 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('heading', { name: /activate your account/i })).toBeTruthy()
+    await continueIntoWaitlistSetup()
     expect(screen.queryByRole('heading', { name: /^waitlist$/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /^continue$/i })).toBeNull()
   })
@@ -388,7 +392,7 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('heading', { name: /activate your account/i })).toBeTruthy()
+    await continueIntoWaitlistSetup()
     expect(screen.getAllByRole('heading', { name: /activate your account/i })).toHaveLength(1)
   })
 
@@ -410,7 +414,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     expect(screen.queryByRole('button', { name: /advanced account settings/i })).toBeNull()
   })
 
-  it('hides enter app until all setup steps are complete', async () => {
+  it('shows enter app when approved even if optional setup is incomplete', async () => {
     render(
       <MemoryRouter>
         <WaitlistSetupWorkspace
@@ -424,7 +428,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     )
 
     expect(await screen.findByRole('heading', { name: /activate your account/i })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /enter app/i })).toBeNull()
+    expect(await screen.findByRole('button', { name: /enter app/i })).toBeTruthy()
   })
 
   it('shows manual existing-account recovery when bootstrap returns recovery-required', async () => {
@@ -452,8 +456,7 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    const continueButton = await screen.findByRole('button', { name: /^continue$/i }, { timeout: 6_000 })
-    fireEvent.click(continueButton)
+    fireEvent.click(await screen.findByRole('button', { name: /^continue$/i }, { timeout: 6_000 }))
 
     expect(
       await screen.findByText(/this email already has a 4626 account/i, undefined, { timeout: 5_000 }),
@@ -593,7 +596,7 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: /^continue$/i }))
+    await continueWaitlist()
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /use existing account/i })).toBeTruthy()
@@ -666,6 +669,8 @@ describe('WaitlistFlow simplified completion UI', () => {
         <WaitlistFlow />
       </MemoryRouter>,
     )
+
+    await continueWaitlist()
 
     await waitFor(() => {
       expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
@@ -965,6 +970,8 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
+    await continueWaitlist()
+
     await waitFor(() => {
       expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     }, { timeout: 9_000 })
@@ -1024,11 +1031,12 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(
-      await screen.findByRole('heading', { name: /waitlist|activate your account/i }, { timeout: 9_000 }),
-    ).toBeTruthy()
+    await continueWaitlist()
+
+    await waitFor(() => {
+      expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
+    }, { timeout: 9_000 })
     // first requiresPrivyAuth + optional cooldown-respected retry to recover
-    expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     expect(bootstrapCalls).toBeLessThanOrEqual(3)
   })
 
@@ -1067,18 +1075,24 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
+    await continueWaitlist()
+
     await waitFor(() => {
       expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     }, { timeout: 6_000 })
 
-    // Allow async retries to settle, then verify calls stay bounded (no ongoing spam loop).
+    expect(
+      await screen.findByText(/this email already has a 4626 account/i, undefined, { timeout: 5_000 }),
+    ).toBeTruthy()
+
+    // Allow async follow-ups to settle, then verify calls stay bounded (no ongoing spam loop).
     await new Promise((resolve) => setTimeout(resolve, 1_800))
     const settledBootstrapCalls = bootstrapCalls
     await new Promise((resolve) => setTimeout(resolve, 1_800))
     expect(bootstrapCalls).toBeLessThanOrEqual(settledBootstrapCalls + 1)
 
-    // one initial bootstrap + bounded recovery probes
-    expect(bootstrapCalls).toBeLessThanOrEqual(3)
+    // one explicit bootstrap after Continue, no auto-retry loop
+    expect(bootstrapCalls).toBeLessThanOrEqual(2)
     expect(logoutCalls).toBeLessThanOrEqual(1)
   })
 

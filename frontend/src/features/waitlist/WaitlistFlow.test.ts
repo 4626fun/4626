@@ -35,7 +35,7 @@ describe('resolveWaitlistStep', () => {
     ).toBe('done')
   })
 
-  it('routes Base App users to connect-base-app when sub-account flow is enabled', () => {
+  it('routes verified Base App users straight to the setup workspace', () => {
     expect(
       resolveWaitlistStep({
         account: {
@@ -50,10 +50,10 @@ describe('resolveWaitlistStep', () => {
         subAccountFlowEnabled: true,
         embeddedEoaAvailable: true,
       }),
-    ).toBe('connect-base-app')
+    ).toBe('done')
   })
 
-  it('skips connect-base-app when sub-account execution is already registered', () => {
+  it('still routes to done when sub-account execution is already registered', () => {
     expect(
       resolveWaitlistStep({
         account: {
@@ -117,14 +117,14 @@ describe('resolveWaitlistStep', () => {
 })
 
 describe('shouldAutoBootstrapWaitlistSession', () => {
-  it('bootstraps whenever an auth-step Privy session exists', () => {
+  it('never auto-bootstraps — users must tap Continue explicitly', () => {
     expect(
       shouldAutoBootstrapWaitlistSession({
         step: 'auth',
         privyAuthed: true,
         recoveryRequired: false,
       }),
-    ).toBe(true)
+    ).toBe(false)
 
     expect(
       shouldAutoBootstrapWaitlistSession({
