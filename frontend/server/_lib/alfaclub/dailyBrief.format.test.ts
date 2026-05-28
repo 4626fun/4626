@@ -40,7 +40,7 @@ describe('formatAlfaClubDailyBrief', () => {
       row({ rank: 3, address: ADDR_C, tokenId: 50, score: 0.099 }),
     ]
     const labels = new Map<string, string>([[ADDR_A.toLowerCase(), '@Flip_Research']])
-    const roomIds = new Map<string, string>([[ADDR_A.toLowerCase(), '1043']])
+    const roomIds = new Map<string, string>([[ADDR_A.toLowerCase(), '2']])
 
     const text = formatAlfaClubDailyBrief({
       snapshotTs: '2026-05-26T12:01:18.477Z',
@@ -66,7 +66,8 @@ describe('formatAlfaClubDailyBrief', () => {
     expect(text).toContain('**Markets**')
     expect(text).toContain('BTC $75.6k')
     expect(text).toContain('@Flip_Research')
-    expect(text).toContain('https://alfaclub.app/room/1043')
+    expect(text).toContain('https://alfaclub.app/room/2')
+    expect(text).not.toContain('/room/1043')
     expect(text).not.toContain('app.4626.fun')
     expect(text).not.toContain('Actionable breakouts')
     expect(text).not.toContain('Watch next (24h)')

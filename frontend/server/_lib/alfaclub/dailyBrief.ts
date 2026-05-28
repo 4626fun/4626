@@ -911,10 +911,15 @@ export async function runAlfaClubDailyBrief(params: {
   }
 
   const labels = await readCreatorLabels(currentRows.map((row) => row.creatorAddress))
-  const addressSet = new Set<string>()
-  for (const row of currentRows) addressSet.add(row.creatorAddress)
-  for (const row of previousRows) addressSet.add(row.creatorAddress)
-  const roomIds = await resolveCreatorRoomLinks([...addressSet])
+  const tokenIdByAddress = new Map<string, string>()
+  for (const row of [...currentRows, ...previousRows]) {
+    tokenIdByAddress.set(row.creatorAddress.toLowerCase(), row.tokenId.toString())
+  }
+  const roomLinkHints = [...tokenIdByAddress.entries()].map(([address, tokenId]) => ({
+    address,
+    tokenId,
+  }))
+  const roomIds = await resolveCreatorRoomLinks(roomLinkHints)
   const messageText = formatAlfaClubDailyBrief({
     snapshotTs,
     previousSnapshotTs,

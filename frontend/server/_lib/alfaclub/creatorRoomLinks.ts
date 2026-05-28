@@ -5,6 +5,18 @@ declare const process: { env: Record<string, string | undefined> }
 
 const DEFAULT_PAGE_ORIGIN = 'https://alfaclub.app'
 const DEFAULT_ROOM_PATH_TEMPLATE = '/room/{roomId}'
+const DEFAULT_OPERATIONAL_ROOM_ID = '1043'
+
+export type CreatorRoomLinkHint = {
+  address: string
+  /** FriendKey / metrics token id — prefer matching `alfaclub_rooms_snapshot.room_id`. */
+  tokenId?: string
+}
+
+type SnapshotRoomRow = {
+  roomId: string
+  volume: number | null
+}
 
 export function readAlfaClubPageOrigin(): string {
   const configured =
@@ -25,8 +37,117 @@ export function buildAlfaClubRoomUrl(roomId: string): string {
   return `${readAlfaClubPageOrigin()}${path.replaceAll('{roomId}', encodeURIComponent(normalizedRoomId))}`
 }
 
-async function loadCreatorRoomIdFromChatActivity(addresses: string[]): Promise<Map<string, string>> {
-  const normalized = [...new Set(addresses.map((value) => value.trim().toLowerCase()).filter(Boolean))]
+export function readOperationalAlfaClubRoomIds(): Set<string> {
+  const ids = new Set<string>()
+  const candidates = [
+    process.env.ALFACLUB_CHAT_ROOM_ID,
+    process.env.ALFACLUB_DAILY_BRIEF_ROOM_ID,
+    process.env.TELEGRAM_TO_ALFACLUB_ROOM_ID,
+    DEFAULT_OPERATIONAL_ROOM_ID,
+  ]
+  for (const raw of candidates) {
+    const value = String(raw ?? '').trim().replace(/^"+|"+$/g, '')
+    if (/^\d+$/.test(value)) ids.add(value)
+  }
+  return ids
+}
+
+function normalizeHints(input: string[] | CreatorRoomLinkHint[]): CreatorRoomLinkHint[] {
+  if (input.length === 0) return []
+  if (typeof input[0] === 'string') {
+    return (input as string[]).map((address) => ({ address }))
+  }
+  return input as CreatorRoomLinkHint[]
+}
+
+/** Prefer token-id room match, then highest reported volume. */
+export function pickCreatorRoomIdFromSnapshotRows(
+  rows: SnapshotRoomRow[],
+  tokenId?: string,
+): string | null {
+  if (rows.length === 0) return null
+  const normalizedTokenId = String(tokenId ?? '').trim()
+  const sorted = [...rows].sort((a, b) => {
+    const aTokenMatch = normalizedTokenId.length > 0 && a.roomId === normalizedTokenId ? 1 : 0
+    const bTokenMatch = normalizedTokenId.length > 0 && b.roomId === normalizedTokenId ? 1 : 0
+    if (bTokenMatch !== aTokenMatch) return bTokenMatch - aTokenMatch
+    const aVol = a.volume ?? Number.NEGATIVE_INFINITY
+    const bVol = b.volume ?? Number.NEGATIVE_INFINITY
+    return bVol - aVol
+  })
+  return sorted[0]?.roomId ?? null
+}
+
+async function loadCreatorRoomIdFromRoomsSnapshot(
+  hints: CreatorRoomLinkHint[],
+): Promise<Map<string, string>> {
+  const normalized = [
+    ...new Set(hints.map((hint) => hint.address.trim().toLowerCase()).filter(Boolean)),
+  ]
+  const tokenIdByAddress = new Map<string, string>()
+  for (const hint of hints) {
+    const address = hint.address.trim().toLowerCase()
+    const tokenId = String(hint.tokenId ?? '').trim()
+    if (address && tokenId) tokenIdByAddress.set(address, tokenId)
+  }
+  const out = new Map<string, string>()
+  if (normalized.length === 0) return out
+
+  const db = await getDb()
+  if (!db) return out
+
+  try {
+    const result = await db.sql`
+      SELECT
+        LOWER(creator_address) AS creator_address,
+        room_id::text AS room_id,
+        volume::text AS volume
+      FROM public.alfaclub_rooms_snapshot
+      WHERE LOWER(creator_address) = ANY(${normalized})
+        AND creator_address IS NOT NULL
+        AND room_id IS NOT NULL;
+    `
+    const rowsByAddress = new Map<string, SnapshotRoomRow[]>()
+    const dbRows = (result.rows ?? []) as Array<{
+      creator_address: string | null
+      room_id: string | null
+      volume: string | null
+    }>
+    for (const row of dbRows) {
+      const address =
+        typeof row.creator_address === 'string' ? row.creator_address.toLowerCase() : ''
+      const roomId = typeof row.room_id === 'string' ? row.room_id.trim() : ''
+      if (!address || !roomId) continue
+      const volumeRaw = row.volume !== null ? Number(row.volume) : null
+      const volume = volumeRaw !== null && Number.isFinite(volumeRaw) ? volumeRaw : null
+      const bucket = rowsByAddress.get(address) ?? []
+      bucket.push({ roomId, volume })
+      rowsByAddress.set(address, bucket)
+    }
+    for (const address of normalized) {
+      const picked = pickCreatorRoomIdFromSnapshotRows(
+        rowsByAddress.get(address) ?? [],
+        tokenIdByAddress.get(address),
+      )
+      if (picked) out.set(address, picked)
+    }
+  } catch {
+    // Best-effort — omit links when snapshot is unavailable.
+  }
+  return out
+}
+
+async function loadCreatorRoomIdFromChatActivity(
+  hints: CreatorRoomLinkHint[],
+): Promise<Map<string, string>> {
+  const operationalRoomIds = readOperationalAlfaClubRoomIds()
+  const normalized = [
+    ...new Set(
+      hints
+        .map((hint) => hint.address.trim().toLowerCase())
+        .filter((address) => address.length > 0),
+    ),
+  ]
   const out = new Map<string, string>()
   if (normalized.length === 0) return out
 
@@ -34,6 +155,7 @@ async function loadCreatorRoomIdFromChatActivity(addresses: string[]): Promise<M
   if (!db) return out
   await ensureAlfaClubVigilanteSchema()
 
+  const excludedRoomIds = [...operationalRoomIds]
   try {
     const result = await db.sql`
       SELECT DISTINCT ON (addr)
@@ -48,6 +170,7 @@ async function loadCreatorRoomIdFromChatActivity(addresses: string[]): Promise<M
         WHERE LOWER(sender_address) = ANY(${normalized})
           AND room_id IS NOT NULL
           AND LENGTH(TRIM(room_id)) > 0
+          AND NOT (room_id = ANY(${excludedRoomIds}))
         GROUP BY 1, 2
       ) ranked
       ORDER BY addr, msg_count DESC;
@@ -56,25 +179,42 @@ async function loadCreatorRoomIdFromChatActivity(addresses: string[]): Promise<M
     for (const row of rows) {
       const address = typeof row.addr === 'string' ? row.addr : ''
       const roomId = typeof row.room_id === 'string' ? row.room_id.trim() : ''
-      if (address && roomId) out.set(address, roomId)
+      if (address && roomId && !operationalRoomIds.has(roomId)) out.set(address, roomId)
     }
   } catch {
-    // Best-effort fallback when policy rows are not seeded yet.
+    // Chat fallback is last resort only.
   }
   return out
 }
 
-/** Policy table first, then most-active AlfaClub chat room per creator wallet. */
-export async function resolveCreatorRoomLinks(addresses: string[]): Promise<Map<string, string>> {
-  const policy = await loadCreatorRoomIdByCoinAddress(addresses)
-  const unresolved = addresses.filter((address) => !policy.has(address.toLowerCase()))
-  if (unresolved.length === 0) return policy
+/**
+ * Resolve creator → AlfaClub room URL targets.
+ * Order: room_access_policies → alfaclub_rooms_snapshot (canonical) → non-ops chat activity.
+ */
+export async function resolveCreatorRoomLinks(
+  input: string[] | CreatorRoomLinkHint[],
+): Promise<Map<string, string>> {
+  const hints = normalizeHints(input)
+  const addresses = hints.map((hint) => hint.address)
 
-  const fromChat = await loadCreatorRoomIdFromChatActivity(unresolved)
-  const merged = new Map(policy)
-  for (const [address, roomId] of fromChat) {
-    if (!merged.has(address)) merged.set(address, roomId)
+  const merged = await loadCreatorRoomIdByCoinAddress(addresses)
+
+  const unresolvedHints = hints.filter((hint) => !merged.has(hint.address.toLowerCase()))
+  if (unresolvedHints.length > 0) {
+    const fromSnapshot = await loadCreatorRoomIdFromRoomsSnapshot(unresolvedHints)
+    for (const [address, roomId] of fromSnapshot) {
+      if (!merged.has(address)) merged.set(address, roomId)
+    }
   }
+
+  const stillUnresolved = hints.filter((hint) => !merged.has(hint.address.toLowerCase()))
+  if (stillUnresolved.length > 0) {
+    const fromChat = await loadCreatorRoomIdFromChatActivity(stillUnresolved)
+    for (const [address, roomId] of fromChat) {
+      if (!merged.has(address)) merged.set(address, roomId)
+    }
+  }
+
   return merged
 }
 
