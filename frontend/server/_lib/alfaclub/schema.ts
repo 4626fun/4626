@@ -383,6 +383,42 @@ export async function ensureAlfaClubVigilanteSchema(): Promise<void> {
   }
   await db.sql`CREATE INDEX IF NOT EXISTS user_preference_sender_idx ON alfaclub.user_preference(sender_address);`
 
+  // ── alfaclub.hermit_command_cooldown ──
+  // Per-(room, sender) throttle for creative slash commands in AlfaClub chat.
+  await db.sql`
+    CREATE TABLE IF NOT EXISTS alfaclub.hermit_command_cooldown (
+      room_id           TEXT NOT NULL,
+      sender_address    TEXT NOT NULL,
+      command_key       TEXT NOT NULL,
+      last_invoked_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (room_id, sender_address, command_key)
+    );
+  `
+  try {
+    await db.sql`ALTER TABLE alfaclub.hermit_command_cooldown ENABLE ROW LEVEL SECURITY;`
+  } catch {
+    // Ignore.
+  }
+  try {
+    await db.sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_policies
+          WHERE schemaname = 'alfaclub'
+            AND tablename = 'hermit_command_cooldown'
+            AND policyname = 'hermit_command_cooldown_deny_all'
+        ) THEN
+          CREATE POLICY hermit_command_cooldown_deny_all
+            ON alfaclub.hermit_command_cooldown FOR ALL TO public USING (false) WITH CHECK (false);
+        END IF;
+      END
+      $$;
+    `
+  } catch {
+    // Ignore.
+  }
+
   // ── alfaclub.room_access_policies ──
   // Dynamic room gating policy keyed by AlfaClub room id. Threshold is
   // derived from `quoteBuyKeys(key_amount_raw)` on the configured XYK pool

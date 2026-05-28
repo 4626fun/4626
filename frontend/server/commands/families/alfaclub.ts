@@ -9,6 +9,12 @@ import {
   type PublicationRecord,
 } from '../../_lib/alfaclub/publicationLedger.js'
 import { buildAlfaRoomChart } from '../../_lib/alfaclub/roomCharts.js'
+import {
+  buildAlfaClubBriefContext,
+  formatAlfaClubDailyBrief,
+  formatAlfaClubLeaderboardChat,
+} from '../../_lib/alfaclub/dailyBrief.js'
+import { buildAlfaClubRoomUrl, resolveCreatorRoomLinks } from '../../_lib/alfaclub/creatorRoomLinks.js'
 import { SCORECARD_DISCLAIMER } from '../../_lib/alfaclub/scorecard.js'
 import {
   readVigilanteFlags,
@@ -193,6 +199,7 @@ function parseCreateRoomPayload(rawPayload: string): ParsedCreateRoomPayload | n
 function parseSubcommand(text: string): {
   sub:
     | 'leaderboard'
+    | 'brief'
     | 'creator'
     | 'status'
     | 'help'
@@ -223,6 +230,17 @@ function parseSubcommand(text: string): {
   const parts = cleaned.split(/\s+/)
   const first = (parts[0] ?? '').toLowerCase()
 
+  if (first === 'brief' || first === 'digest' || first === 'daily') {
+    return {
+      sub: 'brief',
+      address: null,
+      tokenId: null,
+      amount: null,
+      payloadRaw: null,
+      chartKindRaw: null,
+      limit: null,
+    }
+  }
   if (first === 'leaderboard' || first === 'top' || first === 'ranking') {
     return {
       sub: 'leaderboard',
@@ -384,7 +402,8 @@ function formatHelp(): string {
   return [
     '**/alfa** — AlfaClub Integrity Vigilante',
     '',
-    '  `/alfa` — top-N leaderboard',
+    '  `/alfa` — compact top-N leaderboard (AlfaClub room links)',
+    '  `/alfa brief` — full daily digest (markets + moves)',
     '  `/alfa <address>` — detail for a specific creator address',
     '  `/alfa creator <address>` — same, explicit form',
     '  `/alfa chart [kind] [limit]` — render a room analytics chart',
@@ -460,8 +479,9 @@ function formatCreatorDetail(params: {
   address: string
   row: MetricsSnapshotRow | null
   publications: PublicationRecord[]
+  roomUrl?: string | null
 }): string {
-  const { flags, snapshotTs, address, row, publications } = params
+  const { flags, snapshotTs, address, row, publications, roomUrl } = params
   const lines: string[] = [
     `**AlfaClub Creator** \`${address}\``,
     `**Flags:** ${formatFlagsLine(flags)}`,
@@ -494,6 +514,7 @@ function formatCreatorDetail(params: {
   lines.push('')
   lines.push(`**Rank:** ${row.rank}`)
   lines.push(`**Room (FriendKey tokenId):** ${row.tokenId.toString()}`)
+  if (roomUrl) lines.push(`**AlfaClub room:** ${roomUrl}`)
   lines.push(`**Supply:** ${row.totalSupply.toString()} (staked ${row.stakedSupply.toString()})`)
   lines.push(
     `**Hyperliquid:** account=${formatUsd(row.hlAccountValueUsd ?? null)} · pnl30d=${formatUsd(row.pnl30dUsd ?? null)}`,
@@ -1104,9 +1125,28 @@ export async function executeAlfaclubCommandFamily(params: {
   if (parsed.sub === 'help') {
     return { ok: true, response: formatHelp() }
   }
+  if (parsed.sub === 'brief') {
+    const built = await buildAlfaClubBriefContext({ fetchMarkets: true })
+    if (!built.ok) {
+      const hint =
+        built.reason === 'no_snapshot'
+          ? 'No AlfaClub snapshot yet — run the snapshot cron first.'
+          : 'Latest AlfaClub snapshot is empty.'
+      return { ok: false, response: hint }
+    }
+    return { ok: true, response: formatAlfaClubDailyBrief(built.formatInput) }
+  }
   if (parsed.sub === 'creator') {
     const address = parsed.address ?? params.senderWallet.toLowerCase()
     const loaded = await loadCreator(flags, address)
+    let roomUrl: string | null = null
+    if (loaded.row) {
+      const roomIds = await resolveCreatorRoomLinks([
+        { address: loaded.row.creatorAddress, tokenId: loaded.row.tokenId.toString() },
+      ])
+      const roomId = roomIds.get(address.toLowerCase())
+      roomUrl = roomId ? buildAlfaClubRoomUrl(roomId) : null
+    }
     return {
       ok: true,
       response: formatCreatorDetail({
@@ -1115,18 +1155,30 @@ export async function executeAlfaclubCommandFamily(params: {
         address,
         row: loaded.row,
         publications: loaded.publications,
+        roomUrl,
       }),
     }
   }
 
-  const loaded = await loadLeaderboard(flags)
+  const limit = parsed.limit ?? flags.topN
+  const built = await buildAlfaClubBriefContext({
+    topRows: limit,
+    fetchMarkets: false,
+    compact: true,
+  })
+  if (!built.ok) {
+    return {
+      ok: true,
+      response: formatLeaderboard({
+        flags,
+        snapshotTs: built.snapshotTs,
+        rows: [],
+        pubsByAddress: new Map(),
+      }),
+    }
+  }
   return {
     ok: true,
-    response: formatLeaderboard({
-      flags,
-      snapshotTs: loaded.snapshotTs,
-      rows: loaded.rows,
-      pubsByAddress: loaded.pubsByAddress,
-    }),
+    response: formatAlfaClubLeaderboardChat(built.formatInput, SCORECARD_DISCLAIMER),
   }
 }

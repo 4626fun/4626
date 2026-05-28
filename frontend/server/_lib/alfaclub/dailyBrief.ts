@@ -374,6 +374,20 @@ async function fetchMajorTokenPrices(timeoutMs: number): Promise<MarketRow[]> {
   }
 }
 
+export function formatIndexedScopeLine(params: {
+  creatorsTracked: number
+  rankedCount: number
+  newCreators: number
+  activeCreators24h: number
+}): string {
+  const base = `${params.creatorsTracked.toLocaleString('en-US')} FriendKey creators indexed · ${params.rankedCount.toLocaleString('en-US')} scored this snapshot`
+  const tail = `${params.newCreators} new vs prior · ${params.activeCreators24h} active (24h)`
+  if (params.rankedCount > 0 && params.rankedCount < params.creatorsTracked) {
+    return `${base} (partial leaderboard — not every indexed creator is rescored each run) · ${tail}`
+  }
+  return `${base} · ${tail}`
+}
+
 function formatBriefSnapshotDate(iso: string): string {
   const parsed = Date.parse(iso)
   if (!Number.isFinite(parsed)) return iso
@@ -549,7 +563,12 @@ function buildCompactBriefText(params: {
   const prevLabel = params.previousSnapshotTs ? formatBriefSnapshotDate(params.previousSnapshotTs) : null
   lines.push(`**AlfaClub Daily** · ${snapLabel}${prevLabel ? ` vs ${prevLabel}` : ''}`)
   lines.push(
-    `${params.creatorsTracked.toLocaleString('en-US')} tracked · ${params.currentRows.length.toLocaleString('en-US')} ranked · ${newCreators} new · ${activeCreators24h} active (24h)`,
+    formatIndexedScopeLine({
+      creatorsTracked: params.creatorsTracked,
+      rankedCount: params.currentRows.length,
+      newCreators,
+      activeCreators24h,
+    }),
   )
 
   const majorParts = params.marketRows
@@ -808,6 +827,116 @@ export type AlfaClubDailyBriefFormatInput = {
   roomIds: Map<string, string>
 }
 
+export function formatAlfaClubLeaderboardChat(
+  input: AlfaClubDailyBriefFormatInput,
+  disclaimer?: string,
+): string {
+  const snapLabel = formatBriefSnapshotDate(input.snapshotTs)
+  const prevLabel = input.previousSnapshotTs ? formatBriefSnapshotDate(input.previousSnapshotTs) : null
+  const newCreators = buildDeltas(input.currentRows, input.previousRows).filter((delta) => delta.isNew).length
+  const pubs24h = input.recentPublications.filter((pub) => {
+    const ts = Date.parse(pub.createdAt)
+    return Number.isFinite(ts) && ts >= Date.now() - 24 * 60 * 60 * 1000
+  })
+  const activeCreators24h = new Set(pubs24h.map((pub) => pub.creatorAddress.toLowerCase())).size
+
+  const lines: string[] = []
+  lines.push('**AlfaClub Leaderboard**')
+  lines.push(`${snapLabel}${prevLabel ? ` vs ${prevLabel}` : ''}`)
+  lines.push(
+    formatIndexedScopeLine({
+      creatorsTracked: input.creatorsTracked,
+      rankedCount: input.currentRows.length,
+      newCreators,
+      activeCreators24h,
+    }),
+  )
+  lines.push('')
+  lines.push(`**Top ${input.topRows}**`)
+  for (const row of input.currentRows.slice(0, input.topRows)) {
+    lines.push(formatCompactRankLine(row, input.labels, input.roomIds))
+  }
+  if (disclaimer) {
+    lines.push('')
+    lines.push(disclaimer)
+  }
+  return lines.join('\n')
+}
+
+export type AlfaClubBriefContextResult =
+  | { ok: false; reason: string; snapshotTs: string | null }
+  | {
+      ok: true
+      snapshotTs: string
+      previousSnapshotTs: string | null
+      formatInput: AlfaClubDailyBriefFormatInput
+    }
+
+export async function buildAlfaClubBriefContext(params?: {
+  topRows?: number
+  moverRows?: number
+  majorRows?: number
+  fetchMarkets?: boolean
+  compact?: boolean
+}): Promise<AlfaClubBriefContextResult> {
+  const flags = readAlfaClubDailyBriefFlags()
+  const snapshotTs = await getLatestSnapshotTs()
+  if (!snapshotTs) {
+    return { ok: false, reason: 'no_snapshot', snapshotTs: null }
+  }
+
+  const timestamps = await listRecentSnapshotTimestamps(2)
+  const previousSnapshotTs = timestamps.find((ts) => ts !== snapshotTs) ?? null
+  const topRows = params?.topRows ?? flags.topRows
+  const moverRows = params?.moverRows ?? flags.moverRows
+  const majorRows = params?.majorRows ?? flags.majorRows
+  const fetchMarkets = params?.fetchMarkets !== false
+
+  const [currentRows, previousRows, creators, recentPublications, marketRows] = await Promise.all([
+    getSnapshotAt(snapshotTs),
+    previousSnapshotTs ? getSnapshotAt(previousSnapshotTs) : Promise.resolve([]),
+    listAllCreators(),
+    listRecentPublications(null, DEFAULT_RECENT_PUBLICATIONS_LIMIT),
+    fetchMarkets ? fetchMajorTokenPrices(flags.marketTimeoutMs) : Promise.resolve([]),
+  ])
+
+  if (currentRows.length === 0) {
+    return { ok: false, reason: 'empty_snapshot', snapshotTs }
+  }
+
+  const labels = await readCreatorLabels(currentRows.map((row) => row.creatorAddress))
+  const tokenIdByAddress = new Map<string, string>()
+  for (const row of [...currentRows, ...previousRows]) {
+    tokenIdByAddress.set(row.creatorAddress.toLowerCase(), row.tokenId.toString())
+  }
+  const roomLinkHints = [...tokenIdByAddress.entries()].map(([address, tokenId]) => ({
+    address,
+    tokenId,
+  }))
+  const roomIds = await resolveCreatorRoomLinks(roomLinkHints)
+
+  return {
+    ok: true,
+    snapshotTs,
+    previousSnapshotTs,
+    formatInput: {
+      snapshotTs,
+      previousSnapshotTs,
+      currentRows,
+      previousRows,
+      creatorsTracked: creators.length > 0 ? creators.length : currentRows.length,
+      recentPublications,
+      marketRows,
+      topRows,
+      moverRows,
+      majorRows,
+      compact: params?.compact ?? flags.compact,
+      labels,
+      roomIds,
+    },
+  }
+}
+
 export function formatAlfaClubDailyBrief(input: AlfaClubDailyBriefFormatInput): string {
   if (input.compact) {
     return buildCompactBriefText({
@@ -889,18 +1018,18 @@ export async function runAlfaClubDailyBrief(params: {
     }
   }
 
-  const [currentRows, previousRows, creators, recentPublications, marketRows] = await Promise.all([
-    getSnapshotAt(snapshotTs),
-    previousSnapshotTs ? getSnapshotAt(previousSnapshotTs) : Promise.resolve([]),
-    listAllCreators(),
-    listRecentPublications(null, DEFAULT_RECENT_PUBLICATIONS_LIMIT),
-    fetchMajorTokenPrices(flags.marketTimeoutMs),
-  ])
-  if (currentRows.length === 0) {
+  const built = await buildAlfaClubBriefContext({
+    topRows: flags.topRows,
+    moverRows: flags.moverRows,
+    majorRows: flags.majorRows,
+    compact: flags.compact,
+    fetchMarkets: true,
+  })
+  if (!built.ok) {
     return {
       ok: false,
-      reason: 'empty_snapshot',
-      snapshotTs,
+      reason: built.reason,
+      snapshotTs: built.snapshotTs,
       previousSnapshotTs,
       sent: false,
       skippedDuplicate: false,
@@ -910,31 +1039,7 @@ export async function runAlfaClubDailyBrief(params: {
     }
   }
 
-  const labels = await readCreatorLabels(currentRows.map((row) => row.creatorAddress))
-  const tokenIdByAddress = new Map<string, string>()
-  for (const row of [...currentRows, ...previousRows]) {
-    tokenIdByAddress.set(row.creatorAddress.toLowerCase(), row.tokenId.toString())
-  }
-  const roomLinkHints = [...tokenIdByAddress.entries()].map(([address, tokenId]) => ({
-    address,
-    tokenId,
-  }))
-  const roomIds = await resolveCreatorRoomLinks(roomLinkHints)
-  const messageText = formatAlfaClubDailyBrief({
-    snapshotTs,
-    previousSnapshotTs,
-    currentRows,
-    previousRows,
-    creatorsTracked: creators.length > 0 ? creators.length : currentRows.length,
-    recentPublications,
-    marketRows,
-    topRows: flags.topRows,
-    moverRows: flags.moverRows,
-    majorRows: flags.majorRows,
-    compact: flags.compact,
-    labels,
-    roomIds,
-  })
+  const messageText = formatAlfaClubDailyBrief(built.formatInput)
   const send = await sendAlfaClubRoomText({
     text: messageText,
     roomId: flags.roomId,

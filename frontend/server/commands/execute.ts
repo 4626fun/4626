@@ -9,6 +9,11 @@ import { executeConversationalCommandFamily, looksLikeConversationalCommand } fr
 import { executeHelpCommandFamily } from './families/help.js'
 import { executeAlfaclubCommandFamily } from './families/alfaclub.js'
 import { isHermitUserAllowed } from '../_lib/hermit/policy.js'
+import {
+  checkHermitCommandCooldown,
+  recordHermitCommandCooldown,
+  resolveHermitCooldownCommand,
+} from '../_lib/alfaclub/hermitCommandCooldown.js'
 import { executeHermitCommand } from '../_lib/hermit/skillRouter.js'
 import {
   executeKeeprCommandFamily,
@@ -392,6 +397,23 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
         if (!isAlfaClubChatId(params.chatId) && !isHermitUserAllowed(params.senderWallet)) {
           return { ok: false, response: 'Hermit access denied.' }
         }
+        const alfaClubChat = isAlfaClubChatId(params.chatId)
+        const alfaClubRoomId = parseAlfaClubRoomIdFromChatId(params.chatId)
+        const cooldownCommand = resolveHermitCooldownCommand(raw)
+        if (alfaClubChat && alfaClubRoomId && cooldownCommand) {
+          const cooldown = await checkHermitCommandCooldown({
+            roomId: alfaClubRoomId,
+            senderAddress: params.senderWallet,
+            command: cooldownCommand,
+          })
+          if (!cooldown.ok) {
+            const label = cooldownCommand === 'gmeow' ? '/gmeow' : '/meme'
+            return {
+              ok: false,
+              response: `Slow down — ${label} cooldown (${cooldown.retryAfterSec}s left in this room).`,
+            }
+          }
+        }
         const hermitRoomContext = await resolveHermitRoomContext({
           chatId: params.chatId,
           senderWallet: params.senderWallet,
@@ -414,11 +436,17 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
             ? { clearPreferences: hermitRoomContext.clearPreferences }
             : {}),
         })
+        if (alfaClubChat && alfaClubRoomId && cooldownCommand) {
+          await recordHermitCommandCooldown({
+            roomId: alfaClubRoomId,
+            senderAddress: params.senderWallet,
+            command: cooldownCommand,
+          })
+        }
         const mediaUrl =
           pickFirstHermitMediaUrl(result.mediaAttachments ?? []) ??
           pickFirstImageUrlFromReplyText(result.reply)
         const mediaAttachments = result.mediaAttachments ?? []
-        const alfaClubChat = isAlfaClubChatId(params.chatId)
         let response = result.reply
         let alfaclubFollowUpText: string | null = null
         let outboundAttachments = mediaAttachments

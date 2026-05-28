@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import type { MetricsSnapshotRow } from './publicationLedger.js'
-import { formatAlfaClubDailyBrief } from './dailyBrief.js'
+import {
+  formatAlfaClubDailyBrief,
+  formatAlfaClubLeaderboardChat,
+  formatIndexedScopeLine,
+} from './dailyBrief.js'
 
 function row(params: {
   rank: number
@@ -74,6 +78,39 @@ describe('formatAlfaClubDailyBrief', () => {
     expect(text).not.toContain('Compared with:')
     expect(text).toContain('↓ dropped top-5')
     expect(text).toContain(ADDR_C.slice(0, 6))
+    expect(text).toContain('partial leaderboard')
+  })
+
+  it('leaderboard chat uses indexed scope and top rows only', () => {
+    const currentRows = [
+      row({ rank: 1, address: ADDR_A, tokenId: 2, score: 0.148 }),
+      row({ rank: 2, address: ADDR_B, tokenId: 19, score: 0.112 }),
+    ]
+    const text = formatAlfaClubLeaderboardChat({
+      snapshotTs: '2026-05-26T12:01:18.477Z',
+      previousSnapshotTs: null,
+      currentRows,
+      previousRows: [],
+      creatorsTracked: 1655,
+      recentPublications: [],
+      marketRows: [],
+      topRows: 2,
+      moverRows: 5,
+      majorRows: 6,
+      compact: true,
+      labels: new Map([[ADDR_A.toLowerCase(), '@Flip_Research']]),
+      roomIds: new Map([[ADDR_A.toLowerCase(), '2']]),
+    })
+
+    expect(text).toContain('**AlfaClub Leaderboard**')
+    expect(text).toContain('**Top 2**')
+    expect(text).not.toContain('**Markets**')
+    expect(formatIndexedScopeLine({
+      creatorsTracked: 1655,
+      rankedCount: 2,
+      newCreators: 0,
+      activeCreators24h: 0,
+    })).toContain('partial leaderboard')
   })
 
   it('legacy format keeps the long sectioned layout when compact is off', () => {
