@@ -139,7 +139,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (!requireKeeprApiKey(req, res)) return
 
-  const limiter = checkRateLimit(rateLimitKey('keeper-ajna-rebalance', getClientIp(req)), RATE_LIMITS.creRuntimeTriggerWrite)
+  const limiter = checkRateLimit(rateLimitKey('keeper-ajna-rebalance', getClientIp(req)), RATE_LIMITS.keeperTriggerWrite)
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)

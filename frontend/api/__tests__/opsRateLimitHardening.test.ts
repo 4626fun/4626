@@ -17,7 +17,7 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   RATE_LIMITS: {
     adminAction: { windowMs: 60_000, maxRequests: 1 },
     creatorQuickstart: { windowMs: 60_000, maxRequests: 1 },
-    creRuntimeTriggerWrite: { windowMs: 60_000, maxRequests: 1 },
+    keeperTriggerWrite: { windowMs: 60_000, maxRequests: 1 },
   },
 }))
 

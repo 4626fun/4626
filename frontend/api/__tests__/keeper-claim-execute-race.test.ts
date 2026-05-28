@@ -26,7 +26,7 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: vi.fn(() => ({ allowed: true, remaining: 1, resetAt: Date.now() + 60_000 })),
   getClientIp: vi.fn(() => '198.51.100.10'),
   rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
-  RATE_LIMITS: { creRuntimeTriggerWrite: { windowMs: 60_000, maxRequests: 60 } },
+  RATE_LIMITS: { keeperTriggerWrite: { windowMs: 60_000, maxRequests: 60 } },
 }))
 
 vi.mock('../../server/_lib/controlPlane/operations.js', async () => {

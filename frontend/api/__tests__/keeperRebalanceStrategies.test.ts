@@ -22,7 +22,7 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   getClientIp: vi.fn(() => '198.51.100.55'),
   rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
   RATE_LIMITS: {
-    creRuntimeTriggerWrite: { windowMs: 60_000, maxRequests: 60 },
+    keeperTriggerWrite: { windowMs: 60_000, maxRequests: 60 },
   },
 }))
 

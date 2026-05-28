@@ -19,7 +19,7 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
   rateLimitKey: (...parts: string[]) => parts.join(':'),
   checkRateLimit: () => ({ allowed: true, remaining: 100, resetAt: Date.now() + 60_000 }),
   RATE_LIMITS: {
-    creRuntimeDecisionsWrite: { windowMs: 60_000, maxRequests: 60 },
+    keeperDecisionsWrite: { windowMs: 60_000, maxRequests: 60 },
   },
   requireKeeprApiKey: (req: any, res: any, opts?: { missingSecretError?: string }) => {
     const expected = String(process.env.KPR_API_KEY ?? '').trim()

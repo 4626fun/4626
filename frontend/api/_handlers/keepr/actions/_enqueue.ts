@@ -94,7 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
-  const limiter = checkRateLimit(rateLimitKey('keepr:actions:enqueue', getClientIp(req)), RATE_LIMITS.creRuntimeDecisionsWrite)
+  const limiter = checkRateLimit(rateLimitKey('keepr:actions:enqueue', getClientIp(req)), RATE_LIMITS.keeperDecisionsWrite)
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
