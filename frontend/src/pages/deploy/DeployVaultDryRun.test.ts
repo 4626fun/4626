@@ -17,6 +17,7 @@ describe('DeployVault dry run wiring', () => {
     expect(pageSource).toContain('Run dry-run')
     expect(pageSource).toContain('validateDepositBalance: true')
     expect(pageSource).toContain('Dry-run is local-fork-only.')
+    expect(pageSource).toContain('VITE_DEPLOY_DRY_RUN_REQUEST_TIMEOUT_MS')
   })
 
   it('keeps canonical 2-strategy + idle-reserve defaults in deploy-session payload construction', () => {

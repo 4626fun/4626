@@ -206,12 +206,10 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     expect(postTweetFromSystemMock).toHaveBeenCalledTimes(1)
     expect(postTweetFromSystemMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        text: expect.stringMatching(/^cat laugh alpha unlocked\./),
+        text: 'cat laugh alpha unlocked.',
         media: { url: 'https://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif' },
       }),
     )
-    const xPostArgs = postTweetFromSystemMock.mock.calls[0]?.[0] as { text?: string }
-    expect(xPostArgs?.text).toContain('catlaugh-1')
     expect(result.ok).toBe(true)
     expect(result.response).toBe('cat laugh alpha unlocked.')
     expect(result.response).not.toContain('giphy.gif')
@@ -265,7 +263,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
       expect.objectContaining({
         groupId: 'tg-room',
         senderWallet: ALICE,
-        text: expect.stringMatching(/^cat laugh alpha unlocked\./),
+        text: 'cat laugh alpha unlocked.',
         media: { url: 'https://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif' },
       }),
     )

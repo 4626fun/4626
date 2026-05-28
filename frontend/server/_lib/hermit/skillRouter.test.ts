@@ -83,14 +83,14 @@ describe('executeHermitCommand', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('uses the bundled cat laugh meme for plain /gmeow', async () => {
+  it('uses a rotating bundled meme for plain /gmeow', async () => {
     const result = await executeHermitCommand({
       commandText: '/gmeow',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })
 
     expect(result.kind).toBe('gmeow')
-    expect(result.reply).toContain('cat laugh')
+    expect(result.provider).toBe('local')
     expect(result.reply).toContain('https://')
     // /gmeow should still emit an inline media attachment so the
     // AlfaClub client renders it as an image rather than a hyperlink.
@@ -104,30 +104,27 @@ describe('executeHermitCommand', () => {
     ])
   })
 
-  it('returns the bundled cat laugh meme for /gmeow laugh', async () => {
+  it('returns a laugh-tagged meme for /gmeow laugh', async () => {
     const result = await executeHermitCommand({
       commandText: '/gmeow laugh',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })
 
     expect(result.kind).toBe('gmeow')
-    expect(result.reply).toContain('cat laugh')
+    expect(result.meme?.tags).toContain('laugh')
     expect(result.reply).toContain('https://')
-    expect(result.mediaAttachments).toEqual([
-      {
-        url: expect.stringContaining('/giphy.gif'),
-        type: 'photo',
-        filename: 'giphy.gif',
-        mime_type: 'image/gif',
-      },
-    ])
+    expect(result.mediaAttachments?.[0]?.url).toMatch(/giphy\.com|tenor\.com/)
   })
 
-  it('skips pinata for bare /gmeow when pinata is configured (local-only default)', async () => {
+  it('uses pinata for bare /gmeow when pinata is configured (creative default)', async () => {
     restoreEnv = applyEnv({
       HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
       HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
     })
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ text: JSON.stringify({ line: 'fresh cave energy.' }) }),
+    } as Response)
 
     const result = await executeHermitCommand({
       commandText: '/gmeow',
@@ -135,8 +132,9 @@ describe('executeHermitCommand', () => {
     })
 
     expect(result.kind).toBe('gmeow')
-    expect(result.provider).toBe('local')
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(result.provider).toBe('pinata')
+    expect(result.reply).toContain('fresh cave energy.')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('uses pinata for /gmeow when user supplies a prompt (default policy)', async () => {
@@ -226,6 +224,13 @@ describe('executeHermitCommand', () => {
   })
 
   it('shouldRequestPinataGmeowCaption respects env modes', () => {
+    expect(shouldRequestPinataGmeowCaption('')).toBe(true)
+    expect(shouldRequestPinataGmeowCaption('moon')).toBe(true)
+    restoreEnv = applyEnv({ HERMIT_GMEOW_PINATA_CAPTION: '0' })
+    expect(shouldRequestPinataGmeowCaption('')).toBe(false)
+    restoreEnv = applyEnv({ HERMIT_GMEOW_PINATA_CAPTION: 'local' })
+    expect(shouldRequestPinataGmeowCaption('moon')).toBe(false)
+    restoreEnv = applyEnv({ HERMIT_GMEOW_PINATA_CAPTION: 'prompt' })
     expect(shouldRequestPinataGmeowCaption('')).toBe(false)
     expect(shouldRequestPinataGmeowCaption('moon')).toBe(true)
   })
@@ -250,7 +255,8 @@ describe('executeHermitCommand', () => {
 
     expect(result.kind).toBe('gmeow')
     expect(result.provider).toBe('local')
-    expect(result.reply).toContain('cat laugh')
+    expect(result.reply).toMatch(/https:\/\//)
+    expect(result.reply.split('\n')[0]?.length).toBeGreaterThan(4)
     expect(result.reply.toLowerCase()).not.toContain('oauth token refresh failed')
   })
 
@@ -269,14 +275,15 @@ describe('executeHermitCommand', () => {
 
     expect(result.kind).toBe('gmeow')
     expect(result.provider).toBe('local')
-    expect(result.reply).toContain('cat laugh')
     expect(result.reply).toContain('https://')
+    expect(result.reply.split('\n')[0]?.length).toBeGreaterThan(4)
   })
 
   it('/gmeow still replies when explicit dialect persistence fails', async () => {
     restoreEnv = applyEnv({
       HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
       HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_GMEOW_PINATA_CAPTION: 'always',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -799,7 +806,8 @@ describe('executeHermitCommand', () => {
 
       expect(result.kind).toBe('gmeow')
       expect(result.provider).toBe('local')
-      expect(result.reply).toContain('cat laugh')
+      expect(result.meme?.tags).toContain('laugh')
+      expect(result.reply).toContain('https://')
     })
   })
 })

@@ -17,7 +17,7 @@
  * If you find yourself adding an import from `../alfaclub/chatTokenStore.js`
  * here, stop — that belongs in the auth lane, not the creative lane.
  */
-import { pickRandomHermitMeme } from './memeStore.js'
+import { pickGmeowLocalLine, pickRandomHermitMeme } from './memeStore.js'
 import type {
   HermitExecutionParams,
   HermitExecutionResult,
@@ -369,14 +369,18 @@ function readPinataHermitConfig(): { endpoint: string; bearer: string } | null {
 /**
  * Whether /gmeow should call Pinata for an extra caption line.
  *
- * Default (env unset): local bundled GIF only — fastest, no OpenClaw hop.
+ * Default (env unset): Pinata one-liner when configured; else local hooks + rotating GIFs.
  * - `HERMIT_GMEOW_PINATA_CAPTION=always` — call Pinata on every /gmeow when configured.
  * - `HERMIT_GMEOW_PINATA_CAPTION=prompt` — call Pinata only when the user adds text after /gmeow.
- * - `HERMIT_GMEOW_PINATA_CAPTION=0` — never call Pinata for /gmeow.
+ * - `HERMIT_GMEOW_PINATA_CAPTION=0` — never call Pinata for /gmeow (local hooks only).
+ * - `HERMIT_GMEOW_PINATA_CAPTION=local` — force local hooks even when Pinata is configured.
  */
 export function shouldRequestPinataGmeowCaption(userPromptAfterCommand: string): boolean {
   const mode = asTrimmed(process.env.HERMIT_GMEOW_PINATA_CAPTION).toLowerCase()
   if (mode === '0' || mode === 'false' || mode === 'no' || mode === 'off' || mode === 'never') {
+    return false
+  }
+  if (mode === 'local' || mode === 'offline') {
     return false
   }
   if (
@@ -385,19 +389,16 @@ export function shouldRequestPinataGmeowCaption(userPromptAfterCommand: string):
     mode === 'yes' ||
     mode === 'on' ||
     mode === 'always' ||
-    mode === 'all'
+    mode === 'all' ||
+    mode === 'legacy'
   ) {
     return true
   }
   if (mode === 'prompt' || mode === 'args' || mode === 'text') {
     return userPromptAfterCommand.trim().length > 0
   }
-  // Legacy default before optimization: Pinata on every /gmeow when configured.
-  if (mode === 'legacy') {
-    return true
-  }
-  // Env unset: local-only unless the user supplied a custom prompt.
-  return userPromptAfterCommand.trim().length > 0
+  // Env unset: creative Pinata line when endpoint is configured (caller still gates on config).
+  return true
 }
 
 function toGatewaySocketUrl(rawEndpoint: string): { wsUrl: string; origin: string } | null {
@@ -1001,6 +1002,7 @@ function buildPinataPromptForGmeow(params: {
     'Output STRICT JSON only:',
     '{"line":"string"}',
     'Rules: line <= 160 chars, playful but clean, no markdown.',
+    'Do not repeat the reference caption verbatim — invent a fresh one-liner that fits the GIF vibe.',
     buildHermitLanguageDirective(dialect, source),
     ...(toneClause ? [toneClause] : []),
     `Reference caption: ${params.memeCaption}`,
@@ -1455,9 +1457,11 @@ export async function executeHermitCommand(
   const userPreferences: HermitUserPreferences | null = params.userPreferences ?? null
 
   if (command === '/gmeow') {
-    const meme = pickRandomHermitMeme(args || 'laugh')
+    const vibeTag = args.trim() || undefined
+    const meme = pickRandomHermitMeme(vibeTag)
     const attachment = inferPublicMediaAttachment(meme.url)
-    const localReply = `${meme.caption}\n${meme.url}`
+    const localLine = pickGmeowLocalLine(meme)
+    const localReply = `${localLine}\n${meme.url}`
     const explicitSignalSource = classifyExplicitSignal(args)
     let draft: PinataChatResult | null = null
     let fallbackReason: 'pinata_throw' | 'pinata_provider_error_text' | null = null

@@ -23,11 +23,7 @@ import { executeSendCommandFamily } from './families/send.js'
 import { executeTwitterCommandFamily } from './families/twitter.js'
 import { executeWhoisCommandFamily } from './families/whois.js'
 import { postTweetFromSystem } from '../twitter/commands.js'
-import {
-  formatHermitXCrossPostSkipMessage,
-  truncateWithEllipsis,
-  uniquifyHermitTweetCaption,
-} from './hermitXPostHelpers.js'
+import { formatHermitXCrossPostSkipMessage, truncateWithEllipsis } from './hermitXPostHelpers.js'
 
 function resolveVaultRole(params: {
   senderWallet: ExecuteCommandParams['senderWallet']
@@ -143,10 +139,7 @@ function buildHermitXPostPayload(params: {
       params.fallbackCaption?.trim() ||
       'Hermit meme drop'
     return {
-      text: uniquifyHermitTweetCaption(caption, {
-        memeId: params.memeId,
-        mediaUrl,
-      }),
+      text: truncateWithEllipsis(caption, 280),
       media: { url: mediaUrl },
     }
   }

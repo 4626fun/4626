@@ -260,7 +260,17 @@ function isDebugEnabled(): boolean {
 
 const AA_DEBUG = isDebugEnabled()
 setAaDebugMode(AA_DEBUG)
-const DEPLOY_SESSION_DRY_RUN_REQUEST_TIMEOUT_MS = 60_000
+
+function resolveDeploySessionDryRunRequestTimeoutMs(): number {
+  const raw = import.meta.env.VITE_DEPLOY_DRY_RUN_REQUEST_TIMEOUT_MS as string | undefined
+  const parsed = Number(String(raw ?? '').trim())
+  if (Number.isFinite(parsed) && parsed >= 60_000) {
+    return Math.floor(parsed)
+  }
+  return 300_000
+}
+
+const DEPLOY_SESSION_DRY_RUN_REQUEST_TIMEOUT_MS = resolveDeploySessionDryRunRequestTimeoutMs()
 
 function resolveDeploymentVersionFromRuntime(): string {
   const envVersion = normalizeDeploymentVersion(import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined)
