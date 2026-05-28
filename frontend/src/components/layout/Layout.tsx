@@ -120,9 +120,52 @@ function findScrollableAncestor(target: EventTarget | null): HTMLElement | null 
   return null
 }
 
+type LayoutSessionChrome = {
+  hasSession: boolean
+  mobileWalletUsd: number | null
+  mobileWalletLoading: boolean
+}
+
 export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) {
   const interactive = props.interactive ?? true
+  const hostMode = getHostMode()
+  if (interactive && hostMode === 'app') {
+    return <LayoutWithSessionChrome {...props} />
+  }
+  return <LayoutFrame {...props} sessionChrome={null} />
+}
+
+function LayoutWithSessionChrome(props: { interactive?: boolean; chatEnabled?: boolean }) {
+  const interactive = props.interactive ?? true
+  const hostMode = getHostMode()
+  const auth = useSiweAuth()
+  const location = useLocation()
+  const isWaitlistSurface = isMarketingWaitlistEntryLocation(location)
+  const { trayHoldings, isLoading: mobileWalletLoading } = useAccountTrayPortfolio({
+    enabled: interactive && hostMode === 'app' && !isWaitlistSurface,
+  })
+  const mobileWalletUsd = auth.hasSession ? trayHoldings.activeNetworkUsd : null
+
+  return (
+    <LayoutFrame
+      {...props}
+      sessionChrome={{
+        hasSession: auth.hasSession,
+        mobileWalletUsd,
+        mobileWalletLoading,
+      }}
+    />
+  )
+}
+
+function LayoutFrame(props: {
+  interactive?: boolean
+  chatEnabled?: boolean
+  sessionChrome: LayoutSessionChrome | null
+}) {
+  const interactive = props.interactive ?? true
   const chatEnabled = props.chatEnabled ?? true
+  const sessionChrome = props.sessionChrome
   const location = useLocation()
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
@@ -132,7 +175,6 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
       : buildCanonicalMarketingWaitlistUrl(getMarketingBaseUrl())
   const [isMobileChatOverlayActive, setIsMobileChatOverlayActive] = useState(false)
   const [hideMobileNavForBaseApp] = useState(() => isBaseInAppContext())
-  const auth = useSiweAuth()
   const isWaitlistSurface = isMarketingWaitlistEntryLocation(location)
   const showWaitlistFocusedShell = isWaitlistSurface
   const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
@@ -160,11 +202,6 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
     hideMobileNavForBaseApp ||
     hideMobileNavForMarketingHost ||
     isWaitlistSurface
-
-  const { trayHoldings, isLoading: mobileWalletLoading } = useAccountTrayPortfolio({
-    enabled: interactive && hostMode === 'app' && !hideMobileNavForMarketingHost && !isWaitlistSurface,
-  })
-  const mobileWalletUsd = auth.hasSession ? trayHoldings.activeNetworkUsd : null
 
   useEffect(() => {
     if (typeof document === 'undefined') return
@@ -361,10 +398,10 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
                       isActive ? 'font-semibold text-white' : 'font-medium text-current'
                     }`}
                   >
-                    {mobileWalletLoading && auth.hasSession
+                    {sessionChrome?.mobileWalletLoading && sessionChrome.hasSession
                       ? '…'
-                      : mobileWalletUsd != null
-                        ? formatUsdCompact(mobileWalletUsd)
+                      : sessionChrome?.mobileWalletUsd != null
+                        ? formatUsdCompact(sessionChrome.mobileWalletUsd)
                         : 'Wallet'}
                   </span>
                 </button>

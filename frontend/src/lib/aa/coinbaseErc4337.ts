@@ -19,7 +19,10 @@ import {
   waitForUserOperationReceipt,
 } from 'viem/account-abstraction'
 import { getProductionBaseReadClient } from '@/lib/base/productionBaseReadClient'
-import { assertZoraRouterCallExecutesFromCsw } from '@/lib/zora/zoraTradeApi'
+import {
+  assertZoraRouterCallExecutesFromCsw,
+  formatZoraRouterSimulationFailure,
+} from '@/lib/zora/zoraTradeApi'
 import { logger } from '@/lib/observability/logger'
 import { trackEvent } from '@/lib/analytics/analytics'
 import { DATA_SUFFIX } from '@/lib/base/baseBuilderCodes'
@@ -293,7 +296,9 @@ function formatGasEstimate(estimate: any) {
 
 const ZORA_UNIVERSAL_ROUTER_ADDRESS = '0x6ff5693b99212da76ad316178a184ab56d299b43' as const
 const ZORA_SWAP_EXECUTE_SELECTOR = '0x24856bc3' as const
-const ZORA_SWAP_CALL_GAS_LIMIT = 1_800_000n
+const ZORA_SWAP_CALL_GAS_LIMIT = 2_500_000n
+const ZORA_SEND_CALL_GAS_BUFFER_NUMERATOR = 150n
+const ZORA_SEND_CALL_GAS_BUFFER_DENOMINATOR = 100n
 
 function isZoraUniversalRouterTarget(to: Address | undefined): boolean {
   return String(to ?? '').toLowerCase() === ZORA_UNIVERSAL_ROUTER_ADDRESS
@@ -323,6 +328,7 @@ async function assertBundlerUserOpGasEstimate(params: {
   nonce?: bigint
   callGasLimit?: bigint
   paymasterClient?: { getPaymasterData: any; getPaymasterStubData: any }
+  bundlerUrl?: string
 }): Promise<BundlerUserOpGasEstimate> {
   const { bundlerClient, account, calls, verificationGasLimit, paymasterClient } = params
   const client: any = bundlerClient as any
@@ -385,7 +391,9 @@ async function assertBundlerUserOpGasEstimate(params: {
       if (lowerError.includes('could not find an account to execute')) {
         console.warn('[ERC-4337] estimateUserOperationGas missing account context', {
           error: revertInfo.error,
-          bundlerUsesProxy: isPaymasterProxyUrl(bundlerUrlForBundler),
+          ...(params.bundlerUrl
+            ? { bundlerUsesProxy: isPaymasterProxyUrl(params.bundlerUrl) }
+            : {}),
         })
         throw buildUserOpGasEstimateFailureError(e, calls[0]?.to)
       }
@@ -999,7 +1007,8 @@ export async function simulateSmartWalletCalls(params: {
         to: call.to,
         data: call.data,
         value: call.value ?? 0n,
-        account: smartWallet, // Simulate as if smart wallet is the caller
+        account: smartWallet,
+        blockNumber: 'pending',
       })
       directCallResult = { success: true }
     } catch (e: unknown) {
@@ -2077,10 +2086,13 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       nonce: correctNonce,
       callGasLimit: zoraCallGasLimit,
       paymasterClient: usePaymaster ? paymasterClient : undefined,
+      bundlerUrl: bundlerUrlForBundler,
     })
     const sendCallGasLimit = resolveUserOpCallGasLimit({
       estimatedCallGasLimit: bundlerGasEstimate.callGasLimit,
       floorCallGasLimit: zoraCallGasLimit,
+      bufferNumerator: zoraCallGasLimit ? ZORA_SEND_CALL_GAS_BUFFER_NUMERATOR : undefined,
+      bufferDenominator: zoraCallGasLimit ? ZORA_SEND_CALL_GAS_BUFFER_DENOMINATOR : undefined,
     })
     if (AA_DEBUG && sendCallGasLimit) {
       logger.debug('[ERC-4337] send callGasLimit', {
@@ -2525,6 +2537,19 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         } catch (zoraReplayError: unknown) {
           throw zoraReplayError
         }
+        const mappedBundler = mapUserOpExecutionFailureMessage(lastError, {
+          firstCallTo: zoraCall.to,
+        })
+        if (mappedBundler) throw mappedBundler
+        throw new Error(
+          'The swap route passed a static read but the sponsored bundler simulation reverted. ' +
+            'The pool likely moved — increase slippage to 5%+, try a smaller amount, refresh the quote, and swap again. ' +
+            'If a prior swap is still pending, wait ~30s first.',
+        )
+      }
+      const formatted = formatZoraRouterSimulationFailure(lastError)
+      if (formatted.message.toLowerCase().includes('would revert')) {
+        throw formatted
       }
       if (
         triedEphemeralNonceKey ||

@@ -110,6 +110,8 @@ function pickBestRevertData(candidates: Hex[]): Hex | undefined {
 }
 
 function findNestedRevertData(value: unknown, depth = 0): Hex | undefined {
+  const fromScan = pickBestRevertData(findHexRevertCandidates(value))
+  if (fromScan) return fromScan
   if (depth > 8 || value == null || typeof value !== 'object') return undefined
   const node = value as Record<string, unknown>
   for (const key of ['data', 'revertData', 'returnData'] as const) {
@@ -129,8 +131,7 @@ function findNestedRevertData(value: unknown, depth = 0): Hex | undefined {
       if (match?.[0]) return match[0] as Hex
     }
   }
-  const deep = pickBestRevertData(findHexRevertCandidates(value))
-  return deep
+  return undefined
 }
 
 export function extractRevertInfo(e: unknown): { error: string; revertData?: Hex; errorName?: string } {
@@ -442,7 +443,7 @@ export function mapUserOpExecutionFailureMessage(
   })
 }
 
-function extractExecutionFailedInnerSelector(revertData?: Hex): string | null {
+export function extractExecutionFailedInnerSelector(revertData?: Hex): string | null {
   if (!revertData || !revertData.startsWith('0x2c4029e9')) return null
   try {
     const decoded = decodeErrorResult({

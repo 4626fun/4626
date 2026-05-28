@@ -2,7 +2,10 @@ import { permit2ABI, permit2Address } from '@zoralabs/protocol-deployments'
 import { getAddress, hashTypedData, isAddress, type Hex, type PublicClient } from 'viem'
 import { base } from 'viem/chains'
 
-import { extractRevertInfo } from '@/lib/aa/coinbaseErc4337ErrorUtils'
+import {
+  extractExecutionFailedInnerSelector,
+  extractRevertInfo,
+} from '@/lib/aa/coinbaseErc4337ErrorUtils'
 import { findCoinbaseSmartWalletOwnerIndex } from '@/lib/aa/coinbaseErc4337Owners'
 import { getProductionBaseReadClient } from '@/lib/base/productionBaseReadClient'
 import { apiFetch } from '@/lib/api/apiBase'
@@ -113,6 +116,7 @@ export function zoraTradeQuoteToResponse(params: {
       : undefined,
     amountOut: amountOut || undefined,
     _zoraCall: params.payload.call,
+    _zoraSlippage: params.payload.quote?.slippage,
   }
 
   return {
@@ -121,8 +125,78 @@ export function zoraTradeQuoteToResponse(params: {
     _provider: 'zora',
     zoraCall: params.payload.call,
     zoraPermits: params.payload.permits ?? [],
+    zoraQuoteSlippage: params.payload.quote?.slippage,
     quote: classicQuote,
   } as unknown as TradeQuoteResponse
+}
+
+/** Slippage percent (0.5 = 0.5%) recorded on the last Zora quote refresh, if present. */
+export function readZoraQuotedSlippagePct(quote: TradeQuoteResponse | null | undefined): number | null {
+  const raw =
+    (quote as { zoraQuoteSlippage?: number } | null | undefined)?.zoraQuoteSlippage ??
+    (quote as { quote?: { _zoraSlippage?: number } } | null | undefined)?.quote?._zoraSlippage
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) return null
+  return raw >= 1 ? raw : raw * 100
+}
+
+/** Retry simulation with higher slippage when the router reverts (thin pools / stale minOut). */
+export function buildZoraSlippageEscalationLadder(slippagePct: number): number[] {
+  const start = Number(slippagePct)
+  const base = Number.isFinite(start) && start > 0 ? start : 0.5
+  const candidates = [base, 2, 5, 10, 15]
+  const ladder: number[] = []
+  for (const pct of candidates) {
+    if (pct + 1e-9 < base) continue
+    if (!ladder.some((v) => Math.abs(v - pct) < 1e-9)) ladder.push(pct)
+  }
+  return ladder.slice(0, 4)
+}
+
+/** Bundler rejected a UserOp after local Zora eth_call passed — refresh quote and retry once. */
+export function isZoraBundlerSendRetryable(error: unknown): boolean {
+  if (isZoraRouterSimulationRetryable(error)) return true
+  const msg = String(error instanceof Error ? error.message : error).toLowerCase()
+  if (
+    msg.includes('permit2 rejected') ||
+    msg.includes('invalid signature') ||
+    msg.includes('aa25') ||
+    msg.includes('invalid account nonce') ||
+    msg.includes('sponsorship limit') ||
+    msg.includes('session expired') ||
+    msg.includes('not authenticated')
+  ) {
+    return false
+  }
+  return (
+    msg.includes('unknown reason') ||
+    msg.includes('bundler could not simulate') ||
+    msg.includes('bundler rejected') ||
+    msg.includes('simulation passed but the sponsored') ||
+    msg.includes('eth_estimateuseroperationgas failed')
+  )
+}
+
+export function isZoraRouterSimulationRetryable(error: unknown): boolean {
+  const msg = String(error instanceof Error ? error.message : error).toLowerCase()
+  if (
+    msg.includes('permit2 rejected') ||
+    msg.includes('0xb0669cbc') ||
+    msg.includes('invalidcontractsignature') ||
+    msg.includes('not an on-chain owner') ||
+    msg.includes('embedded signer is not')
+  ) {
+    return false
+  }
+  return (
+    msg.includes('would revert') ||
+    msg.includes('malformed or stale') ||
+    msg.includes('0x2c4029e9') ||
+    msg.includes('0x3b99b53d') ||
+    msg.includes('sliceoutofbounds') ||
+    msg.includes('stale quote') ||
+    msg.includes('slippage') ||
+    msg.includes('liquidity')
+  )
 }
 
 export async function fetchZoraTradeQuoteFromApi(params: {
@@ -179,6 +253,50 @@ export async function fetchZoraTradeQuoteFromApi(params: {
 
 const ZORA_UNIVERSAL_ROUTER_ADDRESS = '0x6ff5693b99212da76ad316178a184ab56d299b43' as const
 
+/** Map a production `eth_call` failure from the Zora Universal Router into user-facing copy. */
+export function formatZoraRouterSimulationFailure(error: unknown): Error {
+  const info = extractRevertInfo(error)
+  const revertData = info.revertData
+  const selector = revertData?.slice(0, 10).toLowerCase()
+
+  if (selector === '0x3b99b53d') {
+    return new Error(
+      'Swap route data from Zora is malformed or stale. Refresh the quote and try again.',
+    )
+  }
+
+  if (selector === '0xb0669cbc') {
+    return new Error(
+      'Permit2 rejected the smart-wallet signature. Refresh the quote, sign again when prompted, then retry.',
+    )
+  }
+
+  const innerSelector = extractExecutionFailedInnerSelector(revertData)
+  if (innerSelector === '0xb0669cbc') {
+    return new Error(
+      'Permit2 rejected the smart-wallet signature. Refresh the quote, sign again when prompted, then retry.',
+    )
+  }
+
+  const isExecutionFailed =
+    selector === '0x2c4029e9' ||
+    info.errorName === 'ExecutionFailed(uint256,bytes)' ||
+    String(info.error ?? '')
+      .toLowerCase()
+      .includes('executionfailed')
+
+  if (isExecutionFailed) {
+    return new Error(
+      'The Zora swap would revert on your smart wallet. This is usually a stale quote, tight slippage, or not enough pool liquidity for the size — not a USDC balance issue. Try a smaller amount, increase slippage, refresh the quote, then re-sign Permit2 if prompted.',
+    )
+  }
+
+  const detail = info.errorName ?? info.error ?? 'unknown revert'
+  return new Error(
+    `Zora swap would revert on-chain (${detail}). Refresh the quote and try again.`,
+  )
+}
+
 /** Production-RPC eth_call: CSW → Zora router (catches stale/malformed route bytes before UserOp submit). */
 export async function assertZoraRouterCallExecutesFromCsw(params: {
   executionAddress: `0x${string}`
@@ -194,32 +312,10 @@ export async function assertZoraRouterCallExecutesFromCsw(params: {
       data,
       value,
       account: getAddress(params.executionAddress),
+      blockNumber: 'pending',
     })
   } catch (e: unknown) {
-    const info = extractRevertInfo(e)
-    const selector = info.revertData?.slice(0, 10).toLowerCase()
-    if (selector === '0x3b99b53d') {
-      throw new Error(
-        'Swap route data from Zora is malformed or stale. Refresh the quote and try again.',
-      )
-    }
-    if (selector === '0xb0669cbc') {
-      throw new Error(
-        'Permit2 rejected the smart-wallet signature. Refresh the quote, sign again when prompted, then retry.',
-      )
-    }
-    const innerSelector =
-      typeof info.revertData === 'string' && info.revertData.startsWith('0x2c4029e9')
-        ? info.revertData.slice(0, 10)
-        : null
-    if (innerSelector === '0x2c4029e9' || selector === '0x2c4029e9') {
-      throw new Error(
-        'The Zora swap would revert on your smart wallet. Refresh the quote, confirm the Permit2 signature, and ensure you hold enough of the token you are selling.',
-      )
-    }
-    throw new Error(
-      `Zora swap would revert on-chain (${info.errorName ?? info.error}). Refresh the quote and try again.`,
-    )
+    throw formatZoraRouterSimulationFailure(e)
   }
 }
 
@@ -389,7 +485,7 @@ export function zoraPermitNonceDrifted(quotedNonce: number, chainNonce: number):
   return Number(quotedNonce) !== Number(chainNonce)
 }
 
-async function isDeployedSmartWalletExecutionAddress(
+export async function isDeployedSmartWalletExecutionAddress(
   executionAddress?: string | null,
 ): Promise<boolean> {
   const executionRaw = String(executionAddress ?? '').trim()
@@ -555,11 +651,17 @@ export async function signZoraQuotePermits(params: {
   return signatures
 }
 
+type ZoraCswWalletClient = {
+  signTypedData: (args: Record<string, unknown>) => Promise<Hex | string>
+  signMessage?: (args: Record<string, unknown>) => Promise<Hex | string>
+  request?: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+}
+
 /**
- * Before submitting a Zora swap from a CSW, refresh router calldata and re-sign Permit2 when
- * the on-chain nonce no longer matches the quote (common after review → confirm delay).
+ * Sign Permit2, refresh Zora calldata, and production-simulate CSW → router.
+ * Escalates slippage (e.g. 0.5% → 2% → 5%) when simulation fails on thin creator pools.
  */
-export async function prepareZoraQuoteForExecute(params: {
+export async function executeZoraCswQuoteWithEscalation(params: {
   quote: TradeQuoteResponse
   tokenIn: string
   tokenOut: string
@@ -568,18 +670,13 @@ export async function prepareZoraQuoteForExecute(params: {
   slippagePct: number
   signerAddress: string
   executionAddress?: string | null
-  walletClient: {
-    signTypedData: (args: Record<string, unknown>) => Promise<Hex | string>
-    signMessage?: (args: Record<string, unknown>) => Promise<Hex | string>
-    request?: (args: { method: string; params?: unknown[] }) => Promise<unknown>
-  }
+  walletClient: ZoraCswWalletClient
   publicClient: {
     readContract: (args: Record<string, unknown>) => Promise<unknown>
     getBytecode?: (args: { address: `0x${string}` }) => Promise<Hex | undefined>
   }
+  onStatus?: (message: string) => void
 }): Promise<TradeQuoteResponse> {
-  if (!isZoraProviderQuote(params.quote)) return params.quote
-
   const sender = String(params.sender ?? '').trim()
   if (!isAddress(sender)) {
     throw new Error('Execution address is required to refresh the Zora trade quote.')
@@ -594,29 +691,107 @@ export async function prepareZoraQuoteForExecute(params: {
     throw new Error('Permit2 signature is required for this Zora trade, but the owner signer is not available.')
   }
 
+  const startSlippage = readZoraQuotedSlippagePct(params.quote) ?? params.slippagePct
+  const ladder = buildZoraSlippageEscalationLadder(startSlippage)
   const forceResignPermits = await isDeployedSmartWalletExecutionAddress(params.executionAddress)
 
-  const signatures = await signZoraQuotePermits({
-    quote: params.quote,
-    signerAddress: params.signerAddress,
-    executionAddress: params.executionAddress,
-    forceResignPermits,
-    walletClient: params.walletClient,
-    publicClient: params.publicClient,
-  })
+  let lastError: unknown
+  for (let i = 0; i < ladder.length; i += 1) {
+    const slippagePct = ladder[i]
+    try {
+      if (i > 0) {
+        params.onStatus?.(
+          `Swap simulation failed at ${ladder[i - 1]}% slippage. Increasing to ${slippagePct}% — confirm Permit2 again…`,
+        )
+      }
 
-  if (signatures.length === 0) {
-    throw new Error('Zora trade is missing Permit2 authorization. Refresh the quote and try again.')
+      let baseQuote = params.quote
+      if (i > 0) {
+        const payload = await fetchZoraTradeQuoteFromApi({
+          tokenIn: params.tokenIn,
+          tokenOut: params.tokenOut,
+          amountIn: params.amountIn,
+          sender,
+          slippagePct,
+        })
+        baseQuote = zoraTradeQuoteToResponse({
+          tokenIn: params.tokenIn,
+          tokenOut: params.tokenOut,
+          amountIn: params.amountIn,
+          payload,
+        })
+      }
+
+      const signatures = await signZoraQuotePermits({
+        quote: baseQuote,
+        signerAddress: params.signerAddress,
+        executionAddress: params.executionAddress,
+        forceResignPermits: forceResignPermits || i > 0,
+        walletClient: params.walletClient,
+        publicClient: params.publicClient,
+      })
+
+      if (signatures.length === 0) {
+        throw new Error('Zora trade is missing Permit2 authorization. Refresh the quote and try again.')
+      }
+
+      return await refreshZoraTradeQuoteWithSimulation({
+        tokenIn: params.tokenIn,
+        tokenOut: params.tokenOut,
+        amountIn: params.amountIn,
+        sender,
+        slippagePct,
+        signatures,
+      })
+    } catch (error) {
+      lastError = error
+      if (i >= ladder.length - 1 || !isZoraRouterSimulationRetryable(error)) {
+        throw error
+      }
+    }
   }
 
-  const refreshed = await refreshZoraTradeQuoteWithPermits({
-    tokenIn: params.tokenIn,
-    tokenOut: params.tokenOut,
-    amountIn: params.amountIn,
-    sender,
-    slippagePct: params.slippagePct,
-    signatures,
-  })
+  throw lastError instanceof Error ? lastError : new Error('Zora trade preparation failed')
+}
+
+/**
+ * Before submitting a Zora swap from a CSW, refresh router calldata and re-sign Permit2 when
+ * the on-chain nonce no longer matches the quote (common after review → confirm delay).
+ */
+export async function prepareZoraQuoteForExecute(params: {
+  quote: TradeQuoteResponse
+  tokenIn: string
+  tokenOut: string
+  amountIn: string
+  sender: string
+  slippagePct: number
+  signerAddress: string
+  executionAddress?: string | null
+  walletClient: ZoraCswWalletClient
+  publicClient: {
+    readContract: (args: Record<string, unknown>) => Promise<unknown>
+    getBytecode?: (args: { address: `0x${string}` }) => Promise<Hex | undefined>
+  }
+  onStatus?: (message: string) => void
+}): Promise<TradeQuoteResponse> {
+  if (!isZoraProviderQuote(params.quote)) return params.quote
+  return executeZoraCswQuoteWithEscalation(params)
+}
+
+/** Refresh Zora router calldata with signed permits, then simulate CSW → router on production Base RPC. */
+export async function refreshZoraTradeQuoteWithSimulation(params: {
+  tokenIn: string
+  tokenOut: string
+  amountIn: string
+  sender: string
+  slippagePct: number
+  signatures: ZoraTradeQuotePermit[]
+}): Promise<TradeQuoteResponse> {
+  const refreshed = await refreshZoraTradeQuoteWithPermits(params)
+  const sender = String(params.sender ?? '').trim()
+  if (!isAddress(sender)) {
+    throw new Error('Execution address is required to simulate the Zora trade.')
+  }
 
   const call = readZoraCallFromQuote(refreshed)
   if (call?.target && call.data) {

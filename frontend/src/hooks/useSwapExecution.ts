@@ -50,11 +50,11 @@ import {
   type TransactionRequest,
 } from '@/lib/uniswap/tradingApi'
 import {
+  executeZoraCswQuoteWithEscalation,
+  isZoraBundlerSendRetryable,
   isZoraProviderQuote,
   quoteNeedsZoraPermitFinalization,
   prepareZoraQuoteForExecute,
-  refreshZoraTradeQuoteWithPermits,
-  signZoraQuotePermits,
 } from '@/lib/zora/zoraTradeApi'
 import {
   getSwapProviderLabel,
@@ -1139,26 +1139,23 @@ export function useSwapExecution(params: {
         throw new Error('Connected wallet does not support typed-data signatures required for Zora Permit2.')
       }
 
-      setStatus('Permit2 signature required. Confirm in wallet…')
-      const signatures = await signZoraQuotePermits({
-        quote: nextQuote,
-        signerAddress: params.signerAddress,
-        executionAddress: params.executionAddress,
-        walletClient: signer,
-        publicClient: params.publicClient,
-      })
-
       if (!params.executionAddress) {
         throw new Error('Execution address is required to refresh the Zora trade quote.')
       }
 
-      return refreshZoraTradeQuoteWithPermits({
+      setStatus('Permit2 signature required. Confirm in wallet…')
+      return executeZoraCswQuoteWithEscalation({
+        quote: nextQuote,
         tokenIn: effectiveTokenIn,
         tokenOut: params.tokenOut,
         amountIn: amount,
         sender: params.executionAddress,
         slippagePct: params.parsedSlippage,
-        signatures,
+        signerAddress: params.signerAddress,
+        executionAddress: params.executionAddress,
+        walletClient: signer,
+        publicClient: params.publicClient,
+        onStatus: setStatus,
       })
     },
     [
@@ -1960,6 +1957,7 @@ export function useSwapExecution(params: {
             request?: (args: { method: string; params?: unknown[] }) => Promise<unknown>
           },
           publicClient: params.publicClient,
+          onStatus: setStatus,
         })
         const selectedQuote = pickSwapQuote(executableQuote)
         if (!selectedQuote) {
@@ -1980,16 +1978,75 @@ export function useSwapExecution(params: {
         setSwapTx(built.swap)
       }
       assertSwapSubmitEpochUnchanged(submitEpoch)
-      const { routing, send } = wrapTx
-        ? await buildAndSendCalls({
-            context,
-            calls: [wrapTx, ...(approvalTx ? [approvalTx] : []), swapTxForSend],
+      let activeSwapTx = swapTxForSend
+      let routing: Awaited<ReturnType<typeof buildAndSendSwap>>['routing']
+      let send: Awaited<ReturnType<typeof buildAndSendSwap>>['send']
+      const maxZoraSendAttempts = quote && isZoraProviderQuote(quote) ? 2 : 1
+      for (let sendAttempt = 0; sendAttempt < maxZoraSendAttempts; sendAttempt += 1) {
+        assertSwapSubmitEpochUnchanged(submitEpoch)
+        try {
+          const result = wrapTx
+            ? await buildAndSendCalls({
+                context,
+                calls: [wrapTx, ...(approvalTx ? [approvalTx] : []), activeSwapTx],
+              })
+            : await buildAndSendSwap({
+                context,
+                swapTx: activeSwapTx,
+                approvalTx,
+              })
+          routing = result.routing
+          send = result.send
+          break
+        } catch (sendError: unknown) {
+          const canRefreshZora =
+            sendAttempt + 1 < maxZoraSendAttempts &&
+            quote &&
+            isZoraProviderQuote(quote) &&
+            isZoraBundlerSendRetryable(sendError)
+          if (!canRefreshZora) throw sendError
+          const amount = readQuoteInputAmount(quote)
+          if (!amount || !params.executionAddress) throw sendError
+          setStatus('Bundler simulation failed — refreshing Zora quote and retrying…')
+          const executableQuote = await prepareZoraQuoteForExecute({
+            quote,
+            tokenIn: effectiveTokenIn,
+            tokenOut: params.tokenOut,
+            amountIn: amount,
+            sender: params.executionAddress,
+            slippagePct: params.parsedSlippage,
+            signerAddress: params.signerAddress,
+            executionAddress: params.executionAddress,
+            walletClient: params.walletClient as {
+              signTypedData: (args: Record<string, unknown>) => Promise<string>
+              signMessage?: (args: Record<string, unknown>) => Promise<string>
+              request?: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+            },
+            publicClient: params.publicClient,
+            onStatus: setStatus,
           })
-        : await buildAndSendSwap({
-            context,
-            swapTx: swapTxForSend,
-            approvalTx,
+          const selectedQuote = pickSwapQuote(executableQuote)
+          if (!selectedQuote) throw sendError
+          const built = await buildSwap({
+            quote: selectedQuote,
+            permit2Disabled: true,
+            simulateTransaction: false,
+            executionAddress: params.executionAddress ?? undefined,
+            chainId: Number(swapChainId),
+            includeGasInfo: false,
+            refreshGasPrice: true,
+            deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
           })
+          assertValidSwapTransaction(built.swap)
+          activeSwapTx = built.swap
+          swapTxForSend = built.swap
+          setSwapTx(built.swap)
+          setQuote(executableQuote)
+        }
+      }
+      if (!routing || !send) {
+        throw new Error('Swap transaction failed before send completed.')
+      }
       const userOpHash = send.userOpHash ?? null
       const nextHash = send.transactionHash ?? send.txHashes[send.txHashes.length - 1] ?? null
       const debugHash = nextHash ?? userOpHash

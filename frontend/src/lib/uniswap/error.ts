@@ -117,9 +117,9 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
     msg.includes('malformed or stale')
   ) {
     return {
-      code: 'APPROVAL_REQUIRED',
+      code: 'SLIPPAGE_EXCEEDED',
       message:
-        'The Zora swap would revert on your smart wallet. Refresh the quote, re-sign Permit2 if prompted, then try again.',
+        'The Zora swap would revert on your smart wallet. This is usually stale quote data, tight slippage, or insufficient pool liquidity — not a balance issue. Try a smaller amount, increase slippage, refresh the quote, then re-sign Permit2 if prompted.',
       retryable: true,
     }
   }
