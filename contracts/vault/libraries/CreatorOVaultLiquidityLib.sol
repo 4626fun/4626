@@ -48,7 +48,7 @@ library CreatorOVaultLiquidityLib {
         StrategyLiquidity[] strategies;
     }
 
-    function snapshot(address vault) external view returns (LiquiditySnapshot memory snap) {
+    function snapshot(address vault) internal view returns (LiquiditySnapshot memory snap) {
         IVaultLiquidityReader reader = IVaultLiquidityReader(vault);
 
         snap.totalAssets = reader.totalAssets();

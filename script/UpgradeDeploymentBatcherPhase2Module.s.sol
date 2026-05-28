@@ -17,7 +17,7 @@ import {DeploymentBatcher, DeploymentBatcherPhase2Module} from "../contracts/hel
  * - SET_PHASE2_MODULE=1 (default 1) — call `setPhase2Module` after deploy
  */
 contract UpgradeDeploymentBatcherPhase2Module is Script {
-    address constant DEFAULT_DEPLOYMENT_BATCHER = 0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8;
+    address constant DEFAULT_DEPLOYMENT_BATCHER = 0xa99058f424FB3ACC639F59355C65C40149030651;
 
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");

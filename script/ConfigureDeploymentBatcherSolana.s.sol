@@ -40,7 +40,7 @@ interface ICreatorLotteryManagerAuth {
  * - SOLANA_SHARE_OFT_PEER (bytes32 default mesh peer; required when CONFIGURE_SOLANA_SHARE_OFT_PEER=1)
  */
 contract ConfigureDeploymentBatcherSolana is Script {
-    address constant DEFAULT_DEPLOYMENT_BATCHER = 0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8;
+    address constant DEFAULT_DEPLOYMENT_BATCHER = 0xa99058f424FB3ACC639F59355C65C40149030651;
 
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");

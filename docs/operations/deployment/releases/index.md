@@ -4,7 +4,8 @@ This page tracks notable production and deployment changes for 4626.
 
 ## Latest
 
-- [v1.11.1 protocol contract readiness](/operations/deployment/releases/v1.11.1-protocol-contract-readiness) — active user vault deployment contract surface
+- [v1.12.0 bytecode epoch](/operations/deployment/releases/v1.12.0-bytecode-epoch) — refresh store + Phase 3 helper; keep v1.11.2-pipe-a infra addresses
+- [v1.11.1 protocol contract readiness](/operations/deployment/releases/v1.11.1-protocol-contract-readiness) — prior full protocol contract surface
 - [v1.11.0 protocol contract readiness](/operations/deployment/releases/v1.11.0-protocol-contract-readiness) — prior protocol contract surface
 - [v1.10.1 mainnet](/operations/deployment/releases/v1.10.1-mainnet) — pre-broadcast packet
 - [v1.8.3 mainnet](/operations/deployment/releases/v1.8.3-mainnet)

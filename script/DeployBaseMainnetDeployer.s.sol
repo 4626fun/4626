@@ -63,7 +63,7 @@ contract DeployBaseMainnetDeployer is Script {
     // - raw bytes32: INFRA_*_SALT
     // - string tag (hashed with keccak256): INFRA_*_SALT_TAG
     // - shared epoch: DEPLOYMENT_EPOCH_TAG
-    string constant DEFAULT_DEPLOYMENT_EPOCH_TAG = "v1.11.1";
+    string constant DEFAULT_DEPLOYMENT_EPOCH_TAG = "v1.12.0";
     string constant STORE_SALT_TAG_PREFIX = "base-release:UniversalBytecodeStore:";
     string constant DEPLOYER_FROM_STORE_SALT_TAG_PREFIX = "base-release:UniversalCreate2DeployerFromStore:";
 
