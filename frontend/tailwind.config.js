@@ -22,6 +22,8 @@ export default {
           primary: 'rgb(var(--brand-primary) / <alpha-value>)',
           hover: 'rgb(var(--brand-hover) / <alpha-value>)',
           accent: 'rgb(var(--brand-accent-rgb) / <alpha-value>)',
+          gold: 'rgb(var(--brand-gold) / <alpha-value>)',
+          goldLight: 'rgb(var(--brand-gold-light) / <alpha-value>)',
           glow: 'rgb(var(--brand-primary) / 0.15)',
           // Numeric scale (legacy; kept for existing UI)
           50: '#eff6ff',

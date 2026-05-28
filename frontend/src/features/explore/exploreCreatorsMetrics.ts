@@ -113,8 +113,7 @@ export function buildExploreHeroStatusLine(input: {
   }
 
   if (!exact) {
-    const partialNote = 'Financial totals sum indexed coins only'
-    return indexedLine ? `${indexedLine} · ${partialNote}` : `${partialNote} · refreshed ${time}`
+    return indexedLine ? `${indexedLine} · refreshed ${time}` : `Indexed totals refreshed ${time}`
   }
 
   return indexedLine ?? `Indexed totals refreshed ${time}`

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { weightedAmoeEligiblePoints, weightedWaitlistPoints } from './waitlistScoring.js'
+import { weightedAmoeEligiblePoints, weightedWaitlistPoints, sumWaitlistPointsBreakdown } from './waitlistScoring.js'
+import type { WaitlistPointsBreakdown } from './waitlistScoring.js'
 
 describe('weightedWaitlistPoints', () => {
   it('counts referral_passthrough at full weight', () => {
@@ -29,6 +30,24 @@ describe('weightedAmoeEligiblePoints', () => {
 
   it('counts daily AMOE credits in legacy AMOE view weights', () => {
     expect(weightedAmoeEligiblePoints('amoe_twitter_daily', 1)).toBe(1)
+  })
+})
+
+describe('sumWaitlistPointsBreakdown', () => {
+  it('sums all overview buckets', () => {
+    const breakdown: WaitlistPointsBreakdown = {
+      total: 225,
+      invite: 12,
+      signup: 10,
+      links: 18,
+      tasks: 3,
+      csw: 20,
+      social: 8,
+      checkins: 150,
+      bonus: 4,
+      agent: 0,
+    }
+    expect(sumWaitlistPointsBreakdown(breakdown)).toBe(225)
   })
 })
 

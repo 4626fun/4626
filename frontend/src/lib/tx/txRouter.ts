@@ -63,6 +63,8 @@ export type TxRouterContext = {
   onSubmissionStatus?: (message: string) => void
   /** Canonical4337 only: return after bundler accept; poll receipt separately when false. */
   waitForOnChainReceipt?: boolean
+  /** Canonical4337 only: start on a fresh EntryPoint nonce key (swap AA25 avoidance). */
+  preferEphemeralNonceLane?: boolean
 }
 
 export type TxRoutingDecision = {
@@ -757,6 +759,7 @@ async function sendViaCanonical4337(params: {
       ownerAddress: context.signerAddress,
       onSubmissionStatus: context.onSubmissionStatus,
       waitForOnChainReceipt: context.waitForOnChainReceipt ?? true,
+      preferEphemeralNonceLane: context.preferEphemeralNonceLane ?? false,
       // Let the ERC-4337 helper handle attribution so it can preserve canonical
       // calldata for strict paymaster policies (e.g. Universal Router execute).
       calls: calls.map((call) => ({

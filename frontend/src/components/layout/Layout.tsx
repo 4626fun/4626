@@ -12,11 +12,9 @@ import { PageTransitionOutlet } from '@/components/layout/PageTransition'
 import { FlagToolbarBridge } from '@/components/flags/FlagToolbarBridge'
 import { XmtpChatProvider } from '@/lib/xmtp/provider'
 import { VaultNavBar } from '@/components/brand/VaultNavBar'
-import {
-  ACCOUNT_WALLET_SUMMARY_EVENT,
-  requestOpenAccountTray,
-  type AccountWalletSummaryDetail,
-} from '@/components/account/trayEvents'
+import { requestOpenAccountTray } from '@/components/account/trayEvents'
+import { useAccountTrayPortfolio } from '@/components/account/useAccountTrayPortfolio'
+import { useSiweAuth } from '@/hooks/useSiweAuth'
 
 const LazyChatSurface = lazy(async () => {
   const mod = await import('../chat/ChatSurface')
@@ -76,6 +74,22 @@ function formatUsdCompact(value: number | null | undefined): string {
   return `$${amount.toFixed(2)}`
 }
 
+const mobileNavItemClass = (isActive: boolean) =>
+  [
+    'relative flex flex-1 flex-col items-center justify-center gap-0.5 min-h-12 max-w-[5.5rem] px-2 py-2 rounded-2xl transition-all duration-300 ease-out active:scale-[0.96]',
+    isActive ? 'text-white' : 'text-zinc-500 hover:text-zinc-300',
+  ].join(' ')
+
+const mobileNavIconClass = (isActive: boolean) =>
+  `relative h-[1.125rem] w-[1.125rem] transition-all duration-300 ${
+    isActive ? 'text-white' : 'text-current'
+  }`
+
+const mobileNavLabelClass = (isActive: boolean) =>
+  `relative text-[10px] leading-none tracking-wide transition-colors duration-300 ${
+    isActive ? 'font-semibold text-white' : 'font-medium text-current'
+  }`
+
 function hasCoinbaseInjectedProvider(): boolean {
   if (typeof window === 'undefined') return false
   const ethereum = (window as any).ethereum
@@ -117,8 +131,8 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
       ? getCanonicalMarketingWaitlistPath()
       : buildCanonicalMarketingWaitlistUrl(getMarketingBaseUrl())
   const [isMobileChatOverlayActive, setIsMobileChatOverlayActive] = useState(false)
-  const [mobileWalletUsd, setMobileWalletUsd] = useState<number | null>(null)
   const [hideMobileNavForBaseApp] = useState(() => isBaseInAppContext())
+  const auth = useSiweAuth()
   const isWaitlistSurface = isMarketingWaitlistEntryLocation(location)
   const showWaitlistFocusedShell = isWaitlistSurface
   const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
@@ -140,23 +154,17 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
     return () => window.removeEventListener('vault-mobile-chat-overlay-change', handleOverlayChange as EventListener)
   }, [])
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const handleWalletSummary = (event: Event) => {
-      const customEvent = event as CustomEvent<AccountWalletSummaryDetail>
-      const nextValue = customEvent.detail?.activeNetworkUsd
-      setMobileWalletUsd(typeof nextValue === 'number' && Number.isFinite(nextValue) ? nextValue : null)
-    }
-    window.addEventListener(ACCOUNT_WALLET_SUMMARY_EVENT, handleWalletSummary as EventListener)
-    return () => window.removeEventListener(ACCOUNT_WALLET_SUMMARY_EVENT, handleWalletSummary as EventListener)
-  }, [])
-
   const hideMobileNavForMarketingHost = hostMode === 'marketing'
   const hideMobileNav =
     isMobileChatOverlayActive ||
     hideMobileNavForBaseApp ||
     hideMobileNavForMarketingHost ||
     isWaitlistSurface
+
+  const { trayHoldings, isLoading: mobileWalletLoading } = useAccountTrayPortfolio({
+    enabled: interactive && hostMode === 'app' && !hideMobileNavForMarketingHost && !isWaitlistSurface,
+  })
+  const mobileWalletUsd = auth.hasSession ? trayHoldings.activeNetworkUsd : null
 
   useEffect(() => {
     if (typeof document === 'undefined') return
@@ -288,36 +296,25 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
       {/* Vercel Flags Explorer bridge — exposes flag state to the Toolbar */}
       <FlagToolbarBridge />
 
-      {/* Mobile Nav - Minimal */}
+      {/* Mobile Nav — floating dock */}
       <nav
         aria-label="Mobile navigation"
-        className={`md:hidden fixed bottom-0 left-0 right-0 z-70 border-t border-white/8 bg-linear-to-t from-black/85 to-vault-bg/78 backdrop-blur-xl shadow-[0_-10px_30px_-18px_rgba(0,0,0,0.95)] ${
+        className={`md:hidden fixed inset-x-0 bottom-0 z-70 pointer-events-none pb-[max(0.625rem,env(safe-area-inset-bottom))] px-3 ${
           hideMobileNav ? 'hidden' : ''
         }`}
       >
-        <div className="mx-auto flex max-w-[540px] items-center justify-center gap-1.5 overflow-x-auto scrollbar-hide py-2.5 px-2 sm:py-3 sm:px-4">
+        <div className="pointer-events-auto mx-auto flex max-w-md items-stretch justify-between gap-0.5 overflow-x-auto scrollbar-hide rounded-[1.35rem] border border-white/[0.06] bg-zinc-950/55 px-1.5 py-1 shadow-[0_12px_40px_-16px_rgba(0,0,0,0.92),inset_0_1px_0_0_rgba(255,255,255,0.07)] backdrop-blur-2xl backdrop-saturate-150">
           {items.map((item) => {
             const { path, icon: Icon, label } = item
             const isActive = isActiveLink(location, item)
             if (path === getCanonicalMarketingWaitlistPath()) {
               const content = (
                 <>
-                  <Icon
-                    aria-hidden="true"
-                    className={`h-4 w-4 transition-colors ${
-                      isActive ? 'text-vault-text' : 'text-vault-subtext group-hover:text-vault-text'
-                    }`}
-                  />
-                  <span className={`text-[8px] font-medium uppercase tracking-[0.08em] ${isActive ? 'text-vault-text' : 'text-vault-subtext'}`}>
-                    {label}
-                  </span>
+                  <Icon aria-hidden="true" className={mobileNavIconClass(isActive)} />
+                  <span className={mobileNavLabelClass(isActive)}>{label}</span>
                 </>
               )
-              const className = `flex flex-col items-center justify-center gap-1 group min-h-10 min-w-[48px] sm:min-w-[52px] px-2 rounded-xl border transition-all duration-200 active:scale-[0.97] ${
-                isActive
-                  ? 'border-brand-primary/35 bg-brand-primary/12 shadow-[0_10px_22px_-16px_rgb(var(--brand-primary)/0.9)]'
-                  : 'border-transparent hover:-translate-y-px hover:border-white/10 hover:bg-white/6'
-              }`
+              const className = mobileNavItemClass(isActive)
               return hostMode === 'marketing' ? (
                 <Link
                   key={path}
@@ -347,18 +344,28 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
                   type="button"
                   aria-label={label}
                   aria-current={isActive ? 'page' : undefined}
-                  className="flex flex-col items-center justify-center gap-1 group min-h-10 min-w-[48px] sm:min-w-[52px] px-2 rounded-xl transition-all duration-200 active:scale-[0.97] hover:-translate-y-px hover:bg-white/6"
+                  className={mobileNavItemClass(isActive)}
                   onClick={() => requestOpenAccountTray({ section: 'portfolio', tab: 'tokens', source: 'mobile-nav' })}
                 >
                   <img
                     src="/base/base-chain-light.svg"
                     alt=""
                     aria-hidden="true"
-                    className="h-3.5 w-3.5 object-contain"
+                    className={`relative z-10 h-[1.125rem] w-[1.125rem] object-contain transition-opacity duration-300 ${
+                      isActive ? 'opacity-100' : 'opacity-80'
+                    }`}
                     loading="lazy"
                   />
-                  <span className={`text-[9px] font-semibold tabular-nums ${isActive ? 'text-vault-text' : 'text-vault-subtext'}`}>
-                    {formatUsdCompact(mobileWalletUsd)}
+                  <span
+                    className={`relative z-10 text-[10px] tabular-nums leading-none tracking-wide transition-colors duration-300 ${
+                      isActive ? 'font-semibold text-white' : 'font-medium text-current'
+                    }`}
+                  >
+                    {mobileWalletLoading && auth.hasSession
+                      ? '…'
+                      : mobileWalletUsd != null
+                        ? formatUsdCompact(mobileWalletUsd)
+                        : 'Wallet'}
                   </span>
                 </button>
               )
@@ -369,21 +376,10 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
                 to={path}
                 aria-label={label}
                 aria-current={isActive ? 'page' : undefined}
-                className={`flex flex-col items-center justify-center gap-1 group min-h-10 min-w-[48px] sm:min-w-[52px] px-2 rounded-xl border transition-all duration-200 active:scale-[0.97] ${
-                  isActive
-                    ? 'border-brand-primary/35 bg-brand-primary/12 shadow-[0_10px_22px_-16px_rgb(var(--brand-primary)/0.9)]'
-                    : 'border-transparent hover:-translate-y-px hover:border-white/10 hover:bg-white/6'
-                }`}
+                className={mobileNavItemClass(isActive)}
               >
-                <Icon
-                  aria-hidden="true"
-                  className={`h-4 w-4 transition-colors ${
-                    isActive ? 'text-vault-text' : 'text-vault-subtext group-hover:text-vault-text'
-                  }`}
-                />
-                <span className={`text-[8px] font-medium uppercase tracking-[0.08em] ${isActive ? 'text-vault-text' : 'text-vault-subtext'}`}>
-                  {label}
-                </span>
+                <Icon aria-hidden="true" className={mobileNavIconClass(isActive)} />
+                <span className={mobileNavLabelClass(isActive)}>{label}</span>
               </Link>
             )
           })}

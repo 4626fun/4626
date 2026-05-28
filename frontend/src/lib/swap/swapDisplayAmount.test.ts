@@ -1,6 +1,24 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatSwapDisplayAmount } from '@/lib/swap/swapDisplayAmount'
+import {
+  amountUnitsFromBalancePercent,
+  formatSwapDisplayAmount,
+  formatSwapTokenBalanceLabel,
+  formatSwapTokenUsdLabel,
+} from '@/lib/swap/swapDisplayAmount'
+
+describe('amountUnitsFromBalancePercent', () => {
+  it('uses full raw balance at 100% even when display rounds to fewer decimals', () => {
+    const balance = { raw: 887_174_848n, decimals: 6 }
+    expect(amountUnitsFromBalancePercent(balance, 100)).toBe('887.174848')
+    expect(amountUnitsFromBalancePercent(balance, 50)).toBe('443.587424')
+  })
+
+  it('never exceeds raw units at fractional percentages', () => {
+    const balance = { raw: 1_000_001n, decimals: 6 }
+    expect(amountUnitsFromBalancePercent(balance, 33)).toBe('0.330000')
+  })
+})
 
 describe('formatSwapDisplayAmount', () => {
   it('formats stablecoin outputs with two decimals', () => {
@@ -15,5 +33,32 @@ describe('formatSwapDisplayAmount', () => {
   it('passes through empty and zero', () => {
     expect(formatSwapDisplayAmount('')).toBe('')
     expect(formatSwapDisplayAmount('0', 'ETH')).toBe('0')
+  })
+})
+
+describe('formatSwapTokenBalanceLabel', () => {
+  it('caps large creator-coin balances like Uniswap', () => {
+    expect(formatSwapTokenBalanceLabel('654538.89230025562217', 'akita')).toBe('654,538.89')
+    expect(formatSwapTokenBalanceLabel('10312658.93179696315806', 'b20')).toBe('10,312,658.93')
+  })
+
+  it('uses four decimals for mid-sized holdings', () => {
+    expect(formatSwapTokenBalanceLabel('5.4729', 'SOL')).toBe('5.4729')
+  })
+
+  it('uses five decimals for fractional ETH-sized amounts', () => {
+    expect(formatSwapTokenBalanceLabel('0.00688', 'ETH')).toBe('0.00688')
+    expect(formatSwapTokenBalanceLabel('0.00007', 'ETH')).toBe('0.00007')
+  })
+
+  it('pins stables to cents when >= 1', () => {
+    expect(formatSwapTokenBalanceLabel('2940.34', 'USDC')).toBe('2,940.34')
+  })
+})
+
+describe('formatSwapTokenUsdLabel', () => {
+  it('always shows cents for sub-million USD values', () => {
+    expect(formatSwapTokenUsdLabel(2939.52)).toBe('$2,939.52')
+    expect(formatSwapTokenUsdLabel(0.14)).toBe('$0.14')
   })
 })

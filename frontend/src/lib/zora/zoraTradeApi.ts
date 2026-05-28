@@ -2,11 +2,14 @@ import { permit2ABI, permit2Address } from '@zoralabs/protocol-deployments'
 import { getAddress, hashTypedData, isAddress, type Hex, type PublicClient } from 'viem'
 import { base } from 'viem/chains'
 
+import { extractRevertInfo } from '@/lib/aa/coinbaseErc4337ErrorUtils'
 import { findCoinbaseSmartWalletOwnerIndex } from '@/lib/aa/coinbaseErc4337Owners'
 import { getProductionBaseReadClient } from '@/lib/base/productionBaseReadClient'
 import { apiFetch } from '@/lib/api/apiBase'
-import { wrapCswOwnerSignature } from '@/lib/wallet/cswOwnerSignature'
-import { signRawEcdsaDigest } from '@/lib/wallet/signRawEcdsaDigest'
+import {
+  assertCswAcceptsErc1271Signature,
+  signOwnerSignatureForCswErc1271,
+} from '@/lib/wallet/cswOwnerSignature'
 import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
 import {
   assertValidSwapTransaction,
@@ -172,6 +175,52 @@ export async function fetchZoraTradeQuoteFromApi(params: {
   }
 
   return data
+}
+
+const ZORA_UNIVERSAL_ROUTER_ADDRESS = '0x6ff5693b99212da76ad316178a184ab56d299b43' as const
+
+/** Production-RPC eth_call: CSW → Zora router (catches stale/malformed route bytes before UserOp submit). */
+export async function assertZoraRouterCallExecutesFromCsw(params: {
+  executionAddress: `0x${string}`
+  call: { target: string; data: string; value?: string | null }
+}): Promise<void> {
+  const readClient = getProductionBaseReadClient()
+  const target = getAddress(params.call.target as `0x${string}`)
+  const data = params.call.data as Hex
+  const value = BigInt(params.call.value ?? '0')
+  try {
+    await readClient.call({
+      to: target,
+      data,
+      value,
+      account: getAddress(params.executionAddress),
+    })
+  } catch (e: unknown) {
+    const info = extractRevertInfo(e)
+    const selector = info.revertData?.slice(0, 10).toLowerCase()
+    if (selector === '0x3b99b53d') {
+      throw new Error(
+        'Swap route data from Zora is malformed or stale. Refresh the quote and try again.',
+      )
+    }
+    if (selector === '0xb0669cbc') {
+      throw new Error(
+        'Permit2 rejected the smart-wallet signature. Refresh the quote, sign again when prompted, then retry.',
+      )
+    }
+    const innerSelector =
+      typeof info.revertData === 'string' && info.revertData.startsWith('0x2c4029e9')
+        ? info.revertData.slice(0, 10)
+        : null
+    if (innerSelector === '0x2c4029e9' || selector === '0x2c4029e9') {
+      throw new Error(
+        'The Zora swap would revert on your smart wallet. Refresh the quote, confirm the Permit2 signature, and ensure you hold enough of the token you are selling.',
+      )
+    }
+    throw new Error(
+      `Zora swap would revert on-chain (${info.errorName ?? info.error}). Refresh the quote and try again.`,
+    )
+  }
 }
 
 export function buildSwapFromZoraQuote(params: {
@@ -407,19 +456,6 @@ async function signOneZoraQuotePermit(params: {
 
   let signature: Hex
   if (permitOwnerIsContract && executionAddress) {
-    const digest = hashTypedData({
-      domain: permitDomain,
-      types: PERMIT_SINGLE_TYPES,
-      primaryType: 'PermitSingle',
-      message: signMessage,
-    })
-    signature = await signRawEcdsaDigest({
-      digest,
-      signerAddress: signer,
-      walletClient: params.walletClient,
-      label: 'zoraPermit2',
-    })
-
     const ownerLookup = await findCoinbaseSmartWalletOwnerIndex({
       publicClient: readClient,
       smartWallet: executionAddress,
@@ -430,7 +466,27 @@ async function signOneZoraQuotePermit(params: {
         'Embedded signer is not an on-chain owner of your Coinbase Smart Wallet. Finish waitlist signing setup, then retry the swap.',
       )
     }
-    signature = wrapCswOwnerSignature(signature, ownerLookup.ownerIndex)
+
+    const permitDigest = hashTypedData({
+      domain: permitDomain,
+      types: PERMIT_SINGLE_TYPES,
+      primaryType: 'PermitSingle',
+      message: signMessage,
+    })
+    signature = await signOwnerSignatureForCswErc1271({
+      innerTypedDataDigest: permitDigest,
+      smartWallet: executionAddress,
+      ownerIndex: ownerLookup.ownerIndex,
+      signerAddress: signer,
+      walletClient: params.walletClient,
+      publicClient: readClient,
+    })
+    await assertCswAcceptsErc1271Signature({
+      publicClient: readClient,
+      smartWallet: executionAddress,
+      digest: permitDigest,
+      signature,
+    })
   } else {
     signature = (await params.walletClient.signTypedData({
       account: signer,
@@ -553,7 +609,7 @@ export async function prepareZoraQuoteForExecute(params: {
     throw new Error('Zora trade is missing Permit2 authorization. Refresh the quote and try again.')
   }
 
-  return refreshZoraTradeQuoteWithPermits({
+  const refreshed = await refreshZoraTradeQuoteWithPermits({
     tokenIn: params.tokenIn,
     tokenOut: params.tokenOut,
     amountIn: params.amountIn,
@@ -561,6 +617,16 @@ export async function prepareZoraQuoteForExecute(params: {
     slippagePct: params.slippagePct,
     signatures,
   })
+
+  const call = readZoraCallFromQuote(refreshed)
+  if (call?.target && call.data) {
+    await assertZoraRouterCallExecutesFromCsw({
+      executionAddress: getAddress(sender),
+      call,
+    })
+  }
+
+  return refreshed
 }
 
 export async function refreshZoraTradeQuoteWithPermits(params: {

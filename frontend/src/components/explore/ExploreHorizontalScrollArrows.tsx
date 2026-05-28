@@ -8,6 +8,8 @@ type ExploreHorizontalScrollArrowsProps = {
   onScrollRight: () => void
   leftAriaLabel: string
   rightAriaLabel: string
+  /** Distance from the left edge; use sticky identity width + gap when the column is collapsed. */
+  leftInsetPx?: number
   className?: string
 }
 
@@ -22,12 +24,13 @@ export function ExploreHorizontalScrollArrows({
   onScrollRight,
   leftAriaLabel,
   rightAriaLabel,
+  leftInsetPx = 8,
   className = DEFAULT_ARROW_BUTTON_CLASS,
 }: ExploreHorizontalScrollArrowsProps) {
   return (
     <>
       {hasOverflow && canScrollLeft ? (
-        <div className="absolute left-2 top-10 z-60">
+        <div className="absolute top-10 z-60" style={{ left: leftInsetPx }}>
           <button type="button" onClick={onScrollLeft} aria-label={leftAriaLabel} className={className}>
             <ChevronLeft size={14} strokeWidth={2.4} aria-hidden="true" />
           </button>

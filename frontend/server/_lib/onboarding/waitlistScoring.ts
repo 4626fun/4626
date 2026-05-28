@@ -141,10 +141,28 @@ export type WaitlistPointsBreakdown = {
   total: number
   invite: number
   signup: number
+  links: number
   tasks: number
   csw: number
   social: number
+  checkins: number
   bonus: number
+  agent: number
+}
+
+/** Sum of overview buckets — must match `total` when breakdown SQL stays in sync with total weighting. */
+export function sumWaitlistPointsBreakdown(breakdown: WaitlistPointsBreakdown): number {
+  return (
+    breakdown.invite +
+    breakdown.signup +
+    breakdown.links +
+    breakdown.tasks +
+    breakdown.csw +
+    breakdown.social +
+    breakdown.checkins +
+    breakdown.bonus +
+    breakdown.agent
+  )
 }
 
 /** Canonical waitlist total + category buckets for one profile. */
@@ -179,12 +197,34 @@ export async function readWaitlistPointsBreakdown(
         FROM points
         WHERE signup_id = ${validId}
       ) AS total,
-      COALESCE(ROUND(SUM(CASE WHEN source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN amount * 0.60 ELSE 0 END)), 0)::int AS invite,
+      COALESCE(ROUND(SUM(
+        CASE
+          WHEN source = 'referral_passthrough' THEN amount * 1.00
+          WHEN source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN amount * 0.60
+          ELSE 0
+        END
+      )), 0)::int AS invite,
       COALESCE(ROUND(SUM(CASE WHEN source = 'waitlist_signup' THEN amount * 1.00 ELSE 0 END)), 0)::int AS signup,
+      COALESCE(ROUND(SUM(
+        CASE WHEN source IN (
+          'link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram',
+          'link_tiktok', 'link_external_eoa', 'link_zora'
+        ) THEN amount * 0.60 ELSE 0 END
+      )), 0)::int AS links,
       COALESCE(ROUND(SUM(CASE WHEN source = 'task' THEN amount * 0.30 ELSE 0 END)), 0)::int AS tasks,
-      COALESCE(ROUND(SUM(CASE WHEN source = 'csw_link' THEN amount * 1.00 ELSE 0 END)), 0)::int AS csw,
+      COALESCE(ROUND(SUM(
+        CASE
+          WHEN source = 'csw_link' THEN amount * 1.00
+          WHEN source IN ('resolve_csw', 'has_creator_coin') THEN amount * 0.60
+          ELSE 0
+        END
+      )), 0)::int AS csw,
       COALESCE(ROUND(SUM(CASE WHEN source LIKE 'social_%' THEN amount * 0.50 ELSE 0 END)), 0)::int AS social,
-      COALESCE(ROUND(SUM(CASE WHEN source LIKE 'bonus_%' THEN amount * 0.30 ELSE 0 END)), 0)::int AS bonus
+      COALESCE(ROUND(SUM(CASE WHEN source = 'amoe_checkin' THEN amount * 1.00 ELSE 0 END)), 0)::int AS checkins,
+      COALESCE(ROUND(SUM(CASE WHEN source LIKE 'bonus_%' THEN amount * 0.30 ELSE 0 END)), 0)::int AS bonus,
+      COALESCE(ROUND(SUM(
+        CASE WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40 ELSE 0 END
+      )), 0)::int AS agent
     FROM points
     WHERE signup_id = ${validId};
   `
@@ -193,10 +233,13 @@ export async function readWaitlistPointsBreakdown(
     total: safeInt(row.total),
     invite: safeInt(row.invite),
     signup: safeInt(row.signup),
+    links: safeInt(row.links),
     tasks: safeInt(row.tasks),
     csw: safeInt(row.csw),
     social: safeInt(row.social),
+    checkins: safeInt(row.checkins),
     bonus: safeInt(row.bonus),
+    agent: safeInt(row.agent),
   }
 }
 

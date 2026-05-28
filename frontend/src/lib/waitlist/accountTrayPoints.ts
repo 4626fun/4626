@@ -10,10 +10,13 @@ export type AccountTrayPointsSnapshot = {
     total: number
     invite: number
     signup: number
+    links: number
     tasks: number
     csw: number
     social: number
+    checkins: number
     bonus: number
+    agent: number
   }
   rank: {
     invite: number | null

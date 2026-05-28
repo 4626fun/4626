@@ -235,7 +235,7 @@
     border-color: rgb(var(--vault-border-strong) / 0.74);
     box-shadow:
       0 22px 58px -28px rgba(0, 0, 0, 0.82),
-      0 0 0 1px rgba(59, 130, 246, 0.1),
+      0 0 0 1px rgb(var(--brand-gold) / 0.14),
       inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
 
@@ -609,6 +609,9 @@
   --brand-hover: 63 129 255;
   --brand-glow: 28 92 242;
   --brand-accent-rgb: 245 158 11;
+  /* 4626.fun marketing gold — Explore accent lane (immersive --gold / --gold-2) */
+  --brand-gold: 232 185 100;
+  --brand-gold-light: 245 209 130;
   --vault-bg: 248 250 252;      /* slate-50 */
   --vault-card: 255 255 255;    /* white */
   --vault-card-raised: 241 245 249;
@@ -833,18 +836,28 @@ body {
 
   #explore-creators-body[data-scrolled="1"] .explore-sticky-name-cell,
   #explore-content-body[data-scrolled="1"] .explore-sticky-name-cell {
-    width: 56px;
-    max-width: 56px;
-    min-width: 56px;
-    overflow: hidden;
+    width: var(--explore-collapsed-identity-width, 72px);
+    max-width: var(--explore-collapsed-identity-width, 72px);
+    min-width: var(--explore-collapsed-identity-width, 72px);
+    overflow: visible;
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-bottom: 10px;
+  }
+
+  #explore-creators-body[data-scrolled="1"] .explore-sticky-name-cell .flex,
+  #explore-content-body[data-scrolled="1"] .explore-sticky-name-cell .flex {
+    justify-content: center;
   }
 
   #explore-creators-body[data-scrolled="1"] .explore-sticky-name-header-cell,
   #explore-content-body[data-scrolled="1"] .explore-sticky-name-header-cell {
-    width: 56px;
-    max-width: 56px;
-    min-width: 56px;
-    overflow: hidden;
+    width: var(--explore-collapsed-identity-width, 72px);
+    max-width: var(--explore-collapsed-identity-width, 72px);
+    min-width: var(--explore-collapsed-identity-width, 72px);
+    overflow: visible;
+    padding-left: 6px;
+    padding-right: 6px;
   }
 
   #explore-creators-body[data-scrolled="1"] .explore-token-header-label,
@@ -854,9 +867,9 @@ body {
 
   #explore-creators-body[data-scrolled="1"] .explore-sticky-identity-group-header,
   #explore-content-body[data-scrolled="1"] .explore-sticky-identity-group-header {
-    width: 104px;
-    max-width: 104px;
-    min-width: 104px;
-    overflow: hidden;
+    width: var(--explore-collapsed-identity-width, 72px);
+    max-width: var(--explore-collapsed-identity-width, 72px);
+    min-width: var(--explore-collapsed-identity-width, 72px);
+    overflow: visible;
   }
 }

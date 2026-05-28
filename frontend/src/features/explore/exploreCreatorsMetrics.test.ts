@@ -13,8 +13,9 @@ describe('exploreCreatorsMetrics', () => {
     })
 
     expect(line).toContain('Indexed 30,180 creators')
-    expect(line).toContain('Financial totals sum indexed coins only')
+    expect(line).toContain('refreshed')
     expect(line).not.toContain('Zora')
+    expect(line).not.toContain('Financial totals sum indexed coins only')
   })
 
   it('builds canonical status copy when backfill is complete', () => {

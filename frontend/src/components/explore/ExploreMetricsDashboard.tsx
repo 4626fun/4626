@@ -1,4 +1,3 @@
-import { ExploreAnalyticsMethodology } from '@/components/explore/ExploreAnalyticsMethodology'
 import { ExploreAnalyticsSyncBadge } from '@/components/explore/ExploreAnalyticsSyncBadge'
 import { ExploreHeroMetric } from '@/components/explore/ExploreUiPrimitives'
 import { ExploreHeroSparkline } from '@/components/explore/ExploreHeroSparkline'
@@ -91,10 +90,10 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
             </>
           )}
         </div>
-        {!isLoading ? <ExploreAnalyticsSyncBadge exact={exact} syncStatus={syncStatus} /> : null}
+        {!isLoading && syncStatus === 'error' ? (
+          <ExploreAnalyticsSyncBadge exact={exact} syncStatus={syncStatus} />
+        ) : null}
       </div>
-
-      <ExploreAnalyticsMethodology className="mt-1" />
     </div>
   )
 }

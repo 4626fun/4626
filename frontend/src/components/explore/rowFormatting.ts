@@ -134,6 +134,14 @@ export function getMarketCapDeltaToneClass(change: { text: string; positive: boo
   return change.positive ? 'text-emerald-400/90' : 'text-rose-400/90'
 }
 
+/** Green/red tone for signed percent deltas (sparklines, MCap Δ, etc.). */
+export function getSignedPercentToneClass(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value) || value === 0) {
+    return 'text-zinc-400'
+  }
+  return value > 0 ? 'text-emerald-400/90' : 'text-rose-400/90'
+}
+
 export function buildGroupSpans(columns: ExploreTableColumn[]) {
   const out: Array<{ id: string; label: string; start: number; end: number }> = []
   for (const group of EXPLORE_TABLE_GROUPS) {

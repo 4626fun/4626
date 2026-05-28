@@ -266,6 +266,21 @@ export function buildTrayHoldings(params: {
   }
 }
 
+export function collectTrayZoraTokenKeys(
+  ...groups: ReadonlyArray<ReadonlyArray<{ tokenKey: string; tokenAddress?: string | null }>>
+): Set<string> {
+  const keys = new Set<string>()
+  for (const token of groups.flat()) {
+    keys.add(token.tokenKey.toLowerCase())
+    if (token.tokenAddress) keys.add(token.tokenAddress.toLowerCase())
+  }
+  return keys
+}
+
+export function sumTrayAssetUsd(holdings: ReadonlyArray<{ usdValue: number }>): number {
+  return holdings.reduce((sum, token) => sum + (Number.isFinite(token.usdValue) ? token.usdValue : 0), 0)
+}
+
 export function buildTrayAssetHoldings(
   rows: TrayWalletTokenRow[],
   options?: { excludeTokenKeys?: ReadonlySet<string> },

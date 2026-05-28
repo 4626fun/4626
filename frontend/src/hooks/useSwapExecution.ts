@@ -3,7 +3,11 @@ import { erc20Abi, formatUnits, getAddress, isAddress, parseUnits } from 'viem'
 import { debugLogsFlag } from '@/lib/flags/featureFlags'
 import { CONTRACTS } from '@/config/contracts'
 
-import { pollCanonicalUserOpTransactionHash } from '@/lib/aa/coinbaseErc4337'
+import {
+  pollCanonicalUserOpTransactionHash,
+  readAnyPendingUserOpHashForWallet,
+  waitForPriorPendingUserOp,
+} from '@/lib/aa/coinbaseErc4337'
 import { appendAppSwapActivity } from '@/lib/account/appActivityJournal'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import {
@@ -574,6 +578,7 @@ export function useSwapExecution(params: {
   })
   const txDebugSnapshotRef = useRef<string>('')
   const quoteRunRef = useRef(0)
+  const swapSubmitEpochRef = useRef(0)
   const swapReceiptPollRef = useRef<AbortController | null>(null)
   const quoteFailureTrackerRef = useRef<{ count: number; windowStartedAt: number }>({
     count: 0,
@@ -604,6 +609,25 @@ export function useSwapExecution(params: {
       }),
     [params.hasSession, params.sessionHydrated],
   )
+  useEffect(() => {
+    if (!import.meta.hot) return
+    const onBeforeUpdate = () => {
+      swapSubmitEpochRef.current += 1
+    }
+    import.meta.hot.on('vite:beforeUpdate', onBeforeUpdate)
+    return () => {
+      import.meta.hot?.off('vite:beforeUpdate', onBeforeUpdate)
+    }
+  }, [])
+
+  const assertSwapSubmitEpochUnchanged = useCallback((epoch: number) => {
+    if (epoch !== swapSubmitEpochRef.current) {
+      throw new Error(
+        'Dev reload interrupted this swap. Wait for the page to finish updating, then try again.',
+      )
+    }
+  }, [])
+
   const resetQuoteFailureTracker = useCallback(() => {
     quoteFailureTrackerRef.current = {
       count: 0,
@@ -885,6 +909,7 @@ export function useSwapExecution(params: {
       debug: onTxRouterDebug,
       onSubmissionStatus: setStatus,
       waitForOnChainReceipt: params.executionMode !== 'canonical',
+      preferEphemeralNonceLane: params.executionMode === 'canonical',
     }
   }, [
     assertCanonicalSwapExecutionContext,
@@ -1822,6 +1847,7 @@ export function useSwapExecution(params: {
     }
     assertValidSwapTransaction(swapTx)
     setBusy('executeSwap')
+    const submitEpoch = swapSubmitEpochRef.current
     setSwapCompletion(null)
     setError('')
     setStatus('Signing and submitting swap…')
@@ -1895,6 +1921,29 @@ export function useSwapExecution(params: {
         if (!params.executionAddress) {
           throw new Error('Execution address is required to submit this Zora swap.')
         }
+        const pendingUserOpHash = readAnyPendingUserOpHashForWallet(
+          getAddress(params.executionAddress),
+        )
+        if (pendingUserOpHash && params.publicClient) {
+          const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+          const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+          const priorStatus = await waitForPriorPendingUserOp({
+            publicClient: params.publicClient,
+            bundlerUrl,
+            userOpHash: pendingUserOpHash,
+            onStatus: setStatus,
+          })
+          if (priorStatus === 'timeout') {
+            throw new Error(
+              'Your previous swap is still confirming on Base. Wait about 30 seconds, then try again once.',
+            )
+          }
+          if (priorStatus === 'failed') {
+            throw new Error(
+              'Your previous swap did not confirm. Refresh the quote and try again.',
+            )
+          }
+        }
         setStatus('Refreshing Zora quote for submit…')
         const executableQuote = await prepareZoraQuoteForExecute({
           quote,
@@ -1930,6 +1979,7 @@ export function useSwapExecution(params: {
         swapTxForSend = built.swap
         setSwapTx(built.swap)
       }
+      assertSwapSubmitEpochUnchanged(submitEpoch)
       const { routing, send } = wrapTx
         ? await buildAndSendCalls({
             context,
@@ -2003,6 +2053,12 @@ export function useSwapExecution(params: {
           bundlerUrl,
           userOpHash: userOpHash as `0x${string}`,
           signal: pollController.signal,
+          onStatusChange: (status) => {
+            if (pollController.signal.aborted) return
+            if (status === 'pending') {
+              setStatus('Swap submitted. Confirming on Base…')
+            }
+          },
         })
           .then((confirmedTxHash) => {
             if (pollController.signal.aborted) return
@@ -2077,6 +2133,7 @@ export function useSwapExecution(params: {
     params.parsedSlippage,
     params.walletClient,
     params.parsedDeadlineMinutes,
+    assertSwapSubmitEpochUnchanged,
   ])
 
   const executeOrderNow = useCallback(async () => {

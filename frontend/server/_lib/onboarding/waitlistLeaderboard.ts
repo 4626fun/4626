@@ -237,6 +237,14 @@ export async function getWaitlistLeaderboardData(params: {
           NULLIF(TRIM(p.primary_wallet), '') IS NOT NULL
           AND lower(zp.primary_wallet) = lower(TRIM(p.primary_wallet))
         )
+        OR (
+          NULLIF(TRIM(p.csw_address), '') IS NOT NULL
+          AND lower(zp.smart_wallet_address) = lower(TRIM(p.csw_address))
+        )
+        OR (
+          NULLIF(TRIM(canonical_pw.address), '') IS NOT NULL
+          AND lower(zp.smart_wallet_address) = lower(TRIM(canonical_pw.address))
+        )
         ORDER BY zp.last_refreshed_at DESC NULLS LAST
         LIMIT 1
       ) zp_row ON true
@@ -473,6 +481,14 @@ export async function getWaitlistLeaderboardData(params: {
           OR (
             NULLIF(TRIM(p.primary_wallet), '') IS NOT NULL
             AND lower(zp.primary_wallet) = lower(TRIM(p.primary_wallet))
+          )
+          OR (
+            NULLIF(TRIM(p.csw_address), '') IS NOT NULL
+            AND lower(zp.smart_wallet_address) = lower(TRIM(p.csw_address))
+          )
+          OR (
+            NULLIF(TRIM(canonical_pw.address), '') IS NOT NULL
+            AND lower(zp.smart_wallet_address) = lower(TRIM(canonical_pw.address))
           )
           ORDER BY zp.last_refreshed_at DESC NULLS LAST
           LIMIT 1

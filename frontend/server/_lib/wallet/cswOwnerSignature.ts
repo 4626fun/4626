@@ -16,7 +16,8 @@
  *     uint256 ownerIndex;
  *     bytes   signatureData;
  *   }
- * Encoded as `abi.encode(uint256 ownerIndex, bytes signatureData)`.
+ * Encoded as `abi.encode(SignatureWrapper(...))` (tuple/struct layout), **not**
+ * bare `abi.encode(uint256, bytes)` — the latter makes `isValidSignature` revert.
  *
  * Where the owner signature comes from
  * -------------------------------------
@@ -25,41 +26,56 @@
  * `hashTypedData`) and call `secp256k1SignHash` (Privy's raw secp256k1 RPC)
  * with that digest. The resulting 65-byte ECDSA signature is then wrapped with
  * `wrapCswOwnerSignature` before being sent back to Zora in the re-quote call.
- *
- * Assumption: 1-of-1 CSW (ownerIndex = 0)
- * -----------------------------------------
- * The current provisioning flow creates a single-owner CSW. `ownerIndex` is
- * therefore always 0 (the first and only owner). If multi-owner CSWs are
- * introduced in a future phase, callers should pass the correct `ownerIndex`
- * from the `CommandIssuerContext.ownerIndex` field.
  */
 
-import { encodeAbiParameters, type Hex } from 'viem'
+import { encodeAbiParameters, type Address, type Hex, type PublicClient } from 'viem'
+
+export const CSW_REPLAY_SAFE_HASH_ABI = [
+  {
+    type: 'function' as const,
+    name: 'replaySafeHash' as const,
+    inputs: [{ name: 'hash', type: 'bytes32' as const }],
+    outputs: [{ name: '', type: 'bytes32' as const }],
+    stateMutability: 'view' as const,
+  },
+] as const
+
+export async function readCswReplaySafeHash(params: {
+  publicClient: PublicClient
+  smartWallet: Address
+  innerHash: Hex
+}): Promise<Hex> {
+  return (await params.publicClient.readContract({
+    address: params.smartWallet,
+    abi: CSW_REPLAY_SAFE_HASH_ABI,
+    functionName: 'replaySafeHash',
+    args: [params.innerHash],
+  })) as Hex
+}
+
+const SIGNATURE_WRAPPER_TUPLE = [
+  {
+    type: 'tuple' as const,
+    components: [
+      { name: 'ownerIndex', type: 'uint256' as const },
+      { name: 'signatureData', type: 'bytes' as const },
+    ],
+  },
+] as const
 
 /**
  * Wrap a raw 65-byte secp256k1 owner signature into the ERC-1271
  * `SignatureWrapper` format that Permit2 expects when the signer is a
  * Coinbase Smart Wallet.
- *
- * @param ownerSignature - 65-byte ECDSA signature as a `0x`-prefixed hex
- *   string (output of `secp256k1SignHash` / Privy `secp256k1_sign`).
- * @param ownerIndex - Index of the owner within the CSW owner array.
- *   Defaults to 0 for the standard 1-of-1 provisioning setup.
- * @returns abi.encode(uint256 ownerIndex, bytes signatureData) — the
- *   exact bytes that CSW's `isValidSignature` will decode.
- * @throws Error when `ownerSignature` is not exactly 65 bytes (132 hex
- *   chars plus the 0x prefix, for a total length of 134).
  */
 export function wrapCswOwnerSignature(ownerSignature: Hex, ownerIndex: number = 0): Hex {
-  // 65 bytes = 130 hex chars + 2 for '0x' prefix = 132 total chars.
   if (!ownerSignature.startsWith('0x') || ownerSignature.length !== 132) {
     throw new Error(
       `wrapCswOwnerSignature: expected a 65-byte (132-hex-char) signature, got length ${ownerSignature.length}. ` +
         'Ensure the signature comes from Privy secp256k1_sign and is not truncated.',
     )
   }
-  return encodeAbiParameters(
-    [{ type: 'uint256' }, { type: 'bytes' }],
-    [BigInt(ownerIndex), ownerSignature],
-  )
+  return encodeAbiParameters(SIGNATURE_WRAPPER_TUPLE, [
+    { ownerIndex: BigInt(ownerIndex), signatureData: ownerSignature },
+  ])
 }

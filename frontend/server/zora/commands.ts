@@ -23,7 +23,7 @@ import {
 import { checkRouterTarget } from './routerAllowlist.js'
 import type { CoinbaseSmartWalletCall } from '../_lib/wallet/privyCoinbaseSmartWallet.js'
 import { assertTeeAttestationOrThrow } from '../_lib/agent/teeAttestationGate.js'
-import { wrapCswOwnerSignature } from '../_lib/wallet/cswOwnerSignature.js'
+import { readCswReplaySafeHash, wrapCswOwnerSignature } from '../_lib/wallet/cswOwnerSignature.js'
 import type { KeeprVaultRow } from '../_lib/keepr/keeprRegistry.js'
 import type { KeeprRole, KeeprCommandResult } from '../commands/types.js'
 
@@ -1038,16 +1038,31 @@ async function handleSellViaArchB(params: {
           message: permit.permit as any,
         })
 
-        // Sign the digest with the CSW's owner EOA via Privy secp256k1_sign.
-        //
-        // If the Privy call throws (network error, quorum policy rejection,
-        // invalid wallet id), surface as a sell-specific typed refusal instead
-        // of bubbling to the global executor.
+        // CSW isValidSignature applies replaySafeHash(permitDigest) before ecrecover.
+        let replaySafeDigest: `0x${string}`
+        try {
+          replaySafeDigest = await readCswReplaySafeHash({
+            publicClient: client,
+            smartWallet: issuer.smartWallet,
+            innerHash: typedDataDigest,
+          })
+        } catch (err) {
+          logger.warn('[coin/sell/arch-b] replaySafeHash read failed', {
+            groupId: params.groupId,
+            error: err instanceof Error ? err.message : String(err),
+          })
+          return {
+            ok: false,
+            response:
+              'Sell failed: could not prepare Permit2 signing for the smart wallet. Please try again shortly.',
+          }
+        }
+
         let ownerSig: `0x${string}`
         try {
           ownerSig = await secp256k1SignHash({
             walletId: issuer.privyOwnerWalletId,
-            hash: typedDataDigest,
+            hash: replaySafeDigest,
             idempotencyKey: `coin-sell-permit:${params.groupId}:${Date.now()}:${i}`,
           })
         } catch (err) {

@@ -15,10 +15,13 @@ export type WaitlistProfilePointsBreakdown = {
   total: number
   invite: number
   signup: number
+  links: number
   tasks: number
   csw: number
   social: number
+  checkins: number
   bonus: number
+  agent: number
 }
 
 export type WaitlistProfilePositionSnapshot = {
@@ -65,10 +68,13 @@ export async function readWaitlistPositionForSignupId(
     total: breakdown.total,
     invite: breakdown.invite,
     signup: breakdown.signup,
+    links: breakdown.links,
     tasks: breakdown.tasks,
     csw: breakdown.csw,
     social: breakdown.social,
+    checkins: breakdown.checkins,
     bonus: breakdown.bonus,
+    agent: breakdown.agent,
   }
 
   const qualifiedQ = await db.sql`

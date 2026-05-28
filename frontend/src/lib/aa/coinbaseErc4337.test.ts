@@ -257,6 +257,27 @@ describe('coinbaseErc4337 latency helpers', () => {
     expect(statuses).toContain('confirmed')
   })
 
+  it('pollUserOperationStatus reads top-level transactionHash from bundler receipt', async () => {
+    const bundlerClient = {
+      getUserOperationReceipt: vi.fn().mockResolvedValue({
+        success: true,
+        transactionHash: TX_HASH,
+      }),
+    }
+
+    const result = await pollUserOperationStatus({
+      bundlerClient,
+      userOpHash: USER_OP_HASH as `0x${string}`,
+      options: {
+        pollIntervalMs: 1,
+        maxDurationMs: 20,
+        perCheckTimeoutMs: 20,
+      },
+    })
+
+    expect(result).toEqual({ status: 'confirmed', txHash: TX_HASH })
+  })
+
   it('pollUserOperationStatus returns timeout when receipt does not arrive', async () => {
     const bundlerClient = {
       getUserOperationReceipt: vi.fn().mockResolvedValue(null),

@@ -1,10 +1,15 @@
 /**
- * Resolve Zora creator/content coins held by a wallet (CSW or EOA).
+ * Resolve Zora creator/content/trend coins held by a wallet (CSW or EOA).
  * Portfolio balances (DeBank / Base Etherscan) intersected with Zora coin metadata.
  */
 
 import { getAddress, isAddress, type Address } from 'viem'
 
+import {
+  normalizeZoraCoinType,
+  splitZoraHoldingsByCoinType,
+  type ZoraCoinType,
+} from '../../../src/lib/zora/coinType.js'
 import {
   buildTrayTokenRowsFromPortfolios,
   buildTrayZoraHoldings,
@@ -23,7 +28,7 @@ export type ZoraWalletHoldingDto = {
   address: string
   symbol: string
   name: string
-  coinType: 'CREATOR' | 'CONTENT'
+  coinType: ZoraCoinType
   amount: number
   amountFormatted: string
   usdValue: number
@@ -37,6 +42,7 @@ export type ZoraWalletHoldingsResult = {
   portfolioSource: TrayPortfolioSource | null
   creator: ZoraWalletHoldingDto[]
   content: ZoraWalletHoldingDto[]
+  trend: ZoraWalletHoldingDto[]
 }
 
 async function mapWithLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -58,10 +64,6 @@ function formatHoldingAmount(value: number): string {
   if (value >= 100) return value.toLocaleString(undefined, { maximumFractionDigits: 2 })
   if (value >= 1) return value.toLocaleString(undefined, { maximumFractionDigits: 4 })
   return value.toLocaleString(undefined, { maximumFractionDigits: 6 })
-}
-
-function normalizeCoinType(raw: unknown): 'CREATOR' | 'CONTENT' {
-  return String(raw ?? '').toUpperCase() === 'CONTENT' ? 'CONTENT' : 'CREATOR'
 }
 
 function logoFromZoraCoin(coin: Record<string, unknown>): string | null {
@@ -99,7 +101,7 @@ function holdingToDto(
   coin: Record<string, unknown> | null,
 ): ZoraWalletHoldingDto | null {
   if (!holding.tokenAddress || !isAddress(holding.tokenAddress)) return null
-  const coinType = normalizeCoinType(coin?.coinType)
+  const coinType = normalizeZoraCoinType(coin?.coinType)
   const symbol = String(coin?.symbol ?? holding.symbol ?? '').trim() || holding.symbol
   const name = String(coin?.name ?? holding.name ?? '').trim() || holding.name
   return {
@@ -140,6 +142,7 @@ export async function resolveZoraWalletHoldings(params: {
       portfolioSource: source,
       creator: [],
       content: [],
+      trend: [],
     }
   }
 
@@ -156,6 +159,7 @@ export async function resolveZoraWalletHoldings(params: {
       portfolioSource: source,
       creator: [],
       content: [],
+      trend: [],
     }
   }
 
@@ -170,20 +174,16 @@ export async function resolveZoraWalletHoldings(params: {
   }
 
   const trayHoldings = buildTrayZoraHoldings(tokenRows, zoraMap)
-  const creator: ZoraWalletHoldingDto[] = []
-  const content: ZoraWalletHoldingDto[] = []
+  const rows: ZoraWalletHoldingDto[] = []
 
   for (const holding of trayHoldings) {
     if (!holding.tokenAddress || holding.amount <= 0) continue
     const coin = zoraMap[holding.tokenAddress.toLowerCase()] ?? null
     const dto = holdingToDto(holding, coin)
-    if (!dto) continue
-    if (dto.coinType === 'CONTENT') content.push(dto)
-    else creator.push(dto)
+    if (dto) rows.push(dto)
   }
 
-  creator.sort((a, b) => b.usdValue - a.usdValue)
-  content.sort((a, b) => b.usdValue - a.usdValue)
+  const { creator, content, trend } = splitZoraHoldingsByCoinType(rows)
 
   return {
     wallet,
@@ -191,5 +191,6 @@ export async function resolveZoraWalletHoldings(params: {
     portfolioSource: source,
     creator,
     content,
+    trend,
   }
 }

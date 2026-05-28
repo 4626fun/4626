@@ -6,6 +6,7 @@ import {
   buildTrayHoldingsFromPortfolios,
   buildTrayTokenRowsFromPortfolios,
   buildTrayWalletSources,
+  collectTrayZoraTokenKeys,
   parseDebankToken,
 } from './trayPortfolioHelpers'
 
@@ -158,5 +159,28 @@ describe('buildTrayAssetHoldings', () => {
     expect(holdings).toHaveLength(1)
     expect(holdings[0]?.amount).toBe(5)
     expect(holdings[0]?.usdValue).toBe(5)
+  })
+
+  it('excludes Zora token keys from the flat holdings list', () => {
+    const wallet = { kind: 'canonical' as const, address: CSW, label: '4626 CSW' }
+    const zora = '0x1111111111111111111111111111111111111111'
+    const usdc = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+    const rows = [
+      {
+        token: { id: zora, symbol: 'AGENT', name: 'agent', amount: 100, usdValue: 90 },
+        wallet,
+      },
+      {
+        token: { id: usdc, symbol: 'USDC', name: 'USD Coin', amount: 5, usdValue: 5 },
+        wallet,
+      },
+    ]
+    const exclude = collectTrayZoraTokenKeys(
+      [{ tokenKey: zora, tokenAddress: zora, symbol: 'AGENT', name: 'agent', logoUrl: null, amount: 100, usdValue: 90, walletCount: 1 }],
+      [],
+    )
+    const holdings = buildTrayAssetHoldings(rows, { excludeTokenKeys: exclude })
+    expect(holdings).toHaveLength(1)
+    expect(holdings[0]?.symbol).toBe('USDC')
   })
 })

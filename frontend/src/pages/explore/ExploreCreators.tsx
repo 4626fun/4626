@@ -651,6 +651,7 @@ export function ExploreCreators() {
             onScrollRight={() => handleArrowClick('right', columnScrollStops)}
             leftAriaLabel="Scroll creators table left"
             rightAriaLabel="Scroll creators table right"
+            collapseIdentity={collapseIdentity}
           />
         </>
       }

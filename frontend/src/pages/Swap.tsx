@@ -56,6 +56,7 @@ import {
 import { enrichSwapTokenOption, swapTokenOptionNeedsLabelEnrichment } from '@/lib/swap/swapTokenLabels'
 import { fetchWalletZoraHoldingsBundle } from '@/lib/zora/walletHoldings'
 import { deriveSwapUsdEstimates } from '@/lib/swap/swapAmountUsd'
+import { amountUnitsFromBalancePercent } from '@/lib/swap/swapDisplayAmount'
 import { useSwapAssetBalance } from '@/lib/swap/useSwapAssetBalance'
 import { useSwapTokenUsdPrices } from '@/lib/swap/useSwapTokenUsdPrices'
 import { isBaseAccountWallet, useSwapSubAccountRuntime } from '@/lib/swap/useSwapSubAccountRuntime'
@@ -1390,9 +1391,7 @@ export function Swap() {
   const swapZoraHoldingsQuery = useQuery({
     queryKey: ['swap', 'zora-holdings', balanceOwnerAddress?.toLowerCase() ?? null],
     enabled:
-      swapChainId === BASE_CHAIN_ID &&
-      balanceReadsEnabled &&
-      Boolean(balanceOwnerAddress && isAddress(balanceOwnerAddress)),
+      swapChainId === BASE_CHAIN_ID && Boolean(balanceOwnerAddress && isAddress(balanceOwnerAddress)),
     staleTime: 60_000,
     queryFn: async () => fetchWalletZoraHoldingsBundle(balanceOwnerAddress as Address, { topTokenCount: 100 }),
   })
@@ -1400,11 +1399,16 @@ export function Swap() {
   const swapZoraHoldingOptions = useMemo(() => {
     const bundle = swapZoraHoldingsQuery.data
     if (!bundle) return []
-    return [...bundle.creator, ...bundle.content]
+    return [...bundle.creator, ...bundle.content, ...bundle.trend]
   }, [swapZoraHoldingsQuery.data])
 
   const swapZoraHoldingBalances = useMemo(
     () => swapZoraHoldingsQuery.data?.balances ?? {},
+    [swapZoraHoldingsQuery.data],
+  )
+
+  const swapZoraHoldingUsdValues = useMemo(
+    () => swapZoraHoldingsQuery.data?.usdValues ?? {},
     [swapZoraHoldingsQuery.data],
   )
 
@@ -2101,12 +2105,10 @@ export function Swap() {
                         slippagePct={slippagePct}
                         onOpenTokenSelector={openTokenSelector}
                         onAmountChange={setAmountInUnits}
-                        onQuickPercent={(pct, tokenBalance) => {
-                          if (!tokenInBalanceLabel || !tokenBalance) return
-                          const total = Number(tokenBalance.replace(/,/g, ''))
-                          if (!Number.isFinite(total)) return
-                          const next = ((pct / 100) * total).toFixed(6)
-                          setAmountInUnits(next)
+                        onQuickPercent={(pct) => {
+                          const bal = tokenInBalanceQuery.data
+                          if (!bal) return
+                          setAmountInUnits(amountUnitsFromBalancePercent(bal, pct))
                         }}
                         onSwitchTokens={handleSwitchTokens}
                         onReviewTrade={() => {
@@ -2430,6 +2432,7 @@ export function Swap() {
         balanceOwnerAddress={balanceOwnerAddress ?? null}
         zoraHoldingOptions={swapZoraHoldingOptions}
         zoraHoldingBalances={swapZoraHoldingBalances}
+        zoraHoldingUsdValues={swapZoraHoldingUsdValues}
         zoraHoldingsLoading={swapZoraHoldingsQuery.isLoading}
         isSearchLoading={
           discoveredCreatorTokenOptionsQuery.isFetching && Boolean(normalizedTokenSelectorQuery)

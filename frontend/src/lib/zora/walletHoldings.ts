@@ -3,6 +3,7 @@ import { getAddress, isAddress, type Address } from 'viem'
 import type { SwapTokenOption } from '@/components/swap/TokenSelectorModal'
 import type { TrayTokenHolding } from '@/components/account/trayPortfolioHelpers'
 import { parseApiEnvelope } from '@/lib/api/apiEnvelope'
+import { type ZoraCoinType } from '@/lib/zora/coinType'
 import { BASE_CHAIN_ID } from '@/lib/uniswap/swapUtils'
 
 export type SwapZoraHoldingRow = {
@@ -14,7 +15,7 @@ export type ZoraWalletHoldingDto = {
   address: string
   symbol: string
   name: string
-  coinType: 'CREATOR' | 'CONTENT'
+  coinType: ZoraCoinType
   amount: number
   amountFormatted: string
   usdValue: number
@@ -28,27 +29,56 @@ export type ZoraWalletHoldingsResult = {
   portfolioSource: 'debank' | 'base-etherscan' | null
   creator: ZoraWalletHoldingDto[]
   content: ZoraWalletHoldingDto[]
+  trend: ZoraWalletHoldingDto[]
 }
 
 export type ZoraWalletHoldingsBundle = {
   wallet: string
   creator: SwapTokenOption[]
   content: SwapTokenOption[]
+  trend: SwapTokenOption[]
   balances: Record<string, string>
+  usdValues: Record<string, number>
   trayCreator: TrayTokenHolding[]
   trayContent: TrayTokenHolding[]
+  trayTrend: TrayTokenHolding[]
 }
 
 function dtoToSwapTokenOption(dto: ZoraWalletHoldingDto): SwapTokenOption {
-  const group = dto.coinType === 'CONTENT' ? 'share' : 'creator'
+  if (dto.coinType === 'CONTENT') {
+    return {
+      address: getAddress(dto.address),
+      symbol: dto.symbol,
+      name: dto.name,
+      group: 'share',
+      chainId: dto.chainId ?? BASE_CHAIN_ID,
+      verified: true,
+      sectionTag: 'content',
+      logoUrl: dto.logoUrl ?? undefined,
+      logoUrls: dto.logoUrl ? [dto.logoUrl] : undefined,
+    }
+  }
+  if (dto.coinType === 'TREND') {
+    return {
+      address: getAddress(dto.address),
+      symbol: dto.symbol,
+      name: dto.name,
+      group: 'creator',
+      chainId: dto.chainId ?? BASE_CHAIN_ID,
+      verified: true,
+      sectionTag: 'trend',
+      logoUrl: dto.logoUrl ?? undefined,
+      logoUrls: dto.logoUrl ? [dto.logoUrl] : undefined,
+    }
+  }
   return {
     address: getAddress(dto.address),
     symbol: dto.symbol,
     name: dto.name,
-    group,
+    group: 'creator',
     chainId: dto.chainId ?? BASE_CHAIN_ID,
     verified: true,
-    sectionTag: dto.coinType === 'CONTENT' ? 'content' : 'creator',
+    sectionTag: 'creator',
     logoUrl: dto.logoUrl ?? undefined,
     logoUrls: dto.logoUrl ? [dto.logoUrl] : undefined,
   }
@@ -70,7 +100,7 @@ function dtoToTrayTokenHolding(dto: ZoraWalletHoldingDto): TrayTokenHolding {
 
 export function zoraHoldingsDtoToSwapRows(data: ZoraWalletHoldingsResult): SwapZoraHoldingRow[] {
   const rows: SwapZoraHoldingRow[] = []
-  for (const dto of [...data.creator, ...data.content]) {
+  for (const dto of [...data.creator, ...data.content, ...data.trend]) {
     if (dto.amount <= 0) continue
     rows.push({
       option: dtoToSwapTokenOption(dto),
@@ -82,21 +112,35 @@ export function zoraHoldingsDtoToSwapRows(data: ZoraWalletHoldingsResult): SwapZ
 
 export function zoraHoldingsDtoToBundle(data: ZoraWalletHoldingsResult): ZoraWalletHoldingsBundle {
   const balances: Record<string, string> = {}
+  const usdValues: Record<string, number> = {}
   const creator = data.creator.map((dto) => {
-    balances[dto.address.toLowerCase()] = dto.amountFormatted
+    const key = dto.address.toLowerCase()
+    balances[key] = dto.amountFormatted
+    usdValues[key] = dto.usdValue
     return dtoToSwapTokenOption(dto)
   })
   const content = data.content.map((dto) => {
-    balances[dto.address.toLowerCase()] = dto.amountFormatted
+    const key = dto.address.toLowerCase()
+    balances[key] = dto.amountFormatted
+    usdValues[key] = dto.usdValue
+    return dtoToSwapTokenOption(dto)
+  })
+  const trend = data.trend.map((dto) => {
+    const key = dto.address.toLowerCase()
+    balances[key] = dto.amountFormatted
+    usdValues[key] = dto.usdValue
     return dtoToSwapTokenOption(dto)
   })
   return {
     wallet: data.wallet,
     creator,
     content,
+    trend,
     balances,
+    usdValues,
     trayCreator: data.creator.map(dtoToTrayTokenHolding),
     trayContent: data.content.map(dtoToTrayTokenHolding),
+    trayTrend: data.trend.map(dtoToTrayTokenHolding),
   }
 }
 
@@ -154,24 +198,27 @@ function mergeTrayTokenHoldings(rows: TrayTokenHolding[]): TrayTokenHolding[] {
 /** Merge Zora holdings across multiple wallets (canonical CSW + external EOA). */
 export function mergeZoraHoldingsBundles(
   bundles: Array<ZoraWalletHoldingsBundle | null | undefined>,
-): { creator: TrayTokenHolding[]; content: TrayTokenHolding[] } {
+): { creator: TrayTokenHolding[]; content: TrayTokenHolding[]; trend: TrayTokenHolding[] } {
   const creatorRows: TrayTokenHolding[] = []
   const contentRows: TrayTokenHolding[] = []
+  const trendRows: TrayTokenHolding[] = []
   for (const bundle of bundles) {
     if (!bundle) continue
     creatorRows.push(...bundle.trayCreator)
     contentRows.push(...bundle.trayContent)
+    trendRows.push(...bundle.trayTrend)
   }
   return {
     creator: mergeTrayTokenHoldings(creatorRows),
     content: mergeTrayTokenHoldings(contentRows),
+    trend: mergeTrayTokenHoldings(trendRows),
   }
 }
 
 export async function fetchTrayZoraHoldingsForWallets(
   wallets: string[],
   options?: { topTokenCount?: number },
-): Promise<{ creator: TrayTokenHolding[]; content: TrayTokenHolding[] }> {
+): Promise<{ creator: TrayTokenHolding[]; content: TrayTokenHolding[]; trend: TrayTokenHolding[] }> {
   const normalized = wallets
     .map((w) => normalizeZoraHoldingsWalletAddress(w))
     .filter((w): w is Address => w != null)

@@ -42,6 +42,9 @@ function portfolio(overrides: Partial<{ totalUsdValue: number; topTokens: unknow
 describe('resolveTrayWalletPortfolio', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.hasDebankAccessKey.mockReturnValue(true)
+    mocks.hasEtherscanApiKey.mockReturnValue(true)
+    mocks.preferTrayPortfolioEtherscan.mockReturnValue(false)
   })
 
   it('prefers DeBank when lite portfolio has tokens', async () => {
@@ -79,5 +82,29 @@ describe('resolveTrayWalletPortfolio', () => {
     const resolved = await resolveTrayWalletPortfolio(ADDR)
     expect(resolved.source).toBe('base-etherscan')
     expect(getTrayWalletPortfolioDebank).not.toHaveBeenCalled()
+  })
+
+  it('falls back to DeBank when Etherscan-first returns an empty portfolio shell', async () => {
+    mocks.preferTrayPortfolioEtherscan.mockReturnValue(true)
+    getTrayWalletPortfolioBaseEtherscan.mockResolvedValue(
+      portfolio({ totalUsdValue: 0, topTokens: [] }),
+    )
+    getTrayWalletPortfolioDebank.mockResolvedValue(portfolio({ totalUsdValue: 42 }))
+
+    const resolved = await resolveTrayWalletPortfolio(ADDR)
+    expect(resolved.source).toBe('debank')
+    expect(resolved.portfolio?.totalUsdValue).toBe(42)
+    expect(getTrayWalletPortfolioDebank).toHaveBeenCalled()
+  })
+
+  it('does not return an empty Etherscan portfolio when DeBank has token rows', async () => {
+    getTrayWalletPortfolioDebank.mockResolvedValue(portfolio({ totalUsdValue: 15 }))
+    getTrayWalletPortfolioBaseEtherscan.mockResolvedValue(
+      portfolio({ totalUsdValue: 0, topTokens: [] }),
+    )
+
+    const resolved = await resolveTrayWalletPortfolio(ADDR)
+    expect(resolved.source).toBe('debank')
+    expect(resolved.portfolio?.topTokens.length).toBeGreaterThan(0)
   })
 })

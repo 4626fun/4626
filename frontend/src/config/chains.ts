@@ -2,7 +2,7 @@ import { base, mainnet, arbitrum, optimism, polygon } from 'wagmi/chains'
 import type { Chain } from 'wagmi/chains'
 
 export type SupportedChainId = 1 | 8453 | 42161 | 10 | 137
-const BASE_CHAIN_LOGO = '/base/base-chain-light.svg'
+const BASE_CHAIN_LOGO = '/base/base-square-blue.svg'
 
 export interface ChainMeta {
   id: SupportedChainId

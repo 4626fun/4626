@@ -18,6 +18,7 @@ import {
   toCoinbaseSmartAccount,
   waitForUserOperationReceipt,
 } from 'viem/account-abstraction'
+import { getProductionBaseReadClient } from '@/lib/base/productionBaseReadClient'
 import { logger } from '@/lib/observability/logger'
 import { trackEvent } from '@/lib/analytics/analytics'
 import { DATA_SUFFIX } from '@/lib/base/baseBuilderCodes'
@@ -38,12 +39,15 @@ import {
 import {
   classifyUserOpErrorCode,
   ensureUserOperationSucceeded,
+  extractUserOpReceiptTxHash,
   extractRevertInfo,
   formatMetaMessages,
   getErrorDiagnosticMessage,
   getRpcErrorDetails,
   isAccountNonceMismatchError,
   isDeterministicUserOpExecutionError,
+  isExecutionRevertedLikeError,
+  buildUserOpGasEstimateFailureError,
   isExpectedUserOpTimeoutError,
   isImmediateUserOpRetrySuppressedError,
   isLikelyVerificationGasLimitError,
@@ -283,20 +287,38 @@ function formatGasEstimate(estimate: any) {
   }
 }
 
-async function logUserOpEstimate(params: {
+const ZORA_UNIVERSAL_ROUTER_ADDRESS = '0x6ff5693b99212da76ad316178a184ab56d299b43' as const
+const ZORA_SWAP_EXECUTE_SELECTOR = '0x24856bc3' as const
+const ZORA_SWAP_CALL_GAS_LIMIT = 1_800_000n
+
+function isZoraUniversalRouterTarget(to: Address | undefined): boolean {
+  return String(to ?? '').toLowerCase() === ZORA_UNIVERSAL_ROUTER_ADDRESS
+}
+
+function inferZoraSwapCallGasLimit(
+  calls: Array<{ to: Address; value?: bigint; data?: Hex }>,
+): bigint | undefined {
+  if (calls.length !== 1) return undefined
+  const call = calls[0]!
+  if (call.to.toLowerCase() !== ZORA_UNIVERSAL_ROUTER_ADDRESS) return undefined
+  const dataPrefix = String(call.data ?? '').slice(0, 10).toLowerCase()
+  if (dataPrefix !== ZORA_SWAP_EXECUTE_SELECTOR) return undefined
+  return ZORA_SWAP_CALL_GAS_LIMIT
+}
+
+/** Fail fast when bundler simulation rejects a UserOp (stricter than eth_call preflight). */
+async function assertBundlerUserOpGasEstimate(params: {
   bundlerClient: any
   account: any
   calls: Array<{ to: Address; value?: bigint; data?: Hex }>
   verificationGasLimit: bigint
+  nonce?: bigint
+  callGasLimit?: bigint
   paymasterClient?: { getPaymasterData: any; getPaymasterStubData: any }
-}) {
-  if (!AA_DEBUG) return
+}): Promise<void> {
   const { bundlerClient, account, calls, verificationGasLimit, paymasterClient } = params
   const client: any = bundlerClient as any
-  if (typeof client?.prepareUserOperation !== 'function') {
-    logger.debug('[ERC-4337] estimateUserOperationGas unavailable', { reason: 'prepareUserOperation not supported' })
-    return
-  }
+
   const originalAccount = client.account
   if (!originalAccount) {
     client.account = account
@@ -309,43 +331,73 @@ async function logUserOpEstimate(params: {
             getPaymasterStubData: paymasterClient.getPaymasterStubData,
           }
         : undefined
-    const prepared = await client.prepareUserOperation({
-      account,
-      calls,
-      verificationGasLimit,
-      ...(paymaster ? { paymaster } : {}),
-    })
-    const userOperation = prepared?.userOperation ?? prepared
-    let estimate: any = null
-    if (typeof client?.estimateUserOperationGas === 'function') {
-      estimate = await client.estimateUserOperationGas({ userOperation, entryPoint: ENTRYPOINT_V06 })
-    } else if (typeof client?.request === 'function') {
-      estimate = await client.request({
-        method: 'eth_estimateUserOperationGas',
-        params: [userOperation, ENTRYPOINT_V06],
+    let userOperation: Record<string, unknown> | null = null
+    if (typeof client?.prepareUserOperation === 'function') {
+      const prepared = await client.prepareUserOperation({
+        account,
+        calls,
+        verificationGasLimit,
+        ...(typeof params.nonce === 'bigint' ? { nonce: params.nonce } : {}),
+        ...(typeof params.callGasLimit === 'bigint' ? { callGasLimit: params.callGasLimit } : {}),
+        ...(paymaster ? { paymaster } : {}),
       })
+      userOperation = (prepared?.userOperation ?? prepared) as Record<string, unknown>
+    } else if (typeof account?.encodeCalls === 'function') {
+      const callData = await account.encodeCalls(calls)
+      userOperation = {
+        sender: account.address,
+        nonce:
+          typeof params.nonce === 'bigint'
+            ? `0x${params.nonce.toString(16)}`
+            : undefined,
+        callData,
+        callGasLimit:
+          typeof params.callGasLimit === 'bigint'
+            ? `0x${params.callGasLimit.toString(16)}`
+            : undefined,
+        verificationGasLimit: `0x${verificationGasLimit.toString(16)}`,
+      }
     }
-    if (estimate) {
+
+    if (!userOperation) return
+
+    let estimate: unknown = null
+    try {
+      if (typeof client?.estimateUserOperationGas === 'function') {
+        estimate = await client.estimateUserOperationGas({ userOperation, entryPoint: ENTRYPOINT_V06 })
+      } else if (typeof client?.request === 'function') {
+        estimate = await client.request({
+          method: 'eth_estimateUserOperationGas',
+          params: [userOperation, ENTRYPOINT_V06],
+        })
+      }
+    } catch (e: unknown) {
+      const revertInfo = extractRevertInfo(e)
+      const lowerError = String(revertInfo.error ?? '').toLowerCase()
+      if (lowerError.includes('could not find an account to execute')) {
+        console.warn(
+          '[ERC-4337] estimateUserOperationGas skipped (account context missing); send may still fail',
+          { error: revertInfo.error },
+        )
+        return
+      }
+      console.warn('[ERC-4337] estimateUserOperationGas failed', {
+        error: revertInfo.error,
+        errorName: revertInfo.errorName,
+        revertData: revertInfo.revertData,
+      })
+      if (AA_DEBUG) {
+        logger.debug('[ERC-4337] estimateUserOperationGas failed', {
+          error: revertInfo.error,
+          revertData: revertInfo.revertData,
+          errorName: revertInfo.errorName,
+        })
+      }
+      throw buildUserOpGasEstimateFailureError(e, calls[0]?.to)
+    }
+    if (AA_DEBUG && estimate) {
       logger.debug('[ERC-4337] estimateUserOperationGas', formatGasEstimate(estimate))
     }
-  } catch (e: unknown) {
-    const revertInfo = extractRevertInfo(e)
-    const lowerError = String(revertInfo.error ?? '').toLowerCase()
-    if (lowerError.includes('could not find an account to execute')) {
-      logger.debug('[ERC-4337] estimateUserOperationGas skipped', {
-        reason: 'Missing local account context in debug pre-estimate path',
-      })
-      return
-    }
-    const errDetails: Record<string, unknown> = { 
-      error: revertInfo.error,
-      revertData: revertInfo.revertData,
-      errorName: revertInfo.errorName,
-    }
-    // Also include metaMessages if available (viem often includes helpful context)
-    const errAny = e as any
-    if (errAny?.metaMessages) errDetails.metaMessages = errAny.metaMessages
-    logger.debug('[ERC-4337] estimateUserOperationGas failed', errDetails)
   } finally {
     if (!originalAccount) {
       delete client.account
@@ -398,6 +450,87 @@ function clearPendingUserOpHash(smartWallet: Address, ownerIndex: number): void 
   } catch {
     // ignore
   }
+}
+
+/** Last submitted UserOp hash for wallet + owner-index nonce lane (browser session). */
+export function readPendingUserOpHash(smartWallet: Address, ownerIndex: number): Hex | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = sessionStorage.getItem(pendingUserOpStorageKey(smartWallet, ownerIndex))
+    if (!raw || !raw.startsWith('0x')) return null
+    return raw as Hex
+  } catch {
+    return null
+  }
+}
+
+/** Any in-session pending UserOp for this smart wallet (owner-index lane storage). */
+export function readAnyPendingUserOpHashForWallet(smartWallet: Address): Hex | null {
+  if (typeof window === 'undefined') return null
+  const prefix = `${PENDING_USEROP_STORAGE_PREFIX}${smartWallet.toLowerCase()}:`
+  try {
+    for (let i = 0; i < sessionStorage.length; i += 1) {
+      const key = sessionStorage.key(i)
+      if (!key?.startsWith(prefix)) continue
+      const raw = sessionStorage.getItem(key)
+      if (raw?.startsWith('0x')) return raw as Hex
+    }
+  } catch {
+    // ignore
+  }
+  return null
+}
+
+export function clearAllPendingUserOpHashesForWallet(smartWallet: Address): void {
+  if (typeof window === 'undefined') return
+  const prefix = `${PENDING_USEROP_STORAGE_PREFIX}${smartWallet.toLowerCase()}:`
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i -= 1) {
+      const key = sessionStorage.key(i)
+      if (key?.startsWith(prefix)) sessionStorage.removeItem(key)
+    }
+  } catch {
+    // ignore
+  }
+}
+
+/** Wait for a prior swap UserOp before signing a new Permit2 payload (nonce must advance on-chain). */
+export async function waitForPriorPendingUserOp(params: {
+  publicClient: PublicClientLike
+  bundlerUrl: string
+  userOpHash: Hex
+  maxWaitMs?: number
+  onStatus?: (message: string) => void
+}): Promise<'confirmed' | 'failed' | 'timeout'> {
+  const normalizedBundlerUrl = normalizeUrl(params.bundlerUrl)
+  const bundlerUrlForBundler = resolveBundlerUrlForNonPaymaster(
+    normalizedBundlerUrl,
+    (import.meta.env as Record<string, string | undefined>)['VITE_CDP_BUNDLER_URL'],
+  )
+  const shouldSendSessionToBundler = isPaymasterProxyUrl(bundlerUrlForBundler)
+  const bundlerClient = createBundlerClient({
+    client: params.publicClient as any,
+    dataSuffix: '0x',
+    transport: http(bundlerUrlForBundler, {
+      fetchOptions: {
+        credentials: shouldSendSessionToBundler ? 'include' : 'omit',
+      },
+    }),
+  })
+
+  params.onStatus?.('Waiting for your prior swap to confirm on Base…')
+  const result = await pollUserOperationStatus({
+    bundlerClient,
+    userOpHash: params.userOpHash,
+    options: {
+      maxDurationMs: params.maxWaitMs ?? 90_000,
+      pollIntervalMs: 2_000,
+      perCheckTimeoutMs: 8_000,
+    },
+  })
+  if (result.status === 'confirmed') return 'confirmed'
+  if (result.status === 'failed') return 'failed'
+  return 'timeout'
 }
 
 function transientUserOpRetryDelayMs(attemptIndex: number): number {
@@ -926,6 +1059,20 @@ export async function simulateSmartWalletCalls(params: {
       })
     }
     
+    if (calls.length === 1 && isZoraUniversalRouterTarget(calls[0]?.to)) {
+      if (!directCallResult?.success) {
+        return {
+          success: false,
+          error:
+            directCallResult?.error ??
+            'Zora router simulation did not complete. Refresh the quote and try again.',
+          revertData: directCallResult?.revertData,
+          errorName: directCallResult?.errorName,
+          directCallResult,
+        }
+      }
+    }
+
     return { success: true, directCallResult }
   } catch (e: unknown) {
     const revertInfo = extractRevertInfo(e)
@@ -935,14 +1082,17 @@ export async function simulateSmartWalletCalls(params: {
       /unauthorized/i.test(String(revertInfo.error ?? ''))
 
     // execute/executeBatch simulation is not routed through EntryPoint, so
-    // Unauthorized can be expected even when real ERC-4337 execution succeeds.
+    // Unauthorized can be expected on the wrapper — never treat that as success
+    // unless the underlying router call already succeeded.
     if (unauthorizedExecute) {
-      if (directCallResult && !directCallResult.success) {
+      if (calls.length === 1 && !directCallResult?.success) {
         return {
           success: false,
-          error: directCallResult.error,
-          revertData: directCallResult.revertData,
-          errorName: directCallResult.errorName,
+          error:
+            directCallResult?.error ??
+            'Underlying swap call simulation did not complete. Refresh the quote and try again.',
+          revertData: directCallResult?.revertData,
+          errorName: directCallResult?.errorName,
           directCallResult,
         }
       }
@@ -1134,6 +1284,11 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   onSubmissionStatus?: (message: string) => void
   /** When false, return after bundler accepts the UserOp; receipt can be polled separately. */
   waitForOnChainReceipt?: boolean
+  /**
+   * Use a fresh EntryPoint nonce key instead of ownerIndex (avoids AA25 when a prior
+   * swap UserOp is still in the bundler mempool on the owner-index lane).
+   */
+  preferEphemeralNonceLane?: boolean
 }): Promise<{ userOpHash: Hex; transactionHash: Hex | null }> {
   const {
     publicClient,
@@ -1213,8 +1368,12 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // Pre-flight simulation: fail fast when the underlying call would revert on-chain.
   if (!skipPreflightSimulation) {
     try {
+      const preflightClient =
+        attributedCalls.length === 1 && isZoraUniversalRouterTarget(attributedCalls[0]?.to)
+          ? getProductionBaseReadClient()
+          : publicClient
       const simResult = await simulateSmartWalletCalls({
-        publicClient,
+        publicClient: preflightClient,
         smartWallet,
         calls: attributedCalls,
       })
@@ -1788,6 +1947,25 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   }]
   let activeNonceKey = BigInt(ownerIndex)
   let triedEphemeralNonceKey = false
+  const pendingOwnerLaneHash = readAnyPendingUserOpHashForWallet(smartWallet)
+  if (params.preferEphemeralNonceLane || pendingOwnerLaneHash) {
+    triedEphemeralNonceKey = true
+    activeNonceKey = deriveEphemeralNonceKey(ownerIndex)
+    if (pendingOwnerLaneHash) {
+      clearPendingUserOpHash(smartWallet, ownerIndex)
+    }
+    if (AA_DEBUG) {
+      logger.debug('[ERC-4337] Using ephemeral nonce lane up front', {
+        smartWallet,
+        ownerIndex,
+        ephemeralNonceKey: String(activeNonceKey),
+        reason: params.preferEphemeralNonceLane
+          ? 'preferEphemeralNonceLane'
+          : 'pending_owner_lane_userop',
+        pendingOwnerLaneHash,
+      })
+    }
+  }
   const readEntryPointNonceForKey = async (nonceKey: bigint): Promise<bigint | undefined> => {
     try {
       const entryPointNonce = await withTimeout(
@@ -1858,12 +2036,15 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       logger.debug('[ERC-4337] Failed to read smart wallet balance', { smartWallet, error: msg })
     }
   }
+  const zoraCallGasLimit = inferZoraSwapCallGasLimit(attributedCalls)
   const sendWithVerificationGasLimit = async (verificationGasLimit: bigint, usePaymaster: boolean) => {
-    await logUserOpEstimate({
+    await assertBundlerUserOpGasEstimate({
       bundlerClient,
       account,
       calls: attributedCalls,
       verificationGasLimit,
+      nonce: correctNonce,
+      callGasLimit: zoraCallGasLimit,
       paymasterClient: usePaymaster ? paymasterClient : undefined,
     })
     return await sendUserOperation(bundlerClient, {
@@ -1871,6 +2052,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       calls: attributedCalls,
       verificationGasLimit,
       nonce: correctNonce,
+      ...(typeof zoraCallGasLimit === 'bigint' ? { callGasLimit: zoraCallGasLimit } : {}),
       ...(usePaymaster
         ? {
             paymaster: {
@@ -1935,6 +2117,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
               }
               if (!triedEphemeralNonceKey) {
                 triedEphemeralNonceKey = true
+                clearPendingUserOpHash(smartWallet, ownerIndex)
                 activeNonceKey = deriveEphemeralNonceKey(ownerIndex)
                 correctNonce = await readEntryPointNonceForKeyRequired(activeNonceKey)
                 nonceWaitAttempt = 0
@@ -1953,11 +2136,12 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
               }
               break
             }
+            const executionReverted = isExecutionRevertedLikeError(e)
             const hasNextTransientAttempt = transientAttempt < TRANSIENT_USER_OP_RETRY_DELAYS_MS.length
             if (
+              executionReverted ||
               !hasNextTransientAttempt ||
-              !isTransientUserOpSubmissionError(e) ||
-              isDeterministicUserOpExecutionError(e)
+              !isTransientUserOpSubmissionError(e)
             ) {
               break
             }
@@ -2051,6 +2235,9 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   }
 
   if (lastError) {
+    if (isPreflightSimulationRejection(lastError)) {
+      throw lastError
+    }
     const errMsg = getErrorDiagnosticMessage(lastError)
     const lc = errMsg.toLowerCase()
     const isExpectedTimeoutFailure = isExpectedUserOpTimeoutError(lastError)
@@ -2093,7 +2280,10 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         metaDetail,
       }
       if (!isExpectedTimeoutFailure || AA_DEBUG) {
-        console.error('[ERC-4337] UserOp failed', logPayload)
+        console.error(
+          `[ERC-4337] UserOp failed: ${errMsg}${errorDetails ? ` (${errorDetails})` : ''}`,
+          logPayload,
+        )
       } else {
         logger.debug('[ERC-4337] UserOp timeout (expected transient)', {
           smartWallet,
@@ -2270,6 +2460,22 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
           'Wait about 30 seconds, then try again once. Do not click Swap repeatedly.',
       )
     }
+    const failureRevert = extractRevertInfo(lastError)
+    if (failureRevert.revertData?.slice(0, 10).toLowerCase() === '0x3b99b53d') {
+      throw new Error(
+        'Swap route data from Zora is malformed or stale. Refresh the quote and try again.',
+      )
+    }
+    if (
+      triedEphemeralNonceKey &&
+      (isDeterministicUserOpExecutionError(lastError) ||
+        getErrorDiagnosticMessage(lastError).toLowerCase().includes('execution reverted'))
+    ) {
+      throw new Error(
+        'Swap simulation passed but the sponsored UserOp was rejected by the bundler. ' +
+          'Refresh the quote and try again once. If a prior swap is still pending on Base, wait for it to confirm first.',
+      )
+    }
     if (lc.includes('aa10') || lc.includes('sender already constructed')) {
       throw new Error('Smart wallet already exists at this address.')
     }
@@ -2330,6 +2536,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   }
 
   if (!waitForOnChainReceipt) {
+    clearAllPendingUserOpHashesForWallet(smartWallet)
     telemetryStatus = 'success'
     return {
       userOpHash,
@@ -2350,7 +2557,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     })
   }
   
-  clearPendingUserOpHash(smartWallet, ownerIndex)
+  clearAllPendingUserOpHashesForWallet(smartWallet)
   telemetryStatus = 'success'
   return { 
     userOpHash, 
@@ -2400,12 +2607,90 @@ function asError(error: unknown): Error {
   return new Error(String(error ?? 'Unknown error'))
 }
 
+async function readOnchainTransactionSucceeded(
+  publicClient: PublicClientLike | undefined,
+  txHash: Hex,
+): Promise<boolean> {
+  const client = publicClient as any
+  if (!client || typeof client.getTransactionReceipt !== 'function') return false
+  try {
+    const receipt = await client.getTransactionReceipt({ hash: txHash })
+    return receipt?.status === 'success'
+  } catch {
+    return false
+  }
+}
+
+async function readUserOperationReceipt(params: {
+  bundlerClient: any
+  publicClient?: PublicClientLike
+  userOpHash: Hex
+  perCheckTimeoutMs: number
+}): Promise<unknown | null> {
+  const { bundlerClient, publicClient, userOpHash, perCheckTimeoutMs } = params
+
+  if (typeof bundlerClient?.getUserOperationReceipt === 'function') {
+    try {
+      return await withTimeout(
+        bundlerClient.getUserOperationReceipt({ hash: userOpHash }),
+        perCheckTimeoutMs,
+        'eth_getUserOperationReceipt',
+      )
+    } catch {
+      // fall through to public RPC
+    }
+  } else if (bundlerClient) {
+    try {
+      return await withTimeout(
+        waitForUserOperationReceipt(bundlerClient, {
+          hash: userOpHash,
+          timeout: perCheckTimeoutMs,
+        }),
+        perCheckTimeoutMs,
+        'waitForUserOperationReceipt poll',
+      )
+    } catch {
+      // fall through
+    }
+  }
+
+  const client = publicClient as any
+  if (!client) return null
+  if (typeof client.getUserOperationReceipt === 'function') {
+    try {
+      return await withTimeout(
+        client.getUserOperationReceipt({ hash: userOpHash }),
+        perCheckTimeoutMs,
+        'publicClient.getUserOperationReceipt',
+      )
+    } catch {
+      return null
+    }
+  }
+  if (typeof client.request === 'function') {
+    try {
+      return await withTimeout(
+        client.request({
+          method: 'eth_getUserOperationReceipt',
+          params: [userOpHash],
+        }),
+        perCheckTimeoutMs,
+        'eth_getUserOperationReceipt',
+      )
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
 export async function pollUserOperationStatus(params: {
   bundlerClient: any
   userOpHash: Hex
+  publicClient?: PublicClientLike
   options?: PollUserOperationStatusOptions
 }): Promise<{ status: UserOpStatus; txHash?: Hex }> {
-  const { bundlerClient, userOpHash, options } = params
+  const { bundlerClient, userOpHash, publicClient, options } = params
   const pollIntervalMs = options?.pollIntervalMs ?? USEROP_POLL_INTERVAL_MS
   const maxDurationMs = options?.maxDurationMs ?? USEROP_POLL_MAX_DURATION_MS
   const perCheckTimeoutMs = options?.perCheckTimeoutMs ?? USEROP_POLL_TIMEOUT_MS
@@ -2427,31 +2712,25 @@ export async function pollUserOperationStatus(params: {
     }
 
     try {
-      let receipt: any = null
-      if (typeof bundlerClient?.getUserOperationReceipt === 'function') {
-        receipt = await withTimeout(
-          bundlerClient.getUserOperationReceipt({ hash: userOpHash }),
-          perCheckTimeoutMs,
-          'eth_getUserOperationReceipt',
-        )
-      } else {
-        receipt = await withTimeout(
-          waitForUserOperationReceipt(bundlerClient, {
-            hash: userOpHash,
-            timeout: perCheckTimeoutMs,
-          }),
-          perCheckTimeoutMs,
-          'waitForUserOperationReceipt poll',
-        )
-      }
+      const receipt = await readUserOperationReceipt({
+        bundlerClient,
+        publicClient,
+        userOpHash,
+        perCheckTimeoutMs,
+      })
 
-      const txHash = receipt?.receipt?.transactionHash
-      if (isHexString(txHash)) {
+      const txHash = extractUserOpReceiptTxHash(receipt)
+      if (txHash) {
         try {
           ensureUserOperationSucceeded(receipt, 'ERC-4337 status poll')
-          emitStatus('confirmed', txHash as Hex)
-          return { status: 'confirmed', txHash: txHash as Hex }
+          emitStatus('confirmed', txHash)
+          return { status: 'confirmed', txHash }
         } catch (error) {
+          const onchainOk = await readOnchainTransactionSucceeded(publicClient, txHash)
+          if (onchainOk) {
+            emitStatus('confirmed', txHash)
+            return { status: 'confirmed', txHash }
+          }
           const normalized = asError(error)
           options?.onError?.(normalized)
           emitStatus('failed')
@@ -2489,12 +2768,16 @@ export async function pollCanonicalUserOpTransactionHash(params: {
   userOpHash: Hex
   maxDurationMs?: number
   signal?: AbortSignal
+  onStatusChange?: (status: UserOpStatus, txHash?: Hex) => void
 }): Promise<Hex> {
   const normalizedBundlerUrl = normalizeUrl(params.bundlerUrl)
-  const bundlerUrlForBundler = resolveBundlerUrlForNonPaymaster(
-    normalizedBundlerUrl,
-    (import.meta.env as Record<string, string | undefined>)['VITE_CDP_BUNDLER_URL'],
-  )
+  // Prefer same-origin paymaster proxy for receipt polling (session + server-side CDP forward).
+  const bundlerUrlForBundler = isPaymasterProxyUrl(normalizedBundlerUrl)
+    ? normalizedBundlerUrl
+    : resolveBundlerUrlForNonPaymaster(
+        normalizedBundlerUrl,
+        (import.meta.env as Record<string, string | undefined>)['VITE_CDP_BUNDLER_URL'],
+      )
   const shouldSendSessionToBundler = isPaymasterProxyUrl(bundlerUrlForBundler)
   const bundlerClient = createBundlerClient({
     client: params.publicClient as any,
@@ -2508,10 +2791,12 @@ export async function pollCanonicalUserOpTransactionHash(params: {
 
   const result = await pollUserOperationStatus({
     bundlerClient,
+    publicClient: params.publicClient,
     userOpHash: params.userOpHash,
     options: {
       maxDurationMs: params.maxDurationMs ?? 180_000,
       signal: params.signal,
+      onStatusChange: params.onStatusChange,
     },
   })
 

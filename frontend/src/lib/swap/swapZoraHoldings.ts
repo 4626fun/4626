@@ -16,17 +16,14 @@ import {
 } from '@/lib/zora/walletHoldings'
 import { BASE_CHAIN_ID } from '@/lib/uniswap/swapUtils'
 
+import { formatSwapTokenBalanceLabel } from '@/lib/swap/swapDisplayAmount'
 import { enrichSwapTokenOption } from './swapTokenLabels'
 import { zoraCoinToSwapTokenOption } from './zoraTokenSearch'
 
 export type { SwapZoraHoldingRow } from '@/lib/zora/walletHoldings'
 
 function formatHoldingAmount(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return '0'
-  if (value >= 10_000) return value.toLocaleString(undefined, { maximumFractionDigits: 0 })
-  if (value >= 100) return value.toLocaleString(undefined, { maximumFractionDigits: 2 })
-  if (value >= 1) return value.toLocaleString(undefined, { maximumFractionDigits: 4 })
-  return value.toLocaleString(undefined, { maximumFractionDigits: 6 })
+  return formatSwapTokenBalanceLabel(value)
 }
 
 function normalizeOwnerAddress(ownerAddress: string): Address | null {
@@ -104,7 +101,9 @@ export async function resolveSwapZoraHoldings(params: {
     out.push({
       option: {
         ...enriched,
-        sectionTag: enriched.group === 'share' ? 'content' : 'creator',
+        sectionTag:
+          enriched.sectionTag ??
+          (enriched.group === 'share' ? 'content' : enriched.group === 'creator' ? 'creator' : undefined),
         verified: enriched.verified ?? true,
       },
       balanceFormatted: formatHoldingAmount(holding.amount),

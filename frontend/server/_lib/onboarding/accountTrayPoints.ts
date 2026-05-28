@@ -26,10 +26,13 @@ export type AccountTrayPointsPayload = {
     total: number
     invite: number
     signup: number
+    links: number
     tasks: number
     csw: number
     social: number
+    checkins: number
     bonus: number
+    agent: number
   }
   rank: {
     invite: number | null
@@ -43,7 +46,7 @@ export const EMPTY_ACCOUNT_TRAY_POINTS: AccountTrayPointsPayload = {
   signupId: 0,
   tier: 0,
   leaderboardEligible: false,
-  points: { total: 0, invite: 0, signup: 0, tasks: 0, csw: 0, social: 0, bonus: 0 },
+  points: { total: 0, invite: 0, signup: 0, links: 0, tasks: 0, csw: 0, social: 0, checkins: 0, bonus: 0, agent: 0 },
   rank: { invite: null, total: null },
   totalCount: 0,
   activity: [],

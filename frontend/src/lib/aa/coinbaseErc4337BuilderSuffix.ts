@@ -112,7 +112,15 @@ export function applyBuilderDataSuffixToCalls(
 
     if (isUniversalRouterTarget(c.to)) {
       const cleanedData = stripKnownBuilderDataSuffix(c.data, dataSuffix)
-      const candidateData = canonicalizeUniversalRouterExecuteCalldata(cleanedData ?? c.data)
+      const baseData = cleanedData ?? c.data
+      const basePrefix = String(baseData ?? '').slice(0, 10).toLowerCase()
+      const isZoraExecute = basePrefix === ZORA_UNIVERSAL_ROUTER_EXECUTE_SELECTOR
+      // Zora execute(bytes,bytes[]) embeds strict V4 route bytes. viem decode/re-encode can
+      // change padding and break the router decoder (SliceOutOfBounds on-chain) while a
+      // lenient eth_call still passes — preserve API bytes after suffix strip only.
+      const candidateData = isZoraExecute
+        ? baseData
+        : canonicalizeUniversalRouterExecuteCalldata(baseData)
       const candidatePrefix = String(candidateData ?? '').slice(0, 10).toLowerCase()
       const isCanonical =
         !!candidateData &&
@@ -128,6 +136,7 @@ export function applyBuilderDataSuffixToCalls(
           willPreserveCanonical: isCanonical,
           routerExecuteVariant:
             candidatePrefix === ZORA_UNIVERSAL_ROUTER_EXECUTE_SELECTOR ? 'zora' : 'uniswap',
+          zoraPassthrough: isZoraExecute,
         })
       }
 

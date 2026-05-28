@@ -1,4 +1,4 @@
-import { Check, Search, X } from 'lucide-react'
+import { Check, ChevronDown, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useDebounceValue } from 'usehooks-ts'
 import { useQueries } from '@tanstack/react-query'
@@ -17,11 +17,22 @@ import {
   fetchSwapAssetBalanceViaApi,
   swapAssetBalanceQueryKey,
 } from '@/lib/swap/useSwapAssetBalance'
+import {
+  formatSwapTokenBalanceLabel,
+  formatSwapTokenUsdLabel,
+} from '@/lib/swap/swapDisplayAmount'
 import { isOpaqueInternalTokenLabel } from '@/lib/swap/swapTokenLabels'
-import { BASE_CHAIN_ID, shortAddress, type TokenDisplay, type TokenOption } from '@/lib/uniswap/swapUtils'
+import { AKITA_DEFAULTS } from '@/config/contracts.defaults'
+import {
+  BASE_CHAIN_ID,
+  creatorCoinRawLogo,
+  shortAddress,
+  type TokenDisplay,
+  type TokenOption,
+} from '@/lib/uniswap/swapUtils'
 
 export type SwapTokenOption = TokenOption & {
-  sectionTag?: 'core' | 'creator' | 'content'
+  sectionTag?: 'core' | 'creator' | 'content' | 'trend'
   verified?: boolean
 }
 
@@ -42,11 +53,52 @@ type AddressCandidate = TokenDisplay & {
 const ADDRESS_METADATA_CACHE_KEY = 'swap.addressMetadataCache.v1'
 const QUICK_PICK_SYMBOLS = ['ETH', 'WETH', 'USDC', 'USDT', 'CBBTC', 'ZORA'] as const
 
+const TRENDING_PINNED: Array<{ address: `0x${string}`; fallback: SwapTokenOption }> = [
+  {
+    address: AKITA_DEFAULTS.token,
+    fallback: {
+      address: AKITA_DEFAULTS.token,
+      symbol: 'AKITA',
+      name: 'Akita',
+      group: 'creator',
+      sectionTag: 'creator',
+      verified: true,
+      chainId: BASE_CHAIN_ID,
+      logoUrl: creatorCoinRawLogo(AKITA_DEFAULTS.token),
+    },
+  },
+]
+
+function resolveTrendingTokens(allOptions: SwapTokenOption[]): SwapTokenOption[] {
+  return TRENDING_PINNED.map(({ address, fallback }) => {
+    const match = allOptions.find((option) => option.address.toLowerCase() === address.toLowerCase())
+    return match ?? fallback
+  })
+}
+
+function parseBalanceSortValue(label: string | null | undefined): number {
+  if (!label) return 0
+  const normalized = label.replace(/,/g, '')
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+}
+
 function matchesQuickPickSymbol(symbol: string): boolean {
   const upper = symbol.trim().toUpperCase()
   return QUICK_PICK_SYMBOLS.some((candidate) => candidate === upper)
 }
 const MAX_BALANCE_LOOKUPS = 18
+const ZORA_WALLET_CREATOR_SECTION = 'Your Zora creator coins'
+const ZORA_WALLET_TREND_SECTION = 'Your Zora trend coins'
+const ZORA_WALLET_CONTENT_SECTION = 'Your Zora content coins'
+const COLLAPSIBLE_ZORA_WALLET_SECTIONS = new Set([
+  ZORA_WALLET_CREATOR_SECTION,
+  ZORA_WALLET_TREND_SECTION,
+  ZORA_WALLET_CONTENT_SECTION,
+])
+const ZORA_MIN_USD_FILTER = 0.01
+
+type TokenRow = { option: SwapTokenOption; section: string }
 
 type TokenSelectorModalProps = {
   open: boolean
@@ -58,6 +110,7 @@ type TokenSelectorModalProps = {
   balanceOwnerAddress?: Address | null
   zoraHoldingOptions?: SwapTokenOption[]
   zoraHoldingBalances?: Record<string, string>
+  zoraHoldingUsdValues?: Record<string, number>
   zoraHoldingsLoading?: boolean
   isSearchLoading?: boolean
   onQueryChange: (value: string) => void
@@ -94,21 +147,50 @@ function isAddressLike(value: string): boolean {
   return /^0x[a-f0-9]{40}$/.test(trimmed)
 }
 
-function tokenSection(option: SwapTokenOption): 'core' | 'creator' | 'content' {
+function tokenSection(option: SwapTokenOption): 'core' | 'creator' | 'content' | 'trend' {
+  if (option.sectionTag === 'trend') return 'trend'
   if (option.sectionTag === 'creator') return 'creator'
   if (option.sectionTag === 'content') return 'content'
   if (option.group === 'core') return 'core'
   return 'content'
 }
 
+function passesZoraUsdFilter(usdValue: number | undefined, minUsdOnly: boolean): boolean {
+  if (!minUsdOnly) return true
+  if (!Number.isFinite(usdValue) || usdValue <= 0) return true
+  return usdValue > ZORA_MIN_USD_FILTER
+}
+
+function sortZoraWalletHoldings(
+  options: SwapTokenOption[],
+  balances: Record<string, string>,
+  usdValues: Record<string, number>,
+  minUsdOnly: boolean,
+): SwapTokenOption[] {
+  return options
+    .filter((option) => passesZoraUsdFilter(usdValues[option.address.toLowerCase()], minUsdOnly))
+    .sort((a, b) => {
+      const keyA = a.address.toLowerCase()
+      const keyB = b.address.toLowerCase()
+      const usdA = usdValues[keyA] ?? 0
+      const usdB = usdValues[keyB] ?? 0
+      if (usdB !== usdA) return usdB - usdA
+      return parseBalanceSortValue(balances[keyB]) - parseBalanceSortValue(balances[keyA])
+    })
+}
+
 function formatSectionLabel(section: string): string {
   switch (section) {
+    case 'Trending':
+      return 'Trending'
+    case ZORA_WALLET_CREATOR_SECTION:
+      return 'Creator coins'
+    case ZORA_WALLET_TREND_SECTION:
+      return 'Trend coins'
+    case ZORA_WALLET_CONTENT_SECTION:
+      return 'Content coins'
     case 'Recently used':
       return 'Recent'
-    case 'Your Zora creator coins':
-      return 'Your Zora creator coins'
-    case 'Your Zora content coins':
-      return 'Your Zora content coins'
     case 'Curated top tokens':
       return 'Popular tokens'
     case 'Creator coins':
@@ -122,16 +204,61 @@ function formatSectionLabel(section: string): string {
   }
 }
 
+function resolveTokenRowAmountLabels(params: {
+  address: string
+  symbol: string
+  balanceByAddress: Map<string, string>
+  zoraHoldingBalances: Record<string, string>
+  zoraHoldingUsdValues: Record<string, number>
+}): { balanceLabel: string | null; usdLabel: string | null } {
+  const key = params.address.toLowerCase()
+  const rawBalance = params.balanceByAddress.get(key) ?? params.zoraHoldingBalances[key] ?? null
+  const balanceLabel = rawBalance
+    ? formatSwapTokenBalanceLabel(rawBalance, params.symbol)
+    : null
+  const usdLabel = formatSwapTokenUsdLabel(params.zoraHoldingUsdValues[key])
+  return {
+    balanceLabel: balanceLabel && balanceLabel !== '0' ? balanceLabel : null,
+    usdLabel,
+  }
+}
+
+function CollapsibleSectionHeader(props: {
+  label: string
+  count: number
+  open: boolean
+  onToggle: () => void
+}) {
+  const { label, count, open, onToggle } = props
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      className="sticky top-0 z-[1] flex w-full items-center justify-between gap-2 bg-[#131313]/95 px-2 pb-1 pt-2 text-left backdrop-blur-sm"
+    >
+      <span className="text-[11px] font-medium text-zinc-500">
+        {label}
+        <span className="ml-1 tabular-nums text-zinc-600">({count})</span>
+      </span>
+      <ChevronDown
+        className={cn('h-3.5 w-3.5 shrink-0 text-zinc-500 transition-transform', open ? 'rotate-180' : 'rotate-0')}
+        aria-hidden
+      />
+    </button>
+  )
+}
+
 function NetworkChip({ chainId }: { chainId: SupportedChainId }) {
   const meta = getChainMeta(chainId)
   if (!meta) return null
   return (
     <div
-      className="flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-white/8 bg-white/[0.04] px-2.5"
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.04]"
       title={meta.name}
+      aria-label={meta.name}
     >
-      <img src={meta.logoUrl} alt="" className="h-5 w-5 rounded-md object-cover" />
-      <span className="text-xs font-medium text-zinc-300">{meta.shortName}</span>
+      <img src={meta.logoUrl} alt="" className="h-6 w-6 rounded-[6px] object-contain" />
     </div>
   )
 }
@@ -141,13 +268,18 @@ function TokenSelectorRow(props: {
   isActive: boolean
   isSelected: boolean
   balanceLabel?: string | null
+  usdLabel?: string | null
   chainLogoUrl?: string
   onChoose: () => void
   onHover: () => void
 }) {
-  const { option, isActive, isSelected, balanceLabel, chainLogoUrl, onChoose, onHover } = props
+  const { option, isActive, isSelected, balanceLabel, usdLabel, chainLogoUrl, onChoose, onHover } = props
   const isUnverified = option.verified === false
-  const showAddressHint = isUnverified || option.sectionTag === 'creator' || option.sectionTag === 'content'
+  const showAddressHint =
+    isUnverified ||
+    option.sectionTag === 'creator' ||
+    option.sectionTag === 'content' ||
+    option.sectionTag === 'trend'
   const subtitleName =
     option.name &&
     option.name.toLowerCase() !== option.symbol.toLowerCase() &&
@@ -155,7 +287,9 @@ function TokenSelectorRow(props: {
       ? option.name
       : option.sectionTag === 'creator'
         ? 'Creator coin'
-        : option.name
+        : option.sectionTag === 'trend'
+          ? 'Trend coin'
+          : option.name
 
   return (
     <button
@@ -180,7 +314,7 @@ function TokenSelectorRow(props: {
           <img
             src={chainLogoUrl}
             alt=""
-            className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-[5px] border border-[#131313] bg-[#131313] object-cover"
+            className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-[5px] border border-[#131313] bg-[#131313] object-contain"
           />
         ) : null}
       </div>
@@ -191,6 +325,11 @@ function TokenSelectorRow(props: {
           {option.sectionTag === 'creator' ? (
             <span className="shrink-0 rounded-md bg-brand-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-brand-200">
               Creator
+            </span>
+          ) : null}
+          {option.sectionTag === 'trend' ? (
+            <span className="shrink-0 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-200">
+              Trend
             </span>
           ) : null}
           {option.sectionTag === 'content' ? (
@@ -217,9 +356,14 @@ function TokenSelectorRow(props: {
         </div>
       </div>
 
-      <div className="flex shrink-0 flex-col items-end gap-0.5 pl-1">
-        {balanceLabel ? (
+      <div className="flex min-w-[4.75rem] shrink-0 flex-col items-end gap-0.5 pl-1">
+        {usdLabel ? (
+          <span className="text-sm font-medium tabular-nums text-zinc-200">{usdLabel}</span>
+        ) : balanceLabel ? (
           <span className="text-sm font-medium tabular-nums text-zinc-200">{balanceLabel}</span>
+        ) : null}
+        {usdLabel && balanceLabel ? (
+          <span className="text-xs tabular-nums text-zinc-500">{balanceLabel}</span>
         ) : null}
         {isSelected ? <Check className="h-4 w-4 text-brand-primary" strokeWidth={2.5} /> : null}
       </div>
@@ -237,6 +381,7 @@ export function TokenSelectorModal({
   balanceOwnerAddress,
   zoraHoldingOptions = [],
   zoraHoldingBalances = {},
+  zoraHoldingUsdValues = {},
   zoraHoldingsLoading = false,
   isSearchLoading = false,
   onQueryChange,
@@ -256,7 +401,12 @@ export function TokenSelectorModal({
 
   const listRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const contentAutoCollapsedRef = useRef(false)
   const [activeIndex, setActiveIndex] = useState(0)
+  const [minUsdOnly, setMinUsdOnly] = useState(false)
+  const [walletCreatorOpen, setWalletCreatorOpen] = useState(true)
+  const [walletTrendOpen, setWalletTrendOpen] = useState(true)
+  const [walletContentOpen, setWalletContentOpen] = useState(true)
 
   const publicClient = usePublicClient({ chainId: chainId ?? undefined })
   const isAddressSearchActive = isAddressSearch && Boolean(trimmedQuery)
@@ -271,12 +421,12 @@ export function TokenSelectorModal({
     const filteredHoldings = zoraHoldingOptions.filter((option) => tokenMatches(option, trimmedQuery))
     if (!isAddressSearch || !trimmedQuery) {
       const holdingAddresses = new Set(filteredHoldings.map((option) => option.address.toLowerCase()))
-      const holdingsCreator = filteredHoldings.filter(
-        (o) => o.sectionTag === 'creator' || (o.group === 'creator' && o.sectionTag !== 'content'),
-      )
+      const holdingsCreator = filteredHoldings.filter((o) => o.sectionTag === 'creator')
+      const holdingsTrend = filteredHoldings.filter((o) => o.sectionTag === 'trend')
       const holdingsContent = filteredHoldings.filter((o) => o.sectionTag === 'content' || o.group === 'share')
       return {
         holdingsCreator,
+        holdingsTrend,
         holdingsContent,
         core: filtered.filter((o) => tokenSection(o) === 'core'),
         creator: filtered.filter(
@@ -296,8 +446,60 @@ export function TokenSelectorModal({
           .filter((option): option is SwapTokenOption => option != null),
       }
     }
-    return { holdingsCreator: [], holdingsContent: [], core: [], creator: [], content: [], recent: [] }
+    return { holdingsCreator: [], holdingsTrend: [], holdingsContent: [], core: [], creator: [], content: [], recent: [] }
   }, [isAddressSearch, tokenOptions, trimmedQuery, recentTokenAddresses, zoraHoldingOptions])
+
+  const zoraCreatorHoldings = useMemo(() => {
+    if (trimmedQuery) return []
+    return sortZoraWalletHoldings(
+      matchedTokens.holdingsCreator,
+      zoraHoldingBalances,
+      zoraHoldingUsdValues,
+      minUsdOnly,
+    )
+  }, [matchedTokens.holdingsCreator, minUsdOnly, trimmedQuery, zoraHoldingBalances, zoraHoldingUsdValues])
+
+  const zoraContentHoldings = useMemo(() => {
+    if (trimmedQuery) return []
+    return sortZoraWalletHoldings(
+      matchedTokens.holdingsContent,
+      zoraHoldingBalances,
+      zoraHoldingUsdValues,
+      minUsdOnly,
+    )
+  }, [matchedTokens.holdingsContent, minUsdOnly, trimmedQuery, zoraHoldingBalances, zoraHoldingUsdValues])
+
+  const zoraTrendHoldings = useMemo(() => {
+    if (trimmedQuery) return []
+    return sortZoraWalletHoldings(
+      matchedTokens.holdingsTrend,
+      zoraHoldingBalances,
+      zoraHoldingUsdValues,
+      minUsdOnly,
+    )
+  }, [matchedTokens.holdingsTrend, minUsdOnly, trimmedQuery, zoraHoldingBalances, zoraHoldingUsdValues])
+
+  const hasZoraWalletHoldings =
+    zoraCreatorHoldings.length + zoraTrendHoldings.length + zoraContentHoldings.length > 0
+
+  useEffect(() => {
+    if (!open) {
+      setMinUsdOnly(false)
+      setWalletCreatorOpen(true)
+      setWalletTrendOpen(true)
+      setWalletContentOpen(true)
+      contentAutoCollapsedRef.current = false
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    if (contentAutoCollapsedRef.current) return
+    if (zoraContentHoldings.length >= 4) {
+      setWalletContentOpen(false)
+      contentAutoCollapsedRef.current = true
+    }
+  }, [open, zoraContentHoldings.length])
 
   const quickPickTokens = useMemo(() => {
     if (trimmedQuery) return []
@@ -432,7 +634,12 @@ export function TokenSelectorModal({
     setAddressLookupError(null)
     setNeedsUnverifiedConfirm(null)
     setAddressCandidate(null)
+    setActiveIndex(0)
   }, [trimmedQuery])
+
+  useEffect(() => {
+    setActiveIndex(0)
+  }, [minUsdOnly, walletCreatorOpen, walletTrendOpen, walletContentOpen])
 
   const rows = useMemo(() => {
     const list: { option: SwapTokenOption; section: string }[] = []
@@ -455,44 +662,108 @@ export function TokenSelectorModal({
     }
 
     const seen = new Set<string>()
-    matchedTokens.holdingsCreator.forEach((option) => {
+    const trendingAddresses = new Set(
+      resolveTrendingTokens(tokenOptions).map((option) => option.address.toLowerCase()),
+    )
+
+    if (!trimmedQuery) {
+      resolveTrendingTokens(tokenOptions).forEach((option) => {
+        const key = option.address.toLowerCase()
+        if (seen.has(key)) return
+        seen.add(key)
+        list.push({ option, section: 'Trending' })
+      })
+    }
+
+    const zoraHoldingAddresses = new Set([
+      ...zoraCreatorHoldings.map((option) => option.address.toLowerCase()),
+      ...zoraTrendHoldings.map((option) => option.address.toLowerCase()),
+      ...zoraContentHoldings.map((option) => option.address.toLowerCase()),
+    ])
+
+    zoraCreatorHoldings.forEach((option) => {
       const key = option.address.toLowerCase()
-      if (seen.has(key)) return
+      if (seen.has(key) || trendingAddresses.has(key)) return
       seen.add(key)
-      list.push({ option, section: 'Your Zora creator coins' })
+      list.push({ option, section: ZORA_WALLET_CREATOR_SECTION })
     })
-    matchedTokens.holdingsContent.forEach((option) => {
+
+    zoraTrendHoldings.forEach((option) => {
       const key = option.address.toLowerCase()
-      if (seen.has(key)) return
+      if (seen.has(key) || trendingAddresses.has(key)) return
       seen.add(key)
-      list.push({ option, section: 'Your Zora content coins' })
+      list.push({ option, section: ZORA_WALLET_TREND_SECTION })
     })
+
+    zoraContentHoldings.forEach((option) => {
+      const key = option.address.toLowerCase()
+      if (seen.has(key) || trendingAddresses.has(key)) return
+      seen.add(key)
+      list.push({ option, section: ZORA_WALLET_CONTENT_SECTION })
+    })
+
+    const pushUnlessSeen = (option: SwapTokenOption, section: string) => {
+      const key = option.address.toLowerCase()
+      if (seen.has(key) || trendingAddresses.has(key) || zoraHoldingAddresses.has(key)) return
+      seen.add(key)
+      list.push({ option, section })
+    }
+
     matchedTokens.recent.forEach((option) => {
-      const key = option.address.toLowerCase()
-      if (seen.has(key)) return
-      seen.add(key)
-      list.push({ option, section: 'Recently used' })
+      pushUnlessSeen(option, 'Recently used')
     })
     matchedTokens.core.forEach((option) => {
-      const key = option.address.toLowerCase()
-      if (seen.has(key)) return
-      seen.add(key)
-      list.push({ option, section: 'Curated top tokens' })
+      pushUnlessSeen(option, 'Curated top tokens')
     })
     matchedTokens.creator.forEach((option) => {
-      const key = option.address.toLowerCase()
-      if (seen.has(key)) return
-      seen.add(key)
-      list.push({ option, section: 'Creator coins' })
+      pushUnlessSeen(option, 'Creator coins')
     })
     matchedTokens.content.forEach((option) => {
-      const key = option.address.toLowerCase()
-      if (seen.has(key)) return
-      seen.add(key)
-      list.push({ option, section: 'Content coins' })
+      pushUnlessSeen(option, 'Content coins')
     })
     return list
-  }, [addressCandidate, chainIdForLookup, isAddressSearchActive, matchedTokens])
+  }, [
+    addressCandidate,
+    chainIdForLookup,
+    isAddressSearchActive,
+    matchedTokens,
+    tokenOptions,
+    trimmedQuery,
+    zoraContentHoldings,
+    zoraCreatorHoldings,
+    zoraTrendHoldings,
+  ])
+
+  const isZoraWalletSectionOpen = (section: string) => {
+    if (section === ZORA_WALLET_CREATOR_SECTION) return walletCreatorOpen
+    if (section === ZORA_WALLET_TREND_SECTION) return walletTrendOpen
+    if (section === ZORA_WALLET_CONTENT_SECTION) return walletContentOpen
+    return true
+  }
+
+  const visibleRows = useMemo(
+    () =>
+      rows.filter((row) => {
+        if (row.section === ZORA_WALLET_CREATOR_SECTION) return walletCreatorOpen
+        if (row.section === ZORA_WALLET_TREND_SECTION) return walletTrendOpen
+        if (row.section === ZORA_WALLET_CONTENT_SECTION) return walletContentOpen
+        return true
+      }),
+    [rows, walletContentOpen, walletCreatorOpen, walletTrendOpen],
+  )
+
+  const rowSections = useMemo(() => {
+    const order: string[] = []
+    const grouped = new Map<string, TokenRow[]>()
+    for (const row of rows) {
+      if (!grouped.has(row.section)) {
+        order.push(row.section)
+        grouped.set(row.section, [])
+      }
+      grouped.get(row.section)!.push(row)
+    }
+    return order.map((section) => ({ section, rows: grouped.get(section) ?? [] }))
+  }, [rows])
 
   const balanceLookupAddresses = useMemo(() => {
     if (!balanceOwnerAddress || chainIdForLookup !== BASE_CHAIN_ID) return []
@@ -505,10 +776,24 @@ export function TokenSelectorModal({
       addresses.push(value)
     }
     zoraHoldingOptions.forEach((option) => push(option.address))
+    resolveTrendingTokens(tokenOptions).forEach((option) => push(option.address))
+    zoraCreatorHoldings.forEach((option) => push(option.address))
+    zoraTrendHoldings.forEach((option) => push(option.address))
+    zoraContentHoldings.forEach((option) => push(option.address))
     quickPickTokens.forEach((option) => push(option.address))
-    rows.slice(0, MAX_BALANCE_LOOKUPS).forEach(({ option }) => push(option.address))
+    visibleRows.slice(0, MAX_BALANCE_LOOKUPS).forEach(({ option }) => push(option.address))
     return addresses.slice(0, MAX_BALANCE_LOOKUPS)
-  }, [balanceOwnerAddress, chainIdForLookup, quickPickTokens, rows, zoraHoldingOptions])
+  }, [
+    balanceOwnerAddress,
+    chainIdForLookup,
+    quickPickTokens,
+    visibleRows,
+    tokenOptions,
+    zoraContentHoldings,
+    zoraCreatorHoldings,
+    zoraTrendHoldings,
+    zoraHoldingOptions,
+  ])
 
   const balanceQueries = useQueries({
     queries: balanceLookupAddresses.map((tokenAddress) => ({
@@ -543,23 +828,23 @@ export function TokenSelectorModal({
   }, [open])
 
   useEffect(() => {
-    if (activeIndex >= rows.length) setActiveIndex(0)
-  }, [activeIndex, rows.length])
+    if (activeIndex >= visibleRows.length) setActiveIndex(0)
+  }, [activeIndex, visibleRows.length])
 
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {
       if (!open) return
       if (event.key === 'ArrowDown') {
         event.preventDefault()
-        setActiveIndex((prev) => (prev + 1) % Math.max(1, rows.length))
+        setActiveIndex((prev) => (prev + 1) % Math.max(1, visibleRows.length))
       }
       if (event.key === 'ArrowUp') {
         event.preventDefault()
-        setActiveIndex((prev) => (prev - 1 + Math.max(1, rows.length)) % Math.max(1, rows.length))
+        setActiveIndex((prev) => (prev - 1 + Math.max(1, visibleRows.length)) % Math.max(1, visibleRows.length))
       }
-      if (event.key === 'Enter' && rows[activeIndex]) {
+      if (event.key === 'Enter' && visibleRows[activeIndex]) {
         event.preventDefault()
-        const option = rows[activeIndex].option
+        const option = visibleRows[activeIndex].option
         if (option.verified === false) {
           setNeedsUnverifiedConfirm(option)
           return
@@ -569,15 +854,15 @@ export function TokenSelectorModal({
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [activeIndex, onSelect, open, rows])
+  }, [activeIndex, onSelect, open, visibleRows])
 
   useEffect(() => {
-    const active = rows[activeIndex]
+    const active = visibleRows[activeIndex]
     if (!active) return
     const selector = `[data-token-row="${active.option.address.toLowerCase()}"]`
     const node = listRef.current?.querySelector<HTMLButtonElement>(selector)
     node?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-  }, [activeIndex, rows])
+  }, [activeIndex, visibleRows])
 
   function choose(option: SwapTokenOption) {
     if (option.verified === false) {
@@ -599,6 +884,11 @@ export function TokenSelectorModal({
     setAddressLookupError(null)
     setAddressLookupAttempt((attempt) => attempt + 1)
   }
+
+  const displaySections = useMemo(
+    () => rowSections.filter(({ rows: sectionRows }) => sectionRows.length > 0),
+    [rowSections],
+  )
 
   const listLoading =
     (isSearchLoading && Boolean(trimmedQuery) && !isAddressSearchActive) ||
@@ -659,13 +949,34 @@ export function TokenSelectorModal({
                       <img
                         src={chainMeta.logoUrl}
                         alt=""
-                        className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-[4px] border border-[#131313] bg-[#131313]"
+                        className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-[4px] border border-[#131313] bg-[#131313] object-contain"
                       />
                     ) : null}
                   </div>
                   <span className="text-[11px] font-semibold text-zinc-200">{option.symbol}</span>
                 </button>
               ))}
+            </div>
+          ) : null}
+
+          {!trimmedQuery && zoraHoldingOptions.length > 0 ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMinUsdOnly((value) => !value)}
+                aria-pressed={minUsdOnly}
+                className={cn(
+                  'rounded-full border px-2.5 py-1 text-[11px] font-medium transition',
+                  minUsdOnly
+                    ? 'border-brand-primary/40 bg-brand-primary/15 text-brand-100'
+                    : 'border-white/10 bg-white/[0.03] text-zinc-400 hover:border-white/16 hover:text-zinc-200',
+                )}
+              >
+                &gt; $0.01
+              </button>
+              {minUsdOnly && !hasZoraWalletHoldings ? (
+                <span className="text-[11px] text-zinc-500">No Zora holdings above $0.01</span>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -704,14 +1015,18 @@ export function TokenSelectorModal({
             </div>
           ) : null}
 
-          {!listLoading && rows.length === 0 && !addressLookupLoading ? (
+          {!listLoading && visibleRows.length === 0 && !addressLookupLoading ? (
             <div className="py-14 text-center">
               <p className="text-sm font-medium text-zinc-300">No tokens found</p>
-              <p className="mt-1 text-xs text-zinc-500">Try a symbol, creator handle, or 0x address</p>
+              <p className="mt-1 text-xs text-zinc-500">
+                {minUsdOnly && zoraHoldingOptions.length > 0
+                  ? 'Try turning off the $0.01 filter or search by symbol'
+                  : 'Try a symbol, creator handle, or 0x address'}
+              </p>
             </div>
           ) : null}
 
-          {!listLoading && zoraHoldingsLoading && !trimmedQuery && rows.length === 0 ? (
+          {!listLoading && zoraHoldingsLoading && !trimmedQuery && visibleRows.length === 0 ? (
             <div className="flex items-center justify-center gap-2 py-10 text-sm text-zinc-500">
               <Spinner size="sm" />
               Loading your Zora coins…
@@ -719,33 +1034,67 @@ export function TokenSelectorModal({
           ) : null}
 
           {!listLoading
-            ? rows.map(({ option, section }, idx) => {
-                const isActive = activeIndex === idx
-                const isSelected = option.address.toLowerCase() === selectedToken.toLowerCase()
-                const showSectionHeader = idx === 0 || rows[idx - 1]?.section !== section
-                return (
-                  <div key={`${section}-${option.address}`}>
-                    {showSectionHeader ? (
-                      <div className="sticky top-0 z-[1] bg-[#131313]/95 px-2 pb-1 pt-2 text-[11px] font-medium text-zinc-500 backdrop-blur-sm">
-                        {formatSectionLabel(section)}
-                      </div>
-                    ) : null}
-                    <TokenSelectorRow
-                      option={option}
-                      isActive={isActive}
-                      isSelected={isSelected}
-                      balanceLabel={
-                        balanceByAddress.get(option.address.toLowerCase()) ??
-                        zoraHoldingBalances[option.address.toLowerCase()] ??
-                        null
-                      }
-                      chainLogoUrl={chainMeta?.logoUrl}
-                      onChoose={() => choose(option)}
-                      onHover={() => setActiveIndex(idx)}
-                    />
-                  </div>
-                )
-              })
+            ? (() => {
+                let visibleIdx = 0
+                return displaySections.map(({ section, rows: sectionRows }) => {
+                  const sectionOpen = isZoraWalletSectionOpen(section)
+                  const collapsible = COLLAPSIBLE_ZORA_WALLET_SECTIONS.has(section)
+                  return (
+                    <div key={section}>
+                      {collapsible ? (
+                        <CollapsibleSectionHeader
+                          label={formatSectionLabel(section)}
+                          count={sectionRows.length}
+                          open={sectionOpen}
+                          onToggle={() => {
+                            if (section === ZORA_WALLET_CREATOR_SECTION) {
+                              setWalletCreatorOpen((value) => !value)
+                            }
+                            if (section === ZORA_WALLET_TREND_SECTION) {
+                              setWalletTrendOpen((value) => !value)
+                            }
+                            if (section === ZORA_WALLET_CONTENT_SECTION) {
+                              setWalletContentOpen((value) => !value)
+                            }
+                          }}
+                        />
+                      ) : (
+                        <div className="sticky top-0 z-[1] bg-[#131313]/95 px-2 pb-1 pt-2 text-[11px] font-medium text-zinc-500 backdrop-blur-sm">
+                          {formatSectionLabel(section)}
+                        </div>
+                      )}
+                      {sectionOpen
+                        ? sectionRows.map(({ option }) => {
+                            const isActive = activeIndex === visibleIdx
+                            const isSelected = option.address.toLowerCase() === selectedToken.toLowerCase()
+                            const { balanceLabel, usdLabel } = resolveTokenRowAmountLabels({
+                              address: option.address,
+                              symbol: option.symbol,
+                              balanceByAddress,
+                              zoraHoldingBalances,
+                              zoraHoldingUsdValues,
+                            })
+                            const row = (
+                              <TokenSelectorRow
+                                key={`${section}-${option.address}`}
+                                option={option}
+                                isActive={isActive}
+                                isSelected={isSelected}
+                                balanceLabel={balanceLabel}
+                                usdLabel={usdLabel}
+                                chainLogoUrl={chainMeta?.logoUrl}
+                                onChoose={() => choose(option)}
+                                onHover={() => setActiveIndex(visibleIdx)}
+                              />
+                            )
+                            visibleIdx += 1
+                            return row
+                          })
+                        : null}
+                    </div>
+                  )
+                })
+              })()
             : null}
         </div>
 

@@ -7,6 +7,7 @@ import {
   layoutToPolyline,
   type ExploreHeroSparklinePoint,
 } from '@/components/explore/exploreHeroSparklineUtils'
+import { EXPLORE_ACCENT_HEX } from '@/lib/explore/exploreTheme'
 
 const FILL_LAYOUT_WIDTH = 120
 const FILL_LAYOUT_HEIGHT = 64
@@ -26,7 +27,7 @@ export function ExploreHeroSparkline({
   history,
   width = 72,
   height = 28,
-  stroke = '#38BDF8',
+  stroke = EXPLORE_ACCENT_HEX,
   className = '',
   title = 'Indexed creator-coin market cap over the last 30 days',
   fill = false,

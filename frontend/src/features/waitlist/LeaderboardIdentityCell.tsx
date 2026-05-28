@@ -80,8 +80,10 @@ export function LeaderboardIdentityCell({
   const basename = useBasenameForAddress(csw)
 
   const cswShortLabel = csw ? formatShortAddress(csw) : null
+  const zoraHandle =
+    labelHint && showZoraBadge ? `@${labelHint.replace(/^@/, '')}` : labelHint
   const primaryLabel =
-    basename.displayName ?? labelHint ?? cswShortLabel ?? (csw ? null : display)
+    basename.displayName ?? zoraHandle ?? cswShortLabel ?? (csw ? null : display)
   const resolvedLabel = primaryLabel ?? cswShortLabel ?? display
   const showCswSubtitle = Boolean(
     basename.displayName && cswShortLabel && basename.displayName !== cswShortLabel,

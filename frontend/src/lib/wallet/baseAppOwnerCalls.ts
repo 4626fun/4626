@@ -1,6 +1,7 @@
 import { encodeFunctionData, getAddress, type Hex, type PublicClient } from 'viem'
 
 import { CSW_OWNER_ABI } from '@/lib/wallet/cswOwnerAbi'
+import { assertSendCallsEntryPointAddOwnerBundle } from '@/lib/wallet/addOwnerCallShape'
 import { _submitOwnerViaSendCalls, waitForCallsTxHash, type CswSendCallsTelemetry } from './cswSendCalls'
 
 type WalletRequest = (args: { method: string; params?: unknown[] }) => Promise<unknown>
@@ -135,10 +136,13 @@ export async function addOwnerViaBaseAppSendCalls(params: {
   onTelemetry?: (event: CswSendCallsTelemetry) => void
 }): Promise<BaseAppOwnerCallResult> {
   const call = encodeAddOwnerCall({ csw: params.csw, ownerToAdd: params.ownerToAdd })
+  const calls = [{ to: call.to, data: call.data, value: call.value }]
+  assertSendCallsEntryPointAddOwnerBundle({ csw: params.csw, calls })
+
   const submitted = await _submitOwnerViaSendCalls({
     walletRequest: params.walletRequest,
     csw: call.to,
-    calls: [{ to: call.to, data: call.data, value: call.value }],
+    calls,
     chainId: params.chainId,
     onTelemetry: params.onTelemetry,
   })

@@ -27,7 +27,7 @@ const baseSnapshot = {
   profileCompletedAt: null,
   referralCode: null,
   borderTier: 0,
-  points: { total: 10, invite: 0, signup: 10, tasks: 0, csw: 0, social: 0, bonus: 0 },
+  points: { total: 10, invite: 0, signup: 10, links: 0, tasks: 0, csw: 0, social: 0, checkins: 0, bonus: 0, agent: 0 },
   tier: 0,
   rank: { invite: 2, total: 3 },
   totalCount: 99,
@@ -40,10 +40,13 @@ const baseBreakdown = {
   total: 10,
   invite: 0,
   signup: 10,
+  links: 0,
   tasks: 0,
   csw: 0,
   social: 0,
+  checkins: 0,
   bonus: 0,
+  agent: 0,
 }
 
 function createDb(email: string | null) {

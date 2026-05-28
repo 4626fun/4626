@@ -12,19 +12,25 @@ import { useAccountMe } from '@/hooks/useAccountMe'
 import { getAgentIdentity } from '@/components/chat/agentIdentity'
 import {
   OPEN_ACCOUNT_TRAY_EVENT,
-  publishAccountWalletSummary,
   type AccountTrayOpenDetail,
 } from '@/components/account/trayEvents'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { usePrivy } from '@privy-io/react-auth'
 import { usePrivyClientStatus } from '@/lib/privy/client'
-import { fetchAccountTrayPortfolioBatch } from '@/lib/debank/client'
 import { resolvePublicPointsDisplay } from '@/lib/waitlist/canonicalAccountScore'
 import {
   fetchAccountTrayPoints,
   isAccountTrayPointsAuthError,
 } from '@/lib/waitlist/accountTrayPoints'
 import type { PointsActivityRow } from '@/lib/waitlist/pointsActivity'
+import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import {
+  formatLeaderboardDisplayName,
+  formatWholeNumber,
+  type LeaderboardEntry,
+} from '@/features/waitlist/leaderboardUi'
+import { LeaderboardIdentityCell } from '@/features/waitlist/LeaderboardIdentityCell'
 import { apiFetch } from '@/lib/api/apiBase'
 import { filterHiddenInjectedConnectors } from '@/lib/wallet/wagmiConnectorSelection'
 import {
@@ -33,14 +39,14 @@ import {
 } from '@/components/account/CanonicalIdentityCard'
 import {
   buildTrayAssetHoldings,
-  buildTrayHoldingsFromPortfolios,
-  buildTrayTokenRowsFromPortfolios,
-  buildTrayWalletSources,
+  collectTrayZoraTokenKeys,
+  sumTrayAssetUsd,
   type TrayAssetHolding,
   type TrayNetworkHolding,
   type TrayTokenHolding,
   type TrayWalletSource,
 } from '@/components/account/trayPortfolioHelpers'
+import { useAccountTrayPortfolio } from '@/components/account/useAccountTrayPortfolio'
 import { fetchTrayZoraHoldingsForWallets } from '@/lib/zora/walletHoldings'
 
 type ConnectButtonStateInput = {
@@ -187,16 +193,49 @@ type TrayPointsOverview = {
     total: number
     invite: number
     signup: number
+    links: number
     tasks: number
     csw: number
     social: number
+    checkins: number
     bonus: number
+    agent: number
   }
   rank: {
     invite: number | null
     total: number | null
   }
   totalCount: number
+}
+
+function buildTrayPointsOverviewRows(points: TrayPointsOverview['points']) {
+  const safe = (value: unknown) => {
+    const n = typeof value === 'number' ? value : Number(value)
+    return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0
+  }
+
+  const buckets: Record<string, number> = {
+    Invites: safe(points.invite),
+    Signup: safe(points.signup),
+    Links: safe(points.links),
+    CSW: safe(points.csw),
+    Social: safe(points.social),
+    'Check-ins': safe(points.checkins),
+    Tasks: safe(points.tasks),
+    Bonus: safe(points.bonus),
+    Agent: safe(points.agent),
+  }
+
+  const total = safe(points.total)
+  const accounted = Object.values(buckets).reduce((sum, value) => sum + value, 0)
+  const remainder = total - accounted
+  if (remainder > 0) {
+    buckets['Check-ins'] = (buckets['Check-ins'] ?? 0) + remainder
+  }
+
+  return Object.entries(buckets)
+    .map(([label, value]) => ({ label, value }))
+    .filter((item) => item.value > 0)
 }
 
 export function deriveWalletIdentityPresentation(input: WalletIdentityPresentationInput): WalletIdentityPresentation {
@@ -365,53 +404,13 @@ export function ConnectButton({
   const providerCollision = useMemo(() => detectEthereumProviderCollision(), [])
   const { hasMultipleInjectedProviders, lockedEthereumProviderGlobal } = providerCollision
   const shouldHideInjectedConnector = providerCollision.shouldDisableInjectedConnector
-  const trayWalletSources = useMemo<TrayWalletSource[]>(
-    () =>
-      buildTrayWalletSources({
-        cswAddress: canonicalIdentity.cswAddress,
-        externalEoaAddress: canonicalIdentity.externalEoaAddress,
-      }),
-    [canonicalIdentity.cswAddress, canonicalIdentity.externalEoaAddress],
-  )
+  const { trayWalletSources, trayHoldings, trayTokenRows, trayPortfolioQuery } = useAccountTrayPortfolio()
   const trayWalletKey = useMemo(
     () => trayWalletSources.map((wallet) => wallet.address.toLowerCase()).sort().join(','),
     [trayWalletSources],
   )
   const zoraTokenWalletSources = useMemo<TrayWalletSource[]>(() => trayWalletSources, [trayWalletSources])
   void zoraTokenWalletSources
-  const trayPortfolioQuery = useQuery({
-    queryKey: ['account-tray', 'wallet-portfolio', trayWalletKey],
-    enabled: auth.hasSession && trayWalletSources.length > 0 && showMenu,
-    staleTime: 60_000,
-    retry: 0,
-    queryFn: async () => {
-      const batch = await fetchAccountTrayPortfolioBatch({
-        addresses: trayWalletSources.map((wallet) => wallet.address),
-        topTokenCount: 50,
-      })
-      return batch
-    },
-  })
-  const trayPortfolioResults = useMemo(
-    () => trayPortfolioQuery.data?.results ?? null,
-    [trayPortfolioQuery.data],
-  )
-  const trayHoldings = useMemo(
-    () =>
-      buildTrayHoldingsFromPortfolios({
-        wallets: trayWalletSources,
-        portfolios: trayPortfolioResults,
-      }),
-    [trayPortfolioResults, trayWalletSources],
-  )
-  const trayTokenRows = useMemo(
-    () =>
-      buildTrayTokenRowsFromPortfolios({
-        wallets: zoraTokenWalletSources,
-        portfolios: trayPortfolioResults,
-      }),
-    [trayPortfolioResults, zoraTokenWalletSources],
-  )
   const trayZoraHoldingsQuery = useQuery({
     queryKey: ['account-tray', 'zora-holdings', trayWalletKey],
     enabled: auth.hasSession && showMenu && trayWalletSources.length > 0,
@@ -423,12 +422,34 @@ export function ConnectButton({
         { topTokenCount: 100 },
       ),
   })
-  const trayHoldingsList = useMemo<TrayAssetHolding[]>(
-    () => buildTrayAssetHoldings(trayTokenRows),
-    [trayTokenRows],
+  const trayZoraCreatorTokens = useMemo(
+    () => trayZoraHoldingsQuery.data?.creator ?? [],
+    [trayZoraHoldingsQuery.data?.creator],
   )
-  const trayZoraCreatorTokens = trayZoraHoldingsQuery.data?.creator ?? []
-  const trayZoraContentTokens = trayZoraHoldingsQuery.data?.content ?? []
+  const trayZoraContentTokens = useMemo(
+    () => trayZoraHoldingsQuery.data?.content ?? [],
+    [trayZoraHoldingsQuery.data?.content],
+  )
+  const trayZoraTrendTokens = useMemo(
+    () => trayZoraHoldingsQuery.data?.trend ?? [],
+    [trayZoraHoldingsQuery.data?.trend],
+  )
+  const trayZoraTokenKeys = useMemo(
+    () => collectTrayZoraTokenKeys(trayZoraCreatorTokens, trayZoraContentTokens, trayZoraTrendTokens),
+    [trayZoraCreatorTokens, trayZoraContentTokens, trayZoraTrendTokens],
+  )
+  const trayHoldingsList = useMemo<TrayAssetHolding[]>(
+    () => buildTrayAssetHoldings(trayTokenRows, { excludeTokenKeys: trayZoraTokenKeys }),
+    [trayTokenRows, trayZoraTokenKeys],
+  )
+  const trayPortfolioDisplayUsd = useMemo(() => {
+    const visibleTotal =
+      sumTrayAssetUsd(trayHoldingsList) +
+      sumTrayAssetUsd(trayZoraCreatorTokens) +
+      sumTrayAssetUsd(trayZoraContentTokens) +
+      sumTrayAssetUsd(trayZoraTrendTokens)
+    return visibleTotal > 0 ? visibleTotal : trayHoldings.aggregateUsd
+  }, [trayHoldingsList, trayZoraCreatorTokens, trayZoraContentTokens, trayZoraTrendTokens, trayHoldings.aggregateUsd])
   const trayPortfolioSourceNote = useMemo(() => {
     const sources = trayPortfolioQuery.data?.sources
     if (!sources) return null
@@ -525,11 +546,6 @@ export function ConnectButton({
     window.addEventListener(OPEN_ACCOUNT_TRAY_EVENT, handleOpenTray as EventListener)
     return () => window.removeEventListener(OPEN_ACCOUNT_TRAY_EVENT, handleOpenTray as EventListener)
   }, [buttonState, trayTab])
-  useEffect(() => {
-    publishAccountWalletSummary({
-      activeNetworkUsd: buttonState === 'signed-out' ? null : trayHoldings.activeNetworkUsd,
-    })
-  }, [buttonState, trayHoldings.activeNetworkUsd])
   const closeMenuAfterTrayClose = useCallback(() => {
     const close = () => {
       if (mountedRef.current) setShowMenu(false)
@@ -641,7 +657,7 @@ export function ConnectButton({
                 <RelayTrayPortfolioModule
                   tab={trayTab}
                   onTabChange={setTrayTab}
-                  aggregateUsd={trayHoldings.aggregateUsd}
+                  aggregateUsd={trayPortfolioDisplayUsd}
                   activeNetworkLabel={trayHoldings.activeNetworkLabel}
                   rows={trayHoldings.rows}
                   loading={trayHoldingsLoading}
@@ -650,12 +666,13 @@ export function ConnectButton({
                   portfolioSourceNote={trayPortfolioSourceNote}
                   zoraCreatorTokens={trayZoraCreatorTokens}
                   zoraContentTokens={trayZoraContentTokens}
+                  zoraTrendTokens={trayZoraTrendTokens}
                   zoraTokensLoading={trayZoraTokensLoading}
                 />
               ) : null}
               {auth.hasSession && traySection === 'points' ? (
                 <RelayTrayPointsModule
-                  pointsTotal={trayPointsDisplay.points}
+                  pointsTotal={trayPointsOverview?.points.total ?? trayPointsDisplay.points}
                   position={trayPointsOverview}
                   pointsLoading={trayAccountPointsQuery.isLoading}
                   activity={trayAccountPointsQuery.data?.activity ?? []}
@@ -664,6 +681,7 @@ export function ConnectButton({
                   activityAuthRequired={trayPointsAuthRequired}
                   leaderboardEligible={trayAccountPointsQuery.data?.leaderboardEligible ?? false}
                   hasAccountProfile={(trayAccountPointsQuery.data?.signupId ?? 0) > 0}
+                  signupId={trayAccountPointsQuery.data?.signupId ?? 0}
                 />
               ) : null}
               {!auth.hasSession ? (
@@ -809,7 +827,7 @@ export function ConnectButton({
                 <RelayTrayPortfolioModule
                   tab={trayTab}
                   onTabChange={setTrayTab}
-                  aggregateUsd={trayHoldings.aggregateUsd}
+                  aggregateUsd={trayPortfolioDisplayUsd}
                   activeNetworkLabel={trayHoldings.activeNetworkLabel}
                   rows={trayHoldings.rows}
                   loading={trayHoldingsLoading}
@@ -818,11 +836,12 @@ export function ConnectButton({
                   portfolioSourceNote={trayPortfolioSourceNote}
                   zoraCreatorTokens={trayZoraCreatorTokens}
                   zoraContentTokens={trayZoraContentTokens}
+                  zoraTrendTokens={trayZoraTrendTokens}
                   zoraTokensLoading={trayZoraTokensLoading}
                 />
               ) : (
                 <RelayTrayPointsModule
-                  pointsTotal={trayPointsDisplay.points}
+                  pointsTotal={trayPointsOverview?.points.total ?? trayPointsDisplay.points}
                   position={trayPointsOverview}
                   pointsLoading={trayAccountPointsQuery.isLoading}
                   activity={trayAccountPointsQuery.data?.activity ?? []}
@@ -831,6 +850,7 @@ export function ConnectButton({
                   activityAuthRequired={trayPointsAuthRequired}
                   leaderboardEligible={trayAccountPointsQuery.data?.leaderboardEligible ?? false}
                   hasAccountProfile={(trayAccountPointsQuery.data?.signupId ?? 0) > 0}
+                  signupId={trayAccountPointsQuery.data?.signupId ?? 0}
                 />
               )}
               {auth.error ? <div className="px-4 text-[11px] text-red-400/90">{auth.error}</div> : null}
@@ -988,189 +1008,199 @@ function RelayTrayPortfolioModule(props: {
   portfolioSourceNote?: string | null
   zoraCreatorTokens: TrayTokenHolding[]
   zoraContentTokens: TrayTokenHolding[]
+  zoraTrendTokens: TrayTokenHolding[]
   zoraTokensLoading: boolean
 }) {
   const [networksExpanded, setNetworksExpanded] = useState(false)
   const topRows = props.rows.slice(0, 6)
   const activityRows = props.rows.slice(0, 4)
-  const topHoldings = props.holdings.slice(0, 24)
+  const topHoldings = props.holdings
   const hasBalanceWithoutTokens =
     !props.holdingsLoading && topHoldings.length === 0 && props.aggregateUsd > 0.01
+  const hasZoraTokens =
+    props.zoraCreatorTokens.length > 0 ||
+    props.zoraContentTokens.length > 0 ||
+    props.zoraTrendTokens.length > 0
 
   return (
-    <div className="px-4 pt-2 pb-3">
-      <div className="rounded-xl bg-white/[0.02] p-3">
-        <div className="text-[30px] font-semibold leading-none tracking-tight text-white tabular-nums">
-          {formatUsdValue(props.aggregateUsd)}
-        </div>
-        <div className="mt-1 text-[10px] text-zinc-500 truncate">{props.activeNetworkLabel}</div>
-        {props.portfolioSourceNote ? (
-          <div className="mt-1.5 text-[10px] leading-snug text-zinc-500">{props.portfolioSourceNote}</div>
-        ) : null}
+    <div className="flex min-h-0 flex-1 flex-col px-4 pt-2 pb-3">
+      <div className="text-[30px] font-semibold leading-none tracking-tight text-white tabular-nums">
+        {formatUsdValue(props.aggregateUsd)}
+      </div>
+      <div className="mt-1 text-[10px] text-zinc-500 truncate">{props.activeNetworkLabel}</div>
+      {props.portfolioSourceNote ? (
+        <div className="mt-1.5 text-[10px] leading-snug text-zinc-500">{props.portfolioSourceNote}</div>
+      ) : null}
 
-        <div className="mt-3 flex items-center gap-2 border-b border-white/8 pb-1">
-          {(['tokens', 'activity'] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => props.onTabChange(value)}
-              className={`rounded-md px-2 py-1 text-[12px] font-medium transition-colors ${
-                props.tab === value
-                  ? 'text-white bg-white/[0.08]'
-                  : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04]'
-              }`}
-            >
-              {value === 'tokens' ? 'Tokens' : 'Activity'}
-            </button>
-          ))}
-        </div>
+      <div className="mt-3 flex items-center gap-2 border-b border-white/8 pb-1">
+        {(['tokens', 'activity'] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => props.onTabChange(value)}
+            className={`rounded-md px-2 py-1 text-[12px] font-medium transition-colors ${
+              props.tab === value
+                ? 'text-white bg-white/[0.08]'
+                : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04]'
+            }`}
+          >
+            {value === 'tokens' ? 'Tokens' : 'Activity'}
+          </button>
+        ))}
+      </div>
 
-        {props.tab === 'tokens' ? (
-          <div className="mt-3">
-            <div className="px-0.5 pb-1.5 text-[10px] uppercase tracking-[0.12em] text-zinc-500">Holdings</div>
-            {props.loading || props.holdingsLoading ? (
-              <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
-                Loading token balances…
-              </div>
+      {props.tab === 'tokens' ? (
+        <div className="mt-3 flex-1">
+          <div className="pb-1.5 text-[10px] uppercase tracking-[0.12em] text-zinc-500">Holdings</div>
+          {props.loading || props.holdingsLoading ? (
+            <div className="text-[11px] text-zinc-500">Loading token balances…</div>
             ) : topHoldings.length === 0 ? (
-              <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
+              <div className="text-[11px] text-zinc-500">
                 {hasBalanceWithoutTokens
                   ? `Portfolio total is ${formatUsdValue(props.aggregateUsd)}, but individual tokens could not be loaded. Try again in a moment.`
-                  : 'No token balances found yet.'}
+                  : hasZoraTokens
+                    ? 'No other Base token balances. Zora coins are listed below.'
+                    : 'No token balances found yet.'}
               </div>
-            ) : (
-              <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
-                {topHoldings.map((token) => (
-                  <RelayTrayHoldingRow key={`holding:${token.tokenKey}`} token={token} />
-                ))}
-              </div>
-            )}
+          ) : (
+            <div className="divide-y divide-white/5">
+              {topHoldings.map((token) => (
+                <RelayTrayHoldingRow key={`holding:${token.tokenKey}`} token={token} />
+              ))}
+            </div>
+          )}
 
-            {topRows.length > 0 ? (
-              <div className="mt-3 border-t border-white/8 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setNetworksExpanded((current) => !current)}
-                  className="flex w-full items-center justify-between gap-2 px-0.5 py-1 text-left"
-                >
-                  <span className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">
-                    By network ({topRows.length})
+          {topRows.length > 0 ? (
+            <div className="mt-4 border-t border-white/8 pt-3">
+              <button
+                type="button"
+                onClick={() => setNetworksExpanded((current) => !current)}
+                className="flex w-full items-center justify-between gap-2 py-1 text-left"
+              >
+                <span className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                  By network ({topRows.length})
+                </span>
+                <ChevronDown
+                  className={`h-3.5 w-3.5 shrink-0 text-zinc-500 transition-transform ${networksExpanded ? 'rotate-180' : ''}`}
+                />
+              </button>
+              {networksExpanded ? (
+                <div className="mt-1 divide-y divide-white/5">
+                  {topRows.map((row) => (
+                    <div key={row.networkId} className="flex items-center gap-2 py-2">
+                      {row.networkLogoUrl ? (
+                        <img src={row.networkLogoUrl} alt="" className="h-5 w-5 shrink-0 rounded-full border border-white/10" />
+                      ) : (
+                        <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
+                          <span className="h-2.5 w-2.5 rounded-sm bg-[rgb(var(--brand-primary))]" />
+                        </span>
+                      )}
+                      <span className="min-w-0 flex-1 truncate text-[12px] text-zinc-200">{row.networkLabel}</span>
+                      <span className="text-[12px] tabular-nums text-zinc-300">{formatUsdValue(row.usdTotal)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {props.zoraCreatorTokens.length > 0 ||
+          props.zoraContentTokens.length > 0 ||
+          props.zoraTrendTokens.length > 0 ||
+          props.zoraTokensLoading ? (
+            <div className="mt-4 space-y-4 border-t border-white/8 pt-3">
+              {props.zoraTokensLoading ? (
+                <div className="text-[11px] text-zinc-500">Loading Zora coin holdings…</div>
+              ) : (
+                <>
+                  {props.zoraCreatorTokens.length > 0 ? (
+                    <div>
+                      <div className="pb-1.5 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                        Zora creator coins
+                      </div>
+                      <div className="divide-y divide-white/5">
+                        {props.zoraCreatorTokens.map((token) => (
+                          <RelayTrayHoldingRow
+                            key={`zora-creator:${token.tokenKey}`}
+                            token={token}
+                            subtitle="Creator coin"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {props.zoraTrendTokens.length > 0 ? (
+                    <div>
+                      <div className="pb-1.5 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                        Zora trend coins
+                      </div>
+                      <div className="divide-y divide-white/5">
+                        {props.zoraTrendTokens.map((token) => (
+                          <RelayTrayHoldingRow
+                            key={`zora-trend:${token.tokenKey}`}
+                            token={token}
+                            subtitle="Trend coin"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {props.zoraContentTokens.length > 0 ? (
+                    <div>
+                      <div className="pb-1.5 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                        Zora content coins
+                      </div>
+                      <div className="divide-y divide-white/5">
+                        {props.zoraContentTokens.map((token) => (
+                          <RelayTrayHoldingRow
+                            key={`zora-content:${token.tokenKey}`}
+                            token={token}
+                            subtitle="Content coin"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="mt-2 flex-1 divide-y divide-white/5">
+          {activityRows.length === 0 && topHoldings.length === 0 ? (
+            <div className="py-2 text-[11px] text-zinc-500">No recent portfolio activity yet.</div>
+          ) : (
+            <>
+              {activityRows.map((row) => (
+                <div key={`activity:${row.networkId}`} className="flex items-center justify-between py-2">
+                  <span className="min-w-0">
+                    <span className="block truncate text-[12px] text-zinc-200">{row.networkLabel}</span>
+                    <span className="block text-[10px] text-zinc-600">Network exposure</span>
                   </span>
-                  <ChevronDown
-                    className={`h-3.5 w-3.5 shrink-0 text-zinc-500 transition-transform ${networksExpanded ? 'rotate-180' : ''}`}
-                  />
-                </button>
-                {networksExpanded ? (
-                  <div className="mt-1 space-y-1">
-                    {topRows.map((row) => (
-                      <div
-                        key={row.networkId}
-                        className="flex items-center gap-2 rounded-lg border border-white/8 bg-black/20 px-3 py-2"
-                      >
-                        {row.networkLogoUrl ? (
-                          <img src={row.networkLogoUrl} alt="" className="h-5 w-5 shrink-0 rounded-full border border-white/10" />
-                        ) : (
-                          <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
-                            <span className="h-2.5 w-2.5 rounded-sm bg-[rgb(var(--brand-primary))]" />
-                          </span>
-                        )}
-                        <span className="min-w-0 flex-1 truncate text-[12px] text-zinc-200">{row.networkLabel}</span>
-                        <span className="text-[12px] tabular-nums text-zinc-300">{formatUsdValue(row.usdTotal)}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {props.zoraCreatorTokens.length > 0 ||
-            props.zoraContentTokens.length > 0 ||
-            props.zoraTokensLoading ? (
-              <div className="mt-3 space-y-2 border-t border-white/8 pt-2">
-                {props.zoraTokensLoading ? (
-                  <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
-                    Loading Zora coin holdings…
-                  </div>
-                ) : (
-                  <>
-                    {props.zoraCreatorTokens.length > 0 ? (
-                      <div>
-                        <div className="px-0.5 pb-1.5 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
-                          Zora creator coins
-                        </div>
-                        <div className="max-h-32 space-y-1 overflow-y-auto pr-1">
-                          {props.zoraCreatorTokens.map((token) => (
-                            <RelayTrayHoldingRow
-                              key={`zora-creator:${token.tokenKey}`}
-                              token={token}
-                              subtitle="Creator coin"
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                    {props.zoraContentTokens.length > 0 ? (
-                      <div>
-                        <div className="px-0.5 pb-1.5 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
-                          Zora content coins
-                        </div>
-                        <div className="max-h-32 space-y-1 overflow-y-auto pr-1">
-                          {props.zoraContentTokens.map((token) => (
-                            <RelayTrayHoldingRow
-                              key={`zora-content:${token.tokenKey}`}
-                              token={token}
-                              subtitle="Content coin"
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                  </>
-                )}
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <div className="mt-2 space-y-1">
-            {activityRows.length === 0 && topHoldings.length === 0 ? (
-              <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
-                No recent portfolio activity yet.
-              </div>
-            ) : (
-              <>
-                {activityRows.map((row) => (
-                  <div key={`activity:${row.networkId}`} className="flex items-center justify-between rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-                    <span className="min-w-0">
-                      <span className="block truncate text-[12px] text-zinc-200">{row.networkLabel}</span>
-                      <span className="block text-[10px] text-zinc-600">Network exposure</span>
-                    </span>
-                    <span className="text-[12px] tabular-nums text-zinc-300">{formatUsdValue(row.usdTotal)}</span>
-                  </div>
-                ))}
-                {topHoldings.slice(0, 3).map((token) => (
-                  <div
-                    key={`activity-token:${token.tokenKey}`}
-                    className="flex items-center justify-between rounded-lg border border-white/8 bg-black/20 px-3 py-2"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-[12px] text-zinc-200">{token.symbol}</span>
-                      <span className="block text-[10px] text-zinc-600">Top holding snapshot</span>
-                    </span>
-                    <span className="text-[12px] tabular-nums text-zinc-300">{formatUsdValue(token.usdValue)}</span>
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
-        )}
-      </div>
+                  <span className="text-[12px] tabular-nums text-zinc-300">{formatUsdValue(row.usdTotal)}</span>
+                </div>
+              ))}
+              {topHoldings.slice(0, 3).map((token) => (
+                <div key={`activity-token:${token.tokenKey}`} className="flex items-center justify-between py-2">
+                  <span className="min-w-0">
+                    <span className="block truncate text-[12px] text-zinc-200">{token.symbol}</span>
+                    <span className="block text-[10px] text-zinc-600">Top holding snapshot</span>
+                  </span>
+                  <span className="text-[12px] tabular-nums text-zinc-300">{formatUsdValue(token.usdValue)}</span>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
 function RelayTrayHoldingRow(props: { token: TrayAssetHolding; subtitle?: string }) {
   return (
-    <div className="flex items-center gap-2.5 rounded-lg border border-white/8 bg-black/20 px-3 py-2">
+    <div className="flex items-center gap-2.5 py-2.5">
       {props.token.logoUrl ? (
         <img src={props.token.logoUrl} alt="" className="h-8 w-8 shrink-0 rounded-full border border-white/10" />
       ) : (
@@ -1190,6 +1220,35 @@ function RelayTrayHoldingRow(props: { token: TrayAssetHolding; subtitle?: string
   )
 }
 
+type PointsTrayTab = 'overview' | 'history' | 'leaderboard'
+
+const POINTS_TRAY_TABS: { id: PointsTrayTab; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'history', label: 'History' },
+  { id: 'leaderboard', label: 'Leaderboard' },
+]
+
+type TrayLeaderboardResponse = {
+  totalCount: number
+  leaderboard: LeaderboardEntry[]
+  me: LeaderboardEntry | null
+}
+
+async function fetchTrayLeaderboard(limit: number): Promise<TrayLeaderboardResponse> {
+  const res = await apiFetch(
+    `${API_ENDPOINTS.waitlist.leaderboard}?pointsType=total&page=1&limit=${limit}`,
+    {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    },
+  )
+  const json = (await res.json().catch(() => null)) as ApiEnvelope<TrayLeaderboardResponse> | null
+  if (!res.ok || !json?.success || !json.data) {
+    throw new Error(json?.error || 'Leaderboard request failed')
+  }
+  return json.data
+}
+
 function RelayTrayPointsModule(props: {
   pointsTotal: number
   position: TrayPointsOverview | null
@@ -1200,19 +1259,14 @@ function RelayTrayPointsModule(props: {
   activityAuthRequired?: boolean
   leaderboardEligible: boolean
   hasAccountProfile: boolean
+  signupId: number
 }) {
-  const [pointsTab, setPointsTab] = useState<'history' | 'overview'>('history')
+  const [pointsTab, setPointsTab] = useState<PointsTrayTab>('overview')
   const totalRank = props.position?.rank.total ?? null
   const inviteRank = props.position?.rank.invite ?? null
   const totalCount = props.position?.totalCount ?? 0
-  const breakdown = [
-    { label: 'Invites', value: props.position?.points.invite ?? 0 },
-    { label: 'Signup', value: props.position?.points.signup ?? 0 },
-    { label: 'Tasks', value: props.position?.points.tasks ?? 0 },
-    { label: 'CSW', value: props.position?.points.csw ?? 0 },
-    { label: 'Social', value: props.position?.points.social ?? 0 },
-    { label: 'Bonus', value: props.position?.points.bonus ?? 0 },
-  ]
+  const breakdownRows = props.position ? buildTrayPointsOverviewRows(props.position.points) : []
+  const canonicalTotal = props.position?.points.total ?? props.pointsTotal
   const activityRows = props.activity.filter((row) => row.waitlistPoints > 0)
 
   return (
@@ -1223,27 +1277,65 @@ function RelayTrayPointsModule(props: {
       ) : (
         <>
           <div className="mt-2 text-[30px] font-semibold leading-none tracking-tight text-white tabular-nums">
-            {props.pointsTotal.toLocaleString()}
+            {canonicalTotal.toLocaleString()}
           </div>
 
           <div className="mt-3 flex items-center gap-2 border-b border-white/8 pb-1">
-            {(['history', 'overview'] as const).map((value) => (
+            {POINTS_TRAY_TABS.map(({ id, label }) => (
               <button
-                key={value}
+                key={id}
                 type="button"
-                onClick={() => setPointsTab(value)}
+                onClick={() => setPointsTab(id)}
                 className={`rounded-md px-2 py-1 text-[12px] font-medium transition-colors ${
-                  pointsTab === value
+                  pointsTab === id
                     ? 'bg-white/[0.08] text-white'
                     : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200'
                 }`}
               >
-                {value === 'history' ? 'History' : 'Overview'}
+                {label}
               </button>
             ))}
           </div>
 
-          {pointsTab === 'history' ? (
+          {pointsTab === 'overview' ? (
+            <div className="mt-3 space-y-3">
+              {props.position ? (
+                <>
+                  <div>
+                    <div className="pb-2 text-[10px] uppercase tracking-[0.12em] text-zinc-500">Category breakdown</div>
+                    {breakdownRows.length === 0 ? (
+                      <div className="text-[11px] text-zinc-400">No point awards yet.</div>
+                    ) : (
+                      <div className="divide-y divide-white/6">
+                        {breakdownRows.map((item) => (
+                          <div key={item.label} className="flex items-center justify-between py-2.5">
+                            <span className="text-[12px] text-zinc-300">{item.label}</span>
+                            <span className="text-[12px] tabular-nums text-zinc-200">
+                              {item.value.toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                        <div className="flex items-center justify-between py-2.5">
+                          <span className="text-[12px] font-medium text-zinc-200">Total</span>
+                          <span className="text-[12px] font-medium tabular-nums text-white">
+                            {canonicalTotal.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="text-[11px] text-zinc-400">
+                  {!props.hasAccountProfile
+                    ? 'Verify your email on the waitlist to create your 4626 profile and earn points.'
+                    : !props.leaderboardEligible
+                      ? 'Complete email verification to appear on the leaderboard and see rank.'
+                      : 'Point breakdown is not available yet.'}
+                </div>
+              )}
+            </div>
+          ) : pointsTab === 'history' ? (
             <div className="mt-3 flex min-h-0 flex-1 flex-col">
               <div className="pb-2 text-[10px] uppercase tracking-[0.12em] text-zinc-500">What you earned</div>
               {props.activityLoading ? (
@@ -1268,58 +1360,135 @@ function RelayTrayPointsModule(props: {
               )}
             </div>
           ) : (
-              <div className="mt-3 space-y-3">
-                {props.position ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-                        <div className="text-[10px] text-zinc-500">Total rank</div>
-                        <div className="text-[13px] text-zinc-200 tabular-nums">
-                          {totalRank ? `#${totalRank.toLocaleString()}` : '—'}
-                        </div>
-                      </div>
-                      <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-                        <div className="text-[10px] text-zinc-500">Invite rank</div>
-                        <div className="text-[13px] text-zinc-200 tabular-nums">
-                          {inviteRank ? `#${inviteRank.toLocaleString()}` : '—'}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-[10px] text-zinc-500">
-                      Leaderboard pool: {Math.max(0, totalCount).toLocaleString()} profiles
-                    </div>
-                    <div>
-                      <div className="px-0.5 pb-1.5 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
-                        Category breakdown
-                      </div>
-                      <div className="space-y-1">
-                        {breakdown.map((item) => (
-                          <div
-                            key={item.label}
-                            className="flex items-center justify-between rounded-lg border border-white/8 bg-black/20 px-3 py-2"
-                          >
-                            <span className="text-[11px] text-zinc-300">{item.label}</span>
-                            <span className="text-[11px] tabular-nums text-zinc-200">
-                              {item.value.toLocaleString()}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-400">
-                    {!props.hasAccountProfile
-                      ? 'Verify your email on the waitlist to create your 4626 profile and earn points.'
-                      : !props.leaderboardEligible
-                        ? 'Complete email verification to appear on the leaderboard and see rank.'
-                        : 'Rank and breakdown are not available yet.'}
-                  </div>
-                )}
-              </div>
-            )}
+            <RelayTrayPointsLeaderboardPanel
+              signupId={props.signupId}
+              totalRank={totalRank}
+              inviteRank={inviteRank}
+              totalCount={totalCount}
+              leaderboardEligible={props.leaderboardEligible}
+              hasAccountProfile={props.hasAccountProfile}
+              active={pointsTab === 'leaderboard'}
+            />
+          )}
         </>
       )}
+    </div>
+  )
+}
+
+function RelayTrayPointsLeaderboardPanel(props: {
+  signupId: number
+  totalRank: number | null
+  inviteRank: number | null
+  totalCount: number
+  leaderboardEligible: boolean
+  hasAccountProfile: boolean
+  active: boolean
+}) {
+  const leaderboardQuery = useQuery({
+    queryKey: ['account-tray-leaderboard', props.signupId],
+    enabled: props.active,
+    staleTime: 30_000,
+    queryFn: () => fetchTrayLeaderboard(20),
+  })
+
+  const rows = leaderboardQuery.data?.leaderboard ?? []
+  const meInList = rows.some((row) => row.signupId === props.signupId)
+  const meRow = leaderboardQuery.data?.me ?? null
+
+  return (
+    <div className="mt-3 flex min-h-0 flex-1 flex-col">
+      {props.leaderboardEligible && (props.totalRank || props.inviteRank) ? (
+        <div className="mb-3 grid grid-cols-2 gap-3">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Total rank</div>
+            <div className="mt-1 text-[18px] font-semibold tabular-nums text-zinc-100">
+              {props.totalRank ? `#${props.totalRank.toLocaleString()}` : '—'}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Invite rank</div>
+            <div className="mt-1 text-[18px] font-semibold tabular-nums text-zinc-100">
+              {props.inviteRank ? `#${props.inviteRank.toLocaleString()}` : '—'}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {props.totalCount > 0 ? (
+        <div className="mb-2 text-[10px] text-zinc-500">
+          {props.totalCount.toLocaleString()} profiles on the leaderboard
+        </div>
+      ) : null}
+
+      {leaderboardQuery.isLoading ? (
+        <div className="text-[11px] text-zinc-500">Loading leaderboard…</div>
+      ) : leaderboardQuery.isError ? (
+        <div className="text-[11px] text-zinc-400">Could not load leaderboard. Try again in a moment.</div>
+      ) : !props.hasAccountProfile ? (
+        <div className="text-[11px] text-zinc-400">
+          Verify your email on the waitlist to create your 4626 profile and appear on the leaderboard.
+        </div>
+      ) : !props.leaderboardEligible ? (
+        <div className="text-[11px] text-zinc-400">
+          Complete email verification to appear on the leaderboard and see rank.
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="text-[11px] text-zinc-400">No leaderboard entries yet.</div>
+      ) : (
+        <div className="min-h-0 flex-1 divide-y divide-white/6">
+          {rows.map((row) => (
+            <RelayTrayPointsLeaderboardRow
+              key={row.signupId}
+              row={row}
+              isMe={row.signupId === props.signupId}
+            />
+          ))}
+          {meRow && !meInList ? (
+            <>
+              <div className="py-2 text-center text-[10px] uppercase tracking-[0.12em] text-zinc-600">Your rank</div>
+              <RelayTrayPointsLeaderboardRow row={meRow} isMe />
+            </>
+          ) : null}
+        </div>
+      )}
+
+      <Link
+        to="/leaderboard"
+        className="mt-3 inline-flex text-[12px] font-medium text-brand-200 hover:text-brand-100"
+      >
+        View full leaderboard
+      </Link>
+    </div>
+  )
+}
+
+function RelayTrayPointsLeaderboardRow(props: { row: LeaderboardEntry; isMe: boolean }) {
+  const { row, isMe } = props
+  return (
+    <div className={`py-2 ${isMe ? 'bg-brand-primary/10 -mx-1 px-1 rounded-md' : ''}`}>
+      <div className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2">
+        <span className="text-[11px] font-semibold tabular-nums text-zinc-400">#{row.rank}</span>
+        <div className="min-w-0 flex items-center gap-1.5">
+          <LeaderboardIdentityCell
+            display={formatLeaderboardDisplayName(row.display)}
+            cswAddress={row.cswAddress}
+            labelHint={row.labelHint}
+            avatarUrl={row.avatarUrl}
+            showZoraBadge={row.showZoraBadge}
+            showBaseAppBadge={row.showBaseAppBadge}
+            walletProvider={row.walletProvider}
+          />
+          {isMe ? (
+            <span className="shrink-0 rounded-full border border-brand-primary/30 bg-brand-primary/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-brand-200">
+              You
+            </span>
+          ) : null}
+        </div>
+        <span className="shrink-0 text-[12px] font-medium tabular-nums text-zinc-200">
+          {formatWholeNumber(row.pointsTotal)}
+        </span>
+      </div>
     </div>
   )
 }

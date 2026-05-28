@@ -123,6 +123,22 @@ export function zoraCoinToSwapTokenOption(coin: ZoraCoin, chainId: number = BASE
 
   const checksummed = getAddress(address)
   const coinType = String(coin.coinType ?? '').toUpperCase()
+  if (coinType === 'TREND') {
+    const symbol = (coin.symbol || '').trim() || 'TOKEN'
+    const name = (coin.name || coin.symbol || 'Trend coin').trim()
+    const logoUrl = coin.mediaContent?.previewImage?.medium ?? coin.mediaContent?.previewImage?.small ?? undefined
+    return {
+      address: getAddress(address),
+      symbol,
+      name,
+      group: 'creator',
+      chainId,
+      verified: true,
+      sectionTag: 'trend',
+      logoUrl,
+      logoUrls: logoUrl ? [logoUrl] : undefined,
+    }
+  }
   const { symbol, name } =
     coinType === 'CONTENT'
       ? {

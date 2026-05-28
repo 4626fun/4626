@@ -5,7 +5,8 @@ import {
   layoutToAreaPath,
   layoutToPolyline,
 } from '@/components/explore/exploreHeroSparklineUtils'
-import { getMarketCapDeltaToneClass } from '@/components/explore/rowFormatting'
+import { getSignedPercentToneClass } from '@/components/explore/rowFormatting'
+import { EXPLORE_ACCENT_HEX } from '@/lib/explore/exploreTheme'
 
 type ExploreTableSparklineProps = {
   values: ReadonlyArray<number>
@@ -41,13 +42,7 @@ export function ExploreTableSparkline({
   const polyline = layoutToPolyline(layout)
   const areaPath = layoutToAreaPath(layout, width, height, 2)
   const changeLabel = formatSparklineChangePercent(changePercent)
-  const changeTone =
-    changePercent == null || !Number.isFinite(changePercent)
-      ? 'text-zinc-600'
-      : getMarketCapDeltaToneClass({
-          text: changeLabel,
-          positive: changePercent >= 0,
-        })
+  const changeTone = getSignedPercentToneClass(changePercent)
 
   return (
     <div className={`flex flex-col items-center justify-center gap-0.5 ${className}`}>
@@ -62,15 +57,15 @@ export function ExploreTableSparkline({
         <title>30-day price trend</title>
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#38BDF8" stopOpacity={0.28} />
-            <stop offset="100%" stopColor="#38BDF8" stopOpacity={0.02} />
+            <stop offset="0%" stopColor={EXPLORE_ACCENT_HEX} stopOpacity={0.28} />
+            <stop offset="100%" stopColor={EXPLORE_ACCENT_HEX} stopOpacity={0.02} />
           </linearGradient>
         </defs>
         {areaPath ? <path d={areaPath} fill={`url(#${gradientId})`} /> : null}
         <polyline
           points={polyline}
           fill="none"
-          stroke="#38BDF8"
+          stroke={EXPLORE_ACCENT_HEX}
           strokeWidth={1.5}
           strokeOpacity={0.85}
           strokeLinejoin="round"

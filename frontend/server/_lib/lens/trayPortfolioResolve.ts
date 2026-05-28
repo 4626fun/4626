@@ -27,6 +27,10 @@ function portfolioHasTokenRows(portfolio: WalletPortfolio | null | undefined): b
   return Boolean(portfolio && portfolio.topTokens.length > 0)
 }
 
+function portfolioHasUsdValue(portfolio: WalletPortfolio | null | undefined): boolean {
+  return Boolean(portfolio && portfolio.totalUsdValue > 0)
+}
+
 export async function resolveTrayWalletPortfolio(
   address: string,
   options: { topTokenCount?: number } = {},
@@ -36,32 +40,53 @@ export async function resolveTrayWalletPortfolio(
   const useEtherscan = hasEtherscanApiKey()
   const etherscanFirst = preferTrayPortfolioEtherscan() && useEtherscan
 
-  if (etherscanFirst) {
-    const base = await getTrayWalletPortfolioBaseEtherscan(address, { topTokenCount })
-    if (portfolioHasTokenRows(base) || (base && base.totalUsdValue > 0)) {
-      return { portfolio: base, source: 'base-etherscan' }
-    }
-  }
-
   let debank: WalletPortfolio | null = null
-  if (useDebank && !etherscanFirst) {
-    debank = await getTrayWalletPortfolioDebank(address, { topTokenCount })
-    if (portfolioHasTokenRows(debank)) {
-      return { portfolio: debank, source: 'debank' }
+  let base: WalletPortfolio | null = null
+
+  const ensureDebank = async (): Promise<WalletPortfolio | null> => {
+    if (!useDebank) return null
+    if (!debank) debank = await getTrayWalletPortfolioDebank(address, { topTokenCount })
+    return debank
+  }
+
+  const ensureEtherscan = async (): Promise<WalletPortfolio | null> => {
+    if (!useEtherscan) return null
+    if (!base) base = await getTrayWalletPortfolioBaseEtherscan(address, { topTokenCount })
+    return base
+  }
+
+  if (etherscanFirst) {
+    const scan = await ensureEtherscan()
+    if (portfolioHasTokenRows(scan) || portfolioHasUsdValue(scan)) {
+      return { portfolio: scan, source: 'base-etherscan' }
+    }
+  } else if (useDebank) {
+    const bank = await ensureDebank()
+    if (portfolioHasTokenRows(bank)) {
+      return { portfolio: bank, source: 'debank' }
     }
   }
 
-  if (useEtherscan) {
-    const base = await getTrayWalletPortfolioBaseEtherscan(address, { topTokenCount })
-    if (portfolioHasTokenRows(base) || (base && base.totalUsdValue > 0)) {
-      return { portfolio: base, source: 'base-etherscan' }
+  if (useEtherscan && !etherscanFirst) {
+    const scan = await ensureEtherscan()
+    if (portfolioHasTokenRows(scan) || portfolioHasUsdValue(scan)) {
+      return { portfolio: scan, source: 'base-etherscan' }
     }
-    if (base) return { portfolio: base, source: 'base-etherscan' }
   }
 
-  if (debank && (debank.totalUsdValue > 0 || debank.topTokens.length > 0)) {
-    return { portfolio: debank, source: 'debank' }
+  // DeBank fallback when Base Etherscan has no token rows (common for Zora-heavy CSW wallets).
+  const bank = await ensureDebank()
+  if (bank && (portfolioHasTokenRows(bank) || portfolioHasUsdValue(bank))) {
+    return { portfolio: bank, source: 'debank' }
   }
+
+  if (base && portfolioHasTokenRows(base)) {
+    return { portfolio: base, source: 'base-etherscan' }
+  }
+  if (bank && portfolioHasTokenRows(bank)) {
+    return { portfolio: bank, source: 'debank' }
+  }
+
   return { portfolio: null, source: null }
 }
 

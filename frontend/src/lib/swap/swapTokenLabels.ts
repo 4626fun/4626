@@ -161,6 +161,25 @@ export async function enrichSwapTokenOption(option: SwapTokenOption): Promise<Sw
     const coin = await fetchZoraCoin(checksummed, chainId)
     if (coin) {
       const coinType = String(coin.coinType ?? '').toUpperCase()
+      if (coinType === 'TREND') {
+        const symbol = (coin.symbol || '').trim() || option.symbol
+        const name = (coin.name || coin.symbol || 'Trend coin').trim()
+        const logoUrl =
+          coin.mediaContent?.previewImage?.medium ?? coin.mediaContent?.previewImage?.small ?? undefined
+        if (!isAddressLikeSwapSymbol(symbol, checksummed)) {
+          return {
+            ...option,
+            symbol,
+            name,
+            group: 'creator',
+            chainId,
+            verified: true,
+            sectionTag: 'trend',
+            logoUrl: option.logoUrl ?? logoUrl,
+            logoUrls: option.logoUrls ?? (logoUrl ? [logoUrl] : undefined),
+          }
+        }
+      }
       const group = coinType === 'CONTENT' ? ('share' as const) : ('creator' as const)
       const { symbol, name } =
         coinType === 'CONTENT'

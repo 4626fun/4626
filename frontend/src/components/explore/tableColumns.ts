@@ -42,6 +42,9 @@ export const EXPLORE_TABLE_GROUPS = [
   { id: 'payout', label: 'Payout' },
 ] as const satisfies ReadonlyArray<ExploreTableGroup>
 
+/** Sticky identity column width when horizontal scroll collapses token labels (avatar + Ethos badge). */
+export const EXPLORE_COLLAPSED_IDENTITY_WIDTH_PX = 72
+
 function getVolumeLabel(timeframe: string): string {
   switch (timeframe) {
     case '1d':
@@ -72,7 +75,7 @@ export function getExploreColumns(opts: { variant: ExploreTableVariant; timefram
       id: 'name',
       label: nameLabel,
       group: 'identity',
-      widthPx: collapseIdentity ? 56 : 208,
+      widthPx: collapseIdentity ? EXPLORE_COLLAPSED_IDENTITY_WIDTH_PX : 208,
       align: 'left',
       sticky: true,
       ...(opts.variant === 'creators' ? { sortKey: 'ethosScore' as const } : {}),

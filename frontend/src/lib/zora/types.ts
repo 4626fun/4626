@@ -46,7 +46,7 @@ export type ZoraCoin = {
   description?: string
   address?: string
   symbol?: string
-  coinType?: 'CREATOR' | 'CONTENT' | string
+  coinType?: 'CREATOR' | 'CONTENT' | 'TREND' | string
   totalSupply?: string
   totalVolume?: string
   volume24h?: string
