@@ -8,6 +8,8 @@ import {
   type MetricsSnapshotRow,
   type PublicationRecord,
 } from '../../_lib/alfaclub/publicationLedger.js'
+import { formatAlfaClubCommandHelp } from '../../_lib/alfaclub/alfaclubChatHelp.js'
+import { formatAlfaClubStatusForChat } from '../../_lib/alfaclub/alfaclubChatStatus.js'
 import { buildAlfaRoomChart } from '../../_lib/alfaclub/roomCharts.js'
 import {
   buildAlfaClubBriefContext,
@@ -386,45 +388,8 @@ function formatFlagsLine(flags: VigilanteFlags): string {
   return bits.join(' · ')
 }
 
-function formatStatus(flags: VigilanteFlags): string {
-  const lines: string[] = [
-    '**AlfaClub Vigilante — Pipeline Status**',
-    '',
-    `KILL_SWITCH: ${flags.killSwitch ? 'ON' : 'off'}`,
-    `READ_ENABLED: ${flags.readEnabled ? 'on' : 'off'}`,
-    `POST_ENABLED: ${flags.postEnabled ? 'on' : 'off'}`,
-    `FEEDBACK_ENABLED: ${flags.feedbackEnabled ? 'on' : 'off'}`,
-    `TOP_N: ${flags.topN}`,
-    `COOLDOWN: ${flags.cooldownHours}h`,
-    '',
-    SCORECARD_DISCLAIMER,
-  ]
-  return lines.join('\n')
-}
-
 function formatHelp(): string {
-  return [
-    '**/alfa** — AlfaClub leaderboard & room tools',
-    '',
-    '**Rooms**',
-    '  Creator links → `alfaclub.app/room/{id}` (their trading room).',
-    '  This chat is the **bot/ops room** (commands + digest) — not a creator room.',
-    '  Example: Flip Research (token #2) → room 2, not room 1043.',
-    '',
-    '**Commands**',
-    '  `/alfa` — compact top-N leaderboard',
-    '  `/alfa brief` — full daily digest (markets + moves)',
-    '  `/alfa <address>` — one creator (score + room link when known)',
-    '  `/alfa chart [kind] [limit]` — room analytics chart (IPFS image)',
-    '  `/alfa status` — pipeline flags',
-    '  `/alfa quote-key` · `/alfa buy-key` · `/alfa create-room` — onchain room keys',
-    '',
-    '**Hermit** (same room): `/gmeow` · `/meme` — GIF in chat first, then X link when posted.',
-    '',
-    'Chart kinds: `top-volume` · `tier-mix` · `pnl-distribution`',
-    '',
-    SCORECARD_DISCLAIMER,
-  ].join('\n')
+  return `${formatAlfaClubCommandHelp()}\n\n${SCORECARD_DISCLAIMER}`
 }
 
 function formatLeaderboard(params: {
@@ -1093,7 +1058,8 @@ export async function executeAlfaclubCommandFamily(params: {
   const flags = readVigilanteFlags()
 
   if (parsed.sub === 'status') {
-    return { ok: true, response: formatStatus(flags) }
+    const response = await formatAlfaClubStatusForChat(flags)
+    return { ok: true, response: `${response}\n\n${SCORECARD_DISCLAIMER}` }
   }
   if (parsed.sub === 'quote-key') {
     return executeQuoteKey({

@@ -340,7 +340,7 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
       return resolveVaultRole({ senderWallet: params.senderWallet, vault })
     }
 
-    const helpResult = executeHelpCommandFamily(raw)
+    const helpResult = executeHelpCommandFamily(raw, { chatId: params.chatId })
     if (helpResult) {
       return helpResult
     }
@@ -474,6 +474,8 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
                   ? tweet.action.tweetUrl
                   : extractTweetUrl(tweet.response)
               if (tweetUrl) alfaclubFollowUpText = tweetUrl
+            } else if (isHermitAlfaClubXLinkAfterMediaEnabled() && mediaUrl) {
+              response = `${response}\n_(X cross-post skipped — ${tweet.response?.slice(0, 120) || 'posting unavailable'}.)_`.trim()
             }
           }
         } else {

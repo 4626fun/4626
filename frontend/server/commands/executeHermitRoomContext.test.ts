@@ -302,7 +302,8 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
 
     expect(postTweetFromSystemMock).toHaveBeenCalledTimes(1)
     expect(result.ok).toBe(true)
-    expect(result.response).toBe('cat laugh alpha unlocked.')
+    expect(result.response).toContain('cat laugh alpha unlocked.')
+    expect(result.response).toContain('X cross-post skipped')
     expect(result.action).toEqual({
       action: 'hermit.command',
       kind: 'gmeow',
