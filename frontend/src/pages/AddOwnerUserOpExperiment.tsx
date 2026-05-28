@@ -36,19 +36,35 @@ export function AddOwnerUserOpExperiment() {
   } = controller
 
   const privyClientStatus = usePrivyClientStatus()
-  const { signIn, busy: authBusy, error: authError } = useSiweAuth()
+  const { signIn, signOut, busy: authBusy, error: authError } = useSiweAuth()
   const privyReady = privyClientStatus === 'ready'
+  const authControlsDisabled = authBusy || !privyReady
+  const authStatusLabel = !privyReady
+    ? privyClientStatus === 'disabled'
+      ? 'Sign-in is unavailable in this environment.'
+      : 'Loading sign-in…'
+    : authBusy
+      ? 'Signing in…'
+      : null
 
   const handleEmailSignIn = useCallback(() => {
-    if (!privyReady || authBusy) return
+    if (authControlsDisabled) return
     void login({ loginMethods: ['email', 'wallet'] } as any)
-  }, [authBusy, login, privyReady])
+  }, [authControlsDisabled, login])
 
   const handleBaseSignIn = useCallback(async () => {
-    if (!privyReady || authBusy) return
+    if (authControlsDisabled) return
     const address = await signIn({ method: 'privy', preferBaseAccountWallet: true })
     if (address) void loadMe({ showSpinner: true })
-  }, [authBusy, loadMe, privyReady, signIn])
+  }, [authControlsDisabled, loadMe, signIn])
+
+  const handleSignOut = useCallback(async () => {
+    if (authBusy) return
+    await signOut()
+    if (typeof window !== 'undefined') {
+      window.location.assign('/add')
+    }
+  }, [authBusy, signOut])
 
   const publicClient = usePublicClient({ chainId: base.id })
 
@@ -124,16 +140,22 @@ export function AddOwnerUserOpExperiment() {
 
         {!privyAuthed ? (
           <div className="card space-y-4 rounded-2xl border border-white/10 bg-black/40 p-6">
-            <p className="text-sm text-zinc-300">Sign in to prepare the owner-install payload.</p>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-white">Sign in to prepare the owner-install payload</p>
+              <p className="text-xs leading-relaxed text-zinc-500">
+                Use Base Account if you are opening this from Base App. Email OTP works in any browser.
+              </p>
+            </div>
             <div className="space-y-2.5">
               <Button
                 type="button"
                 variant="primary"
-                className="w-full"
-                disabled={authBusy || !privyReady}
-                onClick={handleEmailSignIn}
+                className="inline-flex w-full items-center justify-center gap-2"
+                disabled={authControlsDisabled}
+                onClick={() => void handleBaseSignIn()}
               >
-                {authBusy || !privyReady ? 'Loading sign-in…' : 'Sign in / Continue'}
+                <img src={BASE_ACCOUNT_LOGO} alt="" className="h-4 w-4 object-contain" aria-hidden />
+                {authControlsDisabled ? authStatusLabel ?? 'Sign in with Base' : 'Sign in with Base'}
               </Button>
               <div className="relative flex items-center py-1">
                 <div className="flex-1 border-t border-white/10" />
@@ -143,21 +165,30 @@ export function AddOwnerUserOpExperiment() {
               <Button
                 type="button"
                 variant="secondary"
-                className="inline-flex w-full items-center justify-center gap-2"
-                disabled={authBusy || !privyReady}
-                onClick={() => void handleBaseSignIn()}
+                className="w-full"
+                disabled={authControlsDisabled}
+                onClick={handleEmailSignIn}
               >
-                <img src={BASE_ACCOUNT_LOGO} alt="" className="h-4 w-4 object-contain" aria-hidden />
-                Sign in with Base
+                Sign in with email
               </Button>
             </div>
+            {authStatusLabel && privyReady ? (
+              <p className="text-xs text-zinc-500">{authStatusLabel}</p>
+            ) : null}
             {authError ? (
               <div className="text-xs text-red-400/90" role="alert">
                 {authError}
               </div>
             ) : null}
           </div>
-        ) : null}
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-xs text-zinc-400">
+            <span>Signed in with Privy. Need a different Base Account?</span>
+            <Button type="button" variant="ghost" size="sm" disabled={authBusy} onClick={() => void handleSignOut()}>
+              Sign out
+            </Button>
+          </div>
+        )}
 
         {privyAuthed && loading ? (
           <div className="rounded-2xl border border-white/10 bg-black/40 p-6 text-sm text-zinc-400">
