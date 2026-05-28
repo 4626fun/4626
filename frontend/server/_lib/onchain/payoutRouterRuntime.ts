@@ -41,6 +41,29 @@ function addressFromPrivateKey(rawKey: string | undefined): Address | null {
   }
 }
 
+const PAYOUT_ROUTER_KEEPER_PRIVATE_KEY_ENVS = [
+  'KPR_PRIVATE_KEY',
+  '4626_KEEPER_AUTOMATION_PRIVATE_KEY',
+  'PROTOCOL_TREASURY_SAFE_OWNER_PK',
+  'PRIVATE_KEY',
+] as const
+
+export function resolvePayoutRouterKeeperPrivateKey(
+  env: Record<string, string | undefined> = process.env,
+): `0x${string}` | null {
+  const expectedKeeper = resolvePayoutRouterKeeperAddress()
+  for (const key of PAYOUT_ROUTER_KEEPER_PRIVATE_KEY_ENVS) {
+    const raw = String(env[key] ?? '').trim()
+    if (!/^0x[0-9a-fA-F]{64}$/.test(raw)) continue
+    const derived = addressFromPrivateKey(raw)
+    if (!expectedKeeper) return raw as `0x${string}`
+    if (derived && derived.toLowerCase() === expectedKeeper.toLowerCase()) {
+      return raw as `0x${string}`
+    }
+  }
+  return null
+}
+
 function parseAddressListFromEnv(keys: string[]): Address[] {
   const out: Address[] = []
   const seen = new Set<string>()

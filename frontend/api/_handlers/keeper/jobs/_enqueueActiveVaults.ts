@@ -31,7 +31,7 @@ type ActiveVaultRow = {
   config_json: Record<string, unknown> | string | null
 }
 
-const VALID_WORKFLOWS = new Set(['sweep', 'tend', 'report', 'payout', 'rebalance'])
+const VALID_WORKFLOWS = new Set(['sweep', 'tend', 'report', 'payout', 'payout-router', 'rebalance'])
 
 function env(name: string): string {
   return String(process.env[name] ?? '').trim()
@@ -227,18 +227,27 @@ function rebalancePayload(row: ActiveVaultRow): Record<string, unknown> | null {
 function payoutPayload(row: ActiveVaultRow): Record<string, unknown> | null {
   const contracts = contractsFromConfig(row.config_json)
   const payoutRouterAddress = normalizeAddress(contracts.payoutRouter)
+  const burnStreamAddress = normalizeAddress(contracts.burnStream)
   const creatorCoinAddress = normalizeAddress(row.creator_coin_address)
+  const vaultAddress = normalizeAddress(row.vault_address)
   if (!payoutRouterAddress || !creatorCoinAddress) return null
   return {
     path: '/api/keeper/payout-router-harvest',
     body: {
       payoutRouterAddress,
       creatorCoinAddress,
+      burnStreamAddress: burnStreamAddress ?? undefined,
+      vaultAddress: vaultAddress ?? undefined,
       includeZora: true,
       includeWeth: true,
       claimProtocolRewards: true,
+      dripBurnStream: true,
     },
   }
+}
+
+function workflowIncludesPayout(workflows: string[]): boolean {
+  return workflows.includes('payout') || workflows.includes('payout-router')
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -322,7 +331,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }))
       }
     }
-    if (workflows.includes('payout')) {
+    if (workflowIncludesPayout(workflows)) {
       const payload = payoutPayload(row)
       const vaultAddress = normalizeAddress(row.vault_address)
       if (payload && vaultAddress) {

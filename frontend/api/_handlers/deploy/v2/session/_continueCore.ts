@@ -27,6 +27,7 @@ import { parseGrant, validateCallsAgainstGrant } from '../../../../../server/_li
 import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
 import { ensureLaunchImageReady } from '../../../../../server/_lib/deploy/deployLaunchImage.js'
 import { verifyDeployPhase2Invariants } from '../../../../../server/_lib/deploy/deployPhase2Invariants.js'
+import { maybeAutoSetupPayoutRouterTreasury } from '../../../../../server/_lib/onchain/payoutRouterTreasurySetup.js'
 import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
 import {
@@ -1007,6 +1008,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!result.checked || result.violations.length > 0) {
         const summary = result.violations.map((entry) => entry.code).join(',')
         throw new Error(`phase2_invariant_failed:${summary || 'unknown'}`)
+      }
+      if (
+        result.expectations?.payoutRecipientMode === 'payout_router' &&
+        result.expectations.expectedPayoutRecipient &&
+        result.expectations.creatorToken
+      ) {
+        void maybeAutoSetupPayoutRouterTreasury({
+          publicClient,
+          rpcUrl: resolveDeploySessionRpcUrl(process.env),
+          payoutRouter: result.expectations.expectedPayoutRecipient,
+          creatorToken: result.expectations.creatorToken,
+        })
       }
     }
 

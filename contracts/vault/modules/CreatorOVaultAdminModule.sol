@@ -9,6 +9,10 @@ import {IStrategy} from "../../interfaces/IStrategy.sol";
 import {CreatorOVaultModuleBase} from "./CreatorOVaultModuleBase.sol";
 import {ICreatorOVaultModuleIdentity} from "./ICreatorOVaultModuleIdentity.sol";
 
+interface IVaultShareBurnStreamQueuer {
+    function setAuthorizedQueuer(address queuer, bool authorized) external;
+}
+
 /// @notice Admin + emergency + rescue + config logic for CreatorOVault.
 /// @dev Must be invoked via delegatecall from CreatorOVault.
 contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModuleIdentity {
@@ -40,6 +44,7 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
     event UpdateEmergencyAdmin(address indexed newEmergencyAdmin);
     event UpdateGaugeController(address indexed oldController, address indexed newController);
     event UpdateBurnStream(address indexed oldBurnStream, address indexed newBurnStream);
+    event BurnStreamQueuerUpdated(address indexed queuer, bool authorized);
     event UpdatePerformanceFee(uint16 newPerformanceFee);
     event UpdatePerformanceFeeRecipient(address indexed newRecipient);
     event UpdateProfitMaxUnlockTime(uint256 newProfitMaxUnlockTime);
@@ -181,6 +186,15 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
         address old = burnStream;
         burnStream = _burnStream;
         emit UpdateBurnStream(old, _burnStream);
+    }
+
+    /// @notice Authorize or revoke a burn-stream share queuer (for example PayoutRouter).
+    /// @dev Only the vault may call `VaultShareBurnStream.setAuthorizedQueuer`; this bridges owner intent.
+    function setBurnStreamAuthorizedQueuer(address queuer, bool authorized) external onlyDelegateCall {
+        if (queuer == address(0)) revert ZeroAddress();
+        if (burnStream == address(0)) revert ZeroAddress();
+        IVaultShareBurnStreamQueuer(burnStream).setAuthorizedQueuer(queuer, authorized);
+        emit BurnStreamQueuerUpdated(queuer, authorized);
     }
 
     function setKeeper(address _keeper) external onlyDelegateCall {

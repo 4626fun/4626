@@ -1460,6 +1460,16 @@ const CREATOR_VAULT_ADMIN_ABI = [
   },
   {
     type: 'function',
+    name: 'setBurnStreamAuthorizedQueuer',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'queuer', type: 'address' },
+      { name: 'authorized', type: 'bool' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
     name: 'setMinimumTotalIdle',
     stateMutability: 'nonpayable',
     inputs: [{ name: '_minimumTotalIdle', type: 'uint256' }],
@@ -1471,6 +1481,16 @@ const CREATOR_VAULT_ADMIN_ABI = [
     stateMutability: 'nonpayable',
     inputs: [],
     outputs: [],
+  },
+] as const
+
+const VAULT_SHARE_BURN_STREAM_ABI = [
+  {
+    type: 'function',
+    name: 'authorizedQueuers',
+    stateMutability: 'view',
+    inputs: [{ name: 'queuer', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
   },
 ] as const
 
@@ -5149,6 +5169,29 @@ function DeployVaultBatcher({
         }),
       } as const
 
+      const payoutRouterQueuerAlreadyAuthorized = await (async () => {
+        try {
+          return await publicClient.readContract({
+            address: expectedBurnStream,
+            abi: VAULT_SHARE_BURN_STREAM_ABI,
+            functionName: 'authorizedQueuers',
+            args: [expectedPayoutRouter],
+          })
+        } catch {
+          return false
+        }
+      })()
+
+      const vaultAuthorizeBurnStreamQueuerCall = {
+        target: expected.vault,
+        value: 0n,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_ADMIN_ABI,
+          functionName: 'setBurnStreamAuthorizedQueuer',
+          args: [expectedPayoutRouter, true],
+        }),
+      } as const
+
       const vaultSetMinimumIdleCall = {
         target: expected.vault,
         value: 0n,
@@ -5976,6 +6019,7 @@ function DeployVaultBatcher({
         if (phase2AuxiliaryDeployCall) phase2Calls.push(phase2AuxiliaryDeployCall)
         if (!burnStreamAlreadyConfigured) phase2Calls.push(vaultSetBurnStreamCall)
         phase2Calls.push(vaultWhitelistRouterCall)
+        if (!payoutRouterQueuerAlreadyAuthorized) phase2Calls.push(vaultAuthorizeBurnStreamQueuerCall)
         if (payoutRouterSetKeeperCall) phase2Calls.push(payoutRouterSetKeeperCall)
         if (payoutRouterSetExternalSwapTargetApprovalCalls.length > 0) {
           phase2Calls.push(...payoutRouterSetExternalSwapTargetApprovalCalls)

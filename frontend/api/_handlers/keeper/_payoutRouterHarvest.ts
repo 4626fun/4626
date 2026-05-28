@@ -19,6 +19,7 @@ import {
   setNoStore,
   RATE_LIMITS,
 } from '../../../packages/server-core/src/index.js'
+import { resolvePayoutRouterKeeperPrivateKey } from '../../../server/_lib/onchain/payoutRouterRuntime.js'
 import { createPublicClient, createWalletClient, getAddress, http, isAddress, type Abi } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
@@ -74,6 +75,16 @@ const PAYOUT_ROUTER_ABI = [
   },
 ] as const
 
+const BURN_STREAM_ABI = [
+  {
+    type: 'function',
+    name: 'checkpoint',
+    stateMutability: 'nonpayable',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+] as const
+
 type TokenResult = {
   token: `0x${string}`
   label: string
@@ -89,15 +100,19 @@ type HarvestResponse = {
   claimedProtocolRewards: boolean
   claimableBefore: string
   claimTxHash: `0x${string}` | null
+  burnStreamCheckpointTxHash?: `0x${string}` | null
   tokens: TokenResult[]
 }
 
 type HarvestBody = {
   payoutRouterAddress?: string
   creatorCoinAddress?: string
+  burnStreamAddress?: string
+  vaultAddress?: string
   includeZora?: boolean
   includeWeth?: boolean
   claimProtocolRewards?: boolean
+  dripBurnStream?: boolean
   minBalanceWei?: string
   minCreatorOutWei?: string
   tokens?: Array<{ token?: string; label?: string; minCreatorOutWei?: string }>
@@ -170,9 +185,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'No harvest tokens configured' } satisfies ApiEnvelope<never>)
   }
 
-  const keeperPk = process.env.KPR_PRIVATE_KEY
+  const keeperPk = resolvePayoutRouterKeeperPrivateKey(process.env)
   if (!keeperPk) {
-    return res.status(500).json({ success: false, error: 'KPR_PRIVATE_KEY not configured' } satisfies ApiEnvelope<never>)
+    return res.status(500).json({ success: false, error: 'Payout router keeper private key not configured' } satisfies ApiEnvelope<never>)
   }
 
   try {
@@ -251,6 +266,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    let burnStreamCheckpointTxHash: `0x${string}` | null = null
+    const dripBurnStream = body.dripBurnStream !== false
+    const burnStreamAddress = normalizeAddress(body.burnStreamAddress)
+    if (dripBurnStream && burnStreamAddress) {
+      try {
+        burnStreamCheckpointTxHash = await walletClient.writeContract({
+          address: burnStreamAddress,
+          abi: BURN_STREAM_ABI as unknown as Abi,
+          functionName: 'checkpoint',
+          chain: base,
+          account,
+        })
+        await publicClient.waitForTransactionReceipt({ hash: burnStreamCheckpointTxHash, timeout: 120_000 })
+      } catch (error) {
+        console.warn('[keeper/payout-router-harvest] burn stream checkpoint failed', {
+          burnStreamAddress,
+          message: error instanceof Error ? error.message : String(error),
+        })
+        burnStreamCheckpointTxHash = null
+      }
+    }
+
     return res.status(200).json({
       success: true,
       data: {
@@ -258,6 +295,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         claimedProtocolRewards,
         claimableBefore: claimableBefore.toString(),
         claimTxHash,
+        burnStreamCheckpointTxHash,
         tokens,
       },
     } satisfies ApiEnvelope<HarvestResponse>)

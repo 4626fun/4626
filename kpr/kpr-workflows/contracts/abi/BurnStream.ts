@@ -40,4 +40,18 @@ export const BurnStreamABI = [
     outputs: [{ type: "uint256" }],
     stateMutability: "view",
   },
+  {
+    type: "function",
+    name: "authorizedQueuers",
+    inputs: [{ name: "queuer", type: "address" }],
+    outputs: [{ type: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "checkpoint",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+    stateMutability: "nonpayable",
+  },
 ] as const

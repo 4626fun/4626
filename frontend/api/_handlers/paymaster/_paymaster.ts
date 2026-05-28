@@ -783,6 +783,7 @@ const SELECTOR_ACTIVATION_BATCH_ACTIVATE = '0xc5c1e920'
 const SELECTOR_ACTIVATION_BATCH_ACTIVATE_WITH_PERMIT2_FOR = '0xdc5de72c'
 
 const SELECTOR_VAULT_SET_BURN_STREAM = '0xf3a1c8b6' // setBurnStream(address)
+const SELECTOR_VAULT_SET_BURN_STREAM_AUTHORIZED_QUEUER = '0x7972e9ff' // setBurnStreamAuthorizedQueuer(address,bool)
 const SELECTOR_VAULT_SET_WHITELIST = '0x53d6fd59' // setWhitelist(address,bool)
 const SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE = '0x8212fd43' // setMinimumTotalIdle(uint256)
 const SELECTOR_VAULT_DEPLOY_TO_STRATEGIES = '0x355aa867' // deployToStrategies()
@@ -3326,6 +3327,7 @@ async function validateInnerCalls(params: {
         (selector === SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE || selector === SELECTOR_VAULT_DEPLOY_TO_STRATEGIES)
       if (
         selector !== SELECTOR_VAULT_SET_BURN_STREAM &&
+        selector !== SELECTOR_VAULT_SET_BURN_STREAM_AUTHORIZED_QUEUER &&
         selector !== SELECTOR_VAULT_SET_WHITELIST &&
         !phase3RuntimeSelectorAllowed
       ) {
@@ -3346,6 +3348,11 @@ async function validateInnerCalls(params: {
           })
           throw new Error('vault_burn_stream_mismatch')
         }
+      } else if (selector === SELECTOR_VAULT_SET_BURN_STREAM_AUTHORIZED_QUEUER) {
+        const queuerArg = decodeAddressArgFromCalldata(c.data, 0)
+        const authorizedArg = decodeBoolArgFromCalldata(c.data, 1)
+        if (!queuerArg || queuerArg !== expectedPayoutRouter) throw new Error('vault_burn_stream_queuer_mismatch')
+        if (authorizedArg !== true) throw new Error('vault_burn_stream_queuer_status_mismatch')
       } else if (selector === SELECTOR_VAULT_SET_WHITELIST) {
         const accountArg = decodeAddressArgFromCalldata(c.data, 0)
         const statusArg = decodeBoolArgFromCalldata(c.data, 1)

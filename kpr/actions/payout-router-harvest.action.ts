@@ -110,6 +110,16 @@ const PAYOUT_ROUTER_ABI = [
   },
 ] as const;
 
+const BURN_STREAM_CHECKPOINT_ABI = [
+  {
+    type: 'function',
+    name: 'checkpoint',
+    stateMutability: 'nonpayable',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+] as const;
+
 export interface RouterTokenResult {
   token: `0x${string}`;
   label: 'creatorCoin' | 'ZORA' | 'WETH';
@@ -623,6 +633,22 @@ export async function executePayoutRouterHarvest(): Promise<BatchPayoutRouterHar
           batch.errors += 1;
           console.error(
             `[${short(vault.vaultAddress)}] convertAndQueue(${token.label}) failed: ${convertResult.error ?? 'unknown'}`,
+          );
+        }
+      }
+
+      if (parseBoolEnv('PAYOUT_ROUTER_DRIP_BURN_STREAM', true) && vault.burnStreamAddress) {
+        const dripResult = await writeContract({
+          address: vault.burnStreamAddress,
+          abi: BURN_STREAM_CHECKPOINT_ABI,
+          functionName: 'checkpoint',
+          args: [],
+        });
+        if (dripResult.success) {
+          console.log(`[${short(vault.vaultAddress)}] burn stream checkpoint succeeded; tx=${dripResult.txHash ?? 'n/a'}`);
+        } else {
+          console.warn(
+            `[${short(vault.vaultAddress)}] burn stream checkpoint failed: ${dripResult.error ?? 'unknown'}`,
           );
         }
       }

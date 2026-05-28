@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Verify live UniversalBytecodeStoreV2 has creation bytecode for v1.12.0 deploy codeIds.
+ * Verify live UniversalBytecodeStoreV2 has creation bytecode for v1.12.1 deploy codeIds.
  *
  * Usage:
  *   pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
- *   BYTECODE_MANIFEST=../../deployments/base/v1.12.0-bytecode-manifest.json pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
+ *   BYTECODE_MANIFEST=../../deployments/base/v1.12.1-bytecode-manifest.json pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
  */
 
 import { readFileSync } from 'node:fs'
@@ -99,7 +99,7 @@ function storeAddress(): Address {
 function manifestPath(): string {
   const fromEnv = process.env.BYTECODE_MANIFEST?.trim()
   if (fromEnv) return resolve(fromEnv)
-  return resolve(import.meta.dirname, '../../../deployments/base/v1.12.0-bytecode-manifest.json')
+  return resolve(import.meta.dirname, '../../../deployments/base/v1.12.1-bytecode-manifest.json')
 }
 
 async function main(): Promise<void> {
@@ -154,7 +154,7 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  process.stdout.write('All required v1.12.0 codeIds are seeded and DEPLOY_BYTECODE matches manifest.\n')
+  process.stdout.write('All required v1.12.1 codeIds are seeded and DEPLOY_BYTECODE matches manifest.\n')
 }
 
 main().catch((err: unknown) => {

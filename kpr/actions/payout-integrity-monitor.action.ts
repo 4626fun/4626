@@ -85,6 +85,20 @@ function parseBool(value: string | undefined, fallback: boolean): boolean {
   return fallback;
 }
 
+function resolveExpectedPayoutRouterKeeper(): string | undefined {
+  for (const candidate of [
+    process.env.PAYOUT_ROUTER_KEEPER,
+    process.env.KPR_KEEPER_ADDRESS,
+    process.env.KPR_ADDRESS,
+  ]) {
+    const trimmed = candidate?.trim();
+    if (trimmed && trimmed.startsWith('0x') && trimmed.length === 42) {
+      return trimmed.toLowerCase();
+    }
+  }
+  return undefined;
+}
+
 function loadMonitorConfig(): MonitorConfig {
   const apiBaseUrl = String(process.env.KPR_API_BASE_URL ?? 'https://4626.fun/api').replace(/\/$/, '');
   const apiKey = requireEnv('KPR_API_KEY');
@@ -320,6 +334,74 @@ export async function executePayoutIntegrityMonitor(): Promise<PayoutIntegrityMo
       }
     } catch {
       // noop
+    }
+  }
+
+  if (selected.payoutRouterAddress) {
+    const payoutRouterAddr = selected.payoutRouterAddress;
+    try {
+      const routerBurnStream = (await readAddress(payoutRouterAddr, PayoutRouterABI, 'burnStream')).toLowerCase();
+      checksRun += 1;
+      const expectedBurn = burnStreamAddr?.toLowerCase();
+      if (!expectedBurn || routerBurnStream !== expectedBurn) {
+        pendingAlerts.push({
+          vaultAddress: vaultAddr,
+          alertType: 'payout_router_burn_stream_mismatch',
+          severity: 'critical',
+          message: `PayoutRouter.burnStream (${routerBurnStream}) != registry burnStream (${expectedBurn ?? 'unset'})`,
+          details: { payoutRouterAddress: payoutRouterAddr, routerBurnStream, expectedBurnStream: expectedBurn ?? null },
+        });
+      }
+    } catch {
+      // noop
+    }
+
+    try {
+      const routerKeeper = (await readAddress(payoutRouterAddr, PayoutRouterABI, 'keeper')).toLowerCase();
+      checksRun += 1;
+      const expectedKeeper = resolveExpectedPayoutRouterKeeper();
+      if (routerKeeper === zeroAddress) {
+        pendingAlerts.push({
+          vaultAddress: vaultAddr,
+          alertType: 'payout_router_keeper_unset',
+          severity: 'warning',
+          message: 'PayoutRouter keeper is unset; harvest automation cannot run convertAndQueue',
+          details: { payoutRouterAddress: payoutRouterAddr, expectedKeeper: expectedKeeper ?? null },
+        });
+      } else if (expectedKeeper && routerKeeper !== expectedKeeper) {
+        pendingAlerts.push({
+          vaultAddress: vaultAddr,
+          alertType: 'payout_router_keeper_mismatch',
+          severity: 'critical',
+          message: `PayoutRouter.keeper (${routerKeeper}) != expected keeper (${expectedKeeper})`,
+          details: { payoutRouterAddress: payoutRouterAddr, routerKeeper, expectedKeeper },
+        });
+      }
+    } catch {
+      // noop
+    }
+
+    if (burnStreamAddr) {
+      try {
+        const queuerAuthorized = await readContract<boolean>({
+          address: burnStreamAddr,
+          abi: BurnStreamABI,
+          functionName: 'authorizedQueuers',
+          args: [payoutRouterAddr],
+        });
+        checksRun += 1;
+        if (!queuerAuthorized) {
+          pendingAlerts.push({
+            vaultAddress: vaultAddr,
+            alertType: 'payout_router_queuer_unauthorized',
+            severity: 'critical',
+            message: 'PayoutRouter is not authorized to queue shares on VaultShareBurnStream',
+            details: { payoutRouterAddress: payoutRouterAddr, burnStreamAddress: burnStreamAddr },
+          });
+        }
+      } catch {
+        // noop
+      }
     }
   }
 

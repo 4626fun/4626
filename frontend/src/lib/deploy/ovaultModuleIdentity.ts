@@ -17,7 +17,7 @@ export const CREATOR_OVAULT_MODULE_STORAGE_V2 = keccak256(
 ) as Hex
 
 /** Fingerprint embedded in frontend deploy bytecode (CreatorOVault creation code). */
-export const DEPLOY_CREATOR_OVAULT_MODULE_STORAGE_VERSION = CREATOR_OVAULT_MODULE_STORAGE_CURRENT
+export const DEPLOY_CREATOR_OVAULT_MODULE_STORAGE_VERSION = CREATOR_OVAULT_MODULE_STORAGE_V2
 
 const MODULE_IDENTITY_ABI = [
   {

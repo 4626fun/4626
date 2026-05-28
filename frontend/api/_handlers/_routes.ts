@@ -101,6 +101,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'keeper/ethos-sync': () => import('./keeper/_ethosSync.js'),
   'keeper/mark-settled': () => import('./keeper/_markSettled.js'),
   'keeper/payout-router-harvest': () => import('./keeper/_payoutRouterHarvest.js'),
+  'keeper/payout-router-treasury-setup': () => import('./keeper/_payoutRouterTreasurySetup.js'),
   'keeper/alert': () => import('./keeper/_alert.js'),
   'keeper/aiAssess': () => import('./keeper/_aiAssess.js'),
   'keeper/solana/reconcile': () => import('./keeper/_solanaReconcile.js'),
