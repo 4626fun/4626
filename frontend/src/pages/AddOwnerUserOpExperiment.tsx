@@ -1,9 +1,11 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { base } from 'viem/chains'
 import { usePublicClient } from 'wagmi'
 
 import { Button } from '@/components/ui/Button'
 import { PageMeta } from '@/components/seo/PageMeta'
+import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { usePrivyClientStatus } from '@/lib/privy/client'
 import {
   useAddUserOpOwnerInstall,
   type AddUserOpOwnerInstallPublicClient,
@@ -14,6 +16,8 @@ import { RELAY_ROUTER_BASE } from '@/lib/wallet/addOwnerCallShape'
 import { ENTRY_POINT_V06_BASE } from '@/lib/wallet/cswOwnerAbi'
 import { externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
 import { formatEthCompact } from '@/lib/wallet/cswEntryPointFunding'
+
+const BASE_ACCOUNT_LOGO = '/base/base-square-blue.svg'
 
 function basescanTxUrl(hash: string): string {
   return `https://basescan.org/tx/${hash}`
@@ -30,6 +34,21 @@ export function AddOwnerUserOpExperiment() {
     privyAuthed,
     privyWallets,
   } = controller
+
+  const privyClientStatus = usePrivyClientStatus()
+  const { signIn, busy: authBusy, error: authError } = useSiweAuth()
+  const privyReady = privyClientStatus === 'ready'
+
+  const handleEmailSignIn = useCallback(() => {
+    if (!privyReady || authBusy) return
+    void login({ loginMethods: ['email', 'wallet'] } as any)
+  }, [authBusy, login, privyReady])
+
+  const handleBaseSignIn = useCallback(async () => {
+    if (!privyReady || authBusy) return
+    const address = await signIn({ method: 'privy', preferBaseAccountWallet: true })
+    if (address) void loadMe({ showSpinner: true })
+  }, [authBusy, loadMe, privyReady, signIn])
 
   const publicClient = usePublicClient({ chainId: base.id })
 
@@ -104,15 +123,39 @@ export function AddOwnerUserOpExperiment() {
         </div>
 
         {!privyAuthed ? (
-          <div className="card space-y-3 rounded-2xl border border-white/10 bg-black/40 p-6">
+          <div className="card space-y-4 rounded-2xl border border-white/10 bg-black/40 p-6">
             <p className="text-sm text-zinc-300">Sign in to prepare the owner-install payload.</p>
-            <Button
-              type="button"
-              variant="primary"
-              onClick={() => void login({ loginMethods: ['email', 'wallet'] } as any)}
-            >
-              Sign in / Continue
-            </Button>
+            <div className="space-y-2.5">
+              <Button
+                type="button"
+                variant="primary"
+                className="w-full"
+                disabled={authBusy || !privyReady}
+                onClick={handleEmailSignIn}
+              >
+                {authBusy || !privyReady ? 'Loading sign-in…' : 'Sign in / Continue'}
+              </Button>
+              <div className="relative flex items-center py-1">
+                <div className="flex-1 border-t border-white/10" />
+                <span className="px-3 text-[10px] uppercase tracking-wider text-zinc-500">or</span>
+                <div className="flex-1 border-t border-white/10" />
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                className="inline-flex w-full items-center justify-center gap-2"
+                disabled={authBusy || !privyReady}
+                onClick={() => void handleBaseSignIn()}
+              >
+                <img src={BASE_ACCOUNT_LOGO} alt="" className="h-4 w-4 object-contain" aria-hidden />
+                Sign in with Base
+              </Button>
+            </div>
+            {authError ? (
+              <div className="text-xs text-red-400/90" role="alert">
+                {authError}
+              </div>
+            ) : null}
           </div>
         ) : null}
 
