@@ -60,6 +60,11 @@ import {
   readWaitlistRecoveryGate,
   writeWaitlistRecoveryGate,
 } from './waitlistRecoveryGate'
+import {
+  clearWaitlistAuthPending,
+  readWaitlistAuthPending,
+  writeWaitlistAuthPending,
+} from './waitlistAuthPending'
 type AccountsSummary = WaitlistAccountsSummary
 
 type WaitlistStatsData = {
@@ -164,6 +169,7 @@ function useWaitlistAttemptState() {
     setBusy(true)
     clearFeedback()
     setRecoveryRequired(false)
+    writeWaitlistAuthPending(true)
     return true
   }, [busy, clearFeedback])
 
@@ -368,6 +374,8 @@ export function WaitlistFlow(props: {
   }, [account])
 
   const authBootstrapAutoAttemptedRef = useRef(false)
+  const pendingAuthResumeStartedRef = useRef(false)
+  const loginStartedWhileLoggedOutRef = useRef(false)
   const startAuthAutoAttemptedRef = useRef(false)
   const finalizingAutoRetryCountRef = useRef(0)
   const finalizingBackgroundRetryCountRef = useRef(0)
@@ -610,6 +618,7 @@ export function WaitlistFlow(props: {
         if (await tryResumeExistingPrivySession()) {
           return
         }
+        loginStartedWhileLoggedOutRef.current = true
         try {
           await runPrivyLoginWithTimeout(login as (options?: unknown) => Promise<unknown>, buildWaitlistEmailLoginOptions() as any)
           await settleBootstrapAfterRecoverableLoginError({
@@ -624,12 +633,15 @@ export function WaitlistFlow(props: {
             return
           }
           await resetStalePrivySessionAndRetryEmailLogin()
+        } finally {
+          loginStartedWhileLoggedOutRef.current = false
         }
       }
     } catch (authError: any) {
       const isRecoveryRequired = isRecoveryRequiredAuthError(authError)
       if (isRecoveryRequired) {
         writeWaitlistRecoveryGate(true)
+        clearWaitlistAuthPending()
         setRecoveryRequired(true)
         setError(RECOVERY_REQUIRED_MESSAGE)
         return
@@ -731,6 +743,7 @@ export function WaitlistFlow(props: {
       finalizingBackgroundRetryCountRef.current = 0
       resetBootstrapCooldowns()
       clearWaitlistRecoveryGate()
+      clearWaitlistAuthPending()
       setStep('auth')
       setBusy(false)
       setRecoveryRequired(false)
@@ -799,6 +812,96 @@ export function WaitlistFlow(props: {
     }
   }, [completionBusy, enterAppUrl, navigateWithSessionHandoff])
 
+  const resumePendingWaitlistAuth = useCallback(async () => {
+    try {
+      await settleBootstrapAfterRecoverableLoginError({
+        bypassRecoveryCooldown: true,
+      })
+      clearWaitlistAuthPending()
+    } catch (bootstrapError: unknown) {
+      if (isSessionFinalizingError(bootstrapError)) {
+        setError(SESSION_FINALIZING_RETRY_MESSAGE)
+        return
+      }
+      const message =
+        typeof (bootstrapError as { message?: unknown })?.message === 'string'
+          ? String((bootstrapError as { message: string }).message)
+          : 'Failed to load account state.'
+      const isSessionMismatch = isSessionEmailMismatchError(message)
+      const isRecoveryRequired = isRecoveryRequiredAuthError(bootstrapError)
+      if (isSessionMismatch) {
+        resetResolvedAccountState()
+        if (!disableAggressiveSessionReset) {
+          await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
+        }
+      }
+      if (isRecoveryRequired) {
+        writeWaitlistRecoveryGate(true)
+        clearWaitlistAuthPending()
+        setRecoveryRequired(true)
+        setError(RECOVERY_REQUIRED_MESSAGE)
+        return
+      }
+      setError(isSessionMismatch ? SESSION_MISMATCH_MESSAGE : message)
+    }
+  }, [
+    disableAggressiveSessionReset,
+    resetResolvedAccountState,
+    setError,
+    setRecoveryRequired,
+    settleBootstrapAfterRecoverableLoginError,
+    shouldDestroyPrivySession,
+  ])
+
+  useEffect(() => {
+    if (step !== 'auth') return
+    if (!readWaitlistAuthPending()) return
+    if (!privyAuthed || privyClientStatus !== 'ready') return
+    if (readWaitlistRecoveryGate()) return
+
+    // Privy can mark the session authenticated before `login()` resolves (email link / redirect).
+    if (authAttemptInFlightRef.current) {
+      if (!loginStartedWhileLoggedOutRef.current || pendingAuthResumeStartedRef.current) return
+      pendingAuthResumeStartedRef.current = true
+      void (async () => {
+        try {
+          await resumePendingWaitlistAuth()
+        } finally {
+          endAuthAttempt()
+          pendingAuthResumeStartedRef.current = false
+        }
+      })()
+      return
+    }
+
+    if (authBootstrapAutoAttemptedRef.current) return
+    authBootstrapAutoAttemptedRef.current = true
+
+    let cancelled = false
+    void (async () => {
+      setBusy(true)
+      setError(null)
+      try {
+        await resumePendingWaitlistAuth()
+      } finally {
+        if (!cancelled) setBusy(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    authAttemptInFlightRef,
+    endAuthAttempt,
+    privyAuthed,
+    privyClientStatus,
+    resumePendingWaitlistAuth,
+    setBusy,
+    setError,
+    step,
+  ])
+
   useEffect(() => {
     void fetchWaitlistStats()
     const intervalId = window.setInterval(() => {
@@ -832,6 +935,7 @@ export function WaitlistFlow(props: {
   useEffect(() => {
     if (step !== 'auth') {
       authBootstrapAutoAttemptedRef.current = false
+      pendingAuthResumeStartedRef.current = false
       finalizingAutoRetryCountRef.current = 0
       finalizingBackgroundRetryCountRef.current = 0
       tokenlessFinalizingBootstrapCooldownUntilRef.current = 0
@@ -848,8 +952,9 @@ export function WaitlistFlow(props: {
   ])
 
   const authUi = deriveWaitlistAuthUi()
-  const authVisibleError = error === SESSION_FINALIZING_RETRY_MESSAGE ? null : error
-  const showAuthBootstrapLoader = step === 'auth' && busy && !authVisibleError
+  const authVisibleError = error
+  const showAuthBootstrapLoader =
+    step === 'auth' && busy && authAttemptInFlightRef.current && !authVisibleError
   const canEnterApp = canEnterAppFromAccountState({
     appAccessStatus: account?.appAccessStatus ?? null,
   })

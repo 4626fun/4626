@@ -23,6 +23,7 @@ import {
 } from './waitlistBootstrapUtils'
 import { type WaitlistAccountsSummary, type WaitlistBootstrapResponse } from './waitlistAccountTypes'
 import { clearWaitlistRecoveryGate } from './waitlistRecoveryGate'
+import { clearWaitlistAuthPending } from './waitlistAuthPending'
 
 type UseWaitlistBootstrapParams = {
   activeReferralCode: string | null
@@ -77,6 +78,7 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
       if (!bypassRecoveryCooldown && recoveryCooldownActive) {
         setStep('auth')
         setRecoveryRequired(true)
+        clearWaitlistAuthPending()
         const err = new Error(RECOVERY_REQUIRED_MESSAGE) as Error & { recoveryRequired?: boolean; code?: string }
         err.recoveryRequired = true
         err.code = 'RECOVERY_REQUIRED_EMAIL_BOUND'
@@ -165,6 +167,7 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
         if (nextRecoveryRequired) err.recoveryRequired = true
         if (nextRecoveryRequired) {
           recoveryRequiredBootstrapCooldownUntilRef.current = Date.now() + RECOVERY_REQUIRED_BOOTSTRAP_COOLDOWN_MS
+          clearWaitlistAuthPending()
         }
         throw err
       }
@@ -186,6 +189,7 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
       recoveryRequiredBootstrapCooldownUntilRef.current = 0
       setRecoveryRequired(false)
       clearWaitlistRecoveryGate()
+      clearWaitlistAuthPending()
       if (activeReferralCode) clearStoredWaitlistReferralCode()
       if (!nextAccount.emailVerified) {
         setStep('auth')

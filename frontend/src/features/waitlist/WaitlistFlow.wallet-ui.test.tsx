@@ -12,6 +12,7 @@ import { AppLoadingProvider } from '@/components/layout/AppLoadingOverlay'
 import { WaitlistFlow } from './WaitlistFlow'
 import { WaitlistSetupWorkspace } from './WaitlistSetupWorkspace'
 import { clearWaitlistRecoveryGate } from './waitlistRecoveryGate'
+import { clearWaitlistAuthPending } from './waitlistAuthPending'
 
 const collisionStateRef = vi.hoisted(() => ({
   current: {
@@ -276,6 +277,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     mockGetAccessToken.mockReset()
     mockGetAccessToken.mockImplementation(async () => (mockPrivyAuthenticated ? 'privy-token-default' : null))
     clearWaitlistRecoveryGate()
+    clearWaitlistAuthPending()
     sessionStorage.clear()
 
     vi.mocked(apiFetch).mockImplementation(async (input: string) => {
@@ -782,6 +784,68 @@ describe('WaitlistFlow simplified completion UI', () => {
     await waitFor(() => {
       expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     }, { timeout: 10_000 })
+    expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
+  })
+
+  it('continues bootstrap when Privy authed before login() resolves', async () => {
+    mockPrivyAuthenticated = false
+    let bootstrapCalls = 0
+
+    mockLogin.mockReset()
+    mockLogin.mockImplementation(
+      () =>
+        new Promise<void>(() => {
+          // Simulates email verification completing outside the login() promise.
+        }),
+    )
+
+    vi.mocked(apiFetch).mockImplementation(async (input: string) => {
+      if (input.startsWith('/api/waitlist/bootstrap')) {
+        bootstrapCalls += 1
+        return jsonResponse(WAITLIST_BOOTSTRAP_PAYLOAD) as any
+      }
+      if (input.startsWith('/api/auth/privy')) {
+        return jsonResponse({ success: true }) as any
+      }
+      if (input.startsWith('/api/waitlist/stats')) {
+        return jsonResponse({
+          success: true,
+          data: { signedUpCount: 0, capacity: 0, spotsRemaining: 0 },
+        }) as any
+      }
+      throw new Error(`Unhandled apiFetch call: ${input}`)
+    })
+
+    const view = render(
+      <MemoryRouter>
+        <WaitlistFlow />
+      </MemoryRouter>,
+    )
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^continue$/i }))
+    })
+
+    mockPrivyAuthenticated = true
+    await act(async () => {
+      view.rerender(
+        <QueryClientProvider
+          client={
+            new QueryClient({
+              defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+            })
+          }
+        >
+          <AppLoadingProvider>
+            <MemoryRouter>
+              <WaitlistFlow />
+            </MemoryRouter>
+          </AppLoadingProvider>
+        </QueryClientProvider>,
+      )
+    })
+
+    expect(await screen.findByRole('heading', { name: /you're on the waitlist/i }, { timeout: 8_000 })).toBeTruthy()
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
   })
 
