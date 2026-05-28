@@ -250,14 +250,18 @@ describe('WaitlistFlow simplified completion UI', () => {
       persistedCollisionSignal: false,
       shouldDisableInjectedConnector: false,
     }
-    mockGetAccessToken.mockReset()
-    mockGetAccessToken.mockResolvedValue('privy-token-default')
     mockPrivyLogout.mockReset()
-    mockPrivyLogout.mockResolvedValue(undefined)
+    mockPrivyLogout.mockImplementation(async () => {
+      mockPrivyAuthenticated = false
+    })
     mockLinkEmail.mockReset()
     mockLinkEmail.mockResolvedValue(undefined)
     mockLogin.mockReset()
-    mockLogin.mockResolvedValue(undefined)
+    mockLogin.mockImplementation(async () => {
+      mockPrivyAuthenticated = true
+    })
+    mockGetAccessToken.mockReset()
+    mockGetAccessToken.mockImplementation(async () => (mockPrivyAuthenticated ? 'privy-token-default' : null))
 
     vi.mocked(apiFetch).mockImplementation(async (input: string) => {
       if (input.startsWith('/api/waitlist/bootstrap')) {
@@ -514,7 +518,104 @@ describe('WaitlistFlow simplified completion UI', () => {
       ).toBe(true)
     }, { timeout: 5_000 })
     expect(bootstrapCalls).toBeLessThanOrEqual(2)
-    expect(mockPrivyLogout).toHaveBeenCalledTimes(0)
+    expect(mockPrivyLogout).toHaveBeenCalledTimes(1)
+    expect(mockLogin).toHaveBeenCalledWith(
+      expect.objectContaining({
+        loginMethods: ['email'],
+        disableSignup: true,
+      }),
+    )
+
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation,
+    })
+  })
+
+  it('does not reload waitlist when recovery auth bridge is rejected', async () => {
+    mockPrivyAuthenticated = true
+    let bootstrapCalls = 0
+    const locationAssign = vi.fn()
+    const originalLocation = window.location
+
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        origin: 'https://4626.fun',
+        pathname: '/waitlist',
+        href: 'https://4626.fun/waitlist',
+        assign: locationAssign,
+      },
+    })
+
+    vi.mocked(apiFetch).mockImplementation(async (input: string) => {
+      if (input.startsWith('/api/waitlist/bootstrap')) {
+        bootstrapCalls += 1
+        return jsonResponse(
+          {
+            success: false,
+            code: 'RECOVERY_REQUIRED_EMAIL_BOUND',
+            error: 'Recovery required',
+            recoveryRequired: true,
+          },
+          false,
+          409,
+        ) as any
+      }
+      if (input.startsWith('/api/auth/logout')) {
+        return jsonResponse({ success: true }) as any
+      }
+      if (input.startsWith('/api/auth/privy')) {
+        return jsonResponse(
+          {
+            success: false,
+            code: 'RECOVERY_REQUIRED_EMAIL_BOUND',
+            error: 'Recovery required',
+            recoveryRequired: true,
+          },
+          false,
+          409,
+        ) as any
+      }
+      if (input.startsWith('/api/waitlist/stats')) {
+        return jsonResponse({
+          success: true,
+          data: { signedUpCount: 0, capacity: 0, spotsRemaining: 0 },
+        }) as any
+      }
+      throw new Error(`Unhandled apiFetch call: ${input}`)
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/waitlist']}>
+        <WaitlistFlow />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /^continue$/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /use existing account/i })).toBeTruthy()
+    }, { timeout: 6_000 })
+
+    fireEvent.click(screen.getByRole('button', { name: /use existing account/i }))
+
+    await waitFor(() => {
+      expect(mockPrivyLogout).toHaveBeenCalled()
+      expect(mockLogin).toHaveBeenCalledWith(
+        expect.objectContaining({
+          loginMethods: ['email'],
+          disableSignup: true,
+        }),
+      )
+    }, { timeout: 5_000 })
+
+    expect(
+      await screen.findByText(/this email already has a 4626 account/i, undefined, { timeout: 5_000 }),
+    ).toBeTruthy()
+    expect(locationAssign).not.toHaveBeenCalled()
+    expect(bootstrapCalls).toBeLessThanOrEqual(3)
 
     Object.defineProperty(window, 'location', {
       configurable: true,

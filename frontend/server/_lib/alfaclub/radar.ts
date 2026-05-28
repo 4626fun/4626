@@ -9,6 +9,10 @@ import {
   getSnapshotAt,
   type MetricsSnapshotRow,
 } from './publicationLedger.js'
+import {
+  formatCreatorRoomLink,
+  loadCreatorRoomIdByCoinAddress,
+} from './creatorRoomLinks.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -16,8 +20,6 @@ const DEFAULT_RADAR_TOP_N = 8
 const DEFAULT_RADAR_MOVERS_N = 6
 const DEFAULT_TELEGRAM_TIMEOUT_MS = 10_000
 const MAX_TELEGRAM_TEXT = 3500
-const DEFAULT_APP_ORIGIN = 'https://app.4626.fun'
-
 export type AlfaClubRadarFlags = {
   killSwitch: boolean
   enabled: boolean
@@ -228,9 +230,13 @@ function shortAddress(value: string): string {
   return `${value.slice(0, 6)}...${value.slice(-4)}`
 }
 
-function creatorUrl(address: string): string {
-  const origin = (process.env.VITE_APP_ORIGIN ?? '').trim() || DEFAULT_APP_ORIGIN
-  return `${origin.replace(/\/+$/, '')}/explore/creators/base/${address}`
+function appendCreatorRoomLink(
+  line: string,
+  address: string,
+  roomIds: Map<string, string>,
+): string {
+  const link = formatCreatorRoomLink(address, roomIds)
+  return link ? `${line} ${link}` : line
 }
 
 function normalizeUsername(raw: string): string {
@@ -366,6 +372,7 @@ export function buildAlfaClubRadarText(params: {
   deltas: SnapshotDelta[]
   flags: AlfaClubRadarFlags
   labels: CreatorLabelMap
+  roomIds: Map<string, string>
 }): { text: string; highlighted: number; topRows: number } {
   const breakoutCandidates = params.deltas
     .filter((delta) => (delta.scoreDelta ?? 0) >= params.flags.minScoreDelta || (delta.rankDelta ?? 0) >= params.flags.minRankMove || delta.isNew)
@@ -417,21 +424,30 @@ export function buildAlfaClubRadarText(params: {
   } else {
     for (const delta of breakoutCandidates) {
       lines.push(
-        `- Breakout: ${creatorLabel(delta, params.labels)} (${formatRankDelta(delta.rankDelta)}, score ${formatScoreDelta(delta.scoreDelta)}, pnl ${formatUsd(delta.current.pnl30dUsd)})`,
+        appendCreatorRoomLink(
+          `- Breakout: ${creatorLabel(delta, params.labels)} (${formatRankDelta(delta.rankDelta)}, score ${formatScoreDelta(delta.scoreDelta)}, pnl ${formatUsd(delta.current.pnl30dUsd)})`,
+          delta.current.creatorAddress,
+          params.roomIds,
+        ),
       )
-      lines.push(`  ${creatorUrl(delta.current.creatorAddress)}`)
     }
     for (const delta of riskCandidates) {
       lines.push(
-        `- Risk: ${creatorLabel(delta, params.labels)} (${formatRankDelta(delta.rankDelta)}, score ${formatScoreDelta(delta.scoreDelta)}, pnl ${formatUsd(delta.current.pnl30dUsd)})`,
+        appendCreatorRoomLink(
+          `- Risk: ${creatorLabel(delta, params.labels)} (${formatRankDelta(delta.rankDelta)}, score ${formatScoreDelta(delta.scoreDelta)}, pnl ${formatUsd(delta.current.pnl30dUsd)})`,
+          delta.current.creatorAddress,
+          params.roomIds,
+        ),
       )
-      lines.push(`  ${creatorUrl(delta.current.creatorAddress)}`)
     }
     for (const entry of stakeShiftCandidates) {
       lines.push(
-        `- Positioning shift: ${creatorLabel(entry.delta, params.labels)} staked ratio ${formatRatioPct(entry.nowRatio)} (${formatRatioDeltaPct(entry.ratioDelta)})`,
+        appendCreatorRoomLink(
+          `- Positioning shift: ${creatorLabel(entry.delta, params.labels)} staked ratio ${formatRatioPct(entry.nowRatio)} (${formatRatioDeltaPct(entry.ratioDelta)})`,
+          entry.delta.current.creatorAddress,
+          params.roomIds,
+        ),
       )
-      lines.push(`  ${creatorUrl(entry.delta.current.creatorAddress)}`)
     }
   }
   lines.push('')
@@ -601,12 +617,17 @@ export async function runAlfaClubRadar(
   }
 
   const labels = await readCreatorLabels(currentRows.map((row) => row.creatorAddress))
+  const addressSet = new Set<string>()
+  for (const row of currentRows) addressSet.add(row.creatorAddress)
+  for (const row of previousRows) addressSet.add(row.creatorAddress)
+  const roomIds = await loadCreatorRoomIdByCoinAddress([...addressSet])
   const built = buildAlfaClubRadarText({
     snapshotTs,
     previousSnapshotTs,
     deltas: buildDeltas(currentRows, previousRows),
     flags,
     labels,
+    roomIds,
   })
 
   if (opts.sendTelegram) {

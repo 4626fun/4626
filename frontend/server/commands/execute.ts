@@ -72,6 +72,26 @@ function isGmeowPostToXFirstEnabled(): boolean {
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
 }
 
+function isHermitAlfaClubXLinkAfterMediaEnabled(): boolean {
+  const raw = String(process.env.HERMIT_ALFACLUB_X_LINK_AFTER_MEDIA ?? '1')
+    .trim()
+    .toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}
+
+function stripImageUrlsFromHermitReply(reply: string, mediaUrl: string | null): string {
+  const lines = reply
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => {
+      if (!isHttpUrl(line)) return true
+      if (mediaUrl && line === mediaUrl) return false
+      return !isLikelyImageUrl(line)
+    })
+  return lines.join('\n').trim()
+}
+
 function isHttpUrl(value: string): boolean {
   return /^https?:\/\/\S+$/i.test(value.trim())
 }
@@ -394,46 +414,76 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
             ? { clearPreferences: hermitRoomContext.clearPreferences }
             : {}),
         })
-        let response = result.reply
-        let suppressMediaAttachments = false
         const mediaUrl =
           pickFirstHermitMediaUrl(result.mediaAttachments ?? []) ??
           pickFirstImageUrlFromReplyText(result.reply)
-        const shouldPostToXFirst =
-          Boolean(mediaUrl) || (result.kind === 'gmeow' && isGmeowPostToXFirstEnabled())
-        if (shouldPostToXFirst) {
-          const tweet = await postTweetFromSystem({
-            text: buildHermitTweetText({
-              reply: result.reply,
-              fallbackCaption: result.meme?.caption,
-              mediaUrl: mediaUrl ?? result.meme?.url,
-            }),
-            groupId: params.groupId,
-            senderWallet: params.senderWallet,
-          })
-          if (tweet.ok) {
-            const tweetUrl =
-              typeof tweet.action?.tweetUrl === 'string'
-                ? tweet.action.tweetUrl
-                : extractTweetUrl(tweet.response)
-            if (tweetUrl) {
-              response = `Posted on X:\n${tweetUrl}`
-              suppressMediaAttachments = true
+        const mediaAttachments = result.mediaAttachments ?? []
+        const alfaClubChat = isAlfaClubChatId(params.chatId)
+        let response = result.reply
+        let alfaclubFollowUpText: string | null = null
+        let outboundAttachments = mediaAttachments
+
+        if (alfaClubChat && mediaAttachments.length > 0) {
+          response = stripImageUrlsFromHermitReply(response, mediaUrl)
+          if (!response) {
+            response =
+              result.meme?.caption?.trim() ||
+              'cat laugh from the Hermit cave.'
+          }
+          if (isHermitAlfaClubXLinkAfterMediaEnabled() && mediaUrl) {
+            const tweet = await postTweetFromSystem({
+              text: buildHermitTweetText({
+                reply: result.reply,
+                fallbackCaption: result.meme?.caption,
+                mediaUrl: mediaUrl ?? result.meme?.url,
+              }),
+              groupId: params.groupId,
+              senderWallet: params.senderWallet,
+            })
+            if (tweet.ok) {
+              const tweetUrl =
+                typeof tweet.action?.tweetUrl === 'string'
+                  ? tweet.action.tweetUrl
+                  : extractTweetUrl(tweet.response)
+              if (tweetUrl) alfaclubFollowUpText = tweetUrl
+            }
+          }
+        } else {
+          const shouldPostToXFirst =
+            Boolean(mediaUrl) || (result.kind === 'gmeow' && isGmeowPostToXFirstEnabled())
+          if (shouldPostToXFirst) {
+            const tweet = await postTweetFromSystem({
+              text: buildHermitTweetText({
+                reply: result.reply,
+                fallbackCaption: result.meme?.caption,
+                mediaUrl: mediaUrl ?? result.meme?.url,
+              }),
+              groupId: params.groupId,
+              senderWallet: params.senderWallet,
+            })
+            if (tweet.ok) {
+              const tweetUrl =
+                typeof tweet.action?.tweetUrl === 'string'
+                  ? tweet.action.tweetUrl
+                  : extractTweetUrl(tweet.response)
+              if (tweetUrl) {
+                response = `Posted on X:\n${tweetUrl}`
+                outboundAttachments = []
+              }
             }
           }
         }
-        const mediaAttachments = suppressMediaAttachments
-          ? []
-          : (result.mediaAttachments ?? [])
+
         return {
           ok: true,
           response,
-          ...(mediaAttachments.length
+          ...(outboundAttachments.length || alfaclubFollowUpText
             ? {
                 action: {
                   action: 'hermit.command',
                   kind: result.kind,
-                  attachments: mediaAttachments,
+                  ...(outboundAttachments.length ? { attachments: outboundAttachments } : {}),
+                  ...(alfaclubFollowUpText ? { alfaclubFollowUpText } : {}),
                 },
               }
             : {}),

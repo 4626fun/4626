@@ -172,9 +172,9 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     expect(typeof call.clearPreferences).toBe('function')
   })
 
-  it('when HERMIT_GMEOW_POST_TO_X_FIRST is enabled, /gmeow posts to X and returns tweet URL', async () => {
+  it('on AlfaClub, /gmeow posts media first then returns X hyperlink as follow-up', async () => {
     restoreEnv = applyEnv({
-      HERMIT_GMEOW_POST_TO_X_FIRST: '1',
+      HERMIT_ALFACLUB_X_LINK_AFTER_MEDIA: '1',
     })
     executeHermitCommandMock.mockResolvedValueOnce({
       kind: 'gmeow',
@@ -204,6 +204,55 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     })
 
     expect(postTweetFromSystemMock).toHaveBeenCalledTimes(1)
+    expect(result.ok).toBe(true)
+    expect(result.response).toBe('cat laugh alpha unlocked.')
+    expect(result.response).not.toContain('giphy.gif')
+    expect(result.action).toEqual({
+      action: 'hermit.command',
+      kind: 'gmeow',
+      attachments: [
+        {
+          url: 'https://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
+          type: 'image',
+        },
+      ],
+      alfaclubFollowUpText: 'https://x.com/i/web/status/1',
+    })
+  })
+
+  it('when HERMIT_GMEOW_POST_TO_X_FIRST is enabled, /gmeow posts to X and returns tweet URL', async () => {
+    restoreEnv = applyEnv({
+      HERMIT_GMEOW_POST_TO_X_FIRST: '1',
+      HERMIT_ALFACLUB_X_LINK_AFTER_MEDIA: '0',
+    })
+    executeHermitCommandMock.mockResolvedValueOnce({
+      kind: 'gmeow',
+      provider: 'pinata',
+      reply: 'cat laugh alpha unlocked.\nhttps://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
+      meme: {
+        id: 'catlaugh-1',
+        caption: 'cat laugh from the Hermit cave.',
+        url: 'https://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
+        tags: ['laugh', 'cat'],
+      },
+      mediaAttachments: [
+        {
+          url: 'https://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
+          type: 'image',
+        },
+      ],
+    })
+
+    const { executeCommand } = await import('./execute.ts')
+    const result = await executeCommand({
+      groupId: 'tg-room',
+      senderWallet: ALICE,
+      text: '/gmeow',
+      chatId: 'telegram:123',
+      userId: ALICE,
+    })
+
+    expect(postTweetFromSystemMock).toHaveBeenCalledTimes(1)
     expect(postTweetFromSystemMock).toHaveBeenCalledWith(
       expect.objectContaining({
         groupId: 'tg-room',
@@ -216,9 +265,9 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     expect(result.action).toBeUndefined()
   })
 
-  it('when X post fails in /gmeow mode, it falls back to normal AlfaClub reply', async () => {
+  it('when X post fails after AlfaClub media, it still returns the inline media reply', async () => {
     restoreEnv = applyEnv({
-      HERMIT_GMEOW_POST_TO_X_FIRST: 'true',
+      HERMIT_ALFACLUB_X_LINK_AFTER_MEDIA: '1',
     })
     executeHermitCommandMock.mockResolvedValueOnce({
       kind: 'gmeow',
@@ -253,7 +302,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
 
     expect(postTweetFromSystemMock).toHaveBeenCalledTimes(1)
     expect(result.ok).toBe(true)
-    expect(result.response).toContain('cat laugh alpha unlocked.')
+    expect(result.response).toBe('cat laugh alpha unlocked.')
     expect(result.action).toEqual({
       action: 'hermit.command',
       kind: 'gmeow',

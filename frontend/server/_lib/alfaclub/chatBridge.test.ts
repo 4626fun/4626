@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { loggerMock, readChatTokenMock, requestImmediatePrivyRefreshMock } = vi.hoisted(() => ({
+const {
+  loggerMock,
+  readChatTokenMock,
+  requestImmediatePrivyRefreshMock,
+  upsertAlfaClubIngestMessagesMock,
+  executeDeterministicCommandMock,
+} = vi.hoisted(() => ({
   loggerMock: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -8,6 +14,8 @@ const { loggerMock, readChatTokenMock, requestImmediatePrivyRefreshMock } = vi.h
   },
   readChatTokenMock: vi.fn(),
   requestImmediatePrivyRefreshMock: vi.fn(),
+  upsertAlfaClubIngestMessagesMock: vi.fn(async () => [] as Array<{ messageId: string }>),
+  executeDeterministicCommandMock: vi.fn(async () => ({ responseText: '' })),
 }))
 
 vi.mock('../infra/logger.js', () => ({
@@ -27,11 +35,11 @@ vi.mock('./privyTokenRefresher.js', () => ({
 }))
 
 vi.mock('./chatIngestStore.js', () => ({
-  upsertAlfaClubIngestMessages: vi.fn(async () => []),
+  upsertAlfaClubIngestMessages: upsertAlfaClubIngestMessagesMock,
 }))
 
 vi.mock('../../agents/core/executeDeterministicCommand.js', () => ({
-  executeDeterministicCommand: vi.fn(async () => ({ responseText: '' })),
+  executeDeterministicCommand: executeDeterministicCommandMock,
 }))
 
 import {
@@ -158,6 +166,10 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     readChatTokenMock.mockResolvedValue(null)
     requestImmediatePrivyRefreshMock.mockReset()
     requestImmediatePrivyRefreshMock.mockResolvedValue({ status: 'refreshed', identityTokenExp: null })
+    upsertAlfaClubIngestMessagesMock.mockReset()
+    upsertAlfaClubIngestMessagesMock.mockResolvedValue([])
+    executeDeterministicCommandMock.mockReset()
+    executeDeterministicCommandMock.mockResolvedValue({ responseText: '' })
     FakeWebSocket.instances = []
     ;(globalThis as { WebSocket?: unknown }).WebSocket = FakeWebSocket
     _resetBridgeAuthHealthForTests()
@@ -170,6 +182,50 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     globalThis.fetch = realFetch
     ;(globalThis as { WebSocket?: unknown }).WebSocket = realWebSocket
     vi.useRealTimers()
+  })
+
+  it('retries room history after awaited Privy refresh when the first fetch returns 401', async () => {
+    readChatTokenMock
+      .mockResolvedValueOnce({
+        jwt: 'jwt-stale',
+        updatedAt: '2026-05-02T15:00:00.000Z',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+        updatedBy: 'test',
+      })
+      .mockResolvedValueOnce({
+        jwt: 'jwt-fresh',
+        updatedAt: '2026-05-02T15:05:00.000Z',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+        updatedBy: 'privy-token-refresher',
+      })
+
+    let historyFetchCalls = 0
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('room_history_paginate')) {
+        historyFetchCalls += 1
+        if (historyFetchCalls === 1) {
+          return new Response(JSON.stringify({ error: 'Unauthorized: Invalid token' }), {
+            status: 401,
+            headers: { 'content-type': 'application/json' },
+          })
+        }
+        return new Response(JSON.stringify({ messages: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }) as unknown as typeof fetch
+
+    const result = await _runAlfaClubChatBridgeTickForTests(makeFlags({ jwt: null }))
+    expect(requestImmediatePrivyRefreshMock).toHaveBeenCalledWith('bridge_auth_fail')
+    expect(historyFetchCalls).toBe(2)
+    expect(result.errors).toEqual([])
+    expect(result.fetched).toBe(0)
   })
 
   it('kicks an immediate Privy refresh on room-history auth failure only', async () => {
@@ -516,6 +572,33 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     })
     expect(commands).toHaveLength(1)
     expect(commands[0]?.text).toBe('/alfa status')
+  })
+
+  it('cron mode does not re-run /gmeow when ingest upsert is an update (not a new row)', async () => {
+    const nowMs = Date.now()
+    mockHistoryMessages([
+      {
+        id: 'm-gmeow-once',
+        date: nowMs - 10_000,
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: '/gmeow',
+      },
+    ])
+    // Empty response skips websocket send (fake timers would hang on send timeout).
+    upsertAlfaClubIngestMessagesMock
+      .mockResolvedValueOnce([{ messageId: 'm-gmeow-once' }])
+      .mockResolvedValueOnce([])
+
+    const first = await _runAlfaClubChatBridgeTickForTests(makeFlags(), {
+      seedHistoryOnlyOnFirstTick: false,
+    })
+    const second = await _runAlfaClubChatBridgeTickForTests(makeFlags(), {
+      seedHistoryOnlyOnFirstTick: false,
+    })
+
+    expect(first.processed).toBe(1)
+    expect(second.processed).toBe(0)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
   })
 
   it('processes recent slash commands on first seed tick', async () => {

@@ -21,7 +21,7 @@ Operational source of truth for bot identities, token ownership, and env-variabl
 
 | Bot Handle | Purpose | Owning Runtime/Service | Primary Env Prefix | Notes |
 | --- | --- | --- | --- | --- |
-| `@keepr4626bot` | Hermit AlfaClub creative posting (`/x post`, `/gmeow` X-first) | Railway service `4626` (`hermit.4626.fun`) | `HERMIT_TWITTER_*` | Hermit runtime prefers `HERMIT_*` and only falls back to `TWITTER_*` for compatibility. |
+| `@keepr4626bot` / `hermit4626bot` (Telegram) | Hermit AlfaClub creative posting (`/hermit`, `/meme`, `/gmeow`, `/x post`) | **Vercel** (`4626.fun` bridge cron + `hermit.4626.fun` Telegram webhook) | `HERMIT_TWITTER_*`, `HERMIT_PINATA_*`, `TELEGRAM_TO_ALFACLUB_*` | Chat bridge ticks run on Vercel cron (`/api/v1/alfaclub/chat-bridge-run`). Railway `4626-hermit-agent` is optional and **blocked from in-process bridge** unless `ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY=1`. |
 | `<fill-me>` | `<fill-me>` | `<fill-me>` | `<fill-me>` | Add every additional bot before enabling it in production. |
 
 ## Bot profile: Hermit (`@keepr4626bot`)
@@ -42,8 +42,8 @@ Operational source of truth for bot identities, token ownership, and env-variabl
 
 ### Service/runtime ownership
 
-- **Owning service:** Railway `4626` (`hermit.4626.fun`)
-- **Process:** `frontend/server/agents/hermit/index.ts`
+- **Owning service:** Vercel production (`akita-llc/4626`) — bridge cron + Telegram ingress on `hermit.4626.fun`
+- **Optional long-lived host:** Railway `4626-hermit-agent` (`frontend/server/agents/hermit/index.ts`) — health at Railway URL, not `hermit.4626.fun/healthz` (that host serves the Vercel SPA)
 - **Identity rule:** if logs say `hermit` and social/chat surfaces say `@keepr4626bot`, that is expected and refers to one bot.
 - **Canonical auth refresher model:** in-process refresher disabled; Vercel cron remains canonical token writer.
 
@@ -71,7 +71,8 @@ Operational source of truth for bot identities, token ownership, and env-variabl
 - **Twitter/X lane**
   - Preferred: `HERMIT_TWITTER_API_KEY`, `HERMIT_TWITTER_API_SECRET`, `HERMIT_TWITTER_ACCESS_TOKEN`, `HERMIT_TWITTER_ACCESS_SECRET`
   - Compatibility fallback: `TWITTER_API_KEY`, `TWITTER_API_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_SECRET`
-  - Feature flag: `HERMIT_GMEOW_POST_TO_X_FIRST`
+  - AlfaClub media: `HERMIT_ALFACLUB_X_LINK_AFTER_MEDIA` (default on — inline image in room, then X URL follow-up)
+  - Legacy non-AlfaClub: `HERMIT_GMEOW_POST_TO_X_FIRST`
 
 ### Telegram room mapping (`@keepr4626bot`)
 

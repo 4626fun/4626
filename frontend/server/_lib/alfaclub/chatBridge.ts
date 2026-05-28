@@ -831,6 +831,13 @@ function extractAlfaClubActionAttachments(action: unknown): AlfaClubMessageAttac
   return normalizeAlfaClubAttachments(action.attachments)
 }
 
+function extractAlfaClubFollowUpText(action: unknown): string | null {
+  if (!isJsonRecord(action)) return null
+  if (action.action !== 'hermit.command') return null
+  const followUp = typeof action.alfaclubFollowUpText === 'string' ? action.alfaclubFollowUpText.trim() : ''
+  return followUp.length > 0 ? followUp : null
+}
+
 /**
  * AlfaClub's API origin (`api.alfaclub.app`) is fronted by Cloudflare,
  * which blocks "browser-signature-banned" non-browser User-Agents with
@@ -2509,6 +2516,43 @@ function ensureLiveCommandSocket(params: {
   socket.addEventListener('error', onError)
 }
 
+async function sendAlfaClubCommandTextReply(params: {
+  flags: AlfaClubChatBridgeFlags
+  roomId: string
+  jwt: string
+  text: string
+  replyToMessageId: string
+}): Promise<void> {
+  if (params.flags.botToken) {
+    const idempotencyKey = buildBotMessageIdempotencyKey({
+      roomId: params.roomId,
+      messageId: `${params.replyToMessageId}:followup`,
+    })
+    await sendRoomMessageViaBotTokenWithProxyFallback({
+      apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
+      directApiBaseUrl: params.flags.apiBaseUrl,
+      botToken: params.flags.botToken,
+      roomId: params.roomId,
+      text: params.text,
+      replyToMessageId: params.replyToMessageId,
+      proxySecret: resolveAlfaClubProxySecret(params.flags),
+      idempotencyKey,
+      timeoutMs: params.flags.sendTimeoutMs,
+    })
+    return
+  }
+  await sendRoomMessageViaWebSocket({
+    websocketUrl: params.flags.websocketUrl,
+    wsProxyHttpSendUrl: params.flags.wsProxyHttpSendUrl,
+    wsProxySecret: params.flags.wsProxySecret,
+    jwt: params.jwt,
+    roomId: params.roomId,
+    text: params.text,
+    replyToMessageId: params.replyToMessageId,
+    timeoutMs: params.flags.sendTimeoutMs,
+  })
+}
+
 async function executeCommandBatch(params: {
   commands: AlfaClubCommandMessage[]
   flags: AlfaClubChatBridgeFlags
@@ -2665,6 +2709,31 @@ async function executeCommandBatch(params: {
         })
       }
       replied += 1
+      const followUpText = extractAlfaClubFollowUpText(result.action)
+      if (followUpText) {
+        try {
+          await sendAlfaClubCommandTextReply({
+            flags: params.flags,
+            roomId: params.roomId,
+            jwt: params.jwt,
+            text: followUpText,
+            replyToMessageId: command.id,
+          })
+          logger.info('[alfaclub-chat] command_followup_sent', {
+            roomId: params.roomId,
+            messageId: command.id,
+            sender: command.sender,
+          })
+        } catch (followUpError) {
+          const detail =
+            followUpError instanceof Error ? followUpError.message : String(followUpError)
+          logger.warn('[alfaclub-chat] command_followup_failed', {
+            roomId: params.roomId,
+            messageId: command.id,
+            error: detail.slice(0, 180),
+          })
+        }
+      }
       await markReadMessage({
         apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
         fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(params.flags),
@@ -2737,6 +2806,61 @@ async function kickPrivyRefreshOncePerTick(): Promise<void> {
   await requestImmediatePrivyRefresh('bridge_auth_fail').catch(() => {})
 }
 
+async function retryRoomHistoryAfterAuthFailure(params: {
+  flags: AlfaClubChatBridgeFlags
+  roomId: string
+  failedJwt: string
+  fallbackJwt: string | null
+}): Promise<{
+  fetchedMessages: AlfaClubRoomHistoryMessage[] | null
+  jwt: string | null
+  resolvedCommandJwt: { jwt: string | null; source: BridgeJwtSource }
+  historyError: unknown | null
+}> {
+  rememberBadJwt(params.failedJwt)
+  await kickPrivyRefreshOncePerTick()
+  const recovered = await resolveBridgeJwtWithSource(params.fallbackJwt)
+  const jwt = recovered.jwt
+  if (!jwt) {
+    return {
+      fetchedMessages: null,
+      jwt: null,
+      resolvedCommandJwt: recovered,
+      historyError: new Error('room_history_failed:401'),
+    }
+  }
+
+  try {
+    const fetchedMessages = await fetchRoomHistory({
+      apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
+      fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(params.flags),
+      proxySecret: resolveAlfaClubProxySecret(params.flags),
+      roomId: params.roomId,
+      jwt,
+      limit: params.flags.historyLimit,
+      timeoutMs: params.flags.requestTimeoutMs,
+    })
+    clearBadJwt()
+    logger.info('[alfaclub-chat] room_history_recovered:after_privy_refresh', {
+      roomId: params.roomId,
+      jwtSource: recovered.source,
+    })
+    return {
+      fetchedMessages,
+      jwt,
+      resolvedCommandJwt: recovered,
+      historyError: null,
+    }
+  } catch (retryError) {
+    return {
+      fetchedMessages: null,
+      jwt,
+      resolvedCommandJwt: recovered,
+      historyError: retryError,
+    }
+  }
+}
+
 async function runBridgeTick(
   flags: AlfaClubChatBridgeFlags,
   options: RunBridgeTickOptions = {},
@@ -2792,13 +2916,43 @@ async function runBridgeTick(
     })
   } catch (error) {
     const fallbackJwt = (flags.jwt ?? '').trim() || null
+    if (classifyHistoryError(error) === 'auth' && historyErrorJwt) {
+      const recovered = await retryRoomHistoryAfterAuthFailure({
+        flags,
+        roomId,
+        failedJwt: historyErrorJwt,
+        fallbackJwt,
+      })
+      if (!recovered.historyError && recovered.fetchedMessages) {
+        fetchedMessages = recovered.fetchedMessages
+        jwt = recovered.jwt as string
+        historyErrorJwt = jwt
+        commandJwt = jwt
+        resolvedCommandJwt = recovered.resolvedCommandJwt
+        historyError = null
+      } else {
+        historyError = recovered.historyError ?? error
+        if (recovered.jwt) {
+          jwt = recovered.jwt
+          historyErrorJwt = recovered.jwt
+          commandJwt = recovered.jwt
+          resolvedCommandJwt = recovered.resolvedCommandJwt
+        }
+      }
+    } else {
+      historyError = error
+    }
+
     const shouldRetryWithEnv =
+      historyError !== null &&
       resolvedCommandJwt.source === 'db' &&
       Boolean(fallbackJwt) &&
       fallbackJwt !== resolvedCommandJwt.jwt &&
-      classifyHistoryError(error) === 'auth'
-    if (!shouldRetryWithEnv) {
-      historyError = error
+      classifyHistoryError(historyError) === 'auth'
+    if (historyError === null) {
+      // Recovered via awaited Privy refresh above.
+    } else if (!shouldRetryWithEnv) {
+      // historyError already set from the initial failure or auth-recovery retry.
     } else {
       logger.warn('[alfaclub-chat] room_history_auth_failed:retry_env', {
         roomId,
@@ -2854,7 +3008,7 @@ async function runBridgeTick(
     rememberBadJwt(historyErrorJwt, now)
     recordBridgeAuthFailure(new Date(now).toISOString())
     bridgeState.liveFallbackActive = true
-    void kickPrivyRefreshOncePerTick()
+    await kickPrivyRefreshOncePerTick()
     warnRoomHistoryAuthFallback({
       roomId,
       jwtSource: resolvedCommandJwt.source,
@@ -3048,14 +3202,18 @@ async function runBridgeTick(
     }
   }
 
-  const commandSourceMessages =
-    !seedHistoryOnlyOnFirstTick &&
-    newlyIngestedHistoryIds !== null &&
-    newlyIngestedHistoryIds.size > 0
-      ? unseenMessages.filter((message) =>
-          newlyIngestedHistoryIds?.has(String(message.id ?? '').trim()),
+  // Long-running in-process bridge: `unseenMessages` + `bridgeState.seenMessageIds`
+  // prevent replay within the same process.
+  // Vercel cron (seedHistoryOnlyOnFirstTick=false): stateless — only execute
+  // slash commands for history rows that were *inserted* this tick (not every
+  // ON CONFLICT update), otherwise /gmeow is re-run every minute and spams chat.
+  const commandSourceMessages = seedHistoryOnlyOnFirstTick
+    ? unseenMessages
+    : newlyIngestedHistoryIds === null
+      ? []
+      : unseenMessages.filter((message) =>
+          newlyIngestedHistoryIds.has(String(message.id ?? '').trim()),
         )
-      : unseenMessages
 
   const commands = collectAlfaClubCommandMessages({
     messages: commandSourceMessages,
@@ -3435,8 +3593,9 @@ export function _resetAlfaClubChatBridgeStateForTests(): void {
 
 export function _runAlfaClubChatBridgeTickForTests(
   flags: AlfaClubChatBridgeFlags,
+  options: RunBridgeTickOptions = {},
 ): Promise<AlfaClubChatBridgeTickResult> {
-  return runBridgeTick(flags)
+  return runBridgeTick(flags, options)
 }
 
 export function _ensureLiveCommandSocketForTests(params: {

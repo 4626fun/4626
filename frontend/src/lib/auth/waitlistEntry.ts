@@ -97,6 +97,17 @@ export function getMarketingWaitlistEntryUrl(): string {
   return buildWaitlistEntryUrl(getMarketingBaseUrl())
 }
 
+/** True when the browser is already on the canonical marketing-host `/waitlist` route. */
+export function isOnCanonicalMarketingWaitlistPage(): boolean {
+  if (typeof window === 'undefined') return false
+  if (!isMarketingWaitlistEntryLocation({ pathname: window.location.pathname })) return false
+  try {
+    return window.location.origin === new URL(getMarketingWaitlistEntryUrl()).origin
+  } catch {
+    return false
+  }
+}
+
 export type WaitlistSetupIntent = 'base-app' | 'owner-install'
 
 export function readWaitlistSetupIntent(value: string | null | undefined): WaitlistSetupIntent | null {

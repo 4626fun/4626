@@ -12,6 +12,10 @@ import {
   type PublicationRecord,
 } from './publicationLedger.js'
 import { readAlfaClubChatBridgeFlags, sendAlfaClubRoomText } from './chatBridge.js'
+import {
+  formatCreatorRoomLink,
+  loadCreatorRoomIdByCoinAddress,
+} from './creatorRoomLinks.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -20,8 +24,6 @@ const DEFAULT_MARKET_TIMEOUT_MS = 12_000
 const DEFAULT_TOP_ROWS = 5
 const DEFAULT_MOVER_ROWS = 5
 const DEFAULT_RECENT_PUBLICATIONS_LIMIT = 500
-const DEFAULT_APP_ORIGIN = 'https://app.4626.fun'
-
 const MAJOR_TOKENS = [
   { symbol: 'BTC', id: 'bitcoin' },
   { symbol: 'ETH', id: 'ethereum' },
@@ -227,9 +229,13 @@ function creatorLabel(row: MetricsSnapshotRow): string {
   return `#${row.tokenId.toString()} ${shortAddress(row.creatorAddress)}`
 }
 
-function creatorUrl(address: string): string {
-  const origin = (process.env.VITE_APP_ORIGIN ?? '').trim() || DEFAULT_APP_ORIGIN
-  return `${origin.replace(/\/+$/, '')}/explore/creators/base/${address}`
+function appendCreatorRoomLink(
+  line: string,
+  address: string,
+  roomIds: Map<string, string>,
+): string {
+  const link = formatCreatorRoomLink(address, roomIds)
+  return link ? `${line} ${link}` : line
 }
 
 function normalizeUsername(raw: string): string {
@@ -403,6 +409,7 @@ function buildBriefText(params: {
   topRows: number
   moverRows: number
   labels: CreatorLabelMap
+  roomIds: Map<string, string>
 }): string {
   const deltas = buildDeltas(params.currentRows, params.previousRows)
   const previousTopSet = new Set(params.previousRows.slice(0, params.topRows).map((row) => row.creatorAddress.toLowerCase()))
@@ -467,23 +474,36 @@ function buildBriefText(params: {
   lines.push('')
   lines.push(`**Top ${params.topRows} leaderboard**`)
   for (const row of params.currentRows.slice(0, params.topRows)) {
-    lines.push(`- #${row.rank} ${creatorIdentity(row, params.labels)} — score ${formatScore(row.score)} · supply ${row.totalSupply.toString()} · staked ${row.stakedSupply.toString()}`)
-    lines.push(`  ${creatorUrl(row.creatorAddress)}`)
+    lines.push(
+      appendCreatorRoomLink(
+        `- #${row.rank} ${creatorIdentity(row, params.labels)} — score ${formatScore(row.score)} · supply ${row.totalSupply.toString()} · staked ${row.stakedSupply.toString()}`,
+        row.creatorAddress,
+        params.roomIds,
+      ),
+    )
   }
   lines.push('')
   lines.push('**Actionable breakouts**')
   for (const delta of movers) {
-    lines.push(`- #${delta.current.rank} ${creatorIdentity(delta.current, params.labels)} — ${formatRankDelta(delta.rankDelta)} · score ${delta.scoreDelta === null ? 'new' : `${delta.scoreDelta > 0 ? '+' : ''}${delta.scoreDelta.toFixed(3)}`} · supply ${delta.current.totalSupply.toString()}`)
-    lines.push(`  ${creatorUrl(delta.current.creatorAddress)}`)
+    lines.push(
+      appendCreatorRoomLink(
+        `- #${delta.current.rank} ${creatorIdentity(delta.current, params.labels)} — ${formatRankDelta(delta.rankDelta)} · score ${delta.scoreDelta === null ? 'new' : `${delta.scoreDelta > 0 ? '+' : ''}${delta.scoreDelta.toFixed(3)}`} · supply ${delta.current.totalSupply.toString()}`,
+        delta.current.creatorAddress,
+        params.roomIds,
+      ),
+    )
   }
   if (downside.length > 0) {
     lines.push('')
     lines.push('**Risks / breakdowns**')
     for (const delta of downside) {
       lines.push(
-        `- #${delta.current.rank} ${creatorIdentity(delta.current, params.labels)} — ${formatRankDelta(delta.rankDelta)} · score ${delta.scoreDelta === null ? 'n/a' : `${delta.scoreDelta > 0 ? '+' : ''}${delta.scoreDelta.toFixed(3)}`} · pnl ${formatUsd(delta.current.pnl30dUsd)}`,
+        appendCreatorRoomLink(
+          `- #${delta.current.rank} ${creatorIdentity(delta.current, params.labels)} — ${formatRankDelta(delta.rankDelta)} · score ${delta.scoreDelta === null ? 'n/a' : `${delta.scoreDelta > 0 ? '+' : ''}${delta.scoreDelta.toFixed(3)}`} · pnl ${formatUsd(delta.current.pnl30dUsd)}`,
+          delta.current.creatorAddress,
+          params.roomIds,
+        ),
       )
-      lines.push(`  ${creatorUrl(delta.current.creatorAddress)}`)
     }
   }
   if (stakeShifts.length > 0) {
@@ -491,25 +511,38 @@ function buildBriefText(params: {
     lines.push('**Positioning shifts (staked ratio)**')
     for (const entry of stakeShifts) {
       lines.push(
-        `- #${entry.delta.current.rank} ${creatorIdentity(entry.delta.current, params.labels)} — now ${formatRatioPct(entry.nowRatio)} (${formatRatioDeltaPct(entry.ratioDelta)})`,
+        appendCreatorRoomLink(
+          `- #${entry.delta.current.rank} ${creatorIdentity(entry.delta.current, params.labels)} — now ${formatRatioPct(entry.nowRatio)} (${formatRatioDeltaPct(entry.ratioDelta)})`,
+          entry.delta.current.creatorAddress,
+          params.roomIds,
+        ),
       )
-      lines.push(`  ${creatorUrl(entry.delta.current.creatorAddress)}`)
     }
   }
   if (entrantRows.length > 0) {
     lines.push('')
     lines.push(`**New top-${params.topRows} entrants**`)
     for (const row of entrantRows) {
-      lines.push(`- #${row.rank} ${creatorIdentity(row, params.labels)} — score ${formatScore(row.score)}`)
-      lines.push(`  ${creatorUrl(row.creatorAddress)}`)
+      lines.push(
+        appendCreatorRoomLink(
+          `- #${row.rank} ${creatorIdentity(row, params.labels)} — score ${formatScore(row.score)}`,
+          row.creatorAddress,
+          params.roomIds,
+        ),
+      )
     }
   }
   if (exitRows.length > 0) {
     lines.push('')
     lines.push(`**Dropped from top-${params.topRows}**`)
     for (const row of exitRows) {
-      lines.push(`- was #${row.rank} ${creatorIdentity(row, params.labels)} — score ${formatScore(row.score)}`)
-      lines.push(`  ${creatorUrl(row.creatorAddress)}`)
+      lines.push(
+        appendCreatorRoomLink(
+          `- was #${row.rank} ${creatorIdentity(row, params.labels)} — score ${formatScore(row.score)}`,
+          row.creatorAddress,
+          params.roomIds,
+        ),
+      )
     }
   }
   lines.push('')
@@ -603,6 +636,10 @@ export async function runAlfaClubDailyBrief(params: {
   }
 
   const labels = await readCreatorLabels(currentRows.map((row) => row.creatorAddress))
+  const addressSet = new Set<string>()
+  for (const row of currentRows) addressSet.add(row.creatorAddress)
+  for (const row of previousRows) addressSet.add(row.creatorAddress)
+  const roomIds = await loadCreatorRoomIdByCoinAddress([...addressSet])
   const messageText = buildBriefText({
     snapshotTs,
     previousSnapshotTs,
@@ -614,6 +651,7 @@ export async function runAlfaClubDailyBrief(params: {
     topRows: flags.topRows,
     moverRows: flags.moverRows,
     labels,
+    roomIds,
   })
   const send = await sendAlfaClubRoomText({
     text: messageText,

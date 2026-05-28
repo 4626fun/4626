@@ -201,9 +201,13 @@ Provider URL contract:
   omit the field (or set it to `null`).
 
 When a valid attachment is produced, AlfaClub's room renders it
-inline. The validated URL is also appended to the textual reply so
-clients that don't render attachments still surface a clickable
-link.
+inline. For AlfaClub bridge replies (`chatId = alfaclub:<roomId>`),
+the bridge sends **caption + attachment first**, then a **second
+message** with the X status URL when `HERMIT_ALFACLUB_X_LINK_AFTER_MEDIA`
+is enabled (default). Raw image URLs are stripped from the primary
+reply text so the client does not show a bare hyperlink instead of
+the inline GIF. Non-AlfaClub surfaces may still use
+`HERMIT_GMEOW_POST_TO_X_FIRST` (tweet URL only, no inline attachment).
 
 ### 5. Hermit workspace seeds — manual sync
 

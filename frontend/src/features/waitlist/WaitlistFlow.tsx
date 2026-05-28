@@ -10,6 +10,7 @@ import { apiFetch } from '@/lib/api/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
 import {
   getMarketingWaitlistEntryUrl,
+  isOnCanonicalMarketingWaitlistPage,
   isWaitlistStartAuthSearchParam,
   readStoredWaitlistReferralCode,
   storeWaitlistReferralCode,
@@ -579,13 +580,13 @@ export function WaitlistFlow(props: {
     return true
   }, [getAccessToken, settleBootstrapAfterRecoverableLoginError])
 
-  const waitForPrivyLogoutSettlement = useCallback(async (): Promise<void> => {
+  const waitForPrivyLogoutSettlement = useCallback(async (opts?: { tokenOnly?: boolean }): Promise<void> => {
     for (let attempt = 0; attempt < PRIVY_LOGOUT_SETTLE_ATTEMPTS; attempt += 1) {
       const token = await getAccessToken().catch(() => null)
       const tokenMissing = !token
       const authCleared = privyAuthedRef.current === false
       const clientNotReady = privyClientStatusRef.current !== 'ready'
-      if (tokenMissing && (authCleared || clientNotReady)) return
+      if (tokenMissing && (opts?.tokenOnly === true || authCleared || clientNotReady)) return
       await new Promise<void>((resolve) => setTimeout(resolve, PRIVY_LOGOUT_SETTLE_DELAY_MS))
     }
     throw new Error(STALE_PRIVY_SESSION_MESSAGE)
@@ -618,25 +619,48 @@ export function WaitlistFlow(props: {
   }, [login, privy, requestBootstrap, waitForPrivyLogoutSettlement])
 
   const handoffIntoExistingAccount = useCallback(async (): Promise<void> => {
-    let privyToken = await getAccessToken().catch(() => null)
+    // Drop the colliding Privy session so recovery login can bind the canonical account.
+    await runWaitlistPrivyLogout({
+      logout: async () => {
+        await privy.logout().catch(() => null)
+      },
+      shouldLogout: true,
+    })
+    await waitForPrivyLogoutSettlement({ tokenOnly: true })
 
-    if (!privyToken) {
-      try {
-        await runPrivyLoginWithTimeout(login as (options?: unknown) => Promise<unknown>, buildWaitlistRecoveryLoginOptions() as any)
-      } catch (loginError: unknown) {
-        if (isWalletProviderCollisionError(loginError)) {
-          throw new Error(getWalletProviderCollisionMessage())
-        }
-        if (!isAlreadyLoggedInAuthError(loginError)) throw loginError
+    try {
+      await runPrivyLoginWithTimeout(
+        login as (options?: unknown) => Promise<unknown>,
+        buildWaitlistRecoveryLoginOptions() as any,
+      )
+    } catch (loginError: unknown) {
+      if (isWalletProviderCollisionError(loginError)) {
+        throw new Error(getWalletProviderCollisionMessage())
       }
-      privyToken = await getAccessToken().catch(() => null)
+      if (!isAlreadyLoggedInAuthError(loginError)) throw loginError
     }
 
+    const privyToken = await getAccessToken().catch(() => null)
     if (!privyToken) {
       throw new Error(STALE_PRIVY_SESSION_MESSAGE)
     }
 
-    await bridgePrivySession(privyToken)
+    const bridged = await bridgePrivySession(privyToken)
+    if (!bridged) {
+      const err = new Error(RECOVERY_REQUIRED_MESSAGE) as Error & { recoveryRequired?: boolean; code?: string }
+      err.recoveryRequired = true
+      err.code = 'RECOVERY_REQUIRED_EMAIL_BOUND'
+      throw err
+    }
+
+    if (isOnCanonicalMarketingWaitlistPage()) {
+      recoveryRequiredBootstrapCooldownUntilRef.current = 0
+      authBootstrapAutoAttemptedRef.current = true
+      setRecoveryRequired(false)
+      setError(null)
+      await settleBootstrapAfterRecoverableLoginError({ bypassRecoveryCooldown: true })
+      return
+    }
 
     let target = waitlistRecoveryUrl
     if (target.startsWith('http') && typeof window !== 'undefined') {
@@ -657,7 +681,17 @@ export function WaitlistFlow(props: {
     }
 
     window.location.assign(target)
-  }, [waitlistRecoveryUrl, getAccessToken, login])
+  }, [
+    waitlistRecoveryUrl,
+    getAccessToken,
+    login,
+    privy,
+    recoveryRequiredBootstrapCooldownUntilRef,
+    settleBootstrapAfterRecoverableLoginError,
+    setError,
+    setRecoveryRequired,
+    waitForPrivyLogoutSettlement,
+  ])
 
   const onContinueAuth = useCallback(async () => {
     if (!beginAuthAttempt()) return

@@ -202,9 +202,23 @@ export async function upsertAlfaClubIngestMessages(
           source = EXCLUDED.source,
           raw_payload_text = COALESCE(EXCLUDED.raw_payload_text, alfaclub.chat_ingest.raw_payload_text),
           updated_at = NOW()
-        RETURNING room_id, message_id, sender_address, message_text, message_date, source, raw_payload_text;
+        RETURNING
+          room_id,
+          message_id,
+          sender_address,
+          message_text,
+          message_date,
+          source,
+          raw_payload_text,
+          (xmax = 0) AS is_new_insert;
       `
-      if ((result.rows?.length ?? 0) === 0) continue
+      const row = result.rows?.[0] as
+        | (Record<string, unknown> & { is_new_insert?: boolean })
+        | undefined
+      if (!row) continue
+      // ON CONFLICT DO UPDATE still returns a row; only brand-new inserts
+      // should drive command execution on serverless cron ticks.
+      if (row.is_new_insert !== true) continue
       inserted.push({
         roomId,
         messageId,
