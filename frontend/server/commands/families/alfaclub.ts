@@ -15,6 +15,10 @@ import {
   buildAlfaClubBriefContext,
   formatAlfaClubDailyBrief,
   formatAlfaClubLeaderboardChat,
+  readAlfaClubDailyBriefFlags,
+  resolveAlfaClubBridgeRoomId,
+  resolveDailyBriefRoomId,
+  runAlfaClubDailyBrief,
 } from '../../_lib/alfaclub/dailyBrief.js'
 import {
   buildAlfaClubRoomUrl,
@@ -217,6 +221,7 @@ function parseSubcommand(text: string): {
   sub:
     | 'leaderboard'
     | 'brief'
+    | 'brief-post'
     | 'creator'
     | 'status'
     | 'help'
@@ -248,8 +253,10 @@ function parseSubcommand(text: string): {
   const first = (parts[0] ?? '').toLowerCase()
 
   if (first === 'brief' || first === 'digest' || first === 'daily') {
+    const second = (parts[1] ?? '').toLowerCase()
+    const sub = second === 'post' || second === 'send' ? 'brief-post' : 'brief'
     return {
-      sub: 'brief',
+      sub,
       address: null,
       tokenId: null,
       amount: null,
@@ -1126,6 +1133,34 @@ export async function executeAlfaclubCommandFamily(params: {
       return { ok: false, response: hint }
     }
     return { ok: true, response: formatAlfaClubDailyBrief(built.formatInput) }
+  }
+  if (parsed.sub === 'brief-post') {
+    const briefRoomId = resolveDailyBriefRoomId()
+    const result = await runAlfaClubDailyBrief({
+      flags: { ...readAlfaClubDailyBriefFlags(), forceSend: true },
+    })
+    if (result.reason === 'brief_room_same_as_bridge') {
+      return {
+        ok: false,
+        response: [
+          'Daily digest is not posted into the command bridge room.',
+          'Set `ALFACLUB_DAILY_BRIEF_ROOM_ID` to a read-only room and keep',
+          '`ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE=1` on Vercel.',
+          `Bridge room: ${resolveAlfaClubBridgeRoomId()}.`,
+        ].join(' '),
+      }
+    }
+    if (!result.ok || !result.sent) {
+      const reason = result.reason ?? 'not_sent'
+      return {
+        ok: false,
+        response: `Digest post failed (${reason}). Target room ${briefRoomId}.`,
+      }
+    }
+    return {
+      ok: true,
+      response: `Daily digest posted to room **${briefRoomId}** (${result.lane ?? 'sent'}).`,
+    }
   }
   if (parsed.sub === 'creator') {
     const address = parsed.address ?? params.senderWallet.toLowerCase()

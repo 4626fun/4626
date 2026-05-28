@@ -283,8 +283,12 @@ AlfaClub auth.
   (not 1043).
 - Local env checklist (no secrets printed):
   `pnpm -C frontend exec tsx scripts/ops/alfaclub-env-preflight.ts`
-- Optional: post daily digest to a read-only room via
-  `ALFACLUB_DAILY_BRIEF_ROOM_ID` (leave unset to keep posting in the bridge room).
+- **Digest split (recommended):** set on Vercel:
+  `ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE=1`,
+  `ALFACLUB_DAILY_BRIEF_ROOM_ID=<read-only-room>`,
+  keep `ALFACLUB_CHAT_ROOM_ID=1043` for commands only.
+  Test: `/alfa brief post` from 1043 (posts to digest room).
+  Helper: `pnpm -C frontend exec tsx scripts/ops/alfaclub-digest-room-setup.ts --room=<id>`.
 
 ### Before merging changes that touch hermit seeds
 

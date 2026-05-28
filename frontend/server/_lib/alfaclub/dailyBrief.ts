@@ -84,11 +84,23 @@ export type AlfaClubDailyBriefResult = {
   messageText: string | null
 }
 
-function resolveDailyBriefRoomId(): string {
+export function resolveAlfaClubBridgeRoomId(): string {
+  return normalizeRoomId(process.env.ALFACLUB_CHAT_ROOM_ID) ?? DEFAULT_ROOM_ID
+}
+
+export function resolveDailyBriefRoomId(): string {
   const explicit = normalizeRoomId(process.env.ALFACLUB_DAILY_BRIEF_ROOM_ID)
   if (explicit) return explicit
-  const bridgeRoom = normalizeRoomId(process.env.ALFACLUB_CHAT_ROOM_ID)
-  return bridgeRoom ?? DEFAULT_ROOM_ID
+  return resolveAlfaClubBridgeRoomId()
+}
+
+/** When true, cron/manual post skips if digest room equals the command bridge room. */
+export function readAlfaClubDailyBriefSeparateFromBridge(): boolean {
+  return parseBool(process.env.ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE ?? '0')
+}
+
+export function isDailyBriefRoomSameAsBridgeRoom(briefRoomId: string): boolean {
+  return briefRoomId === resolveAlfaClubBridgeRoomId()
 }
 
 export function readAlfaClubDailyBriefFlags(): DailyBriefFlags {
@@ -987,6 +999,22 @@ export async function runAlfaClubDailyBrief(params: {
   flags?: DailyBriefFlags
 } = {}): Promise<AlfaClubDailyBriefResult> {
   const flags = params.flags ?? readAlfaClubDailyBriefFlags()
+  if (
+    readAlfaClubDailyBriefSeparateFromBridge() &&
+    isDailyBriefRoomSameAsBridgeRoom(flags.roomId)
+  ) {
+    return {
+      ok: false,
+      reason: 'brief_room_same_as_bridge',
+      snapshotTs: null,
+      previousSnapshotTs: null,
+      sent: false,
+      skippedDuplicate: false,
+      roomId: flags.roomId,
+      lane: null,
+      messageText: null,
+    }
+  }
   if (!flags.enabled) {
     return {
       ok: false,

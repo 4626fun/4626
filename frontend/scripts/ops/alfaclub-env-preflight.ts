@@ -80,11 +80,20 @@ function runChecks(): Check[] {
       'Unset or prompt = bare /gmeow is local-only (fast). Use always only if you want Pinata on every /gmeow.',
   })
 
+  const bridgeRoom = String(process.env.ALFACLUB_CHAT_ROOM_ID ?? '1043').trim()
+  const briefRoom = String(process.env.ALFACLUB_DAILY_BRIEF_ROOM_ID ?? '').trim()
+  const separateBrief = parseBool(process.env.ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE ?? '0')
   checks.push({
-    id: 'ALFACLUB_DAILY_BRIEF_ROOM_ID (optional split)',
+    id: 'ALFACLUB_DAILY_BRIEF_ROOM_ID (digest split)',
+    required: separateBrief,
+    present: briefRoom.length > 0 && briefRoom !== bridgeRoom,
+    note: 'Required when ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE=1 — digest must not land in command room',
+  })
+  checks.push({
+    id: 'ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE',
     required: false,
-    present: envPresent('ALFACLUB_DAILY_BRIEF_ROOM_ID'),
-    note: 'When set, digest posts outside bridge room; unset = same as bridge room',
+    present: separateBrief,
+    note: 'Set 1 on production to stop auto-digest in the bridge/ops room',
   })
 
   return checks
