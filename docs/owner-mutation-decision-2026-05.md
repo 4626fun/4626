@@ -51,6 +51,18 @@ cause is **architectural, not a bug**:
 | Zora CSW users with a known EOA owner | `CSW.executeBatch([{target=CSW, data=addOwnerAddress(...)}])` from the EOA | shipped on PR #523 (March-9 lane) |
 | Zora CSW users with no EOA owner | Spend Permissions only, or unreachable | depends on Zora exposure |
 
+### Execution-context troubleshooting note (EntryPoint vs router)
+
+When `addOwnerAddress` succeeds for CSWs, it is typically executed through
+`EntryPoint.handleOps(...)` in a UserOperation. In that path the wallet performs
+the privileged self-call, so owner checks can pass.
+
+If the same selector is embedded directly inside a third-party router
+`multicall`, the CSW sees the router as `msg.sender`; that caller is neither the
+wallet itself nor an existing owner, so the call reverts before indexing and no
+wallet funds move. This distinction is expected and should not be treated as a
+relay pricing or calldata-shape regression.
+
 ## What ships from PR #523
 
 The PR remains open. Useful pieces to keep:
