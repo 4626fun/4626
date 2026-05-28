@@ -52,6 +52,7 @@ import {
   isDeterministicUserOpExecutionError,
   isExecutionRevertedLikeError,
   buildUserOpGasEstimateFailureError,
+  shouldAdvisorySkipBundlerGasEstimate,
   isExpectedUserOpTimeoutError,
   isImmediateUserOpRetrySuppressedError,
   isLikelyVerificationGasLimitError,
@@ -334,9 +335,7 @@ async function assertBundlerUserOpGasEstimate(params: {
   const client: any = bundlerClient as any
 
   const originalAccount = client.account
-  if (!originalAccount) {
-    client.account = account
-  }
+  client.account = account
   try {
     const paymaster =
       paymasterClient && paymasterClient.getPaymasterData && paymasterClient.getPaymasterStubData
@@ -345,62 +344,56 @@ async function assertBundlerUserOpGasEstimate(params: {
             getPaymasterStubData: paymasterClient.getPaymasterStubData,
           }
         : undefined
-    let userOperation: Record<string, unknown> | null = null
-    if (typeof client?.prepareUserOperation === 'function') {
-      const prepared = await client.prepareUserOperation({
-        account,
-        calls,
-        verificationGasLimit,
-        ...(typeof params.nonce === 'bigint' ? { nonce: params.nonce } : {}),
-        ...(typeof params.callGasLimit === 'bigint' ? { callGasLimit: params.callGasLimit } : {}),
-        ...(paymaster ? { paymaster } : {}),
-      })
-      userOperation = (prepared?.userOperation ?? prepared) as Record<string, unknown>
-    } else if (typeof account?.encodeCalls === 'function') {
-      const callData = await account.encodeCalls(calls)
-      userOperation = {
-        sender: account.address,
-        nonce:
-          typeof params.nonce === 'bigint'
-            ? `0x${params.nonce.toString(16)}`
-            : undefined,
-        callData,
-        callGasLimit:
-          typeof params.callGasLimit === 'bigint'
-            ? `0x${params.callGasLimit.toString(16)}`
-            : undefined,
-        verificationGasLimit: `0x${verificationGasLimit.toString(16)}`,
-      }
+    const estimateParams = {
+      account,
+      calls,
+      verificationGasLimit,
+      entryPointAddress: ENTRYPOINT_V06,
+      ...(typeof params.nonce === 'bigint' ? { nonce: params.nonce } : {}),
+      ...(typeof params.callGasLimit === 'bigint' ? { callGasLimit: params.callGasLimit } : {}),
+      ...(paymaster ? { paymaster } : {}),
     }
 
-    if (!userOperation) return {}
+    if (typeof client?.estimateUserOperationGas !== 'function') {
+      return {}
+    }
 
     let estimate: unknown = null
     try {
-      if (typeof client?.estimateUserOperationGas === 'function') {
-        estimate = await client.estimateUserOperationGas({ userOperation, entryPoint: ENTRYPOINT_V06 })
-      } else if (typeof client?.request === 'function') {
-        estimate = await client.request({
-          method: 'eth_estimateUserOperationGas',
-          params: [userOperation, ENTRYPOINT_V06],
-        })
-      }
+      estimate = await client.estimateUserOperationGas(estimateParams)
     } catch (e: unknown) {
       const revertInfo = extractRevertInfo(e)
-      const lowerError = String(revertInfo.error ?? '').toLowerCase()
-      if (lowerError.includes('could not find an account to execute')) {
-        console.warn('[ERC-4337] estimateUserOperationGas missing account context', {
+      const firstCallTo = calls[0]?.to
+      if (
+        shouldAdvisorySkipBundlerGasEstimate({
+          error: e,
+          firstCallTo,
+          floorCallGasLimit: params.callGasLimit,
+        })
+      ) {
+        const callGasLimit = resolveUserOpCallGasLimit({
+          floorCallGasLimit: params.callGasLimit,
+          bufferNumerator: ZORA_SEND_CALL_GAS_BUFFER_NUMERATOR,
+          bufferDenominator: ZORA_SEND_CALL_GAS_BUFFER_DENOMINATOR,
+        })
+        console.warn('[ERC-4337] estimateUserOperationGas advisory skip; using Zora callGas floor', {
           error: revertInfo.error,
+          errorName: revertInfo.errorName,
+          revertData: revertInfo.revertData,
+          callGasLimit: callGasLimit?.toString() ?? null,
           ...(params.bundlerUrl
             ? { bundlerUsesProxy: isPaymasterProxyUrl(params.bundlerUrl) }
             : {}),
         })
-        throw buildUserOpGasEstimateFailureError(e, calls[0]?.to)
+        return callGasLimit ? { callGasLimit } : {}
       }
       console.warn('[ERC-4337] estimateUserOperationGas failed', {
         error: revertInfo.error,
         errorName: revertInfo.errorName,
         revertData: revertInfo.revertData,
+        ...(params.bundlerUrl
+          ? { bundlerUsesProxy: isPaymasterProxyUrl(params.bundlerUrl) }
+          : {}),
       })
       if (AA_DEBUG) {
         logger.debug('[ERC-4337] estimateUserOperationGas failed', {
@@ -409,7 +402,7 @@ async function assertBundlerUserOpGasEstimate(params: {
           errorName: revertInfo.errorName,
         })
       }
-      throw buildUserOpGasEstimateFailureError(e, calls[0]?.to)
+      throw buildUserOpGasEstimateFailureError(e, firstCallTo)
     }
     if (AA_DEBUG && estimate) {
       logger.debug('[ERC-4337] estimateUserOperationGas', formatGasEstimate(estimate))
@@ -422,7 +415,7 @@ async function assertBundlerUserOpGasEstimate(params: {
     })
     return resolved ? { callGasLimit: resolved } : {}
   } finally {
-    if (!originalAccount) {
+    if (originalAccount === undefined) {
       delete client.account
     } else {
       client.account = originalAccount
@@ -1002,17 +995,35 @@ export async function simulateSmartWalletCalls(params: {
   let directCallResult: { success: boolean; error?: string; revertData?: Hex; errorName?: string } | undefined
   if (calls.length === 1 && calls[0]?.data && typeof client?.call === 'function') {
     const call = calls[0]!
+    const blockNumber = isZoraUniversalRouterTarget(call.to) ? 'latest' : 'pending'
     try {
       await client.call({
         to: call.to,
         data: call.data,
         value: call.value ?? 0n,
         account: smartWallet,
-        blockNumber: 'pending',
+        blockNumber,
       })
       directCallResult = { success: true }
     } catch (e: unknown) {
       directCallResult = { success: false, ...extractRevertInfo(e) }
+    }
+  }
+
+  if (
+    calls.length === 1 &&
+    isZoraUniversalRouterTarget(calls[0]?.to) &&
+    directCallResult &&
+    !directCallResult.success
+  ) {
+    return {
+      success: false,
+      error:
+        directCallResult.error ??
+        'Zora swap would revert on your smart wallet. Increase slippage, try a smaller size, and refresh the quote.',
+      revertData: directCallResult.revertData,
+      errorName: directCallResult.errorName,
+      directCallResult,
     }
   }
   
@@ -1109,6 +1120,17 @@ export async function simulateSmartWalletCalls(params: {
     // Unauthorized can be expected on the wrapper — never treat that as success
     // unless the underlying router call already succeeded.
     if (unauthorizedExecute) {
+      if (calls.length === 1 && isZoraUniversalRouterTarget(calls[0]?.to)) {
+        return {
+          success: false,
+          error:
+            directCallResult?.error ??
+            'Zora swap simulation did not complete. Refresh the quote and try again.',
+          revertData: directCallResult?.revertData,
+          errorName: directCallResult?.errorName,
+          directCallResult,
+        }
+      }
       if (calls.length === 1 && !directCallResult?.success) {
         return {
           success: false,

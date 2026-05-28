@@ -335,6 +335,31 @@ export function isExecutionRevertedLikeError(error: unknown): boolean {
   }
 }
 
+const ZORA_UNIVERSAL_ROUTER_BASE = '0x6ff5693b99212da76ad316178a184ab56d299b43'
+
+/**
+ * Bundler gas estimate can fail while eth_call preflight still passes (stub sig, paymaster stub, state drift).
+ * When a Zora floor callGasLimit is configured, proceed with that floor instead of blocking send.
+ */
+export function shouldAdvisorySkipBundlerGasEstimate(params: {
+  error: unknown
+  firstCallTo?: string
+  floorCallGasLimit?: bigint | null
+}): boolean {
+  const floor = params.floorCallGasLimit
+  if (typeof floor !== 'bigint' || floor <= 0n) return false
+  const callTo = String(params.firstCallTo ?? '').toLowerCase()
+  if (callTo !== ZORA_UNIVERSAL_ROUTER_BASE) return false
+  const revertInfo = extractRevertInfo(params.error)
+  if (revertInfo.revertData && revertInfo.revertData.length >= 10) return true
+  const lower = String(revertInfo.error ?? getErrorDiagnosticMessage(params.error)).toLowerCase()
+  return (
+    lower.includes('execution reverted') ||
+    lower.includes('reverted for an unknown reason') ||
+    lower.includes('invalid parameters were provided')
+  )
+}
+
 export function buildUserOpGasEstimateFailureError(
   error: unknown,
   firstCallTo?: string,
@@ -369,8 +394,6 @@ export function buildUserOpGasEstimateFailureError(
     `Bundler could not simulate this smart-wallet transaction (${detail}). Refresh the quote and try again.`,
   )
 }
-
-const ZORA_UNIVERSAL_ROUTER_BASE = '0x6ff5693b99212da76ad316178a184ab56d299b43'
 
 export class PreflightSimulationRejectionError extends Error {
   override readonly name = 'PreflightSimulationRejectionError'

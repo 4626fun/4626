@@ -28,7 +28,17 @@
  * `wrapCswOwnerSignature` before being sent back to Zora in the re-quote call.
  */
 
-import { encodeAbiParameters, type Address, type Hex, type PublicClient } from 'viem'
+import { encodeAbiParameters, type Address, type Hex } from 'viem'
+
+/** Minimal viem client surface for CSW replay-safe hash reads (avoids duplicate PublicClient resolution). */
+export type CswReadContractClient = {
+  readContract: (args: {
+    address: Address
+    abi: readonly unknown[]
+    functionName: string
+    args?: readonly unknown[]
+  }) => Promise<unknown>
+}
 
 export const CSW_REPLAY_SAFE_HASH_ABI = [
   {
@@ -41,7 +51,7 @@ export const CSW_REPLAY_SAFE_HASH_ABI = [
 ] as const
 
 export async function readCswReplaySafeHash(params: {
-  publicClient: PublicClient
+  publicClient: CswReadContractClient
   smartWallet: Address
   innerHash: Hex
 }): Promise<Hex> {

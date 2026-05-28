@@ -10,6 +10,7 @@ import {
   mapUserOpExecutionFailureMessage,
   PreflightSimulationRejectionError,
   resolveUserOpCallGasLimit,
+  shouldAdvisorySkipBundlerGasEstimate,
 } from './coinbaseErc4337ErrorUtils'
 
 describe('extractUserOpReceiptTxHash', () => {
@@ -60,6 +61,33 @@ describe('isExecutionRevertedLikeError', () => {
         details: 'execution reverted',
       }),
     ).toBe(true)
+  })
+})
+
+describe('shouldAdvisorySkipBundlerGasEstimate', () => {
+  const ZORA_ROUTER = '0x6fF5693b99212Da76ad316178A184AB56D299b43'
+  const ZORA_FLOOR = 2_500_000n
+
+  it('skips when Zora floor is set and estimate returns execution revert data', () => {
+    expect(
+      shouldAdvisorySkipBundlerGasEstimate({
+        error: {
+          message: 'Invalid parameters were provided to the RPC method.',
+          data: '0xb61d27f60000000000000000000000006ff5693b99212da76ad316178a184ab56d299b43',
+        },
+        firstCallTo: ZORA_ROUTER,
+        floorCallGasLimit: ZORA_FLOOR,
+      }),
+    ).toBe(true)
+  })
+
+  it('does not skip without a Zora callGas floor', () => {
+    expect(
+      shouldAdvisorySkipBundlerGasEstimate({
+        error: new Error('Execution reverted for an unknown reason.'),
+        firstCallTo: ZORA_ROUTER,
+      }),
+    ).toBe(false)
   })
 })
 

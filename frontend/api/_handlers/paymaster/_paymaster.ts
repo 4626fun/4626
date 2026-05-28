@@ -2457,7 +2457,7 @@ async function validateInnerCalls(params: {
         let wrappedToken: Address | null = null
         let swapRouterCallData: Hex | null = null
         let swapRouterTarget: Address | null = null
-        let swapRouterKind: 'universal' | 'swap-proxy' | 'v3' | null = null
+        let swapRouterKind: 'universal' | 'swap-proxy' | 'v3' | 'zora-universal' | null = null
         let approvalSpender: Address | null = null
         for (const c of innerCalls) {
           const selector = getSelector(c.data)

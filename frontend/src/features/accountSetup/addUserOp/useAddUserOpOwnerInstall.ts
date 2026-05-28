@@ -92,6 +92,9 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [callBundleId, setCallBundleId] = useState<string | null>(null)
   const [eventLog, setEventLog] = useState<string[]>([])
+  const [submitPhase, setSubmitPhase] = useState<
+    'idle' | 'awaiting_signature' | 'broadcasting' | 'confirming' | 'verifying'
+  >('idle')
   const [preparedTx, setPreparedTx] = useState<PreparedOwnerTxRequest | null>(null)
 
   const inBaseApp = isBaseAppInAppContext(detectInAppEnvironment())
@@ -171,6 +174,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     }
 
     setBusy(true)
+    setSubmitPhase('idle')
     setPageError(null)
     setPageNotice(null)
     setEventLog([])
@@ -221,8 +225,13 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
         csw,
         ownerToAdd,
         chainId: base.id,
+        timeoutMs: 120_000,
         onTelemetry: (event) => {
           appendEvent(`sendCalls:${event.step}`)
+          if (event.step === 'prompt_sign') setSubmitPhase('awaiting_signature')
+          else if (event.step === 'broadcast_success') setSubmitPhase('broadcasting')
+          else if (event.step === 'status_poll') setSubmitPhase('confirming')
+          else if (event.step === 'status_resolved') setSubmitPhase('verifying')
         },
       })
 
@@ -281,6 +290,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       return false
     } finally {
       setBusy(false)
+      setSubmitPhase('idle')
     }
   }, [
     alreadyOwner,
@@ -304,6 +314,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     txHash,
     callBundleId,
     eventLog,
+    submitPhase,
     inBaseApp,
     preparedTx,
     loadPrepare,

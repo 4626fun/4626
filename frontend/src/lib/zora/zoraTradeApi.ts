@@ -306,13 +306,14 @@ export async function assertZoraRouterCallExecutesFromCsw(params: {
   const target = getAddress(params.call.target as `0x${string}`)
   const data = params.call.data as Hex
   const value = BigInt(params.call.value ?? '0')
+  // Match sponsored bundler simulation (chain head), not pending mempool state.
   try {
     await readClient.call({
       to: target,
       data,
       value,
       account: getAddress(params.executionAddress),
-      blockNumber: 'pending',
+      blockNumber: 'latest',
     })
   } catch (e: unknown) {
     throw formatZoraRouterSimulationFailure(e)
@@ -692,8 +693,13 @@ export async function executeZoraCswQuoteWithEscalation(params: {
   }
 
   const startSlippage = readZoraQuotedSlippagePct(params.quote) ?? params.slippagePct
-  const ladder = buildZoraSlippageEscalationLadder(startSlippage)
-  const forceResignPermits = await isDeployedSmartWalletExecutionAddress(params.executionAddress)
+  const isCswExecution = await isDeployedSmartWalletExecutionAddress(params.executionAddress)
+  // Thin creator pools (e.g. AKITA) usually need ≥5% on CSW-sponsored paths; 0.5% often passes
+  // stale pending eth_call but reverts on bundler simulation.
+  const ladder = buildZoraSlippageEscalationLadder(
+    isCswExecution ? Math.max(startSlippage, 5) : startSlippage,
+  )
+  const forceResignPermits = isCswExecution
 
   let lastError: unknown
   for (let i = 0; i < ladder.length; i += 1) {

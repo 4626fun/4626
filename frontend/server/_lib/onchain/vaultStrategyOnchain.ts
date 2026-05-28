@@ -183,7 +183,7 @@ export function createVaultStrategyPublicClient(rpcUrl?: string): PublicClient {
   return createPublicClient({
     chain: base,
     transport: http(url, { timeout: 20_000 }),
-  }) as PublicClient
+  }) as unknown as PublicClient
 }
 
 async function readContractSafe<T>(params: {

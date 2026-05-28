@@ -151,6 +151,14 @@ export function AddOwnerUserOpExperiment() {
                 </div>
               </dl>
 
+              {userOpFlow.busy && userOpFlow.submitPhase === 'awaiting_signature' ? (
+                <div className="rounded-xl border border-sky-400/25 bg-sky-500/10 px-3 py-2.5 text-xs text-sky-100">
+                  Confirm the add-owner request in Base App (passkey or device sign). This page
+                  stays on &quot;Submitting…&quot; until Base App returns from{' '}
+                  <span className="font-mono">wallet_sendCalls</span>.
+                </div>
+              ) : null}
+
               {userOpFlow.alreadyOwner ? (
                 <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2.5 text-xs text-emerald-100">
                   4626 signing is already enabled on this wallet.
@@ -164,7 +172,13 @@ export function AddOwnerUserOpExperiment() {
                     onClick={() => void userOpFlow.handleSubmitUserOp()}
                   >
                     {userOpFlow.busy
-                      ? 'Submitting EntryPoint UserOp…'
+                      ? userOpFlow.submitPhase === 'awaiting_signature'
+                        ? 'Waiting for Base App signature…'
+                        : userOpFlow.submitPhase === 'confirming'
+                          ? 'Waiting for on-chain confirmation…'
+                          : userOpFlow.submitPhase === 'verifying'
+                            ? 'Verifying EntryPoint trace…'
+                            : 'Submitting EntryPoint UserOp…'
                       : userOpFlow.prepareLoading
                         ? 'Preparing…'
                         : 'Submit CSW self-UserOp (wallet_sendCalls)'}

@@ -34,6 +34,8 @@
 
 import { getAddress, type Hex } from 'viem'
 
+import { buildWalletSendCallsPayload } from '@/lib/wallet/walletSendCallsPayload'
+
 export type CswSendCallsTelemetry = {
   step:
     | 'preflight'
@@ -157,24 +159,24 @@ export async function _submitOwnerViaSendCalls(
     throw new Error('wallet_sendCalls: must provide at least one call.')
   }
 
-  const chainIdHex = `0x${params.chainId.toString(16)}`
-
-  // EIP-5792 wallet_sendCalls payload. Spec:
-  // https://eips.ethereum.org/EIPS/eip-5792
-  const payload = {
-    version: '1.0',
+  const payload = buildWalletSendCallsPayload({
     from: getAddress(params.csw),
-    chainId: chainIdHex,
+    chainId: params.chainId,
     atomicRequired: params.atomicRequired ?? true,
-    calls: normalizedCalls,
-  }
+    calls: normalizedCalls.map((call) => ({
+      to: call.to,
+      data: call.data,
+      value: call.value,
+    })),
+  })
 
   emit({
     step: 'prompt_sign',
     detail: {
       method: 'wallet_sendCalls',
       from: payload.from,
-      chainId: chainIdHex,
+      chainId: payload.chainId,
+      version: payload.version,
       callCount: normalizedCalls.length,
       calls: callsSummary,
     },

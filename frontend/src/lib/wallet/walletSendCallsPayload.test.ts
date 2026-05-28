@@ -55,7 +55,7 @@ describe('buildWalletSendCallsPayload', () => {
 
   it('supports addOwnerAddress self-call shape', () => {
     const addOwnerData =
-      '0x0a9856e8000000000000000000000000b2aad65a5402714bf428a66731ae62ba5c45cac0' as const
+      '0x0f0f3f24000000000000000000000000b2aad65a5402714bf428a66731ae62ba5c45cac0' as const
     const payload = buildWalletSendCallsPayload({
       from: CSW,
       chainId: 8453,

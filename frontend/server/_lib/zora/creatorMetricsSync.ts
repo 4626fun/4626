@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { createPublicClient, http, parseAbiItem } from 'viem'
+import { createPublicClient, http, parseAbiItem, type PublicClient } from 'viem'
 import { base } from 'viem/chains'
 import { getDb, getDbForCron } from '../db/postgres.js'
 import { logger } from '../infra/logger.js'
@@ -157,15 +157,21 @@ async function getSdk(apiKey: string): Promise<any> {
   return sdk
 }
 
-function getBasePublicClient() {
+type FactoryCoinCreatedLog = {
+  blockNumber: bigint | null
+  logIndex: number | null
+  args?: Record<string, unknown>
+}
+
+function getBasePublicClient(): PublicClient {
   const rpcUrl = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
   return createPublicClient({
     chain: BASE_CHAIN_NAME,
     transport: http(rpcUrl),
-  })
+  }) as unknown as PublicClient
 }
 
-function getArchivePublicClient(): ReturnType<typeof getBasePublicClient> | null {
+function getArchivePublicClient(): PublicClient | null {
   const archiveUrl = (process.env.CREATOR_METRICS_ARCHIVE_RPC_URL ?? '').trim()
   if (!archiveUrl) return null
   const primaryUrl = (process.env.BASE_RPC_URL ?? '').trim()
@@ -173,7 +179,7 @@ function getArchivePublicClient(): ReturnType<typeof getBasePublicClient> | null
   return createPublicClient({
     chain: BASE_CHAIN_NAME,
     transport: http(archiveUrl),
-  })
+  }) as unknown as PublicClient
 }
 
 function extractList(response: any): any {
@@ -1020,7 +1026,7 @@ function enrichDuringBackfillEnabled(): boolean {
 }
 
 async function prefetchBlockTimestamps(
-  client: ReturnType<typeof getBasePublicClient>,
+  client: PublicClient,
   blockNumbers: readonly bigint[],
   cache: Map<string, string>,
 ): Promise<void> {
@@ -1109,11 +1115,11 @@ function isLogRangeTooLargeError(error: unknown): boolean {
 }
 
 async function fetchFactoryCoinCreatedLogsWithSplit(
-  client: ReturnType<typeof getBasePublicClient>,
+  client: PublicClient,
   fromBlock: bigint,
   toBlock: bigint,
   minSpanBlocks = 1000,
-): Promise<Awaited<ReturnType<ReturnType<typeof getBasePublicClient>['getLogs']>>> {
+): Promise<FactoryCoinCreatedLog[]> {
   try {
     return await client.getLogs({
       address: ZORA_FACTORY_ADDRESS,
@@ -1136,11 +1142,11 @@ async function fetchFactoryCoinCreatedLogsWithSplit(
 }
 
 async function resolveFactoryCoinCreatedLogs(
-  primaryClient: ReturnType<typeof getBasePublicClient>,
+  primaryClient: PublicClient,
   fromBlock: bigint,
   toBlock: bigint,
 ): Promise<{
-  logs: Awaited<ReturnType<ReturnType<typeof getBasePublicClient>['getLogs']>>
+  logs: FactoryCoinCreatedLog[]
   skippedPrunedGap: boolean
 }> {
   try {
