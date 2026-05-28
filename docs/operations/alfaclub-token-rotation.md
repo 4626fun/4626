@@ -69,10 +69,9 @@ node frontend/scripts/alfaclub-restore-tokens.mjs /path/to/triplet.json
 
 Fix any “already expired” errors by re-exporting after a fresh login.
 
-### 3. Write to Supabase (admin session)
+### 3. Write to Supabase (admin session or CRON_SECRET)
 
-Sign in to **4626 admin** on `https://app.4626.fun` (wallet on the admin
-allowlist), then:
+**Option A — admin session** (wallet on the 4626 admin allowlist):
 
 ```sh
 ALFACLUB_ADMIN_ENDPOINT=https://app.4626.fun/api/v1/alfaclub/chat-token \
@@ -80,9 +79,28 @@ ALFACLUB_ADMIN_BEARER='<admin session bearer from browser>' \
   node frontend/scripts/alfaclub-restore-tokens.mjs /path/to/triplet.json --apply
 ```
 
-The admin endpoint stamps writer as your wallet address (expected). It does
-**not** accept `CRON_SECRET` alone — use the restore script’s cron flags for
-that.
+**Option B — cron bootstrap** (no admin wallet; uses production `CRON_SECRET`):
+
+```sh
+curl -sS -X POST 'https://app.4626.fun/api/v1/alfaclub/chat-token' \
+  -H 'content-type: application/json' \
+  -H "x-cron-secret: $CRON_SECRET" \
+  -d @triplet.json
+```
+
+`triplet.json` body shape:
+
+```json
+{
+  "jwt": "<identity_token>",
+  "privyAccessToken": "<access_jwt>",
+  "privyRefreshToken": "<refresh_opaque>"
+}
+```
+
+Writer is stamped `cron-token-bootstrap`. A **409** with `stale_refresh_token`
+means you pasted a refresh token Privy already rotated away — mint a new
+triplet in the browser.
 
 ### 4. Optional: mirror bootstrap vars on Vercel
 
@@ -193,9 +211,14 @@ See [`alfaclub/infra/cloudflare-proxy/README.md`](../../alfaclub/infra/cloudflar
   refresh tokens are single-use).
 - Do **not** treat Pinata/Hermit env rotation as AlfaClub auth rotation.
 
+## Health snapshot: `dbEnvStaleness`
+
+`GET /api/v1/alfaclub/chat-auth-health` (cron-secret) now includes
+`data.dbEnvStaleness` when Vercel env JWTs expire **later** than the DB rows
+the bridge reads. If you see `kind: "db_lags_env"`, update the DB via Option A
+or B above — env-only changes are not enough.
+
 ## Open improvements (tracked in postmortem)
 
-- `CRON_SECRET`-only bootstrap on `chat-token` (#15) — today requires admin
-  session or restore script.
-- Stale refresh-token rejection on seed (#17).
-- `staleness:db_lags_env` on health snapshot (#16).
+- Log-ingest alert on `cf_challenge_sustained` (#5).
+- Rename misleading `room_history_auth_failed` log keys (#7).

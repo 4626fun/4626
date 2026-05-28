@@ -406,8 +406,11 @@ export function summarizeSnapshot(snapshot) {
       : 'null'
   const successAt = String(lastSuccess?.at ?? 'null')
   const failureAt = String(lastFailure?.at ?? 'null')
+  const dbStaleness =
+    snapshot.dbEnvStaleness?.kind === 'db_lags_env' ? 'db_lags_env' : 'ok'
 
   return [
+    `dbEnvStaleness=${dbStaleness}`,
     `minutesUntilExpiry=${minutes}`,
     `minutesUntilAccessExpiry=${accessMinutes}`,
     `writer=${redact(writer).slice(0, 60)}`,

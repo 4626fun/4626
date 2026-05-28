@@ -73,6 +73,7 @@ import {
   upsertAlfaClubPrivyAccessToken,
   upsertAlfaClubPrivyRefreshToken,
 } from './chatTokenStore.js'
+import { recordRetiredRefreshToken } from './refreshTokenRetirement.js'
 import {
   buildRefreshFailurePayload,
   buildRefreshSuccessPayload,
@@ -340,6 +341,7 @@ function resolveDeps(
         }
       }
       if (inbound && bundle.refreshToken !== inbound.refreshToken) {
+        await recordRetiredRefreshToken(inbound.refreshToken).catch(() => undefined)
         const refreshOk = await upsertAlfaClubPrivyRefreshToken({
           refreshToken: bundle.refreshToken,
           updatedBy,

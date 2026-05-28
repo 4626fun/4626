@@ -41,7 +41,10 @@
 import { logger } from '../infra/logger.js'
 import { getDb } from '../db/postgres.js'
 import { ensureAlfaClubVigilanteSchema } from './schema.js'
-import { extractJwtExpiryIso } from './chatTokenStore.js'
+import {
+  extractJwtExpiryIso,
+  readAlfaClubPrivyAccessToken,
+} from './chatTokenStore.js'
 
 const HEALTH_KEY_LAST_SUCCESS = 'chat_auth_health:last_success' as const
 const HEALTH_KEY_LAST_FAILURE = 'chat_auth_health:last_failure' as const
@@ -105,6 +108,7 @@ const KNOWN_WRITERS: ReadonlySet<string> = new Set([
   'privy-token-refresher',
   'admin.api',
   'computer-token-restore',
+  'cron-token-bootstrap',
 ])
 
 const EVM_ADDRESS_PATTERN = /^0x[0-9a-f]{40}$/
@@ -555,7 +559,76 @@ export async function readBridgeAuthHealthSnapshotFromStorage(): Promise<AlfaClu
   return { ...bridgeAuthHealth }
 }
 
+export type DbEnvStalenessWarning = {
+  kind: 'db_lags_env'
+  identity: {
+    dbExpiresAt: string | null
+    envExpiresAt: string | null
+    envConfigured: boolean
+  } | null
+  access: {
+    dbExpiresAt: string | null
+    envExpiresAt: string | null
+    envConfigured: boolean
+  } | null
+  hint: string
+}
+
+const DEFAULT_DB_ENV_STALENESS_SLACK_MS = 5 * 60_000
+
+/**
+ * Surfaces when Vercel env bootstrap JWTs expire later than the DB rows the
+ * refresher actually reads (postmortem #16).
+ */
+export function evaluateDbEnvStaleness(params: {
+  dbIdentityExpiresAt: string | null
+  envIdentityJwt: string | null
+  dbAccessExpiresAt: string | null
+  envAccessJwt: string | null
+  slackMs?: number
+}): DbEnvStalenessWarning | null {
+  const slackMs = params.slackMs ?? DEFAULT_DB_ENV_STALENESS_SLACK_MS
+  const envIdentityExp = params.envIdentityJwt
+    ? extractJwtExpiryIso(params.envIdentityJwt)
+    : null
+  const envAccessExp = params.envAccessJwt ? extractJwtExpiryIso(params.envAccessJwt) : null
+
+  const identity = {
+    dbExpiresAt: params.dbIdentityExpiresAt,
+    envExpiresAt: envIdentityExp,
+    envConfigured: Boolean(params.envIdentityJwt?.trim()),
+  }
+  const access = {
+    dbExpiresAt: params.dbAccessExpiresAt,
+    envExpiresAt: envAccessExp,
+    envConfigured: Boolean(params.envAccessJwt?.trim()),
+  }
+
+  const identityLags =
+    identity.envConfigured &&
+    identity.dbExpiresAt &&
+    identity.envExpiresAt &&
+    Date.parse(identity.envExpiresAt) > Date.parse(identity.dbExpiresAt) + slackMs
+
+  const accessLags =
+    access.envConfigured &&
+    access.dbExpiresAt &&
+    access.envExpiresAt &&
+    Date.parse(access.envExpiresAt) > Date.parse(access.dbExpiresAt) + slackMs
+
+  if (!identityLags && !accessLags) return null
+
+  return {
+    kind: 'db_lags_env',
+    identity: identity.envConfigured || identity.dbExpiresAt ? identity : null,
+    access: access.envConfigured || access.dbExpiresAt ? access : null,
+    hint:
+      'Vercel env bootstrap tokens expire later than DB rows — update alfaclub_runtime_secret (POST /api/v1/alfaclub/chat-token) before relying on env-only changes.',
+  }
+}
+
 export type AlfaClubAuthHealthSnapshot = {
+  dbEnvStaleness: DbEnvStalenessWarning | null
   lastSuccess:
     | (RefreshSuccessPayload & {
         writerAnomaly: WriterAnomaly
@@ -609,10 +682,14 @@ export async function readAuthHealthSnapshot(params?: {
   now?: () => number
 }): Promise<AlfaClubAuthHealthSnapshot> {
   const now = params?.now ?? Date.now
-  const [successRow, failureRow, bridgeSnapshot] = await Promise.all([
+  const envIdentityJwt = (process.env.ALFACLUB_CHAT_JWT ?? '').trim() || null
+  const envAccessJwt = (process.env.ALFACLUB_PRIVY_ACCESS_TOKEN ?? '').trim() || null
+
+  const [successRow, failureRow, bridgeSnapshot, dbAccess] = await Promise.all([
     readHealthRow(HEALTH_KEY_LAST_SUCCESS),
     readHealthRow(HEALTH_KEY_LAST_FAILURE),
     readBridgeAuthHealthSnapshotFromStorage(),
+    readAlfaClubPrivyAccessToken().catch(() => null),
   ])
 
   const lastSuccessPayload = safeParse<RefreshSuccessPayload>(successRow?.secret_value)
@@ -652,7 +729,15 @@ export async function readAuthHealthSnapshot(params?: {
     }
   }
 
+  const dbEnvStaleness = evaluateDbEnvStaleness({
+    dbIdentityExpiresAt: liveSnapshot?.expiresAt ?? null,
+    envIdentityJwt,
+    dbAccessExpiresAt: dbAccess?.expiresAt ?? null,
+    envAccessJwt,
+  })
+
   return {
+    dbEnvStaleness,
     lastSuccess,
     lastFailure,
     liveChatJwt: liveSnapshot,

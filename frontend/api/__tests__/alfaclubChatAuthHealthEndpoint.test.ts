@@ -42,6 +42,7 @@ describe('GET /api/v1/alfaclub/chat-auth-health', () => {
       expiresAt: '2026-05-01T13:00:00.000Z',
     })
     readAuthHealthSnapshotMock.mockResolvedValue({
+      dbEnvStaleness: null,
       lastSuccess: {
         at: '2026-05-01T11:55:00.000Z',
         identityTokenExp: '2026-05-01T13:00:00.000Z',
@@ -144,6 +145,7 @@ describe('GET /api/v1/alfaclub/chat-auth-health', () => {
 
   it('surfaces an anomalous writer when the snapshot reports one', async () => {
     readAuthHealthSnapshotMock.mockResolvedValueOnce({
+      dbEnvStaleness: null,
       lastSuccess: null,
       lastFailure: null,
       liveChatJwt: {
