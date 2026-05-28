@@ -1217,67 +1217,57 @@ function RelayTrayPointsModule(props: {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4 pt-2 pb-3">
-      <div className="flex min-h-0 flex-1 flex-col rounded-xl bg-white/[0.02] p-3">
-        <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Points</div>
-        {props.pointsLoading ? (
-          <div className="mt-2 rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
-            Loading points…
+      <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Points</div>
+      {props.pointsLoading ? (
+        <div className="mt-2 text-[11px] text-zinc-500">Loading points…</div>
+      ) : (
+        <>
+          <div className="mt-2 text-[30px] font-semibold leading-none tracking-tight text-white tabular-nums">
+            {props.pointsTotal.toLocaleString()}
           </div>
-        ) : (
-          <>
-            <div className="mt-2 text-[30px] font-semibold leading-none tracking-tight text-white tabular-nums">
-              {props.pointsTotal.toLocaleString()}
-            </div>
-            <div className="mt-1 text-[10px] text-zinc-400">Weighted total — waitlist, leaderboard, and lottery</div>
 
-            <div className="mt-3 flex items-center gap-2 border-b border-white/8 pb-1">
-              {(['history', 'overview'] as const).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setPointsTab(value)}
-                  className={`rounded-md px-2 py-1 text-[12px] font-medium transition-colors ${
-                    pointsTab === value
-                      ? 'bg-white/[0.08] text-white'
-                      : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200'
-                  }`}
-                >
-                  {value === 'history' ? 'History' : 'Overview'}
-                </button>
-              ))}
-            </div>
+          <div className="mt-3 flex items-center gap-2 border-b border-white/8 pb-1">
+            {(['history', 'overview'] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setPointsTab(value)}
+                className={`rounded-md px-2 py-1 text-[12px] font-medium transition-colors ${
+                  pointsTab === value
+                    ? 'bg-white/[0.08] text-white'
+                    : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200'
+                }`}
+              >
+                {value === 'history' ? 'History' : 'Overview'}
+              </button>
+            ))}
+          </div>
 
-            {pointsTab === 'history' ? (
-              <div className="mt-3 flex min-h-0 flex-1 flex-col">
-                <div className="px-0.5 pb-1.5 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
-                  What you earned
+          {pointsTab === 'history' ? (
+            <div className="mt-3 flex min-h-0 flex-1 flex-col">
+              <div className="pb-2 text-[10px] uppercase tracking-[0.12em] text-zinc-500">What you earned</div>
+              {props.activityLoading ? (
+                <div className="text-[11px] text-zinc-500">Loading point history…</div>
+              ) : props.activityAuthRequired ? (
+                <div className="text-[11px] text-zinc-400">
+                  Sign in with email (Privy) to load point history, then reopen the tray.
                 </div>
-                {props.activityLoading ? (
-                  <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
-                    Loading point history…
-                  </div>
-                ) : props.activityAuthRequired ? (
-                  <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-400">
-                    Sign in with email (Privy) to load point history, then reopen the tray.
-                  </div>
-                ) : props.activityError ? (
-                  <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-400">
-                    Could not load history. Try again in a moment.
-                  </div>
-                ) : activityRows.length === 0 ? (
-                  <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-400">
-                    No point awards yet. Link accounts, invite friends, complete tasks, or check in on social to
-                    earn points.
-                  </div>
-                ) : (
-                  <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1 max-h-[min(52vh,28rem)]">
-                    {activityRows.map((row) => (
-                      <RelayTrayPointsHistoryRow key={row.id} row={row} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
+              ) : props.activityError ? (
+                <div className="text-[11px] text-zinc-400">Could not load history. Try again in a moment.</div>
+              ) : activityRows.length === 0 ? (
+                <div className="text-[11px] text-zinc-400">
+                  No point awards yet. Link accounts, invite friends, complete tasks, or check in on social to earn
+                  points.
+                </div>
+              ) : (
+                <div className="min-h-0 flex-1 divide-y divide-white/6">
+                  {activityRows.map((row) => (
+                    <RelayTrayPointsHistoryRow key={row.id} row={row} />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
               <div className="mt-3 space-y-3">
                 {props.position ? (
                   <>
@@ -1328,9 +1318,8 @@ function RelayTrayPointsModule(props: {
                 )}
               </div>
             )}
-          </>
-        )}
-      </div>
+        </>
+      )}
     </div>
   )
 }
@@ -1342,8 +1331,8 @@ function RelayTrayPointsHistoryRow(props: { row: PointsActivityRow }) {
   const showRawAward = row.amount !== row.waitlistPoints
 
   return (
-    <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-      <div className="flex items-start justify-between gap-2">
+    <div className="py-2.5">
+      <div className="flex items-start justify-between gap-3">
         <span className="min-w-0 text-[12px] font-medium leading-snug text-zinc-100">{row.label}</span>
         <span
           className={`shrink-0 text-[12px] font-medium tabular-nums ${

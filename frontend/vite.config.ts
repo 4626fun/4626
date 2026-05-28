@@ -5,7 +5,7 @@ import { resolve } from 'path'
 import fs from 'fs'
 import path from 'path'
 import { createRequire } from 'module'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { URL } from 'url'
 import type { IncomingMessage, ServerResponse } from 'http'
 
@@ -73,24 +73,37 @@ function resolveApiModulePath(relativePath: string): string {
 }
 
 let tsxLoader: typeof import('tsx/esm/api') | null = null
-const apiModuleCache = new Map<
-  string,
-  Promise<{
+type ApiModuleCacheEntry = {
+  mtimeMs: number
+  promise: Promise<{
     default: (req: any, res: any) => any
   }>
->()
+}
+const apiModuleCache = new Map<string, ApiModuleCacheEntry>()
 
 async function loadApiModule(absPath: string) {
+  let mtimeMs = 0
+  try {
+    mtimeMs = fs.statSync(absPath).mtimeMs
+  } catch {
+    apiModuleCache.delete(absPath)
+    throw new Error(`[vite] apiImport: cannot stat ${absPath}`)
+  }
+
   const cached = apiModuleCache.get(absPath)
-  if (cached) return cached
+  if (cached && cached.mtimeMs === mtimeMs) {
+    return cached.promise
+  }
 
   if (!tsxLoader) {
     tsxLoader = await import('tsx/esm/api')
   }
-  const pending = tsxLoader.tsImport(absPath, import.meta.url) as Promise<{
+  // Bust tsx/Node ESM module cache when the handler file changes (api/ is excluded from HMR).
+  const importUrl = `${pathToFileURL(absPath).href}?v=${mtimeMs}`
+  const pending = tsxLoader.tsImport(importUrl, import.meta.url) as Promise<{
     default: (req: any, res: any) => any
   }>
-  apiModuleCache.set(absPath, pending)
+  apiModuleCache.set(absPath, { mtimeMs, promise: pending })
   try {
     return await pending
   } catch (error) {

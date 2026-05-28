@@ -26,7 +26,17 @@ const FALLBACK: NormalizedUniswapError = {
   retryable: true,
 }
 
+import { isPreflightSimulationRejection } from '@/lib/aa/coinbaseErc4337ErrorUtils'
+
 export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
+  if (isPreflightSimulationRejection(input)) {
+    return {
+      code: 'APPROVAL_REQUIRED',
+      message: input.message,
+      retryable: true,
+    }
+  }
+
   const raw = typeof input === 'string'
     ? input
     : (input && typeof input === 'object' && 'message' in input && typeof (input as Record<string, unknown>).message === 'string')
@@ -64,6 +74,16 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
       code: 'INSUFFICIENT_FUNDS',
       message: 'Insufficient token balance. Reduce the amount or add more tokens.',
       retryable: false,
+    }
+  }
+
+  // CSW execute wrapper / Zora router leg reverted during simulation or gas estimate
+  if (msg.includes('0x2c4029e9') || msg.includes('executionfailed')) {
+    return {
+      code: 'APPROVAL_REQUIRED',
+      message:
+        'The Zora swap would revert on your smart wallet. Confirm the Permit2 signature, refresh the quote, and ensure the wallet holds enough of the token you are selling.',
+      retryable: true,
     }
   }
 

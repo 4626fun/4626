@@ -4,7 +4,9 @@ import { getAddress } from 'viem'
 import {
   buildSwapFromZoraQuote,
   isZoraPermitSignaturePlaceholder,
+  mergePermitWithChainNonce,
   quoteNeedsZoraPermitFinalization,
+  zoraPermitNonceDrifted,
   zoraTradeQuoteToResponse,
 } from '@/lib/zora/zoraTradeApi'
 
@@ -113,6 +115,24 @@ describe('zoraTradeApi', () => {
     ).toThrow(/Permit2 signature/i)
   })
 
+  it('merges on-chain Permit2 nonce into the permit payload sent to Zora', () => {
+    const merged = mergePermitWithChainNonce(
+      {
+        sigDeadline: '9999999999',
+        spender: '0x6ff5693b99212da76ad316178a184ab56d299b43',
+        details: {
+          token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+          amount: '1000000',
+          expiration: 1777703041,
+          nonce: 99,
+        },
+      },
+      3,
+    )
+    expect(merged.details.nonce).toBe(3)
+    expect(merged.details.amount).toBe('1000000')
+  })
+
   it('serializes permit payloads without BigInt for API requests', () => {
     const body = {
       signatures: [
@@ -137,5 +157,10 @@ describe('zoraTradeApi', () => {
     )
     expect(safe.signatures[0].permit.sigDeadline).toBe('9999999999')
     expect(safe.signatures[0].permit.details.amount).toBe('1000000')
+  })
+
+  it('detects Permit2 nonce drift for CSW sells before execute', () => {
+    expect(zoraPermitNonceDrifted(2, 5)).toBe(true)
+    expect(zoraPermitNonceDrifted(2, 2)).toBe(false)
   })
 })

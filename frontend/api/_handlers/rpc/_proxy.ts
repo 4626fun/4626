@@ -365,11 +365,11 @@ function resolveRpcChain(req: VercelRequest): RpcChain {
   return 'base'
 }
 
-function getRpcUrls(chain: RpcChain): string[] {
+function getRpcUrls(chain: RpcChain, options?: { skipLocalFork?: boolean }): string[] {
   const fromEnv = readChainRpcUrlsFromEnv(chain)
   const defaults = DEFAULT_CHAIN_RPCS[chain]
   let urls = fromEnv.length > 0 ? [...fromEnv, ...defaults] : [...defaults]
-  if (chain === 'base') {
+  if (chain === 'base' && !options?.skipLocalFork) {
     const localFork = resolveLocalDryRunRpcUrl()
     if (localFork) urls = [localFork, ...urls.filter((url) => url !== localFork)]
   }
@@ -707,7 +707,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       finalizeTelemetry(400, 'blocked_method')
       return res.status(400).json({ success: false, error: 'Unsupported JSON-RPC method' })
     }
-    const rpcUrls = getRpcUrls(chain)
+    const skipLocalFork =
+      firstQueryValue(req.query?.skipLocalFork as string | string[] | undefined) === '1'
+    const rpcUrls = getRpcUrls(chain, { skipLocalFork })
     const envRpcUrls = new Set(readChainRpcUrlsFromEnv(chain))
     const expectedChainId = EXPECTED_CHAIN_ID_HEX[chain]
     const candidateRpcUrls =

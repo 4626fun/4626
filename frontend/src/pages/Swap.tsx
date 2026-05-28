@@ -32,6 +32,7 @@ import { useTokenIdentity } from '@/hooks/useTokenIdentity'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useAccountMe } from '@/hooks/useAccountMe'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import { isRawEcdsaDigest, signRawEcdsaDigest } from '@/lib/wallet/signRawEcdsaDigest'
 import { extractPrivyWalletsFromUser, useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { apiFetch } from '@/lib/api/apiBase'
@@ -987,6 +988,16 @@ export function Swap() {
             ? (args.message as Record<string, unknown>).raw
             : args?.message
         const msgHex = typeof raw === 'string' && raw.startsWith('0x') ? raw : toHex(String(raw ?? ''))
+        if (isRawEcdsaDigest(msgHex)) {
+          return signRawEcdsaDigest({
+            digest: msgHex,
+            signerAddress: privyEmbeddedEoaAddress,
+            walletClient: {
+              request: (requestArgs) => provider.request(requestArgs as any),
+            },
+            label: 'privyEmbeddedEoa',
+          })
+        }
         const rawSig = await provider.request({
           method: 'personal_sign',
           params: [msgHex, privyEmbeddedEoaAddress],

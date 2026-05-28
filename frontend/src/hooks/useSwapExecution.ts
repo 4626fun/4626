@@ -48,6 +48,7 @@ import {
 import {
   isZoraProviderQuote,
   quoteNeedsZoraPermitFinalization,
+  prepareZoraQuoteForExecute,
   refreshZoraTradeQuoteWithPermits,
   signZoraQuotePermits,
 } from '@/lib/zora/zoraTradeApi'
@@ -1107,6 +1108,7 @@ export function useSwapExecution(params: {
 
       const signer = params.walletClient as {
         signTypedData: (args: Record<string, unknown>) => Promise<string>
+        signMessage?: (args: Record<string, unknown>) => Promise<string>
       }
       if (typeof signer.signTypedData !== 'function') {
         throw new Error('Connected wallet does not support typed-data signatures required for Zora Permit2.')
@@ -1890,8 +1892,25 @@ export function useSwapExecution(params: {
         if (!amount) {
           throw new Error('Swap amount is missing. Refresh the quote and try again.')
         }
-        setStatus('Confirming Permit2 signature…')
-        const executableQuote = await finalizeZoraQuoteIfNeeded(quote, amount)
+        if (!params.executionAddress) {
+          throw new Error('Execution address is required to submit this Zora swap.')
+        }
+        setStatus('Refreshing Zora quote for submit…')
+        const executableQuote = await prepareZoraQuoteForExecute({
+          quote,
+          tokenIn: effectiveTokenIn,
+          tokenOut: params.tokenOut,
+          amountIn: amount,
+          sender: params.executionAddress,
+          slippagePct: params.parsedSlippage,
+          signerAddress: params.signerAddress,
+          executionAddress: params.executionAddress,
+          walletClient: params.walletClient as {
+            signTypedData: (args: Record<string, unknown>) => Promise<string>
+            signMessage?: (args: Record<string, unknown>) => Promise<string>
+          },
+          publicClient: params.publicClient,
+        })
         const selectedQuote = pickSwapQuote(executableQuote)
         if (!selectedQuote) {
           throw new Error('Zora quote does not contain executable swap payload.')
@@ -2053,7 +2072,9 @@ export function useSwapExecution(params: {
     updateAttemptDebug,
     updateTxDebugError,
     quote,
-    finalizeZoraQuoteIfNeeded,
+    effectiveTokenIn,
+    params.parsedSlippage,
+    params.walletClient,
     params.parsedDeadlineMinutes,
   ])
 

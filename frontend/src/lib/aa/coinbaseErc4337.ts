@@ -43,9 +43,12 @@ import {
   getErrorDiagnosticMessage,
   getRpcErrorDetails,
   isAccountNonceMismatchError,
+  isDeterministicUserOpExecutionError,
   isExpectedUserOpTimeoutError,
   isImmediateUserOpRetrySuppressedError,
   isLikelyVerificationGasLimitError,
+  buildPreflightSimulationRejectionError,
+  isPreflightSimulationRejection,
   isPaymasterAuthPolicyError,
   isPaymasterPolicyError,
   isPaymasterRoutingPolicyError,
@@ -429,6 +432,7 @@ function isTransientUserOpSubmissionError(error: unknown): boolean {
   if (isUserRejection(error)) return false
   if (isImmediateUserOpRetrySuppressedError(error)) return false
   if (isAccountNonceMismatchError(error)) return false
+  if (isDeterministicUserOpExecutionError(error)) return false
   const msg = getErrorDiagnosticMessage(error)
   const lc = msg.toLowerCase()
   const code = (error as any)?.code
@@ -1206,37 +1210,52 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     })
   }
 
-  // Pre-flight simulation: check if the underlying call would succeed
-  // This helps diagnose contract-level reverts vs ERC-4337 issues
-  if (!skipPreflightSimulation && AA_DEBUG) {
-    void simulateSmartWalletCalls({ publicClient, smartWallet, calls: attributedCalls })
-      .then((simResult) => {
-        if (!simResult.success) {
+  // Pre-flight simulation: fail fast when the underlying call would revert on-chain.
+  if (!skipPreflightSimulation) {
+    try {
+      const simResult = await simulateSmartWalletCalls({
+        publicClient,
+        smartWallet,
+        calls: attributedCalls,
+      })
+      if (!simResult.success) {
+        if (AA_DEBUG) {
           logger.warn('[ERC-4337] Pre-flight simulation FAILED - underlying call would revert', {
             smartWallet,
             callCount: calls.length,
             error: simResult.error,
             revertData: simResult.revertData,
             errorName: simResult.errorName,
+            directCallError: simResult.directCallResult?.error,
+            directCallRevertData: simResult.directCallResult?.revertData,
+            directCallErrorName: simResult.directCallResult?.errorName,
             firstCallTo: attributedCalls[0]?.to,
-            firstCallData: attributedCalls[0]?.data?.slice(0, 10), // Just selector
+            firstCallData: attributedCalls[0]?.data?.slice(0, 10),
           })
-          return
         }
+        throw buildPreflightSimulationRejectionError({
+          simResult,
+          firstCallTo: attributedCalls[0]?.to,
+        })
+      }
+      if (AA_DEBUG) {
         logger.debug('[ERC-4337] Pre-flight simulation passed', {
           smartWallet,
           callCount: attributedCalls.length,
         })
-      })
-      .catch((error: unknown) => {
-        if (AA_DEBUG) {
-          const msg = error instanceof Error ? error.message : String(error ?? '')
-          logger.debug('[ERC-4337] Pre-flight simulation failed unexpectedly', {
-            smartWallet,
-            error: msg,
-          })
-        }
-      })
+      }
+    } catch (preflightError: unknown) {
+      if (isPreflightSimulationRejection(preflightError)) {
+        throw preflightError
+      }
+      if (AA_DEBUG) {
+        const msg = preflightError instanceof Error ? preflightError.message : String(preflightError ?? '')
+        logger.debug('[ERC-4337] Pre-flight simulation failed unexpectedly', {
+          smartWallet,
+          error: msg,
+        })
+      }
+    }
   }
 
   const ownerIndexOverride =
@@ -1935,7 +1954,11 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
               break
             }
             const hasNextTransientAttempt = transientAttempt < TRANSIENT_USER_OP_RETRY_DELAYS_MS.length
-            if (!hasNextTransientAttempt || !isTransientUserOpSubmissionError(e)) {
+            if (
+              !hasNextTransientAttempt ||
+              !isTransientUserOpSubmissionError(e) ||
+              isDeterministicUserOpExecutionError(e)
+            ) {
               break
             }
             const retryInMs = transientUserOpRetryDelayMs(transientAttempt)

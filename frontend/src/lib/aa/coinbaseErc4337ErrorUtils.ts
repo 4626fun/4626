@@ -25,6 +25,7 @@ const KNOWN_ERROR_SELECTORS: Record<string, string> = {
   // UniversalCreate2DeployerFromStore
   '0x8164ae93': 'NotAuthorizedDeployer()',
   '0xb4f54111': 'DeployFailed()',
+  '0x2c4029e9': 'ExecutionFailed(uint256,bytes)',
 }
 
 export function isAccountNonceMismatchError(error: unknown): boolean {
@@ -225,6 +226,61 @@ export function isImmediateUserOpRetrySuppressedError(error: unknown): boolean {
     lc.includes('request exceeds defined limit') ||
     lc.includes('sponsorship limit exceeded') ||
     lc.includes('rate limit exceeded')
+  )
+}
+
+/** Bundler/EntryPoint failures that will not succeed on immediate retry. */
+export function isDeterministicUserOpExecutionError(error: unknown): boolean {
+  if (isRpcRateLimitError(error)) return false
+  const revertInfo = extractRevertInfo(error)
+  if (revertInfo.errorName === 'ExecutionFailed(uint256,bytes)') return true
+  const selector = revertInfo.revertData?.slice(0, 10).toLowerCase()
+  if (selector === '0x2c4029e9') return true
+  const lc = getErrorDiagnosticMessage(error).toLowerCase()
+  return (
+    lc.includes('0x2c4029e9') ||
+    lc.includes('transfer_from_failed') ||
+    lc.includes('execution reverted')
+  )
+}
+
+const ZORA_UNIVERSAL_ROUTER_BASE = '0x6ff5693b99212da76ad316178a184ab56d299b43'
+
+export class PreflightSimulationRejectionError extends Error {
+  override readonly name = 'PreflightSimulationRejectionError'
+}
+
+export function isPreflightSimulationRejection(error: unknown): error is PreflightSimulationRejectionError {
+  return error instanceof PreflightSimulationRejectionError
+}
+
+export function buildPreflightSimulationRejectionError(params: {
+  simResult: {
+    error?: string
+    revertData?: Hex
+    errorName?: string
+    directCallResult?: { error?: string; revertData?: Hex; errorName?: string }
+  }
+  firstCallTo?: string
+}): Error {
+  const direct = params.simResult.directCallResult
+  const errorName = direct?.errorName ?? params.simResult.errorName
+  const revertData = (direct?.revertData ?? params.simResult.revertData)?.toLowerCase()
+  const callTo = String(params.firstCallTo ?? '').toLowerCase()
+
+  if (
+    errorName === 'ExecutionFailed(uint256,bytes)' ||
+    revertData?.startsWith('0x2c4029e9') ||
+    callTo === ZORA_UNIVERSAL_ROUTER_BASE
+  ) {
+    return new PreflightSimulationRejectionError(
+      'The Zora swap would revert on your smart wallet. Refresh the quote, confirm the Permit2 signature, and ensure the wallet holds enough of the token you are selling.',
+    )
+  }
+
+  const detail = direct?.error ?? params.simResult.error ?? 'Underlying call would revert'
+  return new PreflightSimulationRejectionError(
+    `This transaction would revert on your smart wallet (${detail}). Refresh and try again.`,
   )
 }
 
