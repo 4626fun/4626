@@ -38,6 +38,27 @@ export async function bridgePrivySession(privyToken: string | null): Promise<boo
     },
   }).catch(() => null)
 
+  const payload = authRes
+    ? ((await authRes.json().catch(() => null)) as ApiEnvelope<unknown> | null)
+    : null
+
+  if (authRes?.status === 409) {
+    const code = typeof (payload as { code?: unknown })?.code === 'string' ? String((payload as { code: string }).code) : ''
+    const recoveryRequired =
+      (payload as { recoveryRequired?: unknown })?.recoveryRequired === true ||
+      code.toUpperCase().includes('RECOVERY_REQUIRED')
+    if (recoveryRequired) {
+      const err = new Error(
+        typeof (payload as { error?: unknown })?.error === 'string'
+          ? String((payload as { error: string }).error)
+          : 'Recovery required',
+      ) as Error & { recoveryRequired?: boolean; code?: string }
+      err.recoveryRequired = true
+      err.code = code || 'RECOVERY_REQUIRED_EMAIL_BOUND'
+      throw err
+    }
+  }
+
   const ok = Boolean(authRes?.ok)
   if (ok) {
     // FINDING-02: the 4626 session is now in the HttpOnly cv_auth_session
