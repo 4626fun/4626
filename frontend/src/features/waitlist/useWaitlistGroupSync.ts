@@ -17,11 +17,23 @@ type UseWaitlistGroupSyncParams = {
   envGroupId: string | null
   vaultGroupId: string | null
   groupIdMismatch: boolean
+  groupName: string
   joinStatus: WaitlistChatStatus
   messagingConnected: boolean
   conversations: ChatConversation[]
-  ensureConversationById: (conversationId: string) => Promise<ChatConversation | null>
+  ensureConversationById: (
+    conversationId: string,
+    options?: { forceSync?: boolean },
+  ) => Promise<ChatConversation | null>
   refreshConversations: (options?: { force?: boolean }) => Promise<ChatConversation[]>
+}
+
+function resolveWaitlistGroupFromSummaries(
+  summaries: ChatConversation[],
+  groupIdCandidates: readonly string[],
+  groupName: string,
+): ChatConversation | null {
+  return findWaitlistGroupConversation(summaries, groupIdCandidates, { groupName })
 }
 
 export function useWaitlistGroupSync(params: UseWaitlistGroupSyncParams) {
@@ -30,6 +42,7 @@ export function useWaitlistGroupSync(params: UseWaitlistGroupSyncParams) {
     envGroupId,
     vaultGroupId,
     groupIdMismatch,
+    groupName,
     joinStatus,
     messagingConnected,
     conversations,
@@ -56,8 +69,8 @@ export function useWaitlistGroupSync(params: UseWaitlistGroupSyncParams) {
   )
 
   const groupConversation = useMemo(
-    () => findWaitlistGroupConversation(conversations, groupIdCandidates),
-    [conversations, groupIdCandidates],
+    () => resolveWaitlistGroupFromSummaries(conversations, groupIdCandidates, groupName),
+    [conversations, groupIdCandidates, groupName],
   )
   groupConversationRef.current = groupConversation
 
@@ -75,11 +88,12 @@ export function useWaitlistGroupSync(params: UseWaitlistGroupSyncParams) {
   }, [groupConversation])
 
   const syncWaitlistGroups = useCallback(
-    async (options?: { resyncMembership?: boolean }) => {
+    async (options?: { resyncMembership?: boolean; force?: boolean }) => {
       if (groupSyncInFlightRef.current) {
         return groupConversationRef.current
       }
       groupSyncInFlightRef.current = true
+      const forceSync = options?.force ?? true
       try {
         if (options?.resyncMembership && joinStatus !== 'executed') {
           const resync = await resyncWaitlistGroupMembership()
@@ -92,14 +106,25 @@ export function useWaitlistGroupSync(params: UseWaitlistGroupSyncParams) {
           setResyncError(null)
         }
 
-        let resolved: ChatConversation | null = null
-        for (const candidateId of groupIdCandidates) {
-          resolved = await ensureConversationById(candidateId)
-          if (resolved) break
-        }
+        let resolved: ChatConversation | null = groupConversationRef.current
+
+        const refreshed = await refreshConversations({ force: forceSync })
+        resolved =
+          resolveWaitlistGroupFromSummaries(refreshed, groupIdCandidates, groupName) ?? resolved
+
         if (!resolved) {
-          await refreshConversations()
+          for (const candidateId of groupIdCandidates) {
+            resolved = await ensureConversationById(candidateId, { forceSync })
+            if (resolved) break
+          }
         }
+
+        if (!resolved) {
+          const secondPass = await refreshConversations({ force: forceSync })
+          resolved =
+            resolveWaitlistGroupFromSummaries(secondPass, groupIdCandidates, groupName) ?? resolved
+        }
+
         return resolved
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
@@ -111,7 +136,7 @@ export function useWaitlistGroupSync(params: UseWaitlistGroupSyncParams) {
         groupSyncInFlightRef.current = false
       }
     },
-    [ensureConversationById, groupIdCandidates, joinStatus, refreshConversations],
+    [ensureConversationById, groupIdCandidates, groupName, joinStatus, refreshConversations],
   )
 
   useEffect(() => {
@@ -136,7 +161,7 @@ export function useWaitlistGroupSync(params: UseWaitlistGroupSyncParams) {
           await new Promise((resolve) => window.setTimeout(resolve, delay))
         }
         if (cancelled || groupConversationRef.current) return
-        await syncWaitlistGroups({ resyncMembership: false })
+        await syncWaitlistGroups({ force: true })
         attempt += 1
       }
       if (!cancelled && !groupConversationRef.current) {
@@ -166,7 +191,7 @@ export function useWaitlistGroupSync(params: UseWaitlistGroupSyncParams) {
     setSyncTimedOut(false)
     groupSyncStartedRef.current = false
     try {
-      await syncWaitlistGroups({ resyncMembership: joinStatus !== 'executed' })
+      await syncWaitlistGroups({ resyncMembership: joinStatus !== 'executed', force: true })
       await refreshConversations({ force: true })
     } finally {
       setRefreshBusy(false)

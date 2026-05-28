@@ -75,6 +75,7 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
     envGroupId,
     vaultGroupId,
     groupIdMismatch,
+    groupName,
     joinStatus,
     messagingConnected,
     conversations,

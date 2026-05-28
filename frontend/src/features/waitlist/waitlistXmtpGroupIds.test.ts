@@ -42,4 +42,16 @@ describe('waitlistXmtpGroupIds', () => {
     )
     expect(match?.id).toBe('ed6fbda34f2614536df5cec08dff2266')
   })
+
+  it('falls back to group name when ids do not match local conversations', () => {
+    const match = findWaitlistGroupConversation(
+      [
+        { id: 'dm-1', type: 'dm', name: 'peer' },
+        { id: 'other-group', type: 'group', name: 'Waitlist chat' },
+      ],
+      ['missing-group-id'],
+      { groupName: 'Waitlist chat' },
+    )
+    expect(match?.id).toBe('other-group')
+  })
 })

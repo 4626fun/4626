@@ -445,7 +445,7 @@ async function finalizeResolvedConversation(convo: ConversationLike): Promise<Co
 export async function resolveConversationById(
   conversationsApi: ConversationsApiLike,
   conversationId: string,
-  options?: { preferencesApi?: PreferencesApiLike | null },
+  options?: { preferencesApi?: PreferencesApiLike | null; forceSync?: boolean },
 ): Promise<ConversationLike | null> {
   const normalizedId = conversationId.trim()
   if (!normalizedId) return null
@@ -465,7 +465,10 @@ export async function resolveConversationById(
   const direct = await tryGet()
   if (direct) return direct
 
-  await syncConversationsForGroupDiscovery(conversationsApi)
+  await syncConversationsForGroupDiscovery(conversationsApi, {
+    force: options?.forceSync,
+    lightweight: !options?.forceSync,
+  })
 
   const afterSync = await tryGet()
   if (afterSync) return afterSync
@@ -481,7 +484,12 @@ export async function resolveConversationById(
 export async function resolveConversationByIdWithSyncRetries(
   conversationsApi: ConversationsApiLike,
   conversationId: string,
-  options?: { rounds?: number; delayMs?: number; preferencesApi?: PreferencesApiLike | null },
+  options?: {
+    rounds?: number
+    delayMs?: number
+    preferencesApi?: PreferencesApiLike | null
+    forceSync?: boolean
+  },
 ): Promise<ConversationLike | null> {
   const rounds = Math.max(1, options?.rounds ?? 3)
   const delayMs = Math.max(0, options?.delayMs ?? 400)
@@ -489,11 +497,15 @@ export async function resolveConversationByIdWithSyncRetries(
   for (let round = 0; round < rounds; round += 1) {
     const resolved = await resolveConversationById(conversationsApi, conversationId, {
       preferencesApi: options?.preferencesApi,
+      forceSync: options?.forceSync,
     })
     if (resolved) return resolved
     if (round + 1 >= rounds) break
     try {
-      await syncConversationsForGroupDiscovery(conversationsApi)
+      await syncConversationsForGroupDiscovery(conversationsApi, {
+        force: options?.forceSync,
+        lightweight: !options?.forceSync,
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       if (isXmtpRateLimitError(message)) break

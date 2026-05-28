@@ -109,6 +109,7 @@ describe('resolveConversationById', () => {
 
     const resolved = await resolveConversationById(api, 'ed6fbda34f2614536df5cec08dff2266', {
       preferencesApi,
+      forceSync: true,
     })
     expect(resolved?.id).toBe(group.id)
     expect(preferencesApi.setConsentStates).toHaveBeenCalledWith([

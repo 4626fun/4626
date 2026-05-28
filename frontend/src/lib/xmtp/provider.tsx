@@ -216,7 +216,10 @@ type XmtpContextValue = {
   /** Re-sync the local conversation index from XMTP (safe while connected). */
   refreshConversations: (options?: { force?: boolean }) => Promise<ChatConversation[]>
   /** Sync + list, then fetch a single conversation by id if still missing. */
-  ensureConversationById: (conversationId: string) => Promise<ChatConversation | null>
+  ensureConversationById: (
+    conversationId: string,
+    options?: { forceSync?: boolean },
+  ) => Promise<ChatConversation | null>
 }
 
 type WaitlistMeData = {
@@ -1339,7 +1342,7 @@ export function XmtpChatProvider({
     let mergedConvos: Array<Conversation<unknown> | Dm<unknown> | Group<unknown>> = [...convos]
     if (typeof conversationsApi.listGroups === 'function') {
       try {
-        const groups = await conversationsApi.listGroups()
+        const groups = await conversationsApi.listGroups(listOptions)
         for (const group of groups) {
           if (!mergedConvos.some((convo) => conversationIdsEqual(convo.id, group.id))) {
             mergedConvos.push(group)
@@ -1357,7 +1360,10 @@ export function XmtpChatProvider({
     refreshConversationsRef.current = refreshConversations
   }, [refreshConversations])
 
-  const ensureConversationById = useCallback(async (conversationId: string): Promise<ChatConversation | null> => {
+  const ensureConversationById = useCallback(async (
+    conversationId: string,
+    options?: { forceSync?: boolean },
+  ): Promise<ChatConversation | null> => {
     const normalizedId = conversationId.trim()
     if (!normalizedId) return null
 
@@ -1377,7 +1383,7 @@ export function XmtpChatProvider({
       return cached
     }
 
-    const summaries = await refreshConversations()
+    const summaries = await refreshConversations({ force: options?.forceSync })
     const fromList =
       summaries.find((conversation) => conversationIdsEqual(conversation.id, normalizedId)) ?? null
     if (fromList) return fromList
@@ -1396,6 +1402,7 @@ export function XmtpChatProvider({
       rounds: identityHintAddressRef.current ? 5 : 3,
       delayMs: 500,
       preferencesApi: client.preferences,
+      forceSync: options?.forceSync,
     })
     if (!convo) return null
 
@@ -1902,15 +1909,24 @@ export function XmtpChatProvider({
 
       // Shared setup: sync conversations, start streams, mark connected.
       const setupConversations = async (client: Client) => {
-        await client.conversations.sync()
-        const convos = await client.conversations.list()
-        let mergedConvos: Array<Conversation<unknown> | Dm<unknown> | Group<unknown>> = [...convos]
         const conversationsApi = client.conversations as {
-          listGroups?: () => Promise<Array<Conversation | Dm | Group>>
+          sync: () => Promise<unknown>
+          syncAll?: (consentStates?: import('@xmtp/browser-sdk').ConsentState[]) => Promise<unknown>
+          list: (options?: ReturnType<typeof groupMembershipListOptions>) => Promise<Array<Conversation | Dm | Group>>
+          listGroups?: (
+            options?: ReturnType<typeof groupMembershipListOptions>,
+          ) => Promise<Array<Conversation | Dm | Group>>
         }
+        await syncConversationsForGroupDiscovery(conversationsApi, {
+          force: manualConnectOnlyRef.current,
+          lightweight: !manualConnectOnlyRef.current,
+        })
+        const listOptions = groupMembershipListOptions()
+        const convos = await conversationsApi.list(listOptions)
+        let mergedConvos: Array<Conversation<unknown> | Dm<unknown> | Group<unknown>> = [...convos]
         if (typeof conversationsApi.listGroups === 'function') {
           try {
-            const groups = await conversationsApi.listGroups()
+            const groups = await conversationsApi.listGroups(listOptions)
             for (const group of groups) {
               if (!mergedConvos.some((convo) => conversationIdsEqual(convo.id, group.id))) {
                 mergedConvos.push(group)

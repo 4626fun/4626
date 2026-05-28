@@ -24,20 +24,31 @@ export function collectWaitlistGroupIdCandidates(input: {
   return ids
 }
 
-export function findWaitlistGroupConversation<T extends { id: string; type: string }>(
+export function findWaitlistGroupConversation<T extends { id: string; type: string; name?: string }>(
   conversations: T[],
   groupIds: readonly string[],
+  options?: { groupName?: string | null },
 ): T | null {
-  if (groupIds.length === 0) return null
-  const normalizedTargets = new Set(groupIds.map((id) => id.trim().toLowerCase()))
-  const byId = conversations.find((conversation) =>
-    normalizedTargets.has(conversation.id.trim().toLowerCase()),
-  )
-  if (byId) return byId
+  if (groupIds.length > 0) {
+    const normalizedTargets = new Set(groupIds.map((id) => id.trim().toLowerCase()))
+    const byId = conversations.find((conversation) =>
+      normalizedTargets.has(conversation.id.trim().toLowerCase()),
+    )
+    if (byId) return byId
+    const byIdAndType = conversations.find(
+      (conversation) =>
+        conversation.type === 'group' && normalizedTargets.has(conversation.id.trim().toLowerCase()),
+    )
+    if (byIdAndType) return byIdAndType
+  }
+
+  const normalizedName = String(options?.groupName ?? '').trim().toLowerCase()
+  if (!normalizedName) return null
+
   return (
     conversations.find(
       (conversation) =>
-        conversation.type === 'group' && normalizedTargets.has(conversation.id.trim().toLowerCase()),
+        conversation.type === 'group' && conversation.name?.trim().toLowerCase() === normalizedName,
     ) ?? null
   )
 }
