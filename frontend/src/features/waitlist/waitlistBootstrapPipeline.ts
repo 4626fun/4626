@@ -16,6 +16,7 @@ export type WaitlistCanonicalizationResult = {
 export type WaitlistBootstrapPipelineParams = {
   token: string
   activeReferralCode: string | null
+  verifiedEmailHint?: string | null
   fetchWaitlistBootstrap: (headers: Record<string, string>, body: string) => Promise<Response>
   runCanonicalization: (token: string) => Promise<WaitlistCanonicalizationResult>
   ensureEmbeddedWallet: () => Promise<{ address: string }>
@@ -48,7 +49,10 @@ export async function executeWaitlistBootstrapPipeline(
     'Content-Type': 'application/json',
     'X-Privy-Token': params.token,
   }
-  const body = JSON.stringify(params.activeReferralCode ? { referralCode: params.activeReferralCode } : {})
+  const body = JSON.stringify({
+    ...(params.activeReferralCode ? { referralCode: params.activeReferralCode } : {}),
+    ...(params.verifiedEmailHint ? { email: params.verifiedEmailHint } : {}),
+  })
 
   const response = await params.fetchWaitlistBootstrap(headers, body)
   const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistBootstrapResponse> | null

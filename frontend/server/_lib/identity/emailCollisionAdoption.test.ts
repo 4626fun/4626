@@ -123,6 +123,61 @@ describe('runWithWaitlistEmailCollisionAdoption', () => {
     expect(upsertLinkedMethodMock).not.toHaveBeenCalled()
   })
 
+  it('rebinds legacy profiles whose privy_user_id is still null', async () => {
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('from profiles') && text.includes('where lower(email) = lower(')) {
+          return {
+            rows: [{ id: 42, privy_user_id: null }],
+          }
+        }
+        if (text.includes('update profiles') && text.includes('returning id')) {
+          return { rows: [{ id: 42 }] }
+        }
+        return { rows: [] }
+      }),
+    }
+    const action = vi
+      .fn()
+      .mockRejectedValueOnce(recoveryError('user@example.com'))
+      .mockResolvedValueOnce('ok')
+
+    const result = await runWithWaitlistEmailCollisionAdoption({
+      db: db as any,
+      email: 'user@example.com',
+      privyUserId: 'did:privy:new-user',
+      privyUser: {
+        id: 'did:privy:new-user',
+        email: { address: 'user@example.com', verified: true },
+      },
+      action,
+    })
+
+    expect(result).toBe('ok')
+    expect(action).toHaveBeenCalledTimes(2)
+  })
+
+  it('rebinds from a client bootstrap email hint when Privy server hydration lags', async () => {
+    const db = createRebindDb()
+    const action = vi
+      .fn()
+      .mockRejectedValueOnce(recoveryError('user@example.com'))
+      .mockResolvedValueOnce('ok')
+
+    const result = await runWithWaitlistEmailCollisionAdoption({
+      db: db as any,
+      email: null,
+      privyUserId: 'did:privy:new-user',
+      privyUser: { id: 'did:privy:new-user' },
+      bootstrapEmailHint: 'user@example.com',
+      action,
+    })
+
+    expect(result).toBe('ok')
+    expect(action).toHaveBeenCalledTimes(2)
+  })
+
   it('delegates to assertNoEmailPrivyCollision without throwing when no collision exists', async () => {
     const db: FakeDb = {
       sql: vi.fn(async (strings: TemplateStringsArray) => {

@@ -51,6 +51,27 @@ describe('executeWaitlistBootstrapPipeline', () => {
     expect(result.kind).toBe('success')
   })
 
+  it('includes the verified email hint in the bootstrap request body', async () => {
+    let requestBody = ''
+    await executeWaitlistBootstrapPipeline({
+      token: 'privy-token',
+      activeReferralCode: null,
+      verifiedEmailHint: 'user@example.com',
+      fetchWaitlistBootstrap: async (_headers, body) => {
+        requestBody = body
+        return jsonResponse(BOOTSTRAP_PAYLOAD)
+      },
+      runCanonicalization: async () => ({
+        onboardingBootstrapped: false,
+        onboarding: null,
+        flags: { needsEmbeddedWallet: false },
+      }),
+      ensureEmbeddedWallet: async () => ({ address: '0xabc' }),
+    })
+
+    expect(JSON.parse(requestBody)).toEqual({ email: 'user@example.com' })
+  })
+
   it('still succeeds when canonicalization reports recovery after bootstrap settled identity', async () => {
     const result = await executeWaitlistBootstrapPipeline({
       token: 'privy-token',

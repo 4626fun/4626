@@ -56,6 +56,10 @@ vi.mock('../../server/_lib/identity/identityRecovery.js', () => ({
   isIdentityRecoveryRequiredError: (error: any) => error?.code === 'IDENTITY_RECOVERY_REQUIRED',
 }))
 
+vi.mock('../../server/_lib/infra/privyUserLoad.js', () => ({
+  loadPrivyUserWithVerifiedEmailRetry: vi.fn(async ({ initialUser }: { initialUser: unknown }) => initialUser),
+}))
+
 function defaultAccountSignals(overrides: Record<string, unknown> = {}) {
   return {
     linked: false,
@@ -520,7 +524,7 @@ describe('POST /api/waitlist/bootstrap', () => {
     expect(res.body?.error).toBe('Invalid referral code')
   })
 
-  it('does not upsert a canonical account email until Privy email is verified', async () => {
+  it('uses an authenticated bootstrap email hint when Privy server hydration lags', async () => {
     verifyPrivyForAccountsMock.mockResolvedValueOnce({
       privyUserId: 'did:privy:test-user',
       privyUser: { id: 'did:privy:test-user', email: null },
@@ -536,7 +540,13 @@ describe('POST /api/waitlist/bootstrap', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(upsertAccountMock).not.toHaveBeenCalled()
+    expect(upsertAccountMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        privyUserId: 'did:privy:test-user',
+        email: 'user@example.com',
+        emailVerified: true,
+      }),
+    )
   })
 
   it('returns 401 for explicit session email mismatch errors', async () => {

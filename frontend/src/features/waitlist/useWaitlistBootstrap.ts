@@ -26,6 +26,7 @@ type UseWaitlistBootstrapParams = {
   activeReferralCode: string | null
   ensureEmbeddedWallet: () => Promise<{ address: string }>
   getAccessToken: () => Promise<string | null>
+  getVerifiedEmailHint?: () => string | null
   privyAuthed: boolean
   setAccount: (account: WaitlistAccountsSummary | null) => void
   setStep: (step: WaitlistStep) => void
@@ -40,6 +41,7 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
     activeReferralCode,
     ensureEmbeddedWallet,
     getAccessToken,
+    getVerifiedEmailHint,
     privyAuthed,
     setAccount,
     setStep,
@@ -115,6 +117,7 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
         pipelineResult = await executeWaitlistBootstrapPipeline({
           token,
           activeReferralCode,
+          verifiedEmailHint: getVerifiedEmailHint?.() ?? null,
           fetchWaitlistBootstrap: (bootstrapHeaders, body) =>
             withTimeout(
               apiFetch('/api/waitlist/bootstrap', {
@@ -184,6 +187,7 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
       activeReferralCode,
       ensureEmbeddedWallet,
       getAccessToken,
+      getVerifiedEmailHint,
       privyAuthed,
       setAccount,
       setError,

@@ -38,6 +38,7 @@ import {
 } from '../../../server/_lib/identity/accountsIdentity.js'
 import { runWithWaitlistEmailCollisionAdoption } from '../../../server/_lib/identity/emailCollisionAdoption.js'
 import { resolveBasenameHandle } from '../../../server/_lib/identity/basenameResolver.js'
+import { loadPrivyUserWithVerifiedEmailRetry } from '../../../server/_lib/infra/privyUserLoad.js'
 import { extractPrivyVerifiedEmail } from '../../../server/_lib/infra/trust.js'
 
 type BootstrapBody = { email?: string; referralCode?: string }
@@ -513,6 +514,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const context = await verifyPrivyForAccounts(req)
     await ensureAccountsIdentitySchema(db as any)
+    const bootstrapEmailHint = email
+    const privyUser = await loadPrivyUserWithVerifiedEmailRetry({
+      privyUserId: context.privyUserId,
+      initialUser: context.privyUser,
+    })
+    const privyEmail =
+      normalizeEmail(extractPrivyVerifiedEmail(privyUser)) ?? bootstrapEmailHint
 
     // Block wallet-only Privy sign-ins for humans who already have a
     // canonical (email-verified) profile owning one of the incoming
@@ -524,31 +532,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await assertNoWalletPrivyCollision({
       db: db as any,
       privyUserId: context.privyUserId,
-      privyUser: context.privyUser,
+      privyUser,
     })
 
-    const privyEmail = normalizeEmail(extractPrivyVerifiedEmail(context.privyUser))
     await runWithWaitlistEmailCollisionAdoption({
       db: db as any,
       email: privyEmail,
       privyUserId: context.privyUserId,
-      privyUser: context.privyUser,
+      privyUser,
+      bootstrapEmailHint,
       action: () =>
         syncEmailIdentity({
           db: db as any,
           privyUserId: context.privyUserId,
-          privyUser: context.privyUser,
+          privyUser,
         }),
     })
 
     // Only Privy's verified email is allowed to become the canonical account email.
-    // Pre-auth form input is intent, not proof.
+    // Pre-auth form input is intent, not proof. After OTP, the client may send the
+    // verified email before Privy server hydration catches up (common in Base App).
     if (privyEmail) {
       await runWithWaitlistEmailCollisionAdoption({
         db: db as any,
         email: privyEmail,
         privyUserId: context.privyUserId,
-        privyUser: context.privyUser,
+        privyUser,
+        bootstrapEmailHint,
         action: () =>
           assertNoEmailPrivyCollision({
             db: db as any,
@@ -616,7 +626,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const me = await buildAccountsMePayload({
       db: db as any,
       privyUserId: context.privyUserId,
-      privyUser: context.privyUser,
+      privyUser,
     })
 
     return res.status(200).json({

@@ -18,6 +18,7 @@ import {
 } from '@/lib/auth/waitlistEntry'
 import { getAppBaseUrl } from '@/lib/env/host'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import { extractPrivyVerifiedEmailFromUser } from '@/lib/privy/verifiedEmail'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
@@ -450,6 +451,7 @@ export function WaitlistFlow(props: {
     activeReferralCode,
     ensureEmbeddedWallet,
     getAccessToken,
+    getVerifiedEmailHint: () => extractPrivyVerifiedEmailFromUser(privy.user),
     privyAuthed,
     setAccount,
     setStep,
@@ -664,11 +666,13 @@ export function WaitlistFlow(props: {
         return
       }
       if (privyAuthed) {
-        try {
-          const linked = await maybeCallMethod(privy, ['linkEmail', 'linkEmailAccount'])
-          if (!linked) throw new Error('Email verification is unavailable in this client. Sign out and retry with email.')
-        } catch (linkEmailError: unknown) {
-          if (!isEmailAlreadyLinkedAuthError(linkEmailError)) throw linkEmailError
+        if (!extractPrivyVerifiedEmailFromUser(privy.user)) {
+          try {
+            const linked = await maybeCallMethod(privy, ['linkEmail', 'linkEmailAccount'])
+            if (!linked) throw new Error('Email verification is unavailable in this client. Sign out and retry with email.')
+          } catch (linkEmailError: unknown) {
+            if (!isEmailAlreadyLinkedAuthError(linkEmailError)) throw linkEmailError
+          }
         }
         await settleBootstrapAfterRecoverableLoginError({
           bypassRecoveryCooldown: true,
