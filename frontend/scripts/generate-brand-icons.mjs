@@ -107,7 +107,7 @@ function buildDerivativePlan(siteConfig) {
     ['assets/android-chrome-512x512.png', 'icon-512.png'],
     ['assets/android-chrome-192x192.png', 'icon-192.png'],
     [miniappIcon, 'miniapp-icon.png'],
-    ['assets/og-image.png', 'miniapp-hero.png'],
+    ['assets/base-app-icon-1024.png', 'miniapp-hero.png'],
   ]
 
   return { rootCompatibilityCopies, favicon32, appleTouchIcon, miniappIcon }

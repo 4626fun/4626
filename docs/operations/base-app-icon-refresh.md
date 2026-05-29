@@ -40,6 +40,12 @@ curl -s https://4626.fun/.well-known/farcaster.json | jq '.miniapp.iconUrl, .min
 
 Website-only favicon updates are insufficient when Base still serves the old blue gradient squircle from base.dev or from a cached `/app-icon.png` fetch.
 
+**Do not point legacy root `miniapp-hero.png` at `og-image.png`.** `pnpm generate:brand-icons` copies the opaque `base-app-icon-1024.png` tile there so crawlers that still request `/miniapp-hero.png` do not get the blue-glow social card.
+
+**`4626.fun/` is `public/immersive/index.html`.** A later immersive-only revert can strip `base:app_id` / `fc:miniapp` from that file even when SPA shells are correct. `sync-static-favicon-head.mjs` re-injects the Base meta block (marked with `@4626/base-app-head` comments) on every `generate:brand-icons` run.
+
+**`/.well-known/farcaster.json` `heroImageUrl` / `screenshotUrls`** must use the same white-4 tile as `iconUrl`, not `og-image.png`, or Base alternates between blue-glow and tile on refresh.
+
 ## Pinata / IPFS (not the app icon)
 
 Live 4626 **app** icon surfaces (`favicon.ico`, `farcaster.json` `iconUrl`, `fc:miniapp` splash) are **local** under `frontend/public/` — not Pinata.

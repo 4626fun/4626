@@ -2,7 +2,7 @@
   "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
   "name": "4626 Agent",
   "description": "Agent API for 4626 on Base. Reachable via XMTP messaging, REST API, and MCP tools. Provides vault management, wallet intelligence, ERC-8004 reputation queries, and keeper automation.",
-  "image": "https://4626.fun/assets/base-app-icon-1024.png?v=17",
+  "image": "https://4626.fun/assets/base-app-icon-1024.png?v=19",
   "services": [
     {
       "name": "web",
@@ -66,5 +66,9 @@
     }
   ],
   "reputationRegistry": "eip155:8453:0x8004baa17c55a88189ae136b182e5fda19de9b63",
-  "supportedTrust": ["reputation", "crypto-economic", "tee-attestation"]
+  "supportedTrust": [
+    "reputation",
+    "crypto-economic",
+    "tee-attestation"
+  ]
 }

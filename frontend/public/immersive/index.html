@@ -23,7 +23,19 @@
     <meta name="theme-color" content="#000000" />
     <meta name="msapplication-TileColor" content="#000000" />
 
-    <link rel="manifest" href="/site.webmanifest" />
+    <!-- @4626/base-app-head:start -->
+    <meta name="base:app_id" content="695a49dc4d3a403912ed8ca5" />
+    <meta
+      name="fc:miniapp"
+      content='{"version":"next","imageUrl":"https://4626.fun/assets/base-app-icon-1024.png?v=19","button":{"title":"Open 4626.fun","action":{"type":"launch_miniapp","name":"4626.fun","url":"https://4626.fun/","splashImageUrl":"https://4626.fun/assets/base-miniapp-icon-v19-200.png?v=19","splashBackgroundColor":"#000000"}}}'
+    />
+    <meta
+      name="fc:frame"
+      content='{"version":"next","imageUrl":"https://4626.fun/assets/base-app-icon-1024.png?v=19","button":{"title":"Open 4626.fun","action":{"type":"launch_frame","name":"4626.fun","url":"https://4626.fun/","splashImageUrl":"https://4626.fun/assets/base-miniapp-icon-v19-200.png?v=19","splashBackgroundColor":"#000000"}}}'
+    />
+<!-- @4626/base-app-head:end -->
+
+<link rel="manifest" href="/site.webmanifest" />
     <meta name="msapplication-config" content="/browserconfig.xml" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -157,7 +169,12 @@
         </div>
 
         <!-- 3D cube perfectly centered — hero focal point -->
-        <div id="vault-canvas" class="hero__cube" aria-hidden="true"></div>
+        <div
+          id="vault-canvas"
+          class="hero__cube"
+          data-vault-src="legacy"
+          aria-hidden="true"
+        ></div>
 
         <!-- Animated lightning strikes (procedural SVG — sits between bg and clouds) -->
         <svg class="hero__lightning" id="hero-lightning" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">

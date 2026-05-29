@@ -193,6 +193,14 @@ describe('public manifest assets', () => {
     }
   })
 
+  it('keeps legacy miniapp-hero.png on the white-4 opaque tile (not og-image blue glow)', () => {
+    const heroPath = path.join(publicRoot, 'miniapp-hero.png')
+    const tilePath = path.join(publicRoot, BASE_APP_ICON_PATH.replace(/^\//, ''))
+    const ogPath = path.join(publicRoot, 'assets/og-image.png')
+    expect(readFileSync(heroPath)).toEqual(readFileSync(tilePath))
+    expect(readFileSync(heroPath)).not.toEqual(readFileSync(ogPath))
+  })
+
   it('points Base mini-app manifest iconUrl at the 1024px opaque tile asset', () => {
     const manifest = JSON.parse(readFileSync(farcasterManifestPath, 'utf8')) as {
       miniapp?: { iconUrl?: string; splashImageUrl?: string; version?: string }
@@ -200,7 +208,10 @@ describe('public manifest assets', () => {
 
     expect(manifest.miniapp?.iconUrl).toBe(`https://4626.fun${BASE_APP_ICON_PATH}?v=${BRAND_ASSET_VERSION}`)
     expect(manifest.miniapp?.splashImageUrl).toBe(`https://4626.fun${MINIAPP_ICON_PATH}?v=${BRAND_ASSET_VERSION}`)
-    expect(manifest.miniapp?.version).toBe('11')
+    expect(manifest.miniapp?.heroImageUrl).toBe(`https://4626.fun${BASE_APP_ICON_PATH}?v=${BRAND_ASSET_VERSION}`)
+    expect(manifest.miniapp?.screenshotUrls).toEqual([`https://4626.fun${BASE_APP_ICON_PATH}?v=${BRAND_ASSET_VERSION}`])
+    expect(manifest.miniapp?.heroImageUrl).not.toContain('og-image.png')
+    expect(Number(manifest.miniapp?.version)).toBeGreaterThanOrEqual(12)
     expect(existsSync(path.join(publicRoot, BASE_APP_ICON_PATH.replace(/^\//, '')))).toBe(true)
     expect(existsSync(path.join(publicRoot, MINIAPP_ICON_PATH.replace(/^\//, '')))).toBe(true)
   })
