@@ -16,6 +16,7 @@ cache/
 typechain-types/
 dist/
 build/
+frontend/packages/server-core/dist/
 out/
 broadcast/
 
