@@ -98,6 +98,10 @@ export type HermitExecutionParams = {
   listPreferences?: HermitPreferenceLister | null
   /** Best-effort bulk-clear for `/hermit reset`. Optional. */
   clearPreferences?: HermitPreferenceClearer | null
+
+  // === Room 1659 specific market data ===
+  /** Live hype, liquidation, and user position data (only for room 1659) */
+  room1659Market?: import('../../commands/execute.js').HermitRoomContext['room1659Market']
 }
 
 export type HermitExecutionResult = {

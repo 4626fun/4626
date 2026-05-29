@@ -176,7 +176,8 @@ line and follow the matching row in
 
 | Env | Production value | Purpose |
 | --- | --- | --- |
-| `ALFACLUB_CHAT_ROOM_ID` | `1043` | Commands (`/gmeow`, `/help`, …) |
+| `ALFACLUB_CHAT_ROOM_ID` | `1043` | Legacy single primary command room (still supported) |
+| `ALFACLUB_HERMIT_COMMAND_ROOMS` | `1043,1659` | Official Hermit creative + command rooms (comma list). Room 1659 = https://alfaclub.app/rooms/1659/ |
 | `ALFACLUB_DAILY_BRIEF_ROOM_ID` | `2` | Flip Research digest (`alfaclub.app/room/2`) |
 | `ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE` | `1` | Cron skips digest in bridge room |
 

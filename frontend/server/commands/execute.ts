@@ -230,6 +230,9 @@ type HermitRoomContext = {
       >)
     | null
   clearPreferences: (() => Promise<boolean>) | null
+
+  // === Room 1659 Market Awareness (only populated for room 1659) ===
+  room1659Market?: import('../_lib/alfaclub/room1659Market.js').Room1659MarketSnapshot | null
 }
 
 /**
@@ -336,13 +339,26 @@ async function resolveHermitRoomContext(params: {
     }
   }
 
-  return {
+  const context: HermitRoomContext = {
     roomId,
     userPreferences: { spanishDialect, tone, onboardedAt },
     persistPreference,
     listPreferences,
     clearPreferences,
   }
+
+  // Room 1659 specific: attach live market context (hype, liquidation, user position)
+  if (roomId === '1659') {
+    try {
+      const { resolveRoom1659MarketContext } = await import('../_lib/alfaclub/room1659Market.js')
+      context.room1659Market = await resolveRoom1659MarketContext(params.senderWallet)
+    } catch (e) {
+      // Fail open — Hermit still works, just without market data
+      context.room1659Market = { hype: null, liquidation: null, userPosition: null, fetchedAt: new Date().toISOString(), ok: false, errorReason: 'load_failed' }
+    }
+  }
+
+  return context
 }
 
 
@@ -466,6 +482,10 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
             : {}),
           ...(hermitRoomContext.clearPreferences
             ? { clearPreferences: hermitRoomContext.clearPreferences }
+            : {}),
+          // Room 1659 market data (hype, liquidation, user position)
+          ...(hermitRoomContext.room1659Market
+            ? { room1659Market: hermitRoomContext.room1659Market }
             : {}),
         })
         if (alfaClubChat && alfaClubRoomId && cooldownCommand) {

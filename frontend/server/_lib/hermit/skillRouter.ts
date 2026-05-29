@@ -918,10 +918,12 @@ function resolveActiveDialect(params: {
   return { dialect: null, source: 'default' }
 }
 
-function buildPinataPromptForHermit(params: {
+export function buildPinataPromptForHermit(params: {
   mode: HermitDraftMode
   userPrompt: string
   userPreferences?: HermitUserPreferences | null
+  // Room 1659 market data (only present when called from room 1659)
+  room1659Market?: any
 }): string {
   const modeInstruction =
     params.mode === 'announce'
@@ -937,6 +939,29 @@ function buildPinataPromptForHermit(params: {
   })
   const tone = asHermitTone(params.userPreferences?.tone ?? null)
   const toneClause = buildHermitToneClause(tone)
+
+  let marketContext = ''
+  if (params.room1659Market && params.room1659Market.ok !== false) {
+    const m = params.room1659Market
+
+    const lines = [
+      '',
+      '=== ROOM 1659 LIVE MARKET CONTEXT (use this for theatrical, dramatic, marketing copy) ===',
+      `Current hype score: ${m.hype ?? 'unknown'}`,
+      `Current liquidation level: ${m.liquidation ?? 'unknown'}`,
+    ]
+
+    if (m.userPosition) {
+      lines.push(m.userPosition) // already formatted with rich multi-line on-chain curve data
+    } else {
+      lines.push('You currently have no open position in this room.')
+    }
+
+    lines.push('')
+    lines.push('INSTRUCTION FOR HERMIT: This room is stressed and theatrical. Turn the numbers above (especially the quadratic curve acceleration, low supply, and liquidation tension) into unhinged, quotable, cinematic, memeable lines. Be dramatic. Be memorable. The "Do not be overly dramatic" rule is suspended for room 1659.')
+    marketContext = lines.join('\n')
+  }
+
   return [
     'You are Hermit, a crypto-native creative assistant for AlfaChat communities.',
     modeInstruction,
@@ -945,6 +970,7 @@ function buildPinataPromptForHermit(params: {
     'Rules: line <= 220 chars, alt 2-4 entries, hashtags 1-5, no fabricated claims.',
     buildHermitLanguageDirective(dialect, source),
     ...(toneClause ? [toneClause] : []),
+    marketContext,
     `User input: ${params.userPrompt}`,
   ].join('\n')
 }
@@ -1609,6 +1635,7 @@ export async function executeHermitCommand(
         mode,
         userPrompt: prompt,
         userPreferences,
+        room1659Market: params.room1659Market,
       }),
       senderAddress: params.senderAddress,
       sourceIdentity: params.sourceIdentity ?? null,

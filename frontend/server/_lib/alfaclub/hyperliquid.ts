@@ -27,6 +27,18 @@ export type HyperliquidClearinghouseState = {
   accountValueUsd: number | null
   totalNtlPosUsd: number | null
   totalRawUsdUsd: number | null
+  // Richer data for room 1659 position awareness
+  crossAccountValueUsd?: number | null
+  withdrawableUsd?: number | null
+  assetPositions?: Array<{
+    coin: string
+    entryPx: number | null
+    positionValue: number | null
+    unrealizedPnl: number | null
+    liquidationPx: number | null
+    leverage: number | null
+    side?: 'long' | 'short' | null
+  }>
 }
 
 export type HyperliquidUserFill = {
@@ -118,20 +130,53 @@ export async function getClearinghouseState(
   })
   if (isErrorShape(raw)) return null
   if (!raw || typeof raw !== 'object') return null
-  const data = raw as {
-    marginSummary?: {
-      accountValue?: unknown
-      totalNtlPos?: unknown
-      totalRawUsd?: unknown
-    }
+  const data = raw as any
+
+  const marginSummary = data?.marginSummary ?? {}
+  const crossMarginSummary = data?.crossMarginSummary ?? {}
+
+  const result: HyperliquidClearinghouseState = {
+    accountValueUsd: parseFloatSafe(marginSummary.accountValue),
+    totalNtlPosUsd: parseFloatSafe(marginSummary.totalNtlPos),
+    totalRawUsdUsd: parseFloatSafe(marginSummary.totalRawUsd),
+    crossAccountValueUsd: parseFloatSafe(crossMarginSummary.accountValue),
+    withdrawableUsd: parseFloatSafe(data?.withdrawable),
   }
-  const summary = data.marginSummary
-  if (!summary || typeof summary !== 'object') return null
-  return {
-    accountValueUsd: parseFloatSafe(summary.accountValue),
-    totalNtlPosUsd: parseFloatSafe(summary.totalNtlPos),
-    totalRawUsdUsd: parseFloatSafe(summary.totalRawUsd),
+
+  // Parse assetPositions for liquidation / position details (critical for room 1659)
+  if (Array.isArray(data?.assetPositions)) {
+    result.assetPositions = data.assetPositions
+      .map((pos: any) => {
+        const position = pos?.position ?? pos
+        if (!position) return null
+
+        const coin = position.coin ?? 'UNKNOWN'
+        const entryPx = parseFloatSafe(position.entryPx)
+        const positionValue = parseFloatSafe(position.positionValue)
+        const unrealizedPnl = parseFloatSafe(position.unrealizedPnl)
+        const liquidationPx = parseFloatSafe(position.liquidationPx)
+        const leverage = parseFloatSafe(position.leverage?.value ?? position.leverage)
+
+        let side: 'long' | 'short' | null = null
+        if (position.szi) {
+          const szi = parseFloatSafe(position.szi)
+          if (szi !== null) side = szi > 0 ? 'long' : 'short'
+        }
+
+        return {
+          coin,
+          entryPx,
+          positionValue,
+          unrealizedPnl,
+          liquidationPx,
+          leverage,
+          side,
+        }
+      })
+      .filter(Boolean)
   }
+
+  return result
 }
 
 export async function getUserFills30d(

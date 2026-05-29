@@ -29,8 +29,11 @@ Operational source of truth for bot identities, token ownership, and env-variabl
 ### Responsibilities
 
 - **AlfaClub room automation (primary):**
-  - Polls room `1043` via AlfaClub chat bridge.
-  - Handles slash commands routed into deterministic command execution.
+  - Official Hermit command rooms (via `ALFACLUB_HERMIT_COMMAND_ROOMS` or legacy `ALFACLUB_CHAT_ROOM_ID`):
+    - `1043` (primary ops / creative command surface)
+    - `1659` (https://alfaclub.app/rooms/1659/)
+  - The bridge ingests commands from these rooms (and all rooms when `ALFACLUB_CHAT_WS_INGEST_ALL_ROOMS_ENABLED=1`).
+  - Handles slash commands (`/hermit`, `/meme`, `/gmeow`, `/help`, etc.) routed into deterministic command execution.
 - **Hermit creative lane:**
   - `/hermit`, `/meme`, `/gmeow` run through Pinata agent endpoint.
   - Creative generation is isolated from AlfaClub auth-token rotation.
@@ -51,7 +54,8 @@ Operational source of truth for bot identities, token ownership, and env-variabl
 
 - **AlfaClub bridge core**
   - `ALFACLUB_CHAT_BRIDGE_ENABLED`
-  - `ALFACLUB_CHAT_ROOM_ID`
+  - `ALFACLUB_CHAT_ROOM_ID` (legacy single primary; still honored)
+  - `ALFACLUB_HERMIT_COMMAND_ROOMS` (preferred: comma-separated list, e.g. `1043,1659`)
   - `ALFACLUB_API_KEY`
   - `ALFACLUB_CHAT_API_BASE_URL`
   - `ALFACLUB_CHAT_API_PROXY_URL`

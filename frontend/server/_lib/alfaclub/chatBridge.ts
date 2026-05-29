@@ -140,6 +140,12 @@ export type AlfaClubChatBridgeFlags = {
   killSwitch: boolean
   enabled: boolean
   roomId: string | null
+  /**
+   * Rooms where hermit4626 creative commands and the core command surface are treated
+   * as first-class (polling priority, ops visibility, etc.).
+   * Populated from ALFACLUB_HERMIT_COMMAND_ROOMS (comma list) or legacy single ALFACLUB_CHAT_ROOM_ID.
+   */
+  hermitCommandRoomIds: string[]
   jwt: string | null
   ingestJwt: string | null
   botToken: string | null
@@ -438,6 +444,17 @@ function isHexAddress(value: string): value is `0x${string}` {
 export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
   const roomIdRaw = normalizeEnvScalar(process.env.ALFACLUB_CHAT_ROOM_ID)
   const roomId = /^\d+$/.test(roomIdRaw) ? roomIdRaw : null
+
+  // Support multiple official Hermit command rooms (e.g. 1043 + the new 1659).
+  // Preferred: ALFACLUB_HERMIT_COMMAND_ROOMS="1043,1659"
+  // Fallback: the legacy single ALFACLUB_CHAT_ROOM_ID (for backward compat).
+  const hermitRoomsRaw =
+    normalizeEnvScalar(process.env.ALFACLUB_HERMIT_COMMAND_ROOMS) || roomIdRaw
+  const hermitCommandRoomIds = hermitRoomsRaw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => /^\d+$/.test(s))
+
   const groupIdRaw = normalizeEnvScalar(process.env.ALFACLUB_CHAT_GROUP_ID)
   const telegramRelayBotToken =
     normalizeEnvScalar(process.env.ALFACLUB_TELEGRAM_BOT_TOKEN) ||
@@ -459,6 +476,7 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
     killSwitch: parseBool(process.env.ALFACLUB_VIGILANTE_KILL_SWITCH),
     enabled: parseBool(process.env.ALFACLUB_CHAT_BRIDGE_ENABLED),
     roomId,
+    hermitCommandRoomIds,
     jwt: normalizeEnvScalar(process.env.ALFACLUB_CHAT_JWT) || null,
     ingestJwt: normalizeEnvScalar(process.env.ALFACLUB_CHAT_INGEST_JWT) || null,
     botToken: normalizeAlfaClubBotToken(
@@ -516,6 +534,16 @@ export function readAlfaClubCronSkipLiveWebSocket(): boolean {
   const raw = normalizeEnvScalar(process.env.ALFACLUB_BRIDGE_CRON_SKIP_WS).toLowerCase()
   if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') return false
   return true
+}
+
+/**
+ * Returns true if the given room is one of the official Hermit command surfaces
+ * for hermit4626 (creative commands + core bot surface).
+ */
+export function isHermitCommandRoom(roomId: string | null | undefined): boolean {
+  if (!roomId) return false
+  const flags = readAlfaClubChatBridgeFlags()
+  return flags.hermitCommandRoomIds.includes(roomId)
 }
 
 export function readAlfaClubChatBridgeFlagsForCronTick(): AlfaClubChatBridgeFlags {
@@ -1059,7 +1087,7 @@ export function resolveAlfaClubOriginHeaders(apiBaseUrl: string): AlfaClubOrigin
  * Sec-Fetch-Mode, Sec-Fetch-Dest) are origin-agnostic and stay in
  * place regardless of routing/fingerprint base.
  */
-function buildAlfaClubApiHeaders(params: {
+export function buildAlfaClubApiHeaders(params: {
   jwt: string
   fingerprintBaseUrl: string
   proxySecret?: string | null
