@@ -11,11 +11,11 @@ import {
   type ZoraCoinType,
 } from '../zora/coinType.js'
 import {
-  buildTrayTokenRowsFromPortfolios,
-  buildTrayZoraHoldings,
+  buildServerZoraTokenRows,
+  buildServerZoraHoldings,
   collectZoraLookupAddresses,
-  type TrayWalletSource,
-} from '../../../src/components/account/trayPortfolioHelpers.js'
+  type ServerWalletSource,
+} from '../zora/zoraHoldings.js'
 import { resolveTrayWalletPortfolio, type TrayPortfolioSource } from '../lens/trayPortfolioResolve.js'
 import { requireServerKey } from '../../zora/_shared.js'
 
@@ -58,12 +58,29 @@ async function mapWithLimit<T, R>(items: T[], limit: number, fn: (item: T) => Pr
   return out
 }
 
-function formatHoldingAmount(value: number): string {
+export function formatHoldingAmount(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return '0'
   if (value >= 10_000) return value.toLocaleString(undefined, { maximumFractionDigits: 0 })
   if (value >= 100) return value.toLocaleString(undefined, { maximumFractionDigits: 2 })
   if (value >= 1) return value.toLocaleString(undefined, { maximumFractionDigits: 4 })
   return value.toLocaleString(undefined, { maximumFractionDigits: 6 })
+}
+
+export function parseZoraProfileBalance(input: string | number): number {
+  const str = String(input ?? '').trim()
+  if (!str) return 0
+
+  // If it looks like a very large integer (wei), convert to ETH
+  if (/^\d{10,}$/.test(str)) {
+    try {
+      return Number(BigInt(str)) / 1e18
+    } catch {
+      return 0
+    }
+  }
+
+  const num = parseFloat(str)
+  return Number.isFinite(num) ? num : 0
 }
 
 function logoFromZoraCoin(coin: Record<string, unknown>): string | null {
@@ -146,10 +163,10 @@ export async function resolveZoraWalletHoldings(params: {
     }
   }
 
-  const trayWallet: TrayWalletSource = { kind: 'canonical', address: wallet, label: 'Wallet' }
-  const tokenRows = buildTrayTokenRowsFromPortfolios({
-    wallets: [trayWallet],
-    portfolios: { [wallet.toLowerCase()]: portfolio },
+  const serverWallet: ServerWalletSource = { kind: 'canonical', address: wallet, label: 'Wallet' }
+  const tokenRows = buildServerZoraTokenRows({
+    wallet: serverWallet,
+    portfolio,
   })
   const lookupAddresses = collectZoraLookupAddresses(tokenRows)
   if (lookupAddresses.length === 0) {
@@ -173,10 +190,10 @@ export async function resolveZoraWalletHoldings(params: {
     zoraMap[addressLc] = coin
   }
 
-  const trayHoldings = buildTrayZoraHoldings(tokenRows, zoraMap)
+  const serverHoldings = buildServerZoraHoldings(tokenRows, zoraMap)
   const rows: ZoraWalletHoldingDto[] = []
 
-  for (const holding of trayHoldings) {
+  for (const holding of serverHoldings) {
     if (!holding.tokenAddress || holding.amount <= 0) continue
     const coin = zoraMap[holding.tokenAddress.toLowerCase()] ?? null
     const dto = holdingToDto(holding, coin)

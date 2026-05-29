@@ -113,7 +113,7 @@ export const RATE_LIMITS = {
   adminAction: { windowMs: 60_000, maxRequests: 30 },
   // Creative generation API: 30 per minute per IP
   agentCreative: { windowMs: 60_000, maxRequests: 30 },
-  // Generic read endpoints (legacy usage in some v1 handlers)
+  // Generic read for v1 handlers (legacy)
   read: { windowMs: 60_000, maxRequests: 120 },
   // Agent access proof request minting: 40 per minute per principal
   agentAccessProofRequest: { windowMs: 60_000, maxRequests: 40 },

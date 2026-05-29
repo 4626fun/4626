@@ -593,34 +593,6 @@ a {
 }
 .hero__cube.is-ready { opacity: 1; }
 
-/* Scroll-pinned vault stays fixed while user scrolls through open sequence */
-.hero__cube.is-scroll-pinned {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.hero__cube.is-handoff {
-  opacity: 0;
-  transition: opacity 1.2s var(--ease, ease);
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hero__cube.is-scroll-pinned,
-  .hero__cube.is-handoff {
-    position: absolute;
-    inset: 0;
-    width: auto;
-    height: auto;
-    opacity: 1;
-    transition: none;
-  }
-}
-
 .hero__cube canvas {
   width: 100% !important;
   height: 100% !important;

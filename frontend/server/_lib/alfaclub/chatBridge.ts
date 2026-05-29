@@ -1730,8 +1730,8 @@ async function reactToAlfaClubTriggerMessage(params: {
   try {
     await sendRoomReactionViaWebSocket({
       websocketUrl: params.flags.websocketUrl,
-      wsProxyHttpSendUrl: params.flags.wsProxyHttpSendUrl,
-      wsProxySecret: params.flags.wsProxySecret,
+      wsProxyHttpSendUrl: (params.flags as any).wsProxyHttpSendUrl,
+      wsProxySecret: (params.flags as any).wsProxySecret,
       jwt,
       roomId: params.roomId,
       messageId: params.messageId,
@@ -1773,8 +1773,8 @@ async function sendCommandReplyToRoom(params: {
     try {
       const lane = await sendRoomMessageViaWebSocket({
         websocketUrl: params.flags.websocketUrl,
-        wsProxyHttpSendUrl: params.flags.wsProxyHttpSendUrl,
-        wsProxySecret: params.flags.wsProxySecret,
+        wsProxyHttpSendUrl: (params.flags as any).wsProxyHttpSendUrl,
+        wsProxySecret: (params.flags as any).wsProxySecret,
         jwt: params.jwt,
         roomId: params.roomId,
         text: params.text,
@@ -1826,8 +1826,8 @@ async function sendCommandReplyToRoom(params: {
 
   const lane = await sendRoomMessageViaWebSocket({
     websocketUrl: params.flags.websocketUrl,
-    wsProxyHttpSendUrl: params.flags.wsProxyHttpSendUrl,
-    wsProxySecret: params.flags.wsProxySecret,
+    wsProxyHttpSendUrl: (params.flags as any).wsProxyHttpSendUrl,
+    wsProxySecret: (params.flags as any).wsProxySecret,
     jwt: params.jwt,
     roomId: params.roomId,
     text: params.text,
@@ -2860,8 +2860,8 @@ async function sendAlfaClubCommandTextReply(params: {
   }
   await sendRoomMessageViaWebSocket({
     websocketUrl: params.flags.websocketUrl,
-    wsProxyHttpSendUrl: params.flags.wsProxyHttpSendUrl,
-    wsProxySecret: params.flags.wsProxySecret,
+    wsProxyHttpSendUrl: (params.flags as any).wsProxyHttpSendUrl,
+    wsProxySecret: (params.flags as any).wsProxySecret,
     jwt: params.jwt,
     roomId: params.roomId,
     text: params.text,
