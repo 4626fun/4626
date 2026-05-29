@@ -355,6 +355,7 @@ export function WaitlistFlow(props: {
 
   const authBootstrapAutoAttemptedRef = useRef(false)
   const privyAuthedBootstrapAttemptedRef = useRef(false)
+  const recoveryHandoffInFlightRef = useRef(false)
   const pendingAuthResumeStartedRef = useRef(false)
   const loginStartedWhileLoggedOutRef = useRef(false)
   const startAuthAutoAttemptedRef = useRef(false)
@@ -458,6 +459,48 @@ export function WaitlistFlow(props: {
     finalizingBackgroundRetryCountRef,
   })
 
+  const beginRecoveryHandoffAttempt = useCallback((): boolean => {
+    if (busy || authAttemptInFlightRef.current || recoveryHandoffInFlightRef.current) return false
+    recoveryHandoffInFlightRef.current = true
+    authAttemptInFlightRef.current = true
+    privyAuthedBootstrapAttemptedRef.current = true
+    authBootstrapAutoAttemptedRef.current = true
+    recoveryRequiredBootstrapCooldownUntilRef.current = 0
+    setBusy(true)
+    setError(null)
+    writeWaitlistAuthPending(true)
+    return true
+  }, [authAttemptInFlightRef, busy, recoveryRequiredBootstrapCooldownUntilRef, setBusy, setError])
+
+  const endRecoveryHandoffAttempt = useCallback(() => {
+    recoveryHandoffInFlightRef.current = false
+    authAttemptInFlightRef.current = false
+    setBusy(false)
+  }, [authAttemptInFlightRef, setBusy])
+
+  const finalizeRecoveryHandoffError = useCallback(
+    (recoverError: unknown) => {
+      if (isPrivyLoginBootstrapError(recoverError) && redirectToCanonicalWaitlist()) {
+        setError('Redirecting back to the waitlist sign-in flow...')
+        return
+      }
+      if (isRecoveryRequiredAuthError(recoverError)) {
+        writeWaitlistRecoveryGate(true)
+        setRecoveryRequired(true)
+        setError(RECOVERY_REQUIRED_MESSAGE)
+        return
+      }
+      setError(
+        typeof (recoverError as { message?: unknown })?.message === 'string'
+          ? String((recoverError as { message: string }).message)
+          : 'Failed to start account recovery sign-in.',
+      )
+      setRecoveryRequired(true)
+      writeWaitlistRecoveryGate(true)
+    },
+    [redirectToCanonicalWaitlist, setError, setRecoveryRequired],
+  )
+
   const tryResumeExistingPrivySession = useCallback(async (): Promise<boolean> => {
     const existingToken = await getAccessToken().catch(() => null)
     if (!existingToken) return false
@@ -505,9 +548,35 @@ export function WaitlistFlow(props: {
     }
   }, [login, privy, requestBootstrap, waitForPrivyLogoutSettlement])
 
+  const runRecoveryPrivyLogin = useCallback(async (): Promise<void> => {
+    const recoveryOptions = buildWaitlistRecoveryLoginOptions()
+    try {
+      await runPrivyLoginWithTimeout(
+        login as (options?: unknown) => Promise<unknown>,
+        recoveryOptions as any,
+      )
+    } catch (loginError: unknown) {
+      if (isWalletProviderCollisionError(loginError)) {
+        throw new Error(getWalletProviderCollisionMessage())
+      }
+      if (!isAlreadyLoggedInAuthError(loginError)) throw loginError
+
+      await runWaitlistPrivyLogout({
+        logout: async () => {
+          await privy.logout().catch(() => null)
+        },
+        shouldLogout: true,
+      })
+      await waitForPrivyLogoutSettlement()
+      await runPrivyLoginWithTimeout(
+        login as (options?: unknown) => Promise<unknown>,
+        recoveryOptions as any,
+      )
+    }
+  }, [login, privy, waitForPrivyLogoutSettlement])
+
   const handoffIntoExistingAccount = useCallback(async (): Promise<void> => {
     clearWaitlistRecoveryGate()
-    clearWaitlistAuthPending()
     recoveryRequiredBootstrapCooldownUntilRef.current = 0
 
     // Drop the colliding Privy session so recovery login can bind the canonical account.
@@ -519,17 +588,7 @@ export function WaitlistFlow(props: {
     })
     await waitForPrivyLogoutSettlement({ tokenOnly: true })
 
-    try {
-      await runPrivyLoginWithTimeout(
-        login as (options?: unknown) => Promise<unknown>,
-        buildWaitlistRecoveryLoginOptions() as any,
-      )
-    } catch (loginError: unknown) {
-      if (isWalletProviderCollisionError(loginError)) {
-        throw new Error(getWalletProviderCollisionMessage())
-      }
-      if (!isAlreadyLoggedInAuthError(loginError)) throw loginError
-    }
+    await runRecoveryPrivyLogin()
 
     const privyToken = await getAccessToken().catch(() => null)
     if (!privyToken) {
@@ -570,9 +629,9 @@ export function WaitlistFlow(props: {
     window.location.assign(target)
   }, [
     getAccessToken,
-    login,
     privy,
     recoveryRequiredBootstrapCooldownUntilRef,
+    runRecoveryPrivyLogin,
     settleBootstrapAfterRecoverableLoginError,
     setError,
     setRecoveryRequired,
@@ -582,14 +641,21 @@ export function WaitlistFlow(props: {
 
   const onContinueAuth = useCallback(async () => {
     const needsExistingAccountRecovery = recoveryRequired || readWaitlistRecoveryGate()
+    if (needsExistingAccountRecovery) {
+      if (!beginRecoveryHandoffAttempt()) return
+      try {
+        await handoffIntoExistingAccount()
+      } catch (authError: unknown) {
+        finalizeRecoveryHandoffError(authError)
+      } finally {
+        endRecoveryHandoffAttempt()
+      }
+      return
+    }
     if (!beginAuthAttempt()) return
     tokenlessFinalizingBootstrapCooldownUntilRef.current = 0
     recoveryRequiredBootstrapCooldownUntilRef.current = 0
     try {
-      if (needsExistingAccountRecovery) {
-        await handoffIntoExistingAccount()
-        return
-      }
       if (!privyAuthed && privyClientStatus === 'disabled' && redirectToCanonicalWaitlist()) {
         return
       }
@@ -654,7 +720,10 @@ export function WaitlistFlow(props: {
     }
   }, [
     beginAuthAttempt,
+    beginRecoveryHandoffAttempt,
     endAuthAttempt,
+    endRecoveryHandoffAttempt,
+    finalizeRecoveryHandoffError,
     handoffIntoExistingAccount,
     login,
     privy,
@@ -691,44 +760,29 @@ export function WaitlistFlow(props: {
   }, [step, searchParams, privyClientStatus, busy, authAttemptInFlightRef, clearStartAuthDeepLink, onContinueAuth])
 
   const onRecoverAccount = useCallback(async () => {
-    if (!beginAuthAttempt()) return
-    clearWaitlistAuthPending()
-    recoveryRequiredBootstrapCooldownUntilRef.current = 0
+    if (privyClientStatus === 'disabled' && redirectToCanonicalWaitlist()) {
+      return
+    }
+    if (privyClientStatus === 'loading') {
+      setError('Sign-in service is still loading. Please wait a moment and try again.')
+      return
+    }
+    if (!beginRecoveryHandoffAttempt()) return
     try {
-      if (privyClientStatus === 'disabled' && redirectToCanonicalWaitlist()) {
-        return
-      }
-      if (privyClientStatus === 'loading') {
-        setError('Sign-in service is still loading. Please wait a moment and try again.')
-        return
-      }
       await handoffIntoExistingAccount()
-    } catch (recoverError: any) {
-      if (isPrivyLoginBootstrapError(recoverError) && redirectToCanonicalWaitlist()) {
-        setError('Redirecting back to the waitlist sign-in flow...')
-        return
-      }
-      if (isRecoveryRequiredAuthError(recoverError)) {
-        writeWaitlistRecoveryGate(true)
-        setRecoveryRequired(true)
-        setError(RECOVERY_REQUIRED_MESSAGE)
-        return
-      }
-      setError(typeof recoverError?.message === 'string' ? recoverError.message : 'Failed to start account recovery sign-in.')
-      setRecoveryRequired(true)
-      writeWaitlistRecoveryGate(true)
+    } catch (recoverError: unknown) {
+      finalizeRecoveryHandoffError(recoverError)
     } finally {
-      endAuthAttempt()
+      endRecoveryHandoffAttempt()
     }
   }, [
-    beginAuthAttempt,
-    endAuthAttempt,
+    beginRecoveryHandoffAttempt,
+    endRecoveryHandoffAttempt,
+    finalizeRecoveryHandoffError,
     handoffIntoExistingAccount,
     privyClientStatus,
-    recoveryRequiredBootstrapCooldownUntilRef,
     redirectToCanonicalWaitlist,
     setError,
-    setRecoveryRequired,
   ])
 
   const onSignOut = useCallback(async () => {
@@ -861,13 +915,15 @@ export function WaitlistFlow(props: {
 
   useEffect(() => {
     if (step !== 'auth') return
+    if (recoveryHandoffInFlightRef.current) return
     if (!privyAuthed || privyClientStatus !== 'ready') return
     if (recoveryRequired) return
     if (account?.emailVerified) return
 
     // Privy can mark the session authenticated before `login()` resolves (email link / redirect).
     if (authAttemptInFlightRef.current) {
-      if (pendingAuthResumeStartedRef.current) return
+      if (recoveryHandoffInFlightRef.current) return
+      if (!loginStartedWhileLoggedOutRef.current || pendingAuthResumeStartedRef.current) return
       pendingAuthResumeStartedRef.current = true
       void (async () => {
         try {

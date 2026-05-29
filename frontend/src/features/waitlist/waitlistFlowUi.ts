@@ -16,7 +16,7 @@ export function deriveWaitlistAuthUi(options?: { recoveryRequired?: boolean }): 
       title: 'Welcome back',
       subtitle: 'This email already has a 4626 account. Sign in to join the waitlist with it.',
       ctaLabel: 'Use existing account',
-      busyLabel: 'Signing in…',
+      busyLabel: 'Signing in to your existing account…',
     }
   }
 
