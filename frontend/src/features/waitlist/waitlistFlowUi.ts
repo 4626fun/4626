@@ -10,7 +10,16 @@ export function canEnterAppFromAccountState(params: { appAccessStatus: string | 
   return status === 'approved'
 }
 
-export function deriveWaitlistAuthUi(): WaitlistEmailUi {
+export function deriveWaitlistAuthUi(options?: { recoveryRequired?: boolean }): WaitlistEmailUi {
+  if (options?.recoveryRequired) {
+    return {
+      title: 'Welcome back',
+      subtitle: 'This email already has a 4626 account. Sign in to join the waitlist with it.',
+      ctaLabel: 'Use existing account',
+      busyLabel: 'Signing in…',
+    }
+  }
+
   return {
     title: 'Waitlist',
     subtitle: 'Sign in with email to save your spot.',

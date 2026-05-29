@@ -176,6 +176,7 @@ function WaitlistAuthStep(props: {
   referralCode: string | null
   onContinueAuth: () => void | Promise<void>
   onRecoverAccount: () => void | Promise<void>
+  onTryDifferentEmail: () => void | Promise<void>
   disableMotion?: boolean
 }) {
   const {
@@ -188,6 +189,7 @@ function WaitlistAuthStep(props: {
     referralCode,
     onContinueAuth,
     onRecoverAccount,
+    onTryDifferentEmail,
     disableMotion = false,
   } = props
 
@@ -255,6 +257,10 @@ function WaitlistAuthStep(props: {
             </div>
           ) : null}
 
+          {recoveryRequired ? (
+            <p className="mt-2 text-sm text-zinc-400">{authUi.subtitle}</p>
+          ) : null}
+
           {/* CTA */}
           <motion.div {...stagger(1)} className="mt-4 space-y-2.5">
             <Button
@@ -264,7 +270,7 @@ function WaitlistAuthStep(props: {
               aria-disabled={buttonsDisabled}
               onClick={() => {
                 if (buttonsDisabled) return
-                void onContinueAuth()
+                void (recoveryRequired ? onRecoverAccount() : onContinueAuth())
               }}
               className="w-full"
             >
@@ -277,10 +283,20 @@ function WaitlistAuthStep(props: {
                 authUi.ctaLabel
               )}
             </Button>
+            {recoveryRequired ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void onTryDifferentEmail()}
+                className="w-full text-xs text-zinc-400 transition hover:text-zinc-200 disabled:opacity-60"
+              >
+                Try a different email instead
+              </button>
+            ) : null}
           </motion.div>
 
           {/* error */}
-          {error ? (
+          {error && !recoveryRequired ? (
             <motion.div
               {...stagger(2)}
               role="alert"
@@ -288,16 +304,6 @@ function WaitlistAuthStep(props: {
               className="mt-3.5 space-y-2.5 rounded-xl border border-blue-500/20 bg-blue-500/8 px-4 py-3 text-left text-sm text-blue-200"
             >
               <div>{error}</div>
-              {recoveryRequired ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void onRecoverAccount()}
-                  className="inline-flex items-center rounded-lg border border-rose-300/25 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-200 transition hover:bg-rose-500/20 disabled:opacity-60"
-                >
-                  Use existing account
-                </button>
-              ) : null}
             </motion.div>
           ) : null}
         </motion.div>
@@ -517,16 +523,18 @@ export function WaitlistFlow(props: {
       throw new Error(STALE_PRIVY_SESSION_MESSAGE)
     }
 
-    await bridgePrivySession(privyToken)
-
     if (isOnCanonicalMarketingWaitlistPage()) {
       authBootstrapAutoAttemptedRef.current = true
       setRecoveryRequired(false)
       clearWaitlistRecoveryGate()
       setError(null)
       await settleBootstrapAfterRecoverableLoginError({ bypassRecoveryCooldown: true })
+      // Bootstrap already authenticates via X-Privy-Token; bridge is best-effort for cookies.
+      await bridgePrivySession(privyToken).catch(() => undefined)
       return
     }
+
+    await bridgePrivySession(privyToken)
 
     let target = waitlistRecoveryUrl
     if (target.startsWith('http') && typeof window !== 'undefined') {
@@ -560,10 +568,15 @@ export function WaitlistFlow(props: {
   ])
 
   const onContinueAuth = useCallback(async () => {
+    const needsExistingAccountRecovery = recoveryRequired || readWaitlistRecoveryGate()
     if (!beginAuthAttempt()) return
     tokenlessFinalizingBootstrapCooldownUntilRef.current = 0
     recoveryRequiredBootstrapCooldownUntilRef.current = 0
     try {
+      if (needsExistingAccountRecovery) {
+        await handoffIntoExistingAccount()
+        return
+      }
       if (!privyAuthed && privyClientStatus === 'disabled' && redirectToCanonicalWaitlist()) {
         return
       }
@@ -629,10 +642,12 @@ export function WaitlistFlow(props: {
   }, [
     beginAuthAttempt,
     endAuthAttempt,
+    handoffIntoExistingAccount,
     login,
     privy,
     privyAuthed,
     privyClientStatus,
+    recoveryRequired,
     recoveryRequiredBootstrapCooldownUntilRef,
     resetStalePrivySessionAndRetryEmailLogin,
     redirectToCanonicalWaitlist,
@@ -882,6 +897,10 @@ export function WaitlistFlow(props: {
     step,
   ])
 
+  const onTryDifferentEmail = useCallback(async () => {
+    await onSignOut()
+  }, [onSignOut])
+
   useEffect(() => {
     void fetchWaitlistStats()
     const intervalId = window.setInterval(() => {
@@ -901,7 +920,8 @@ export function WaitlistFlow(props: {
     if (typeof window === 'undefined') return
     if (step !== 'auth') return
     if (!busy) return
-    if (authAttemptInFlightRef.current) return
+    // Only timeout explicit user-initiated attempts; background auto-resume uses busy without inFlight.
+    if (!authAttemptInFlightRef.current) return
     if (error) return
 
     const timeoutId = window.setTimeout(() => {
@@ -931,7 +951,7 @@ export function WaitlistFlow(props: {
     tokenlessFinalizingBootstrapCooldownUntilRef,
   ])
 
-  const authUi = deriveWaitlistAuthUi()
+  const authUi = deriveWaitlistAuthUi({ recoveryRequired })
   const authVisibleError = error
   const showAuthBootstrapLoader =
     step === 'auth' && busy && authAttemptInFlightRef.current && !authVisibleError
@@ -1031,6 +1051,7 @@ export function WaitlistFlow(props: {
             referralCode={activeReferralCode}
             onContinueAuth={onContinueAuth}
             onRecoverAccount={onRecoverAccount}
+            onTryDifferentEmail={onTryDifferentEmail}
             disableMotion
           />
         ) : step === 'done' && account ? (
@@ -1059,6 +1080,7 @@ export function WaitlistFlow(props: {
               referralCode={activeReferralCode}
               onContinueAuth={onContinueAuth}
               onRecoverAccount={onRecoverAccount}
+              onTryDifferentEmail={onTryDifferentEmail}
             />
           ) : step === 'done' && account ? (
             <motion.div

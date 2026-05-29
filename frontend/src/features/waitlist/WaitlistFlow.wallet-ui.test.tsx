@@ -985,7 +985,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
 
     expect(
-      await screen.findByText(/sign-in got stuck in an old session/i, undefined, { timeout: 9_000 }),
+      await screen.findByText(/sign-in session expired/i, undefined, { timeout: 9_000 }),
     ).toBeTruthy()
     expect(mockPrivyLogout).toHaveBeenCalledTimes(1)
     expect(mockLogin).toHaveBeenCalledTimes(2)

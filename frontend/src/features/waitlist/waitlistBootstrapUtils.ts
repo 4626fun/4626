@@ -1,10 +1,10 @@
 export const RECOVERY_REQUIRED_MESSAGE =
-  'This email already has a 4626 account. Use existing account sign-in to continue.'
+  'This email is already on 4626. Tap Use existing account and sign in with the same email you used before.'
 export const SESSION_MISMATCH_MESSAGE = 'Signed in as a different account. Tap Continue to try again.'
 export const SESSION_FINALIZING_RETRY_MESSAGE =
-  'Sign-in session is still finalizing. We will keep retrying automatically.'
+  'Finishing sign-in… this usually takes a few seconds.'
 export const STALE_PRIVY_SESSION_MESSAGE =
-  'Sign-in got stuck in an old session. Tap Continue to retry with a fresh email sign-in.'
+  'Sign-in session expired. Tap Use existing account to sign in again with email.'
 
 export const FLOW_TIMEOUT_MS = 20_000
 export const TOKENLESS_FINALIZING_BOOTSTRAP_COOLDOWN_MS = 2_500
@@ -39,7 +39,11 @@ export function isSessionFinalizingError(error: unknown): boolean {
       : typeof error === 'string'
         ? error
         : ''
-  return text.toLowerCase().includes('session is still finalizing')
+  const normalized = text.toLowerCase()
+  return (
+    normalized.includes('session is still finalizing') ||
+    normalized.includes('finishing sign-in')
+  )
 }
 
 export function isWalletProviderCollisionError(error: unknown): boolean {

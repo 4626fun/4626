@@ -11,6 +11,15 @@ describe('deriveWaitlistAuthUi', () => {
       busyLabel: 'Setting up your account…',
     })
   })
+
+  it('switches to existing-account recovery copy when recovery is required', () => {
+    expect(deriveWaitlistAuthUi({ recoveryRequired: true })).toEqual({
+      title: 'Welcome back',
+      subtitle: 'This email already has a 4626 account. Sign in to join the waitlist with it.',
+      ctaLabel: 'Use existing account',
+      busyLabel: 'Signing in…',
+    })
+  })
 })
 
 describe('canEnterAppFromAccountState', () => {
