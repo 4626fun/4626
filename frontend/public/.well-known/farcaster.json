@@ -8,11 +8,11 @@
     "ownerAddress": "0x8719fa7Be10533fd69885b124a8c84f9C51071AF"
   },
   "miniapp": {
-    "version": "10",
+    "version": "11",
     "name": "4626.fun",
     "homeUrl": "https://4626.fun/",
-    "iconUrl": "https://4626.fun/assets/base-miniapp-icon-v17-200.png",
-    "splashImageUrl": "https://4626.fun/assets/base-miniapp-icon-v17-200.png",
+    "iconUrl": "https://4626.fun/assets/base-app-icon-1024.png?v=18",
+    "splashImageUrl": "https://4626.fun/assets/base-miniapp-icon-v18-200.png?v=18",
     "splashBackgroundColor": "#020204",
     "subtitle": "Creator vaults on Base",
     "description": "ERC-4626 creator vaults on Base.",
