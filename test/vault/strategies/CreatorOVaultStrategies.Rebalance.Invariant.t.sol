@@ -8,8 +8,11 @@ import {
     MockRebalanceCoin
 } from "./RebalanceTestHarness.sol";
 
+import {UserPositionInvariantBase} from "./UserPositionInvariantBase.sol";
+
 /// @dev Stateful handler for rebalance invariant fuzzing.
-contract RebalanceInvariantHandler is RebalanceTestHarness {
+/// Now inherits user position tracking + protection logic from the shared base.
+contract RebalanceInvariantHandler is UserPositionInvariantBase {
     ScenarioVaultCtx internal ctx;
     uint256 public ghostTotalBefore;
     uint256 public ghostTotalAfter;
@@ -161,23 +164,10 @@ contract RebalanceInvariantHandler is RebalanceTestHarness {
         opNonce += 1;
     }
 
-    // --- User position tracking for real roundtrip invariants ---
-    mapping(address => uint256) public userDepositedAssets;
-    mapping(address => uint256) public userSharesHeld;
+    // User position tracking is now inherited from UserPositionInvariantBase.
+    // We only implement the two hooks so the base can do the tracking.
 
-    address[3] public testUsers;
-
-    function setupTestUsers() external {
-        testUsers[0] = address(0x1001);
-        testUsers[1] = address(0x1002);
-        testUsers[2] = address(0x1003);
-    }
-
-    function depositForUser(uint256 userIndex, uint256 amount) external {
-        userIndex = bound(userIndex, 0, 2);
-        address user = testUsers[userIndex];
-        amount = bound(amount, 1e18, 20_000_000e18);
-
+    function _depositForUser(address user, uint256 amount) internal override {
         ctx.coin.mint(user, amount);
         vm.prank(user);
         ctx.coin.approve(address(ctx.vault), amount);
@@ -189,21 +179,10 @@ contract RebalanceInvariantHandler is RebalanceTestHarness {
         opNonce += 1;
     }
 
-    function withdrawForUser(uint256 userIndex, uint256 shareFractionBps) external {
-        userIndex = bound(userIndex, 0, 2);
-        address user = testUsers[userIndex];
-        uint256 shares = userSharesHeld[user];
-        if (shares == 0) return;
-
-        uint256 toWithdraw = (shares * bound(shareFractionBps, 100, 10_000)) / 10_000;
-        if (toWithdraw == 0) return;
-
+    function _withdrawForUser(address user, uint256 amount) internal override {
         vm.prank(user);
-        ctx.vault.redeem(toWithdraw, user, user);
-
-        // Note: we don't perfectly track remaining deposited assets here (fees etc.),
-        // but we can still check that the user received something reasonable.
-        userSharesHeld[user] -= toWithdraw;
+        ctx.vault.redeem(amount, user, user);
+        userSharesHeld[user] -= amount;
         opNonce += 1;
     }
 }
@@ -213,7 +192,10 @@ contract CreatorOVaultStrategiesRebalanceInvariantTest is RebalanceTestHarness {
 
     function setUp() external {
         handler = new RebalanceInvariantHandler();
-        handler.setupTestUsers();
+        // setupTestUsers() is now provided by the base (called in constructor or here)
+        if (handler.testUsers(0) == address(0)) {
+            handler.setupTestUsers();
+        }
         targetContract(address(handler));
 
         // Explicitly target the new actions for better fuzzing signal
