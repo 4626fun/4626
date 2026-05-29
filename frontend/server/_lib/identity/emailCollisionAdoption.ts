@@ -327,7 +327,13 @@ export async function runWithWaitlistEmailCollisionAdoption<T>(params: {
   try {
     return await action()
   } catch (error: unknown) {
-    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
+    const verifiedEmail = normalizeLower(extractPrivyVerifiedEmail(privyUser))
+    const requestedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
+    const collisionEmail =
+      isIdentityRecoveryRequiredError(error) && typeof error.email === 'string'
+        ? error.email.trim().toLowerCase()
+        : ''
+    const normalizedEmail = verifiedEmail || requestedEmail || collisionEmail
     const canAdopt =
       normalizedEmail &&
       isIdentityRecoveryRequiredError(error) &&

@@ -3,7 +3,6 @@ import { useCallback, useRef, type MutableRefObject } from 'react'
 import { apiFetch } from '@/lib/api/apiBase'
 import { clearStoredWaitlistReferralCode } from '@/lib/auth/waitlistEntry'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
-import type { ApiEnvelope, OnboardingBootstrapResponse } from '@/lib/wallet/onboardingBootstrapTypes'
 
 import { mergeCanonicalWaitlistAccount, resolveWaitlistStep, type WaitlistStep } from './waitlistFlowState'
 import { isRecoveryRequiredAuthError } from './waitlistAuthState'
@@ -16,10 +15,10 @@ import {
   getWalletProviderCollisionMessage,
   isSessionFinalizingError,
   isWalletProviderCollisionError,
-  readApiErrorMessage,
   withTimeout,
 } from './waitlistBootstrapUtils'
-import { type WaitlistAccountsSummary, type WaitlistBootstrapResponse } from './waitlistAccountTypes'
+import { executeWaitlistBootstrapPipeline } from './waitlistBootstrapPipeline'
+import { type WaitlistAccountsSummary } from './waitlistAccountTypes'
 import { clearWaitlistRecoveryGate } from './waitlistRecoveryGate'
 import { clearWaitlistAuthPending } from './waitlistAuthPending'
 
@@ -67,7 +66,6 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
       waitForTokenHydration?: boolean
       bypassRecoveryCooldown?: boolean
     }): Promise<WaitlistAccountsSummary | null> => {
-      let bootstrappedCanonicalWallet: OnboardingBootstrapResponse | null = null
       const waitForTokenHydration = opts?.waitForTokenHydration === true
       const bypassRecoveryCooldown = opts?.bypassRecoveryCooldown === true
       const recoveryCooldownActive = recoveryRequiredBootstrapCooldownUntilRef.current > Date.now()
@@ -112,43 +110,47 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
         throw new Error(SESSION_FINALIZING_RETRY_MESSAGE)
       }
 
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (token) {
-        headers['X-Privy-Token'] = token
-      }
-
-      const response = await withTimeout(
-        apiFetch('/api/waitlist/bootstrap', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(activeReferralCode ? { referralCode: activeReferralCode } : {}),
-        }),
-        FLOW_TIMEOUT_MS,
-        'Waitlist bootstrap',
-      )
-      const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistBootstrapResponse> | null
-      if (!response.ok || !payload?.success || !payload.data) {
-        const err = new Error(readApiErrorMessage(payload, 'Failed to bootstrap waitlist state.')) as Error & {
-          status?: number
-          code?: string
-          recoveryRequired?: boolean
-        }
-        err.status = response.status
-        const code = typeof (payload as any)?.code === 'string' ? String((payload as any).code).trim() : ''
-        if (code) err.code = code
-        const nextRecoveryRequired =
-          response.status === 409 ||
-          Boolean((payload as { recoveryRequired?: boolean })?.recoveryRequired) ||
-          code.toUpperCase().includes('RECOVERY_REQUIRED')
-        if (nextRecoveryRequired) err.recoveryRequired = true
-        if (nextRecoveryRequired) {
+      let pipelineResult
+      try {
+        pipelineResult = await executeWaitlistBootstrapPipeline({
+          token,
+          activeReferralCode,
+          fetchWaitlistBootstrap: (bootstrapHeaders, body) =>
+            withTimeout(
+              apiFetch('/api/waitlist/bootstrap', {
+                method: 'POST',
+                headers: bootstrapHeaders,
+                body,
+              }),
+              FLOW_TIMEOUT_MS,
+              'Waitlist bootstrap',
+            ),
+          runCanonicalization: async (privyToken) => {
+            const canonicalization = await withTimeout(
+              runCanonicalizationPipeline({ privyToken }),
+              FLOW_TIMEOUT_MS,
+              'Account sync',
+            )
+            return {
+              onboardingBootstrapped: canonicalization.onboardingBootstrapped,
+              onboarding: canonicalization.onboarding,
+              flags: {
+                needsEmbeddedWallet: canonicalization.flags.needsEmbeddedWallet,
+              },
+            }
+          },
+          ensureEmbeddedWallet: () =>
+            withTimeout(ensureEmbeddedWallet(), FLOW_TIMEOUT_MS, 'Embedded wallet provisioning'),
+        })
+      } catch (bootstrapError: unknown) {
+        if (isRecoveryRequiredAuthError(bootstrapError)) {
           recoveryRequiredBootstrapCooldownUntilRef.current = Date.now() + RECOVERY_REQUIRED_BOOTSTRAP_COOLDOWN_MS
           clearWaitlistAuthPending()
         }
-        throw err
+        throw bootstrapError
       }
 
-      if (payload.data.requiresPrivyAuth) {
+      if (pipelineResult.kind === 'requires_privy_auth') {
         tokenlessFinalizingBootstrapCooldownUntilRef.current = Date.now() + TOKENLESS_FINALIZING_BOOTSTRAP_COOLDOWN_MS
         setStep('auth')
         if (privyAuthed) {
@@ -157,37 +159,10 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
         return null
       }
 
-      // Run canonical wallet sync only after waitlist identity is settled.
-      // `/api/auth/privy` also hits email-collision guards via wallet sync; doing
-      // that before waitlist bootstrap blocked verified-email rebind for returning users.
-      if (token) {
-        try {
-          let canonicalization = await withTimeout(
-            runCanonicalizationPipeline({ privyToken: token }),
-            FLOW_TIMEOUT_MS,
-            'Account sync',
-          )
-          if (!canonicalization.onboardingBootstrapped && canonicalization.flags.needsEmbeddedWallet) {
-            await withTimeout(ensureEmbeddedWallet(), FLOW_TIMEOUT_MS, 'Embedded wallet provisioning')
-            canonicalization = await withTimeout(
-              runCanonicalizationPipeline({ privyToken: token }),
-              FLOW_TIMEOUT_MS,
-              'Account sync',
-            )
-          }
-          if (canonicalization.onboardingBootstrapped && canonicalization.onboarding) {
-            bootstrappedCanonicalWallet = canonicalization.onboarding
-          }
-        } catch (canonicalizationError: unknown) {
-          if (isRecoveryRequiredAuthError(canonicalizationError)) {
-            // Waitlist bootstrap already succeeded; do not regress into recovery UI.
-          } else {
-            throw canonicalizationError
-          }
-        }
-      }
-
-      const nextAccount = mergeCanonicalWaitlistAccount(payload.data, bootstrappedCanonicalWallet)
+      const nextAccount = mergeCanonicalWaitlistAccount(
+        pipelineResult.payload,
+        pipelineResult.bootstrappedCanonicalWallet,
+      )
       setAccount(nextAccount)
       finalizingAutoRetryCountRef.current = 0
       finalizingBackgroundRetryCountRef.current = 0
