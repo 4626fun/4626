@@ -117,6 +117,8 @@ export type SubmitViaSendCallsParams = {
   chainId: number
   /** Optional. Defaults to true so Base App treats the calls as a single bundle. */
   atomicRequired?: boolean
+  /** When true, skip eth_accounts (Base App can hang on it after eth_requestAccounts). */
+  skipEthAccountsPreflight?: boolean
   onTelemetry?: (event: CswSendCallsTelemetry) => void
 }
 
@@ -144,10 +146,14 @@ export async function _submitOwnerViaSendCalls(
   // Sanity check: the wallet must be connected as the CSW (or as an owner)
   // for EIP-5792 to authorize the call against the CSW account.
   let accounts: string[] = []
-  try {
-    accounts = (await params.walletRequest({ method: 'eth_accounts' })) as string[]
-  } catch {
-    /* fall through */
+  if (!params.skipEthAccountsPreflight) {
+    try {
+      accounts = (await withWalletRequestTimeout('eth_accounts', 8_000, () =>
+        params.walletRequest({ method: 'eth_accounts' }),
+      )) as string[]
+    } catch {
+      /* fall through — upstream eth_requestAccounts may already have verified CSW */
+    }
   }
 
   const cswLower = params.csw.toLowerCase()

@@ -146,6 +146,7 @@ export async function addOwnerViaBaseAppSendCalls(params: {
     calls,
     chainId: params.chainId,
     atomicRequired: false,
+    skipEthAccountsPreflight: true,
     onTelemetry: params.onTelemetry,
   })
   const resolution = await waitForCallsTxHash({

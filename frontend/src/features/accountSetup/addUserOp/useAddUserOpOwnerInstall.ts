@@ -326,7 +326,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
 
       appendEvent(`submit:csw=${csw}`)
       appendEvent(`submit:owner=${ownerToAdd}`)
-      setSubmitPhase('awaiting_signature')
+      appendEvent('submit:wallet_sendCalls_start')
 
       const result = await addOwnerViaBaseAppSendCalls({
         walletRequest,
@@ -337,7 +337,8 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
         publicClient: publicClient as Pick<AddUserOpOwnerInstallPublicClient, 'request'> | undefined,
         onTelemetry: (event) => {
           appendEvent(`sendCalls:${event.step}`)
-          if (event.step === 'prompt_sign') setSubmitPhase('awaiting_signature')
+          if (event.step === 'preflight') setSubmitPhase('preflight')
+          else if (event.step === 'prompt_sign') setSubmitPhase('awaiting_signature')
           else if (event.step === 'broadcast_success') setSubmitPhase('broadcasting')
           else if (event.step === 'status_poll') setSubmitPhase('confirming')
           else if (event.step === 'status_resolved') setSubmitPhase('verifying')
