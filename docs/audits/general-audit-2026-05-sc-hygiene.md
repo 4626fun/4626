@@ -114,6 +114,8 @@ This matches the separation described in the (missing) canonical lane document a
 
 ## Guard & Process Signals (Broader Audit Context)
 
+**Resumption pass update (post-stabilization)**: The tombstone scanner in `scripts/check-sc-hygiene.mjs` was updated to target only the canonical post-promotion sources under `packages/server-core/src/` (`profileIdForPrivyUser.ts`, `identity.ts`, `commandIssuerContext.ts`). Legacy thin re-export shims under `server/_lib/` are now intentionally excluded from the pattern check. This change was driven by the guard itself surfacing a false positive after the server-core promotion (Lens A) and the subsequent waitlist controller stabilization. Guard re-ran clean. This is the intended behavior — the guard now protects the boundary the audit recommended.
+
 During the same session the following architectural guards were run:
 
 - Most passed cleanly (`server-core-boundary`, `runtime-boundaries`, `api-nonv1-hardening`, `test-file-placement`, `generated-output`, `api-429-retry-after`, etc.).

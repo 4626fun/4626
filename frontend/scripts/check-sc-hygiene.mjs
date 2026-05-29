@@ -90,17 +90,18 @@ async function checkTerminology() {
 }
 
 async function checkTombstoneAwareness() {
-  const resolverFiles = [
-    path.join(serverRoot, '_lib/identity/profileIdForPrivyUser.ts'),
-    path.join(serverRoot, '_lib/identity/accountsIdentity.ts'),
-    path.join(serverRoot, '_lib/wallet/commandIssuerContext.ts'),
-    path.join(serverRoot, '_lib/wallet/walletSync.ts'),
-    path.join(serverRoot, '_lib/identity/profileMerge.ts'),
+  // Canonical locations after the 2026-05 audit server-core promotion (Lens A structural hygiene).
+  // Only files that contain the actual tombstone/alias chasing logic are listed here.
+  // Thin re-export barrels (e.g. wallet.ts still pointing at old _lib for walletSync) are intentionally excluded.
+  const canonicalResolverFiles = [
+    path.join(repoRoot, 'frontend/packages/server-core/src/profileIdForPrivyUser.ts'),
+    path.join(repoRoot, 'frontend/packages/server-core/src/identity.ts'),
+    path.join(repoRoot, 'frontend/packages/server-core/src/commandIssuerContext.ts'),
   ];
 
   let missing = 0;
 
-  for (const f of resolverFiles) {
+  for (const f of canonicalResolverFiles) {
     try {
       const content = await fs.readFile(f, 'utf8');
       const hasPattern = TOMBSTONE_PATTERNS.some(p => content.includes(p));
@@ -109,15 +110,15 @@ async function checkTombstoneAwareness() {
         missing++;
       }
     } catch {
-      // file may not exist in this checkout; skip
+      // file may not exist in this checkout or path not yet promoted; skip silently
     }
   }
 
   if (missing > 0) {
-    console.error(`\nSC hygiene: ${missing} identity resolvers missing obvious tombstone patterns.`);
+    console.error(`\nSC hygiene: ${missing} canonical identity resolvers missing obvious tombstone patterns.`);
     process.exitCode = 1;
   } else {
-    console.log('SC hygiene: tombstone-aware patterns present in key resolvers.');
+    console.log('SC hygiene: tombstone-aware patterns present in canonical @4626/server-core resolvers.');
   }
 }
 

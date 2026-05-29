@@ -72,8 +72,8 @@ contract RebalanceInvariantHandler is RebalanceTestHarness {
         if (charmTarget > 0) _setStrategyNav(ctx.coin, ctx.charm, (charmTarget * 20_000) / 10_000);
         if (ajnaTarget > 0) {
             uint256 ajnaNav = (ajnaTarget * 5_000) / 10_000;
-            uint256 ajnaDebt = ctx.vault.strategyDebt(address(ctx.ajna));
-            if (ajnaNav < ajnaDebt) ajnaNav = ajnaDebt;
+            uint256 ajnaDebt_ = ctx.vault.strategyDebt(address(ctx.ajna));
+            if (ajnaNav < ajnaDebt_) ajnaNav = ajnaDebt_;
             _setStrategyNav(ctx.coin, ctx.ajna, ajnaNav);
         }
 
