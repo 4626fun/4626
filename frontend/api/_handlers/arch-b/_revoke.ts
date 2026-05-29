@@ -31,7 +31,7 @@ import {
   readBoundedJsonObjectBody,
   resolveAuthorizedRequestPrincipal,
 } from '../../../packages/server-core/src/index.js'
-import { revokeCommandIssuerContext } from '@4626/server-core'
+import { revokeCommandIssuerContext } from '../../../packages/server-core/src/identity.js'
 
 const REVOKE_BODY_MAX_BYTES = 8_192
 

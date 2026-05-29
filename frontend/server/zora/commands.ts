@@ -14,7 +14,7 @@ import {
   // Canonical import — implementation lives in @4626/server-core
   resolveCommandIssuerContextByAddress,
   isExecutionReady,
-} from '@4626/server-core'
+} from '../../packages/server-core/src/index.js'
 import {
   isArchBCoinBuyViaUserOpEnabled,
   isArchBCoinSellViaUserOpEnabled,

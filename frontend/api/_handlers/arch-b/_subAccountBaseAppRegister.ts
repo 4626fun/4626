@@ -71,7 +71,7 @@ import {
   logger,
 } from '../../../packages/server-core/src/index.js'
 import { getBasePublicClient } from '../../../server/_lib/wallet/subAccountProvisionVerify.js'
-import { envBigInt } from '@4626/server-core'
+import { envBigInt } from '../../../packages/server-core/src/index.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

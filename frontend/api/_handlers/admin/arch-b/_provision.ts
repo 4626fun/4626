@@ -48,7 +48,7 @@ import {
 import {
   provisionCommandIssuerContext,
   resolveCommandIssuerContextByProfileId,
-} from '@4626/server-core'
+} from '../../../../packages/server-core/src/index.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

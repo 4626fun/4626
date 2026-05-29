@@ -26,14 +26,14 @@ import {
 import {
   // Canonical import — implementation lives in @4626/server-core
   resolveCommandIssuerContextByProfileId,
-} from '@4626/server-core'
+} from '../../../packages/server-core/src/index.js'
 import {
   fetchPrivyWalletFull,
 } from '../../../server/_lib/wallet/privyWalletApi.js'
 import { resolveOwnerWalletId } from '../../../server/_lib/wallet/privyOwnerWalletIdResolver.js'
 import { getBasePublicClient } from '../../../server/_lib/wallet/subAccountProvisionVerify.js'
 import { readSpendPermissionCurrentPeriod } from '../../../server/_lib/wallet/spendPermissionPeriodRead.js'
-import type { CommandIssuerSubAccount } from '@4626/server-core'
+import type { CommandIssuerSubAccount } from '../../../packages/server-core/src/index.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

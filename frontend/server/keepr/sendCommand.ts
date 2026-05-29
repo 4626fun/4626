@@ -12,7 +12,7 @@ import {
 import {
   resolveCommandIssuerContextByAddress,
   isExecutionReady,
-} from '@4626/server-core'
+} from '../../packages/server-core/src/index.js'
 import {
   isArchBSendViaUserOpEnabled,
   submitUserOpOrRefuse,
