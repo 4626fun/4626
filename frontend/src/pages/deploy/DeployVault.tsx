@@ -74,6 +74,10 @@ import {
   mergePipeAFinalizeParams,
   readDeployedPhase1CoreAddresses,
 } from '@/lib/deploy/phase1OnchainState'
+import {
+  resolveBytecodeStoreForBatcher,
+  resolveCreate2DeployerForBatcher,
+} from '@/lib/deploy/phase1ModuleDeploy'
 import { assertCreatorOvaultModuleStorageCompatible } from '@/lib/deploy/ovaultModuleIdentity'
 import { ShareBridgeFinalizeWiringPanel } from '@/components/deploy/ShareBridgeFinalizeWiringPanel'
 import { useAccountMe } from '@/hooks/useAccountMe'
@@ -2917,9 +2921,9 @@ function DeployVaultBatcher({
     if (lower.includes('0x5cfe78fe') || lower.includes('invalidmoduleaddress')) {
       return (
         'Phase 1 reverted: CreatorOVault rejected the batcher wired modules (InvalidModuleAddress / 0x5cfe78fe). ' +
-        'This usually means deploy bytecode expects a different moduleStorageVersion fingerprint than the live batcher modules. ' +
-        'Confirm UniversalBytecodeStore CreatorOVault bytecode matches CreatorOVaultModuleStorage.current on the wired modules, ' +
-        'or deploy fresh v2 modules and rotate the batcher before retrying.'
+        'Deploy bytecode and Phase1Module wiring must share the same moduleStorageVersion fingerprint (v1.12.1 uses CreatorOVaultModuleStorage.v2). ' +
+        'Hard-refresh the app so predicted CREATE2 addresses use the Phase1Module create2 deployer (not stale batcher-shell getters), ' +
+        'confirm UniversalBytecodeStore CreatorOVault bytecode is seeded for v1.12.1, bump deploymentVersion if retrying after a partial Phase 1, then retry.'
       )
     }
     if (
@@ -3479,20 +3483,11 @@ function DeployVaultBatcher({
     staleTime: 30_000,
     retry: 0,
     queryFn: async () => {
-      let create2Deployer: Address | null = null
-      try {
-        create2Deployer = (await publicClient!.readContract({
-          address: batcherAddress as Address,
-          abi: CREATOR_VAULT_BATCHER_ABI,
-          functionName: 'create2Deployer',
-        })) as Address
-      } catch {
-        create2Deployer = null
-      }
-      if (!create2Deployer || !isAddress(String(create2Deployer))) {
-        const fallback = (CONTRACTS.universalCreate2DeployerFromStore ?? null) as Address | null
-        create2Deployer = fallback && isAddress(String(fallback)) ? fallback : null
-      }
+      const create2Deployer = await resolveCreate2DeployerForBatcher({
+        publicClient: publicClient!,
+        batcherAddress: batcherAddress as Address,
+        fallback: (CONTRACTS.universalCreate2DeployerFromStore ?? null) as Address | null,
+      })
       if (!create2Deployer) throw new Error('Create2 deployer not available')
 
       let protocolTreasury: Address | null = null
@@ -3899,20 +3894,11 @@ function DeployVaultBatcher({
           },
         ] as const
 
-        let bytecodeStore: Address | null = null
-        try {
-          bytecodeStore = (await publicClient!.readContract({
-            address: batcherAddress as Address,
-            abi: CREATOR_VAULT_BATCHER_ABI,
-            functionName: 'bytecodeStore',
-          })) as Address
-        } catch {
-          bytecodeStore = null
-        }
-        if (!bytecodeStore || !isAddress(String(bytecodeStore))) {
-          const fallback = (CONTRACTS.universalBytecodeStore ?? null) as Address | null
-          bytecodeStore = fallback && isAddress(String(fallback)) ? fallback : null
-        }
+        const bytecodeStore = await resolveBytecodeStoreForBatcher({
+          publicClient: publicClient!,
+          batcherAddress: batcherAddress as Address,
+          fallback: (CONTRACTS.universalBytecodeStore ?? null) as Address | null,
+        })
 
         if (bytecodeStore) {
           const [burnCreation, routerCreation, policyControllerCreation] = (await Promise.all([
@@ -5324,6 +5310,7 @@ function DeployVaultBatcher({
       if (isTwoStepBatcher && supportsVaultModuleGetters) {
         const modulePreflight = await assertCreatorOvaultModuleStorageCompatible({
           publicClient,
+          batcherAddress: batcherAddress as Address,
         })
         if (!modulePreflight.ok) {
           throw new Error(modulePreflight.message)
@@ -9231,42 +9218,17 @@ function DeployVaultMain() {
         )
       }
 
-      const getterErrors: unknown[] = []
-      let bytecodeStore: Address | null = null
-      let create2Deployer: Address | null = null
-      try {
-        bytecodeStore = (await readClient.readContract({
-          address: batcher,
-          abi: CREATOR_VAULT_BATCHER_ABI,
-          functionName: 'bytecodeStore',
-        })) as Address
-      } catch (err: unknown) {
-        getterErrors.push(err)
-      }
-      try {
-        create2Deployer = (await readClient.readContract({
-          address: batcher,
-          abi: CREATOR_VAULT_BATCHER_ABI,
-          functionName: 'create2Deployer',
-        })) as Address
-      } catch (err: unknown) {
-        getterErrors.push(err)
-      }
-
-      if (!bytecodeStore || !isAddress(String(bytecodeStore))) {
-        const fallback = (CONTRACTS.universalBytecodeStore ?? null) as Address | null
-        bytecodeStore = fallback && isAddress(String(fallback)) ? fallback : null
-      }
-      if (!create2Deployer || !isAddress(String(create2Deployer))) {
-        const fallback = (CONTRACTS.universalCreate2DeployerFromStore ?? null) as Address | null
-        create2Deployer = fallback && isAddress(String(fallback)) ? fallback : null
-      }
+      const bytecodeStore = await resolveBytecodeStoreForBatcher({
+        publicClient: readClient,
+        batcherAddress: batcher,
+        fallback: (CONTRACTS.universalBytecodeStore ?? null) as Address | null,
+      })
+      const create2Deployer = await resolveCreate2DeployerForBatcher({
+        publicClient: readClient,
+        batcherAddress: batcher,
+        fallback: (CONTRACTS.universalCreate2DeployerFromStore ?? null) as Address | null,
+      })
       if (!bytecodeStore || !create2Deployer) {
-        if (getterErrors.some((e) => isTransientRpcFailure(e))) {
-          throw new Error(
-            'Could not verify deployment batcher interface due to temporary RPC/network limits. Retry in a few seconds.',
-          )
-        }
         throw new Error(
           `Configured batcher at ${batcher} does not expose expected phased deploy interface (bytecodeStore/create2Deployer). Update VITE_CREATOR_VAULT_BATCHER / CREATOR_VAULT_BATCHER.`,
         )

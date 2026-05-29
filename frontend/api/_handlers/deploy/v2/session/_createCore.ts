@@ -16,6 +16,11 @@ import {
 import { base } from 'viem/chains'
 
 import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
+import {
+  resolveBytecodeStoreForBatcher,
+  resolveCreate2DeployerForBatcher,
+  resolveWiredCreatorOvaultModules,
+} from '../../../../../src/lib/deploy/phase1ModuleDeploy.js'
 import { assertShareBridgeOftWiringForFinalize } from '../../../../../src/lib/deploy/shareBridgeOftWiring.js'
 import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import {
@@ -1211,19 +1216,14 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
   let bytecodeStore: Address
   try {
     const [create2Read, storeRead] = await Promise.all([
-      readClient.readContract({
-        address: batcherAddress,
-        abi: BATCHER_DEPENDENCY_ABI,
-        functionName: 'create2Deployer',
-      }),
-      readClient.readContract({
-        address: batcherAddress,
-        abi: BATCHER_DEPENDENCY_ABI,
-        functionName: 'bytecodeStore',
-      }),
+      resolveCreate2DeployerForBatcher({ publicClient: readClient, batcherAddress }),
+      resolveBytecodeStoreForBatcher({ publicClient: readClient, batcherAddress }),
     ])
-    create2Deployer = getAddress(create2Read as Address)
-    bytecodeStore = getAddress(storeRead as Address)
+    if (!create2Read || !storeRead) {
+      throw new Error('missing phase1 create2 dependencies')
+    }
+    create2Deployer = getAddress(create2Read)
+    bytecodeStore = getAddress(storeRead)
   } catch {
     throw new DeploySessionRequestError(
       409,
@@ -1272,23 +1272,14 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
   // modules before we attempt phase1. This catches immutable module-mismatch
   // batchers up front (otherwise deployPhase1* reverts with InvalidModuleAddress()).
   try {
-    const [coreModule, strategiesModule, adminModule] = (await Promise.all([
-      readClient.readContract({
-        address: batcherAddress,
-        abi: BATCHER_VAULT_MODULES_ABI,
-        functionName: 'vaultCoreModule',
-      }),
-      readClient.readContract({
-        address: batcherAddress,
-        abi: BATCHER_VAULT_MODULES_ABI,
-        functionName: 'vaultStrategiesModule',
-      }),
-      readClient.readContract({
-        address: batcherAddress,
-        abi: BATCHER_VAULT_MODULES_ABI,
-        functionName: 'vaultAdminModule',
-      }),
-    ])) as [Address, Address, Address]
+    const wiredModules = await resolveWiredCreatorOvaultModules({
+      publicClient: readClient,
+      batcherAddress,
+    })
+    if (!wiredModules) {
+      throw new Error('could not resolve phase1 module wiring')
+    }
+    const { core: coreModule, strategies: strategiesModule, admin: adminModule } = wiredModules
 
     const moduleChecks: Array<{ label: 'core' | 'strategies' | 'admin'; address: Address; expectedKind: Hex }> = [
       { label: 'core', address: getAddress(coreModule), expectedKind: EXPECTED_VAULT_CORE_MODULE_KIND },

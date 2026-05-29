@@ -5,6 +5,7 @@ import {
   CREATOR_OVAULT_CORE_MODULE,
   CREATOR_OVAULT_STRATEGIES_MODULE,
 } from '@/config/contracts.defaults'
+import { resolveWiredCreatorOvaultModules } from '@/lib/deploy/phase1ModuleDeploy'
 
 /** Live batcher + store deploy fingerprint (CreatorOVaultModuleStorage.v2). */
 export const CREATOR_OVAULT_MODULE_STORAGE_V2 = keccak256(
@@ -42,18 +43,30 @@ export type OVaultModuleStoragePreflight = {
   moduleReports: Hex
 }
 
+type ModuleReadClient = {
+  readContract: (args: {
+    address: Address
+    abi: readonly unknown[]
+    functionName: string
+    args?: readonly unknown[]
+  }) => Promise<unknown>
+}
+
 export async function assertCreatorOvaultModuleStorageCompatible(params: {
-  publicClient: {
-    readContract: (args: {
-      address: Address
-      abi: typeof MODULE_IDENTITY_ABI
-      functionName: 'moduleStorageVersion'
-    }) => Promise<unknown>
-  }
+  publicClient: ModuleReadClient
+  batcherAddress?: Address
   moduleAddress?: Address
   vaultExpects?: Hex
 }): Promise<OVaultModuleStoragePreflight> {
-  const moduleAddress = getAddress(params.moduleAddress ?? CREATOR_OVAULT_CORE_MODULE)
+  let moduleAddress = params.moduleAddress
+  if (!moduleAddress && params.batcherAddress && isAddress(params.batcherAddress)) {
+    const wired = await resolveWiredCreatorOvaultModules({
+      publicClient: params.publicClient,
+      batcherAddress: getAddress(params.batcherAddress),
+    })
+    moduleAddress = wired?.core
+  }
+  moduleAddress = getAddress(moduleAddress ?? CREATOR_OVAULT_CORE_MODULE)
   const vaultExpects = params.vaultExpects ?? DEPLOY_CREATOR_OVAULT_MODULE_STORAGE_VERSION
 
   if (!isAddress(moduleAddress)) {
