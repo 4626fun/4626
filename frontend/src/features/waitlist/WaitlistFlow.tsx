@@ -354,6 +354,7 @@ export function WaitlistFlow(props: {
   }, [account])
 
   const authBootstrapAutoAttemptedRef = useRef(false)
+  const privyAuthedBootstrapAttemptedRef = useRef(false)
   const pendingAuthResumeStartedRef = useRef(false)
   const loginStartedWhileLoggedOutRef = useRef(false)
   const startAuthAutoAttemptedRef = useRef(false)
@@ -365,7 +366,6 @@ export function WaitlistFlow(props: {
 
   useEffect(() => {
     if (!readWaitlistRecoveryGate()) return
-    authBootstrapAutoAttemptedRef.current = true
     setRecoveryRequired(true)
     setError(RECOVERY_REQUIRED_MESSAGE)
   }, [setError, setRecoveryRequired])
@@ -395,8 +395,21 @@ export function WaitlistFlow(props: {
     }
   }, [privy, shouldDestroyPrivySession])
 
+  const prevPrivyAuthedRef = useRef(privyAuthed)
+
   useEffect(() => {
     privyAuthedRef.current = privyAuthed
+    if (!privyAuthed) {
+      privyAuthedBootstrapAttemptedRef.current = false
+    }
+  }, [privyAuthed])
+
+  useEffect(() => {
+    if (!prevPrivyAuthedRef.current && privyAuthed) {
+      authBootstrapAutoAttemptedRef.current = false
+      privyAuthedBootstrapAttemptedRef.current = false
+    }
+    prevPrivyAuthedRef.current = privyAuthed
   }, [privyAuthed])
 
   useEffect(() => {
@@ -848,14 +861,13 @@ export function WaitlistFlow(props: {
 
   useEffect(() => {
     if (step !== 'auth') return
-    if (!readWaitlistAuthPending()) return
     if (!privyAuthed || privyClientStatus !== 'ready') return
-    if (readWaitlistRecoveryGate()) return
     if (recoveryRequired) return
+    if (account?.emailVerified) return
 
     // Privy can mark the session authenticated before `login()` resolves (email link / redirect).
     if (authAttemptInFlightRef.current) {
-      if (!loginStartedWhileLoggedOutRef.current || pendingAuthResumeStartedRef.current) return
+      if (pendingAuthResumeStartedRef.current) return
       pendingAuthResumeStartedRef.current = true
       void (async () => {
         try {
@@ -868,24 +880,21 @@ export function WaitlistFlow(props: {
       return
     }
 
-    if (authBootstrapAutoAttemptedRef.current) return
+    if (privyAuthedBootstrapAttemptedRef.current) return
+    privyAuthedBootstrapAttemptedRef.current = true
     authBootstrapAutoAttemptedRef.current = true
 
-    let cancelled = false
     void (async () => {
       setBusy(true)
       setError(null)
       try {
         await resumePendingWaitlistAuth()
       } finally {
-        if (!cancelled) setBusy(false)
+        setBusy(false)
       }
     })()
-
-    return () => {
-      cancelled = true
-    }
   }, [
+    account?.emailVerified,
     authAttemptInFlightRef,
     endAuthAttempt,
     privyAuthed,
@@ -954,7 +963,7 @@ export function WaitlistFlow(props: {
   const authUi = deriveWaitlistAuthUi({ recoveryRequired })
   const authVisibleError = error
   const showAuthBootstrapLoader =
-    step === 'auth' && busy && authAttemptInFlightRef.current && !authVisibleError
+    step === 'auth' && busy && !authVisibleError && !recoveryRequired
   const canEnterApp = canEnterAppFromAccountState({
     appAccessStatus: account?.appAccessStatus ?? null,
   })

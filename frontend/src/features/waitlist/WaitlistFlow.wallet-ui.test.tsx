@@ -58,7 +58,7 @@ vi.mock('framer-motion', () => ({
   ),
 }))
 
-let mockPrivyAuthenticated = true
+let mockPrivyAuthenticated = false
 const mockGetAccessToken = vi.fn<() => Promise<string | null>>(async () => 'privy-token-default')
 const mockPrivyLogout = vi.fn(async () => undefined)
 const mockLinkEmail = vi.fn(async () => undefined)
@@ -215,8 +215,11 @@ async function continueWaitlist() {
 }
 
 async function continueIntoWaitlistSetup() {
-  await continueWaitlist()
-  expect(await screen.findByRole('heading', { name: /you're on the waitlist/i })).toBeTruthy()
+  const continueButton = screen.queryByRole('button', { name: /^continue$/i })
+  if (continueButton) {
+    await continueWaitlist()
+  }
+  expect(await screen.findByRole('heading', { name: /you're on the waitlist/i }, { timeout: 8_000 })).toBeTruthy()
   expect(await screen.findByRole('heading', { name: /activate your account/i })).toBeTruthy()
 }
 
@@ -257,7 +260,7 @@ const WAITLIST_BOOTSTRAP_PAYLOAD = {
 
 describe('WaitlistFlow simplified completion UI', () => {
   beforeEach(() => {
-    mockPrivyAuthenticated = true
+    mockPrivyAuthenticated = false
     collisionStateRef.current = {
       hasMultipleInjectedProviders: false,
       lockedEthereumProviderGlobal: false,
@@ -307,6 +310,7 @@ describe('WaitlistFlow simplified completion UI', () => {
   })
 
   it('shows streamlined completion actions for verified waitlisted users', async () => {
+    mockPrivyAuthenticated = true
     render(
       <MemoryRouter>
         <WaitlistFlow />
@@ -376,6 +380,7 @@ describe('WaitlistFlow simplified completion UI', () => {
   })
 
   it('renders a setup-first workspace for verified users instead of a CTA-only completion state', async () => {
+    mockPrivyAuthenticated = true
     render(
       <MemoryRouter>
         <WaitlistFlow />
@@ -388,6 +393,7 @@ describe('WaitlistFlow simplified completion UI', () => {
   })
 
   it('shows a single setup title after entering the waitlist setup workspace', async () => {
+    mockPrivyAuthenticated = true
     render(
       <MemoryRouter>
         <WaitlistFlow />
@@ -434,6 +440,7 @@ describe('WaitlistFlow simplified completion UI', () => {
   })
 
   it('shows manual existing-account recovery when bootstrap returns recovery-required', async () => {
+    mockPrivyAuthenticated = true
     let bootstrapCalls = 0
     vi.mocked(apiFetch).mockImplementation(async (input: string) => {
       if (input.startsWith('/api/waitlist/bootstrap')) {
@@ -449,6 +456,12 @@ describe('WaitlistFlow simplified completion UI', () => {
           409,
         ) as any
       }
+      if (input.startsWith('/api/waitlist/stats')) {
+        return jsonResponse({
+          success: true,
+          data: { signedUpCount: 0, capacity: 0, spotsRemaining: 0 },
+        }) as any
+      }
       throw new Error(`Unhandled apiFetch call: ${input}`)
     })
 
@@ -458,12 +471,10 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: /^continue$/i }, { timeout: 6_000 }))
-
     expect(
       await screen.findByText(/this email already has a 4626 account/i, undefined, { timeout: 5_000 }),
     ).toBeTruthy()
-    expect(screen.getByRole('button', { name: /use existing account/i })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: /use existing account/i }, { timeout: 5_000 })).toBeTruthy()
     expect(mockLogin).toHaveBeenCalledTimes(0)
     expect(mockPrivyLogout).toHaveBeenCalledTimes(0)
     expect(bootstrapCalls).toBeLessThanOrEqual(2)
@@ -538,7 +549,7 @@ describe('WaitlistFlow simplified completion UI', () => {
   })
 
   it('does not reload waitlist when recovery auth bridge is rejected', async () => {
-    mockPrivyAuthenticated = true
+    mockPrivyAuthenticated = false
     let bootstrapCalls = 0
     const locationAssign = vi.fn()
     const originalLocation = window.location
@@ -1034,8 +1045,6 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    await continueWaitlist()
-
     await waitFor(() => {
       expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     }, { timeout: 9_000 })
@@ -1095,8 +1104,6 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    await continueWaitlist()
-
     await waitFor(() => {
       expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     }, { timeout: 9_000 })
@@ -1105,7 +1112,7 @@ describe('WaitlistFlow simplified completion UI', () => {
   })
 
   it('opens a recovery circuit breaker when bootstrap keeps returning recovery-required', async () => {
-    mockPrivyAuthenticated = true
+    mockPrivyAuthenticated = false
     let bootstrapCalls = 0
     let logoutCalls = 0
 
@@ -1233,6 +1240,61 @@ describe('WaitlistFlow simplified completion UI', () => {
       expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     }, { timeout: 3_000 })
     expect(screen.queryByText(/browser wallet extension is interfering with sign-in/i)).toBeNull()
+  })
+
+  it('auto-bootstraps after email verify when auth-pending flag is missing', async () => {
+    mockPrivyAuthenticated = false
+    let bootstrapCalls = 0
+
+    vi.mocked(apiFetch).mockImplementation(async (input: string) => {
+      if (input.startsWith('/api/waitlist/bootstrap')) {
+        bootstrapCalls += 1
+        return jsonResponse(WAITLIST_BOOTSTRAP_PAYLOAD) as any
+      }
+      if (input.startsWith('/api/auth/privy')) {
+        return jsonResponse({ success: true }) as any
+      }
+      if (input.startsWith('/api/waitlist/stats')) {
+        return jsonResponse({
+          success: true,
+          data: { signedUpCount: 0, capacity: 0, spotsRemaining: 0 },
+        }) as any
+      }
+      throw new Error(`Unhandled apiFetch call: ${input}`)
+    })
+
+    const view = render(
+      <MemoryRouter>
+        <WaitlistFlow />
+      </MemoryRouter>,
+    )
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^continue$/i }))
+    })
+
+    clearWaitlistAuthPending()
+    mockPrivyAuthenticated = true
+    await act(async () => {
+      view.rerender(
+        <QueryClientProvider
+          client={
+            new QueryClient({
+              defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+            })
+          }
+        >
+          <AppLoadingProvider>
+            <MemoryRouter>
+              <WaitlistFlow />
+            </MemoryRouter>
+          </AppLoadingProvider>
+        </QueryClientProvider>,
+      )
+    })
+
+    expect(await screen.findByRole('heading', { name: /you're on the waitlist/i }, { timeout: 8_000 })).toBeTruthy()
+    expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
   })
 
   it('releases busy lock when login hangs and surfaces a retryable timeout', async () => {
