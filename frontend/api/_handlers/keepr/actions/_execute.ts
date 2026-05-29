@@ -12,7 +12,7 @@ import {
   getClientIp,
   rateLimitKey,
   RATE_LIMITS,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { executeKeeprAction } from '../../../../server/keepr/xmtpQueueExecutor.js'
 import {
   KPR_TRUST_ZONE_KEY_HEADER,

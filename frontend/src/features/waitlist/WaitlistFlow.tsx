@@ -63,7 +63,6 @@ import {
 } from './waitlistRecoveryGate'
 import {
   clearWaitlistAuthPending,
-  readWaitlistAuthPending,
   writeWaitlistAuthPending,
 } from './waitlistAuthPending'
 type AccountsSummary = WaitlistAccountsSummary

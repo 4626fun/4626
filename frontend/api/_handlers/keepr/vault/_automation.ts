@@ -11,7 +11,7 @@ import {
   getClientIp,
   rateLimitKey,
   RATE_LIMITS,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import {
   disableKeeprVaultAutomation,

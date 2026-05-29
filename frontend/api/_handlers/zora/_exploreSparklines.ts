@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { getDb } from '../../../packages/server-core/src/index.js'
+import { getDb } from '@4626/server-core'
 import { resolveCoinPriceSparkline } from '../../../server/_lib/zora/coinPriceSparkline.js'
 import { persistExploreSparklinesToDb } from '../../../server/_lib/zora/exploreSparklineCache.js'
 import {

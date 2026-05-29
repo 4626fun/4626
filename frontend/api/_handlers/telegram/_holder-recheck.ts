@@ -12,7 +12,7 @@ import { getDb,
   listHolderRoomMembersNeedingRecheck,
   upsertHolderRoomMember,
   type TelegramHolderRoomRecheckRow,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { getTelegramWebhookConfig } from './webhook/config.js'
 
 declare const process: { env: Record<string, string | undefined> }

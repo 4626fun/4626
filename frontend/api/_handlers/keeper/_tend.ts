@@ -17,7 +17,7 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { createPublicClient, createWalletClient, http, type Abi } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { base } from 'viem/chains'

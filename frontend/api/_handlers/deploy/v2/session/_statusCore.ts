@@ -16,7 +16,7 @@ import {
   RATE_LIMITS,
   rateLimitKey,
   isDbConfigured,
-} from '../../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { getDeploySessionById, signDeployToken, transitionDeploySession, updateDeploySession } from '../../../../../server/_lib/deploy/deploySessions.js'
 import { getCanonicalOrigin } from '../../../../../server/_lib/infra/origin.js'
 import { buildUserOpErrorDebug } from '../../../../../server/_lib/deploy/userOpRevertDebug.js'

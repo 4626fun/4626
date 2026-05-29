@@ -176,7 +176,7 @@ export async function loadMergedCreatorEthosByAddresses(
   const out = new Map<string, CreatorEthosMerged & { creatorAddress: string }>()
   if (normalized.length === 0) return out
 
-  const { getDb } = await import('../../../packages/server-core/src/index.js')
+  const { getDb } = await import('@4626/server-core')
   const { resolveCreatorEthosByAddress } = await import('./resolveCreatorEthosByAddress.js')
   const db = await getDb()
   if (!db) return out

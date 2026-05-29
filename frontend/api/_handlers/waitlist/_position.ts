@@ -8,7 +8,7 @@ import {
   getClientIp,
   rateLimitKey,
   readRequestPrincipalAddress,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { isAuthorizedWalletForProfile } from '../../../server/_lib/wallet/canonicalWalletResolver.js'
 

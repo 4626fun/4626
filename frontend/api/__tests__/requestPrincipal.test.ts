@@ -22,7 +22,7 @@ import {
   readRequestPrincipal,
   readRequestPrincipalAddress,
   resolveAuthorizedRequestPrincipal,
-} from '../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 describe('request principal resolver', () => {
   beforeEach(() => {

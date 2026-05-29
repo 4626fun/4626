@@ -1780,7 +1780,7 @@ export function useSwapExecution(params: {
           chainId: Number(swapChainId),
           executionMode: params.executionMode,
           selectedAddress: params.executionAddress,
-          signerAddress: params.signerAddress,
+          signerAddress: params.signerAddress!,
           canonicalAddress: params.canonicalAddress,
           connectorId: params.connectorId ?? null,
           connectorName: params.connectorName ?? null,
@@ -1879,7 +1879,7 @@ export function useSwapExecution(params: {
           chainId: Number(swapChainId),
           executionMode: params.executionMode,
           selectedAddress: params.executionAddress,
-          signerAddress: params.signerAddress,
+          signerAddress: params.signerAddress!,
           canonicalAddress: params.canonicalAddress,
           connectorId: params.connectorId ?? null,
           connectorName: params.connectorName ?? null,
@@ -1950,7 +1950,7 @@ export function useSwapExecution(params: {
           amountIn: amount,
           sender: params.executionAddress,
           slippagePct: params.parsedSlippage,
-          signerAddress: params.signerAddress,
+          signerAddress: params.signerAddress!,
           executionAddress: params.executionAddress,
           walletClient: params.walletClient as {
             signTypedData: (args: Record<string, unknown>) => Promise<string>
@@ -1980,8 +1980,8 @@ export function useSwapExecution(params: {
       }
       assertSwapSubmitEpochUnchanged(submitEpoch)
       let activeSwapTx = swapTxForSend
-      let routing: Awaited<ReturnType<typeof buildAndSendSwap>>['routing']
-      let send: Awaited<ReturnType<typeof buildAndSendSwap>>['send']
+      let routing: Awaited<ReturnType<typeof buildAndSendSwap>>['routing'] | undefined
+      let send: Awaited<ReturnType<typeof buildAndSendSwap>>['send'] | undefined
       const maxZoraSendAttempts = quote && isZoraProviderQuote(quote) ? 2 : 1
       for (let sendAttempt = 0; sendAttempt < maxZoraSendAttempts; sendAttempt += 1) {
         assertSwapSubmitEpochUnchanged(submitEpoch)
@@ -2019,7 +2019,7 @@ export function useSwapExecution(params: {
             amountIn: amount,
             sender: params.executionAddress,
             slippagePct: retrySlippagePct,
-            signerAddress: params.signerAddress,
+            signerAddress: params.signerAddress!,
             executionAddress: params.executionAddress,
             walletClient: params.walletClient as {
               signTypedData: (args: Record<string, unknown>) => Promise<string>

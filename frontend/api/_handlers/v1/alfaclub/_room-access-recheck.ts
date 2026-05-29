@@ -6,7 +6,7 @@ import {
   requireKeeprApiKey,
   setCors,
   setNoStore,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { recheckAlfaClubRoomAccessMemberships } from '../../../../server/_lib/alfaclub/roomAccessPolicy.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

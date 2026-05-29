@@ -18,7 +18,7 @@ import {
   setCors,
   setNoStore,
   RATE_LIMITS,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { resolvePayoutRouterKeeperPrivateKey } from '../../../server/_lib/onchain/payoutRouterRuntime.js'
 import { createPublicClient, createWalletClient, getAddress, http, isAddress, type Abi } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'

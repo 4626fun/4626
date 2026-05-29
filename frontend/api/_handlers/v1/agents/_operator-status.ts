@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   handleOptions,
   readRequestPrincipal,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { buildAgentOperatorStatus } from '../../../../server/_lib/agent/erc8004OperatorStatus.js'
 

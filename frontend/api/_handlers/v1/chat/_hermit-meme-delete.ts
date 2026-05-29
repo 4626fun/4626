@@ -11,7 +11,7 @@ import {
   RATE_LIMITS,
   checkRateLimit,
   rateLimitKey,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { softDeleteHermitMeme } from '../../../../server/_lib/hermit/repository.js'
 import { isHermitOwner, isHermitRoomAllowedForOwner } from '../../../../server/_lib/hermit/policy.js'
 

@@ -16,7 +16,7 @@ import {
   checkRateLimit,
   RATE_LIMITS,
   rateLimitKey,
-} from '../../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 import { getDeploySessionById, signDeployToken, updateDeploySession } from '../../../../../server/_lib/deploy/deploySessions.js'

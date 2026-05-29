@@ -5,7 +5,7 @@ import {
   renderHermitAvatarBuffer,
 } from '../../../server/_lib/alfaclub/hermitAvatar.js'
 import { getNumberQuery, getStringQuery, handleOptions, setPublicCors } from '../../../server/zora/_shared.js'
-import { checkRateLimit, getClientIp, rateLimitKey } from '../../../packages/server-core/src/index.js'
+import { checkRateLimit, getClientIp, rateLimitKey } from '@4626/server-core'
 
 const RATE_LIMIT = { windowMs: 60_000, maxRequests: 60 } as const
 

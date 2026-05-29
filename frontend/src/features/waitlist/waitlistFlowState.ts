@@ -2,6 +2,20 @@ import { shouldUseBaseAppSubAccountPath, type UserExecutionAccountSignals } from
 
 export type WaitlistStep = 'auth' | 'done'
 
+/**
+ * Minimal input shape accepted by pure decision helpers (resolveWaitlistStep, etc.).
+ *
+ * Callers on the bootstrap success path always receive the full AccountSetupMe
+ * (via WaitlistAccountsSummary = AccountSetupMe). We explicitly allow extra
+ * properties so tests and real richer objects (emailVerified + appAccessStatus +
+ * accountSignals + privyUserId + score, etc.) do not trigger TS excess-property
+ * errors when passed to these narrow decision functions.
+ */
+export type WaitlistStepAccountInput = {
+  emailVerified: boolean
+  [key: string]: unknown
+}
+
 type WaitlistAccountWithCanonical = {
   accountSignals: UserExecutionAccountSignals
 }
@@ -189,9 +203,7 @@ export function shouldShowBaseAppConnectPanel(params: {
 }
 
 export function resolveWaitlistStep(params: {
-  account: {
-    emailVerified: boolean
-  }
+  account: WaitlistStepAccountInput
 }): WaitlistStep {
   if (!params.account.emailVerified) return 'auth'
   return 'done'

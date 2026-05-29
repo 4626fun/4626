@@ -30,8 +30,8 @@ import {
   rateLimitKey,
   readBoundedJsonObjectBody,
   resolveAuthorizedRequestPrincipal,
-} from '../../../packages/server-core/src/index.js'
-import { revokeCommandIssuerContext } from '../../../packages/server-core/src/identity.js'
+} from '@4626/server-core'
+import { revokeCommandIssuerContext } from '@4626/server-core/identity'
 
 const REVOKE_BODY_MAX_BYTES = 8_192
 

@@ -27,7 +27,7 @@ import {
   handleOptions,
   getSessionAddress,
   isAdminAddress,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { relayAlfaClubFeedbackOnce } from '../../../../server/_lib/alfaclub/feedbackRelayer.js'
 import { SCORECARD_DISCLAIMER } from '../../../../server/_lib/alfaclub/scorecard.js'

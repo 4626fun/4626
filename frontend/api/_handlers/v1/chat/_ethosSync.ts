@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { getDbForCron, isDbConfigured, isPostgresPoolSaturatedError } from '../../../../packages/server-core/src/index.js'
+import { getDbForCron, isDbConfigured, isPostgresPoolSaturatedError } from '@4626/server-core'
 import { isAuthorizedCron } from '../../../../server/_lib/lottery/cronAuth.js'
 import {
   materializeCanonicalEthosScores,

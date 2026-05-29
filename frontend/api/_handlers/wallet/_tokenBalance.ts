@@ -6,7 +6,7 @@ import {
   readRequestPrincipalAddress,
   setCors,
   setNoStore,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { getStringQuery, isAddressLike } from '../../../server/debank/_shared.js'
 import { readTokenBalance } from '../../../server/_lib/wallet/readTokenBalance.js'
 

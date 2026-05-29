@@ -11,7 +11,7 @@ import {
   setCors,
   setNoStore,
   RATE_LIMITS,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { enqueueKeeperJob, type KeeperJob } from '../../../../server/_lib/keeperJobs/keeperJobs.js'
 
 type EnqueueBody = {

@@ -6,7 +6,7 @@ import {
   setCors,
   setNoStore,
   getSessionAddress,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 import { buildKeeprJoinMessage, issueKeeprJoinNonce } from '../../../server/_lib/keepr/keeprProof.js'

@@ -4,7 +4,7 @@ import {
   COOKIE_SESSION,
   enforceCookieSessionTrustedOrigin,
   makeSessionToken,
-} from '../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
 
 describe('cookie origin guard', () => {

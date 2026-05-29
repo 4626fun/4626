@@ -39,11 +39,11 @@ import {
   getDb,
   isDbConfigured,
   resolveAuthorizedRequestPrincipal,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import {
   provisionCommandIssuerContext,
   envBigInt,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import {
   fetchPrivyWalletFull,
   secp256k1SignHash,

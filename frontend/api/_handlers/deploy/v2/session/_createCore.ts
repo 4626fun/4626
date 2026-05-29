@@ -36,7 +36,7 @@ import {
   checkDurableRateLimit,
   RATE_LIMITS,
   rateLimitKey,
-} from '../../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { ensureDeploySessionsSchema, hashDeployToken, insertDeploySession, randomDeployToken, randomId } from '../../../../../server/_lib/deploy/deploySessions.js'
 

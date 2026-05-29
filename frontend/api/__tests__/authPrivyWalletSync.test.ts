@@ -36,7 +36,7 @@ const {
   })),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   COOKIE_SESSION: '__Host-4626_session',
   handleOptions: vi.fn(() => false),
   setCors: vi.fn(),

@@ -69,9 +69,9 @@ import {
   runInTransaction,
   resolveAuthorizedRequestPrincipal,
   logger,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { getBasePublicClient } from '../../../server/_lib/wallet/subAccountProvisionVerify.js'
-import { envBigInt } from '../../../packages/server-core/src/index.js'
+import { envBigInt } from '@4626/server-core'
 
 declare const process: { env: Record<string, string | undefined> }
 

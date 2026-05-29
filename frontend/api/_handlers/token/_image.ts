@@ -28,7 +28,7 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { blobHeadOrNull, blobPutBytes, fetchBytes, sha256Hex } from '../../../server/_lib/infra/blob.js'
 import { resolveCreatorTokenArtwork, type CreatorTokenArtwork } from '../../../server/_lib/image/creatorTokenArtwork.js'

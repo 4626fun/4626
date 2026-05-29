@@ -43,7 +43,7 @@ vi.mock('../../server/agents/eliza/llm.js', () => ({
   getElizaLlmService: getElizaLlmServiceMock,
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   RATE_LIMITS: {
     agentCreative: { windowMs: 60_000, maxRequests: 20 },
   },

@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   getErc8004PublicOrigin: vi.fn(() => 'https://4626.fun'),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   guardAgentApiRequest: mocks.guardAgentApiRequest,
   checkRateLimit: mocks.checkRateLimit,
   getClientIp: mocks.getClientIp,

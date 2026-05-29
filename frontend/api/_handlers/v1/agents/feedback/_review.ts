@@ -12,7 +12,7 @@ import {
   RATE_LIMITS,
   checkRateLimit,
   rateLimitKey,
-} from '../../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 import { type FeedbackPayload, getIdentityRegistryAddress, getReputationRegistryAddress, REPUTATION_REGISTRY_ABI } from '../../../../../server/_lib/agent/erc8004.js'

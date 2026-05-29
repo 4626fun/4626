@@ -10,7 +10,7 @@ import {
   rateLimitKey,
   readBoundedJsonObjectBody,
   setNoStore,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { issueCswEntryChallenge } from '../../../server/_lib/zora/cswGateVerification.js'
 
 // FIX: M-01 — /api/zora/csw-entry/challenge

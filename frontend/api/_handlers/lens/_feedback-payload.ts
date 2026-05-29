@@ -31,7 +31,7 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { tryUploadImmutableJson } from '../../../server/_lib/lens/lensGrove.js'
 import { getIdentityRegistryAddress } from '../../../server/_lib/agent/erc8004.js'

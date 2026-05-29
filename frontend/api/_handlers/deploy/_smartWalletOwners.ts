@@ -10,7 +10,7 @@ import {
   RATE_LIMITS,
   rateLimitKey,
   getClientIp,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 const DEFAULT_BASE_RPCS = [
   'https://mainnet.base.org',

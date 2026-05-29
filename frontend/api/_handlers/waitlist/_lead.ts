@@ -13,7 +13,7 @@ import {
   readBoundedJsonObjectBody,
   setCors,
   setNoStore,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 const BODY_MAX_BYTES = 16_384
 const VALID_ROLES = new Set(['creator', 'builder', 'depositor', 'partner', 'other'])

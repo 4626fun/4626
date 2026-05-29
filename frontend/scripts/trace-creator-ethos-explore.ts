@@ -8,7 +8,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { getDb, isDbConfigured } from '../packages/server-core/src/index.js'
+import { getDb, isDbConfigured } from '@4626/server-core'
 import {
   loadCreatorEthosProjectionByAddresses,
   loadMergedCreatorEthosByAddresses,

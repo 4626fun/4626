@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useBaseAccountSdk } from '@privy-io/react-auth'
 import { getAddress, type PublicClient } from 'viem'
 import { base } from 'viem/chains'
@@ -119,6 +119,8 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
 
   const [prepareLoading, setPrepareLoading] = useState(false)
   const [busy, setBusy] = useState(false)
+  const busyRef = useRef(false)
+  useEffect(() => { busyRef.current = busy }, [busy])
   const [alreadyOwner, setAlreadyOwner] = useState(false)
   const [pageError, setPageError] = useState<string | null>(null)
   const [pageNotice, setPageNotice] = useState<string | null>(null)
@@ -132,6 +134,27 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
   const [fundingAssessment, setFundingAssessment] = useState<CswFundingAssessment | null>(null)
   const [fundingLoading, setFundingLoading] = useState(false)
 
+  // Stabilize the (potentially new-on-every-render) publicClient from wagmi/Privy
+  // so that long async operations and effects don't cause callback/effect churn
+  // that leads to React maximum update depth errors during Base App wallet_sendCalls.
+  const publicClientRef = useRef<AddUserOpOwnerInstallPublicClient | undefined>(publicClient)
+  useEffect(() => {
+    publicClientRef.current = publicClient
+  }, [publicClient])
+
+  const authHeadersRef = useRef(authHeaders)
+  useEffect(() => {
+    authHeadersRef.current = authHeaders
+  }, [authHeaders])
+
+  // Stabilize noisy wagmi/Privy objects behind refs so resolveWalletRequest and other
+  // callbacks don't get recreated on every connection state flicker during Base App flows.
+  const connectionsRef = useRef(connections)
+  useEffect(() => { connectionsRef.current = connections }, [connections])
+
+  const baseAccountSdkRef = useRef(baseAccountSdk)
+  useEffect(() => { baseAccountSdkRef.current = baseAccountSdk }, [baseAccountSdk])
+
   const inBaseApp = isBaseAppInAppContext(detectInAppEnvironment())
 
   const appendEvent = useCallback((row: string) => {
@@ -139,7 +162,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
   }, [])
 
   const resolveWalletRequest = useCallback(async (): Promise<WalletRequest> => {
-    const sdk = baseAccountSdk as { getProvider?: () => { request?: WalletRequest } } | null | undefined
+    const sdk = baseAccountSdkRef.current as { getProvider?: () => { request?: WalletRequest } } | null | undefined
     if (sdk && typeof sdk.getProvider === 'function') {
       try {
         const provider = sdk.getProvider()
@@ -157,7 +180,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       return id === 'coinbasewalletsdk' || id === 'base-account' || id.includes('coinbase')
     }
 
-    const connection = connections.find((conn) => isCoinbaseLikeConnector(conn.connector?.id))
+    const connection = connectionsRef.current.find((conn) => isCoinbaseLikeConnector(conn.connector?.id))
     if (connection) {
       const provider = (await (connection.connector as { getProvider?: () => Promise<unknown> })
         .getProvider?.()) as { request?: WalletRequest } | null
@@ -170,14 +193,14 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     throw new Error(
       'Base App wallet provider unavailable. Open https://4626.fun/add in Base App with your smart wallet connected.',
     )
-  }, [appendEvent, baseAccountSdk, connections])
+  }, [appendEvent])  // connections and baseAccountSdk are read via refs for stability during Base App prompts
 
   const loadPrepare = useCallback(async () => {
     if (!enabled || !canonicalCswAddress || !privyEmbeddedEoaAddress) return null
     setPrepareLoading(true)
     setPageError(null)
     try {
-      const headers = await authHeaders()
+      const headers = await authHeadersRef.current()
       const prepared = await fetchPrepareAddPrivyOwner({ headers })
       if (prepared.alreadyOwner) {
         setAlreadyOwner(true)
@@ -195,7 +218,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     } finally {
       setPrepareLoading(false)
     }
-  }, [appendEvent, authHeaders, canonicalCswAddress, enabled, privyEmbeddedEoaAddress])
+  }, [appendEvent, canonicalCswAddress, enabled, privyEmbeddedEoaAddress])  // authHeaders read via ref
 
   useEffect(() => {
     if (!enabled) return
@@ -208,7 +231,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       return null
     }
     const readClient =
-      typeof window !== 'undefined' ? getProductionBaseReadClient() : publicClient
+      typeof window !== 'undefined' ? getProductionBaseReadClient() : publicClientRef.current
     if (!readClient) {
       setFundingAssessment(null)
       return null
@@ -229,7 +252,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     } finally {
       setFundingLoading(false)
     }
-  }, [canonicalCswAddress, publicClient])
+  }, [canonicalCswAddress])  // publicClient is read via ref for stability
 
   useEffect(() => {
     if (!enabled || !canonicalCswAddress) {
@@ -237,9 +260,13 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       return
     }
     void refreshFunding()
-  }, [canonicalCswAddress, enabled, refreshFunding])
+  }, [canonicalCswAddress, enabled, refreshFunding])  // refreshFunding is stable wrt publicClient (uses ref)
 
   const handleSubmitUserOp = useCallback(async (): Promise<boolean> => {
+    if (busyRef.current) {
+      appendEvent('submit:ignored_reentrant')
+      return false
+    }
     if (!canonicalCswAddress || !privyEmbeddedEoaAddress) {
       setPageError('Canonical wallet or embedded signer is unavailable. Sign in and retry.')
       return false
@@ -353,11 +380,12 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       })
 
       let landedTxHash = result.transactionHash
-      if (!landedTxHash && result.userOperationHash && publicClient) {
+      const pcForPoll = publicClientRef.current
+      if (!landedTxHash && result.userOperationHash && pcForPoll) {
         appendEvent(`poll:user_op_hash=${result.userOperationHash}`)
         const deadline = Date.now() + 90_000
         while (!landedTxHash && Date.now() < deadline) {
-          const receipt = (await publicClient.request({
+          const receipt = (await pcForPoll.request({
             method: 'eth_getUserOperationReceipt' as any,
             params: [result.userOperationHash],
           }).catch(() => null)) as { receipt?: { transactionHash?: string } } | null
@@ -382,24 +410,25 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       appendEvent(`tx_hash=${landedTxHash}`)
       setCallBundleId(result.callBundleId)
 
-      if (publicClient) {
-        await publicClient
+      const pcForVerify = publicClientRef.current
+      if (pcForVerify) {
+        await pcForVerify
           .waitForTransactionReceipt({ hash: landedTxHash, timeout: 90_000 })
           .catch(() => undefined)
         await verifyEntryPointHandleOpsTransaction({
-          publicClient,
+          publicClient: pcForVerify,
           txHash: landedTxHash,
         })
         appendEvent(`verify:entrypoint_handleops=ok (${ENTRY_POINT_V06_BASE})`)
         const installed = await readIsOwnerAddressIfDeployed({
-          publicClient,
+          publicClient: pcForVerify,
           cswAddress: csw,
           ownerAddress: ownerToAdd,
         })
         appendEvent(`verify:is_owner=${String(installed)}`)
       }
 
-      const headers = await authHeaders()
+      const headers = await authHeadersRef.current()
       const confirmed = await confirmOwnerInstall({
         cswAddress: canonicalCswAddress,
         ownerAddress: privyEmbeddedEoaAddress,
@@ -429,19 +458,20 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       setBusy(false)
       setSubmitPhase('idle')
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     alreadyOwner,
     appendEvent,
-    authHeaders,
     canonicalCswAddress,
     loadPrepare,
     onSuccess,
     preparedTx,
     privyEmbeddedEoaAddress,
-    publicClient,
-    resolveWalletRequest,
     refreshFunding,
     fundingAssessment,
+    // authHeaders, resolveWalletRequest, publicClient, connections, and baseAccountSdk
+    // are read via refs (see top of file). This prevents the giant submit callback
+    // from being recreated constantly during Base App interactions (main cause of React #185).
   ])
 
   return {

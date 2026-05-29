@@ -87,6 +87,15 @@ export function AddOwnerBaseApp() {
 
   const publicClient = usePublicClient({ chainId: base.id })
 
+  // Stabilize the public client reference. usePublicClient can return a new object
+  // on re-renders (especially during Base App wallet_sendCalls prompts), which can
+  // cause effects and callbacks inside the owner install hook to churn and trigger
+  // React maximum update depth errors.
+  const stablePublicClient = useMemo(
+    () => publicClient as AddUserOpOwnerInstallPublicClient | undefined,
+    [publicClient],
+  )
+
   const privyEmbeddedEoaAddress = useMemo(() => {
     const candidates = (Array.isArray(privyWallets) ? privyWallets : []) as Array<Record<string, unknown>>
     const found = pickPrivyEmbeddedEoaWallet(candidates)
@@ -107,13 +116,20 @@ export function AddOwnerBaseApp() {
     }
   }, [baseWalletLink, loadMe])
 
+  // Stabilize onSuccess so it doesn't cause the hook's useCallbacks / effects to
+  // be recreated on every render of this page (common source of React #185 during
+  // long async wallet operations).
+  const handleInstallSuccess = useCallback(() => {
+    void loadMe({ showSpinner: false })
+  }, [loadMe])
+
   const userOpFlow = useAddUserOpOwnerInstall({
     canonicalCswAddress,
     privyEmbeddedEoaAddress,
     authHeaders,
-    publicClient: (publicClient ?? undefined) as AddUserOpOwnerInstallPublicClient | undefined,
+    publicClient: stablePublicClient,
     enabled: Boolean(privyAuthed && canonicalCswAddress && privyEmbeddedEoaAddress),
-    onSuccess: () => loadMe({ showSpinner: false }),
+    onSuccess: handleInstallSuccess,
   })
 
   const fundingBlocksSubmit =

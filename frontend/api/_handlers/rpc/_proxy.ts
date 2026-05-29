@@ -8,7 +8,7 @@ import {
   readRequestPrincipalAddress,
   getClientIp,
   logger,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 

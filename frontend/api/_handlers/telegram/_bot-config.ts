@@ -14,7 +14,7 @@ import {
   setTelegramWebhook,
   setTelegramChatMenuButton,
   setTelegramMyCommands,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { getTelegramWebhookConfig } from './webhook/config.js'
 import {
   TELEGRAM_ADMIN_BOT_COMMANDS,

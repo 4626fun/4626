@@ -6,7 +6,7 @@ import {
   requireKeeprApiKey,
   setCors,
   setNoStore,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { listKeeperJobs, type KeeperJob, type KeeperJobStatus } from '../../../../server/_lib/keeperJobs/keeperJobs.js'
 
 function singleQueryValue(value: string | string[] | undefined): string | null {

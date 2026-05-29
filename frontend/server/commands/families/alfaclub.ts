@@ -36,7 +36,7 @@ import { ALFACLUB, FRIEND_KEY_ABI } from '../../_lib/wallet/alfaclub.js'
 import {
   isExecutionReady,
   resolveCommandIssuerContextByAddress,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import type { CoinbaseSmartWalletCall } from '../../_lib/wallet/privyCoinbaseSmartWallet.js'
 import { submitUserOpOrRefuse } from '../../_lib/wallet/userOperationSubmitter.js'
 import { getBasePreflightPublicClient } from '../../_lib/wallet/walletBalancePreflight.js'

@@ -8,7 +8,7 @@ import {
   readBoundedJsonObjectBody,
   setCors,
   setNoStore,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { createVaultControlPlane, VaultControlPlaneError } from '../../../../server/_lib/controlPlane/vaultControlPlane.js'
 
 type ProvisionBody = {

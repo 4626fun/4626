@@ -14,7 +14,7 @@ import {
   setNoStore,
   getDb,
   isDbConfigured,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { listKeeprVaultAutomationByVaultAddresses } from '../../../server/_lib/keepr/keeprAutomation.js'
 

@@ -335,7 +335,7 @@ async function resolveBundleTxFromUserOpHash(
 ): Promise<`0x${string}` | null> {
   try {
     const receipt = (await publicClient.request({
-      method: 'eth_getUserOperationReceipt',
+      method: 'eth_getUserOperationReceipt' as any,
       params: [userOpHash],
     })) as { receipt?: { transactionHash?: string } } | null
     const tx = receipt?.receipt?.transactionHash

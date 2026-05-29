@@ -16,7 +16,7 @@ import {
   classifyLinkedAccounts,
   syncUserWallets,
   type ClassifiedLinkedAccounts,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identity/identityRecovery.js'
 import { PrivyClient } from '@privy-io/server-auth'

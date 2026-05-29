@@ -9,7 +9,7 @@ import {
   rateLimitKey,
   setCors,
   setNoStore,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { listAvailableChatUsers, normalizeChatAddress } from '../../../../server/_lib/chat/presence.js'
 
 function clampLimit(value: unknown): number {

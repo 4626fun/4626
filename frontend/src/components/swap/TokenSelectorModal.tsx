@@ -157,7 +157,7 @@ function tokenSection(option: SwapTokenOption): 'core' | 'creator' | 'content' |
 
 function passesZoraUsdFilter(usdValue: number | undefined, minUsdOnly: boolean): boolean {
   if (!minUsdOnly) return true
-  if (!Number.isFinite(usdValue) || usdValue <= 0) return true
+  if (usdValue == null || !Number.isFinite(usdValue) || usdValue <= 0) return true
   return usdValue > ZORA_MIN_USD_FILTER
 }
 
@@ -333,7 +333,7 @@ function TokenSelectorRow(props: {
             </span>
           ) : null}
           {option.sectionTag === 'content' ? (
-            <span className="shrink-0 rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-200">
+            <span className="shrink-0 rounded-md bg-brand-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-brand-300">
               Content
             </span>
           ) : null}

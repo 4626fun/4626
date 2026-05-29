@@ -16,7 +16,7 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { executeVaultRebalanceStrategies } from '../../../server/_lib/controlPlane/executors/keeperVaultActions.js'
 import { parseMinDeviationBps } from '../../../server/_lib/keeper/strategyReallocEnv.js'
 

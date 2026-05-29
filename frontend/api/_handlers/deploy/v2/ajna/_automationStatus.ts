@@ -7,7 +7,7 @@ import {
   readRequestPrincipalAddress,
   setCors,
   setNoStore,
-} from '../../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { isServerAdminAddress } from '../../../../../server/_lib/infra/trust.js'
 import { resolveCoinPartiesAndOwner } from '../../../../../server/_lib/onchain/coinParties.js'
 import { getAjnaVaultRegistryEntry } from '../../../../../server/_lib/ajnaVaultManager/registry.js'

@@ -1,9 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { getAddress, isAddress, type Address } from 'viem'
 
-import { prefetchBundlerEntryPointSupport } from '@/lib/aa/coinbaseErc4337'
 import { findCoinbaseSmartWalletOwnerIndex } from '@/lib/aa/coinbaseErc4337Owners'
-import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 
 type PublicClientLike = {
   chain?: { id: number }
@@ -54,15 +52,6 @@ export function useCanonicalSwapWarmup(input: CanonicalSwapWarmupInput): void {
 
       if (typeof input.publicClient?.getBalance === 'function') {
         tasks.push(input.publicClient.getBalance({ address: csw }))
-      }
-
-      const paymasterUrl = resolveCdpPaymasterUrl(
-        import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined,
-      )
-      if (paymasterUrl) {
-        tasks.push(
-          prefetchBundlerEntryPointSupport(paymasterUrl, { includeCredentials: true }).catch(() => null),
-        )
       }
 
       await Promise.allSettled(tasks)

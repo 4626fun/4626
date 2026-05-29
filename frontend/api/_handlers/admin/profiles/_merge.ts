@@ -15,7 +15,7 @@ import {
   checkRateLimit,
   rateLimitKey,
   logger,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { logAdminAction } from '../../../../server/_lib/admin/adminAudit.js'
 import {

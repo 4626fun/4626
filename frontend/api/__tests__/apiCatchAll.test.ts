@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { COOKIE_SESSION, makeSessionToken } from '../../packages/server-core/src/index.js'
+import { COOKIE_SESSION, makeSessionToken } from '@4626/server-core'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
 
 describe('api catch-all hardening', () => {

@@ -1,4 +1,4 @@
-import { isTelegramFunnelEventsEnabledForChat, logTelegramFunnelEvent } from '../../../../../packages/server-core/src/index.js'
+import { isTelegramFunnelEventsEnabledForChat, logTelegramFunnelEvent } from '@4626/server-core'
 
 export function emitTelegramFunnelEvent(params: {
   db: any | null | undefined

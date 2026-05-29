@@ -1,4 +1,4 @@
-import { getAddress, type Address, type Hex } from 'viem'
+import { getAddress, type Hex } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import { mergePipeAFinalizeParams, parsePhase1SplitState } from './phase1OnchainState'

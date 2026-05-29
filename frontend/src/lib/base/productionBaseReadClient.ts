@@ -22,7 +22,7 @@ export function getProductionBaseReadClient(): PublicClient {
         }),
         http('https://mainnet.base.org', { retryCount: 1, timeout: 20_000 }),
       ]),
-    })
+    }) as PublicClient
   }
   return cached
 }

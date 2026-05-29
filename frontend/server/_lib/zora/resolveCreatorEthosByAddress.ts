@@ -1,4 +1,4 @@
-import { getDb } from '../../../packages/server-core/src/index.js'
+import { getDb } from '@4626/server-core'
 import { fetchFreshEthosScoresByUserkeys } from '../chat/ethosClient.js'
 
 export type CreatorEthosResolved = {

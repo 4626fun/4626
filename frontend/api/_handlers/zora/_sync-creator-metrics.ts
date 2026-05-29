@@ -4,7 +4,7 @@ import {
   runCreatorMetricsHotSync,
   runCreatorMetricsSync,
 } from '../../../server/_lib/zora/creatorMetricsSync.js'
-import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../packages/server-core/src/index.js'
+import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '@4626/server-core'
 declare const process: { env: Record<string, string | undefined> }
 
 function readSyncMode(req: VercelRequest): 'hot' | 'explore' | 'backfill' {

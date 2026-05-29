@@ -5,7 +5,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, readJsonBody } from '../../../../packages/server-core/src/index.js'
+import { type ApiEnvelope, readJsonBody } from '@4626/server-core'
 
 import type { TelegramUpdate } from './types.js'
 import { extractUpdateMessage, normalizeMessageContext } from './updates/message.js'

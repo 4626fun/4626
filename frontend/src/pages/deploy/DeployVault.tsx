@@ -77,7 +77,6 @@ import {
 import {
   resolveAlignedPhase1DeployDeps,
   resolveBytecodeStoreForBatcher,
-  resolveCreate2DeployerForBatcher,
 } from '@/lib/deploy/phase1ModuleDeploy'
 import { assertCreatorOvaultModuleStorageCompatible } from '@/lib/deploy/ovaultModuleIdentity'
 import { ShareBridgeFinalizeWiringPanel } from '@/components/deploy/ShareBridgeFinalizeWiringPanel'

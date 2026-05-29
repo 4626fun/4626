@@ -36,7 +36,7 @@ const {
   extractDelegationFlagsMock: vi.fn(() => ({})),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   handleOptions: vi.fn(() => false),
   setCors: vi.fn(),
   setNoStore: vi.fn(),

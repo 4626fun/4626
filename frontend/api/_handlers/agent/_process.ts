@@ -32,7 +32,7 @@ import {
   findMountedAncestorPath,
   hasDedicatedMount,
   resolveXmtpDbDirectory,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { createPrivyScwSigner } from '../../../server/_lib/wallet/privyXmtpSigner.js'
 import { executeDeterministicCommand } from '../../../server/agents/core/executeDeterministicCommand.js'
 

@@ -11,7 +11,7 @@ import {
   readBoundedJsonObjectBody,
   readTelegramMiniAppSession,
   setNoStore,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../server/_lib/db/supabaseAdmin.js'
 import {
   consumeZoraCswGateVerificationToken,

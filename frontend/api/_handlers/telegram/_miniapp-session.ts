@@ -15,7 +15,7 @@ import {
   claimTelegramMiniAppReplayNonce,
   createTelegramMiniAppSession,
   ensureTelegramTradingSchema,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { getTelegramWebhookConfig } from './webhook/config.js'
 import { resolveTelegramMiniAppVerificationStatusCode, verifyTelegramMiniAppInitData } from './webhook/miniAppAuth.js'

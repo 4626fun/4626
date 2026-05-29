@@ -8,7 +8,7 @@ import {
   isAdminAddress,
   setCors,
   setNoStore,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 type AdminControlPlaneOperationDetail = {
   admin: string

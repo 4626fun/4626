@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { getDb, isDbConfigured, runInTransaction } from '../../../packages/server-core/src/index.js'
+import { getDb, isDbConfigured, runInTransaction } from '@4626/server-core'
 import { emitControlPlaneMetric } from './metrics.js'
 
 type Db = {

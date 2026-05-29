@@ -87,7 +87,7 @@ vi.mock('../../server/_lib/lottery/lotteryAmoe.js', () => ({
   consumeAmoeCreditsForEntry: consumeAmoeCreditsForEntryMock,
 }))
 
-// `packages/server-core/src/index.js` is a thin barrel that re-exports from
+// `@4626/server-core` is a thin barrel that re-exports from
 // `server/_lib/agent/agentApiGuard.js`, `server/_lib/onchain/contracts.js`,
 // `server/_lib/infra/rateLimit.js`, and `server/_lib/infra/durableRateLimit.js`.
 // Mocking the underlying modules above is sufficient — the barrel surfaces

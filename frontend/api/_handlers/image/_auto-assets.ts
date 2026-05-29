@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { isAddress } from 'viem'
 import sharp from 'sharp'
 
-import { checkRateLimit, getClientIp, rateLimitKey, RATE_LIMITS } from '../../../packages/server-core/src/index.js'
+import { checkRateLimit, getClientIp, rateLimitKey, RATE_LIMITS } from '@4626/server-core'
 import { requireServerKey } from '../../../server/zora/_shared.js'
 import { fetchBytes } from '../../../server/_lib/infra/blob.js'
 import { attachImageGenerationAsset, getImageGenerationProject } from '../../../server/_lib/image/imageProjects.js'

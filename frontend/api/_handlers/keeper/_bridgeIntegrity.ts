@@ -16,7 +16,7 @@ import {
   setCors,
   setNoStore,
   RATE_LIMITS,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 type BridgeIntegrityResponse = {
   status: 'ok' | 'warning' | 'critical'

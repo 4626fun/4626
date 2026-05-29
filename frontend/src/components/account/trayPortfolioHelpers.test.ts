@@ -176,7 +176,7 @@ describe('buildTrayAssetHoldings', () => {
       },
     ]
     const exclude = collectTrayZoraTokenKeys(
-      [{ tokenKey: zora, tokenAddress: zora, symbol: 'AGENT', name: 'agent', logoUrl: null, amount: 100, usdValue: 90, walletCount: 1 }],
+      [{ tokenKey: zora, tokenAddress: zora }],
       [],
     )
     const holdings = buildTrayAssetHoldings(rows, { excludeTokenKeys: exclude })

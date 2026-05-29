@@ -24,7 +24,7 @@ async function loadDb(): Promise<Db | null> {
   if (process.env.CONTROL_PLANE_INTEGRATION_DATABASE_URL) {
     process.env.DATABASE_URL = integrationDbUrl
   }
-  const { getDb, isDbConfigured } = await import('../../packages/server-core/src/index.js')
+  const { getDb, isDbConfigured } = await import('@4626/server-core')
   if (!isDbConfigured()) return null
   return (await getDb()) as Db | null
 }

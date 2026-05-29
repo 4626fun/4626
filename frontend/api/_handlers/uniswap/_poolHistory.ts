@@ -9,7 +9,7 @@ import {
   rateLimitKey,
   logger,
   readRequestPrincipalAddress,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 import { fetchExternalJson } from '../../../server/_lib/infra/externalFetch.js'

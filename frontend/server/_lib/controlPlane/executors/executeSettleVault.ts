@@ -1,4 +1,4 @@
-import { getDb, isDbConfigured } from '../../../../packages/server-core/src/index.js'
+import { getDb, isDbConfigured } from '@4626/server-core'
 import { ensureKeeprSchema } from '../../keepr/keeprSchema.js'
 import { ensureKeeperRegistryForVault } from '../../keepr/keeperRegistryBootstrap.js'
 

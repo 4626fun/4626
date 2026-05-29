@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getNumberQuery, getStringQuery, handleOptions, requireServerKey, setCache, setCors } from '../../../server/zora/_shared.js'
-import { getDb } from '../../../packages/server-core/src/index.js'
+import { getDb } from '@4626/server-core'
 import {
   loadCreatorEthosProjectionByAddresses,
   mergeCreatorEthosScores,

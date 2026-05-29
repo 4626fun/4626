@@ -64,7 +64,7 @@ const {
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   handleOptions: vi.fn(() => false),
   readBoundedJsonObjectBody: readJsonBodyMock,
   setCors: vi.fn(),

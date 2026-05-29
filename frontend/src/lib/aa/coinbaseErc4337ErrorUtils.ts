@@ -528,10 +528,11 @@ export function extractExecutionFailedInnerSelector(revertData?: Hex): string | 
 
 export function buildPreflightSimulationRejectionError(params: {
   simResult: {
+    success?: boolean
     error?: string
     revertData?: Hex
     errorName?: string
-    directCallResult?: { error?: string; revertData?: Hex; errorName?: string }
+    directCallResult?: { success?: boolean; error?: string; revertData?: Hex; errorName?: string }
   }
   firstCallTo?: string
 }): Error {

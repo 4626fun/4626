@@ -1,4 +1,4 @@
-import type { getDb } from '../../../packages/server-core/src/index.js'
+import type { getDb } from '@4626/server-core'
 
 import { resolveCoinPriceSparkline } from './coinPriceSparkline.js'
 import {

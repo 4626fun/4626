@@ -10,7 +10,7 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { buildAgentPublishStatus, type AgentPublishData } from '../../../../server/_lib/agent/erc8004OperatorStatus.js'
 

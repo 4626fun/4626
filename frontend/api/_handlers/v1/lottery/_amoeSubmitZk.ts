@@ -27,7 +27,7 @@ import {
   checkRateLimit,
   rateLimitKey,
   getDb,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { checkDurableRateLimit } from '../../../../server/_lib/infra/durableRateLimit.js'
 

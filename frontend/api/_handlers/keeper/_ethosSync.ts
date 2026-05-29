@@ -19,7 +19,7 @@ import {
   getDbForCron,
   isDbConfigured,
   isPostgresPoolSaturatedError,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { syncEthosScoreUpdates } from '../../../server/_lib/identity/ethosCanonicalScores.js'
 import {
   pickCreatorEthosProjectionRefreshMode,

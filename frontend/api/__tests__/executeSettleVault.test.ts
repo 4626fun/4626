@@ -11,8 +11,8 @@ const { dbSqlMock, getDbMock, ensureKeeprSchemaMock } = vi.hoisted(() => ({
   ensureKeeprSchemaMock: vi.fn(async () => undefined),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('../../packages/server-core/src/index.js')
+vi.mock('@4626/server-core', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('../../@4626/server-core')
   return {
     ...actual,
     getDb: getDbMock,

@@ -322,7 +322,7 @@ async function ethCallZoraRouterAsCsw(params: {
       data: params.data,
       value: params.value,
       account: from,
-      blockNumber: 'latest',
+      blockTag: 'latest',
     })
     return
   } catch (e: unknown) {
@@ -449,15 +449,15 @@ function convertPermitAmountsToString(
 function buildPermit2TypedDataMessage(params: {
   token: `0x${string}`
   spender: `0x${string}`
-  amount: string
+  amount: bigint
   expiration: number
   nonce: number
-  sigDeadline: string
+  sigDeadline: bigint
 }) {
   return {
     details: {
       token: params.token,
-      amount: params.amount.toString(),
+      amount: params.amount,
       expiration: params.expiration,
       nonce: params.nonce,
     },
@@ -585,10 +585,10 @@ async function signOneZoraQuotePermit(params: {
   const signMessage = buildPermit2TypedDataMessage({
     token,
     spender,
-    amount: permitForApi.details.amount,
+    amount: BigInt(permitForApi.details.amount),
     expiration: permitForApi.details.expiration,
     nonce: chainNonce,
-    sigDeadline: permitForApi.sigDeadline,
+    sigDeadline: BigInt(permitForApi.sigDeadline),
   })
 
   const permitDomain = {
@@ -764,7 +764,7 @@ export async function executeZoraCswQuoteWithEscalation(params: {
           tokenOut: params.tokenOut,
           amountIn: params.amountIn,
           sender,
-          slippagePct,
+          slippagePct: slippagePct ?? 0.5,
         })
         baseQuote = zoraTradeQuoteToResponse({
           tokenIn: params.tokenIn,
@@ -792,7 +792,7 @@ export async function executeZoraCswQuoteWithEscalation(params: {
         tokenOut: params.tokenOut,
         amountIn: params.amountIn,
         sender,
-        slippagePct,
+        slippagePct: slippagePct ?? 0.5,
         signatures,
       })
     } catch (error) {

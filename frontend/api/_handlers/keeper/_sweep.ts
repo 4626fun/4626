@@ -20,7 +20,7 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { createVaultControlPlane } from '../../../server/_lib/controlPlane/vaultControlPlane.js'
 import { createPublicClient, createWalletClient, http, type Abi, zeroAddress } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'

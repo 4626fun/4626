@@ -11,7 +11,7 @@ import {
   getClientIp,
   rateLimitKey,
   RATE_LIMITS,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { checkSharesEligibility, getKeeprBaseRpcUrls } from '../../../server/_lib/keepr/keeprGating.js'
 import { enqueueKeeprAction, getKeeprVaultByVaultAddress, isKeeprJoinLocked } from '../../../server/_lib/keepr/keeprRegistry.js'

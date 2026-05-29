@@ -11,7 +11,7 @@ import {
   readBoundedJsonObjectBody,
   setCors,
   setNoStore,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 const BODY_MAX_BYTES = 16_384
 const EVENT_NAME_PATTERN = /^[a-z][a-z0-9_]{1,80}$/

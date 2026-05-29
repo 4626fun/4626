@@ -11,7 +11,7 @@ import {
 } from '../../../server/zora/_shared.js'
 import { buildShareTokenMetadata } from '../../../server/_lib/infra/shareTokenMetadata.js'
 import { tryUploadImmutableJson } from '../../../server/_lib/lens/lensGrove.js'
-import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey, readRequestPrincipal } from '../../../packages/server-core/src/index.js'
+import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey, readRequestPrincipal } from '@4626/server-core'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 

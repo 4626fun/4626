@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { handleOptions, setCors } from '../../../packages/server-core/src/index.js'
+import { handleOptions, setCors } from '@4626/server-core'
 import { fetchServerMigratedCoins } from '../../../server/_lib/zora/migratedCoins.js'
 
 function setCache(res: VercelResponse, seconds: number = 3600) {

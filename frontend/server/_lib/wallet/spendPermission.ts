@@ -19,7 +19,7 @@ import { encodeFunctionData, hashTypedData } from 'viem'
 
 // Canonical implementation of CommandIssuerContext / SpendPermissionPayload now lives
 // in @4626/server-core (commandIssuerContext.ts). Local file is a thin transitional re-export.
-import type { SpendPermissionPayload } from '../../../packages/server-core/src/identity.js'
+import type { SpendPermissionPayload } from '@4626/server-core/identity'
 import type { CoinbaseSmartWalletCall } from './privyCoinbaseSmartWallet.js'
 
 /** SpendPermissionManager singleton, deployed on Base mainnet. */

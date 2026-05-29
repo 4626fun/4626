@@ -11,7 +11,7 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { getElizaLlmService } from '../../../server/agents/eliza/llm.js'
 import { prepareRemoteAiJsonPayload } from '../../../server/_lib/agentControl/remoteAi.js'
 

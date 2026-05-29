@@ -6,7 +6,7 @@ import {
   setCors,
   setNoStore,
   getDb,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 import {

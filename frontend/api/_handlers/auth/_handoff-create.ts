@@ -11,7 +11,7 @@ import {
   checkRateLimit,
   rateLimitKey,
   readRequestPrincipalAddress,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { createHandoffCode, ensureHandoffSchema } from '../../../server/auth/_handoff.js'
 

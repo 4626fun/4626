@@ -43,7 +43,7 @@ const {
   getCoinMock: vi.fn(),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   getDb: getDbMock,
 }))
 

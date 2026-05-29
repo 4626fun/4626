@@ -12,7 +12,7 @@ import {
   checkRateLimit,
   RATE_LIMITS,
   rateLimitKey,
-} from '../../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { getCanonicalOrigin } from '../../../../../server/_lib/infra/origin.js'
 import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
 

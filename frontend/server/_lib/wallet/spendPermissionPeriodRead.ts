@@ -17,7 +17,7 @@ import {
 } from './spendPermission.js'
 // Canonical SpendPermissionPayload / command issuer logic lives in @4626/server-core.
 // This sibling import resolves through the transitional _lib re-export shim.
-import type { SpendPermissionPayload } from '../../../packages/server-core/src/identity.js'
+import type { SpendPermissionPayload } from '@4626/server-core/identity'
 
 type ViemReadClient = {
   readContract: (args: {

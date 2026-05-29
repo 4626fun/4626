@@ -9,7 +9,7 @@ import {
   getDb,
   getDbInitError,
   isDbConfigured,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 import { ensureCreatorWalletsSchema } from '../../../server/_lib/wallet/creatorWallets.js'

@@ -9,7 +9,7 @@ import {
   rateLimitKey,
   isAdminAddress,
   listCreatorXmtpAgents,
-} from '../../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 function setPublicCors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')

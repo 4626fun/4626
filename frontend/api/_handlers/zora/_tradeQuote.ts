@@ -9,7 +9,7 @@ import {
   readRequestPrincipalAddress,
   setCors,
   setNoStore,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { fetchZoraTradeQuote } from '../../../server/_lib/zora/zoraTradeQuote.js'
 
 function isObject(value: unknown): value is Record<string, unknown> {

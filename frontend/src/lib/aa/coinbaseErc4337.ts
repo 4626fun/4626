@@ -29,7 +29,6 @@ import { DATA_SUFFIX } from '@/lib/base/baseBuilderCodes'
 import { applyBuilderDataSuffixToCalls } from './coinbaseErc4337BuilderSuffix'
 import {
   ensureSignatureHex,
-  isHexString,
   isUserOpHashLike,
   runSignatureExtractionHarness,
   signatureMeta,
@@ -222,7 +221,7 @@ export async function verifyBundlerSupportsV06(
 // NOTE: Avoid tight coupling to a specific `viem` client instance/type.
 // wagmi and other libs can surface structurally-compatible clients that TypeScript may treat as distinct.
 export type PublicClientLike = {
-  chain: { id: number }
+  chain?: { id: number }
   readContract: (args: any) => Promise<any>
 } & Record<string, any>
 
@@ -1469,7 +1468,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
           ? getProductionBaseReadClient()
           : publicClient
       const simResult = await simulateSmartWalletCalls({
-        publicClient: preflightClient,
+        publicClient: preflightClient as PublicClientLike,
         smartWallet,
         calls: attributedCalls,
       })

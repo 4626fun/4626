@@ -35,7 +35,7 @@ import {
   isDbConfigured,
   resolveAuthorizedRequestPrincipal,
   logger,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import {
   NATIVE_TOKEN_SENTINEL,
   SPEND_PERMISSION_EIP712_DOMAIN,
@@ -45,7 +45,7 @@ import {
 import { computeSubAccountAddress } from '../../../server/_lib/wallet/subAccountAddress.js'
 import { resolveOwnerWalletId } from '../../../server/_lib/wallet/privyOwnerWalletIdResolver.js'
 import type { Address } from 'viem'
-import type { SpendPermissionPayload } from '../../../packages/server-core/src/identity.js'
+import type { SpendPermissionPayload } from '@4626/server-core/identity'
 import { randomBytes } from 'node:crypto'
 import {
   getBasePublicClient,

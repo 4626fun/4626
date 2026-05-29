@@ -23,7 +23,7 @@ import {
 } from './walletMapping.js'
 import { syncUserWallets } from './walletSync.js'
 import { resolveStoredCanonicalCswAddress } from './canonicalCswPersistence.js'
-import { resolvePrimaryProfileIdForPrivyUser } from '../../../packages/server-core/src/identity.js'
+import { resolvePrimaryProfileIdForPrivyUser } from '@4626/server-core'
 
 declare const process: { env: Record<string, string | undefined> }
 

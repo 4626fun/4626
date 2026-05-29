@@ -1330,8 +1330,9 @@ export function XmtpChatProvider({
     const conversationsApi = client.conversations as {
       sync: () => Promise<unknown>
       syncAll?: (consentStates?: import('@xmtp/browser-sdk').ConsentState[]) => Promise<unknown>
-      list: () => Promise<Array<Conversation | Dm | Group>>
-      listGroups?: () => Promise<Array<Conversation | Dm | Group>>
+      getConversationById?: (id: string) => Promise<Conversation | Dm | Group | null>
+      list: (options?: ReturnType<typeof groupMembershipListOptions>) => Promise<Array<Conversation | Dm | Group>>
+      listGroups?: (options?: ReturnType<typeof groupMembershipListOptions>) => Promise<Array<Conversation | Dm | Group>>
     }
     await syncConversationsForGroupDiscovery(conversationsApi as unknown as import('@/lib/xmtp/xmtpHelpers').ConversationsApiLike, {
       force: options?.force,
@@ -1912,12 +1913,13 @@ export function XmtpChatProvider({
         const conversationsApi = client.conversations as {
           sync: () => Promise<unknown>
           syncAll?: (consentStates?: import('@xmtp/browser-sdk').ConsentState[]) => Promise<unknown>
+          getConversationById?: (id: string) => Promise<Conversation | Dm | Group | null>
           list: (options?: ReturnType<typeof groupMembershipListOptions>) => Promise<Array<Conversation | Dm | Group>>
           listGroups?: (
             options?: ReturnType<typeof groupMembershipListOptions>,
           ) => Promise<Array<Conversation | Dm | Group>>
         }
-        await syncConversationsForGroupDiscovery(conversationsApi, {
+        await syncConversationsForGroupDiscovery(conversationsApi as unknown as import('@/lib/xmtp/xmtpHelpers').ConversationsApiLike, {
           force: manualConnectOnlyRef.current,
           lightweight: !manualConnectOnlyRef.current,
         })

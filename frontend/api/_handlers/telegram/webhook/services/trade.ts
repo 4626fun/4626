@@ -1,4 +1,4 @@
-import { checkRateLimit, rateLimitKey } from '../../../../../packages/server-core/src/index.js'
+import { checkRateLimit, rateLimitKey } from '@4626/server-core'
 import { asTrimmed } from '../utils.js'
 
 export function readTradeLimitFromEnv(key: string, fallback: number): number {

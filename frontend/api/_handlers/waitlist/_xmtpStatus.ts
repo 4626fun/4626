@@ -11,7 +11,7 @@ import {
   resolveAuthorizedRequestPrincipal,
   setCors,
   setNoStore,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import type { WaitlistChatExecutionTrack } from '../../../server/_lib/waitlist/waitlistXmtpChatEligibility.js'
 import {
   getWaitlistGroupName,

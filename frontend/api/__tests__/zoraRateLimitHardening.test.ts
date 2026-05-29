@@ -15,9 +15,9 @@ const { coreCheckRateLimitMock, libCheckRateLimitMock } = vi.hoisted(() => ({
   })),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', async () => {
-  const actual = await vi.importActual<typeof import('../../packages/server-core/src/index.js')>(
-    '../../packages/server-core/src/index.js',
+vi.mock('@4626/server-core', async () => {
+  const actual = await vi.importActual<typeof import('@4626/server-core')>(
+    '../../@4626/server-core',
   )
   return {
     ...actual,

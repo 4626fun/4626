@@ -11,7 +11,7 @@ import {
   isInsufficientFundsError,
   type PreflightResult,
 } from '../_lib/wallet/walletBalancePreflight.js'
-import type { CommandIssuerContext } from '../../packages/server-core/src/identity.js'
+import type { CommandIssuerContext } from '@4626/server-core/identity'
 import { submitUserOpOrRefuse } from '../_lib/wallet/userOperationSubmitter.js'
 import { assertTeeAttestationOrThrow } from '../_lib/agent/teeAttestationGate.js'
 import type { CoinbaseSmartWalletCall } from '../_lib/wallet/privyCoinbaseSmartWallet.js'

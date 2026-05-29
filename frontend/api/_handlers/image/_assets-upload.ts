@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { attachImageGenerationAsset, getImageGenerationProject } from '../../../server/_lib/image/imageProjects.js'
-import { checkRateLimit, getClientIp, rateLimitKey, RATE_LIMITS } from '../../../packages/server-core/src/index.js'
+import { checkRateLimit, getClientIp, rateLimitKey, RATE_LIMITS } from '@4626/server-core'
 import {
   decodeBase64Payload,
   getImageApiActor,

@@ -8,7 +8,7 @@ import { readBoundedJsonObjectBody,
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { runTrendLaunchSentinelProcess } from '../../../server/zora/trendLaunchSentinel.js'
 
 declare const process: { env: Record<string, string | undefined> }

@@ -13,7 +13,7 @@ import {
   readSessionFromRequest,
   setCors,
   setNoStore,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { getElizaLlmService } from '../../../server/agents/eliza/llm.js'
 
 export type CreativeMode = 'referral_og' | 'share_page_copy' | 'quest_reward' | 'metadata_bundle'

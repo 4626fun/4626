@@ -21,7 +21,7 @@ vi.mock('../../server/agents/eliza/llm.js', () => ({
 }))
 
 vi.mock('../../server/auth/_shared.js', async () => {
-  const actual = await vi.importActual<typeof import('../../packages/server-core/src/index.js')>('../../server/auth/_shared.js')
+  const actual = await vi.importActual<typeof import('@4626/server-core')>('../../server/auth/_shared.js')
   return {
     ...actual,
     readSessionFromRequest: readSessionFromRequestMock,

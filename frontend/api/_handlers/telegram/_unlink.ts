@@ -14,7 +14,7 @@ import {
   ensureTelegramTradingSchema,
   getTelegramLinkByUserId,
   revokeTelegramLink,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 import { verifyTelegramLinkApiSecret } from './webhook/services/access.js'
 import { asTrimmed, readTelegramUserId } from './webhook/utils.js'

@@ -17,7 +17,7 @@ import {
   setNoStore,
   getDbForCron,
   isDbConfigured,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { listActivationsForCreator } from '../../../server/_lib/creatorStrategy/activations.js'
 import { creatorHasSolanaShareMeshEntitlement } from '../../../server/_lib/creatorStrategy/solanaShareMeshProvisioning.js'

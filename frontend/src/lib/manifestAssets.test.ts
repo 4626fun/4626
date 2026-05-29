@@ -216,7 +216,13 @@ describe('public manifest assets', () => {
 
   it('points Base mini-app manifest iconUrl at the 1024px opaque tile asset', () => {
     const manifest = JSON.parse(readFileSync(farcasterManifestPath, 'utf8')) as {
-      miniapp?: { iconUrl?: string; splashImageUrl?: string; version?: string }
+      miniapp?: {
+        iconUrl?: string
+        splashImageUrl?: string
+        heroImageUrl?: string
+        screenshotUrls?: string[]
+        version?: string
+      }
     }
 
     expect(manifest.miniapp?.iconUrl).toBe(`https://4626.fun${BASE_APP_ICON_PATH}?v=${BRAND_ASSET_VERSION}`)

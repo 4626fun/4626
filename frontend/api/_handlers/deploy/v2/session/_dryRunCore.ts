@@ -26,7 +26,7 @@ import {
   checkRateLimit,
   RATE_LIMITS,
   rateLimitKey,
-} from '../../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
 import { ensureBatcherRegistryAuthorizationOnFork } from '../../../../../server/_lib/deploy/ensureBatcherRegistryAuthorization.js'

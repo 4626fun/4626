@@ -31,7 +31,7 @@ const {
   verifyKeeprJoinProofMock: vi.fn(),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   handleOptions: handleOptionsMock,
   readJsonBody: readJsonBodyMock,
   readBoundedJsonObjectBody: readBoundedJsonObjectBodyMock,

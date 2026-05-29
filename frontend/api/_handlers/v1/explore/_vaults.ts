@@ -10,7 +10,7 @@ import {
   RATE_LIMITS,
   checkRateLimit,
   rateLimitKey,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { ensureCreatorMetricsSchema } from '../../../../server/_lib/zora/creatorMetricsSync.js'
 import { ensureKeeprSchema } from '../../../../server/_lib/keepr/keeprSchema.js'

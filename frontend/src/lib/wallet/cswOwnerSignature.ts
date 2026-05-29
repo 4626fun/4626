@@ -1,11 +1,9 @@
 import {
   encodeAbiParameters,
-  hashTypedData,
   type Address,
   type Hex,
   type PublicClient,
 } from 'viem'
-import { base } from 'viem/chains'
 
 import { parseCoinbaseSignatureWrapper } from '@/lib/wallet/coinbaseSignatureWrapper'
 import { signRawEcdsaDigest } from '@/lib/wallet/signRawEcdsaDigest'

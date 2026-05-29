@@ -13,7 +13,7 @@ import {
   getClientIp,
   rateLimitKey,
   RATE_LIMITS,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 import { computeConfigHash, type KeeprConfigV1, upsertKeeprVault } from '../../../../server/_lib/keepr/keeprRegistry.js'

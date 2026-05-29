@@ -11,7 +11,7 @@ import {
   RATE_LIMITS,
   checkRateLimit,
   rateLimitKey,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { isKeeperWriteCommandText } from '../../../../server/agents/eliza/plugins/keeperOps/index.js'
 import { isHermitUserAllowed } from '../../../../server/_lib/hermit/policy.js'
 import { executeHermitCommand } from '../../../../server/_lib/hermit/skillRouter.js'

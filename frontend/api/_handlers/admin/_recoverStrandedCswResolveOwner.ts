@@ -40,7 +40,7 @@ import {
   readBoundedJsonObjectBody,
   logger,
   requireAdminApiToken,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { resolveOwnerWalletId } from '../../../server/_lib/wallet/privyOwnerWalletIdResolver.js'
 
 declare const process: { env: Record<string, string | undefined> }
