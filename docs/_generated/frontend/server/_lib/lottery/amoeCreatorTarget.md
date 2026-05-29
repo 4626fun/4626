@@ -12,7 +12,7 @@
 
 > **AmoeCreatorTargetResolution** = \{ `creatorCoin`: `` `0x${string}` ``; `ok`: `true`; `source`: `"request"` \| `"protocol-default"`; \} \| \{ `error`: `"invalid_creator_coin"` \| `"amoe_default_creator_coin_not_configured"`; `ok`: `false`; \}
 
-Defined in: [server/\_lib/lottery/amoeCreatorTarget.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeCreatorTarget.ts#L7)
+Defined in: [server/\_lib/lottery/amoeCreatorTarget.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeCreatorTarget.ts#L7)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/lottery/amoeCreatorTarget.ts:7](https://github.com/wen
 
 > **readProtocolAmoeCreatorCoin**(): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/lottery/amoeCreatorTarget.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeCreatorTarget.ts#L17)
+Defined in: [server/\_lib/lottery/amoeCreatorTarget.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeCreatorTarget.ts#L17)
 
 #### Returns
 
@@ -32,7 +32,7 @@ Defined in: [server/\_lib/lottery/amoeCreatorTarget.ts:17](https://github.com/we
 
 > **resolveAmoeCreatorTarget**(`value`): [`AmoeCreatorTargetResolution`](#amoecreatortargetresolution)
 
-Defined in: [server/\_lib/lottery/amoeCreatorTarget.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeCreatorTarget.ts#L25)
+Defined in: [server/\_lib/lottery/amoeCreatorTarget.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeCreatorTarget.ts#L25)
 
 #### Parameters
 

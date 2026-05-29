@@ -12,7 +12,7 @@
 
 > **InAppEnvironment** = `object`
 
-Defined in: [src/lib/wallet/inAppBrowser.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/inAppBrowser.ts#L33)
+Defined in: [src/lib/wallet/inAppBrowser.ts:33](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/inAppBrowser.ts#L33)
 
 Snapshot of the host environment we collect once per page render.  Pure
 data; no React hooks here so it's safe to call from anywhere.
@@ -23,7 +23,7 @@ data; no React hooks here so it's safe to call from anywhere.
 
 > **hasInjectedEthereum**: `boolean`
 
-Defined in: [src/lib/wallet/inAppBrowser.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/inAppBrowser.ts#L35)
+Defined in: [src/lib/wallet/inAppBrowser.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/inAppBrowser.ts#L35)
 
 True iff `window` and `window.ethereum` are available.
 
@@ -31,7 +31,7 @@ True iff `window` and `window.ethereum` are available.
 
 > **isAnyWalletInApp**: `boolean`
 
-Defined in: [src/lib/wallet/inAppBrowser.ts:45](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/inAppBrowser.ts#L45)
+Defined in: [src/lib/wallet/inAppBrowser.ts:45](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/inAppBrowser.ts#L45)
 
 True for any wallet-managed in-app browser.  Catch-all for unknown
 webviews that look enough like a wallet to warrant routing the user
@@ -41,7 +41,7 @@ out to a real browser.
 
 > **isBaseAppInApp**: `boolean`
 
-Defined in: [src/lib/wallet/inAppBrowser.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/inAppBrowser.ts#L39)
+Defined in: [src/lib/wallet/inAppBrowser.ts:39](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/inAppBrowser.ts#L39)
 
 True for the Base App / Toshi in-app browser.
 
@@ -49,7 +49,7 @@ True for the Base App / Toshi in-app browser.
 
 > **isCoinbaseInApp**: `boolean`
 
-Defined in: [src/lib/wallet/inAppBrowser.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/inAppBrowser.ts#L37)
+Defined in: [src/lib/wallet/inAppBrowser.ts:37](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/inAppBrowser.ts#L37)
 
 True for the Coinbase Wallet in-app browser (Android + iOS).
 
@@ -57,7 +57,7 @@ True for the Coinbase Wallet in-app browser (Android + iOS).
 
 > **userAgent**: `string`
 
-Defined in: [src/lib/wallet/inAppBrowser.ts:47](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/inAppBrowser.ts#L47)
+Defined in: [src/lib/wallet/inAppBrowser.ts:47](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/inAppBrowser.ts#L47)
 
 Lower-cased userAgent string for telemetry / debug copy.
 
@@ -67,7 +67,7 @@ Lower-cased userAgent string for telemetry / debug copy.
 
 > **detectInAppEnvironment**(): [`InAppEnvironment`](#inappenvironment) \| `null`
 
-Defined in: [src/lib/wallet/inAppBrowser.ts:54](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/inAppBrowser.ts#L54)
+Defined in: [src/lib/wallet/inAppBrowser.ts:54](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/inAppBrowser.ts#L54)
 
 Inspects `window` and the injected provider.  Returns `null` during SSR
 or when no `window` object is available.
@@ -82,7 +82,7 @@ or when no `window` object is available.
 
 > **externalBrowserUrlFor**(`path`): `string`
 
-Defined in: [src/lib/wallet/inAppBrowser.ts:154](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/inAppBrowser.ts#L154)
+Defined in: [src/lib/wallet/inAppBrowser.ts:154](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/inAppBrowser.ts#L154)
 
 Returns a `https://` URL the user can tap to open the current page in the
 device default browser, escaping the wallet's in-app webview.
@@ -112,7 +112,7 @@ it works on iOS too.
 
 > **isBaseAppInAppContext**(`env`): `boolean`
 
-Defined in: [src/lib/wallet/inAppBrowser.ts:109](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/inAppBrowser.ts#L109)
+Defined in: [src/lib/wallet/inAppBrowser.ts:109](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/inAppBrowser.ts#L109)
 
 #### Parameters
 

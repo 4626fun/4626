@@ -12,7 +12,7 @@
 
 > **DmRecipientResolution** = `object`
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:84](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/socialIdentity.ts#L84)
+Defined in: [src/lib/xmtp/socialIdentity.ts:85](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L85)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/xmtp/socialIdentity.ts:84](https://github.com/wenakita/4626
 
 > **address**: `` `0x${string}` ``
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:86](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/socialIdentity.ts#L86)
+Defined in: [src/lib/xmtp/socialIdentity.ts:87](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L87)
 
 Final recipient used for DM creation (after canonical wallet mapping).
 
@@ -28,19 +28,19 @@ Final recipient used for DM creation (after canonical wallet mapping).
 
 > **avatarUrl**: `string` \| `null`
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:92](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/socialIdentity.ts#L92)
+Defined in: [src/lib/xmtp/socialIdentity.ts:93](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L93)
 
 ##### basenameHint
 
 > **basenameHint**: `string` \| `null`
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:91](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/socialIdentity.ts#L91)
+Defined in: [src/lib/xmtp/socialIdentity.ts:92](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L92)
 
 ##### inputAddress
 
 > **inputAddress**: `` `0x${string}` ``
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:88](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/socialIdentity.ts#L88)
+Defined in: [src/lib/xmtp/socialIdentity.ts:89](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L89)
 
 Direct address resolved from the user input before canonical mapping.
 
@@ -48,7 +48,7 @@ Direct address resolved from the user input before canonical mapping.
 
 > **wasCanonicalRemap**: `boolean`
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:90](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/socialIdentity.ts#L90)
+Defined in: [src/lib/xmtp/socialIdentity.ts:91](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L91)
 
 True when recipient address was remapped to a canonical smart wallet.
 
@@ -58,7 +58,7 @@ True when recipient address was remapped to a canonical smart wallet.
 
 > **PeerChatPresentation** = `object`
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:50](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/socialIdentity.ts#L50)
+Defined in: [src/lib/xmtp/socialIdentity.ts:51](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L51)
 
 #### Properties
 
@@ -66,13 +66,13 @@ Defined in: [src/lib/xmtp/socialIdentity.ts:50](https://github.com/wenakita/4626
 
 > `optional` **imageUrl**: `string`
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/socialIdentity.ts#L52)
+Defined in: [src/lib/xmtp/socialIdentity.ts:53](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L53)
 
 ##### name
 
 > **name**: `string`
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/socialIdentity.ts#L51)
+Defined in: [src/lib/xmtp/socialIdentity.ts:52](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L52)
 
 ## Functions
 
@@ -80,7 +80,7 @@ Defined in: [src/lib/xmtp/socialIdentity.ts:51](https://github.com/wenakita/4626
 
 > **getBasenameAutocompleteCandidate**(`input`): `string` \| `null`
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:95](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/socialIdentity.ts#L95)
+Defined in: [src/lib/xmtp/socialIdentity.ts:96](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L96)
 
 #### Parameters
 
@@ -98,7 +98,7 @@ Defined in: [src/lib/xmtp/socialIdentity.ts:95](https://github.com/wenakita/4626
 
 > **getBasenameName**(`address`): `Promise`\<`string` \| `null`\>
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/socialIdentity.ts#L42)
+Defined in: [src/lib/xmtp/socialIdentity.ts:43](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L43)
 
 Chat identity helpers.
 
@@ -122,7 +122,7 @@ under CORS). This wrapper keeps the logic in one place.
 
 > **resolveDmRecipient**(`input`): `Promise`\<[`DmRecipientResolution`](#dmrecipientresolution) \| `null`\>
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:173](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/socialIdentity.ts#L173)
+Defined in: [src/lib/xmtp/socialIdentity.ts:174](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L174)
 
 Resolve a "new DM" recipient input into an EVM address.
 Supports raw addresses and basename handles (e.g. "akita", "@akita", "akita.base.eth").
@@ -143,7 +143,7 @@ Supports raw addresses and basename handles (e.g. "akita", "@akita", "akita.base
 
 > **resolvePeerChatPresentation**(`address`, `truncateFallback`): `Promise`\<[`PeerChatPresentation`](#peerchatpresentation)\>
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:59](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/socialIdentity.ts#L59)
+Defined in: [src/lib/xmtp/socialIdentity.ts:60](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L60)
 
 Resolve DM peer label + avatar for chat list/header at XMTP connect time.
 Uses Basename profile (display name + ENS avatar) with a bounded timeout.

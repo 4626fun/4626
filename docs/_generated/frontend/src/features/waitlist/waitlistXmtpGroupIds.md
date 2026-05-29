@@ -12,7 +12,7 @@
 
 > **collectWaitlistGroupIdCandidates**(`input`): `string`[]
 
-Defined in: [src/features/waitlist/waitlistXmtpGroupIds.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistXmtpGroupIds.ts#L1)
+Defined in: [src/features/waitlist/waitlistXmtpGroupIds.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistXmtpGroupIds.ts#L1)
 
 #### Parameters
 
@@ -42,9 +42,9 @@ Defined in: [src/features/waitlist/waitlistXmtpGroupIds.ts:1](https://github.com
 
 ### findWaitlistGroupConversation()
 
-> **findWaitlistGroupConversation**\<`T`\>(`conversations`, `groupIds`): `T` \| `null`
+> **findWaitlistGroupConversation**\<`T`\>(`conversations`, `groupIds`, `options?`): `T` \| `null`
 
-Defined in: [src/features/waitlist/waitlistXmtpGroupIds.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistXmtpGroupIds.ts#L27)
+Defined in: [src/features/waitlist/waitlistXmtpGroupIds.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistXmtpGroupIds.ts#L27)
 
 #### Type Parameters
 
@@ -61,6 +61,12 @@ Defined in: [src/features/waitlist/waitlistXmtpGroupIds.ts:27](https://github.co
 ##### groupIds
 
 readonly `string`[]
+
+##### options?
+
+###### groupName?
+
+`string` \| `null`
 
 #### Returns
 

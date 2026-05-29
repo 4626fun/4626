@@ -12,7 +12,7 @@
 
 > **PointsActivityRow** = `object`
 
-Defined in: [src/lib/waitlist/pointsActivity.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/pointsActivity.ts#L4)
+Defined in: [src/lib/waitlist/pointsActivity.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/pointsActivity.ts#L4)
 
 #### Properties
 
@@ -20,37 +20,37 @@ Defined in: [src/lib/waitlist/pointsActivity.ts:4](https://github.com/wenakita/4
 
 > **amount**: `number`
 
-Defined in: [src/lib/waitlist/pointsActivity.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/pointsActivity.ts#L8)
+Defined in: [src/lib/waitlist/pointsActivity.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/pointsActivity.ts#L8)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [src/lib/waitlist/pointsActivity.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/pointsActivity.ts#L10)
+Defined in: [src/lib/waitlist/pointsActivity.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/pointsActivity.ts#L10)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [src/lib/waitlist/pointsActivity.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/pointsActivity.ts#L5)
+Defined in: [src/lib/waitlist/pointsActivity.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/pointsActivity.ts#L5)
 
 ##### label
 
 > **label**: `string`
 
-Defined in: [src/lib/waitlist/pointsActivity.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/pointsActivity.ts#L7)
+Defined in: [src/lib/waitlist/pointsActivity.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/pointsActivity.ts#L7)
 
 ##### source
 
 > **source**: `string`
 
-Defined in: [src/lib/waitlist/pointsActivity.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/pointsActivity.ts#L6)
+Defined in: [src/lib/waitlist/pointsActivity.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/pointsActivity.ts#L6)
 
 ##### waitlistPoints
 
 > **waitlistPoints**: `number`
 
-Defined in: [src/lib/waitlist/pointsActivity.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/pointsActivity.ts#L9)
+Defined in: [src/lib/waitlist/pointsActivity.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/pointsActivity.ts#L9)
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: [src/lib/waitlist/pointsActivity.ts:9](https://github.com/wenakita/4
 
 > **WaitlistPointsActivityBatch** = `object`
 
-Defined in: [src/lib/waitlist/pointsActivity.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/pointsActivity.ts#L13)
+Defined in: [src/lib/waitlist/pointsActivity.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/pointsActivity.ts#L13)
 
 #### Properties
 
@@ -66,13 +66,13 @@ Defined in: [src/lib/waitlist/pointsActivity.ts:13](https://github.com/wenakita/
 
 > **activity**: [`PointsActivityRow`](#pointsactivityrow)[]
 
-Defined in: [src/lib/waitlist/pointsActivity.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/pointsActivity.ts#L15)
+Defined in: [src/lib/waitlist/pointsActivity.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/pointsActivity.ts#L15)
 
 ##### signupId
 
 > **signupId**: `number`
 
-Defined in: [src/lib/waitlist/pointsActivity.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/pointsActivity.ts#L14)
+Defined in: [src/lib/waitlist/pointsActivity.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/pointsActivity.ts#L14)
 
 ## Functions
 
@@ -80,7 +80,7 @@ Defined in: [src/lib/waitlist/pointsActivity.ts:14](https://github.com/wenakita/
 
 > **fetchWaitlistPointsActivity**(`limit`, `privyAccessToken?`): `Promise`\<[`WaitlistPointsActivityBatch`](#waitlistpointsactivitybatch) \| `null`\>
 
-Defined in: [src/lib/waitlist/pointsActivity.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/pointsActivity.ts#L18)
+Defined in: [src/lib/waitlist/pointsActivity.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/pointsActivity.ts#L18)
 
 #### Parameters
 

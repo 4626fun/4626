@@ -12,7 +12,7 @@
 
 > **buildShareTokenMetadata**(`__namedParameters`): `Promise`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [server/\_lib/infra/shareTokenMetadata.ts:99](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/shareTokenMetadata.ts#L99)
+Defined in: [server/\_lib/infra/shareTokenMetadata.ts:99](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/shareTokenMetadata.ts#L99)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/infra/shareTokenMetadata.ts:99](https://github.com/wen
 
 > **resolveShareTokenMetadataUrls**(`params`): `object`
 
-Defined in: [server/\_lib/infra/shareTokenMetadata.ts:61](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/shareTokenMetadata.ts#L61)
+Defined in: [server/\_lib/infra/shareTokenMetadata.ts:61](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/shareTokenMetadata.ts#L61)
 
 #### Parameters
 

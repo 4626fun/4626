@@ -12,7 +12,7 @@
 
 > **ExploreTransactions**(): `Element`
 
-Defined in: [src/pages/explore/ExploreTransactions.tsx:247](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/explore/ExploreTransactions.tsx#L247)
+Defined in: [src/pages/explore/ExploreTransactions.tsx:247](https://github.com/wenakita/4626/blob/main/frontend/src/pages/explore/ExploreTransactions.tsx#L247)
 
 #### Returns
 

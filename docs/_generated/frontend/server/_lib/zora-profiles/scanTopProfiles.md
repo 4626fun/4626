@@ -12,7 +12,7 @@
 
 > **ProfileScanResult** = `object`
 
-Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/scanTopProfiles.ts#L15)
+Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/scanTopProfiles.ts#L15)
 
 #### Properties
 
@@ -20,31 +20,31 @@ Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:15](https://github.co
 
 > **coinsFetched**: `number`
 
-Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/scanTopProfiles.ts#L16)
+Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/scanTopProfiles.ts#L16)
 
 ##### listType
 
 > **listType**: `string`
 
-Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/scanTopProfiles.ts#L20)
+Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/scanTopProfiles.ts#L20)
 
 ##### pages
 
 > **pages**: `number`
 
-Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/scanTopProfiles.ts#L19)
+Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/scanTopProfiles.ts#L19)
 
 ##### profilesUpserted
 
 > **profilesUpserted**: `number`
 
-Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/scanTopProfiles.ts#L17)
+Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/scanTopProfiles.ts#L17)
 
 ##### skippedNoHandle
 
 > **skippedNoHandle**: `number`
 
-Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/scanTopProfiles.ts#L18)
+Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/scanTopProfiles.ts#L18)
 
 ## Functions
 
@@ -52,7 +52,7 @@ Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:18](https://github.co
 
 > **chunkProfileRows**\<`T`\>(`items`, `batchSize`): `T`[][]
 
-Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:72](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/scanTopProfiles.ts#L72)
+Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:72](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/scanTopProfiles.ts#L72)
 
 #### Type Parameters
 
@@ -80,7 +80,7 @@ Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:72](https://github.co
 
 > **scanTopProfilesFromExplore**(`db`, `apiKey`): `Promise`\<[`ProfileScanResult`](#profilescanresult)\>
 
-Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:92](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/scanTopProfiles.ts#L92)
+Defined in: [server/\_lib/zora-profiles/scanTopProfiles.ts:92](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/scanTopProfiles.ts#L92)
 
 #### Parameters
 

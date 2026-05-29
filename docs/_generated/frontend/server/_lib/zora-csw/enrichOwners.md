@@ -12,7 +12,7 @@
 
 > **EnrichedOwners** = `object`
 
-Defined in: [server/\_lib/zora-csw/enrichOwners.ts:50](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/enrichOwners.ts#L50)
+Defined in: [server/\_lib/zora-csw/enrichOwners.ts:50](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/enrichOwners.ts#L50)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/zora-csw/enrichOwners.ts:50](https://github.com/wenaki
 
 > **addressOwners**: `Address`[]
 
-Defined in: [server/\_lib/zora-csw/enrichOwners.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/enrichOwners.ts#L52)
+Defined in: [server/\_lib/zora-csw/enrichOwners.ts:52](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/enrichOwners.ts#L52)
 
 EOA owners currently installed on the CSW (checksummed).
 
@@ -28,7 +28,7 @@ EOA owners currently installed on the CSW (checksummed).
 
 > **nextOwnerIndex**: `bigint` \| `null`
 
-Defined in: [server/\_lib/zora-csw/enrichOwners.ts:56](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/enrichOwners.ts#L56)
+Defined in: [server/\_lib/zora-csw/enrichOwners.ts:56](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/enrichOwners.ts#L56)
 
 Result of `nextOwnerIndex` at read time; null if the call reverted.
 
@@ -36,7 +36,7 @@ Result of `nextOwnerIndex` at read time; null if the call reverted.
 
 > **passkeyOwnerCount**: `number`
 
-Defined in: [server/\_lib/zora-csw/enrichOwners.ts:54](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/enrichOwners.ts#L54)
+Defined in: [server/\_lib/zora-csw/enrichOwners.ts:54](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/enrichOwners.ts#L54)
 
 Passkey owners (raw bytes); included for completeness, not stored.
 
@@ -44,7 +44,7 @@ Passkey owners (raw bytes); included for completeness, not stored.
 
 > **removedOwnersCount**: `bigint` \| `null`
 
-Defined in: [server/\_lib/zora-csw/enrichOwners.ts:58](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/enrichOwners.ts#L58)
+Defined in: [server/\_lib/zora-csw/enrichOwners.ts:58](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/enrichOwners.ts#L58)
 
 Result of `removedOwnersCount` at read time; null if the call reverted.
 
@@ -54,7 +54,7 @@ Result of `removedOwnersCount` at read time; null if the call reverted.
 
 > `const` **MAX\_OWNER\_INDEX**: `64` = `64`
 
-Defined in: [server/\_lib/zora-csw/enrichOwners.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/enrichOwners.ts#L48)
+Defined in: [server/\_lib/zora-csw/enrichOwners.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/enrichOwners.ts#L48)
 
 Hard ceiling on owner enumeration — defends against pathological loops.
 
@@ -64,7 +64,7 @@ Hard ceiling on owner enumeration — defends against pathological loops.
 
 > **enrichCswOwners**(`client`, `cswAddress`): `Promise`\<[`EnrichedOwners`](#enrichedowners)\>
 
-Defined in: [server/\_lib/zora-csw/enrichOwners.ts:76](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/enrichOwners.ts#L76)
+Defined in: [server/\_lib/zora-csw/enrichOwners.ts:76](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/enrichOwners.ts#L76)
 
 Enumerate current owners of a Coinbase Smart Wallet.
 

@@ -12,7 +12,7 @@
 
 > **HermitAvatarOptions** = `object`
 
-Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/hermitAvatar.ts#L23)
+Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/hermitAvatar.ts#L23)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:23](https://github.com/wenaki
 
 > `optional` **signatureText**: `string`
 
-Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/hermitAvatar.ts#L25)
+Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/hermitAvatar.ts#L25)
 
 ##### size?
 
 > `optional` **size**: `number`
 
-Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/hermitAvatar.ts#L24)
+Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/hermitAvatar.ts#L24)
 
 ## Variables
 
@@ -34,7 +34,7 @@ Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:24](https://github.com/wenaki
 
 > `const` **HERMIT\_AVATAR\_DEFAULT\_SIGNATURE**: `"Agent Hermit 4626"` = `DEFAULT_SIGNATURE`
 
-Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:116](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/hermitAvatar.ts#L116)
+Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:116](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/hermitAvatar.ts#L116)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:116](https://github.com/wenak
 
 > `const` **HERMIT\_AVATAR\_SIZE\_BOUNDS**: `object`
 
-Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:115](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/hermitAvatar.ts#L115)
+Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:115](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/hermitAvatar.ts#L115)
 
 #### Type Declaration
 
@@ -64,7 +64,7 @@ Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:115](https://github.com/wenak
 
 > **renderHermitAvatarBuffer**(`opts`): `Promise`\<`Buffer`\<`ArrayBufferLike`\>\>
 
-Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:83](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/hermitAvatar.ts#L83)
+Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:83](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/hermitAvatar.ts#L83)
 
 #### Parameters
 
@@ -82,7 +82,7 @@ Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:83](https://github.com/wenaki
 
 > **renderHermitAvatarDataUrl**(`opts`): `Promise`\<`string`\>
 
-Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:110](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/hermitAvatar.ts#L110)
+Defined in: [server/\_lib/alfaclub/hermitAvatar.ts:110](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/hermitAvatar.ts#L110)
 
 #### Parameters
 

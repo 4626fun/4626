@@ -12,7 +12,7 @@
 
 > `const` **\_\_internal**: `object`
 
-Defined in: [server/\_lib/wallet/subAccountAddress.ts:94](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/subAccountAddress.ts#L94)
+Defined in: [server/\_lib/wallet/subAccountAddress.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountAddress.ts#L94)
 
 #### Type Declaration
 
@@ -43,7 +43,7 @@ factory's `bytes[] owners` input — a 32-byte ABI-encoded `address`.
 
 > `const` **CSW\_FACTORY\_BASE**: `Address` = `'0x0BA5ED0c6AA8c49038F819E587E2633c4A9F428a'`
 
-Defined in: [server/\_lib/wallet/subAccountAddress.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/subAccountAddress.ts#L23)
+Defined in: [server/\_lib/wallet/subAccountAddress.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountAddress.ts#L23)
 
 Coinbase Smart Wallet v1 factory on Base mainnet.
 
@@ -53,7 +53,7 @@ Coinbase Smart Wallet v1 factory on Base mainnet.
 
 > **computeSubAccountAddress**(`params`): `Promise`\<`string`\>
 
-Defined in: [server/\_lib/wallet/subAccountAddress.ts:76](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/subAccountAddress.ts#L76)
+Defined in: [server/\_lib/wallet/subAccountAddress.ts:76](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountAddress.ts#L76)
 
 Compute the counterfactual CSW sub-account address via the factory's
 `getAddress(owners, nonce)` view call. The factory derives the deploy
@@ -91,7 +91,7 @@ safest way to get the exact value that the first-op initCode will produce.
 
 > **computeSubAccountSalt**(`params`): `` `0x${string}` ``
 
-Defined in: [server/\_lib/wallet/subAccountAddress.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/subAccountAddress.ts#L52)
+Defined in: [server/\_lib/wallet/subAccountAddress.ts:52](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountAddress.ts#L52)
 
 Deterministic salt for a profile's sub-account. Stable across re-provisioning
 attempts so an interrupted flow resumes to the same counterfactual address.

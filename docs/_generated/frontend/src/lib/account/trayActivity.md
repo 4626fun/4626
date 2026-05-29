@@ -12,7 +12,7 @@
 
 > **AccountTrayActivityBatch** = `object`
 
-Defined in: [src/lib/account/trayActivity.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L14)
+Defined in: [src/lib/account/trayActivity.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L14)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/lib/account/trayActivity.ts:14](https://github.com/wenakita/462
 
 > **asOf**: `number`
 
-Defined in: [src/lib/account/trayActivity.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L15)
+Defined in: [src/lib/account/trayActivity.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L15)
 
 ##### merged
 
 > **merged**: [`TrayOnchainActivityRow`](#trayonchainactivityrow)[]
 
-Defined in: [src/lib/account/trayActivity.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L17)
+Defined in: [src/lib/account/trayActivity.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L17)
 
 ##### results
 
 > **results**: `Record`\<`string`, [`TrayOnchainActivityRow`](#trayonchainactivityrow)[]\>
 
-Defined in: [src/lib/account/trayActivity.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L16)
+Defined in: [src/lib/account/trayActivity.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L16)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/lib/account/trayActivity.ts:16](https://github.com/wenakita/462
 
 > **TrayActivityRow** = `object`
 
-Defined in: [src/lib/account/trayActivity.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L20)
+Defined in: [src/lib/account/trayActivity.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L20)
 
 #### Properties
 
@@ -48,55 +48,55 @@ Defined in: [src/lib/account/trayActivity.ts:20](https://github.com/wenakita/462
 
 > **failed**: `boolean`
 
-Defined in: [src/lib/account/trayActivity.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L29)
+Defined in: [src/lib/account/trayActivity.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L29)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [src/lib/account/trayActivity.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L21)
+Defined in: [src/lib/account/trayActivity.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L21)
 
 ##### source
 
 > **source**: `"onchain"` \| `"app"`
 
-Defined in: [src/lib/account/trayActivity.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L22)
+Defined in: [src/lib/account/trayActivity.ts:22](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L22)
 
 ##### subtitle
 
 > **subtitle**: `string`
 
-Defined in: [src/lib/account/trayActivity.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L27)
+Defined in: [src/lib/account/trayActivity.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L27)
 
 ##### timestampMs
 
 > **timestampMs**: `number`
 
-Defined in: [src/lib/account/trayActivity.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L28)
+Defined in: [src/lib/account/trayActivity.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L28)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [src/lib/account/trayActivity.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L26)
+Defined in: [src/lib/account/trayActivity.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L26)
 
 ##### txHash
 
 > **txHash**: `string` \| `null`
 
-Defined in: [src/lib/account/trayActivity.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L23)
+Defined in: [src/lib/account/trayActivity.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L23)
 
 ##### walletAddress
 
 > **walletAddress**: `string`
 
-Defined in: [src/lib/account/trayActivity.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L24)
+Defined in: [src/lib/account/trayActivity.ts:24](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L24)
 
 ##### walletLabel
 
 > **walletLabel**: `string`
 
-Defined in: [src/lib/account/trayActivity.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L25)
+Defined in: [src/lib/account/trayActivity.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L25)
 
 ***
 
@@ -104,7 +104,7 @@ Defined in: [src/lib/account/trayActivity.ts:25](https://github.com/wenakita/462
 
 > **TrayOnchainActivityRow** = `object`
 
-Defined in: [src/lib/account/trayActivity.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L4)
+Defined in: [src/lib/account/trayActivity.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L4)
 
 #### Properties
 
@@ -112,43 +112,43 @@ Defined in: [src/lib/account/trayActivity.ts:4](https://github.com/wenakita/4626
 
 > **failed**: `boolean`
 
-Defined in: [src/lib/account/trayActivity.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L11)
+Defined in: [src/lib/account/trayActivity.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L11)
 
 ##### kind
 
 > **kind**: `"swap"` \| `"transfer"` \| `"contract"` \| `"unknown"`
 
-Defined in: [src/lib/account/trayActivity.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L10)
+Defined in: [src/lib/account/trayActivity.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L10)
 
 ##### subtitle
 
 > **subtitle**: `string`
 
-Defined in: [src/lib/account/trayActivity.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L9)
+Defined in: [src/lib/account/trayActivity.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L9)
 
 ##### timestampMs
 
 > **timestampMs**: `number`
 
-Defined in: [src/lib/account/trayActivity.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L7)
+Defined in: [src/lib/account/trayActivity.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L7)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [src/lib/account/trayActivity.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L8)
+Defined in: [src/lib/account/trayActivity.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L8)
 
 ##### txHash
 
 > **txHash**: `string`
 
-Defined in: [src/lib/account/trayActivity.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L5)
+Defined in: [src/lib/account/trayActivity.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L5)
 
 ##### walletAddress
 
 > **walletAddress**: `string`
 
-Defined in: [src/lib/account/trayActivity.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L6)
+Defined in: [src/lib/account/trayActivity.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L6)
 
 ## Functions
 
@@ -156,7 +156,7 @@ Defined in: [src/lib/account/trayActivity.ts:6](https://github.com/wenakita/4626
 
 > **basescanTxUrl**(`txHash`): `string`
 
-Defined in: [src/lib/account/trayActivity.ts:77](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L77)
+Defined in: [src/lib/account/trayActivity.ts:77](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L77)
 
 #### Parameters
 
@@ -174,7 +174,7 @@ Defined in: [src/lib/account/trayActivity.ts:77](https://github.com/wenakita/462
 
 > **buildMergedTrayActivityRows**(`params`): [`TrayActivityRow`](#trayactivityrow)[]
 
-Defined in: [src/lib/account/trayActivity.ts:81](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L81)
+Defined in: [src/lib/account/trayActivity.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L81)
 
 #### Parameters
 
@@ -206,7 +206,7 @@ Defined in: [src/lib/account/trayActivity.ts:81](https://github.com/wenakita/462
 
 > **fetchAccountTrayActivityBatch**(`params`): `Promise`\<[`AccountTrayActivityBatch`](#accounttrayactivitybatch) \| `null`\>
 
-Defined in: [src/lib/account/trayActivity.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L42)
+Defined in: [src/lib/account/trayActivity.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L42)
 
 #### Parameters
 
@@ -230,7 +230,7 @@ Defined in: [src/lib/account/trayActivity.ts:42](https://github.com/wenakita/462
 
 > **formatTrayActivityWhen**(`timestampMs`): `string`
 
-Defined in: [src/lib/account/trayActivity.ts:64](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/account/trayActivity.ts#L64)
+Defined in: [src/lib/account/trayActivity.ts:64](https://github.com/wenakita/4626/blob/main/frontend/src/lib/account/trayActivity.ts#L64)
 
 #### Parameters
 

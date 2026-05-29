@@ -12,7 +12,7 @@
 
 > **VerifiedTweet** = `object`
 
-Defined in: [server/twitter/verifyTweet.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/twitter/verifyTweet.ts#L4)
+Defined in: [server/twitter/verifyTweet.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/verifyTweet.ts#L4)
 
 #### Properties
 
@@ -20,31 +20,31 @@ Defined in: [server/twitter/verifyTweet.ts:4](https://github.com/wenakita/4626/b
 
 > **authorId**: `string` \| `null`
 
-Defined in: [server/twitter/verifyTweet.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/twitter/verifyTweet.ts#L8)
+Defined in: [server/twitter/verifyTweet.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/verifyTweet.ts#L8)
 
 ##### authorUsername
 
 > **authorUsername**: `string` \| `null`
 
-Defined in: [server/twitter/verifyTweet.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/twitter/verifyTweet.ts#L9)
+Defined in: [server/twitter/verifyTweet.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/verifyTweet.ts#L9)
 
 ##### canonicalUrl
 
 > **canonicalUrl**: `string`
 
-Defined in: [server/twitter/verifyTweet.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/twitter/verifyTweet.ts#L6)
+Defined in: [server/twitter/verifyTweet.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/verifyTweet.ts#L6)
 
 ##### text
 
 > **text**: `string`
 
-Defined in: [server/twitter/verifyTweet.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/twitter/verifyTweet.ts#L7)
+Defined in: [server/twitter/verifyTweet.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/verifyTweet.ts#L7)
 
 ##### tweetId
 
 > **tweetId**: `string`
 
-Defined in: [server/twitter/verifyTweet.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/twitter/verifyTweet.ts#L5)
+Defined in: [server/twitter/verifyTweet.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/verifyTweet.ts#L5)
 
 ## Functions
 
@@ -52,7 +52,7 @@ Defined in: [server/twitter/verifyTweet.ts:5](https://github.com/wenakita/4626/b
 
 > **extractTweetIdFromInput**(`params`): `string` \| `null`
 
-Defined in: [server/twitter/verifyTweet.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/twitter/verifyTweet.ts#L12)
+Defined in: [server/twitter/verifyTweet.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/verifyTweet.ts#L12)
 
 #### Parameters
 
@@ -76,7 +76,7 @@ Defined in: [server/twitter/verifyTweet.ts:12](https://github.com/wenakita/4626/
 
 > **verifyTweetForAmoe**(`params`): `Promise`\<[`VerifiedTweet`](#verifiedtweet)\>
 
-Defined in: [server/twitter/verifyTweet.ts:50](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/twitter/verifyTweet.ts#L50)
+Defined in: [server/twitter/verifyTweet.ts:50](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/verifyTweet.ts#L50)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **AccountTrayPointsPayload** = `object`
 
-Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountTrayPoints.ts#L20)
+Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountTrayPoints.ts#L20)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:20](https://github.com
 
 > **activity**: [`PointsActivityRow`](waitlistScoring.md#pointsactivityrow)[]
 
-Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountTrayPoints.ts#L39)
+Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountTrayPoints.ts#L42)
 
 ##### leaderboardEligible
 
 > **leaderboardEligible**: `boolean`
 
-Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountTrayPoints.ts#L24)
+Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountTrayPoints.ts#L24)
 
 True when profile has a real verified email and is not tombstoned (leaderboard pool).
 
@@ -34,11 +34,19 @@ True when profile has a real verified email and is not tombstoned (leaderboard p
 
 > **points**: `object`
 
-Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountTrayPoints.ts#L25)
+Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountTrayPoints.ts#L25)
+
+###### agent
+
+> **agent**: `number`
 
 ###### bonus
 
 > **bonus**: `number`
+
+###### checkins
+
+> **checkins**: `number`
 
 ###### csw
 
@@ -47,6 +55,10 @@ Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:25](https://github.com
 ###### invite
 
 > **invite**: `number`
+
+###### links
+
+> **links**: `number`
 
 ###### signup
 
@@ -68,7 +80,7 @@ Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:25](https://github.com
 
 > **rank**: `object`
 
-Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:34](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountTrayPoints.ts#L34)
+Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountTrayPoints.ts#L37)
 
 ###### invite
 
@@ -82,19 +94,19 @@ Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:34](https://github.com
 
 > **signupId**: `number`
 
-Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountTrayPoints.ts#L21)
+Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountTrayPoints.ts#L21)
 
 ##### tier
 
 > **tier**: `number`
 
-Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountTrayPoints.ts#L22)
+Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountTrayPoints.ts#L22)
 
 ##### totalCount
 
 > **totalCount**: `number`
 
-Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountTrayPoints.ts#L38)
+Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountTrayPoints.ts#L41)
 
 ## Variables
 
@@ -102,7 +114,7 @@ Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:38](https://github.com
 
 > `const` **ACCOUNT\_TRAY\_POINTS\_ACTIVITY\_LIMIT\_DEFAULT**: `40` = `40`
 
-Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountTrayPoints.ts#L17)
+Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountTrayPoints.ts#L17)
 
 ***
 
@@ -110,7 +122,7 @@ Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:17](https://github.com
 
 > `const` **ACCOUNT\_TRAY\_POINTS\_ACTIVITY\_LIMIT\_MAX**: `100` = `100`
 
-Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountTrayPoints.ts#L18)
+Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountTrayPoints.ts#L18)
 
 ***
 
@@ -118,7 +130,7 @@ Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:18](https://github.com
 
 > `const` **EMPTY\_ACCOUNT\_TRAY\_POINTS**: [`AccountTrayPointsPayload`](#accounttraypointspayload)
 
-Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountTrayPoints.ts#L42)
+Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountTrayPoints.ts#L45)
 
 ## Functions
 
@@ -126,7 +138,7 @@ Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:42](https://github.com
 
 > **buildAccountTrayPointsForPrivyUser**(`db`, `privyUserId`, `limit`): `Promise`\<[`AccountTrayPointsPayload`](#accounttraypointspayload)\>
 
-Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:129](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountTrayPoints.ts#L129)
+Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:132](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountTrayPoints.ts#L132)
 
 Privy-only entry: resolves canonical profile id (alias-aware), then builds tray payload.
 
@@ -154,7 +166,7 @@ Privy-only entry: resolves canonical profile id (alias-aware), then builds tray 
 
 > **buildAccountTrayPointsPayload**(`db`, `signupId`, `limit`): `Promise`\<[`AccountTrayPointsPayload`](#accounttraypointspayload)\>
 
-Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:90](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountTrayPoints.ts#L90)
+Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:93](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountTrayPoints.ts#L93)
 
 Canonical tray payload: one Privy-resolved profile, one weighted breakdown, optional rank.
 Rank/totalCount are withheld unless the profile is leaderboard-eligible (verified email, live row).
@@ -183,7 +195,7 @@ Rank/totalCount are withheld unless the profile is leaderboard-eligible (verifie
 
 > **clampAccountTrayPointsActivityLimit**(`limit`): `number`
 
-Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountTrayPoints.ts#L52)
+Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:55](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountTrayPoints.ts#L55)
 
 #### Parameters
 
@@ -201,7 +213,7 @@ Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:52](https://github.com
 
 > **readProfileLeaderboardEligibility**(`db`, `signupId`): `Promise`\<\{ `leaderboardEligible`: `boolean`; \}\>
 
-Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:67](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountTrayPoints.ts#L67)
+Defined in: [server/\_lib/onboarding/accountTrayPoints.ts:70](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountTrayPoints.ts#L70)
 
 #### Parameters
 

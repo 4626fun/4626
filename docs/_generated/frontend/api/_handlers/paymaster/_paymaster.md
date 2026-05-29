@@ -12,7 +12,7 @@
 
 > `const` **DEFAULT\_PROTOCOL\_REWARDS**: `string`
 
-Defined in: [api/\_handlers/paymaster/\_paymaster.ts:1039](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/paymaster/_paymaster.ts#L1039)
+Defined in: [api/\_handlers/paymaster/\_paymaster.ts:1042](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/paymaster/_paymaster.ts#L1042)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/paymaster/\_paymaster.ts:1039](https://github.com/we
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/paymaster/\_paymaster.ts:3342](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/paymaster/_paymaster.ts#L3342)
+Defined in: [api/\_handlers/paymaster/\_paymaster.ts:3402](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/paymaster/_paymaster.ts#L3402)
 
 #### Parameters
 
@@ -42,7 +42,7 @@ Defined in: [api/\_handlers/paymaster/\_paymaster.ts:3342](https://github.com/we
 
 > **validatePayoutRouterProtocolRewardsArg**(`protocolRewardsArg`): `"payout_router_protocol_rewards_mismatch"` \| `null`
 
-Defined in: [api/\_handlers/paymaster/\_paymaster.ts:1050](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/paymaster/_paymaster.ts#L1050)
+Defined in: [api/\_handlers/paymaster/\_paymaster.ts:1053](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/paymaster/_paymaster.ts#L1053)
 
 4626-audit-2026-04-25 review: validates the 7th constructor arg of a
 sponsored PayoutRouter deploy. Returns null if accepted, otherwise an
@@ -68,7 +68,7 @@ paymaster mock stack.
 
 > **validateSponsoredSmartWalletCalls**(`params`): `Promise`\<\{ `expectedCreatorToken`: `string` \| `null`; `mode`: `string`; \}\>
 
-Defined in: [api/\_handlers/paymaster/\_paymaster.ts:1388](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/paymaster/_paymaster.ts#L1388)
+Defined in: [api/\_handlers/paymaster/\_paymaster.ts:1391](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/paymaster/_paymaster.ts#L1391)
 
 #### Parameters
 

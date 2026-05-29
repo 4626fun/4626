@@ -12,7 +12,7 @@
 
 > **ExploreContent**(): `Element`
 
-Defined in: [src/pages/explore/ExploreContent.tsx:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/explore/ExploreContent.tsx#L37)
+Defined in: [src/pages/explore/ExploreContent.tsx:37](https://github.com/wenakita/4626/blob/main/frontend/src/pages/explore/ExploreContent.tsx#L37)
 
 #### Returns
 

@@ -12,7 +12,7 @@
 
 > **CopyableAddress**(`__namedParameters`): `Element`
 
-Defined in: [src/components/account/CopyableAddress.tsx:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/CopyableAddress.tsx#L14)
+Defined in: [src/components/account/CopyableAddress.tsx:14](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/CopyableAddress.tsx#L14)
 
 Display an Ethereum address in short form with a copy-to-clipboard
 action. Shows the full address in a tooltip on hover; click anywhere
@@ -42,6 +42,33 @@ short hex shifts to a subtle secondary slot.
 ###### variant?
 
 `"default"` \| `"muted"` \| `"pill"` = `'default'`
+
+#### Returns
+
+`Element`
+
+***
+
+### InlineAddressCopyButton()
+
+> **InlineAddressCopyButton**(`__namedParameters`): `Element`
+
+Defined in: [src/components/account/CopyableAddress.tsx:76](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/CopyableAddress.tsx#L76)
+
+Compact copy control for placing next to a primary address label.
+Copies the full address; shows a brief check after success.
+
+#### Parameters
+
+##### \_\_namedParameters
+
+###### address
+
+`string`
+
+###### className?
+
+`string`
 
 #### Returns
 

@@ -12,7 +12,7 @@
 
 > **ProfileRefreshTickResult** = \{ `cswIndexRowsUpdated`: `number`; `ok`: `true`; `reason?`: `string`; `scan`: \{ `coinsFetched`: `number`; `listType`: `string`; `pages`: `number`; `profilesUpserted`: `number`; `skippedNoHandle`: `number`; \} \| `null`; `tick`: `"refreshed"` \| `"skipped"`; `wallets`: \{ `failed`: `number`; `selected`: `number`; `updated`: `number`; `withSmartWallet`: `number`; \} \| `null`; \} \| \{ `error`: `string`; `ok`: `false`; `tick`: `"errored"`; \}
 
-Defined in: [server/\_lib/zora-profiles/refreshProfiles.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/refreshProfiles.ts#L15)
+Defined in: [server/\_lib/zora-profiles/refreshProfiles.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/refreshProfiles.ts#L15)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/zora-profiles/refreshProfiles.ts:15](https://github.co
 
 > **runZoraProfilesRefreshTick**(): `Promise`\<[`ProfileRefreshTickResult`](#profilerefreshtickresult)\>
 
-Defined in: [server/\_lib/zora-profiles/refreshProfiles.ts:58](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/refreshProfiles.ts#L58)
+Defined in: [server/\_lib/zora-profiles/refreshProfiles.ts:58](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/refreshProfiles.ts#L58)
 
 #### Returns
 

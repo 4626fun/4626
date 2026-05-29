@@ -12,7 +12,7 @@
 
 > **dedupeReferralCodeCandidates**(`values`): `string`[]
 
-Defined in: [server/\_lib/onboarding/referrals.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/referrals.ts#L29)
+Defined in: [server/\_lib/onboarding/referrals.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/referrals.ts#L29)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/onboarding/referrals.ts:29](https://github.com/wenakit
 
 > **ensureReferralsSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/onboarding/referrals.ts:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/referrals.ts#L68)
+Defined in: [server/\_lib/onboarding/referrals.ts:68](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/referrals.ts#L68)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/onboarding/referrals.ts:68](https://github.com/wenakit
 
 > **getClientIp**(`req`): `string`
 
-Defined in: [server/\_lib/onboarding/referrals.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/referrals.ts#L41)
+Defined in: [server/\_lib/onboarding/referrals.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/referrals.ts#L41)
 
 #### Parameters
 
@@ -68,7 +68,7 @@ Defined in: [server/\_lib/onboarding/referrals.ts:41](https://github.com/wenakit
 
 > **getUserAgent**(`req`): `string`
 
-Defined in: [server/\_lib/onboarding/referrals.ts:55](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/referrals.ts#L55)
+Defined in: [server/\_lib/onboarding/referrals.ts:55](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/referrals.ts#L55)
 
 #### Parameters
 
@@ -88,7 +88,7 @@ Defined in: [server/\_lib/onboarding/referrals.ts:55](https://github.com/wenakit
 
 > **hashForAttribution**(`value`): `string` \| `null`
 
-Defined in: [server/\_lib/onboarding/referrals.ts:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/referrals.ts#L60)
+Defined in: [server/\_lib/onboarding/referrals.ts:60](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/referrals.ts#L60)
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: [server/\_lib/onboarding/referrals.ts:60](https://github.com/wenakit
 
 > **normalizeReferralCode**(`input`): `string`
 
-Defined in: [server/\_lib/onboarding/referrals.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/referrals.ts#L10)
+Defined in: [server/\_lib/onboarding/referrals.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/referrals.ts#L10)
 
 #### Parameters
 
@@ -124,7 +124,7 @@ Defined in: [server/\_lib/onboarding/referrals.ts:10](https://github.com/wenakit
 
 > **referralCodeFromEmail**(`email`): `string` \| `null`
 
-Defined in: [server/\_lib/onboarding/referrals.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/referrals.ts#L21)
+Defined in: [server/\_lib/onboarding/referrals.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/referrals.ts#L21)
 
 #### Parameters
 

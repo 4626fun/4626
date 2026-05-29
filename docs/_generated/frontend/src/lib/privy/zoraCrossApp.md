@@ -12,7 +12,7 @@
 
 > **isUnauthorizedCrossAppLinkError**(`error`): `boolean`
 
-Defined in: [src/lib/privy/zoraCrossApp.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/privy/zoraCrossApp.ts#L16)
+Defined in: [src/lib/privy/zoraCrossApp.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/zoraCrossApp.ts#L16)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/lib/privy/zoraCrossApp.ts:16](https://github.com/wenakita/4626/
 
 > **performZoraCrossAppAuth**(`params`): `Promise`\<`void`\>
 
-Defined in: [src/lib/privy/zoraCrossApp.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/privy/zoraCrossApp.ts#L39)
+Defined in: [src/lib/privy/zoraCrossApp.ts:39](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/zoraCrossApp.ts#L39)
 
 #### Parameters
 

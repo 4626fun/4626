@@ -12,7 +12,7 @@
 
 > `const` **keeprOpsPlugin**: `Plugin`
 
-Defined in: [server/agents/eliza/plugins/kpr/index.ts:825](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/kpr/index.ts#L825)
+Defined in: [server/agents/eliza/plugins/kpr/index.ts:825](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/kpr/index.ts#L825)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/agents/eliza/plugins/kpr/index.ts:825](https://github.com/we
 
 > `const` **KPR\_WRITE\_SUBCOMMAND\_PREFIXES**: readonly \[`"tend"`, `"report"`, `"settle"`, `"settle-fees"`, `"relay-entries"`, `"relay-winners"`, `"graduate"`, `"queue"`\]
 
-Defined in: [server/agents/eliza/plugins/kpr/index.ts:146](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/kpr/index.ts#L146)
+Defined in: [server/agents/eliza/plugins/kpr/index.ts:146](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/kpr/index.ts#L146)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [server/agents/eliza/plugins/kpr/index.ts:146](https://github.com/we
 
 > **isKeeperWriteCommandText**(`text`): `boolean`
 
-Defined in: [server/agents/eliza/plugins/kpr/index.ts:157](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/kpr/index.ts#L157)
+Defined in: [server/agents/eliza/plugins/kpr/index.ts:157](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/kpr/index.ts#L157)
 
 #### Parameters
 

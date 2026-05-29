@@ -12,7 +12,7 @@
 
 > **AccountContextProvider**(`props`): `Element`
 
-Defined in: [src/wallet/accountContext/useAccountContext.tsx:50](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/wallet/accountContext/useAccountContext.tsx#L50)
+Defined in: [src/wallet/accountContext/useAccountContext.tsx:51](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/accountContext/useAccountContext.tsx#L51)
 
 #### Parameters
 
@@ -32,7 +32,7 @@ Defined in: [src/wallet/accountContext/useAccountContext.tsx:50](https://github.
 
 > **useAccountContext**(): `AccountContextValue`
 
-Defined in: [src/wallet/accountContext/useAccountContext.tsx:304](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/wallet/accountContext/useAccountContext.tsx#L304)
+Defined in: [src/wallet/accountContext/useAccountContext.tsx:314](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/accountContext/useAccountContext.tsx#L314)
 
 #### Returns
 

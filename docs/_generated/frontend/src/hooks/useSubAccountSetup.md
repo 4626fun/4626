@@ -12,7 +12,7 @@
 
 > **SubAccountSetupControls** = `ReturnType`\<*typeof* [`useSubAccountSetup`](#usesubaccountsetup)\>
 
-Defined in: [src/hooks/useSubAccountSetup.ts:87](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useSubAccountSetup.ts#L87)
+Defined in: [src/hooks/useSubAccountSetup.ts:88](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSubAccountSetup.ts#L88)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/hooks/useSubAccountSetup.ts:87](https://github.com/wenakita/462
 
 > **useSubAccountSetup**(): `object`
 
-Defined in: [src/hooks/useSubAccountSetup.ts:89](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useSubAccountSetup.ts#L89)
+Defined in: [src/hooks/useSubAccountSetup.ts:90](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSubAccountSetup.ts#L90)
 
 #### Returns
 
@@ -64,7 +64,19 @@ Defined in: [src/hooks/useSubAccountSetup.ts:89](https://github.com/wenakita/462
 
 ##### connectBaseAccountWallet()
 
-> **connectBaseAccountWallet**: () => `Promise`\<`boolean`\>
+> **connectBaseAccountWallet**: (`opts?`) => `Promise`\<`boolean`\>
+
+###### Parameters
+
+###### opts?
+
+###### canonicalCswAddress?
+
+`string` \| `null`
+
+###### requireEmbeddedEoa?
+
+`boolean`
 
 ###### Returns
 

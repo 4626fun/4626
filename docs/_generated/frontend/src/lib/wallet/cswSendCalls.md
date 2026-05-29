@@ -12,7 +12,7 @@
 
 > **CswSendCallsTelemetry** = `object`
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L37)
+Defined in: [src/lib/wallet/cswSendCalls.ts:39](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L39)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/lib/wallet/cswSendCalls.ts:37](https://github.com/wenakita/4626
 
 > **detail**: `unknown`
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:46](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L46)
+Defined in: [src/lib/wallet/cswSendCalls.ts:48](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L48)
 
 ##### step
 
 > **step**: `"preflight"` \| `"prompt_sign"` \| `"broadcast_success"` \| `"broadcast_error"` \| `"status_poll"` \| `"status_resolved"` \| `"status_timeout"`
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L38)
+Defined in: [src/lib/wallet/cswSendCalls.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L40)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [src/lib/wallet/cswSendCalls.ts:38](https://github.com/wenakita/4626
 
 > **SendCallsCall** = `object`
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L53)
+Defined in: [src/lib/wallet/cswSendCalls.ts:55](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L55)
 
 One EIP-5792 call entry. Mirrors the shape the backend preview handler
 returns and the shape EIP-5792 wallets accept in wallet_sendCalls.calls[].
@@ -45,19 +45,19 @@ returns and the shape EIP-5792 wallets accept in wallet_sendCalls.calls[].
 
 > **data**: `Hex`
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:55](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L55)
+Defined in: [src/lib/wallet/cswSendCalls.ts:57](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L57)
 
 ##### to
 
 > **to**: `` `0x${string}` ``
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:54](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L54)
+Defined in: [src/lib/wallet/cswSendCalls.ts:56](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L56)
 
 ##### value?
 
 > `optional` **value**: `bigint` \| `` `0x${string}` ``
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L60)
+Defined in: [src/lib/wallet/cswSendCalls.ts:62](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L62)
 
 Native value to send with this specific call. Accepts either a bigint
 (which we'll hex-encode here) or a pre-hex-encoded string. Defaults to 0.
@@ -68,7 +68,7 @@ Native value to send with this specific call. Accepts either a bigint
 
 > **SubmitViaSendCallsParams** = `object`
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:63](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L63)
+Defined in: [src/lib/wallet/cswSendCalls.ts:65](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L65)
 
 #### Properties
 
@@ -76,7 +76,7 @@ Defined in: [src/lib/wallet/cswSendCalls.ts:63](https://github.com/wenakita/4626
 
 > `optional` **atomicRequired**: `boolean`
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:87](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L87)
+Defined in: [src/lib/wallet/cswSendCalls.ts:89](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L89)
 
 Optional. Defaults to true so Base App treats the calls as a single bundle.
 
@@ -84,7 +84,7 @@ Optional. Defaults to true so Base App treats the calls as a single bundle.
 
 > **calls**: [`SendCallsCall`](#sendcallscall)[]
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:83](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L83)
+Defined in: [src/lib/wallet/cswSendCalls.ts:85](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L85)
 
 Ordered list of calls to dispatch in this single wallet_sendCalls. For
 the two-part Relay owner-mutation flow this is exactly 2 entries:
@@ -100,7 +100,7 @@ fine because the on-chain outcome matches the May 5 reference flow.
 
 > **chainId**: `number`
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:85](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L85)
+Defined in: [src/lib/wallet/cswSendCalls.ts:87](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L87)
 
 Target chain id. Currently Base mainnet (8453).
 
@@ -108,7 +108,7 @@ Target chain id. Currently Base mainnet (8453).
 
 > **csw**: `` `0x${string}` ``
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L71)
+Defined in: [src/lib/wallet/cswSendCalls.ts:73](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L73)
 
 The CSW address (used as `from` in the EIP-5792 payload).
 
@@ -116,7 +116,7 @@ The CSW address (used as `from` in the EIP-5792 payload).
 
 > `optional` **onTelemetry**: (`event`) => `void`
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:88](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L88)
+Defined in: [src/lib/wallet/cswSendCalls.ts:90](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L90)
 
 ###### Parameters
 
@@ -132,7 +132,7 @@ Defined in: [src/lib/wallet/cswSendCalls.ts:88](https://github.com/wenakita/4626
 
 > **walletRequest**: (`args`) => `Promise`\<`unknown`\>
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:69](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L69)
+Defined in: [src/lib/wallet/cswSendCalls.ts:71](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L71)
 
 Wallet provider RPC bridge. For Base App self-auth sessions this is the
 Base App wallet's request bridge; for external-signer sessions it's the
@@ -160,7 +160,7 @@ connected wallet (Privy / WalletConnect / etc.).
 
 > **WaitForCallsTxHashParams** = `object`
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:225](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L225)
+Defined in: [src/lib/wallet/cswSendCalls.ts:227](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L227)
 
 #### Properties
 
@@ -168,13 +168,13 @@ Defined in: [src/lib/wallet/cswSendCalls.ts:225](https://github.com/wenakita/462
 
 > **callBundleId**: `string`
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:227](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L227)
+Defined in: [src/lib/wallet/cswSendCalls.ts:229](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L229)
 
 ##### intervalMs?
 
 > `optional` **intervalMs**: `number`
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:231](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L231)
+Defined in: [src/lib/wallet/cswSendCalls.ts:233](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L233)
 
 Interval between polls in ms. Defaults to 1500.
 
@@ -182,7 +182,7 @@ Interval between polls in ms. Defaults to 1500.
 
 > `optional` **onTelemetry**: (`event`) => `void`
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:232](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L232)
+Defined in: [src/lib/wallet/cswSendCalls.ts:234](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L234)
 
 ###### Parameters
 
@@ -198,7 +198,7 @@ Defined in: [src/lib/wallet/cswSendCalls.ts:232](https://github.com/wenakita/462
 
 > `optional` **timeoutMs**: `number`
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:229](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L229)
+Defined in: [src/lib/wallet/cswSendCalls.ts:231](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L231)
 
 Total wait budget in ms. Defaults to 60_000.
 
@@ -206,7 +206,7 @@ Total wait budget in ms. Defaults to 60_000.
 
 > **walletRequest**: (`args`) => `Promise`\<`unknown`\>
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:226](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L226)
+Defined in: [src/lib/wallet/cswSendCalls.ts:228](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L228)
 
 ###### Parameters
 
@@ -230,7 +230,7 @@ Defined in: [src/lib/wallet/cswSendCalls.ts:226](https://github.com/wenakita/462
 
 > **\_submitOwnerViaSendCalls**(`params`): `Promise`\<\{ `callBundleId`: `string`; \}\>
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:101](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L101)
+Defined in: [src/lib/wallet/cswSendCalls.ts:103](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L103)
 
 #### Parameters
 
@@ -248,7 +248,7 @@ Defined in: [src/lib/wallet/cswSendCalls.ts:101](https://github.com/wenakita/462
 
 > **waitForCallsTxHash**(`params`): `Promise`\<\{ `rawStatus`: `unknown`; `transactionHash`: `` `0x${string}` `` \| `null`; \}\>
 
-Defined in: [src/lib/wallet/cswSendCalls.ts:264](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/cswSendCalls.ts#L264)
+Defined in: [src/lib/wallet/cswSendCalls.ts:266](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/cswSendCalls.ts#L266)
 
 Poll `wallet_getCallsStatus` until the wallet reports at least one receipt
 with a real `transactionHash`, then resolve. Returns null on timeout so the

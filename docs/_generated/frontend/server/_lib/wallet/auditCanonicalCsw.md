@@ -12,7 +12,7 @@
 
 > **CswMixupReason** = `"csw_is_allowed_owner_eoa"` \| `"csw_has_no_bytecode"` \| `"csw_equals_embedded_eoa"` \| `"csw_mismatch_primary_smart_wallet"` \| `"profile_wallet_canonical_flag_on_eoa"` \| `"zora_signal_canonical_is_eoa"` \| `"policy_resolved_csw_differs"`
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L12)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L12)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:12](https://github.com/wen
 
 > **ProfileCswAuditRow** = `object`
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L21)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L21)
 
 #### Properties
 
@@ -28,55 +28,55 @@ Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:21](https://github.com/wen
 
 > **currentCsw**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L25)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L25)
 
 ##### currentPrimarySmartWallet
 
 > **currentPrimarySmartWallet**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L26)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L26)
 
 ##### email
 
 > **email**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L23)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L23)
 
 ##### embeddedEoa
 
 > **embeddedEoa**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L27)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L27)
 
 ##### expectedCsw
 
 > **expectedCsw**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L29)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L29)
 
 ##### primaryWallet
 
 > **primaryWallet**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L28)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L28)
 
 ##### privyUserId
 
 > **privyUserId**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L24)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L24)
 
 ##### profileId
 
 > **profileId**: `number`
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L22)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L22)
 
 ##### reasons
 
 > **reasons**: [`CswMixupReason`](#cswmixupreason)[]
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L30)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L30)
 
 ***
 
@@ -84,7 +84,7 @@ Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:30](https://github.com/wen
 
 > **ProfileCswRepairResult** = `object`
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L33)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L33)
 
 #### Properties
 
@@ -92,43 +92,43 @@ Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:33](https://github.com/wen
 
 > **afterCsw**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L37)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L37)
 
 ##### applied
 
 > **applied**: `boolean`
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L35)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L35)
 
 ##### beforeCsw
 
 > **beforeCsw**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L36)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L36)
 
 ##### profileId
 
 > **profileId**: `number`
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:34](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L34)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L34)
 
 ##### profileWalletFlagsFixed
 
 > **profileWalletFlagsFixed**: `number`
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L39)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L39)
 
 ##### reasons
 
 > **reasons**: [`CswMixupReason`](#cswmixupreason)[]
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L38)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L38)
 
 ##### zoraSignalUpdated
 
 > **zoraSignalUpdated**: `boolean`
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L40)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L40)
 
 ## Functions
 
@@ -136,7 +136,7 @@ Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:40](https://github.com/wen
 
 > **auditAllProfileCswMixups**(`params`): `Promise`\<[`ProfileCswAuditRow`](#profilecswauditrow)[]\>
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:258](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L258)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:258](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L258)
 
 #### Parameters
 
@@ -144,7 +144,7 @@ Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:258](https://github.com/we
 
 ###### db
 
-`Db`
+[`Db`](walletSync.md#db)
 
 ###### limit?
 
@@ -164,7 +164,7 @@ Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:258](https://github.com/we
 
 > **auditProfileCswRow**(`params`): `Promise`\<[`ProfileCswAuditRow`](#profilecswauditrow) \| `null`\>
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:63](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L63)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:63](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L63)
 
 #### Parameters
 
@@ -228,7 +228,7 @@ Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:63](https://github.com/wen
 
 > **repairAllProfileCswMixups**(`params`): `Promise`\<\{ `audits`: [`ProfileCswAuditRow`](#profilecswauditrow)[]; `repairs`: [`ProfileCswRepairResult`](#profilecswrepairresult)[]; \}\>
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:320](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L320)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:320](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L320)
 
 #### Parameters
 
@@ -240,7 +240,7 @@ Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:320](https://github.com/we
 
 ###### db
 
-`Db`
+[`Db`](walletSync.md#db)
 
 ###### limit?
 
@@ -260,7 +260,7 @@ Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:320](https://github.com/we
 
 > **repairProfileCswMixup**(`params`): `Promise`\<[`ProfileCswRepairResult`](#profilecswrepairresult)\>
 
-Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:146](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L146)
+Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:146](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/auditCanonicalCsw.ts#L146)
 
 #### Parameters
 
@@ -276,7 +276,7 @@ Defined in: [server/\_lib/wallet/auditCanonicalCsw.ts:146](https://github.com/we
 
 ###### db
 
-`Db`
+[`Db`](walletSync.md#db)
 
 ###### hasDeployedBytecode
 

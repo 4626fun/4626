@@ -12,7 +12,7 @@
 
 > **RelayerFlags** = `object`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:93](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L93)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:93](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L93)
 
 #### Properties
 
@@ -20,43 +20,43 @@ Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:93](https://github.com/wen
 
 > **dryRun**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:96](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L96)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:96](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L96)
 
 ##### intervalMs
 
 > **intervalMs**: `number`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:97](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L97)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:97](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L97)
 
 ##### killSwitch
 
 > **killSwitch**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:94](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L94)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L94)
 
 ##### maxAttempts
 
 > **maxAttempts**: `number`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:100](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L100)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:100](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L100)
 
 ##### maxPerTick
 
 > **maxPerTick**: `number`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:98](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L98)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:98](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L98)
 
 ##### relayerEnabled
 
 > **relayerEnabled**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:95](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L95)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L95)
 
 ##### spacingMs
 
 > **spacingMs**: `number`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:99](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L99)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:99](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L99)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:99](https://github.com/wen
 
 > **RelayerSkipReason** = `"kill_switch"` \| `"disabled"` \| `"privy_env_missing"` \| `"owner_context_failed"` \| `"no_queued_rows"`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:163](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L163)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:163](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L163)
 
 ***
 
@@ -72,7 +72,7 @@ Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:163](https://github.com/we
 
 > **RelayerTickResult** = `object`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:170](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L170)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:170](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L170)
 
 #### Properties
 
@@ -80,25 +80,25 @@ Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:170](https://github.com/we
 
 > **abandoned**: `number`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:174](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L174)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:174](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L174)
 
 ##### dryRun
 
 > **dryRun**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:178](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L178)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:178](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L178)
 
 ##### durationMs
 
 > **durationMs**: `number`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:181](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L181)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:181](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L181)
 
 ##### errors
 
 > **errors**: `object`[]
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:177](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L177)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:177](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L177)
 
 ###### error
 
@@ -112,43 +112,43 @@ Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:177](https://github.com/we
 
 > **failed**: `number`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:173](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L173)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:173](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L173)
 
 ##### ownerAddress
 
 > **ownerAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:179](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L179)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:179](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L179)
 
 ##### ownerIndex
 
 > **ownerIndex**: `number` \| `null`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:180](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L180)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:180](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L180)
 
 ##### picked
 
 > **picked**: `number`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:171](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L171)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:171](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L171)
 
 ##### skipped
 
 > **skipped**: [`RelayerSkipReason`](#relayerskipreason) \| `null`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:175](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L175)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:175](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L175)
 
 ##### submitted
 
 > **submitted**: `number`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:172](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L172)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:172](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L172)
 
 ##### txHashes
 
 > **txHashes**: `string`[]
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:176](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L176)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:176](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L176)
 
 ***
 
@@ -156,7 +156,7 @@ Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:176](https://github.com/we
 
 > **StartRelayerResult** = `object`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:420](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L420)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:420](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L420)
 
 #### Properties
 
@@ -164,25 +164,25 @@ Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:420](https://github.com/we
 
 > **intervalMs**: `number`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:423](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L423)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:423](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L423)
 
 ##### reason?
 
 > `optional` **reason**: [`RelayerSkipReason`](#relayerskipreason) \| `"already_running"`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:422](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L422)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:422](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L422)
 
 ##### started
 
 > **started**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:421](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L421)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:421](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L421)
 
 ##### stop()
 
 > **stop**: () => `void`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:424](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L424)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:424](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L424)
 
 ###### Returns
 
@@ -194,7 +194,7 @@ Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:424](https://github.com/we
 
 > **SubmitCallFn** = (`params`) => `Promise`\<\{ `ok`: `true`; `txHash`: `string`; \} \| \{ `error`: `string`; `ok`: `false`; \}\>
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:184](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L184)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:184](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L184)
 
 #### Parameters
 
@@ -234,7 +234,7 @@ Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:184](https://github.com/we
 
 > `const` **GIVE\_FEEDBACK\_FUNCTION\_SELECTOR**: `` `0x${string}` `` = `GIVE_FEEDBACK_SELECTOR`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:496](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L496)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:496](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L496)
 
 ## Functions
 
@@ -242,7 +242,7 @@ Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:496](https://github.com/we
 
 > **\_resetAlfaClubRelayerStateForTests**(): `void`
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:489](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L489)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:489](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L489)
 
 Reset internal state for tests only.
 
@@ -256,7 +256,7 @@ Reset internal state for tests only.
 
 > **isGiveFeedbackCalldata**(`value`): `` value is `0x${string}` ``
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:201](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L201)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:201](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L201)
 
 Strict check: must be 0x-prefixed hex, length >= 10 (selector + at least
 one byte of args), and the first 4 bytes must match `giveFeedback`.
@@ -277,7 +277,7 @@ one byte of args), and the first 4 bytes must match `giveFeedback`.
 
 > **readRelayerFlags**(): [`RelayerFlags`](#relayerflags)
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:103](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L103)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:103](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L103)
 
 #### Returns
 
@@ -289,7 +289,7 @@ Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:103](https://github.com/we
 
 > **relayAlfaClubFeedbackOnce**(`opts`): `Promise`\<[`RelayerTickResult`](#relayertickresult)\>
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:266](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L266)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:266](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L266)
 
 #### Parameters
 
@@ -329,7 +329,7 @@ Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:266](https://github.com/we
 
 > **startAlfaClubFeedbackRelayer**(`opts?`): [`StartRelayerResult`](#startrelayerresult)
 
-Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:433](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L433)
+Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:433](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/feedbackRelayer.ts#L433)
 
 Start the long-lived relayer loop. Idempotent: if already running,
 returns the same `stop()` closure without starting a second interval.

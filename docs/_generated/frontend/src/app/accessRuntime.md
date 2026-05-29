@@ -12,7 +12,7 @@
 
 > **AccessStateProvider**(`props`): `Element`
 
-Defined in: [src/app/accessRuntime.tsx:110](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/app/accessRuntime.tsx#L110)
+Defined in: [src/app/accessRuntime.tsx:110](https://github.com/wenakita/4626/blob/main/frontend/src/app/accessRuntime.tsx#L110)
 
 #### Parameters
 
@@ -32,7 +32,7 @@ Defined in: [src/app/accessRuntime.tsx:110](https://github.com/wenakita/4626/blo
 
 > **RequireAccepted**(`props`): `Element`
 
-Defined in: [src/app/accessRuntime.tsx:134](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/app/accessRuntime.tsx#L134)
+Defined in: [src/app/accessRuntime.tsx:134](https://github.com/wenakita/4626/blob/main/frontend/src/app/accessRuntime.tsx#L134)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: [src/app/accessRuntime.tsx:134](https://github.com/wenakita/4626/blo
 
 > **RequireAdmin**(`props`): `Element`
 
-Defined in: [src/app/accessRuntime.tsx:138](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/app/accessRuntime.tsx#L138)
+Defined in: [src/app/accessRuntime.tsx:138](https://github.com/wenakita/4626/blob/main/frontend/src/app/accessRuntime.tsx#L138)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ Defined in: [src/app/accessRuntime.tsx:138](https://github.com/wenakita/4626/blo
 
 > **RequireSession**(`props`): `Element`
 
-Defined in: [src/app/accessRuntime.tsx:130](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/app/accessRuntime.tsx#L130)
+Defined in: [src/app/accessRuntime.tsx:130](https://github.com/wenakita/4626/blob/main/frontend/src/app/accessRuntime.tsx#L130)
 
 #### Parameters
 
@@ -92,7 +92,7 @@ Defined in: [src/app/accessRuntime.tsx:130](https://github.com/wenakita/4626/blo
 
 > **RequireTelegramMiniAppEntry**(`props`): `Element` \| `null`
 
-Defined in: [src/app/accessRuntime.tsx:142](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/app/accessRuntime.tsx#L142)
+Defined in: [src/app/accessRuntime.tsx:142](https://github.com/wenakita/4626/blob/main/frontend/src/app/accessRuntime.tsx#L142)
 
 #### Parameters
 

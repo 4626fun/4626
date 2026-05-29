@@ -10,7 +10,7 @@
 
 ### AmoeWitnessRawInputs
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:265](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L265)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:265](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L265)
 
 Raw, application-level inputs the API handler receives. Each value is
 a `bigint` — callers are responsible for parsing whatever wire format
@@ -29,7 +29,7 @@ Why bigints and not strings?
 
 > **creatorCoinAddr**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:281](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L281)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:281](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L281)
 
 Creator coin contract address as a 160-bit bigint.
 
@@ -37,7 +37,7 @@ Creator coin contract address as a 160-bit bigint.
 
 > **epoch**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:283](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L283)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:283](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L283)
 
 Daily epoch counter, ≤ 2^64 - 1.
 
@@ -45,7 +45,7 @@ Daily epoch counter, ≤ 2^64 - 1.
 
 > **nonce**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:274](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L274)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:274](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L274)
 
 Server-issued bytes32 nonce. Domain: `[0, 2^256)`. Will be reduced
 mod the BN254 scalar field modulus (`Q`) by the assembler before
@@ -56,7 +56,7 @@ are above `Q` — see `lotteryAmoe.ts::issueAmoeNonce` for the issuer.
 
 > **pointsBurnedAsUSD**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:299](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L299)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:299](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L299)
 
 Points burned, expressed in USD-cents (i.e. `points * 10_000`). Must
 fit in 64 bits per the circuit. Business-rule bands (100..1M points)
@@ -66,7 +66,7 @@ are enforced by the Solidity layer.
 
 > **signupIdHash**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:288](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L288)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:288](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L288)
 
 Hash of the user's signup ID (off-chain). Bytes32 domain;
 canonicalized mod Q before hashing.
@@ -75,7 +75,7 @@ canonicalized mod Q before hashing.
 
 > **spendRefIdHash**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:293](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L293)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:293](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L293)
 
 Hash of the points-burn spend reference. Bytes32 domain; canonicalized
 mod Q before hashing.
@@ -84,7 +84,7 @@ mod Q before hashing.
 
 > **twitterCreditNullifier**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:279](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L279)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:279](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L279)
 
 Nullifier derived from the user's Twitter credential. Bytes32 domain;
 canonicalized mod Q before hashing.
@@ -93,7 +93,7 @@ canonicalized mod Q before hashing.
 
 > **wallet**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:267](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L267)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:267](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L267)
 
 EVM wallet address as a 160-bit bigint (e.g. `BigInt('0x...')`).
 
@@ -101,7 +101,7 @@ EVM wallet address as a 160-bit bigint (e.g. `BigInt('0x...')`).
 
 ### AmoeWitnessTreeContext
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:308](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L308)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:308](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L308)
 
 Tree context the witness assembler needs — typically supplied by the
 daily snapshot publisher. Two trees because the circuit verifies
@@ -114,7 +114,7 @@ row's presence in the day's points-burn ledger.
 
 > **allowlistLeafIndex**: `number`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:315](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L315)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:315](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L315)
 
 Index of *this* wallet's leaf in the allowlist snapshot.
 
@@ -122,7 +122,7 @@ Index of *this* wallet's leaf in the allowlist snapshot.
 
 > **allowlistSnapshot**: [`AmoeMerkleSnapshot`](amoeMerkleTree.md#amoemerklesnapshot)
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:313](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L313)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:313](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L313)
 
 The allowlist snapshot for `epoch`. Leaves are
 `Poseidon2(wallet, epoch)` for every wallet allowlisted in this epoch.
@@ -131,7 +131,7 @@ The allowlist snapshot for `epoch`. Leaves are
 
 > **pointsLedgerLeafIndex**: `number`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:323](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L323)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:323](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L323)
 
 Index of *this* burn row's leaf in the ledger snapshot.
 
@@ -139,7 +139,7 @@ Index of *this* burn row's leaf in the ledger snapshot.
 
 > **pointsLedgerSnapshot**: [`AmoeMerkleSnapshot`](amoeMerkleTree.md#amoemerklesnapshot)
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:321](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L321)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:321](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L321)
 
 The points-burn ledger snapshot for `epoch`. Leaves are
 `Poseidon5(signupIdHash, spendRefIdHash, pointsBurnedAsUSD, epoch,
@@ -149,7 +149,7 @@ walletAddrCommit)`.
 
 ### AssembleAmoeWitnessArgs
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:331](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L331)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:331](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L331)
 
 Combined input for [assembleAmoeWitness](#assembleamoewitness). Splits cleanly between
 "what the user supplied" and "what the daily snapshot publisher
@@ -161,13 +161,13 @@ supplied" so callers can compose the two streams independently.
 
 > **raw**: [`AmoeWitnessRawInputs`](#amoewitnessrawinputs)
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:332](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L332)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:332](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L332)
 
 ##### trees
 
 > **trees**: [`AmoeWitnessTreeContext`](#amoewitnesstreecontext)
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:333](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L333)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:333](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L333)
 
 ## Variables
 
@@ -175,7 +175,7 @@ Defined in: [server/\_lib/lottery/amoeWitness.ts:333](https://github.com/wenakit
 
 > `const` **AMOE\_BN254\_FIELD\_MODULUS**: `21888242871839275222246405745257275088548364400416034343698204186575808495617n` = `21888242871839275222246405745257275088548364400416034343698204186575808495617n`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:239](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L239)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:239](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L239)
 
 BN254 scalar field modulus. Every signal in the circuit must lie in
 `[0, Q)`. Inputs whose domain is naturally bounded by Q (EVM addresses,
@@ -190,7 +190,7 @@ helper for the rationale.
 
 > `const` **AMOE\_BYTES32\_DOMAIN\_MAX**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:247](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L247)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:247](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L247)
 
 Maximum bytes32 value (2^256 - 1). Used as the domain bound for
 `canonicalizeAmoeBytes32ToField`. Any input larger than this is a
@@ -203,7 +203,7 @@ bigint coerced via two's complement.
 
 > `const` **AMOE\_EPOCH\_GENESIS\_SECONDS**: `1777507200n`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:142](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L142)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:142](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L142)
 
 Genesis timestamp for the AMOE epoch counter, in seconds since the Unix
 epoch (UTC). The first epoch (E=0) starts at this instant; subsequent
@@ -238,7 +238,7 @@ every in-flight proof. Treat it as a circuit constant.
 
 > `const` **AMOE\_EPOCH\_GRACE\_SECONDS**: `60n`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:166](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L166)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:166](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L166)
 
 Grace window (in seconds) the publisher waits past `epoch_close(E)`
 before declaring epoch `E` eligible for projection / publishing. This
@@ -256,7 +256,7 @@ drift. Increase only if monitoring shows late-arriving rows.
 
 > `const` **AMOE\_EPOCH\_LENGTH\_SECONDS**: `86400n`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:153](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L153)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:153](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L153)
 
 Length of one AMOE epoch in seconds — 86400 = 1 UTC day.
 
@@ -272,7 +272,7 @@ v1 decision, it is a constant.
 
 > `const` **AMOE\_MAX\_CREATOR\_COIN\_ADDR**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:98](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L98)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:98](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L98)
 
 Maximum value for `creatorCoinAddr`. Mirrors `Num2Bits(160)` in
 `amoe_eligibility.circom` line 153. EVM addresses are 160-bit, so this
@@ -284,7 +284,7 @@ is exactly the 20-byte address space.
 
 > `const` **AMOE\_MAX\_EPOCH**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:105](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L105)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:105](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L105)
 
 Maximum value for `epoch`. Mirrors `Num2Bits(64)` in
 `amoe_eligibility.circom` line 157. Epoch is the daily counter
@@ -296,7 +296,7 @@ Maximum value for `epoch`. Mirrors `Num2Bits(64)` in
 
 > `const` **AMOE\_MAX\_POINTS\_BURNED\_AS\_USD**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:112](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L112)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:112](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L112)
 
 Maximum value for `pointsBurnedAsUSD` (the circuit's Num2Bits(64) bound).
 The Solidity / business-rule cap (100..1_000_000 points ⇒ 1_000_000..
@@ -308,7 +308,7 @@ The Solidity / business-rule cap (100..1_000_000 points ⇒ 1_000_000..
 
 > **assembleAmoeWitness**(`args`): [`AmoeEligibilityWitness`](proveAmoeEntryPlonk.md#amoeeligibilitywitness)
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:580](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L580)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:580](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L580)
 
 Assemble a fully-populated, circuit-ready `AmoeEligibilityWitness` from
 raw inputs and the day's two Merkle snapshots.
@@ -352,7 +352,7 @@ on any structural / bounds / inclusion
 
 > **buildAmoeAllowlistSnapshotFromSingleWallet**(`wallet`, `epoch`): [`AmoeMerkleSnapshot`](amoeMerkleTree.md#amoemerklesnapshot)
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:825](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L825)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:825](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L825)
 
 Build a single-leaf snapshot — the wallet's allowlist leaf at index 0,
 with the rest zero-padded. Useful for fixture parity tests where the
@@ -380,7 +380,7 @@ before the daily publisher is wired up.
 
 > **buildAmoeLedgerSnapshotFromSingleEntry**(`args`): [`AmoeMerkleSnapshot`](amoeMerkleTree.md#amoemerklesnapshot)
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:839](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L839)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:839](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L839)
 
 Build a single-leaf points-burn ledger snapshot for the given burn row.
 Mirrors the shape used by the canonical fixture (single leaf at index
@@ -421,7 +421,7 @@ once the ledger source-of-truth design (#403 §2) is finalized.
 
 > **canonicalizeAmoeBytes32ToField**(`name`, `v`): `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:382](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L382)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:382](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L382)
 
 Reduce a bytes32-domain bigint to a canonical BN254 field element.
 
@@ -484,7 +484,7 @@ than silently reducing it.
 
 > **computeAmoeAllowlistLeaf**(`wallet`, `epoch`): `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:462](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L462)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:462](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L462)
 
 Allowlist leaf — `Poseidon2(wallet, epoch)`. The publisher uses the same
 function when building the daily allowlist snapshot, so caller-vs-tree
@@ -510,7 +510,7 @@ is guaranteed in-sync.
 
 > **computeAmoeLedgerLeaf**(`signupIdHash`, `spendRefIdHash`, `pointsBurnedAsUSD`, `epoch`, `walletAddrCommit`): `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:478](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L478)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:478](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L478)
 
 Points-burn ledger leaf — `Poseidon5(signupIdHash, spendRefIdHash,
 pointsBurnedAsUSD, epoch, walletAddrCommit)`.
@@ -552,7 +552,7 @@ addresses.
 
 > **computeAmoeNonceCommit**(`nonce`, `wallet`, `creatorCoinAddr`): `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:428](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L428)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:428](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L428)
 
 `nonceCommit = Poseidon3(nonce, wallet, creatorCoinAddr)`. Binds the
 nonce to a specific (wallet, creator) pair so a nonce can't be replayed
@@ -582,7 +582,7 @@ across creators or wallets. Public signal.
 
 > **computeAmoePointsBurnNullifier**(`signupIdHash`, `spendRefIdHash`, `pointsBurnedAsUSD`, `epoch`): `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:448](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L448)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:448](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L448)
 
 `pointsBurnNullifier = Poseidon4(signupIdHash, spendRefIdHash,
 pointsBurnedAsUSD, epoch)`. Public signal — the on-chain replay store
@@ -623,7 +623,7 @@ design currently locked.
 
 > **computeAmoeWalletAddrCommit**(`wallet`, `twitterCreditNullifier`): `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:416](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L416)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:416](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L416)
 
 `walletAddrCommit = Poseidon2(wallet, twitterCreditNullifier)`. This is
 the public signal used on-chain to identify the entry without revealing
@@ -649,7 +649,7 @@ the wallet ↔ credential binding.
 
 > **currentAmoeEpoch**(`nowMs`): `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:213](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L213)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:213](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L213)
 
 Return the current AMOE epoch given a wall-clock millisecond timestamp
 (e.g. `Date.now()`). Pure helper — no I/O, no dependency on the system
@@ -671,7 +671,7 @@ clock at module-load time.
 
 > **epochCloseAt**(`epoch`): `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:201](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L201)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:201](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L201)
 
 Compute the close-time of epoch `E`, in Unix seconds.
 
@@ -694,7 +694,7 @@ Compute the close-time of epoch `E`, in Unix seconds.
 
 > **epochForTimestamp**(`createdAtSeconds`): `bigint`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:180](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L180)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:180](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L180)
 
 Compute the AMOE epoch index for a `created_at` timestamp.
 
@@ -727,7 +727,7 @@ Range error (as a plain `Error` — not an AmoeProofGenerationError
 
 > **isAmoeEpochEligibleForPublish**(`epoch`, `nowMs`): `boolean`
 
-Defined in: [server/\_lib/lottery/amoeWitness.ts:222](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWitness.ts#L222)
+Defined in: [server/\_lib/lottery/amoeWitness.ts:222](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWitness.ts#L222)
 
 Returns true iff epoch `E` is eligible for projection / publishing —
 i.e. its close-time plus the grace window has passed. Used by the

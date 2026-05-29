@@ -12,7 +12,7 @@
 
 > **TelegramTradeActionType** = `"buy"` \| `"sell"` \| `"bid"`
 
-Defined in: [server/\_lib/agentControl/telegramTradeControl.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/telegramTradeControl.ts#L13)
+Defined in: [server/\_lib/agentControl/telegramTradeControl.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/telegramTradeControl.ts#L13)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/agentControl/telegramTradeControl.ts:13](https://githu
 
 > **TelegramTradeControlAction** = *typeof* [`TELEGRAM_TRADE_CONTROL_ACTIONS`](#telegram_trade_control_actions)\[`number`\]
 
-Defined in: [server/\_lib/agentControl/telegramTradeControl.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/telegramTradeControl.ts#L14)
+Defined in: [server/\_lib/agentControl/telegramTradeControl.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/telegramTradeControl.ts#L14)
 
 ## Variables
 
@@ -28,7 +28,7 @@ Defined in: [server/\_lib/agentControl/telegramTradeControl.ts:14](https://githu
 
 > `const` **TELEGRAM\_TRADE\_CONTROL\_ACTIONS**: readonly \[`"trade.buy"`, `"trade.sell"`, `"trade.bid"`\]
 
-Defined in: [server/\_lib/agentControl/telegramTradeControl.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/telegramTradeControl.ts#L11)
+Defined in: [server/\_lib/agentControl/telegramTradeControl.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/telegramTradeControl.ts#L11)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [server/\_lib/agentControl/telegramTradeControl.ts:11](https://githu
 
 > `const` **TELEGRAM\_TRADE\_CONTROL\_SUBSYSTEM**: `"telegram_trade"` = `'telegram_trade'`
 
-Defined in: [server/\_lib/agentControl/telegramTradeControl.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/telegramTradeControl.ts#L10)
+Defined in: [server/\_lib/agentControl/telegramTradeControl.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/telegramTradeControl.ts#L10)
 
 ## Functions
 
@@ -44,7 +44,7 @@ Defined in: [server/\_lib/agentControl/telegramTradeControl.ts:10](https://githu
 
 > **buildTelegramTradeControlBundle**(`params`): `object`
 
-Defined in: [server/\_lib/agentControl/telegramTradeControl.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/telegramTradeControl.ts#L37)
+Defined in: [server/\_lib/agentControl/telegramTradeControl.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/telegramTradeControl.ts#L37)
 
 #### Parameters
 

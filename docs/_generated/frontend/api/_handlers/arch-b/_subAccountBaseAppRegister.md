@@ -10,7 +10,7 @@
 
 ### ZoraSubAccountBaseAppRegisterHandlerHooks
 
-Defined in: [api/\_handlers/arch-b/\_subAccountBaseAppRegister.ts:98](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/arch-b/_subAccountBaseAppRegister.ts#L98)
+Defined in: [api/\_handlers/arch-b/\_subAccountBaseAppRegister.ts:98](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/arch-b/_subAccountBaseAppRegister.ts#L98)
 
 Test seam — handler-side hooks to skip slow side-effects in unit
 tests (the Base RPC sanity read in particular). Mirrors the
@@ -22,7 +22,7 @@ tests (the Base RPC sanity read in particular). Mirrors the
 
 > `optional` **sanityReadSubAccount**: (`args`) => `Promise`\<`void`\>
 
-Defined in: [api/\_handlers/arch-b/\_subAccountBaseAppRegister.ts:105](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/arch-b/_subAccountBaseAppRegister.ts#L105)
+Defined in: [api/\_handlers/arch-b/\_subAccountBaseAppRegister.ts:105](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/arch-b/_subAccountBaseAppRegister.ts#L105)
 
 Override the optional sanity read of `subAccountAddress.code` /
 `ownerAtIndex(0)` from Base RPC. The default uses
@@ -51,7 +51,7 @@ to talk to a real RPC.
 
 > **\_\_resetHandlerHooksForTest**(): `void`
 
-Defined in: [api/\_handlers/arch-b/\_subAccountBaseAppRegister.ts:119](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/arch-b/_subAccountBaseAppRegister.ts#L119)
+Defined in: [api/\_handlers/arch-b/\_subAccountBaseAppRegister.ts:119](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/arch-b/_subAccountBaseAppRegister.ts#L119)
 
 #### Returns
 
@@ -63,7 +63,7 @@ Defined in: [api/\_handlers/arch-b/\_subAccountBaseAppRegister.ts:119](https://g
 
 > **\_\_setHandlerHooksForTest**(`hooks`): `void`
 
-Defined in: [api/\_handlers/arch-b/\_subAccountBaseAppRegister.ts:113](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/arch-b/_subAccountBaseAppRegister.ts#L113)
+Defined in: [api/\_handlers/arch-b/\_subAccountBaseAppRegister.ts:113](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/arch-b/_subAccountBaseAppRegister.ts#L113)
 
 #### Parameters
 
@@ -81,7 +81,7 @@ Defined in: [api/\_handlers/arch-b/\_subAccountBaseAppRegister.ts:113](https://g
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/arch-b/\_subAccountBaseAppRegister.ts:200](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/arch-b/_subAccountBaseAppRegister.ts#L200)
+Defined in: [api/\_handlers/arch-b/\_subAccountBaseAppRegister.ts:200](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/arch-b/_subAccountBaseAppRegister.ts#L200)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **CoinPriceSparklineResult** = `object`
 
-Defined in: [server/\_lib/zora/coinPriceSparkline.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/coinPriceSparkline.ts#L8)
+Defined in: [server/\_lib/zora/coinPriceSparkline.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/coinPriceSparkline.ts#L8)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [server/\_lib/zora/coinPriceSparkline.ts:8](https://github.com/wenak
 
 > **changePercent**: `number` \| `null`
 
-Defined in: [server/\_lib/zora/coinPriceSparkline.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/coinPriceSparkline.ts#L11)
+Defined in: [server/\_lib/zora/coinPriceSparkline.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/coinPriceSparkline.ts#L11)
 
 ##### coinAddress
 
 > **coinAddress**: `string`
 
-Defined in: [server/\_lib/zora/coinPriceSparkline.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/coinPriceSparkline.ts#L9)
+Defined in: [server/\_lib/zora/coinPriceSparkline.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/coinPriceSparkline.ts#L9)
 
 ##### source
 
 > **source**: [`CoinSparklineSource`](#coinsparklinesource)
 
-Defined in: [server/\_lib/zora/coinPriceSparkline.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/coinPriceSparkline.ts#L12)
+Defined in: [server/\_lib/zora/coinPriceSparkline.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/coinPriceSparkline.ts#L12)
 
 ##### values
 
 > **values**: `number`[]
 
-Defined in: [server/\_lib/zora/coinPriceSparkline.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/coinPriceSparkline.ts#L10)
+Defined in: [server/\_lib/zora/coinPriceSparkline.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/coinPriceSparkline.ts#L10)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [server/\_lib/zora/coinPriceSparkline.ts:10](https://github.com/wena
 
 > **CoinSparklineSource** = `"subgraph"` \| `"zora_swaps"` \| `null`
 
-Defined in: [server/\_lib/zora/coinPriceSparkline.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/coinPriceSparkline.ts#L6)
+Defined in: [server/\_lib/zora/coinPriceSparkline.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/coinPriceSparkline.ts#L6)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [server/\_lib/zora/coinPriceSparkline.ts:6](https://github.com/wenak
 
 > **CoinSparklineTimeframe** = `"1m"`
 
-Defined in: [server/\_lib/zora/coinPriceSparkline.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/coinPriceSparkline.ts#L5)
+Defined in: [server/\_lib/zora/coinPriceSparkline.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/coinPriceSparkline.ts#L5)
 
 ## Functions
 
@@ -62,7 +62,7 @@ Defined in: [server/\_lib/zora/coinPriceSparkline.ts:5](https://github.com/wenak
 
 > **buildCoinPriceSparklineFromSwapEdges**(`edges`, `timeframe`): `Omit`\<[`CoinPriceSparklineResult`](#coinpricesparklineresult), `"coinAddress"` \| `"source"`\>
 
-Defined in: [server/\_lib/zora/coinPriceSparkline.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/coinPriceSparkline.ts#L40)
+Defined in: [server/\_lib/zora/coinPriceSparkline.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/coinPriceSparkline.ts#L40)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ readonly `object`[]
 
 > **fetchCoinPriceSparkline**(`sdk`, `coinAddress`, `chainId`, `timeframe`): `Promise`\<[`CoinPriceSparklineResult`](#coinpricesparklineresult)\>
 
-Defined in: [server/\_lib/zora/coinPriceSparkline.ts:108](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/coinPriceSparkline.ts#L108)
+Defined in: [server/\_lib/zora/coinPriceSparkline.ts:108](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/coinPriceSparkline.ts#L108)
 
 #### Parameters
 
@@ -118,7 +118,7 @@ Use resolveCoinPriceSparkline — kept for call-site stability.
 
 > **fetchCoinPriceSparklineFromZoraSwaps**(`sdk`, `coinAddress`, `chainId`, `timeframe`): `Promise`\<[`CoinPriceSparklineResult`](#coinpricesparklineresult)\>
 
-Defined in: [server/\_lib/zora/coinPriceSparkline.ts:86](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/coinPriceSparkline.ts#L86)
+Defined in: [server/\_lib/zora/coinPriceSparkline.ts:86](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/coinPriceSparkline.ts#L86)
 
 #### Parameters
 
@@ -148,7 +148,7 @@ Defined in: [server/\_lib/zora/coinPriceSparkline.ts:86](https://github.com/wena
 
 > **resolveCoinPriceSparkline**(`coinAddress`, `options`): `Promise`\<[`CoinPriceSparklineResult`](#coinpricesparklineresult)\>
 
-Defined in: [server/\_lib/zora/coinPriceSparkline.ts:120](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/coinPriceSparkline.ts#L120)
+Defined in: [server/\_lib/zora/coinPriceSparkline.ts:120](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/coinPriceSparkline.ts#L120)
 
 Subgraph-first, Zora swap fallback — same resolution order as detail charts.
 

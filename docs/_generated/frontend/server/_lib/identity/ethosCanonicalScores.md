@@ -12,7 +12,7 @@
 
 > `const` **\_\_testOnly**: `object`
 
-Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:939](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/ethosCanonicalScores.ts#L939)
+Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:939](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/ethosCanonicalScores.ts#L939)
 
 #### Type Declaration
 
@@ -128,7 +128,7 @@ Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:939](https://github.c
 
 > **ensureEthosCanonicalSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:119](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/ethosCanonicalScores.ts#L119)
+Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:119](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/ethosCanonicalScores.ts#L119)
 
 #### Parameters
 
@@ -146,7 +146,7 @@ Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:119](https://github.c
 
 > **ethosCanonicalReadEnabled**(): `boolean`
 
-Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:115](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/ethosCanonicalScores.ts#L115)
+Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:115](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/ethosCanonicalScores.ts#L115)
 
 #### Returns
 
@@ -158,7 +158,7 @@ Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:115](https://github.c
 
 > **getCanonicalEthosScoresByUserkeys**(`params`): `Promise`\<`Map`\<`string`, \{ `level`: `string` \| `null`; `score`: `number` \| `null`; \}\>\>
 
-Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:905](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/ethosCanonicalScores.ts#L905)
+Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:905](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/ethosCanonicalScores.ts#L905)
 
 #### Parameters
 
@@ -182,7 +182,7 @@ Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:905](https://github.c
 
 > **materializeCanonicalEthosScores**(`params`): `Promise`\<\{ `processed`: `number`; `updated`: `number`; \}\>
 
-Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:570](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/ethosCanonicalScores.ts#L570)
+Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:570](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/ethosCanonicalScores.ts#L570)
 
 #### Parameters
 
@@ -214,7 +214,7 @@ Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:570](https://github.c
 
 > **seedEthosIdentityKeys**(`params`): `Promise`\<\{ `keysDerived`: `number`; `keysUpserted`: `number`; `profilesProcessed`: `number`; \}\>
 
-Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:240](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/ethosCanonicalScores.ts#L240)
+Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:240](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/ethosCanonicalScores.ts#L240)
 
 #### Parameters
 
@@ -246,7 +246,7 @@ Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:240](https://github.c
 
 > **syncEthosScoreUpdates**(`params`): `Promise`\<\{ `cursorAfter`: `string` \| `null`; `pages`: `number`; `refreshedUserkeys`: `number`; `updatesSeen`: `number`; \}\>
 
-Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:827](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/ethosCanonicalScores.ts#L827)
+Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:827](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/ethosCanonicalScores.ts#L827)
 
 #### Parameters
 
@@ -282,7 +282,7 @@ Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:827](https://github.c
 
 > **syncEthosUserkeyScores**(`params`): `Promise`\<\{ `attempted`: `number`; `failed`: `number`; `processedUserkeys`: `string`[]; `updated`: `number`; \}\>
 
-Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:459](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/ethosCanonicalScores.ts#L459)
+Defined in: [server/\_lib/identity/ethosCanonicalScores.ts:459](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/ethosCanonicalScores.ts#L459)
 
 #### Parameters
 

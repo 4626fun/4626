@@ -12,7 +12,7 @@
 
 > **AmoeSigningWalletClient** = `object`
 
-Defined in: [src/components/lottery/AmoeEntryCard.tsx:104](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/lottery/AmoeEntryCard.tsx#L104)
+Defined in: [src/components/lottery/AmoeEntryCard.tsx:104](https://github.com/wenakita/4626/blob/main/frontend/src/components/lottery/AmoeEntryCard.tsx#L104)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [src/components/lottery/AmoeEntryCard.tsx:104](https://github.com/we
 
 > **signMessage**: (`args`) => `Promise`\<`Hex` \| `string`\>
 
-Defined in: [src/components/lottery/AmoeEntryCard.tsx:105](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/lottery/AmoeEntryCard.tsx#L105)
+Defined in: [src/components/lottery/AmoeEntryCard.tsx:105](https://github.com/wenakita/4626/blob/main/frontend/src/components/lottery/AmoeEntryCard.tsx#L105)
 
 ###### Parameters
 
@@ -40,7 +40,7 @@ Defined in: [src/components/lottery/AmoeEntryCard.tsx:105](https://github.com/we
 
 > `const` **\_\_testHooks**: `object`
 
-Defined in: [src/components/lottery/AmoeEntryCard.tsx:169](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/lottery/AmoeEntryCard.tsx#L169)
+Defined in: [src/components/lottery/AmoeEntryCard.tsx:169](https://github.com/wenakita/4626/blob/main/frontend/src/components/lottery/AmoeEntryCard.tsx#L169)
 
 #### Type Declaration
 
@@ -66,7 +66,7 @@ Defined in: [src/components/lottery/AmoeEntryCard.tsx:169](https://github.com/we
 
 > **AmoeEntryCard**(`props`): `Element`
 
-Defined in: [src/components/lottery/AmoeEntryCard.tsx:174](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/lottery/AmoeEntryCard.tsx#L174)
+Defined in: [src/components/lottery/AmoeEntryCard.tsx:174](https://github.com/wenakita/4626/blob/main/frontend/src/components/lottery/AmoeEntryCard.tsx#L174)
 
 #### Parameters
 

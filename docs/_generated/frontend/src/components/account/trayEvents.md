@@ -12,7 +12,7 @@
 
 > **AccountTrayOpenDetail** = `object`
 
-Defined in: [src/components/account/trayEvents.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayEvents.ts#L7)
+Defined in: [src/components/account/trayEvents.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayEvents.ts#L7)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/components/account/trayEvents.ts:7](https://github.com/wenakita
 
 > `optional` **section**: [`AccountTraySection`](#accounttraysection)
 
-Defined in: [src/components/account/trayEvents.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayEvents.ts#L8)
+Defined in: [src/components/account/trayEvents.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayEvents.ts#L8)
 
 ##### source?
 
 > `optional` **source**: `"mobile-nav"` \| `"desktop-nav"` \| `"programmatic"`
 
-Defined in: [src/components/account/trayEvents.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayEvents.ts#L10)
+Defined in: [src/components/account/trayEvents.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayEvents.ts#L10)
 
 ##### tab?
 
 > `optional` **tab**: [`AccountTrayTab`](#accounttraytab)
 
-Defined in: [src/components/account/trayEvents.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayEvents.ts#L9)
+Defined in: [src/components/account/trayEvents.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayEvents.ts#L9)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/components/account/trayEvents.ts:9](https://github.com/wenakita
 
 > **AccountTraySection** = `"account"` \| `"portfolio"` \| `"points"`
 
-Defined in: [src/components/account/trayEvents.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayEvents.ts#L4)
+Defined in: [src/components/account/trayEvents.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayEvents.ts#L4)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [src/components/account/trayEvents.ts:4](https://github.com/wenakita
 
 > **AccountTrayTab** = `"tokens"` \| `"activity"`
 
-Defined in: [src/components/account/trayEvents.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayEvents.ts#L5)
+Defined in: [src/components/account/trayEvents.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayEvents.ts#L5)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [src/components/account/trayEvents.ts:5](https://github.com/wenakita
 
 > **AccountWalletSummaryDetail** = `object`
 
-Defined in: [src/components/account/trayEvents.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayEvents.ts#L18)
+Defined in: [src/components/account/trayEvents.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayEvents.ts#L18)
 
 #### Properties
 
@@ -64,7 +64,7 @@ Defined in: [src/components/account/trayEvents.ts:18](https://github.com/wenakit
 
 > **activeNetworkUsd**: `number` \| `null`
 
-Defined in: [src/components/account/trayEvents.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayEvents.ts#L19)
+Defined in: [src/components/account/trayEvents.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayEvents.ts#L19)
 
 ## Variables
 
@@ -72,7 +72,7 @@ Defined in: [src/components/account/trayEvents.ts:19](https://github.com/wenakit
 
 > `const` **ACCOUNT\_WALLET\_SUMMARY\_EVENT**: `"vault:account-wallet-summary"` = `'vault:account-wallet-summary'`
 
-Defined in: [src/components/account/trayEvents.ts:2](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayEvents.ts#L2)
+Defined in: [src/components/account/trayEvents.ts:2](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayEvents.ts#L2)
 
 ***
 
@@ -80,7 +80,7 @@ Defined in: [src/components/account/trayEvents.ts:2](https://github.com/wenakita
 
 > `const` **OPEN\_ACCOUNT\_TRAY\_EVENT**: `"vault:open-account-tray"` = `'vault:open-account-tray'`
 
-Defined in: [src/components/account/trayEvents.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayEvents.ts#L1)
+Defined in: [src/components/account/trayEvents.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayEvents.ts#L1)
 
 ## Functions
 
@@ -88,7 +88,7 @@ Defined in: [src/components/account/trayEvents.ts:1](https://github.com/wenakita
 
 > **publishAccountWalletSummary**(`detail`): `void`
 
-Defined in: [src/components/account/trayEvents.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayEvents.ts#L22)
+Defined in: [src/components/account/trayEvents.ts:22](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayEvents.ts#L22)
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: [src/components/account/trayEvents.ts:22](https://github.com/wenakit
 
 > **requestOpenAccountTray**(`detail`): `void`
 
-Defined in: [src/components/account/trayEvents.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayEvents.ts#L13)
+Defined in: [src/components/account/trayEvents.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayEvents.ts#L13)
 
 #### Parameters
 

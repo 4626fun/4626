@@ -12,7 +12,7 @@
 
 > `const` **PORTFOLIO\_FIRST\_ACTIONS\_DISMISS\_KEY**: `"cv:portfolio:first-actions-dismissed"` = `'cv:portfolio:first-actions-dismissed'`
 
-Defined in: [src/features/portfolio/FirstActionsNudge.tsx:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/portfolio/FirstActionsNudge.tsx#L14)
+Defined in: [src/features/portfolio/FirstActionsNudge.tsx:14](https://github.com/wenakita/4626/blob/main/frontend/src/features/portfolio/FirstActionsNudge.tsx#L14)
 
 First-run nudge shown on /portfolio. Helps users who just entered the app
 find the two or three highest-value starting actions. Dismissible, and the
@@ -27,7 +27,7 @@ falls back to in-memory state for the session.
 
 > **PortfolioFirstActionsNudge**(`__namedParameters`): `Element` \| `null`
 
-Defined in: [src/features/portfolio/FirstActionsNudge.tsx:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/portfolio/FirstActionsNudge.tsx#L68)
+Defined in: [src/features/portfolio/FirstActionsNudge.tsx:68](https://github.com/wenakita/4626/blob/main/frontend/src/features/portfolio/FirstActionsNudge.tsx#L68)
 
 #### Parameters
 
@@ -45,7 +45,7 @@ Defined in: [src/features/portfolio/FirstActionsNudge.tsx:68](https://github.com
 
 > **resetPortfolioFirstActionsNudge**(): `void`
 
-Defined in: [src/features/portfolio/FirstActionsNudge.tsx:134](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/portfolio/FirstActionsNudge.tsx#L134)
+Defined in: [src/features/portfolio/FirstActionsNudge.tsx:134](https://github.com/wenakita/4626/blob/main/frontend/src/features/portfolio/FirstActionsNudge.tsx#L134)
 
 Exposed for cases where the help menu wants to re-show the nudge.
 

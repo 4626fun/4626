@@ -12,7 +12,7 @@
 
 > **ProcessXmtpAgentInputParams** = `object`
 
-Defined in: [server/agents/core/processXmtpAgentInput.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/core/processXmtpAgentInput.ts#L15)
+Defined in: [server/agents/core/processXmtpAgentInput.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/agents/core/processXmtpAgentInput.ts#L15)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [server/agents/core/processXmtpAgentInput.ts:15](https://github.com/
 
 > **groupId**: `string`
 
-Defined in: [server/agents/core/processXmtpAgentInput.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/core/processXmtpAgentInput.ts#L17)
+Defined in: [server/agents/core/processXmtpAgentInput.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/agents/core/processXmtpAgentInput.ts#L17)
 
 ##### runtimeContext
 
 > **runtimeContext**: [`SharedConversationalRuntimeContext`](../../ai/chat.md#sharedconversationalruntimecontext)
 
-Defined in: [server/agents/core/processXmtpAgentInput.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/core/processXmtpAgentInput.ts#L19)
+Defined in: [server/agents/core/processXmtpAgentInput.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/agents/core/processXmtpAgentInput.ts#L19)
 
 ##### senderWallet
 
 > **senderWallet**: `string`
 
-Defined in: [server/agents/core/processXmtpAgentInput.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/core/processXmtpAgentInput.ts#L18)
+Defined in: [server/agents/core/processXmtpAgentInput.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/agents/core/processXmtpAgentInput.ts#L18)
 
 ##### text
 
 > **text**: `string`
 
-Defined in: [server/agents/core/processXmtpAgentInput.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/core/processXmtpAgentInput.ts#L16)
+Defined in: [server/agents/core/processXmtpAgentInput.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/agents/core/processXmtpAgentInput.ts#L16)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [server/agents/core/processXmtpAgentInput.ts:16](https://github.com/
 
 > **XmtpAgentInputResult** = `object`
 
-Defined in: [server/agents/core/processXmtpAgentInput.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/core/processXmtpAgentInput.ts#L22)
+Defined in: [server/agents/core/processXmtpAgentInput.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/agents/core/processXmtpAgentInput.ts#L22)
 
 #### Properties
 
@@ -54,7 +54,7 @@ Defined in: [server/agents/core/processXmtpAgentInput.ts:22](https://github.com/
 
 > **responseText**: `string`
 
-Defined in: [server/agents/core/processXmtpAgentInput.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/core/processXmtpAgentInput.ts#L23)
+Defined in: [server/agents/core/processXmtpAgentInput.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/agents/core/processXmtpAgentInput.ts#L23)
 
 ## Functions
 
@@ -62,7 +62,7 @@ Defined in: [server/agents/core/processXmtpAgentInput.ts:23](https://github.com/
 
 > **processXmtpAgentInput**(`params`): `Promise`\<[`XmtpAgentInputResult`](#xmtpagentinputresult)\>
 
-Defined in: [server/agents/core/processXmtpAgentInput.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/core/processXmtpAgentInput.ts#L26)
+Defined in: [server/agents/core/processXmtpAgentInput.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/agents/core/processXmtpAgentInput.ts#L26)
 
 #### Parameters
 

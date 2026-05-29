@@ -12,7 +12,7 @@
 
 > **ExploreListTabPath** = *typeof* [`EXPLORE_LIST_TAB_PATHS`](#explore_list_tab_paths)\[`number`\]
 
-Defined in: [src/features/explore/exploreListNavigation.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreListNavigation.ts#L12)
+Defined in: [src/features/explore/exploreListNavigation.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreListNavigation.ts#L12)
 
 ## Variables
 
@@ -20,7 +20,7 @@ Defined in: [src/features/explore/exploreListNavigation.ts:12](https://github.co
 
 > `const` **EXPLORE\_LIST\_TAB\_PATHS**: readonly \[`"/explore/creators"`, `"/explore/content"`, `"/explore/vaults"`, `"/explore/trends"`, `"/explore/transactions"`\]
 
-Defined in: [src/features/explore/exploreListNavigation.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreListNavigation.ts#L4)
+Defined in: [src/features/explore/exploreListNavigation.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreListNavigation.ts#L4)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [src/features/explore/exploreListNavigation.ts:4](https://github.com
 
 > **buildExploreTabSearchParams**(`currentSearch`): `string`
 
-Defined in: [src/features/explore/exploreListNavigation.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreListNavigation.ts#L23)
+Defined in: [src/features/explore/exploreListNavigation.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreListNavigation.ts#L23)
 
 Preserve search (`q`) only when switching list tabs — drop sort/time that may be tab-specific.
 
@@ -48,7 +48,7 @@ Preserve search (`q`) only when switching list tabs — drop sort/time that may 
 
 > **getExploreListTabKey**(`pathname`): `"/explore/creators"` \| `"/explore/content"` \| `"/explore/vaults"` \| `"/explore/trends"` \| `"/explore/transactions"` \| `null`
 
-Defined in: [src/features/explore/exploreListNavigation.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreListNavigation.ts#L18)
+Defined in: [src/features/explore/exploreListNavigation.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreListNavigation.ts#L18)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/features/explore/exploreListNavigation.ts:18](https://github.co
 
 > **isExploreListTabPath**(`pathname`): pathname is "/explore/creators" \| "/explore/content" \| "/explore/vaults" \| "/explore/trends" \| "/explore/transactions"
 
-Defined in: [src/features/explore/exploreListNavigation.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreListNavigation.ts#L14)
+Defined in: [src/features/explore/exploreListNavigation.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreListNavigation.ts#L14)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ pathname is "/explore/creators" \| "/explore/content" \| "/explore/vaults" \| "/
 
 > **shouldShowExploreTableLoading**(`__namedParameters`): `boolean`
 
-Defined in: [src/features/explore/exploreListNavigation.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreListNavigation.ts#L31)
+Defined in: [src/features/explore/exploreListNavigation.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreListNavigation.ts#L31)
 
 #### Parameters
 
@@ -118,7 +118,7 @@ When the user is searching, inline table messages own empty/loading UX.
 
 > **useExploreListTabScrollReset**(): `void`
 
-Defined in: [src/features/explore/exploreListNavigation.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreListNavigation.ts#L48)
+Defined in: [src/features/explore/exploreListNavigation.ts:48](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreListNavigation.ts#L48)
 
 #### Returns
 

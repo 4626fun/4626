@@ -12,7 +12,7 @@
 
 > `const` **siteAssets**: `object` = `sharedSiteConfig.assets`
 
-Defined in: [src/config/site.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/config/site.ts#L5)
+Defined in: [src/config/site.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/config/site.ts#L5)
 
 #### Type Declaration
 
@@ -110,7 +110,7 @@ Defined in: [src/config/site.ts:5](https://github.com/wenakita/4626/blob/5b93f3e
 
 > `const` **siteConfig**: `object` = `sharedSiteConfig`
 
-Defined in: [src/config/site.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/config/site.ts#L3)
+Defined in: [src/config/site.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/config/site.ts#L3)
 
 #### Type Declaration
 

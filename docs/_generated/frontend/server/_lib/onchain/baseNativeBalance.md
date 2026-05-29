@@ -12,7 +12,7 @@
 
 > **readMaxNativeBalanceWei**(`address`): `Promise`\<`bigint`\>
 
-Defined in: [server/\_lib/onchain/baseNativeBalance.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/baseNativeBalance.ts#L11)
+Defined in: [server/\_lib/onchain/baseNativeBalance.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/baseNativeBalance.ts#L11)
 
 Read native balance from every configured Base RPC and return the highest value.
 
@@ -32,7 +32,7 @@ Read native balance from every configured Base RPC and return the highest value.
 
 > **resolveBaseRpcUrls**(): `string`[]
 
-Defined in: [server/\_lib/onchain/baseNativeBalance.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/baseNativeBalance.ts#L6)
+Defined in: [server/\_lib/onchain/baseNativeBalance.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/baseNativeBalance.ts#L6)
 
 #### Returns
 

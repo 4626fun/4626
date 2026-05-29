@@ -10,7 +10,7 @@
 
 ### ShareBridgeOftWiringError
 
-Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L48)
+Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:51](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L51)
 
 #### Extends
 
@@ -22,7 +22,7 @@ Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:48](https://github.com/wenak
 
 > **new ShareBridgeOftWiringError**(`code`, `message`): [`ShareBridgeOftWiringError`](#sharebridgeoftwiringerror)
 
-Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:56](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L56)
+Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:59](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L59)
 
 ###### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:56](https://github.com/wenak
 
 > `readonly` **code**: `"finalize_decode_failed"` \| `"bridge_not_configured"` \| `"oft_peer_not_configured"` \| `"quote_failed"` \| `"share_oft_peer_mismatch"`
 
-Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:49](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L49)
+Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:52](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L52)
 
 ## Type Aliases
 
@@ -56,7 +56,7 @@ Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:49](https://github.com/wenak
 
 > **ShareBridgeOftWiringStatus** = `object`
 
-Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L36)
+Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:39](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L39)
 
 #### Properties
 
@@ -64,55 +64,55 @@ Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:36](https://github.com/wenak
 
 > **batcherDefaultPeer**: `Hex` \| `null`
 
-Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L41)
+Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:44](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L44)
 
 ##### bridgeRequired
 
 > **bridgeRequired**: `boolean`
 
-Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L37)
+Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L40)
 
 ##### destination
 
 > **destination**: `Hex`
 
-Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L39)
+Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L42)
 
 ##### effectivePeer
 
 > **effectivePeer**: `Hex` \| `null`
 
-Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L42)
+Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:45](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L45)
 
 ##### registryPeer
 
 > **registryPeer**: `Hex` \| `null`
 
-Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L40)
+Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:43](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L43)
 
 ##### registryPeerConfigured
 
 > **registryPeerConfigured**: `boolean`
 
-Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L44)
+Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:47](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L47)
 
 ##### shareOftPeer
 
 > **shareOftPeer**: `Hex` \| `null`
 
-Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L43)
+Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:46](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L46)
 
 ##### shareOftPeerConfigured
 
 > **shareOftPeerConfigured**: `boolean`
 
-Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:45](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L45)
+Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:48](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L48)
 
 ##### solanaEid
 
 > **solanaEid**: `number`
 
-Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L38)
+Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:41](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L41)
 
 ## Functions
 
@@ -120,7 +120,7 @@ Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:38](https://github.com/wenak
 
 > **assertShareBridgeOftWiringForFinalize**(`params`): `Promise`\<`void`\>
 
-Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:149](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L149)
+Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:152](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L152)
 
 #### Parameters
 
@@ -136,7 +136,7 @@ Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:149](https://github.com/wena
 
 ###### publicClient
 
-`Pick`\<`PublicClient`, `"readContract"`\>
+[`ShareBridgeReadClient`](shareBridgeReadClient.md#sharebridgereadclient)
 
 ###### registryAddress?
 
@@ -152,7 +152,7 @@ Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:149](https://github.com/wena
 
 > **readShareBridgeOftWiringStatus**(`params`): `Promise`\<[`FinalizeShareBridgeQuoteError`](finalizeShareBridgeFee.md#finalizesharebridgequoteerror) \| [`ShareBridgeOftWiringStatus`](#sharebridgeoftwiringstatus)\>
 
-Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L71)
+Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:74](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/shareBridgeOftWiring.ts#L74)
 
 #### Parameters
 
@@ -168,7 +168,7 @@ Defined in: [src/lib/deploy/shareBridgeOftWiring.ts:71](https://github.com/wenak
 
 ###### publicClient
 
-`Pick`\<`PublicClient`, `"readContract"`\>
+[`ShareBridgeReadClient`](shareBridgeReadClient.md#sharebridgereadclient)
 
 ###### registryAddress?
 

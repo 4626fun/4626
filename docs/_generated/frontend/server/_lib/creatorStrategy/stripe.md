@@ -12,7 +12,7 @@
 
 > **CreateCheckoutSessionInput** = `object`
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:87](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L87)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:87](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L87)
 
 #### Properties
 
@@ -20,55 +20,55 @@ Defined in: [server/\_lib/creatorStrategy/stripe.ts:87](https://github.com/wenak
 
 > **cancelUrl**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:95](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L95)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L95)
 
 ##### clientReferenceId?
 
 > `optional` **clientReferenceId**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:96](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L96)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:96](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L96)
 
 ##### creatorToken
 
 > **creatorToken**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:88](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L88)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:88](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L88)
 
 ##### featureDescription
 
 > **featureDescription**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:92](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L92)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:92](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L92)
 
 ##### featureDisplayName
 
 > **featureDisplayName**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:91](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L91)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:91](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L91)
 
 ##### featureKey
 
 > **featureKey**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:90](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L90)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:90](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L90)
 
 ##### priceUsdc
 
 > **priceUsdc**: `bigint`
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:93](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L93)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:93](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L93)
 
 ##### successUrl
 
 > **successUrl**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:94](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L94)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L94)
 
 ##### walletAddress
 
 > **walletAddress**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:89](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L89)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:89](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L89)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [server/\_lib/creatorStrategy/stripe.ts:89](https://github.com/wenak
 
 > **CreateCheckoutSessionResult** = `object`
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:99](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L99)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:99](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L99)
 
 #### Properties
 
@@ -84,19 +84,19 @@ Defined in: [server/\_lib/creatorStrategy/stripe.ts:99](https://github.com/wenak
 
 > **sessionId**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:100](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L100)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:100](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L100)
 
 ##### sessionUrl
 
 > **sessionUrl**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:101](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L101)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:101](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L101)
 
 ##### unitAmountCents
 
 > **unitAmountCents**: `number`
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:102](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L102)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:102](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L102)
 
 ***
 
@@ -104,7 +104,7 @@ Defined in: [server/\_lib/creatorStrategy/stripe.ts:102](https://github.com/wena
 
 > **VerifyWebhookResult** = \{ `event`: `Stripe.Event`; `ok`: `true`; \} \| \{ `message`: `string`; `ok`: `false`; `reason`: `"missing_signature"` \| `"webhook_not_configured"` \| `"signature_invalid"`; \}
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:161](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L161)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:161](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L161)
 
 Verify + parse a Stripe webhook request. Returns the typed event or
 a structured failure so the handler can reply with the right status
@@ -116,7 +116,7 @@ code.
 
 > **createCheckoutSession**(`input`): `Promise`\<[`CreateCheckoutSessionResult`](#createcheckoutsessionresult)\>
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:110](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L110)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:110](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L110)
 
 Wraps Stripe SDK's `checkout.sessions.create`. Keeps all
 4626-specific metadata on the session so the webhook can resolve it
@@ -138,7 +138,7 @@ back to the right activation row without a second DB call.
 
 > **getStripeClient**(): `Promise`\<`Stripe`\>
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L53)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:53](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L53)
 
 Lazily instantiate the Stripe client so the module is safe to import
 in contexts where Stripe env isn't set (local dev, tests). Throws
@@ -155,7 +155,7 @@ configuration.
 
 > **isStripeConfigured**(): `boolean`
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L36)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L36)
 
 #### Returns
 
@@ -167,7 +167,7 @@ Defined in: [server/\_lib/creatorStrategy/stripe.ts:36](https://github.com/wenak
 
 > **isStripeWebhookConfigured**(): `boolean`
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L40)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L40)
 
 #### Returns
 
@@ -179,7 +179,7 @@ Defined in: [server/\_lib/creatorStrategy/stripe.ts:40](https://github.com/wenak
 
 > **usdcToStripeUnitAmount**(`priceUsdc`): `number`
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:77](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L77)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:77](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L77)
 
 Convert a USDC-denominated price (6 decimals) into Stripe's expected
 unit-amount (USD cents, integer). We assume USDC ≈ USD for pricing
@@ -201,7 +201,7 @@ purposes — the $0.001–0.01 depeg risk is acceptable for a $100 item.
 
 > **verifyStripeWebhook**(`rawBody`, `signatureHeader`): `Promise`\<[`VerifyWebhookResult`](#verifywebhookresult)\>
 
-Defined in: [server/\_lib/creatorStrategy/stripe.ts:165](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/stripe.ts#L165)
+Defined in: [server/\_lib/creatorStrategy/stripe.ts:165](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/stripe.ts#L165)
 
 #### Parameters
 

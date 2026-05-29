@@ -10,7 +10,7 @@
 
 ### DeploySessionRequestError
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:128](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L128)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:133](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L133)
 
 #### Extends
 
@@ -22,7 +22,7 @@ Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:128](https://githu
 
 > **new DeploySessionRequestError**(`status`, `message`): [`DeploySessionRequestError`](#deploysessionrequesterror)
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:131](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L131)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:136](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L136)
 
 ###### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:131](https://githu
 
 > **status**: `number`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:129](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L129)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:134](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L134)
 
 ## Type Aliases
 
@@ -56,7 +56,7 @@ Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:129](https://githu
 
 > **ApiEnvelope**\<`T`\> = `object`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L68)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:73](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L73)
 
 #### Type Parameters
 
@@ -70,19 +70,19 @@ Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:68](https://github
 
 > `optional` **data**: `T`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L68)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:73](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L73)
 
 ##### error?
 
 > `optional` **error**: `string`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L68)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:73](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L73)
 
 ##### success
 
 > **success**: `boolean`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L68)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:73](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L73)
 
 ***
 
@@ -90,7 +90,7 @@ Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:68](https://github
 
 > **Call** = `object`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L71)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:76](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L76)
 
 #### Properties
 
@@ -98,19 +98,19 @@ Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:71](https://github
 
 > **data**: `Hex`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L71)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:76](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L76)
 
 ##### to
 
 > **to**: `Address`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L71)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:76](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L76)
 
 ##### value?
 
 > `optional` **value**: `bigint` \| `number` \| `string`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L71)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:76](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L76)
 
 ***
 
@@ -118,7 +118,7 @@ Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:71](https://github
 
 > **CreateDeploySessionRequest** = `object`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:87](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L87)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:92](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L92)
 
 #### Properties
 
@@ -126,97 +126,97 @@ Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:87](https://github
 
 > **creatorToken**: `Address`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:89](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L89)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:94](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L94)
 
 ##### expectedPayoutRecipient?
 
 > `optional` **expectedPayoutRecipient**: `Address`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:111](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L111)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:116](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L116)
 
 ##### expectedPayoutRecipientMode?
 
 > `optional` **expectedPayoutRecipientMode**: `"gauge"` \| `"payout_router"`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:110](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L110)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:115](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L115)
 
 ##### expectedTradeFeeCollector?
 
 > `optional` **expectedTradeFeeCollector**: `Address`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:109](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L109)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:114](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L114)
 
 ##### ownerAddress
 
 > **ownerAddress**: `Address`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:90](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L90)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:95](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L95)
 
 ##### phase1Calls?
 
 > `optional` **phase1Calls**: [`Call`](#call)[]
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:98](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L98)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:103](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L103)
 
 ##### phase2CoreCalls?
 
 > `optional` **phase2CoreCalls**: [`Call`](#call)[]
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:99](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L99)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:104](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L104)
 
 ##### phase2FinalizeCalls?
 
 > `optional` **phase2FinalizeCalls**: [`Call`](#call)[]
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:100](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L100)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:105](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L105)
 
 ##### phase3Calls?
 
 > `optional` **phase3Calls**: [`Call`](#call)[]
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:102](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L102)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:107](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L107)
 
 ##### phase4Calls?
 
 > `optional` **phase4Calls**: [`Call`](#call)[]
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:103](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L103)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:108](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L108)
 
 ##### preflightOnly?
 
 > `optional` **preflightOnly**: `boolean`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:93](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L93)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:98](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L98)
 
 ##### rolePolicyId?
 
 > `optional` **rolePolicyId**: `number` \| `string`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:112](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L112)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:117](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L117)
 
 ##### smartWallet
 
 > **smartWallet**: `Address`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:88](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L88)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:93](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L93)
 
 ##### solanaOvault?
 
 > `optional` **solanaOvault**: `SolanaOvaultRequest`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:104](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L104)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:109](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L109)
 
 ##### vanity?
 
 > `optional` **vanity**: `DeployVanityRequest`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:105](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L105)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:110](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L110)
 
 ##### version?
 
 > `optional` **version**: `string`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:107](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L107)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:112](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L112)
 
 ***
 
@@ -224,7 +224,7 @@ Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:107](https://githu
 
 > **ValidatedDeploySessionRequest** = `object`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:138](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L138)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:143](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L143)
 
 #### Properties
 
@@ -232,97 +232,97 @@ Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:138](https://githu
 
 > **authType**: `"session"` \| `"siwa"`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:143](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L143)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:148](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L148)
 
 ##### creatorToken
 
 > **creatorToken**: `Address`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:141](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L141)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:146](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L146)
 
 ##### hasPhase2Finalize
 
 > **hasPhase2Finalize**: `boolean`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:151](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L151)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:156](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L156)
 
 ##### ownerAddress
 
 > **ownerAddress**: `Address`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:142](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L142)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:147](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L147)
 
 ##### phase1Calls
 
 > **phase1Calls**: [`Call`](#call)[]
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:144](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L144)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:149](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L149)
 
 ##### phase2CoreCalls
 
 > **phase2CoreCalls**: [`Call`](#call)[]
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:145](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L145)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:150](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L150)
 
 ##### phase2FinalizeCalls
 
 > **phase2FinalizeCalls**: [`Call`](#call)[]
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:146](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L146)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:151](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L151)
 
 ##### phase2InvariantExpectations
 
 > **phase2InvariantExpectations**: `DeployPhase2InvariantExpectations` \| `null`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:153](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L153)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:158](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L158)
 
 ##### phase3Calls
 
 > **phase3Calls**: [`Call`](#call)[]
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:147](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L147)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:152](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L152)
 
 ##### phase4Calls
 
 > **phase4Calls**: [`Call`](#call)[]
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:148](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L148)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:153](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L153)
 
 ##### rolePolicyId
 
 > **rolePolicyId**: `number` \| `null`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:154](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L154)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:159](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L159)
 
 ##### rolePolicySource
 
 > **rolePolicySource**: `"request"` \| `"creator_default"` \| `"global_default"` \| `"none"`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:155](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L155)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:160](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L160)
 
 ##### sessionAddress
 
 > **sessionAddress**: `Address`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:139](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L139)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:144](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L144)
 
 ##### smartWallet
 
 > **smartWallet**: `Address`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:140](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L140)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:145](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L145)
 
 ##### solanaOvault
 
 > **solanaOvault**: `Record`\<`string`, `unknown`\> \| `null`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:149](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L149)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:154](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L154)
 
 ##### vanity
 
 > **vanity**: `object`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:150](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L150)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:155](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L155)
 
 ###### shareSuffix
 
@@ -336,7 +336,7 @@ Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:150](https://githu
 
 > **version**: `string`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:152](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L152)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:157](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L157)
 
 ## Functions
 
@@ -344,7 +344,7 @@ Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:152](https://githu
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:3015](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L3015)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:3006](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L3006)
 
 #### Parameters
 
@@ -366,7 +366,7 @@ Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:3015](https://gith
 
 > **normalizePhase2RolePolicyCalls**(`params`): `object`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:1719](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L1719)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:1710](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L1710)
 
 #### Parameters
 
@@ -398,7 +398,7 @@ Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:1719](https://gith
 
 > **resolveRolePolicyIdForSession**(`params`): `object`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:1685](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L1685)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:1676](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L1676)
 
 #### Parameters
 
@@ -430,7 +430,7 @@ Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:1685](https://gith
 
 > **validateDeploySessionRequest**(`params`): `Promise`\<[`ValidatedDeploySessionRequest`](#validateddeploysessionrequest)\>
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:2551](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L2551)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:2542](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L2542)
 
 #### Parameters
 
@@ -466,7 +466,7 @@ Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:2551](https://gith
 
 > **validatePhase2RolePolicyInput**(`params`): `void`
 
-Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:1773](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L1773)
+Defined in: [api/\_handlers/deploy/v2/session/\_createCore.ts:1764](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_createCore.ts#L1764)
 
 #### Parameters
 

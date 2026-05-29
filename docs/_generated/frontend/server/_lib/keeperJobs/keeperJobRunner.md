@@ -12,7 +12,7 @@
 
 > **KeeperJobTickResult** = `object`
 
-Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:46](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L46)
+Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L46)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:46](https://github.com/w
 
 > **claimed**: `number`
 
-Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:47](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L47)
+Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L47)
 
 ##### releasedExpiredClaims
 
 > **releasedExpiredClaims**: `number`
 
-Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L48)
+Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L48)
 
 ##### results
 
 > **results**: `KeeperJobRunResult`[]
 
-Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:49](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L49)
+Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:49](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L49)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:49](https://github.com/w
 
 > **KeeprActionProcessResult** = `object`
 
-Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:72](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L72)
+Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:72](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L72)
 
 #### Properties
 
@@ -48,25 +48,25 @@ Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:72](https://github.com/w
 
 > **failed**: `number`
 
-Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:75](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L75)
+Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:75](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L75)
 
 ##### processed
 
 > **processed**: `number`
 
-Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:73](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L73)
+Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:73](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L73)
 
 ##### retried
 
 > **retried**: `number`
 
-Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:76](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L76)
+Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:76](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L76)
 
 ##### succeeded
 
 > **succeeded**: `number`
 
-Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:74](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L74)
+Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:74](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L74)
 
 ## Functions
 
@@ -74,7 +74,7 @@ Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:74](https://github.com/w
 
 > **processKeeprActions**(`input`): `Promise`\<[`KeeprActionProcessResult`](#keepractionprocessresult)\>
 
-Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:445](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L445)
+Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:445](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L445)
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:445](https://github.com/
 
 > **runKeeperJobTick**(`input`): `Promise`\<[`KeeperJobTickResult`](#keeperjobtickresult)\>
 
-Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:414](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L414)
+Defined in: [server/\_lib/keeperJobs/keeperJobRunner.ts:414](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeperJobs/keeperJobRunner.ts#L414)
 
 #### Parameters
 

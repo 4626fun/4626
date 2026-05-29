@@ -12,7 +12,7 @@
 
 > **ExploreHeroSparklinePoint** = `object`
 
-Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/exploreHeroSparklineUtils.ts#L1)
+Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/exploreHeroSparklineUtils.ts#L1)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:1](https://gith
 
 > **creatorCoinsMarketCapUsd**: `number` \| `null`
 
-Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:2](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/exploreHeroSparklineUtils.ts#L2)
+Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:2](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/exploreHeroSparklineUtils.ts#L2)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:2](https://gith
 
 > **SparklineLayoutPoint** = `object`
 
-Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/exploreHeroSparklineUtils.ts#L5)
+Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/exploreHeroSparklineUtils.ts#L5)
 
 #### Properties
 
@@ -36,13 +36,13 @@ Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:5](https://gith
 
 > **x**: `number`
 
-Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/exploreHeroSparklineUtils.ts#L6)
+Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/exploreHeroSparklineUtils.ts#L6)
 
 ##### y
 
 > **y**: `number`
 
-Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/exploreHeroSparklineUtils.ts#L7)
+Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/exploreHeroSparklineUtils.ts#L7)
 
 ## Functions
 
@@ -50,7 +50,7 @@ Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:7](https://gith
 
 > **buildSparklineLayout**(`values`, `width`, `height`, `padding`): [`SparklineLayoutPoint`](#sparklinelayoutpoint)[]
 
-Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/exploreHeroSparklineUtils.ts#L18)
+Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/exploreHeroSparklineUtils.ts#L18)
 
 #### Parameters
 
@@ -80,7 +80,7 @@ readonly `number`[]
 
 > **extractIndexedMcapSparklineValues**(`history`): `number`[]
 
-Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/exploreHeroSparklineUtils.ts#L10)
+Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/exploreHeroSparklineUtils.ts#L10)
 
 #### Parameters
 
@@ -96,9 +96,9 @@ readonly [`ExploreHeroSparklinePoint`](#exploreherosparklinepoint)[]
 
 ### layoutToAreaPath()
 
-> **layoutToAreaPath**(`points`, `width`, `height`, `padding`): `string` \| `null`
+> **layoutToAreaPath**(`points`, `_width`, `height`, `padding`): `string` \| `null`
 
-Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:46](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/exploreHeroSparklineUtils.ts#L46)
+Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:46](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/exploreHeroSparklineUtils.ts#L46)
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:46](https://git
 
 readonly [`SparklineLayoutPoint`](#sparklinelayoutpoint)[]
 
-##### width
+##### \_width
 
 `number`
 
@@ -128,7 +128,7 @@ readonly [`SparklineLayoutPoint`](#sparklinelayoutpoint)[]
 
 > **layoutToPolyline**(`points`): `string`
 
-Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/exploreHeroSparklineUtils.ts#L42)
+Defined in: [src/components/explore/exploreHeroSparklineUtils.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/exploreHeroSparklineUtils.ts#L42)
 
 #### Parameters
 

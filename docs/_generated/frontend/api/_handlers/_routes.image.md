@@ -12,7 +12,7 @@
 
 > `const` **imageRouteLoaders**: [`ApiRouteLoaders`](_routeLoader.md#apirouteloaders)
 
-Defined in: [api/\_handlers/\_routes.image.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/_routes.image.ts#L4)
+Defined in: [api/\_handlers/\_routes.image.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.image.ts#L4)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/\_routes.image.ts:4](https://github.com/wenakita/462
 
 > **getImageApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.image.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/_routes.image.ts#L18)
+Defined in: [api/\_handlers/\_routes.image.ts:18](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.image.ts#L18)
 
 #### Parameters
 

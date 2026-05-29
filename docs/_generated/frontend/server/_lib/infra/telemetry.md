@@ -12,7 +12,7 @@
 
 > **emitTelemetryEvent**(`event`, `payload`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/infra/telemetry.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/telemetry.ts#L32)
+Defined in: [server/\_lib/infra/telemetry.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/telemetry.ts#L32)
 
 #### Parameters
 

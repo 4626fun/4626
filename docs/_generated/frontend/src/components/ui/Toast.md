@@ -12,7 +12,7 @@
 
 > `const` **CdsToastBridge**: () => `Element` = `AppToaster`
 
-Defined in: [src/components/ui/Toast.tsx:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/ui/Toast.tsx#L27)
+Defined in: [src/components/ui/Toast.tsx:27](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Toast.tsx#L27)
 
 #### Returns
 
@@ -28,7 +28,7 @@ Use AppToaster at app root; kept for one release of import stability.
 
 > `const` **toast**: (`text`, `options?`) => `string` \| `number` & `object`
 
-Defined in: [src/components/ui/Toast.tsx:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/ui/Toast.tsx#L29)
+Defined in: [src/components/ui/Toast.tsx:29](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Toast.tsx#L29)
 
 #### Type Declaration
 
@@ -174,7 +174,7 @@ Defined in: [src/components/ui/Toast.tsx:29](https://github.com/wenakita/4626/bl
 
 > **AppToaster**(): `Element`
 
-Defined in: [src/components/ui/Toast.tsx:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/ui/Toast.tsx#L7)
+Defined in: [src/components/ui/Toast.tsx:7](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Toast.tsx#L7)
 
 #### Returns
 

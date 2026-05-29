@@ -12,7 +12,7 @@
 
 > **ApiFailure** = `object`
 
-Defined in: [api/\_handlers/image/\_shared.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/image/_shared.ts#L19)
+Defined in: [api/\_handlers/image/\_shared.ts:19](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_shared.ts#L19)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [api/\_handlers/image/\_shared.ts:19](https://github.com/wenakita/46
 
 > **error**: `string`
 
-Defined in: [api/\_handlers/image/\_shared.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/image/_shared.ts#L19)
+Defined in: [api/\_handlers/image/\_shared.ts:19](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_shared.ts#L19)
 
 ##### success
 
 > **success**: `false`
 
-Defined in: [api/\_handlers/image/\_shared.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/image/_shared.ts#L19)
+Defined in: [api/\_handlers/image/\_shared.ts:19](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_shared.ts#L19)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [api/\_handlers/image/\_shared.ts:19](https://github.com/wenakita/46
 
 > **ApiSuccess**\<`T`\> = `object`
 
-Defined in: [api/\_handlers/image/\_shared.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/image/_shared.ts#L18)
+Defined in: [api/\_handlers/image/\_shared.ts:18](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_shared.ts#L18)
 
 #### Type Parameters
 
@@ -48,13 +48,13 @@ Defined in: [api/\_handlers/image/\_shared.ts:18](https://github.com/wenakita/46
 
 > **data**: `T`
 
-Defined in: [api/\_handlers/image/\_shared.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/image/_shared.ts#L18)
+Defined in: [api/\_handlers/image/\_shared.ts:18](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_shared.ts#L18)
 
 ##### success
 
 > **success**: `true`
 
-Defined in: [api/\_handlers/image/\_shared.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/image/_shared.ts#L18)
+Defined in: [api/\_handlers/image/\_shared.ts:18](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_shared.ts#L18)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [api/\_handlers/image/\_shared.ts:18](https://github.com/wenakita/46
 
 > **ImageMutationBody** = `object`
 
-Defined in: [api/\_handlers/image/\_shared.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/image/_shared.ts#L14)
+Defined in: [api/\_handlers/image/\_shared.ts:14](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_shared.ts#L14)
 
 #### Properties
 
@@ -70,7 +70,7 @@ Defined in: [api/\_handlers/image/\_shared.ts:14](https://github.com/wenakita/46
 
 > `optional` **projectId**: `string`
 
-Defined in: [api/\_handlers/image/\_shared.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/image/_shared.ts#L15)
+Defined in: [api/\_handlers/image/\_shared.ts:15](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_shared.ts#L15)
 
 ## Functions
 
@@ -78,7 +78,7 @@ Defined in: [api/\_handlers/image/\_shared.ts:15](https://github.com/wenakita/46
 
 > **decodeBase64Payload**(`value`, `options`): `Uint8Array`
 
-Defined in: [api/\_handlers/image/\_shared.ts:101](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/image/_shared.ts#L101)
+Defined in: [api/\_handlers/image/\_shared.ts:101](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_shared.ts#L101)
 
 #### Parameters
 
@@ -102,7 +102,7 @@ Defined in: [api/\_handlers/image/\_shared.ts:101](https://github.com/wenakita/4
 
 > **getImageApiActor**(`req`): `string` \| `null`
 
-Defined in: [api/\_handlers/image/\_shared.ts:69](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/image/_shared.ts#L69)
+Defined in: [api/\_handlers/image/\_shared.ts:69](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_shared.ts#L69)
 
 Returns the authenticated session address, or null if not signed in.
 
@@ -122,7 +122,7 @@ Returns the authenticated session address, or null if not signed in.
 
 > **isReferenceAssetRole**(`value`): value is "frame" \| "subject"
 
-Defined in: [api/\_handlers/image/\_shared.ts:97](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/image/_shared.ts#L97)
+Defined in: [api/\_handlers/image/\_shared.ts:97](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_shared.ts#L97)
 
 #### Parameters
 
@@ -140,7 +140,7 @@ value is "frame" \| "subject"
 
 > **parseRequiredString**(`value`): `string` \| `null`
 
-Defined in: [api/\_handlers/image/\_shared.ts:93](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/image/_shared.ts#L93)
+Defined in: [api/\_handlers/image/\_shared.ts:93](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_shared.ts#L93)
 
 #### Parameters
 
@@ -158,7 +158,7 @@ Defined in: [api/\_handlers/image/\_shared.ts:93](https://github.com/wenakita/46
 
 > **prepareImageApi**(`req`, `res`): `boolean`
 
-Defined in: [api/\_handlers/image/\_shared.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/image/_shared.ts#L22)
+Defined in: [api/\_handlers/image/\_shared.ts:22](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_shared.ts#L22)
 
 CORS + no-store + admin-only gate. Used by AdminImageGeneration flows.
 
@@ -182,7 +182,7 @@ CORS + no-store + admin-only gate. Used by AdminImageGeneration flows.
 
 > **prepareImageApiAuthenticated**(`req`, `res`): `boolean`
 
-Defined in: [api/\_handlers/image/\_shared.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/image/_shared.ts#L41)
+Defined in: [api/\_handlers/image/\_shared.ts:41](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_shared.ts#L41)
 
 CORS + no-store + any-authenticated-user gate. Used by vault-deploy image gen flows.
 
@@ -206,7 +206,7 @@ CORS + no-store + any-authenticated-user gate. Used by vault-deploy image gen fl
 
 > **readBody**\<`T`\>(`req`, `options`): `Promise`\<`T`\>
 
-Defined in: [api/\_handlers/image/\_shared.ts:73](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/image/_shared.ts#L73)
+Defined in: [api/\_handlers/image/\_shared.ts:73](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_shared.ts#L73)
 
 #### Type Parameters
 
@@ -236,7 +236,7 @@ Defined in: [api/\_handlers/image/\_shared.ts:73](https://github.com/wenakita/46
 
 > **requireImageApiAdmin**(`req`, `res`): `boolean`
 
-Defined in: [api/\_handlers/image/\_shared.ts:55](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/image/_shared.ts#L55)
+Defined in: [api/\_handlers/image/\_shared.ts:55](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_shared.ts#L55)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **useDeferUntilAfterCommit**(): `boolean`
 
-Defined in: [src/hooks/useDeferUntilMounted.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useDeferUntilMounted.ts#L36)
+Defined in: [src/hooks/useDeferUntilMounted.ts:36](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useDeferUntilMounted.ts#L36)
 
 True after the first client commit — avoids wagmi Hydrate reconnect setState during render.
 
@@ -26,7 +26,7 @@ True after the first client commit — avoids wagmi Hydrate reconnect setState d
 
 > **useDeferUntilMounted**(): `boolean`
 
-Defined in: [src/hooks/useDeferUntilMounted.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useDeferUntilMounted.ts#L4)
+Defined in: [src/hooks/useDeferUntilMounted.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useDeferUntilMounted.ts#L4)
 
 True after client mount — avoids wagmi Hydrate setState during SSR/first paint.
 

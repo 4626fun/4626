@@ -12,7 +12,7 @@
 
 > **detectSignerType**(`params`): [`SignerType`](types.md#signertype-1)
 
-Defined in: [src/wallet/accountContext/detectSignerType.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/wallet/accountContext/detectSignerType.ts#L8)
+Defined in: [src/wallet/accountContext/detectSignerType.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/accountContext/detectSignerType.ts#L8)
 
 #### Parameters
 

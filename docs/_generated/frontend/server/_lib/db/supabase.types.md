@@ -12,7 +12,7 @@
 
 > **CompositeTypes**\<`PublicCompositeTypeNameOrOptions`, `CompositeTypeName`\> = `PublicCompositeTypeNameOrOptions` *extends* `object` ? `DatabaseWithoutInternals`\[`PublicCompositeTypeNameOrOptions`\[`"schema"`\]\]\[`"CompositeTypes"`\]\[`CompositeTypeName`\] : `PublicCompositeTypeNameOrOptions` *extends* keyof `DefaultSchema`\[`"CompositeTypes"`\] ? `DefaultSchema`\[`"CompositeTypes"`\]\[`PublicCompositeTypeNameOrOptions`\] : `never`
 
-Defined in: [server/\_lib/db/supabase.types.ts:4716](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/supabase.types.ts#L4716)
+Defined in: [server/\_lib/db/supabase.types.ts:4716](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/supabase.types.ts#L4716)
 
 #### Type Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/db/supabase.types.ts:4716](https://github.com/wenakita
 
 > **Database** = `object`
 
-Defined in: [server/\_lib/db/supabase.types.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/supabase.types.ts#L9)
+Defined in: [server/\_lib/db/supabase.types.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/supabase.types.ts#L9)
 
 #### Properties
 
@@ -38,7 +38,7 @@ Defined in: [server/\_lib/db/supabase.types.ts:9](https://github.com/wenakita/46
 
 > **\_\_InternalSupabase**: `object`
 
-Defined in: [server/\_lib/db/supabase.types.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/supabase.types.ts#L12)
+Defined in: [server/\_lib/db/supabase.types.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/supabase.types.ts#L12)
 
 ###### PostgrestVersion
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/db/supabase.types.ts:12](https://github.com/wenakita/4
 
 > **public**: `object`
 
-Defined in: [server/\_lib/db/supabase.types.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/supabase.types.ts#L15)
+Defined in: [server/\_lib/db/supabase.types.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/supabase.types.ts#L15)
 
 ###### CompositeTypes
 
@@ -16272,7 +16272,7 @@ Defined in: [server/\_lib/db/supabase.types.ts:15](https://github.com/wenakita/4
 
 > **Enums**\<`DefaultSchemaEnumNameOrOptions`, `EnumName`\> = `DefaultSchemaEnumNameOrOptions` *extends* `object` ? `DatabaseWithoutInternals`\[`DefaultSchemaEnumNameOrOptions`\[`"schema"`\]\]\[`"Enums"`\]\[`EnumName`\] : `DefaultSchemaEnumNameOrOptions` *extends* keyof `DefaultSchema`\[`"Enums"`\] ? `DefaultSchema`\[`"Enums"`\]\[`DefaultSchemaEnumNameOrOptions`\] : `never`
 
-Defined in: [server/\_lib/db/supabase.types.ts:4699](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/supabase.types.ts#L4699)
+Defined in: [server/\_lib/db/supabase.types.ts:4699](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/supabase.types.ts#L4699)
 
 #### Type Parameters
 
@@ -16290,7 +16290,7 @@ Defined in: [server/\_lib/db/supabase.types.ts:4699](https://github.com/wenakita
 
 > **Json** = `string` \| `number` \| `boolean` \| `null` \| \{\[`key`: `string`\]: [`Json`](#json) \| `undefined`; \} \| [`Json`](#json)[]
 
-Defined in: [server/\_lib/db/supabase.types.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/supabase.types.ts#L1)
+Defined in: [server/\_lib/db/supabase.types.ts:1](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/supabase.types.ts#L1)
 
 ***
 
@@ -16298,7 +16298,7 @@ Defined in: [server/\_lib/db/supabase.types.ts:1](https://github.com/wenakita/46
 
 > **Tables**\<`DefaultSchemaTableNameOrOptions`, `TableName`\> = `DefaultSchemaTableNameOrOptions` *extends* `object` ? `DatabaseWithoutInternals`\[`DefaultSchemaTableNameOrOptions`\[`"schema"`\]\]\[`"Tables"`\] & `DatabaseWithoutInternals`\[`DefaultSchemaTableNameOrOptions`\[`"schema"`\]\]\[`"Views"`\]\[`TableName`\] *extends* `object` ? `R` : `never` : `DefaultSchemaTableNameOrOptions` *extends* keyof `DefaultSchema`\[`"Tables"`\] & `DefaultSchema`\[`"Views"`\] ? `DefaultSchema`\[`"Tables"`\] & `DefaultSchema`\[`"Views"`\]\[`DefaultSchemaTableNameOrOptions`\] *extends* `object` ? `R` : `never` : `never`
 
-Defined in: [server/\_lib/db/supabase.types.ts:4620](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/supabase.types.ts#L4620)
+Defined in: [server/\_lib/db/supabase.types.ts:4620](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/supabase.types.ts#L4620)
 
 #### Type Parameters
 
@@ -16316,7 +16316,7 @@ Defined in: [server/\_lib/db/supabase.types.ts:4620](https://github.com/wenakita
 
 > **TablesInsert**\<`DefaultSchemaTableNameOrOptions`, `TableName`\> = `DefaultSchemaTableNameOrOptions` *extends* `object` ? `DatabaseWithoutInternals`\[`DefaultSchemaTableNameOrOptions`\[`"schema"`\]\]\[`"Tables"`\]\[`TableName`\] *extends* `object` ? `I` : `never` : `DefaultSchemaTableNameOrOptions` *extends* keyof `DefaultSchema`\[`"Tables"`\] ? `DefaultSchema`\[`"Tables"`\]\[`DefaultSchemaTableNameOrOptions`\] *extends* `object` ? `I` : `never` : `never`
 
-Defined in: [server/\_lib/db/supabase.types.ts:4649](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/supabase.types.ts#L4649)
+Defined in: [server/\_lib/db/supabase.types.ts:4649](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/supabase.types.ts#L4649)
 
 #### Type Parameters
 
@@ -16334,7 +16334,7 @@ Defined in: [server/\_lib/db/supabase.types.ts:4649](https://github.com/wenakita
 
 > **TablesUpdate**\<`DefaultSchemaTableNameOrOptions`, `TableName`\> = `DefaultSchemaTableNameOrOptions` *extends* `object` ? `DatabaseWithoutInternals`\[`DefaultSchemaTableNameOrOptions`\[`"schema"`\]\]\[`"Tables"`\]\[`TableName`\] *extends* `object` ? `U` : `never` : `DefaultSchemaTableNameOrOptions` *extends* keyof `DefaultSchema`\[`"Tables"`\] ? `DefaultSchema`\[`"Tables"`\]\[`DefaultSchemaTableNameOrOptions`\] *extends* `object` ? `U` : `never` : `never`
 
-Defined in: [server/\_lib/db/supabase.types.ts:4674](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/supabase.types.ts#L4674)
+Defined in: [server/\_lib/db/supabase.types.ts:4674](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/supabase.types.ts#L4674)
 
 #### Type Parameters
 
@@ -16352,7 +16352,7 @@ Defined in: [server/\_lib/db/supabase.types.ts:4674](https://github.com/wenakita
 
 > `const` **Constants**: `object`
 
-Defined in: [server/\_lib/db/supabase.types.ts:4733](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/supabase.types.ts#L4733)
+Defined in: [server/\_lib/db/supabase.types.ts:4733](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/supabase.types.ts#L4733)
 
 #### Type Declaration
 

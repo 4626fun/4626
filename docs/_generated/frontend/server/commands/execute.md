@@ -12,7 +12,7 @@
 
 > **executeCommand**(`params`): `Promise`\<[`KeeprCommandResult`](types.md#keeprcommandresult)\>
 
-Defined in: [server/commands/execute.ts:293](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/commands/execute.ts#L293)
+Defined in: [server/commands/execute.ts:350](https://github.com/wenakita/4626/blob/main/frontend/server/commands/execute.ts#L350)
 
 #### Parameters
 

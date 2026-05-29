@@ -12,7 +12,7 @@
 
 > **PreviewKind** = `"creator"` \| `"content"` \| `"vault"` \| `"trends"`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L13)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:13](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L13)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/social/\_socialPreview.ts:13](https://github.com/wen
 
 > **PreviewPayload** = `object`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L17)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:17](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L17)
 
 #### Properties
 
@@ -28,25 +28,25 @@ Defined in: [api/\_handlers/social/\_socialPreview.ts:17](https://github.com/wen
 
 > **description**: `string`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L19)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:19](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L19)
 
 ##### imageUrl
 
 > **imageUrl**: `string`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L20)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:20](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L20)
 
 ##### pageUrl
 
 > **pageUrl**: `string`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L21)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:21](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L21)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L18)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:18](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L18)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [api/\_handlers/social/\_socialPreview.ts:18](https://github.com/wen
 
 > **SocialPreviewInput** = `object`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:793](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L793)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:793](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L793)
 
 #### Properties
 
@@ -62,43 +62,43 @@ Defined in: [api/\_handlers/social/\_socialPreview.ts:793](https://github.com/we
 
 > **address**: `Address` \| `null`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:798](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L798)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:798](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L798)
 
 ##### chain
 
 > **chain**: `string`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:796](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L796)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:796](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L796)
 
 ##### chainId
 
 > **chainId**: `number`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:797](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L797)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:797](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L797)
 
 ##### kind
 
 > **kind**: [`PreviewKind`](#previewkind)
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:795](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L795)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:795](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L795)
 
 ##### origin
 
 > **origin**: `string`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:794](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L794)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:794](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L794)
 
 ##### sort
 
 > **sort**: [`TrendsSort`](#trendssort)
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:799](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L799)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:799](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L799)
 
 ##### time
 
 > **time**: [`TrendsTime`](#trendstime)
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:800](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L800)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:800](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L800)
 
 ***
 
@@ -106,7 +106,7 @@ Defined in: [api/\_handlers/social/\_socialPreview.ts:800](https://github.com/we
 
 > **SocialRewriteId** = `"explore-creators-list"` \| `"explore-creator-detail"` \| `"explore-content-list"` \| `"explore-content-detail"` \| `"explore-vaults-list"` \| `"vault-detail"` \| `"explore-trends-list"`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:192](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L192)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:192](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L192)
 
 ***
 
@@ -114,7 +114,7 @@ Defined in: [api/\_handlers/social/\_socialPreview.ts:192](https://github.com/we
 
 > **SocialRewriteMatch** = `object`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:201](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L201)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:201](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L201)
 
 #### Properties
 
@@ -122,19 +122,19 @@ Defined in: [api/\_handlers/social/\_socialPreview.ts:201](https://github.com/we
 
 > **destPath**: `string`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:204](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L204)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:204](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L204)
 
 ##### id
 
 > **id**: [`SocialRewriteId`](#socialrewriteid)
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:202](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L202)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:202](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L202)
 
 ##### query
 
 > **query**: `object`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:205](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L205)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:205](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L205)
 
 ###### address?
 
@@ -160,7 +160,7 @@ Defined in: [api/\_handlers/social/\_socialPreview.ts:205](https://github.com/we
 
 > **sourcePattern**: `string`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:203](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L203)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:203](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L203)
 
 ***
 
@@ -168,7 +168,7 @@ Defined in: [api/\_handlers/social/\_socialPreview.ts:203](https://github.com/we
 
 > **TrendsSort** = `"volume"` \| `"marketCap"` \| `"priceChange"` \| `"new"`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L14)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:14](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L14)
 
 ***
 
@@ -176,7 +176,7 @@ Defined in: [api/\_handlers/social/\_socialPreview.ts:14](https://github.com/wen
 
 > **TrendsTime** = `"1d"` \| `"1w"` \| `"1y"`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L15)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:15](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L15)
 
 ## Functions
 
@@ -184,7 +184,7 @@ Defined in: [api/\_handlers/social/\_socialPreview.ts:15](https://github.com/wen
 
 > **default**(`req`, `res`): `Promise`\<`void`\>
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:875](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L875)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:875](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L875)
 
 #### Parameters
 
@@ -206,7 +206,7 @@ Defined in: [api/\_handlers/social/\_socialPreview.ts:875](https://github.com/we
 
 > **getRequestOrigin**(`req`): `string`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:231](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L231)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:231](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L231)
 
 #### Parameters
 
@@ -224,7 +224,7 @@ Defined in: [api/\_handlers/social/\_socialPreview.ts:231](https://github.com/we
 
 > **isSocialBotUserAgent**(`userAgent`): `boolean`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:252](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L252)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:252](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L252)
 
 #### Parameters
 
@@ -242,7 +242,7 @@ Defined in: [api/\_handlers/social/\_socialPreview.ts:252](https://github.com/we
 
 > **matchSocialPreviewRewrite**(`pathOrUrl`, `userAgent`): [`SocialRewriteMatch`](#socialrewritematch) \| `null`
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:256](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L256)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:256](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L256)
 
 #### Parameters
 
@@ -264,7 +264,7 @@ Defined in: [api/\_handlers/social/\_socialPreview.ts:256](https://github.com/we
 
 > **normalizeSocialPreviewInput**(`params`): [`SocialPreviewInput`](#socialpreviewinput)
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:803](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L803)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:803](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L803)
 
 #### Parameters
 
@@ -304,7 +304,7 @@ Defined in: [api/\_handlers/social/\_socialPreview.ts:803](https://github.com/we
 
 > **resolveSocialPreviewPayload**(`input`): `Promise`\<[`PreviewPayload`](#previewpayload)\>
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:823](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L823)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:823](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L823)
 
 #### Parameters
 
@@ -322,7 +322,7 @@ Defined in: [api/\_handlers/social/\_socialPreview.ts:823](https://github.com/we
 
 > **resolveSocialPreviewPayloadSafe**(`input`): `Promise`\<[`PreviewPayload`](#previewpayload)\>
 
-Defined in: [api/\_handlers/social/\_socialPreview.ts:854](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/social/_socialPreview.ts#L854)
+Defined in: [api/\_handlers/social/\_socialPreview.ts:854](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/social/_socialPreview.ts#L854)
 
 #### Parameters
 

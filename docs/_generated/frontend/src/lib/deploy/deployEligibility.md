@@ -12,7 +12,7 @@
 
 > **DeployEligibilityCode** = `"ready"` \| `"no-canonical-csw"` \| `"base-app-deploy-blocked"` \| `"zora-passkey-deploy-blocked"` \| `"signing-required"` \| `"simulation-may-fail"`
 
-Defined in: [src/lib/deploy/deployEligibility.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L18)
+Defined in: [src/lib/deploy/deployEligibility.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L18)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/deploy/deployEligibility.ts:18](https://github.com/wenakita
 
 > **DeployEligibilityInput** = `object`
 
-Defined in: [src/lib/deploy/deployEligibility.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L26)
+Defined in: [src/lib/deploy/deployEligibility.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L26)
 
 #### Properties
 
@@ -28,25 +28,25 @@ Defined in: [src/lib/deploy/deployEligibility.ts:26](https://github.com/wenakita
 
 > `optional` **baseAppLinked**: `boolean`
 
-Defined in: [src/lib/deploy/deployEligibility.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L30)
+Defined in: [src/lib/deploy/deployEligibility.ts:30](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L30)
 
 ##### canonicalCswAddress
 
 > **canonicalCswAddress**: `string` \| `null`
 
-Defined in: [src/lib/deploy/deployEligibility.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L27)
+Defined in: [src/lib/deploy/deployEligibility.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L27)
 
 ##### canonicalIdentityType
 
 > **canonicalIdentityType**: `"contract"` \| `"eoa"` \| `"unknown"`
 
-Defined in: [src/lib/deploy/deployEligibility.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L28)
+Defined in: [src/lib/deploy/deployEligibility.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L28)
 
 ##### creatorCoinActionSimulationFailed?
 
 > `optional` **creatorCoinActionSimulationFailed**: `boolean`
 
-Defined in: [src/lib/deploy/deployEligibility.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L35)
+Defined in: [src/lib/deploy/deployEligibility.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L35)
 
 When set, overrides generic passkey-only Zora block (simulation already failed).
 
@@ -54,25 +54,25 @@ When set, overrides generic passkey-only Zora block (simulation already failed).
 
 > `optional` **executionTrack**: `"sub-account"` \| `"legacy-owner-install"` \| `"migration-pending"` \| `"none-yet"` \| `null`
 
-Defined in: [src/lib/deploy/deployEligibility.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L31)
+Defined in: [src/lib/deploy/deployEligibility.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L31)
 
 ##### onchainEoaOwnerCount?
 
 > `optional` **onchainEoaOwnerCount**: `number`
 
-Defined in: [src/lib/deploy/deployEligibility.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L32)
+Defined in: [src/lib/deploy/deployEligibility.ts:32](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L32)
 
 ##### privyEmbeddedEoaIsOwnerOfCanonicalCsw?
 
 > `optional` **privyEmbeddedEoaIsOwnerOfCanonicalCsw**: `boolean` \| `null`
 
-Defined in: [src/lib/deploy/deployEligibility.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L33)
+Defined in: [src/lib/deploy/deployEligibility.ts:33](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L33)
 
 ##### zoraLinked?
 
 > `optional` **zoraLinked**: `boolean`
 
-Defined in: [src/lib/deploy/deployEligibility.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L29)
+Defined in: [src/lib/deploy/deployEligibility.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L29)
 
 ***
 
@@ -80,7 +80,7 @@ Defined in: [src/lib/deploy/deployEligibility.ts:29](https://github.com/wenakita
 
 > **DeployEligibilityResult** = `object`
 
-Defined in: [src/lib/deploy/deployEligibility.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L38)
+Defined in: [src/lib/deploy/deployEligibility.ts:38](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L38)
 
 #### Properties
 
@@ -88,7 +88,7 @@ Defined in: [src/lib/deploy/deployEligibility.ts:38](https://github.com/wenakita
 
 > **blockerMessage**: `string` \| `null`
 
-Defined in: [src/lib/deploy/deployEligibility.ts:46](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L46)
+Defined in: [src/lib/deploy/deployEligibility.ts:46](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L46)
 
 Human-facing blocker when deploy should not proceed.
 
@@ -96,7 +96,7 @@ Human-facing blocker when deploy should not proceed.
 
 > **canProceedWithDeploySession**: `boolean`
 
-Defined in: [src/lib/deploy/deployEligibility.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L42)
+Defined in: [src/lib/deploy/deployEligibility.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L42)
 
 True when population (c) has deploy-session signing prerequisites.
 
@@ -104,19 +104,19 @@ True when population (c) has deploy-session signing prerequisites.
 
 > **code**: [`DeployEligibilityCode`](#deployeligibilitycode)
 
-Defined in: [src/lib/deploy/deployEligibility.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L40)
+Defined in: [src/lib/deploy/deployEligibility.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L40)
 
 ##### population
 
 > **population**: [`DeployUserPopulation`](#deployuserpopulation)
 
-Defined in: [src/lib/deploy/deployEligibility.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L39)
+Defined in: [src/lib/deploy/deployEligibility.ts:39](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L39)
 
 ##### showOwnerApprovalPanel
 
 > **showOwnerApprovalPanel**: `boolean`
 
-Defined in: [src/lib/deploy/deployEligibility.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L44)
+Defined in: [src/lib/deploy/deployEligibility.ts:44](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L44)
 
 Show Deploy one-time Privy/Base owner approval panel.
 
@@ -126,7 +126,7 @@ Show Deploy one-time Privy/Base owner approval panel.
 
 > **DeployUserPopulation** = `"email-only"` \| `"base-app-passkey"` \| `"zora-eoa-owner"` \| `"zora-passkey-only"` \| `"unknown"`
 
-Defined in: [src/lib/deploy/deployEligibility.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L11)
+Defined in: [src/lib/deploy/deployEligibility.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L11)
 
 Deploy vault eligibility by account population.
 
@@ -142,7 +142,7 @@ Populations align with docs/ACCOUNT_MODEL.md §2:
 
 > **classifyDeployPopulation**(`input`): [`DeployUserPopulation`](#deployuserpopulation)
 
-Defined in: [src/lib/deploy/deployEligibility.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L53)
+Defined in: [src/lib/deploy/deployEligibility.ts:53](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L53)
 
 #### Parameters
 
@@ -160,7 +160,7 @@ Defined in: [src/lib/deploy/deployEligibility.ts:53](https://github.com/wenakita
 
 > **evaluateDeployEligibility**(`input`): [`DeployEligibilityResult`](#deployeligibilityresult)
 
-Defined in: [src/lib/deploy/deployEligibility.ts:75](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/deploy/deployEligibility.ts#L75)
+Defined in: [src/lib/deploy/deployEligibility.ts:75](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/deployEligibility.ts#L75)
 
 #### Parameters
 

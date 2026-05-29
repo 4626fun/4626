@@ -12,7 +12,7 @@
 
 > **listHermitMemes**(): [`HermitMeme`](types.md#hermitmeme)[]
 
-Defined in: [server/\_lib/hermit/memeStore.ts:70](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/memeStore.ts#L70)
+Defined in: [server/\_lib/hermit/memeStore.ts:123](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/memeStore.ts#L123)
 
 #### Returns
 
@@ -20,11 +20,31 @@ Defined in: [server/\_lib/hermit/memeStore.ts:70](https://github.com/wenakita/46
 
 ***
 
+### pickGmeowLocalLine()
+
+> **pickGmeowLocalLine**(`meme`): `string`
+
+Defined in: [server/\_lib/hermit/memeStore.ts:150](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/memeStore.ts#L150)
+
+Local creative line when Pinata is unavailable — not the same stock caption every drop.
+
+#### Parameters
+
+##### meme
+
+[`HermitMeme`](types.md#hermitmeme)
+
+#### Returns
+
+`string`
+
+***
+
 ### pickRandomHermitMeme()
 
 > **pickRandomHermitMeme**(`tag?`): [`HermitMeme`](types.md#hermitmeme)
 
-Defined in: [server/\_lib/hermit/memeStore.ts:74](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/memeStore.ts#L74)
+Defined in: [server/\_lib/hermit/memeStore.ts:136](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/memeStore.ts#L136)
 
 #### Parameters
 
@@ -35,3 +55,17 @@ Defined in: [server/\_lib/hermit/memeStore.ts:74](https://github.com/wenakita/46
 #### Returns
 
 [`HermitMeme`](types.md#hermitmeme)
+
+***
+
+### resetHermitMemeRecentForTests()
+
+> **resetHermitMemeRecentForTests**(): `void`
+
+Defined in: [server/\_lib/hermit/memeStore.ts:132](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/memeStore.ts#L132)
+
+Test-only: reset rotation memory between cases.
+
+#### Returns
+
+`void`

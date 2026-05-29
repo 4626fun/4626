@@ -12,7 +12,7 @@
 
 > **AppLoadingBootstrapGate**(`props`): `Element`
 
-Defined in: [src/components/layout/AppLoadingOverlay.tsx:125](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/layout/AppLoadingOverlay.tsx#L125)
+Defined in: [src/components/layout/AppLoadingOverlay.tsx:125](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/AppLoadingOverlay.tsx#L125)
 
 Full-screen bootstrap handoff: register the shared overlay and keep route
 content out of the document until the gate closes.
@@ -39,7 +39,7 @@ content out of the document until the gate closes.
 
 > **AppLoadingOverlay**(): `Element` \| `null`
 
-Defined in: [src/components/layout/AppLoadingOverlay.tsx:159](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/layout/AppLoadingOverlay.tsx#L159)
+Defined in: [src/components/layout/AppLoadingOverlay.tsx:159](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/AppLoadingOverlay.tsx#L159)
 
 #### Returns
 
@@ -51,7 +51,7 @@ Defined in: [src/components/layout/AppLoadingOverlay.tsx:159](https://github.com
 
 > **AppLoadingProvider**(`props`): `Element`
 
-Defined in: [src/components/layout/AppLoadingOverlay.tsx:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/layout/AppLoadingOverlay.tsx#L60)
+Defined in: [src/components/layout/AppLoadingOverlay.tsx:60](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/AppLoadingOverlay.tsx#L60)
 
 #### Parameters
 
@@ -71,7 +71,7 @@ Defined in: [src/components/layout/AppLoadingOverlay.tsx:60](https://github.com/
 
 > **AppLoadingRegistrar**(): `null`
 
-Defined in: [src/components/layout/AppLoadingOverlay.tsx:148](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/layout/AppLoadingOverlay.tsx#L148)
+Defined in: [src/components/layout/AppLoadingOverlay.tsx:148](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/AppLoadingOverlay.tsx#L148)
 
 Register a full-screen bootstrap load. Always renders one shared overlay copy.
 
@@ -85,7 +85,7 @@ Register a full-screen bootstrap load. Always renders one shared overlay copy.
 
 > **useAppLoadingShellActive**(): `boolean`
 
-Defined in: [src/components/layout/AppLoadingOverlay.tsx:115](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/layout/AppLoadingOverlay.tsx#L115)
+Defined in: [src/components/layout/AppLoadingOverlay.tsx:115](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/AppLoadingOverlay.tsx#L115)
 
 True while bootstrap registrars are active or the overlay is finishing its hide delay.
 
@@ -99,7 +99,7 @@ True while bootstrap registrars are active or the overlay is finishing its hide 
 
 > **useOptionalAppLoadingActive**(): `boolean`
 
-Defined in: [src/components/layout/AppLoadingOverlay.tsx:73](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/layout/AppLoadingOverlay.tsx#L73)
+Defined in: [src/components/layout/AppLoadingOverlay.tsx:73](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/AppLoadingOverlay.tsx#L73)
 
 #### Returns
 

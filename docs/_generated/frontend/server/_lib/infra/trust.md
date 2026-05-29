@@ -12,7 +12,7 @@
 
 > **extractPrivyVerifiedEmail**(`user`): `string` \| `null`
 
-Defined in: [server/\_lib/infra/trust.ts:88](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/trust.ts#L88)
+Defined in: [server/\_lib/infra/trust.ts:88](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/trust.ts#L88)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/infra/trust.ts:88](https://github.com/wenakita/4626/bl
 
 > **getTrustedRequestOrigins**(`req?`): `Set`\<`string`\>
 
-Defined in: [server/\_lib/infra/trust.ts:138](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/trust.ts#L138)
+Defined in: [server/\_lib/infra/trust.ts:138](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/trust.ts#L138)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/infra/trust.ts:138](https://github.com/wenakita/4626/b
 
 > **isAddressLike**(`value`): `` value is `0x${string}` ``
 
-Defined in: [server/\_lib/infra/trust.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/trust.ts#L29)
+Defined in: [server/\_lib/infra/trust.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/trust.ts#L29)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [server/\_lib/infra/trust.ts:29](https://github.com/wenakita/4626/bl
 
 > **isServerAdminAddress**(`address`): `boolean`
 
-Defined in: [server/\_lib/infra/trust.ts:190](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/trust.ts#L190)
+Defined in: [server/\_lib/infra/trust.ts:190](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/trust.ts#L190)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ Defined in: [server/\_lib/infra/trust.ts:190](https://github.com/wenakita/4626/b
 
 > **isTrustedRequestOrigin**(`req`, `origin`): `boolean`
 
-Defined in: [server/\_lib/infra/trust.ts:169](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/trust.ts#L169)
+Defined in: [server/\_lib/infra/trust.ts:169](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/trust.ts#L169)
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: [server/\_lib/infra/trust.ts:169](https://github.com/wenakita/4626/b
 
 > **normalizeAddress**(`value`): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/infra/trust.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/trust.ts#L33)
+Defined in: [server/\_lib/infra/trust.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/trust.ts#L33)
 
 #### Parameters
 
@@ -124,7 +124,7 @@ Defined in: [server/\_lib/infra/trust.ts:33](https://github.com/wenakita/4626/bl
 
 > **normalizeEmail**(`value`): `string` \| `null`
 
-Defined in: [server/\_lib/infra/trust.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/trust.ts#L39)
+Defined in: [server/\_lib/infra/trust.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/trust.ts#L39)
 
 #### Parameters
 
@@ -142,7 +142,7 @@ Defined in: [server/\_lib/infra/trust.ts:39](https://github.com/wenakita/4626/bl
 
 > **normalizeOrigin**(`value`): `string` \| `null`
 
-Defined in: [server/\_lib/infra/trust.ts:112](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/trust.ts#L112)
+Defined in: [server/\_lib/infra/trust.ts:112](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/trust.ts#L112)
 
 #### Parameters
 
@@ -160,7 +160,7 @@ Defined in: [server/\_lib/infra/trust.ts:112](https://github.com/wenakita/4626/b
 
 > **readServerAdminAddressSet**(): `Set`\<`string`\>
 
-Defined in: [server/\_lib/infra/trust.ts:175](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/trust.ts#L175)
+Defined in: [server/\_lib/infra/trust.ts:175](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/trust.ts#L175)
 
 #### Returns
 

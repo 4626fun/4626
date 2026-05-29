@@ -12,7 +12,7 @@
 
 > **TelegramParseMode** = `"Markdown"` \| `"HTML"` \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/markdown.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/markdown.ts#L3)
+Defined in: [api/\_handlers/telegram/webhook/markdown.ts:3](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/markdown.ts#L3)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/telegram/webhook/markdown.ts:3](https://github.com/w
 
 > **formatTelegramOutboundText**(`text`): `object`
 
-Defined in: [api/\_handlers/telegram/webhook/markdown.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/markdown.ts#L15)
+Defined in: [api/\_handlers/telegram/webhook/markdown.ts:15](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/markdown.ts#L15)
 
 #### Parameters
 
@@ -46,7 +46,7 @@ Defined in: [api/\_handlers/telegram/webhook/markdown.ts:15](https://github.com/
 
 > **shouldUseTelegramHtml**(`text`): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/markdown.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/markdown.ts#L11)
+Defined in: [api/\_handlers/telegram/webhook/markdown.ts:11](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/markdown.ts#L11)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [api/\_handlers/telegram/webhook/markdown.ts:11](https://github.com/
 
 > **shouldUseTelegramMarkdown**(`text`): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/markdown.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/markdown.ts#L5)
+Defined in: [api/\_handlers/telegram/webhook/markdown.ts:5](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/markdown.ts#L5)
 
 #### Parameters
 

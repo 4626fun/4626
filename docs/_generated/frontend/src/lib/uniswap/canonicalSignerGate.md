@@ -12,7 +12,7 @@
 
 > **CanonicalAuthStatus** = `"authenticated"` \| `"unauthenticated"` \| `"unknown"`
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L7)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L7)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/uniswap/canonicalSignerGate.ts:7](https://github.com/wenaki
 
 > **CanonicalOwnerCheckStatus** = `"owner"` \| `"not-owner"` \| `"pending"` \| `"unknown"`
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L6)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L6)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/lib/uniswap/canonicalSignerGate.ts:6](https://github.com/wenaki
 
 > **CanonicalPrivyClientStatus** = `"disabled"` \| `"loading"` \| `"ready"`
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L8)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L8)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/lib/uniswap/canonicalSignerGate.ts:8](https://github.com/wenaki
 
 > **CanonicalSignerGateInput** = `object`
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L10)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L10)
 
 #### Properties
 
@@ -44,67 +44,67 @@ Defined in: [src/lib/uniswap/canonicalSignerGate.ts:10](https://github.com/wenak
 
 > `optional` **authStatus**: [`CanonicalAuthStatus`](#canonicalauthstatus)
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L17)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L17)
 
 ##### baseSubAccountAddress?
 
 > `optional` **baseSubAccountAddress**: `string` \| `null`
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L14)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L14)
 
 ##### canonicalAddress
 
 > **canonicalAddress**: `string` \| `null`
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L13)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L13)
 
 ##### clientStatus?
 
 > `optional` **clientStatus**: [`CanonicalPrivyClientStatus`](#canonicalprivyclientstatus)
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L16)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L16)
 
 ##### embeddedWalletAddress
 
 > **embeddedWalletAddress**: `string` \| `null`
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L19)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L19)
 
 ##### embeddedWalletCanSign
 
 > **embeddedWalletCanSign**: `boolean`
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L20)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L20)
 
 ##### embeddedWalletDetected
 
 > **embeddedWalletDetected**: `boolean`
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L18)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L18)
 
 ##### executionMode
 
 > **executionMode**: [`WalletMode`](walletMode.md#walletmode)
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L11)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L11)
 
 ##### executionTrack?
 
 > `optional` **executionTrack**: [`UserExecutionTrack`](../tx/txRouter.md#userexecutiontrack) \| `null`
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L12)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L12)
 
 ##### ownerCheckStatus
 
 > **ownerCheckStatus**: [`CanonicalOwnerCheckStatus`](#canonicalownercheckstatus)
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L21)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L21)
 
 ##### subAccountProviderReady?
 
 > `optional` **subAccountProviderReady**: `boolean`
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L15)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L15)
 
 ***
 
@@ -112,7 +112,7 @@ Defined in: [src/lib/uniswap/canonicalSignerGate.ts:15](https://github.com/wenak
 
 > **CanonicalSignerGateResult** = `object`
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L24)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:24](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L24)
 
 #### Properties
 
@@ -120,25 +120,25 @@ Defined in: [src/lib/uniswap/canonicalSignerGate.ts:24](https://github.com/wenak
 
 > **code**: `"not-required"` \| `"privy-client-disabled"` \| `"privy-auth-loading"` \| `"privy-auth-required"` \| `"missing-canonical-address"` \| `"base-sub-account-missing"` \| `"base-sub-account-invalid"` \| `"base-sub-account-provider-missing"` \| `"execution-setup-required"` \| `"embedded-wallet-missing"` \| `"embedded-wallet-address-invalid"` \| `"embedded-wallet-cannot-sign"` \| `"owner-check-pending"` \| `"embedded-wallet-not-owner"` \| `"ok"`
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L27)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L27)
 
 ##### ready
 
 > **ready**: `boolean`
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L26)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L26)
 
 ##### reason
 
 > **reason**: `string` \| `null`
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L43)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:43](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L43)
 
 ##### required
 
 > **required**: `boolean`
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L25)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L25)
 
 ## Functions
 
@@ -146,7 +146,7 @@ Defined in: [src/lib/uniswap/canonicalSignerGate.ts:25](https://github.com/wenak
 
 > **evaluateCanonicalSignerGate**(`input`): [`CanonicalSignerGateResult`](#canonicalsignergateresult)
 
-Defined in: [src/lib/uniswap/canonicalSignerGate.ts:62](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/canonicalSignerGate.ts#L62)
+Defined in: [src/lib/uniswap/canonicalSignerGate.ts:62](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/canonicalSignerGate.ts#L62)
 
 #### Parameters
 

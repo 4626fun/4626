@@ -12,7 +12,7 @@
 
 > **enrichSwapTokenOption**(`option`): `Promise`\<[`SwapTokenOption`](../../components/swap/TokenSelectorModal.md#swaptokenoption)\>
 
-Defined in: src/lib/swap/swapTokenLabels.ts:149
+Defined in: [src/lib/swap/swapTokenLabels.ts:151](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/swapTokenLabels.ts#L151)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: src/lib/swap/swapTokenLabels.ts:149
 
 > **enrichSwapTokenOptions**(`options`): `Promise`\<[`SwapTokenOption`](../../components/swap/TokenSelectorModal.md#swaptokenoption)[]\>
 
-Defined in: src/lib/swap/swapTokenLabels.ts:168
+Defined in: [src/lib/swap/swapTokenLabels.ts:226](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/swapTokenLabels.ts#L226)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: src/lib/swap/swapTokenLabels.ts:168
 
 > **isAddressLikeSwapSymbol**(`symbol`, `address`): `boolean`
 
-Defined in: src/lib/swap/swapTokenLabels.ts:55
+Defined in: [src/lib/swap/swapTokenLabels.ts:55](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/swapTokenLabels.ts#L55)
 
 Truncated or full addresses used as placeholders should be replaced with real labels.
 
@@ -72,7 +72,7 @@ Truncated or full addresses used as placeholders should be replaced with real la
 
 > **isOpaqueInternalTokenLabel**(`value`): `boolean`
 
-Defined in: src/lib/swap/swapTokenLabels.ts:45
+Defined in: [src/lib/swap/swapTokenLabels.ts:45](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/swapTokenLabels.ts#L45)
 
 Vault/XMTP group ids and other opaque ids must not be shown as token symbols.
 
@@ -92,7 +92,7 @@ Vault/XMTP group ids and other opaque ids must not be shown as token symbols.
 
 > **resolveCreatorCoinLabelsFromZora**(`coin`, `address`): `object`
 
-Defined in: src/lib/swap/swapTokenLabels.ts:17
+Defined in: [src/lib/swap/swapTokenLabels.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/swapTokenLabels.ts#L17)
 
 #### Parameters
 
@@ -122,7 +122,7 @@ Defined in: src/lib/swap/swapTokenLabels.ts:17
 
 > **resolveSwapTokenLabels**(`address`, `chainId`): `Promise`\<\{ `logoUrl?`: `string`; `name`: `string`; `symbol`: `string`; \}\>
 
-Defined in: src/lib/swap/swapTokenLabels.ts:88
+Defined in: [src/lib/swap/swapTokenLabels.ts:90](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/swapTokenLabels.ts#L90)
 
 #### Parameters
 
@@ -144,7 +144,7 @@ Defined in: src/lib/swap/swapTokenLabels.ts:88
 
 > **swapTokenOptionNeedsLabelEnrichment**(`option`): `boolean`
 
-Defined in: src/lib/swap/swapTokenLabels.ts:70
+Defined in: [src/lib/swap/swapTokenLabels.ts:70](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/swapTokenLabels.ts#L70)
 
 #### Parameters
 

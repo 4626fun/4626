@@ -12,7 +12,7 @@
 
 > `const` **ERC20\_METADATA\_ABI**: readonly \[\{ `inputs`: readonly \[\]; `name`: `"name"`; `outputs`: readonly \[\{ `type`: `"string"`; \}\]; `stateMutability`: `"view"`; `type`: `"function"`; \}, \{ `inputs`: readonly \[\]; `name`: `"symbol"`; `outputs`: readonly \[\{ `type`: `"string"`; \}\]; `stateMutability`: `"view"`; `type`: `"function"`; \}, \{ `inputs`: readonly \[\]; `name`: `"decimals"`; `outputs`: readonly \[\{ `type`: `"uint8"`; \}\]; `stateMutability`: `"view"`; `type`: `"function"`; \}\]
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L7)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L7)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:7](https://github
 
 > `const` **normalizeExactWrapTokenName**: (`raw`) => `string` \| `null` = `normalizeWrapTokenName`
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:107](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L107)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:107](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L107)
 
 Normalize a Base ERC-20 `name()` for use as a Solana bridge-wrapped mint
 name. Coerces to lowercase so every creator's Solana display is uniform
@@ -51,7 +51,7 @@ behavior changed at the same time (now lowercase-coerced, not exact-case).
 
 > `const` **normalizeExactWrapTokenSymbol**: (`raw`) => `string` \| `null` = `normalizeWrapTokenSymbol`
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:113](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L113)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:113](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L113)
 
 Normalize a Base ERC-20 `symbol()` for use as a Solana bridge-wrapped mint
 symbol. Same lowercase policy as the name normalizer: uniform lowercase
@@ -78,7 +78,7 @@ rationale as `normalizeExactWrapTokenName`.
 
 > `const` **WRAP\_TOKEN\_METADATA\_URI\_MAX\_LENGTH**: `512` = `512`
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L5)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L5)
 
 ***
 
@@ -86,7 +86,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:5](https://github
 
 > `const` **WRAP\_TOKEN\_NAME\_MAX\_LENGTH**: `32` = `32`
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L3)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L3)
 
 ***
 
@@ -94,7 +94,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:3](https://github
 
 > `const` **WRAP\_TOKEN\_SYMBOL\_MAX\_LENGTH**: `12` = `12`
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L4)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L4)
 
 ## Functions
 
@@ -102,7 +102,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:4](https://github
 
 > **isLikelyUnsupportedMetadataUriFlagError**(`message`): `boolean`
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:132](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L132)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:132](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L132)
 
 #### Parameters
 
@@ -120,7 +120,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:132](https://gith
 
 > **normalizeWrapTokenMetadataUri**(`raw`): `string` \| `null`
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:115](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L115)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:115](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L115)
 
 #### Parameters
 
@@ -138,7 +138,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:115](https://gith
 
 > **normalizeWrapTokenName**(`raw`): `string` \| `null`
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:73](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L73)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:73](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L73)
 
 Normalize a Base ERC-20 `name()` for use as a Solana bridge-wrapped mint
 name. Coerces to lowercase so every creator's Solana display is uniform
@@ -163,7 +163,7 @@ on-chain identity is bound to the lowercase form.
 
 > **normalizeWrapTokenSymbol**(`raw`): `string` \| `null`
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:91](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L91)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:91](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L91)
 
 Normalize a Base ERC-20 `symbol()` for use as a Solana bridge-wrapped mint
 symbol. Same lowercase policy as the name normalizer: uniform lowercase
@@ -185,7 +185,7 @@ display, fail-closed on empty/null-byte/oversized inputs.
 
 > **readBridgeTokenMetadata**(`params`): `Promise`\<\{ `name`: `string`; `symbol`: `string`; \} \| `null`\>
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L39)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L39)
 
 #### Parameters
 

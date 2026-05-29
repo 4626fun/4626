@@ -12,7 +12,7 @@
 
 > **extractCreatorCoinAddressFromProfile**(`profile`): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/zora/zoraProfile.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/zoraProfile.ts#L10)
+Defined in: [server/\_lib/zora/zoraProfile.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/zoraProfile.ts#L10)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/zora/zoraProfile.ts:10](https://github.com/wenakita/46
 
 > **fetchZoraProfile**(`identifier`): `Promise`\<`any`\>
 
-Defined in: [server/\_lib/zora/zoraProfile.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/zoraProfile.ts#L16)
+Defined in: [server/\_lib/zora/zoraProfile.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/zoraProfile.ts#L16)
 
 #### Parameters
 

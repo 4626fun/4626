@@ -12,7 +12,7 @@
 
 > **PaymentOrderStatus** = `"quoted"` \| `"payment_pending"` \| `"paid"` \| `"provisioning_queued"` \| `"provisioning_running"` \| `"manual_review"` \| `"completed"` \| `"failed"` \| `"refunded"` \| `"cancelled"` \| `"expired"`
 
-Defined in: [server/\_lib/creatorStrategy/paymentOrders.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/paymentOrders.ts#L5)
+Defined in: [server/\_lib/creatorStrategy/paymentOrders.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/paymentOrders.ts#L5)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/creatorStrategy/paymentOrders.ts:5](https://github.com
 
 > **upsertPaymentOrder**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/creatorStrategy/paymentOrders.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/paymentOrders.ts#L18)
+Defined in: [server/\_lib/creatorStrategy/paymentOrders.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/paymentOrders.ts#L18)
 
 #### Parameters
 

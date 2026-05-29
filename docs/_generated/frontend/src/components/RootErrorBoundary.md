@@ -10,7 +10,7 @@
 
 ### RootErrorBoundary
 
-Defined in: [src/components/RootErrorBoundary.tsx:95](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/RootErrorBoundary.tsx#L95)
+Defined in: [src/components/RootErrorBoundary.tsx:95](https://github.com/wenakita/4626/blob/main/frontend/src/components/RootErrorBoundary.tsx#L95)
 
 #### Extends
 
@@ -22,7 +22,7 @@ Defined in: [src/components/RootErrorBoundary.tsx:95](https://github.com/wenakit
 
 > **new RootErrorBoundary**(`props`): [`RootErrorBoundary`](#rooterrorboundary)
 
-Defined in: [src/components/RootErrorBoundary.tsx:96](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/RootErrorBoundary.tsx#L96)
+Defined in: [src/components/RootErrorBoundary.tsx:96](https://github.com/wenakita/4626/blob/main/frontend/src/components/RootErrorBoundary.tsx#L96)
 
 ###### Parameters
 
@@ -44,7 +44,7 @@ Defined in: [src/components/RootErrorBoundary.tsx:96](https://github.com/wenakit
 
 > **componentDidCatch**(`error`, `errorInfo`): `void`
 
-Defined in: [src/components/RootErrorBoundary.tsx:105](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/RootErrorBoundary.tsx#L105)
+Defined in: [src/components/RootErrorBoundary.tsx:105](https://github.com/wenakita/4626/blob/main/frontend/src/components/RootErrorBoundary.tsx#L105)
 
 Catches exceptions generated in descendant components. Unhandled exceptions will cause
 the entire component tree to unmount.
@@ -71,7 +71,7 @@ the entire component tree to unmount.
 
 > **handleReload**(): `void`
 
-Defined in: [src/components/RootErrorBoundary.tsx:122](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/RootErrorBoundary.tsx#L122)
+Defined in: [src/components/RootErrorBoundary.tsx:122](https://github.com/wenakita/4626/blob/main/frontend/src/components/RootErrorBoundary.tsx#L122)
 
 ###### Returns
 
@@ -81,7 +81,7 @@ Defined in: [src/components/RootErrorBoundary.tsx:122](https://github.com/wenaki
 
 > **handleRetry**(): `void`
 
-Defined in: [src/components/RootErrorBoundary.tsx:114](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/RootErrorBoundary.tsx#L114)
+Defined in: [src/components/RootErrorBoundary.tsx:114](https://github.com/wenakita/4626/blob/main/frontend/src/components/RootErrorBoundary.tsx#L114)
 
 ###### Returns
 
@@ -91,7 +91,7 @@ Defined in: [src/components/RootErrorBoundary.tsx:114](https://github.com/wenaki
 
 > **render**(): `ReactNode`
 
-Defined in: [src/components/RootErrorBoundary.tsx:126](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/RootErrorBoundary.tsx#L126)
+Defined in: [src/components/RootErrorBoundary.tsx:126](https://github.com/wenakita/4626/blob/main/frontend/src/components/RootErrorBoundary.tsx#L126)
 
 ###### Returns
 
@@ -105,7 +105,7 @@ Defined in: [src/components/RootErrorBoundary.tsx:126](https://github.com/wenaki
 
 > `static` **getDerivedStateFromError**(`error`): `Partial`\<`RootErrorBoundaryState`\>
 
-Defined in: [src/components/RootErrorBoundary.tsx:101](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/RootErrorBoundary.tsx#L101)
+Defined in: [src/components/RootErrorBoundary.tsx:101](https://github.com/wenakita/4626/blob/main/frontend/src/components/RootErrorBoundary.tsx#L101)
 
 ###### Parameters
 

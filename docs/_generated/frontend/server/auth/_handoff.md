@@ -12,7 +12,7 @@
 
 > **consumeHandoffCode**(`db`, `code`): `Promise`\<\{ `address`: `string`; `privyToken`: `string` \| `null`; \} \| `null`\>
 
-Defined in: [server/auth/\_handoff.ts:145](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/auth/_handoff.ts#L145)
+Defined in: [server/auth/\_handoff.ts:145](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_handoff.ts#L145)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [server/auth/\_handoff.ts:145](https://github.com/wenakita/4626/blob
 
 > **createHandoffCode**(`db`, `params`): `Promise`\<\{ `code`: `string`; `expiresAt`: `string`; \}\>
 
-Defined in: [server/auth/\_handoff.ts:127](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/auth/_handoff.ts#L127)
+Defined in: [server/auth/\_handoff.ts:127](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_handoff.ts#L127)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [server/auth/\_handoff.ts:127](https://github.com/wenakita/4626/blob
 
 > **decryptPrivyToken**(`stored`): `string` \| `null`
 
-Defined in: [server/auth/\_handoff.ts:80](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/auth/_handoff.ts#L80)
+Defined in: [server/auth/\_handoff.ts:80](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_handoff.ts#L80)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ Defined in: [server/auth/\_handoff.ts:80](https://github.com/wenakita/4626/blob/
 
 > **encryptPrivyToken**(`token`): `string`
 
-Defined in: [server/auth/\_handoff.ts:72](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/auth/_handoff.ts#L72)
+Defined in: [server/auth/\_handoff.ts:72](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_handoff.ts#L72)
 
 #### Parameters
 
@@ -102,7 +102,7 @@ Defined in: [server/auth/\_handoff.ts:72](https://github.com/wenakita/4626/blob/
 
 > **ensureHandoffSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/auth/\_handoff.ts:101](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/auth/_handoff.ts#L101)
+Defined in: [server/auth/\_handoff.ts:101](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_handoff.ts#L101)
 
 #### Parameters
 
@@ -120,7 +120,7 @@ Defined in: [server/auth/\_handoff.ts:101](https://github.com/wenakita/4626/blob
 
 > **makeHandoffCode**(): `string`
 
-Defined in: [server/auth/\_handoff.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/auth/_handoff.ts#L11)
+Defined in: [server/auth/\_handoff.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_handoff.ts#L11)
 
 #### Returns
 

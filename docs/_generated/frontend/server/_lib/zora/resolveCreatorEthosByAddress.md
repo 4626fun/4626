@@ -12,7 +12,7 @@
 
 > **CreatorEthosResolved** = `object`
 
-Defined in: [server/\_lib/zora/resolveCreatorEthosByAddress.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/resolveCreatorEthosByAddress.ts#L4)
+Defined in: [server/\_lib/zora/resolveCreatorEthosByAddress.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/resolveCreatorEthosByAddress.ts#L4)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [server/\_lib/zora/resolveCreatorEthosByAddress.ts:4](https://github
 
 > **creatorAddress**: `string`
 
-Defined in: [server/\_lib/zora/resolveCreatorEthosByAddress.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/resolveCreatorEthosByAddress.ts#L5)
+Defined in: [server/\_lib/zora/resolveCreatorEthosByAddress.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/resolveCreatorEthosByAddress.ts#L5)
 
 ##### level
 
 > **level**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/resolveCreatorEthosByAddress.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/resolveCreatorEthosByAddress.ts#L7)
+Defined in: [server/\_lib/zora/resolveCreatorEthosByAddress.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/resolveCreatorEthosByAddress.ts#L7)
 
 ##### score
 
 > **score**: `number` \| `null`
 
-Defined in: [server/\_lib/zora/resolveCreatorEthosByAddress.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/resolveCreatorEthosByAddress.ts#L6)
+Defined in: [server/\_lib/zora/resolveCreatorEthosByAddress.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/resolveCreatorEthosByAddress.ts#L6)
 
 ##### source
 
 > **source**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/resolveCreatorEthosByAddress.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/resolveCreatorEthosByAddress.ts#L8)
+Defined in: [server/\_lib/zora/resolveCreatorEthosByAddress.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/resolveCreatorEthosByAddress.ts#L8)
 
 ## Functions
 
@@ -46,7 +46,7 @@ Defined in: [server/\_lib/zora/resolveCreatorEthosByAddress.ts:8](https://github
 
 > **resolveCreatorEthosByAddress**(`creatorAddresses`): `Promise`\<`Map`\<`string`, [`CreatorEthosResolved`](#creatorethosresolved)\>\>
 
-Defined in: [server/\_lib/zora/resolveCreatorEthosByAddress.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/resolveCreatorEthosByAddress.ts#L44)
+Defined in: [server/\_lib/zora/resolveCreatorEthosByAddress.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/resolveCreatorEthosByAddress.ts#L44)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [server/\_lib/zora/resolveCreatorEthosByAddress.ts:44](https://githu
 
 > **resolveEthosScoreSource**(`candidates`): `string` \| `null`
 
-Defined in: [server/\_lib/zora/resolveCreatorEthosByAddress.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/resolveCreatorEthosByAddress.ts#L20)
+Defined in: [server/\_lib/zora/resolveCreatorEthosByAddress.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/resolveCreatorEthosByAddress.ts#L20)
 
 #### Parameters
 

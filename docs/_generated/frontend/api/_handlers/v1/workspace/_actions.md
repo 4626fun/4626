@@ -12,7 +12,7 @@
 
 > **MaxAssetsCapParseResult** = \{ `ok`: `true`; `value`: `string` \| `null` \| `undefined`; \} \| \{ `error`: `string`; `ok`: `false`; \}
 
-Defined in: [api/\_handlers/v1/workspace/\_actions.ts:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/workspace/_actions.ts#L68)
+Defined in: [api/\_handlers/v1/workspace/\_actions.ts:68](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/workspace/_actions.ts#L68)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/v1/workspace/\_actions.ts:68](https://github.com/wen
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/workspace/\_actions.ts:175](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/workspace/_actions.ts#L175)
+Defined in: [api/\_handlers/v1/workspace/\_actions.ts:175](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/workspace/_actions.ts#L175)
 
 #### Parameters
 
@@ -42,7 +42,7 @@ Defined in: [api/\_handlers/v1/workspace/\_actions.ts:175](https://github.com/we
 
 > **parseMaxAssetsCap**(`payload`): [`MaxAssetsCapParseResult`](#maxassetscapparseresult)
 
-Defined in: [api/\_handlers/v1/workspace/\_actions.ts:78](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/workspace/_actions.ts#L78)
+Defined in: [api/\_handlers/v1/workspace/\_actions.ts:78](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/workspace/_actions.ts#L78)
 
 #### Parameters
 

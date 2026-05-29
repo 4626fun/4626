@@ -12,7 +12,7 @@
 
 > **AccountsPage**(`props`): `Element`
 
-Defined in: [src/pages/accounts/AccountsPage.tsx:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/accounts/AccountsPage.tsx#L23)
+Defined in: [src/pages/accounts/AccountsPage.tsx:22](https://github.com/wenakita/4626/blob/main/frontend/src/pages/accounts/AccountsPage.tsx#L22)
 
 #### Parameters
 

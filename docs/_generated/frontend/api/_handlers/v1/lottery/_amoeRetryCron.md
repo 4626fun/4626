@@ -10,7 +10,7 @@
 
 ### AmoeRetryCronHandlerHooks
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeRetryCron.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeRetryCron.ts#L43)
+Defined in: [api/\_handlers/v1/lottery/\_amoeRetryCron.ts:43](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeRetryCron.ts#L43)
 
 Test seam \u2014 inject a relay so the integration test can drive the
 cron without snarkjs / RPC.
@@ -21,7 +21,7 @@ cron without snarkjs / RPC.
 
 > `optional` **pickRows**: (`limit`) => `Promise`\<[`AmoeSubmissionRow`](../../../../server/_lib/lottery/amoeReplayStore.md#amoesubmissionrow)[]\>
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeRetryCron.ts:46](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeRetryCron.ts#L46)
+Defined in: [api/\_handlers/v1/lottery/\_amoeRetryCron.ts:46](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeRetryCron.ts#L46)
 
 Override the row picker (tests use this to bypass the DB).
 
@@ -39,13 +39,13 @@ Override the row picker (tests use this to bypass the DB).
 
 > `optional` **relay**: [`RetrySubmissionRelay`](../../../../server/_lib/lottery/amoeReplayRetry.md#retrysubmissionrelay)
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeRetryCron.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeRetryCron.ts#L44)
+Defined in: [api/\_handlers/v1/lottery/\_amoeRetryCron.ts:44](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeRetryCron.ts#L44)
 
 ##### retryOne()?
 
 > `optional` **retryOne**: (`id`, `params`) => `Promise`\<[`RetrySubmissionOutcome`](../../../../server/_lib/lottery/amoeReplayRetry.md#retrysubmissionoutcome)\>
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeRetryCron.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeRetryCron.ts#L48)
+Defined in: [api/\_handlers/v1/lottery/\_amoeRetryCron.ts:48](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeRetryCron.ts#L48)
 
 Override `retrySubmissionByIdAsCron` for tests.
 
@@ -69,7 +69,7 @@ Override `retrySubmissionByIdAsCron` for tests.
 
 > **\_\_resetAmoeRetryCronHandlerHooksForTest**(): `void`
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeRetryCron.ts:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeRetryCron.ts#L60)
+Defined in: [api/\_handlers/v1/lottery/\_amoeRetryCron.ts:60](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeRetryCron.ts#L60)
 
 #### Returns
 
@@ -81,7 +81,7 @@ Defined in: [api/\_handlers/v1/lottery/\_amoeRetryCron.ts:60](https://github.com
 
 > **\_\_setAmoeRetryCronHandlerHooksForTest**(`hooks`): `void`
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeRetryCron.ts:56](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeRetryCron.ts#L56)
+Defined in: [api/\_handlers/v1/lottery/\_amoeRetryCron.ts:56](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeRetryCron.ts#L56)
 
 #### Parameters
 
@@ -99,7 +99,7 @@ Defined in: [api/\_handlers/v1/lottery/\_amoeRetryCron.ts:56](https://github.com
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse`\>
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeRetryCron.ts:66](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeRetryCron.ts#L66)
+Defined in: [api/\_handlers/v1/lottery/\_amoeRetryCron.ts:66](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeRetryCron.ts#L66)
 
 #### Parameters
 

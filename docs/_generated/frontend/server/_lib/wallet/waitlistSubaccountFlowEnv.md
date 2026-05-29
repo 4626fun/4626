@@ -12,7 +12,7 @@
 
 > **isWaitlistSubaccountFlowEnabled**(`env`): `boolean`
 
-Defined in: [server/\_lib/wallet/waitlistSubaccountFlowEnv.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/waitlistSubaccountFlowEnv.ts#L8)
+Defined in: [server/\_lib/wallet/waitlistSubaccountFlowEnv.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/waitlistSubaccountFlowEnv.ts#L8)
 
 Server gate for Track C2 Base App sub-account waitlist/onboarding.
 Must stay in sync with `waitlistSubAccountFlowFlag` (client) and

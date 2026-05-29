@@ -12,7 +12,7 @@
 
 > **AccountChromeExecution** = `object`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:123](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L123)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:123](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L123)
 
 #### Properties
 
@@ -20,49 +20,49 @@ Defined in: [src/lib/wallet/userExecutionTrack.ts:123](https://github.com/wenaki
 
 > **effectiveExecutionTrack**: [`UserFrontendExecutionTrack`](#userfrontendexecutiontrack)
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:125](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L125)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:125](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L125)
 
 ##### executionLaneDescription
 
 > **executionLaneDescription**: `string`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:131](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L131)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:131](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L131)
 
 ##### executionLaneTitle
 
 > **executionLaneTitle**: `string`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:130](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L130)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:130](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L130)
 
 ##### mode
 
 > **mode**: [`AccountChromeExecutionMode`](#accountchromeexecutionmode-1)
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:124](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L124)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:124](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L124)
 
 ##### showSubAccountInAccounts
 
 > **showSubAccountInAccounts**: `boolean`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:127](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L127)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:127](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L127)
 
 ##### showSubAccountInTray
 
 > **showSubAccountInTray**: `boolean`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:126](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L126)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:126](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L126)
 
 ##### subAccountAddress
 
 > **subAccountAddress**: `string` \| `null`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:129](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L129)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:129](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L129)
 
 ##### swapSenderLabel
 
 > **swapSenderLabel**: `string` \| `null`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:128](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L128)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:128](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L128)
 
 ***
 
@@ -70,7 +70,7 @@ Defined in: [src/lib/wallet/userExecutionTrack.ts:128](https://github.com/wenaki
 
 > **AccountChromeExecutionMode** = `"parent-csw"` \| `"sub-account"` \| `"none"`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:121](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L121)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:121](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L121)
 
 ***
 
@@ -78,7 +78,7 @@ Defined in: [src/lib/wallet/userExecutionTrack.ts:121](https://github.com/wenaki
 
 > **UserExecutionAccountSignals** = `object`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L14)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L14)
 
 #### Properties
 
@@ -86,7 +86,7 @@ Defined in: [src/lib/wallet/userExecutionTrack.ts:14](https://github.com/wenakit
 
 > `optional` **baseSubAccount**: `object`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L21)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L21)
 
 ###### address?
 
@@ -104,37 +104,37 @@ Defined in: [src/lib/wallet/userExecutionTrack.ts:21](https://github.com/wenakit
 
 > `optional` **canonicalCswAddress**: `string` \| `null`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L18)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L18)
 
 ##### creatorCoin?
 
 > `optional` **creatorCoin**: \{ `address?`: `string` \| `null`; \} \| `null`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L17)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L17)
 
 ##### executionTrack?
 
 > `optional` **executionTrack**: [`UserFrontendExecutionTrack`](#userfrontendexecutiontrack)
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L19)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L19)
 
 ##### linked?
 
 > `optional` **linked**: `boolean`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L15)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L15)
 
 ##### privyEmbeddedEoaIsOwnerOfCanonicalCsw?
 
 > `optional` **privyEmbeddedEoaIsOwnerOfCanonicalCsw**: `boolean` \| `null`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L20)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L20)
 
 ##### zoraHandle?
 
 > `optional` **zoraHandle**: `string` \| `null`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L16)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L16)
 
 ***
 
@@ -142,7 +142,7 @@ Defined in: [src/lib/wallet/userExecutionTrack.ts:16](https://github.com/wenakit
 
 > **UserFrontendExecutionTrack** = `"sub-account"` \| `"legacy-owner-install"` \| `"migration-pending"` \| `"none-yet"`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L8)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L8)
 
 Client-side user-initiated frontend execution track resolution.
 
@@ -155,7 +155,7 @@ state (population b). Shared by waitlist, swap, and deploy surfaces.
 
 > **WaitlistStepRoutingContext** = `object`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:112](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L112)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:112](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L112)
 
 #### Properties
 
@@ -163,37 +163,37 @@ Defined in: [src/lib/wallet/userExecutionTrack.ts:112](https://github.com/wenaki
 
 > **embeddedEoaAvailable**: `boolean`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:114](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L114)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:114](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L114)
 
 ##### onchainEoaOwnerCount?
 
 > `optional` **onchainEoaOwnerCount**: `number`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:118](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L118)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:118](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L118)
 
 ##### parentEmbeddedOwnerOnChain?
 
 > `optional` **parentEmbeddedOwnerOnChain**: `boolean`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:116](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L116)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:116](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L116)
 
 ##### subAccountFlowEnabled
 
 > **subAccountFlowEnabled**: `boolean`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:113](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L113)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:113](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L113)
 
 ##### subAccountStepCompleted?
 
 > `optional` **subAccountStepCompleted**: `boolean`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:115](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L115)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:115](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L115)
 
 ##### zoraLinked?
 
 > `optional` **zoraLinked**: `boolean`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:117](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L117)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:117](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L117)
 
 ## Functions
 
@@ -201,7 +201,7 @@ Defined in: [src/lib/wallet/userExecutionTrack.ts:117](https://github.com/wenaki
 
 > **buildWaitlistStepRoutingParams**\<`TAccount`\>(`account`, `context`): `object`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:237](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L237)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:237](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L237)
 
 #### Type Parameters
 
@@ -257,7 +257,7 @@ Defined in: [src/lib/wallet/userExecutionTrack.ts:237](https://github.com/wenaki
 
 > **deriveAccountChromeExecution**(`params`): [`AccountChromeExecution`](#accountchromeexecution)
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:168](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L168)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:168](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L168)
 
 Account chrome (tray, /accounts, swap sender hint) must follow the effective
 execution track — parent CSW owner (population c) hides stale sub-account UI.
@@ -300,7 +300,7 @@ execution track — parent CSW owner (population c) hides stale sub-account UI.
 
 > **inferWaitlistEoaOwnerRoutingHint**(`params`): `number`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:57](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L57)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:57](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L57)
 
 Best-effort EOA-owner hint for routing when a full CSW owner index is unavailable.
 
@@ -330,7 +330,7 @@ Best-effort EOA-owner hint for routing when a full CSW owner index is unavailabl
 
 > **isParentCswEmbeddedOwnerReady**(`params`): `boolean`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L38)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:38](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L38)
 
 Population (c): embedded EOA is a direct owner on the parent CSW — not Base App sub-account.
 
@@ -356,7 +356,7 @@ Population (c): embedded EOA is a direct owner on the parent CSW — not Base Ap
 
 > **isZoraLinkedFromAccountSignals**(`accountSignals`): `boolean`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:46](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L46)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:46](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L46)
 
 #### Parameters
 
@@ -374,7 +374,7 @@ Defined in: [src/lib/wallet/userExecutionTrack.ts:46](https://github.com/wenakit
 
 > **resolveEffectiveExecutionTrack**(`params`): [`UserFrontendExecutionTrack`](#userfrontendexecutiontrack)
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:97](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L97)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:97](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L97)
 
 #### Parameters
 
@@ -402,7 +402,7 @@ Defined in: [src/lib/wallet/userExecutionTrack.ts:97](https://github.com/wenakit
 
 > **shouldUseBaseAppSubAccountPath**(`params`): `boolean`
 
-Defined in: [src/lib/wallet/userExecutionTrack.ts:70](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/userExecutionTrack.ts#L70)
+Defined in: [src/lib/wallet/userExecutionTrack.ts:70](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/userExecutionTrack.ts#L70)
 
 #### Parameters
 

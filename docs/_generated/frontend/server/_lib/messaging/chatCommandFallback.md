@@ -12,7 +12,7 @@
 
 > **NumberedCommandOption** = `object`
 
-Defined in: [server/\_lib/messaging/chatCommandFallback.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L1)
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:1](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L1)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/\_lib/messaging/chatCommandFallback.ts:1](https://github.com
 
 > **command**: `string`
 
-Defined in: [server/\_lib/messaging/chatCommandFallback.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L3)
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L3)
 
 ##### description
 
 > **description**: `string`
 
-Defined in: [server/\_lib/messaging/chatCommandFallback.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L4)
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L4)
 
 ##### index
 
 > **index**: `number`
 
-Defined in: [server/\_lib/messaging/chatCommandFallback.ts:2](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L2)
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:2](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L2)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/messaging/chatCommandFallback.ts:2](https://github.com
 
 > **WelcomeMenuResolution** = \{ `kind`: `"passthrough"`; \} \| \{ `kind`: `"command"`; `resolvedText`: `string`; \} \| \{ `kind`: `"ai_prompt"`; \} \| \{ `kind`: `"invalid"`; `selection`: `string`; \}
 
-Defined in: [server/\_lib/messaging/chatCommandFallback.ts:46](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L46)
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L46)
 
 ## Functions
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/messaging/chatCommandFallback.ts:46](https://github.co
 
 > **formatAiPromptGuidance**(): `string`
 
-Defined in: [server/\_lib/messaging/chatCommandFallback.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L40)
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L40)
 
 #### Returns
 
@@ -60,7 +60,7 @@ Defined in: [server/\_lib/messaging/chatCommandFallback.ts:40](https://github.co
 
 > **formatNumberedCommandFallback**(`params?`): `string`
 
-Defined in: [server/\_lib/messaging/chatCommandFallback.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L19)
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L19)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ Defined in: [server/\_lib/messaging/chatCommandFallback.ts:19](https://github.co
 
 > **formatWelcomeNumberedOptions**(): `string`
 
-Defined in: [server/\_lib/messaging/chatCommandFallback.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L30)
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L30)
 
 #### Returns
 
@@ -96,7 +96,7 @@ Defined in: [server/\_lib/messaging/chatCommandFallback.ts:30](https://github.co
 
 > **resolveInboundMenuText**(`input`): [`WelcomeMenuResolution`](#welcomemenuresolution)
 
-Defined in: [server/\_lib/messaging/chatCommandFallback.ts:63](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L63)
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:63](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L63)
 
 #### Parameters
 
@@ -114,7 +114,7 @@ Defined in: [server/\_lib/messaging/chatCommandFallback.ts:63](https://github.co
 
 > **resolveWelcomeMenuSelection**(`index`): [`WelcomeMenuResolution`](#welcomemenuresolution)
 
-Defined in: [server/\_lib/messaging/chatCommandFallback.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L52)
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:52](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L52)
 
 #### Parameters
 

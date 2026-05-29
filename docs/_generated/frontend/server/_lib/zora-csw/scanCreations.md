@@ -12,7 +12,7 @@
 
 > **CswCreation** = `object`
 
-Defined in: [server/\_lib/zora-csw/scanCreations.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/scanCreations.ts#L71)
+Defined in: [server/\_lib/zora-csw/scanCreations.ts:71](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/scanCreations.ts#L71)
 
 #### Properties
 
@@ -20,43 +20,43 @@ Defined in: [server/\_lib/zora-csw/scanCreations.ts:71](https://github.com/wenak
 
 > **baseOwner**: `Address`
 
-Defined in: [server/\_lib/zora-csw/scanCreations.ts:73](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/scanCreations.ts#L73)
+Defined in: [server/\_lib/zora-csw/scanCreations.ts:73](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/scanCreations.ts#L73)
 
 ##### blockNumber
 
 > **blockNumber**: `bigint`
 
-Defined in: [server/\_lib/zora-csw/scanCreations.ts:76](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/scanCreations.ts#L76)
+Defined in: [server/\_lib/zora-csw/scanCreations.ts:76](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/scanCreations.ts#L76)
 
 ##### cswAddress
 
 > **cswAddress**: `Address`
 
-Defined in: [server/\_lib/zora-csw/scanCreations.ts:72](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/scanCreations.ts#L72)
+Defined in: [server/\_lib/zora-csw/scanCreations.ts:72](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/scanCreations.ts#L72)
 
 ##### initialOwners
 
 > **initialOwners**: `Address`[]
 
-Defined in: [server/\_lib/zora-csw/scanCreations.ts:74](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/scanCreations.ts#L74)
+Defined in: [server/\_lib/zora-csw/scanCreations.ts:74](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/scanCreations.ts#L74)
 
 ##### logIndex
 
 > **logIndex**: `number`
 
-Defined in: [server/\_lib/zora-csw/scanCreations.ts:78](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/scanCreations.ts#L78)
+Defined in: [server/\_lib/zora-csw/scanCreations.ts:78](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/scanCreations.ts#L78)
 
 ##### nonce
 
 > **nonce**: `bigint`
 
-Defined in: [server/\_lib/zora-csw/scanCreations.ts:75](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/scanCreations.ts#L75)
+Defined in: [server/\_lib/zora-csw/scanCreations.ts:75](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/scanCreations.ts#L75)
 
 ##### txHash
 
 > **txHash**: `Hex`
 
-Defined in: [server/\_lib/zora-csw/scanCreations.ts:77](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/scanCreations.ts#L77)
+Defined in: [server/\_lib/zora-csw/scanCreations.ts:77](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/scanCreations.ts#L77)
 
 ## Variables
 
@@ -64,7 +64,7 @@ Defined in: [server/\_lib/zora-csw/scanCreations.ts:77](https://github.com/wenak
 
 > `const` **DEFAULT\_GETLOGS\_WINDOW**: `10000n` = `10_000n`
 
-Defined in: [server/\_lib/zora-csw/scanCreations.ts:45](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/scanCreations.ts#L45)
+Defined in: [server/\_lib/zora-csw/scanCreations.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/scanCreations.ts#L45)
 
 Default per-tick window cap if `INDEXER_GETLOGS_WINDOW` is unset.
 
@@ -74,7 +74,7 @@ Default per-tick window cap if `INDEXER_GETLOGS_WINDOW` is unset.
 
 > `const` **SAFETY\_CONFIRMATIONS**: `12n` = `12n`
 
-Defined in: [server/\_lib/zora-csw/scanCreations.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/scanCreations.ts#L42)
+Defined in: [server/\_lib/zora-csw/scanCreations.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/scanCreations.ts#L42)
 
 Block confirmations required before a log is considered safe to
 persist. Base produces ~2s blocks and finality (post-Bedrock) is
@@ -87,7 +87,7 @@ absorb minor reorgs around L1 batch posting without re-indexing.
 
 > `const` **ZORA\_ACCOUNT\_MANAGER\_ADDRESS**: `Address` = `'0x0Ba958A449701907302e28F5955fa9d16dDC45c3'`
 
-Defined in: [server/\_lib/zora-csw/scanCreations.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/scanCreations.ts#L33)
+Defined in: [server/\_lib/zora-csw/scanCreations.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/scanCreations.ts#L33)
 
 Zora's account-manager proxy on Base mainnet — same address used by
 `indexer/src/constants.ts`. Re-declared here so the frontend has no
@@ -99,7 +99,7 @@ runtime dep on the indexer/ workspace.
 
 > **fetchCreationsWindow**(`client`, `fromBlock`, `toBlock`): `Promise`\<[`CswCreation`](#cswcreation)[]\>
 
-Defined in: [server/\_lib/zora-csw/scanCreations.ts:127](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/scanCreations.ts#L127)
+Defined in: [server/\_lib/zora-csw/scanCreations.ts:127](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/scanCreations.ts#L127)
 
 Fetch a single block window and decode the events. Failures bubble
 up — the caller (cron handler) catches them and surfaces as a
@@ -127,7 +127,7 @@ up — the caller (cron handler) catches them and surfaces as a
 
 > **planScanWindow**(`args`): \{ `fromBlock`: `bigint`; `toBlock`: `bigint`; \} \| `null`
 
-Defined in: [server/\_lib/zora-csw/scanCreations.ts:187](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/scanCreations.ts#L187)
+Defined in: [server/\_lib/zora-csw/scanCreations.ts:187](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/scanCreations.ts#L187)
 
 Compute the [fromBlock, toBlock] pair for a single scan tick.
 
@@ -173,7 +173,7 @@ checkpoint.
 
 > **readGetLogsWindow**(): `bigint`
 
-Defined in: [server/\_lib/zora-csw/scanCreations.ts:106](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/scanCreations.ts#L106)
+Defined in: [server/\_lib/zora-csw/scanCreations.ts:106](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/scanCreations.ts#L106)
 
 #### Returns
 

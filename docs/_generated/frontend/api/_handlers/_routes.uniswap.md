@@ -12,7 +12,7 @@
 
 > `const` **uniswapRouteLoaders**: [`ApiRouteLoaders`](_routeLoader.md#apirouteloaders)
 
-Defined in: [api/\_handlers/\_routes.uniswap.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/_routes.uniswap.ts#L4)
+Defined in: [api/\_handlers/\_routes.uniswap.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.uniswap.ts#L4)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/\_routes.uniswap.ts:4](https://github.com/wenakita/4
 
 > **getUniswapApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.uniswap.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/_routes.uniswap.ts#L18)
+Defined in: [api/\_handlers/\_routes.uniswap.ts:18](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.uniswap.ts#L18)
 
 #### Parameters
 

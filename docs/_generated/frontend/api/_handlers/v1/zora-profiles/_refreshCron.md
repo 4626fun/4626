@@ -10,7 +10,7 @@
 
 ### ZoraProfilesRefreshCronHooks
 
-Defined in: [api/\_handlers/v1/zora-profiles/\_refreshCron.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/zora-profiles/_refreshCron.ts#L22)
+Defined in: [api/\_handlers/v1/zora-profiles/\_refreshCron.ts:22](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/zora-profiles/_refreshCron.ts#L22)
 
 #### Properties
 
@@ -18,7 +18,7 @@ Defined in: [api/\_handlers/v1/zora-profiles/\_refreshCron.ts:22](https://github
 
 > `optional` **runTick**: () => `Promise`\<[`ProfileRefreshTickResult`](../../../../server/_lib/zora-profiles/refreshProfiles.md#profilerefreshtickresult)\>
 
-Defined in: [api/\_handlers/v1/zora-profiles/\_refreshCron.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/zora-profiles/_refreshCron.ts#L23)
+Defined in: [api/\_handlers/v1/zora-profiles/\_refreshCron.ts:23](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/zora-profiles/_refreshCron.ts#L23)
 
 ###### Returns
 
@@ -30,7 +30,7 @@ Defined in: [api/\_handlers/v1/zora-profiles/\_refreshCron.ts:23](https://github
 
 > **\_\_resetZoraProfilesRefreshCronHooksForTest**(): `void`
 
-Defined in: [api/\_handlers/v1/zora-profiles/\_refreshCron.ts:34](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/zora-profiles/_refreshCron.ts#L34)
+Defined in: [api/\_handlers/v1/zora-profiles/\_refreshCron.ts:34](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/zora-profiles/_refreshCron.ts#L34)
 
 #### Returns
 
@@ -42,7 +42,7 @@ Defined in: [api/\_handlers/v1/zora-profiles/\_refreshCron.ts:34](https://github
 
 > **\_\_setZoraProfilesRefreshCronHooksForTest**(`hooks`): `void`
 
-Defined in: [api/\_handlers/v1/zora-profiles/\_refreshCron.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/zora-profiles/_refreshCron.ts#L28)
+Defined in: [api/\_handlers/v1/zora-profiles/\_refreshCron.ts:28](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/zora-profiles/_refreshCron.ts#L28)
 
 #### Parameters
 
@@ -60,7 +60,7 @@ Defined in: [api/\_handlers/v1/zora-profiles/\_refreshCron.ts:28](https://github
 
 > **default**(`req`, `res`): `Promise`\<`void`\>
 
-Defined in: [api/\_handlers/v1/zora-profiles/\_refreshCron.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/zora-profiles/_refreshCron.ts#L38)
+Defined in: [api/\_handlers/v1/zora-profiles/\_refreshCron.ts:38](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/zora-profiles/_refreshCron.ts#L38)
 
 #### Parameters
 

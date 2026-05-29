@@ -12,7 +12,7 @@
 
 > **EthosProfileSummary** = [`EthosScore`](#ethosscore) & `object`
 
-Defined in: [server/\_lib/chat/ethosClient.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/ethosClient.ts#L9)
+Defined in: [server/\_lib/chat/ethosClient.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/ethosClient.ts#L9)
 
 #### Type Declaration
 
@@ -86,7 +86,7 @@ Defined in: [server/\_lib/chat/ethosClient.ts:9](https://github.com/wenakita/462
 
 > **EthosScore** = `object`
 
-Defined in: [server/\_lib/chat/ethosClient.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/ethosClient.ts#L4)
+Defined in: [server/\_lib/chat/ethosClient.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/ethosClient.ts#L4)
 
 #### Properties
 
@@ -94,13 +94,13 @@ Defined in: [server/\_lib/chat/ethosClient.ts:4](https://github.com/wenakita/462
 
 > **level**: `string` \| `null`
 
-Defined in: [server/\_lib/chat/ethosClient.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/ethosClient.ts#L6)
+Defined in: [server/\_lib/chat/ethosClient.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/ethosClient.ts#L6)
 
 ##### score
 
 > **score**: `number` \| `null`
 
-Defined in: [server/\_lib/chat/ethosClient.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/ethosClient.ts#L5)
+Defined in: [server/\_lib/chat/ethosClient.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/ethosClient.ts#L5)
 
 ## Functions
 
@@ -108,7 +108,7 @@ Defined in: [server/\_lib/chat/ethosClient.ts:5](https://github.com/wenakita/462
 
 > **fetchFreshEthosScoresByUserkeys**(`rawUserkeys`): `Promise`\<`Map`\<`string`, [`EthosScore`](#ethosscore) \| `null`\>\>
 
-Defined in: [server/\_lib/chat/ethosClient.ts:207](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/ethosClient.ts#L207)
+Defined in: [server/\_lib/chat/ethosClient.ts:207](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/ethosClient.ts#L207)
 
 #### Parameters
 
@@ -126,7 +126,7 @@ Defined in: [server/\_lib/chat/ethosClient.ts:207](https://github.com/wenakita/4
 
 > **getCachedEthosProfileByUserkey**(`rawUserkey`): `Promise`\<[`EthosProfileSummary`](#ethosprofilesummary) \| `null`\>
 
-Defined in: [server/\_lib/chat/ethosClient.ts:373](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/ethosClient.ts#L373)
+Defined in: [server/\_lib/chat/ethosClient.ts:373](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/ethosClient.ts#L373)
 
 #### Parameters
 
@@ -144,7 +144,7 @@ Defined in: [server/\_lib/chat/ethosClient.ts:373](https://github.com/wenakita/4
 
 > **getCachedEthosScoreByAddress**(`rawAddress`): `Promise`\<[`EthosScore`](#ethosscore) \| `null`\>
 
-Defined in: [server/\_lib/chat/ethosClient.ts:261](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/ethosClient.ts#L261)
+Defined in: [server/\_lib/chat/ethosClient.ts:261](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/ethosClient.ts#L261)
 
 #### Parameters
 
@@ -162,7 +162,7 @@ Defined in: [server/\_lib/chat/ethosClient.ts:261](https://github.com/wenakita/4
 
 > **getCachedEthosScoreByUserkey**(`rawUserkey`): `Promise`\<[`EthosScore`](#ethosscore) \| `null`\>
 
-Defined in: [server/\_lib/chat/ethosClient.ts:313](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/ethosClient.ts#L313)
+Defined in: [server/\_lib/chat/ethosClient.ts:313](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/ethosClient.ts#L313)
 
 #### Parameters
 
@@ -180,7 +180,7 @@ Defined in: [server/\_lib/chat/ethosClient.ts:313](https://github.com/wenakita/4
 
 > **getCachedEthosScoresByUserkeys**(`rawUserkeys`): `Promise`\<`Map`\<`string`, [`EthosScore`](#ethosscore) \| `null`\>\>
 
-Defined in: [server/\_lib/chat/ethosClient.ts:332](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/ethosClient.ts#L332)
+Defined in: [server/\_lib/chat/ethosClient.ts:332](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/ethosClient.ts#L332)
 
 #### Parameters
 
@@ -198,7 +198,7 @@ Defined in: [server/\_lib/chat/ethosClient.ts:332](https://github.com/wenakita/4
 
 > **normalizeEthosUserkey**(`value`): `string` \| `null`
 
-Defined in: [server/\_lib/chat/ethosClient.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/ethosClient.ts#L71)
+Defined in: [server/\_lib/chat/ethosClient.ts:71](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/ethosClient.ts#L71)
 
 #### Parameters
 

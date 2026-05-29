@@ -12,7 +12,7 @@
 
 > **hexByteLength**(`value`): `number`
 
-Defined in: [src/lib/wallet/coinbaseSignatureWrapper.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/coinbaseSignatureWrapper.ts#L3)
+Defined in: [src/lib/wallet/coinbaseSignatureWrapper.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/coinbaseSignatureWrapper.ts#L3)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/lib/wallet/coinbaseSignatureWrapper.ts:3](https://github.com/we
 
 > **parseCoinbaseSignatureWrapper**(`signature`): \{ `ownerIndex`: `number`; `signatureData`: `` `0x${string}` ``; \} \| `null`
 
-Defined in: [src/lib/wallet/coinbaseSignatureWrapper.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/coinbaseSignatureWrapper.ts#L10)
+Defined in: [src/lib/wallet/coinbaseSignatureWrapper.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/coinbaseSignatureWrapper.ts#L10)
 
 #### Parameters
 

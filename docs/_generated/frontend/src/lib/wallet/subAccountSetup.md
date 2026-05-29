@@ -12,7 +12,7 @@
 
 > **SubAccount** = `object`
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L33)
+Defined in: [src/lib/wallet/subAccountSetup.ts:33](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L33)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/lib/wallet/subAccountSetup.ts:33](https://github.com/wenakita/4
 
 > **address**: `Address`
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:34](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L34)
+Defined in: [src/lib/wallet/subAccountSetup.ts:34](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L34)
 
 ##### factory?
 
 > `optional` **factory**: `Address`
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L35)
+Defined in: [src/lib/wallet/subAccountSetup.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L35)
 
 ##### factoryData?
 
 > `optional` **factoryData**: `Hex`
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L36)
+Defined in: [src/lib/wallet/subAccountSetup.ts:36](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L36)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/lib/wallet/subAccountSetup.ts:36](https://github.com/wenakita/4
 
 > **SubAccountSetupResult** = `object`
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L39)
+Defined in: [src/lib/wallet/subAccountSetup.ts:39](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L39)
 
 #### Properties
 
@@ -48,19 +48,19 @@ Defined in: [src/lib/wallet/subAccountSetup.ts:39](https://github.com/wenakita/4
 
 > **created**: `boolean`
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L42)
+Defined in: [src/lib/wallet/subAccountSetup.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L42)
 
 ##### parentAddress
 
 > **parentAddress**: `Address`
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L41)
+Defined in: [src/lib/wallet/subAccountSetup.ts:41](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L41)
 
 ##### subAccountAddress
 
 > **subAccountAddress**: `Address`
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L40)
+Defined in: [src/lib/wallet/subAccountSetup.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L40)
 
 ***
 
@@ -68,7 +68,7 @@ Defined in: [src/lib/wallet/subAccountSetup.ts:40](https://github.com/wenakita/4
 
 > **SubAccountSetupStage** = `"check_existing"` \| `"create_sub_account"` \| `"install_embedded_owner"` \| `"configure_signer"` \| `"done"`
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:45](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L45)
+Defined in: [src/lib/wallet/subAccountSetup.ts:45](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L45)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [src/lib/wallet/subAccountSetup.ts:45](https://github.com/wenakita/4
 
 > **SubAccountSetupStageEvent** = `object`
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L52)
+Defined in: [src/lib/wallet/subAccountSetup.ts:52](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L52)
 
 #### Properties
 
@@ -84,31 +84,31 @@ Defined in: [src/lib/wallet/subAccountSetup.ts:52](https://github.com/wenakita/4
 
 > `optional` **message**: `string`
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:57](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L57)
+Defined in: [src/lib/wallet/subAccountSetup.ts:57](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L57)
 
 ##### parentAddress?
 
 > `optional` **parentAddress**: `string` \| `null`
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:56](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L56)
+Defined in: [src/lib/wallet/subAccountSetup.ts:56](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L56)
 
 ##### stage
 
 > **stage**: [`SubAccountSetupStage`](#subaccountsetupstage)
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L53)
+Defined in: [src/lib/wallet/subAccountSetup.ts:53](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L53)
 
 ##### status
 
 > **status**: `"start"` \| `"success"` \| `"error"`
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:54](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L54)
+Defined in: [src/lib/wallet/subAccountSetup.ts:54](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L54)
 
 ##### subAccountAddress?
 
 > `optional` **subAccountAddress**: `string` \| `null`
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:55](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L55)
+Defined in: [src/lib/wallet/subAccountSetup.ts:55](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L55)
 
 ## Functions
 
@@ -116,7 +116,7 @@ Defined in: [src/lib/wallet/subAccountSetup.ts:55](https://github.com/wenakita/4
 
 > **configureSubAccountSigner**(`params`): `void`
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:205](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L205)
+Defined in: [src/lib/wallet/subAccountSetup.ts:205](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L205)
 
 Configure the Base Account SDK to use the Privy embedded wallet as the
 signer for sub-account operations. After this call, all transactions sent
@@ -169,7 +169,7 @@ the `toViemAccount` function from `@privy-io/react-auth`, and the Privy
 
 > **confirmSubAccountEmbeddedOwner**(`params`): `Promise`\<\{ `alreadyOwner`: `boolean`; `transactionHash`: `` `0x${string}` `` \| `null`; \}\>
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:350](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L350)
+Defined in: [src/lib/wallet/subAccountSetup.ts:350](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L350)
 
 Phase 2 — user signs `addOwnerAddress(privyEmbeddedEoa)` on the sub-account.
 
@@ -211,7 +211,7 @@ Phase 2 — user signs `addOwnerAddress(privyEmbeddedEoa)` on the sub-account.
 
 > **createSubAccount**(`params`): `Promise`\<[`SubAccount`](#subaccount)\>
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:155](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L155)
+Defined in: [src/lib/wallet/subAccountSetup.ts:155](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L155)
 
 Create a new sub-account with the Privy embedded wallet address as
 the initial signer key.  Triggers one passkey popup for the user.
@@ -258,7 +258,7 @@ the initial signer key.  Triggers one passkey popup for the user.
 
 > **finalizeSubAccountSigner**(`params`): `Promise`\<`void`\>
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:400](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L400)
+Defined in: [src/lib/wallet/subAccountSetup.ts:400](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L400)
 
 Phase 3 — route future sub-account sends through the Privy embedded EOA (silent).
 
@@ -278,7 +278,7 @@ Phase 3 — route future sub-account sends through the Privy embedded EOA (silen
 
 > **getExistingSubAccount**(`params`): `Promise`\<[`SubAccount`](#subaccount) \| `null`\>
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:121](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L121)
+Defined in: [src/lib/wallet/subAccountSetup.ts:121](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L121)
 
 Check for an existing sub-account on the Base Account for the current
 app domain.  Returns the sub-account if found, or null.
@@ -305,7 +305,7 @@ app domain.  Returns the sub-account if found, or null.
 
 > **provisionSubAccount**(`params`): `Promise`\<[`SubAccountSetupResult`](#subaccountsetupresult) & `object`\>
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:284](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L284)
+Defined in: [src/lib/wallet/subAccountSetup.ts:284](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L284)
 
 Phase 1 — discover or create the per-app sub-account (one passkey prompt
 when creating). Does not install on-chain owner or configure the SDK signer.
@@ -326,7 +326,7 @@ when creating). Does not install on-chain owner or configure the SDK signer.
 
 > **resolveSubAccountProvider**(`params`): `Promise`\<`SubAccountRpcProvider`\>
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:96](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L96)
+Defined in: [src/lib/wallet/subAccountSetup.ts:96](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L96)
 
 Base App injects sub-account RPCs on the Base Account SDK provider
 (`baseAccountSdk.getProvider()` → `window.ethereum.isCoinbaseBrowser`).
@@ -349,7 +349,7 @@ which surfaces as `-32604 method not supported` inside Base App.
 
 > **resolveSubAccountSetupContext**(`params`): `Promise`\<\{ `embeddedAddress`: `string`; `parentAddress`: `string`; `provider`: `any`; \}\>
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:254](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L254)
+Defined in: [src/lib/wallet/subAccountSetup.ts:254](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L254)
 
 Wallet + SDK bundle ready for sub-account RPCs (no create/provision side effects).
 
@@ -369,7 +369,7 @@ Wallet + SDK bundle ready for sub-account RPCs (no create/provision side effects
 
 > **setupSubAccount**(`params`): `Promise`\<[`SubAccountSetupResult`](#subaccountsetupresult)\>
 
-Defined in: [src/lib/wallet/subAccountSetup.ts:457](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountSetup.ts#L457)
+Defined in: [src/lib/wallet/subAccountSetup.ts:457](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L457)
 
 Full sub-account setup flow (all phases in one call):
   1. Discover or create sub-account (passkey only when creating)

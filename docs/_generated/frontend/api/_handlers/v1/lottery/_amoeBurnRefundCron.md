@@ -10,7 +10,7 @@
 
 ### AmoeBurnRefundCronHandlerHooks
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:70](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeBurnRefundCron.ts#L70)
+Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:70](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeBurnRefundCron.ts#L70)
 
 Test seam — inject the db and the runner so handler tests can drive
 the cron without touching the real Postgres pool. `runTick` lets a
@@ -23,25 +23,25 @@ reconstructing the helper's internal SQL.
 
 > `optional` **ageSec**: `number`
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:76](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeBurnRefundCron.ts#L76)
+Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:76](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeBurnRefundCron.ts#L76)
 
 ##### db?
 
 > `optional` **db**: [`AmoeBurnRefundDb`](../../../../server/_lib/lottery/amoeBurnRefund.md#amoeburnrefunddb)
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeBurnRefundCron.ts#L71)
+Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:71](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeBurnRefundCron.ts#L71)
 
 ##### limit?
 
 > `optional` **limit**: `number`
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:77](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeBurnRefundCron.ts#L77)
+Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:77](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeBurnRefundCron.ts#L77)
 
 ##### runTick()?
 
 > `optional` **runTick**: (`db`, `args`) => `Promise`\<[`RefundTickResult`](../../../../server/_lib/lottery/amoeBurnRefund.md#refundtickresult)\>
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:72](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeBurnRefundCron.ts#L72)
+Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:72](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeBurnRefundCron.ts#L72)
 
 ###### Parameters
 
@@ -69,7 +69,7 @@ Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:72](https://githu
 
 > **\_\_resetAmoeBurnRefundCronHandlerHooksForTest**(): `void`
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:88](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeBurnRefundCron.ts#L88)
+Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:88](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeBurnRefundCron.ts#L88)
 
 #### Returns
 
@@ -81,7 +81,7 @@ Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:88](https://githu
 
 > **\_\_setAmoeBurnRefundCronHandlerHooksForTest**(`hooks`): `void`
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:82](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeBurnRefundCron.ts#L82)
+Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:82](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeBurnRefundCron.ts#L82)
 
 #### Parameters
 
@@ -99,7 +99,7 @@ Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:82](https://githu
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse`\>
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:92](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeBurnRefundCron.ts#L92)
+Defined in: [api/\_handlers/v1/lottery/\_amoeBurnRefundCron.ts:92](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeBurnRefundCron.ts#L92)
 
 #### Parameters
 

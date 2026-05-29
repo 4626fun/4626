@@ -12,7 +12,7 @@
 
 > **DegradationContext** = `object`
 
-Defined in: [server/\_lib/controlPlane/policyDegradation.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/policyDegradation.ts#L4)
+Defined in: [server/\_lib/controlPlane/policyDegradation.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/policyDegradation.ts#L4)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/\_lib/controlPlane/policyDegradation.ts:4](https://github.co
 
 > `optional` **hasDeploySession**: `boolean`
 
-Defined in: [server/\_lib/controlPlane/policyDegradation.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/policyDegradation.ts#L5)
+Defined in: [server/\_lib/controlPlane/policyDegradation.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/policyDegradation.ts#L5)
 
 ##### hasKeeprVault?
 
 > `optional` **hasKeeprVault**: `boolean`
 
-Defined in: [server/\_lib/controlPlane/policyDegradation.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/policyDegradation.ts#L6)
+Defined in: [server/\_lib/controlPlane/policyDegradation.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/policyDegradation.ts#L6)
 
 ##### isStale?
 
 > `optional` **isStale**: `boolean`
 
-Defined in: [server/\_lib/controlPlane/policyDegradation.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/policyDegradation.ts#L7)
+Defined in: [server/\_lib/controlPlane/policyDegradation.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/policyDegradation.ts#L7)
 
 ## Functions
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/controlPlane/policyDegradation.ts:7](https://github.co
 
 > **enforceMutatingDegradation**(`params`): `object`
 
-Defined in: [server/\_lib/controlPlane/policyDegradation.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/policyDegradation.ts#L35)
+Defined in: [server/\_lib/controlPlane/policyDegradation.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/policyDegradation.ts#L35)
 
 #### Parameters
 
@@ -76,7 +76,7 @@ Defined in: [server/\_lib/controlPlane/policyDegradation.ts:35](https://github.c
 
 > **evaluateFreshness**(`lastUpdatedAt`): `object`
 
-Defined in: [server/\_lib/controlPlane/policyDegradation.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/policyDegradation.ts#L20)
+Defined in: [server/\_lib/controlPlane/policyDegradation.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/policyDegradation.ts#L20)
 
 #### Parameters
 
@@ -102,7 +102,7 @@ Defined in: [server/\_lib/controlPlane/policyDegradation.ts:20](https://github.c
 
 > **getStaleThresholdMinutes**(): `number`
 
-Defined in: [server/\_lib/controlPlane/policyDegradation.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/policyDegradation.ts#L14)
+Defined in: [server/\_lib/controlPlane/policyDegradation.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/policyDegradation.ts#L14)
 
 #### Returns
 
@@ -114,7 +114,7 @@ Defined in: [server/\_lib/controlPlane/policyDegradation.ts:14](https://github.c
 
 > **resolveDegradationMode**(`verb`): [`DegradationMode`](policy.md#degradationmode)
 
-Defined in: [server/\_lib/controlPlane/policyDegradation.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/policyDegradation.ts#L10)
+Defined in: [server/\_lib/controlPlane/policyDegradation.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/policyDegradation.ts#L10)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **Swap**(): `Element`
 
-Defined in: [src/pages/Swap.tsx:462](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/Swap.tsx#L462)
+Defined in: [src/pages/Swap.tsx:467](https://github.com/wenakita/4626/blob/main/frontend/src/pages/Swap.tsx#L467)
 
 #### Returns
 

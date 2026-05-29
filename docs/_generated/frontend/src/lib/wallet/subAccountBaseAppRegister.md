@@ -12,7 +12,7 @@
 
 > **RegisterBaseAppSubAccountInput** = `object`
 
-Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountBaseAppRegister.ts#L5)
+Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountBaseAppRegister.ts#L5)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:5](https://github.com/w
 
 > **embeddedEoaAddress**: `Address`
 
-Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountBaseAppRegister.ts#L8)
+Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountBaseAppRegister.ts#L8)
 
 ##### parentAddress
 
 > **parentAddress**: `Address`
 
-Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountBaseAppRegister.ts#L6)
+Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountBaseAppRegister.ts#L6)
 
 ##### subAccountAddress
 
 > **subAccountAddress**: `Address`
 
-Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountBaseAppRegister.ts#L7)
+Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountBaseAppRegister.ts#L7)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:7](https://github.com/w
 
 > **RegisterBaseAppSubAccountResult** = `object`
 
-Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountBaseAppRegister.ts#L11)
+Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountBaseAppRegister.ts#L11)
 
 #### Properties
 
@@ -48,19 +48,19 @@ Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:11](https://github.com/
 
 > `optional` **errorCode**: `string`
 
-Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountBaseAppRegister.ts#L14)
+Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountBaseAppRegister.ts#L14)
 
 ##### message
 
 > **message**: `string`
 
-Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountBaseAppRegister.ts#L13)
+Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountBaseAppRegister.ts#L13)
 
 ##### ok
 
 > **ok**: `boolean`
 
-Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountBaseAppRegister.ts#L12)
+Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountBaseAppRegister.ts#L12)
 
 ## Functions
 
@@ -68,7 +68,7 @@ Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:12](https://github.com/
 
 > **registerBaseAppSubAccountLink**(`body`): `Promise`\<[`RegisterBaseAppSubAccountResult`](#registerbaseappsubaccountresult)\>
 
-Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:49](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountBaseAppRegister.ts#L49)
+Defined in: [src/lib/wallet/subAccountBaseAppRegister.ts:49](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountBaseAppRegister.ts#L49)
 
 #### Parameters
 

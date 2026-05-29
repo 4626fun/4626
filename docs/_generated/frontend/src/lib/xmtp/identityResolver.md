@@ -12,7 +12,7 @@
 
 > **XmtpIdentitySource** = `"connected"` \| `"account-context"` \| `"waitlist"`
 
-Defined in: [src/lib/xmtp/identityResolver.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/identityResolver.ts#L4)
+Defined in: [src/lib/xmtp/identityResolver.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/identityResolver.ts#L4)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/xmtp/identityResolver.ts:4](https://github.com/wenakita/462
 
 > **XmtpModeOverride** = `"EOA"` \| `"SMART_WALLET"` \| `null` \| `undefined`
 
-Defined in: [src/lib/xmtp/identityResolver.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/identityResolver.ts#L3)
+Defined in: [src/lib/xmtp/identityResolver.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/identityResolver.ts#L3)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [src/lib/xmtp/identityResolver.ts:3](https://github.com/wenakita/462
 
 > **resolveModePreferredIdentity**(`input`): `ResolveModePreferredIdentityResult`
 
-Defined in: [src/lib/xmtp/identityResolver.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/identityResolver.ts#L27)
+Defined in: [src/lib/xmtp/identityResolver.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/identityResolver.ts#L27)
 
 #### Parameters
 
@@ -46,7 +46,7 @@ Defined in: [src/lib/xmtp/identityResolver.ts:27](https://github.com/wenakita/46
 
 > **shouldRequireAuthBackedXmtpIdentity**(`input`): `boolean`
 
-Defined in: [src/lib/xmtp/identityResolver.ts:74](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/identityResolver.ts#L74)
+Defined in: [src/lib/xmtp/identityResolver.ts:74](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/identityResolver.ts#L74)
 
 #### Parameters
 

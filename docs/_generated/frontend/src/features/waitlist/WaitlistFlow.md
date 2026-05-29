@@ -12,7 +12,7 @@
 
 > **isPrivyLoginBootstrapError**(`error`): `boolean`
 
-Defined in: [src/features/waitlist/WaitlistFlow.tsx:96](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/WaitlistFlow.tsx#L96)
+Defined in: [src/features/waitlist/WaitlistFlow.tsx:94](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/WaitlistFlow.tsx#L94)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/features/waitlist/WaitlistFlow.tsx:96](https://github.com/wenak
 
 > **WaitlistFlow**(`props`): `Element`
 
-Defined in: [src/features/waitlist/WaitlistFlow.tsx:337](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/WaitlistFlow.tsx#L337)
+Defined in: [src/features/waitlist/WaitlistFlow.tsx:315](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/WaitlistFlow.tsx#L315)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > `const` **logger**: `object`
 
-Defined in: [src/lib/observability/logger.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/observability/logger.ts#L19)
+Defined in: [src/lib/observability/logger.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/observability/logger.ts#L19)
 
 #### Type Declaration
 

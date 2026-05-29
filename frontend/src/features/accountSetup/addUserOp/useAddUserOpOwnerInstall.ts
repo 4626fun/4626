@@ -17,6 +17,7 @@ import {
 } from '@/lib/wallet/cswEntryPointFunding'
 import { ENTRY_POINT_V06_BASE } from '@/lib/wallet/cswOwnerAbi'
 import { readIsOwnerAddressIfDeployed } from '@/lib/wallet/cswOwnerRead'
+import { withWalletRequestTimeout } from '@/lib/wallet/cswSendCalls'
 import { detectInAppEnvironment, isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import {
   confirmOwnerInstall,
@@ -61,10 +62,6 @@ async function ensureBaseMainnetWalletContext(walletRequest: WalletRequest): Pro
   }
 }
 
-async function refreshWalletAuthorization(walletRequest: WalletRequest): Promise<void> {
-  await walletRequest({ method: 'eth_requestAccounts' })
-}
-
 async function assertWalletAccountsMatchCsw(
   walletRequest: WalletRequest,
   cswAddress: string,
@@ -89,7 +86,7 @@ async function assertWalletAccountsMatchCsw(
 
 export type AddUserOpOwnerInstallPublicClient = Pick<
   PublicClient,
-  'getTransaction' | 'waitForTransactionReceipt' | 'readContract' | 'getBytecode'
+  'getTransaction' | 'waitForTransactionReceipt' | 'readContract' | 'getBytecode' | 'request'
 >
 
 export type UseAddUserOpOwnerInstallParams = {
@@ -123,7 +120,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
   const [callBundleId, setCallBundleId] = useState<string | null>(null)
   const [eventLog, setEventLog] = useState<string[]>([])
   const [submitPhase, setSubmitPhase] = useState<
-    'idle' | 'awaiting_signature' | 'broadcasting' | 'confirming' | 'verifying'
+    'idle' | 'preflight' | 'awaiting_signature' | 'broadcasting' | 'confirming' | 'verifying'
   >('idle')
   const [preparedTx, setPreparedTx] = useState<PreparedOwnerTxRequest | null>(null)
   const [fundingAssessment, setFundingAssessment] = useState<CswFundingAssessment | null>(null)
@@ -236,15 +233,17 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     }
 
     setBusy(true)
-    setSubmitPhase('idle')
+    setSubmitPhase('preflight')
     setPageError(null)
     setPageNotice(null)
-    setEventLog([])
+    appendEvent('--- submit ---')
     appendEvent(`lane:entrypoint_userop via wallet_sendCalls → ${ENTRY_POINT_V06_BASE}`)
 
     try {
       let txRequest = preparedTx
       if (!txRequest || alreadyOwner) {
+        setSubmitPhase('preflight')
+        appendEvent('preflight:prepare')
         const prepared = await loadPrepare()
         if (prepared && 'alreadyOwner' in prepared && prepared.alreadyOwner) {
           setAlreadyOwner(true)
@@ -266,6 +265,8 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       })
       appendEvent('preflight:server_preview=self_call_shape_ok')
 
+      setSubmitPhase('preflight')
+      appendEvent('preflight:funding')
       const funding = (await refreshFunding()) ?? fundingAssessment
       if (funding && !funding.ok) {
         appendEvent(`preflight:funding_${funding.reason}`)
@@ -276,9 +277,14 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       }
 
       const walletRequest = await resolveWalletRequest()
-      await ensureBaseMainnetWalletContext(walletRequest)
-      await refreshWalletAuthorization(walletRequest)
-      await assertWalletAccountsMatchCsw(walletRequest, canonicalCswAddress)
+      appendEvent('preflight:wallet_provider=ready')
+      await withWalletRequestTimeout('Base network check', 15_000, () =>
+        ensureBaseMainnetWalletContext(walletRequest),
+      )
+      appendEvent('preflight:chain=base_mainnet')
+      await withWalletRequestTimeout('Base App wallet authorization', 60_000, () =>
+        assertWalletAccountsMatchCsw(walletRequest, canonicalCswAddress),
+      )
       appendEvent('preflight:wallet_accounts=canonical_csw')
 
       const csw = getAddress(canonicalCswAddress) as `0x${string}`
@@ -292,6 +298,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
 
       appendEvent(`submit:csw=${csw}`)
       appendEvent(`submit:owner=${ownerToAdd}`)
+      setSubmitPhase('awaiting_signature')
 
       const result = await addOwnerViaBaseAppSendCalls({
         walletRequest,
@@ -299,32 +306,54 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
         ownerToAdd,
         chainId: base.id,
         timeoutMs: 120_000,
+        publicClient: publicClient as Pick<AddUserOpOwnerInstallPublicClient, 'request'> | undefined,
         onTelemetry: (event) => {
           appendEvent(`sendCalls:${event.step}`)
           if (event.step === 'prompt_sign') setSubmitPhase('awaiting_signature')
           else if (event.step === 'broadcast_success') setSubmitPhase('broadcasting')
           else if (event.step === 'status_poll') setSubmitPhase('confirming')
           else if (event.step === 'status_resolved') setSubmitPhase('verifying')
+          else if (event.step === 'broadcast_error') setSubmitPhase('idle')
         },
       })
 
-      if (!result.transactionHash) {
+      let landedTxHash = result.transactionHash
+      if (!landedTxHash && result.userOperationHash && publicClient) {
+        appendEvent(`poll:user_op_hash=${result.userOperationHash}`)
+        const deadline = Date.now() + 90_000
+        while (!landedTxHash && Date.now() < deadline) {
+          const receipt = (await publicClient.request({
+            method: 'eth_getUserOperationReceipt',
+            params: [result.userOperationHash],
+          }).catch(() => null)) as { receipt?: { transactionHash?: string } } | null
+          const candidate = receipt?.receipt?.transactionHash
+          if (typeof candidate === 'string' && /^0x[0-9a-fA-F]{64}$/.test(candidate)) {
+            landedTxHash = candidate as `0x${string}`
+            break
+          }
+          await new Promise((resolve) => setTimeout(resolve, 2_000))
+        }
+      }
+
+      if (!landedTxHash) {
         throw new Error(
-          'wallet_sendCalls completed without a transaction hash. Wait for Base App to finish, then retry.',
+          result.userOperationHash
+            ? `UserOp submitted (${result.userOperationHash.slice(0, 10)}…) but bundle tx hash is still pending. Wait 30s and tap Rebuild preview — or check Base App activity.`
+            : 'wallet_sendCalls completed without a transaction hash. Wait for Base App to finish, then retry.',
         )
       }
 
-      setTxHash(result.transactionHash)
-      appendEvent(`tx_hash=${result.transactionHash}`)
+      setTxHash(landedTxHash)
+      appendEvent(`tx_hash=${landedTxHash}`)
       setCallBundleId(result.callBundleId)
 
       if (publicClient) {
         await publicClient
-          .waitForTransactionReceipt({ hash: result.transactionHash, timeout: 90_000 })
+          .waitForTransactionReceipt({ hash: landedTxHash, timeout: 90_000 })
           .catch(() => undefined)
         await verifyEntryPointHandleOpsTransaction({
           publicClient,
-          txHash: result.transactionHash,
+          txHash: landedTxHash,
         })
         appendEvent(`verify:entrypoint_handleops=ok (${ENTRY_POINT_V06_BASE})`)
         const installed = await readIsOwnerAddressIfDeployed({
@@ -339,7 +368,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       const confirmed = await confirmOwnerInstall({
         cswAddress: canonicalCswAddress,
         ownerAddress: privyEmbeddedEoaAddress,
-        txHash: result.transactionHash,
+        txHash: landedTxHash,
         headers,
       })
 
@@ -353,7 +382,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
 
       setAlreadyOwner(true)
       setPageNotice(
-        `Owner install submitted via EntryPoint handleOps (tx ${result.transactionHash.slice(0, 10)}…). addOwner ran inside a UserOp where the CSW self-called.`,
+        `Owner install submitted via EntryPoint handleOps (tx ${landedTxHash.slice(0, 10)}…). addOwner ran inside a UserOp where the CSW self-called.`,
       )
       await onSuccess?.()
       return true

@@ -12,7 +12,7 @@
 
 > **isCswOwner**(`ownerAddress`, `cswAddress`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/wallet/cswOwner.ts:105](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/cswOwner.ts#L105)
+Defined in: [server/\_lib/wallet/cswOwner.ts:105](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/cswOwner.ts#L105)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [server/\_lib/wallet/cswOwner.ts:105](https://github.com/wenakita/46
 
 > **verifyCswProvenance**(`cswAddress`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/wallet/cswOwner.ts:159](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/cswOwner.ts#L159)
+Defined in: [server/\_lib/wallet/cswOwner.ts:159](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/cswOwner.ts#L159)
 
 Verify that a contract address is a genuine Coinbase Smart Wallet by checking
 its `entryPoint` and `implementation` against known CSW factories.

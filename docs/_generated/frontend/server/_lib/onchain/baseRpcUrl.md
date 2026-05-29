@@ -12,7 +12,7 @@
 
 > **isLocalForkRpcUrl**(`rpcUrl`): `boolean`
 
-Defined in: [server/\_lib/onchain/baseRpcUrl.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/baseRpcUrl.ts#L10)
+Defined in: [server/\_lib/onchain/baseRpcUrl.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/baseRpcUrl.ts#L10)
 
 True when the URL targets a local Anvil/Hardhat fork (deploy dry-run only).
 
@@ -32,7 +32,7 @@ True when the URL targets a local Anvil/Hardhat fork (deploy dry-run only).
 
 > **normalizeViemHttpRpcUrl**(`rpcUrl`): `string`
 
-Defined in: [server/\_lib/onchain/baseRpcUrl.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/baseRpcUrl.ts#L15)
+Defined in: [server/\_lib/onchain/baseRpcUrl.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/baseRpcUrl.ts#L15)
 
 viem `http()` cannot speak WebSocket — coerce ws(s) env URLs to http(s).
 
@@ -52,7 +52,7 @@ viem `http()` cannot speak WebSocket — coerce ws(s) env URLs to http(s).
 
 > **resolveDeploySessionRpcUrl**(): `string`
 
-Defined in: [server/\_lib/onchain/baseRpcUrl.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/baseRpcUrl.ts#L52)
+Defined in: [server/\_lib/onchain/baseRpcUrl.ts:52](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/baseRpcUrl.ts#L52)
 
 Deploy session / dry-run RPC. Prefers `DEPLOY_DRY_RUN_LOCAL_RPC_URL`, then any
 localhost entry in `BASE_RPC_URL`, otherwise live mainnet.
@@ -67,7 +67,7 @@ localhost entry in `BASE_RPC_URL`, otherwise live mainnet.
 
 > **resolveServerBaseRpcUrl**(`options?`): `string`
 
-Defined in: [server/\_lib/onchain/baseRpcUrl.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/baseRpcUrl.ts#L44)
+Defined in: [server/\_lib/onchain/baseRpcUrl.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/baseRpcUrl.ts#L44)
 
 #### Parameters
 
@@ -87,7 +87,7 @@ Defined in: [server/\_lib/onchain/baseRpcUrl.ts:44](https://github.com/wenakita/
 
 > **resolveServerBaseRpcUrls**(`options?`): `string`[]
 
-Defined in: [server/\_lib/onchain/baseRpcUrl.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/baseRpcUrl.ts#L36)
+Defined in: [server/\_lib/onchain/baseRpcUrl.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/baseRpcUrl.ts#L36)
 
 Server-side Base RPC for live mainnet reads (owner-install preview, Relay simulation, etc.).
 Local fork URLs are ignored unless explicitly allowed — deploy dry-run must not leak into

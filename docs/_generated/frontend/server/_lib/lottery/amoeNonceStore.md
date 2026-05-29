@@ -12,7 +12,7 @@
 
 > **consumeAmoeNonceForSubmit**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/lottery/amoeNonceStore.ts:62](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeNonceStore.ts#L62)
+Defined in: [server/\_lib/lottery/amoeNonceStore.ts:62](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeNonceStore.ts#L62)
 
 Consume a previously-issued AMOE nonce and atomically mark it used.
 

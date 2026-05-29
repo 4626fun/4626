@@ -12,7 +12,7 @@
 
 > **readOptionalZoraStatus**(`params`): [`ZoraLinkStatusResponse`](types.md#zoralinkstatusresponse) \| `null`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:102](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/accountSetup/useAccountSetupController.ts#L102)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:102](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L102)
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:102](https:/
 
 > **shouldRefreshAccountsOnForeground**(`input`): `boolean`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:90](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/accountSetup/useAccountSetupController.ts#L90)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:90](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L90)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:90](https://
 
 > **useAccountSetupController**(`params`): `object`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:159](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/accountSetup/useAccountSetupController.ts#L159)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:159](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L159)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **ExploreBackfillCheckpoints** = `Record`\<[`ExploreList`](#explorelist), [`ExploreListCheckpoint`](#explorelistcheckpoint)\>
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:126](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L126)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:126](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L126)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:126](https://github.
 
 > **ExploreCoinFinancialSnapshot** = `object`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L4)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L4)
 
 #### Properties
 
@@ -28,55 +28,55 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:4](https://github.co
 
 > **coinAddress**: `string`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L5)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L5)
 
 ##### createdAt
 
 > **createdAt**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L7)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L7)
 
 ##### creatorAddress
 
 > **creatorAddress**: `string`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L6)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L6)
 
 ##### feeModel
 
 > **feeModel**: [`FeeModel`](#feemodel-1)
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L13)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L13)
 
 ##### fees24hUsd
 
 > **fees24hUsd**: `number` \| `null`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L10)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L10)
 
 ##### marketCapDelta24h
 
 > **marketCapDelta24h**: `number` \| `null`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L12)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L12)
 
 ##### marketCapUsd
 
 > **marketCapUsd**: `number` \| `null`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L8)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L8)
 
 ##### uniqueHolders
 
 > **uniqueHolders**: `number` \| `null`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L11)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L11)
 
 ##### volume24hUsd
 
 > **volume24hUsd**: `number` \| `null`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L9)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L9)
 
 ***
 
@@ -84,7 +84,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:9](https://github.co
 
 > **ExploreList** = `"NEW_CREATORS"` \| `"TOP_VOLUME_CREATORS_24H"` \| `"MOST_VALUABLE_CREATORS"`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L1)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:1](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L1)
 
 ***
 
@@ -92,7 +92,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:1](https://github.co
 
 > **ExploreListCheckpoint** = `object`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:121](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L121)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:121](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L121)
 
 #### Properties
 
@@ -100,13 +100,13 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:121](https://github.
 
 > **after**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:122](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L122)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:122](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L122)
 
 ##### complete
 
 > **complete**: `boolean`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:123](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L123)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:123](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L123)
 
 ***
 
@@ -114,7 +114,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:123](https://github.
 
 > **FeeModel** = `"legacy"` \| `"v4"`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:2](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L2)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:2](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L2)
 
 ## Variables
 
@@ -122,7 +122,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:2](https://github.co
 
 > `const` **DEFAULT\_HOT\_REFRESH\_LISTS**: readonly [`ExploreList`](#explorelist)[]
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L38)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L38)
 
 ## Functions
 
@@ -130,7 +130,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:38](https://github.c
 
 > **computeFees24hUsd**(`volume24hUsd`, `feeModel`): `number` \| `null`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:82](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L82)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:82](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L82)
 
 #### Parameters
 
@@ -152,7 +152,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:82](https://github.c
 
 > **createDefaultExploreBackfillCheckpoints**(): [`ExploreBackfillCheckpoints`](#explorebackfillcheckpoints)
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:132](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L132)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:132](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L132)
 
 #### Returns
 
@@ -164,7 +164,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:132](https://github.
 
 > **detectFeeModel**(`coin`): [`FeeModel`](#feemodel-1)
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:63](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L63)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:63](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L63)
 
 #### Parameters
 
@@ -182,7 +182,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:63](https://github.c
 
 > **extractExploreListEdges**(`response`): `object`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:167](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L167)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:167](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L167)
 
 #### Parameters
 
@@ -216,7 +216,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:167](https://github.
 
 > **feeRateFromModel**(`feeModel`): `number`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:78](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L78)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:78](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L78)
 
 #### Parameters
 
@@ -234,7 +234,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:78](https://github.c
 
 > **isExploreBackfillComplete**(`checkpoints`): `boolean`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:163](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L163)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:163](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L163)
 
 #### Parameters
 
@@ -252,7 +252,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:163](https://github.
 
 > **isStaleRunningLock**(`lastSyncStartedAt`, `nowMs`, `thresholdMs`): `boolean`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:110](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L110)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:110](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L110)
 
 #### Parameters
 
@@ -278,7 +278,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:110](https://github.
 
 > **normalizeAddress**(`v`): `string` \| `null`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:50](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L50)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:50](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L50)
 
 #### Parameters
 
@@ -296,7 +296,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:50](https://github.c
 
 > **parseExploreBackfillCheckpoints**(`raw`): [`ExploreBackfillCheckpoints`](#explorebackfillcheckpoints)
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:140](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L140)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:140](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L140)
 
 #### Parameters
 
@@ -314,7 +314,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:140](https://github.
 
 > **parseExploreCoinFinancialSnapshot**(`coin`): [`ExploreCoinFinancialSnapshot`](#explorecoinfinancialsnapshot) \| `null`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:87](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L87)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:87](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L87)
 
 #### Parameters
 
@@ -332,7 +332,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:87](https://github.c
 
 > **parseTimestamp**(`v`): `string` \| `null`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:56](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L56)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:56](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L56)
 
 #### Parameters
 
@@ -350,7 +350,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:56](https://github.c
 
 > **serializeExploreBackfillCheckpoints**(`checkpoints`): `string`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:159](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L159)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:159](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L159)
 
 #### Parameters
 
@@ -368,7 +368,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:159](https://github.
 
 > **toFiniteNumber**(`v`): `number` \| `null`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L44)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L44)
 
 #### Parameters
 
@@ -386,7 +386,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:44](https://github.c
 
 > **toIntegerOrNull**(`v`): `number` \| `null`
 
-Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L28)
+Defined in: [server/\_lib/zora/creatorMetricsSyncHelpers.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSyncHelpers.ts#L28)
 
 #### Parameters
 

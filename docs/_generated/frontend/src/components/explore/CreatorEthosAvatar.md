@@ -12,7 +12,7 @@
 
 > **CreatorEthosAvatarSize** = `"sm"` \| `"lg"`
 
-Defined in: [src/components/explore/CreatorEthosAvatar.tsx:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/CreatorEthosAvatar.tsx#L15)
+Defined in: [src/components/explore/CreatorEthosAvatar.tsx:15](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/CreatorEthosAvatar.tsx#L15)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/components/explore/CreatorEthosAvatar.tsx:15](https://github.co
 
 > **CreatorEthosAvatar**(`__namedParameters`): `Element`
 
-Defined in: [src/components/explore/CreatorEthosAvatar.tsx:83](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/CreatorEthosAvatar.tsx#L83)
+Defined in: [src/components/explore/CreatorEthosAvatar.tsx:83](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/CreatorEthosAvatar.tsx#L83)
 
 #### Parameters
 
@@ -38,7 +38,7 @@ Defined in: [src/components/explore/CreatorEthosAvatar.tsx:83](https://github.co
 
 > **CreatorSocialEthosBadge**(`__namedParameters`): `Element` \| `null`
 
-Defined in: [src/components/explore/CreatorEthosAvatar.tsx:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/CreatorEthosAvatar.tsx#L23)
+Defined in: [src/components/explore/CreatorEthosAvatar.tsx:23](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/CreatorEthosAvatar.tsx#L23)
 
 #### Parameters
 

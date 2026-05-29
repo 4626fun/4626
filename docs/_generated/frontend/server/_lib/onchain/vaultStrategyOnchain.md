@@ -12,7 +12,7 @@
 
 > **VaultOnChainArtifacts** = `Record`\<`string`, `unknown`\>
 
-Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:155](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L155)
+Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:155](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L155)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:155](https://github.co
 
 > **VaultStrategyScan** = `object`
 
-Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:141](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L141)
+Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:141](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L141)
 
 #### Properties
 
@@ -28,7 +28,7 @@ Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:141](https://github.co
 
 > **ajna**: `object`
 
-Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:145](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L145)
+Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:145](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L145)
 
 ###### ajnaPool
 
@@ -54,25 +54,25 @@ Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:145](https://github.co
 
 > **bridgeAddress**: `Address` \| `null`
 
-Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:152](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L152)
+Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:152](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L152)
 
 ##### charmVault
 
 > **charmVault**: `Address` \| `null`
 
-Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:144](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L144)
+Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:144](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L144)
 
 ##### strategy
 
 > **strategy**: `Address`
 
-Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:142](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L142)
+Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:142](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L142)
 
 ##### weight
 
 > **weight**: `bigint`
 
-Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:143](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L143)
+Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:143](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L143)
 
 ## Functions
 
@@ -80,7 +80,7 @@ Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:143](https://github.co
 
 > **applyKnownVaultDefaults**(`vault`, `artifacts`): [`VaultOnChainArtifacts`](#vaultonchainartifacts)
 
-Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:442](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L442)
+Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:442](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L442)
 
 #### Parameters
 
@@ -102,7 +102,7 @@ Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:442](https://github.co
 
 > **createVaultStrategyPublicClient**(`rpcUrl?`): `object`
 
-Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:181](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L181)
+Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:181](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L181)
 
 #### Parameters
 
@@ -120,7 +120,7 @@ Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:181](https://github.co
 
 > **enrichVaultArtifactsFromOnChain**(`params`): `Promise`\<\{ `artifacts`: [`VaultOnChainArtifacts`](#vaultonchainartifacts); `warnings`: `string`[]; \}\>
 
-Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:467](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L467)
+Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:467](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L467)
 
 #### Parameters
 
@@ -152,7 +152,7 @@ Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:467](https://github.co
 
 > **pickAjnaRegistryCandidate**(`strategyDetails`): [`VaultStrategyScan`](#vaultstrategyscan) \| `null`
 
-Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:548](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L548)
+Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:548](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L548)
 
 #### Parameters
 
@@ -170,7 +170,7 @@ Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:548](https://github.co
 
 > **readCreatorTokenForVault**(`params`): `Promise`\<`string` \| `null`\>
 
-Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:208](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L208)
+Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:208](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L208)
 
 #### Parameters
 
@@ -194,7 +194,7 @@ Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:208](https://github.co
 
 > **readShareOftForCreatorToken**(`params`): `Promise`\<`string` \| `null`\>
 
-Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:237](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L237)
+Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:237](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L237)
 
 #### Parameters
 
@@ -218,7 +218,7 @@ Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:237](https://github.co
 
 > **readVaultActiveStrategies**(`params`): `Promise`\<`object`[]\>
 
-Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:270](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L270)
+Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:270](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L270)
 
 #### Parameters
 
@@ -246,7 +246,7 @@ Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:270](https://github.co
 
 > **readVaultOwner**(`params`): `Promise`\<`string` \| `null`\>
 
-Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:255](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L255)
+Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:255](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L255)
 
 #### Parameters
 
@@ -270,7 +270,7 @@ Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:255](https://github.co
 
 > **scanVaultStrategyDetails**(`params`): `Promise`\<[`VaultStrategyScan`](#vaultstrategyscan)[]\>
 
-Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:426](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L426)
+Defined in: [server/\_lib/onchain/vaultStrategyOnchain.ts:426](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/vaultStrategyOnchain.ts#L426)
 
 #### Parameters
 

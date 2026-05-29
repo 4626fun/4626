@@ -12,7 +12,7 @@
 
 > `const` **CREATOR\_STATS\_FINALE\_NAV\_LABEL**: `"All metrics"` = `'All metrics'`
 
-Defined in: [src/components/explore/creatorStatsScrollNav.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorStatsScrollNav.ts#L9)
+Defined in: [src/components/explore/creatorStatsScrollNav.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorStatsScrollNav.ts#L9)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/components/explore/creatorStatsScrollNav.ts:9](https://github.c
 
 > `const` **CREATOR\_STATS\_TIMELINE\_LABELS**: readonly \[`"volume"`, `"marketCap"`, `"holders"`, `"ethos"`, `"coinsCreated"`, `"created"`, `"finale"`\]
 
-Defined in: [src/components/explore/creatorStatsScrollNav.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorStatsScrollNav.ts#L12)
+Defined in: [src/components/explore/creatorStatsScrollNav.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorStatsScrollNav.ts#L12)
 
 GSAP timeline / snap nav labels aligned to `CreatorStatItem.id` order + finale.
 
@@ -30,7 +30,7 @@ GSAP timeline / snap nav labels aligned to `CreatorStatItem.id` order + finale.
 
 > **nearestCreatorStatsSnapProgress**(`progress`, `statCount`): `number`
 
-Defined in: [src/components/explore/creatorStatsScrollNav.ts:65](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorStatsScrollNav.ts#L65)
+Defined in: [src/components/explore/creatorStatsScrollNav.ts:65](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorStatsScrollNav.ts#L65)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: [src/components/explore/creatorStatsScrollNav.ts:65](https://github.
 
 > **resolveCreatorStatsActiveSnapIndex**(`progress`, `snapPoints`): `number`
 
-Defined in: [src/components/explore/creatorStatsScrollNav.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorStatsScrollNav.ts#L22)
+Defined in: [src/components/explore/creatorStatsScrollNav.ts:22](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorStatsScrollNav.ts#L22)
 
 #### Parameters
 
@@ -74,7 +74,7 @@ Defined in: [src/components/explore/creatorStatsScrollNav.ts:22](https://github.
 
 > **scrollToCreatorStatsSnapIndex**(`scrollTrigger`, `statCount`, `snapIndex`, `options?`): `void`
 
-Defined in: [src/components/explore/creatorStatsScrollNav.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorStatsScrollNav.ts#L53)
+Defined in: [src/components/explore/creatorStatsScrollNav.ts:53](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorStatsScrollNav.ts#L53)
 
 #### Parameters
 
@@ -110,7 +110,7 @@ Defined in: [src/components/explore/creatorStatsScrollNav.ts:53](https://github.
 
 > **scrollToCreatorStatsSnapPoint**(`scrollTrigger`, `progress`, `options?`): `void`
 
-Defined in: [src/components/explore/creatorStatsScrollNav.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorStatsScrollNav.ts#L37)
+Defined in: [src/components/explore/creatorStatsScrollNav.ts:37](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorStatsScrollNav.ts#L37)
 
 #### Parameters
 

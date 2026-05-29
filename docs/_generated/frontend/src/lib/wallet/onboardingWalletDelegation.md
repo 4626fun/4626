@@ -12,7 +12,7 @@
 
 > **OwnerDelegationFlags** = `object`
 
-Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/onboardingWalletDelegation.ts#L3)
+Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWalletDelegation.ts#L3)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:3](https://github.com/
 
 > `optional` **baseAppUrl**: `string`
 
-Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/onboardingWalletDelegation.ts#L6)
+Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWalletDelegation.ts#L6)
 
 ##### needsBaseAppSetup?
 
 > `optional` **needsBaseAppSetup**: `boolean`
 
-Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/onboardingWalletDelegation.ts#L5)
+Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWalletDelegation.ts#L5)
 
 ##### needsEmbeddedWallet?
 
 > `optional` **needsEmbeddedWallet**: `boolean`
 
-Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/onboardingWalletDelegation.ts#L4)
+Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWalletDelegation.ts#L4)
 
 ## Functions
 
@@ -40,7 +40,7 @@ Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:4](https://github.com/
 
 > **buildOwnerDelegationError**(`payload`, `fallback`): `Error` & [`OwnerDelegationFlags`](#ownerdelegationflags)
 
-Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/onboardingWalletDelegation.ts#L23)
+Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWalletDelegation.ts#L23)
 
 #### Parameters
 
@@ -62,7 +62,7 @@ Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:23](https://github.com
 
 > **deriveOwnerDelegationFlags**(`flags`): [`OwnerDelegationFlags`](#ownerdelegationflags) \| `null`
 
-Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/onboardingWalletDelegation.ts#L38)
+Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:38](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWalletDelegation.ts#L38)
 
 #### Parameters
 
@@ -90,7 +90,7 @@ Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:38](https://github.com
 
 > **readApiError**(`payload`, `fallback`): `string`
 
-Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/onboardingWalletDelegation.ts#L9)
+Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWalletDelegation.ts#L9)
 
 #### Parameters
 
@@ -112,7 +112,7 @@ Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:9](https://github.com/
 
 > **readOwnerDelegationFlags**(`payload`): [`OwnerDelegationFlags`](#ownerdelegationflags)
 
-Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/onboardingWalletDelegation.ts#L13)
+Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWalletDelegation.ts#L13)
 
 #### Parameters
 
@@ -130,7 +130,7 @@ Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:13](https://github.com
 
 > **shouldRefreshOwnerDelegationOnForeground**(`input`): `boolean`
 
-Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/onboardingWalletDelegation.ts#L51)
+Defined in: [src/lib/wallet/onboardingWalletDelegation.ts:51](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWalletDelegation.ts#L51)
 
 #### Parameters
 

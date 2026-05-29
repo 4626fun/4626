@@ -12,7 +12,7 @@
 
 > `const` **DEPLOYMENT\_VERSION\_RE**: `RegExp`
 
-Defined in: [src/pages/deploy/deployVaultHelpers.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultHelpers.ts#L18)
+Defined in: [src/pages/deploy/deployVaultHelpers.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultHelpers.ts#L18)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:18](https://github.com/wenak
 
 > `const` **MAX\_UINT256**: `bigint`
 
-Defined in: [src/pages/deploy/deployVaultHelpers.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultHelpers.ts#L17)
+Defined in: [src/pages/deploy/deployVaultHelpers.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultHelpers.ts#L17)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:17](https://github.com/wenak
 
 > `const` **ZERO\_BYTES32**: `string`
 
-Defined in: [src/pages/deploy/deployVaultHelpers.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultHelpers.ts#L16)
+Defined in: [src/pages/deploy/deployVaultHelpers.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultHelpers.ts#L16)
 
 ## Functions
 
@@ -36,7 +36,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:16](https://github.com/wenak
 
 > **encodeUniswapV3Path**(`tokens`, `fees`): `` `0x${string}` ``
 
-Defined in: [src/pages/deploy/deployVaultHelpers.ts:103](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultHelpers.ts#L103)
+Defined in: [src/pages/deploy/deployVaultHelpers.ts:103](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultHelpers.ts#L103)
 
 #### Parameters
 
@@ -58,7 +58,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:103](https://github.com/wena
 
 > **findCreate2SaltForSuffix**(`params`): `Promise`\<`` `0x${string}` `` \| `null`\>
 
-Defined in: [src/pages/deploy/deployVaultHelpers.ts:148](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultHelpers.ts#L148)
+Defined in: [src/pages/deploy/deployVaultHelpers.ts:148](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultHelpers.ts#L148)
 
 #### Parameters
 
@@ -102,7 +102,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:148](https://github.com/wena
 
 > **getHexByteLength**(`hex`): `number` \| `null`
 
-Defined in: [src/pages/deploy/deployVaultHelpers.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultHelpers.ts#L27)
+Defined in: [src/pages/deploy/deployVaultHelpers.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultHelpers.ts#L27)
 
 #### Parameters
 
@@ -120,7 +120,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:27](https://github.com/wenak
 
 > **isHexString**(`value`): `` value is `0x${string}` ``
 
-Defined in: [src/pages/deploy/deployVaultHelpers.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultHelpers.ts#L23)
+Defined in: [src/pages/deploy/deployVaultHelpers.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultHelpers.ts#L23)
 
 #### Parameters
 
@@ -138,7 +138,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:23](https://github.com/wenak
 
 > **normalizeAddressArray**(`value`): `string`[]
 
-Defined in: [src/pages/deploy/deployVaultHelpers.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultHelpers.ts#L51)
+Defined in: [src/pages/deploy/deployVaultHelpers.ts:51](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultHelpers.ts#L51)
 
 #### Parameters
 
@@ -156,7 +156,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:51](https://github.com/wenak
 
 > **normalizeAddressLike**(`value`): `string` \| `null`
 
-Defined in: [src/pages/deploy/deployVaultHelpers.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultHelpers.ts#L41)
+Defined in: [src/pages/deploy/deployVaultHelpers.ts:41](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultHelpers.ts#L41)
 
 #### Parameters
 
@@ -174,7 +174,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:41](https://github.com/wenak
 
 > **normalizeBytes32**(`value`): `` `0x${string}` `` \| `null`
 
-Defined in: [src/pages/deploy/deployVaultHelpers.ts:34](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultHelpers.ts#L34)
+Defined in: [src/pages/deploy/deployVaultHelpers.ts:34](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultHelpers.ts#L34)
 
 #### Parameters
 
@@ -192,7 +192,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:34](https://github.com/wenak
 
 > **normalizeDeploymentVersion**(`value`): `string` \| `null`
 
-Defined in: [src/pages/deploy/deployVaultHelpers.ts:131](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultHelpers.ts#L131)
+Defined in: [src/pages/deploy/deployVaultHelpers.ts:131](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultHelpers.ts#L131)
 
 #### Parameters
 
@@ -210,7 +210,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:131](https://github.com/wena
 
 > **normalizeHexSuffix**(`value`): `string` \| `null`
 
-Defined in: [src/pages/deploy/deployVaultHelpers.ts:139](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultHelpers.ts#L139)
+Defined in: [src/pages/deploy/deployVaultHelpers.ts:139](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultHelpers.ts#L139)
 
 #### Parameters
 
@@ -228,7 +228,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:139](https://github.com/wena
 
 > **parsePositiveTokenAmount**(`value`): `bigint` \| `null`
 
-Defined in: [src/pages/deploy/deployVaultHelpers.ts:118](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultHelpers.ts#L118)
+Defined in: [src/pages/deploy/deployVaultHelpers.ts:118](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultHelpers.ts#L118)
 
 #### Parameters
 
@@ -246,7 +246,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:118](https://github.com/wena
 
 > **parseUint8**(`value`): `number` \| `null`
 
-Defined in: [src/pages/deploy/deployVaultHelpers.ts:73](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultHelpers.ts#L73)
+Defined in: [src/pages/deploy/deployVaultHelpers.ts:73](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultHelpers.ts#L73)
 
 #### Parameters
 
@@ -264,7 +264,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:73](https://github.com/wenak
 
 > **parseUniswapV3Fee**(`value`): `number` \| `null`
 
-Defined in: [src/pages/deploy/deployVaultHelpers.ts:86](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultHelpers.ts#L86)
+Defined in: [src/pages/deploy/deployVaultHelpers.ts:86](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultHelpers.ts#L86)
 
 #### Parameters
 
@@ -282,7 +282,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:86](https://github.com/wenak
 
 > **sameAddress**(`a`, `b`): `boolean`
 
-Defined in: [src/pages/deploy/deployVaultHelpers.ts:66](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultHelpers.ts#L66)
+Defined in: [src/pages/deploy/deployVaultHelpers.ts:66](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultHelpers.ts#L66)
 
 #### Parameters
 

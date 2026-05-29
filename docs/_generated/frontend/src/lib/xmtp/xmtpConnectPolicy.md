@@ -12,7 +12,7 @@
 
 > **XmtpConnectIntent** = `"auto"` \| `"user"`
 
-Defined in: [src/lib/xmtp/xmtpConnectPolicy.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectPolicy.ts#L1)
+Defined in: [src/lib/xmtp/xmtpConnectPolicy.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectPolicy.ts#L1)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/xmtp/xmtpConnectPolicy.ts:1](https://github.com/wenakita/46
 
 > **shouldAllowFirstTimeCreate**(`input`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpConnectPolicy.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectPolicy.ts#L31)
+Defined in: [src/lib/xmtp/xmtpConnectPolicy.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectPolicy.ts#L31)
 
 First-time browser install requires explicit user intent.
 Passive/auto callers must not burn an installation slot.
@@ -55,7 +55,7 @@ Passive/auto callers must not burn an installation slot.
 
 > **shouldAttemptXmtpRestore**(`input`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpConnectPolicy.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectPolicy.ts#L7)
+Defined in: [src/lib/xmtp/xmtpConnectPolicy.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectPolicy.ts#L7)
 
 Prefer Client.build whenever local OPFS or prior install markers exist.
 Never skip restore just because OPFS listing returned false once.
@@ -82,7 +82,7 @@ Never skip restore just because OPFS listing returned false once.
 
 > **shouldRefuseAutoCreateAfterFailedRestore**(`input`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpConnectPolicy.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectPolicy.ts#L18)
+Defined in: [src/lib/xmtp/xmtpConnectPolicy.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectPolicy.ts#L18)
 
 Fail closed before Client.create when restore did not succeed but we still
 have evidence of an existing browser/network installation.

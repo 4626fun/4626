@@ -10,7 +10,7 @@
 
 ### AccountTrayPointsAuthError
 
-Defined in: [src/lib/waitlist/accountTrayPoints.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/accountTrayPoints.ts#L26)
+Defined in: [src/lib/waitlist/accountTrayPoints.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/accountTrayPoints.ts#L29)
 
 #### Extends
 
@@ -22,7 +22,7 @@ Defined in: [src/lib/waitlist/accountTrayPoints.ts:26](https://github.com/wenaki
 
 > **new AccountTrayPointsAuthError**(`message`): [`AccountTrayPointsAuthError`](#accounttraypointsautherror)
 
-Defined in: [src/lib/waitlist/accountTrayPoints.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/accountTrayPoints.ts#L29)
+Defined in: [src/lib/waitlist/accountTrayPoints.ts:32](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/accountTrayPoints.ts#L32)
 
 ###### Parameters
 
@@ -44,7 +44,7 @@ Defined in: [src/lib/waitlist/accountTrayPoints.ts:29](https://github.com/wenaki
 
 > `readonly` **code**: `"account_tray_points_auth_required"`
 
-Defined in: [src/lib/waitlist/accountTrayPoints.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/accountTrayPoints.ts#L27)
+Defined in: [src/lib/waitlist/accountTrayPoints.ts:30](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/accountTrayPoints.ts#L30)
 
 ## Type Aliases
 
@@ -52,7 +52,7 @@ Defined in: [src/lib/waitlist/accountTrayPoints.ts:27](https://github.com/wenaki
 
 > **AccountTrayPointsSnapshot** = `object`
 
-Defined in: [src/lib/waitlist/accountTrayPoints.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/accountTrayPoints.ts#L5)
+Defined in: [src/lib/waitlist/accountTrayPoints.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/accountTrayPoints.ts#L5)
 
 #### Properties
 
@@ -60,23 +60,31 @@ Defined in: [src/lib/waitlist/accountTrayPoints.ts:5](https://github.com/wenakit
 
 > **activity**: [`PointsActivityRow`](pointsActivity.md#pointsactivityrow)[]
 
-Defined in: [src/lib/waitlist/accountTrayPoints.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/accountTrayPoints.ts#L23)
+Defined in: [src/lib/waitlist/accountTrayPoints.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/accountTrayPoints.ts#L26)
 
 ##### leaderboardEligible
 
 > **leaderboardEligible**: `boolean`
 
-Defined in: [src/lib/waitlist/accountTrayPoints.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/accountTrayPoints.ts#L8)
+Defined in: [src/lib/waitlist/accountTrayPoints.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/accountTrayPoints.ts#L8)
 
 ##### points
 
 > **points**: `object`
 
-Defined in: [src/lib/waitlist/accountTrayPoints.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/accountTrayPoints.ts#L9)
+Defined in: [src/lib/waitlist/accountTrayPoints.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/accountTrayPoints.ts#L9)
+
+###### agent
+
+> **agent**: `number`
 
 ###### bonus
 
 > **bonus**: `number`
+
+###### checkins
+
+> **checkins**: `number`
 
 ###### csw
 
@@ -85,6 +93,10 @@ Defined in: [src/lib/waitlist/accountTrayPoints.ts:9](https://github.com/wenakit
 ###### invite
 
 > **invite**: `number`
+
+###### links
+
+> **links**: `number`
 
 ###### signup
 
@@ -106,7 +118,7 @@ Defined in: [src/lib/waitlist/accountTrayPoints.ts:9](https://github.com/wenakit
 
 > **rank**: `object`
 
-Defined in: [src/lib/waitlist/accountTrayPoints.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/accountTrayPoints.ts#L18)
+Defined in: [src/lib/waitlist/accountTrayPoints.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/accountTrayPoints.ts#L21)
 
 ###### invite
 
@@ -120,19 +132,19 @@ Defined in: [src/lib/waitlist/accountTrayPoints.ts:18](https://github.com/wenaki
 
 > **signupId**: `number`
 
-Defined in: [src/lib/waitlist/accountTrayPoints.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/accountTrayPoints.ts#L6)
+Defined in: [src/lib/waitlist/accountTrayPoints.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/accountTrayPoints.ts#L6)
 
 ##### tier
 
 > **tier**: `number`
 
-Defined in: [src/lib/waitlist/accountTrayPoints.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/accountTrayPoints.ts#L7)
+Defined in: [src/lib/waitlist/accountTrayPoints.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/accountTrayPoints.ts#L7)
 
 ##### totalCount
 
 > **totalCount**: `number`
 
-Defined in: [src/lib/waitlist/accountTrayPoints.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/accountTrayPoints.ts#L22)
+Defined in: [src/lib/waitlist/accountTrayPoints.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/accountTrayPoints.ts#L25)
 
 ## Functions
 
@@ -140,7 +152,7 @@ Defined in: [src/lib/waitlist/accountTrayPoints.ts:22](https://github.com/wenaki
 
 > **fetchAccountTrayPoints**(`limit`, `privyAccessToken?`): `Promise`\<[`AccountTrayPointsSnapshot`](#accounttraypointssnapshot)\>
 
-Defined in: [src/lib/waitlist/accountTrayPoints.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/accountTrayPoints.ts#L39)
+Defined in: [src/lib/waitlist/accountTrayPoints.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/accountTrayPoints.ts#L42)
 
 #### Parameters
 
@@ -162,7 +174,7 @@ Defined in: [src/lib/waitlist/accountTrayPoints.ts:39](https://github.com/wenaki
 
 > **isAccountTrayPointsAuthError**(`error`): `error is AccountTrayPointsAuthError`
 
-Defined in: [src/lib/waitlist/accountTrayPoints.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/waitlist/accountTrayPoints.ts#L35)
+Defined in: [src/lib/waitlist/accountTrayPoints.ts:38](https://github.com/wenakita/4626/blob/main/frontend/src/lib/waitlist/accountTrayPoints.ts#L38)
 
 #### Parameters
 

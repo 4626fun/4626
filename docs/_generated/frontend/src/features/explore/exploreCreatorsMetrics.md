@@ -12,7 +12,7 @@
 
 > **ExploreCreatorsMetrics** = `object`
 
-Defined in: [src/features/explore/exploreCreatorsMetrics.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreCreatorsMetrics.ts#L13)
+Defined in: [src/features/explore/exploreCreatorsMetrics.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreCreatorsMetrics.ts#L13)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/features/explore/exploreCreatorsMetrics.ts:13](https://github.c
 
 > **exact**: `boolean`
 
-Defined in: [src/features/explore/exploreCreatorsMetrics.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreCreatorsMetrics.ts#L16)
+Defined in: [src/features/explore/exploreCreatorsMetrics.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreCreatorsMetrics.ts#L16)
 
 ##### history30d
 
 > **history30d**: `object`[]
 
-Defined in: [src/features/explore/exploreCreatorsMetrics.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreCreatorsMetrics.ts#L41)
+Defined in: [src/features/explore/exploreCreatorsMetrics.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreCreatorsMetrics.ts#L42)
 
 ###### creatorCoinsMarketCapUsd
 
@@ -40,13 +40,13 @@ Defined in: [src/features/explore/exploreCreatorsMetrics.ts:41](https://github.c
 
 > **scope**: `"creators"`
 
-Defined in: [src/features/explore/exploreCreatorsMetrics.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreCreatorsMetrics.ts#L14)
+Defined in: [src/features/explore/exploreCreatorsMetrics.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreCreatorsMetrics.ts#L14)
 
 ##### sync
 
 > **sync**: `object`
 
-Defined in: [src/features/explore/exploreCreatorsMetrics.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreCreatorsMetrics.ts#L18)
+Defined in: [src/features/explore/exploreCreatorsMetrics.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreCreatorsMetrics.ts#L18)
 
 ###### backfillComplete
 
@@ -59,6 +59,10 @@ Defined in: [src/features/explore/exploreCreatorsMetrics.ts:18](https://github.c
 ###### driftPct
 
 > **driftPct**: `number` \| `null`
+
+###### exploreBackfillComplete
+
+> **exploreBackfillComplete**: `boolean`
 
 ###### lastFullSyncAt
 
@@ -84,13 +88,13 @@ Defined in: [src/features/explore/exploreCreatorsMetrics.ts:18](https://github.c
 
 > **syncStatus**: `"idle"` \| `"running"` \| `"error"`
 
-Defined in: [src/features/explore/exploreCreatorsMetrics.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreCreatorsMetrics.ts#L17)
+Defined in: [src/features/explore/exploreCreatorsMetrics.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreCreatorsMetrics.ts#L17)
 
 ##### totals
 
 > **totals**: `object`
 
-Defined in: [src/features/explore/exploreCreatorsMetrics.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreCreatorsMetrics.ts#L28)
+Defined in: [src/features/explore/exploreCreatorsMetrics.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreCreatorsMetrics.ts#L29)
 
 ###### creatorCoinsFees24hUsd
 
@@ -140,7 +144,7 @@ Defined in: [src/features/explore/exploreCreatorsMetrics.ts:28](https://github.c
 
 > **updatedAt**: `string`
 
-Defined in: [src/features/explore/exploreCreatorsMetrics.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreCreatorsMetrics.ts#L15)
+Defined in: [src/features/explore/exploreCreatorsMetrics.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreCreatorsMetrics.ts#L15)
 
 ## Variables
 
@@ -148,7 +152,7 @@ Defined in: [src/features/explore/exploreCreatorsMetrics.ts:15](https://github.c
 
 > `const` **EXPLORE\_CREATORS\_METRICS\_QUERY\_KEY**: readonly \[`"explore"`, `"creators"`, `"metrics"`, `"shared-dashboard"`\]
 
-Defined in: [src/features/explore/exploreCreatorsMetrics.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreCreatorsMetrics.ts#L5)
+Defined in: [src/features/explore/exploreCreatorsMetrics.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreCreatorsMetrics.ts#L5)
 
 ***
 
@@ -156,7 +160,7 @@ Defined in: [src/features/explore/exploreCreatorsMetrics.ts:5](https://github.co
 
 > `const` **LIVE\_HERO\_METRICS\_REFETCH\_MS**: `120000` = `120_000`
 
-Defined in: [src/features/explore/exploreCreatorsMetrics.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreCreatorsMetrics.ts#L7)
+Defined in: [src/features/explore/exploreCreatorsMetrics.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreCreatorsMetrics.ts#L7)
 
 Align with server metrics cache (~5 min) to avoid redundant polls.
 
@@ -166,7 +170,7 @@ Align with server metrics cache (~5 min) to avoid redundant polls.
 
 > **buildExploreHeroStatusLine**(`input`): `string`
 
-Defined in: [src/features/explore/exploreCreatorsMetrics.ts:91](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreCreatorsMetrics.ts#L91)
+Defined in: [src/features/explore/exploreCreatorsMetrics.ts:92](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreCreatorsMetrics.ts#L92)
 
 #### Parameters
 
@@ -182,7 +186,7 @@ Defined in: [src/features/explore/exploreCreatorsMetrics.ts:91](https://github.c
 
 ###### syncMeta
 
-\{ `backfillComplete`: `boolean`; `driftEstimateTotal`: `number` \| `null`; `driftPct`: `number` \| `null`; `lastFullSyncAt`: `string` \| `null`; `lastSyncFinishedAt`: `string` \| `null`; `lastSyncStartedAt`: `string` \| `null`; `sampledCreators`: `number`; `syncError`: `string` \| `null`; \} \| `null`
+\{ `backfillComplete`: `boolean`; `driftEstimateTotal`: `number` \| `null`; `driftPct`: `number` \| `null`; `exploreBackfillComplete`: `boolean`; `lastFullSyncAt`: `string` \| `null`; `lastSyncFinishedAt`: `string` \| `null`; `lastSyncStartedAt`: `string` \| `null`; `sampledCreators`: `number`; `syncError`: `string` \| `null`; \} \| `null`
 
 ###### syncStatus
 
@@ -202,7 +206,7 @@ Defined in: [src/features/explore/exploreCreatorsMetrics.ts:91](https://github.c
 
 > **fetchExploreCreatorsMetrics**(): `Promise`\<[`ExploreCreatorsMetrics`](#explorecreatorsmetrics) \| `null`\>
 
-Defined in: [src/features/explore/exploreCreatorsMetrics.ts:80](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreCreatorsMetrics.ts#L80)
+Defined in: [src/features/explore/exploreCreatorsMetrics.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreCreatorsMetrics.ts#L81)
 
 #### Returns
 
@@ -214,7 +218,7 @@ Defined in: [src/features/explore/exploreCreatorsMetrics.ts:80](https://github.c
 
 > **readCachedExploreCreatorsMetrics**(): [`ExploreCreatorsMetrics`](#explorecreatorsmetrics) \| `null`
 
-Defined in: [src/features/explore/exploreCreatorsMetrics.ts:63](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreCreatorsMetrics.ts#L63)
+Defined in: [src/features/explore/exploreCreatorsMetrics.ts:64](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreCreatorsMetrics.ts#L64)
 
 #### Returns
 
@@ -226,7 +230,7 @@ Defined in: [src/features/explore/exploreCreatorsMetrics.ts:63](https://github.c
 
 > **writeCachedExploreCreatorsMetrics**(`metrics`): `void`
 
-Defined in: [src/features/explore/exploreCreatorsMetrics.ts:67](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreCreatorsMetrics.ts#L67)
+Defined in: [src/features/explore/exploreCreatorsMetrics.ts:68](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreCreatorsMetrics.ts#L68)
 
 #### Parameters
 

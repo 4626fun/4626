@@ -12,7 +12,7 @@
 
 > **SwapCompletion** = `object`
 
-Defined in: [src/hooks/useSwapExecution.ts:63](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useSwapExecution.ts#L63)
+Defined in: [src/hooks/useSwapExecution.ts:76](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L76)
 
 #### Properties
 
@@ -20,31 +20,31 @@ Defined in: [src/hooks/useSwapExecution.ts:63](https://github.com/wenakita/4626/
 
 > **amountInUnits**: `string`
 
-Defined in: [src/hooks/useSwapExecution.ts:66](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useSwapExecution.ts#L66)
+Defined in: [src/hooks/useSwapExecution.ts:79](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L79)
 
 ##### completedAt
 
 > **completedAt**: `number`
 
-Defined in: [src/hooks/useSwapExecution.ts:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useSwapExecution.ts#L68)
+Defined in: [src/hooks/useSwapExecution.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L81)
 
 ##### estimatedOut
 
 > **estimatedOut**: `string`
 
-Defined in: [src/hooks/useSwapExecution.ts:67](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useSwapExecution.ts#L67)
+Defined in: [src/hooks/useSwapExecution.ts:80](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L80)
 
 ##### txHash
 
 > **txHash**: `string` \| `null`
 
-Defined in: [src/hooks/useSwapExecution.ts:64](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useSwapExecution.ts#L64)
+Defined in: [src/hooks/useSwapExecution.ts:77](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L77)
 
 ##### userOpHash?
 
 > `optional` **userOpHash**: `string` \| `null`
 
-Defined in: [src/hooks/useSwapExecution.ts:65](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useSwapExecution.ts#L65)
+Defined in: [src/hooks/useSwapExecution.ts:78](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L78)
 
 ## Functions
 
@@ -52,7 +52,7 @@ Defined in: [src/hooks/useSwapExecution.ts:65](https://github.com/wenakita/4626/
 
 > **assertSwapSpendBalancePreflight**(`params`): `Promise`\<`void`\>
 
-Defined in: [src/hooks/useSwapExecution.ts:367](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useSwapExecution.ts#L367)
+Defined in: [src/hooks/useSwapExecution.ts:380](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L380)
 
 #### Parameters
 
@@ -92,7 +92,7 @@ Defined in: [src/hooks/useSwapExecution.ts:367](https://github.com/wenakita/4626
 
 > **deriveSwapExecutionReadiness**(`params`): `boolean`
 
-Defined in: [src/hooks/useSwapExecution.ts:205](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useSwapExecution.ts#L205)
+Defined in: [src/hooks/useSwapExecution.ts:218](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L218)
 
 #### Parameters
 
@@ -140,7 +140,7 @@ Defined in: [src/hooks/useSwapExecution.ts:205](https://github.com/wenakita/4626
 
 > **evaluateCanonicalSubmitSession**(`input`): `CanonicalSubmitSessionResult`
 
-Defined in: [src/hooks/useSwapExecution.ts:270](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useSwapExecution.ts#L270)
+Defined in: [src/hooks/useSwapExecution.ts:283](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L283)
 
 #### Parameters
 
@@ -158,7 +158,7 @@ Defined in: [src/hooks/useSwapExecution.ts:270](https://github.com/wenakita/4626
 
 > **evaluateSwapSessionGate**(`input`): `SwapSessionGateResult`
 
-Defined in: [src/hooks/useSwapExecution.ts:181](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useSwapExecution.ts#L181)
+Defined in: [src/hooks/useSwapExecution.ts:194](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L194)
 
 #### Parameters
 
@@ -176,7 +176,7 @@ Defined in: [src/hooks/useSwapExecution.ts:181](https://github.com/wenakita/4626
 
 > **resolveCanonicalSubmitSession**(`input`, `ensureCanonicalSession?`): `Promise`\<`CanonicalSubmitSessionResult`\>
 
-Defined in: [src/hooks/useSwapExecution.ts:148](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useSwapExecution.ts#L148)
+Defined in: [src/hooks/useSwapExecution.ts:161](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L161)
 
 #### Parameters
 
@@ -198,7 +198,7 @@ Defined in: [src/hooks/useSwapExecution.ts:148](https://github.com/wenakita/4626
 
 > **shouldDisablePermit2ForSwap**(`params`): `boolean`
 
-Defined in: [src/hooks/useSwapExecution.ts:228](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useSwapExecution.ts#L228)
+Defined in: [src/hooks/useSwapExecution.ts:241](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L241)
 
 #### Parameters
 
@@ -226,7 +226,7 @@ Defined in: [src/hooks/useSwapExecution.ts:228](https://github.com/wenakita/4626
 
 > **shouldSimulateSwapTransaction**(`requiresApprovalTx`, `wrapsNativeEthForCanonical`): `boolean`
 
-Defined in: [src/hooks/useSwapExecution.ts:358](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useSwapExecution.ts#L358)
+Defined in: [src/hooks/useSwapExecution.ts:371](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L371)
 
 Uniswap simulateTransaction runs the swap tx alone; skip when approval or WETH wrap is batched later.
 
@@ -250,7 +250,7 @@ Uniswap simulateTransaction runs the swap tx alone; skip when approval or WETH w
 
 > **useSwapExecution**(`params`): `object`
 
-Defined in: [src/hooks/useSwapExecution.ts:449](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useSwapExecution.ts#L449)
+Defined in: [src/hooks/useSwapExecution.ts:487](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L487)
 
 #### Parameters
 
@@ -323,6 +323,10 @@ Defined in: [src/hooks/useSwapExecution.ts:449](https://github.com/wenakita/4626
 ###### parsedSlippage
 
 `number`
+
+###### preferZoraTradeRoute?
+
+`boolean`
 
 ###### privyDebug?
 

@@ -6,21 +6,13 @@
 
 # src/features/waitlist/useWaitlistChatJoin
 
-## Type Aliases
-
-### WaitlistChatStatus
-
-> **WaitlistChatStatus** = `"idle"` \| `"awaiting_messaging"` \| `"joining"` \| `"pending"` \| `"executing"` \| `"executed"` \| `"failed"` \| `"blocked"` \| `"config"` \| `"error"`
-
-Defined in: [src/features/waitlist/useWaitlistChatJoin.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/useWaitlistChatJoin.ts#L7)
-
 ## Functions
 
 ### useWaitlistChatJoin()
 
 > **useWaitlistChatJoin**(`params`): `object`
 
-Defined in: [src/features/waitlist/useWaitlistChatJoin.ts:109](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/useWaitlistChatJoin.ts#L109)
+Defined in: [src/features/waitlist/useWaitlistChatJoin.ts:41](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/useWaitlistChatJoin.ts#L41)
 
 #### Parameters
 
@@ -40,7 +32,7 @@ Defined in: [src/features/waitlist/useWaitlistChatJoin.ts:109](https://github.co
 
 ###### serverJoinActionStatus?
 
-`WaitlistJoinActionStatus`
+[`WaitlistJoinActionStatus`](waitlistChatCopy.md#waitlistjoinactionstatus)
 
 ###### xmtpMemberAddress
 
@@ -60,46 +52,34 @@ Defined in: [src/features/waitlist/useWaitlistChatJoin.ts:109](https://github.co
 
 ##### status
 
-> **status**: [`WaitlistChatStatus`](#waitlistchatstatus)
+> **status**: [`WaitlistChatStatus`](waitlistChatCopy.md#waitlistchatstatus)
+
+## References
+
+### mapJoinActionStatus
+
+Re-exports [mapJoinActionStatus](waitlistChatCopy.md#mapjoinactionstatus)
 
 ***
 
-### waitlistChatBlockedMessage()
+### waitlistChatBlockedMessage
 
-> **waitlistChatBlockedMessage**(`params`): `string`
-
-Defined in: [src/features/waitlist/useWaitlistChatJoin.ts:47](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/useWaitlistChatJoin.ts#L47)
-
-#### Parameters
-
-##### params
-
-###### executionTrack?
-
-[`WaitlistChatExecutionTrack`](useWaitlistXmtpStatus.md#waitlistchatexecutiontrack) \| `null`
-
-###### joinBlockedReason?
-
-`string` \| `null`
-
-#### Returns
-
-`string`
+Re-exports [waitlistChatBlockedMessage](waitlistChatCopy.md#waitlistchatblockedmessage)
 
 ***
 
-### waitlistChatStatusMessage()
+### WaitlistChatStatus
 
-> **waitlistChatStatusMessage**(`status`): `string`
+Re-exports [WaitlistChatStatus](waitlistChatCopy.md#waitlistchatstatus)
 
-Defined in: [src/features/waitlist/useWaitlistChatJoin.ts:63](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/useWaitlistChatJoin.ts#L63)
+***
 
-#### Parameters
+### waitlistChatStatusMessage
 
-##### status
+Re-exports [waitlistChatStatusMessage](waitlistChatCopy.md#waitlistchatstatusmessage)
 
-[`WaitlistChatStatus`](#waitlistchatstatus)
+***
 
-#### Returns
+### WaitlistJoinActionStatus
 
-`string`
+Re-exports [WaitlistJoinActionStatus](waitlistChatCopy.md#waitlistjoinactionstatus)

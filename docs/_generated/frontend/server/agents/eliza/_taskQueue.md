@@ -12,7 +12,7 @@
 
 > **AgentBackgroundQueueStats** = `object`
 
-Defined in: [server/agents/eliza/\_taskQueue.ts:194](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_taskQueue.ts#L194)
+Defined in: [server/agents/eliza/\_taskQueue.ts:194](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_taskQueue.ts#L194)
 
 #### Properties
 
@@ -20,31 +20,31 @@ Defined in: [server/agents/eliza/\_taskQueue.ts:194](https://github.com/wenakita
 
 > **done**: `number`
 
-Defined in: [server/agents/eliza/\_taskQueue.ts:197](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_taskQueue.ts#L197)
+Defined in: [server/agents/eliza/\_taskQueue.ts:197](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_taskQueue.ts#L197)
 
 ##### failed
 
 > **failed**: `number`
 
-Defined in: [server/agents/eliza/\_taskQueue.ts:198](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_taskQueue.ts#L198)
+Defined in: [server/agents/eliza/\_taskQueue.ts:198](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_taskQueue.ts#L198)
 
 ##### pending
 
 > **pending**: `number`
 
-Defined in: [server/agents/eliza/\_taskQueue.ts:195](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_taskQueue.ts#L195)
+Defined in: [server/agents/eliza/\_taskQueue.ts:195](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_taskQueue.ts#L195)
 
 ##### processing
 
 > **processing**: `number`
 
-Defined in: [server/agents/eliza/\_taskQueue.ts:196](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_taskQueue.ts#L196)
+Defined in: [server/agents/eliza/\_taskQueue.ts:196](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_taskQueue.ts#L196)
 
 ##### staleProcessing
 
 > **staleProcessing**: `number`
 
-Defined in: [server/agents/eliza/\_taskQueue.ts:199](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_taskQueue.ts#L199)
+Defined in: [server/agents/eliza/\_taskQueue.ts:199](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_taskQueue.ts#L199)
 
 ## Functions
 
@@ -52,7 +52,7 @@ Defined in: [server/agents/eliza/\_taskQueue.ts:199](https://github.com/wenakita
 
 > **enqueueAgentBackgroundTask**(`input`): `Promise`\<`void`\>
 
-Defined in: [server/agents/eliza/\_taskQueue.ts:65](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_taskQueue.ts#L65)
+Defined in: [server/agents/eliza/\_taskQueue.ts:65](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_taskQueue.ts#L65)
 
 #### Parameters
 
@@ -88,7 +88,7 @@ Defined in: [server/agents/eliza/\_taskQueue.ts:65](https://github.com/wenakita/
 
 > **getAgentBackgroundQueueStats**(`params?`): `Promise`\<[`AgentBackgroundQueueStats`](#agentbackgroundqueuestats)\>
 
-Defined in: [server/agents/eliza/\_taskQueue.ts:212](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_taskQueue.ts#L212)
+Defined in: [server/agents/eliza/\_taskQueue.ts:212](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_taskQueue.ts#L212)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [server/agents/eliza/\_taskQueue.ts:212](https://github.com/wenakita
 
 > **startAgentBackgroundTaskWorker**(`params`): `TaskWorker`
 
-Defined in: [server/agents/eliza/\_taskQueue.ts:257](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_taskQueue.ts#L257)
+Defined in: [server/agents/eliza/\_taskQueue.ts:257](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_taskQueue.ts#L257)
 
 #### Parameters
 

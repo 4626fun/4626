@@ -12,7 +12,7 @@
 
 > **EoaOwnerPreparedCallsExecutionMode** = `"canonicalSmartWallet"`
 
-Defined in: [src/lib/wallet/eoaOwnerPreparedCalls.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/eoaOwnerPreparedCalls.ts#L5)
+Defined in: [src/lib/wallet/eoaOwnerPreparedCalls.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/eoaOwnerPreparedCalls.ts#L5)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/wallet/eoaOwnerPreparedCalls.ts:5](https://github.com/wenak
 
 > **submitOwnerViaPreparedCallsWithEoaOwner**(`params`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [src/lib/wallet/eoaOwnerPreparedCalls.ts:78](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/eoaOwnerPreparedCalls.ts#L78)
+Defined in: [src/lib/wallet/eoaOwnerPreparedCalls.ts:78](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/eoaOwnerPreparedCalls.ts#L78)
 
 #### Parameters
 

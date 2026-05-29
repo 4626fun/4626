@@ -12,7 +12,7 @@
 
 > **getZoraExploreVolumeColumnRaw**(`coin`, `timeframe`): `string` \| `undefined`
 
-Defined in: [src/lib/zora/exploreVolume.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/exploreVolume.ts#L7)
+Defined in: [src/lib/zora/exploreVolume.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/exploreVolume.ts#L7)
 
 Zora coins explore API exposes rolling 24h volume per coin (`volume24h`) and cumulative
 `totalVolume` (all-time). There is no true multi-day window on explore responses besides those two.
@@ -37,7 +37,7 @@ Zora coins explore API exposes rolling 24h volume per coin (`volume24h`) and cum
 
 > **getZoraExploreVolumeForFees**(`coin`): `string` \| `undefined`
 
-Defined in: [src/lib/zora/exploreVolume.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/exploreVolume.ts#L17)
+Defined in: [src/lib/zora/exploreVolume.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/exploreVolume.ts#L17)
 
 Always use 24h notional for fee estimates (fees accrue on recent trading; all-time volume would misstate fees).
 
@@ -57,7 +57,7 @@ Always use 24h notional for fee estimates (fees accrue on recent trading; all-ti
 
 > **getZoraExploreVolumeHeaderLabel**(`timeframe`): `string`
 
-Defined in: [src/lib/zora/exploreVolume.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/exploreVolume.ts#L35)
+Defined in: [src/lib/zora/exploreVolume.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/exploreVolume.ts#L35)
 
 #### Parameters
 
@@ -75,7 +75,7 @@ Defined in: [src/lib/zora/exploreVolume.ts:35](https://github.com/wenakita/4626/
 
 > **getZoraExploreVolumeNote**(`timeframe`): `string` \| `null`
 
-Defined in: [src/lib/zora/exploreVolume.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/exploreVolume.ts#L24)
+Defined in: [src/lib/zora/exploreVolume.ts:24](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/exploreVolume.ts#L24)
 
 Short note under explore time pills so users are not misled by column headers vs API reality.
 

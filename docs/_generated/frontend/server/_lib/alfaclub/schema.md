@@ -12,7 +12,7 @@
 
 > **\_resetAlfaClubSchemaCacheForTests**(): `void`
 
-Defined in: [server/\_lib/alfaclub/schema.ts:540](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/schema.ts#L540)
+Defined in: [server/\_lib/alfaclub/schema.ts:576](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/schema.ts#L576)
 
 Reset state cache — exposed for tests only.
 
@@ -26,7 +26,7 @@ Reset state cache — exposed for tests only.
 
 > **ensureAlfaClubVigilanteSchema**(): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/alfaclub/schema.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/schema.ts#L14)
+Defined in: [server/\_lib/alfaclub/schema.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/schema.ts#L14)
 
 #### Returns
 

@@ -10,7 +10,7 @@
 
 ### BroadcastSetPointsLedgerRoot()
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:137](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L137)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:137](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L137)
 
 Adapter for the on-chain broadcast. Tests inject a stub; production
 uses [defaultBroadcastSetPointsLedgerRoot](#defaultbroadcastsetpointsledgerroot) which encodes via
@@ -18,7 +18,7 @@ viem and submits via the configured signer.
 
 > **BroadcastSetPointsLedgerRoot**(`args`): `Promise`\<\{ `txHash`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:138](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L138)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:138](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L138)
 
 Adapter for the on-chain broadcast. Tests inject a stub; production
 uses [defaultBroadcastSetPointsLedgerRoot](#defaultbroadcastsetpointsledgerroot) which encodes via
@@ -48,7 +48,7 @@ viem and submits via the configured signer.
 
 ### ConfirmTransactionReceipt()
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:151](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L151)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:151](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L151)
 
 Adapter for receipt confirmation. Tests inject a stub; production
 uses viem's `waitForTransactionReceipt`. Returns the block number on
@@ -57,7 +57,7 @@ the next tick to re-poll).
 
 > **ConfirmTransactionReceipt**(`args`): `Promise`\<\{ `blockNumber`: `bigint`; \} \| `null`\>
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:152](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L152)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:152](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L152)
 
 Adapter for receipt confirmation. Tests inject a stub; production
 uses viem's `waitForTransactionReceipt`. Returns the block number on
@@ -84,7 +84,7 @@ the next tick to re-poll).
 
 ### LookupBurnContext()
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:164](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L164)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:164](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L164)
 
 Resolve a burn's on-chain identity (wallet + nullifier) at projection
 time. The projector calls this for every L0 row it considers; we wire
@@ -93,7 +93,7 @@ the same wallet bound to the L1 leaf.
 
 > **LookupBurnContext**(`args`): `Promise`\<[`AmoeBurnContext`](amoeLedgerProjector.md#amoeburncontext) \| `null`\>
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:165](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L165)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:165](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L165)
 
 Resolve a burn's on-chain identity (wallet + nullifier) at projection
 time. The projector calls this for every L0 row it considers; we wire
@@ -114,7 +114,7 @@ the same wallet bound to the L1 leaf.
 
 ### PublishEpochArgs
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:168](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L168)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:168](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L168)
 
 #### Properties
 
@@ -122,7 +122,7 @@ Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:168](https://github.com
 
 > **broadcast**: [`BroadcastSetPointsLedgerRoot`](#broadcastsetpointsledgerroot)
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:178](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L178)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:178](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L178)
 
 Adapter for the on-chain root broadcast.
 
@@ -130,7 +130,7 @@ Adapter for the on-chain root broadcast.
 
 > **claimedBy**: `string`
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:174](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L174)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:174](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L174)
 
 Identity stamped on the publisher_runs row.
 
@@ -138,7 +138,7 @@ Identity stamped on the publisher_runs row.
 
 > **confirm**: [`ConfirmTransactionReceipt`](#confirmtransactionreceipt)
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:180](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L180)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:180](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L180)
 
 Adapter for confirmation polling.
 
@@ -146,7 +146,7 @@ Adapter for confirmation polling.
 
 > **db**: [`AmoePublisherDb`](#amoepublisherdb)
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:170](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L170)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:170](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L170)
 
 Db pool.
 
@@ -154,7 +154,7 @@ Db pool.
 
 > **epoch**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:172](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L172)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:172](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L172)
 
 Epoch to publish.
 
@@ -162,7 +162,7 @@ Epoch to publish.
 
 > **lookupBurnContext**: [`LookupBurnContext`](#lookupburncontext)
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:182](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L182)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:182](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L182)
 
 Lookup wallet/nullifier for projection.
 
@@ -170,7 +170,7 @@ Lookup wallet/nullifier for projection.
 
 > **lotteryAmoeRouter**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:176](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L176)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:176](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L176)
 
 Address of the deployed `LotteryAmoeRouter`.
 
@@ -178,7 +178,7 @@ Address of the deployed `LotteryAmoeRouter`.
 
 > **publisherVersion**: `string`
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:184](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L184)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:184](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L184)
 
 Publisher version (git SHA) stamped on the L2 row.
 
@@ -188,7 +188,7 @@ Publisher version (git SHA) stamped on the L2 row.
 
 > **AmoePublisherDb** = `object`
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:125](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L125)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:125](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L125)
 
 Db pool shape this module needs.
 
@@ -198,7 +198,7 @@ Db pool shape this module needs.
 
 > **sql**: (`strings`, ...`values`) => `Promise`\<\{ `rows`: `unknown`[]; \}\>
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:126](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L126)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:126](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L126)
 
 ###### Parameters
 
@@ -220,7 +220,7 @@ Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:126](https://github.com
 
 > **PublishEpochOutcome** = \{ `epoch`: `bigint`; `kind`: `"finished"`; `rootHex`: `` `0x${string}` ``; `txHash`: `` `0x${string}` ``; \} \| \{ `epoch`: `bigint`; `kind`: `"finished_no_op"`; `reason`: `"empty_epoch"`; \} \| \{ `epoch`: `bigint`; `kind`: `"in_flight"`; `phase`: [`PublisherPhase`](#publisherphase); \} \| \{ `epoch`: `bigint`; `kind`: `"lost_claim"`; \} \| \{ `epoch`: `bigint`; `kind`: `"errored"`; `message`: `string`; `phase`: [`PublisherPhase`](#publisherphase); \}
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:188](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L188)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:188](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L188)
 
 Outcome of a single epoch's pipeline run.
 
@@ -230,7 +230,7 @@ Outcome of a single epoch's pipeline run.
 
 > **PublisherPhase** = `"projecting"` \| `"building"` \| `"broadcasting"` \| `"confirming"` \| `"finished"` \| `"finished_no_op"` \| `"errored"`
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:195](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L195)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:195](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L195)
 
 ## Variables
 
@@ -238,7 +238,7 @@ Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:195](https://github.com
 
 > `const` **BACKFILL\_LOOKBACK\_EPOCHS**: `14n` = `14n`
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:118](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L118)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:118](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L118)
 
 How far back the cron will scan for unpublished closed epochs when
 picking the next target. Bounded so a long outage doesn't make a
@@ -256,7 +256,7 @@ so a 14-day backlog drains in 14 ticks at 15-min cadence — about
 
 > `const` **MAX\_EPOCHS\_PER\_TICK**: `1` = `1`
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:105](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L105)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:105](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L105)
 
 Cap on epochs processed per tick. The cron is supposed to be the
 common case (process the latest closed epoch); a value > 1 only
@@ -269,7 +269,7 @@ question 2 is resolved.
 
 > `const` **MAX\_PROJECTOR\_ITERATIONS**: `32` = `32`
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:90](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L90)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:90](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L90)
 
 Hard cap on projector loop iterations within a single phase. Bounds
 the cron tick's worst-case duration even if a misconfigured
@@ -282,7 +282,7 @@ but we still want a tick budget).
 
 > `const` **RECEIPT\_WAIT\_TIMEOUT\_MS**: `60000` = `60_000`
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:97](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L97)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:97](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L97)
 
 How long to wait for the on-chain receipt before we give up on this
 tick (we leave the L2 row in state 2 and the next tick will re-poll
@@ -294,7 +294,7 @@ via the confirming branch).
 
 > `const` **STRANDED\_RUN\_RECLAIM\_AGE\_MS**: `number`
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:82](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L82)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:82](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L82)
 
 How long an in-flight publisher run can sit before reclaim treats it
 as stranded. Sized above the worst-case `waitForTransactionReceipt`
@@ -306,7 +306,7 @@ as stranded. Sized above the worst-case `waitForTransactionReceipt`
 
 > **defaultBroadcastSetPointsLedgerRoot**(`args`): `Promise`\<\{ `txHash`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:808](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L808)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:808](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L808)
 
 Default broadcaster — encodes the calldata and submits via the
 configured signer (EOA or Privy CSW). Refuses to fall back to the
@@ -343,7 +343,7 @@ Error('no_publisher_key_configured') when no signer is set;
 
 > **defaultConfirmTransactionReceipt**(`args`): `Promise`\<\{ `blockNumber`: `bigint`; \} \| `null`\>
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:893](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L893)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:893](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L893)
 
 Default receipt confirmer — wraps viem's `waitForTransactionReceipt`,
 returns null on timeout (publisher leaves the run in 'confirming'
@@ -371,7 +371,7 @@ for the next tick to re-poll).
 
 > **defaultLookupBurnContext**(`db`, `args`): `Promise`\<[`AmoeBurnContext`](amoeLedgerProjector.md#amoeburncontext) \| `null`\>
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:938](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L938)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:938](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L938)
 
 Default `lookupBurnContext` — joins against `amoe_zk_submissions` to
 resolve `(wallet_address, twitter_credit_nullifier_hex)` for a given
@@ -403,7 +403,7 @@ is intentional — they have no on-chain identity to bind to.
 
 > **isAmoeLedgerPublisherEnabled**(): `boolean`
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:761](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L761)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:761](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L761)
 
 Whether the publisher cron is enabled. Defaults to false.
 
@@ -417,7 +417,7 @@ Whether the publisher cron is enabled. Defaults to false.
 
 > **pickNextEpochToPublish**(`db`, `args`): `Promise`\<`bigint` \| `null`\>
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:438](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L438)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:438](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L438)
 
 Pick the OLDEST unpublished closed epoch within the lookback horizon,
 or null if every epoch in [latestClosedEpoch - lookback + 1, latestClosedEpoch]
@@ -460,7 +460,7 @@ successive ticks.
 
 > **publishEpoch**(`args`): `Promise`\<[`PublishEpochOutcome`](#publishepochoutcome)\>
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:502](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L502)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:502](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L502)
 
 Run the full publish pipeline for a single epoch. Idempotent: if the
 epoch's L2 row is already at state 2 (broadcast) or state 3
@@ -486,7 +486,7 @@ caller (cron handler) translates outcomes to log lines / metrics.
 
 > **readAmoeLedgerPublisherBundlerUrl**(): `string` \| `null`
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:748](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L748)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:748](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L748)
 
 #### Returns
 
@@ -498,7 +498,7 @@ Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:748](https://github.com
 
 > **readAmoeLedgerPublisherOwnerAddress**(): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:734](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L734)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:734](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L734)
 
 #### Returns
 
@@ -510,7 +510,7 @@ Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:734](https://github.com
 
 > **readAmoeLedgerPublisherPrivateKey**(): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:723](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L723)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:723](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L723)
 
 Read the publisher EOA private key. Returns `null` if unset or
 malformed.
@@ -525,7 +525,7 @@ malformed.
 
 > **readAmoeLedgerPublisherPrivyWalletId**(): `string` \| `null`
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:729](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L729)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:729](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L729)
 
 #### Returns
 
@@ -537,7 +537,7 @@ Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:729](https://github.com
 
 > **readAmoeLedgerPublisherSmartWallet**(): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:740](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L740)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:740](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L740)
 
 #### Returns
 
@@ -549,7 +549,7 @@ Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:740](https://github.com
 
 > **readBaseRpcUrlForPublisher**(): `string`
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:753](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L753)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:753](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L753)
 
 #### Returns
 
@@ -561,7 +561,7 @@ Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:753](https://github.com
 
 > **readPublisherClaimedBy**(): `string`
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:766](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L766)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:766](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L766)
 
 Pod identifier stamped on `claimed_by`.
 
@@ -575,7 +575,7 @@ Pod identifier stamped on `claimed_by`.
 
 > **reclaimStrandedPublisherRuns**(`db`, `options`): `Promise`\<`number`\>
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:401](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L401)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:401](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L401)
 
 Mark in-flight runs whose `claimed_at` is older than the reclaim age
 as `errored`. Called at the top of every cron tick before claiming
@@ -606,7 +606,7 @@ Returns the number of rows reclaimed.
 
 > **requirePublisherDb**(): `Promise`\<[`AmoePublisherDb`](#amoepublisherdb)\>
 
-Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:967](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L967)
+Defined in: [server/\_lib/lottery/amoeLedgerPublisher.ts:967](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerPublisher.ts#L967)
 
 #### Returns
 

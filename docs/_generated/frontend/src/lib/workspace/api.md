@@ -12,7 +12,7 @@
 
 > **getWorkspaceActivity**(`params`): `Promise`\<[`WorkspaceActivityResponse`](types.md#workspaceactivityresponse)\>
 
-Defined in: [src/lib/workspace/api.ts:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/workspace/api.ts#L60)
+Defined in: [src/lib/workspace/api.ts:60](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/api.ts#L60)
 
 #### Parameters
 
@@ -40,7 +40,7 @@ Defined in: [src/lib/workspace/api.ts:60](https://github.com/wenakita/4626/blob/
 
 > **getWorkspaceMonitoring**(`vault`): `Promise`\<[`WorkspaceMonitoringResponse`](types.md#workspacemonitoringresponse)\>
 
-Defined in: [src/lib/workspace/api.ts:54](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/workspace/api.ts#L54)
+Defined in: [src/lib/workspace/api.ts:54](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/api.ts#L54)
 
 #### Parameters
 
@@ -58,7 +58,7 @@ Defined in: [src/lib/workspace/api.ts:54](https://github.com/wenakita/4626/blob/
 
 > **getWorkspaceRooms**(`vault`): `Promise`\<[`WorkspaceRoomsResponse`](types.md#workspaceroomsresponse)\>
 
-Defined in: [src/lib/workspace/api.ts:74](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/workspace/api.ts#L74)
+Defined in: [src/lib/workspace/api.ts:74](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/api.ts#L74)
 
 #### Parameters
 
@@ -76,7 +76,7 @@ Defined in: [src/lib/workspace/api.ts:74](https://github.com/wenakita/4626/blob/
 
 > **getWorkspaceSettings**(`vault`): `Promise`\<[`WorkspaceSettingsResponse`](types.md#workspacesettingsresponse)\>
 
-Defined in: [src/lib/workspace/api.ts:94](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/workspace/api.ts#L94)
+Defined in: [src/lib/workspace/api.ts:94](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/api.ts#L94)
 
 #### Parameters
 
@@ -94,7 +94,7 @@ Defined in: [src/lib/workspace/api.ts:94](https://github.com/wenakita/4626/blob/
 
 > **getWorkspaceStrategies**(`vault`): `Promise`\<[`WorkspaceStrategiesResponse`](types.md#workspacestrategiesresponse)\>
 
-Defined in: [src/lib/workspace/api.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/workspace/api.ts#L48)
+Defined in: [src/lib/workspace/api.ts:48](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/api.ts#L48)
 
 #### Parameters
 
@@ -112,7 +112,7 @@ Defined in: [src/lib/workspace/api.ts:48](https://github.com/wenakita/4626/blob/
 
 > **getWorkspaceSummary**(`vault`): `Promise`\<[`WorkspaceSummary`](types.md#workspacesummary)\>
 
-Defined in: [src/lib/workspace/api.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/workspace/api.ts#L42)
+Defined in: [src/lib/workspace/api.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/api.ts#L42)
 
 #### Parameters
 
@@ -130,7 +130,7 @@ Defined in: [src/lib/workspace/api.ts:42](https://github.com/wenakita/4626/blob/
 
 > **getWorkspaceTasks**(`params`): `Promise`\<[`WorkspaceTasksResponse`](types.md#workspacetasksresponse)\>
 
-Defined in: [src/lib/workspace/api.ts:80](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/workspace/api.ts#L80)
+Defined in: [src/lib/workspace/api.ts:80](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/api.ts#L80)
 
 #### Parameters
 
@@ -158,7 +158,7 @@ Defined in: [src/lib/workspace/api.ts:80](https://github.com/wenakita/4626/blob/
 
 > **postWorkspaceAction**(`params`): `Promise`\<[`WorkspaceActionResult`](types.md#workspaceactionresult)\>
 
-Defined in: [src/lib/workspace/api.ts:100](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/workspace/api.ts#L100)
+Defined in: [src/lib/workspace/api.ts:100](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/api.ts#L100)
 
 #### Parameters
 

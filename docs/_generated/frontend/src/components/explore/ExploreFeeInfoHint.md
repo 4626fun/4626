@@ -12,7 +12,7 @@
 
 > `const` **EXPLORE\_FEE\_VERSION\_HEADER\_HINT**: `"Estimated 24h trading fees (24h volume × fee rate). V4 coins: 1%; legacy: 3%. Expand a row for the payout split."` = `'Estimated 24h trading fees (24h volume × fee rate). V4 coins: 1%; legacy: 3%. Expand a row for the payout split.'`
 
-Defined in: [src/components/explore/ExploreFeeInfoHint.tsx:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ExploreFeeInfoHint.tsx#L1)
+Defined in: [src/components/explore/ExploreFeeInfoHint.tsx:1](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ExploreFeeInfoHint.tsx#L1)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/components/explore/ExploreFeeInfoHint.tsx:1](https://github.com
 
 > **ExploreFeeInfoHint**(`props`): `Element`
 
-Defined in: [src/components/explore/ExploreFeeInfoHint.tsx:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ExploreFeeInfoHint.tsx#L4)
+Defined in: [src/components/explore/ExploreFeeInfoHint.tsx:4](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ExploreFeeInfoHint.tsx#L4)
 
 #### Parameters
 

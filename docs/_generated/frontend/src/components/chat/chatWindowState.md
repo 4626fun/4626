@@ -12,7 +12,7 @@
 
 > **resolveCommandCenterVisibility**(`params`): `boolean`
 
-Defined in: [src/components/chat/chatWindowState.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/chatWindowState.ts#L20)
+Defined in: [src/components/chat/chatWindowState.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/chatWindowState.ts#L28)
 
 #### Parameters
 
@@ -36,11 +36,35 @@ Defined in: [src/components/chat/chatWindowState.ts:20](https://github.com/wenak
 
 ***
 
+### shouldAttemptGroupConversationRecovery()
+
+> **shouldAttemptGroupConversationRecovery**(`params`): `boolean`
+
+Defined in: [src/components/chat/chatWindowState.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/chatWindowState.ts#L20)
+
+#### Parameters
+
+##### params
+
+###### conversationType
+
+`ConversationType`
+
+###### reason
+
+`string`
+
+#### Returns
+
+`boolean`
+
+***
+
 ### shouldAttemptInactiveDmRecovery()
 
 > **shouldAttemptInactiveDmRecovery**(`params`): `boolean`
 
-Defined in: [src/components/chat/chatWindowState.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/chatWindowState.ts#L7)
+Defined in: [src/components/chat/chatWindowState.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/chatWindowState.ts#L7)
 
 #### Parameters
 

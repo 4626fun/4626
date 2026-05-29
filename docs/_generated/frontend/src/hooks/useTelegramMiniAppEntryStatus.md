@@ -12,7 +12,7 @@
 
 > **TelegramMiniAppEntryStatus** = `"checking"` \| `"ready"` \| `"blocked"`
 
-Defined in: [src/hooks/useTelegramMiniAppEntryStatus.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useTelegramMiniAppEntryStatus.ts#L14)
+Defined in: [src/hooks/useTelegramMiniAppEntryStatus.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useTelegramMiniAppEntryStatus.ts#L14)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/hooks/useTelegramMiniAppEntryStatus.ts:14](https://github.com/w
 
 > **useTelegramMiniAppEntryStatus**(`search`): [`TelegramMiniAppEntryStatus`](#telegramminiappentrystatus)
 
-Defined in: [src/hooks/useTelegramMiniAppEntryStatus.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useTelegramMiniAppEntryStatus.ts#L16)
+Defined in: [src/hooks/useTelegramMiniAppEntryStatus.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useTelegramMiniAppEntryStatus.ts#L16)
 
 #### Parameters
 

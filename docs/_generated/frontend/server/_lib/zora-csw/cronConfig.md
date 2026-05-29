@@ -12,7 +12,7 @@
 
 > `const` **LAST\_SCANNED\_BLOCK\_KEY**: `"last_scanned_block"` = `'last_scanned_block'`
 
-Defined in: [server/\_lib/zora-csw/cronConfig.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/cronConfig.ts#L11)
+Defined in: [server/\_lib/zora-csw/cronConfig.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/cronConfig.ts#L11)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/zora-csw/cronConfig.ts:11](https://github.com/wenakita
 
 > `const` **ZORA\_CSW\_INDEXER\_STATE\_TABLE**: `"zora_csw_indexer_state"` = `'zora_csw_indexer_state'`
 
-Defined in: [server/\_lib/zora-csw/cronConfig.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/cronConfig.ts#L9)
+Defined in: [server/\_lib/zora-csw/cronConfig.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/cronConfig.ts#L9)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [server/\_lib/zora-csw/cronConfig.ts:9](https://github.com/wenakita/
 
 > `const` **ZORA\_CSW\_OWNERS\_TABLE**: `"zora_csw_owners"` = `'zora_csw_owners'`
 
-Defined in: [server/\_lib/zora-csw/cronConfig.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/cronConfig.ts#L10)
+Defined in: [server/\_lib/zora-csw/cronConfig.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/cronConfig.ts#L10)
 
 ## Functions
 
@@ -36,7 +36,7 @@ Defined in: [server/\_lib/zora-csw/cronConfig.ts:10](https://github.com/wenakita
 
 > **isZoraCswIndexerEnabled**(): `boolean`
 
-Defined in: [server/\_lib/zora-csw/cronConfig.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/cronConfig.ts#L17)
+Defined in: [server/\_lib/zora-csw/cronConfig.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/cronConfig.ts#L17)
 
 Master kill-switch for both crons. Default: disabled.
 Set `ZORA_CSW_INDEXER_ENABLED=1` in Vercel to flip on.
@@ -51,7 +51,7 @@ Set `ZORA_CSW_INDEXER_ENABLED=1` in Vercel to flip on.
 
 > **readEnrichBudget**(): `number`
 
-Defined in: [server/\_lib/zora-csw/cronConfig.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/cronConfig.ts#L21)
+Defined in: [server/\_lib/zora-csw/cronConfig.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/cronConfig.ts#L21)
 
 #### Returns
 
@@ -63,7 +63,7 @@ Defined in: [server/\_lib/zora-csw/cronConfig.ts:21](https://github.com/wenakita
 
 > **readEthosEnrichBudget**(): `number`
 
-Defined in: [server/\_lib/zora-csw/cronConfig.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/cronConfig.ts#L37)
+Defined in: [server/\_lib/zora-csw/cronConfig.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/cronConfig.ts#L37)
 
 #### Returns
 
@@ -75,7 +75,7 @@ Defined in: [server/\_lib/zora-csw/cronConfig.ts:37](https://github.com/wenakita
 
 > **readRpcConcurrency**(): `number`
 
-Defined in: [server/\_lib/zora-csw/cronConfig.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-csw/cronConfig.ts#L29)
+Defined in: [server/\_lib/zora-csw/cronConfig.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-csw/cronConfig.ts#L29)
 
 #### Returns
 

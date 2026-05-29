@@ -12,7 +12,7 @@
 
 > **TrayOnchainActivityRow** = `object`
 
-Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/baseTrayActivityEtherscan.ts#L8)
+Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/baseTrayActivityEtherscan.ts#L8)
 
 #### Properties
 
@@ -20,43 +20,43 @@ Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:8](https://github.co
 
 > **failed**: `boolean`
 
-Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/baseTrayActivityEtherscan.ts#L15)
+Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/baseTrayActivityEtherscan.ts#L15)
 
 ##### kind
 
 > **kind**: `"swap"` \| `"transfer"` \| `"contract"` \| `"unknown"`
 
-Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/baseTrayActivityEtherscan.ts#L14)
+Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/baseTrayActivityEtherscan.ts#L14)
 
 ##### subtitle
 
 > **subtitle**: `string`
 
-Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/baseTrayActivityEtherscan.ts#L13)
+Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/baseTrayActivityEtherscan.ts#L13)
 
 ##### timestampMs
 
 > **timestampMs**: `number`
 
-Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/baseTrayActivityEtherscan.ts#L11)
+Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/baseTrayActivityEtherscan.ts#L11)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/baseTrayActivityEtherscan.ts#L12)
+Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/baseTrayActivityEtherscan.ts#L12)
 
 ##### txHash
 
 > **txHash**: `string`
 
-Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/baseTrayActivityEtherscan.ts#L9)
+Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/baseTrayActivityEtherscan.ts#L9)
 
 ##### walletAddress
 
 > **walletAddress**: `string`
 
-Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/baseTrayActivityEtherscan.ts#L10)
+Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/baseTrayActivityEtherscan.ts#L10)
 
 ## Functions
 
@@ -64,7 +64,7 @@ Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:10](https://github.c
 
 > **getTrayWalletActivityBaseEtherscan**(`address`, `options`): `Promise`\<[`TrayOnchainActivityRow`](#trayonchainactivityrow)[]\>
 
-Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:106](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/baseTrayActivityEtherscan.ts#L106)
+Defined in: [server/\_lib/lens/baseTrayActivityEtherscan.ts:106](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/baseTrayActivityEtherscan.ts#L106)
 
 #### Parameters
 

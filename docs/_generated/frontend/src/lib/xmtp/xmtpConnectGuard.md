@@ -12,7 +12,7 @@
 
 > **XmtpConnectPrecheckDenyReason** = `"no_wallet"` \| `"reset_in_flight"` \| `"already_connected"` \| `"connect_in_flight"` \| `"cooldown"` \| `"wrong_origin"`
 
-Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L14)
+Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L14)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:14](https://github.com/wenakita/46
 
 > **XmtpConnectPrecheckInput** = `object`
 
-Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L1)
+Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L1)
 
 #### Properties
 
@@ -28,61 +28,61 @@ Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:1](https://github.com/wenakita/462
 
 > **alreadyHasClient**: `boolean`
 
-Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L4)
+Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L4)
 
 ##### canonicalAppOrigin
 
 > **canonicalAppOrigin**: `string`
 
-Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L10)
+Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L10)
 
 ##### connectCooldownUntilMs
 
 > **connectCooldownUntilMs**: `number`
 
-Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L7)
+Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L7)
 
 ##### connectInFlight
 
 > **connectInFlight**: `boolean`
 
-Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L5)
+Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L5)
 
 ##### currentOrigin
 
 > **currentOrigin**: `string`
 
-Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L9)
+Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L9)
 
 ##### hostname
 
 > **hostname**: `string`
 
-Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L11)
+Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L11)
 
 ##### nowMs
 
 > **nowMs**: `number`
 
-Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L8)
+Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L8)
 
 ##### resetLocalStateInFlight
 
 > **resetLocalStateInFlight**: `boolean`
 
-Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L6)
+Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L6)
 
 ##### walletAddress
 
 > **walletAddress**: `string` \| `null`
 
-Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:2](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L2)
+Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:2](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L2)
 
 ##### walletClientReady
 
 > **walletClientReady**: `boolean`
 
-Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L3)
+Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L3)
 
 ***
 
@@ -90,7 +90,7 @@ Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:3](https://github.com/wenakita/462
 
 > **XmtpConnectPrecheckResult** = \{ `allowed`: `true`; \} \| \{ `allowed`: `false`; `reason`: [`XmtpConnectPrecheckDenyReason`](#xmtpconnectprecheckdenyreason); `retryInSeconds?`: `number`; \}
 
-Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L22)
+Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:22](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L22)
 
 ## Functions
 
@@ -98,7 +98,7 @@ Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:22](https://github.com/wenakita/46
 
 > **buildWrongOriginConnectError**(`currentOrigin`, `canonicalAppOrigin`): `string`
 
-Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:86](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L86)
+Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:86](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L86)
 
 #### Parameters
 
@@ -120,7 +120,7 @@ Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:86](https://github.com/wenakita/46
 
 > **evaluateXmtpConnectPrecheck**(`input`): [`XmtpConnectPrecheckResult`](#xmtpconnectprecheckresult)
 
-Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:57](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L57)
+Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:57](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L57)
 
 Pure preflight gate mirrored at the top of provider.connect().
 Blocks accidental connect churn on preview hosts, duplicate in-flight work, etc.
@@ -141,7 +141,7 @@ Blocks accidental connect churn on preview hosts, duplicate in-flight work, etc.
 
 > **isCanonicalMessagingOrigin**(`input`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L44)
+Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:44](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L44)
 
 #### Parameters
 
@@ -169,7 +169,7 @@ Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:44](https://github.com/wenakita/46
 
 > **isLocalDevHostname**(`hostname`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L30)
+Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:30](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L30)
 
 #### Parameters
 
@@ -187,7 +187,7 @@ Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:30](https://github.com/wenakita/46
 
 > **isTrustedMessagingHostname**(`hostname`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L38)
+Defined in: [src/lib/xmtp/xmtpConnectGuard.ts:38](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectGuard.ts#L38)
 
 #### Parameters
 

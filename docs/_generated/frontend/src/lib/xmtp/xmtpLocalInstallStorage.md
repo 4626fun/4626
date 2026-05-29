@@ -12,7 +12,7 @@
 
 > **StoredInstallationMeta** = `object`
 
-Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L5)
+Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L5)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:5](https://github.com/wenak
 
 > **inboxId**: `string`
 
-Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L6)
+Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L6)
 
 ##### installationId
 
 > **installationId**: `string`
 
-Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L7)
+Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L7)
 
 ##### updatedAt
 
 > **updatedAt**: `number`
 
-Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L8)
+Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L8)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:8](https://github.com/wenak
 
 > **XmtpEnv** = `"production"` \| `"dev"` \| `"local"`
 
-Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L1)
+Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L1)
 
 ## Variables
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:1](https://github.com/wenak
 
 > `const` **ENC\_KEY\_HEX\_RE**: `RegExp`
 
-Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L3)
+Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L3)
 
 ## Functions
 
@@ -56,7 +56,7 @@ Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:3](https://github.com/wenak
 
 > **buildXmtpDbPath**(`env`, `inboxId`): `string`
 
-Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L25)
+Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L25)
 
 #### Parameters
 
@@ -78,7 +78,7 @@ Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:25](https://github.com/wena
 
 > **clearInstallationProvisioned**(`env`, `address`): `void`
 
-Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:86](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L86)
+Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:86](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L86)
 
 #### Parameters
 
@@ -100,7 +100,7 @@ Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:86](https://github.com/wena
 
 > **clearStoredEncKeyHex**(`env`, `address`): `void`
 
-Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:57](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L57)
+Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:57](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L57)
 
 #### Parameters
 
@@ -122,7 +122,7 @@ Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:57](https://github.com/wena
 
 > **clearStoredInstallationMeta**(`env`, `address`): `void`
 
-Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:136](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L136)
+Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:136](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L136)
 
 #### Parameters
 
@@ -144,7 +144,7 @@ Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:136](https://github.com/wen
 
 > **hasKnownXmtpInstallation**(`env`, `address`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:145](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L145)
+Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:145](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L145)
 
 #### Parameters
 
@@ -166,7 +166,7 @@ Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:145](https://github.com/wen
 
 > **readInstallationProvisioned**(`env`, `address`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L68)
+Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:68](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L68)
 
 #### Parameters
 
@@ -188,7 +188,7 @@ Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:68](https://github.com/wena
 
 > **readStoredEncKeyHex**(`env`, `address`): `string` \| `null`
 
-Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L29)
+Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L29)
 
 #### Parameters
 
@@ -210,7 +210,7 @@ Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:29](https://github.com/wena
 
 > **readStoredInstallationMeta**(`env`, `address`): [`StoredInstallationMeta`](#storedinstallationmeta) \| `null`
 
-Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:95](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L95)
+Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:95](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L95)
 
 #### Parameters
 
@@ -232,7 +232,7 @@ Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:95](https://github.com/wena
 
 > **writeInstallationProvisioned**(`env`, `address`): `void`
 
-Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:77](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L77)
+Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:77](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L77)
 
 #### Parameters
 
@@ -254,7 +254,7 @@ Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:77](https://github.com/wena
 
 > **writeStoredEncKeyHex**(`env`, `address`, `encKeyHex`): `void`
 
-Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:45](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L45)
+Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:45](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L45)
 
 #### Parameters
 
@@ -280,7 +280,7 @@ Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:45](https://github.com/wena
 
 > **writeStoredInstallationMeta**(`env`, `address`, `meta`): `void`
 
-Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:117](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L117)
+Defined in: [src/lib/xmtp/xmtpLocalInstallStorage.ts:117](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpLocalInstallStorage.ts#L117)
 
 #### Parameters
 

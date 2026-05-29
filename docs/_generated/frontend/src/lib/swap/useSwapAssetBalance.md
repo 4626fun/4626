@@ -12,7 +12,7 @@
 
 > **SwapAssetBalance** = `object`
 
-Defined in: [src/lib/swap/useSwapAssetBalance.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/useSwapAssetBalance.ts#L8)
+Defined in: [src/lib/swap/useSwapAssetBalance.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/useSwapAssetBalance.ts#L8)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/lib/swap/useSwapAssetBalance.ts:8](https://github.com/wenakita/
 
 > **decimals**: `number`
 
-Defined in: [src/lib/swap/useSwapAssetBalance.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/useSwapAssetBalance.ts#L10)
+Defined in: [src/lib/swap/useSwapAssetBalance.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/useSwapAssetBalance.ts#L10)
 
 ##### formatted
 
 > **formatted**: `string`
 
-Defined in: [src/lib/swap/useSwapAssetBalance.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/useSwapAssetBalance.ts#L11)
+Defined in: [src/lib/swap/useSwapAssetBalance.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/useSwapAssetBalance.ts#L11)
 
 ##### raw
 
 > **raw**: `bigint`
 
-Defined in: [src/lib/swap/useSwapAssetBalance.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/useSwapAssetBalance.ts#L9)
+Defined in: [src/lib/swap/useSwapAssetBalance.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/useSwapAssetBalance.ts#L9)
 
 ## Functions
 
@@ -40,7 +40,7 @@ Defined in: [src/lib/swap/useSwapAssetBalance.ts:9](https://github.com/wenakita/
 
 > **fetchSwapAssetBalanceViaApi**(`params`): `Promise`\<[`SwapAssetBalance`](#swapassetbalance)\>
 
-Defined in: [src/lib/swap/useSwapAssetBalance.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/useSwapAssetBalance.ts#L20)
+Defined in: [src/lib/swap/useSwapAssetBalance.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/useSwapAssetBalance.ts#L20)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [src/lib/swap/useSwapAssetBalance.ts:20](https://github.com/wenakita
 
 > **swapAssetBalanceQueryKey**(`params`): readonly \[`"swap"`, `"asset-balance"`, `number`, `string` \| `null`, `string`\]
 
-Defined in: [src/lib/swap/useSwapAssetBalance.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/useSwapAssetBalance.ts#L40)
+Defined in: [src/lib/swap/useSwapAssetBalance.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/useSwapAssetBalance.ts#L40)
 
 #### Parameters
 
@@ -92,7 +92,7 @@ readonly \[`"swap"`, `"asset-balance"`, `number`, `string` \| `null`, `string`\]
 
 > **useSwapAssetBalance**(`params`): `UseQueryResult`\<[`SwapAssetBalance`](#swapassetbalance), `Error`\>
 
-Defined in: [src/lib/swap/useSwapAssetBalance.ts:54](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/useSwapAssetBalance.ts#L54)
+Defined in: [src/lib/swap/useSwapAssetBalance.ts:54](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/useSwapAssetBalance.ts#L54)
 
 #### Parameters
 

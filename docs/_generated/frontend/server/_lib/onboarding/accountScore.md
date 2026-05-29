@@ -12,7 +12,7 @@
 
 > **NormalizedAccountScore** = `object`
 
-Defined in: [server/\_lib/onboarding/accountScore.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountScore.ts#L18)
+Defined in: [server/\_lib/onboarding/accountScore.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountScore.ts#L18)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/onboarding/accountScore.ts:18](https://github.com/wena
 
 > **points**: `number`
 
-Defined in: [server/\_lib/onboarding/accountScore.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountScore.ts#L20)
+Defined in: [server/\_lib/onboarding/accountScore.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountScore.ts#L20)
 
 Canonical public points total (waitlist, leaderboard, tray, lottery).
 
@@ -28,7 +28,7 @@ Canonical public points total (waitlist, leaderboard, tray, lottery).
 
 > **tier**: `number`
 
-Defined in: [server/\_lib/onboarding/accountScore.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountScore.ts#L21)
+Defined in: [server/\_lib/onboarding/accountScore.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountScore.ts#L21)
 
 ## Functions
 
@@ -36,7 +36,7 @@ Defined in: [server/\_lib/onboarding/accountScore.ts:21](https://github.com/wena
 
 > **buildAccountScoreFromBreakdown**(`breakdown`): [`NormalizedAccountScore`](#normalizedaccountscore)
 
-Defined in: [server/\_lib/onboarding/accountScore.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountScore.ts#L35)
+Defined in: [server/\_lib/onboarding/accountScore.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountScore.ts#L35)
 
 #### Parameters
 
@@ -54,7 +54,7 @@ Defined in: [server/\_lib/onboarding/accountScore.ts:35](https://github.com/wena
 
 > **normalizeAccountScore**(`input`): [`NormalizedAccountScore`](#normalizedaccountscore)
 
-Defined in: [server/\_lib/onboarding/accountScore.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountScore.ts#L24)
+Defined in: [server/\_lib/onboarding/accountScore.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountScore.ts#L24)
 
 #### Parameters
 
@@ -78,7 +78,7 @@ Defined in: [server/\_lib/onboarding/accountScore.ts:24](https://github.com/wena
 
 > **normalizeNonNegativeInt**(`value`): `number`
 
-Defined in: [server/\_lib/onboarding/accountScore.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountScore.ts#L12)
+Defined in: [server/\_lib/onboarding/accountScore.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountScore.ts#L12)
 
 #### Parameters
 
@@ -96,7 +96,7 @@ Defined in: [server/\_lib/onboarding/accountScore.ts:12](https://github.com/wena
 
 > **waitlistTierFromPoints**(`points`): `number`
 
-Defined in: [server/\_lib/onboarding/accountScore.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/accountScore.ts#L4)
+Defined in: [server/\_lib/onboarding/accountScore.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/accountScore.ts#L4)
 
 Mirrors client `tierFromPoints` in `waitlistTiers.ts`.
 

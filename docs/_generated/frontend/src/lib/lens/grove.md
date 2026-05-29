@@ -12,7 +12,7 @@
 
 > **GroveUploadResult** = `object`
 
-Defined in: [src/lib/lens/grove.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/lens/grove.ts#L28)
+Defined in: [src/lib/lens/grove.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/lib/lens/grove.ts#L28)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [src/lib/lens/grove.ts:28](https://github.com/wenakita/4626/blob/5b9
 
 > **gatewayUrl**: `string`
 
-Defined in: [src/lib/lens/grove.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/lens/grove.ts#L30)
+Defined in: [src/lib/lens/grove.ts:30](https://github.com/wenakita/4626/blob/main/frontend/src/lib/lens/grove.ts#L30)
 
 ##### lensUri
 
 > **lensUri**: `string`
 
-Defined in: [src/lib/lens/grove.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/lens/grove.ts#L31)
+Defined in: [src/lib/lens/grove.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/lib/lens/grove.ts#L31)
 
 ##### statusUrl
 
 > **statusUrl**: `string` \| `null`
 
-Defined in: [src/lib/lens/grove.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/lens/grove.ts#L32)
+Defined in: [src/lib/lens/grove.ts:32](https://github.com/wenakita/4626/blob/main/frontend/src/lib/lens/grove.ts#L32)
 
 ##### storageKey
 
 > **storageKey**: `string`
 
-Defined in: [src/lib/lens/grove.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/lens/grove.ts#L29)
+Defined in: [src/lib/lens/grove.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/lib/lens/grove.ts#L29)
 
 ## Variables
 
@@ -46,7 +46,7 @@ Defined in: [src/lib/lens/grove.ts:29](https://github.com/wenakita/4626/blob/5b9
 
 > `const` **BASE\_CHAIN\_ID**: `8453` = `8453`
 
-Defined in: [src/lib/lens/grove.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/lens/grove.ts#L9)
+Defined in: [src/lib/lens/grove.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/lens/grove.ts#L9)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [src/lib/lens/grove.ts:9](https://github.com/wenakita/4626/blob/5b93
 
 > `const` **LENS\_MAINNET\_CHAIN\_ID**: `232` = `232`
 
-Defined in: [src/lib/lens/grove.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/lens/grove.ts#L8)
+Defined in: [src/lib/lens/grove.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/lens/grove.ts#L8)
 
 ## Functions
 
@@ -62,7 +62,7 @@ Defined in: [src/lib/lens/grove.ts:8](https://github.com/wenakita/4626/blob/5b93
 
 > **fetchLensJson**\<`T`\>(`uri`, `init?`): `Promise`\<`T`\>
 
-Defined in: [src/lib/lens/grove.ts:103](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/lens/grove.ts#L103)
+Defined in: [src/lib/lens/grove.ts:103](https://github.com/wenakita/4626/blob/main/frontend/src/lib/lens/grove.ts#L103)
 
 #### Type Parameters
 
@@ -90,7 +90,7 @@ Defined in: [src/lib/lens/grove.ts:103](https://github.com/wenakita/4626/blob/5b
 
 > **fetchLensResource**(`uri`, `init?`): `Promise`\<`Response`\>
 
-Defined in: [src/lib/lens/grove.ts:90](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/lens/grove.ts#L90)
+Defined in: [src/lib/lens/grove.ts:90](https://github.com/wenakita/4626/blob/main/frontend/src/lib/lens/grove.ts#L90)
 
 #### Parameters
 
@@ -112,7 +112,7 @@ Defined in: [src/lib/lens/grove.ts:90](https://github.com/wenakita/4626/blob/5b9
 
 > **resolveLensUri**(`uri`): `string`
 
-Defined in: [src/lib/lens/grove.ts:78](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/lens/grove.ts#L78)
+Defined in: [src/lib/lens/grove.ts:78](https://github.com/wenakita/4626/blob/main/frontend/src/lib/lens/grove.ts#L78)
 
 #### Parameters
 
@@ -130,7 +130,7 @@ Defined in: [src/lib/lens/grove.ts:78](https://github.com/wenakita/4626/blob/5b9
 
 > **uploadImmutableBlob**(`input`, `contentType`, `chainId`): `Promise`\<[`GroveUploadResult`](#groveuploadresult)\>
 
-Defined in: [src/lib/lens/grove.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/lens/grove.ts#L51)
+Defined in: [src/lib/lens/grove.ts:51](https://github.com/wenakita/4626/blob/main/frontend/src/lib/lens/grove.ts#L51)
 
 Upload a Blob (binary file) immutably to Grove.
 
@@ -158,7 +158,7 @@ Upload a Blob (binary file) immutably to Grove.
 
 > **uploadImmutableJson**(`data`, `chainId`): `Promise`\<[`GroveUploadResult`](#groveuploadresult)\>
 
-Defined in: [src/lib/lens/grove.ts:65](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/lens/grove.ts#L65)
+Defined in: [src/lib/lens/grove.ts:65](https://github.com/wenakita/4626/blob/main/frontend/src/lib/lens/grove.ts#L65)
 
 Upload JSON data immutably to Grove.
 

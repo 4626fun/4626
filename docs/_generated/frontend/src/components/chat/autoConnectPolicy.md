@@ -12,7 +12,7 @@
 
 > **MessagingConnectStatus** = `"idle"` \| `"signing"` \| `"connecting"` \| `"connected"` \| `"error"`
 
-Defined in: [src/components/chat/autoConnectPolicy.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/autoConnectPolicy.ts#L1)
+Defined in: [src/components/chat/autoConnectPolicy.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/autoConnectPolicy.ts#L1)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/components/chat/autoConnectPolicy.ts:1](https://github.com/wena
 
 > **shouldAutoConnectMessaging**(`status`, `options?`): `boolean`
 
-Defined in: [src/components/chat/autoConnectPolicy.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/autoConnectPolicy.ts#L8)
+Defined in: [src/components/chat/autoConnectPolicy.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/autoConnectPolicy.ts#L8)
 
 #### Parameters
 

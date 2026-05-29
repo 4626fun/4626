@@ -12,7 +12,7 @@
 
 > **TimelineDateParts** = `object`
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L3)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L3)
 
 #### Properties
 
@@ -20,37 +20,37 @@ Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:3](https://
 
 > **full**: `string`
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L4)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L4)
 
 ##### monthDay
 
 > **monthDay**: `string`
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L6)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L6)
 
 ##### relative
 
 > **relative**: `string`
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L8)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L8)
 
 ##### timestamp
 
 > **timestamp**: `number` \| `null`
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L9)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L9)
 
 ##### weekday
 
 > **weekday**: `string`
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L5)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L5)
 
 ##### year
 
 > **year**: `string`
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L7)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L7)
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:7](https://
 
 > **TimelineEntry** = `object`
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L17)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L17)
 
 #### Properties
 
@@ -66,25 +66,25 @@ Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:17](https:/
 
 > **coin**: [`ZoraCoin`](../../lib/zora/types.md#zoracoin)
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L18)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L18)
 
 ##### date
 
 > **date**: [`TimelineDateParts`](#timelinedateparts)
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L21)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L21)
 
 ##### side
 
 > **side**: `"left"` \| `"right"`
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L19)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L19)
 
 ##### year
 
 > **year**: `string`
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L20)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L20)
 
 ***
 
@@ -92,7 +92,7 @@ Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:20](https:/
 
 > **TimelineYearGroup** = `object`
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L12)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L12)
 
 #### Properties
 
@@ -100,13 +100,13 @@ Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:12](https:/
 
 > **items**: [`ZoraCoin`](../../lib/zora/types.md#zoracoin)[]
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L14)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L14)
 
 ##### year
 
 > **year**: `string`
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L13)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L13)
 
 ## Functions
 
@@ -114,7 +114,7 @@ Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:13](https:/
 
 > **buildTimelineEntries**(`coins`): [`TimelineEntry`](#timelineentry)[]
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:89](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L89)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:89](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L89)
 
 #### Parameters
 
@@ -132,7 +132,7 @@ Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:89](https:/
 
 > **formatTimelineDateParts**(`value?`): [`TimelineDateParts`](#timelinedateparts)
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L33)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:33](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L33)
 
 #### Parameters
 
@@ -150,7 +150,7 @@ Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:33](https:/
 
 > **groupTimelineCoinsByYear**(`coins`): [`TimelineYearGroup`](#timelineyeargroup)[]
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:69](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L69)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L69)
 
 #### Parameters
 
@@ -168,7 +168,7 @@ Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:69](https:/
 
 > **resolveTimelineSide**(`globalIndex`): `"left"` \| `"right"`
 
-Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:85](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L85)
+Defined in: [src/components/explore/creatorContentTimelineHelpers.ts:85](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/creatorContentTimelineHelpers.ts#L85)
 
 #### Parameters
 

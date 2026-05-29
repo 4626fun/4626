@@ -12,7 +12,7 @@
 
 > **cdpTradeFetch**(`params`): `Promise`\<\{ `payload`: `unknown`; `status`: `number`; \}\>
 
-Defined in: [server/cdp/trading.ts:112](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/cdp/trading.ts#L112)
+Defined in: [server/cdp/trading.ts:112](https://github.com/wenakita/4626/blob/main/frontend/server/cdp/trading.ts#L112)
 
 #### Parameters
 
@@ -44,7 +44,7 @@ Defined in: [server/cdp/trading.ts:112](https://github.com/wenakita/4626/blob/5b
 
 > **normalizeCdpSwapPayload**(`raw`): `Record`\<`string`, `unknown`\> \| `null`
 
-Defined in: [server/cdp/trading.ts:184](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/cdp/trading.ts#L184)
+Defined in: [server/cdp/trading.ts:184](https://github.com/wenakita/4626/blob/main/frontend/server/cdp/trading.ts#L184)
 
 #### Parameters
 

@@ -10,7 +10,7 @@
 
 ### ProvisionVaultEconomyError
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L27)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L27)
 
 #### Extends
 
@@ -22,7 +22,7 @@ Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:27](ht
 
 > **new ProvisionVaultEconomyError**(`message`, `params?`): [`ProvisionVaultEconomyError`](#provisionvaulteconomyerror)
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L31)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L31)
 
 ###### Parameters
 
@@ -54,13 +54,13 @@ Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:31](ht
 
 > **code**: `string`
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L28)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L28)
 
 ##### retryable
 
 > **retryable**: `boolean`
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L29)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L29)
 
 ## Type Aliases
 
@@ -68,7 +68,7 @@ Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:29](ht
 
 > **ProvisionVaultEconomyInput** = `object`
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L38)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L38)
 
 #### Properties
 
@@ -76,37 +76,37 @@ Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:38](ht
 
 > `optional` **chainId**: `number` \| `null`
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L40)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L40)
 
 ##### creatorAddress?
 
 > `optional` **creatorAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L41)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L41)
 
 ##### operationId?
 
 > `optional` **operationId**: `string` \| `null`
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L44)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L44)
 
 ##### requestedBy?
 
 > `optional` **requestedBy**: `string` \| `null`
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L43)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L43)
 
 ##### strategyVariant?
 
 > `optional` **strategyVariant**: `string` \| `null`
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L42)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L42)
 
 ##### vaultAddress
 
 > **vaultAddress**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L39)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L39)
 
 ***
 
@@ -114,7 +114,7 @@ Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:39](ht
 
 > **ProvisionVaultEconomyResult** = `object`
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:47](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L47)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L47)
 
 #### Properties
 
@@ -122,37 +122,37 @@ Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:47](ht
 
 > **automationEnabled**: `boolean`
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L51)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:51](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L51)
 
 ##### configHash
 
 > **configHash**: `string`
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:50](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L50)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:50](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L50)
 
 ##### deploySessionId?
 
 > `optional` **deploySessionId**: `string` \| `null`
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L53)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:53](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L53)
 
 ##### provisioned
 
 > **provisioned**: `boolean`
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L48)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L48)
 
 ##### vaultAddress
 
 > **vaultAddress**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:49](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L49)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:49](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L49)
 
 ##### warnings
 
 > **warnings**: `string`[]
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L52)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:52](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L52)
 
 ## Functions
 
@@ -160,7 +160,7 @@ Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:52](ht
 
 > **findDeploySessionByVaultAddress**(`vaultAddress`): `Promise`\<[`DeploySessionRecord`](../../deploy/deploySessions.md#deploysessionrecord) \| `null`\>
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:61](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L61)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:61](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L61)
 
 #### Parameters
 
@@ -178,7 +178,7 @@ Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:61](ht
 
 > **provisionVaultEconomy**(`input`): `Promise`\<[`ProvisionVaultEconomyResult`](#provisionvaulteconomyresult)\>
 
-Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:127](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L127)
+Defined in: [server/\_lib/controlPlane/executors/provisionVaultEconomy.ts:127](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts#L127)
 
 #### Parameters
 

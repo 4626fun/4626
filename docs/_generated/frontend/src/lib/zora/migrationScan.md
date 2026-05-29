@@ -12,7 +12,7 @@
 
 > **MigratedCoinScanClient** = `object`
 
-Defined in: [src/lib/zora/migrationScan.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrationScan.ts#L19)
+Defined in: [src/lib/zora/migrationScan.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrationScan.ts#L19)
 
 #### Methods
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/zora/migrationScan.ts:19](https://github.com/wenakita/4626/
 
 > **getBlockNumber**(): `Promise`\<`bigint`\>
 
-Defined in: [src/lib/zora/migrationScan.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrationScan.ts#L20)
+Defined in: [src/lib/zora/migrationScan.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrationScan.ts#L20)
 
 ###### Returns
 
@@ -30,7 +30,7 @@ Defined in: [src/lib/zora/migrationScan.ts:20](https://github.com/wenakita/4626/
 
 > **request**(`args`): `Promise`\<`unknown`\>
 
-Defined in: [src/lib/zora/migrationScan.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrationScan.ts#L21)
+Defined in: [src/lib/zora/migrationScan.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrationScan.ts#L21)
 
 ###### Parameters
 
@@ -54,7 +54,7 @@ Defined in: [src/lib/zora/migrationScan.ts:21](https://github.com/wenakita/4626/
 
 > **ScanMigratedCoinsOptions** = `object`
 
-Defined in: [src/lib/zora/migrationScan.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrationScan.ts#L24)
+Defined in: [src/lib/zora/migrationScan.ts:24](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrationScan.ts#L24)
 
 #### Properties
 
@@ -62,37 +62,37 @@ Defined in: [src/lib/zora/migrationScan.ts:24](https://github.com/wenakita/4626/
 
 > `optional` **allowedImplementations**: `Set`\<`string`\>
 
-Defined in: [src/lib/zora/migrationScan.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrationScan.ts#L29)
+Defined in: [src/lib/zora/migrationScan.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrationScan.ts#L29)
 
 ##### fromBlock?
 
 > `optional` **fromBlock**: `bigint`
 
-Defined in: [src/lib/zora/migrationScan.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrationScan.ts#L25)
+Defined in: [src/lib/zora/migrationScan.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrationScan.ts#L25)
 
 ##### initialChunkDelta?
 
 > `optional` **initialChunkDelta**: `bigint`
 
-Defined in: [src/lib/zora/migrationScan.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrationScan.ts#L27)
+Defined in: [src/lib/zora/migrationScan.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrationScan.ts#L27)
 
 ##### topic?
 
 > `optional` **topic**: `string`
 
-Defined in: [src/lib/zora/migrationScan.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrationScan.ts#L26)
+Defined in: [src/lib/zora/migrationScan.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrationScan.ts#L26)
 
 ##### trustCheckConcurrency?
 
 > `optional` **trustCheckConcurrency**: `number`
 
-Defined in: [src/lib/zora/migrationScan.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrationScan.ts#L30)
+Defined in: [src/lib/zora/migrationScan.ts:30](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrationScan.ts#L30)
 
 ##### verifyImplementation?
 
 > `optional` **verifyImplementation**: `boolean`
 
-Defined in: [src/lib/zora/migrationScan.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrationScan.ts#L28)
+Defined in: [src/lib/zora/migrationScan.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrationScan.ts#L28)
 
 ## Variables
 
@@ -100,7 +100,7 @@ Defined in: [src/lib/zora/migrationScan.ts:28](https://github.com/wenakita/4626/
 
 > `const` **DEFAULT\_ZORA\_COIN\_IMPLEMENTATION\_ALLOWLIST**: readonly \[`"0x88cc4e08c7608723f3e44e17ac669fb43b6a8313"`, `"0xca72309aaf706d290e08608b1af47943902f69b2"`\]
 
-Defined in: [src/lib/zora/migrationScan.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrationScan.ts#L8)
+Defined in: [src/lib/zora/migrationScan.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrationScan.ts#L8)
 
 ***
 
@@ -108,7 +108,7 @@ Defined in: [src/lib/zora/migrationScan.ts:8](https://github.com/wenakita/4626/b
 
 > `const` **LIQUIDITY\_MIGRATED\_TOPIC**: `"0x907fbdc07b1c9a591dc1287635b072fa848f4da7c86645dfc9b8bfb3b94f82ab"` = `'0x907fbdc07b1c9a591dc1287635b072fa848f4da7c86645dfc9b8bfb3b94f82ab'`
 
-Defined in: [src/lib/zora/migrationScan.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrationScan.ts#L3)
+Defined in: [src/lib/zora/migrationScan.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrationScan.ts#L3)
 
 ***
 
@@ -116,7 +116,7 @@ Defined in: [src/lib/zora/migrationScan.ts:3](https://github.com/wenakita/4626/b
 
 > `const` **V4\_LAUNCH\_BLOCK**: `31250000n` = `31250000n`
 
-Defined in: [src/lib/zora/migrationScan.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrationScan.ts#L13)
+Defined in: [src/lib/zora/migrationScan.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrationScan.ts#L13)
 
 ## Functions
 
@@ -124,7 +124,7 @@ Defined in: [src/lib/zora/migrationScan.ts:13](https://github.com/wenakita/4626/
 
 > **extractMigratedCoinAddressFromLog**(`log`): `string` \| `null`
 
-Defined in: [src/lib/zora/migrationScan.ts:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrationScan.ts#L60)
+Defined in: [src/lib/zora/migrationScan.ts:60](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrationScan.ts#L60)
 
 #### Parameters
 
@@ -148,7 +148,7 @@ Defined in: [src/lib/zora/migrationScan.ts:60](https://github.com/wenakita/4626/
 
 > **isPrunedHistoryError**(`error`): `boolean`
 
-Defined in: [src/lib/zora/migrationScan.ts:220](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrationScan.ts#L220)
+Defined in: [src/lib/zora/migrationScan.ts:220](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrationScan.ts#L220)
 
 #### Parameters
 
@@ -166,7 +166,7 @@ Defined in: [src/lib/zora/migrationScan.ts:220](https://github.com/wenakita/4626
 
 > **parseAddressAllowlist**(`raw`, `fallback`): `Set`\<`string`\>
 
-Defined in: [src/lib/zora/migrationScan.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrationScan.ts#L37)
+Defined in: [src/lib/zora/migrationScan.ts:37](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrationScan.ts#L37)
 
 #### Parameters
 
@@ -188,7 +188,7 @@ readonly `string`[]
 
 > **parseMinimalProxyImplementation**(`bytecode`): `string` \| `null`
 
-Defined in: [src/lib/zora/migrationScan.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrationScan.ts#L51)
+Defined in: [src/lib/zora/migrationScan.ts:51](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrationScan.ts#L51)
 
 #### Parameters
 
@@ -206,7 +206,7 @@ Defined in: [src/lib/zora/migrationScan.ts:51](https://github.com/wenakita/4626/
 
 > **scanMigratedCoinsWithClient**(`client`, `options`): `Promise`\<`Set`\<`string`\>\>
 
-Defined in: [src/lib/zora/migrationScan.ts:225](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrationScan.ts#L225)
+Defined in: [src/lib/zora/migrationScan.ts:225](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrationScan.ts#L225)
 
 #### Parameters
 

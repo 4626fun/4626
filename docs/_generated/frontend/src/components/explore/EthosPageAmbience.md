@@ -12,7 +12,7 @@
 
 > **EthosBlurOrbs**(`__namedParameters`): `Element`
 
-Defined in: [src/components/explore/EthosPageAmbience.tsx:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/EthosPageAmbience.tsx#L16)
+Defined in: [src/components/explore/EthosPageAmbience.tsx:16](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/EthosPageAmbience.tsx#L16)
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [src/components/explore/EthosPageAmbience.tsx:16](https://github.com
 
 > **EthosHeroScoreWash**(`__namedParameters`): `Element` \| `null`
 
-Defined in: [src/components/explore/EthosPageAmbience.tsx:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/EthosPageAmbience.tsx#L11)
+Defined in: [src/components/explore/EthosPageAmbience.tsx:11](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/EthosPageAmbience.tsx#L11)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [src/components/explore/EthosPageAmbience.tsx:11](https://github.com
 
 > **EthosPageAmbience**(`__namedParameters`): `Element`
 
-Defined in: [src/components/explore/EthosPageAmbience.tsx:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/EthosPageAmbience.tsx#L3)
+Defined in: [src/components/explore/EthosPageAmbience.tsx:3](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/EthosPageAmbience.tsx#L3)
 
 #### Parameters
 

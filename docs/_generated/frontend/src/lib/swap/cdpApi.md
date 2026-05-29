@@ -12,7 +12,7 @@
 
 > **CdpExecuteRequest** = [`CdpPriceRequest`](#cdppricerequest)
 
-Defined in: [src/lib/swap/cdpApi.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/cdpApi.ts#L16)
+Defined in: [src/lib/swap/cdpApi.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/cdpApi.ts#L16)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/swap/cdpApi.ts:16](https://github.com/wenakita/4626/blob/5b
 
 > **CdpPriceRequest** = `object`
 
-Defined in: [src/lib/swap/cdpApi.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/cdpApi.ts#L5)
+Defined in: [src/lib/swap/cdpApi.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/cdpApi.ts#L5)
 
 #### Properties
 
@@ -28,49 +28,49 @@ Defined in: [src/lib/swap/cdpApi.ts:5](https://github.com/wenakita/4626/blob/5b9
 
 > `optional` **account**: `string`
 
-Defined in: [src/lib/swap/cdpApi.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/cdpApi.ts#L12)
+Defined in: [src/lib/swap/cdpApi.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/cdpApi.ts#L12)
 
 ##### fromAmount
 
 > **fromAmount**: `string`
 
-Defined in: [src/lib/swap/cdpApi.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/cdpApi.ts#L9)
+Defined in: [src/lib/swap/cdpApi.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/cdpApi.ts#L9)
 
 ##### fromToken
 
 > **fromToken**: `string`
 
-Defined in: [src/lib/swap/cdpApi.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/cdpApi.ts#L7)
+Defined in: [src/lib/swap/cdpApi.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/cdpApi.ts#L7)
 
 ##### network
 
 > **network**: `string`
 
-Defined in: [src/lib/swap/cdpApi.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/cdpApi.ts#L6)
+Defined in: [src/lib/swap/cdpApi.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/cdpApi.ts#L6)
 
 ##### slippageBps?
 
 > `optional` **slippageBps**: `number`
 
-Defined in: [src/lib/swap/cdpApi.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/cdpApi.ts#L11)
+Defined in: [src/lib/swap/cdpApi.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/cdpApi.ts#L11)
 
 ##### taker?
 
 > `optional` **taker**: `string`
 
-Defined in: [src/lib/swap/cdpApi.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/cdpApi.ts#L10)
+Defined in: [src/lib/swap/cdpApi.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/cdpApi.ts#L10)
 
 ##### toToken
 
 > **toToken**: `string`
 
-Defined in: [src/lib/swap/cdpApi.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/cdpApi.ts#L8)
+Defined in: [src/lib/swap/cdpApi.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/cdpApi.ts#L8)
 
 ##### useCdpPaymaster?
 
 > `optional` **useCdpPaymaster**: `boolean`
 
-Defined in: [src/lib/swap/cdpApi.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/cdpApi.ts#L13)
+Defined in: [src/lib/swap/cdpApi.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/cdpApi.ts#L13)
 
 ## Functions
 
@@ -78,7 +78,7 @@ Defined in: [src/lib/swap/cdpApi.ts:13](https://github.com/wenakita/4626/blob/5b
 
 > **buildCdpPriceRequest**(`params`): [`CdpPriceRequest`](#cdppricerequest)
 
-Defined in: [src/lib/swap/cdpApi.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/cdpApi.ts#L41)
+Defined in: [src/lib/swap/cdpApi.ts:41](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/cdpApi.ts#L41)
 
 #### Parameters
 
@@ -118,7 +118,7 @@ Defined in: [src/lib/swap/cdpApi.ts:41](https://github.com/wenakita/4626/blob/5b
 
 > **executeCdpSwap**(`body`): `Promise`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/lib/swap/cdpApi.ts:64](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/cdpApi.ts#L64)
+Defined in: [src/lib/swap/cdpApi.ts:64](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/cdpApi.ts#L64)
 
 #### Parameters
 
@@ -136,7 +136,7 @@ Defined in: [src/lib/swap/cdpApi.ts:64](https://github.com/wenakita/4626/blob/5b
 
 > **fetchCdpSwapPrice**(`body`): `Promise`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/lib/swap/cdpApi.ts:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/cdpApi.ts#L60)
+Defined in: [src/lib/swap/cdpApi.ts:60](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/cdpApi.ts#L60)
 
 #### Parameters
 

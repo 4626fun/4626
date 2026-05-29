@@ -12,7 +12,7 @@
 
 > **collectPrivySmartWalletAddressesFromWallets**(`wallets`): `string`[]
 
-Defined in: [src/lib/privy/privyEmbeddedEoa.ts:91](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/privy/privyEmbeddedEoa.ts#L91)
+Defined in: [src/lib/privy/privyEmbeddedEoa.ts:91](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/privyEmbeddedEoa.ts#L91)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ readonly `WalletLike`[] | `null` | `undefined`
 
 > **getWalletClientType**(`wallet`): `string`
 
-Defined in: [src/lib/privy/privyEmbeddedEoa.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/privy/privyEmbeddedEoa.ts#L15)
+Defined in: [src/lib/privy/privyEmbeddedEoa.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/privyEmbeddedEoa.ts#L15)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/privy/privyEmbeddedEoa.ts:15](https://github.com/wenakita/4
 
 > **isEmbeddedPrivyEoaCandidate**(`wallet`, `excludedWalletAddress?`): `boolean`
 
-Defined in: [src/lib/privy/privyEmbeddedEoa.ts:34](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/privy/privyEmbeddedEoa.ts#L34)
+Defined in: [src/lib/privy/privyEmbeddedEoa.ts:34](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/privyEmbeddedEoa.ts#L34)
 
 #### Parameters
 
@@ -70,7 +70,7 @@ Defined in: [src/lib/privy/privyEmbeddedEoa.ts:34](https://github.com/wenakita/4
 
 > **isPrivyServerManagedWallet**(`wallet`): `boolean`
 
-Defined in: [src/lib/privy/privyEmbeddedEoa.ts:81](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/privy/privyEmbeddedEoa.ts#L81)
+Defined in: [src/lib/privy/privyEmbeddedEoa.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/privyEmbeddedEoa.ts#L81)
 
 #### Parameters
 
@@ -88,7 +88,7 @@ Defined in: [src/lib/privy/privyEmbeddedEoa.ts:81](https://github.com/wenakita/4
 
 > **isSmartWalletLikeType**(`walletType`): `boolean`
 
-Defined in: [src/lib/privy/privyEmbeddedEoa.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/privy/privyEmbeddedEoa.ts#L29)
+Defined in: [src/lib/privy/privyEmbeddedEoa.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/privyEmbeddedEoa.ts#L29)
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: [src/lib/privy/privyEmbeddedEoa.ts:29](https://github.com/wenakita/4
 
 > **pickPrivyEmbeddedEoaWallet**\<`T`\>(`wallets`, `excludedWalletAddress?`): `T` \| `null`
 
-Defined in: [src/lib/privy/privyEmbeddedEoa.ts:108](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/privy/privyEmbeddedEoa.ts#L108)
+Defined in: [src/lib/privy/privyEmbeddedEoa.ts:108](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/privyEmbeddedEoa.ts#L108)
 
 #### Type Parameters
 

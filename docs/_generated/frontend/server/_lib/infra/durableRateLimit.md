@@ -12,7 +12,7 @@
 
 > **DurableRateLimitOptions** = `object`
 
-Defined in: [server/\_lib/infra/durableRateLimit.ts:63](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/durableRateLimit.ts#L63)
+Defined in: [server/\_lib/infra/durableRateLimit.ts:63](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/durableRateLimit.ts#L63)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/infra/durableRateLimit.ts:63](https://github.com/wenak
 
 > `optional` **failClosed**: `boolean`
 
-Defined in: [server/\_lib/infra/durableRateLimit.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/durableRateLimit.ts#L71)
+Defined in: [server/\_lib/infra/durableRateLimit.ts:71](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/durableRateLimit.ts#L71)
 
 When true, do NOT fall back to the in-memory limiter if Postgres is
 unavailable or the query fails — instead deny the request. This is
@@ -34,7 +34,7 @@ instances (H-07 / 4626-299).
 
 > **DurableRateLimitResult** = [`RateLimitResult`](rateLimit.md#ratelimitresult) & `object`
 
-Defined in: [server/\_lib/infra/durableRateLimit.ts:61](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/durableRateLimit.ts#L61)
+Defined in: [server/\_lib/infra/durableRateLimit.ts:61](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/durableRateLimit.ts#L61)
 
 #### Type Declaration
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/infra/durableRateLimit.ts:61](https://github.com/wenak
 
 > **checkDurableRateLimit**(`key`, `config`, `options`): `Promise`\<[`DurableRateLimitResult`](#durableratelimitresult)\>
 
-Defined in: [server/\_lib/infra/durableRateLimit.ts:88](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/durableRateLimit.ts#L88)
+Defined in: [server/\_lib/infra/durableRateLimit.ts:88](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/durableRateLimit.ts#L88)
 
 Durable rate limit using Postgres when configured.
 Falls back to in-memory limiter if DB is unavailable, unless the caller

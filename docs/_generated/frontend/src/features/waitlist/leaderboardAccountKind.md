@@ -12,7 +12,7 @@
 
 > **LeaderboardAccountKind** = `"base_app"` \| `"zora"` \| `"coinbase_csw"` \| `"eoa"` \| `"unknown"`
 
-Defined in: [src/features/waitlist/leaderboardAccountKind.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/leaderboardAccountKind.ts#L5)
+Defined in: [src/features/waitlist/leaderboardAccountKind.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/leaderboardAccountKind.ts#L5)
 
 Single public account lane shown on the waitlist leaderboard.
 
@@ -22,7 +22,7 @@ Single public account lane shown on the waitlist leaderboard.
 
 > **leaderboardAccountKindLabel**(`kind`, `walletProvider?`): `string`
 
-Defined in: [src/features/waitlist/leaderboardAccountKind.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/leaderboardAccountKind.ts#L30)
+Defined in: [src/features/waitlist/leaderboardAccountKind.ts:30](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/leaderboardAccountKind.ts#L30)
 
 #### Parameters
 
@@ -44,7 +44,7 @@ Defined in: [src/features/waitlist/leaderboardAccountKind.ts:30](https://github.
 
 > **resolveLeaderboardAccountKind**(`input`): [`LeaderboardAccountKind`](#leaderboardaccountkind)
 
-Defined in: [src/features/waitlist/leaderboardAccountKind.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/leaderboardAccountKind.ts#L7)
+Defined in: [src/features/waitlist/leaderboardAccountKind.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/leaderboardAccountKind.ts#L7)
 
 #### Parameters
 
@@ -76,7 +76,7 @@ Defined in: [src/features/waitlist/leaderboardAccountKind.ts:7](https://github.c
 
 > **resolveLeaderboardWalletProvider**(`walletProvider`): [`WalletProviderId`](../../lib/wallet/providerIdentity.md#walletproviderid)
 
-Defined in: [src/features/waitlist/leaderboardAccountKind.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/leaderboardAccountKind.ts#L20)
+Defined in: [src/features/waitlist/leaderboardAccountKind.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/leaderboardAccountKind.ts#L20)
 
 #### Parameters
 

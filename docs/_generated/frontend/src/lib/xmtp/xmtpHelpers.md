@@ -12,7 +12,7 @@
 
 > **ConversationLike** = `object`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:300](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L300)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:329](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L329)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:300](https://github.com/wenakita/4626/b
 
 > `optional` **consentState**: () => `Promise`\<`ConsentState`\>
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:303](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L303)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:332](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L332)
 
 ###### Returns
 
@@ -30,13 +30,13 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:303](https://github.com/wenakita/4626/b
 
 > **id**: `string`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:301](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L301)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:330](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L330)
 
 ##### sync()?
 
 > `optional` **sync**: () => `Promise`\<`unknown`\>
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:302](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L302)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:331](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L331)
 
 ###### Returns
 
@@ -46,7 +46,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:302](https://github.com/wenakita/4626/b
 
 > `optional` **updateConsentState**: (`state`) => `Promise`\<`unknown`\>
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:304](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L304)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:333](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L333)
 
 ###### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:304](https://github.com/wenakita/4626/b
 
 > **ConversationsApiLike** = `object`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:311](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L311)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:340](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L340)
 
 #### Properties
 
@@ -72,7 +72,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:311](https://github.com/wenakita/4626/b
 
 > **getConversationById**: (`id`) => `Promise`\<[`ConversationLike`](#conversationlike) \| `null`\>
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:314](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L314)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:343](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L343)
 
 ###### Parameters
 
@@ -88,7 +88,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:314](https://github.com/wenakita/4626/b
 
 > **list**: (`options?`) => `Promise`\<[`ConversationLike`](#conversationlike)[]\>
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:315](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L315)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:344](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L344)
 
 ###### Parameters
 
@@ -104,7 +104,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:315](https://github.com/wenakita/4626/b
 
 > `optional` **listGroups**: (`options?`) => `Promise`\<[`ConversationLike`](#conversationlike)[]\>
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:316](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L316)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:345](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L345)
 
 ###### Parameters
 
@@ -120,7 +120,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:316](https://github.com/wenakita/4626/b
 
 > **sync**: () => `Promise`\<`unknown`\>
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:312](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L312)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:341](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L341)
 
 ###### Returns
 
@@ -130,7 +130,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:312](https://github.com/wenakita/4626/b
 
 > `optional` **syncAll**: (`consentStates?`) => `Promise`\<`unknown`\>
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:313](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L313)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:342](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L342)
 
 ###### Parameters
 
@@ -148,7 +148,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:313](https://github.com/wenakita/4626/b
 
 > **ListConversationsOptionsLike** = `object`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:307](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L307)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:336](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L336)
 
 #### Properties
 
@@ -156,7 +156,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:307](https://github.com/wenakita/4626/b
 
 > `optional` **consentStates**: `ConsentState`[]
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:308](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L308)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:337](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L337)
 
 ***
 
@@ -164,7 +164,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:308](https://github.com/wenakita/4626/b
 
 > **ParsedWireContent** = `object`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L41)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:41](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L41)
 
 #### Properties
 
@@ -172,37 +172,37 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:41](https://github.com/wenakita/4626/bl
 
 > `optional` **actions**: \{ `buttons`: `object`[]; `description`: `string`; `promptId`: `string`; \} \| `null`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:46](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L46)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:46](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L46)
 
 ##### content
 
 > **content**: `string`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L42)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L42)
 
 ##### contentType
 
 > **contentType**: `ChatMessageContentType`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L43)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:43](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L43)
 
 ##### reactionEmoji?
 
 > `optional` **reactionEmoji**: `string` \| `null`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L51)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:51](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L51)
 
 ##### replyToId
 
 > **replyToId**: `string` \| `null`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:45](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L45)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:45](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L45)
 
 ##### richPreview?
 
 > `optional` **richPreview**: `string`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L44)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:44](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L44)
 
 ***
 
@@ -210,7 +210,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:44](https://github.com/wenakita/4626/bl
 
 > **PreferencesApiLike** = `object`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:319](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L319)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:348](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L348)
 
 #### Properties
 
@@ -218,7 +218,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:319](https://github.com/wenakita/4626/b
 
 > `optional` **setConsentStates**: (`records`) => `Promise`\<`unknown`\>
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:320](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L320)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:349](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L349)
 
 ###### Parameters
 
@@ -236,7 +236,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:320](https://github.com/wenakita/4626/b
 
 > **SendChatMessageOptions** = `object`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:115](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L115)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:115](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L115)
 
 #### Properties
 
@@ -244,13 +244,13 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:115](https://github.com/wenakita/4626/b
 
 > `optional` **replyToId**: `string` \| `null`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:116](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L116)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:116](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L116)
 
 ##### replyToSenderInboxId?
 
 > `optional` **replyToSenderInboxId**: `string` \| `null`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:118](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L118)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:118](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L118)
 
 Inbox id of the message being replied to (required for native XMTP replies).
 
@@ -260,7 +260,7 @@ Inbox id of the message being replied to (required for native XMTP replies).
 
 > **XmtpEnvLabel** = `"production"` \| `"dev"` \| `"local"`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:129](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L129)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:129](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L129)
 
 ## Variables
 
@@ -268,7 +268,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:129](https://github.com/wenakita/4626/b
 
 > `const` **GROUP\_MEMBERSHIP\_CONSENT\_SYNC\_STATES**: readonly \[`Unknown`, `Allowed`\]
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:326](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L326)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:355](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L355)
 
 Consent states included when pulling server-side group memberships into a fresh browser install.
 
@@ -278,7 +278,7 @@ Consent states included when pulling server-side group memberships into a fresh 
 
 > **allowConversationIfUnknown**(`convo`): `Promise`\<`void`\>
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:360](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L360)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:389](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L389)
 
 #### Parameters
 
@@ -296,7 +296,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:360](https://github.com/wenakita/4626/b
 
 > **allowGroupConsentById**(`preferencesApi`, `groupId`): `Promise`\<`void`\>
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:335](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L335)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:364](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L364)
 
 #### Parameters
 
@@ -318,7 +318,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:335](https://github.com/wenakita/4626/b
 
 > **buildNotRegisteredDmMessage**(`params`): `string`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:277](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L277)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:306](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L306)
 
 #### Parameters
 
@@ -346,7 +346,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:277](https://github.com/wenakita/4626/b
 
 > **conversationIdsEqual**(`a`, `b`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:293](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L293)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:322](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L322)
 
 #### Parameters
 
@@ -368,7 +368,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:293](https://github.com/wenakita/4626/b
 
 > **encodeWireContent**(`text`, `options?`): `string`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:122](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L122)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:122](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L122)
 
 Legacy wire prefix — prefer native XMTP Reply when both clients support it.
 
@@ -392,7 +392,7 @@ Legacy wire prefix — prefer native XMTP Reply when both clients support it.
 
 > **extractCanMessageResult**(`result`, `address`): `boolean` \| `null`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:210](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L210)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:239](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L239)
 
 #### Parameters
 
@@ -414,7 +414,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:210](https://github.com/wenakita/4626/b
 
 > **extractInstallationLimitInboxId**(`message`): `string` \| `null`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:137](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L137)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:137](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L137)
 
 #### Parameters
 
@@ -432,7 +432,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:137](https://github.com/wenakita/4626/b
 
 > **formatXmtpEnvLabel**(`env`): `string`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:131](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L131)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:131](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L131)
 
 #### Parameters
 
@@ -450,7 +450,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:131](https://github.com/wenakita/4626/b
 
 > **groupMembershipListOptions**(): [`ListConversationsOptionsLike`](#listconversationsoptionslike)
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:331](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L331)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:360](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L360)
 
 #### Returns
 
@@ -462,7 +462,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:331](https://github.com/wenakita/4626/b
 
 > **hexToBytes**(`hex`): `Uint8Array`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L16)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L16)
 
 #### Parameters
 
@@ -480,7 +480,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:16](https://github.com/wenakita/4626/bl
 
 > **isInstallationLimitError**(`message`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:162](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L162)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:162](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L162)
 
 #### Parameters
 
@@ -498,7 +498,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:162](https://github.com/wenakita/4626/b
 
 > **isLocalXmtpStateInvalidError**(`message`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:191](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L191)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:191](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L191)
 
 Local OPFS install no longer validates against the XMTP network inbox.
 
@@ -518,7 +518,7 @@ Local OPFS install no longer validates against the XMTP network inbox.
 
 > **isOpfsAccessHandleError**(`message`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:180](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L180)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:180](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L180)
 
 #### Parameters
 
@@ -536,7 +536,45 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:180](https://github.com/wenakita/4626/b
 
 > **isScwSignatureValidationError**(`message`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:172](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L172)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:172](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L172)
+
+#### Parameters
+
+##### message
+
+`string`
+
+#### Returns
+
+`boolean`
+
+***
+
+### isTransientXmtpStreamError()
+
+> **isTransientXmtpStreamError**(`message`): `boolean`
+
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:224](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L224)
+
+#### Parameters
+
+##### message
+
+`string`
+
+#### Returns
+
+`boolean`
+
+***
+
+### isTransientXmtpStreamNetworkError()
+
+> **isTransientXmtpStreamNetworkError**(`message`): `boolean`
+
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:200](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L200)
+
+Transient XMTP worker/network blips (common during dev HMR or welcome-stream retries).
 
 #### Parameters
 
@@ -554,7 +592,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:172](https://github.com/wenakita/4626/b
 
 > **isWrongChainIdError**(`message`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:167](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L167)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:167](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L167)
 
 #### Parameters
 
@@ -572,7 +610,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:167](https://github.com/wenakita/4626/b
 
 > **isXmtpEnvironmentMismatchError**(`message`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:154](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L154)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:154](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L154)
 
 #### Parameters
 
@@ -590,7 +628,27 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:154](https://github.com/wenakita/4626/b
 
 > **isXmtpNotRegisteredError**(`message`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:145](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L145)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:145](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L145)
+
+#### Parameters
+
+##### message
+
+`string`
+
+#### Returns
+
+`boolean`
+
+***
+
+### isXmtpRateLimitError()
+
+> **isXmtpRateLimitError**(`message`): `boolean`
+
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:214](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L214)
+
+XMTP MLS API rate limits (QueryWelcomeMessages / welcome stream).
 
 #### Parameters
 
@@ -608,7 +666,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:145](https://github.com/wenakita/4626/b
 
 > **normalizeEvmAddress**(`value`): `string` \| `null`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L30)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:30](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L30)
 
 #### Parameters
 
@@ -626,7 +684,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:30](https://github.com/wenakita/4626/bl
 
 > **parseWireContent**(`raw`): [`ParsedWireContent`](#parsedwirecontent)
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:58](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L58)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:58](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L58)
 
 #### Parameters
 
@@ -644,7 +702,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:58](https://github.com/wenakita/4626/bl
 
 > **readCanMessageBoolean**(`value`): `boolean` \| `null`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:203](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L203)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:232](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L232)
 
 #### Parameters
 
@@ -662,7 +720,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:203](https://github.com/wenakita/4626/b
 
 > **resolveConversationById**(`conversationsApi`, `conversationId`, `options?`): `Promise`\<[`ConversationLike`](#conversationlike) \| `null`\>
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:423](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L423)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:445](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L445)
 
 #### Parameters
 
@@ -675,6 +733,10 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:423](https://github.com/wenakita/4626/b
 `string`
 
 ##### options?
+
+###### forceSync?
+
+`boolean`
 
 ###### preferencesApi?
 
@@ -690,7 +752,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:423](https://github.com/wenakita/4626/b
 
 > **resolveConversationByIdWithSyncRetries**(`conversationsApi`, `conversationId`, `options?`): `Promise`\<[`ConversationLike`](#conversationlike) \| `null`\>
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:459](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L459)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:484](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L484)
 
 #### Parameters
 
@@ -707,6 +769,10 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:459](https://github.com/wenakita/4626/b
 ###### delayMs?
 
 `number`
+
+###### forceSync?
+
+`boolean`
 
 ###### preferencesApi?
 
@@ -726,7 +792,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:459](https://github.com/wenakita/4626/b
 
 > **shouldFallbackToOriginalXmtpRecipient**(`params`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:259](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L259)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:288](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L288)
 
 #### Parameters
 
@@ -756,15 +822,25 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:259](https://github.com/wenakita/4626/b
 
 ### syncConversationsForGroupDiscovery()
 
-> **syncConversationsForGroupDiscovery**(`conversationsApi`): `Promise`\<`void`\>
+> **syncConversationsForGroupDiscovery**(`conversationsApi`, `options?`): `Promise`\<`void`\>
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:374](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L374)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:403](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L403)
 
 #### Parameters
 
 ##### conversationsApi
 
 [`ConversationsApiLike`](#conversationsapilike)
+
+##### options?
+
+###### force?
+
+`boolean`
+
+###### lightweight?
+
+`boolean`
 
 #### Returns
 
@@ -776,7 +852,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:374](https://github.com/wenakita/4626/b
 
 > **truncateAddress**(`addr`): `string`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpHelpers.ts#L25)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L25)
 
 #### Parameters
 

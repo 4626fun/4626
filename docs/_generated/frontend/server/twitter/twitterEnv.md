@@ -12,7 +12,7 @@
 
 > **TwitterOauth1Credentials** = `object`
 
-Defined in: [server/twitter/twitterEnv.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/twitter/twitterEnv.ts#L36)
+Defined in: [server/twitter/twitterEnv.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/twitterEnv.ts#L36)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [server/twitter/twitterEnv.ts:36](https://github.com/wenakita/4626/b
 
 > **accessSecret**: `string`
 
-Defined in: [server/twitter/twitterEnv.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/twitter/twitterEnv.ts#L40)
+Defined in: [server/twitter/twitterEnv.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/twitterEnv.ts#L40)
 
 ##### accessToken
 
 > **accessToken**: `string`
 
-Defined in: [server/twitter/twitterEnv.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/twitter/twitterEnv.ts#L39)
+Defined in: [server/twitter/twitterEnv.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/twitterEnv.ts#L39)
 
 ##### apiKey
 
 > **apiKey**: `string`
 
-Defined in: [server/twitter/twitterEnv.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/twitter/twitterEnv.ts#L37)
+Defined in: [server/twitter/twitterEnv.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/twitterEnv.ts#L37)
 
 ##### apiSecret
 
 > **apiSecret**: `string`
 
-Defined in: [server/twitter/twitterEnv.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/twitter/twitterEnv.ts#L38)
+Defined in: [server/twitter/twitterEnv.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/twitterEnv.ts#L38)
 
 ## Functions
 
@@ -46,7 +46,7 @@ Defined in: [server/twitter/twitterEnv.ts:38](https://github.com/wenakita/4626/b
 
 > **isHermitTwitterStrictModeEnabled**(): `boolean`
 
-Defined in: [server/twitter/twitterEnv.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/twitter/twitterEnv.ts#L29)
+Defined in: [server/twitter/twitterEnv.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/twitterEnv.ts#L29)
 
 #### Returns
 
@@ -58,7 +58,7 @@ Defined in: [server/twitter/twitterEnv.ts:29](https://github.com/wenakita/4626/b
 
 > **missingTwitterOauth1EnvKeys**(`creds`, `strictHermitOnly`): `string`[]
 
-Defined in: [server/twitter/twitterEnv.ts:64](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/twitter/twitterEnv.ts#L64)
+Defined in: [server/twitter/twitterEnv.ts:64](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/twitterEnv.ts#L64)
 
 #### Parameters
 
@@ -80,7 +80,7 @@ Defined in: [server/twitter/twitterEnv.ts:64](https://github.com/wenakita/4626/b
 
 > **readTwitterBearerToken**(): `string` \| `null`
 
-Defined in: [server/twitter/twitterEnv.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/twitter/twitterEnv.ts#L24)
+Defined in: [server/twitter/twitterEnv.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/twitterEnv.ts#L24)
 
 #### Returns
 
@@ -92,7 +92,7 @@ Defined in: [server/twitter/twitterEnv.ts:24](https://github.com/wenakita/4626/b
 
 > **readTwitterOauth1Credentials**(`options`): [`TwitterOauth1Credentials`](#twitteroauth1credentials)
 
-Defined in: [server/twitter/twitterEnv.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/twitter/twitterEnv.ts#L52)
+Defined in: [server/twitter/twitterEnv.ts:52](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/twitterEnv.ts#L52)
 
 #### Parameters
 

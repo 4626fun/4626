@@ -12,7 +12,7 @@
 
 > **ExploreTableSparkline** = `object`
 
-Defined in: [src/features/explore/exploreTableSparklines.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreTableSparklines.ts#L5)
+Defined in: [src/features/explore/exploreTableSparklines.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreTableSparklines.ts#L5)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/features/explore/exploreTableSparklines.ts:5](https://github.co
 
 > **changePercent**: `number` \| `null`
 
-Defined in: [src/features/explore/exploreTableSparklines.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreTableSparklines.ts#L7)
+Defined in: [src/features/explore/exploreTableSparklines.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreTableSparklines.ts#L7)
 
 ##### values
 
 > **values**: `number`[]
 
-Defined in: [src/features/explore/exploreTableSparklines.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreTableSparklines.ts#L6)
+Defined in: [src/features/explore/exploreTableSparklines.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreTableSparklines.ts#L6)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [src/features/explore/exploreTableSparklines.ts:6](https://github.co
 
 > **ExploreTableSparklinesResponse** = `object`
 
-Defined in: [src/features/explore/exploreTableSparklines.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreTableSparklines.ts#L10)
+Defined in: [src/features/explore/exploreTableSparklines.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreTableSparklines.ts#L10)
 
 #### Properties
 
@@ -42,7 +42,7 @@ Defined in: [src/features/explore/exploreTableSparklines.ts:10](https://github.c
 
 > **sparklines**: `Record`\<`string`, [`ExploreTableSparkline`](#exploretablesparkline)\>
 
-Defined in: [src/features/explore/exploreTableSparklines.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreTableSparklines.ts#L11)
+Defined in: [src/features/explore/exploreTableSparklines.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreTableSparklines.ts#L11)
 
 ## Functions
 
@@ -50,7 +50,7 @@ Defined in: [src/features/explore/exploreTableSparklines.ts:11](https://github.c
 
 > **fetchExploreTableSparklines**(`coinAddresses`): `Promise`\<`Map`\<`string`, [`ExploreTableSparkline`](#exploretablesparkline)\>\>
 
-Defined in: [src/features/explore/exploreTableSparklines.ts:124](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreTableSparklines.ts#L124)
+Defined in: [src/features/explore/exploreTableSparklines.ts:126](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreTableSparklines.ts#L126)
 
 #### Parameters
 
@@ -68,7 +68,7 @@ Defined in: [src/features/explore/exploreTableSparklines.ts:124](https://github.
 
 > **mergeExploreTableSparklineMaps**(...`sources`): `Map`\<`string`, [`ExploreTableSparkline`](#exploretablesparkline)\>
 
-Defined in: [src/features/explore/exploreTableSparklines.ts:110](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreTableSparklines.ts#L110)
+Defined in: [src/features/explore/exploreTableSparklines.ts:112](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreTableSparklines.ts#L112)
 
 #### Parameters
 
@@ -86,7 +86,7 @@ Defined in: [src/features/explore/exploreTableSparklines.ts:110](https://github.
 
 > **readPersistedExploreTableSparklines**(): `Map`\<`string`, [`ExploreTableSparkline`](#exploretablesparkline)\>
 
-Defined in: [src/features/explore/exploreTableSparklines.ts:56](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreTableSparklines.ts#L56)
+Defined in: [src/features/explore/exploreTableSparklines.ts:58](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreTableSparklines.ts#L58)
 
 #### Returns
 
@@ -98,7 +98,7 @@ Defined in: [src/features/explore/exploreTableSparklines.ts:56](https://github.c
 
 > **resolveExploreRowTrend30d**(`coin`, `sparklines`): [`ExploreTableSparkline`](#exploretablesparkline) \| `null`
 
-Defined in: [src/features/explore/exploreTableSparklines.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreTableSparklines.ts#L22)
+Defined in: [src/features/explore/exploreTableSparklines.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreTableSparklines.ts#L31)
 
 #### Parameters
 
@@ -120,7 +120,7 @@ Defined in: [src/features/explore/exploreTableSparklines.ts:22](https://github.c
 
 > **seedSparklinesFromCoins**(`coins`): `Map`\<`string`, [`ExploreTableSparkline`](#exploretablesparkline)\>
 
-Defined in: [src/features/explore/exploreTableSparklines.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreTableSparklines.ts#L41)
+Defined in: [src/features/explore/exploreTableSparklines.ts:45](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreTableSparklines.ts#L45)
 
 #### Parameters
 
@@ -138,7 +138,7 @@ readonly `Pick`\<[`ZoraCoin`](../../lib/zora/types.md#zoracoin), `"address"` \| 
 
 > **writePersistedExploreTableSparklines**(`entries`): `void`
 
-Defined in: [src/features/explore/exploreTableSparklines.ts:81](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreTableSparklines.ts#L81)
+Defined in: [src/features/explore/exploreTableSparklines.ts:83](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreTableSparklines.ts#L83)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **LaunchCoinCardProps** = `object`
 
-Defined in: [src/features/waitlist/LaunchCoinCard.tsx:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/LaunchCoinCard.tsx#L48)
+Defined in: [src/features/waitlist/LaunchCoinCard.tsx:48](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/LaunchCoinCard.tsx#L48)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [src/features/waitlist/LaunchCoinCard.tsx:48](https://github.com/wen
 
 > `optional` **defaultName**: `string` \| `null`
 
-Defined in: [src/features/waitlist/LaunchCoinCard.tsx:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/LaunchCoinCard.tsx#L52)
+Defined in: [src/features/waitlist/LaunchCoinCard.tsx:52](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/LaunchCoinCard.tsx#L52)
 
 Prefill coin name (used in one-click mode)
 
@@ -28,7 +28,7 @@ Prefill coin name (used in one-click mode)
 
 > `optional` **defaultSymbol**: `string` \| `null`
 
-Defined in: [src/features/waitlist/LaunchCoinCard.tsx:54](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/LaunchCoinCard.tsx#L54)
+Defined in: [src/features/waitlist/LaunchCoinCard.tsx:54](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/LaunchCoinCard.tsx#L54)
 
 Prefill coin symbol seed (used in one-click mode)
 
@@ -36,7 +36,7 @@ Prefill coin symbol seed (used in one-click mode)
 
 > `optional` **mode**: `"form"` \| `"one-click"`
 
-Defined in: [src/features/waitlist/LaunchCoinCard.tsx:50](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/LaunchCoinCard.tsx#L50)
+Defined in: [src/features/waitlist/LaunchCoinCard.tsx:50](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/LaunchCoinCard.tsx#L50)
 
 UI mode: full form (default) or 1-click prefilled
 
@@ -44,7 +44,7 @@ UI mode: full form (default) or 1-click prefilled
 
 > `optional` **onCoinCreated**: (`coinAddress`, `symbol`) => `void`
 
-Defined in: [src/features/waitlist/LaunchCoinCard.tsx:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/LaunchCoinCard.tsx#L60)
+Defined in: [src/features/waitlist/LaunchCoinCard.tsx:60](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/LaunchCoinCard.tsx#L60)
 
 Callback when coin is successfully created
 
@@ -66,7 +66,7 @@ Callback when coin is successfully created
 
 > **ownerAddress**: `string` \| `null`
 
-Defined in: [src/features/waitlist/LaunchCoinCard.tsx:58](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/LaunchCoinCard.tsx#L58)
+Defined in: [src/features/waitlist/LaunchCoinCard.tsx:58](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/LaunchCoinCard.tsx#L58)
 
 The EOA owner address that will sign the UserOp
 
@@ -74,7 +74,7 @@ The EOA owner address that will sign the UserOp
 
 > **smartWalletAddress**: `string` \| `null`
 
-Defined in: [src/features/waitlist/LaunchCoinCard.tsx:56](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/LaunchCoinCard.tsx#L56)
+Defined in: [src/features/waitlist/LaunchCoinCard.tsx:56](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/LaunchCoinCard.tsx#L56)
 
 The user's Coinbase Smart Wallet address (coin creator)
 
@@ -84,7 +84,7 @@ The user's Coinbase Smart Wallet address (coin creator)
 
 > `const` **LaunchCoinCard**: `NamedExoticComponent`\<[`LaunchCoinCardProps`](#launchcoincardprops)\>
 
-Defined in: [src/features/waitlist/LaunchCoinCard.tsx:84](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/LaunchCoinCard.tsx#L84)
+Defined in: [src/features/waitlist/LaunchCoinCard.tsx:84](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/LaunchCoinCard.tsx#L84)
 
 ## References
 

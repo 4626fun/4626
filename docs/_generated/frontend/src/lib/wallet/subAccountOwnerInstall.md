@@ -12,7 +12,7 @@
 
 > **InstallEmbeddedOwnerResult** = `object`
 
-Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountOwnerInstall.ts#L27)
+Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountOwnerInstall.ts#L27)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:27](https://github.com/wen
 
 > **alreadyOwner**: `boolean`
 
-Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountOwnerInstall.ts#L31)
+Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountOwnerInstall.ts#L31)
 
 True when the embedded EOA was already an on-chain owner.
 
@@ -28,13 +28,13 @@ True when the embedded EOA was already an on-chain owner.
 
 > **callBundleId**: `string` \| `null`
 
-Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountOwnerInstall.ts#L33)
+Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:33](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountOwnerInstall.ts#L33)
 
 ##### installed
 
 > **installed**: `boolean`
 
-Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountOwnerInstall.ts#L29)
+Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountOwnerInstall.ts#L29)
 
 True when we submitted addOwnerAddress (user signed).
 
@@ -42,7 +42,7 @@ True when we submitted addOwnerAddress (user signed).
 
 > **transactionHash**: `Hex` \| `null`
 
-Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountOwnerInstall.ts#L32)
+Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:32](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountOwnerInstall.ts#L32)
 
 ## Functions
 
@@ -50,7 +50,7 @@ Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:32](https://github.com/wen
 
 > **createBaseSubAccountReadClient**(): `object`
 
-Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:94](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountOwnerInstall.ts#L94)
+Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:94](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountOwnerInstall.ts#L94)
 
 #### Returns
 
@@ -62,7 +62,7 @@ Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:94](https://github.com/wen
 
 > **installEmbeddedOwnerOnSubAccount**(`params`): `Promise`\<[`InstallEmbeddedOwnerResult`](#installembeddedownerresult)\>
 
-Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:157](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountOwnerInstall.ts#L157)
+Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:157](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountOwnerInstall.ts#L157)
 
 Install the Privy embedded EOA as an owner of the sub-account CSW.
 
@@ -107,7 +107,7 @@ Fallback: `eth_sendTransaction` when sendCalls is unavailable outside Base App.
 
 > **readEmbeddedOwnerOnSubAccount**(`params`): `Promise`\<`boolean` \| `null`\>
 
-Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:105](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/subAccountOwnerInstall.ts#L105)
+Defined in: [src/lib/wallet/subAccountOwnerInstall.ts:105](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountOwnerInstall.ts#L105)
 
 #### Parameters
 

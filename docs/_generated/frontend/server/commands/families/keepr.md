@@ -12,7 +12,7 @@
 
 > **executeKeeprCommandFamily**(`params`): `Promise`\<[`KeeprCommandResult`](../types.md#keeprcommandresult)\>
 
-Defined in: [server/commands/families/keepr.ts:801](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/commands/families/keepr.ts#L801)
+Defined in: [server/commands/families/keepr.ts:801](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/keepr.ts#L801)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [server/commands/families/keepr.ts:801](https://github.com/wenakita/
 
 > **formatAdminCheckUnavailable**(`command`): `string`
 
-Defined in: [server/commands/families/keepr.ts:702](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/commands/families/keepr.ts#L702)
+Defined in: [server/commands/families/keepr.ts:702](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/keepr.ts#L702)
 
 Shown when we could not determine the caller's role because getChatMember
 failed (network, rate limit, bot not admin in group). This is a "fail closed"
@@ -70,7 +70,7 @@ refusal — we do not allow the action until we can verify.
 
 > **formatAdminOnlyRefusal**(`command`): `string`
 
-Defined in: [server/commands/families/keepr.ts:686](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/commands/families/keepr.ts#L686)
+Defined in: [server/commands/families/keepr.ts:686](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/keepr.ts#L686)
 
 Shown when a non-admin group member invokes a setup command (/link, /status,
 /unlink, /keepr). The command is still available to group owners and admins,
@@ -92,7 +92,7 @@ and to all users in private DMs with the bot.
 
 > **formatAssistantOnlyBlocked**(`command`): `string`
 
-Defined in: [server/commands/families/keepr.ts:671](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/commands/families/keepr.ts#L671)
+Defined in: [server/commands/families/keepr.ts:671](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/keepr.ts#L671)
 
 #### Parameters
 
@@ -110,7 +110,7 @@ Defined in: [server/commands/families/keepr.ts:671](https://github.com/wenakita/
 
 > **formatGroupConnectGuidance**(`groupId`): `string`
 
-Defined in: [server/commands/families/keepr.ts:655](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/commands/families/keepr.ts#L655)
+Defined in: [server/commands/families/keepr.ts:655](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/keepr.ts#L655)
 
 #### Parameters
 
@@ -128,7 +128,7 @@ Defined in: [server/commands/families/keepr.ts:655](https://github.com/wenakita/
 
 > **formatKeeprHelp**(`rawTopic`, `options?`): `string`
 
-Defined in: [server/commands/families/keepr.ts:627](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/commands/families/keepr.ts#L627)
+Defined in: [server/commands/families/keepr.ts:627](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/keepr.ts#L627)
 
 #### Parameters
 
@@ -160,7 +160,7 @@ Defined in: [server/commands/families/keepr.ts:627](https://github.com/wenakita/
 
 > **formatVaultStatus**(`v`): `string`
 
-Defined in: [server/commands/families/keepr.ts:712](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/commands/families/keepr.ts#L712)
+Defined in: [server/commands/families/keepr.ts:712](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/keepr.ts#L712)
 
 #### Parameters
 
@@ -178,7 +178,7 @@ Defined in: [server/commands/families/keepr.ts:712](https://github.com/wenakita/
 
 > **looksLikeGroupConnectIntent**(`raw`): `boolean`
 
-Defined in: [server/commands/families/keepr.ts:645](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/commands/families/keepr.ts#L645)
+Defined in: [server/commands/families/keepr.ts:645](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/keepr.ts#L645)
 
 #### Parameters
 

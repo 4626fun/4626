@@ -12,7 +12,7 @@
 
 > **AlfaClubChatBridgeFlags** = `object`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:128](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L128)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:139](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L139)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:128](https://github.com/wenakit
 
 > **apiBaseUrl**: `string`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:135](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L135)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:146](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L146)
 
 ##### apiProxySecret
 
 > **apiProxySecret**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:183](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L183)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:194](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L194)
 
 Shared secret sent only to the configured proxy. Never forwarded
 to AlfaClub directly.
@@ -35,7 +35,7 @@ to AlfaClub directly.
 
 > **apiProxyUrl**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:178](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L178)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:189](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L189)
 
 Optional proxy origin for AlfaClub HTTP API calls
 (`/api/websocket/room_history_paginate` +
@@ -82,109 +82,109 @@ the bridge calls `apiBaseUrl` directly.
 
 > **botToken**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:134](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L134)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:145](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L145)
 
 ##### enabled
 
 > **enabled**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:130](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L130)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:141](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L141)
 
 ##### groupId
 
 > **groupId**: `string`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:185](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L185)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:196](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L196)
 
 ##### historyLimit
 
 > **historyLimit**: `number`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:187](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L187)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:198](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L198)
 
 ##### ingestJwt
 
 > **ingestJwt**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:133](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L133)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:144](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L144)
 
 ##### jwt
 
 > **jwt**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:132](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L132)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:143](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L143)
 
 ##### killSwitch
 
 > **killSwitch**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:129](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L129)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:140](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L140)
 
 ##### pollIntervalMs
 
 > **pollIntervalMs**: `number`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:186](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L186)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:197](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L197)
 
 ##### requestTimeoutMs
 
 > **requestTimeoutMs**: `number`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:189](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L189)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:200](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L200)
 
 ##### roomId
 
 > **roomId**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:131](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L131)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:142](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L142)
 
 ##### sendTimeoutMs
 
 > **sendTimeoutMs**: `number`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:188](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L188)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:199](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L199)
 
 ##### telegramRelayBotToken
 
 > **telegramRelayBotToken**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:193](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L193)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:204](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L204)
 
 ##### telegramRelayChatId
 
 > **telegramRelayChatId**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:194](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L194)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:205](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L205)
 
 ##### telegramRelayEnabled
 
 > **telegramRelayEnabled**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:192](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L192)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:203](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L203)
 
 ##### telegramRelayThreadId
 
 > **telegramRelayThreadId**: `number` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:195](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L195)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:206](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L206)
 
 ##### websocketUrl
 
 > **websocketUrl**: `string`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:184](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L184)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:195](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L195)
 
 ##### wsIngestAllRoomsEnabled
 
 > **wsIngestAllRoomsEnabled**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:191](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L191)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:202](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L202)
 
 ##### wsLiveFallbackEnabled
 
 > **wsLiveFallbackEnabled**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:190](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L190)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:201](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L201)
 
 ***
 
@@ -192,7 +192,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:190](https://github.com/wenakit
 
 > **AlfaClubChatBridgeSkipReason** = `"kill_switch"` \| `"disabled"` \| `"railway_blocked"` \| `"env_missing"` \| `"already_running"`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:216](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L216)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:228](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L228)
 
 ***
 
@@ -200,7 +200,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:216](https://github.com/wenakit
 
 > **AlfaClubChatBridgeTickResult** = `object`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:223](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L223)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:235](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L235)
 
 #### Properties
 
@@ -208,7 +208,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:223](https://github.com/wenakit
 
 > **errors**: `object`[]
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:230](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L230)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:242](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L242)
 
 ###### error
 
@@ -222,37 +222,37 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:230](https://github.com/wenakit
 
 > **fetched**: `number`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:226](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L226)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:238](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L238)
 
 ##### processed
 
 > **processed**: `number`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:228](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L228)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:240](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L240)
 
 ##### replied
 
 > **replied**: `number`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:229](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L229)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:241](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L241)
 
 ##### roomId
 
 > **roomId**: `string`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:225](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L225)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:237](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L237)
 
 ##### seeded
 
 > **seeded**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:224](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L224)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:236](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L236)
 
 ##### unseen
 
 > **unseen**: `number`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:227](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L227)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:239](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L239)
 
 ***
 
@@ -260,7 +260,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:227](https://github.com/wenakit
 
 > **AlfaClubCommandMessage** = `object`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:198](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L198)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:209](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L209)
 
 #### Properties
 
@@ -268,25 +268,25 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:198](https://github.com/wenakit
 
 > **date**: `number`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:200](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L200)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:211](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L211)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:199](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L199)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:210](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L210)
 
 ##### sender
 
 > **sender**: `string`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:201](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L201)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:212](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L212)
 
 ##### text
 
 > **text**: `string`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:202](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L202)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:213](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L213)
 
 ***
 
@@ -294,7 +294,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:202](https://github.com/wenakit
 
 > **AlfaClubMessageAttachment** = `object`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:107](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L107)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:108](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L108)
 
 #### Properties
 
@@ -302,49 +302,49 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:107](https://github.com/wenakit
 
 > `optional` **dims**: \[`number`, `number`\]
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:109](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L109)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:110](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L110)
 
 ##### duration?
 
 > `optional` **duration**: `number`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:115](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L115)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:116](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L116)
 
 ##### filename?
 
 > `optional` **filename**: `string`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:111](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L111)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:112](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L112)
 
 ##### mime\_type?
 
 > `optional` **mime\_type**: `string`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:112](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L112)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:113](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L113)
 
 ##### preview?
 
 > `optional` **preview**: `string`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:114](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L114)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:115](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L115)
 
 ##### size?
 
 > `optional` **size**: `number`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:113](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L113)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:114](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L114)
 
 ##### type
 
 > **type**: `string`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:110](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L110)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:111](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L111)
 
 ##### url
 
 > **url**: `string`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:108](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L108)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:109](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L109)
 
 ***
 
@@ -352,7 +352,39 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:108](https://github.com/wenakit
 
 > **RunAlfaClubChatBridgeTickOnceResult** = \{ `data`: [`AlfaClubChatBridgeTickResult`](#alfaclubchatbridgetickresult); `intervalMs`: `number`; `ok`: `true`; `roomId`: `string`; \} \| \{ `intervalMs`: `number`; `ok`: `false`; `reason`: [`AlfaClubChatBridgeSkipReason`](#alfaclubchatbridgeskipreason); `roomId`: `string` \| `null`; \}
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:241](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L241)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:253](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L253)
+
+***
+
+### RunBridgeTickOptions
+
+> **RunBridgeTickOptions** = `object`
+
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3049](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3049)
+
+#### Properties
+
+##### ingestCommandCandidatesOnly?
+
+> `optional` **ingestCommandCandidatesOnly**: `boolean`
+
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3056](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3056)
+
+Cron mode: upsert only slash-command candidates into chat_ingest (less DB write churn).
+
+##### seedHistoryOnlyOnFirstTick?
+
+> `optional` **seedHistoryOnlyOnFirstTick**: `boolean`
+
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3052](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3052)
+
+##### skipLiveWebSocket?
+
+> `optional` **skipLiveWebSocket**: `boolean`
+
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3054](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3054)
+
+Serverless cron: skip WS connect (no cross-invocation session). Default on via readAlfaClubCronSkipLiveWebSocket().
 
 ***
 
@@ -360,7 +392,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:241](https://github.com/wenakit
 
 > **StartAlfaClubChatBridgeResult** = `object`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:233](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L233)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:245](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L245)
 
 #### Properties
 
@@ -368,31 +400,31 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:233](https://github.com/wenakit
 
 > **intervalMs**: `number`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:236](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L236)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:248](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L248)
 
 ##### reason?
 
 > `optional` **reason**: [`AlfaClubChatBridgeSkipReason`](#alfaclubchatbridgeskipreason)
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:235](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L235)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:247](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L247)
 
 ##### roomId
 
 > **roomId**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:237](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L237)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:249](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L249)
 
 ##### started
 
 > **started**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:234](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L234)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:246](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L246)
 
 ##### stop()
 
 > **stop**: () => `void`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:238](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L238)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:250](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L250)
 
 ###### Returns
 
@@ -404,7 +436,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:238](https://github.com/wenakit
 
 > `const` **\_ALFACLUB\_API\_BROWSER\_HEADERS\_FOR\_TESTS**: `Record`\<`string`, `string`\> = `ALFACLUB_API_COMMON_BROWSER_HEADERS`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:991](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L991)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:1073](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L1073)
 
 Exposed for unit tests — common (origin-agnostic) headers.
 
@@ -414,7 +446,7 @@ Exposed for unit tests — common (origin-agnostic) headers.
 
 > `const` **\_shouldSuppressDeterministicReplyForTests**: (`responseText`) => `boolean` = `shouldSuppressDeterministicReply`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:607](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L607)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:674](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L674)
 
 Exposed for unit tests.
 
@@ -434,7 +466,7 @@ Exposed for unit tests.
 
 > **\_classifyHistoryErrorForTests**(`error`): `HistoryErrorKind`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:3256](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L3256)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3686](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3686)
 
 #### Parameters
 
@@ -452,7 +484,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:3256](https://github.com/wenaki
 
 > **\_ensureLiveCommandSocketForTests**(`params`): `void`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:3442](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L3442)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3873](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3873)
 
 #### Parameters
 
@@ -484,7 +516,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:3442](https://github.com/wenaki
 
 > **\_fetchRoomHistoryForTests**(`params`): `Promise`\<`AlfaClubRoomHistoryMessage`[]\>
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:3261](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L3261)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3691](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3691)
 
 Test seam: exercise `fetchRoomHistory` against an injected fetch.
 
@@ -530,7 +562,7 @@ Test seam: exercise `fetchRoomHistory` against an injected fetch.
 
 > **\_getBridgeAuthStateForTests**(): `object`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:3451](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L3451)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3882](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3882)
 
 #### Returns
 
@@ -686,7 +718,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:3451](https://github.com/wenaki
 
 > **\_isCloudflareChallengeErrorForTests**(`error`): `boolean`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:3252](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L3252)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3682](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3682)
 
 #### Parameters
 
@@ -704,7 +736,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:3252](https://github.com/wenaki
 
 > **\_isRoomHistoryAuthErrorForTests**(`error`): `boolean`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:3248](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L3248)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3678](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3678)
 
 #### Parameters
 
@@ -722,7 +754,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:3248](https://github.com/wenaki
 
 > **\_markReadMessageForTests**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:3274](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L3274)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3704](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3704)
 
 Test seam: exercise `markReadMessage` against an injected fetch.
 
@@ -768,7 +800,7 @@ Test seam: exercise `markReadMessage` against an injected fetch.
 
 > **\_resetAlfaClubChatBridgeStateForTests**(): `void`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:3375](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L3375)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3805](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3805)
 
 #### Returns
 
@@ -778,15 +810,19 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:3375](https://github.com/wenaki
 
 ### \_runAlfaClubChatBridgeTickForTests()
 
-> **\_runAlfaClubChatBridgeTickForTests**(`flags`): `Promise`\<[`AlfaClubChatBridgeTickResult`](#alfaclubchatbridgetickresult)\>
+> **\_runAlfaClubChatBridgeTickForTests**(`flags`, `options`): `Promise`\<[`AlfaClubChatBridgeTickResult`](#alfaclubchatbridgetickresult)\>
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:3436](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L3436)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3866](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3866)
 
 #### Parameters
 
 ##### flags
 
 [`AlfaClubChatBridgeFlags`](#alfaclubchatbridgeflags)
+
+##### options
+
+[`RunBridgeTickOptions`](#runbridgetickoptions) = `{}`
 
 #### Returns
 
@@ -798,7 +834,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:3436](https://github.com/wenaki
 
 > **\_sendRoomMessageViaBotTokenForTests**(`params`): `Promise`\<`BotSendResultSummary`\>
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:3286](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L3286)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3716](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3716)
 
 #### Parameters
 
@@ -846,7 +882,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:3286](https://github.com/wenaki
 
 > **\_sendRoomMessageViaBotTokenWithProxyFallbackForTests**(`params`): `Promise`\<`BotSendResultSummary`\>
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:3299](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L3299)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3729](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3729)
 
 #### Parameters
 
@@ -898,7 +934,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:3299](https://github.com/wenaki
 
 > **\_sendRoomMessageViaWebSocketForTests**(`params`): `Promise`\<`"ws_proxy_http"` \| `"websocket"`\>
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:3313](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L3313)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3743](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3743)
 
 #### Parameters
 
@@ -950,7 +986,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:3313](https://github.com/wenaki
 
 > **buildAlfaClubOutboundFrame**(`params`): `AlfaClubOutboundFrame`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:498](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L498)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:530](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L530)
 
 #### Parameters
 
@@ -978,11 +1014,39 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:498](https://github.com/wenakit
 
 ***
 
+### buildAlfaClubReactionFrame()
+
+> **buildAlfaClubReactionFrame**(`params`): `AlfaClubReactionFrame`
+
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:547](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L547)
+
+#### Parameters
+
+##### params
+
+###### emoji
+
+`string`
+
+###### messageId
+
+`string`
+
+###### roomId
+
+`string`
+
+#### Returns
+
+`AlfaClubReactionFrame`
+
+***
+
 ### collectAlfaClubCommandMessages()
 
 > **collectAlfaClubCommandMessages**(`params`): [`AlfaClubCommandMessage`](#alfaclubcommandmessage)[]
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:609](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L609)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:676](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L676)
 
 #### Parameters
 
@@ -1010,7 +1074,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:609](https://github.com/wenakit
 
 > **extractAlfaClubWsMessagesForTest**(`payload`): `AlfaClubLiveInboundMessage`[]
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:823](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L823)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:891](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L891)
 
 #### Parameters
 
@@ -1024,11 +1088,43 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:823](https://github.com/wenakit
 
 ***
 
+### isHistoryMessageCommandCandidate()
+
+> **isHistoryMessageCommandCandidate**(`message`): `boolean`
+
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:626](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L626)
+
+Whether a history row could trigger the deterministic command executor.
+
+#### Parameters
+
+##### message
+
+`AlfaClubRoomHistoryMessage`
+
+#### Returns
+
+`boolean`
+
+***
+
+### readAlfaClubBridgeReactionsEnabled()
+
+> **readAlfaClubBridgeReactionsEnabled**(): `boolean`
+
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:562](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L562)
+
+#### Returns
+
+`boolean`
+
+***
+
 ### readAlfaClubChatBridgeFlags()
 
 > **readAlfaClubChatBridgeFlags**(): [`AlfaClubChatBridgeFlags`](#alfaclubchatbridgeflags)
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:424](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L424)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:436](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L436)
 
 #### Returns
 
@@ -1036,11 +1132,37 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:424](https://github.com/wenakit
 
 ***
 
+### readAlfaClubChatBridgeFlagsForCronTick()
+
+> **readAlfaClubChatBridgeFlagsForCronTick**(): [`AlfaClubChatBridgeFlags`](#alfaclubchatbridgeflags)
+
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:517](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L517)
+
+#### Returns
+
+[`AlfaClubChatBridgeFlags`](#alfaclubchatbridgeflags)
+
+***
+
+### readAlfaClubCronSkipLiveWebSocket()
+
+> **readAlfaClubCronSkipLiveWebSocket**(): `boolean`
+
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:511](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L511)
+
+Vercel cron ticks cannot keep a live WS between invocations — skip by default.
+
+#### Returns
+
+`boolean`
+
+***
+
 ### resolveAlfaClubApiCallBaseUrl()
 
 > **resolveAlfaClubApiCallBaseUrl**(`flags`): `string`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:368](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L368)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:380](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L380)
 
 Pick the URL the bridge should hit for an AlfaClub HTTP API call
 (the *routing* URL — where the request is actually sent).
@@ -1084,7 +1206,7 @@ Exported for tests. Production callers always pass the full
 
 > **resolveAlfaClubFingerprintBaseUrl**(`flags`): `string`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:403](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L403)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:415](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L415)
 
 Pick the URL whose hostname determines the browser-fingerprint
 triplet (`Origin`/`Referer`/`Sec-Fetch-Site`) for an AlfaClub HTTP
@@ -1135,7 +1257,7 @@ Exported for tests.
 
 > **resolveAlfaClubOriginHeaders**(`apiBaseUrl`): `AlfaClubOriginHeaders`
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:912](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L912)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:994](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L994)
 
 Resolve the origin/referer/Sec-Fetch-Site triplet for an AlfaClub
 API request. Returns an empty object for hosts not on the known
@@ -1157,7 +1279,7 @@ AlfaClub-family list.
 
 > **runAlfaClubChatBridgeTickOnce**(): `Promise`\<[`RunAlfaClubChatBridgeTickOnceResult`](#runalfaclubchatbridgetickonceresult)\>
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:3091](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L3091)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3517](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3517)
 
 #### Returns
 
@@ -1169,7 +1291,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:3091](https://github.com/wenaki
 
 > **sendAlfaClubRoomText**(`params`): `Promise`\<\{ `lane`: `string`; \}\>
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:3327](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L3327)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3757](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3757)
 
 #### Parameters
 
@@ -1209,7 +1331,7 @@ Defined in: [server/\_lib/alfaclub/chatBridge.ts:3327](https://github.com/wenaki
 
 > **startAlfaClubChatBridge**(`opts?`): [`StartAlfaClubChatBridgeResult`](#startalfaclubchatbridgeresult)
 
-Defined in: [server/\_lib/alfaclub/chatBridge.ts:3135](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatBridge.ts#L3135)
+Defined in: [server/\_lib/alfaclub/chatBridge.ts:3565](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatBridge.ts#L3565)
 
 #### Parameters
 

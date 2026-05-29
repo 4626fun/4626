@@ -12,7 +12,7 @@
 
 > **fetchMigratedCoins**(): `Promise`\<`Set`\<`string`\>\>
 
-Defined in: [src/lib/zora/migrations.ts:154](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrations.ts#L154)
+Defined in: [src/lib/zora/migrations.ts:154](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L154)
 
 #### Returns
 
@@ -24,7 +24,7 @@ Defined in: [src/lib/zora/migrations.ts:154](https://github.com/wenakita/4626/bl
 
 > **getMigrationStats**(): `Promise`\<\{ `count`: `number`; `lastUpdated`: `number`; \}\>
 
-Defined in: [src/lib/zora/migrations.ts:216](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrations.ts#L216)
+Defined in: [src/lib/zora/migrations.ts:216](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L216)
 
 #### Returns
 
@@ -36,7 +36,7 @@ Defined in: [src/lib/zora/migrations.ts:216](https://github.com/wenakita/4626/bl
 
 > **hasCoinMigrated**(`coinAddress`): `Promise`\<`boolean`\>
 
-Defined in: [src/lib/zora/migrations.ts:194](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrations.ts#L194)
+Defined in: [src/lib/zora/migrations.ts:194](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L194)
 
 #### Parameters
 
@@ -54,7 +54,7 @@ Defined in: [src/lib/zora/migrations.ts:194](https://github.com/wenakita/4626/bl
 
 > **hasCoinMigratedSync**(`coinAddress`): `boolean` \| `undefined`
 
-Defined in: [src/lib/zora/migrations.ts:199](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrations.ts#L199)
+Defined in: [src/lib/zora/migrations.ts:199](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L199)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ Defined in: [src/lib/zora/migrations.ts:199](https://github.com/wenakita/4626/bl
 
 > **preloadMigratedCoins**(): `void`
 
-Defined in: [src/lib/zora/migrations.ts:212](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/migrations.ts#L212)
+Defined in: [src/lib/zora/migrations.ts:212](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L212)
 
 #### Returns
 

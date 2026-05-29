@@ -12,7 +12,7 @@
 
 > **applyExploreParamChange**(`__namedParameters`): `void`
 
-Defined in: [src/components/explore/ExploreSubnav.tsx:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ExploreSubnav.tsx#L31)
+Defined in: [src/components/explore/ExploreSubnav.tsx:31](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ExploreSubnav.tsx#L31)
 
 #### Parameters
 
@@ -40,7 +40,7 @@ Defined in: [src/components/explore/ExploreSubnav.tsx:31](https://github.com/wen
 
 > **ExploreSubnav**(`__namedParameters`): `Element`
 
-Defined in: [src/components/explore/ExploreSubnav.tsx:45](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ExploreSubnav.tsx#L45)
+Defined in: [src/components/explore/ExploreSubnav.tsx:45](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ExploreSubnav.tsx#L45)
 
 #### Parameters
 

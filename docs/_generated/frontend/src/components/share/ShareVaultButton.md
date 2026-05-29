@@ -12,7 +12,7 @@
 
 > **buildTelegramIntent**(`url`, `text`): `string`
 
-Defined in: [src/components/share/ShareVaultButton.tsx:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/share/ShareVaultButton.tsx#L39)
+Defined in: [src/components/share/ShareVaultButton.tsx:39](https://github.com/wenakita/4626/blob/main/frontend/src/components/share/ShareVaultButton.tsx#L39)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [src/components/share/ShareVaultButton.tsx:39](https://github.com/we
 
 > **buildTwitterIntent**(`url`, `text`): `string`
 
-Defined in: [src/components/share/ShareVaultButton.tsx:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/share/ShareVaultButton.tsx#L27)
+Defined in: [src/components/share/ShareVaultButton.tsx:27](https://github.com/wenakita/4626/blob/main/frontend/src/components/share/ShareVaultButton.tsx#L27)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [src/components/share/ShareVaultButton.tsx:27](https://github.com/we
 
 > **buildWarpcastIntent**(`url`, `text`): `string`
 
-Defined in: [src/components/share/ShareVaultButton.tsx:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/share/ShareVaultButton.tsx#L32)
+Defined in: [src/components/share/ShareVaultButton.tsx:32](https://github.com/wenakita/4626/blob/main/frontend/src/components/share/ShareVaultButton.tsx#L32)
 
 #### Parameters
 
@@ -78,7 +78,7 @@ Defined in: [src/components/share/ShareVaultButton.tsx:32](https://github.com/we
 
 > **ShareVaultButton**(`__namedParameters`): `Element`
 
-Defined in: [src/components/share/ShareVaultButton.tsx:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/share/ShareVaultButton.tsx#L52)
+Defined in: [src/components/share/ShareVaultButton.tsx:52](https://github.com/wenakita/4626/blob/main/frontend/src/components/share/ShareVaultButton.tsx#L52)
 
 #### Parameters
 

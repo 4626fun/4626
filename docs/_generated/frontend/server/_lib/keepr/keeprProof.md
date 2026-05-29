@@ -12,7 +12,7 @@
 
 > **KeeprJoinMessageFields** = `object`
 
-Defined in: [server/\_lib/keepr/keeprProof.ts:124](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keepr/keeprProof.ts#L124)
+Defined in: [server/\_lib/keepr/keeprProof.ts:124](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprProof.ts#L124)
 
 #### Properties
 
@@ -20,31 +20,31 @@ Defined in: [server/\_lib/keepr/keeprProof.ts:124](https://github.com/wenakita/4
 
 > **expiresAt**: `string`
 
-Defined in: [server/\_lib/keepr/keeprProof.ts:129](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keepr/keeprProof.ts#L129)
+Defined in: [server/\_lib/keepr/keeprProof.ts:129](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprProof.ts#L129)
 
 ##### issuedAt
 
 > **issuedAt**: `string`
 
-Defined in: [server/\_lib/keepr/keeprProof.ts:128](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keepr/keeprProof.ts#L128)
+Defined in: [server/\_lib/keepr/keeprProof.ts:128](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprProof.ts#L128)
 
 ##### nonce
 
 > **nonce**: `string`
 
-Defined in: [server/\_lib/keepr/keeprProof.ts:127](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keepr/keeprProof.ts#L127)
+Defined in: [server/\_lib/keepr/keeprProof.ts:127](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprProof.ts#L127)
 
 ##### vaultAddress
 
 > **vaultAddress**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/keepr/keeprProof.ts:126](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keepr/keeprProof.ts#L126)
+Defined in: [server/\_lib/keepr/keeprProof.ts:126](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprProof.ts#L126)
 
 ##### wallet
 
 > **wallet**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/keepr/keeprProof.ts:125](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keepr/keeprProof.ts#L125)
+Defined in: [server/\_lib/keepr/keeprProof.ts:125](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprProof.ts#L125)
 
 ## Functions
 
@@ -52,7 +52,7 @@ Defined in: [server/\_lib/keepr/keeprProof.ts:125](https://github.com/wenakita/4
 
 > **buildKeeprJoinMessage**(`fields`): `string`
 
-Defined in: [server/\_lib/keepr/keeprProof.ts:132](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keepr/keeprProof.ts#L132)
+Defined in: [server/\_lib/keepr/keeprProof.ts:132](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprProof.ts#L132)
 
 #### Parameters
 
@@ -70,7 +70,7 @@ Defined in: [server/\_lib/keepr/keeprProof.ts:132](https://github.com/wenakita/4
 
 > **issueKeeprJoinNonce**(`params`): `Promise`\<\{ `expiresAt`: `string`; `issuedAt`: `string`; `nonce`: `string`; \}\>
 
-Defined in: [server/\_lib/keepr/keeprProof.ts:172](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keepr/keeprProof.ts#L172)
+Defined in: [server/\_lib/keepr/keeprProof.ts:172](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprProof.ts#L172)
 
 #### Parameters
 
@@ -94,7 +94,7 @@ Defined in: [server/\_lib/keepr/keeprProof.ts:172](https://github.com/wenakita/4
 
 > **parseKeeprJoinMessage**(`message`): [`KeeprJoinMessageFields`](#keeprjoinmessagefields) \| `null`
 
-Defined in: [server/\_lib/keepr/keeprProof.ts:144](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keepr/keeprProof.ts#L144)
+Defined in: [server/\_lib/keepr/keeprProof.ts:144](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprProof.ts#L144)
 
 #### Parameters
 
@@ -112,7 +112,7 @@ Defined in: [server/\_lib/keepr/keeprProof.ts:144](https://github.com/wenakita/4
 
 > **verifyKeeprJoinProof**(`params`): `Promise`\<\{ `messageHash`: `string`; `wallet`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/keepr/keeprProof.ts:253](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keepr/keeprProof.ts#L253)
+Defined in: [server/\_lib/keepr/keeprProof.ts:253](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprProof.ts#L253)
 
 #### Parameters
 

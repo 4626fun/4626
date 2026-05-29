@@ -12,7 +12,7 @@
 
 > **BaseAppOwnerCallResult** = `object`
 
-Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L8)
+Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L9)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:8](https://github.com/wenakita/
 
 > **callBundleId**: `string`
 
-Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L9)
+Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L10)
 
 ##### transactionHash
 
 > **transactionHash**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L10)
+Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L11)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:10](https://github.com/wenakita
 
 > **RemoveOwnerFunctionName** = `"removeOwnerAtIndex"` \| `"removeLastOwner"`
 
-Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L13)
+Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L14)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:13](https://github.com/wenakita
 
 > **RemoveOwnerPlan** = `object`
 
-Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L15)
+Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L16)
 
 #### Properties
 
@@ -50,37 +50,37 @@ Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:15](https://github.com/wenakita
 
 > **highestPopulatedOwnerIndex**: `number`
 
-Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L21)
+Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:22](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L22)
 
 ##### nextOwnerIndex
 
 > **nextOwnerIndex**: `number`
 
-Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L20)
+Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L21)
 
 ##### ownerBytes
 
 > **ownerBytes**: `` `0x${string}` ``
 
-Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L17)
+Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L18)
 
 ##### ownerCount
 
 > **ownerCount**: `number`
 
-Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L19)
+Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L20)
 
 ##### ownerIndex
 
 > **ownerIndex**: `number`
 
-Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L16)
+Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L17)
 
 ##### selectedFunction
 
 > **selectedFunction**: [`RemoveOwnerFunctionName`](#removeownerfunctionname)
 
-Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L18)
+Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L19)
 
 ## Functions
 
@@ -88,7 +88,7 @@ Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:18](https://github.com/wenakita
 
 > **addOwnerViaBaseAppSendCalls**(`params`): `Promise`\<[`BaseAppOwnerCallResult`](#baseappownercallresult)\>
 
-Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:128](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L128)
+Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:129](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L129)
 
 #### Parameters
 
@@ -132,7 +132,7 @@ Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:128](https://github.com/wenakit
 
 > **encodeAddOwnerCall**(`params`): `object`
 
-Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:90](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L90)
+Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:91](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L91)
 
 #### Parameters
 
@@ -168,7 +168,7 @@ Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:90](https://github.com/wenakita
 
 > **encodeRemoveOwnerCall**(`params`): `object`
 
-Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:104](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L104)
+Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:105](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L105)
 
 #### Parameters
 
@@ -216,7 +216,7 @@ Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:104](https://github.com/wenakit
 
 > **planRemoveOwnerFromChain**(`params`): `Promise`\<[`RemoveOwnerPlan`](#removeownerplan)\>
 
-Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L24)
+Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L25)
 
 #### Parameters
 
@@ -248,7 +248,7 @@ Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:24](https://github.com/wenakita
 
 > **removeOwnerViaBaseAppSendCalls**(`params`): `Promise`\<[`BaseAppOwnerCallResult`](#baseappownercallresult)\>
 
-Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:155](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L155)
+Defined in: [src/lib/wallet/baseAppOwnerCalls.ts:159](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/baseAppOwnerCalls.ts#L159)
 
 #### Parameters
 

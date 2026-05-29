@@ -12,7 +12,7 @@
 
 > **ReferrerDisplay** = `object`
 
-Defined in: [src/features/waitlist/useReferrerByCode.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/useReferrerByCode.ts#L7)
+Defined in: [src/features/waitlist/useReferrerByCode.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/useReferrerByCode.ts#L7)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/features/waitlist/useReferrerByCode.ts:7](https://github.com/we
 
 > **display**: `string`
 
-Defined in: [src/features/waitlist/useReferrerByCode.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/useReferrerByCode.ts#L8)
+Defined in: [src/features/waitlist/useReferrerByCode.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/useReferrerByCode.ts#L8)
 
 ##### pointsTotal
 
 > **pointsTotal**: `number`
 
-Defined in: [src/features/waitlist/useReferrerByCode.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/useReferrerByCode.ts#L9)
+Defined in: [src/features/waitlist/useReferrerByCode.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/useReferrerByCode.ts#L9)
 
 ##### rank
 
 > **rank**: `number` \| `null`
 
-Defined in: [src/features/waitlist/useReferrerByCode.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/useReferrerByCode.ts#L10)
+Defined in: [src/features/waitlist/useReferrerByCode.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/useReferrerByCode.ts#L10)
 
 ## Functions
 
@@ -40,7 +40,7 @@ Defined in: [src/features/waitlist/useReferrerByCode.ts:10](https://github.com/w
 
 > **useReferrerByCode**(`rawCode`): `UseQueryResult`\<[`ReferrerDisplay`](#referrerdisplay) \| `null`, `Error`\>
 
-Defined in: [src/features/waitlist/useReferrerByCode.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/useReferrerByCode.ts#L30)
+Defined in: [src/features/waitlist/useReferrerByCode.ts:30](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/useReferrerByCode.ts#L30)
 
 Resolve a referral code to the referrer's public display name + signal.
 Returns `null` for unknown codes or when the code is empty/invalid so the

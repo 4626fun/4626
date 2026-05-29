@@ -12,7 +12,7 @@
 
 > **applyDeployDryRunLocalDevEnv**(): `void`
 
-Defined in: [server/\_lib/dev/localDevEnv.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/dev/localDevEnv.ts#L26)
+Defined in: [server/\_lib/dev/localDevEnv.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/dev/localDevEnv.ts#L26)
 
 Apply deploy-dry-run env policy after Vite loads dotenv files from disk.
 
@@ -26,7 +26,7 @@ Apply deploy-dry-run env policy after Vite loads dotenv files from disk.
 
 > **applyLocalDevServerEnv**(): `void`
 
-Defined in: [server/\_lib/dev/localDevEnv.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/dev/localDevEnv.ts#L43)
+Defined in: [server/\_lib/dev/localDevEnv.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/dev/localDevEnv.ts#L43)
 
 Dev-server env normalization for local API handlers (Vite configureServer).
 
@@ -40,7 +40,7 @@ Dev-server env normalization for local API handlers (Vite configureServer).
 
 > **filterDevelopmentRpcUrls**(`urls`): `string`[]
 
-Defined in: [server/\_lib/dev/localDevEnv.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/dev/localDevEnv.ts#L53)
+Defined in: [server/\_lib/dev/localDevEnv.ts:53](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/dev/localDevEnv.ts#L53)
 
 Drop slow dev-only upstreams when faster URLs are already configured.
 
@@ -60,7 +60,7 @@ Drop slow dev-only upstreams when faster URLs are already configured.
 
 > **isDeployDryRunContext**(): `boolean`
 
-Defined in: [server/\_lib/dev/localDevEnv.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/dev/localDevEnv.ts#L3)
+Defined in: [server/\_lib/dev/localDevEnv.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/dev/localDevEnv.ts#L3)
 
 Shared local-dev / deploy-dry-run env helpers for Vite + API handlers.
 
@@ -74,7 +74,7 @@ Shared local-dev / deploy-dry-run env helpers for Vite + API handlers.
 
 > **isDeployDryRunDbDisabled**(): `boolean`
 
-Defined in: [server/\_lib/dev/localDevEnv.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/dev/localDevEnv.ts#L14)
+Defined in: [server/\_lib/dev/localDevEnv.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/dev/localDevEnv.ts#L14)
 
 Dry-run defaults skip Postgres unless DEPLOY_DRY_RUN_KEEP_DB_ENV=1.
 
@@ -88,7 +88,7 @@ Dry-run defaults skip Postgres unless DEPLOY_DRY_RUN_KEEP_DB_ENV=1.
 
 > **isDeployDryRunDbEnabled**(): `boolean`
 
-Defined in: [server/\_lib/dev/localDevEnv.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/dev/localDevEnv.ts#L9)
+Defined in: [server/\_lib/dev/localDevEnv.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/dev/localDevEnv.ts#L9)
 
 #### Returns
 
@@ -100,7 +100,7 @@ Defined in: [server/\_lib/dev/localDevEnv.ts:9](https://github.com/wenakita/4626
 
 > **resolveLocalDryRunRpcUrl**(): `string` \| `null`
 
-Defined in: [server/\_lib/dev/localDevEnv.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/dev/localDevEnv.ts#L18)
+Defined in: [server/\_lib/dev/localDevEnv.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/dev/localDevEnv.ts#L18)
 
 #### Returns
 

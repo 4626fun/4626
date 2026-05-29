@@ -12,7 +12,7 @@
 
 > **ChatAvailabilityUser** = `object`
 
-Defined in: [server/\_lib/chat/presence.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/presence.ts#L11)
+Defined in: [server/\_lib/chat/presence.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/presence.ts#L11)
 
 #### Properties
 
@@ -20,43 +20,43 @@ Defined in: [server/\_lib/chat/presence.ts:11](https://github.com/wenakita/4626/
 
 > **address**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/chat/presence.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/presence.ts#L12)
+Defined in: [server/\_lib/chat/presence.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/presence.ts#L12)
 
 ##### avatarUrl
 
 > **avatarUrl**: `string` \| `null`
 
-Defined in: [server/\_lib/chat/presence.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/presence.ts#L14)
+Defined in: [server/\_lib/chat/presence.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/presence.ts#L14)
 
 ##### displayName
 
 > **displayName**: `string` \| `null`
 
-Defined in: [server/\_lib/chat/presence.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/presence.ts#L13)
+Defined in: [server/\_lib/chat/presence.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/presence.ts#L13)
 
 ##### ethosLevel
 
 > **ethosLevel**: `string` \| `null`
 
-Defined in: [server/\_lib/chat/presence.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/presence.ts#L16)
+Defined in: [server/\_lib/chat/presence.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/presence.ts#L16)
 
 ##### ethosScore
 
 > **ethosScore**: `number` \| `null`
 
-Defined in: [server/\_lib/chat/presence.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/presence.ts#L15)
+Defined in: [server/\_lib/chat/presence.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/presence.ts#L15)
 
 ##### lastSeenAt
 
 > **lastSeenAt**: `string` \| `null`
 
-Defined in: [server/\_lib/chat/presence.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/presence.ts#L18)
+Defined in: [server/\_lib/chat/presence.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/presence.ts#L18)
 
 ##### status
 
 > **status**: `"available"` \| `"recent"`
 
-Defined in: [server/\_lib/chat/presence.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/presence.ts#L17)
+Defined in: [server/\_lib/chat/presence.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/presence.ts#L17)
 
 ## Functions
 
@@ -64,7 +64,7 @@ Defined in: [server/\_lib/chat/presence.ts:17](https://github.com/wenakita/4626/
 
 > **listAvailableChatUsers**(`params`): `Promise`\<[`ChatAvailabilityUser`](#chatavailabilityuser)[]\>
 
-Defined in: [server/\_lib/chat/presence.ts:125](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/presence.ts#L125)
+Defined in: [server/\_lib/chat/presence.ts:125](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/presence.ts#L125)
 
 #### Parameters
 
@@ -88,7 +88,7 @@ Defined in: [server/\_lib/chat/presence.ts:125](https://github.com/wenakita/4626
 
 > **normalizeChatAddress**(`value`): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/chat/presence.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/presence.ts#L29)
+Defined in: [server/\_lib/chat/presence.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/presence.ts#L29)
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: [server/\_lib/chat/presence.ts:29](https://github.com/wenakita/4626/
 
 > **recordPresenceHeartbeat**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/chat/presence.ts:34](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/presence.ts#L34)
+Defined in: [server/\_lib/chat/presence.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/presence.ts#L34)
 
 #### Parameters
 

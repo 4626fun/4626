@@ -12,7 +12,7 @@
 
 > **buildEthosSocialUserkeyFromXUsername**(`value`): `string` \| `null`
 
-Defined in: [src/lib/ethos/zoraSocial.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/ethos/zoraSocial.ts#L9)
+Defined in: [src/lib/ethos/zoraSocial.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ethos/zoraSocial.ts#L9)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/lib/ethos/zoraSocial.ts:9](https://github.com/wenakita/4626/blo
 
 > **buildEthosSocialUserkeyFromZoraProfile**(`profile`): `string` \| `null`
 
-Defined in: [src/lib/ethos/zoraSocial.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/ethos/zoraSocial.ts#L15)
+Defined in: [src/lib/ethos/zoraSocial.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ethos/zoraSocial.ts#L15)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/ethos/zoraSocial.ts:15](https://github.com/wenakita/4626/bl
 
 > **getZoraCreatorProfileIdentifier**(`coin`): `string` \| `null`
 
-Defined in: [src/lib/ethos/zoraSocial.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/ethos/zoraSocial.ts#L19)
+Defined in: [src/lib/ethos/zoraSocial.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ethos/zoraSocial.ts#L19)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/lib/ethos/zoraSocial.ts:19](https://github.com/wenakita/4626/bl
 
 > **normalizeXUsername**(`value`): `string` \| `null`
 
-Defined in: [src/lib/ethos/zoraSocial.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/ethos/zoraSocial.ts#L3)
+Defined in: [src/lib/ethos/zoraSocial.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ethos/zoraSocial.ts#L3)
 
 #### Parameters
 

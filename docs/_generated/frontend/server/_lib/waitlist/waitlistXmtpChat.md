@@ -12,7 +12,7 @@
 
 > **WaitlistChatEligibility** = [`WaitlistChatEligibilitySnapshot`](waitlistXmtpChatEligibility.md#waitlistchateligibilitysnapshot)
 
-Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L71)
+Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:71](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L71)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:71](https://github.com/we
 
 > **WaitlistGroupIdResolution** = `object`
 
-Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L28)
+Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L28)
 
 #### Properties
 
@@ -28,31 +28,31 @@ Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:28](https://github.com/we
 
 > **envGroupId**: `string` \| `null`
 
-Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L31)
+Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L31)
 
 ##### groupId
 
 > **groupId**: `string` \| `null`
 
-Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L29)
+Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L29)
 
 ##### mismatched
 
 > **mismatched**: `boolean`
 
-Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L33)
+Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L33)
 
 ##### source
 
 > **source**: `"vault"` \| `"env"` \| `null`
 
-Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L30)
+Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L30)
 
 ##### vaultGroupId
 
 > **vaultGroupId**: `string` \| `null`
 
-Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L32)
+Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L32)
 
 ## Variables
 
@@ -60,7 +60,7 @@ Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:32](https://github.com/we
 
 > `const` **WAITLIST\_CHAT\_VAULT\_ADDRESS**: `"0x0000000000000000000000000000000000004626"`
 
-Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L11)
+Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L11)
 
 ## Functions
 
@@ -68,7 +68,7 @@ Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:11](https://github.com/we
 
 > **getWaitlistGroupId**(): `string` \| `null`
 
-Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L21)
+Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L21)
 
 #### Returns
 
@@ -80,7 +80,7 @@ Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:21](https://github.com/we
 
 > **getWaitlistGroupName**(): `string`
 
-Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:61](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L61)
+Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:61](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L61)
 
 #### Returns
 
@@ -92,7 +92,7 @@ Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:61](https://github.com/we
 
 > **isWaitlistChatVaultConfigured**(): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:66](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L66)
+Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:66](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L66)
 
 #### Returns
 
@@ -104,7 +104,7 @@ Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:66](https://github.com/we
 
 > **normalizeWaitlistChatAddress**(`value`): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L15)
+Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L15)
 
 #### Parameters
 
@@ -122,7 +122,7 @@ Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:15](https://github.com/we
 
 > **resolveWaitlistChatEligibility**(`db`, `profileId`): `Promise`\<[`WaitlistChatEligibilitySnapshot`](waitlistXmtpChatEligibility.md#waitlistchateligibilitysnapshot)\>
 
-Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:73](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L73)
+Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:73](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L73)
 
 #### Parameters
 
@@ -144,7 +144,7 @@ Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:73](https://github.com/we
 
 > **resolveWaitlistGroupId**(): `Promise`\<[`WaitlistGroupIdResolution`](#waitlistgroupidresolution)\>
 
-Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L37)
+Defined in: [server/\_lib/waitlist/waitlistXmtpChat.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlist/waitlistXmtpChat.ts#L37)
 
 Keepr executes against the vault row's group_id; prefer that over env drift.
 

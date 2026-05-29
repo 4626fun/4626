@@ -12,7 +12,7 @@
 
 > **AccountSetupWorkspaceView**(`props`): `Element` \| `null`
 
-Defined in: [src/features/accountSetup/AccountSetupWorkspaceView.tsx:176](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/accountSetup/AccountSetupWorkspaceView.tsx#L176)
+Defined in: [src/features/accountSetup/AccountSetupWorkspaceView.tsx:139](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/AccountSetupWorkspaceView.tsx#L139)
 
 #### Parameters
 

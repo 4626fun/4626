@@ -12,7 +12,7 @@
 
 > **AlfaClubChatTokenMeta** = `object`
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L60)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:60](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L60)
 
 #### Properties
 
@@ -20,31 +20,31 @@ Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:60](https://github.com/wena
 
 > **expiresAt**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:63](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L63)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:63](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L63)
 
 ##### hasToken
 
 > **hasToken**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:61](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L61)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:61](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L61)
 
 ##### isExpired
 
 > **isExpired**: `boolean` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:65](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L65)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:65](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L65)
 
 ##### updatedAt
 
 > **updatedAt**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:62](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L62)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:62](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L62)
 
 ##### updatedBy
 
 > **updatedBy**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:64](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L64)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:64](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L64)
 
 ***
 
@@ -52,7 +52,7 @@ Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:64](https://github.com/wena
 
 > **AlfaClubChatTokenRecord** = `object`
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:46](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L46)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L46)
 
 #### Properties
 
@@ -60,25 +60,25 @@ Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:46](https://github.com/wena
 
 > **expiresAt**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:49](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L49)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:49](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L49)
 
 ##### jwt
 
 > **jwt**: `string`
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:47](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L47)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L47)
 
 ##### updatedAt
 
 > **updatedAt**: `string`
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L48)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L48)
 
 ##### updatedBy
 
 > **updatedBy**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:50](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L50)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:50](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L50)
 
 ***
 
@@ -86,7 +86,7 @@ Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:50](https://github.com/wena
 
 > **AlfaClubPrivySecretRecord** = `object`
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L53)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:53](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L53)
 
 #### Properties
 
@@ -94,25 +94,25 @@ Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:53](https://github.com/wena
 
 > **expiresAt**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:56](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L56)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:56](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L56)
 
 ##### updatedAt
 
 > **updatedAt**: `string`
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:55](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L55)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:55](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L55)
 
 ##### updatedBy
 
 > **updatedBy**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:57](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L57)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:57](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L57)
 
 ##### value
 
 > **value**: `string`
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:54](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L54)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:54](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L54)
 
 ## Functions
 
@@ -120,7 +120,7 @@ Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:54](https://github.com/wena
 
 > **clearAlfaClubChatToken**(`params?`): `Promise`\<[`AlfaClubChatTokenMeta`](#alfaclubchattokenmeta) \| `null`\>
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:395](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L395)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:395](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L395)
 
 #### Parameters
 
@@ -140,7 +140,7 @@ Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:395](https://github.com/wen
 
 > **extractJwtExpiryIso**(`jwt`): `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:93](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L93)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:93](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L93)
 
 Returns an ISO timestamp for JWT exp when present/valid, otherwise null.
 
@@ -160,7 +160,7 @@ Returns an ISO timestamp for JWT exp when present/valid, otherwise null.
 
 > **readAlfaClubChatToken**(): `Promise`\<[`AlfaClubChatTokenRecord`](#alfaclubchattokenrecord) \| `null`\>
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:126](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L126)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:126](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L126)
 
 #### Returns
 
@@ -172,7 +172,7 @@ Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:126](https://github.com/wen
 
 > **readAlfaClubChatTokenMeta**(): `Promise`\<[`AlfaClubChatTokenMeta`](#alfaclubchattokenmeta)\>
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:153](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L153)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:153](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L153)
 
 #### Returns
 
@@ -184,7 +184,7 @@ Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:153](https://github.com/wen
 
 > **readAlfaClubPrivyAccessToken**(): `Promise`\<[`AlfaClubPrivySecretRecord`](#alfaclubprivysecretrecord) \| `null`\>
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:360](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L360)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:360](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L360)
 
 #### Returns
 
@@ -196,7 +196,7 @@ Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:360](https://github.com/wen
 
 > **readAlfaClubPrivyRefreshToken**(): `Promise`\<[`AlfaClubPrivySecretRecord`](#alfaclubprivysecretrecord) \| `null`\>
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:364](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L364)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:364](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L364)
 
 #### Returns
 
@@ -208,7 +208,7 @@ Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:364](https://github.com/wen
 
 > **upsertAlfaClubChatToken**(`params`): `Promise`\<[`AlfaClubChatTokenMeta`](#alfaclubchattokenmeta) \| `null`\>
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:188](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L188)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:188](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L188)
 
 #### Parameters
 
@@ -232,7 +232,7 @@ Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:188](https://github.com/wen
 
 > **upsertAlfaClubPrivyAccessToken**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:368](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L368)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:368](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L368)
 
 #### Parameters
 
@@ -256,7 +256,7 @@ Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:368](https://github.com/wen
 
 > **upsertAlfaClubPrivyRefreshToken**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:380](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/chatTokenStore.ts#L380)
+Defined in: [server/\_lib/alfaclub/chatTokenStore.ts:380](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/chatTokenStore.ts#L380)
 
 #### Parameters
 

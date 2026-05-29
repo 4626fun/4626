@@ -12,7 +12,7 @@
 
 > **AlfaClubAuthHealthSnapshot** = `object`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:558](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L558)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:630](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L630)
 
 #### Properties
 
@@ -20,25 +20,31 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:558](https://github.com/we
 
 > **bridge**: [`AlfaClubBridgeAuthHealthSnapshot`](#alfaclubbridgeauthhealthsnapshot)
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:585](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L585)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:658](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L658)
+
+##### dbEnvStaleness
+
+> **dbEnvStaleness**: [`DbEnvStalenessWarning`](#dbenvstalenesswarning) \| `null`
+
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:631](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L631)
 
 ##### lastFailure
 
 > **lastFailure**: [`RefreshFailurePayload`](#refreshfailurepayload) & `object` \| `null`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:572](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L572)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:645](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L645)
 
 ##### lastSuccess
 
 > **lastSuccess**: [`RefreshSuccessPayload`](#refreshsuccesspayload) & `object` \| `null`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:559](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L559)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:632](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L632)
 
 ##### liveChatJwt
 
 > **liveChatJwt**: \{ `expiresAt`: `string` \| `null`; `minutesUntilExpiry`: `number` \| `null`; `updatedAt`: `string` \| `null`; `writer`: `string` \| `null`; `writerAnomaly`: [`WriterAnomaly`](#writeranomaly); \} \| `null`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:578](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L578)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:651](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L651)
 
 Snapshot of the chat_jwt row's writer + expiry, so the health endpoint
 can surface anomalies on the live token row even when the most recent
@@ -50,7 +56,7 @@ refresh succeeded (e.g. a downstream writer overwrote the slot).
 
 > **AlfaClubBridgeAuthHealthSnapshot** = `object`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L51)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:54](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L54)
 
 #### Properties
 
@@ -58,55 +64,89 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:51](https://github.com/wen
 
 > **cfChallengeSustained**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:56](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L56)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:59](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L59)
 
 ##### consecutiveAuthFailures
 
 > **consecutiveAuthFailures**: `number`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L53)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:56](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L56)
 
 ##### consecutiveCfChallenges
 
 > **consecutiveCfChallenges**: `number`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:55](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L55)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:58](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L58)
 
 ##### lastAuthFailAt
 
 > **lastAuthFailAt**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L52)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:55](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L55)
 
 ##### lastCfChallengeAt
 
 > **lastCfChallengeAt**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:54](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L54)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:57](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L57)
 
 ##### lastProxyFallbackDirectAt
 
 > **lastProxyFallbackDirectAt**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:58](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L58)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:61](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L61)
 
 ##### proxyFallbackDirectCount
 
 > **proxyFallbackDirectCount**: `number`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:57](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L57)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:60](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L60)
 
 ##### socketBackoffMs
 
 > **socketBackoffMs**: `number`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L60)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:63](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L63)
 
 ##### suppressedSocketAttempts
 
 > **suppressedSocketAttempts**: `number`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:59](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L59)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:62](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L62)
+
+***
+
+### DbEnvStalenessWarning
+
+> **DbEnvStalenessWarning** = `object`
+
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:562](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L562)
+
+#### Properties
+
+##### access
+
+> **access**: \{ `dbExpiresAt`: `string` \| `null`; `envConfigured`: `boolean`; `envExpiresAt`: `string` \| `null`; \} \| `null`
+
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:569](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L569)
+
+##### hint
+
+> **hint**: `string`
+
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:574](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L574)
+
+##### identity
+
+> **identity**: \{ `dbExpiresAt`: `string` \| `null`; `envConfigured`: `boolean`; `envExpiresAt`: `string` \| `null`; \} \| `null`
+
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:564](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L564)
+
+##### kind
+
+> **kind**: `"db_lags_env"`
+
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:563](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L563)
 
 ***
 
@@ -114,7 +154,7 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:59](https://github.com/wen
 
 > **RefreshFailurePayload** = `object`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:197](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L197)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:201](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L201)
 
 #### Properties
 
@@ -122,13 +162,13 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:197](https://github.com/we
 
 > **at**: `string`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:198](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L198)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:202](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L202)
 
 ##### detail
 
 > **detail**: `string`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:202](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L202)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:206](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L206)
 
 Already-redacted short label, never the raw error.
 
@@ -136,13 +176,13 @@ Already-redacted short label, never the raw error.
 
 > **errorCode**: `string`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:200](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L200)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:204](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L204)
 
 ##### status
 
 > **status**: `"error"` \| `"missing_tokens"`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:199](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L199)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:203](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L203)
 
 ***
 
@@ -150,7 +190,7 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:199](https://github.com/we
 
 > **RefreshSuccessPayload** = `object`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:177](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L177)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:181](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L181)
 
 #### Properties
 
@@ -158,7 +198,7 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:177](https://github.com/we
 
 > **accessTokenExp**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:192](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L192)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:196](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L196)
 
 ISO timestamp when the Privy ACCESS token (the bearer the refresher
 sends to `https://auth.privy.io/api/v1/sessions`) expires. The
@@ -175,25 +215,25 @@ claim (defensive — Privy access tokens are JWTs in practice).
 
 > **at**: `string`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:178](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L178)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:182](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L182)
 
 ##### identityTokenExp
 
 > **identityTokenExp**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:179](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L179)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:183](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L183)
 
 ##### rotatedRefresh
 
 > **rotatedRefresh**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:194](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L194)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:198](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L198)
 
 ##### writer
 
 > **writer**: `string`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:193](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L193)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:197](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L197)
 
 ***
 
@@ -201,7 +241,7 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:193](https://github.com/we
 
 > **WriterAnomaly** = `object`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:112](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L112)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:116](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L116)
 
 #### Properties
 
@@ -209,19 +249,19 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:112](https://github.com/we
 
 > **isAnomalous**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:113](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L113)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:117](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L117)
 
 ##### reason
 
 > **reason**: `"unknown_writer"` \| `"legacy_in_process_refresher"` \| `"empty_writer"` \| `null`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:114](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L114)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:118](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L118)
 
 ##### writer
 
 > **writer**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:119](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L119)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:123](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L123)
 
 ## Variables
 
@@ -229,7 +269,7 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:119](https://github.com/we
 
 > `const` **\_HEALTH\_KEYS\_FOR\_TESTS**: `object`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:678](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L678)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:763](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L763)
 
 For tests only — health row keys.
 
@@ -253,7 +293,7 @@ For tests only — health row keys.
 
 > **\_resetBridgeAuthHealthForTests**(): `void`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:663](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L663)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:748](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L748)
 
 #### Returns
 
@@ -265,7 +305,7 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:663](https://github.com/we
 
 > **buildRefreshFailurePayload**(`params`): [`RefreshFailurePayload`](#refreshfailurepayload)
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:309](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L309)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:313](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L313)
 
 #### Parameters
 
@@ -293,7 +333,7 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:309](https://github.com/we
 
 > **buildRefreshSuccessPayload**(`params`): [`RefreshSuccessPayload`](#refreshsuccesspayload)
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:205](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L205)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:209](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L209)
 
 #### Parameters
 
@@ -329,7 +369,7 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:205](https://github.com/we
 
 > **classifyRefreshError**(`rawError`): `object`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:259](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L259)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:263](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L263)
 
 Reduce a free-form refresher error message to a stable short code that
 is safe to persist and surface from the health endpoint. Preserves the
@@ -361,11 +401,50 @@ bearer-vs-refresh rejection without parsing the detail string.
 
 ***
 
+### evaluateDbEnvStaleness()
+
+> **evaluateDbEnvStaleness**(`params`): [`DbEnvStalenessWarning`](#dbenvstalenesswarning) \| `null`
+
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:583](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L583)
+
+Surfaces when Vercel env bootstrap JWTs expire later than the DB rows the
+refresher actually reads (postmortem #16).
+
+#### Parameters
+
+##### params
+
+###### dbAccessExpiresAt
+
+`string` \| `null`
+
+###### dbIdentityExpiresAt
+
+`string` \| `null`
+
+###### envAccessJwt
+
+`string` \| `null`
+
+###### envIdentityJwt
+
+`string` \| `null`
+
+###### slackMs?
+
+`number`
+
+#### Returns
+
+[`DbEnvStalenessWarning`](#dbenvstalenesswarning) \| `null`
+
+***
+
 ### evaluateWriterAnomaly()
 
 > **evaluateWriterAnomaly**(`updatedBy`): [`WriterAnomaly`](#writeranomaly)
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:126](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L126)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:130](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L130)
 
 Classifies an `updated_by` string against the single-writer invariant.
 Pure function — no IO, safe to call from anywhere including tests.
@@ -386,7 +465,7 @@ Pure function — no IO, safe to call from anywhere including tests.
 
 > **readAuthHealthSnapshot**(`params?`): `Promise`\<[`AlfaClubAuthHealthSnapshot`](#alfaclubauthhealthsnapshot)\>
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:598](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L598)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:671](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L671)
 
 #### Parameters
 
@@ -413,7 +492,7 @@ here so the endpoint and the bridge tick share one query path).
 
 > **readBridgeAuthHealthSnapshot**(): [`AlfaClubBridgeAuthHealthSnapshot`](#alfaclubbridgeauthhealthsnapshot)
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:480](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L480)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:484](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L484)
 
 Synchronous, in-memory snapshot. Used by the bridge itself (same
 process as the writes) and by tests. Cross-process readers should use
@@ -429,7 +508,7 @@ process as the writes) and by tests. Cross-process readers should use
 
 > **readBridgeAuthHealthSnapshotFromStorage**(): `Promise`\<[`AlfaClubBridgeAuthHealthSnapshot`](#alfaclubbridgeauthhealthsnapshot)\>
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:526](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L526)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:530](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L530)
 
 Cross-process read path. Loads the bridge counters from the shared
 `chat_auth_health:bridge` row. When shared storage is not reachable
@@ -447,7 +526,7 @@ spamming the log.
 
 > **recordBridgeAuthFailure**(`at`): `void`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:431](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L431)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:435](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L435)
 
 #### Parameters
 
@@ -465,7 +544,7 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:431](https://github.com/we
 
 > **recordBridgeCfChallenge**(`at`, `sustained`): `void`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:442](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L442)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:446](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L446)
 
 #### Parameters
 
@@ -487,7 +566,7 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:442](https://github.com/we
 
 > **recordBridgeCfChallengeRecovered**(): `void`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:452](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L452)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:456](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L456)
 
 #### Returns
 
@@ -499,7 +578,7 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:452](https://github.com/we
 
 > **recordBridgeHistorySuccess**(): `void`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:437](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L437)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:441](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L441)
 
 #### Returns
 
@@ -511,7 +590,7 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:437](https://github.com/we
 
 > **recordBridgeProxyFallbackDirect**(`at`): `void`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:469](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L469)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:473](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L473)
 
 #### Parameters
 
@@ -529,7 +608,7 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:469](https://github.com/we
 
 > **recordBridgeSocketBackoff**(`socketBackoffMs`): `void`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:464](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L464)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:468](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L468)
 
 #### Parameters
 
@@ -547,7 +626,7 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:464](https://github.com/we
 
 > **recordBridgeSuppressedSocketAttempt**(): `void`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:459](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L459)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:463](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L463)
 
 #### Returns
 
@@ -559,7 +638,7 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:459](https://github.com/we
 
 > **recordRefreshFailure**(`payload`, `writer`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:414](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L414)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:418](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L418)
 
 #### Parameters
 
@@ -581,7 +660,7 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:414](https://github.com/we
 
 > **recordRefreshSuccess**(`payload`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:407](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L407)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:411](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L411)
 
 #### Parameters
 
@@ -599,7 +678,7 @@ Defined in: [server/\_lib/alfaclub/authHealthStore.ts:407](https://github.com/we
 
 > **redactTokenMaterial**(`input`): `string`
 
-Defined in: [server/\_lib/alfaclub/authHealthStore.ts:161](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/authHealthStore.ts#L161)
+Defined in: [server/\_lib/alfaclub/authHealthStore.ts:165](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/authHealthStore.ts#L165)
 
 Defensive redactor. Strips JWT-shaped substrings (`xxx.yyy.zzz`),
 `Bearer ...` headers, and obvious base64url runs. The error strings

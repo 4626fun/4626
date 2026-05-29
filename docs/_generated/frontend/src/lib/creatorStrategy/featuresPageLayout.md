@@ -12,7 +12,7 @@
 
 > **StrategyFeatureSection** = `object`
 
-Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L3)
+Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L3)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:3](https://github.com
 
 > **features**: [`CatalogDto`](../../pages/CreatorStrategyFeatures.types.md#catalogdto)[]
 
-Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L7)
+Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L7)
 
 ##### id
 
 > **id**: `"deploy"` \| `"other"`
 
-Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L4)
+Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L4)
 
 ##### subtitle
 
 > **subtitle**: `string`
 
-Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L6)
+Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L6)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L5)
+Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L5)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:5](https://github.com
 
 > **VanityFeatureGroup** = `object`
 
-Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L10)
+Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L10)
 
 #### Properties
 
@@ -54,31 +54,31 @@ Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:10](https://github.co
 
 > **defaultNote**: `string`
 
-Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L14)
+Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L14)
 
 ##### features
 
 > **features**: [`CatalogDto`](../../pages/CreatorStrategyFeatures.types.md#catalogdto)[]
 
-Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L15)
+Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L15)
 
 ##### id
 
 > **id**: `"vault_prefix"` \| `"share_suffix"`
 
-Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L11)
+Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L11)
 
 ##### subtitle
 
 > **subtitle**: `string`
 
-Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L13)
+Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L13)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L12)
+Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L12)
 
 ## Functions
 
@@ -86,7 +86,7 @@ Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:12](https://github.co
 
 > **partitionCreatorStrategyCatalog**(`catalog`): `object`
 
-Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L31)
+Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L31)
 
 #### Parameters
 
@@ -112,7 +112,7 @@ Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:31](https://github.co
 
 > **vanityTierLabel**(`feature`): `string`
 
-Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:98](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L98)
+Defined in: [src/lib/creatorStrategy/featuresPageLayout.ts:98](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/featuresPageLayout.ts#L98)
 
 #### Parameters
 

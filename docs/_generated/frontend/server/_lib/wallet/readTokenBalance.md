@@ -12,7 +12,7 @@
 
 > **TokenBalanceResult** = `object`
 
-Defined in: [server/\_lib/wallet/readTokenBalance.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/readTokenBalance.ts#L16)
+Defined in: [server/\_lib/wallet/readTokenBalance.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/readTokenBalance.ts#L16)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/\_lib/wallet/readTokenBalance.ts:16](https://github.com/wena
 
 > **decimals**: `number`
 
-Defined in: [server/\_lib/wallet/readTokenBalance.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/readTokenBalance.ts#L18)
+Defined in: [server/\_lib/wallet/readTokenBalance.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/readTokenBalance.ts#L18)
 
 ##### formatted
 
 > **formatted**: `string`
 
-Defined in: [server/\_lib/wallet/readTokenBalance.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/readTokenBalance.ts#L19)
+Defined in: [server/\_lib/wallet/readTokenBalance.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/readTokenBalance.ts#L19)
 
 ##### raw
 
 > **raw**: `string`
 
-Defined in: [server/\_lib/wallet/readTokenBalance.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/readTokenBalance.ts#L17)
+Defined in: [server/\_lib/wallet/readTokenBalance.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/readTokenBalance.ts#L17)
 
 ## Variables
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/wallet/readTokenBalance.ts:17](https://github.com/wena
 
 > `const` **NATIVE\_TOKEN\_BALANCE\_ADDRESS**: `"0x0000000000000000000000000000000000000000"` = `'0x0000000000000000000000000000000000000000'`
 
-Defined in: [server/\_lib/wallet/readTokenBalance.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/readTokenBalance.ts#L14)
+Defined in: [server/\_lib/wallet/readTokenBalance.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/readTokenBalance.ts#L14)
 
 ## Functions
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/wallet/readTokenBalance.ts:14](https://github.com/wena
 
 > **readTokenBalance**(`params`): `Promise`\<[`TokenBalanceResult`](#tokenbalanceresult)\>
 
-Defined in: [server/\_lib/wallet/readTokenBalance.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/readTokenBalance.ts#L22)
+Defined in: [server/\_lib/wallet/readTokenBalance.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/readTokenBalance.ts#L22)
 
 #### Parameters
 

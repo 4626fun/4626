@@ -12,7 +12,7 @@
 
 > **FeeStatus** = `object`
 
-Defined in: [src/components/explore/rowFormatting.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/rowFormatting.ts#L25)
+Defined in: [src/components/explore/rowFormatting.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L25)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/components/explore/rowFormatting.ts:25](https://github.com/wena
 
 > **feeRates**: *typeof* `FEE_RATES_V4`
 
-Defined in: [src/components/explore/rowFormatting.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/rowFormatting.ts#L28)
+Defined in: [src/components/explore/rowFormatting.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L28)
 
 ##### isMigrated
 
 > **isMigrated**: `boolean`
 
-Defined in: [src/components/explore/rowFormatting.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/rowFormatting.ts#L27)
+Defined in: [src/components/explore/rowFormatting.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L27)
 
 ##### isV4
 
 > **isV4**: `boolean`
 
-Defined in: [src/components/explore/rowFormatting.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/rowFormatting.ts#L26)
+Defined in: [src/components/explore/rowFormatting.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L26)
 
 ## Functions
 
@@ -40,7 +40,7 @@ Defined in: [src/components/explore/rowFormatting.ts:26](https://github.com/wena
 
 > **buildGroupSpans**(`columns`): `object`[]
 
-Defined in: [src/components/explore/rowFormatting.ts:137](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/rowFormatting.ts#L137)
+Defined in: [src/components/explore/rowFormatting.ts:145](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L145)
 
 #### Parameters
 
@@ -58,7 +58,7 @@ Defined in: [src/components/explore/rowFormatting.ts:137](https://github.com/wen
 
 > **formatCompactNumber**(`value`): `string`
 
-Defined in: [src/components/explore/rowFormatting.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/rowFormatting.ts#L48)
+Defined in: [src/components/explore/rowFormatting.ts:48](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L48)
 
 #### Parameters
 
@@ -76,7 +76,7 @@ Defined in: [src/components/explore/rowFormatting.ts:48](https://github.com/wena
 
 > **formatFeeAmount**(`volume`, `totalFeeRate`, `splitRate`): `string`
 
-Defined in: [src/components/explore/rowFormatting.ts:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/rowFormatting.ts#L60)
+Defined in: [src/components/explore/rowFormatting.ts:60](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L60)
 
 #### Parameters
 
@@ -102,7 +102,7 @@ Defined in: [src/components/explore/rowFormatting.ts:60](https://github.com/wena
 
 > **formatMarketCapDeltaPercent**(`deltaRaw`, `marketCapRaw`): `object`
 
-Defined in: [src/components/explore/rowFormatting.ts:109](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/rowFormatting.ts#L109)
+Defined in: [src/components/explore/rowFormatting.ts:109](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L109)
 
 #### Parameters
 
@@ -132,7 +132,7 @@ Defined in: [src/components/explore/rowFormatting.ts:109](https://github.com/wen
 
 > **getCoinFeeStatus**(`address`, `createdAt`, `migratedCoins?`): [`FeeStatus`](#feestatus)
 
-Defined in: [src/components/explore/rowFormatting.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/rowFormatting.ts#L31)
+Defined in: [src/components/explore/rowFormatting.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L31)
 
 #### Parameters
 
@@ -158,7 +158,7 @@ Defined in: [src/components/explore/rowFormatting.ts:31](https://github.com/wena
 
 > **getMarketCapDeltaToneClass**(`change`): `string`
 
-Defined in: [src/components/explore/rowFormatting.ts:130](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/rowFormatting.ts#L130)
+Defined in: [src/components/explore/rowFormatting.ts:130](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L130)
 
 #### Parameters
 
@@ -178,11 +178,31 @@ Defined in: [src/components/explore/rowFormatting.ts:130](https://github.com/wen
 
 ***
 
+### getSignedPercentToneClass()
+
+> **getSignedPercentToneClass**(`value`): `string`
+
+Defined in: [src/components/explore/rowFormatting.ts:138](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L138)
+
+Green/red tone for signed percent deltas (sparklines, MCap Δ, etc.).
+
+#### Parameters
+
+##### value
+
+`number` | `null` | `undefined`
+
+#### Returns
+
+`string`
+
+***
+
 ### resolveExploreFees24hDisplay()
 
 > **resolveExploreFees24hDisplay**(`fees24hUsd`, `volumeForFees`, `totalFeeRate`): `string`
 
-Defined in: [src/components/explore/rowFormatting.ts:69](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/rowFormatting.ts#L69)
+Defined in: [src/components/explore/rowFormatting.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L69)
 
 Prefer indexed 24h fees from Supabase when present; fall back to volume × fee rate.
 
@@ -210,7 +230,7 @@ Prefer indexed 24h fees from Supabase when present; fall back to volume × fee r
 
 > **shortAddress**(`addr`): `string`
 
-Defined in: [src/components/explore/rowFormatting.ts:81](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/rowFormatting.ts#L81)
+Defined in: [src/components/explore/rowFormatting.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L81)
 
 #### Parameters
 

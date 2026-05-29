@@ -12,7 +12,7 @@
 
 > **useExploreCreatorsHeroMetrics**(): `object`
 
-Defined in: [src/features/explore/useExploreCreatorsHeroMetrics.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/useExploreCreatorsHeroMetrics.ts#L13)
+Defined in: [src/features/explore/useExploreCreatorsHeroMetrics.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/useExploreCreatorsHeroMetrics.ts#L13)
 
 #### Returns
 

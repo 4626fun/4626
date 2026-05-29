@@ -12,7 +12,7 @@
 
 > **CreatorEthosMerged** = `object`
 
-Defined in: [server/\_lib/zora/creatorEthosProjection.ts:110](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorEthosProjection.ts#L110)
+Defined in: [server/\_lib/zora/creatorEthosProjection.ts:110](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorEthosProjection.ts#L110)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/\_lib/zora/creatorEthosProjection.ts:110](https://github.com
 
 > **level**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/creatorEthosProjection.ts:112](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorEthosProjection.ts#L112)
+Defined in: [server/\_lib/zora/creatorEthosProjection.ts:112](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorEthosProjection.ts#L112)
 
 ##### score
 
 > **score**: `number` \| `null`
 
-Defined in: [server/\_lib/zora/creatorEthosProjection.ts:111](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorEthosProjection.ts#L111)
+Defined in: [server/\_lib/zora/creatorEthosProjection.ts:111](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorEthosProjection.ts#L111)
 
 ##### source
 
 > **source**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/creatorEthosProjection.ts:113](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorEthosProjection.ts#L113)
+Defined in: [server/\_lib/zora/creatorEthosProjection.ts:113](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorEthosProjection.ts#L113)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/zora/creatorEthosProjection.ts:113](https://github.com
 
 > **CreatorEthosProjectionByAddress** = `object`
 
-Defined in: [server/\_lib/zora/creatorEthosProjection.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorEthosProjection.ts#L37)
+Defined in: [server/\_lib/zora/creatorEthosProjection.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorEthosProjection.ts#L37)
 
 #### Properties
 
@@ -48,25 +48,25 @@ Defined in: [server/\_lib/zora/creatorEthosProjection.ts:37](https://github.com/
 
 > **creatorAddress**: `string`
 
-Defined in: [server/\_lib/zora/creatorEthosProjection.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorEthosProjection.ts#L38)
+Defined in: [server/\_lib/zora/creatorEthosProjection.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorEthosProjection.ts#L38)
 
 ##### level
 
 > **level**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/creatorEthosProjection.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorEthosProjection.ts#L40)
+Defined in: [server/\_lib/zora/creatorEthosProjection.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorEthosProjection.ts#L40)
 
 ##### score
 
 > **score**: `number` \| `null`
 
-Defined in: [server/\_lib/zora/creatorEthosProjection.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorEthosProjection.ts#L39)
+Defined in: [server/\_lib/zora/creatorEthosProjection.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorEthosProjection.ts#L39)
 
 ##### source
 
 > **source**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/creatorEthosProjection.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorEthosProjection.ts#L41)
+Defined in: [server/\_lib/zora/creatorEthosProjection.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorEthosProjection.ts#L41)
 
 ## Functions
 
@@ -74,7 +74,7 @@ Defined in: [server/\_lib/zora/creatorEthosProjection.ts:41](https://github.com/
 
 > **ensureCreatorEthosProjectionSchema**(`db`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/zora/creatorEthosProjection.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorEthosProjection.ts#L17)
+Defined in: [server/\_lib/zora/creatorEthosProjection.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorEthosProjection.ts#L17)
 
 #### Parameters
 
@@ -92,7 +92,7 @@ Defined in: [server/\_lib/zora/creatorEthosProjection.ts:17](https://github.com/
 
 > **loadCreatorEthosProjectionByAddresses**(`db`, `creatorAddresses`): `Promise`\<`Map`\<`string`, [`CreatorEthosProjectionByAddress`](#creatorethosprojectionbyaddress)\>\>
 
-Defined in: [server/\_lib/zora/creatorEthosProjection.ts:58](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorEthosProjection.ts#L58)
+Defined in: [server/\_lib/zora/creatorEthosProjection.ts:58](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorEthosProjection.ts#L58)
 
 #### Parameters
 
@@ -114,7 +114,7 @@ Defined in: [server/\_lib/zora/creatorEthosProjection.ts:58](https://github.com/
 
 > **loadMergedCreatorEthosByAddresses**(`creatorAddresses`): `Promise`\<`Map`\<`string`, [`CreatorEthosMerged`](#creatorethosmerged) & `object`\>\>
 
-Defined in: [server/\_lib/zora/creatorEthosProjection.ts:172](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorEthosProjection.ts#L172)
+Defined in: [server/\_lib/zora/creatorEthosProjection.ts:172](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorEthosProjection.ts#L172)
 
 Projection-first Ethos merge used by explore and coin handlers.
 
@@ -134,7 +134,7 @@ Projection-first Ethos merge used by explore and coin handlers.
 
 > **mergeCreatorEthosScores**(`projection`, `live`, `liveSource?`): [`CreatorEthosMerged`](#creatorethosmerged)
 
-Defined in: [server/\_lib/zora/creatorEthosProjection.ts:116](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorEthosProjection.ts#L116)
+Defined in: [server/\_lib/zora/creatorEthosProjection.ts:116](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorEthosProjection.ts#L116)
 
 #### Parameters
 
@@ -160,7 +160,7 @@ Defined in: [server/\_lib/zora/creatorEthosProjection.ts:116](https://github.com
 
 > **pickCreatorEthosProjectionRefreshMode**(`lane`): `"fast"` \| `"full"`
 
-Defined in: [server/\_lib/zora/creatorEthosProjection.ts:45](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorEthosProjection.ts#L45)
+Defined in: [server/\_lib/zora/creatorEthosProjection.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorEthosProjection.ts#L45)
 
 15-minute cron slots for ethos-sync; used to alternate full projection refreshes.
 
@@ -180,7 +180,7 @@ Defined in: [server/\_lib/zora/creatorEthosProjection.ts:45](https://github.com/
 
 > **refreshCreatorEthosProjection**(`params`): `Promise`\<\{ `appliedLimit`: `number`; `available`: `boolean`; `refreshedRows`: `number`; \}\>
 
-Defined in: [server/\_lib/zora/creatorEthosProjection.ts:205](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/creatorEthosProjection.ts#L205)
+Defined in: [server/\_lib/zora/creatorEthosProjection.ts:205](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorEthosProjection.ts#L205)
 
 #### Parameters
 

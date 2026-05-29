@@ -12,7 +12,7 @@
 
 > **EthosPageTheme** = `object`
 
-Defined in: [src/components/explore/ethosPageTheme.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L13)
+Defined in: [src/components/explore/ethosPageTheme.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L13)
 
 #### Properties
 
@@ -20,97 +20,97 @@ Defined in: [src/components/explore/ethosPageTheme.ts:13](https://github.com/wen
 
 > **accentHex**: `string`
 
-Defined in: [src/components/explore/ethosPageTheme.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L16)
+Defined in: [src/components/explore/ethosPageTheme.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L16)
 
 ##### accentStrongTextClass
 
 > **accentStrongTextClass**: `string`
 
-Defined in: [src/components/explore/ethosPageTheme.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L25)
+Defined in: [src/components/explore/ethosPageTheme.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L25)
 
 ##### accentTextClass
 
 > **accentTextClass**: `string`
 
-Defined in: [src/components/explore/ethosPageTheme.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L24)
+Defined in: [src/components/explore/ethosPageTheme.ts:24](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L24)
 
 ##### ambientLayerStyle
 
 > **ambientLayerStyle**: `CSSProperties`
 
-Defined in: [src/components/explore/ethosPageTheme.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L18)
+Defined in: [src/components/explore/ethosPageTheme.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L18)
 
 ##### cardBorderClass
 
 > **cardBorderClass**: `string`
 
-Defined in: [src/components/explore/ethosPageTheme.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L22)
+Defined in: [src/components/explore/ethosPageTheme.ts:22](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L22)
 
 ##### cardSurfaceClass
 
 > **cardSurfaceClass**: `string`
 
-Defined in: [src/components/explore/ethosPageTheme.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L23)
+Defined in: [src/components/explore/ethosPageTheme.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L23)
 
 ##### dividerStyle
 
 > **dividerStyle**: `CSSProperties`
 
-Defined in: [src/components/explore/ethosPageTheme.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L29)
+Defined in: [src/components/explore/ethosPageTheme.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L29)
 
 ##### heroWashStyle
 
 > **heroWashStyle**: `CSSProperties`
 
-Defined in: [src/components/explore/ethosPageTheme.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L19)
+Defined in: [src/components/explore/ethosPageTheme.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L19)
 
 ##### isActive
 
 > **isActive**: `boolean`
 
-Defined in: [src/components/explore/ethosPageTheme.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L14)
+Defined in: [src/components/explore/ethosPageTheme.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L14)
 
 ##### levelLabel
 
 > **levelLabel**: `string`
 
-Defined in: [src/components/explore/ethosPageTheme.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L17)
+Defined in: [src/components/explore/ethosPageTheme.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L17)
 
 ##### orbBottomStyle
 
 > **orbBottomStyle**: `CSSProperties`
 
-Defined in: [src/components/explore/ethosPageTheme.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L21)
+Defined in: [src/components/explore/ethosPageTheme.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L21)
 
 ##### orbTopStyle
 
 > **orbTopStyle**: `CSSProperties`
 
-Defined in: [src/components/explore/ethosPageTheme.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L20)
+Defined in: [src/components/explore/ethosPageTheme.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L20)
 
 ##### outlineCtaClass
 
 > **outlineCtaClass**: `string`
 
-Defined in: [src/components/explore/ethosPageTheme.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L28)
+Defined in: [src/components/explore/ethosPageTheme.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L28)
 
 ##### palette
 
 > **palette**: [`EthosScorePalette`](../chat/EthosScorePill.md#ethosscorepalette)
 
-Defined in: [src/components/explore/ethosPageTheme.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L15)
+Defined in: [src/components/explore/ethosPageTheme.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L15)
 
 ##### primaryCtaHoverClass
 
 > **primaryCtaHoverClass**: `string`
 
-Defined in: [src/components/explore/ethosPageTheme.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L27)
+Defined in: [src/components/explore/ethosPageTheme.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L27)
 
 ##### primaryCtaStyle
 
 > **primaryCtaStyle**: `CSSProperties`
 
-Defined in: [src/components/explore/ethosPageTheme.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L26)
+Defined in: [src/components/explore/ethosPageTheme.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L26)
 
 ## Functions
 
@@ -118,7 +118,7 @@ Defined in: [src/components/explore/ethosPageTheme.ts:26](https://github.com/wen
 
 > **buildEthosPageTheme**(`score`): [`EthosPageTheme`](#ethospagetheme)
 
-Defined in: [src/components/explore/ethosPageTheme.ts:87](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L87)
+Defined in: [src/components/explore/ethosPageTheme.ts:87](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L87)
 
 #### Parameters
 
@@ -136,7 +136,7 @@ Defined in: [src/components/explore/ethosPageTheme.ts:87](https://github.com/wen
 
 > **resolveCreatorEthosUserkey**(`profile`, `creatorAddress`): `string` \| `null`
 
-Defined in: [src/components/explore/ethosPageTheme.ts:127](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L127)
+Defined in: [src/components/explore/ethosPageTheme.ts:127](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L127)
 
 #### Parameters
 
@@ -158,7 +158,7 @@ Defined in: [src/components/explore/ethosPageTheme.ts:127](https://github.com/we
 
 > **useCreatorEthosPageTheme**(`params`): `object`
 
-Defined in: [src/components/explore/ethosPageTheme.ts:142](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/explore/ethosPageTheme.ts#L142)
+Defined in: [src/components/explore/ethosPageTheme.ts:142](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ethosPageTheme.ts#L142)
 
 #### Parameters
 

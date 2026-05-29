@@ -12,15 +12,15 @@
 
 > `const` **FINALIZING\_BACKGROUND\_RETRY\_MAX\_ATTEMPTS**: `5` = `5`
 
-Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L13)
+Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L13)
 
 ***
 
 ### FINALIZING\_BACKGROUND\_RETRY\_MS
 
-> `const` **FINALIZING\_BACKGROUND\_RETRY\_MS**: `1500` = `1_500`
+> `const` **FINALIZING\_BACKGROUND\_RETRY\_MS**: `900` = `900`
 
-Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L12)
+Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L12)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:12](https://github.
 
 > `const` **FLOW\_TIMEOUT\_MS**: `20000` = `20_000`
 
-Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L9)
+Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L9)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:9](https://github.c
 
 > `const` **PRIVY\_LOGOUT\_SETTLE\_ATTEMPTS**: `10` = `10`
 
-Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L14)
+Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L14)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:14](https://github.
 
 > `const` **PRIVY\_LOGOUT\_SETTLE\_DELAY\_MS**: `150` = `150`
 
-Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L15)
+Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L15)
 
 ***
 
@@ -52,39 +52,39 @@ Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:15](https://github.
 
 > `const` **RECOVERY\_REQUIRED\_BOOTSTRAP\_COOLDOWN\_MS**: `15000` = `15_000`
 
-Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L11)
+Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L11)
 
 ***
 
 ### RECOVERY\_REQUIRED\_MESSAGE
 
-> `const` **RECOVERY\_REQUIRED\_MESSAGE**: `"This email already has a 4626 account. Use existing account sign-in to continue."` = `'This email already has a 4626 account. Use existing account sign-in to continue.'`
+> `const` **RECOVERY\_REQUIRED\_MESSAGE**: `"This email is already on 4626. Tap Use existing account and sign in with the same email you used before."` = `'This email is already on 4626. Tap Use existing account and sign in with the same email you used before.'`
 
-Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L1)
+Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L1)
 
 ***
 
 ### SESSION\_FINALIZING\_RETRY\_MESSAGE
 
-> `const` **SESSION\_FINALIZING\_RETRY\_MESSAGE**: `"Sign-in session is still finalizing. We will keep retrying automatically."` = `'Sign-in session is still finalizing. We will keep retrying automatically.'`
+> `const` **SESSION\_FINALIZING\_RETRY\_MESSAGE**: `"Finishing sign-in… this usually takes a few seconds."` = `'Finishing sign-in… this usually takes a few seconds.'`
 
-Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L4)
+Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L4)
 
 ***
 
 ### SESSION\_MISMATCH\_MESSAGE
 
-> `const` **SESSION\_MISMATCH\_MESSAGE**: `"Signed in as a different account. Click Continue with email to try again."` = `'Signed in as a different account. Click Continue with email to try again.'`
+> `const` **SESSION\_MISMATCH\_MESSAGE**: `"Signed in as a different account. Tap Continue to try again."` = `'Signed in as a different account. Tap Continue to try again.'`
 
-Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L3)
+Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L3)
 
 ***
 
 ### STALE\_PRIVY\_SESSION\_MESSAGE
 
-> `const` **STALE\_PRIVY\_SESSION\_MESSAGE**: `"Sign-in got stuck in an old session. Tap Continue to retry with a fresh email sign-in."` = `'Sign-in got stuck in an old session. Tap Continue to retry with a fresh email sign-in.'`
+> `const` **STALE\_PRIVY\_SESSION\_MESSAGE**: `"Sign-in session expired. Tap Use existing account to sign in again with email."` = `'Sign-in session expired. Tap Use existing account to sign in again with email.'`
 
-Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L6)
+Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L6)
 
 ***
 
@@ -92,7 +92,7 @@ Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:6](https://github.c
 
 > `const` **TOKENLESS\_FINALIZING\_BOOTSTRAP\_COOLDOWN\_MS**: `2500` = `2_500`
 
-Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L10)
+Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L10)
 
 ## Functions
 
@@ -100,7 +100,7 @@ Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:10](https://github.
 
 > **getWalletProviderCollisionMessage**(): `string`
 
-Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:61](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L61)
+Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:65](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L65)
 
 #### Returns
 
@@ -112,7 +112,7 @@ Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:61](https://github.
 
 > **isSessionFinalizingError**(`error`): `boolean`
 
-Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L35)
+Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L35)
 
 #### Parameters
 
@@ -130,7 +130,7 @@ Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:35](https://github.
 
 > **isWalletProviderCollisionError**(`error`): `boolean`
 
-Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:45](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L45)
+Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:49](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L49)
 
 #### Parameters
 
@@ -148,7 +148,7 @@ Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:45](https://github.
 
 > **readApiErrorMessage**(`payload`, `fallback`): `string`
 
-Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L27)
+Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L27)
 
 #### Parameters
 
@@ -170,7 +170,7 @@ Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:27](https://github.
 
 > **withTimeout**\<`T`\>(`promise`, `ms`, `label`): `Promise`\<`T`\>
 
-Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L17)
+Defined in: [src/features/waitlist/waitlistBootstrapUtils.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistBootstrapUtils.ts#L17)
 
 #### Type Parameters
 

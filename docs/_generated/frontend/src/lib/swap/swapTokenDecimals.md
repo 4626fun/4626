@@ -12,7 +12,7 @@
 
 > **resolveSwapTokenDecimals**(`params`): `Promise`\<`number`\>
 
-Defined in: src/lib/swap/swapTokenDecimals.ts:20
+Defined in: [src/lib/swap/swapTokenDecimals.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/swapTokenDecimals.ts#L20)
 
 #### Parameters
 

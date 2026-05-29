@@ -12,7 +12,7 @@
 
 > **AmoeWaitlistAwardResult** = `object`
 
-Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWaitlistPoints.ts#L23)
+Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWaitlistPoints.ts#L23)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:23](https://github.com/w
 
 > **awarded**: `boolean`
 
-Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWaitlistPoints.ts#L24)
+Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWaitlistPoints.ts#L24)
 
 ##### profileId
 
 > **profileId**: `number` \| `null`
 
-Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWaitlistPoints.ts#L25)
+Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWaitlistPoints.ts#L25)
 
 ## Variables
 
@@ -34,7 +34,7 @@ Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:25](https://github.com/w
 
 > `const` **AMOE\_CHECKIN\_POINTS**: `6` = `6`
 
-Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWaitlistPoints.ts#L20)
+Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWaitlistPoints.ts#L20)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:20](https://github.com/w
 
 > `const` **AMOE\_CHECKIN\_SOURCE**: `"amoe_checkin"`
 
-Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWaitlistPoints.ts#L21)
+Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWaitlistPoints.ts#L21)
 
 ## Functions
 
@@ -50,7 +50,7 @@ Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:21](https://github.com/w
 
 > **awardAmoeCheckinPoints**(`params`): `Promise`\<[`AmoeWaitlistAwardResult`](#amoewaitlistawardresult)\>
 
-Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWaitlistPoints.ts#L44)
+Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWaitlistPoints.ts#L44)
 
 #### Parameters
 
@@ -78,7 +78,7 @@ Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:44](https://github.com/w
 
 > **resolveWaitlistProfileIdForWallet**(`db`, `wallet`): `Promise`\<`number` \| `null`\>
 
-Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeWaitlistPoints.ts#L37)
+Defined in: [server/\_lib/lottery/amoeWaitlistPoints.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeWaitlistPoints.ts#L37)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **CreatorAllowlistMode** = `"disabled"` \| `"enforced"`
 
-Defined in: [src/hooks/useCreatorAllowlist.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCreatorAllowlist.ts#L6)
+Defined in: [src/hooks/useCreatorAllowlist.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCreatorAllowlist.ts#L6)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/hooks/useCreatorAllowlist.ts:6](https://github.com/wenakita/462
 
 > **CreatorAllowlistStatus** = `object`
 
-Defined in: [src/hooks/useCreatorAllowlist.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCreatorAllowlist.ts#L8)
+Defined in: [src/hooks/useCreatorAllowlist.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCreatorAllowlist.ts#L8)
 
 #### Properties
 
@@ -28,37 +28,37 @@ Defined in: [src/hooks/useCreatorAllowlist.ts:8](https://github.com/wenakita/462
 
 > **address**: `string` \| `null`
 
-Defined in: [src/hooks/useCreatorAllowlist.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCreatorAllowlist.ts#L9)
+Defined in: [src/hooks/useCreatorAllowlist.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCreatorAllowlist.ts#L9)
 
 ##### allowed
 
 > **allowed**: `boolean`
 
-Defined in: [src/hooks/useCreatorAllowlist.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCreatorAllowlist.ts#L14)
+Defined in: [src/hooks/useCreatorAllowlist.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCreatorAllowlist.ts#L14)
 
 ##### coin
 
 > **coin**: `string` \| `null`
 
-Defined in: [src/hooks/useCreatorAllowlist.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCreatorAllowlist.ts#L10)
+Defined in: [src/hooks/useCreatorAllowlist.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCreatorAllowlist.ts#L10)
 
 ##### creator
 
 > **creator**: `string` \| `null`
 
-Defined in: [src/hooks/useCreatorAllowlist.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCreatorAllowlist.ts#L11)
+Defined in: [src/hooks/useCreatorAllowlist.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCreatorAllowlist.ts#L11)
 
 ##### mode
 
 > **mode**: [`CreatorAllowlistMode`](#creatorallowlistmode)
 
-Defined in: [src/hooks/useCreatorAllowlist.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCreatorAllowlist.ts#L13)
+Defined in: [src/hooks/useCreatorAllowlist.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCreatorAllowlist.ts#L13)
 
 ##### payoutRecipient
 
 > **payoutRecipient**: `string` \| `null`
 
-Defined in: [src/hooks/useCreatorAllowlist.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCreatorAllowlist.ts#L12)
+Defined in: [src/hooks/useCreatorAllowlist.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCreatorAllowlist.ts#L12)
 
 ## Functions
 
@@ -68,7 +68,7 @@ Defined in: [src/hooks/useCreatorAllowlist.ts:12](https://github.com/wenakita/46
 
 > **useCreatorAllowlist**(`address?`): `UseQueryResult`\<[`CreatorAllowlistStatus`](#creatorallowliststatus)\>
 
-Defined in: [src/hooks/useCreatorAllowlist.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCreatorAllowlist.ts#L35)
+Defined in: [src/hooks/useCreatorAllowlist.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCreatorAllowlist.ts#L35)
 
 ##### Parameters
 
@@ -84,7 +84,7 @@ Defined in: [src/hooks/useCreatorAllowlist.ts:35](https://github.com/wenakita/46
 
 > **useCreatorAllowlist**(`params?`): `UseQueryResult`\<[`CreatorAllowlistStatus`](#creatorallowliststatus)\>
 
-Defined in: [src/hooks/useCreatorAllowlist.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCreatorAllowlist.ts#L36)
+Defined in: [src/hooks/useCreatorAllowlist.ts:36](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCreatorAllowlist.ts#L36)
 
 ##### Parameters
 

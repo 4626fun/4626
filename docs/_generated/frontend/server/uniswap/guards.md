@@ -12,7 +12,7 @@
 
 > **getAllowedUniswapChainIds**(): `Set`\<`number`\>
 
-Defined in: [server/uniswap/guards.ts:72](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/uniswap/guards.ts#L72)
+Defined in: [server/uniswap/guards.ts:72](https://github.com/wenakita/4626/blob/main/frontend/server/uniswap/guards.ts#L72)
 
 #### Returns
 
@@ -24,7 +24,7 @@ Defined in: [server/uniswap/guards.ts:72](https://github.com/wenakita/4626/blob/
 
 > **validateAddressField**(`payload`, `field`): `string` \| `null`
 
-Defined in: [server/uniswap/guards.ts:80](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/uniswap/guards.ts#L80)
+Defined in: [server/uniswap/guards.ts:80](https://github.com/wenakita/4626/blob/main/frontend/server/uniswap/guards.ts#L80)
 
 #### Parameters
 
@@ -46,7 +46,7 @@ Defined in: [server/uniswap/guards.ts:80](https://github.com/wenakita/4626/blob/
 
 > **validateChainIdField**(`payload`, `field`): `string` \| `null`
 
-Defined in: [server/uniswap/guards.ts:87](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/uniswap/guards.ts#L87)
+Defined in: [server/uniswap/guards.ts:87](https://github.com/wenakita/4626/blob/main/frontend/server/uniswap/guards.ts#L87)
 
 #### Parameters
 
@@ -68,7 +68,7 @@ Defined in: [server/uniswap/guards.ts:87](https://github.com/wenakita/4626/blob/
 
 > **validateIntegerAmountField**(`payload`, `field`): `string` \| `null`
 
-Defined in: [server/uniswap/guards.ts:94](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/uniswap/guards.ts#L94)
+Defined in: [server/uniswap/guards.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/uniswap/guards.ts#L94)
 
 #### Parameters
 
@@ -90,7 +90,7 @@ Defined in: [server/uniswap/guards.ts:94](https://github.com/wenakita/4626/blob/
 
 > **validateQuoteTokenPolicy**(`quote`): `string` \| `null`
 
-Defined in: [server/uniswap/guards.ts:145](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/uniswap/guards.ts#L145)
+Defined in: [server/uniswap/guards.ts:145](https://github.com/wenakita/4626/blob/main/frontend/server/uniswap/guards.ts#L145)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [server/uniswap/guards.ts:145](https://github.com/wenakita/4626/blob
 
 > **validateRoutePolicy**(`routing`): `string` \| `null`
 
-Defined in: [server/uniswap/guards.ts:149](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/uniswap/guards.ts#L149)
+Defined in: [server/uniswap/guards.ts:149](https://github.com/wenakita/4626/blob/main/frontend/server/uniswap/guards.ts#L149)
 
 #### Parameters
 
@@ -126,7 +126,7 @@ Defined in: [server/uniswap/guards.ts:149](https://github.com/wenakita/4626/blob
 
 > **validateTokenPolicy**(`payload`, `fields`): `string` \| `null`
 
-Defined in: [server/uniswap/guards.ts:113](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/uniswap/guards.ts#L113)
+Defined in: [server/uniswap/guards.ts:113](https://github.com/wenakita/4626/blob/main/frontend/server/uniswap/guards.ts#L113)
 
 #### Parameters
 

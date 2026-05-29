@@ -12,7 +12,7 @@
 
 > `const` **zoraRouteLoaders**: [`ApiRouteLoaders`](_routeLoader.md#apirouteloaders)
 
-Defined in: [api/\_handlers/\_routes.zora.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/_routes.zora.ts#L5)
+Defined in: [api/\_handlers/\_routes.zora.ts:5](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.zora.ts#L5)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/\_routes.zora.ts:5](https://github.com/wenakita/4626
 
 > **getZoraApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.zora.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/_routes.zora.ts#L31)
+Defined in: [api/\_handlers/\_routes.zora.ts:32](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.zora.ts#L32)
 
 #### Parameters
 

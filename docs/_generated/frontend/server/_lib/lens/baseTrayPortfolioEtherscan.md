@@ -12,7 +12,7 @@
 
 > **getTrayWalletPortfolioBaseEtherscan**(`address`, `options`): `Promise`\<[`WalletPortfolio`](debankPortfolio.md#walletportfolio) \| `null`\>
 
-Defined in: [server/\_lib/lens/baseTrayPortfolioEtherscan.ts:123](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/baseTrayPortfolioEtherscan.ts#L123)
+Defined in: [server/\_lib/lens/baseTrayPortfolioEtherscan.ts:128](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/baseTrayPortfolioEtherscan.ts#L128)
 
 Base mainnet holdings for the account tray (ERC-20 + native ETH).
 Does not include DeFi positions or non-Base chains.

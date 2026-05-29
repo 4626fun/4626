@@ -12,7 +12,7 @@
 
 > `const` **\_\_testables**: `object`
 
-Defined in: [api/\_handlers/image/\_auto-assets.ts:352](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/image/_auto-assets.ts#L352)
+Defined in: [api/\_handlers/image/\_auto-assets.ts:352](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_auto-assets.ts#L352)
 
 #### Type Declaration
 
@@ -64,7 +64,7 @@ Defined in: [api/\_handlers/image/\_auto-assets.ts:352](https://github.com/wenak
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/image/\_auto-assets.ts:178](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/image/_auto-assets.ts#L178)
+Defined in: [api/\_handlers/image/\_auto-assets.ts:178](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_auto-assets.ts#L178)
 
 #### Parameters
 

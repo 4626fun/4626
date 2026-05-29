@@ -12,7 +12,7 @@
 
 > **AmoeRelayFn** = (`params`) => `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [server/\_lib/lottery/amoeRelay.ts:87](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeRelay.ts#L87)
+Defined in: [server/\_lib/lottery/amoeRelay.ts:87](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeRelay.ts#L87)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/lottery/amoeRelay.ts:87](https://github.com/wenakita/4
 
 > **AmoeRelayRequest** = `object`
 
-Defined in: [server/\_lib/lottery/amoeRelay.ts:82](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeRelay.ts#L82)
+Defined in: [server/\_lib/lottery/amoeRelay.ts:82](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeRelay.ts#L82)
 
 #### Properties
 
@@ -38,13 +38,13 @@ Defined in: [server/\_lib/lottery/amoeRelay.ts:82](https://github.com/wenakita/4
 
 > **callData**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/amoeRelay.ts:84](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeRelay.ts#L84)
+Defined in: [server/\_lib/lottery/amoeRelay.ts:84](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeRelay.ts#L84)
 
 ##### to
 
 > **to**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/amoeRelay.ts:83](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeRelay.ts#L83)
+Defined in: [server/\_lib/lottery/amoeRelay.ts:83](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeRelay.ts#L83)
 
 ## Functions
 
@@ -52,7 +52,7 @@ Defined in: [server/\_lib/lottery/amoeRelay.ts:83](https://github.com/wenakita/4
 
 > **createAmoeRelay**(): [`AmoeRelayFn`](#amoerelayfn) \| `null`
 
-Defined in: [server/\_lib/lottery/amoeRelay.ts:103](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeRelay.ts#L103)
+Defined in: [server/\_lib/lottery/amoeRelay.ts:103](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeRelay.ts#L103)
 
 #### Returns
 
@@ -64,7 +64,7 @@ Defined in: [server/\_lib/lottery/amoeRelay.ts:103](https://github.com/wenakita/
 
 > **hasAmoeRelayConfig**(): `boolean`
 
-Defined in: [server/\_lib/lottery/amoeRelay.ts:89](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeRelay.ts#L89)
+Defined in: [server/\_lib/lottery/amoeRelay.ts:89](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeRelay.ts#L89)
 
 #### Returns
 

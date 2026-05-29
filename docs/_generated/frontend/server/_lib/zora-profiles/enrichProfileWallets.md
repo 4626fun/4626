@@ -12,7 +12,7 @@
 
 > **ProfileWalletEnrichResult** = `object`
 
-Defined in: [server/\_lib/zora-profiles/enrichProfileWallets.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/enrichProfileWallets.ts#L11)
+Defined in: [server/\_lib/zora-profiles/enrichProfileWallets.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/enrichProfileWallets.ts#L11)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [server/\_lib/zora-profiles/enrichProfileWallets.ts:11](https://gith
 
 > **failed**: `number`
 
-Defined in: [server/\_lib/zora-profiles/enrichProfileWallets.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/enrichProfileWallets.ts#L15)
+Defined in: [server/\_lib/zora-profiles/enrichProfileWallets.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/enrichProfileWallets.ts#L15)
 
 ##### selected
 
 > **selected**: `number`
 
-Defined in: [server/\_lib/zora-profiles/enrichProfileWallets.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/enrichProfileWallets.ts#L12)
+Defined in: [server/\_lib/zora-profiles/enrichProfileWallets.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/enrichProfileWallets.ts#L12)
 
 ##### updated
 
 > **updated**: `number`
 
-Defined in: [server/\_lib/zora-profiles/enrichProfileWallets.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/enrichProfileWallets.ts#L13)
+Defined in: [server/\_lib/zora-profiles/enrichProfileWallets.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/enrichProfileWallets.ts#L13)
 
 ##### withSmartWallet
 
 > **withSmartWallet**: `number`
 
-Defined in: [server/\_lib/zora-profiles/enrichProfileWallets.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/enrichProfileWallets.ts#L14)
+Defined in: [server/\_lib/zora-profiles/enrichProfileWallets.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/enrichProfileWallets.ts#L14)
 
 ## Functions
 
@@ -46,7 +46,7 @@ Defined in: [server/\_lib/zora-profiles/enrichProfileWallets.ts:14](https://gith
 
 > **enrichProfileWallets**(`db`, `apiKey`): `Promise`\<[`ProfileWalletEnrichResult`](#profilewalletenrichresult)\>
 
-Defined in: [server/\_lib/zora-profiles/enrichProfileWallets.ts:75](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/enrichProfileWallets.ts#L75)
+Defined in: [server/\_lib/zora-profiles/enrichProfileWallets.ts:75](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/enrichProfileWallets.ts#L75)
 
 #### Parameters
 

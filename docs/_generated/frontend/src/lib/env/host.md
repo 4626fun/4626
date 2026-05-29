@@ -12,7 +12,7 @@
 
 > **HostMode** = `"app"` \| `"marketing"`
 
-Defined in: [src/lib/env/host.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/env/host.ts#L1)
+Defined in: [src/lib/env/host.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L1)
 
 ## Variables
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/env/host.ts:1](https://github.com/wenakita/4626/blob/5b93f3
 
 > `const` **APP\_ORIGIN**: `string`
 
-Defined in: [src/lib/env/host.ts:176](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/env/host.ts#L176)
+Defined in: [src/lib/env/host.ts:176](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L176)
 
 Canonical app domain origin (post-acceptance).
 
@@ -30,7 +30,7 @@ Canonical app domain origin (post-acceptance).
 
 > `const` **CONFIGURED\_APP\_ORIGIN**: `string`
 
-Defined in: [src/lib/env/host.ts:137](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/env/host.ts#L137)
+Defined in: [src/lib/env/host.ts:137](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L137)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/lib/env/host.ts:137](https://github.com/wenakita/4626/blob/5b93
 
 > `const` **CONFIGURED\_MARKETING\_ORIGIN**: `string`
 
-Defined in: [src/lib/env/host.ts:134](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/env/host.ts#L134)
+Defined in: [src/lib/env/host.ts:134](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L134)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/lib/env/host.ts:134](https://github.com/wenakita/4626/blob/5b93
 
 > `const` **MARKETING\_ORIGIN**: `string`
 
-Defined in: [src/lib/env/host.ts:173](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/env/host.ts#L173)
+Defined in: [src/lib/env/host.ts:173](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L173)
 
 Canonical marketing/waitlist domain origin.
 
@@ -56,7 +56,7 @@ Canonical marketing/waitlist domain origin.
 
 > `const` **WAITLIST\_REFERRAL\_BASE\_URL**: `string`
 
-Defined in: [src/lib/env/host.ts:182](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/env/host.ts#L182)
+Defined in: [src/lib/env/host.ts:182](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L182)
 
 Optional explicit base URL for waitlist referral links.
 When set, waitlist share links are built from this origin instead of MARKETING_ORIGIN.
@@ -67,7 +67,7 @@ When set, waitlist share links are built from this origin instead of MARKETING_O
 
 > **getAppBaseUrl**(): `string`
 
-Defined in: [src/lib/env/host.ts:219](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/env/host.ts#L219)
+Defined in: [src/lib/env/host.ts:219](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L219)
 
 Base URL for the app (explore, deploy, vault, admin).
 
@@ -84,7 +84,7 @@ When on app domain, returns current origin.
 
 > **getHostMode**(): [`HostMode`](#hostmode)
 
-Defined in: [src/lib/env/host.ts:205](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/env/host.ts#L205)
+Defined in: [src/lib/env/host.ts:205](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L205)
 
 Host mode detection.
 
@@ -101,7 +101,7 @@ Host mode detection.
 
 > **getMarketingBaseUrl**(): `string`
 
-Defined in: [src/lib/env/host.ts:240](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/env/host.ts#L240)
+Defined in: [src/lib/env/host.ts:240](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L240)
 
 Base URL for the marketing/waitlist site.
 
@@ -118,7 +118,7 @@ When on app domain, returns 4626.fun.
 
 > **getSubAccountAppDomain**(): `string`
 
-Defined in: [src/lib/env/host.ts:260](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/env/host.ts#L260)
+Defined in: [src/lib/env/host.ts:260](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L260)
 
 Base Account sub-accounts are scoped to the marketing app domain
 (`4626.fun`), not the app subdomain. Use this origin for
@@ -134,7 +134,7 @@ Base Account sub-accounts are scoped to the marketing app domain
 
 > **getWaitlistReferralBaseUrl**(): `string`
 
-Defined in: [src/lib/env/host.ts:249](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/env/host.ts#L249)
+Defined in: [src/lib/env/host.ts:249](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L249)
 
 Base URL used for user-facing waitlist referral links.
 
@@ -148,7 +148,7 @@ Base URL used for user-facing waitlist referral links.
 
 > **isCurrentWindowUrl**(`target`): `boolean`
 
-Defined in: [src/lib/env/host.ts:117](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/env/host.ts#L117)
+Defined in: [src/lib/env/host.ts:117](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L117)
 
 #### Parameters
 
@@ -166,7 +166,7 @@ Defined in: [src/lib/env/host.ts:117](https://github.com/wenakita/4626/blob/5b93
 
 > **resolveAuthRedirectOrigin**(`input`): `string`
 
-Defined in: [src/lib/env/host.ts:97](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/env/host.ts#L97)
+Defined in: [src/lib/env/host.ts:97](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L97)
 
 #### Parameters
 
@@ -184,7 +184,7 @@ Defined in: [src/lib/env/host.ts:97](https://github.com/wenakita/4626/blob/5b93f
 
 > **resolveDisallowedLoopbackRedirectUrl**(`input`): `string` \| `null`
 
-Defined in: [src/lib/env/host.ts:77](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/env/host.ts#L77)
+Defined in: [src/lib/env/host.ts:77](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L77)
 
 #### Parameters
 
@@ -202,7 +202,7 @@ Defined in: [src/lib/env/host.ts:77](https://github.com/wenakita/4626/blob/5b93f
 
 > **resolveLoopbackOriginForCurrentWindow**(`input`): `string`
 
-Defined in: [src/lib/env/host.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/env/host.ts#L48)
+Defined in: [src/lib/env/host.ts:48](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L48)
 
 Keep local dev redirects on the active loopback origin when only the port is stale.
 This avoids cross-origin bounces like localhost:5173 -> localhost:5174 when only one
@@ -224,7 +224,7 @@ Vite server is running.
 
 > **resolveMarketingToAppBaseUrl**(`input`): `string`
 
-Defined in: [src/lib/env/host.ts:145](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/env/host.ts#L145)
+Defined in: [src/lib/env/host.ts:145](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L145)
 
 When rendering the marketing host, never route users to loopback app origins.
 This protects against accidentally shipping VITE_APP_ORIGIN=localhost in a

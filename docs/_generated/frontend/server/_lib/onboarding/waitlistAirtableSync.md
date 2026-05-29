@@ -12,7 +12,7 @@
 
 > **WaitlistAirtableSyncConfig** = `object`
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L15)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L15)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:15](https://github.
 
 > **baseId**: `string`
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L17)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L17)
 
 ##### limit
 
 > **limit**: `number`
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L18)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L18)
 
 ##### tables
 
 > **tables**: `Record`\<`AirtableTableKey`, `AirtableTableConfig`\>
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L19)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L19)
 
 ##### token
 
 > **token**: `string`
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L16)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L16)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:16](https://github.
 
 > **WaitlistAirtableSyncResult** = `object`
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L41)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L41)
 
 #### Properties
 
@@ -54,19 +54,19 @@ Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:41](https://github.
 
 > **baseId**: `string`
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L43)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L43)
 
 ##### dryRun
 
 > **dryRun**: `boolean`
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L42)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L42)
 
 ##### tables
 
 > **tables**: [`WaitlistAirtableTableResult`](#waitlistairtabletableresult)[]
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L44)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L44)
 
 ***
 
@@ -74,7 +74,7 @@ Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:44](https://github.
 
 > **WaitlistAirtableTableResult** = `object`
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L31)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L31)
 
 #### Properties
 
@@ -82,43 +82,43 @@ Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:31](https://github.
 
 > **attempted**: `number`
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L36)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L36)
 
 ##### errors
 
 > **errors**: `string`[]
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L38)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L38)
 
 ##### key
 
 > **key**: `AirtableTableKey`
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L32)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L32)
 
 ##### label
 
 > **label**: `string`
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L33)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L33)
 
 ##### mergeField
 
 > **mergeField**: `string`
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L35)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L35)
 
 ##### table
 
 > **table**: `string`
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:34](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L34)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L34)
 
 ##### upserted
 
 > **upserted**: `number`
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L37)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L37)
 
 ## Functions
 
@@ -126,7 +126,7 @@ Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:37](https://github.
 
 > **readApplicantRecords**(`db`, `limit`): `Promise`\<`AirtableRecord`[]\>
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:386](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L386)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:386](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L386)
 
 #### Parameters
 
@@ -148,7 +148,7 @@ Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:386](https://github
 
 > **readOnboardingRecords**(`db`, `limit`): `Promise`\<`AirtableRecord`[]\>
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:502](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L502)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:502](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L502)
 
 #### Parameters
 
@@ -170,7 +170,7 @@ Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:502](https://github
 
 > **readReferralRecords**(`db`, `limit`): `Promise`\<`AirtableRecord`[]\>
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:449](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L449)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:449](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L449)
 
 #### Parameters
 
@@ -192,7 +192,7 @@ Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:449](https://github
 
 > **readTaskRecords**(`db`, `limit`): `Promise`\<`AirtableRecord`[]\>
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:478](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L478)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:478](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L478)
 
 #### Parameters
 
@@ -214,7 +214,7 @@ Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:478](https://github
 
 > **readWaitlistAirtableSyncConfig**(`env`): `object`
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:75](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L75)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:75](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L75)
 
 #### Parameters
 
@@ -240,7 +240,7 @@ Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:75](https://github.
 
 > **syncWaitlistSupabaseToAirtable**(`params`): `Promise`\<[`WaitlistAirtableSyncResult`](#waitlistairtablesyncresult)\>
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:754](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L754)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:754](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L754)
 
 #### Parameters
 
@@ -272,7 +272,7 @@ Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:754](https://github
 
 > **syncWaitlistToAirtable**(`params`): `Promise`\<[`WaitlistAirtableSyncResult`](#waitlistairtablesyncresult)\>
 
-Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:731](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L731)
+Defined in: [server/\_lib/onboarding/waitlistAirtableSync.ts:731](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistAirtableSync.ts#L731)
 
 #### Parameters
 

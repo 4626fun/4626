@@ -12,7 +12,7 @@
 
 > **enrichDiscoveredSwapTokenOptions**(`options`): `Promise`\<[`SwapTokenOption`](../../components/swap/TokenSelectorModal.md#swaptokenoption)[]\>
 
-Defined in: src/lib/swap/zoraTokenSearch.ts:166
+Defined in: [src/lib/swap/zoraTokenSearch.ts:179](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/zoraTokenSearch.ts#L179)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: src/lib/swap/zoraTokenSearch.ts:166
 
 > **normalizeSwapTokenSearchQuery**(`query`): `string`
 
-Defined in: src/lib/swap/zoraTokenSearch.ts:51
+Defined in: [src/lib/swap/zoraTokenSearch.ts:46](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/zoraTokenSearch.ts#L46)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: src/lib/swap/zoraTokenSearch.ts:51
 
 > **searchZoraCreatorCoinsForSwap**(`query`): `Promise`\<[`ZoraCoin`](../zora/types.md#zoracoin)[]\>
 
-Defined in: src/lib/swap/zoraTokenSearch.ts:62
+Defined in: [src/lib/swap/zoraTokenSearch.ts:57](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/zoraTokenSearch.ts#L57)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: src/lib/swap/zoraTokenSearch.ts:62
 
 > **shouldRunZoraSwapTokenSearch**(`query`): `boolean`
 
-Defined in: src/lib/swap/zoraTokenSearch.ts:55
+Defined in: [src/lib/swap/zoraTokenSearch.ts:50](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/zoraTokenSearch.ts#L50)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ Defined in: src/lib/swap/zoraTokenSearch.ts:55
 
 > **zoraCoinsToSwapTokenOptions**(`coins`, `chainId`): [`SwapTokenOption`](../../components/swap/TokenSelectorModal.md#swaptokenoption)[]
 
-Defined in: src/lib/swap/zoraTokenSearch.ts:152
+Defined in: [src/lib/swap/zoraTokenSearch.ts:165](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/zoraTokenSearch.ts#L165)
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: src/lib/swap/zoraTokenSearch.ts:152
 
 > **zoraCoinToSwapTokenOption**(`coin`, `chainId`): [`SwapTokenOption`](../../components/swap/TokenSelectorModal.md#swaptokenoption) \| `null`
 
-Defined in: src/lib/swap/zoraTokenSearch.ts:125
+Defined in: [src/lib/swap/zoraTokenSearch.ts:120](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/zoraTokenSearch.ts#L120)
 
 #### Parameters
 

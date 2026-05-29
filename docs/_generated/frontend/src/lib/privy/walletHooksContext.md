@@ -12,7 +12,7 @@
 
 > **PrivyWalletHooksContextProvider**(`props`): `Element`
 
-Defined in: [src/lib/privy/walletHooksContext.tsx:61](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/privy/walletHooksContext.tsx#L61)
+Defined in: [src/lib/privy/walletHooksContext.tsx:61](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/walletHooksContext.tsx#L61)
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [src/lib/privy/walletHooksContext.tsx:61](https://github.com/wenakit
 
 > **usePrivyConnectWalletFromContext**(): (`options?`) => `void` \| `undefined`
 
-Defined in: [src/lib/privy/walletHooksContext.tsx:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/privy/walletHooksContext.tsx#L36)
+Defined in: [src/lib/privy/walletHooksContext.tsx:36](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/walletHooksContext.tsx#L36)
 
 Privy wallet action hooks bridged once inside `PrivyProvider`.
 
@@ -50,7 +50,7 @@ Privy wallet action hooks bridged once inside `PrivyProvider`.
 
 > **usePrivySetActiveWalletFromContext**(): (`wallet`) => `void` \| `undefined`
 
-Defined in: [src/lib/privy/walletHooksContext.tsx:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/privy/walletHooksContext.tsx#L40)
+Defined in: [src/lib/privy/walletHooksContext.tsx:40](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/walletHooksContext.tsx#L40)
 
 #### Returns
 
@@ -62,7 +62,7 @@ Defined in: [src/lib/privy/walletHooksContext.tsx:40](https://github.com/wenakit
 
 > **usePrivyWalletsFromContext**(): `ConnectedWalletLike`[]
 
-Defined in: [src/lib/privy/walletHooksContext.tsx:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/privy/walletHooksContext.tsx#L31)
+Defined in: [src/lib/privy/walletHooksContext.tsx:31](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/walletHooksContext.tsx#L31)
 
 Read wallet state from the single in-tree `useWallets()` bridge.
 
@@ -76,7 +76,7 @@ Read wallet state from the single in-tree `useWallets()` bridge.
 
 > **usePrivyWalletsSnapshot**(): `PrivyWalletHooksSnapshot`
 
-Defined in: [src/lib/privy/walletHooksContext.tsx:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/privy/walletHooksContext.tsx#L26)
+Defined in: [src/lib/privy/walletHooksContext.tsx:26](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/walletHooksContext.tsx#L26)
 
 #### Returns
 

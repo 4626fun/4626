@@ -12,7 +12,7 @@
 
 > `const` **DEFAULT\_CHAIN\_ID**: `8453` = `8453`
 
-Defined in: [server/zora/\_shared.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/zora/_shared.ts#L6)
+Defined in: [server/zora/\_shared.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/zora/_shared.ts#L6)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [server/zora/\_shared.ts:6](https://github.com/wenakita/4626/blob/5b
 
 > **getNumberQuery**(`req`, `key`): `number` \| `null`
 
-Defined in: [server/zora/\_shared.ts:50](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/zora/_shared.ts#L50)
+Defined in: [server/zora/\_shared.ts:50](https://github.com/wenakita/4626/blob/main/frontend/server/zora/_shared.ts#L50)
 
 #### Parameters
 
@@ -42,7 +42,7 @@ Defined in: [server/zora/\_shared.ts:50](https://github.com/wenakita/4626/blob/5
 
 > **getStringQuery**(`req`, `key`): `string` \| `null`
 
-Defined in: [server/zora/\_shared.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/zora/_shared.ts#L44)
+Defined in: [server/zora/\_shared.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/zora/_shared.ts#L44)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [server/zora/\_shared.ts:44](https://github.com/wenakita/4626/blob/5
 
 > **handleOptions**(`req`, `res`): `boolean`
 
-Defined in: [server/zora/\_shared.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/zora/_shared.ts#L25)
+Defined in: [server/zora/\_shared.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/zora/_shared.ts#L25)
 
 #### Parameters
 
@@ -86,7 +86,7 @@ Defined in: [server/zora/\_shared.ts:25](https://github.com/wenakita/4626/blob/5
 
 > **isAddressLike**(`value`): `boolean`
 
-Defined in: [server/zora/\_shared.ts:57](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/zora/_shared.ts#L57)
+Defined in: [server/zora/\_shared.ts:57](https://github.com/wenakita/4626/blob/main/frontend/server/zora/_shared.ts#L57)
 
 #### Parameters
 
@@ -104,7 +104,7 @@ Defined in: [server/zora/\_shared.ts:57](https://github.com/wenakita/4626/blob/5
 
 > **requireServerKey**(): `string` \| `null`
 
-Defined in: [server/zora/\_shared.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/zora/_shared.ts#L38)
+Defined in: [server/zora/\_shared.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/zora/_shared.ts#L38)
 
 #### Returns
 
@@ -116,7 +116,7 @@ Defined in: [server/zora/\_shared.ts:38](https://github.com/wenakita/4626/blob/5
 
 > **setCache**(`res`, `seconds`): `void`
 
-Defined in: [server/zora/\_shared.ts:34](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/zora/_shared.ts#L34)
+Defined in: [server/zora/\_shared.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/zora/_shared.ts#L34)
 
 #### Parameters
 
@@ -138,7 +138,7 @@ Defined in: [server/zora/\_shared.ts:34](https://github.com/wenakita/4626/blob/5
 
 > **setCors**(`req`, `res`): `void`
 
-Defined in: [server/zora/\_shared.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/zora/_shared.ts#L8)
+Defined in: [server/zora/\_shared.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/zora/_shared.ts#L8)
 
 #### Parameters
 
@@ -160,7 +160,7 @@ Defined in: [server/zora/\_shared.ts:8](https://github.com/wenakita/4626/blob/5b
 
 > **setPublicCors**(`res`): `void`
 
-Defined in: [server/zora/\_shared.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/zora/_shared.ts#L19)
+Defined in: [server/zora/\_shared.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/zora/_shared.ts#L19)
 
 Wildcard CORS for fully public, read-only endpoints (token image, token metadata).
 These carry no credentials and must be fetchable from any origin — including

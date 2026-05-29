@@ -12,7 +12,7 @@
 
 > **CliParseResult**\<`TParams`\> = \{ `ok`: `true`; `params`: `TParams`; \} \| \{ `body`: `CliErrorBody`; `ok`: `false`; `status`: `number`; \}
 
-Defined in: [api/\_handlers/zora/cli/\_shared.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/zora/cli/_shared.ts#L13)
+Defined in: [api/\_handlers/zora/cli/\_shared.ts:13](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/cli/_shared.ts#L13)
 
 #### Type Parameters
 
@@ -26,7 +26,7 @@ Defined in: [api/\_handlers/zora/cli/\_shared.ts:13](https://github.com/wenakita
 
 > **okParams**\<`TParams`\>(`params`): [`CliParseResult`](#cliparseresult)\<`TParams`\>
 
-Defined in: [api/\_handlers/zora/cli/\_shared.ts:76](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/zora/cli/_shared.ts#L76)
+Defined in: [api/\_handlers/zora/cli/\_shared.ts:76](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/cli/_shared.ts#L76)
 
 #### Type Parameters
 
@@ -50,7 +50,7 @@ Defined in: [api/\_handlers/zora/cli/\_shared.ts:76](https://github.com/wenakita
 
 > **parseError**(`status`, `error`, `suggestion?`): [`CliParseResult`](#cliparseresult)\<`never`\>
 
-Defined in: [api/\_handlers/zora/cli/\_shared.ts:80](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/zora/cli/_shared.ts#L80)
+Defined in: [api/\_handlers/zora/cli/\_shared.ts:80](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/cli/_shared.ts#L80)
 
 #### Parameters
 
@@ -76,7 +76,7 @@ Defined in: [api/\_handlers/zora/cli/\_shared.ts:80](https://github.com/wenakita
 
 > **withCliReadHandler**\<`TParams`, `TResult`\>(`options`): (`req`, `res`) => `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/zora/cli/\_shared.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/zora/cli/_shared.ts#L33)
+Defined in: [api/\_handlers/zora/cli/\_shared.ts:33](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/cli/_shared.ts#L33)
 
 #### Type Parameters
 

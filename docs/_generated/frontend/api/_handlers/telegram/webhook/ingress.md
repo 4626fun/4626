@@ -12,7 +12,7 @@
 
 > **TelegramWebhookIngressLane** = `"canonical"` \| `"hermit"`
 
-Defined in: [api/\_handlers/telegram/webhook/ingress.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/ingress.ts#L5)
+Defined in: [api/\_handlers/telegram/webhook/ingress.ts:5](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/ingress.ts#L5)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/telegram/webhook/ingress.ts:5](https://github.com/we
 
 > **readHermitTelegramBotToken**(`env`): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/ingress.ts:50](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/ingress.ts#L50)
+Defined in: [api/\_handlers/telegram/webhook/ingress.ts:50](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/ingress.ts#L50)
 
 #### Parameters
 
@@ -38,7 +38,7 @@ Defined in: [api/\_handlers/telegram/webhook/ingress.ts:50](https://github.com/w
 
 > **readHermitTelegramWebhookSecret**(`env`): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/ingress.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/ingress.ts#L44)
+Defined in: [api/\_handlers/telegram/webhook/ingress.ts:44](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/ingress.ts#L44)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [api/\_handlers/telegram/webhook/ingress.ts:44](https://github.com/w
 
 > **readTelegramToAlfaclubIngressHost**(`env`): `string` \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/ingress.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/ingress.ts#L22)
+Defined in: [api/\_handlers/telegram/webhook/ingress.ts:22](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/ingress.ts#L22)
 
 When set, Telegram → AlfaClub relay runs only on this host (e.g. hermit.4626.fun).
 
@@ -76,7 +76,7 @@ When set, Telegram → AlfaClub relay runs only on this host (e.g. hermit.4626.f
 
 > **readTelegramWebhookHost**(`req`): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/ingress.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/ingress.ts#L14)
+Defined in: [api/\_handlers/telegram/webhook/ingress.ts:14](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/ingress.ts#L14)
 
 #### Parameters
 
@@ -94,7 +94,7 @@ Defined in: [api/\_handlers/telegram/webhook/ingress.ts:14](https://github.com/w
 
 > **resolveTelegramWebhookIngressLane**(`req`, `env`): [`TelegramWebhookIngressLane`](#telegramwebhookingresslane)
 
-Defined in: [api/\_handlers/telegram/webhook/ingress.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/ingress.ts#L29)
+Defined in: [api/\_handlers/telegram/webhook/ingress.ts:29](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/ingress.ts#L29)
 
 #### Parameters
 
@@ -116,7 +116,7 @@ Defined in: [api/\_handlers/telegram/webhook/ingress.ts:29](https://github.com/w
 
 > **shouldRelayTelegramToAlfaclubOnCanonicalWebhook**(`env`): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/ingress.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/ingress.ts#L38)
+Defined in: [api/\_handlers/telegram/webhook/ingress.ts:38](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/ingress.ts#L38)
 
 #### Parameters
 

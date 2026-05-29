@@ -12,7 +12,7 @@
 
 > **applyChainBrandTheme**(`theme`): `void`
 
-Defined in: [src/theme/chainBrandTheme.ts:58](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/theme/chainBrandTheme.ts#L58)
+Defined in: [src/theme/chainBrandTheme.ts:58](https://github.com/wenakita/4626/blob/main/frontend/src/theme/chainBrandTheme.ts#L58)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/theme/chainBrandTheme.ts:58](https://github.com/wenakita/4626/b
 
 > **resolveChainBrandTheme**(`chainId?`): `ChainBrandTheme`
 
-Defined in: [src/theme/chainBrandTheme.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/theme/chainBrandTheme.ts#L52)
+Defined in: [src/theme/chainBrandTheme.ts:52](https://github.com/wenakita/4626/blob/main/frontend/src/theme/chainBrandTheme.ts#L52)
 
 #### Parameters
 

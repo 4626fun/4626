@@ -12,7 +12,7 @@
 
 > `const` **LAST\_REFRESH\_TICK\_KEY**: `"last_tick"` = `'last_tick'`
 
-Defined in: [server/\_lib/zora-profiles/cronConfig.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/cronConfig.ts#L9)
+Defined in: [server/\_lib/zora-profiles/cronConfig.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/cronConfig.ts#L9)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/zora-profiles/cronConfig.ts:9](https://github.com/wena
 
 > `const` **ZORA\_PROFILES\_REFRESH\_STATE\_TABLE**: `"zora_profiles_refresh_state"` = `'zora_profiles_refresh_state'`
 
-Defined in: [server/\_lib/zora-profiles/cronConfig.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/cronConfig.ts#L8)
+Defined in: [server/\_lib/zora-profiles/cronConfig.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/cronConfig.ts#L8)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [server/\_lib/zora-profiles/cronConfig.ts:8](https://github.com/wena
 
 > `const` **ZORA\_PROFILES\_TABLE**: `"zora_profiles"` = `'zora_profiles'`
 
-Defined in: [server/\_lib/zora-profiles/cronConfig.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/cronConfig.ts#L7)
+Defined in: [server/\_lib/zora-profiles/cronConfig.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/cronConfig.ts#L7)
 
 ## Functions
 
@@ -36,7 +36,7 @@ Defined in: [server/\_lib/zora-profiles/cronConfig.ts:7](https://github.com/wena
 
 > **isZoraProfilesRefreshEnabled**(): `boolean`
 
-Defined in: [server/\_lib/zora-profiles/cronConfig.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/cronConfig.ts#L15)
+Defined in: [server/\_lib/zora-profiles/cronConfig.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/cronConfig.ts#L15)
 
 Master kill-switch. Default off until enabled on Vercel.
 Set `ZORA_PROFILES_REFRESH_ENABLED=1` to run the scheduled cron.
@@ -51,7 +51,7 @@ Set `ZORA_PROFILES_REFRESH_ENABLED=1` to run the scheduled cron.
 
 > **readProfileRefreshListType**(): `string`
 
-Defined in: [server/\_lib/zora-profiles/cronConfig.ts:67](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/cronConfig.ts#L67)
+Defined in: [server/\_lib/zora-profiles/cronConfig.ts:67](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/cronConfig.ts#L67)
 
 #### Returns
 
@@ -63,7 +63,7 @@ Defined in: [server/\_lib/zora-profiles/cronConfig.ts:67](https://github.com/wen
 
 > **readProfileRefreshPageSize**(): `number`
 
-Defined in: [server/\_lib/zora-profiles/cronConfig.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/cronConfig.ts#L27)
+Defined in: [server/\_lib/zora-profiles/cronConfig.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/cronConfig.ts#L27)
 
 #### Returns
 
@@ -75,7 +75,7 @@ Defined in: [server/\_lib/zora-profiles/cronConfig.ts:27](https://github.com/wen
 
 > **readProfileRefreshRequestIntervalMs**(): `number`
 
-Defined in: [server/\_lib/zora-profiles/cronConfig.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/cronConfig.ts#L35)
+Defined in: [server/\_lib/zora-profiles/cronConfig.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/cronConfig.ts#L35)
 
 #### Returns
 
@@ -87,7 +87,7 @@ Defined in: [server/\_lib/zora-profiles/cronConfig.ts:35](https://github.com/wen
 
 > **readProfileRefreshTargetCount**(): `number`
 
-Defined in: [server/\_lib/zora-profiles/cronConfig.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/cronConfig.ts#L19)
+Defined in: [server/\_lib/zora-profiles/cronConfig.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/cronConfig.ts#L19)
 
 #### Returns
 
@@ -99,7 +99,7 @@ Defined in: [server/\_lib/zora-profiles/cronConfig.ts:19](https://github.com/wen
 
 > **readProfileRefreshUpsertBatchSize**(): `number`
 
-Defined in: [server/\_lib/zora-profiles/cronConfig.ts:59](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/cronConfig.ts#L59)
+Defined in: [server/\_lib/zora-profiles/cronConfig.ts:59](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/cronConfig.ts#L59)
 
 #### Returns
 
@@ -111,7 +111,7 @@ Defined in: [server/\_lib/zora-profiles/cronConfig.ts:59](https://github.com/wen
 
 > **readProfileRefreshWalletBudget**(): `number`
 
-Defined in: [server/\_lib/zora-profiles/cronConfig.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/cronConfig.ts#L43)
+Defined in: [server/\_lib/zora-profiles/cronConfig.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/cronConfig.ts#L43)
 
 #### Returns
 
@@ -123,7 +123,7 @@ Defined in: [server/\_lib/zora-profiles/cronConfig.ts:43](https://github.com/wen
 
 > **readProfileRefreshWalletConcurrency**(): `number`
 
-Defined in: [server/\_lib/zora-profiles/cronConfig.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/cronConfig.ts#L51)
+Defined in: [server/\_lib/zora-profiles/cronConfig.ts:51](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/cronConfig.ts#L51)
 
 #### Returns
 
@@ -135,7 +135,7 @@ Defined in: [server/\_lib/zora-profiles/cronConfig.ts:51](https://github.com/wen
 
 > **resolveZoraServerApiKey**(): `string` \| `null`
 
-Defined in: [server/\_lib/zora-profiles/cronConfig.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/cronConfig.ts#L71)
+Defined in: [server/\_lib/zora-profiles/cronConfig.ts:71](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/cronConfig.ts#L71)
 
 #### Returns
 

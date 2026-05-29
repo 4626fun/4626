@@ -12,7 +12,7 @@
 
 > **HermitTone** = *typeof* [`HERMIT_TONES`](#hermit_tones)\[`number`\]
 
-Defined in: [server/\_lib/hermit/skillRouter.ts:1142](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/skillRouter.ts#L1142)
+Defined in: [server/\_lib/hermit/skillRouter.ts:1187](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/skillRouter.ts#L1187)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/hermit/skillRouter.ts:1142](https://github.com/wenakit
 
 > **SpanishDialect** = `"neutral_latam"` \| `"mexico"` \| `"argentina"` \| `"colombia"` \| `"chile"` \| `"peru"` \| `"venezuela"` \| `"caribbean"` \| `"spain"`
 
-Defined in: [server/\_lib/hermit/skillRouter.ts:690](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/skillRouter.ts#L690)
+Defined in: [server/\_lib/hermit/skillRouter.ts:734](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/skillRouter.ts#L734)
 
 ## Variables
 
@@ -28,7 +28,7 @@ Defined in: [server/\_lib/hermit/skillRouter.ts:690](https://github.com/wenakita
 
 > `const` **\_hermitPromptBuildersForTests**: `object`
 
-Defined in: [server/\_lib/hermit/skillRouter.ts:1075](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/skillRouter.ts#L1075)
+Defined in: [server/\_lib/hermit/skillRouter.ts:1120](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/skillRouter.ts#L1120)
 
 #### Type Declaration
 
@@ -248,7 +248,7 @@ responsible for validating the URL through `inferPublicMediaAttachment`
 
 > `const` **HERMIT\_TONES**: readonly \[`"clean"`, `"degen"`, `"pro"`, `"poetic"`, `"spanglish"`, `"chaotic"`, `"concise"`\]
 
-Defined in: [server/\_lib/hermit/skillRouter.ts:1133](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/skillRouter.ts#L1133)
+Defined in: [server/\_lib/hermit/skillRouter.ts:1178](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/skillRouter.ts#L1178)
 
 ## Functions
 
@@ -256,7 +256,7 @@ Defined in: [server/\_lib/hermit/skillRouter.ts:1133](https://github.com/wenakit
 
 > **asHermitTone**(`value`): `"clean"` \| `"degen"` \| `"pro"` \| `"poetic"` \| `"spanglish"` \| `"chaotic"` \| `"concise"` \| `null`
 
-Defined in: [server/\_lib/hermit/skillRouter.ts:1145](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/skillRouter.ts#L1145)
+Defined in: [server/\_lib/hermit/skillRouter.ts:1190](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/skillRouter.ts#L1190)
 
 #### Parameters
 
@@ -274,7 +274,7 @@ Defined in: [server/\_lib/hermit/skillRouter.ts:1145](https://github.com/wenakit
 
 > **asSpanishDialect**(`value`): [`SpanishDialect`](#spanishdialect) \| `null`
 
-Defined in: [server/\_lib/hermit/skillRouter.ts:718](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/skillRouter.ts#L718)
+Defined in: [server/\_lib/hermit/skillRouter.ts:762](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/skillRouter.ts#L762)
 
 Validate and narrow a string into a known SpanishDialect, or return
 null. Used to whitelist values coming back from the per-user
@@ -296,7 +296,7 @@ preference store before they reach prompt-building.
 
 > **executeHermitCommand**(`params`): `Promise`\<[`HermitExecutionResult`](types.md#hermitexecutionresult)\>
 
-Defined in: [server/\_lib/hermit/skillRouter.ts:1408](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/skillRouter.ts#L1408)
+Defined in: [server/\_lib/hermit/skillRouter.ts:1453](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/skillRouter.ts#L1453)
 
 #### Parameters
 
@@ -314,7 +314,7 @@ Defined in: [server/\_lib/hermit/skillRouter.ts:1408](https://github.com/wenakit
 
 > **shouldPreferPinataHttpDraft**(`params`): `boolean`
 
-Defined in: [server/\_lib/hermit/skillRouter.ts:417](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/skillRouter.ts#L417)
+Defined in: [server/\_lib/hermit/skillRouter.ts:457](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/skillRouter.ts#L457)
 
 AlfaClub bridge calls Pinata for generation only — Vercel posts the
 formatted reply. OpenClaw gateway `chat.send` on a Pinata agent that
@@ -335,6 +335,32 @@ session-bound channel plugin.
 ###### sourceIdentity?
 
 `string` \| `null`
+
+#### Returns
+
+`boolean`
+
+***
+
+### shouldRequestPinataGmeowCaption()
+
+> **shouldRequestPinataGmeowCaption**(`userPromptAfterCommand`): `boolean`
+
+Defined in: [server/\_lib/hermit/skillRouter.ts:378](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/skillRouter.ts#L378)
+
+Whether /gmeow should call Pinata for an extra caption line.
+
+Default (env unset): Pinata one-liner when configured; else local hooks + rotating GIFs.
+- `HERMIT_GMEOW_PINATA_CAPTION=always` — call Pinata on every /gmeow when configured.
+- `HERMIT_GMEOW_PINATA_CAPTION=prompt` — call Pinata only when the user adds text after /gmeow.
+- `HERMIT_GMEOW_PINATA_CAPTION=0` — never call Pinata for /gmeow (local hooks only).
+- `HERMIT_GMEOW_PINATA_CAPTION=local` — force local hooks even when Pinata is configured.
+
+#### Parameters
+
+##### userPromptAfterCommand
+
+`string`
 
 #### Returns
 

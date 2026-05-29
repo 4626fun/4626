@@ -12,7 +12,7 @@
 
 > **WorkspaceActivityTab**(`props`): `Element`
 
-Defined in: [src/components/workspace/WorkspaceActivityTab.tsx:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/workspace/WorkspaceActivityTab.tsx#L12)
+Defined in: [src/components/workspace/WorkspaceActivityTab.tsx:12](https://github.com/wenakita/4626/blob/main/frontend/src/components/workspace/WorkspaceActivityTab.tsx#L12)
 
 #### Parameters
 

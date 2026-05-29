@@ -133,8 +133,9 @@ export async function addOwnerViaBaseAppSendCalls(params: {
   chainId: number
   timeoutMs?: number
   intervalMs?: number
+  publicClient?: Pick<PublicClient, 'request'>
   onTelemetry?: (event: CswSendCallsTelemetry) => void
-}): Promise<BaseAppOwnerCallResult> {
+}): Promise<BaseAppOwnerCallResult & { userOperationHash: `0x${string}` | null }> {
   const call = encodeAddOwnerCall({ csw: params.csw, ownerToAdd: params.ownerToAdd })
   const calls = [{ to: call.to, data: call.data, value: call.value }]
   assertSendCallsEntryPointAddOwnerBundle({ csw: params.csw, calls })
@@ -144,6 +145,7 @@ export async function addOwnerViaBaseAppSendCalls(params: {
     csw: call.to,
     calls,
     chainId: params.chainId,
+    atomicRequired: false,
     onTelemetry: params.onTelemetry,
   })
   const resolution = await waitForCallsTxHash({
@@ -151,9 +153,14 @@ export async function addOwnerViaBaseAppSendCalls(params: {
     callBundleId: submitted.callBundleId,
     timeoutMs: params.timeoutMs,
     intervalMs: params.intervalMs,
+    publicClient: params.publicClient,
     onTelemetry: params.onTelemetry,
   })
-  return { callBundleId: submitted.callBundleId, transactionHash: resolution.transactionHash }
+  return {
+    callBundleId: submitted.callBundleId,
+    transactionHash: resolution.transactionHash,
+    userOperationHash: resolution.userOperationHash,
+  }
 }
 
 export async function removeOwnerViaBaseAppSendCalls(params: {

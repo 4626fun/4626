@@ -12,7 +12,7 @@
 
 > **StrategyAprSignal** = `object`
 
-Defined in: [server/\_lib/workspace/aprSignals.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/workspace/aprSignals.ts#L1)
+Defined in: [server/\_lib/workspace/aprSignals.ts:1](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/aprSignals.ts#L1)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/\_lib/workspace/aprSignals.ts:1](https://github.com/wenakita
 
 > **confidence**: `"unknown"` \| `"low"` \| `"medium"` \| `"high"`
 
-Defined in: [server/\_lib/workspace/aprSignals.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/workspace/aprSignals.ts#L3)
+Defined in: [server/\_lib/workspace/aprSignals.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/aprSignals.ts#L3)
 
 ##### expectedAprBps
 
 > **expectedAprBps**: `number` \| `null`
 
-Defined in: [server/\_lib/workspace/aprSignals.ts:2](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/workspace/aprSignals.ts#L2)
+Defined in: [server/\_lib/workspace/aprSignals.ts:2](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/aprSignals.ts#L2)
 
 ##### source
 
 > **source**: `"keeper_report"` \| `"p0_placeholder"` \| `"none"`
 
-Defined in: [server/\_lib/workspace/aprSignals.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/workspace/aprSignals.ts#L4)
+Defined in: [server/\_lib/workspace/aprSignals.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/aprSignals.ts#L4)
 
 ## Functions
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/workspace/aprSignals.ts:4](https://github.com/wenakita
 
 > **deriveStrategyAprSignal**(`params`): [`StrategyAprSignal`](#strategyaprsignal)
 
-Defined in: [server/\_lib/workspace/aprSignals.ts:219](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/workspace/aprSignals.ts#L219)
+Defined in: [server/\_lib/workspace/aprSignals.ts:219](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/aprSignals.ts#L219)
 
 #### Parameters
 

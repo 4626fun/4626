@@ -10,7 +10,7 @@
 
 ### FeatureFlag()
 
-Defined in: [src/lib/flags/featureFlags.ts:69](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L69)
+Defined in: [src/lib/flags/featureFlags.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L69)
 
 #### Type Parameters
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/flags/featureFlags.ts:69](https://github.com/wenakita/4626/
 
 > **FeatureFlag**(): `T`
 
-Defined in: [src/lib/flags/featureFlags.ts:70](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L70)
+Defined in: [src/lib/flags/featureFlags.ts:70](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L70)
 
 #### Returns
 
@@ -32,13 +32,13 @@ Defined in: [src/lib/flags/featureFlags.ts:70](https://github.com/wenakita/4626/
 
 > **definition**: [`FlagDefinition`](#flagdefinition)\<`T`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L71)
+Defined in: [src/lib/flags/featureFlags.ts:71](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L71)
 
 ***
 
 ### FlagDefinition
 
-Defined in: [src/lib/flags/featureFlags.ts:59](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L59)
+Defined in: [src/lib/flags/featureFlags.ts:59](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L59)
 
 #### Type Parameters
 
@@ -52,13 +52,13 @@ Defined in: [src/lib/flags/featureFlags.ts:59](https://github.com/wenakita/4626/
 
 > **category**: [`FlagCategory`](#flagcategory)
 
-Defined in: [src/lib/flags/featureFlags.ts:62](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L62)
+Defined in: [src/lib/flags/featureFlags.ts:62](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L62)
 
 ##### decide()
 
 > **decide**: () => `T`
 
-Defined in: [src/lib/flags/featureFlags.ts:66](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L66)
+Defined in: [src/lib/flags/featureFlags.ts:66](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L66)
 
 Resolve the current flag value.
 
@@ -70,25 +70,25 @@ Resolve the current flag value.
 
 > **defaultValue**: `T`
 
-Defined in: [src/lib/flags/featureFlags.ts:63](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L63)
+Defined in: [src/lib/flags/featureFlags.ts:63](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L63)
 
 ##### description
 
 > **description**: `string`
 
-Defined in: [src/lib/flags/featureFlags.ts:61](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L61)
+Defined in: [src/lib/flags/featureFlags.ts:61](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L61)
 
 ##### key
 
 > **key**: `string`
 
-Defined in: [src/lib/flags/featureFlags.ts:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L60)
+Defined in: [src/lib/flags/featureFlags.ts:60](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L60)
 
 ##### options?
 
 > `optional` **options**: `object`[]
 
-Defined in: [src/lib/flags/featureFlags.ts:64](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L64)
+Defined in: [src/lib/flags/featureFlags.ts:64](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L64)
 
 ###### label?
 
@@ -104,7 +104,7 @@ Defined in: [src/lib/flags/featureFlags.ts:64](https://github.com/wenakita/4626/
 
 > **FlagCategory** = `"security"` \| `"operational"` \| `"ui"` \| `"debug"`
 
-Defined in: [src/lib/flags/featureFlags.ts:57](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L57)
+Defined in: [src/lib/flags/featureFlags.ts:57](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L57)
 
 ## Variables
 
@@ -112,7 +112,7 @@ Defined in: [src/lib/flags/featureFlags.ts:57](https://github.com/wenakita/4626/
 
 > `const` **allFlags**: [`FeatureFlag`](#featureflag)\<`unknown`\>[]
 
-Defined in: [src/lib/flags/featureFlags.ts:323](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L323)
+Defined in: [src/lib/flags/featureFlags.ts:323](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L323)
 
 ***
 
@@ -120,7 +120,7 @@ Defined in: [src/lib/flags/featureFlags.ts:323](https://github.com/wenakita/4626
 
 > `const` **debugLogsFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:245](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L245)
+Defined in: [src/lib/flags/featureFlags.ts:245](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L245)
 
 ***
 
@@ -128,7 +128,7 @@ Defined in: [src/lib/flags/featureFlags.ts:245](https://github.com/wenakita/4626
 
 > `const` **directCswAddOwnerSendCallsFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:278](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L278)
+Defined in: [src/lib/flags/featureFlags.ts:278](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L278)
 
 ***
 
@@ -136,7 +136,7 @@ Defined in: [src/lib/flags/featureFlags.ts:278](https://github.com/wenakita/4626
 
 > `const` **hostModeFlag**: [`FeatureFlag`](#featureflag)\<[`HostMode`](../env/host.md#hostmode)\>
 
-Defined in: [src/lib/flags/featureFlags.ts:164](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L164)
+Defined in: [src/lib/flags/featureFlags.ts:164](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L164)
 
 ***
 
@@ -144,7 +144,7 @@ Defined in: [src/lib/flags/featureFlags.ts:164](https://github.com/wenakita/4626
 
 > `const` **injectedConnectorFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:197](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L197)
+Defined in: [src/lib/flags/featureFlags.ts:197](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L197)
 
 ***
 
@@ -152,7 +152,7 @@ Defined in: [src/lib/flags/featureFlags.ts:197](https://github.com/wenakita/4626
 
 > `const` **lensGroveFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:225](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L225)
+Defined in: [src/lib/flags/featureFlags.ts:225](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L225)
 
 ***
 
@@ -160,7 +160,7 @@ Defined in: [src/lib/flags/featureFlags.ts:225](https://github.com/wenakita/4626
 
 > `const` **privyAnalyticsFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:292](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L292)
+Defined in: [src/lib/flags/featureFlags.ts:292](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L292)
 
 ***
 
@@ -168,7 +168,7 @@ Defined in: [src/lib/flags/featureFlags.ts:292](https://github.com/wenakita/4626
 
 > `const` **privyEnabledFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:132](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L132)
+Defined in: [src/lib/flags/featureFlags.ts:132](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L132)
 
 ***
 
@@ -176,7 +176,7 @@ Defined in: [src/lib/flags/featureFlags.ts:132](https://github.com/wenakita/4626
 
 > `const` **publicSiteModeFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:175](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L175)
+Defined in: [src/lib/flags/featureFlags.ts:175](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L175)
 
 ***
 
@@ -184,7 +184,7 @@ Defined in: [src/lib/flags/featureFlags.ts:175](https://github.com/wenakita/4626
 
 > `const` **swapProviderFlag**: [`FeatureFlag`](#featureflag)\<`string`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:186](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L186)
+Defined in: [src/lib/flags/featureFlags.ts:186](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L186)
 
 ***
 
@@ -192,7 +192,7 @@ Defined in: [src/lib/flags/featureFlags.ts:186](https://github.com/wenakita/4626
 
 > `const` **useropTelemetryFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:267](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L267)
+Defined in: [src/lib/flags/featureFlags.ts:267](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L267)
 
 ***
 
@@ -200,7 +200,7 @@ Defined in: [src/lib/flags/featureFlags.ts:267](https://github.com/wenakita/4626
 
 > `const` **waitlistSubAccountFlowFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:209](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L209)
+Defined in: [src/lib/flags/featureFlags.ts:209](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L209)
 
 Pairs with server `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1`.
 
@@ -210,7 +210,7 @@ Pairs with server `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1`.
 
 > `const` **xmtpDebugFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:256](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L256)
+Defined in: [src/lib/flags/featureFlags.ts:256](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L256)
 
 ***
 
@@ -218,7 +218,7 @@ Defined in: [src/lib/flags/featureFlags.ts:256](https://github.com/wenakita/4626
 
 > `const` **zoraMigrationVerifyImplFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:147](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L147)
+Defined in: [src/lib/flags/featureFlags.ts:147](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L147)
 
 ## Functions
 
@@ -226,7 +226,7 @@ Defined in: [src/lib/flags/featureFlags.ts:147](https://github.com/wenakita/4626
 
 > **buildFlagDefinitions**(): `Record`\<`string`, \{ `description`: `string`; `options`: `object`[]; \}\>
 
-Defined in: [src/lib/flags/featureFlags.ts:349](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L349)
+Defined in: [src/lib/flags/featureFlags.ts:349](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L349)
 
 Build the FlagDefinitionsType shape expected by flags/react FlagDefinitions.
 
@@ -240,7 +240,7 @@ Build the FlagDefinitionsType shape expected by flags/react FlagDefinitions.
 
 > **isPrivyHostModeAllowed**(`mode`): `boolean`
 
-Defined in: [src/lib/flags/featureFlags.ts:124](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L124)
+Defined in: [src/lib/flags/featureFlags.ts:124](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L124)
 
 #### Parameters
 
@@ -258,7 +258,7 @@ Defined in: [src/lib/flags/featureFlags.ts:124](https://github.com/wenakita/4626
 
 > **resolveAllFlagValues**(): `Record`\<`string`, `unknown`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:340](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L340)
+Defined in: [src/lib/flags/featureFlags.ts:340](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L340)
 
 Snapshot every flag's current value, keyed by flag key.
 
@@ -272,7 +272,7 @@ Snapshot every flag's current value, keyed by flag key.
 
 > **resolvePrivyAppId**(): `string` \| `null`
 
-Defined in: [src/lib/flags/featureFlags.ts:308](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L308)
+Defined in: [src/lib/flags/featureFlags.ts:308](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L308)
 
 #### Returns
 
@@ -284,7 +284,7 @@ Defined in: [src/lib/flags/featureFlags.ts:308](https://github.com/wenakita/4626
 
 > **resolvePrivyClientId**(): `string` \| `null`
 
-Defined in: [src/lib/flags/featureFlags.ts:314](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/flags/featureFlags.ts#L314)
+Defined in: [src/lib/flags/featureFlags.ts:314](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L314)
 
 #### Returns
 

@@ -12,7 +12,7 @@
 
 > `const` **DEFAULT\_BASE\_APP\_INVITE\_URL**: `"https://base.app/invite/4626/T9Y9BZYK"` = `'https://base.app/invite/4626/T9Y9BZYK'`
 
-Defined in: [src/lib/base/baseAppInvite.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/base/baseAppInvite.ts#L1)
+Defined in: [src/lib/base/baseAppInvite.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/lib/base/baseAppInvite.ts#L1)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/base/baseAppInvite.ts:1](https://github.com/wenakita/4626/b
 
 > **resolveBaseAppInviteUrl**(): `string`
 
-Defined in: [src/lib/base/baseAppInvite.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/base/baseAppInvite.ts#L3)
+Defined in: [src/lib/base/baseAppInvite.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/lib/base/baseAppInvite.ts#L3)
 
 #### Returns
 

@@ -12,7 +12,7 @@
 
 > **OwnersPublicClientLike** = `object` & `Record`\<`string`, `any`\>
 
-Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L38)
+Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:38](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L38)
 
 #### Type Declaration
 
@@ -44,7 +44,7 @@ Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:38](https://github.com/wenakita
 
 > **fetchCoinbaseSmartWalletOwners**(`params`): `Promise`\<`string`[]\>
 
-Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:222](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L222)
+Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:222](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L222)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:222](https://github.com/wenakit
 
 > **findCoinbaseSmartWalletOwnerIndex**(`params`): `Promise`\<\{ `ownerCount`: `number`; `ownerIndex`: `number` \| `null`; \}\>
 
-Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:100](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L100)
+Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:100](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L100)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:100](https://github.com/wenakit
 
 > **resetOwnerIndexCacheForTests**(): `void`
 
-Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:96](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L96)
+Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:96](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L96)
 
 #### Returns
 

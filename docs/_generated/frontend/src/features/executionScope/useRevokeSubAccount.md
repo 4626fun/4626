@@ -12,7 +12,7 @@
 
 > **RevokeSubAccountResult** = \{ `alreadyRevoked`: `boolean`; `ok`: `true`; `profileId`: `number`; `revokedAt`: `string`; \} \| \{ `code`: `string`; `message`: `string`; `ok`: `false`; \}
 
-Defined in: [src/features/executionScope/useRevokeSubAccount.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useRevokeSubAccount.ts#L16)
+Defined in: [src/features/executionScope/useRevokeSubAccount.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useRevokeSubAccount.ts#L16)
 
 Client-side hook that drives `POST /api/arch-b/sub-account/revoke`.
 
@@ -29,7 +29,7 @@ why on-chain revoke is deferred to v1.1.
 
 > **UseRevokeSubAccountReturn** = `object`
 
-Defined in: [src/features/executionScope/useRevokeSubAccount.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useRevokeSubAccount.ts#L29)
+Defined in: [src/features/executionScope/useRevokeSubAccount.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useRevokeSubAccount.ts#L29)
 
 #### Properties
 
@@ -37,7 +37,7 @@ Defined in: [src/features/executionScope/useRevokeSubAccount.ts:29](https://gith
 
 > **busy**: `boolean`
 
-Defined in: [src/features/executionScope/useRevokeSubAccount.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useRevokeSubAccount.ts#L31)
+Defined in: [src/features/executionScope/useRevokeSubAccount.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useRevokeSubAccount.ts#L31)
 
 True while the revoke request is in flight.
 
@@ -45,7 +45,7 @@ True while the revoke request is in flight.
 
 > **error**: `string` \| `null`
 
-Defined in: [src/features/executionScope/useRevokeSubAccount.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useRevokeSubAccount.ts#L33)
+Defined in: [src/features/executionScope/useRevokeSubAccount.ts:33](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useRevokeSubAccount.ts#L33)
 
 Last error shown to the user; cleared on the next `revoke()` call.
 
@@ -53,7 +53,7 @@ Last error shown to the user; cleared on the next `revoke()` call.
 
 > **lastResult**: [`RevokeSubAccountResult`](#revokesubaccountresult) \| `null`
 
-Defined in: [src/features/executionScope/useRevokeSubAccount.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useRevokeSubAccount.ts#L35)
+Defined in: [src/features/executionScope/useRevokeSubAccount.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useRevokeSubAccount.ts#L35)
 
 Last successful revoke, persisted until the next call.
 
@@ -61,7 +61,7 @@ Last successful revoke, persisted until the next call.
 
 > **revoke**: (`reason?`) => `Promise`\<[`RevokeSubAccountResult`](#revokesubaccountresult)\>
 
-Defined in: [src/features/executionScope/useRevokeSubAccount.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useRevokeSubAccount.ts#L37)
+Defined in: [src/features/executionScope/useRevokeSubAccount.ts:37](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useRevokeSubAccount.ts#L37)
 
 Trigger the revoke. `reason` is optional and capped to 256 chars server-side.
 
@@ -81,7 +81,7 @@ Trigger the revoke. `reason` is optional and capped to 256 chars server-side.
 
 > **useRevokeSubAccount**(): [`UseRevokeSubAccountReturn`](#userevokesubaccountreturn)
 
-Defined in: [src/features/executionScope/useRevokeSubAccount.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useRevokeSubAccount.ts#L40)
+Defined in: [src/features/executionScope/useRevokeSubAccount.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useRevokeSubAccount.ts#L40)
 
 #### Returns
 

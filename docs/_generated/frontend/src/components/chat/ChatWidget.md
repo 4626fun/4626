@@ -12,7 +12,7 @@
 
 > **ChatWidget**(`props`): `Element`
 
-Defined in: [src/components/chat/ChatWidget.tsx:698](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/ChatWidget.tsx#L698)
+Defined in: [src/components/chat/ChatWidget.tsx:698](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/ChatWidget.tsx#L698)
 
 Chat widget dock. The app layout owns the XMTP provider so directory pages,
 the availability rail, and the dock all share one client.

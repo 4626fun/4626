@@ -10,7 +10,7 @@
 
 ### AmoeBurnContext
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:117](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L117)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:117](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L117)
 
 #### Properties
 
@@ -18,7 +18,7 @@ Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:117](https://github.com
 
 > **twitterCreditNullifierHex**: `string`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:121](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L121)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:121](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L121)
 
 twitterCreditNullifier as 0x-hex (32 bytes).
 
@@ -26,7 +26,7 @@ twitterCreditNullifier as 0x-hex (32 bytes).
 
 > **walletAddress**: `string`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:119](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L119)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:119](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L119)
 
 EVM wallet address as hex (with or without 0x).
 
@@ -34,7 +34,7 @@ EVM wallet address as hex (with or without 0x).
 
 ### AmoeBurnContextLookupArgs
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:108](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L108)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:108](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L108)
 
 Row shape returned by reading a candidate burn from L0.
 
@@ -48,7 +48,7 @@ the caller-supplied `lookupBurnContext`).
 
 > **signupId**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:112](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L112)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:112](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L112)
 
 L0 signup_id (profiles.id).
 
@@ -56,7 +56,7 @@ L0 signup_id (profiles.id).
 
 > **sourcePointsId**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:110](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L110)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:110](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L110)
 
 L0 points row id.
 
@@ -64,7 +64,7 @@ L0 points row id.
 
 > **spendRefId**: `string`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:114](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L114)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:114](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L114)
 
 L0 source_id (= the spendRefId used at debit time).
 
@@ -72,7 +72,7 @@ L0 source_id (= the spendRefId used at debit time).
 
 ### ProjectAmoeBurnsToLedgerArgs
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:131](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L131)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:131](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L131)
 
 Args for [projectAmoeBurnsToLedger](#projectamoeburnstoledger). The lookup callback is
 required because the wallet + twitter-credit-nullifier needed to
@@ -86,7 +86,7 @@ against `amoe_zk_submissions`.
 
 > `optional` **afterId**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:169](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L169)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:169](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L169)
 
 Optional cursor: only consider candidate rows whose `points.id` is
 strictly greater than this value. The publisher uses this to advance
@@ -103,7 +103,7 @@ idempotent — the cursor is only useful as a starvation escape valve.
 
 > `optional` **batchSize**: `number`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:156](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L156)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:156](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L156)
 
 Optional: cap on how many rows to project per call. Defaults to 1000.
 The publisher cron pages through epochs in chunks to bound a single
@@ -113,7 +113,7 @@ transaction's size.
 
 > **db**: [`AmoeProjectorDb`](#amoeprojectordb)
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:133](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L133)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:133](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L133)
 
 Database client.
 
@@ -121,7 +121,7 @@ Database client.
 
 > **epoch**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:138](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L138)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:138](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L138)
 
 Epoch to project. Only `points` rows whose `created_at` falls in this
 epoch are considered.
@@ -130,7 +130,7 @@ epoch are considered.
 
 > **lookupBurnContext**: (`args`) => `Promise`\<[`AmoeBurnContext`](#amoeburncontext) \| `null`\>
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:148](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L148)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:148](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L148)
 
 Resolve the wallet + twitter-credit nullifier for a given burn. Must
 return `null` for burns without a matching entry-submission (the
@@ -152,7 +152,7 @@ for observability.
 
 > **publisherRunId**: `string`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:140](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L140)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:140](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L140)
 
 UUID identifying the publisher run that owns these projections.
 
@@ -160,7 +160,7 @@ UUID identifying the publisher run that owns these projections.
 
 ### ProjectAmoeBurnsToLedgerResult
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:188](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L188)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:188](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L188)
 
 #### Properties
 
@@ -168,7 +168,7 @@ Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:188](https://github.com
 
 > **alreadyPresent**: `number`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:194](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L194)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:194](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L194)
 
 Rows already present in L1 (idempotent re-run).
 
@@ -176,7 +176,7 @@ Rows already present in L1 (idempotent re-run).
 
 > **lastScannedId**: `bigint` \| `null`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:204](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L204)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:204](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L204)
 
 Highest `points.id` observed in this batch (or `null` if `scanned == 0`).
 Callers paging through a large epoch should pass this back as
@@ -186,7 +186,7 @@ Callers paging through a large epoch should pass this back as
 
 > **projected**: `number`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:192](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L192)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:192](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L192)
 
 Rows projected (newly inserted into L1).
 
@@ -194,7 +194,7 @@ Rows projected (newly inserted into L1).
 
 > **rows**: [`ProjectedBurnRow`](#projectedburnrow)[]
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:198](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L198)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:198](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L198)
 
 Rows projected this run (for downstream verification).
 
@@ -202,7 +202,7 @@ Rows projected this run (for downstream verification).
 
 > **scanned**: `number`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:190](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L190)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:190](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L190)
 
 Total candidate L0 rows scanned for the epoch.
 
@@ -210,7 +210,7 @@ Total candidate L0 rows scanned for the epoch.
 
 > **skippedMissingContext**: `number`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:196](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L196)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:196](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L196)
 
 Rows the lookup callback returned `null` for; skipped + counted.
 
@@ -218,7 +218,7 @@ Rows the lookup callback returned `null` for; skipped + counted.
 
 ### ProjectedBurnRow
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:172](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L172)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:172](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L172)
 
 #### Properties
 
@@ -226,79 +226,79 @@ Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:172](https://github.com
 
 > **epoch**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:176](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L176)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:176](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L176)
 
 ##### leafHashHex
 
 > **leafHashHex**: `string`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:183](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L183)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:183](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L183)
 
 ##### pointsBurned
 
 > **pointsBurned**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:175](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L175)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:175](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L175)
 
 ##### pointsBurnedAsUSD
 
 > **pointsBurnedAsUSD**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:181](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L181)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:181](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L181)
 
 ##### publisherRunId
 
 > **publisherRunId**: `string`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:185](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L185)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:185](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L185)
 
 ##### signupId
 
 > **signupId**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:173](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L173)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:173](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L173)
 
 ##### signupIdHashHex
 
 > **signupIdHashHex**: `string`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:179](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L179)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:179](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L179)
 
 ##### sourcePointsId
 
 > **sourcePointsId**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:184](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L184)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:184](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L184)
 
 ##### spendRefId
 
 > **spendRefId**: `string`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:174](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L174)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:174](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L174)
 
 ##### spendRefIdHashHex
 
 > **spendRefIdHashHex**: `string`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:180](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L180)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:180](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L180)
 
 ##### twitterCreditNullifierHex
 
 > **twitterCreditNullifierHex**: `string`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:178](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L178)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:178](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L178)
 
 ##### walletAddrCommitHex
 
 > **walletAddrCommitHex**: `string`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:182](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L182)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:182](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L182)
 
 ##### walletAddress
 
 > **walletAddress**: `string`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:177](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L177)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:177](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L177)
 
 ## Type Aliases
 
@@ -306,7 +306,7 @@ Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:177](https://github.com
 
 > **AmoeProjectorDb** = `object`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:94](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L94)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L94)
 
 Minimal db-pool shape this module needs. Mirrors `amoeReplayStore.ts`
 for consistency with the rest of the AMOE server-side code.
@@ -317,7 +317,7 @@ for consistency with the rest of the AMOE server-side code.
 
 > **sql**: (`strings`, ...`values`) => `Promise`\<\{ `rows`: `unknown`[]; \}\>
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:95](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L95)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L95)
 
 ###### Parameters
 
@@ -339,7 +339,7 @@ Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:95](https://github.com/
 
 > `const` **AMOE\_ENTRY\_SPEND\_SOURCE**: `"amoe_entry_spend"`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:84](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L84)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:84](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L84)
 
 Source-tag for AMOE-entry burn rows in the operational `points` table.
 Single point of truth — must match `consumeAmoeCreditsForEntry` in
@@ -351,7 +351,7 @@ Single point of truth — must match `consumeAmoeCreditsForEntry` in
 
 > `const` **AMOE\_POINTS\_TO\_USD\_E6**: `10000n`
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:77](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L77)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:77](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L77)
 
 Conversion factor from AMOE points to USD-1e6 (`pointsBurnedAsUSD`).
 Locked-spec value: `pointsBurnedAsUSD = points * 10_000`.
@@ -367,7 +367,7 @@ Mirrors `LotteryAmoeRouter.MAX_POINTS_AS_USD = 10_000 * 1_000_000`.
 
 > **projectAmoeBurnsToLedger**(`args`): `Promise`\<[`ProjectAmoeBurnsToLedgerResult`](#projectamoeburnstoledgerresult)\>
 
-Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:273](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L273)
+Defined in: [server/\_lib/lottery/amoeLedgerProjector.ts:273](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerProjector.ts#L273)
 
 Project AMOE points-burn rows for a single epoch from L0 (`points`) into
 L1 (`amoe_points_burn_ledger`). Idempotent and side-effect-free for

@@ -6,35 +6,15 @@
 
 # src/lib/swap/swapZoraHoldings
 
-## Type Aliases
-
-### SwapZoraHoldingRow
-
-> **SwapZoraHoldingRow** = `object`
-
-Defined in: src/lib/swap/swapZoraHoldings.ts:18
-
-#### Properties
-
-##### balanceFormatted
-
-> **balanceFormatted**: `string`
-
-Defined in: src/lib/swap/swapZoraHoldings.ts:20
-
-##### option
-
-> **option**: [`SwapTokenOption`](../../components/swap/TokenSelectorModal.md#swaptokenoption)
-
-Defined in: src/lib/swap/swapZoraHoldings.ts:19
-
 ## Functions
 
 ### fetchSwapZoraHoldings()
 
-> **fetchSwapZoraHoldings**(`ownerAddress`): `Promise`\<[`SwapZoraHoldingRow`](#swapzoraholdingrow)[]\>
+> **fetchSwapZoraHoldings**(`ownerAddress`): `Promise`\<[`SwapZoraHoldingRow`](../zora/walletHoldings.md#swapzoraholdingrow)[]\>
 
-Defined in: src/lib/swap/swapZoraHoldings.ts:115
+Defined in: [src/lib/swap/swapZoraHoldings.ts:117](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/swapZoraHoldings.ts#L117)
+
+Canonical path: one API call for all Zora creator/content coins on a CSW (or any wallet).
 
 #### Parameters
 
@@ -44,15 +24,17 @@ Defined in: src/lib/swap/swapZoraHoldings.ts:115
 
 #### Returns
 
-`Promise`\<[`SwapZoraHoldingRow`](#swapzoraholdingrow)[]\>
+`Promise`\<[`SwapZoraHoldingRow`](../zora/walletHoldings.md#swapzoraholdingrow)[]\>
 
 ***
 
 ### resolveSwapZoraHoldings()
 
-> **resolveSwapZoraHoldings**(`params`): `Promise`\<[`SwapZoraHoldingRow`](#swapzoraholdingrow)[]\>
+> **resolveSwapZoraHoldings**(`params`): `Promise`\<[`SwapZoraHoldingRow`](../zora/walletHoldings.md#swapzoraholdingrow)[]\>
 
-Defined in: src/lib/swap/swapZoraHoldings.ts:41
+Defined in: [src/lib/swap/swapZoraHoldings.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/swapZoraHoldings.ts#L40)
+
+Client-side resolver (tests + offline). Production paths use `fetchSwapZoraHoldings` → API.
 
 #### Parameters
 
@@ -64,7 +46,7 @@ Defined in: src/lib/swap/swapZoraHoldings.ts:41
 
 ###### fetchCoin?
 
-(`address`) => `Promise`\<[`ZoraCoin`](../zora/types.md#zoracoin) \| `null`\>
+(`address`) => `Promise`\<`unknown`\>
 
 ###### ownerAddress
 
@@ -72,7 +54,7 @@ Defined in: src/lib/swap/swapZoraHoldings.ts:41
 
 #### Returns
 
-`Promise`\<[`SwapZoraHoldingRow`](#swapzoraholdingrow)[]\>
+`Promise`\<[`SwapZoraHoldingRow`](../zora/walletHoldings.md#swapzoraholdingrow)[]\>
 
 ***
 
@@ -80,14 +62,20 @@ Defined in: src/lib/swap/swapZoraHoldings.ts:41
 
 > **swapZoraHoldingsToBalanceMap**(`rows`): `Map`\<`string`, `string`\>
 
-Defined in: src/lib/swap/swapZoraHoldings.ts:125
+Defined in: [src/lib/swap/swapZoraHoldings.ts:126](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/swapZoraHoldings.ts#L126)
 
 #### Parameters
 
 ##### rows
 
-[`SwapZoraHoldingRow`](#swapzoraholdingrow)[]
+[`SwapZoraHoldingRow`](../zora/walletHoldings.md#swapzoraholdingrow)[]
 
 #### Returns
 
 `Map`\<`string`, `string`\>
+
+## References
+
+### SwapZoraHoldingRow
+
+Re-exports [SwapZoraHoldingRow](../zora/walletHoldings.md#swapzoraholdingrow)

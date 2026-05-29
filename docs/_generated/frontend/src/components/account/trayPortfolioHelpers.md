@@ -12,7 +12,7 @@
 
 > **TrayAssetHolding** = `object`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L26)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L26)
 
 #### Properties
 
@@ -20,43 +20,43 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:26](https://github.c
 
 > **amount**: `number`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L32)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:32](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L32)
 
 ##### logoUrl
 
 > **logoUrl**: `string` \| `null`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L31)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L31)
 
 ##### name
 
 > **name**: `string`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L30)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:30](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L30)
 
 ##### symbol
 
 > **symbol**: `string`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L29)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L29)
 
 ##### tokenAddress
 
 > **tokenAddress**: `string` \| `null`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L28)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L28)
 
 ##### tokenKey
 
 > **tokenKey**: `string`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L27)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L27)
 
 ##### usdValue
 
 > **usdValue**: `number`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L33)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:33](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L33)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:33](https://github.c
 
 > **TrayNetworkHolding** = `object`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L18)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L18)
 
 #### Properties
 
@@ -72,31 +72,31 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:18](https://github.c
 
 > **networkId**: `string`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L19)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L19)
 
 ##### networkLabel
 
 > **networkLabel**: `string`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L20)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L20)
 
 ##### networkLogoUrl
 
 > **networkLogoUrl**: `string` \| `null`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L21)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L21)
 
 ##### usdTotal
 
 > **usdTotal**: `number`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L22)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:22](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L22)
 
 ##### wallets
 
 > **wallets**: [`TrayNetworkWalletBreakdown`](#traynetworkwalletbreakdown)[]
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L23)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L23)
 
 ***
 
@@ -104,7 +104,7 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:23](https://github.c
 
 > **TrayNetworkWalletBreakdown** = `object`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L11)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L11)
 
 #### Properties
 
@@ -112,25 +112,25 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:11](https://github.c
 
 > **address**: `string`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L14)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L14)
 
 ##### kind
 
 > **kind**: [`TrayWalletKind`](#traywalletkind)
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L12)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L12)
 
 ##### label
 
 > **label**: `string`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L13)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L13)
 
 ##### usdValue
 
 > **usdValue**: `number`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L15)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L15)
 
 ***
 
@@ -138,7 +138,7 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:15](https://github.c
 
 > **TrayTokenHolding** = [`TrayAssetHolding`](#trayassetholding) & `object`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L36)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:36](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L36)
 
 #### Type Declaration
 
@@ -152,7 +152,7 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:36](https://github.c
 
 > **TrayWalletKind** = `"canonical"` \| `"external"`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L3)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L3)
 
 ***
 
@@ -160,7 +160,7 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:3](https://github.co
 
 > **TrayWalletSource** = `object`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L5)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L5)
 
 #### Properties
 
@@ -168,19 +168,19 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:5](https://github.co
 
 > **address**: `string`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L7)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L7)
 
 ##### kind
 
 > **kind**: [`TrayWalletKind`](#traywalletkind)
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L6)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L6)
 
 ##### label
 
 > **label**: `string`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L8)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L8)
 
 ***
 
@@ -188,7 +188,7 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:8](https://github.co
 
 > **TrayWalletTokenRow** = `object`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L40)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L40)
 
 #### Properties
 
@@ -196,13 +196,13 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:40](https://github.c
 
 > **token**: [`DebankToken`](../../lib/debank/client.md#debanktoken)
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L41)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:41](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L41)
 
 ##### wallet
 
 > **wallet**: [`TrayWalletSource`](#traywalletsource)
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L42)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L42)
 
 ## Functions
 
@@ -210,7 +210,7 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:42](https://github.c
 
 > **buildTrayAssetHoldings**(`rows`, `options?`): [`TrayAssetHolding`](#trayassetholding)[]
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:269](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L269)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:284](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L284)
 
 #### Parameters
 
@@ -234,7 +234,7 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:269](https://github.
 
 > **buildTrayHoldings**(`params`): `object`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:193](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L193)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:193](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L193)
 
 #### Parameters
 
@@ -274,7 +274,7 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:193](https://github.
 
 > **buildTrayHoldingsFromPortfolios**(`params`): `object`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:165](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L165)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:165](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L165)
 
 Build network totals from unified tray portfolio snapshots (DeBank or Base/etherscan).
 
@@ -316,7 +316,7 @@ Build network totals from unified tray portfolio snapshots (DeBank or Base/ether
 
 > **buildTrayTokenRowsFromPortfolios**(`params`): [`TrayWalletTokenRow`](#traywallettokenrow)[]
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:380](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L380)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:395](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L395)
 
 Flatten server wallet portfolios into tray token rows (DeBank all_token_list).
 
@@ -342,7 +342,7 @@ Flatten server wallet portfolios into tray token rows (DeBank all_token_list).
 
 > **buildTrayWalletSources**(`params`): [`TrayWalletSource`](#traywalletsource)[]
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:56](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L56)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:56](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L56)
 
 One DeBank row per address — skip external EOA when it is the same as canonical CSW.
 
@@ -368,7 +368,7 @@ One DeBank row per address — skip external EOA when it is the same as canonica
 
 > **buildTrayZoraHoldings**(`rows`, `zoraMap`): [`TrayTokenHolding`](#traytokenholding)[]
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:309](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L309)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:324](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L324)
 
 #### Parameters
 
@@ -386,11 +386,29 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:309](https://github.
 
 ***
 
+### collectTrayZoraTokenKeys()
+
+> **collectTrayZoraTokenKeys**(...`groups`): `Set`\<`string`\>
+
+Defined in: [src/components/account/trayPortfolioHelpers.ts:269](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L269)
+
+#### Parameters
+
+##### groups
+
+...readonly readonly `object`[][]
+
+#### Returns
+
+`Set`\<`string`\>
+
+***
+
 ### collectZoraLookupAddresses()
 
 > **collectZoraLookupAddresses**(`rows`): `string`[]
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:357](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L357)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:372](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L372)
 
 #### Parameters
 
@@ -408,7 +426,7 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:357](https://github.
 
 > **isEvmAddress**(`value`): `boolean`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:47](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L47)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:47](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L47)
 
 #### Parameters
 
@@ -426,7 +444,7 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:47](https://github.c
 
 > **normalizeAddressKey**(`value`): `string`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L51)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:51](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L51)
 
 #### Parameters
 
@@ -444,7 +462,7 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:51](https://github.c
 
 > **parseDebankToken**(`token`): \{ `amount`: `number`; `logoUrl`: `string` \| `null`; `name`: `string`; `symbol`: `string`; `tokenAddress`: `string` \| `null`; `tokenKey`: `string`; `usdValue`: `number`; \} \| `null`
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:96](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L96)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:96](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L96)
 
 #### Parameters
 
@@ -462,7 +480,7 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:96](https://github.c
 
 > **portfolioTokenToDebankToken**(`token`): [`DebankToken`](../../lib/debank/client.md#debanktoken)
 
-Defined in: [src/components/account/trayPortfolioHelpers.ts:366](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/trayPortfolioHelpers.ts#L366)
+Defined in: [src/components/account/trayPortfolioHelpers.ts:381](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L381)
 
 #### Parameters
 
@@ -473,3 +491,21 @@ Defined in: [src/components/account/trayPortfolioHelpers.ts:366](https://github.
 #### Returns
 
 [`DebankToken`](../../lib/debank/client.md#debanktoken)
+
+***
+
+### sumTrayAssetUsd()
+
+> **sumTrayAssetUsd**(`holdings`): `number`
+
+Defined in: [src/components/account/trayPortfolioHelpers.ts:280](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/trayPortfolioHelpers.ts#L280)
+
+#### Parameters
+
+##### holdings
+
+readonly `object`[]
+
+#### Returns
+
+`number`

@@ -12,7 +12,7 @@
 
 > **\_resetHermitRoomOwnerCacheForTests**(): `void`
 
-Defined in: [server/\_lib/hermit/policy.ts:107](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/policy.ts#L107)
+Defined in: [server/\_lib/hermit/policy.ts:107](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/policy.ts#L107)
 
 #### Returns
 
@@ -24,7 +24,7 @@ Defined in: [server/\_lib/hermit/policy.ts:107](https://github.com/wenakita/4626
 
 > **getHermitOwnerAddress**(): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/hermit/policy.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/policy.ts#L13)
+Defined in: [server/\_lib/hermit/policy.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/policy.ts#L13)
 
 #### Returns
 
@@ -36,7 +36,7 @@ Defined in: [server/\_lib/hermit/policy.ts:13](https://github.com/wenakita/4626/
 
 > **isHermitOwner**(`address`): `boolean`
 
-Defined in: [server/\_lib/hermit/policy.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/policy.ts#L18)
+Defined in: [server/\_lib/hermit/policy.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/policy.ts#L18)
 
 #### Parameters
 
@@ -54,7 +54,7 @@ Defined in: [server/\_lib/hermit/policy.ts:18](https://github.com/wenakita/4626/
 
 > **isHermitRoomAllowed**(`roomId`): `boolean`
 
-Defined in: [server/\_lib/hermit/policy.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/policy.ts#L53)
+Defined in: [server/\_lib/hermit/policy.ts:53](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/policy.ts#L53)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ Defined in: [server/\_lib/hermit/policy.ts:53](https://github.com/wenakita/4626/
 
 > **isHermitRoomAllowedForOwner**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/hermit/policy.ts:88](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/policy.ts#L88)
+Defined in: [server/\_lib/hermit/policy.ts:88](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/policy.ts#L88)
 
 #### Parameters
 
@@ -96,7 +96,7 @@ Defined in: [server/\_lib/hermit/policy.ts:88](https://github.com/wenakita/4626/
 
 > **isHermitUserAllowed**(`address`): `boolean`
 
-Defined in: [server/\_lib/hermit/policy.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/policy.ts#L35)
+Defined in: [server/\_lib/hermit/policy.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/policy.ts#L35)
 
 #### Parameters
 
@@ -114,7 +114,7 @@ Defined in: [server/\_lib/hermit/policy.ts:35](https://github.com/wenakita/4626/
 
 > **readHermitAllowedRoomIds**(): `Set`\<`string`\>
 
-Defined in: [server/\_lib/hermit/policy.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/policy.ts#L42)
+Defined in: [server/\_lib/hermit/policy.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/policy.ts#L42)
 
 #### Returns
 
@@ -126,7 +126,7 @@ Defined in: [server/\_lib/hermit/policy.ts:42](https://github.com/wenakita/4626/
 
 > **readHermitAllowedUsers**(): `Set`\<`string`\>
 
-Defined in: [server/\_lib/hermit/policy.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/policy.ts#L24)
+Defined in: [server/\_lib/hermit/policy.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/policy.ts#L24)
 
 #### Returns
 
@@ -138,7 +138,7 @@ Defined in: [server/\_lib/hermit/policy.ts:24](https://github.com/wenakita/4626/
 
 > **resolveHermitGatewayUrl**(`cid`): `string` \| `null`
 
-Defined in: [server/\_lib/hermit/policy.ts:111](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/hermit/policy.ts#L111)
+Defined in: [server/\_lib/hermit/policy.ts:111](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/policy.ts#L111)
 
 #### Parameters
 

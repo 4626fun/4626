@@ -12,7 +12,7 @@
 
 > **PersistedCswOwnerIndex** = `object`
 
-Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/cswOwnerIndexPersistence.ts#L5)
+Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/cswOwnerIndexPersistence.ts#L5)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:5](https://github.com/wenaki
 
 > **ownerCountSnapshot**: `number`
 
-Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/cswOwnerIndexPersistence.ts#L7)
+Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/cswOwnerIndexPersistence.ts#L7)
 
 ##### ownerIndex
 
 > **ownerIndex**: `number`
 
-Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/cswOwnerIndexPersistence.ts#L6)
+Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/cswOwnerIndexPersistence.ts#L6)
 
 ##### savedAt
 
 > **savedAt**: `number`
 
-Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/cswOwnerIndexPersistence.ts#L8)
+Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/cswOwnerIndexPersistence.ts#L8)
 
 ## Functions
 
@@ -40,7 +40,7 @@ Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:8](https://github.com/wenaki
 
 > **clearCswOwnerIndexPersistenceForTests**(): `void`
 
-Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:90](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/cswOwnerIndexPersistence.ts#L90)
+Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:90](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/cswOwnerIndexPersistence.ts#L90)
 
 #### Returns
 
@@ -52,7 +52,7 @@ Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:90](https://github.com/wenak
 
 > **clearPersistedCswOwnerIndex**(`params`): `void`
 
-Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:77](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/cswOwnerIndexPersistence.ts#L77)
+Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:77](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/cswOwnerIndexPersistence.ts#L77)
 
 #### Parameters
 
@@ -80,7 +80,7 @@ Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:77](https://github.com/wenak
 
 > **readPersistedCswOwnerIndex**(`params`): [`PersistedCswOwnerIndex`](#persistedcswownerindex) \| `null`
 
-Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/cswOwnerIndexPersistence.ts#L27)
+Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/cswOwnerIndexPersistence.ts#L27)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:27](https://github.com/wenak
 
 > **writePersistedCswOwnerIndex**(`params`): `void`
 
-Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/cswOwnerIndexPersistence.ts#L52)
+Defined in: [src/lib/aa/cswOwnerIndexPersistence.ts:52](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/cswOwnerIndexPersistence.ts#L52)
 
 #### Parameters
 

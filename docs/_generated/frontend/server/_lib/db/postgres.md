@@ -12,7 +12,7 @@
 
 > **DbPool** = `object`
 
-Defined in: [server/\_lib/db/postgres.ts:130](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/postgres.ts#L130)
+Defined in: [server/\_lib/db/postgres.ts:130](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/postgres.ts#L130)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/db/postgres.ts:130](https://github.com/wenakita/4626/b
 
 > `optional` **query**: (`text`, `params?`) => `Promise`\<`DbResult`\>
 
-Defined in: [server/\_lib/db/postgres.ts:133](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/postgres.ts#L133)
+Defined in: [server/\_lib/db/postgres.ts:133](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/postgres.ts#L133)
 
 ###### Parameters
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/db/postgres.ts:133](https://github.com/wenakita/4626/b
 
 > **sql**: \<`T`\>(`strings`, ...`values`) => `Promise`\<`DbResult`\<`T`\>\>
 
-Defined in: [server/\_lib/db/postgres.ts:131](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/postgres.ts#L131)
+Defined in: [server/\_lib/db/postgres.ts:131](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/postgres.ts#L131)
 
 ###### Type Parameters
 
@@ -68,7 +68,7 @@ Defined in: [server/\_lib/db/postgres.ts:131](https://github.com/wenakita/4626/b
 
 > **ensureCreatorAccessSchema**(): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/db/postgres.ts:711](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/postgres.ts#L711)
+Defined in: [server/\_lib/db/postgres.ts:711](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/postgres.ts#L711)
 
 #### Returns
 
@@ -80,7 +80,7 @@ Defined in: [server/\_lib/db/postgres.ts:711](https://github.com/wenakita/4626/b
 
 > **getDb**(): `Promise`\<[`DbPool`](#dbpool) \| `null`\>
 
-Defined in: [server/\_lib/db/postgres.ts:412](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/postgres.ts#L412)
+Defined in: [server/\_lib/db/postgres.ts:412](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/postgres.ts#L412)
 
 #### Returns
 
@@ -92,7 +92,7 @@ Defined in: [server/\_lib/db/postgres.ts:412](https://github.com/wenakita/4626/b
 
 > **getDbForCron**(`deadlineMs?`): `Promise`\<[`DbPool`](#dbpool) \| `null`\>
 
-Defined in: [server/\_lib/db/postgres.ts:387](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/postgres.ts#L387)
+Defined in: [server/\_lib/db/postgres.ts:387](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/postgres.ts#L387)
 
 Cron handlers should use this instead of bare `getDb()` so a saturated Supabase pool
 does not hold the Vercel function until maxDuration (connection acquire can retry
@@ -114,7 +114,7 @@ for tens of seconds per query).
 
 > **getDbInitError**(): `string` \| `null`
 
-Defined in: [server/\_lib/db/postgres.ts:378](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/postgres.ts#L378)
+Defined in: [server/\_lib/db/postgres.ts:378](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/postgres.ts#L378)
 
 #### Returns
 
@@ -126,7 +126,7 @@ Defined in: [server/\_lib/db/postgres.ts:378](https://github.com/wenakita/4626/b
 
 > **isDbConfigured**(): `boolean`
 
-Defined in: [server/\_lib/db/postgres.ts:374](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/postgres.ts#L374)
+Defined in: [server/\_lib/db/postgres.ts:374](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/postgres.ts#L374)
 
 Returns true if a Postgres connection string appears to be configured in env.
 Note: this doesn't guarantee connectivity.
@@ -141,7 +141,7 @@ Note: this doesn't guarantee connectivity.
 
 > **isPostgresPoolSaturatedError**(`err`): `boolean`
 
-Defined in: [server/\_lib/db/postgres.ts:224](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/postgres.ts#L224)
+Defined in: [server/\_lib/db/postgres.ts:224](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/postgres.ts#L224)
 
 True when Supabase session pool or a torn-down pg pool rejected the connection.
 
@@ -161,7 +161,7 @@ True when Supabase session pool or a torn-down pg pool rejected the connection.
 
 > **runInTransaction**\<`T`\>(`fn`): `Promise`\<`T` \| `null`\>
 
-Defined in: [server/\_lib/db/postgres.ts:164](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/postgres.ts#L164)
+Defined in: [server/\_lib/db/postgres.ts:164](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/postgres.ts#L164)
 
 #### Type Parameters
 

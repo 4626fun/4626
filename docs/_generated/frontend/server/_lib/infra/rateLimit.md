@@ -12,7 +12,7 @@
 
 > **RateLimitConfig** = `object`
 
-Defined in: [server/\_lib/infra/rateLimit.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/rateLimit.ts#L36)
+Defined in: [server/\_lib/infra/rateLimit.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L36)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [server/\_lib/infra/rateLimit.ts:36](https://github.com/wenakita/462
 
 > **maxRequests**: `number`
 
-Defined in: [server/\_lib/infra/rateLimit.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/rateLimit.ts#L38)
+Defined in: [server/\_lib/infra/rateLimit.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L38)
 
 ##### windowMs
 
 > **windowMs**: `number`
 
-Defined in: [server/\_lib/infra/rateLimit.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/rateLimit.ts#L37)
+Defined in: [server/\_lib/infra/rateLimit.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L37)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [server/\_lib/infra/rateLimit.ts:37](https://github.com/wenakita/462
 
 > **RateLimitResult** = `object`
 
-Defined in: [server/\_lib/infra/rateLimit.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/rateLimit.ts#L41)
+Defined in: [server/\_lib/infra/rateLimit.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L41)
 
 #### Properties
 
@@ -42,19 +42,19 @@ Defined in: [server/\_lib/infra/rateLimit.ts:41](https://github.com/wenakita/462
 
 > **allowed**: `boolean`
 
-Defined in: [server/\_lib/infra/rateLimit.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/rateLimit.ts#L42)
+Defined in: [server/\_lib/infra/rateLimit.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L42)
 
 ##### remaining
 
 > **remaining**: `number`
 
-Defined in: [server/\_lib/infra/rateLimit.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/rateLimit.ts#L43)
+Defined in: [server/\_lib/infra/rateLimit.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L43)
 
 ##### resetAt
 
 > **resetAt**: `number`
 
-Defined in: [server/\_lib/infra/rateLimit.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/rateLimit.ts#L44)
+Defined in: [server/\_lib/infra/rateLimit.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L44)
 
 ## Variables
 
@@ -62,7 +62,7 @@ Defined in: [server/\_lib/infra/rateLimit.ts:44](https://github.com/wenakita/462
 
 > `const` **RATE\_LIMITS**: `object`
 
-Defined in: [server/\_lib/infra/rateLimit.ts:85](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/rateLimit.ts#L85)
+Defined in: [server/\_lib/infra/rateLimit.ts:85](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L85)
 
 #### Type Declaration
 
@@ -354,54 +354,6 @@ Defined in: [server/\_lib/infra/rateLimit.ts:85](https://github.com/wenakita/462
 
 > `readonly` **windowMs**: `60000` = `60_000`
 
-##### creRuntimeDecisionsWrite
-
-> `readonly` **creRuntimeDecisionsWrite**: `object`
-
-###### creRuntimeDecisionsWrite.maxRequests
-
-> `readonly` **maxRequests**: `60` = `60`
-
-###### creRuntimeDecisionsWrite.windowMs
-
-> `readonly` **windowMs**: `60000` = `60_000`
-
-##### creRuntimeIngestRead
-
-> `readonly` **creRuntimeIngestRead**: `object`
-
-###### creRuntimeIngestRead.maxRequests
-
-> `readonly` **maxRequests**: `120` = `120`
-
-###### creRuntimeIngestRead.windowMs
-
-> `readonly` **windowMs**: `60000` = `60_000`
-
-##### creRuntimeIngestWrite
-
-> `readonly` **creRuntimeIngestWrite**: `object`
-
-###### creRuntimeIngestWrite.maxRequests
-
-> `readonly` **maxRequests**: `60` = `60`
-
-###### creRuntimeIngestWrite.windowMs
-
-> `readonly` **windowMs**: `60000` = `60_000`
-
-##### creRuntimeTriggerWrite
-
-> `readonly` **creRuntimeTriggerWrite**: `object`
-
-###### creRuntimeTriggerWrite.maxRequests
-
-> `readonly` **maxRequests**: `30` = `30`
-
-###### creRuntimeTriggerWrite.windowMs
-
-> `readonly` **windowMs**: `60000` = `60_000`
-
 ##### cswLink
 
 > `readonly` **cswLink**: `object`
@@ -519,6 +471,54 @@ Defined in: [server/\_lib/infra/rateLimit.ts:85](https://github.com/wenakita/462
 > `readonly` **maxRequests**: `60` = `60`
 
 ###### general.windowMs
+
+> `readonly` **windowMs**: `60000` = `60_000`
+
+##### keeperDecisionsWrite
+
+> `readonly` **keeperDecisionsWrite**: `object`
+
+###### keeperDecisionsWrite.maxRequests
+
+> `readonly` **maxRequests**: `60` = `60`
+
+###### keeperDecisionsWrite.windowMs
+
+> `readonly` **windowMs**: `60000` = `60_000`
+
+##### keeperIngestRead
+
+> `readonly` **keeperIngestRead**: `object`
+
+###### keeperIngestRead.maxRequests
+
+> `readonly` **maxRequests**: `120` = `120`
+
+###### keeperIngestRead.windowMs
+
+> `readonly` **windowMs**: `60000` = `60_000`
+
+##### keeperIngestWrite
+
+> `readonly` **keeperIngestWrite**: `object`
+
+###### keeperIngestWrite.maxRequests
+
+> `readonly` **maxRequests**: `60` = `60`
+
+###### keeperIngestWrite.windowMs
+
+> `readonly` **windowMs**: `60000` = `60_000`
+
+##### keeperTriggerWrite
+
+> `readonly` **keeperTriggerWrite**: `object`
+
+###### keeperTriggerWrite.maxRequests
+
+> `readonly` **maxRequests**: `30` = `30`
+
+###### keeperTriggerWrite.windowMs
 
 > `readonly` **windowMs**: `60000` = `60_000`
 
@@ -756,7 +756,7 @@ Defined in: [server/\_lib/infra/rateLimit.ts:85](https://github.com/wenakita/462
 
 > **checkRateLimit**(`key`, `config`): [`RateLimitResult`](#ratelimitresult)
 
-Defined in: [server/\_lib/infra/rateLimit.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/rateLimit.ts#L51)
+Defined in: [server/\_lib/infra/rateLimit.ts:51](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L51)
 
 Check if a key is rate limited.
 Returns whether the request is allowed and remaining quota.
@@ -781,7 +781,7 @@ Returns whether the request is allowed and remaining quota.
 
 > **getClientIp**(`req`): `string`
 
-Defined in: [server/\_lib/infra/rateLimit.ts:218](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/rateLimit.ts#L218)
+Defined in: [server/\_lib/infra/rateLimit.ts:218](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L218)
 
 Helper to get client IP from request headers.
 
@@ -816,7 +816,7 @@ feature flag that asserts Cloudflare is the true edge.
 
 > **rateLimitKey**(...`parts`): `string`
 
-Defined in: [server/\_lib/infra/rateLimit.ts:250](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/infra/rateLimit.ts#L250)
+Defined in: [server/\_lib/infra/rateLimit.ts:250](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L250)
 
 Build a rate limit key from components.
 

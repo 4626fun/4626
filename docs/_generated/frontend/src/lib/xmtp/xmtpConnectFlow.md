@@ -12,7 +12,7 @@
 
 > **ConnectFlowInput** = `object`
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L25)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L25)
 
 #### Properties
 
@@ -20,31 +20,31 @@ Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:25](https://github.com/wenakita/462
 
 > **hasKnownInstallation**: `boolean`
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L28)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L28)
 
 ##### intent
 
 > **intent**: [`XmtpConnectIntent`](xmtpConnectPolicy.md#xmtpconnectintent)
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L26)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L26)
 
 ##### opfsDatabaseExists
 
 > **opfsDatabaseExists**: `boolean`
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L27)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L27)
 
 ##### restoreOutcome
 
 > **restoreOutcome**: [`RestorePhaseOutcome`](#restorephaseoutcome)
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L29)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L29)
 
 ##### setupOutcome
 
 > **setupOutcome**: [`SetupPhaseOutcome`](#setupphaseoutcome)
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L30)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:30](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L30)
 
 ***
 
@@ -52,7 +52,7 @@ Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:30](https://github.com/wenakita/462
 
 > **ConnectFlowTrace** = `object`
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L33)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:33](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L33)
 
 #### Properties
 
@@ -60,49 +60,49 @@ Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:33](https://github.com/wenakita/462
 
 > **clientBuildCount**: `number`
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L35)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L35)
 
 ##### clientCreateCount
 
 > **clientCreateCount**: `number`
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L36)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:36](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L36)
 
 ##### installationLimitHit
 
 > **installationLimitHit**: `boolean`
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L40)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L40)
 
 ##### localStateResetRequired
 
 > **localStateResetRequired**: `boolean`
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L39)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:39](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L39)
 
 ##### outcome
 
 > **outcome**: `"connected"` \| `"error"` \| `"idle"`
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:34](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L34)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:34](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L34)
 
 ##### refusedChurn
 
 > **refusedChurn**: `boolean`
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L41)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:41](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L41)
 
 ##### registerInPlaceCount
 
 > **registerInPlaceCount**: `number`
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L37)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:37](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L37)
 
 ##### setupConversationsCount
 
 > **setupConversationsCount**: `number`
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L38)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:38](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L38)
 
 ***
 
@@ -110,7 +110,7 @@ Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:38](https://github.com/wenakita/462
 
 > **RestorePhaseOutcome** = `"not_attempted"` \| `"success"` \| `"installation_limit"` \| `"opfs_lock"` \| `"failed"`
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L8)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L8)
 
 ***
 
@@ -118,7 +118,7 @@ Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:8](https://github.com/wenakita/4626
 
 > **SetupPhaseOutcome** = `"not_reached"` \| `"success"` \| `"invalid_local"` \| `"uninitialized_then_registered"` \| `"uninitialized_register_failed"` \| `"uninitialized_register_failed_still_uninitialized"` \| `"transient_then_success"` \| `"transient_then_failed"`
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L15)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L15)
 
 ## Functions
 
@@ -126,7 +126,7 @@ Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:15](https://github.com/wenakita/462
 
 > **buildConnectFlowScenarioMatrix**(): [`ConnectFlowInput`](#connectflowinput)[]
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:231](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L231)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:231](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L231)
 
 #### Returns
 
@@ -138,7 +138,7 @@ Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:231](https://github.com/wenakita/46
 
 > **buildPseudoRandomConnectFlowScenarios**(`count`, `seed`): [`ConnectFlowInput`](#connectflowinput)[]
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:276](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L276)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:276](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L276)
 
 Deterministic pseudo-random scenarios to reach large test counts.
 
@@ -162,7 +162,7 @@ Deterministic pseudo-random scenarios to reach large test counts.
 
 > **isFirstTryConnectWithoutChurn**(`input`, `trace`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:186](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L186)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:186](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L186)
 
 #### Parameters
 
@@ -184,7 +184,7 @@ Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:186](https://github.com/wenakita/46
 
 > **normalizeScenario**(`input`): [`ConnectFlowInput`](#connectflowinput)
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:207](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L207)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:207](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L207)
 
 #### Parameters
 
@@ -202,7 +202,7 @@ Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:207](https://github.com/wenakita/46
 
 > **simulateXmtpConnectFlow**(`input`): [`ConnectFlowTrace`](#connectflowtrace)
 
-Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L48)
+Defined in: [src/lib/xmtp/xmtpConnectFlow.ts:48](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpConnectFlow.ts#L48)
 
 Pure model of the browser XMTP connect decision tree in provider.tsx.
 Used for high-volume regression tests that forbid accidental Client.create churn.

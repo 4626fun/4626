@@ -12,7 +12,7 @@
 
 > **dedupeExploreCoinsByCreatorIdentity**\<`T`\>(`coins`): `T`[]
 
-Defined in: [src/features/explore/exploreShared.ts:337](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L337)
+Defined in: [src/features/explore/exploreShared.ts:337](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L337)
 
 #### Type Parameters
 
@@ -36,7 +36,7 @@ readonly `T`[]
 
 > **flattenExplorePagedNodes**\<`TNode`\>(`pages`, `options`): `TNode`[]
 
-Defined in: [src/features/explore/exploreShared.ts:288](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L288)
+Defined in: [src/features/explore/exploreShared.ts:288](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L288)
 
 #### Type Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/features/explore/exploreShared.ts:288](https://github.com/wenak
 
 > **formatCompactUsd**(`v`): `string`
 
-Defined in: [src/features/explore/exploreShared.ts:428](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L428)
+Defined in: [src/features/explore/exploreShared.ts:428](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L428)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ Defined in: [src/features/explore/exploreShared.ts:428](https://github.com/wenak
 
 > **formatCount**(`value`): `string`
 
-Defined in: [src/features/explore/exploreShared.ts:388](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L388)
+Defined in: [src/features/explore/exploreShared.ts:388](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L388)
 
 #### Parameters
 
@@ -102,7 +102,7 @@ Defined in: [src/features/explore/exploreShared.ts:388](https://github.com/wenak
 
 > **formatDateLabel**(`value?`): `string`
 
-Defined in: [src/features/explore/exploreShared.ts:408](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L408)
+Defined in: [src/features/explore/exploreShared.ts:408](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L408)
 
 #### Parameters
 
@@ -120,7 +120,7 @@ Defined in: [src/features/explore/exploreShared.ts:408](https://github.com/wenak
 
 > **formatShortAddress**(`value`, `fallback`): `string`
 
-Defined in: [src/features/explore/exploreShared.ts:364](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L364)
+Defined in: [src/features/explore/exploreShared.ts:364](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L364)
 
 #### Parameters
 
@@ -142,7 +142,7 @@ Defined in: [src/features/explore/exploreShared.ts:364](https://github.com/wenak
 
 > **formatTimestamp**(`ts`): `string`
 
-Defined in: [src/features/explore/exploreShared.ts:396](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L396)
+Defined in: [src/features/explore/exploreShared.ts:396](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L396)
 
 #### Parameters
 
@@ -160,7 +160,7 @@ Defined in: [src/features/explore/exploreShared.ts:396](https://github.com/wenak
 
 > **formatTokenAmount**(`value`): `string`
 
-Defined in: [src/features/explore/exploreShared.ts:419](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L419)
+Defined in: [src/features/explore/exploreShared.ts:419](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L419)
 
 #### Parameters
 
@@ -178,7 +178,7 @@ Defined in: [src/features/explore/exploreShared.ts:419](https://github.com/wenak
 
 > **formatUsd**(`value`): `string`
 
-Defined in: [src/features/explore/exploreShared.ts:379](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L379)
+Defined in: [src/features/explore/exploreShared.ts:379](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L379)
 
 #### Parameters
 
@@ -196,7 +196,7 @@ Defined in: [src/features/explore/exploreShared.ts:379](https://github.com/wenak
 
 > **isSupportedExploreChain**(`chain`): `boolean`
 
-Defined in: [src/features/explore/exploreShared.ts:349](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L349)
+Defined in: [src/features/explore/exploreShared.ts:349](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L349)
 
 #### Parameters
 
@@ -214,7 +214,7 @@ Defined in: [src/features/explore/exploreShared.ts:349](https://github.com/wenak
 
 > **matchesCoinSearchQuery**(`coin`, `query`, `options`): `boolean`
 
-Defined in: [src/features/explore/exploreShared.ts:115](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L115)
+Defined in: [src/features/explore/exploreShared.ts:115](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L115)
 
 #### Parameters
 
@@ -240,7 +240,7 @@ Defined in: [src/features/explore/exploreShared.ts:115](https://github.com/wenak
 
 > **normalizeCoinSearchQuery**(`query`): `object`
 
-Defined in: [src/features/explore/exploreShared.ts:101](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L101)
+Defined in: [src/features/explore/exploreShared.ts:101](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L101)
 
 #### Parameters
 
@@ -270,7 +270,7 @@ Defined in: [src/features/explore/exploreShared.ts:101](https://github.com/wenak
 
 > **normalizeExploreOption**\<`TValue`\>(`value`, `allowed`, `fallback`): `TValue`
 
-Defined in: [src/features/explore/exploreShared.ts:146](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L146)
+Defined in: [src/features/explore/exploreShared.ts:146](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L146)
 
 #### Type Parameters
 
@@ -302,7 +302,7 @@ readonly `TValue`[]
 
 > **parseNumber**(`value`): `number`
 
-Defined in: [src/features/explore/exploreShared.ts:370](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L370)
+Defined in: [src/features/explore/exploreShared.ts:370](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L370)
 
 #### Parameters
 
@@ -320,7 +320,7 @@ Defined in: [src/features/explore/exploreShared.ts:370](https://github.com/wenak
 
 > **recordExploreQueryRefresh**(`scope`, `query`): `void`
 
-Defined in: [src/features/explore/exploreShared.ts:94](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L94)
+Defined in: [src/features/explore/exploreShared.ts:94](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L94)
 
 #### Parameters
 
@@ -342,7 +342,7 @@ Defined in: [src/features/explore/exploreShared.ts:94](https://github.com/wenaki
 
 > **recordExploreSearchInputUpdate**(`scope`, `query`): `void`
 
-Defined in: [src/features/explore/exploreShared.ts:87](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L87)
+Defined in: [src/features/explore/exploreShared.ts:87](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L87)
 
 #### Parameters
 
@@ -364,7 +364,7 @@ Defined in: [src/features/explore/exploreShared.ts:87](https://github.com/wenaki
 
 > **resolveExploreCreatorIdentityKey**(`coin`): `string`
 
-Defined in: [src/features/explore/exploreShared.ts:319](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L319)
+Defined in: [src/features/explore/exploreShared.ts:319](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L319)
 
 #### Parameters
 
@@ -382,7 +382,7 @@ Defined in: [src/features/explore/exploreShared.ts:319](https://github.com/wenak
 
 > **setExploreSearchParam**(`searchParams`, `setSearchParams`, `key`, `value`): `boolean`
 
-Defined in: [src/features/explore/exploreShared.ts:156](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L156)
+Defined in: [src/features/explore/exploreShared.ts:156](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L156)
 
 #### Parameters
 
@@ -412,7 +412,7 @@ Defined in: [src/features/explore/exploreShared.ts:156](https://github.com/wenak
 
 > **setExploreSearchQueryParam**(`searchParams`, `setSearchParams`, `query`, `key`): `boolean`
 
-Defined in: [src/features/explore/exploreShared.ts:169](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L169)
+Defined in: [src/features/explore/exploreShared.ts:169](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L169)
 
 #### Parameters
 
@@ -442,7 +442,7 @@ Defined in: [src/features/explore/exploreShared.ts:169](https://github.com/wenak
 
 > **toDisplayAssetUrl**(`value?`): `string` \| `undefined`
 
-Defined in: [src/features/explore/exploreShared.ts:353](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L353)
+Defined in: [src/features/explore/exploreShared.ts:353](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L353)
 
 #### Parameters
 
@@ -460,7 +460,7 @@ Defined in: [src/features/explore/exploreShared.ts:353](https://github.com/wenak
 
 > **useDebouncedValue**\<`TValue`\>(`value`, `delayMs`): `TValue`
 
-Defined in: [src/features/explore/exploreShared.ts:277](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L277)
+Defined in: [src/features/explore/exploreShared.ts:277](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L277)
 
 #### Type Parameters
 
@@ -488,7 +488,7 @@ Defined in: [src/features/explore/exploreShared.ts:277](https://github.com/wenak
 
 > **useExploreSubnavParams**\<`TSort`, `TTime`\>(`options`): `object`
 
-Defined in: [src/features/explore/exploreShared.ts:185](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/explore/exploreShared.ts#L185)
+Defined in: [src/features/explore/exploreShared.ts:185](https://github.com/wenakita/4626/blob/main/frontend/src/features/explore/exploreShared.ts#L185)
 
 #### Type Parameters
 

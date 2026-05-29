@@ -12,7 +12,7 @@
 
 > **CommandIssuerContext** = `object`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:84](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L84)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:84](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L84)
 
 #### Properties
 
@@ -20,73 +20,73 @@ Defined in: [server/\_lib/wallet/commandIssuerContext.ts:84](https://github.com/
 
 > **capsVersion**: `number`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:91](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L91)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:91](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L91)
 
 ##### dailyCapWei
 
 > **dailyCapWei**: `bigint`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:93](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L93)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:93](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L93)
 
 ##### ownerEoa
 
 > **ownerEoa**: `Address`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:88](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L88)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:88](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L88)
 
 ##### ownerIndex
 
 > **ownerIndex**: `number`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:89](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L89)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:89](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L89)
 
 ##### paymasterPolicy
 
 > **paymasterPolicy**: `string`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:90](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L90)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:90](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L90)
 
 ##### perTxCapWei
 
 > **perTxCapWei**: `bigint`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:92](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L92)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:92](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L92)
 
 ##### privyOwnerWalletId
 
 > **privyOwnerWalletId**: `string`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:87](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L87)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:87](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L87)
 
 ##### profileId
 
 > **profileId**: `number`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:85](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L85)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:85](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L85)
 
 ##### provisionedAt
 
 > **provisionedAt**: `Date`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:94](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L94)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L94)
 
 ##### revokedAt
 
 > **revokedAt**: `Date` \| `null`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:95](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L95)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L95)
 
 ##### smartWallet
 
 > **smartWallet**: `Address`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:86](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L86)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:86](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L86)
 
 ##### subAccount
 
 > **subAccount**: [`CommandIssuerSubAccount`](#commandissuersubaccount) \| `null`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:96](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L96)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:96](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L96)
 
 ***
 
@@ -94,7 +94,7 @@ Defined in: [server/\_lib/wallet/commandIssuerContext.ts:96](https://github.com/
 
 > **CommandIssuerResolution** = \{ `context`: [`CommandIssuerContext`](#commandissuercontext); `status`: `"ready"`; \} \| \{ `profileId`: `number` \| `null`; `status`: `"not_provisioned"`; \} \| \{ `profileId`: `number`; `reason`: `string` \| `null`; `revokedAt`: `Date`; `status`: `"revoked"`; \} \| \{ `status`: `"db_unavailable"`; \}
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:99](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L99)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:99](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L99)
 
 ***
 
@@ -102,7 +102,7 @@ Defined in: [server/\_lib/wallet/commandIssuerContext.ts:99](https://github.com/
 
 > **CommandIssuerSubAccount** = `object`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:70](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L70)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:70](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L70)
 
 #### Properties
 
@@ -110,13 +110,13 @@ Defined in: [server/\_lib/wallet/commandIssuerContext.ts:70](https://github.com/
 
 > **parentCswAddress**: `Address`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:72](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L72)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:72](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L72)
 
 ##### spendPermission
 
 > **spendPermission**: `object`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:73](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L73)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:73](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L73)
 
 ###### allowanceWei
 
@@ -150,7 +150,7 @@ Defined in: [server/\_lib/wallet/commandIssuerContext.ts:73](https://github.com/
 
 > **subAccountAddress**: `Address`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L71)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:71](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L71)
 
 ***
 
@@ -158,7 +158,7 @@ Defined in: [server/\_lib/wallet/commandIssuerContext.ts:71](https://github.com/
 
 > **ExecutionReadiness** = `"ready"` \| `"not_provisioned"` \| `"revoked"` \| `"db_unavailable"`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L51)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:51](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L51)
 
 ***
 
@@ -166,7 +166,7 @@ Defined in: [server/\_lib/wallet/commandIssuerContext.ts:51](https://github.com/
 
 > **ProvisionSubAccountInput** = `object`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:401](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L401)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:401](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L401)
 
 Provision (or re-provision) an execution context for a profile.
 Called only from admin surfaces — never from the hot path.
@@ -177,13 +177,13 @@ Called only from admin surfaces — never from the hot path.
 
 > **parentCswAddress**: `string`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:403](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L403)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:403](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L403)
 
 ##### spendPermission
 
 > **spendPermission**: `object`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:404](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L404)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:404](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L404)
 
 ###### allowanceWei
 
@@ -213,7 +213,7 @@ Defined in: [server/\_lib/wallet/commandIssuerContext.ts:404](https://github.com
 
 > **subAccountAddress**: `string`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:402](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L402)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:402](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L402)
 
 ***
 
@@ -221,7 +221,7 @@ Defined in: [server/\_lib/wallet/commandIssuerContext.ts:402](https://github.com
 
 > **SpendPermissionPayload** = `object`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:58](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L58)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:58](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L58)
 
 EIP-712 SpendPermission payload shape, exactly matching the
 `SpendPermissionManager` struct on Base mainnet. Bigints are serialized as
@@ -233,55 +233,55 @@ decimal strings for JSONB-round-trip safety.
 
 > **account**: `Address`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:59](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L59)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:59](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L59)
 
 ##### allowance
 
 > **allowance**: `string`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:62](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L62)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:62](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L62)
 
 ##### end
 
 > **end**: `number`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:65](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L65)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:65](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L65)
 
 ##### extraData
 
 > **extraData**: `string`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:67](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L67)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:67](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L67)
 
 ##### period
 
 > **period**: `number`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:63](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L63)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:63](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L63)
 
 ##### salt
 
 > **salt**: `string`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:66](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L66)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:66](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L66)
 
 ##### spender
 
 > **spender**: `Address`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L60)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:60](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L60)
 
 ##### start
 
 > **start**: `number`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:64](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L64)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:64](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L64)
 
 ##### token
 
 > **token**: `Address`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:61](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L61)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:61](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L61)
 
 ## Functions
 
@@ -289,7 +289,7 @@ Defined in: [server/\_lib/wallet/commandIssuerContext.ts:61](https://github.com/
 
 > **envBigInt**(`key`, `fallback`): `bigint`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L40)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L40)
 
 Read an environment variable as a positive bigint, returning `fallback` if
 the variable is absent, empty, non-numeric, or non-positive.
@@ -315,7 +315,7 @@ Shared by user-facing arch-b handlers and the admin provisioning endpoint.
 
 > **isExecutionReady**(`resolution`): `resolution is { context: CommandIssuerContext; status: "ready" }`
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:391](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L391)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:391](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L391)
 
 Type-narrow helper: true iff resolution returned a non-revoked, provisioned
 context.
@@ -336,7 +336,7 @@ context.
 
 > **provisionCommandIssuerContext**(`params`): `Promise`\<\{ `context`: [`CommandIssuerContext`](#commandissuercontext); `ok`: `true`; \} \| \{ `error`: `string`; `ok`: `false`; \}\>
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:414](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L414)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:414](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L414)
 
 #### Parameters
 
@@ -392,7 +392,7 @@ Defined in: [server/\_lib/wallet/commandIssuerContext.ts:414](https://github.com
 
 > **provisionSubAccountSpendPermission**(`params`): `Promise`\<\{ `context`: [`CommandIssuerContext`](#commandissuercontext); `ok`: `true`; \} \| \{ `error`: `string`; `ok`: `false`; \}\>
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:549](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L549)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:549](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L549)
 
 Update just the sub-account columns on an existing execution-context row.
 Used by PR-B's provisioning endpoint after the parent-signed SpendPermission
@@ -453,7 +453,7 @@ create — caller must provision the base context first).
 
 > **readIssuerDailySpend**(`profileId`): `Promise`\<`bigint`\>
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:796](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L796)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:796](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L796)
 
 Read today's spend total without mutation. Used for preflight cap checks.
 
@@ -473,7 +473,7 @@ Read today's spend total without mutation. Used for preflight cap checks.
 
 > **recordIssuerDailySpend**(`params`): `Promise`\<\{ `newTotalWei`: `bigint`; `ok`: `true`; \} \| \{ `error`: `string`; `ok`: `false`; \}\>
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:727](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L727)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:727](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L727)
 
 Durable per-profile daily spend: increments today's counter atomically
 and returns the new total. Used by the submitter to enforce dailyCapWei
@@ -505,7 +505,7 @@ negative amount; the CHECK constraint prevents underflow.
 
 > **resolveCommandIssuerContextByAddress**(`address`): `Promise`\<[`CommandIssuerResolution`](#commandissuerresolution)\>
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:282](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L282)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:282](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L282)
 
 Resolve the execution context for a wallet address that issued a command
 (typically `params.senderWallet` in command handlers). The address is
@@ -528,7 +528,7 @@ reverse-looked-up to a profile via `profile_wallets`, then the active
 
 > **resolveCommandIssuerContextByProfileId**(`profileId`): `Promise`\<[`CommandIssuerResolution`](#commandissuerresolution)\>
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:337](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L337)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:337](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L337)
 
 Resolve execution context directly by profile id (used by admin provisioning
 endpoints and tests).
@@ -549,7 +549,7 @@ endpoints and tests).
 
 > **revokeCommandIssuerContext**(`params`): `Promise`\<\{ `ok`: `true`; \} \| \{ `error`: `string`; `ok`: `false`; \}\>
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:626](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L626)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:626](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L626)
 
 Soft-revoke an execution context. The row stays for audit but
 `isExecutionReady` returns false after this.
@@ -576,7 +576,7 @@ Soft-revoke an execution context. The row stays for audit but
 
 > **revokeSubAccountSpendPermission**(`params`): `Promise`\<\{ `alreadyRevoked`: `boolean`; `ok`: `true`; \} \| \{ `error`: `"not_provisioned"` \| `"db_unavailable"` \| `"db_write_failed"` \| `"context_row_missing"`; `ok`: `false`; \}\>
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:669](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L669)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:669](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L669)
 
 Revoke JUST the sub-account spend permission on a context row.
 
@@ -612,7 +612,7 @@ or 'context_row_missing' if there's no row at all.
 
 > **rollbackIssuerDailySpend**(`params`): `Promise`\<\{ `ok`: `true`; \} \| \{ `error`: `string`; `ok`: `false`; \}\>
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:764](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/commandIssuerContext.ts#L764)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:764](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L764)
 
 Roll back a previously-recorded spend (e.g., after a submission failure).
 Subtracts `amountWei` from today's counter. Uses GREATEST to prevent

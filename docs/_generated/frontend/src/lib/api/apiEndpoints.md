@@ -12,7 +12,7 @@
 
 > `const` **API\_ENDPOINTS**: `object`
 
-Defined in: [src/lib/api/apiEndpoints.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/api/apiEndpoints.ts#L1)
+Defined in: [src/lib/api/apiEndpoints.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/lib/api/apiEndpoints.ts#L1)
 
 #### Type Declaration
 

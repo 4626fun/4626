@@ -6,13 +6,91 @@
 
 # server/\_lib/wallet/cswOwnerSignature
 
+## Type Aliases
+
+### CswReadContractClient
+
+> **CswReadContractClient** = `object`
+
+Defined in: [server/\_lib/wallet/cswOwnerSignature.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/cswOwnerSignature.ts#L34)
+
+Minimal viem client surface for CSW replay-safe hash reads (avoids duplicate PublicClient resolution).
+
+#### Properties
+
+##### readContract()
+
+> **readContract**: (`args`) => `Promise`\<`unknown`\>
+
+Defined in: [server/\_lib/wallet/cswOwnerSignature.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/cswOwnerSignature.ts#L35)
+
+###### Parameters
+
+###### args
+
+###### abi
+
+readonly `unknown`[]
+
+###### address
+
+`Address`
+
+###### args?
+
+readonly `unknown`[]
+
+###### functionName
+
+`string`
+
+###### Returns
+
+`Promise`\<`unknown`\>
+
+## Variables
+
+### CSW\_REPLAY\_SAFE\_HASH\_ABI
+
+> `const` **CSW\_REPLAY\_SAFE\_HASH\_ABI**: readonly \[\{ `inputs`: readonly \[\{ `name`: `"hash"`; `type`: `"bytes32"`; \}\]; `name`: `"replaySafeHash"`; `outputs`: readonly \[\{ `name`: `""`; `type`: `"bytes32"`; \}\]; `stateMutability`: `"view"`; `type`: `"function"`; \}\]
+
+Defined in: [server/\_lib/wallet/cswOwnerSignature.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/cswOwnerSignature.ts#L43)
+
 ## Functions
+
+### readCswReplaySafeHash()
+
+> **readCswReplaySafeHash**(`params`): `Promise`\<`` `0x${string}` ``\>
+
+Defined in: [server/\_lib/wallet/cswOwnerSignature.ts:53](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/cswOwnerSignature.ts#L53)
+
+#### Parameters
+
+##### params
+
+###### innerHash
+
+`` `0x${string}` ``
+
+###### publicClient
+
+[`CswReadContractClient`](#cswreadcontractclient)
+
+###### smartWallet
+
+`string`
+
+#### Returns
+
+`Promise`\<`` `0x${string}` ``\>
+
+***
 
 ### wrapCswOwnerSignature()
 
 > **wrapCswOwnerSignature**(`ownerSignature`, `ownerIndex`): `` `0x${string}` ``
 
-Defined in: [server/\_lib/wallet/cswOwnerSignature.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/cswOwnerSignature.ts#L53)
+Defined in: [server/\_lib/wallet/cswOwnerSignature.ts:81](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/cswOwnerSignature.ts#L81)
 
 Wrap a raw 65-byte secp256k1 owner signature into the ERC-1271
 `SignatureWrapper` format that Permit2 expects when the signer is a
@@ -24,24 +102,10 @@ Coinbase Smart Wallet.
 
 `` `0x${string}` ``
 
-65-byte ECDSA signature as a `0x`-prefixed hex
-  string (output of `secp256k1SignHash` / Privy `secp256k1_sign`).
-
 ##### ownerIndex
 
 `number` = `0`
 
-Index of the owner within the CSW owner array.
-  Defaults to 0 for the standard 1-of-1 provisioning setup.
-
 #### Returns
 
 `` `0x${string}` ``
-
-abi.encode(uint256 ownerIndex, bytes signatureData) — the
-  exact bytes that CSW's `isValidSignature` will decode.
-
-#### Throws
-
-Error when `ownerSignature` is not exactly 65 bytes (132 hex
-  chars plus the 0x prefix, for a total length of 134).

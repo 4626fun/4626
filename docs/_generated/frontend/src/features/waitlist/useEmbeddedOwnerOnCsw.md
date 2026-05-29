@@ -12,7 +12,7 @@
 
 > **EmbeddedOwnerOnCswStatus** = `"idle"` \| `"checking"` \| `"owner"` \| `"not-owner"` \| `"unknown"`
 
-Defined in: [src/features/waitlist/useEmbeddedOwnerOnCsw.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/useEmbeddedOwnerOnCsw.ts#L8)
+Defined in: [src/features/waitlist/useEmbeddedOwnerOnCsw.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/useEmbeddedOwnerOnCsw.ts#L8)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/features/waitlist/useEmbeddedOwnerOnCsw.ts:8](https://github.co
 
 > **mapEmbeddedOwnerStatusToCanonicalCheckStatus**(`status`): [`CanonicalOwnerCheckStatus`](../../lib/uniswap/canonicalSignerGate.md#canonicalownercheckstatus)
 
-Defined in: [src/features/waitlist/useEmbeddedOwnerOnCsw.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/useEmbeddedOwnerOnCsw.ts#L10)
+Defined in: [src/features/waitlist/useEmbeddedOwnerOnCsw.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/useEmbeddedOwnerOnCsw.ts#L10)
 
 #### Parameters
 
@@ -38,7 +38,7 @@ Defined in: [src/features/waitlist/useEmbeddedOwnerOnCsw.ts:10](https://github.c
 
 > **useEmbeddedOwnerOnCsw**(`params`): `object`
 
-Defined in: [src/features/waitlist/useEmbeddedOwnerOnCsw.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/useEmbeddedOwnerOnCsw.ts#L51)
+Defined in: [src/features/waitlist/useEmbeddedOwnerOnCsw.ts:51](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/useEmbeddedOwnerOnCsw.ts#L51)
 
 #### Parameters
 

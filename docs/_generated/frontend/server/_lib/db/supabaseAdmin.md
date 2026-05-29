@@ -12,7 +12,7 @@
 
 > **getSupabaseAdmin**(): `SupabaseClient`
 
-Defined in: [server/\_lib/db/supabaseAdmin.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/supabaseAdmin.ts#L16)
+Defined in: [server/\_lib/db/supabaseAdmin.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/supabaseAdmin.ts#L16)
 
 #### Returns
 
@@ -24,7 +24,7 @@ Defined in: [server/\_lib/db/supabaseAdmin.ts:16](https://github.com/wenakita/46
 
 > **isSupabaseAdminConfigured**(): `boolean`
 
-Defined in: [server/\_lib/db/supabaseAdmin.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/db/supabaseAdmin.ts#L23)
+Defined in: [server/\_lib/db/supabaseAdmin.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/db/supabaseAdmin.ts#L23)
 
 #### Returns
 

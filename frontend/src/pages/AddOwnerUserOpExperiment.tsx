@@ -306,11 +306,25 @@ export function AddOwnerUserOpExperiment() {
                 </div>
               ) : null}
 
+              {userOpFlow.busy && userOpFlow.submitPhase === 'preflight' ? (
+                <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-xs text-zinc-300">
+                  Checking CSW gas and Base App wallet connection…
+                </div>
+              ) : null}
+
               {userOpFlow.busy && userOpFlow.submitPhase === 'awaiting_signature' ? (
                 <div className="rounded-xl border border-sky-400/25 bg-sky-500/10 px-3 py-2.5 text-xs text-sky-100">
-                  Confirm the add-owner request in Base App (passkey or device sign). This page
-                  stays on &quot;Submitting…&quot; until Base App returns from{' '}
-                  <span className="font-mono">wallet_sendCalls</span>.
+                  Confirm the add-owner request in Base App (passkey or device sign). Swipe up if the
+                  prompt is behind this page — this step can take up to 3 minutes.
+                </div>
+              ) : null}
+
+              {userOpFlow.busy &&
+              (userOpFlow.submitPhase === 'broadcasting' ||
+                userOpFlow.submitPhase === 'confirming' ||
+                userOpFlow.submitPhase === 'verifying') ? (
+                <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-xs text-zinc-300">
+                  UserOp broadcasted — waiting for EntryPoint confirmation on Base…
                 </div>
               ) : null}
 
@@ -327,13 +341,17 @@ export function AddOwnerUserOpExperiment() {
                     onClick={() => void userOpFlow.handleSubmitUserOp()}
                   >
                     {userOpFlow.busy
-                      ? userOpFlow.submitPhase === 'awaiting_signature'
+                      ? userOpFlow.submitPhase === 'preflight'
+                        ? 'Preflight checks…'
+                        : userOpFlow.submitPhase === 'awaiting_signature'
                         ? 'Waiting for Base App signature…'
                         : userOpFlow.submitPhase === 'confirming'
                           ? 'Waiting for on-chain confirmation…'
                           : userOpFlow.submitPhase === 'verifying'
                             ? 'Verifying EntryPoint trace…'
-                            : 'Submitting EntryPoint UserOp…'
+                            : userOpFlow.submitPhase === 'broadcasting'
+                              ? 'Broadcasting UserOp…'
+                              : 'Submitting EntryPoint UserOp…'
                       : userOpFlow.prepareLoading
                         ? 'Preparing…'
                         : 'Submit CSW self-UserOp (wallet_sendCalls)'}

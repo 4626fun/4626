@@ -12,7 +12,7 @@
 
 > **ChatFriendRecord** = `object`
 
-Defined in: [server/\_lib/chat/friends.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/friends.ts#L7)
+Defined in: [server/\_lib/chat/friends.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/friends.ts#L7)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/\_lib/chat/friends.ts:7](https://github.com/wenakita/4626/bl
 
 > **address**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/chat/friends.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/friends.ts#L8)
+Defined in: [server/\_lib/chat/friends.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/friends.ts#L8)
 
 ##### state
 
 > **state**: [`ChatFriendState`](#chatfriendstate)
 
-Defined in: [server/\_lib/chat/friends.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/friends.ts#L9)
+Defined in: [server/\_lib/chat/friends.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/friends.ts#L9)
 
 ##### updatedAt
 
 > **updatedAt**: `string`
 
-Defined in: [server/\_lib/chat/friends.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/friends.ts#L10)
+Defined in: [server/\_lib/chat/friends.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/friends.ts#L10)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/chat/friends.ts:10](https://github.com/wenakita/4626/b
 
 > **ChatFriendsSnapshot** = `object`
 
-Defined in: [server/\_lib/chat/friends.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/friends.ts#L13)
+Defined in: [server/\_lib/chat/friends.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/friends.ts#L13)
 
 #### Properties
 
@@ -48,19 +48,19 @@ Defined in: [server/\_lib/chat/friends.ts:13](https://github.com/wenakita/4626/b
 
 > **friends**: [`ChatFriendRecord`](#chatfriendrecord)[]
 
-Defined in: [server/\_lib/chat/friends.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/friends.ts#L14)
+Defined in: [server/\_lib/chat/friends.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/friends.ts#L14)
 
 ##### incoming
 
 > **incoming**: [`ChatFriendRecord`](#chatfriendrecord)[]
 
-Defined in: [server/\_lib/chat/friends.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/friends.ts#L15)
+Defined in: [server/\_lib/chat/friends.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/friends.ts#L15)
 
 ##### outgoing
 
 > **outgoing**: [`ChatFriendRecord`](#chatfriendrecord)[]
 
-Defined in: [server/\_lib/chat/friends.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/friends.ts#L16)
+Defined in: [server/\_lib/chat/friends.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/friends.ts#L16)
 
 ***
 
@@ -68,7 +68,7 @@ Defined in: [server/\_lib/chat/friends.ts:16](https://github.com/wenakita/4626/b
 
 > **ChatFriendState** = `"accepted"` \| `"pending_incoming"` \| `"pending_outgoing"`
 
-Defined in: [server/\_lib/chat/friends.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/friends.ts#L5)
+Defined in: [server/\_lib/chat/friends.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/friends.ts#L5)
 
 ## Functions
 
@@ -76,7 +76,7 @@ Defined in: [server/\_lib/chat/friends.ts:5](https://github.com/wenakita/4626/bl
 
 > **acceptChatFriendRequest**(`params`): `Promise`\<\{ `ok`: `true`; \} \| \{ `ok`: `false`; `reason`: `string`; \}\>
 
-Defined in: [server/\_lib/chat/friends.ts:125](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/friends.ts#L125)
+Defined in: [server/\_lib/chat/friends.ts:125](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/friends.ts#L125)
 
 #### Parameters
 
@@ -100,7 +100,7 @@ Defined in: [server/\_lib/chat/friends.ts:125](https://github.com/wenakita/4626/
 
 > **cancelOutgoingChatFriendRequest**(`params`): `Promise`\<\{ `ok`: `true`; \} \| \{ `ok`: `false`; `reason`: `string`; \}\>
 
-Defined in: [server/\_lib/chat/friends.ts:179](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/friends.ts#L179)
+Defined in: [server/\_lib/chat/friends.ts:179](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/friends.ts#L179)
 
 #### Parameters
 
@@ -124,7 +124,7 @@ Defined in: [server/\_lib/chat/friends.ts:179](https://github.com/wenakita/4626/
 
 > **declineChatFriendRequest**(`params`): `Promise`\<\{ `ok`: `true`; \} \| \{ `ok`: `false`; `reason`: `string`; \}\>
 
-Defined in: [server/\_lib/chat/friends.ts:152](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/friends.ts#L152)
+Defined in: [server/\_lib/chat/friends.ts:152](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/friends.ts#L152)
 
 #### Parameters
 
@@ -148,7 +148,7 @@ Defined in: [server/\_lib/chat/friends.ts:152](https://github.com/wenakita/4626/
 
 > **listChatFriendSnapshot**(`viewerAddress`): `Promise`\<[`ChatFriendsSnapshot`](#chatfriendssnapshot)\>
 
-Defined in: [server/\_lib/chat/friends.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/friends.ts#L19)
+Defined in: [server/\_lib/chat/friends.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/friends.ts#L19)
 
 #### Parameters
 
@@ -166,7 +166,7 @@ Defined in: [server/\_lib/chat/friends.ts:19](https://github.com/wenakita/4626/b
 
 > **removeChatFriend**(`params`): `Promise`\<\{ `ok`: `true`; \} \| \{ `ok`: `false`; `reason`: `string`; \}\>
 
-Defined in: [server/\_lib/chat/friends.ts:196](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/friends.ts#L196)
+Defined in: [server/\_lib/chat/friends.ts:196](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/friends.ts#L196)
 
 #### Parameters
 
@@ -190,7 +190,7 @@ Defined in: [server/\_lib/chat/friends.ts:196](https://github.com/wenakita/4626/
 
 > **sendChatFriendRequest**(`params`): `Promise`\<\{ `ok`: `true`; \} \| \{ `ok`: `false`; `reason`: `string`; \}\>
 
-Defined in: [server/\_lib/chat/friends.ts:67](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/chat/friends.ts#L67)
+Defined in: [server/\_lib/chat/friends.ts:67](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/chat/friends.ts#L67)
 
 #### Parameters
 

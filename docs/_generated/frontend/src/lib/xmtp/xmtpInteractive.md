@@ -12,7 +12,7 @@
 
 > **NormalizedXmtpAgentReply** = [`XmtpAgentReply`](#xmtpagentreply)
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L25)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L25)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/xmtp/xmtpInteractive.ts:25](https://github.com/wenakita/462
 
 > **XmtpActionButton** = `object`
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L4)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L4)
 
 #### Properties
 
@@ -28,19 +28,19 @@ Defined in: [src/lib/xmtp/xmtpInteractive.ts:4](https://github.com/wenakita/4626
 
 > **id**: `string`
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L5)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L5)
 
 ##### label
 
 > **label**: `string`
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L6)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L6)
 
 ##### style?
 
 > `optional` **style**: `"primary"` \| `"secondary"` \| `"danger"`
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L7)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L7)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/xmtp/xmtpInteractive.ts:7](https://github.com/wenakita/4626
 
 > **XmtpActionsPayload** = `object`
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L10)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L10)
 
 #### Properties
 
@@ -56,19 +56,19 @@ Defined in: [src/lib/xmtp/xmtpInteractive.ts:10](https://github.com/wenakita/462
 
 > **actions**: [`XmtpActionButton`](#xmtpactionbutton)[]
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L13)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L13)
 
 ##### description
 
 > **description**: `string`
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L12)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L12)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L11)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L11)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [src/lib/xmtp/xmtpInteractive.ts:11](https://github.com/wenakita/462
 
 > **XmtpAgentReply** = `object`
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L18)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L18)
 
 #### Properties
 
@@ -84,13 +84,13 @@ Defined in: [src/lib/xmtp/xmtpInteractive.ts:18](https://github.com/wenakita/462
 
 > `optional` **followUp**: [`XmtpInteractiveFollowUp`](#xmtpinteractivefollowup)
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L20)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L20)
 
 ##### reactToInbound?
 
 > `optional` **reactToInbound**: `boolean`
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L22)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:22](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L22)
 
 Agent adds ✅ on the inbound message (e.g. after /keepr status).
 
@@ -98,7 +98,7 @@ Agent adds ✅ on the inbound message (e.g. after /keepr status).
 
 > **text**: `string`
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L19)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L19)
 
 ***
 
@@ -106,7 +106,7 @@ Defined in: [src/lib/xmtp/xmtpInteractive.ts:19](https://github.com/wenakita/462
 
 > **XmtpInteractiveFollowUp** = `"welcome-actions"` \| `"keepr-status-followup"`
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L16)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L16)
 
 ***
 
@@ -114,7 +114,7 @@ Defined in: [src/lib/xmtp/xmtpInteractive.ts:16](https://github.com/wenakita/462
 
 > **XmtpWalletSendCallsScaffold** = `object`
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:106](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L106)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:106](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L106)
 
 Wallet send calls are intentionally out of scope here — see docs/operations/xmtp-interactive-roadmap.md
 
@@ -124,7 +124,7 @@ Wallet send calls are intentionally out of scope here — see docs/operations/xm
 
 > **note**: `"Use conversation.sendWalletSendCalls() for in-chat swap/approval confirmation."`
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:107](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L107)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:107](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L107)
 
 ## Variables
 
@@ -132,7 +132,7 @@ Defined in: [src/lib/xmtp/xmtpInteractive.ts:107](https://github.com/wenakita/46
 
 > `const` **XMTP\_ACTION\_IDS**: `object`
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L27)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L27)
 
 #### Type Declaration
 
@@ -174,7 +174,7 @@ Defined in: [src/lib/xmtp/xmtpInteractive.ts:27](https://github.com/wenakita/462
 
 > **buildKeeprStatusFollowUpActions**(): [`XmtpActionsPayload`](#xmtpactionspayload)
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:69](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L69)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L69)
 
 #### Returns
 
@@ -186,7 +186,7 @@ Defined in: [src/lib/xmtp/xmtpInteractive.ts:69](https://github.com/wenakita/462
 
 > **buildWelcomeActions**(): [`XmtpActionsPayload`](#xmtpactionspayload)
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:55](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L55)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:55](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L55)
 
 #### Returns
 
@@ -198,7 +198,7 @@ Defined in: [src/lib/xmtp/xmtpInteractive.ts:55](https://github.com/wenakita/462
 
 > **isWelcomeMessageText**(`text`): `boolean`
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:81](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L81)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L81)
 
 #### Parameters
 
@@ -216,7 +216,7 @@ Defined in: [src/lib/xmtp/xmtpInteractive.ts:81](https://github.com/wenakita/462
 
 > **normalizeAgentReply**(`reply`): [`XmtpAgentReply`](#xmtpagentreply) \| `null`
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:85](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L85)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:85](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L85)
 
 #### Parameters
 
@@ -234,7 +234,7 @@ Defined in: [src/lib/xmtp/xmtpInteractive.ts:85](https://github.com/wenakita/462
 
 > **resolveIntentActionId**(`actionId`): `string` \| `null`
 
-Defined in: [src/lib/xmtp/xmtpInteractive.ts:49](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/xmtpInteractive.ts#L49)
+Defined in: [src/lib/xmtp/xmtpInteractive.ts:49](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpInteractive.ts#L49)
 
 #### Parameters
 

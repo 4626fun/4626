@@ -10,7 +10,7 @@
 
 ### KeeprConfigBuildError
 
-Defined in: [server/\_lib/keepr/keeprConfigBuilder.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keepr/keeprConfigBuilder.ts#L13)
+Defined in: [server/\_lib/keepr/keeprConfigBuilder.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprConfigBuilder.ts#L13)
 
 #### Extends
 
@@ -22,7 +22,7 @@ Defined in: [server/\_lib/keepr/keeprConfigBuilder.ts:13](https://github.com/wen
 
 > **new KeeprConfigBuildError**(`message`, `code`): [`KeeprConfigBuildError`](#keeprconfigbuilderror)
 
-Defined in: [server/\_lib/keepr/keeprConfigBuilder.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keepr/keeprConfigBuilder.ts#L16)
+Defined in: [server/\_lib/keepr/keeprConfigBuilder.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprConfigBuilder.ts#L16)
 
 ###### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/keepr/keeprConfigBuilder.ts:16](https://github.com/wen
 
 > **code**: `string`
 
-Defined in: [server/\_lib/keepr/keeprConfigBuilder.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keepr/keeprConfigBuilder.ts#L14)
+Defined in: [server/\_lib/keepr/keeprConfigBuilder.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprConfigBuilder.ts#L14)
 
 ## Functions
 
@@ -56,7 +56,7 @@ Defined in: [server/\_lib/keepr/keeprConfigBuilder.ts:14](https://github.com/wen
 
 > **buildKeeprConfig**(`params`): [`KeeprConfigV1`](keeprRegistry.md#keeprconfigv1)
 
-Defined in: [server/\_lib/keepr/keeprConfigBuilder.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keepr/keeprConfigBuilder.ts#L22)
+Defined in: [server/\_lib/keepr/keeprConfigBuilder.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprConfigBuilder.ts#L22)
 
 #### Parameters
 
@@ -100,7 +100,7 @@ Defined in: [server/\_lib/keepr/keeprConfigBuilder.ts:22](https://github.com/wen
 
 > **normalizeKeeprAddress**(`value`): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/keepr/keeprConfigBuilder.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keepr/keeprConfigBuilder.ts#L4)
+Defined in: [server/\_lib/keepr/keeprConfigBuilder.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprConfigBuilder.ts#L4)
 
 #### Parameters
 
@@ -118,7 +118,7 @@ Defined in: [server/\_lib/keepr/keeprConfigBuilder.ts:4](https://github.com/wena
 
 > **readKeeprString**(`value`): `string`
 
-Defined in: [server/\_lib/keepr/keeprConfigBuilder.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/keepr/keeprConfigBuilder.ts#L9)
+Defined in: [server/\_lib/keepr/keeprConfigBuilder.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprConfigBuilder.ts#L9)
 
 #### Parameters
 

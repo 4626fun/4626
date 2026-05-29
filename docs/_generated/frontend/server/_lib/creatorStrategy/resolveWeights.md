@@ -12,7 +12,7 @@
 
 > **ComputeStrategyWeightsResult** = \{ `ok`: `true`; `weights`: [`StrategyWeights`](#strategyweights); \} \| \{ `ok`: `false`; `reason`: `"no_paid_strategies"`; \}
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:91](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L91)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:91](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L91)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:91](https://github.c
 
 > **ResolveCreatorStrategyPlanResult** = \{ `ok`: `true`; `plan`: [`ResolvedStrategyPlan`](#resolvedstrategyplan); \} \| \{ `activeFeatureKeys`: [`CreatorStrategyFeatureKey`](catalog.md#creatorstrategyfeaturekey)[]; `creatorToken`: `Address`; `ok`: `false`; `reason`: `"no_paid_strategies"`; \}
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:114](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L114)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:114](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L114)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:114](https://github.
 
 > **ResolvedStrategyPlan** = [`StrategyWeights`](#strategyweights) & `object`
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:58](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L58)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:58](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L58)
 
 #### Type Declaration
 
@@ -54,7 +54,7 @@ Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:58](https://github.c
 
 ###### reasons.solana
 
-> **solana**: `"share_auto_bridge"`
+> **solana**: `"paid"` \| `"unpaid"` \| `"share_auto_bridge"`
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:58](https://github.c
 
 > **StrategyWeights** = `object`
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L51)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:51](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L51)
 
 #### Properties
 
@@ -70,25 +70,25 @@ Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:51](https://github.c
 
 > **ajnaWeightBps**: `bigint`
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L53)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:53](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L53)
 
 ##### charmWeightBps
 
 > **charmWeightBps**: `bigint`
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L52)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:52](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L52)
 
 ##### idleReserveBps
 
 > **idleReserveBps**: `bigint`
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:55](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L55)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:55](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L55)
 
 ##### solanaWeightBps
 
 > **solanaWeightBps**: `bigint`
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:54](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L54)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:54](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L54)
 
 ***
 
@@ -96,7 +96,7 @@ Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:54](https://github.c
 
 > **WeightGateResult** = \{ `ok`: `true`; \} \| \{ `expected`: [`StrategyWeights`](#strategyweights); `ok`: `false`; `reason`: `"charm_unpaid_but_requested"` \| `"ajna_unpaid_but_requested"` \| `"solana_unpaid_but_requested"` \| `"charm_weight_mismatch"` \| `"ajna_weight_mismatch"` \| `"solana_weight_mismatch"`; `requested`: \{ `ajnaWeightBps`: `bigint`; `charmWeightBps`: `bigint`; `solanaWeightBps`: `bigint`; \}; \}
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:153](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L153)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:159](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L159)
 
 ## Variables
 
@@ -104,7 +104,7 @@ Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:153](https://github.
 
 > `const` **DEFAULT\_AJNA\_WEIGHT\_BPS**: `bigint`
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:47](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L47)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L47)
 
 ***
 
@@ -112,7 +112,7 @@ Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:47](https://github.c
 
 > `const` **DEFAULT\_CHARM\_WEIGHT\_BPS**: `bigint`
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:46](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L46)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L46)
 
 Default 45/45 split when both Charm and Ajna are paid.
 
@@ -122,7 +122,7 @@ Default 45/45 split when both Charm and Ajna are paid.
 
 > `const` **DEFAULT\_IDLE\_RESERVE\_BPS**: `1000n` = `1_000n`
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L41)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L41)
 
 Fixed idle reserve in bps. Kept constant across strategy counts so
 creators always have a predictable withdrawal buffer.
@@ -133,7 +133,7 @@ creators always have a predictable withdrawal buffer.
 
 > `const` **DEFAULT\_SOLANA\_WEIGHT\_BPS**: `0n` = `0n`
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:49](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L49)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:49](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L49)
 
 Solana vault strategy weight is always zero on greenfield deploys.
 
@@ -143,7 +143,7 @@ Solana vault strategy weight is always zero on greenfield deploys.
 
 > `const` **PRODUCTIVE\_ALLOCATION\_BPS**: `bigint`
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L43)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L43)
 
 ***
 
@@ -151,7 +151,7 @@ Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:43](https://github.c
 
 > `const` **TOTAL\_ALLOCATION\_BPS**: `10000n` = `10_000n`
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L42)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L42)
 
 ## Functions
 
@@ -159,7 +159,7 @@ Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:42](https://github.c
 
 > **computeStrategyWeights**(`activeKeys`): [`ComputeStrategyWeightsResult`](#computestrategyweightsresult)
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:95](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L95)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L95)
 
 #### Parameters
 
@@ -177,7 +177,7 @@ Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:95](https://github.c
 
 > **gateRequestedStrategyWeights**(`plan`, `requested`): [`WeightGateResult`](#weightgateresult)
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:172](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L172)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:178](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L178)
 
 #### Parameters
 
@@ -209,7 +209,7 @@ Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:172](https://github.
 
 > **readActiveCreatorFeatureKeys**(`db`, `creatorToken`): `Promise`\<`Set`\<[`CreatorStrategyFeatureKey`](catalog.md#creatorstrategyfeaturekey)\>\>
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:72](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L72)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:72](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L72)
 
 Read which gated features the creator currently has active or pending
 payment for. Both `pending` and `active` count as "paid".
@@ -234,7 +234,7 @@ payment for. Both `pending` and `active` count as "paid".
 
 > **resolveCreatorStrategyPlan**(`db`, `creatorTokenRaw`): `Promise`\<[`ResolveCreatorStrategyPlanResult`](#resolvecreatorstrategyplanresult)\>
 
-Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:123](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L123)
+Defined in: [server/\_lib/creatorStrategy/resolveWeights.ts:123](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/resolveWeights.ts#L123)
 
 #### Parameters
 

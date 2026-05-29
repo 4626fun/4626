@@ -12,7 +12,7 @@
 
 > `const` **discordPlugin**: `Plugin`
 
-Defined in: [server/agents/eliza/plugins/discord/index.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/discord/index.ts#L5)
+Defined in: [server/agents/eliza/plugins/discord/index.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/discord/index.ts#L5)
 
 ## References
 

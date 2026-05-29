@@ -12,7 +12,7 @@
 
 > **AjnaRebucketAuthorization** = \{ `authorized`: `true`; `lane`: `"protocol_automation_admin"`; \} \| \{ `authorized`: `true`; `lane`: `"legacy_treasury_admin"`; \} \| \{ `authorized`: `true`; `lane`: `"legacy_csw_admin"`; \} \| \{ `authorized`: `false`; `reason`: `string`; \}
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:222](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L222)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:222](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L222)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:222](https://github.com
 
 > **CharmAutomationAuthorization** = \{ `authorized`: `true`; `lane`: `"protocol_automation_manager"`; \} \| \{ `authorized`: `true`; `lane`: `"protocol_treasury_manager"`; \} \| \{ `authorized`: `true`; `lane`: `"keeper_direct"`; \} \| \{ `authorized`: `false`; `reason`: `string`; \}
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:178](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L178)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:178](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L178)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:178](https://github.com
 
 > **CharmVaultAuthSnapshot** = `object`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:244](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L244)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:244](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L244)
 
 #### Properties
 
@@ -36,25 +36,25 @@ Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:244](https://github.com
 
 > **charmKeeper**: `Address` \| `null`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:247](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L247)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:247](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L247)
 
 ##### charmOwner
 
 > **charmOwner**: `Address` \| `null`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:248](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L248)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:248](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L248)
 
 ##### delegateAddress
 
 > **delegateAddress**: `Address` \| `null`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:246](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L246)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:246](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L246)
 
 ##### managerAddress
 
 > **managerAddress**: `Address` \| `null`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:245](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L245)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:245](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L245)
 
 ## Variables
 
@@ -62,7 +62,7 @@ Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:245](https://github.com
 
 > `const` **KEEPER\_AUTOMATION\_PRIVATE\_KEY\_ENV**: `"4626_KEEPER_AUTOMATION_PRIVATE_KEY"` = `'4626_KEEPER_AUTOMATION_PRIVATE_KEY'`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L13)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L13)
 
 Dedicated Charm automation signer (must be owner of protocol automation Safe).
 
@@ -72,7 +72,7 @@ Dedicated Charm automation signer (must be owner of protocol automation Safe).
 
 > `const` **KEEPER\_AUTOMATION\_PUBLIC\_KEY\_ENV**: `"4626_KEEPER_AUTOMATION_PUBLIC_KEY"` = `'4626_KEEPER_AUTOMATION_PUBLIC_KEY'`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L14)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L14)
 
 ## Functions
 
@@ -80,7 +80,7 @@ Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:14](https://github.com/
 
 > **assertKeeperAutomationKeyPair**(`env`): `void`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:132](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L132)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:132](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L132)
 
 #### Parameters
 
@@ -94,11 +94,53 @@ Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:132](https://github.com
 
 ***
 
+### executeBatchViaProtocolTreasurySafe()
+
+> **executeBatchViaProtocolTreasurySafe**(`params`): `Promise`\<\{ `safeAddress`: `string`; `signerAddress`: `string`; `txHash`: `` `0x${string}` ``; \}\>
+
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:400](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L400)
+
+Batch protocol treasury Safe exec for router admin lanes (keeper, swap paths, external approvals).
+
+#### Parameters
+
+##### params
+
+###### calls
+
+`object`[]
+
+###### env?
+
+`Record`\<`string`, `string` \| `undefined`\>
+
+###### publicClient
+
+\{ `readContract`: (`args`) => `Promise`\<`unknown`\>; `waitForTransactionReceipt`: (`args`) => `Promise`\<\{ `status`: `string`; \}\>; \}
+
+###### publicClient.readContract
+
+(`args`) => `Promise`\<`unknown`\>
+
+###### publicClient.waitForTransactionReceipt
+
+(`args`) => `Promise`\<\{ `status`: `string`; \}\>
+
+###### rpcUrl
+
+`string`
+
+#### Returns
+
+`Promise`\<\{ `safeAddress`: `string`; `signerAddress`: `string`; `txHash`: `` `0x${string}` ``; \}\>
+
+***
+
 ### executeViaProtocolAutomationSafe()
 
 > **executeViaProtocolAutomationSafe**(`params`): `Promise`\<\{ `safeAddress`: `string`; `signerAddress`: `string`; `txHash`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:400](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L400)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:462](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L462)
 
 Primary Charm rebalance path for new deploys (manager = protocol automation Safe).
 
@@ -148,7 +190,7 @@ Primary Charm rebalance path for new deploys (manager = protocol automation Safe
 
 > **executeViaProtocolTreasurySafe**(`params`): `Promise`\<\{ `safeAddress`: `string`; `signerAddress`: `string`; `txHash`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:439](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L439)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:501](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L501)
 
 Legacy path for vaults that still use protocol treasury Safe as Charm manager.
 
@@ -198,7 +240,7 @@ Legacy path for vaults that still use protocol treasury Safe as Charm manager.
 
 > **isProtocolAutomationAjnaAdmin**(`adminAddress`): `boolean`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:168](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L168)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:168](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L168)
 
 AjnaVaultAuth.admin on new deploys — same hot Safe as Charm manager.
 
@@ -218,7 +260,7 @@ AjnaVaultAuth.admin on new deploys — same hot Safe as Charm manager.
 
 > **isProtocolAutomationManager**(`managerAddress`): `boolean`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:161](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L161)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:161](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L161)
 
 #### Parameters
 
@@ -236,7 +278,7 @@ Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:161](https://github.com
 
 > **isProtocolTreasuryManager**(`managerAddress`): `boolean`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:173](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L173)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:173](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L173)
 
 #### Parameters
 
@@ -258,7 +300,7 @@ Pre-split vaults only — new deploys use protocol automation Safe as manager.
 
 > **isSameAddress**(`a`, `b`): `boolean`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:152](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L152)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:152](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L152)
 
 #### Parameters
 
@@ -280,7 +322,7 @@ Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:152](https://github.com
 
 > **readCharmVaultAuthSnapshot**(`params`): `Promise`\<[`CharmVaultAuthSnapshot`](#charmvaultauthsnapshot)\>
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:285](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L285)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:285](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L285)
 
 Reads on-chain Charm auth slots; skips keeper/owner when manager is a protocol Safe.
 
@@ -306,7 +348,7 @@ Reads on-chain Charm auth slots; skips keeper/owner when manager is a protocol S
 
 > **resolveAjnaRebucketAuthorization**(`params`): [`AjnaRebucketAuthorization`](#ajnarebucketauthorization)
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:228](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L228)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:228](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L228)
 
 #### Parameters
 
@@ -330,7 +372,7 @@ Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:228](https://github.com
 
 > **resolveCharmAutomationAuthorization**(`params`): [`CharmAutomationAuthorization`](#charmautomationauthorization)
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:184](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L184)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:184](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L184)
 
 #### Parameters
 
@@ -366,7 +408,7 @@ Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:184](https://github.com
 
 > **resolveCharmKeeperAuthorization**(`params`): [`CharmAutomationAuthorization`](#charmautomationauthorization)
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:313](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L313)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:313](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L313)
 
 #### Parameters
 
@@ -390,7 +432,7 @@ Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:313](https://github.com
 
 > **resolveKeeperAutomationPrivateKey**(`env`): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:104](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L104)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:104](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L104)
 
 Prefer automation signer; fall back to legacy treasury/keeper keys.
 
@@ -410,7 +452,7 @@ Prefer automation signer; fall back to legacy treasury/keeper keys.
 
 > **resolveKeeperAutomationPublicAddress**(`env`): `string` \| `null`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:110](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L110)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:110](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L110)
 
 #### Parameters
 
@@ -428,7 +470,7 @@ Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:110](https://github.com
 
 > **resolveProtocolAjnaKeeperAddress**(`env`): `string` \| `null`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:122](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L122)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:122](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L122)
 
 On-chain Ajna `keeper` slot — automation EOA for `move*` calls (not the Safe).
 
@@ -448,7 +490,7 @@ On-chain Ajna `keeper` slot — automation EOA for `move*` calls (not the Safe).
 
 > **resolveProtocolAutomationAddress**(`env`): `string` \| `null`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L68)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:68](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L68)
 
 Hot automation Safe — Charm vault manager on new deploys.
 
@@ -468,7 +510,7 @@ Hot automation Safe — Charm vault manager on new deploys.
 
 > **resolveProtocolAutomationSafeOwnerPrivateKey**(`env`): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:82](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L82)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:82](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L82)
 
 #### Parameters
 
@@ -486,7 +528,7 @@ Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:82](https://github.com/
 
 > **resolveProtocolTreasuryAddress**(): `string`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:63](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L63)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:63](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L63)
 
 #### Returns
 
@@ -498,7 +540,7 @@ Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:63](https://github.com/
 
 > **resolveProtocolTreasurySafeOwnerPrivateKey**(`env`): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:93](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L93)
+Defined in: [server/\_lib/wallet/protocolTreasurySafe.ts:93](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/protocolTreasurySafe.ts#L93)
 
 Legacy treasury Safe exec + keeper bootstrap fallback.
 

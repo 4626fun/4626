@@ -12,7 +12,7 @@
 
 > **BadgeState** = `"loading"` \| `"ok"` \| `"degraded"` \| `"offline"` \| `"error"`
 
-Defined in: [src/features/status/InfraReadinessBadges.tsx:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/status/InfraReadinessBadges.tsx#L44)
+Defined in: [src/features/status/InfraReadinessBadges.tsx:44](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L44)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/features/status/InfraReadinessBadges.tsx:44](https://github.com
 
 > **HealthResponse** = `object`
 
-Defined in: [src/features/status/InfraReadinessBadges.tsx:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/status/InfraReadinessBadges.tsx#L36)
+Defined in: [src/features/status/InfraReadinessBadges.tsx:36](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L36)
 
 #### Properties
 
@@ -28,31 +28,31 @@ Defined in: [src/features/status/InfraReadinessBadges.tsx:36](https://github.com
 
 > **db**: `DbHealth`
 
-Defined in: [src/features/status/InfraReadinessBadges.tsx:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/status/InfraReadinessBadges.tsx#L40)
+Defined in: [src/features/status/InfraReadinessBadges.tsx:40](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L40)
 
 ##### ok
 
 > **ok**: `boolean`
 
-Defined in: [src/features/status/InfraReadinessBadges.tsx:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/status/InfraReadinessBadges.tsx#L37)
+Defined in: [src/features/status/InfraReadinessBadges.tsx:37](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L37)
 
 ##### paymaster
 
 > **paymaster**: `PaymasterHealth`
 
-Defined in: [src/features/status/InfraReadinessBadges.tsx:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/status/InfraReadinessBadges.tsx#L39)
+Defined in: [src/features/status/InfraReadinessBadges.tsx:39](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L39)
 
 ##### siwe
 
 > **siwe**: `SiweHealth`
 
-Defined in: [src/features/status/InfraReadinessBadges.tsx:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/status/InfraReadinessBadges.tsx#L41)
+Defined in: [src/features/status/InfraReadinessBadges.tsx:41](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L41)
 
 ##### time
 
 > **time**: `string`
 
-Defined in: [src/features/status/InfraReadinessBadges.tsx:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/status/InfraReadinessBadges.tsx#L38)
+Defined in: [src/features/status/InfraReadinessBadges.tsx:38](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L38)
 
 ## Functions
 
@@ -60,7 +60,7 @@ Defined in: [src/features/status/InfraReadinessBadges.tsx:38](https://github.com
 
 > **deriveBadges**(`health`, `errored`): `object`
 
-Defined in: [src/features/status/InfraReadinessBadges.tsx:121](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/status/InfraReadinessBadges.tsx#L121)
+Defined in: [src/features/status/InfraReadinessBadges.tsx:121](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L121)
 
 Map each health sub-object to a badge state. Errors = offline, configured
 but not ok = degraded, not configured = degraded (informational), ok = ok.
@@ -125,7 +125,7 @@ is unreachable (outage) rather than returning a populated failure payload.
 
 > **InfraReadinessBadges**(`__namedParameters`): `Element`
 
-Defined in: [src/features/status/InfraReadinessBadges.tsx:183](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/status/InfraReadinessBadges.tsx#L183)
+Defined in: [src/features/status/InfraReadinessBadges.tsx:183](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L183)
 
 #### Parameters
 

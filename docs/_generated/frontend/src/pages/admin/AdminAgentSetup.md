@@ -12,7 +12,7 @@
 
 > **AdminAgentSetup**(): `Element`
 
-Defined in: [src/pages/admin/AdminAgentSetup.tsx:274](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/admin/AdminAgentSetup.tsx#L274)
+Defined in: [src/pages/admin/AdminAgentSetup.tsx:274](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AdminAgentSetup.tsx#L274)
 
 #### Returns
 
@@ -24,7 +24,7 @@ Defined in: [src/pages/admin/AdminAgentSetup.tsx:274](https://github.com/wenakit
 
 > **selectAjnaAutomationViewState**(`input`): `object`
 
-Defined in: [src/pages/admin/AdminAgentSetup.tsx:202](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/admin/AdminAgentSetup.tsx#L202)
+Defined in: [src/pages/admin/AdminAgentSetup.tsx:202](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AdminAgentSetup.tsx#L202)
 
 #### Parameters
 

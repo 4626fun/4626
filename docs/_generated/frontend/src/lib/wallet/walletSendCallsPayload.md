@@ -12,7 +12,7 @@
 
 > **WalletSendCallsCallInput** = `object`
 
-Defined in: [src/lib/wallet/walletSendCallsPayload.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/walletSendCallsPayload.ts#L6)
+Defined in: [src/lib/wallet/walletSendCallsPayload.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/walletSendCallsPayload.ts#L6)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/lib/wallet/walletSendCallsPayload.ts:6](https://github.com/wena
 
 > **data**: `Hex`
 
-Defined in: [src/lib/wallet/walletSendCallsPayload.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/walletSendCallsPayload.ts#L8)
+Defined in: [src/lib/wallet/walletSendCallsPayload.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/walletSendCallsPayload.ts#L8)
 
 ##### to
 
 > **to**: `` `0x${string}` ``
 
-Defined in: [src/lib/wallet/walletSendCallsPayload.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/walletSendCallsPayload.ts#L7)
+Defined in: [src/lib/wallet/walletSendCallsPayload.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/walletSendCallsPayload.ts#L7)
 
 ##### value?
 
 > `optional` **value**: `bigint` \| `` `0x${string}` ``
 
-Defined in: [src/lib/wallet/walletSendCallsPayload.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/walletSendCallsPayload.ts#L9)
+Defined in: [src/lib/wallet/walletSendCallsPayload.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/walletSendCallsPayload.ts#L9)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/lib/wallet/walletSendCallsPayload.ts:9](https://github.com/wena
 
 > **WalletSendCallsPayload** = `object`
 
-Defined in: [src/lib/wallet/walletSendCallsPayload.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/walletSendCallsPayload.ts#L12)
+Defined in: [src/lib/wallet/walletSendCallsPayload.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/walletSendCallsPayload.ts#L12)
 
 #### Properties
 
@@ -48,13 +48,13 @@ Defined in: [src/lib/wallet/walletSendCallsPayload.ts:12](https://github.com/wen
 
 > **atomicRequired**: `boolean`
 
-Defined in: [src/lib/wallet/walletSendCallsPayload.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/walletSendCallsPayload.ts#L16)
+Defined in: [src/lib/wallet/walletSendCallsPayload.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/walletSendCallsPayload.ts#L16)
 
 ##### calls
 
 > **calls**: `object`[]
 
-Defined in: [src/lib/wallet/walletSendCallsPayload.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/walletSendCallsPayload.ts#L17)
+Defined in: [src/lib/wallet/walletSendCallsPayload.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/walletSendCallsPayload.ts#L17)
 
 ###### data
 
@@ -72,19 +72,19 @@ Defined in: [src/lib/wallet/walletSendCallsPayload.ts:17](https://github.com/wen
 
 > **chainId**: `` `0x${string}` ``
 
-Defined in: [src/lib/wallet/walletSendCallsPayload.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/walletSendCallsPayload.ts#L15)
+Defined in: [src/lib/wallet/walletSendCallsPayload.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/walletSendCallsPayload.ts#L15)
 
 ##### from
 
 > **from**: `` `0x${string}` ``
 
-Defined in: [src/lib/wallet/walletSendCallsPayload.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/walletSendCallsPayload.ts#L14)
+Defined in: [src/lib/wallet/walletSendCallsPayload.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/walletSendCallsPayload.ts#L14)
 
 ##### version
 
 > **version**: *typeof* [`WALLET_SEND_CALLS_VERSION`](#wallet_send_calls_version)
 
-Defined in: [src/lib/wallet/walletSendCallsPayload.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/walletSendCallsPayload.ts#L13)
+Defined in: [src/lib/wallet/walletSendCallsPayload.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/walletSendCallsPayload.ts#L13)
 
 ## Variables
 
@@ -92,7 +92,7 @@ Defined in: [src/lib/wallet/walletSendCallsPayload.ts:13](https://github.com/wen
 
 > `const` **WALLET\_SEND\_CALLS\_VERSION**: `"2.0.0"`
 
-Defined in: [src/lib/wallet/walletSendCallsPayload.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/walletSendCallsPayload.ts#L4)
+Defined in: [src/lib/wallet/walletSendCallsPayload.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/walletSendCallsPayload.ts#L4)
 
 Coinbase Wallet SDK / EIP-5792 wallet_sendCalls schema version.
 
@@ -102,7 +102,7 @@ Coinbase Wallet SDK / EIP-5792 wallet_sendCalls schema version.
 
 > **buildWalletSendCallsPayload**(`input`): [`WalletSendCallsPayload`](#walletsendcallspayload)
 
-Defined in: [src/lib/wallet/walletSendCallsPayload.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/walletSendCallsPayload.ts#L44)
+Defined in: [src/lib/wallet/walletSendCallsPayload.ts:44](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/walletSendCallsPayload.ts#L44)
 
 Build a Coinbase-compatible EIP-5792 `wallet_sendCalls` request payload.
 Requires `from` (Smart Wallet address) per @coinbase/wallet-sdk 4.3.x guidance.
@@ -137,7 +137,7 @@ Requires `from` (Smart Wallet address) per @coinbase/wallet-sdk 4.3.x guidance.
 
 > **chainIdToHex**(`chainId`): `` `0x${string}` ``
 
-Defined in: [src/lib/wallet/walletSendCallsPayload.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/walletSendCallsPayload.ts#L33)
+Defined in: [src/lib/wallet/walletSendCallsPayload.ts:33](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/walletSendCallsPayload.ts#L33)
 
 #### Parameters
 

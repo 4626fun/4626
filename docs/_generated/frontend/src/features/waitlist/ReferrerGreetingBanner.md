@@ -12,7 +12,7 @@
 
 > **ReferrerGreetingBanner**(`__namedParameters`): `Element` \| `null`
 
-Defined in: [src/features/waitlist/ReferrerGreetingBanner.tsx:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/ReferrerGreetingBanner.tsx#L22)
+Defined in: [src/features/waitlist/ReferrerGreetingBanner.tsx:22](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/ReferrerGreetingBanner.tsx#L22)
 
 Small banner shown above the waitlist auth step when the user arrived via
 a referral link. Looks up the referrer's public display name via the

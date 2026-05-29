@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/waitlist/\_stats.ts:49](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/waitlist/_stats.ts#L49)
+Defined in: [api/\_handlers/waitlist/\_stats.ts:49](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/waitlist/_stats.ts#L49)
 
 #### Parameters
 

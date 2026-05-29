@@ -12,7 +12,7 @@
 
 > **validateSwapTransactionPayload**(`payload`): `string` \| `null`
 
-Defined in: [server/uniswap/swapPayloadValidation.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/uniswap/swapPayloadValidation.ts#L13)
+Defined in: [server/uniswap/swapPayloadValidation.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/uniswap/swapPayloadValidation.ts#L20)
 
 #### Parameters
 
@@ -23,3 +23,9 @@ Defined in: [server/uniswap/swapPayloadValidation.ts:13](https://github.com/wena
 #### Returns
 
 `string` \| `null`
+
+## References
+
+### normalizeSwapApiResponsePayload
+
+Re-exports [normalizeSwapApiResponsePayload](../../src/lib/uniswap/swapQuoteSanitize.md#normalizeswapapiresponsepayload)

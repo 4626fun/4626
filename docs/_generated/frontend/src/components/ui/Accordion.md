@@ -10,7 +10,7 @@
 
 ### AccordionItemData
 
-Defined in: [src/components/ui/Accordion.tsx:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/ui/Accordion.tsx#L7)
+Defined in: [src/components/ui/Accordion.tsx:7](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L7)
 
 #### Properties
 
@@ -18,19 +18,19 @@ Defined in: [src/components/ui/Accordion.tsx:7](https://github.com/wenakita/4626
 
 > **children**: `ReactNode`
 
-Defined in: [src/components/ui/Accordion.tsx:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/ui/Accordion.tsx#L10)
+Defined in: [src/components/ui/Accordion.tsx:10](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L10)
 
 ##### key
 
 > **key**: `string`
 
-Defined in: [src/components/ui/Accordion.tsx:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/ui/Accordion.tsx#L8)
+Defined in: [src/components/ui/Accordion.tsx:8](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L8)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [src/components/ui/Accordion.tsx:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/ui/Accordion.tsx#L9)
+Defined in: [src/components/ui/Accordion.tsx:9](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L9)
 
 ## Functions
 
@@ -38,7 +38,7 @@ Defined in: [src/components/ui/Accordion.tsx:9](https://github.com/wenakita/4626
 
 > **FaqAccordion**(`__namedParameters`): `Element`
 
-Defined in: [src/components/ui/Accordion.tsx:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/ui/Accordion.tsx#L29)
+Defined in: [src/components/ui/Accordion.tsx:29](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L29)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [src/components/ui/Accordion.tsx:29](https://github.com/wenakita/462
 
 > **SingleAccordion**(`__namedParameters`): `Element`
 
-Defined in: [src/components/ui/Accordion.tsx:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/ui/Accordion.tsx#L68)
+Defined in: [src/components/ui/Accordion.tsx:68](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L68)
 
 #### Parameters
 

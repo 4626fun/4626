@@ -12,7 +12,7 @@
 
 > **ExploreSparklinePrecomputeResult** = `object`
 
-Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L15)
+Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L15)
 
 #### Properties
 
@@ -20,31 +20,31 @@ Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:15](https://github.
 
 > **attempted**: `number`
 
-Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L16)
+Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L16)
 
 ##### disabled?
 
 > `optional` **disabled**: `boolean`
 
-Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L20)
+Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L20)
 
 ##### failed
 
 > **failed**: `number`
 
-Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L19)
+Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L19)
 
 ##### refreshed
 
 > **refreshed**: `number`
 
-Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L17)
+Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L17)
 
 ##### skippedFresh
 
 > **skippedFresh**: `number`
 
-Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L18)
+Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L18)
 
 ## Variables
 
@@ -52,7 +52,7 @@ Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:18](https://github.
 
 > `const` **DEFAULT\_SPARKLINE\_PRECOMPUTE\_BUDGET**: `96` = `96`
 
-Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L12)
+Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L12)
 
 ***
 
@@ -60,7 +60,7 @@ Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:12](https://github.
 
 > `const` **DEFAULT\_SPARKLINE\_PRECOMPUTE\_CONCURRENCY**: `8` = `8`
 
-Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L13)
+Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L13)
 
 ## Functions
 
@@ -68,7 +68,7 @@ Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:13](https://github.
 
 > **listStaleSparklineCoinAddresses**(`db`, `candidates`): `Promise`\<`Set`\<`string`\>\>
 
-Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:54](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L54)
+Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:54](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L54)
 
 #### Parameters
 
@@ -90,7 +90,7 @@ readonly `string`[]
 
 > **listTopVolumeStaleSparklineCoinAddresses**(`db`, `limit`, `exclude`): `Promise`\<`string`[]\>
 
-Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:83](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L83)
+Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:83](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L83)
 
 #### Parameters
 
@@ -116,7 +116,7 @@ Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:83](https://github.
 
 > **normalizeSparklineCoinAddresses**(`addresses`): `string`[]
 
-Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L29)
+Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L29)
 
 #### Parameters
 
@@ -134,7 +134,7 @@ readonly `string`[]
 
 > **precomputeExploreSparklinesForCoins**(`sdk`, `db`, `options`): `Promise`\<[`ExploreSparklinePrecomputeResult`](#exploresparklineprecomputeresult)\>
 
-Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:136](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L136)
+Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:136](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L136)
 
 #### Parameters
 
@@ -174,7 +174,7 @@ readonly `string`[]
 
 > **prioritizeSparklineCandidates**(`orderedCandidates`, `staleAddresses`, `budget`): `string`[]
 
-Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L39)
+Defined in: [server/\_lib/zora/exploreSparklinePrecompute.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/exploreSparklinePrecompute.ts#L39)
 
 #### Parameters
 

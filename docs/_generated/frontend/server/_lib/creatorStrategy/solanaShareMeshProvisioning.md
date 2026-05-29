@@ -12,7 +12,7 @@
 
 > **SolanaShareMeshProvisioningEnqueueResult** = `object`
 
-Defined in: [server/\_lib/creatorStrategy/solanaShareMeshProvisioning.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/solanaShareMeshProvisioning.ts#L11)
+Defined in: [server/\_lib/creatorStrategy/solanaShareMeshProvisioning.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/solanaShareMeshProvisioning.ts#L11)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/\_lib/creatorStrategy/solanaShareMeshProvisioning.ts:11](htt
 
 > **enqueued**: `boolean`
 
-Defined in: [server/\_lib/creatorStrategy/solanaShareMeshProvisioning.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/solanaShareMeshProvisioning.ts#L12)
+Defined in: [server/\_lib/creatorStrategy/solanaShareMeshProvisioning.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/solanaShareMeshProvisioning.ts#L12)
 
 ##### jobId
 
 > **jobId**: `number` \| `null`
 
-Defined in: [server/\_lib/creatorStrategy/solanaShareMeshProvisioning.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/solanaShareMeshProvisioning.ts#L13)
+Defined in: [server/\_lib/creatorStrategy/solanaShareMeshProvisioning.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/solanaShareMeshProvisioning.ts#L13)
 
 ##### reason?
 
 > `optional` **reason**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/solanaShareMeshProvisioning.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/solanaShareMeshProvisioning.ts#L14)
+Defined in: [server/\_lib/creatorStrategy/solanaShareMeshProvisioning.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/solanaShareMeshProvisioning.ts#L14)
 
 ## Functions
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/creatorStrategy/solanaShareMeshProvisioning.ts:14](htt
 
 > **creatorHasSolanaShareMeshEntitlement**(`creatorToken`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/creatorStrategy/solanaShareMeshProvisioning.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/solanaShareMeshProvisioning.ts#L33)
+Defined in: [server/\_lib/creatorStrategy/solanaShareMeshProvisioning.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/solanaShareMeshProvisioning.ts#L33)
 
 #### Parameters
 
@@ -58,7 +58,7 @@ Defined in: [server/\_lib/creatorStrategy/solanaShareMeshProvisioning.ts:33](htt
 
 > **enqueueSolanaShareMeshProvisioning**(`params`): `Promise`\<[`SolanaShareMeshProvisioningEnqueueResult`](#solanasharemeshprovisioningenqueueresult)\>
 
-Defined in: [server/\_lib/creatorStrategy/solanaShareMeshProvisioning.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/solanaShareMeshProvisioning.ts#L43)
+Defined in: [server/\_lib/creatorStrategy/solanaShareMeshProvisioning.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/solanaShareMeshProvisioning.ts#L43)
 
 #### Parameters
 

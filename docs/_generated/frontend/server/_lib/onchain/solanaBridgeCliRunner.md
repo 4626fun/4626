@@ -12,7 +12,7 @@
 
 > **WrapRunner** = `object`
 
-Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeCliRunner.ts#L7)
+Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeCliRunner.ts#L7)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:7](https://github.com
 
 > **args**: `string`[]
 
-Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeCliRunner.ts#L9)
+Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeCliRunner.ts#L9)
 
 ##### bin
 
 > **bin**: `string`
 
-Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeCliRunner.ts#L8)
+Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeCliRunner.ts#L8)
 
 ##### label
 
 > **label**: `string`
 
-Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeCliRunner.ts#L10)
+Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeCliRunner.ts#L10)
 
 ## Functions
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:10](https://github.co
 
 > **buildWrapRunnerList**(`cliBinRaw`, `wrapArgs`, `cliDir`): [`WrapRunner`](#wraprunner)[]
 
-Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeCliRunner.ts#L13)
+Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeCliRunner.ts#L13)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:13](https://github.co
 
 > **isRunnerUnavailable**(`error`): `boolean`
 
-Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:78](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeCliRunner.ts#L78)
+Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:78](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeCliRunner.ts#L78)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:78](https://github.co
 
 > **runWrapToken**(`cliDir`, `cliBinRaw`, `wrapArgs`): `Promise`\<\{ `output`: `string`; `runner`: `string`; \}\>
 
-Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:92](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeCliRunner.ts#L92)
+Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:92](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeCliRunner.ts#L92)
 
 #### Parameters
 
@@ -110,7 +110,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:92](https://github.co
 
 > **toExecErrorText**(`error`): `string`
 
-Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:72](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaBridgeCliRunner.ts#L72)
+Defined in: [server/\_lib/onchain/solanaBridgeCliRunner.ts:72](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaBridgeCliRunner.ts#L72)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **handleSendCommand**(`params`): `Promise`\<[`KeeprCommandResult`](../commands/types.md#keeprcommandresult)\>
 
-Defined in: [server/keepr/sendCommand.ts:242](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/keepr/sendCommand.ts#L242)
+Defined in: [server/keepr/sendCommand.ts:242](https://github.com/wenakita/4626/blob/main/frontend/server/keepr/sendCommand.ts#L242)
 
 #### Parameters
 

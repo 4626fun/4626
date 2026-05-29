@@ -10,137 +10,17 @@
 
 ### WaitlistStep
 
-> **WaitlistStep** = `"auth"` \| `"connect-base-app"` \| `"done"`
+> **WaitlistStep** = `"auth"` \| `"done"`
 
-Defined in: [src/features/waitlist/waitlistFlowState.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistFlowState.ts#L12)
-
-***
-
-### WaitlistSubAccountConnectOverlay
-
-> **WaitlistSubAccountConnectOverlay** = `object`
-
-Defined in: [src/features/waitlist/waitlistFlowState.ts:98](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistFlowState.ts#L98)
-
-#### Properties
-
-##### parentAddress
-
-> **parentAddress**: `string`
-
-Defined in: [src/features/waitlist/waitlistFlowState.ts:99](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistFlowState.ts#L99)
-
-##### subAccountAddress
-
-> **subAccountAddress**: `string`
-
-Defined in: [src/features/waitlist/waitlistFlowState.ts:100](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistFlowState.ts#L100)
+Defined in: [src/features/waitlist/waitlistFlowState.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowState.ts#L3)
 
 ## Functions
-
-### applyWaitlistSubAccountConnectOverlay()
-
-> **applyWaitlistSubAccountConnectOverlay**\<`T`\>(`account`, `overlay`, `subAccountStepCompleted`): `T`
-
-Defined in: [src/features/waitlist/waitlistFlowState.ts:104](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistFlowState.ts#L104)
-
-Keep waitlist UI signing-ready while bootstrap catches up after Base App connect.
-
-#### Type Parameters
-
-##### T
-
-`T` *extends* `WaitlistAccountWithCanonical`
-
-#### Parameters
-
-##### account
-
-`T`
-
-##### overlay
-
-[`WaitlistSubAccountConnectOverlay`](#waitlistsubaccountconnectoverlay) | `null` | `undefined`
-
-##### subAccountStepCompleted
-
-`boolean`
-
-#### Returns
-
-`T`
-
-***
-
-### isSubAccountExecutionReady()
-
-> **isSubAccountExecutionReady**(`accountSignals?`): `boolean`
-
-Defined in: [src/features/waitlist/waitlistFlowState.ts:50](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistFlowState.ts#L50)
-
-#### Parameters
-
-##### accountSignals?
-
-[`UserExecutionAccountSignals`](../../lib/wallet/userExecutionTrack.md#userexecutionaccountsignals)
-
-#### Returns
-
-`boolean`
-
-***
-
-### isWaitlistSigningReady()
-
-> **isWaitlistSigningReady**(`account`): `boolean`
-
-Defined in: [src/features/waitlist/waitlistFlowState.ts:80](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistFlowState.ts#L80)
-
-#### Parameters
-
-##### account
-
-###### accountSignals?
-
-[`UserExecutionAccountSignals`](../../lib/wallet/userExecutionTrack.md#userexecutionaccountsignals)
-
-#### Returns
-
-`boolean`
-
-***
-
-### isWaitlistSigningReadyForUi()
-
-> **isWaitlistSigningReadyForUi**(`account`, `notice?`): `boolean`
-
-Defined in: [src/features/waitlist/waitlistFlowState.ts:91](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistFlowState.ts#L91)
-
-Server signals plus optimistic UI when a success notice landed before `me` refreshes.
-
-#### Parameters
-
-##### account
-
-###### accountSignals?
-
-[`UserExecutionAccountSignals`](../../lib/wallet/userExecutionTrack.md#userexecutionaccountsignals)
-
-##### notice?
-
-`string` | `null`
-
-#### Returns
-
-`boolean`
-
-***
 
 ### isWaitlistStepTwoSigningComplete()
 
 > **isWaitlistStepTwoSigningComplete**(`params`): `boolean`
 
-Defined in: [src/features/waitlist/waitlistFlowState.ts:169](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistFlowState.ts#L169)
+Defined in: [src/features/waitlist/waitlistFlowState.ts:111](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowState.ts#L111)
 
 Waitlist step 2 completion — parent CSW embedded owner on-chain or sub-account track.
 
@@ -174,7 +54,7 @@ Waitlist step 2 completion — parent CSW embedded owner on-chain or sub-account
 
 > **mergeCanonicalWaitlistAccount**\<`T`\>(`account`, `canonicalBootstrap`): `T`
 
-Defined in: [src/features/waitlist/waitlistFlowState.ts:340](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistFlowState.ts#L340)
+Defined in: [src/features/waitlist/waitlistFlowState.ts:204](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowState.ts#L204)
 
 #### Type Parameters
 
@@ -198,27 +78,35 @@ Defined in: [src/features/waitlist/waitlistFlowState.ts:340](https://github.com/
 
 ***
 
-### resolveSubAccountAddress()
+### resolveWaitlistAccordionOpenStep()
 
-> **resolveSubAccountAddress**(`params`): `string` \| `null`
+> **resolveWaitlistAccordionOpenStep**(`params`): `1` \| `2`
 
-Defined in: [src/features/waitlist/waitlistFlowState.ts:57](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistFlowState.ts#L57)
+Defined in: [src/features/waitlist/waitlistFlowState.ts:65](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowState.ts#L65)
 
 #### Parameters
 
 ##### params
 
-###### accountSignals?
+###### focusBaseAppConnect
 
-[`UserExecutionAccountSignals`](../../lib/wallet/userExecutionTrack.md#userexecutionaccountsignals)
+`boolean`
 
-###### baseSubAccount?
+###### manualOpenStep
 
-`string` \| `null`
+`1` \| `2` \| `null`
+
+###### ownerInstallRequested
+
+`boolean`
+
+###### stepOneComplete
+
+`boolean`
 
 #### Returns
 
-`string` \| `null`
+`1` \| `2`
 
 ***
 
@@ -226,7 +114,7 @@ Defined in: [src/features/waitlist/waitlistFlowState.ts:57](https://github.com/w
 
 > **resolveWaitlistStep**(`params`): [`WaitlistStep`](#waitliststep)
 
-Defined in: [src/features/waitlist/waitlistFlowState.ts:249](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistFlowState.ts#L249)
+Defined in: [src/features/waitlist/waitlistFlowState.ts:191](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowState.ts#L191)
 
 #### Parameters
 
@@ -234,25 +122,41 @@ Defined in: [src/features/waitlist/waitlistFlowState.ts:249](https://github.com/
 
 ###### account
 
-\{ `accountSignals?`: [`UserExecutionAccountSignals`](../../lib/wallet/userExecutionTrack.md#userexecutionaccountsignals); `appAccessStatus`: `string` \| `null`; `baseSubAccount?`: `string` \| `null`; `emailVerified`: `boolean`; \}
-
-###### account.accountSignals?
-
-[`UserExecutionAccountSignals`](../../lib/wallet/userExecutionTrack.md#userexecutionaccountsignals)
-
-###### account.appAccessStatus
-
-`string` \| `null`
-
-###### account.baseSubAccount?
-
-`string` \| `null`
+\{ `emailVerified`: `boolean`; \}
 
 ###### account.emailVerified
 
 `boolean`
 
-###### embeddedEoaAvailable?
+#### Returns
+
+[`WaitlistStep`](#waitliststep)
+
+***
+
+### shouldFocusWaitlistBaseAppConnect()
+
+> **shouldFocusWaitlistBaseAppConnect**(`params`): `boolean`
+
+Defined in: [src/features/waitlist/waitlistFlowState.ts:39](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowState.ts#L39)
+
+#### Parameters
+
+##### params
+
+###### account
+
+\{ `accountSignals?`: [`UserExecutionAccountSignals`](../../lib/wallet/userExecutionTrack.md#userexecutionaccountsignals); `emailVerified`: `boolean`; \}
+
+###### account.accountSignals?
+
+[`UserExecutionAccountSignals`](../../lib/wallet/userExecutionTrack.md#userexecutionaccountsignals)
+
+###### account.emailVerified
+
+`boolean`
+
+###### inBaseApp
 
 `boolean`
 
@@ -264,45 +168,25 @@ Defined in: [src/features/waitlist/waitlistFlowState.ts:249](https://github.com/
 
 `boolean`
 
-###### subAccountFlowEnabled?
+###### setupIntent?
+
+`string` \| `null`
+
+###### showBaseAppConnectPanel
 
 `boolean`
 
-###### subAccountStepCompleted?
+###### signingStepComplete
+
+`boolean`
+
+###### subAccountFlowEnabled?
 
 `boolean`
 
 ###### zoraLinked?
 
 `boolean`
-
-#### Returns
-
-[`WaitlistStep`](#waitliststep)
-
-***
-
-### shouldAutoBootstrapWaitlistSession()
-
-> **shouldAutoBootstrapWaitlistSession**(`params`): `boolean`
-
-Defined in: [src/features/waitlist/waitlistFlowState.ts:329](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistFlowState.ts#L329)
-
-#### Parameters
-
-##### params
-
-###### privyAuthed
-
-`boolean`
-
-###### recoveryRequired
-
-`boolean`
-
-###### step
-
-[`WaitlistStep`](#waitliststep)
 
 #### Returns
 
@@ -314,7 +198,7 @@ Defined in: [src/features/waitlist/waitlistFlowState.ts:329](https://github.com/
 
 > **shouldForceBaseAppConnectStep**(`params`): `boolean`
 
-Defined in: [src/features/waitlist/waitlistFlowState.ts:135](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistFlowState.ts#L135)
+Defined in: [src/features/waitlist/waitlistFlowState.ts:77](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowState.ts#L77)
 
 #### Parameters
 
@@ -358,35 +242,11 @@ Defined in: [src/features/waitlist/waitlistFlowState.ts:135](https://github.com/
 
 ***
 
-### shouldPromptBaseAccountReconnect()
-
-> **shouldPromptBaseAccountReconnect**(`params`): `boolean`
-
-Defined in: [src/features/waitlist/waitlistFlowState.ts:67](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistFlowState.ts#L67)
-
-#### Parameters
-
-##### params
-
-###### accountSignals?
-
-[`UserExecutionAccountSignals`](../../lib/wallet/userExecutionTrack.md#userexecutionaccountsignals)
-
-###### subAccountFlowEnabled
-
-`boolean`
-
-#### Returns
-
-`boolean`
-
-***
-
 ### shouldShowBaseAppConnectPanel()
 
 > **shouldShowBaseAppConnectPanel**(`params`): `boolean`
 
-Defined in: [src/features/waitlist/waitlistFlowState.ts:209](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistFlowState.ts#L209)
+Defined in: [src/features/waitlist/waitlistFlowState.ts:151](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowState.ts#L151)
 
 #### Parameters
 
@@ -430,7 +290,7 @@ Defined in: [src/features/waitlist/waitlistFlowState.ts:209](https://github.com/
 
 > **shouldShowParentCswAddOwnerPanel**(`params`): `boolean`
 
-Defined in: [src/features/waitlist/waitlistFlowState.ts:183](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistFlowState.ts#L183)
+Defined in: [src/features/waitlist/waitlistFlowState.ts:125](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowState.ts#L125)
 
 #### Parameters
 
@@ -471,45 +331,3 @@ Defined in: [src/features/waitlist/waitlistFlowState.ts:183](https://github.com/
 #### Returns
 
 `boolean`
-
-## References
-
-### buildWaitlistStepRoutingParams
-
-Re-exports [buildWaitlistStepRoutingParams](../../lib/wallet/userExecutionTrack.md#buildwaitliststeproutingparams)
-
-***
-
-### inferWaitlistEoaOwnerRoutingHint
-
-Re-exports [inferWaitlistEoaOwnerRoutingHint](../../lib/wallet/userExecutionTrack.md#inferwaitlisteoaownerroutinghint)
-
-***
-
-### isParentCswEmbeddedOwnerReady
-
-Re-exports [isParentCswEmbeddedOwnerReady](../../lib/wallet/userExecutionTrack.md#isparentcswembeddedownerready)
-
-***
-
-### isZoraLinkedFromAccountSignals
-
-Re-exports [isZoraLinkedFromAccountSignals](../../lib/wallet/userExecutionTrack.md#iszoralinkedfromaccountsignals)
-
-***
-
-### resolveEffectiveExecutionTrack
-
-Re-exports [resolveEffectiveExecutionTrack](../../lib/wallet/userExecutionTrack.md#resolveeffectiveexecutiontrack)
-
-***
-
-### shouldUseBaseAppSubAccountPath
-
-Re-exports [shouldUseBaseAppSubAccountPath](../../lib/wallet/userExecutionTrack.md#shouldusebaseappsubaccountpath)
-
-***
-
-### WaitlistStepRoutingContext
-
-Re-exports [WaitlistStepRoutingContext](../../lib/wallet/userExecutionTrack.md#waitliststeproutingcontext)

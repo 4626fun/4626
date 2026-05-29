@@ -12,7 +12,7 @@
 
 > **AlfaClubRoomAccessMembership** = `object`
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L28)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L28)
 
 #### Properties
 
@@ -20,55 +20,55 @@ Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:28](https://github.com/we
 
 > **creatorCoinBalanceRaw**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L32)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L32)
 
 ##### failureReason
 
 > **failureReason**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L37)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L37)
 
 ##### graceStartedAt
 
 > **graceStartedAt**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L36)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L36)
 
 ##### lastCheckedAt
 
 > **lastCheckedAt**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:34](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L34)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L34)
 
 ##### lastEligibleAt
 
 > **lastEligibleAt**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L35)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L35)
 
 ##### quoteThresholdRaw
 
 > **quoteThresholdRaw**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L33)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L33)
 
 ##### roomId
 
 > **roomId**: `string`
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L29)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L29)
 
 ##### status
 
 > **status**: `RoomAccessStatus`
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L31)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L31)
 
 ##### walletAddress
 
 > **walletAddress**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L30)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L30)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:30](https://github.com/we
 
 > **AlfaClubRoomAccessPolicy** = `object`
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L16)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L16)
 
 #### Properties
 
@@ -84,55 +84,55 @@ Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:16](https://github.com/we
 
 > **creatorCoinAddress**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L19)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L19)
 
 ##### enabled
 
 > **enabled**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L25)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L25)
 
 ##### enterThresholdBps
 
 > **enterThresholdBps**: `number`
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L22)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L22)
 
 ##### exitThresholdBps
 
 > **exitThresholdBps**: `number`
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L23)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L23)
 
 ##### graceHours
 
 > **graceHours**: `number`
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L24)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L24)
 
 ##### keyAmountRaw
 
 > **keyAmountRaw**: `string`
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L21)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L21)
 
 ##### poolAddress
 
 > **poolAddress**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L20)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L20)
 
 ##### roomId
 
 > **roomId**: `string`
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L17)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L17)
 
 ##### tokenId
 
 > **tokenId**: `string`
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L18)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L18)
 
 ## Functions
 
@@ -140,7 +140,7 @@ Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:18](https://github.com/we
 
 > **joinAlfaClubRoomAccess**(`params`): `Promise`\<\{ `eligible`: `boolean`; `membership`: [`AlfaClubRoomAccessMembership`](#alfaclubroomaccessmembership); `policy`: [`AlfaClubRoomAccessPolicy`](#alfaclubroomaccesspolicy); `reason`: `EligibilityReason`; \}\>
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:380](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L380)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:380](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L380)
 
 #### Parameters
 
@@ -164,7 +164,7 @@ Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:380](https://github.com/w
 
 > **preloadAlfaClubRoomAccessPolicyPoolAddress**(`params`): `Promise`\<`` `0x${string}` `` \| `null`\>
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:508](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L508)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:508](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L508)
 
 #### Parameters
 
@@ -192,7 +192,7 @@ Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:508](https://github.com/w
 
 > **readAlfaClubRoomAccessMembership**(`params`): `Promise`\<[`AlfaClubRoomAccessMembership`](#alfaclubroomaccessmembership) \| `null`\>
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:297](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L297)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:297](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L297)
 
 #### Parameters
 
@@ -216,7 +216,7 @@ Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:297](https://github.com/w
 
 > **readAlfaClubRoomAccessPolicy**(`roomId`): `Promise`\<[`AlfaClubRoomAccessPolicy`](#alfaclubroomaccesspolicy) \| `null`\>
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:208](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L208)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:208](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L208)
 
 #### Parameters
 
@@ -234,7 +234,7 @@ Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:208](https://github.com/w
 
 > **recheckAlfaClubRoomAccessMemberships**(`params`): `Promise`\<\{ `autoEntered`: `number`; `checked`: `number`; `removed`: `number`; `stale`: `number`; \}\>
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:408](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L408)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:408](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L408)
 
 #### Parameters
 
@@ -258,7 +258,7 @@ Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:408](https://github.com/w
 
 > **upsertAlfaClubRoomAccessPolicy**(`params`): `Promise`\<[`AlfaClubRoomAccessPolicy`](#alfaclubroomaccesspolicy)\>
 
-Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:222](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L222)
+Defined in: [server/\_lib/alfaclub/roomAccessPolicy.ts:222](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/roomAccessPolicy.ts#L222)
 
 #### Parameters
 

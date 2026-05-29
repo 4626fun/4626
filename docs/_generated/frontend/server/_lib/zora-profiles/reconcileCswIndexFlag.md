@@ -12,7 +12,7 @@
 
 > **ReconcileCswIndexResult** = `object`
 
-Defined in: [server/\_lib/zora-profiles/reconcileCswIndexFlag.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/reconcileCswIndexFlag.ts#L7)
+Defined in: [server/\_lib/zora-profiles/reconcileCswIndexFlag.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/reconcileCswIndexFlag.ts#L7)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/zora-profiles/reconcileCswIndexFlag.ts:7](https://gith
 
 > **rowsUpdated**: `number`
 
-Defined in: [server/\_lib/zora-profiles/reconcileCswIndexFlag.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/reconcileCswIndexFlag.ts#L8)
+Defined in: [server/\_lib/zora-profiles/reconcileCswIndexFlag.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/reconcileCswIndexFlag.ts#L8)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [server/\_lib/zora-profiles/reconcileCswIndexFlag.ts:8](https://gith
 
 > **reconcileZoraProfilesCswIndexFlag**(): `Promise`\<[`ReconcileCswIndexResult`](#reconcilecswindexresult)\>
 
-Defined in: [server/\_lib/zora-profiles/reconcileCswIndexFlag.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora-profiles/reconcileCswIndexFlag.ts#L14)
+Defined in: [server/\_lib/zora-profiles/reconcileCswIndexFlag.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora-profiles/reconcileCswIndexFlag.ts#L14)
 
 Best-effort reconciliation. Requires postgres `getDb()` (not Supabase REST).
 

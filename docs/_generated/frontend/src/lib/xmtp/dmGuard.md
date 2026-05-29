@@ -12,7 +12,7 @@
 
 > **normalizeDmGuardAddress**(`value`): `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/xmtp/dmGuard.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/dmGuard.ts#L1)
+Defined in: [src/lib/xmtp/dmGuard.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/dmGuard.ts#L1)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/lib/xmtp/dmGuard.ts:1](https://github.com/wenakita/4626/blob/5b
 
 > **shouldBlockSelfDm**(`params`): `boolean`
 
-Defined in: [src/lib/xmtp/dmGuard.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/xmtp/dmGuard.ts#L7)
+Defined in: [src/lib/xmtp/dmGuard.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/dmGuard.ts#L7)
 
 #### Parameters
 

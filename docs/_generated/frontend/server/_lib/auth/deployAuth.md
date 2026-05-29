@@ -12,7 +12,7 @@
 
 > **DeployAuthContext** = \{ `address`: `Address`; `type`: `"session"`; \} \| \{ `address`: `Address`; `agentId`: `number`; `agentRegistry`: `string`; `chainId`: `number`; `type`: `"siwa"`; \}
 
-Defined in: [server/\_lib/auth/deployAuth.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/auth/deployAuth.ts#L8)
+Defined in: [server/\_lib/auth/deployAuth.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/auth/deployAuth.ts#L8)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/auth/deployAuth.ts:8](https://github.com/wenakita/4626
 
 > **readDeployAuthFromRequest**(`req`): [`DeployAuthContext`](#deployauthcontext) \| `null`
 
-Defined in: [server/\_lib/auth/deployAuth.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/auth/deployAuth.ts#L25)
+Defined in: [server/\_lib/auth/deployAuth.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/auth/deployAuth.ts#L25)
 
 #### Parameters
 

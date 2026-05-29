@@ -12,7 +12,7 @@
 
 > **expandCreatorFeatureKeys**(`keys`): `Set`\<[`CreatorStrategyFeatureKey`](catalog.md#creatorstrategyfeaturekey)\>
 
-Defined in: [server/\_lib/creatorStrategy/bundleEntitlements.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/bundleEntitlements.ts#L16)
+Defined in: [server/\_lib/creatorStrategy/bundleEntitlements.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/bundleEntitlements.ts#L16)
 
 Expand stored activation keys into effective deploy entitlements.
 A paid `vault_full_deploy` row satisfies every bundled sub-feature.
@@ -33,7 +33,7 @@ A paid `vault_full_deploy` row satisfies every bundled sub-feature.
 
 > **getAlacarteDeployPurchaseBlockedMessage**(`featureKey`): `string` \| `null`
 
-Defined in: [server/\_lib/creatorStrategy/bundleEntitlements.ts:54](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/bundleEntitlements.ts#L54)
+Defined in: [server/\_lib/creatorStrategy/bundleEntitlements.ts:54](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/bundleEntitlements.ts#L54)
 
 #### Parameters
 
@@ -51,7 +51,7 @@ Defined in: [server/\_lib/creatorStrategy/bundleEntitlements.ts:54](https://gith
 
 > **isFeatureGrantedByKeys**(`featureKey`, `activeKeys`): `boolean`
 
-Defined in: [server/\_lib/creatorStrategy/bundleEntitlements.ts:47](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/bundleEntitlements.ts#L47)
+Defined in: [server/\_lib/creatorStrategy/bundleEntitlements.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/bundleEntitlements.ts#L47)
 
 #### Parameters
 
@@ -73,7 +73,7 @@ Defined in: [server/\_lib/creatorStrategy/bundleEntitlements.ts:47](https://gith
 
 > **listEntitlementLookupKeys**(`featureKey`): `string`[]
 
-Defined in: [server/\_lib/creatorStrategy/bundleEntitlements.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/creatorStrategy/bundleEntitlements.ts#L38)
+Defined in: [server/\_lib/creatorStrategy/bundleEntitlements.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/bundleEntitlements.ts#L38)
 
 Feature keys to match in SQL when checking live entitlement for a sub-feature.
 

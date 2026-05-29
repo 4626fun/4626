@@ -12,7 +12,7 @@
 
 > **ReprovisionResult** = \{ `ok`: `true`; `parentCswAddress`: `Address`; `permissionHash`: `Hex`; `subAccountAddress`: `Address`; \} \| \{ `code`: `string`; `message`: `string`; `ok`: `false`; \}
 
-Defined in: [src/features/executionScope/useReprovisionSubAccount.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useReprovisionSubAccount.ts#L51)
+Defined in: [src/features/executionScope/useReprovisionSubAccount.ts:52](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useReprovisionSubAccount.ts#L52)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/features/executionScope/useReprovisionSubAccount.ts:51](https:/
 
 > **UseReprovisionReturn** = `object`
 
-Defined in: [src/features/executionScope/useReprovisionSubAccount.ts:64](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useReprovisionSubAccount.ts#L64)
+Defined in: [src/features/executionScope/useReprovisionSubAccount.ts:65](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useReprovisionSubAccount.ts#L65)
 
 #### Properties
 
@@ -28,25 +28,25 @@ Defined in: [src/features/executionScope/useReprovisionSubAccount.ts:64](https:/
 
 > **busy**: `boolean`
 
-Defined in: [src/features/executionScope/useReprovisionSubAccount.ts:65](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useReprovisionSubAccount.ts#L65)
+Defined in: [src/features/executionScope/useReprovisionSubAccount.ts:66](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useReprovisionSubAccount.ts#L66)
 
 ##### error
 
 > **error**: `string` \| `null`
 
-Defined in: [src/features/executionScope/useReprovisionSubAccount.ts:67](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useReprovisionSubAccount.ts#L67)
+Defined in: [src/features/executionScope/useReprovisionSubAccount.ts:68](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useReprovisionSubAccount.ts#L68)
 
 ##### phase
 
-> **phase**: `"idle"` \| `"preparing"` \| `"signing"` \| `"committing"` \| `"done"` \| `"error"`
+> **phase**: `"idle"` \| `"delegating"` \| `"preparing"` \| `"signing"` \| `"committing"` \| `"done"` \| `"error"`
 
-Defined in: [src/features/executionScope/useReprovisionSubAccount.ts:66](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useReprovisionSubAccount.ts#L66)
+Defined in: [src/features/executionScope/useReprovisionSubAccount.ts:67](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useReprovisionSubAccount.ts#L67)
 
 ##### reprovision()
 
 > **reprovision**: (`caps?`) => `Promise`\<[`ReprovisionResult`](#reprovisionresult)\>
 
-Defined in: [src/features/executionScope/useReprovisionSubAccount.ts:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useReprovisionSubAccount.ts#L68)
+Defined in: [src/features/executionScope/useReprovisionSubAccount.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useReprovisionSubAccount.ts#L69)
 
 ###### Parameters
 
@@ -70,7 +70,7 @@ Defined in: [src/features/executionScope/useReprovisionSubAccount.ts:68](https:/
 
 > **useReprovisionSubAccount**(): [`UseReprovisionReturn`](#usereprovisionreturn)
 
-Defined in: [src/features/executionScope/useReprovisionSubAccount.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useReprovisionSubAccount.ts#L71)
+Defined in: [src/features/executionScope/useReprovisionSubAccount.ts:72](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useReprovisionSubAccount.ts#L72)
 
 #### Returns
 

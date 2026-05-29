@@ -8,11 +8,41 @@
 
 ## Type Aliases
 
+### Db
+
+> **Db** = `object`
+
+Defined in: [server/\_lib/wallet/walletSync.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L15)
+
+#### Properties
+
+##### sql()
+
+> **sql**: (`strings`, ...`values`) => `Promise`\<\{ `rowCount?`: `number`; `rows`: `any`[]; \}\>
+
+Defined in: [server/\_lib/wallet/walletSync.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L16)
+
+###### Parameters
+
+###### strings
+
+`TemplateStringsArray`
+
+###### values
+
+...`any`[]
+
+###### Returns
+
+`Promise`\<\{ `rowCount?`: `number`; `rows`: `any`[]; \}\>
+
+***
+
 ### PersistedIdentity
 
 > **PersistedIdentity** = `object`
 
-Defined in: [server/\_lib/wallet/walletSync.ts:252](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L252)
+Defined in: [server/\_lib/wallet/walletSync.ts:254](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L254)
 
 #### Properties
 
@@ -20,43 +50,43 @@ Defined in: [server/\_lib/wallet/walletSync.ts:252](https://github.com/wenakita/
 
 > **activeOwnerWallet**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/walletSync.ts:254](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L254)
+Defined in: [server/\_lib/wallet/walletSync.ts:256](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L256)
 
 ##### canonicalSmartWallet
 
 > **canonicalSmartWallet**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/walletSync.ts:255](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L255)
+Defined in: [server/\_lib/wallet/walletSync.ts:257](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L257)
 
 ##### canonicalSolanaWallet
 
 > **canonicalSolanaWallet**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/walletSync.ts:256](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L256)
+Defined in: [server/\_lib/wallet/walletSync.ts:258](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L258)
 
 ##### embeddedEoa
 
 > **embeddedEoa**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/walletSync.ts:258](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L258)
+Defined in: [server/\_lib/wallet/walletSync.ts:260](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L260)
 
 ##### operationalSolanaWallet
 
 > **operationalSolanaWallet**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/walletSync.ts:257](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L257)
+Defined in: [server/\_lib/wallet/walletSync.ts:259](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L259)
 
 ##### preprovZoraHandle
 
 > **preprovZoraHandle**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/walletSync.ts:259](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L259)
+Defined in: [server/\_lib/wallet/walletSync.ts:261](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L261)
 
 ##### primaryWallet
 
 > **primaryWallet**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/walletSync.ts:253](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L253)
+Defined in: [server/\_lib/wallet/walletSync.ts:255](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L255)
 
 ***
 
@@ -64,7 +94,7 @@ Defined in: [server/\_lib/wallet/walletSync.ts:253](https://github.com/wenakita/
 
 > **SyncUserWalletsResult** = `object`
 
-Defined in: [server/\_lib/wallet/walletSync.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L19)
+Defined in: [server/\_lib/wallet/walletSync.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L21)
 
 #### Properties
 
@@ -72,25 +102,25 @@ Defined in: [server/\_lib/wallet/walletSync.ts:19](https://github.com/wenakita/4
 
 > **activeOwnerWallet**: \{ `address`: `string`; `provider`: `string`; `walletType`: `string`; \} \| `null`
 
-Defined in: [server/\_lib/wallet/walletSync.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L22)
+Defined in: [server/\_lib/wallet/walletSync.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L24)
 
 ##### canonicalSmartWallet
 
 > **canonicalSmartWallet**: \{ `address`: `string`; `provider`: `string`; \} \| `null`
 
-Defined in: [server/\_lib/wallet/walletSync.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L21)
+Defined in: [server/\_lib/wallet/walletSync.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L23)
 
 ##### canonicalSolanaWallet
 
 > **canonicalSolanaWallet**: \{ `address`: `string`; `provider`: `string`; \} \| `null`
 
-Defined in: [server/\_lib/wallet/walletSync.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L23)
+Defined in: [server/\_lib/wallet/walletSync.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L25)
 
 ##### connectedWallets
 
 > **connectedWallets**: `object`[]
 
-Defined in: [server/\_lib/wallet/walletSync.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L26)
+Defined in: [server/\_lib/wallet/walletSync.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L28)
 
 ###### address
 
@@ -108,25 +138,25 @@ Defined in: [server/\_lib/wallet/walletSync.ts:26](https://github.com/wenakita/4
 
 > **embeddedEoa**: \{ `address`: `string`; `chainType`: `string`; `clientType`: `string` \| `null`; \} \| `null`
 
-Defined in: [server/\_lib/wallet/walletSync.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L25)
+Defined in: [server/\_lib/wallet/walletSync.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L27)
 
 ##### operationalSolanaWallet
 
 > **operationalSolanaWallet**: \{ `address`: `string`; `provider`: `string`; \} \| `null`
 
-Defined in: [server/\_lib/wallet/walletSync.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L24)
+Defined in: [server/\_lib/wallet/walletSync.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L26)
 
 ##### primaryWalletAddress
 
 > **primaryWalletAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/walletSync.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L27)
+Defined in: [server/\_lib/wallet/walletSync.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L29)
 
 ##### profileId
 
 > **profileId**: `number`
 
-Defined in: [server/\_lib/wallet/walletSync.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L20)
+Defined in: [server/\_lib/wallet/walletSync.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L22)
 
 ## Functions
 
@@ -134,13 +164,13 @@ Defined in: [server/\_lib/wallet/walletSync.ts:20](https://github.com/wenakita/4
 
 > **readPersistedIdentity**(`db`, `profileId`): `Promise`\<[`PersistedIdentity`](#persistedidentity) \| `null`\>
 
-Defined in: [server/\_lib/wallet/walletSync.ts:262](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L262)
+Defined in: [server/\_lib/wallet/walletSync.ts:264](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L264)
 
 #### Parameters
 
 ##### db
 
-`Db`
+[`Db`](#db)
 
 ##### profileId
 
@@ -156,13 +186,13 @@ Defined in: [server/\_lib/wallet/walletSync.ts:262](https://github.com/wenakita/
 
 > **syncUserWallets**(`db`, `privyUser`): `Promise`\<[`SyncUserWalletsResult`](#syncuserwalletsresult)\>
 
-Defined in: [server/\_lib/wallet/walletSync.ts:888](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/walletSync.ts#L888)
+Defined in: [server/\_lib/wallet/walletSync.ts:890](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L890)
 
 #### Parameters
 
 ##### db
 
-`Db`
+[`Db`](#db)
 
 ##### privyUser
 

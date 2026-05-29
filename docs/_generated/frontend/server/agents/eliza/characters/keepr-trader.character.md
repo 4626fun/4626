@@ -12,7 +12,7 @@
 
 > `const` **keeprTraderCharacter**: `object`
 
-Defined in: [server/agents/eliza/characters/keepr-trader.character.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/characters/keepr-trader.character.ts#L3)
+Defined in: [server/agents/eliza/characters/keepr-trader.character.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/characters/keepr-trader.character.ts#L3)
 
 #### Type Declaration
 

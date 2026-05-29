@@ -12,7 +12,7 @@
 
 > **ComposeLockedFrameImageParams** = `object`
 
-Defined in: [server/\_lib/image/imageCompositor.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageCompositor.ts#L7)
+Defined in: [server/\_lib/image/imageCompositor.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageCompositor.ts#L7)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/\_lib/image/imageCompositor.ts:7](https://github.com/wenakit
 
 > `optional` **artworkBytes**: `Uint8Array`
 
-Defined in: [server/\_lib/image/imageCompositor.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageCompositor.ts#L8)
+Defined in: [server/\_lib/image/imageCompositor.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageCompositor.ts#L8)
 
 ##### extractedForegroundBytes?
 
 > `optional` **extractedForegroundBytes**: `Uint8Array` \| `null`
 
-Defined in: [server/\_lib/image/imageCompositor.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageCompositor.ts#L11)
+Defined in: [server/\_lib/image/imageCompositor.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageCompositor.ts#L11)
 
 ##### forceBreakout?
 
 > `optional` **forceBreakout**: `boolean`
 
-Defined in: [server/\_lib/image/imageCompositor.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageCompositor.ts#L14)
+Defined in: [server/\_lib/image/imageCompositor.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageCompositor.ts#L14)
 
 Skip heuristic subject-detection and always render the breakout layer.
 
@@ -40,19 +40,19 @@ Skip heuristic subject-detection and always render the breakout layer.
 
 > **frameBytes**: `Uint8Array`
 
-Defined in: [server/\_lib/image/imageCompositor.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageCompositor.ts#L10)
+Defined in: [server/\_lib/image/imageCompositor.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageCompositor.ts#L10)
 
 ##### interiorLayerBytes?
 
 > `optional` **interiorLayerBytes**: `Uint8Array`
 
-Defined in: [server/\_lib/image/imageCompositor.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageCompositor.ts#L9)
+Defined in: [server/\_lib/image/imageCompositor.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageCompositor.ts#L9)
 
 ##### layoutHint?
 
 > `optional` **layoutHint**: [`ArtworkLayout`](imageClassifier.md#artworklayout)
 
-Defined in: [server/\_lib/image/imageCompositor.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageCompositor.ts#L12)
+Defined in: [server/\_lib/image/imageCompositor.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageCompositor.ts#L12)
 
 ***
 
@@ -60,7 +60,7 @@ Defined in: [server/\_lib/image/imageCompositor.ts:12](https://github.com/wenaki
 
 > **ComposeLockedFrameImageResult** = `object`
 
-Defined in: [server/\_lib/image/imageCompositor.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageCompositor.ts#L17)
+Defined in: [server/\_lib/image/imageCompositor.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageCompositor.ts#L17)
 
 #### Properties
 
@@ -68,25 +68,25 @@ Defined in: [server/\_lib/image/imageCompositor.ts:17](https://github.com/wenaki
 
 > **breakoutApplied**: `boolean`
 
-Defined in: [server/\_lib/image/imageCompositor.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageCompositor.ts#L20)
+Defined in: [server/\_lib/image/imageCompositor.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageCompositor.ts#L20)
 
 ##### contentBox
 
 > **contentBox**: [`ImageCompositorBox`](#imagecompositorbox)
 
-Defined in: [server/\_lib/image/imageCompositor.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageCompositor.ts#L19)
+Defined in: [server/\_lib/image/imageCompositor.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageCompositor.ts#L19)
 
 ##### imageBytes
 
 > **imageBytes**: `Uint8Array`
 
-Defined in: [server/\_lib/image/imageCompositor.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageCompositor.ts#L18)
+Defined in: [server/\_lib/image/imageCompositor.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageCompositor.ts#L18)
 
 ##### layout
 
 > **layout**: [`ArtworkLayout`](imageClassifier.md#artworklayout)
 
-Defined in: [server/\_lib/image/imageCompositor.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageCompositor.ts#L21)
+Defined in: [server/\_lib/image/imageCompositor.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageCompositor.ts#L21)
 
 ***
 
@@ -94,7 +94,7 @@ Defined in: [server/\_lib/image/imageCompositor.ts:21](https://github.com/wenaki
 
 > **ImageCompositorBox** = [`FixedContentBox`](imageContentBox.md#fixedcontentbox)
 
-Defined in: [server/\_lib/image/imageCompositor.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageCompositor.ts#L5)
+Defined in: [server/\_lib/image/imageCompositor.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageCompositor.ts#L5)
 
 ## Functions
 
@@ -102,7 +102,7 @@ Defined in: [server/\_lib/image/imageCompositor.ts:5](https://github.com/wenakit
 
 > **composeLockedFrameImage**(`params`): `Promise`\<[`ComposeLockedFrameImageResult`](#composelockedframeimageresult)\>
 
-Defined in: [server/\_lib/image/imageCompositor.ts:483](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageCompositor.ts#L483)
+Defined in: [server/\_lib/image/imageCompositor.ts:483](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageCompositor.ts#L483)
 
 #### Parameters
 

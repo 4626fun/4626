@@ -12,7 +12,7 @@
 
 > **PageTransitionSurfaceProps** = `object`
 
-Defined in: [src/components/layout/PageTransition.tsx:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/layout/PageTransition.tsx#L28)
+Defined in: [src/components/layout/PageTransition.tsx:28](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/PageTransition.tsx#L28)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [src/components/layout/PageTransition.tsx:28](https://github.com/wen
 
 > **children**: `ReactNode`
 
-Defined in: [src/components/layout/PageTransition.tsx:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/layout/PageTransition.tsx#L30)
+Defined in: [src/components/layout/PageTransition.tsx:30](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/PageTransition.tsx#L30)
 
 ##### className?
 
 > `optional` **className**: `string`
 
-Defined in: [src/components/layout/PageTransition.tsx:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/layout/PageTransition.tsx#L31)
+Defined in: [src/components/layout/PageTransition.tsx:31](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/PageTransition.tsx#L31)
 
 ##### transitionKey
 
 > **transitionKey**: `string`
 
-Defined in: [src/components/layout/PageTransition.tsx:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/layout/PageTransition.tsx#L29)
+Defined in: [src/components/layout/PageTransition.tsx:29](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/PageTransition.tsx#L29)
 
 ##### variant?
 
 > `optional` **variant**: [`PageTransitionVariant`](#pagetransitionvariant)
 
-Defined in: [src/components/layout/PageTransition.tsx:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/layout/PageTransition.tsx#L32)
+Defined in: [src/components/layout/PageTransition.tsx:32](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/PageTransition.tsx#L32)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/components/layout/PageTransition.tsx:32](https://github.com/wen
 
 > **PageTransitionVariant** = `"route"` \| `"nested"`
 
-Defined in: [src/components/layout/PageTransition.tsx:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/layout/PageTransition.tsx#L10)
+Defined in: [src/components/layout/PageTransition.tsx:10](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/PageTransition.tsx#L10)
 
 ## Functions
 
@@ -54,7 +54,7 @@ Defined in: [src/components/layout/PageTransition.tsx:10](https://github.com/wen
 
 > **PageTransitionNestedOutlet**(`props`): `Element`
 
-Defined in: [src/components/layout/PageTransition.tsx:59](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/layout/PageTransition.tsx#L59)
+Defined in: [src/components/layout/PageTransition.tsx:59](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/PageTransition.tsx#L59)
 
 Nested tab / sub-route transitions (Explore tabs, Admin sections).
 
@@ -76,7 +76,7 @@ Nested tab / sub-route transitions (Explore tabs, Admin sections).
 
 > **PageTransitionOutlet**(): `Element`
 
-Defined in: [src/components/layout/PageTransition.tsx:69](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/layout/PageTransition.tsx#L69)
+Defined in: [src/components/layout/PageTransition.tsx:69](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/PageTransition.tsx#L69)
 
 #### Returns
 
@@ -88,7 +88,7 @@ Defined in: [src/components/layout/PageTransition.tsx:69](https://github.com/wen
 
 > **PageTransitionSurface**(`props`): `Element`
 
-Defined in: [src/components/layout/PageTransition.tsx:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/layout/PageTransition.tsx#L36)
+Defined in: [src/components/layout/PageTransition.tsx:36](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/PageTransition.tsx#L36)
 
 Shared fade + slight vertical shift for route and nested tab surfaces.
 

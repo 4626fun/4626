@@ -12,7 +12,7 @@
 
 > **PublishScorecardResult** = `object`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:86](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L86)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:86](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L86)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [server/\_lib/alfaclub/scorecard.ts:86](https://github.com/wenakita/
 
 > **canonicalJson**: `string`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:88](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L88)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:88](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L88)
 
 ##### hash
 
 > **hash**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:89](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L89)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:89](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L89)
 
 ##### scorecard
 
 > **scorecard**: [`Scorecard`](#scorecard-1)
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:87](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L87)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:87](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L87)
 
 ##### upload
 
 > **upload**: [`GroveUploadAttempt`](../lens/lensGrove.md#groveuploadattempt)
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:90](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L90)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:90](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L90)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [server/\_lib/alfaclub/scorecard.ts:90](https://github.com/wenakita/
 
 > **Scorecard** = `object`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L43)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L43)
 
 #### Properties
 
@@ -54,7 +54,7 @@ Defined in: [server/\_lib/alfaclub/scorecard.ts:43](https://github.com/wenakita/
 
 > **citations**: `object`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:72](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L72)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:72](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L72)
 
 ###### friendKeyContract
 
@@ -76,7 +76,7 @@ Defined in: [server/\_lib/alfaclub/scorecard.ts:72](https://github.com/wenakita/
 
 > **creator**: `object`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L53)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:53](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L53)
 
 ###### address
 
@@ -90,19 +90,19 @@ Defined in: [server/\_lib/alfaclub/scorecard.ts:53](https://github.com/wenakita/
 
 > **disclaimer**: `string`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:47](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L47)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L47)
 
 ##### generatedAt
 
 > **generatedAt**: `string`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:45](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L45)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L45)
 
 ##### metrics
 
 > **metrics**: `object`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:57](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L57)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:57](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L57)
 
 ###### hyperliquid
 
@@ -120,7 +120,7 @@ Defined in: [server/\_lib/alfaclub/scorecard.ts:57](https://github.com/wenakita/
 
 > **publisher**: `object`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L48)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L48)
 
 ###### agentId
 
@@ -138,13 +138,13 @@ Defined in: [server/\_lib/alfaclub/scorecard.ts:48](https://github.com/wenakita/
 
 > **schema**: *typeof* [`SCORECARD_SCHEMA`](#scorecard_schema)
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L44)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L44)
 
 ##### scores
 
 > **scores**: `object`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:65](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L65)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:65](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L65)
 
 ###### composite
 
@@ -170,7 +170,7 @@ Defined in: [server/\_lib/alfaclub/scorecard.ts:65](https://github.com/wenakita/
 
 > **snapshotTs**: `string`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:46](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L46)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L46)
 
 ***
 
@@ -178,7 +178,7 @@ Defined in: [server/\_lib/alfaclub/scorecard.ts:46](https://github.com/wenakita/
 
 > **ScorecardInput** = `object`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L31)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L31)
 
 #### Properties
 
@@ -186,19 +186,19 @@ Defined in: [server/\_lib/alfaclub/scorecard.ts:31](https://github.com/wenakita/
 
 > **creator**: [`RankedCreator`](leaderboard.md#rankedcreator)
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L32)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L32)
 
 ##### snapshotTs
 
 > **snapshotTs**: `string`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L33)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L33)
 
 ##### sources
 
 > **sources**: `object`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L35)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L35)
 
 ###### friendKeyContract
 
@@ -220,7 +220,7 @@ Defined in: [server/\_lib/alfaclub/scorecard.ts:35](https://github.com/wenakita/
 
 > **totalCreatorsRanked**: `number`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:34](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L34)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L34)
 
 ***
 
@@ -228,7 +228,7 @@ Defined in: [server/\_lib/alfaclub/scorecard.ts:34](https://github.com/wenakita/
 
 > **ScorecardWithIntegrity** = `object`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:80](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L80)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:80](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L80)
 
 #### Properties
 
@@ -236,19 +236,19 @@ Defined in: [server/\_lib/alfaclub/scorecard.ts:80](https://github.com/wenakita/
 
 > **canonicalJson**: `string`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:82](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L82)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:82](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L82)
 
 ##### hash
 
 > **hash**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:83](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L83)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:83](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L83)
 
 ##### scorecard
 
 > **scorecard**: [`Scorecard`](#scorecard-1)
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:81](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L81)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:81](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L81)
 
 ## Variables
 
@@ -256,7 +256,7 @@ Defined in: [server/\_lib/alfaclub/scorecard.ts:81](https://github.com/wenakita/
 
 > `const` **SCORECARD\_DISCLAIMER**: `"4626 Keepr onchain-derived snapshot. Scores derive from public Base chain data (FriendKey total supply, FriendStake staked supply, Hyperliquid realized 30d PnL) and public Hyperliquid API responses. AlfaClub's in-app ranking is a separate proprietary calculation. Not financial advice."`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L24)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L24)
 
 ***
 
@@ -264,7 +264,7 @@ Defined in: [server/\_lib/alfaclub/scorecard.ts:24](https://github.com/wenakita/
 
 > `const` **SCORECARD\_SCHEMA**: `"4626.alfaclub.scorecard.v1"`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L22)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L22)
 
 ## Functions
 
@@ -272,7 +272,7 @@ Defined in: [server/\_lib/alfaclub/scorecard.ts:22](https://github.com/wenakita/
 
 > **buildScorecard**(`input`): [`ScorecardWithIntegrity`](#scorecardwithintegrity)
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:128](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L128)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:128](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L128)
 
 Build a canonical scorecard. Pure — no network, no DB, no time lookups
 beyond the `generatedAt` stamp.
@@ -293,7 +293,7 @@ beyond the `generatedAt` stamp.
 
 > **formatScorecardPostBody**(`scorecard`, `scorecardUri`): `string`
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:177](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L177)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:177](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L177)
 
 Derive the exact Lens post body text from a scorecard. Factual only.
 
@@ -317,7 +317,7 @@ Derive the exact Lens post body text from a scorecard. Factual only.
 
 > **publishScorecard**(`input`): `Promise`\<[`PublishScorecardResult`](#publishscorecardresult)\>
 
-Defined in: [server/\_lib/alfaclub/scorecard.ts:204](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/scorecard.ts#L204)
+Defined in: [server/\_lib/alfaclub/scorecard.ts:204](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/scorecard.ts#L204)
 
 Upload a scorecard to Lens Grove. Never throws.
 

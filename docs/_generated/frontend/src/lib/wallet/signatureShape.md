@@ -12,7 +12,7 @@
 
 > **SignatureShape** = \{ `kind`: `"secp256k1"`; `r`: `` `0x${string}` ``; `s`: `` `0x${string}` ``; `v`: `number`; \} \| \{ `authenticatorData`: `` `0x${string}` ``; `challengeIndex`: `number`; `clientDataJSON`: `string`; `kind`: `"webauthn"`; `r`: `bigint`; `s`: `bigint`; `typeIndex`: `number`; \} \| \{ `kind`: `"unknown"`; `reason`: `string`; \}
 
-Defined in: [src/lib/wallet/signatureShape.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/signatureShape.ts#L14)
+Defined in: [src/lib/wallet/signatureShape.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/signatureShape.ts#L14)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/wallet/signatureShape.ts:14](https://github.com/wenakita/46
 
 > **detectSignatureShape**(`raw`): [`SignatureShape`](#signatureshape)
 
-Defined in: [src/lib/wallet/signatureShape.ts:67](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/signatureShape.ts#L67)
+Defined in: [src/lib/wallet/signatureShape.ts:67](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/signatureShape.ts#L67)
 
 #### Parameters
 

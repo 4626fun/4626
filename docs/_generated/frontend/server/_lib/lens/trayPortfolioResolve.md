@@ -12,7 +12,7 @@
 
 > **ResolvedTrayPortfolio** = `object`
 
-Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/trayPortfolioResolve.ts#L13)
+Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/trayPortfolioResolve.ts#L21)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:13](https://github.com/we
 
 > **portfolio**: [`WalletPortfolio`](debankPortfolio.md#walletportfolio) \| `null`
 
-Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/trayPortfolioResolve.ts#L14)
+Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/trayPortfolioResolve.ts#L22)
 
 ##### source
 
 > **source**: [`TrayPortfolioSource`](#trayportfoliosource) \| `null`
 
-Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/trayPortfolioResolve.ts#L15)
+Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/trayPortfolioResolve.ts#L23)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:15](https://github.com/we
 
 > **TrayPortfolioBatchResult** = `object`
 
-Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/trayPortfolioResolve.ts#L40)
+Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:93](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/trayPortfolioResolve.ts#L93)
 
 #### Properties
 
@@ -42,19 +42,19 @@ Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:40](https://github.com/we
 
 > **asOf**: `number`
 
-Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/trayPortfolioResolve.ts#L41)
+Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/trayPortfolioResolve.ts#L94)
 
 ##### results
 
 > **results**: `Record`\<`string`, [`WalletPortfolio`](debankPortfolio.md#walletportfolio) \| `null`\>
 
-Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/trayPortfolioResolve.ts#L42)
+Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/trayPortfolioResolve.ts#L95)
 
 ##### sources
 
 > **sources**: `Record`\<`string`, [`TrayPortfolioSource`](#trayportfoliosource) \| `null`\>
 
-Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/trayPortfolioResolve.ts#L43)
+Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:96](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/trayPortfolioResolve.ts#L96)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:43](https://github.com/we
 
 > **TrayPortfolioSource** = `"debank"` \| `"base-etherscan"`
 
-Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/trayPortfolioResolve.ts#L11)
+Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/trayPortfolioResolve.ts#L19)
 
 ## Functions
 
@@ -70,7 +70,7 @@ Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:11](https://github.com/we
 
 > **resolveTrayWalletPortfolio**(`address`, `options`): `Promise`\<[`ResolvedTrayPortfolio`](#resolvedtrayportfolio)\>
 
-Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/trayPortfolioResolve.ts#L18)
+Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/trayPortfolioResolve.ts#L34)
 
 #### Parameters
 
@@ -94,7 +94,7 @@ Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:18](https://github.com/we
 
 > **resolveTrayWalletPortfolioBatch**(`addresses`, `options`): `Promise`\<[`TrayPortfolioBatchResult`](#trayportfoliobatchresult)\>
 
-Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:59](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/trayPortfolioResolve.ts#L59)
+Defined in: [server/\_lib/lens/trayPortfolioResolve.ts:112](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/trayPortfolioResolve.ts#L112)
 
 #### Parameters
 

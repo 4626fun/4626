@@ -12,7 +12,7 @@
 
 > **CanonicalIdentityCard**(`__namedParameters`): `Element`
 
-Defined in: [src/components/account/CanonicalIdentityCard.tsx:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/CanonicalIdentityCard.tsx#L29)
+Defined in: [src/components/account/CanonicalIdentityCard.tsx:29](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/CanonicalIdentityCard.tsx#L29)
 
 Top-right identity surface for authenticated users.
 
@@ -65,7 +65,7 @@ See `docs/design/identity-surface-spec.md` for the full design rationale.
 
 > **CanonicalIdentityDropdown**(`__namedParameters`): `Element`
 
-Defined in: [src/components/account/CanonicalIdentityCard.tsx:160](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/CanonicalIdentityCard.tsx#L160)
+Defined in: [src/components/account/CanonicalIdentityCard.tsx:160](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/CanonicalIdentityCard.tsx#L160)
 
 Dropdown body content — canonical smart wallet first, then signer lanes.
 Sub-account is surfaced only for population (b) when it is the effective swap lane.

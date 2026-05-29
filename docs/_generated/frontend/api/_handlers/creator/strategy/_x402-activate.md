@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/creator/strategy/\_x402-activate.ts:81](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/creator/strategy/_x402-activate.ts#L81)
+Defined in: [api/\_handlers/creator/strategy/\_x402-activate.ts:81](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/creator/strategy/_x402-activate.ts#L81)
 
 x402-style activation for creator strategy features.
 

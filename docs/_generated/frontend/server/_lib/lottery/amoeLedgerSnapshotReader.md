@@ -10,7 +10,7 @@
 
 ### AmoeBurnRowMissingError
 
-Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:66](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L66)
+Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:66](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L66)
 
 Server-side / config / upstream class. Maps to HTTP 500 or 503.
 Used for missing relay key, RPC failures, downstream contract reads.
@@ -25,7 +25,7 @@ Used for missing relay key, RPC failures, downstream contract reads.
 
 > **new AmoeBurnRowMissingError**(): [`AmoeBurnRowMissingError`](#amoeburnrowmissingerror)
 
-Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L68)
+Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:68](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L68)
 
 ###### Returns
 
@@ -41,7 +41,7 @@ Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:68](https://github
 
 > `readonly` **kind**: `"amoe_server"`
 
-Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L68)
+Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:68](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L68)
 
 ###### Inherited from
 
@@ -51,7 +51,7 @@ Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:68](https://github.com/we
 
 > `readonly` **name**: `"AmoeBurnRowMissingError"` = `'AmoeBurnRowMissingError'`
 
-Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:67](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L67)
+Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:67](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L67)
 
 ###### Overrides
 
@@ -61,7 +61,7 @@ Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:67](https://github
 
 ### AmoeLedgerSnapshotPgReader
 
-Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:137](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L137)
+Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:137](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L137)
 
 Postgres-backed reader. Holds a reference to the db pool; one instance
 per process is sufficient.
@@ -76,7 +76,7 @@ per process is sufficient.
 
 > **new AmoeLedgerSnapshotPgReader**(`db`): [`AmoeLedgerSnapshotPgReader`](#amoeledgersnapshotpgreader)
 
-Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:138](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L138)
+Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:138](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L138)
 
 ###### Parameters
 
@@ -94,7 +94,7 @@ Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:138](https://githu
 
 > **readSnapshotForBurn**(`args`): `Promise`\<[`AmoeLedgerSnapshotReadResult`](#amoeledgersnapshotreadresult)\>
 
-Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:140](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L140)
+Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:140](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L140)
 
 Return the confirmed snapshot for the given burn.
 
@@ -130,7 +130,7 @@ AmoeServerError('amoe_ledger_snapshot_unavailable')
 
 ### AmoeSnapshotNotYetConfirmedError
 
-Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:73](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L73)
+Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:73](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L73)
 
 Server-side / config / upstream class. Maps to HTTP 500 or 503.
 Used for missing relay key, RPC failures, downstream contract reads.
@@ -145,7 +145,7 @@ Used for missing relay key, RPC failures, downstream contract reads.
 
 > **new AmoeSnapshotNotYetConfirmedError**(): [`AmoeSnapshotNotYetConfirmedError`](#amoesnapshotnotyetconfirmederror)
 
-Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:75](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L75)
+Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:75](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L75)
 
 ###### Returns
 
@@ -161,7 +161,7 @@ Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:75](https://github
 
 > `readonly` **kind**: `"amoe_server"`
 
-Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L68)
+Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:68](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L68)
 
 ###### Inherited from
 
@@ -171,7 +171,7 @@ Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:68](https://github.com/we
 
 > `readonly` **name**: `"AmoeSnapshotNotYetConfirmedError"` = `'AmoeSnapshotNotYetConfirmedError'`
 
-Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:74](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L74)
+Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:74](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L74)
 
 ###### Overrides
 
@@ -181,7 +181,7 @@ Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:74](https://github
 
 ### AmoeLedgerSnapshotReader
 
-Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:106](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L106)
+Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:106](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L106)
 
 Read confirmed snapshots from the AMOE ledger source-of-truth. The PR 3
 handler dependency-injects an implementation; tests pass an in-memory
@@ -193,7 +193,7 @@ stub, the publisher cron + handler use [AmoeLedgerSnapshotPgReader](#amoeledgers
 
 > **readSnapshotForBurn**(`args`): `Promise`\<[`AmoeLedgerSnapshotReadResult`](#amoeledgersnapshotreadresult)\>
 
-Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:116](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L116)
+Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:116](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L116)
 
 Return the confirmed snapshot for the given burn.
 
@@ -225,7 +225,7 @@ AmoeServerError('amoe_ledger_snapshot_unavailable')
 
 ### AmoeLedgerSnapshotReadResult
 
-Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:90](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L90)
+Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:90](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L90)
 
 Result returned to the handler / prover for a single burn lookup.
 
@@ -238,7 +238,7 @@ half so callers can drop this directly into the witness assembler.
 
 > **epoch**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:92](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L92)
+Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:92](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L92)
 
 Epoch the burn was projected into — same as the snapshot's epoch.
 
@@ -246,7 +246,7 @@ Epoch the burn was projected into — same as the snapshot's epoch.
 
 > **pointsLedgerLeafIndex**: `number`
 
-Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:96](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L96)
+Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:96](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L96)
 
 Leaf index of the burn within `pointsLedgerSnapshot`.
 
@@ -254,7 +254,7 @@ Leaf index of the burn within `pointsLedgerSnapshot`.
 
 > **pointsLedgerSnapshot**: [`AmoeMerkleSnapshot`](amoeMerkleTree.md#amoemerklesnapshot)
 
-Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:94](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L94)
+Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L94)
 
 The deserialized Merkle snapshot for this epoch.
 
@@ -262,7 +262,7 @@ The deserialized Merkle snapshot for this epoch.
 
 > **rootHex**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:98](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L98)
+Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:98](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L98)
 
 The Merkle root, as 0x-hex bytes32. Convenience — equals snapshot.root.
 
@@ -272,7 +272,7 @@ The Merkle root, as 0x-hex bytes32. Convenience — equals snapshot.root.
 
 > **AmoeSnapshotReaderDb** = `object`
 
-Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:126](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L126)
+Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:126](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L126)
 
 #### Properties
 
@@ -280,7 +280,7 @@ Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:126](https://githu
 
 > **sql**: (`strings`, ...`values`) => `Promise`\<\{ `rows`: `unknown`[]; \}\>
 
-Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:127](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L127)
+Defined in: [server/\_lib/lottery/amoeLedgerSnapshotReader.ts:127](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeLedgerSnapshotReader.ts#L127)
 
 ###### Parameters
 

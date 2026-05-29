@@ -12,7 +12,7 @@
 
 > **AnimatedSystem** = `"vault"` \| `"valueFlows"` \| `"depositCard"` \| `"distributionFan"` \| `"allocationHandoff"` \| `"strategyFan"` \| `"earningLoop"`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:140](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L140)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:140](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L140)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:140](https://g
 
 > **getAllocationRepresentation**(`s`): [`AllocationRepresentation`](storySemantics.md#allocationrepresentation)
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:135](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L135)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:135](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L135)
 
 Returns the current allocation representation step.
 Renderers use this to decide which visual representation to show.
@@ -41,7 +41,7 @@ Renderers use this to decide which visual representation to show.
 
 > **getPhaseLabel**(`s`): `"active"` \| `"entering"` \| `"transitioning"`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L35)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L35)
 
 #### Parameters
 
@@ -59,7 +59,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:35](https://gi
 
 > **getPrimaryFocus**(`s`): [`StoryFocus`](storySemantics.md#storyfocus)
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:128](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L128)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:128](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L128)
 
 Returns the primary focal object for the current beat.
 Derived from the beat definition — never inferred ad-hoc.
@@ -80,7 +80,7 @@ Derived from the beat definition — never inferred ad-hoc.
 
 > **getVisibleSystems**(`s`, `profile`): [`AnimatedSystem`](#animatedsystem)[]
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:154](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L154)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:154](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L154)
 
 Returns the set of animated systems allowed to run simultaneously for the
 given profile. Mobile enforces max 1 animated system + 1 supporting UI block.
@@ -106,7 +106,7 @@ This is a selector-enforced API contract, not a convention.
 
 > **isAllocationEncoded**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:59](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L59)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:59](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L59)
 
 #### Parameters
 
@@ -124,7 +124,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:59](https://gi
 
 > **isBeat**(`s`, `beat`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L18)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L18)
 
 #### Parameters
 
@@ -146,7 +146,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:18](https://gi
 
 > **isDeployComplete**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:62](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L62)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:62](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L62)
 
 #### Parameters
 
@@ -164,7 +164,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:62](https://gi
 
 > **isDeployStrategiesVisible**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:81](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L81)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L81)
 
 #### Parameters
 
@@ -182,7 +182,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:81](https://gi
 
 > **isDistributionComplete**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:92](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L92)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:92](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L92)
 
 #### Parameters
 
@@ -200,7 +200,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:92](https://gi
 
 > **isDistributionFullyVisible**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:107](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L107)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:107](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L107)
 
 #### Parameters
 
@@ -218,7 +218,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:107](https://g
 
 > **isDistributionVisible**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:78](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L78)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:78](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L78)
 
 #### Parameters
 
@@ -236,7 +236,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:78](https://gi
 
 > **isEarningTogetherVisible**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:84](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L84)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:84](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L84)
 
 #### Parameters
 
@@ -254,7 +254,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:84](https://gi
 
 > **isEnterPhase**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L26)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L26)
 
 #### Parameters
 
@@ -272,7 +272,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:26](https://gi
 
 > **isExitPhase**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L32)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:32](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L32)
 
 #### Parameters
 
@@ -290,7 +290,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:32](https://gi
 
 > **isHandoffActive**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:95](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L95)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:95](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L95)
 
 #### Parameters
 
@@ -308,7 +308,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:95](https://gi
 
 > **isHoldPhase**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L29)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L29)
 
 #### Parameters
 
@@ -326,7 +326,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:29](https://gi
 
 > **isLoopActive**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:70](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L70)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:70](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L70)
 
 True when loopActive milestone is set.
 Fires at earningTogether holdStart and stays true.
@@ -348,7 +348,7 @@ Replaces any isEarningLoopVisible pattern.
 
 > **isMintConfirmed**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:56](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L56)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:56](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L56)
 
 #### Parameters
 
@@ -366,7 +366,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:56](https://gi
 
 > **isPhase**(`s`, `phase`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L21)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L21)
 
 #### Parameters
 
@@ -388,7 +388,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:21](https://gi
 
 > **isReceivingFaceVisible**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:110](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L110)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:110](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L110)
 
 #### Parameters
 
@@ -406,7 +406,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:110](https://g
 
 > **isReEntryHintVisible**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:119](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L119)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:119](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L119)
 
 True when the re-entry hint affordance is visible in earningTogether.
 The renderer is responsible for setting reEntryHintVisible in milestonesSoft
@@ -429,7 +429,7 @@ Used by tests and renderers to verify the affordance is shown.
 
 > **isSealReady**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:99](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L99)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:99](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L99)
 
 #### Parameters
 
@@ -447,7 +447,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:99](https://gi
 
 > **isValueFlowsVisible**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:104](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L104)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:104](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L104)
 
 #### Parameters
 
@@ -465,7 +465,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:104](https://g
 
 > **isValueSourceActive**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L53)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:53](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L53)
 
 #### Parameters
 
@@ -483,7 +483,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:53](https://gi
 
 > **isValueSourceVisible**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:75](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L75)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:75](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L75)
 
 #### Parameters
 
@@ -501,7 +501,7 @@ Defined in: [src/features/home/vault-flow/model/storySelectors.ts:75](https://gi
 
 > **isVaultReady**(`s`): `boolean`
 
-Defined in: [src/features/home/vault-flow/model/storySelectors.ts:50](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/home/vault-flow/model/storySelectors.ts#L50)
+Defined in: [src/features/home/vault-flow/model/storySelectors.ts:50](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySelectors.ts#L50)
 
 #### Parameters
 

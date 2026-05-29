@@ -12,7 +12,7 @@
 
 > **DeployCall** = `object`
 
-Defined in: [server/\_lib/deploy/erc7712Permissions.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/erc7712Permissions.ts#L3)
+Defined in: [server/\_lib/deploy/erc7712Permissions.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/erc7712Permissions.ts#L3)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/\_lib/deploy/erc7712Permissions.ts:3](https://github.com/wen
 
 > **data**: `Hex`
 
-Defined in: [server/\_lib/deploy/erc7712Permissions.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/erc7712Permissions.ts#L3)
+Defined in: [server/\_lib/deploy/erc7712Permissions.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/erc7712Permissions.ts#L3)
 
 ##### to
 
 > **to**: `Address`
 
-Defined in: [server/\_lib/deploy/erc7712Permissions.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/erc7712Permissions.ts#L3)
+Defined in: [server/\_lib/deploy/erc7712Permissions.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/erc7712Permissions.ts#L3)
 
 ##### value
 
 > **value**: `bigint`
 
-Defined in: [server/\_lib/deploy/erc7712Permissions.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/erc7712Permissions.ts#L3)
+Defined in: [server/\_lib/deploy/erc7712Permissions.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/erc7712Permissions.ts#L3)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/deploy/erc7712Permissions.ts:3](https://github.com/wen
 
 > **Erc7712PermissionGrant** = `object`
 
-Defined in: [server/\_lib/deploy/erc7712Permissions.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/erc7712Permissions.ts#L5)
+Defined in: [server/\_lib/deploy/erc7712Permissions.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/erc7712Permissions.ts#L5)
 
 #### Properties
 
@@ -48,43 +48,43 @@ Defined in: [server/\_lib/deploy/erc7712Permissions.ts:5](https://github.com/wen
 
 > **allowedSelectors**: `Hex`[]
 
-Defined in: [server/\_lib/deploy/erc7712Permissions.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/erc7712Permissions.ts#L12)
+Defined in: [server/\_lib/deploy/erc7712Permissions.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/erc7712Permissions.ts#L12)
 
 ##### allowedTargets
 
 > **allowedTargets**: `Address`[]
 
-Defined in: [server/\_lib/deploy/erc7712Permissions.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/erc7712Permissions.ts#L11)
+Defined in: [server/\_lib/deploy/erc7712Permissions.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/erc7712Permissions.ts#L11)
 
 ##### chainId
 
 > **chainId**: `number`
 
-Defined in: [server/\_lib/deploy/erc7712Permissions.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/erc7712Permissions.ts#L7)
+Defined in: [server/\_lib/deploy/erc7712Permissions.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/erc7712Permissions.ts#L7)
 
 ##### sessionId
 
 > **sessionId**: `string`
 
-Defined in: [server/\_lib/deploy/erc7712Permissions.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/erc7712Permissions.ts#L10)
+Defined in: [server/\_lib/deploy/erc7712Permissions.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/erc7712Permissions.ts#L10)
 
 ##### validAfter
 
 > **validAfter**: `string`
 
-Defined in: [server/\_lib/deploy/erc7712Permissions.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/erc7712Permissions.ts#L8)
+Defined in: [server/\_lib/deploy/erc7712Permissions.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/erc7712Permissions.ts#L8)
 
 ##### validUntil
 
 > **validUntil**: `string`
 
-Defined in: [server/\_lib/deploy/erc7712Permissions.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/erc7712Permissions.ts#L9)
+Defined in: [server/\_lib/deploy/erc7712Permissions.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/erc7712Permissions.ts#L9)
 
 ##### version
 
 > **version**: `"erc7712-v1"`
 
-Defined in: [server/\_lib/deploy/erc7712Permissions.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/erc7712Permissions.ts#L6)
+Defined in: [server/\_lib/deploy/erc7712Permissions.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/erc7712Permissions.ts#L6)
 
 ## Functions
 
@@ -92,7 +92,7 @@ Defined in: [server/\_lib/deploy/erc7712Permissions.ts:6](https://github.com/wen
 
 > **buildDeployPermissionGrant**(`params`): [`Erc7712PermissionGrant`](#erc7712permissiongrant)
 
-Defined in: [server/\_lib/deploy/erc7712Permissions.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/erc7712Permissions.ts#L28)
+Defined in: [server/\_lib/deploy/erc7712Permissions.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/erc7712Permissions.ts#L28)
 
 #### Parameters
 
@@ -128,7 +128,7 @@ Defined in: [server/\_lib/deploy/erc7712Permissions.ts:28](https://github.com/we
 
 > **parseGrant**(`raw`): [`Erc7712PermissionGrant`](#erc7712permissiongrant) \| `null`
 
-Defined in: [server/\_lib/deploy/erc7712Permissions.ts:99](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/erc7712Permissions.ts#L99)
+Defined in: [server/\_lib/deploy/erc7712Permissions.ts:99](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/erc7712Permissions.ts#L99)
 
 #### Parameters
 
@@ -146,7 +146,7 @@ Defined in: [server/\_lib/deploy/erc7712Permissions.ts:99](https://github.com/we
 
 > **validateCallsAgainstGrant**(`params`): `object`
 
-Defined in: [server/\_lib/deploy/erc7712Permissions.ts:59](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/erc7712Permissions.ts#L59)
+Defined in: [server/\_lib/deploy/erc7712Permissions.ts:59](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/erc7712Permissions.ts#L59)
 
 #### Parameters
 
