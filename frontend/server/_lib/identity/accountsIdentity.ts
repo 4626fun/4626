@@ -59,8 +59,8 @@ export type AccountsMePayload = {
   appAccessStatus: string | null
   /**
    * Raw `profiles.base_sub_account` column. May legitimately mirror the
-   * canonical CSW for legacy accounts; prefer `accountSignals.baseSubAccount`
-   * for distinctness + registration signal.
+   * canonical CSW for older accounts created before sub-account support;
+   * prefer `accountSignals.baseSubAccount` for distinctness + registration signal.
    */
   baseSubAccount: string | null
   linkedMethods: Record<string, string[]>
@@ -80,14 +80,16 @@ export type AccountsMePayload = {
      * `migration-pending`, `none-yet`. See `executionTrack.ts` for the
      * classification rules. Prefer this field over deriving the track from
      * individual signals on the client.
+     *
+     * Note: "legacy-owner-install" refers to the parent CSW + embedded EOA
+     * owner path (the main supported track as of 2026). The name is historical.
      */
     executionTrack: ExecutionTrack
     /**
-     * Cached legacy-track signal. True iff the Privy embedded EOA is
-     * installed as a direct owner of the parent CSW. Read from
-     * `profile_wallets.privy_is_owner` (populated by
-     * `/api/onboarding/bootstrap`). Null when the cache has not been
-     * primed yet or the account has no canonical CSW.
+     * Whether the Privy embedded EOA is recorded as a direct owner of the
+     * parent canonical CSW. Read from `profile_wallets.privy_is_owner`
+     * (populated by `/api/onboarding/bootstrap`). Null when the cache has
+     * not been primed yet or the account has no canonical CSW.
      */
     privyEmbeddedEoaIsOwnerOfCanonicalCsw: boolean | null
   }

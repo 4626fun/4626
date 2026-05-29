@@ -367,3 +367,88 @@ export async function revokeSubAccountSpendPermission(profileId: number): Promis
     return false
   }
 }
+
+// ---------------------------------------------------------------------------
+// Daily spend tracking for command issuers (used for rate limiting / quotas)
+// Promoted here as part of completing the server-core move.
+// ---------------------------------------------------------------------------
+
+function getTodayYmd(): string {
+  const d = new Date()
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+export async function readIssuerDailySpend(profileId: number): Promise<bigint> {
+  if (!isDbConfigured()) return 0n
+  const db = await getDb()
+  if (!db) return 0n
+  const ymd = getTodayYmd()
+  try {
+    const res = await db.sql`
+      SELECT spent_wei FROM command_issuer_daily_spend
+      WHERE profile_id = ${profileId} AND ymd = ${ymd}
+      LIMIT 1
+    `
+    const row = res.rows?.[0]
+    return row?.spent_wei ? BigInt(row.spent_wei) : 0n
+  } catch {
+    return 0n
+  }
+}
+
+export async function recordIssuerDailySpend(params: {
+  profileId: number
+  amountWei: bigint
+}): Promise<{ ok: true; newTotalWei: bigint } | { ok: false; error: string }> {
+  const { profileId, amountWei } = params
+  if (amountWei < 0n) {
+    return { ok: false, error: 'negative_amount' }
+  }
+  if (!isDbConfigured()) return { ok: false, error: 'db_unavailable' }
+  const db = await getDb()
+  if (!db) return { ok: false, error: 'db_unavailable' }
+
+  const ymd = getTodayYmd()
+  try {
+    const res = await db.sql`
+      INSERT INTO command_issuer_daily_spend (profile_id, ymd, spent_wei, updated_at)
+      VALUES (${profileId}, ${ymd}, ${amountWei}, NOW())
+      ON CONFLICT (profile_id, ymd)
+      DO UPDATE SET
+        spent_wei = command_issuer_daily_spend.spent_wei + EXCLUDED.spent_wei,
+        updated_at = NOW()
+      RETURNING spent_wei
+    `
+    const newTotal = res.rows?.[0]?.spent_wei ? BigInt(res.rows[0].spent_wei) : amountWei
+    return { ok: true, newTotalWei: newTotal }
+  } catch (err: any) {
+    logger.error('[command-issuer] recordIssuerDailySpend failed', { profileId, error: err?.message })
+    return { ok: false, error: 'db_error' }
+  }
+}
+
+export async function rollbackIssuerDailySpend(params: {
+  profileId: number
+  amountWei: bigint
+}): Promise<void> {
+  const { profileId, amountWei } = params
+  if (amountWei <= 0n) return
+  if (!isDbConfigured()) return
+  const db = await getDb()
+  if (!db) return
+
+  const ymd = getTodayYmd()
+  try {
+    await db.sql`
+      UPDATE command_issuer_daily_spend
+      SET spent_wei = GREATEST(spent_wei - ${amountWei}, 0),
+          updated_at = NOW()
+      WHERE profile_id = ${profileId} AND ymd = ${ymd}
+    `
+  } catch (err: any) {
+    logger.warn('[command-issuer] rollbackIssuerDailySpend failed (non-fatal)', { profileId, error: err?.message })
+  }
+}

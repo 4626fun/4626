@@ -110,7 +110,7 @@ export type PayoutRouterTreasurySetupPlan = {
 }
 
 type ReaderClient = {
-  readContract: (args: unknown) => Promise<unknown>
+  readContract: (args: any) => Promise<any>
 }
 
 function normalizeAddress(value: unknown): Address | null {

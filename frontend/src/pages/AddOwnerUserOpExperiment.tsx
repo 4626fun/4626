@@ -26,7 +26,15 @@ function basescanTxUrl(hash: string): string {
   return `https://basescan.org/tx/${hash}`
 }
 
-export function AddOwnerUserOpExperiment() {
+/**
+ * Base App CSW owner install surface (the validated path).
+ *
+ * Uses wallet_sendCalls + EntryPoint handleOps so the user's Coinbase Smart Wallet
+ * self-calls addOwnerAddress. This is the shape that actually works.
+ *
+ * Do not route addOwner through RelayRouter multicall — it will fail the onlyOwner check.
+ */
+export function AddOwnerBaseApp() {
   const controller = useAccountSetupController({ zoraReturnPath: '/add' })
   const {
     authHeaders,
@@ -120,38 +128,43 @@ export function AddOwnerUserOpExperiment() {
   return (
     <div className="relative min-h-0 w-full bg-transparent text-white">
       <PageMeta
-        title="Enable 4626 signing (experiment)"
-        description="Submit addOwnerAddress as an ERC-4337 UserOperation through EntryPoint handleOps — CSW self-call only, never RelayRouter multicall."
+        title="Enable 4626 signing (Base App)"
+        description="Add your Privy embedded EOA as an owner on your Base App Coinbase Smart Wallet using an ERC-4337 UserOp self-call through EntryPoint handleOps. This is the supported path for Base App CSWs — never use RelayRouter multicall for addOwner."
         canonicalPath="/add"
         robots="noindex,nofollow"
       />
+
+      {/* Clean status banner while we finish promoting this out of the /add experiment route */}
+      <div className="mx-auto max-w-2xl px-6 pt-4">
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-400">
+          This is the supported Base App owner install path (EntryPoint self-call). Sub-account registration is the limited fallback.
+        </div>
+      </div>
       <div className="mx-auto w-full max-w-2xl space-y-6 px-6 py-16">
         <div className="space-y-3">
-          <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Experiment</div>
-          <h1 className="text-3xl font-semibold tracking-tight">/add — EntryPoint UserOp</h1>
+          <div className="text-[11px] uppercase tracking-[0.2em] text-emerald-500">Base App owner install</div>
+          <h1 className="text-3xl font-semibold tracking-tight">Enable 4626 signing on your Base App wallet</h1>
           <div className="space-y-2 text-sm leading-relaxed text-zinc-400">
             <p>
-              Successful owner installs go through the ERC-4337 EntryPoint (
-              <span className="font-mono text-zinc-300">{ENTRY_POINT_V06_BASE}</span>, via{' '}
-              <span className="font-mono text-zinc-300">handleOps</span>). In that flow{' '}
-              <span className="font-mono text-zinc-300">addOwnerAddress</span> runs inside a UserOperation
-              the smart wallet executes on itself, so{' '}
+              Both successful transactions went through the ERC-4337 EntryPoint (
+              <span className="font-mono text-zinc-300">{ENTRY_POINT_V06_BASE}</span>) via{' '}
+              <span className="font-mono text-zinc-300">handleOps</span>. The{' '}
+              <span className="font-mono text-zinc-300">addOwnerAddress</span> call runs inside a UserOperation
+              that the smart wallet executes on itself, so{' '}
               <span className="font-mono text-zinc-300">msg.sender == address(this)</span> and the
-              owner-management check passes.
+              <code className="mx-1 rounded bg-white/10 px-1 py-px text-[10px]">onlyOwner</code> check passes.
             </p>
             <p>
-              This page does <strong className="font-medium text-zinc-300">not</strong> embed{' '}
-              <span className="font-mono text-zinc-300">addOwnerAddress</span> in RelayRouter multicall (
-              <span className="font-mono text-zinc-300">{RELAY_ROUTER_BASE}</span>). There the caller is
-              the router — not the wallet and not a current owner — so authorization rejects and Relay
-              never indexes. Your CSW funds stay untouched.
+              <strong className="font-medium text-red-400">Do not</strong> embed the call in a RelayRouter
+              multicall (<span className="font-mono text-zinc-300">{RELAY_ROUTER_BASE}</span>). From the
+              wallet’s perspective the caller becomes the router — not the wallet and not a current owner —
+              so the authorization check rejects it. Your funds remain untouched and the operation never
+              indexes.
             </p>
-            <p>
-              To reproduce the working shape: submit one{' '}
-              <span className="font-mono text-zinc-300">wallet_sendCalls</span> bundle with a single
-              CSW → CSW <span className="font-mono text-zinc-300">addOwnerAddress</span> self-call. Base
-              App builds the UserOp, signs it, and broadcasts via{' '}
-              <span className="font-mono text-zinc-300">eth_sendUserOperation</span> → EntryPoint.
+            <p className="text-zinc-300">
+              Correct shape: one <span className="font-mono">wallet_sendCalls</span> bundle containing a
+              single CSW → CSW <span className="font-mono">addOwnerAddress</span> self-call (zero value).
+              Base App turns this into a UserOp that the wallet itself executes.
             </p>
           </div>
         </div>
@@ -273,19 +286,22 @@ export function AddOwnerUserOpExperiment() {
               </dl>
 
               {userOpFlow.fundingAssessment && !userOpFlow.fundingAssessment.ok ? (
-                <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 space-y-2 text-xs text-amber-100">
-                  <div className="font-semibold">Smart wallet needs gas prefund</div>
+                <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 space-y-3 text-xs text-amber-100">
+                  <div>
+                    <div className="font-semibold">CSW needs gas prefund for the EntryPoint UserOp</div>
+                    <p className="mt-1 leading-relaxed text-amber-100/90">
+                      Current available:{' '}
+                      <span className="font-mono font-medium">
+                        {fundingSnapshot ? formatEthCompact(fundingSnapshot.totalAvailableWei) : '0 ETH'}
+                      </span>{' '}
+                      (native {fundingSnapshot ? formatEthCompact(fundingSnapshot.cswNativeWei) : '0'} + EntryPoint deposit{' '}
+                      {fundingSnapshot ? formatEthCompact(fundingSnapshot.entryPointDepositWei) : '0'}).
+                    </p>
+                  </div>
                   <p className="leading-relaxed text-amber-100/90">
-                    Base App builds an ERC-4337 UserOp for this self-call. Your CSW currently has{' '}
-                    <span className="font-mono">
-                      {fundingSnapshot ? formatEthCompact(fundingSnapshot.totalAvailableWei) : '0 ETH'}
-                    </span>{' '}
-                    available for gas (native{' '}
-                    {fundingSnapshot ? formatEthCompact(fundingSnapshot.cswNativeWei) : '0 ETH'} + EntryPoint
-                    deposit{' '}
-                    {fundingSnapshot ? formatEthCompact(fundingSnapshot.entryPointDepositWei) : '0 ETH'}).
-                    Send about <strong className="font-medium">0.001 ETH</strong> to your canonical CSW in Base
-                    App (Assets → your wallet → Receive), then tap Rebuild preview.
+                    Send <strong className="font-medium">~0.001 ETH</strong> directly to your canonical CSW address inside Base App
+                    (Assets → your smart wallet → Receive). Wait 5–10 seconds, then tap the button below.
+                    The actual <span className="font-mono">addOwnerAddress</span> call sends 0 value — this is only gas for the self-call UserOp.
                   </p>
                   <Button
                     type="button"
@@ -299,9 +315,9 @@ export function AddOwnerUserOpExperiment() {
               ) : null}
 
               {userOpFlow.fundingAssessment?.ok && fundingSnapshot ? (
-                <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-[10px] text-zinc-500">
-                  Gas prefund: {formatEthCompact(fundingSnapshot.totalAvailableWei)} available on CSW (
-                  native {formatEthCompact(fundingSnapshot.cswNativeWei)}, EntryPoint{' '}
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[10px] text-emerald-400/90">
+                  Gas prefund ready: {formatEthCompact(fundingSnapshot.totalAvailableWei)} on CSW
+                  (native {formatEthCompact(fundingSnapshot.cswNativeWei)} + EntryPoint deposit{' '}
                   {formatEthCompact(fundingSnapshot.entryPointDepositWei)})
                 </div>
               ) : null}
@@ -426,4 +442,4 @@ export function AddOwnerUserOpExperiment() {
   )
 }
 
-export default AddOwnerUserOpExperiment
+export default AddOwnerBaseApp

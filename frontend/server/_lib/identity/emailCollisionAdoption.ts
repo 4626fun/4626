@@ -377,7 +377,9 @@ export async function runWithWaitlistEmailCollisionAdoption<T>(params: {
     const hintEmail =
       typeof bootstrapEmailHint === 'string' ? bootstrapEmailHint.trim().toLowerCase() : ''
     const collisionEmail =
-      isIdentityRecoveryRequiredError(error) && typeof error.email === 'string'
+      isIdentityRecoveryRequiredError(error) &&
+      error.reason === 'EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER' &&
+      typeof error.email === 'string'
         ? error.email.trim().toLowerCase()
         : ''
     const normalizedEmail = verifiedEmail || requestedEmail || hintEmail || collisionEmail

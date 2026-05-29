@@ -245,7 +245,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     setPageError(null)
     setPageNotice(null)
     appendEvent('--- submit ---')
-    appendEvent(`lane:entrypoint_userop via wallet_sendCalls → ${ENTRY_POINT_V06_BASE}`)
+    appendEvent(`lane:entrypoint_userop (validated Base App self-call path) via wallet_sendCalls → ${ENTRY_POINT_V06_BASE}`)
 
     try {
       let txRequest = preparedTx
@@ -286,7 +286,8 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       }
       if (funding && !funding.ok) {
         appendEvent(`preflight:funding_${funding.reason}`)
-        throw new Error(getErrorMessage(new Error('insufficient funds for gas')))
+        // This will be turned into the clear "send ETH to your CSW" message by mapAddOwnerFundingErrorMessage
+        throw new Error('Base App could not build the UserOp — insufficient gas prefund on canonical CSW')
       }
       if (funding?.ok) {
         appendEvent(`preflight:funding_ok total=${funding.snapshot.totalAvailableWei.toString()} wei`)
@@ -411,7 +412,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
 
       setAlreadyOwner(true)
       setPageNotice(
-        `Owner install submitted via EntryPoint handleOps (tx ${landedTxHash.slice(0, 10)}…). addOwner ran inside a UserOp where the CSW self-called.`,
+        `Owner install succeeded via EntryPoint handleOps (tx ${landedTxHash.slice(0, 10)}…). The CSW executed addOwnerAddress on itself inside the UserOp (msg.sender == address(this)).`,
       )
       await onSuccess?.()
       return true

@@ -2139,8 +2139,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (phase1Batcher && phase2FinalizeCallsForPlan.length > 0) {
         const registryPrep = await ensureBatcherRegistryAuthorizationOnFork({
-          publicClient,
-          walletClient,
+          publicClient: publicClient as any,
+          walletClient: walletClient as any,
           waitForTransactionReceipt: (args) => publicClient.waitForTransactionReceipt(args as any),
           forkRequest,
           forkMode,
@@ -2155,8 +2155,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (phase1Batcher && phase3Calls.length > 0) {
         const phase3AuthPrep = await ensurePhase3HelperCreate2AuthorizationOnFork({
-          publicClient,
-          walletClient,
+          publicClient: publicClient as any,
+          walletClient: walletClient as any,
           waitForTransactionReceipt: (args) => publicClient.waitForTransactionReceipt(args as any),
           forkRequest,
           forkMode,

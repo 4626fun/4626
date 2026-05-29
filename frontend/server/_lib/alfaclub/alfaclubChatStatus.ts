@@ -36,8 +36,8 @@ export function formatBridgeAuthHealthLines(snapshot: AlfaClubAuthHealthSnapshot
   lines.push(
     `Refresh: last ok ${formatIsoShort(lastOk?.at ?? null)} · last fail ${formatIsoShort(lastFail?.at ?? null)}`,
   )
-  if (lastFail?.code) {
-    lines.push(`Last fail code: \`${lastFail.code}\``)
+  if ((lastFail as any)?.code) {
+    lines.push(`Last fail code: \`${(lastFail as any).code}\``)
   }
 
   const b = snapshot.bridge

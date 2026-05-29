@@ -31,10 +31,10 @@ export function buildAlfaClubRoomUrl(roomId: string): string {
 
   const templateRaw = (process.env.ALFACLUB_ROOM_URL_TEMPLATE ?? '').trim() || DEFAULT_ROOM_PATH_TEMPLATE
   if (templateRaw.startsWith('http://') || templateRaw.startsWith('https://')) {
-    return templateRaw.replaceAll('{roomId}', encodeURIComponent(normalizedRoomId))
+    return templateRaw.replace(/\{roomId\}/g, encodeURIComponent(normalizedRoomId))
   }
   const path = templateRaw.startsWith('/') ? templateRaw : `/${templateRaw}`
-  return `${readAlfaClubPageOrigin()}${path.replaceAll('{roomId}', encodeURIComponent(normalizedRoomId))}`
+  return `${readAlfaClubPageOrigin()}${path.replace(/\{roomId\}/g, encodeURIComponent(normalizedRoomId))}`
 }
 
 export function readOperationalAlfaClubRoomIds(): Set<string> {

@@ -126,6 +126,15 @@ export function encodeRemoveOwnerCall(params: {
   return { to: csw, data, value: '0x0', selectedFunction }
 }
 
+/**
+ * The supported way to add an owner on a Base App Coinbase Smart Wallet.
+ *
+ * This builds a single CSW self-call to addOwnerAddress and submits it via
+ * wallet_sendCalls. Base App turns it into a UserOp that goes through the
+ * EntryPoint (handleOps). The wallet executes the call on itself.
+ *
+ * Do NOT route this through RelayRouter multicall — it will fail the onlyOwner check.
+ */
 export async function addOwnerViaBaseAppSendCalls(params: {
   walletRequest: WalletRequest
   csw: `0x${string}`

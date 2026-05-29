@@ -700,7 +700,8 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
       ingestCommandCandidatesOnly: true,
     })
 
-    const rows = upsertAlfaClubIngestMessagesMock.mock.calls[0]?.[0] ?? []
+    const firstCall = upsertAlfaClubIngestMessagesMock.mock.calls[0] as any
+    const rows = (firstCall?.[0] ?? []) as any[]
     expect(rows).toHaveLength(1)
     expect(rows[0]?.messageId).toBe('m-gmeow')
   })

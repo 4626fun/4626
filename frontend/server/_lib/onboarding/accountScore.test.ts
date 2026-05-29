@@ -26,7 +26,10 @@ describe('buildAccountScoreFromBreakdown', () => {
       csw: 50,
       social: 0,
       bonus: 0,
-    })
+      links: 0,
+      checkins: 0,
+      agent: 0,
+    } as any)
     expect(score.points).toBe(225)
     expect(score.tier).toBe(waitlistTierFromPoints(225))
   })

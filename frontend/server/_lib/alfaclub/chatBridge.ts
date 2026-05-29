@@ -144,6 +144,8 @@ export type AlfaClubChatBridgeFlags = {
   ingestJwt: string | null
   botToken: string | null
   apiBaseUrl: string
+  wsProxyHttpSendUrl?: string | null
+  wsProxySecret?: string | null
   /**
    * Optional proxy origin for AlfaClub HTTP API calls
    * (`/api/websocket/room_history_paginate` +
@@ -468,6 +470,8 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
     apiProxyUrl: normalizeApiProxyUrl(process.env.ALFACLUB_CHAT_API_PROXY_URL),
     apiProxySecret: normalizeApiProxySecret(process.env.ALFACLUB_CHAT_API_PROXY_SECRET),
     websocketUrl: normalizeWsUrl(process.env.ALFACLUB_CHAT_WS_URL),
+    wsProxyHttpSendUrl: normalizeEnvScalar(process.env.ALFACLUB_WS_PROXY_HTTP_SEND_URL) || null,
+    wsProxySecret: normalizeEnvScalar(process.env.ALFACLUB_WS_PROXY_SECRET) || null,
     groupId: groupIdRaw || `alfaclub-room-${roomId ?? 'unknown'}`,
     pollIntervalMs: parsePositiveInt(
       process.env.ALFACLUB_CHAT_POLL_INTERVAL_MS,

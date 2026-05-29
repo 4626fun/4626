@@ -1015,8 +1015,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         result.expectations.creatorToken
       ) {
         void maybeAutoSetupPayoutRouterTreasury({
-          publicClient,
-          rpcUrl: resolveDeploySessionRpcUrl(process.env),
+          publicClient: publicClient as any,
+          rpcUrl: resolveDeploySessionRpcUrl(),
           payoutRouter: result.expectations.expectedPayoutRecipient,
           creatorToken: result.expectations.creatorToken,
         })

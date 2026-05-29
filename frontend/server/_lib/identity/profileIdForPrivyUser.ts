@@ -6,4 +6,4 @@
 export {
   listProfileIdsForPrivyUser,
   resolvePrimaryProfileIdForPrivyUser,
-} from '../../packages/server-core/src/profileIdForPrivyUser.js'
+} from '../../../packages/server-core/src/profileIdForPrivyUser.js'

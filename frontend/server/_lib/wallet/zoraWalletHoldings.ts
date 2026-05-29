@@ -9,7 +9,7 @@ import {
   normalizeZoraCoinType,
   splitZoraHoldingsByCoinType,
   type ZoraCoinType,
-} from '../../../src/lib/zora/coinType.js'
+} from '../zora/coinType.js'
 import {
   buildTrayTokenRowsFromPortfolios,
   buildTrayZoraHoldings,

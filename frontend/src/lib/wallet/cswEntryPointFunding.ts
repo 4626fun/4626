@@ -7,10 +7,17 @@ export const ENTRY_POINT_BALANCE_ABI = parseAbi([
   'function balanceOf(address account) view returns (uint256)',
 ])
 
-/** Soft floor — below this, Base App often fails UserOp generation. */
-export const MIN_CSW_USEROP_FUNDING_WEI = 50_000_000_000_000n // 0.00005 ETH
+/**
+ * Funding requirements for Base App CSW owner install (EntryPoint self-call path).
+ *
+ * The addOwnerAddress call itself sends 0 ETH. The CSW still needs a small amount of
+ * native ETH (or pre-funded EntryPoint deposit) so Base App can build and submit the
+ * UserOperation through the EntryPoint (handleOps). Without it, Base App refuses to
+ * generate the UserOp.
+ */
+export const MIN_CSW_USEROP_FUNDING_WEI = 50_000_000_000_000n // 0.00005 ETH — soft floor where Base App often fails
 
-/** Comfortable buffer for addOwner UserOp gas on Base. */
+/** Recommended comfortable buffer for a single addOwner UserOp on Base. */
 export const RECOMMENDED_CSW_USEROP_FUNDING_WEI = 500_000_000_000_000n // 0.0005 ETH
 
 export type CswFundingSnapshot = {
@@ -61,6 +68,7 @@ export function formatEthCompact(wei: bigint): string {
 export function mapAddOwnerFundingErrorMessage(error: unknown): string | null {
   const message = error instanceof Error ? error.message : String(error ?? '')
   const lower = message.toLowerCase()
+
   if (
     lower.includes('enough funds') ||
     lower.includes('error generating transaction') ||
@@ -70,9 +78,10 @@ export function mapAddOwnerFundingErrorMessage(error: unknown): string | null {
     lower.includes('aa21')
   ) {
     return (
-      'Base App could not build the UserOp because your canonical smart wallet has little or no ETH ' +
-      'for gas. Send about 0.001 ETH to your CSW in Base App (Assets → Receive), wait a few seconds, ' +
-      'tap Rebuild preview, then submit again. The addOwner call itself sends 0 ETH — this is only gas prefund.'
+      'Base App cannot build the EntryPoint UserOp for the CSW self-call (addOwnerAddress). ' +
+      'Your canonical smart wallet needs a small gas prefund. In Base App: go to your CSW → Receive → ' +
+      'send ~0.001 ETH directly to it. Wait a few seconds, then tap "Rebuild preview" on this page. ' +
+      'The actual addOwner call sends 0 value — this ETH is only for the UserOp gas.'
     )
   }
   return null

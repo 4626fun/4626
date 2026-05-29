@@ -114,7 +114,7 @@ describe('runWithWaitlistEmailCollisionAdoption', () => {
         privyUser: {
           id: 'did:privy:new-user',
           email: { address: 'user@example.com', verified: false },
-        },
+        } as any,
         action,
       }),
     ).rejects.toMatchObject({ code: 'IDENTITY_RECOVERY_REQUIRED' })
@@ -150,7 +150,7 @@ describe('runWithWaitlistEmailCollisionAdoption', () => {
       privyUser: {
         id: 'did:privy:new-user',
         email: { address: 'user@example.com', verified: true },
-      },
+      } as any,
       action,
     })
 
@@ -197,7 +197,7 @@ describe('runWithWaitlistEmailCollisionAdoption', () => {
         privyUser: {
           id: 'did:privy:new-user',
           email: { address: 'user@example.com', verified: true },
-        },
+        } as any,
         action: () => assertNoEmailPrivyCollision({ db: db as any, email: 'user@example.com', privyUserId: 'did:privy:new-user' }),
       }),
     ).resolves.toBeUndefined()

@@ -515,10 +515,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const context = await verifyPrivyForAccounts(req)
     await ensureAccountsIdentitySchema(db as any)
     const bootstrapEmailHint = email
-    const privyUser = await loadPrivyUserWithVerifiedEmailRetry({
+    const privyUser = (await loadPrivyUserWithVerifiedEmailRetry({
       privyUserId: context.privyUserId,
       initialUser: context.privyUser,
-    })
+    })) as any
     const privyEmail =
       normalizeEmail(extractPrivyVerifiedEmail(privyUser)) ?? bootstrapEmailHint
 
@@ -532,20 +532,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await assertNoWalletPrivyCollision({
       db: db as any,
       privyUserId: context.privyUserId,
-      privyUser,
+      privyUser: privyUser as any,
     })
 
     await runWithWaitlistEmailCollisionAdoption({
       db: db as any,
       email: privyEmail,
       privyUserId: context.privyUserId,
-      privyUser,
+      privyUser: privyUser as any,
       bootstrapEmailHint,
       action: () =>
         syncEmailIdentity({
           db: db as any,
           privyUserId: context.privyUserId,
-          privyUser,
+          privyUser: privyUser as any,
         }),
     })
 
@@ -557,7 +557,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         db: db as any,
         email: privyEmail,
         privyUserId: context.privyUserId,
-        privyUser,
+        privyUser: privyUser as any,
         bootstrapEmailHint,
         action: () =>
           assertNoEmailPrivyCollision({
@@ -570,7 +570,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         db: db as any,
         email: privyEmail,
         privyUserId: context.privyUserId,
-        privyUser,
+        privyUser: privyUser as any,
         bootstrapEmailHint,
         action: () =>
           upsertAccount({
@@ -634,7 +634,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const me = await buildAccountsMePayload({
       db: db as any,
       privyUserId: context.privyUserId,
-      privyUser,
+      privyUser: privyUser as any,
     })
 
     return res.status(200).json({

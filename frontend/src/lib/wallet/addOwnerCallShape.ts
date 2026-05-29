@@ -6,7 +6,19 @@ import {
 } from '@/lib/wallet/cswOwnerAbi'
 import type { PublicClient } from 'viem'
 
-/** Relay Settlement router on Base mainnet — must not be the addOwner call target. */
+/**
+ * Canonical rule for adding an owner to a Base App Coinbase Smart Wallet (2026):
+ *
+ * Successful addOwnerAddress calls MUST run inside an ERC-4337 UserOperation submitted
+ * through the EntryPoint (handleOps). The CSW executes the call on itself, so
+ * msg.sender == address(this) and MultiOwnable.onlyOwner passes.
+ *
+ * Failed attempts almost always embed the call inside a RelayRouter multicall.
+ * From the wallet's perspective the caller is then the router (not the wallet),
+ * so the owner check rejects. The operation never indexes and funds stay untouched.
+ *
+ * This file exists to make the wrong shape impossible at the call site.
+ */
 export const RELAY_ROUTER_BASE = '0xb92fe925dc43a0ecde6c8b1a2709c170ec4fff4f' as const
 
 export type AddOwnerTxRequestShape = {
@@ -22,7 +34,7 @@ export type SendCallsCallShape = {
 }
 
 const ROUTER_MULTICALL_BLOCKED_MESSAGE =
-  'RelayRouter multicall blocked: addOwner must run inside an ERC-4337 UserOperation where the smart wallet executes addOwnerAddress on itself (msg.sender == address(this)). Do not submit addOwner through the router — the router is not an owner and authorization will reject.'
+  'RelayRouter multicall is not allowed for owner changes. Successful installs go through the EntryPoint (handleOps) so the CSW self-calls addOwnerAddress (msg.sender == address(this)). When the call is inside a router multicall the wallet sees the router as the caller, the onlyOwner check fails, and nothing indexes.'
 
 function normalizeCallValue(value: SendCallsCallShape['value']): bigint {
   if (value === undefined) return 0n
@@ -68,8 +80,9 @@ export function assertAddOwnerSelfCallShape(params: {
 }
 
 /**
- * EntryPoint UserOp lane for /add: exactly one zero-value CSW → CSW addOwnerAddress call.
- * Rejects Relay Part 1 deposit bundles and any router/depository targets.
+ * EntryPoint UserOp lane (the validated path for Base App CSWs).
+ * Requires exactly one zero-value CSW self-call to addOwnerAddress.
+ * Explicitly rejects any attempt to put the call inside RelayRouter multicall or deposit bundles.
  */
 export function assertSendCallsEntryPointAddOwnerBundle(params: {
   csw: string

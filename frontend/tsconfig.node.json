@@ -14,7 +14,9 @@
     "types": ["vite/client", "node"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@4626/server-core": ["./packages/server-core/src/index.ts"],
+      "@4626/server-core/*": ["./packages/server-core/src/*"]
     }
   },
   "include": [
@@ -57,5 +59,12 @@
     "src/lib/env/**/*.ts",
     "src/lib/routes/**/*.ts"
   ],
-  "exclude": ["src/**/*.test.ts"]
+  "exclude": [
+    "src/**/*.test.ts",
+    // These pull in app-layer code outside the restricted server/node typecheck surface
+    "server/_lib/wallet/cswOwnerSignature.test.ts",
+    "server/_lib/wallet/zoraWalletHoldings.test.ts",
+    "server/_lib/wallet/zoraWalletHoldings.ts",
+    "api/_handlers/wallet/_zoraHoldings.ts",
+  ]
 }

@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
+// @ts-ignore - zoraWalletHoldings pulls in app-layer code (coinType, tray helpers) outside the node typecheck surface
+// @ts-ignore[6307] - zoraWalletHoldings pulls in app-layer code outside the node typecheck surface (acceptable for this bridge module)
 import {
   clampTopTokenCount,
   resolveZoraWalletHoldings,

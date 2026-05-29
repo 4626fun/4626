@@ -10,7 +10,9 @@
     "types": ["node"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["../src/*"]
+      "@/*": ["../src/*"],
+      "@4626/server-core": ["../packages/server-core/src/index.ts"],
+      "@4626/server-core/*": ["../packages/server-core/src/*"]
     }
   },
   // Only typecheck our local API proxy handlers used by the Vite dev server.

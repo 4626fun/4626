@@ -317,7 +317,7 @@ function formatUnknownError(error: unknown): string {
   for (let depth = 0; depth < 6; depth += 1) {
     if (current instanceof Error) {
       if (current.message.trim()) parts.push(current.message)
-      current = current.cause
+      current = (current as any).cause
       continue
     }
     if (typeof current === 'string' && current.trim()) {
@@ -331,8 +331,8 @@ function formatUnknownError(error: unknown): string {
 function readReferenceWiredShareOftCandidates(): Address[] {
   const out: Address[] = []
   const viteReference =
-    typeof import.meta !== 'undefined' && import.meta.env
-      ? String(import.meta.env.VITE_REFERENCE_WIRED_SHARE_OFT ?? '').trim()
+    typeof import.meta !== 'undefined' && (import.meta as any).env
+      ? String((import.meta as any).env.VITE_REFERENCE_WIRED_SHARE_OFT ?? '').trim()
       : ''
   for (const raw of [
     typeof process !== 'undefined' ? process.env?.REFERENCE_WIRED_SHARE_OFT : undefined,

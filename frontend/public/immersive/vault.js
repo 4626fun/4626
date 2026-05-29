@@ -1,59 +1,58 @@
-// 4626.fun — minimal-luxury cube hero
-// Pure dark studio, the cube IS the page. Real HDRI environment for studio
-// reflections, chamfered geometry, edge highlights, slow rotation, mouse
-// parallax, scroll parallax. Apple keynote energy.
+// 4626.fun — obsidian Ethereum vault hero
+// Dynamic GLB with scroll-driven open, legacy iron cube fallback, storm sync.
 
 import * as THREE from 'three';
 import { setConsoleFunction } from 'three';
 
-// Marketing homepage: keep DevTools clean (ANGLE/HLSL program-info noise, etc.).
 setConsoleFunction(() => {});
 
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-const host = document.getElementById('vault-canvas');
-if (host) init(host);
+import {
+  applyVaultOpenState,
+  cloneSceneWithUniqueMaterials,
+  collectMeshParts,
+  getVaultOpenProgress,
+  retuneMaterial,
+} from './vaultScrollAnimation.js';
 
-// ---------- Chamfered cube geometry ----------
-function makeChamferedCube(size = 1.7, bevel = 0.06, segs = 8) {
-  const half = size / 2;
-  const geo = new THREE.BoxGeometry(size, size, size, segs, segs, segs);
-  const pos = geo.attributes.position;
-  const v = new THREE.Vector3();
-  const inner = half - bevel;
-  for (let i = 0; i < pos.count; i++) {
-    v.fromBufferAttribute(pos, i);
-    const cx = THREE.MathUtils.clamp(v.x, -inner, inner);
-    const cy = THREE.MathUtils.clamp(v.y, -inner, inner);
-    const cz = THREE.MathUtils.clamp(v.z, -inner, inner);
-    const dx = v.x - cx, dy = v.y - cy, dz = v.z - cz;
-    const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    if (len > 0) {
-      const k = bevel / len;
-      pos.setXYZ(i, cx + dx * k, cy + dy * k, cz + dz * k);
-    }
+const DEFAULT_GLB = './assets/models/ethereum-obsidian-vault.glb';
+
+const host = document.getElementById('vault-canvas');
+if (host) {
+  const mode = resolveVaultMode(host);
+  if (mode === 'legacy') {
+    initLegacyCube(host);
+  } else {
+    initDynamicVault(host, mode);
   }
-  geo.computeVertexNormals();
-  return geo;
 }
 
-// ---------- Build a procedural studio HDR environment ----------
-// We construct a small canvas-based environment map: dark with one warm
-// softbox above and a subtle rim glow. Used as scene.environment so the cube
-// gets real reflections on its bevels.
+function resolveVaultMode(host) {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('vault') === 'legacy') return 'legacy';
+  if (params.get('vault') === 'dynamic') return 'dynamic';
+  if (params.get('vault') === 'procedural') return 'procedural';
+  const attr = host.dataset.vaultSrc;
+  if (attr === 'legacy') return 'legacy';
+  if (attr === 'dynamic') return 'dynamic';
+  if (attr === 'procedural') return 'procedural';
+  return 'legacy';
+}
+
 function makeStudioEnv(renderer) {
   const c = document.createElement('canvas');
-  c.width = 512; c.height = 256;
+  c.width = 512;
+  c.height = 256;
   const ctx = c.getContext('2d');
 
-  // Pure black base
   ctx.fillStyle = '#020203';
   ctx.fillRect(0, 0, 512, 256);
 
-  // Warm overhead softbox (top center, fades down)
   let g = ctx.createRadialGradient(256, 30, 5, 256, 30, 200);
   g.addColorStop(0, 'rgba(255, 200, 130, 0.85)');
   g.addColorStop(0.4, 'rgba(255, 170, 90, 0.32)');
@@ -61,14 +60,12 @@ function makeStudioEnv(renderer) {
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 512, 256);
 
-  // Cool secondary fill from upper-left
   g = ctx.createRadialGradient(80, 60, 5, 80, 60, 160);
   g.addColorStop(0, 'rgba(150, 175, 230, 0.4)');
   g.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 512, 256);
 
-  // Faint warm horizon line at ~70% height (suggests floor reflection)
   g = ctx.createLinearGradient(0, 180, 0, 220);
   g.addColorStop(0, 'rgba(0,0,0,0)');
   g.addColorStop(0.5, 'rgba(80, 60, 40, 0.25)');
@@ -88,129 +85,204 @@ function makeStudioEnv(renderer) {
   return envTex;
 }
 
-function init(host) {
+function createRenderer(host) {
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
     alpha: true,
     powerPreference: 'high-performance',
   });
-  // Sharp high-DPI rendering. Cap at 2x for cost reasons but use full pixelRatio
-  // when available so brushed-metal micro-detail and cross filigree stay crisp.
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.5));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
+  renderer.toneMappingExposure = 0.82;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.debug.checkShaderErrors = false;
   host.appendChild(renderer.domElement);
+  return renderer;
+}
 
-  const scene = new THREE.Scene();
-  scene.environment = makeStudioEnv(renderer);
+function createComposer(renderer, scene, camera) {
+  const composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  const bloom = new UnrealBloomPass(new THREE.Vector2(1024, 1024), 0.12, 0.45, 0.92);
+  composer.addPass(bloom);
+  composer.addPass(new OutputPass());
+  return composer;
+}
 
-  // No scene fog. The cube must be crystal clear and fully opaque — fog
-  // would tint cube faces toward the sky color and reduce material clarity.
-  // Background composition handled by CSS/video, not renderer fog.
-
-  // Pull camera back and narrow FOV so the cube sits in the middle of the
-  // canvas with breathing room on every side — no visible canvas edge.
-  const camera = new THREE.PerspectiveCamera(22, 1, 0.05, 100);
-  camera.position.set(0, 0.35, 6.6);
-
-  // ---------- lighting ----------
-  // The HDRI environment carries most of the look; lights add directional bite.
-  // Warm gold key from upper-right (matches the god rays in the backdrop)
+function addDynamicLighting(scene) {
   const key = new THREE.DirectionalLight(0xffd6a0, 1.5);
   key.position.set(2.5, 3.5, 2.5);
   scene.add(key);
-
-  // Cool blue rim from below-left (atmospheric haze bouncing back)
   const rim = new THREE.DirectionalLight(0x6b8de0, 0.6);
   rim.position.set(-2.5, -0.5, 0.5);
   scene.add(rim);
-
-  // Faint warm bottom fill (gold horizon glow)
   const fill = new THREE.DirectionalLight(0xc88450, 0.4);
   fill.position.set(0, -2.5, 1.0);
   scene.add(fill);
-
   scene.add(new THREE.AmbientLight(0x05060a, 1.0));
+  const core = new THREE.PointLight(0xd17a1e, 0.55, 2.9);
+  core.position.set(0, 0.08, 1.1);
+  scene.add(core);
+}
 
-  // ---------- cube with full PBR texture set ----------
-  const cubeGroup = new THREE.Group();
-  scene.add(cubeGroup);
-
-  const geo = makeChamferedCube(1.7, 0.07, 6);
-
-  // Load PBR maps
+function loadLegacyVaultMaps(renderer) {
   const texLoader = new THREE.TextureLoader();
-  const setupTex = (tex, srgb = false) => {
+  const setupTex = (url, srgb = false) => {
+    const tex = texLoader.load(url);
     tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
     tex.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
     tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
     return tex;
   };
-  const baseColorMap = setupTex(texLoader.load('assets/vault_basecolor.jpg'), true);
-  const normalMap    = setupTex(texLoader.load('assets/vault_normal.jpg'));
-  const roughnessMap = setupTex(texLoader.load('assets/vault_roughness.jpg'));
-  const emissiveMap  = setupTex(texLoader.load('assets/vault_emissive.jpg'), true);
+  return {
+    baseColorMap: setupTex('assets/vault_basecolor.jpg', true),
+    normalMap: setupTex('assets/vault_normal.jpg'),
+    roughnessMap: setupTex('assets/vault_roughness.jpg'),
+    emissiveMap: setupTex('assets/vault_emissive.jpg', true),
+  };
+}
 
-  // Premium PBR material — crystal clear, fully opaque, every channel pumped
-  // for finest detail. The brushed iron base reads sharply, the gold cross +
-  // blue lightning veins glow with controlled bloom, and the clearcoat lacquer
-  // gives a museum-display sheen.  Emissive is RESTRAINED so the iron
-  // substrate — the rivets, hammered patina, edge frame — stays the hero of
-  // the surface; the glow is an accent, not the dominant feature.
-  const mat = new THREE.MeshPhysicalMaterial({
-    map: baseColorMap,
-    normalMap: normalMap,
-    normalScale: new THREE.Vector2(2.2, 2.2),  // sharp surface micro-detail
-    roughnessMap: roughnessMap,
-    roughness: 0.92,
-    metalness: 0.92,             // richly metallic
-    metalnessMap: roughnessMap,
-    emissiveMap: emissiveMap,
-    emissive: new THREE.Color(0xffffff),
-    emissiveIntensity: 0.7,      // restrained glow — substrate stays visible
-    envMapIntensity: 0.95,       // strong environment reflection
-    clearcoat: 0.85,             // strong gloss lacquer
-    clearcoatRoughness: 0.25,    // mirror-like clearcoat finish
-    reflectivity: 0.6,
-    fog: false,
+function applyLegacyVaultMapsToMesh(obj, maps) {
+  const name = obj.name.toLowerCase();
+  let mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+  mats = mats.map((mat) => {
+    if (!mat) return mat;
+    if (name.includes('glass')) {
+      mat.transparent = true;
+      mat.opacity = 0.35;
+      mat.depthWrite = false;
+      mat.side = THREE.DoubleSide;
+      mat.envMapIntensity = 1.2;
+      mat.needsUpdate = true;
+      return mat;
+    }
+    const physical = mat.isMeshPhysicalMaterial
+      ? mat
+      : new THREE.MeshPhysicalMaterial().copy(mat);
+    physical.map = maps.baseColorMap;
+    physical.normalMap = maps.normalMap;
+    physical.normalScale = new THREE.Vector2(2.2, 2.2);
+    physical.roughnessMap = maps.roughnessMap;
+    physical.metalnessMap = maps.roughnessMap;
+    physical.roughness = 0.92;
+    physical.metalness = 0.92;
+    physical.emissiveMap = maps.emissiveMap;
+    physical.emissive = new THREE.Color(0xffffff);
+    physical.emissiveIntensity = name.includes('inner_core') ? 0.45
+      : (name.includes('seam') || name.includes('vein') || name.includes('amber') ? 0.35 : 0.65);
+    physical.envMapIntensity = 0.95;
+    physical.clearcoat = 0.85;
+    physical.clearcoatRoughness = 0.25;
+    physical.reflectivity = 0.6;
+    physical.fog = false;
+    physical.needsUpdate = true;
+    return physical;
   });
-  const cube = new THREE.Mesh(geo, mat);
-  cubeGroup.add(cube);
+  obj.material = Array.isArray(obj.material) ? mats : mats[0];
+}
 
-  // Soft elliptical floor shadow
-  const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(1.6, 64),
-    new THREE.MeshBasicMaterial({
-      color: 0x000000,
-      transparent: true,
-      opacity: 0.55,
-      depthWrite: false,
-    })
-  );
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = -1.05;
-  shadow.scale.set(1.3, 1, 0.5);
-  scene.add(shadow);
+function setupInteraction(reduce) {
+  let mx = 0;
+  let my = 0;
+  let cx = 0;
+  let cy = 0;
+  let hasMouse = false;
 
-  // ---------- post: stronger bloom for the glowing seams ----------
-  const composer = new EffectComposer(renderer);
-  composer.addPass(new RenderPass(scene, camera));
-  // Bloom on the gold cross + blue lightning emissive seams. Tuned so the
-  // seams glow but the brushed iron substrate stays the dominant material.
-  // Bloom is the main culprit behind the visible rectangular halo around
-  // the canvas: it spreads bright pixels across the whole canvas, and the
-  // canvas edge becomes visible as a hard rectangle when the bloom dies.
-  // Keep bloom very subtle — the CSS .hero__cube-halo behind the canvas
-  // provides most of the visible "glow bleeding into the scene" effect.
-  const bloom = new UnrealBloomPass(new THREE.Vector2(1024, 1024), 0.18, 0.55, 0.85);
-  composer.addPass(bloom);
-  composer.addPass(new OutputPass());
+  document.addEventListener('mousemove', (e) => {
+    mx = e.clientX / window.innerWidth - 0.5;
+    my = e.clientY / window.innerHeight - 0.5;
+    hasMouse = true;
+  }, { passive: true });
 
-  // ---------- resize ----------
+  return {
+    update(time) {
+      const tx = hasMouse ? mx * 0.35 : Math.sin(time * 0.32) * 0.08;
+      const ty = hasMouse ? my * 0.22 : Math.sin(time * 0.5) * 0.05;
+      cx += (tx - cx) * 0.045;
+      cy += (ty - cy) * 0.045;
+      return { x: cx, y: cy };
+    },
+  };
+}
+
+function setupLightning() {
+  let lightningBonus = 0;
+  let lightningPeak = 0;
+  let lightningStartedAt = 0;
+
+  window.addEventListener('vault:lightning', (e) => {
+    const intensity = (e.detail && e.detail.intensity) || 1;
+    lightningPeak = Math.max(lightningPeak, intensity * 1.8);
+    lightningStartedAt = performance.now();
+  });
+
+  return {
+    update() {
+      const elapsed = (performance.now() - lightningStartedAt) / 1000;
+      if (lightningPeak > 0) {
+        const env = Math.exp(-elapsed * 5.5);
+        lightningBonus = lightningPeak * env;
+        if (env < 0.02) {
+          lightningPeak = 0;
+          lightningBonus = 0;
+        }
+      }
+      return lightningBonus;
+    },
+  };
+}
+
+function updateScrollPin(host, progress, reduce) {
+  if (reduce) {
+    host.classList.remove('is-scroll-pinned', 'is-opening', 'is-handoff');
+    return;
+  }
+  if (progress >= 1) {
+    host.classList.remove('is-scroll-pinned', 'is-opening');
+    host.classList.add('is-handoff');
+    return;
+  }
+  if (progress > 0.04) {
+    host.classList.add('is-scroll-pinned');
+    host.classList.toggle('is-opening', progress > 0.08);
+    host.classList.remove('is-handoff');
+  } else {
+    host.classList.remove('is-scroll-pinned', 'is-opening', 'is-handoff');
+  }
+}
+
+function initDynamicVault(host, mode) {
+  const glbUrl = host.dataset.vaultGlb || DEFAULT_GLB;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const facetDrift = !matchMedia('(max-width: 768px)').matches;
+
+  const renderer = createRenderer(host);
+  renderer.toneMappingExposure = 1.0;
+
+  const scene = new THREE.Scene();
+  scene.environment = makeStudioEnv(renderer);
+
+  const camera = new THREE.PerspectiveCamera(22, 1, 0.05, 100);
+  camera.position.set(0, 0.35, 6.6);
+
+  addDynamicLighting(scene);
+
+  const vaultRoot = new THREE.Group();
+  vaultRoot.position.y = 0.35;
+  scene.add(vaultRoot);
+
+  const composer = createComposer(renderer, scene, camera);
+  const legacyMaps = loadLegacyVaultMaps(renderer);
+  const pointer = setupInteraction(reduce);
+  const lightning = setupLightning();
+  const clock = new THREE.Clock();
+
+  let parts = [];
+  let loaded = false;
+
   function resize() {
-    const w = host.clientWidth, h = host.clientHeight;
+    const w = host.clientWidth;
+    const h = host.clientHeight;
     if (!w || !h) return;
     renderer.setSize(w, h, false);
     composer.setSize(w, h);
@@ -220,14 +292,245 @@ function init(host) {
   resize();
   new ResizeObserver(resize).observe(host);
 
-  // ---------- interaction ----------
+  function buildProceduralFallback() {
+    parts = [];
+    const materialCore = new THREE.MeshPhysicalMaterial({
+      color: '#020204',
+      metalness: 0.85,
+      roughness: 0.26,
+      clearcoat: 1,
+      clearcoatRoughness: 0.12,
+    });
+    const materialGlow = new THREE.MeshStandardMaterial({
+      color: '#b56a16',
+      emissive: '#b56a16',
+      emissiveIntensity: 0.45,
+      roughness: 0.2,
+    });
+
+    const top = new THREE.Group();
+    top.name = 'top_fallback';
+    const topMesh = new THREE.Mesh(new THREE.ConeGeometry(1.12, 2.24, 4, 1), materialCore);
+    topMesh.name = 'top_fallback';
+    topMesh.position.set(0, 0.88, 0);
+    top.add(topMesh);
+    vaultRoot.add(top);
+
+    const bottom = new THREE.Group();
+    bottom.name = 'bottom_fallback';
+    const bottomMesh = new THREE.Mesh(new THREE.ConeGeometry(1.12, 2.24, 4, 1), materialCore);
+    bottomMesh.name = 'bottom_fallback';
+    bottomMesh.position.set(0, -0.88, 0);
+    bottomMesh.rotation.x = Math.PI;
+    bottom.add(bottomMesh);
+    vaultRoot.add(bottom);
+
+    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 1), materialGlow);
+    core.name = 'inner_core_fallback';
+    core.position.set(0, 0, 0.05);
+    core.scale.setScalar(0.35);
+    vaultRoot.add(core);
+
+    for (const obj of [topMesh, bottomMesh, core]) {
+      obj.userData.closedPosition = obj.position.clone();
+      obj.userData.closedRotation = obj.rotation.clone();
+      obj.userData.closedScale = obj.scale.clone();
+      parts.push(obj);
+    }
+    vaultRoot.scale.setScalar(1.05);
+    loaded = true;
+  }
+
+  function onGltfLoaded(gltf) {
+    try {
+      vaultRoot.clear();
+      const clone = cloneSceneWithUniqueMaterials(gltf.scene);
+      clone.scale.setScalar(0.48);
+      clone.updateMatrixWorld(true);
+      clone.traverse((obj) => {
+        if (obj.isMesh) {
+          obj.userData.closedPosition = obj.position.clone();
+          obj.userData.closedRotation = obj.rotation.clone();
+          obj.userData.closedScale = obj.scale.clone();
+        }
+      });
+      clone.traverse((obj) => {
+        if (obj.isMesh && obj.material) {
+          applyLegacyVaultMapsToMesh(obj, legacyMaps);
+        }
+      });
+      vaultRoot.add(clone);
+      parts = collectMeshParts(clone);
+      if (parts.length === 0) throw new Error('GLB contained no mesh parts');
+      loaded = true;
+    } catch (err) {
+      console.warn('[vault] dynamic GLB failed; using procedural fallback', err);
+      buildProceduralFallback();
+    }
+  }
+
+  if (mode === 'procedural') {
+    buildProceduralFallback();
+  } else {
+    const loader = new GLTFLoader();
+    loader.load(
+      glbUrl,
+      onGltfLoaded,
+      undefined,
+      () => buildProceduralFallback(),
+    );
+  }
+
+  function tick() {
+    const t = clock.getElapsedTime();
+    const progress = loaded ? getVaultOpenProgress() : 0;
+    const lightningBonus = lightning.update();
+    const pointerOffset = pointer.update(t);
+
+    updateScrollPin(host, progress, reduce);
+
+    if (loaded) {
+      applyVaultOpenState({
+        parts,
+        rootGroup: vaultRoot,
+        camera,
+        progress,
+        time: t,
+        reducedMotion: reduce,
+        pointerOffset,
+        lightningBonus,
+        facetDrift,
+      });
+    }
+
+    composer.render();
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+  requestAnimationFrame(() => host.classList.add('is-ready'));
+}
+
+// ---------- Legacy iron PBR chamfered cube (unchanged behavior) ----------
+
+function makeChamferedCube(size = 1.7, bevel = 0.06, segs = 8) {
+  const half = size / 2;
+  const geo = new THREE.BoxGeometry(size, size, size, segs, segs, segs);
+  const pos = geo.attributes.position;
+  const v = new THREE.Vector3();
+  const inner = half - bevel;
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const cx = THREE.MathUtils.clamp(v.x, -inner, inner);
+    const cy = THREE.MathUtils.clamp(v.y, -inner, inner);
+    const cz = THREE.MathUtils.clamp(v.z, -inner, inner);
+    const dx = v.x - cx;
+    const dy = v.y - cy;
+    const dz = v.z - cz;
+    const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len > 0) {
+      const k = bevel / len;
+      pos.setXYZ(i, cx + dx * k, cy + dy * k, cz + dz * k);
+    }
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function initLegacyCube(host) {
+  const renderer = createRenderer(host);
+  renderer.toneMappingExposure = 1.0;
+
+  const scene = new THREE.Scene();
+  scene.environment = makeStudioEnv(renderer);
+
+  const camera = new THREE.PerspectiveCamera(22, 1, 0.05, 100);
+  camera.position.set(0, 0.35, 6.6);
+
+  const key = new THREE.DirectionalLight(0xffd6a0, 1.5);
+  key.position.set(2.5, 3.5, 2.5);
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0x6b8de0, 0.6);
+  rim.position.set(-2.5, -0.5, 0.5);
+  scene.add(rim);
+  const fill = new THREE.DirectionalLight(0xc88450, 0.4);
+  fill.position.set(0, -2.5, 1.0);
+  scene.add(fill);
+  scene.add(new THREE.AmbientLight(0x05060a, 1.0));
+
+  const cubeGroup = new THREE.Group();
+  scene.add(cubeGroup);
+
+  const geo = makeChamferedCube(1.7, 0.07, 6);
+  const texLoader = new THREE.TextureLoader();
+  const setupTex = (tex, srgb = false) => {
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    return tex;
+  };
+  const baseColorMap = setupTex(texLoader.load('assets/vault_basecolor.jpg'), true);
+  const normalMap = setupTex(texLoader.load('assets/vault_normal.jpg'));
+  const roughnessMap = setupTex(texLoader.load('assets/vault_roughness.jpg'));
+  const emissiveMap = setupTex(texLoader.load('assets/vault_emissive.jpg'), true);
+
+  const mat = new THREE.MeshPhysicalMaterial({
+    map: baseColorMap,
+    normalMap,
+    normalScale: new THREE.Vector2(2.2, 2.2),
+    roughnessMap,
+    roughness: 0.92,
+    metalness: 0.92,
+    metalnessMap: roughnessMap,
+    emissiveMap,
+    emissive: new THREE.Color(0xffffff),
+    emissiveIntensity: 0.7,
+    envMapIntensity: 0.95,
+    clearcoat: 0.85,
+    clearcoatRoughness: 0.25,
+    reflectivity: 0.6,
+    fog: false,
+  });
+  cubeGroup.add(new THREE.Mesh(geo, mat));
+
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(1.6, 64),
+    new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+    }),
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = -1.05;
+  shadow.scale.set(1.3, 1, 0.5);
+  scene.add(shadow);
+
+  const composer = createComposer(renderer, scene, camera);
+
+  function resize() {
+    const w = host.clientWidth;
+    const h = host.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    composer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  resize();
+  new ResizeObserver(resize).observe(host);
+
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let mx = 0, my = 0, cx = 0, cy = 0, hasMouse = false;
+  let mx = 0;
+  let my = 0;
+  let cx = 0;
+  let cy = 0;
+  let hasMouse = false;
   let scrollY = 0;
 
   document.addEventListener('mousemove', (e) => {
-    mx = (e.clientX / window.innerWidth - 0.5);
-    my = (e.clientY / window.innerHeight - 0.5);
+    mx = e.clientX / window.innerWidth - 0.5;
+    my = e.clientY / window.innerHeight - 0.5;
     hasMouse = true;
   }, { passive: true });
 
@@ -235,10 +538,6 @@ function init(host) {
     scrollY = window.scrollY;
   }, { passive: true });
 
-  // ---------- lightning sympathetic flash ----------
-  // The page fires a 'vault:lightning' event when a bolt strikes.
-  // We keep a lightning bonus that decays over ~700ms, added on top of
-  // the breathing emissive intensity so the cube's seams flare with the sky.
   let lightningBonus = 0;
   let lightningPeak = 0;
   let lightningStartedAt = 0;
@@ -248,28 +547,26 @@ function init(host) {
     lightningStartedAt = performance.now();
   });
 
-  // ---------- loop ----------
   const clock = new THREE.Clock();
-  // Start at a satisfying 3/4 hero angle (OBSDN-style)
-  let baseRotY = 0.5, baseRotX = -0.22;
+  let baseRotY = 0.5;
+  let baseRotX = -0.22;
 
   function tick() {
     const dt = clock.getDelta();
     const t = clock.getElapsedTime();
 
-    // Slow elegant rotation — more contemplative than spinny
     if (!reduce) baseRotY += dt * 0.10;
 
-    // Compute lightning bonus envelope (fast attack, slow decay)
     const elapsed = (performance.now() - lightningStartedAt) / 1000;
     if (lightningPeak > 0) {
-      // Two-phase envelope: spike then decay
       const env = Math.exp(-elapsed * 5.5);
       lightningBonus = lightningPeak * env;
-      if (env < 0.02) { lightningPeak = 0; lightningBonus = 0; }
+      if (env < 0.02) {
+        lightningPeak = 0;
+        lightningBonus = 0;
+      }
     }
 
-    // Pulse emissive intensity to make the seams breathe + react to lightning
     if (mat) {
       const breath = 1.15 + Math.sin(t * 1.6) * 0.22 + Math.sin(t * 5.2) * 0.08;
       mat.emissiveIntensity = breath + lightningBonus;
@@ -291,6 +588,5 @@ function init(host) {
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
-
   requestAnimationFrame(() => host.classList.add('is-ready'));
 }

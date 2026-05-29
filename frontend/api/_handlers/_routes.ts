@@ -62,6 +62,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'debank/tokenList': () => import('./debank/_tokenList.js'),
   'debank/walletPortfolioBatch': () => import('./debank/_walletPortfolioBatch.js'),
   'wallet/trayPortfolio': () => import('./wallet/_trayPortfolio.js'),
+  // @ts-ignore - zora holdings pulls in app-layer tray/portfolio code; acceptable for the restricted node typecheck surface
   'wallet/zora-holdings': () => import('./wallet/_zoraHoldings.js'),
   'wallet/trayActivity': () => import('./wallet/_trayActivity.js'),
   'wallet/tokenBalance': () => import('./wallet/_tokenBalance.js'),

@@ -3,7 +3,7 @@ import { Navigate, Route } from 'react-router-dom'
 
 import {
   AccountsPage,
-  AddOwnerUserOpExperiment,
+  AddOwnerBaseApp,
   AmoeQuickTasks,
   AdminAgentSetup,
   AdminCreatorAccess,
@@ -114,7 +114,7 @@ export const ACCOUNT_ROUTES: PathRouteDef[] = [
     path: '/add',
     element: (
       <SmartWalletRoute>
-        <AddOwnerUserOpExperiment />
+        <AddOwnerBaseApp />
       </SmartWalletRoute>
     ),
   },

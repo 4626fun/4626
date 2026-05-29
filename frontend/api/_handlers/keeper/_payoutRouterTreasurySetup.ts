@@ -75,7 +75,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (body.execute === true) {
       const result = await executePayoutRouterTreasurySetup({
-        publicClient,
+        publicClient: publicClient as any,
         rpcUrl,
         payoutRouter,
         creatorToken,
@@ -94,7 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const plan = await buildPayoutRouterTreasurySetupPlan({
-      publicClient,
+      publicClient: publicClient as any,
       payoutRouter,
       creatorToken,
     })

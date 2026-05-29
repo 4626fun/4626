@@ -83,12 +83,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { profileId } = principal
 
-  const outcome = await revokeCommandIssuerContext({ profileId, reason })
-  if (!outcome.ok) {
-    const statusCode = outcome.error === 'db_unavailable' ? 503 : 500
+  const ok = await revokeCommandIssuerContext(profileId, reason)
+  if (!ok) {
     return res
-      .status(statusCode)
-      .json({ success: false, error: outcome.error } satisfies ApiEnvelope<never>)
+      .status(500)
+      .json({ success: false, error: 'revoke_failed' } satisfies ApiEnvelope<never>)
   }
 
   return res.status(200).json({

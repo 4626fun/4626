@@ -6,4 +6,4 @@
  * New code must import from `@4626/server-core`:
  *   import { resolveCommandIssuerContextByAddress, ... } from '@4626/server-core'
  */
-export * from '../../packages/server-core/src/commandIssuerContext.js'
+export * from '../../../packages/server-core/src/commandIssuerContext.js'
