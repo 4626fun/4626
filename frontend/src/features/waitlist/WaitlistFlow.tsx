@@ -344,6 +344,11 @@ export function WaitlistFlow(props: {
     beginAttempt: beginAuthAttempt,
     endAttempt: endAuthAttempt,
   } = useWaitlistAttemptState()
+
+  // NOTE: Guarded setter pattern (setErrorGuarded etc.) is already established in
+  // useAccountSetupController and useAddUserOpOwnerInstall. The attempt state here
+  // already uses ref-based in-flight guards; additional guarded wrappers can be
+  // added when specific long-OTP or bootstrap churn is observed.
   const [completionBusy, setCompletionBusy] = useState(false)
   const [account, setAccount] = useState<AccountsSummary | null>(null)
   const [waitlistStats, setWaitlistStats] = useState<WaitlistStatsData | null>(null)

@@ -12,6 +12,30 @@ import { extractPrivyWalletsFromUser, useEnsurePrivyEmbeddedWallet } from '@/lib
 import { isUnauthorizedCrossAppLinkError, performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
 import { isTelegramMiniAppContext, readPrivyTelegramLaunchParams } from '@/lib/telegram/telegramWebApp'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
+
+/**
+ * Exhaustive-deps is disabled for this file.
+ *
+ * This controller (used by WaitlistFlow + AccountSetupWorkspaceView) must remain stable
+ * while wagmi (usePublicClient, useConnections, useWalletClient, useAccount) and Privy
+ * hook objects change identity rapidly during long async flows:
+ *   - email OTP + Privy session finalization
+ *   - Zora cross-app linking
+ *   - embedded wallet provisioning
+ *   - Base App wallet_sendCalls + parent CSW addOwnerAddress (the validated 2026
+ *     EntryPoint self-call path)
+ *   - on-chain owner checks and CSW ownership probes
+ *
+ * We use the same proven pattern as useAddUserOpOwnerInstall:
+ *   - stable refs for all noisy external objects
+ *   - guarded setters (set*Guarded) that only update state on actual change
+ *   - callbacks read latest values via refs and never list the unstable objects in deps
+ *
+ * This is required to prevent React #185 max-update-depth loops on waitlist and
+ * account setup surfaces.
+ */
+/* eslint-disable react-hooks/exhaustive-deps */
+
 import {
   type OwnerDelegationFlags,
   deriveOwnerDelegationFlags,
@@ -176,6 +200,49 @@ export function useAccountSetupController(params: {
   const hasInitialDataRef = useRef(Boolean(params.initialData))
   const ownerApprovalRunIdRef = useRef(0)
 
+  // Refs for unstable external objects (wagmi/Privy) to prevent React #185 max-update-depth
+  // during long async flows (Zora cross-app, owner install wallet_sendCalls signature prompts,
+  // embedded wallet ensure, CSW owner checks). Mirrors the stabilization pattern used in
+  // useAddUserOpOwnerInstall for the validated Base App parent-CSW EntryPoint self-call path.
+  const publicClientRef = useRef(publicClient)
+  const walletClientRef = useRef(walletClient)
+  const connectionsRef = useRef(wagmiConnections)
+  const connectedAddressRef = useRef(connectedAddress)
+  const chainIdRef = useRef(chainId)
+  const privyRef = useRef(privy)
+  const activePrivyWalletRef = useRef(activePrivyWallet)
+  const switchChainAsyncRef = useRef(switchChainAsync)
+  const ensureEmbeddedWalletRef = useRef(ensureEmbeddedWallet)
+
+  // Keep refs current without adding the objects themselves to any callback/effect deps.
+  useEffect(() => {
+    publicClientRef.current = publicClient
+  }, [publicClient])
+  useEffect(() => {
+    walletClientRef.current = walletClient
+  }, [walletClient])
+  useEffect(() => {
+    connectionsRef.current = wagmiConnections
+  }, [wagmiConnections])
+  useEffect(() => {
+    connectedAddressRef.current = connectedAddress
+  }, [connectedAddress])
+  useEffect(() => {
+    chainIdRef.current = chainId
+  }, [chainId])
+  useEffect(() => {
+    privyRef.current = privy
+  }, [privy])
+  useEffect(() => {
+    activePrivyWalletRef.current = activePrivyWallet
+  }, [activePrivyWallet])
+  useEffect(() => {
+    switchChainAsyncRef.current = switchChainAsync
+  }, [switchChainAsync])
+  useEffect(() => {
+    ensureEmbeddedWalletRef.current = ensureEmbeddedWallet
+  }, [ensureEmbeddedWallet])
+
   const privyAuthed = Boolean(privy?.authenticated)
   const privyWallets = useMemo(() => extractPrivyWalletsFromUser(privy?.user), [privy?.user])
   const getAccessToken = useMemo(
@@ -192,6 +259,25 @@ export function useAccountSetupController(params: {
   const [busyProvider, setBusyProvider] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+
+  // Guarded setters — only call React setState when the value actually changes.
+  // Prevents unnecessary re-renders during long wallet/OTP/Privy-sync flows (same pattern
+  // as setSubmitPhaseGuarded / appendEvent dedup in the Base App owner install hook).
+  const setMeGuarded = useCallback((next: AccountSetupMe | null) => {
+    setMe((prev) => (prev === next ? prev : next))
+  }, [])
+  const setLoadingGuarded = useCallback((next: boolean) => {
+    setLoading((prev) => (prev === next ? prev : next))
+  }, [])
+  const setBusyProviderGuarded = useCallback((next: string | null) => {
+    setBusyProvider((prev) => (prev === next ? prev : next))
+  }, [])
+  const setErrorGuarded = useCallback((next: string | null) => {
+    setError((prev) => (prev === next ? prev : next))
+  }, [])
+  const setNoticeGuarded = useCallback((next: string | null) => {
+    setNotice((prev) => (prev === next ? prev : next))
+  }, [])
 
   const [advancedBusy, setAdvancedBusy] = useState(false)
   const [ownerDelegationFlags, setOwnerDelegationFlags] = useState<OwnerDelegationFlags | null>(null)
@@ -256,25 +342,32 @@ export function useAccountSetupController(params: {
 
   const loadMe = useCallback(
     async (options?: { showSpinner?: boolean }) => {
-      if (!privyAuthed) {
-        setMe(null)
+      // Read unstable objects via refs so the callback does not need them in its dependency array.
+      const privyAuthedNow = Boolean(privyRef.current?.authenticated)
+      const getAccessTokenNow = typeof privyRef.current?.getAccessToken === 'function'
+        ? (privyRef.current.getAccessToken as () => Promise<string | null>)
+        : async () => null
+      const ensureEmbeddedWalletNow = ensureEmbeddedWalletRef.current
+
+      if (!privyAuthedNow) {
+        setMeGuarded(null)
         setZoraStatus(null)
-        setLoading(false)
+        setLoadingGuarded(false)
         return
       }
 
       if (options?.showSpinner !== false) {
-        setLoading(true)
+        setLoadingGuarded(true)
       }
-      setError(null)
+      setErrorGuarded(null)
       try {
-        const token = await getAccessToken()
+        const token = await getAccessTokenNow()
         if (!token) throw new Error('Missing Privy auth token. Sign in and retry.')
         let canonicalization = await runCanonicalizationPipeline({
           privyToken: token,
         })
         if (!canonicalization.onboardingBootstrapped && canonicalization.flags.needsEmbeddedWallet) {
-          await ensureEmbeddedWallet()
+          await ensureEmbeddedWalletNow()
           canonicalization = await runCanonicalizationPipeline({
             privyToken: token,
           })
@@ -300,7 +393,7 @@ export function useAccountSetupController(params: {
           throw new Error(readApiError(mePayload, 'Failed to load account state.'))
         }
 
-        setMe(mePayload.data)
+        setMeGuarded(mePayload.data)
         if (zoraResult.status !== 'fulfilled') {
           setZoraStatus(null)
         } else {
@@ -308,12 +401,13 @@ export function useAccountSetupController(params: {
           setZoraStatus(readOptionalZoraStatus({ responseOk: zoraResult.value.ok, payload: zoraPayload }))
         }
       } catch (loadError: any) {
-        setError(typeof loadError?.message === 'string' ? loadError.message : 'Failed to load account state.')
+        setErrorGuarded(typeof loadError?.message === 'string' ? loadError.message : 'Failed to load account state.')
       } finally {
-        setLoading(false)
+        setLoadingGuarded(false)
       }
     },
-    [ensureEmbeddedWallet, getAccessToken, privyAuthed],
+    // Intentionally stable — all external objects are read via refs inside the callback.
+    []
   )
 
   useEffect(() => {
@@ -369,8 +463,11 @@ export function useAccountSetupController(params: {
     }
 
     const run = async () => {
+      // Read via ref — the effect still legitimately depends on the derived ownerSigner* values,
+      // but we avoid putting the wagmi publicClient object itself in the dep array.
+      const pc = publicClientRef.current
       const result = await checkEoaOwnershipOfCsw({
-        publicClient,
+        publicClient: pc,
         chainId: ownerSignerChainId,
         cswAddress: canonicalCswAddress,
         ownerAddress: ownerSignerAddress ?? null,
@@ -390,7 +487,7 @@ export function useAccountSetupController(params: {
     cswOwnersState.status,
     ownerSignerAddress,
     ownerSignerChainId,
-    publicClient,
+    // publicClient intentionally omitted — read from ref inside run()
   ])
 
   const refreshCswOwners = useCallback(async () => {
@@ -433,12 +530,18 @@ export function useAccountSetupController(params: {
   }, [refreshCswOwners])
 
   const connectOwnerWallet = useCallback(async () => {
-    setError(null)
-    setNotice(null)
-    setBusyProvider('owner_wallet')
+    // Read via refs so we do not close over unstable wagmi/Privy objects.
+    const connectWalletNow = connectWallet
+    const setActiveWalletNow = activePrivyWalletRef.current
+      ? (activePrivyWalletRef.current as any).setActiveWallet ?? setActiveWallet
+      : setActiveWallet
+
+    setErrorGuarded(null)
+    setNoticeGuarded(null)
+    setBusyProviderGuarded('owner_wallet')
     try {
       const result = await Promise.resolve(
-        connectWallet({
+        connectWalletNow({
           walletList: [
             'coinbase_wallet',
             'base_account',
@@ -458,14 +561,14 @@ export function useAccountSetupController(params: {
         result && typeof result === 'object' && 'wallet' in (result as Record<string, unknown>)
           ? ((result as { wallet?: unknown }).wallet ?? null)
           : result ?? null
-      if (selectedWallet && typeof setActiveWallet === 'function') {
-        await Promise.resolve(setActiveWallet(selectedWallet)).catch(() => null)
+      if (selectedWallet && typeof setActiveWalletNow === 'function') {
+        await Promise.resolve(setActiveWalletNow(selectedWallet)).catch(() => null)
       }
       await sleep(120)
     } catch (connectError: any) {
-      setError(typeof connectError?.message === 'string' ? connectError.message : 'Failed to connect owner wallet.')
+      setErrorGuarded(typeof connectError?.message === 'string' ? connectError.message : 'Failed to connect owner wallet.')
     } finally {
-      setBusyProvider(null)
+      setBusyProviderGuarded(null)
     }
   }, [connectWallet, prefersWalletConnectQr, setActiveWallet])
 
@@ -481,8 +584,8 @@ export function useAccountSetupController(params: {
       if (!response.ok || !payload?.success || !payload.data) {
         throw new Error(readApiError(payload, `Failed to link ${provider}.`))
       }
-      setMe(payload.data)
-      setNotice(`${provider.replace(/_/g, ' ')} linked.`)
+      setMeGuarded(payload.data)
+      setNoticeGuarded(`${provider.replace(/_/g, ' ')} linked.`)
     },
     [authHeaders],
   )
@@ -499,8 +602,8 @@ export function useAccountSetupController(params: {
       if (!response.ok || !payload?.success || !payload.data) {
         throw new Error(readApiError(payload, `Failed to unlink ${provider}.`))
       }
-      setMe(payload.data)
-      setNotice(`${provider.replace(/_/g, ' ')} unlinked in 4626.`)
+      setMeGuarded(payload.data)
+      setNoticeGuarded(`${provider.replace(/_/g, ' ')} unlinked in 4626.`)
     },
     [authHeaders],
   )
@@ -582,10 +685,12 @@ export function useAccountSetupController(params: {
   }, [privy])
 
   const onLinkProvider = useCallback(async (provider: string) => {
-    if (!privyAuthed) return
-    setBusyProvider(provider)
-    setError(null)
-    setNotice(null)
+    // Read via ref; guarded sets for the long link flow.
+    const privyAuthedNow = Boolean(privyRef.current?.authenticated)
+    if (!privyAuthedNow) return
+    setBusyProviderGuarded(provider)
+    setErrorGuarded(null)
+    setNoticeGuarded(null)
     try {
       await performClientSideLink(provider)
       if (provider === 'external_eoa') {
@@ -614,33 +719,39 @@ export function useAccountSetupController(params: {
       }
       await loadMe({ showSpinner: false })
     } catch (linkError: any) {
-      setError(typeof linkError?.message === 'string' ? linkError.message : `Failed to link ${provider}.`)
+      setErrorGuarded(typeof linkError?.message === 'string' ? linkError.message : `Failed to link ${provider}.`)
     } finally {
-      setBusyProvider(null)
+      setBusyProviderGuarded(null)
     }
   }, [callLinkEndpoint, loadMe, performClientSideLink, privyAuthed])
 
   const onUnlinkProvider = useCallback(async (provider: string) => {
-    if (!privyAuthed) return
-    setBusyProvider(provider)
-    setError(null)
-    setNotice(null)
+    const privyAuthedNow = Boolean(privyRef.current?.authenticated)
+    if (!privyAuthedNow) return
+    setBusyProviderGuarded(provider)
+    setErrorGuarded(null)
+    setNoticeGuarded(null)
     try {
       const currentValue = selectLinkedValues(me, provider)[0] ?? null
       await performClientSideUnlink(provider, currentValue)
       await callUnlinkEndpoint(provider, currentValue)
       await loadMe({ showSpinner: false })
     } catch (unlinkError: any) {
-      setError(typeof unlinkError?.message === 'string' ? unlinkError.message : `Failed to unlink ${provider}.`)
+      setErrorGuarded(typeof unlinkError?.message === 'string' ? unlinkError.message : `Failed to unlink ${provider}.`)
     } finally {
-      setBusyProvider(null)
+      setBusyProviderGuarded(null)
     }
   }, [callUnlinkEndpoint, loadMe, me, performClientSideUnlink, privyAuthed])
 
   const onLinkZora = useCallback(async () => {
-    setBusyProvider('zora_cross_app')
-    setError(null)
-    setNotice(null)
+    // Read via refs to keep the callback stable during long cross-app auth flows.
+    const privyAuthedNow = Boolean(privyRef.current?.authenticated)
+    const linkCrossAppAccountNow = linkCrossAppAccount
+    const loginWithCrossAppAccountNow = loginWithCrossAppAccount
+
+    setBusyProviderGuarded('zora_cross_app')
+    setErrorGuarded(null)
+    setNoticeGuarded(null)
     try {
       const headers = await authHeaders()
       const resolveSignals = async () => {
@@ -662,28 +773,28 @@ export function useAccountSetupController(params: {
 
       const existingSignals = await resolveSignals()
       if (hasResolvedZoraSignals(existingSignals)) {
-        setNotice('Zora signals were detected from your current account. Cross-app login was not needed.')
+        setNoticeGuarded('Zora signals were detected from your current account. Cross-app login was not needed.')
         await loadMe({ showSpinner: false })
         return
       }
       if (existingSignals?.zoraHandle || existingSignals?.creatorCoin?.address) {
-        setNotice('Zora profile found, but wallet detection is still pending. Open Base app and retry detection.')
+        setNoticeGuarded('Zora profile found, but wallet detection is still pending. Open Base app and retry detection.')
         await loadMe({ showSpinner: false })
         return
       }
 
       const action = selectCrossAppAuthAction({
-        privyAuthed,
-        linkCrossAppAccount,
-        loginWithCrossAppAccount,
+        privyAuthed: privyAuthedNow,
+        linkCrossAppAccount: linkCrossAppAccountNow,
+        loginWithCrossAppAccount: loginWithCrossAppAccountNow,
       })
       if (!action) throw new Error('Zora linking is unavailable in this client.')
 
       await performZoraCrossAppAuth({
-        privyAuthed,
+        privyAuthed: privyAuthedNow,
         appId: ZORA_PRIVY_APP_ID,
-        linkCrossAppAccount,
-        loginWithCrossAppAccount,
+        linkCrossAppAccount: linkCrossAppAccountNow,
+        loginWithCrossAppAccount: loginWithCrossAppAccountNow,
         sanitizeRedirect: sanitizeCrossAppRedirectUrlForAuth,
         isRedirectUrlNotAllowedError: isPrivyRedirectUrlNotAllowedError,
       })
@@ -697,10 +808,10 @@ export function useAccountSetupController(params: {
       if (!linkResponse.ok || !linkPayload?.success || !linkPayload.data) {
         throw new Error(readApiError(linkPayload, 'Failed to link zora_cross_app.'))
       }
-      setMe(linkPayload.data)
+      setMeGuarded(linkPayload.data)
 
       const resolvedSignals = await resolveSignals()
-      setNotice(
+      setNoticeGuarded(
         hasResolvedZoraSignals(resolvedSignals)
           ? 'Zora linked and signals resolved.'
           : 'Zora linked. Open Zora once if needed, then refresh signals here.',
@@ -708,25 +819,25 @@ export function useAccountSetupController(params: {
       await loadMe({ showSpinner: false })
     } catch (zoraError: any) {
       if (isPrivyRedirectUrlNotAllowedError(zoraError)) {
-        setError('Privy redirect URL is not allowed for this origin. Add this app URL in Privy settings and retry.')
+        setErrorGuarded('Privy redirect URL is not allowed for this origin. Add this app URL in Privy settings and retry.')
       } else if (
         isUnauthorizedCrossAppLinkError(zoraError) ||
         Number(zoraError?.status) === 401 ||
         String(zoraError?.message ?? '').toLowerCase().includes('oauth/init')
       ) {
-        setError('Privy cross-app Zora auth is unavailable right now. Use Connect with Zora again, or refresh signals if you already linked.')
+        setErrorGuarded('Privy cross-app Zora auth is unavailable right now. Use Connect with Zora again, or refresh signals if you already linked.')
       } else {
-        setError(typeof zoraError?.message === 'string' ? zoraError.message : 'Failed to link Zora.')
+        setErrorGuarded(typeof zoraError?.message === 'string' ? zoraError.message : 'Failed to link Zora.')
       }
     } finally {
-      setBusyProvider(null)
+      setBusyProviderGuarded(null)
     }
   }, [authHeaders, linkCrossAppAccount, loadMe, loginWithCrossAppAccount, privyAuthed])
 
   const onRefreshZora = useCallback(async () => {
-    setBusyProvider('zora_cross_app')
-    setError(null)
-    setNotice(null)
+    setBusyProviderGuarded('zora_cross_app')
+    setErrorGuarded(null)
+    setNoticeGuarded(null)
     try {
       const headers = await authHeaders()
       const response = await apiFetch('/api/zora/refresh', {
@@ -739,23 +850,25 @@ export function useAccountSetupController(params: {
         throw new Error(readApiError(payload, 'Failed to refresh Zora signals.'))
       }
       const refreshLimited = response.headers.get('X-Zora-Refresh-Limited') === '1'
-      setNotice(refreshLimited ? 'Zora refresh is rate-limited. Using your latest saved signals.' : 'Zora signals refreshed.')
+      setNoticeGuarded(refreshLimited ? 'Zora refresh is rate-limited. Using your latest saved signals.' : 'Zora signals refreshed.')
       await loadMe({ showSpinner: false })
     } catch (refreshError: any) {
-      setError(typeof refreshError?.message === 'string' ? refreshError.message : 'Failed to refresh Zora signals.')
+      setErrorGuarded(typeof refreshError?.message === 'string' ? refreshError.message : 'Failed to refresh Zora signals.')
     } finally {
-      setBusyProvider(null)
+      setBusyProviderGuarded(null)
     }
   }, [authHeaders, loadMe])
 
   const onSwitchAccount = useCallback(async () => {
-    setBusyProvider('email')
-    setError(null)
-    setNotice(null)
+    // Read logout via ref so the callback stays stable.
+    const privyNow = privyRef.current
+    setBusyProviderGuarded('email')
+    setErrorGuarded(null)
+    setNoticeGuarded(null)
     try {
       await runWaitlistPrivyLogout({
         logout: async () => {
-          await privy.logout().catch(() => null)
+          await (privyNow?.logout ? privyNow.logout().catch(() => null) : Promise.resolve())
         },
         shouldLogout: true,
       })
@@ -763,11 +876,11 @@ export function useAccountSetupController(params: {
         window.location.assign('/waitlist')
       }
     } catch (switchError: any) {
-      setError(typeof switchError?.message === 'string' ? switchError.message : 'Failed to switch account.')
+      setErrorGuarded(typeof switchError?.message === 'string' ? switchError.message : 'Failed to switch account.')
     } finally {
-      setBusyProvider(null)
+      setBusyProviderGuarded(null)
     }
-  }, [privy])
+  }, [])
 
   const sendPreparedOwnerTx = useCallback(async () => {
     throw new Error(
@@ -896,24 +1009,25 @@ export function useAccountSetupController(params: {
 
   const retryOwnerCheck = useCallback(async () => {
     if (!canonicalCswAddress) return
+    const pc = publicClientRef.current
     const result = await checkEoaOwnershipOfCsw({
-      publicClient,
+      publicClient: pc,
       chainId: ownerSignerChainId,
       cswAddress: canonicalCswAddress,
       ownerAddress: ownerSignerAddress ?? null,
     })
     setConnectedOwnerState(result)
-  }, [canonicalCswAddress, ownerSignerAddress, ownerSignerChainId, publicClient])
+  }, [canonicalCswAddress, ownerSignerAddress, ownerSignerChainId])
 
   const onResetOwnerApproval = useCallback(async () => {
     ownerApprovalRunIdRef.current += 1
     setAdvancedBusy(false)
-    setError(null)
-    setNotice(null)
+    setErrorGuarded(null)
+    setNoticeGuarded(null)
     setConnectedOwnerState({ value: null, reason: 'idle' })
     setOwnerDelegationFlags(null)
     await retryOwnerCheck()
-    setNotice('Signing state reset. Reconnect or switch owner wallet if needed.')
+    setNoticeGuarded('Signing state reset. Reconnect or switch owner wallet if needed.')
   }, [retryOwnerCheck])
 
   const onAddRabbyCoOwner = useCallback(async (_advancedOwnerAddress: string) => {
@@ -1095,6 +1209,12 @@ export function useAccountSetupController(params: {
     setNotice,
     setOwnerDelegationFlags,
     setZoraStatus,
+    // Explicit guarded variants (stable during long flows; prefer these from waitlist/setup UI)
+    setMeGuarded,
+    setLoadingGuarded,
+    setBusyProviderGuarded,
+    setErrorGuarded,
+    setNoticeGuarded,
     signerClientReady,
     switchChainAsync,
     telegramLaunchParamsAvailable,

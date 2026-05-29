@@ -126,10 +126,21 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
   const [pageNotice, setPageNotice] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [callBundleId, setCallBundleId] = useState<string | null>(null)
+  const [pendingUserOpHash, setPendingUserOpHash] = useState<string | null>(null)
   const [eventLog, setEventLog] = useState<string[]>([])
   const [submitPhase, setSubmitPhase] = useState<
     'idle' | 'preflight' | 'awaiting_signature' | 'broadcasting' | 'confirming' | 'verifying'
   >('idle')
+  const submitPhaseRef = useRef(submitPhase)
+  useEffect(() => {
+    submitPhaseRef.current = submitPhase
+  }, [submitPhase])
+
+  const setSubmitPhaseGuarded = useCallback((next: typeof submitPhase) => {
+    if (next !== submitPhaseRef.current) {
+      setSubmitPhase(next)
+    }
+  }, [])
   const [preparedTx, setPreparedTx] = useState<PreparedOwnerTxRequest | null>(null)
   const [fundingAssessment, setFundingAssessment] = useState<CswFundingAssessment | null>(null)
   const [fundingLoading, setFundingLoading] = useState(false)
@@ -157,7 +168,11 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
 
   const inBaseApp = isBaseAppInAppContext(detectInAppEnvironment())
 
+  const lastAppendedEventRef = useRef<string | null>(null)
   const appendEvent = useCallback((row: string) => {
+    // Avoid spamming the event log (and causing extra re-renders) with duplicate consecutive events
+    if (lastAppendedEventRef.current === row) return
+    lastAppendedEventRef.current = row
     setEventLog((prev) => [...prev, row].slice(-30))
   }, [])
 
@@ -273,16 +288,17 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     }
 
     setBusy(true)
-    setSubmitPhase('preflight')
+    setSubmitPhaseGuarded('preflight')
     setPageError(null)
     setPageNotice(null)
+    setPendingUserOpHash(null)
     appendEvent('--- submit ---')
     appendEvent(`lane:entrypoint_userop (validated Base App self-call path) via wallet_sendCalls → ${ENTRY_POINT_V06_BASE}`)
 
     try {
       let txRequest = preparedTx
       if (!txRequest || alreadyOwner) {
-        setSubmitPhase('preflight')
+        setSubmitPhaseGuarded('preflight')
         appendEvent('preflight:prepare')
         const prepared = await loadPrepare()
         if (prepared && 'alreadyOwner' in prepared && prepared.alreadyOwner) {
@@ -305,7 +321,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       })
       appendEvent('preflight:server_preview=self_call_shape_ok')
 
-      setSubmitPhase('preflight')
+      setSubmitPhaseGuarded('preflight')
       appendEvent('preflight:funding')
       let funding: CswFundingAssessment | null = fundingAssessment?.ok === true ? fundingAssessment : null
       if (funding) {
@@ -370,14 +386,27 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
         publicClient: publicClient as Pick<AddUserOpOwnerInstallPublicClient, 'request'> | undefined,
         onTelemetry: (event) => {
           appendEvent(`sendCalls:${event.step}`)
-          if (event.step === 'preflight') setSubmitPhase('preflight')
-          else if (event.step === 'prompt_sign') setSubmitPhase('awaiting_signature')
-          else if (event.step === 'broadcast_success') setSubmitPhase('broadcasting')
-          else if (event.step === 'status_poll') setSubmitPhase('confirming')
-          else if (event.step === 'status_resolved') setSubmitPhase('verifying')
-          else if (event.step === 'broadcast_error') setSubmitPhase('idle')
+          const nextPhase =
+            event.step === 'preflight' ? 'preflight'
+            : event.step === 'prompt_sign' ? 'awaiting_signature'
+            : event.step === 'broadcast_success' ? 'broadcasting'
+            : event.step === 'status_poll' ? 'confirming'
+            : event.step === 'status_resolved' ? 'verifying'
+            : event.step === 'broadcast_error' ? 'idle'
+            : null
+
+          if (nextPhase && nextPhase !== submitPhaseRef.current) {
+            setSubmitPhaseGuarded(nextPhase)
+          }
         },
       })
+
+      // Capture the UserOp hash as soon as we have it (even before the bundle tx lands).
+      // This is very useful for the user to monitor / share.
+      if (result.userOperationHash) {
+        setPendingUserOpHash(result.userOperationHash)
+        appendEvent(`user_op_hash=${result.userOperationHash}`)
+      }
 
       let landedTxHash = result.transactionHash
       const pcForPoll = publicClientRef.current
@@ -444,6 +473,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
         throw new Error('Transaction submitted but owner confirmation is still pending. Retry shortly.')
       }
 
+      setPendingUserOpHash(null)
       setAlreadyOwner(true)
       setPageNotice(
         `Owner install succeeded via EntryPoint handleOps (tx ${landedTxHash.slice(0, 10)}…). The CSW executed addOwnerAddress on itself inside the UserOp (msg.sender == address(this)).`,
@@ -456,7 +486,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       return false
     } finally {
       setBusy(false)
-      setSubmitPhase('idle')
+      setSubmitPhaseGuarded('idle')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -482,6 +512,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     pageNotice,
     txHash,
     callBundleId,
+    pendingUserOpHash,
     eventLog,
     submitPhase,
     inBaseApp,

@@ -27,10 +27,10 @@ function basescanTxUrl(hash: string): string {
 }
 
 /**
- * Base App CSW owner install surface (the validated path).
+ * Supported Base App CSW owner install path (EntryPoint self-call via wallet_sendCalls).
  *
  * Uses wallet_sendCalls + EntryPoint handleOps so the user's Coinbase Smart Wallet
- * self-calls addOwnerAddress. This is the shape that actually works.
+ * self-calls addOwnerAddress. This is the validated, recommended shape.
  *
  * Do not route addOwner through RelayRouter multicall — it will fail the onlyOwner check.
  */
@@ -132,6 +132,8 @@ export function AddOwnerBaseApp() {
     onSuccess: handleInstallSuccess,
   })
 
+  const { pendingUserOpHash } = userOpFlow
+
   const fundingBlocksSubmit =
     userOpFlow.fundingAssessment != null && !userOpFlow.fundingAssessment.ok
   const fundingPending =
@@ -157,7 +159,7 @@ export function AddOwnerBaseApp() {
         robots="noindex,nofollow"
       />
 
-      {/* Clean status banner while we finish promoting this out of the /add experiment route */}
+      {/* Status banner confirming this is the supported production path */}
       <div className="mx-auto max-w-2xl px-6 pt-4">
         <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-400">
           This is the supported Base App owner install path (EntryPoint self-call). Sub-account registration is the limited fallback.
@@ -367,8 +369,64 @@ export function AddOwnerBaseApp() {
               (userOpFlow.submitPhase === 'broadcasting' ||
                 userOpFlow.submitPhase === 'confirming' ||
                 userOpFlow.submitPhase === 'verifying') ? (
-                <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-xs text-zinc-300">
-                  UserOp broadcasted — waiting for EntryPoint confirmation on Base…
+                <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-xs text-zinc-300 space-y-1">
+                  <div>UserOp broadcasted — waiting for EntryPoint confirmation on Base…</div>
+                  {pendingUserOpHash && (
+                    <div className="font-mono text-[10px] text-zinc-400 break-all">
+                      UserOp: {pendingUserOpHash}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {pendingUserOpHash && !userOpFlow.busy ? (
+                <div className="rounded-xl border border-sky-400/30 bg-sky-500/10 p-4 space-y-3 text-xs text-sky-100">
+                  <div>
+                    <div className="font-semibold">UserOp submitted — waiting for bundle tx</div>
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard?.writeText(pendingUserOpHash)}
+                      className="mt-1 block w-full text-left font-mono text-[10px] text-sky-200/80 break-all hover:text-sky-100 active:text-white"
+                      title="Click to copy full UserOp hash"
+                    >
+                      {pendingUserOpHash}
+                    </button>
+                  </div>
+
+                  <p className="leading-relaxed text-sky-100/90">
+                    The UserOperation was accepted by the bundler. Base App (or the bundler) is still
+                    waiting for the bundle transaction to be mined. This can take 30–120 seconds.
+                  </p>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        void userOpFlow.loadPrepare()
+                        void userOpFlow.refreshFunding()
+                      }}
+                    >
+                      Check now (also refresh gas)
+                    </Button>
+
+                    {userOpFlow.txHash && (
+                      <a
+                        href={basescanTxUrl(userOpFlow.txHash)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center rounded-md border border-sky-300/40 px-3 py-1 text-xs font-medium text-sky-100 hover:bg-sky-500/20"
+                      >
+                        View on Basescan
+                      </a>
+                    )}
+                  </div>
+
+                  <div className="text-[10px] text-sky-200/70">
+                    Tip: Look for a transaction to the EntryPoint (0x5FF137...) that contains an
+                    internal CSW self-call to addOwnerAddress.
+                  </div>
                 </div>
               ) : null}
 
@@ -430,7 +488,7 @@ export function AddOwnerBaseApp() {
                 </div>
               ) : null}
 
-              {userOpFlow.pageError ? (
+              {userOpFlow.pageError && !pendingUserOpHash ? (
                 <div className="rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2.5 text-xs text-red-100">
                   {userOpFlow.pageError}
                 </div>

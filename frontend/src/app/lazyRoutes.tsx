@@ -193,7 +193,7 @@ export const AlfaClubLiquidity = lazyNamed(
 export const Positions = lazyNamed(() => import('../pages/Positions'), 'Positions')
 export const AccountsPage = lazyNamed(() => import('../pages/accounts/AccountsPage'), 'AccountsPage')
 export const AddOwnerBaseApp = lazyNamed(
-  () => import('../pages/AddOwnerUserOpExperiment'),
+  () => import('../pages/AddOwnerBaseApp'),
   'AddOwnerBaseApp',
 )
 export const MetaballOsProbe = lazyNamed(
