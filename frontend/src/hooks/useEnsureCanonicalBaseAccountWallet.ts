@@ -4,6 +4,7 @@ import { useBaseAccountSdk } from '@privy-io/react-auth'
 import { useSubAccountSetup } from '@/hooks/useSubAccountSetup'
 import { usePrivyWalletsFromContext } from '@/lib/privy/walletHooksContext'
 import {
+  findBaseAccountWalletInList,
   isCanonicalBaseAccountWalletReady,
   readBaseAccountProviderAccounts,
 } from '@/lib/wallet/ensureCanonicalBaseAccountWallet'
@@ -36,16 +37,12 @@ export function useEnsureCanonicalBaseAccountWallet(params: EnsureCanonicalBaseA
   }, [baseAccountSdk])
 
   const link = useCallback(async (): Promise<boolean> => {
-    if (!params.canonicalCswAddress) {
-      setLinkError('Canonical smart wallet is not linked yet.')
-      return false
-    }
-
     setLinking(true)
     setLinkError(null)
     try {
       const accountsBefore = await refreshProviderAccounts()
       if (
+        params.canonicalCswAddress &&
         isCanonicalBaseAccountWalletReady({
           wallets,
           canonicalCswAddress: params.canonicalCswAddress,
@@ -68,6 +65,17 @@ export function useEnsureCanonicalBaseAccountWallet(params: EnsureCanonicalBaseA
       }
 
       const accountsAfter = await refreshProviderAccounts()
+      if (!params.canonicalCswAddress) {
+        // CSW may appear on profile after wallet sync — caller should refresh /api/accounts/me.
+        const hasBaseProvider =
+          findBaseAccountWalletInList(wallets) != null || accountsAfter.length > 0
+        if (!hasBaseProvider) {
+          setLinkError('Approve the Base Account connect prompt, then try again.')
+          return false
+        }
+        return true
+      }
+
       if (
         !isCanonicalBaseAccountWalletReady({
           wallets,

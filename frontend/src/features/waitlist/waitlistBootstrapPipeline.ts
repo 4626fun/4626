@@ -24,7 +24,7 @@ export type WaitlistBootstrapPipelineParams = {
 
 export type WaitlistBootstrapPipelineSuccess = {
   kind: 'success'
-  payload: WaitlistBootstrapResponse
+  payload: Extract<WaitlistBootstrapResponse, { requiresPrivyAuth: false }>
   bootstrappedCanonicalWallet: OnboardingBootstrapResponse | null
 }
 
@@ -64,7 +64,7 @@ export async function executeWaitlistBootstrapPipeline(
       recoveryRequired?: boolean
     }
     err.status = response.status
-    const code = typeof (payload as { code?: unknown })?.code === 'string' ? String((payload as { code: string }).code).trim() : ''
+    const code = typeof (payload as any)?.code === 'string' ? String((payload as any).code).trim() : ''
     if (code) err.code = code
     const nextRecoveryRequired =
       response.status === 409 ||

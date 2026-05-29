@@ -95,10 +95,17 @@ export function AddOwnerBaseApp() {
   }, [privyWallets])
 
   const baseWalletLink = useEnsureCanonicalBaseAccountWallet({
-    enabled: Boolean(privyAuthed && inBaseApp && canonicalCswAddress),
+    enabled: Boolean(privyAuthed && inBaseApp),
     canonicalCswAddress,
-    autoConnect: true,
+    autoConnect: Boolean(canonicalCswAddress),
   })
+
+  const handleLinkBaseAccount = useCallback(async () => {
+    const linked = await baseWalletLink.link()
+    if (linked) {
+      await loadMe({ showSpinner: true })
+    }
+  }, [baseWalletLink, loadMe])
 
   const userOpFlow = useAddUserOpOwnerInstall({
     canonicalCswAddress,
@@ -215,9 +222,13 @@ export function AddOwnerBaseApp() {
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-xs text-zinc-400">
             <span>
-              Signed in with Privy (4626 session).{' '}
+              Step 1 done: 4626 Privy session (email or wallet).{' '}
               {inBaseApp
-                ? 'Submit still requires your Base Account wallet connected for signing — email alone is not enough.'
+                ? canonicalCswAddress
+                  ? baseWalletLink.ready
+                    ? 'Base Account connected — you can submit when gas prefund is ready.'
+                    : 'Step 2: connect Base Account below for signing (email alone is not enough).'
+                  : 'Step 2: connect Base Account below to load your CSW and unlock signing.'
                 : 'Open in Base App and connect your Base Account wallet before submit.'}
             </span>
             <Button type="button" variant="ghost" size="sm" disabled={authBusy} onClick={() => void handleSignOut()}>
@@ -258,12 +269,13 @@ export function AddOwnerBaseApp() {
 
             {inBaseApp ? (
               <BaseAppCanonicalWalletLinkPanel
-                enabled={Boolean(privyAuthed && canonicalCswAddress)}
+                enabled={Boolean(privyAuthed)}
                 canonicalCswAddress={canonicalCswAddress}
+                missingCanonicalCsw={!canonicalCswAddress}
                 ready={baseWalletLink.ready}
                 linking={baseWalletLink.linking}
                 linkError={baseWalletLink.linkError}
-                onLink={async () => { await baseWalletLink.link(); }}
+                onLink={handleLinkBaseAccount}
                 onSignOut={() => void handleSignOut()}
                 signOutBusy={authBusy}
               />
@@ -274,7 +286,7 @@ export function AddOwnerBaseApp() {
                 <div className="rounded-xl border border-white/10 bg-black/30 p-3">
                   <dt className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Canonical CSW</dt>
                   <dd className="mt-1 break-all font-mono text-zinc-300">
-                    {canonicalCswAddress ?? 'not linked'}
+                    {canonicalCswAddress ?? (inBaseApp ? 'Connect Base Account below' : 'not linked')}
                   </dd>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-black/30 p-3">

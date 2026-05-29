@@ -43,14 +43,14 @@ export async function bridgePrivySession(privyToken: string | null): Promise<boo
     : null
 
   if (authRes?.status === 409) {
-    const code = typeof (payload as { code?: unknown })?.code === 'string' ? String((payload as { code: string }).code) : ''
+    const code = typeof (payload as any)?.code === 'string' ? String((payload as any).code) : ''
     const recoveryRequired =
-      (payload as { recoveryRequired?: unknown })?.recoveryRequired === true ||
+      (payload as any)?.recoveryRequired === true ||
       code.toUpperCase().includes('RECOVERY_REQUIRED')
     if (recoveryRequired) {
       const err = new Error(
-        typeof (payload as { error?: unknown })?.error === 'string'
-          ? String((payload as { error: string }).error)
+        typeof (payload as any)?.error === 'string'
+          ? String((payload as any).error)
           : 'Recovery required',
       ) as Error & { recoveryRequired?: boolean; code?: string }
       err.recoveryRequired = true

@@ -232,21 +232,20 @@ export async function fetchZoraTradeQuoteFromApi(params: {
     }),
   })
 
-  const envelope = await parseApiEnvelope<ZoraTradeQuotePayload & { call?: ZoraTradeQuotePayload['call'] }>(res)
+  // Support both modern `{ success, data: ZoraTradeQuotePayload }` and legacy top-level spread responses.
+  type LegacyZoraQuote = ZoraTradeQuotePayload & { call?: ZoraTradeQuotePayload['call'] }
+  const envelope = await parseApiEnvelope<ZoraTradeQuotePayload | LegacyZoraQuote>(res)
+
   if (!res.ok || !envelope?.success) {
     throw new Error(resolveApiErrorMessage(envelope, 'Zora trade quote failed'))
   }
 
-  // Server handlers must return `{ success, data }`; accept legacy top-level spread as fallback.
-  const data =
-    envelope.data ??
-    (envelope.call?.target && envelope.call?.data
-      ? ({
-          call: envelope.call,
-          permits: (envelope as ZoraTradeQuotePayload).permits,
-          quote: (envelope as ZoraTradeQuotePayload).quote,
-        } as ZoraTradeQuotePayload)
-      : null)
+  const raw = envelope.data ?? (envelope as any as LegacyZoraQuote)
+
+  const data: ZoraTradeQuotePayload | null =
+    raw && typeof raw === 'object' && 'call' in raw && raw.call?.target && raw.call?.data
+      ? (raw as ZoraTradeQuotePayload)
+      : null
 
   if (!data?.call?.target || !data?.call?.data) {
     if (data?.permits?.length) {
@@ -259,8 +258,6 @@ export async function fetchZoraTradeQuoteFromApi(params: {
 
   return data
 }
-
-const ZORA_UNIVERSAL_ROUTER_ADDRESS = '0x6ff5693b99212da76ad316178a184ab56d299b43' as const
 
 /** Map a production `eth_call` failure from the Zora Universal Router into user-facing copy. */
 export function formatZoraRouterSimulationFailure(error: unknown): Error {
@@ -338,7 +335,7 @@ async function ethCallZoraRouterAsCsw(params: {
       {
         to: params.target,
         data: params.data,
-        value: numberToHex(params.value),
+        value: numberToHex(BigInt(params.value)),
         from,
       },
       'latest',
@@ -460,7 +457,7 @@ function buildPermit2TypedDataMessage(params: {
   return {
     details: {
       token: params.token,
-      amount: params.amount,
+      amount: params.amount.toString(),
       expiration: params.expiration,
       nonce: params.nonce,
     },
@@ -499,7 +496,7 @@ async function readPermit2AllowanceNonce(params: {
     address: permit2Address[base.id],
     functionName: 'allowance',
     args: [params.permitOwner, params.token, params.spender],
-  })) as [bigint, bigint, number]
+  })) as any as readonly [bigint, bigint, number]
   return Number(nonce)
 }
 
@@ -571,7 +568,7 @@ async function signOneZoraQuotePermit(params: {
   const readClient: PublicClient =
     permitOwnerIsContract && executionAddress
       ? getProductionBaseReadClient()
-      : (params.publicClient as PublicClient)
+      : (params.publicClient as any as PublicClient)
 
   if (permitOwnerIsContract && readClient.getBytecode) {
     const bytecode = await readClient.getBytecode({ address: permitOwner })
