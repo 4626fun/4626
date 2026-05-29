@@ -18,6 +18,7 @@ import {
 import { ENTRY_POINT_V06_BASE } from '@/lib/wallet/cswOwnerAbi'
 import { readIsOwnerAddressIfDeployed } from '@/lib/wallet/cswOwnerRead'
 import { withWalletRequestTimeout } from '@/lib/wallet/cswSendCalls'
+import { getProductionBaseReadClient } from '@/lib/base/productionBaseReadClient'
 import { detectInAppEnvironment, isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import {
   confirmOwnerInstall,
@@ -197,21 +198,28 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
   }, [enabled, loadPrepare])
 
   const refreshFunding = useCallback(async () => {
-    if (!canonicalCswAddress || !publicClient) {
+    if (!canonicalCswAddress) {
+      setFundingAssessment(null)
+      return null
+    }
+    const readClient =
+      typeof window !== 'undefined' ? getProductionBaseReadClient() : publicClient
+    if (!readClient) {
       setFundingAssessment(null)
       return null
     }
     setFundingLoading(true)
     try {
-      const snapshot = await readCswUserOpFundingSnapshot({
-        publicClient,
-        cswAddress: canonicalCswAddress,
-      })
+      const snapshot = await withWalletRequestTimeout('CSW gas balance read', 12_000, () =>
+        readCswUserOpFundingSnapshot({
+          publicClient: readClient,
+          cswAddress: canonicalCswAddress,
+        }),
+      )
       const assessment = assessCswUserOpFunding(snapshot)
       setFundingAssessment(assessment)
       return assessment
     } catch {
-      setFundingAssessment(null)
       return null
     } finally {
       setFundingLoading(false)
@@ -219,12 +227,12 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
   }, [canonicalCswAddress, publicClient])
 
   useEffect(() => {
-    if (!enabled || !canonicalCswAddress || !publicClient) {
+    if (!enabled || !canonicalCswAddress) {
       setFundingAssessment(null)
       return
     }
     void refreshFunding()
-  }, [canonicalCswAddress, enabled, publicClient, refreshFunding])
+  }, [canonicalCswAddress, enabled, refreshFunding])
 
   const handleSubmitUserOp = useCallback(async (): Promise<boolean> => {
     if (!canonicalCswAddress || !privyEmbeddedEoaAddress) {
@@ -267,16 +275,36 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
 
       setSubmitPhase('preflight')
       appendEvent('preflight:funding')
-      const funding = (await refreshFunding()) ?? fundingAssessment
+      let funding: CswFundingAssessment | null = fundingAssessment?.ok === true ? fundingAssessment : null
+      if (funding) {
+        appendEvent(
+          `preflight:funding_cached_ok total=${funding.snapshot.totalAvailableWei.toString()} wei`,
+        )
+      } else {
+        appendEvent('preflight:funding_refresh')
+        funding = (await refreshFunding().catch(() => null)) ?? fundingAssessment
+      }
       if (funding && !funding.ok) {
         appendEvent(`preflight:funding_${funding.reason}`)
         throw new Error(getErrorMessage(new Error('insufficient funds for gas')))
       }
       if (funding?.ok) {
         appendEvent(`preflight:funding_ok total=${funding.snapshot.totalAvailableWei.toString()} wei`)
+      } else if (fundingAssessment?.ok) {
+        funding = fundingAssessment
+        appendEvent(
+          `preflight:funding_fallback_cached total=${fundingAssessment.snapshot.totalAvailableWei.toString()} wei`,
+        )
+      } else {
+        throw new Error(
+          'Could not verify CSW gas balance in time. Your displayed balance may still be valid — retry in a few seconds.',
+        )
       }
 
-      const walletRequest = await resolveWalletRequest()
+      appendEvent('preflight:wallet_provider_lookup')
+      const walletRequest = await withWalletRequestTimeout('Base App wallet provider', 15_000, () =>
+        resolveWalletRequest(),
+      )
       appendEvent('preflight:wallet_provider=ready')
       await withWalletRequestTimeout('Base network check', 15_000, () =>
         ensureBaseMainnetWalletContext(walletRequest),
