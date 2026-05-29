@@ -117,6 +117,7 @@ async function rebindEmailCollisionProfile(params: {
       AND (
         privy_user_id IS NULL
         OR LOWER(privy_user_id) = ${existingPrivyUserId}
+        OR LOWER(privy_user_id) = ${normalizeLower(collision.requestedPrivyUserId)}
       );
   `
   await upsertLinkedMethod({

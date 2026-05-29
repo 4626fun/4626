@@ -73,3 +73,37 @@ export function extractPrivyVerifiedEmailFromUser(user: unknown): string | null 
 
   return null
 }
+
+/**
+ * Best-effort email read for waitlist bootstrap hints right after OTP.
+ * Privy client SDKs (especially Base App) can expose a linked email before
+ * verified flags or server hydration catch up.
+ */
+export function extractPrivyLinkedEmailFromUser(user: unknown): string | null {
+  const verified = extractPrivyVerifiedEmailFromUser(user)
+  if (verified) return verified
+
+  const record = user && typeof user === 'object' ? (user as Record<string, unknown>) : null
+  if (!record) return null
+
+  const directEmail = record.email && typeof record.email === 'object' ? (record.email as Record<string, unknown>) : null
+  if (directEmail) {
+    const direct = candidateEmailFromAccount(directEmail)
+    if (direct) return direct
+  }
+
+  const linked = [
+    ...(Array.isArray(record.linkedAccounts) ? (record.linkedAccounts as unknown[]) : []),
+    ...(Array.isArray(record.linked_accounts) ? (record.linked_accounts as unknown[]) : []),
+  ]
+  for (const account of linked) {
+    const linkedRecord = account && typeof account === 'object' ? (account as Record<string, unknown>) : null
+    if (!linkedRecord) continue
+    const type = normalizeLower(linkedRecord.type)
+    if (!type.includes('email')) continue
+    const candidate = candidateEmailFromAccount(linkedRecord)
+    if (candidate) return candidate
+  }
+
+  return null
+}

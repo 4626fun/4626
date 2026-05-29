@@ -18,7 +18,11 @@ import {
 } from '@/lib/auth/waitlistEntry'
 import { getAppBaseUrl } from '@/lib/env/host'
 import { usePrivyClientStatus } from '@/lib/privy/client'
-import { extractPrivyVerifiedEmailFromUser } from '@/lib/privy/verifiedEmail'
+import {
+  captureWaitlistVerifiedEmailHint,
+  clearStoredWaitlistVerifiedEmailHint,
+  resolveWaitlistVerifiedEmailHint,
+} from './waitlistVerifiedEmailHint'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
@@ -30,7 +34,6 @@ import {
 import {
   clearStoredWaitlistSessionToken,
   isAlreadyLoggedInAuthError,
-  isEmailAlreadyLinkedAuthError,
   isRecoveryRequiredAuthError,
   runWaitlistPrivyLogout,
 } from './waitlistAuthState'
@@ -104,17 +107,6 @@ export function isPrivyLoginBootstrapError(error: unknown): boolean {
 
 function getSignInNetworkUnstableMessage(): string {
   return 'Sign-in network is unstable right now. Stay on this page and retrying will continue automatically.'
-}
-
-async function maybeCallMethod(target: any, methodNames: string[], args: unknown[] = []): Promise<boolean> {
-  if (!target) return false
-  for (const methodName of methodNames) {
-    if (typeof target?.[methodName] === 'function') {
-      await target[methodName](...args)
-      return true
-    }
-  }
-  return false
 }
 
 function isTelegramMiniAppRuntime(): boolean {
@@ -449,7 +441,7 @@ export function WaitlistFlow(props: {
     activeReferralCode,
     ensureEmbeddedWallet,
     getAccessToken,
-    getVerifiedEmailHint: () => extractPrivyVerifiedEmailFromUser(privy.user),
+    getVerifiedEmailHint: () => resolveWaitlistVerifiedEmailHint(privy.user),
     privyAuthed,
     setAccount,
     setStep,
@@ -458,6 +450,11 @@ export function WaitlistFlow(props: {
     finalizingAutoRetryCountRef,
     finalizingBackgroundRetryCountRef,
   })
+
+  useEffect(() => {
+    if (!privyAuthed) return
+    captureWaitlistVerifiedEmailHint(privy.user)
+  }, [privy.user, privyAuthed])
 
   useEffect(() => {
     if (!prevPrivyAuthedRef.current && privyAuthed) {
@@ -680,14 +677,6 @@ export function WaitlistFlow(props: {
         return
       }
       if (privyAuthed) {
-        if (!extractPrivyVerifiedEmailFromUser(privy.user)) {
-          try {
-            const linked = await maybeCallMethod(privy, ['linkEmail', 'linkEmailAccount'])
-            if (!linked) throw new Error('Email verification is unavailable in this client. Sign out and retry with email.')
-          } catch (linkEmailError: unknown) {
-            if (!isEmailAlreadyLinkedAuthError(linkEmailError)) throw linkEmailError
-          }
-        }
         await settleBootstrapAfterRecoverableLoginError({
           bypassRecoveryCooldown: true,
         })
@@ -747,7 +736,6 @@ export function WaitlistFlow(props: {
     finalizeRecoveryHandoffError,
     handoffIntoExistingAccount,
     login,
-    privy,
     privyAuthed,
     privyClientStatus,
     recoveryRequired,
@@ -825,6 +813,7 @@ export function WaitlistFlow(props: {
       resetBootstrapCooldowns()
       clearWaitlistRecoveryGate()
       clearWaitlistAuthPending()
+      clearStoredWaitlistVerifiedEmailHint()
       setStep('auth')
       setBusy(false)
       setRecoveryRequired(false)

@@ -447,6 +447,21 @@ async function applyBootstrapReferral(params: {
   void conversionResult
 }
 
+async function lookupVerifiedAccountEmailForPrivyUser(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  privyUserId: string,
+): Promise<string | null> {
+  const result = await db.sql`
+    SELECT email
+    FROM accounts
+    WHERE LOWER(privy_user_id) = LOWER(${privyUserId})
+      AND email_verified = TRUE
+      AND email IS NOT NULL
+    LIMIT 1;
+  `
+  return normalizeEmail(result.rows?.[0]?.email)
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -518,8 +533,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const privyUser = (await loadPrivyUserWithVerifiedEmailRetry({
       privyUserId: context.privyUserId,
       initialUser: context.privyUser,
+      attempts: 10,
+      delayMs: 300,
     })) as any
-    const privyEmail =
+    let resolvedPrivyUser = privyUser
+    let resolvedEmail =
       normalizeEmail(extractPrivyVerifiedEmail(privyUser)) ?? bootstrapEmailHint
 
     // Block wallet-only Privy sign-ins for humans who already have a
@@ -537,52 +555,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     await runWithWaitlistEmailCollisionAdoption({
       db: db as any,
-      email: privyEmail,
+      email: resolvedEmail,
       privyUserId: context.privyUserId,
-      privyUser: privyUser as any,
+      privyUser: resolvedPrivyUser as any,
       bootstrapEmailHint,
       action: () =>
         syncEmailIdentity({
           db: db as any,
           privyUserId: context.privyUserId,
-          privyUser: privyUser as any,
+          privyUser: resolvedPrivyUser as any,
         }),
     })
+
+    if (!resolvedEmail) {
+      resolvedPrivyUser = (await loadPrivyUserWithVerifiedEmailRetry({
+        privyUserId: context.privyUserId,
+        initialUser: resolvedPrivyUser,
+        attempts: 10,
+        delayMs: 300,
+      })) as any
+      resolvedEmail =
+        normalizeEmail(extractPrivyVerifiedEmail(resolvedPrivyUser)) ??
+        bootstrapEmailHint ??
+        (await lookupVerifiedAccountEmailForPrivyUser(db, context.privyUserId))
+    }
 
     // Only Privy's verified email is allowed to become the canonical account email.
     // Pre-auth form input is intent, not proof. After OTP, the client may send the
     // verified email before Privy server hydration catches up (common in Base App).
-    if (privyEmail) {
+    if (resolvedEmail) {
       await runWithWaitlistEmailCollisionAdoption({
         db: db as any,
-        email: privyEmail,
+        email: resolvedEmail,
         privyUserId: context.privyUserId,
-        privyUser: privyUser as any,
+        privyUser: resolvedPrivyUser as any,
         bootstrapEmailHint,
         action: () =>
           assertNoEmailPrivyCollision({
             db: db as any,
-            email: privyEmail,
+            email: resolvedEmail,
             privyUserId: context.privyUserId,
           }),
       })
       await runWithWaitlistEmailCollisionAdoption({
         db: db as any,
-        email: privyEmail,
+        email: resolvedEmail,
         privyUserId: context.privyUserId,
-        privyUser: privyUser as any,
+        privyUser: resolvedPrivyUser as any,
         bootstrapEmailHint,
         action: () =>
           upsertAccount({
             db: db as any,
             privyUserId: context.privyUserId,
-            email: privyEmail,
+            email: resolvedEmail,
             emailVerified: true,
           }),
       })
       await upsertBootstrapProfile({
         db: db as any,
-        email: privyEmail,
+        email: resolvedEmail,
         privyUserId: context.privyUserId,
       })
 
@@ -634,7 +665,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const me = await buildAccountsMePayload({
       db: db as any,
       privyUserId: context.privyUserId,
-      privyUser: privyUser as any,
+      privyUser: resolvedPrivyUser as any,
     })
 
     return res.status(200).json({

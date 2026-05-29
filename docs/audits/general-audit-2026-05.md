@@ -567,3 +567,335 @@ This document (plus the canonical lane reference) serves as the single source of
 The single failing test was a perfect "audit for bugs" signal — outdated test expectation vs. the live contract inventory the earlier phases of this audit had already documented and hardened around. Now resolved.
 
 *Continuation slice complete. All signals incorporated.*
+
+---
+
+## Charm & Ajna Strategy Mechanics + Rebalance Dynamics (Deep-Dive Continuation)
+
+**Focus of this slice**: Mechanisms, flows, coupling, accounting, and risk surface of the two primary Phase-3 yield strategies (CreatorCharmStrategy + Ajna sleeve) and how they interact with vault-level rebalancing, idle management, deposits, and withdrawals.
+
+**Scope sources** (May 2026 live v1.12 module epoch):
+- `contracts/vault/CreatorOVault.sol`
+- `contracts/vault/modules/CreatorOVaultStrategiesModule.sol` (the delegatecall implementation of `rebalanceStrategies`, `tend`, `_withdrawFromStrategies`, `_deployUnderweightStrategies`, etc.)
+- `contracts/vault/strategies/univ3/CreatorCharmStrategy.sol` (Uniswap V3 concentrated LP + Ajna backstop)
+- `contracts/vault/strategies/ajna4626/AjnaERC4626Vault.sol` + `AjnaVaultAuth.sol` / `AjnaVaultBuffer.sol` / `AjnaVaultLibrary.sol`
+- `contracts/vault/strategies/ERC4626StrategyAdapter.sol`
+- `contracts/helpers/batchers/DeploymentBatcher.sol` (initial synergy wiring)
+- Relevant tests: `CreatorOVaultStrategiesRebalance*`, `CreatorCharmStrategy*`, `AjnaERC4626*`
+
+### 1. High-Level Architecture
+
+**Vault-level rebalancing (Yearn V3-inspired, hardened)**:
+- Public keeper entry: `CreatorOVault.rebalanceStrategies(uint256 minDeviationBps)` (nonReentrant, onlyKeepers) → delegates to `CreatorOVaultStrategiesModule`.
+- Core loop (StrategiesModule:463):
+  1. Compute `deployableBase = totalAssets - minIdle`.
+  2. Walk the queue (default or strategyList). For every overweight strategy (actual > target by more than `minDeviationBps` drift), call `_tryWithdrawFromStrategyMeasured(excess)`.
+  3. Update `strategyDebt[strategy]` and `totalDebt` downward.
+  4. Then `_deployUnderweightStrategies`: push remaining idle (above minIdle) to underweight legs using weighted slices.
+- **Explicit invariant (comment at 461)**: "Cross-strategy moves always route vault idle — strategies never transfer directly."
+- `tend()` (StrategiesModule:444) is lighter: just deploys excess idle above `deploymentThreshold` into the first strategy in the default queue.
+- `minimumTotalIdle` (default 10k CREATOR in CreatorOVault:324, governor-settable) is the primary governor on how much stays in the vault buffer vs. strategies.
+- Withdrawal path (`_withdrawFromStrategies`) is best-effort per leg with hostile-strategy defenses (if a strategy lies and drains idle on failure, the deficit is pushed to later queue items — see lines 376-380 and the M-09 fix comment).
+
+**Charm (CreatorCharmStrategy)**:
+- Wraps an external Charm concentrated liquidity vault on the CREATOR/USDC Uniswap V3 pool.
+- Strategy implements `IStrategy` + `IStrategyValuation`.
+- Valuation (getTotalAssets:446): idle CREATOR + idle USDC + Charm exposure (via `getTotalAmounts()`) + Ajna debt state. **Fail-closed on unreadable Ajna state → returns 0**.
+- Heavy use of two oracles: `creatorOracle` (for USDC valuation of positions and Ajna bucket resolution) + Uniswap TWAP on the swap pool (for swap sizing/slippage).
+
+**Ajna sleeve (AjnaERC4626Vault + ERC4626StrategyAdapter)**:
+- ERC4626 wrapper around Ajna quote-token bucket positions + an explicit idle buffer.
+- The adapter (`ERC4626StrategyAdapter`) is the vault-facing `IStrategy` implementation for most ERC4626-style sleeves (including Ajna).
+- Bucket management is capped (`MAX_BUCKETS=50`, F-08 fix) to bound gas in `totalAssets()` loops.
+
+### 2. The Critical Dynamic: Charm ↔ Ajna Direct Backstop (Not Just Idle Buffer)
+
+This is the most interesting coupling and the area with the largest gap vs. high-level documentation.
+
+**High-level claim (AGENTS.md + prior audit notes)**:
+> "Charm and Ajna coordinate only through the parent vault idle CREATOR buffer, not direct strategy-to-strategy transfers."
+
+**Actual implementation (CreatorCharmStrategy)**:
+- Charm maintains a **first-class, on-strategy Ajna borrowing facility** (lines 101-108, 255-316, 1030+):
+  - `ajnaPool` (CREATOR as quote token, USDC as collateral).
+  - `ajnaBorrowEnabled`, `ajnaMinCollateralRatioBps = 12_500` (125%, matches `DeploymentBatcher.CHARM_AJNA_MIN_COLLATERAL_RATIO_BPS`).
+  - `ajnaMaxDebt`, `ajnaMaxBorrowPerWithdraw`.
+  - Borrow/repay limit indices (can be oracle-driven via `_resolveAjnaLimitIndex`).
+- **On deposit (648)**: Prioritizes repaying any outstanding Ajna CREATOR debt first (`_repayAjnaDebtWithCreator`). Releasing USDC collateral increases the USDC leg available for the Charm LP deposit.
+- **On withdraw (943)**: Can trigger `_borrowFromAjna` (internal, ~1050) when on-chain liquidity in Charm is insufficient to meet the withdrawal without excessive slippage/IL. Borrows CREATOR by pledging additional USDC collateral at the configured ratio.
+- Events: `AjnaBorrowed`, `AjnaRepaid`.
+- DeploymentBatcher explicitly wires this synergy when both weights are non-zero (241-244) and deploys the Ajna pool for the creator token.
+
+**Implications for rebalancing**:
+- Vault-level `rebalanceStrategies` can indirectly cause Charm to increase (or decrease) its Ajna leverage.
+- A large overweight withdrawal from Charm during rebalance may force Ajna borrowing inside the strategy (increasing net CREATOR exposure while creating a debt obligation outside the vault's direct `strategyDebt` tracking?).
+- Repays happen preferentially on inflows.
+- The backstop is **operational liquidity insurance** for the concentrated LP leg (avoid selling CREATOR into the pool at bad prices during stress).
+
+This is a deliberate, production feature (commented as "borrow backstop"), not an accident. It creates leverage and cross-protocol risk inside what appears at the vault layer as a single "Charm" strategy allocation.
+
+### 3. Accounting & NAV Dynamics (Initial Signals)
+
+- Vault tracks `strategyDebt` (ModuleStorage + CreatorOVault) as the source of truth for what has been deployed. On valuation revert, falls back to `strategyDebt` (CreatorOVault:869, StrategiesModule:335).
+- Charm's `getTotalAssets` is the strategy-reported value fed into the vault's total. It already nets the Ajna debt state.
+- When Charm borrows CREATOR, the borrowed tokens appear as idle in the strategy (or get deployed to Charm LP). The corresponding debt is tracked inside Charm's Ajna position, not directly in the vault's `strategyDebt[strategy]`.
+- Unrealized loss assessment (`_assessUnrealisedLoss`, StrategiesModule:397) and hostile-strategy handling exist, but the Ajna backstop adds a layer of "synthetic" liquidity that can mask or amplify IL/price moves.
+- Reentrancy: Both the module and the individual strategies use `nonReentrant`. The module's hostile defenses are explicitly designed around strategies that lie on withdraw.
+
+**Open question for deeper pass**: Does a Charm borrow increase the vault's effective exposure to CREATOR without a corresponding increase in `strategyDebt`? How does this interact with `strategyMaxAssets` caps, gauge weighting, and payout routing?
+
+### 4. Risk Surfaces & Invariants (Initial List)
+
+**High**:
+- **Ajna liquidation risk inside Charm**: If CREATOR price drops, the 125% collateral ratio can be breached on the Ajna side. The strategy has no automatic deleveraging in the code read so far; liquidation would realize a loss inside `getTotalAssets()`.
+- **Oracle dependency & manipulation window**: Charm uses `creatorOracle` for both valuation and Ajna bucket selection during borrow/repay. A stale or manipulated oracle during a rebalance or large withdrawal is dangerous.
+- **Rebalance feedback loops**: Vault rebalance pulls from Charm → Charm may borrow more from Ajna to meet the pull → increased leverage right when the system is trying to reduce risk.
+- **Liquidity illusion**: The backstop makes Charm appear more liquid than its on-chain Uniswap + Charm LP position actually is.
+
+**Medium**:
+- Slippage controls are strategy-local (`swapSlippageBps`, `depositSlippageBps` in Charm; rebalance has its own check at 1214). The vault `rebalanceStrategies` does not pass or enforce a global slippage budget across legs.
+- `minDeviationBps` is caller-supplied by the keeper. A malicious or misconfigured keeper could force excessive churning.
+- Direct `rebalance()` on CharmStrategy (1205) is callable by owner or vault — different from the vault-level `rebalanceStrategies`.
+
+**Positive / hardened**:
+- Best-effort withdrawals + hostile strategy accounting (multiple post-audit fixes visible: M-09, S-M01, etc.).
+- Fail-closed on unreadable Ajna state in valuation.
+- No direct token transfers between strategies (everything through vault idle).
+
+### 5. Test Coverage Snapshot (from fresh run)
+
+All targeted suites green:
+- `CreatorOVaultStrategiesRebalanceInvariantTest` (6 tests, heavy fuzz including `skewCharm` handler with 25k+ runs).
+- `CreatorOVaultStrategiesRebalanceScenariosTest` + `RebalanceTest` (30 tests).
+- `CreatorCharmStrategyOracleTest` (26 tests), ForkIntegration (4), etc.
+- Multiple Ajna vault + adapter + auth tests (27+).
+
+**Coverage notes**:
+- Strong on rebalance math, overweight/underweight, hostile scenarios, oracle/TWAP valuation.
+- The Ajna borrow/repay paths inside Charm are exercised in the oracle and integration tests.
+- Less visibility (from this run) on end-to-end keeper rebalance + simultaneous large user withdraw + Ajna liquidation edge cases. The invariant harness does skew Charm, which is good.
+
+### 6. Recommendations & Follow-ups
+
+1. **Document the backstop explicitly** in AGENTS.md, the creatorvault-business-logic audit doc, and any user-facing strategy descriptions. The "only through idle buffer" statement is now incomplete.
+2. Add explicit accounting invariants or events around the net effect of Charm's Ajna debt on vault `strategyDebt` and totalAssets.
+3. Consider a governor-visible "effective leverage" or "backstop utilization" metric for the Charm leg.
+4. Stress-test (or add invariant) the scenario: large vault withdrawal + CREATOR price drop + active Ajna debt in Charm.
+5. Review whether `strategyMaxAssets` caps on the Charm leg should consider the gross or net (post-Ajna-debt) exposure.
+6. Keeper / rebalanceDelegate surfaces should surface when a rebalance would cause the Charm leg to increase Ajna borrowing.
+
+This slice surfaced a richer operational coupling than the high-level architecture suggested. The backstop is a deliberate resilience feature with real risk trade-offs that deserve explicit treatment in invariants, monitoring, and documentation.
+
+**Status**: Initial deep-dive complete. Ready for deeper accounting trace, specific invariant review against the x-ray worksheet, or focused test augmentation if requested.
+
+*End of Charm/Ajna rebalance dynamics slice.*
+
+---
+
+### 7. Accounting & NAV Mechanics Deep Trace (Continuation)
+
+This subsection traces exactly how deposits, withdrawals, rebalances, and internal leverage flow through `strategyDebt`, `totalDebt`, `totalAssets()`, and reported strategy values — with special attention to the Charm ↔ Ajna backstop.
+
+#### 7.1 Core Tracking Primitives (vault + module)
+
+- `CreatorOVault` (and mirrored in `CreatorOVaultModuleStorage.v2`):
+  - `uint256 public coinBalance` — tracked idle (L-06 fix prevents donation attacks).
+  - `mapping(address => uint256) public strategyDebt` — vault's authoritative record of how much CREATOR has been "pushed" to each strategy.
+  - `uint256 public totalDebt` — sum of all strategyDebt.
+  - `mapping(address => uint256) public strategyMaxAssets` — governance cap (clamped in `_getStrategyAssetsSafe`).
+
+- Update rules (all in `CreatorOVaultStrategiesModule`, only via delegatecall):
+  - **Deposit path** (`_depositIntoStrategyMeasured`, line 231):
+    - Measures actual spend (`beforeBal - afterBal` after `IStrategy.deposit`).
+    - `strategyDebt[strategy] += deposited`
+    - `totalDebt += deposited`
+    - `coinBalance` synced to observed.
+  - **Withdraw path** (both measured and best-effort `_tryWithdrawFromStrategyMeasured`):
+    - Debt reduced by actual withdrawn amount (capped at current debt).
+    - `totalDebt -= debtReduction`
+  - **Rebalance** (`rebalanceStrategies` + `_deployUnderweightStrategies`):
+    - Overweight legs: debt reduced by withdrawn excess.
+    - Underweight legs: debt increased by actual deposited.
+  - `tend()` / `_deployToStrategies()` / `_autoAllocateToStrategy()`: same debt-increase pattern on idle deployment.
+  - `_getStrategyAssetsSafe` (331): `try strategy.getTotalAssets() else strategyDebt[strategy]`, then clamp to `strategyMaxAssets`.
+
+#### 7.2 CharmStrategy `getTotalAssets()` (the leveraged view)
+
+From `CreatorCharmStrategy:446` (full trace):
+
+```solidity
+uint256 idleCreator = CREATOR.balanceOf(address(this));
+uint256 idleUsdc = USDC.balanceOf(address(this));
+
+(uint256 charmCreator, uint256 charmUsdc, bool charmReadable) = _getCharmExposure();
+... (zero on !readable)
+
+AjnaDebtState memory ajnaState = _readAjnaDebtState();
+if (!ajnaState.readable) return 0;   // fail-closed
+
+uint256 grossCreator = idleCreator + charmCreator;
+uint256 usdcInCreator = _usdcToCreatorValue(idleUsdc + charmUsdc + ajnaState.collateralUsdc);
+uint256 grossCreatorValue = grossCreator + usdcInCreator;
+
+if (ajnaState.debtCreator >= grossCreatorValue) return 0;
+return grossCreatorValue - ajnaState.debtCreator;
+```
+
+- The strategy reports **net** equity after its internal Ajna CREATOR debt.
+- USDC collateral (both idle in Charm and pledged to Ajna) is converted to CREATOR terms using the oracle/TWAP path.
+- When the backstop is active and leveraged, Charm reports **less** to the vault than the gross amount the vault believes it sent (`strategyDebt[charm]`).
+
+#### 7.3 Ajna (via ERC4626StrategyAdapter + AjnaERC4626Vault)
+
+- Adapter `getTotalAssets()` (173): `idle + ERC4626_VAULT.convertToAssets(sharesHeld)` (best-effort, falls back to idle only).
+- The inner `AjnaERC4626Vault` maintains its own buffer + bucket LP positions.
+- The adapter also maintains an explicit `idleBufferBps` (deposit path keeps some idle in the adapter, only excess goes into the inner Ajna vault).
+- Debt tracking at vault level is still the gross transferred via `_depositIntoStrategyMeasured`. The adapter's reported value can lag or differ due to its own buffer policy and any unrealized bucket performance.
+
+#### 7.4 Divergence & Implications During Rebalance
+
+When Charm has active Ajna debt:
+
+- Vault `strategyDebt[charm]` ≈ gross historical deployments.
+- Charm `getTotalAssets()` = gross exposure – Ajna debt (in CREATOR terms).
+- Therefore `_getStrategyAssetsSafe(charm)` (used in `totalAssets()`, rebalance overweight calc, withdrawal queue, unrealized loss assessment) returns the **net** number.
+
+Consequences observed in the code:
+
+- **Rebalance overweight detection** (StrategiesModule:486): `actualAssets = _getStrategyAssetsSafe(...)` uses the net number. Charm can appear less overweight (or even underweight) than its gross deployment because of internal leverage.
+- **Unrealized loss calc** (`_assessUnrealisedLoss`, 397): `strategyAssets = _getStrategyAssetsSafe(...)`. Loss socialization uses the net (post-debt) figure against `currentDebt` (the gross sent). This can produce different socialization than a pure gross view.
+- **Withdrawal queue** (`_withdrawFromStrategies`): `strategyAssets = _getStrategyAssetsSafe(...)` limits `toWithdraw`. A highly leveraged Charm reports lower capacity, which can push more withdrawal pressure onto the Ajna sleeve or idle.
+- **Vault `totalAssets()`** (CreatorOVault:842): `coinBalance + sum(_getStrategyAssetsSafe for active strategies)`. The vault's PPS reflects Charm's net equity, not gross.
+
+**Net effect**: The vault's internal "debt ledger" (`strategyDebt`) and its economic reality (`totalAssets()`) intentionally diverge when a strategy uses internal leverage. The design trusts the strategy's `getTotalAssets()` for economic truth while using `strategyDebt` only as a fallback on revert and as the "sent" accounting for debt purchasing / caps.
+
+This is consistent with the "strategy is authoritative for its own NAV" pattern, but the Charm backstop makes that authority include off-vault leverage.
+
+#### 7.5 Gaps / Questions for Further Review
+
+- Is there any on-chain invariant or event that makes the net vs. gross divergence visible to the gauge, payout router, or external observers?
+- Does `strategyMaxAssets` (the governance trust ceiling) intend to cap gross deployment or net exposure after backstop leverage?
+- In a large rebalance + simultaneous user withdrawal while Charm is leveraged, can the combination of (a) vault rebalance pulling net assets and (b) user withdrawal also pulling cause the Ajna position to be stressed faster than a non-levered leg?
+- Fee accrual (if any on strategies) and how it interacts with the debt-subtracted valuation.
+
+These are the precise mechanics that make the "Charm and Ajna coordinate only through the idle buffer" statement incomplete once the backstop is active.
+
+**Accounting posture after this trace**: The system is deliberately net-aware at the economic layer while keeping a gross deployment ledger. This is a conscious design choice with clear trade-offs that are now documented. No obvious double-counting or hidden inflation bugs found in the paths read, but the divergence is a monitoring and invariant surface that should be explicitly tracked (especially around rebalance + large flows).
+
+*Accounting deep-dive complete for this pass.*
+
+---
+
+### 8. Keeper / Operational Rebalancing Layer (Continuation)
+
+This slice audits how the actual production rebalancing is driven by the KPR keeper system, and how it interacts with the on-chain mechanisms (especially the Charm internal Ajna backstop we traced earlier).
+
+#### 8.1 Two Distinct Rebalance Concerns for Charm
+
+Production separates two different rebalance responsibilities:
+
+1. **Inner Charm LP position management** (`charm-rebalance-manager`):
+   - Runs on a schedule (see workflow).
+   - Reads `CreatorOracle.getV3TWAPTick(twapDuration)`.
+   - For each active Charm strategy, reads the underlying `charmVault.baseLower/baseUpper`.
+   - Computes implied price change in bps between current TWAP tick and the position's center tick (`tickPriceChangeBps` + normalization for decimals and token ordering).
+   - If the move exceeds `CHARM_REBALANCE_PRICE_CHANGE_TRIGGER_BPS` (configurable, default in secrets), it calls `charmVault.rebalance()` (via protocol treasury safe or automation safe for authorization).
+   - This is the path that can cause `CreatorCharmStrategy` to execute its internal `_borrowFromAjna` / `_repayAjnaDebtWithCreator` logic during the subsequent deposit or liquidity adjustment inside the Charm vault.
+
+2. **Cross-strategy weight reallocation** (`vault-strategy-reallocator`):
+   - Runs every 15 minutes (4626.workflow.ts + vault-strategy-reallocator.workflow.ts).
+   - For each active vault with ≥2 strategies:
+     - Reads on-chain state: `coinBalance`, `minimumTotalIdle`, `deploymentThreshold`, `totalStrategyWeight`, `strategyList`/`strategyWeights`/`strategyDebt`, plus each strategy's `getTotalAssets()`.
+     - Uses pure `strategyAllocation.ts` math (mirrors on-chain `rebalanceStrategies`):
+       - `deployableBase = totalAssets - minIdle`
+       - Target per strategy = `deployableBase * weight / totalStrategyWeight`
+       - Drift computed in bps.
+     - If max drift > `VAULT_STRATEGY_REALLOC_MIN_DEVIATION_BPS`, it enters a **multi-pass loop** (up to `VAULT_STRATEGY_REALLOC_MAX_PASSES`, typically 4, max 8):
+       - Call `vault.rebalanceStrategies(minDeviationBps)` (either direct `writeContract` or via keeper HTTP bridge `/api/keeper/rebalance-strategies`).
+       - Re-read full state.
+       - Repeat until converged within band or max passes hit.
+   - Uses `actualAssets` directly from strategy `getTotalAssets()` (for Charm this is the *net* post-Ajna-debt number). The reallocator is therefore automatically net-aware of any internal leverage in the Charm leg.
+
+#### 8.2 Interaction with the Ajna Backstop
+
+- The vault-strategy-reallocator has **no explicit knowledge** of Charm's internal Ajna debt state. It only sees whatever `CreatorCharmStrategy.getTotalAssets()` reports (which subtracts the debt).
+- When the inner charm-rebalance-manager triggers a Charm vault rebalance (on price move), any resulting borrow/repay inside `CreatorCharmStrategy` changes the net NAV that the *next* run of the strategy reallocator will observe.
+- Consequence: A material price move can cause:
+  1. Inner rebalance → possible Ajna borrow inside Charm (increasing net CREATOR exposure while creating debt).
+  2. Subsequent strategy reallocator tick sees the new net allocation and may decide to pull TVL out of the Charm leg (or push more in) via `rebalanceStrategies`.
+- The backstop acts as an automatic "shock absorber" for liquidity during the inner rebalance, but the top-level weight rebalancer only reacts to the *after* net effect.
+
+No code in kpr/ currently monitors Ajna utilization inside Charm strategies (no greps for `debtCreator`, `AjnaDebtState`, collateral ratio, etc. in the reallocator or charm manager). The backstop is treated as an opaque implementation detail of the Charm strategy's NAV reporting.
+
+#### 8.3 Operational Characteristics & Risks
+
+**Multi-pass chasing**:
+- The pass loop (`runRebalancePassLoop`) is necessary because one `rebalanceStrategies` call does sequential withdraw-from-overweight then deposit-to-underweight. With `minDeviationBps` filtering and gas/liquidity limits inside strategies, full convergence often requires 2–4 on-chain calls.
+- Max passes is a safety cap (hard 8). Hitting it with remaining drift logs a warning but does not alert as critical in the current code (only info alert on successful passes).
+
+**Authorization paths**:
+- Direct writes from keeper key (when not using HTTP bridge).
+- Or via the keeper HTTP bridge (Vercel side) which the on-chain keeper can call.
+- Charm inner rebalances go through protocol treasury safe or automation safe (for the privileged `rebalance` on the Charm vault itself).
+
+**Failure modes observed in code**:
+- If `getTotalAssets()` reverts on a strategy, the reallocator falls back to `strategyDebt` for that leg (same as on-chain).
+- Write failures (revert, gas, etc.) stop the pass loop early and surface as errors.
+- Single-strategy or shutdown/paused vaults are skipped cleanly.
+
+**Configuration surfaces** (from secrets.example.env and code):
+- `VAULT_STRATEGY_REALLOC_MIN_DEVIATION_BPS`
+- `VAULT_STRATEGY_REALLOC_MAX_PASSES`
+- `CHARM_REBALANCE_PRICE_CHANGE_TRIGGER_BPS`
+- `CHARM_REBALANCE_TWAP_DURATION`
+
+#### 8.4 Audit Assessment — Keeper Layer
+
+**Strengths**:
+- Clean separation of concerns (inner position rebalance vs. top-level weight reallocation).
+- Multi-pass with fresh state reads is a pragmatic way to chase the on-chain sequential nature of `rebalanceStrategies`.
+- Relies on strategy-reported `getTotalAssets()` (net for Charm) — consistent with the accounting model we traced.
+- Good observability (per-vault logging + alerts on success/failure).
+
+**Gaps / Observations**:
+- No visibility or alerting on Charm's internal Ajna leverage/utilization. A vault whose Charm leg is heavily using the backstop (high debtCreator / collateral) will just appear as "lower net TVL in Charm" to the reallocator. Sudden unwind of the backstop (e.g., large repay on inflow, or forced liquidation on Ajna) could cause unexpected drift spikes.
+- The inner charm rebalance (price-move triggered) and the weight reallocator run on independent schedules. A price move large enough to trigger inner rebalance + borrow can immediately change the inputs the next weight rebalance sees.
+- Max-passes-with-remaining-drift is only a warning today; in a high-volatility or low-liquidity period this could leave persistent misallocation.
+- The reallocator does not appear to have any special preflight around whether a planned `rebalanceStrategies` call would push Charm into (or out of) heavy backstop usage.
+
+**Recommendations**:
+- Add lightweight monitoring/alerting in the reallocator (or a new sidecar) for Charm strategies where Ajna debt utilization exceeds a threshold (e.g., debtCreator / gross exposure).
+- Consider exposing a view or event from CharmStrategy for "current backstop utilization" that keepers and the reallocator can read.
+- Tighten or make configurable the "max passes with drift" outcome (currently soft warning).
+- In chaos / incident runbooks, explicitly call out that a large price move can cause both inner rebalance (with borrow side-effects) *and* subsequent weight reallocation in the same 15-min window.
+
+This completes the operational picture of how rebalancing actually happens for the Charm + Ajna pair in production.
+
+*Keeper / operational rebalancing layer deep-dive complete.*
+
+---
+
+### Overall Charm + Ajna Rebalance Audit Assessment (Synthesis)
+
+Across the slices executed in this continuation (architecture → rebalance flow & backstop coupling → accounting/NAV divergence → keeper operational layer), the picture is now clear and consistent:
+
+**The system is deliberately layered and net-aware**:
+- On-chain: gross deployment ledger (`strategyDebt`) + strategy-reported economic truth (`getTotalAssets`, net of internal leverage for Charm).
+- Rebalance math (both on-chain and in the reallocator) operates on the net view.
+- The Ajna backstop inside Charm is a real, production backstop for concentrated LP liquidity management. It is triggered as a side-effect of inner position rebalances (price-move driven) and large flows, not as a top-level orchestrated action.
+- Keepers have two independent loops (inner Charm rebalance on price delta; cross-strategy weight reallocation every 15 min with multi-pass chasing). The backstop effects flow through the net NAV that the weight reallocator observes.
+
+**No critical bugs found** in the paths examined, but several material nuances and monitoring gaps were surfaced (detailed in the sections above), particularly around the opacity of the internal leverage to the weight rebalancer and the lack of explicit backstop-utilization observability.
+
+**Key AGENTS.md claim now qualified**:
+The statement that "Charm and Ajna coordinate only through the parent vault idle CREATOR buffer" is true at the *weight allocation* layer, but incomplete once the operational backstop inside `CreatorCharmStrategy` is taken into account. The backstop creates direct (if one-way) coupling for liquidity during stress.
+
+**Recommended next actions** (if this audit thread continues):
+- Add backstop utilization metrics / alerts in the reallocator or a lightweight sidecar.
+- Consider surfacing `currentAjnaDebtState` or utilization ratio from CharmStrategy for external observers and the reallocator.
+- Explicitly document the two rebalance concerns + backstop side-effects in strategy design docs and runbooks.
+- Add a targeted invariant or chaos test that combines a price move (triggering inner rebalance + borrow) with a concurrent vault-level weight rebalance and user withdrawal.
+
+The Charm/Ajna + rebalancing mechanisms are one of the more sophisticated parts of the v1.12+ yield strategy stack. The engineering is thoughtful (net-aware accounting, best-effort defenses, multi-pass chasing, fail-closed valuation), but the internal leverage introduces complexity that benefits from explicit observability and documentation.
+
+*Charm & Ajna rebalance dynamics audit slice fully complete.*

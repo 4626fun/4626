@@ -26,8 +26,8 @@ export async function loadPrivyUserWithVerifiedEmailRetry(params: {
   let user = params.initialUser
   if (extractPrivyVerifiedEmail(user)) return user
 
-  const attempts = Math.max(1, params.attempts ?? 5)
-  const delayMs = Math.max(0, params.delayMs ?? 250)
+  const attempts = Math.max(1, params.attempts ?? 10)
+  const delayMs = Math.max(0, params.delayMs ?? 300)
   const auth = getPrivyServerAuth()
   const client = new PrivyClient(auth.appId, auth.appSecret)
 

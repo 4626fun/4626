@@ -176,6 +176,10 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
       clearWaitlistAuthPending()
       if (activeReferralCode) clearStoredWaitlistReferralCode()
       if (!nextAccount.emailVerified) {
+        if (privyAuthed) {
+          setStep('auth')
+          throw new Error(SESSION_FINALIZING_RETRY_MESSAGE)
+        }
         setStep('auth')
         setError('Verify your email with 4626 to finish creating this account.')
         return nextAccount
