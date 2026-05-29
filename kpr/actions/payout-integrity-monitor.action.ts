@@ -236,9 +236,9 @@ export async function executePayoutIntegrityMonitor(): Promise<PayoutIntegrityMo
     if (!expected || payoutRecipient !== expected) {
       pendingAlerts.push({
         vaultAddress: vaultAddr,
-        alertType: 'external_revenue_recipient_mismatch',
+        alertType: 'creator_coin_payout_recipient_mismatch',
         severity: 'critical',
-        message: `Creator Coin payoutRecipient (${payoutRecipient}) != expected (${expected ?? 'unset'})`,
+        message: `Creator coin creatorCoinPayoutRecipient (external earnings lane) (${payoutRecipient}) != expected (${expected ?? 'unset'})`,
         details: { mode, payoutRecipient, expected: expected ?? null },
       });
     }

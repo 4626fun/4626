@@ -103,6 +103,11 @@ async function main(): Promise<void> {
   if (receipt.status !== 'success') throw new Error(`Safe tx reverted: ${txHash}`)
 
   process.stdout.write(`${JSON.stringify({ ok: true, txHash, batcher, phase1Module, safeAddress }, null, 2)}\n`)
+
+  // Hygiene note (from 2026-05 general audit): After any production module rotation,
+  // record this txHash and ensure the new module's code ID is added to the active
+  // bytecode manifest and seeded into the UniversalBytecodeStore.
+  // See docs/audits/general-audit-2026-05.md (source-vs-deployed section).
 }
 
 main().catch((error) => {

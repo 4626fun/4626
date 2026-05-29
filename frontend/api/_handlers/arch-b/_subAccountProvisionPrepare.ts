@@ -45,7 +45,7 @@ import {
 import { computeSubAccountAddress } from '../../../server/_lib/wallet/subAccountAddress.js'
 import { resolveOwnerWalletId } from '../../../server/_lib/wallet/privyOwnerWalletIdResolver.js'
 import type { Address } from 'viem'
-import type { SpendPermissionPayload } from '../../../server/_lib/wallet/commandIssuerContext.js'
+import type { SpendPermissionPayload } from '@4626/server-core'
 import { randomBytes } from 'node:crypto'
 import {
   getBasePublicClient,

@@ -11,9 +11,10 @@ import {
   isInsufficientFundsError,
 } from '../_lib/wallet/walletBalancePreflight.js'
 import {
+  // Canonical import — implementation lives in @4626/server-core
   resolveCommandIssuerContextByAddress,
   isExecutionReady,
-} from '../_lib/wallet/commandIssuerContext.js'
+} from '@4626/server-core'
 import {
   isArchBCoinBuyViaUserOpEnabled,
   isArchBCoinSellViaUserOpEnabled,

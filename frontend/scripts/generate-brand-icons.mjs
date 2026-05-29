@@ -18,6 +18,7 @@ import process from 'node:process'
 import { promisify } from 'node:util'
 
 import sharp from 'sharp'
+import toIco from 'to-ico'
 
 const execFileAsync = promisify(execFile)
 
@@ -124,25 +125,36 @@ async function writeSquareIcon(source, outPath, size, { maskableSafeZone = false
   await sharp(resized).resize(size, size, { fit: 'cover' }).png().toFile(outPath)
 }
 
-async function writeFaviconIco(outDir) {
+async function writeFaviconIco(outDir, opaquePath) {
   const icoPath = path.join(outDir, 'assets/favicon-brand.ico')
-  const png16 = path.join(outDir, 'assets/favicon-16x16.png')
-  const png32 = path.join(outDir, 'assets/favicon-32x32.png')
-  const png48 = path.join(outDir, 'assets/favicon-48x48.png')
+  const sizes = [16, 32, 48]
+  const pngBuffers = await Promise.all(
+    sizes.map((size) => sharp(opaquePath).resize(size, size, { fit: 'cover' }).png().toBuffer()),
+  )
 
   try {
-    await execFileAsync('convert', [
-      png16,
-      png32,
-      png48,
-      '-define',
-      'icon:auto-resize=16,32,48',
-      icoPath,
-    ])
+    const icoBuffer = await toIco(pngBuffers)
+    await fs.writeFile(icoPath, icoBuffer)
   } catch (error) {
     // eslint-disable-next-line no-console
-    console.warn('ImageMagick convert unavailable; copying 32px PNG as favicon fallback', error?.message ?? error)
-    await fs.copyFile(png32, icoPath)
+    console.warn('to-ico failed; falling back to ImageMagick convert', error?.message ?? error)
+    const png16 = path.join(outDir, 'assets/favicon-16x16.png')
+    const png32 = path.join(outDir, 'assets/favicon-32x32.png')
+    const png48 = path.join(outDir, 'assets/favicon-48x48.png')
+    try {
+      await execFileAsync('convert', [
+        png16,
+        png32,
+        png48,
+        '-define',
+        'icon:auto-resize=16,32,48',
+        icoPath,
+      ])
+    } catch (convertError) {
+      // eslint-disable-next-line no-console
+      console.warn('ImageMagick convert unavailable; writing 32px PNG only', convertError?.message ?? convertError)
+      await fs.writeFile(icoPath, pngBuffers[1])
+    }
   }
 }
 
@@ -186,7 +198,7 @@ async function renderOpaqueInstallSurfaces(outDir, opaquePath, { favicon32, appl
     await writeSquareIcon(opaquePath, miniappDest, 200)
   }
 
-  await writeFaviconIco(outDir)
+  await writeFaviconIco(outDir, opaquePath)
 }
 
 async function syncCompatibilityAssets(outDir, copies, label) {

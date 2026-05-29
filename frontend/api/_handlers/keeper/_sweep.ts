@@ -353,13 +353,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           : expectedGauge
         if (!expectedRecipient) {
           recordInvariantViolation(
-            'missing_expected_external_revenue_recipient',
-            'Cannot resolve expected CreatorCoin payoutRecipient from completion invariants',
+            'missing_expected_creator_coin_payout_recipient',
+            'Cannot resolve expected creatorCoinPayoutRecipient (external earnings lane) from completion invariants',
           )
         } else if (creatorCoinPayoutRecipient !== expectedRecipient) {
           recordInvariantViolation(
-            'external_revenue_recipient_mismatch',
-            'Creator Coin payoutRecipient does not match expected lane',
+            'creator_coin_payout_recipient_mismatch',
+            'Creator coin creatorCoinPayoutRecipient (external earnings lane) does not match expected lane',
             expectedRecipient,
             creatorCoinPayoutRecipient,
           )

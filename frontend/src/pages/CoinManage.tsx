@@ -12,6 +12,10 @@ import { useZoraCoin } from '@/lib/zora/hooks'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 
+// On-chain CreatorCoin function is named `payoutRecipient` (ABI compatibility).
+// Per AGENTS.md "Canonical Lane Terminology", this represents the
+// creatorCoinPayoutRecipient (external earnings lane) — distinct from tradeFeeCollector.
+// See docs/audits/creatorvault-business-logic-core-structure-audit.md.
 const ZORA_COIN_READ_ABI = [
   {
     name: 'payoutRecipient',
@@ -281,22 +285,22 @@ export function CoinManage() {
                   )}
                 </div>
 
-                {/* CreatorCoin payout recipient */}
+                {/* creatorCoinPayoutRecipient (external earnings lane) */}
                 <div className="card p-8 space-y-4">
                   <div className="flex items-start justify-between gap-6">
                     <div>
-                      <div className="label">CreatorCoin payout recipient</div>
+                      <div className="label">Creator coin payout recipient (external earnings lane)</div>
                       <div className="text-sm text-zinc-500 mt-2">
                         Current:{' '}
                         <span className="font-mono text-zinc-300">
-                          {payoutRecipient ? shortAddress(String(payoutRecipient)) : '—'}
+                          {payoutRecipient ? shortAddress(String(payoutRecipient)) : '—'} {/* creatorCoinPayoutRecipient (external earnings lane) */}
                         </span>
                       </div>
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <label htmlFor="coin-manage-payout-recipient" className="label">New CreatorCoin payout recipient</label>
+                    <label htmlFor="coin-manage-payout-recipient" className="label">New creator coin payout recipient (external earnings lane)</label>
                     <input
                       id="coin-manage-payout-recipient"
                       value={newPayoutRecipient}

@@ -24,6 +24,8 @@ import { buildAccountScoreFromBreakdown } from '../onboarding/accountScore.js'
 import {
   readWaitlistPointsBreakdown,
 } from '../onboarding/waitlistScoring.js'
+// Canonical implementation lives in @4626/server-core (profileIdForPrivyUser.ts).
+// This local re-export is transitional; new code should import directly from the package.
 import {
   listProfileIdsForPrivyUser,
   resolvePrimaryProfileIdForPrivyUser,

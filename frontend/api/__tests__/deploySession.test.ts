@@ -573,7 +573,7 @@ describe('deploy session optimistic concurrency', () => {
       checksRun: 5,
       violations: [
         {
-          code: 'external_revenue_recipient_mismatch',
+          code: 'creator_coin_payout_recipient_mismatch',
           message: 'Creator Coin payoutRecipient does not match expected recipient',
         },
       ],
@@ -600,7 +600,7 @@ describe('deploy session optimistic concurrency', () => {
       .mockResolvedValueOnce({
         ...rec,
         step: 'failed',
-        lastError: 'phase2_invariant_failed:external_revenue_recipient_mismatch',
+        lastError: 'phase2_invariant_failed:creator_coin_payout_recipient_mismatch',
         payload: {
           ...rec.payload,
           phase2InvariantGate: gateResult,
@@ -613,16 +613,16 @@ describe('deploy session optimistic concurrency', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body?.data?.step).toBe('failed')
-    expect(res.body?.data?.lastError).toBe('phase2_invariant_failed:external_revenue_recipient_mismatch')
+    expect(res.body?.data?.lastError).toBe('phase2_invariant_failed:creator_coin_payout_recipient_mismatch')
     expect(res.body?.data?.phase2InvariantGate?.violations?.[0]?.code).toBe(
-      'external_revenue_recipient_mismatch',
+      'creator_coin_payout_recipient_mismatch',
     )
     expect(sendUserOperationMock).not.toHaveBeenCalled()
     expect(updateDeploySessionMock).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'sess_1',
         step: 'failed',
-        lastError: 'phase2_invariant_failed:external_revenue_recipient_mismatch',
+        lastError: 'phase2_invariant_failed:creator_coin_payout_recipient_mismatch',
       }),
     )
   })

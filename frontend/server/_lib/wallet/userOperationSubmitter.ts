@@ -45,6 +45,8 @@ import { createPublicClient, http } from 'viem'
 import { base } from 'viem/chains'
 
 import { logger } from '../infra/logger.js'
+// Canonical CommandIssuerContext + daily spend helpers now live in @4626/server-core.
+// The local file is a thin re-export for the remainder of the _lib transition.
 import {
   type CommandIssuerContext,
   readIssuerDailySpend,

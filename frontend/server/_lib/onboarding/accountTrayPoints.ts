@@ -1,5 +1,5 @@
 import { waitlistTierFromPoints } from './accountScore.js'
-import { resolvePrimaryProfileIdForPrivyUser } from '../identity/profileIdForPrivyUser.js'
+import { resolvePrimaryProfileIdForPrivyUser } from '@4626/server-core'
 import { assertValidSignupId } from './profileSignupId.js'
 import { readWaitlistPositionForSignupId } from './waitlistPositionForProfile.js'
 import {

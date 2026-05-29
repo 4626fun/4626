@@ -146,7 +146,7 @@ describe('verifyDeployPhase2Invariants', () => {
     })
 
     expect(result.checked).toBe(true)
-    expect(result.violations.map((entry) => entry.code)).toContain('external_revenue_recipient_unresolved')
+    expect(result.violations.map((entry) => entry.code)).toContain('creator_coin_payout_recipient_unresolved')
     expect(result.expectations?.payoutRecipientMode).toBe('payout_router')
     expect(result.expectations?.expectedPayoutRecipient).toBeNull()
   })

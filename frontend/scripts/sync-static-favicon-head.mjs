@@ -39,7 +39,7 @@ const immersiveBaseMetaBlock = `${immersiveBaseMetaStart}
 ${immersiveBaseMetaEnd}
 `
 
-const canonicalBlock = '    <link rel="icon" href="/favicon.ico" sizes="any" />'
+const canonicalBlock = `    <link rel="icon" href="/favicon.ico?v=${version}" sizes="any" />`
 
 const canonicalComment =
   '<!-- Single /favicon.ico (Base App domain bar; avoids multi-tag icon flicker). -->'

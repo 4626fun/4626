@@ -146,6 +146,11 @@ async function main(): Promise<void> {
         newPhase3Helper: phase3Helper,
         wiredPhase3Helper: wiredHelper,
         txHash: hash,
+
+  // Hygiene note (from 2026-05 general audit): After any production module rotation,
+  // record the tx hash and ensure the new module's code ID is added to the active
+  // bytecode manifest and seeded into the UniversalBytecodeStore.
+  // See docs/audits/general-audit-2026-05.md (source-vs-deployed section).
         status: receipt.status,
         blockNumber: receipt.blockNumber.toString(),
       },

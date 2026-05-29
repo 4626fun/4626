@@ -2211,8 +2211,8 @@ async function validateInnerCalls(params: {
             throw new Error('batcher_creator_treasury_mismatch')
           }
           // creatorCoinPayoutRecipient (external earnings lane) policy is enforced explicitly through router wiring + policy controller handoff (see canonical lanes doc).
-          // In greenfield deploys the batcher forces this to zero; the owner sets the actual creatorCoinPayoutRecipient post-deploy.
-          if (payoutRecipientArg !== ZERO_ADDRESS) throw new Error('batcher_payout_recipient_must_be_zero')
+          // In greenfield deploys the batcher forces this to zero; the owner sets the actual creatorCoinPayoutRecipient (external earnings lane) post-deploy.
+          if (payoutRecipientArg !== ZERO_ADDRESS) throw new Error('batcher_creator_coin_payout_recipient_must_be_zero')
 
           const expectedPhase2CodeIds = {
             vault: CREATOR_OVAULT_CODE_ID,

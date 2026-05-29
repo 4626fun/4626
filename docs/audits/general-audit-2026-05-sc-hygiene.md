@@ -128,9 +128,42 @@ This is consistent with a repo that has invested heavily in custom guardrails an
 
 1. **Resolve the canonical lane reference** (create the doc or update AGENTS.md). This is the highest documentation hygiene item.
 2. **Decide on terminology migration** for the remaining `payoutRecipient` usages in `DeploymentBatcher`. Either finish the migration or document the exception.
-3. **Treat CreatorLotteryManager size as an ongoing P0 constraint**. Any new public surface on this contract should require an explicit size budget review.
-4. **Close or explicitly accept the I-6 sponsorship guard-lift gap** in the lottery manager (document the intended security model for the delegatecall admin module pattern).
+3. **Treat CreatorLotteryManager size as an ongoing P0 constraint**. Any new public surface, event, or state variable on this contract **must** go through an explicit size budget review before implementation. The existing CI `--sizes` gate + warn-only headroom check is the minimum; teams should treat further growth as blocked until budget is approved and extraction/refactoring is planned.
+4. **Close or explicitly accept the I-6 sponsorship guard-lift gap** in the lottery manager (document the intended security model for the delegatecall admin module pattern — see new subsection below).
 5. Consider adding a lightweight "SC hygiene" check (terminology + size headroom on key contracts) to the existing guard suite or pre-PR checklist.
+
+---
+
+## Documented Security Model for CreatorLotteryManager AdminModule Delegatecall Pattern (Addresses I-6)
+
+**Intent (as implemented and reviewed in 2026-05 audit)**:
+
+- `CreatorLotteryManager` (the EIP-170-constrained hub contract) contains only thin stub functions for all owner-only configuration and sponsorship policy mutations.
+- Every such stub immediately forwards via `_delegateAdmin()` → `delegatecall` to the separately deployed `CreatorLotteryManagerAdminModule`.
+- The AdminModule contains the real implementations.
+- All AdminModule functions are guarded with:
+  - `onlyDelegateCall` (reverts if the module is called directly instead of via delegatecall from the main contract).
+  - `onlyOwner` (standard Ownable, initialized to the same owner as the main contract).
+- Storage layout is deliberately mirrored between main contract and AdminModule so delegatecall reads/writes the correct slots.
+- Certain high-risk or timelocked actions (boost source changes) have additional `armBoostSourceTimelock` + propose/commit patterns only available on the AdminModule.
+
+**Why this pattern exists**:
+- Keeps the main `CreatorLotteryManager` bytecode as small as possible (critical for EIP-170 on a contract that already sits ~49 bytes from the hard cap).
+- Moves complex logic (timelocks, sponsorship policy, VRF config, etc.) out of the size-constrained contract while preserving a single on-chain owner and a single entrypoint for privileged actions (the main contract's stubs).
+
+**Guard-lift surface (I-6)**:
+- The main contract's stub functions have no body other than the delegatecall. There are no "unrestricted wrapper signatures" that bypass the AdminModule for the sponsorship setters (the apparent gap in the original x-ray was the existence of both the stub + the real implementation; the intended path is always through the stub → delegatecall).
+- Direct calls to the AdminModule are blocked by `onlyDelegateCall`.
+- Therefore, the **only** way for the owner to mutate sponsorship policy, VRF config, authorized relays, etc., is:
+  1. Call the stub on the main `CreatorLotteryManager` (msg.sender = owner).
+  2. That triggers delegatecall into the AdminModule (which then enforces `onlyOwner` in the delegatecall context).
+
+**Accepted / Documented Trade-off**:
+- The pattern intentionally uses delegatecall for size reasons.
+- It relies on the correctness of the mirrored storage layout and the `onlyDelegateCall` modifier.
+- This is the **intended and reviewed security model** as of the 2026-05 general audit. Future changes to sponsorship policy or other owner surfaces on this contract must continue to route exclusively through the AdminModule stubs.
+
+If a future reviewer or auditor believes the model should be strengthened (e.g., remove all legacy direct paths, add more on-chain assertions), that would be a deliberate design change with size impact and should be tracked as a new item. As of this audit, the pattern is accepted and documented.
 
 ---
 

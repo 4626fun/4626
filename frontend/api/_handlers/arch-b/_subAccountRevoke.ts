@@ -50,7 +50,7 @@ import {
   resolveAuthorizedRequestPrincipal,
   logger,
 } from '../../../packages/server-core/src/index.js'
-import { revokeSubAccountSpendPermission } from '../../../server/_lib/wallet/commandIssuerContext.js'
+import { revokeSubAccountSpendPermission } from '@4626/server-core'
 
 const REVOKE_BODY_MAX_BYTES = 8_192
 

@@ -125,3 +125,4 @@ The active bytecode manifest must include all three entries.
    - `cast call 0x19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87 "vaultStrategiesModule()(address)"`
    - `cast call 0x19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87 "vaultAdminModule()(address)"`
 5. Verify bytecode store seed: `pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts` with `BYTECODE_MANIFEST=../../deployments/base/v1.12.1-bytecode-manifest.json`.
+6. After any future module rotation on the live batcher, ensure the new module code IDs are added to the active manifest and seeded into the UniversalBytecodeStore (see `docs/audits/general-audit-2026-05.md` for the hygiene note).

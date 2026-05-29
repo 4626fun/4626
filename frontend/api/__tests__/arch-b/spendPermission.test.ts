@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest'
 import { encodeFunctionData, hashTypedData } from 'viem'
 
-import type { SpendPermissionPayload } from '../../../server/_lib/wallet/commandIssuerContext.js'
+import type { SpendPermissionPayload } from '@4626/server-core'
 import {
   NATIVE_TOKEN_SENTINEL,
   SPEND_PERMISSION_EIP712_DOMAIN,

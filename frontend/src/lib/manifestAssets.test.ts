@@ -36,8 +36,8 @@ const OG_SOCIAL_IMAGE_URL = `https://4626.fun/assets/og-image.png?v=${BRAND_ASSE
 const TWITTER_SOCIAL_IMAGE_URL = `https://4626.fun/assets/twitter-card.png?v=${BRAND_ASSET_VERSION}`
 const MINIAPP_TILE_IMAGE_URL = `https://4626.fun${BASE_APP_ICON_PATH}?v=${BRAND_ASSET_VERSION}`
 const APP_SHELL_MINIAPP_SPLASH_URL = `https://app.4626.fun${siteConfig.assets?.miniappSplash ?? MINIAPP_ICON_PATH}?v=${BRAND_ASSET_VERSION}`
-const SINGLE_FAVICON_TAG = '<link rel="icon" href="/favicon.ico" sizes="any" />'
-const APP_SHELL_FAVICON_TAG = '<link rel="icon" href="https://app.4626.fun/favicon.ico" sizes="any" />'
+const SINGLE_FAVICON_TAG = `<link rel="icon" href="/favicon.ico?v=${BRAND_ASSET_VERSION}" sizes="any" />`
+const APP_SHELL_FAVICON_TAG = `<link rel="icon" href="https://app.4626.fun/favicon.ico?v=${BRAND_ASSET_VERSION}" sizes="any" />`
 const farcasterManifestPath = path.join(publicRoot, '.well-known/farcaster.json')
 
 describe('public manifest assets', () => {
@@ -164,6 +164,19 @@ describe('public manifest assets', () => {
     expect(immersiveHtml).toContain('<meta name="base:app_id" content="695a49dc4d3a403912ed8ca5" />')
     expect(immersiveHtml).toContain(`"imageUrl":"${MINIAPP_TILE_IMAGE_URL}"`)
     expect(immersiveHtml).not.toContain('"imageUrl":"https://4626.fun/assets/og-image.png')
+  })
+
+  it('ships a multi-size favicon.ico for Base App domain-bar auto-discovery', () => {
+    const icoPath = path.join(publicRoot, 'favicon.ico')
+    const bytes = readFileSync(icoPath)
+    expect(bytes.length).toBeGreaterThan(1000)
+    expect(bytes[0]).toBe(0)
+    expect(bytes[1]).toBe(0)
+    // ICO directory type
+    expect(bytes[2]).toBe(1)
+    expect(bytes[3]).toBe(0)
+    const imageCount = bytes[4]
+    expect(imageCount).toBeGreaterThanOrEqual(3)
   })
 
   it('ships root auto-discovery favicon paths for Base App domain bar', () => {

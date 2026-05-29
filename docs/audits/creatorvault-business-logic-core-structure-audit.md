@@ -28,6 +28,35 @@ AGENTS.md requires these exact names in docs, UI copy, commit messages, and code
 - **Authority / Gating**: Authorized queuers (keeper + deploy-session paths); permissionless drip via `VaultShareBurnStream.checkpoint()`.
 - **On-chain identifiers**:
   - Creator Coin `payoutRecipient` setter (Zora coin contract — this is the raw field name that must be qualified in all docs/comments as `creatorCoinPayoutRecipient`).
+
+---
+
+## Acquisition & Linking Nuances (Zora / Base Cross-App)
+
+Zora (and Base App) are treated as **login / linking / acquisition paths**, not separate account systems. Per AGENTS.md:
+
+- They must resolve into the same verified-email-based 4626 account model.
+- "No 4626 account is considered fully created until email OTP verification completes."
+
+**Owner-install nuance (Zora-acquired CSWs)**:
+
+For users who create a Coinbase Smart Wallet via Zora's Privy experience and later link it to 4626:
+
+- The "Enable 4626 signing" / owner-install step (adding the 4626 Privy embedded EOA as an on-chain owner via `addOwnerAddress`) can be performed using only valid Privy auth + profile resolution (via `bootstrapCanonicalDelegationState` / `resolveCanonicalCsw`).
+- This step does **not** re-enforce email OTP verification inside the delegation / prepare-add-privy-owner surface itself.
+- Email verification is enforced upstream during explicit linking flows (`/api/accounts/link`, Zora status, general onboarding bootstrap via `syncEmailIdentity`).
+
+**Practical effect**:
+- A Zora-linked user can reach a state where their embedded EOA is an on-chain owner of the canonical CSW (enabling sponsored `canonical4337` execution) before completing 4626 email OTP.
+- This is **intentional for acquisition** (low-friction owner-install for Zora users).
+- It creates a temporary window where the account has execution capability on the Zora-created CSW without the "fully created" email-verified marker on the 4626 profile.
+
+**Recommended handling**:
+- Document this nuance clearly in onboarding, account setup UI copy, and any "execution-ready" definitions.
+- Features that require the strict "email-verified canonical identity" (e.g., certain high-trust actions, points that assume full account) should continue to gate on email verification separately from owner-install success.
+- The canonical CSW + embedded EOA owner relationship itself is still protected by the on-chain `isOwner` check and the tombstone-aware profile resolvers.
+
+This nuance was surfaced during the 2026-05 general audit (Lens A edge review) and is recorded here as the authoritative reference.
   - `PayoutRouter`
   - `VaultShareBurnStream`
 - **Policy**: Never call this the "trade-fee" lane or conflate with `tradeFeeCollector`. In router mode it feeds holder PPS accretion, not a direct creator treasury spend.

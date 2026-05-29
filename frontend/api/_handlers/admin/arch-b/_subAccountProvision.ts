@@ -58,8 +58,8 @@ import {
   // remaining surface tracked in M-06.
   requireAdminApiToken,
 } from '../../../../packages/server-core/src/index.js'
-import { provisionCommandIssuerContext } from '../../../../server/_lib/wallet/commandIssuerContext.js'
-import type { SpendPermissionPayload } from '../../../../server/_lib/wallet/commandIssuerContext.js'
+import { provisionCommandIssuerContext } from '@4626/server-core'
+import type { SpendPermissionPayload } from '@4626/server-core'
 import {
   checkPrivyDelegation,
   getBasePublicClient,

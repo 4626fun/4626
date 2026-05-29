@@ -293,8 +293,8 @@ export async function verifyDeployPhase2Invariants(
   checksRun++
   if (!expectedPayoutRecipient) {
     recordViolation(
-      'external_revenue_recipient_unresolved',
-      `Cannot resolve expected CreatorCoin payoutRecipient for mode=${mode}`,
+      'creator_coin_payout_recipient_unresolved',
+      `Cannot resolve expected creatorCoinPayoutRecipient (external earnings lane) for mode=${mode}`,
       null,
       creatorCoinPayoutRecipient,
     )
@@ -303,8 +303,8 @@ export async function verifyDeployPhase2Invariants(
     creatorCoinPayoutRecipient.toLowerCase() !== expectedPayoutRecipient.toLowerCase()
   ) {
     recordViolation(
-      'external_revenue_recipient_mismatch',
-      'Creator Coin payoutRecipient does not match expected recipient',
+      'creator_coin_payout_recipient_mismatch',
+      'Creator coin creatorCoinPayoutRecipient (external earnings lane) does not match expected recipient',
       expectedPayoutRecipient,
       creatorCoinPayoutRecipient,
     )

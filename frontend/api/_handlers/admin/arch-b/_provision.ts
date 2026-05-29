@@ -48,7 +48,7 @@ import {
 import {
   provisionCommandIssuerContext,
   resolveCommandIssuerContextByProfileId,
-} from '../../../../server/_lib/wallet/commandIssuerContext.js'
+} from '@4626/server-core'
 
 declare const process: { env: Record<string, string | undefined> }
 

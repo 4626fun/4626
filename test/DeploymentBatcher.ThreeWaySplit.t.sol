@@ -133,6 +133,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
             creatorToken: makeAddr("creatorToken"),
             owner: address(this),
             creatorTreasury: address(0),
+            // payoutRecipient field = creatorCoinPayoutRecipient (external earnings lane) per AGENTS.md
             payoutRecipient: address(0),
             vault: makeAddr("vault"),
             wrapper: makeAddr("wrapper"),
@@ -180,6 +181,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
             creatorToken: makeAddr("creatorToken"),
             owner: ownerContract,
             creatorTreasury: address(0),
+            // payoutRecipient field = creatorCoinPayoutRecipient (external earnings lane) per AGENTS.md
             payoutRecipient: address(0),
             vault: makeAddr("vault"),
             wrapper: makeAddr("wrapper"),

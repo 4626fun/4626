@@ -7,6 +7,10 @@
  *  - Missing DB config returns `db_unavailable`
  *  - `isExecutionReady` narrows the union correctly
  *  - recordIssuerDailySpend + rollback invariants
+ *
+ * NOTE: The real implementation has been promoted to @4626/server-core.
+ * This test file (and its sibling thin re-export) exist only for the transition period.
+ * Mocks and assertions here continue to target the public surface.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'

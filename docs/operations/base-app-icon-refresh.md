@@ -33,12 +33,27 @@ curl -s https://4626.fun/.well-known/farcaster.json | jq '.miniapp.iconUrl, .min
 
 ## Manual step (often required)
 
-1. Open the 4626 project on [base.dev](https://base.dev).
-2. Re-upload the app icon using `frontend/public/assets/logo-mark-opaque-1024.png` (or the generated `base-miniapp-icon-v15-200.png`).
-3. Save/publish project metadata.
-4. Force-quit and reopen Base App (client icon cache is aggressive).
+After April 2026, Base App treats apps as **standard web apps** and reads launcher/domain metadata from the **[base.dev](https://base.dev) project** (`695a49dc4d3a403912ed8ca5`). Website HTML/manifest fixes alone may not change the domain-bar icon until base.dev and the Base App client cache are refreshed.
 
-Website-only favicon updates are insufficient when Base still serves the old blue gradient squircle from base.dev or from a cached `/app-icon.png` fetch.
+1. Open the 4626 project on [base.dev](https://base.dev).
+2. Re-upload the app icon using `frontend/public/assets/logo-mark-opaque-1024.png` (white **4** on black rounded tile — not `og-image.png` or `logo-mark-blue.svg`).
+3. Save/publish project metadata and confirm the preview shows the white-4 tile.
+4. Force-quit Base App completely (not background) and reopen.
+
+Website-only favicon updates are insufficient when Base still serves the old blue gradient squircle from base.dev or from a cached `/favicon.ico` fetch (Base requests `/favicon.ico` **without** `?v=`).
+
+### Regenerate `/favicon.ico` after icon changes
+
+```bash
+pnpm -C frontend generate:brand-icons
+```
+
+This rebuilds `public/favicon.ico` as a **multi-size ICO** (16/32/48) from `logo-mark-opaque-1024.png` via `to-ico`. Verify the bytes changed:
+
+```bash
+curl -sI https://4626.fun/favicon.ico | grep -i etag
+# etag must differ from pre-v20 value 052129f3b02e7f47a194958bcc48aa90
+```
 
 **Do not point legacy root `miniapp-hero.png` at `og-image.png`.** `pnpm generate:brand-icons` copies the opaque `base-app-icon-1024.png` tile there so crawlers that still request `/miniapp-hero.png` do not get the blue-glow social card.
 

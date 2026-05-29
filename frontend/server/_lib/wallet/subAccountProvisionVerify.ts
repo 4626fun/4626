@@ -11,6 +11,8 @@ import type { Address, Hex, PublicClient } from 'viem'
 import { createPublicClient, http, recoverTypedDataAddress } from 'viem'
 import { base } from 'viem/chains'
 
+// Canonical SpendPermissionPayload definition now lives in @4626/server-core.
+// Local ./commandIssuerContext.js is the thin re-export shim during transition.
 import type { SpendPermissionPayload } from './commandIssuerContext.js'
 import {
   NATIVE_TOKEN_SENTINEL,

@@ -43,7 +43,7 @@ import {
 import {
   provisionCommandIssuerContext,
   envBigInt,
-} from '../../../server/_lib/wallet/commandIssuerContext.js'
+} from '@4626/server-core'
 import {
   fetchPrivyWalletFull,
   secp256k1SignHash,

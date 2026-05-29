@@ -12,7 +12,7 @@ import {
 import {
   resolveCommandIssuerContextByAddress,
   isExecutionReady,
-} from '../_lib/wallet/commandIssuerContext.js'
+} from '@4626/server-core'
 import {
   isArchBSendViaUserOpEnabled,
   submitUserOpOrRefuse,

@@ -50,3 +50,4 @@ export { readRequestPrincipal, readRequestPrincipalAddress, resolveAuthorizedReq
 export { getSessionAddress, isAdminAddress, isAdminEmail } from './session.js'
 export * from './messaging.js'
 export * from './wallet.js'
+export * from './identity.js'

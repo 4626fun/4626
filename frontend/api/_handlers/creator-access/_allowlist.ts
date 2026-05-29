@@ -25,7 +25,9 @@ type CreatorAllowlistResponse = {
   address: string | null
   // Echoes `coin=` input (lowercased), if provided.
   coin: string | null
-  // When `coin=` is provided, we attempt to resolve creator + CreatorCoin payoutRecipient.
+  // When `coin=` is provided, we attempt to resolve creator + creatorCoinPayoutRecipient (external earnings lane).
+  // The field name `payoutRecipient` mirrors the on-chain CreatorCoin getter + resolveCoinParties return shape.
+  // See AGENTS.md "Canonical Lane Terminology" and docs/audits/creatorvault-business-logic-core-structure-audit.md.
   creator: string | null
   payoutRecipient: string | null
 
