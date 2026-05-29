@@ -278,6 +278,17 @@ if ! wait_for_anvil_ready; then
 fi
 
 echo "Base fork ready. Logs: $ANVIL_LOG_FILE"
+if [[ "$USE_LOCAL_BATCHER" != "1" ]]; then
+  echo "Ensuring fork batcher Phase1Module matches live store-aligned wiring..."
+  (
+    cd "$FRONTEND_DIR"
+    DEPLOY_DRY_RUN_LOCAL_RPC_URL="$LOCAL_RPC_URL" \
+      pnpm exec tsx "scripts/ops/ensure-fork-phase1-module-aligned.ts"
+  ) || {
+    echo "Failed to align fork Phase1Module. Restart deploy dry-run or rerun ensure-fork-phase1-module-aligned.ts." >&2
+    exit 1
+  }
+fi
 if [[ "$USE_LOCAL_BATCHER" == "1" ]]; then
   echo "Deploying local DeploymentBatcher override onto the fork..."
   LOCAL_BATCHER_ADDRESS="$(
