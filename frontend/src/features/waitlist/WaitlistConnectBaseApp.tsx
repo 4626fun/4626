@@ -46,6 +46,8 @@ type Props = {
   autoConnectOnMount?: boolean
   /** Hide skip when Base App sign-in is required (in-app browser). */
   requireBaseAppConnect?: boolean
+  /** Slim embed for waitlist Base App fast path — hides duplicate headings and auto-starts connect. */
+  compact?: boolean
 }
 
 type PendingProvision = {
@@ -68,6 +70,7 @@ const STAGE_LABELS: Partial<Record<SubAccountSetupStage, string>> = {
 }
 
 const COMPLETE_AUTOADVANCE_MS = 1_400
+const COMPACT_COMPLETE_AUTOADVANCE_MS = 450
 
 function mapRegisterError(code: string, fallback: string): { message: string; canRetry: boolean; autoSkip: boolean } {
   switch (code) {
@@ -200,6 +203,7 @@ function WaitlistConnectBaseAppReady(props: Props) {
     parentCswSigningReady = false,
     autoConnectOnMount = false,
     requireBaseAppConnect = false,
+    compact = false,
   } = props
   const setup = useSubAccountSetup()
   const {
@@ -357,6 +361,8 @@ function WaitlistConnectBaseAppReady(props: Props) {
     Boolean(parentAddress?.trim() && subAccountAddress?.trim() && embeddedEoaAddress?.trim())
 
   const allowSkip = !requireBaseAppConnect || view.kind === 'error'
+  const showIdleConnectCta = view.kind === 'idle' && !(compact && autoConnectOnMount)
+  const showCompactAutoConnectPending = view.kind === 'idle' && compact && autoConnectOnMount
 
   useEffect(() => {
     if (!autoConnectOnMount) return
@@ -374,9 +380,9 @@ function WaitlistConnectBaseAppReady(props: Props) {
     if (view.kind !== 'complete') return
     const timer = window.setTimeout(() => {
       onComplete({ parentAddress: view.parentAddress, subAccountAddress: view.subAccountAddress })
-    }, COMPLETE_AUTOADVANCE_MS)
+    }, compact ? COMPACT_COMPLETE_AUTOADVANCE_MS : COMPLETE_AUTOADVANCE_MS)
     return () => window.clearTimeout(timer)
-  }, [view, onComplete])
+  }, [compact, view, onComplete])
 
   if (parentCswSigningReady) {
     return (
@@ -400,24 +406,41 @@ function WaitlistConnectBaseAppReady(props: Props) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-md space-y-6 text-center" data-testid="waitlist-connect-base-app">
-      <div className="space-y-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgb(var(--brand-primary)/0.8)]">
-          {showRecoveryPanel ? 'Finish setup' : requireBaseAppConnect ? 'Required · Base App' : 'Optional · Base App'}
-        </p>
-        <h2 className="text-[1.8rem] font-light leading-tight tracking-tight text-white">
-          {showRecoveryPanel ? 'Enable 4626 signing' : 'Connect Base App'}
-        </h2>
-        <p className="text-sm leading-relaxed text-zinc-400">
-          {showRecoveryPanel
-            ? 'Your app wallet is linked. One Base App approval lets your embedded 4626 key sign for sponsored swaps.'
-            : requireBaseAppConnect
-              ? 'Sign in with your Base App wallet to finish setup. We link a dedicated 4626 app wallet signed by your embedded key — your main Base App wallet stays unchanged.'
-              : 'Link your Base App wallet for sponsored swaps. We create a dedicated 4626 app wallet signed by your embedded key — your main Base App wallet stays unchanged.'}
-        </p>
-      </div>
+    <div
+      className={`mx-auto w-full ${compact ? 'max-w-none space-y-4' : 'max-w-md space-y-6'} text-center`}
+      data-testid="waitlist-connect-base-app"
+    >
+      {!compact ? (
+        <div className="space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgb(var(--brand-primary)/0.8)]">
+            {showRecoveryPanel ? 'Finish setup' : requireBaseAppConnect ? 'Required · Base App' : 'Optional · Base App'}
+          </p>
+          <h2 className="text-[1.8rem] font-light leading-tight tracking-tight text-white">
+            {showRecoveryPanel ? 'Enable 4626 signing' : 'Connect Base App'}
+          </h2>
+          <p className="text-sm leading-relaxed text-zinc-400">
+            {showRecoveryPanel
+              ? 'Your app wallet is linked. One Base App approval lets your embedded 4626 key sign for sponsored swaps.'
+              : requireBaseAppConnect
+                ? 'Sign in with your Base App wallet to finish setup. We link a dedicated 4626 app wallet signed by your embedded key — your main Base App wallet stays unchanged.'
+                : 'Link your Base App wallet for sponsored swaps. We create a dedicated 4626 app wallet signed by your embedded key — your main Base App wallet stays unchanged.'}
+          </p>
+        </div>
+      ) : null}
 
-      {view.kind === 'idle' ? (
+      {showCompactAutoConnectPending ? (
+        <div
+          className="flex items-center justify-center gap-2 py-2 text-sm text-zinc-400"
+          role="status"
+          aria-live="polite"
+          data-testid="waitlist-connect-base-app-connecting"
+        >
+          <PixelWaveLoader name="wave-lr" size={12} color="rgba(255,255,255,0.72)" />
+          <span>Connecting your Base Account wallet…</span>
+        </div>
+      ) : null}
+
+      {showIdleConnectCta ? (
         <div className="space-y-4 text-left">
           {showRecoveryPanel ? (
             <SubAccountOwnerInstallPanel

@@ -338,6 +338,19 @@ export function AccountSetupWorkspaceView(props: {
       ? (rawZoraHandle.startsWith('@') || rawZoraHandle.startsWith('$') ? rawZoraHandle : `@${rawZoraHandle}`)
       : null
     const zoraProfileUrl = normalizedZoraHandle ? `${ZORA_PROFILE_BASE}${normalizedZoraHandle}` : null
+    const baseAppConnectProps = {
+      onSkip: () => undefined,
+      onComplete: () => {
+        void loadMe()
+        void refreshParentEmbeddedOwner()
+      },
+      parentAddress: canonicalCswAddress,
+      subAccountAddress: me.accountSignals.baseSubAccount?.address ?? me.baseSubAccount ?? null,
+      embeddedEoaAddress: embeddedEoaAddress ?? null,
+      autoConnectOnMount: focusBaseAppConnect,
+      requireBaseAppConnect: inBaseApp,
+      compact: focusBaseAppConnect && inBaseApp,
+    } as const
 
     if (allDone) {
       return (
@@ -428,6 +441,52 @@ export function AccountSetupWorkspaceView(props: {
           <WaitlistAdvancedSection controller={controller} label="Account settings" />
 
           {waitlistFooter ? <div className="flex justify-center pt-1">{waitlistFooter}</div> : null}
+        </div>
+      )
+    }
+
+    if (focusBaseAppConnect && showBaseAppConnectPanel && !signingStepComplete) {
+      return (
+        <div className="mx-auto w-full max-w-[640px] space-y-4">
+          {error ? (
+            <div role="alert" aria-live="assertive" className="rounded-xl border border-rose-500/20 bg-rose-500/[0.08] px-4 py-3 text-sm text-rose-300">
+              <div>{error}</div>
+            </div>
+          ) : null}
+
+          <div className="space-y-1">
+            <h2 className="text-2xl font-semibold tracking-tight text-white">Connect your wallet</h2>
+            <p className="text-sm text-zinc-500">One approval in Base App unlocks swaps and chat. Zora is optional.</p>
+          </div>
+
+          <WaitlistConnectBaseAppLazy {...baseAppConnectProps} />
+
+          {!stepOneComplete ? (
+            <details className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-sm text-zinc-400">
+              <summary className="cursor-pointer select-none text-zinc-300">Link Zora later (optional)</summary>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busyProvider === 'zora_cross_app'}
+                  onClick={() => void onLinkZora()}
+                  className="inline-flex h-9 items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+                >
+                  {busyProvider === 'zora_cross_app' ? 'Connecting…' : 'Connect Zora'}
+                </button>
+                <button
+                  type="button"
+                  disabled={busyProvider === 'zora_cross_app'}
+                  onClick={() => void onRefreshZora()}
+                  className="inline-flex h-9 items-center rounded-lg border border-white/10 px-4 text-sm font-medium text-zinc-400 hover:bg-white/[0.04] disabled:opacity-50"
+                >
+                  Already linked? Refresh
+                </button>
+              </div>
+            </details>
+          ) : null}
+
+          {summaryActions ? <div className="pt-1">{summaryActions}</div> : null}
+          {waitlistFooter ? <div className="flex justify-center pt-2">{waitlistFooter}</div> : null}
         </div>
       )
     }
@@ -721,20 +780,7 @@ export function AccountSetupWorkspaceView(props: {
                         Your embedded signer is confirmed as an on-chain owner of your parent smart wallet.
                       </p>
                     ) : showBaseAppConnectPanel ? (
-                      <WaitlistConnectBaseAppLazy
-                        onSkip={() => undefined}
-                        onComplete={() => {
-                          void loadMe()
-                          void refreshParentEmbeddedOwner()
-                        }}
-                        parentAddress={canonicalCswAddress}
-                        subAccountAddress={
-                          me.accountSignals.baseSubAccount?.address ?? me.baseSubAccount ?? null
-                        }
-                        embeddedEoaAddress={embeddedEoaAddress ?? null}
-                        autoConnectOnMount={focusBaseAppConnect}
-                        requireBaseAppConnect={inBaseApp}
-                      />
+                      <WaitlistConnectBaseAppLazy {...baseAppConnectProps} />
                     ) : showParentCswAddOwnerPanel ? (
                       <ZoraAddOwnerSigningPanelLazy
                         controller={controller}

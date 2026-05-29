@@ -94,7 +94,7 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
 
       let token = await readPrivyToken()
       if (!token && waitForTokenHydration) {
-        const tokenRetryDelaysMs = [250, 500, 900]
+        const tokenRetryDelaysMs = [100, 200, 400]
         for (const delayMs of tokenRetryDelaysMs) {
           if (token) break
           await new Promise<void>((resolve) => setTimeout(resolve, delayMs))

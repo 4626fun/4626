@@ -50,15 +50,13 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
 
   return (
     <>
-      {waitlistJoined ? (
+      {waitlistJoined && !(inBaseApp && !signingStepComplete) ? (
         <div className="mx-auto mb-6 max-w-[640px] space-y-2 text-center">
           <h2 className="text-2xl font-semibold text-white">You&apos;re on the waitlist</h2>
           <p className="text-sm text-zinc-400">
-            {inBaseApp && !signingStepComplete
-              ? 'Email verified — connecting your Base Account wallet unlocks swaps and chat.'
-              : canEnterApp
-                ? 'You&apos;re approved — enter the app when ready.'
-                : 'We&apos;ll notify you when your spot opens. Optional setup below unlocks swaps and chat sooner.'}
+            {canEnterApp
+              ? 'You&apos;re approved — enter the app when ready.'
+              : 'We&apos;ll notify you when your spot opens. Optional setup below unlocks swaps and chat sooner.'}
           </p>
         </div>
       ) : null}
