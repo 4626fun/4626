@@ -30,9 +30,18 @@ type WalletRequest = (args: { method: string; params?: unknown[] }) => Promise<u
 
 const BASE_MAINNET_CHAIN_ID_HEX = '0x2105'
 
+function isUserRejectedWalletAction(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return lower.includes('user rejected') || lower.includes('user denied') || lower.includes('rejected the request')
+}
+
 function getErrorMessage(error: unknown): string {
   const funding = mapAddOwnerFundingErrorMessage(error)
   if (funding) return funding
+  if (isUserRejectedWalletAction(error)) {
+    return 'You dismissed the Base App signing prompt. Swipe up to find the passkey/sign sheet, approve the request, then tap Submit again.'
+  }
   if (error instanceof Error && error.message.trim()) return error.message
   return 'UserOp owner install failed. Retry from Base App with your smart wallet connected.'
 }

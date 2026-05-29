@@ -18,7 +18,7 @@ type EnsureCanonicalBaseAccountWalletParams = {
 export function useEnsureCanonicalBaseAccountWallet(params: EnsureCanonicalBaseAccountWalletParams) {
   const wallets = usePrivyWalletsFromContext()
   const { baseAccountSdk } = useBaseAccountSdk()
-  const { connectBaseAccountWallet, error: setupError } = useSubAccountSetup()
+  const { connectBaseAccountWallet, disconnectBaseAccountWallet, error: setupError } = useSubAccountSetup()
   const [linking, setLinking] = useState(false)
   const [linkError, setLinkError] = useState<string | null>(null)
   const [providerAccounts, setProviderAccounts] = useState<string[] | null>(null)
@@ -116,11 +116,20 @@ export function useEnsureCanonicalBaseAccountWallet(params: EnsureCanonicalBaseA
     void link()
   }, [link, params.autoConnect, params.canonicalCswAddress, params.enabled, ready])
 
+  const disconnect = useCallback(async (): Promise<boolean> => {
+    setLinkError(null)
+    autoAttemptedRef.current = false
+    const ok = await disconnectBaseAccountWallet()
+    setProviderAccounts([])
+    return ok
+  }, [disconnectBaseAccountWallet])
+
   return {
     ready,
     linking,
     linkError,
     link,
+    disconnect,
     refreshProviderAccounts,
     providerAccounts,
   }

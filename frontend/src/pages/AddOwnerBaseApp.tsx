@@ -1,14 +1,21 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { base } from 'viem/chains'
 import { usePublicClient } from 'wagmi'
+import { usePrivy } from '@privy-io/react-auth'
 
 import { Button } from '@/components/ui/Button'
 import { PageMeta } from '@/components/seo/PageMeta'
+import {
+  AddOwnerConnectionStatusPanel,
+  resolveAddOwnerBaseWalletAddress,
+} from '@/components/wallet/AddOwnerConnectionStatusPanel'
 import { BaseAppCanonicalWalletLinkPanel } from '@/components/wallet/BaseAppCanonicalWalletLinkPanel'
 import { useEnsureCanonicalBaseAccountWallet } from '@/hooks/useEnsureCanonicalBaseAccountWallet'
 import { useSubAccountSetup } from '@/hooks/useSubAccountSetup'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import { usePrivyWalletsFromContext } from '@/lib/privy/walletHooksContext'
+import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import {
   useAddUserOpOwnerInstall,
   type AddUserOpOwnerInstallPublicClient,
@@ -42,13 +49,18 @@ export function AddOwnerBaseApp() {
     loadMe,
     loading,
     login,
+    me,
     privyAuthed,
     privyWallets,
   } = controller
 
   const privyClientStatus = usePrivyClientStatus()
-  const { signIn, signOut, busy: authBusy, error: authError } = useSiweAuth()
+  const { logout: privyLogout } = usePrivy() as { logout?: () => Promise<void> }
+  const { signIn, signOut, busy: authBusy, error: authError, hasSession, authAddress } = useSiweAuth()
+  const privyContextWallets = usePrivyWalletsFromContext()
   const { connectBaseAccountWallet } = useSubAccountSetup()
+  const [privySignOutBusy, setPrivySignOutBusy] = useState(false)
+  const [baseDisconnectBusy, setBaseDisconnectBusy] = useState(false)
   const inBaseApp = isBaseAppInAppContext(detectInAppEnvironment())
   const privyReady = privyClientStatus === 'ready'
   const authControlsDisabled = authBusy || !privyReady
@@ -77,13 +89,22 @@ export function AddOwnerBaseApp() {
     }
   }, [authControlsDisabled, canonicalCswAddress, connectBaseAccountWallet, loadMe, signIn])
 
-  const handleSignOut = useCallback(async () => {
-    if (authBusy) return
-    await signOut()
-    if (typeof window !== 'undefined') {
-      window.location.assign('/add')
+  const handleSignOutPrivy = useCallback(async () => {
+    if (authBusy || privySignOutBusy) return
+    setPrivySignOutBusy(true)
+    try {
+      await runWaitlistPrivyLogout({
+        logout: typeof privyLogout === 'function' ? privyLogout : undefined,
+        shouldLogout: true,
+      })
+      await signOut()
+      if (typeof window !== 'undefined') {
+        window.location.assign('/add')
+      }
+    } finally {
+      setPrivySignOutBusy(false)
     }
-  }, [authBusy, signOut])
+  }, [authBusy, privyLogout, privySignOutBusy, signOut])
 
   const publicClient = usePublicClient({ chainId: base.id })
 
@@ -113,8 +134,30 @@ export function AddOwnerBaseApp() {
     const linked = await baseWalletLink.link()
     if (linked) {
       await loadMe({ showSpinner: true })
+      await baseWalletLink.refreshProviderAccounts()
     }
   }, [baseWalletLink, loadMe])
+
+  const handleDisconnectBase = useCallback(async () => {
+    if (baseDisconnectBusy || baseWalletLink.linking) return
+    setBaseDisconnectBusy(true)
+    try {
+      await baseWalletLink.disconnect()
+      await loadMe({ showSpinner: false })
+    } finally {
+      setBaseDisconnectBusy(false)
+    }
+  }, [baseDisconnectBusy, baseWalletLink, loadMe])
+
+  const privyEmail = useMemo(() => {
+    if (me?.email) return me.email
+    return null
+  }, [me?.email])
+
+  const connectedBaseWalletAddress = useMemo(
+    () => resolveAddOwnerBaseWalletAddress(privyContextWallets, baseWalletLink.providerAccounts),
+    [baseWalletLink.providerAccounts, privyContextWallets],
+  )
 
   // Stabilize onSuccess so it doesn't cause the hook's useCallbacks / effects to
   // be recreated on every render of this page (common source of React #185 during
@@ -194,6 +237,26 @@ export function AddOwnerBaseApp() {
           </div>
         </div>
 
+        <AddOwnerConnectionStatusPanel
+          inBaseApp={inBaseApp}
+          privyReady={privyReady}
+          privyAuthenticated={privyAuthed}
+          privyEmail={privyEmail}
+          privyEmbeddedEoa={privyEmbeddedEoaAddress}
+          has4626Session={hasSession}
+          sessionAddress={authAddress}
+          canonicalCswAddress={canonicalCswAddress}
+          baseAccountReady={baseWalletLink.ready}
+          baseProviderAccounts={baseWalletLink.providerAccounts}
+          baseWalletAddress={connectedBaseWalletAddress}
+          privySignOutBusy={privySignOutBusy || authBusy}
+          baseDisconnectBusy={baseDisconnectBusy}
+          baseLinkBusy={baseWalletLink.linking}
+          onSignOutPrivy={handleSignOutPrivy}
+          onDisconnectBase={handleDisconnectBase}
+          onConnectBase={handleLinkBaseAccount}
+        />
+
         {!privyAuthed ? (
           <div className="card space-y-4 rounded-2xl border border-white/10 bg-black/40 p-6">
             <div className="space-y-1">
@@ -237,23 +300,7 @@ export function AddOwnerBaseApp() {
               </div>
             ) : null}
           </div>
-        ) : (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-xs text-zinc-400">
-            <span>
-              Step 1 done: 4626 Privy session (email or wallet).{' '}
-              {inBaseApp
-                ? canonicalCswAddress
-                  ? baseWalletLink.ready
-                    ? 'Base Account connected — you can submit when gas prefund is ready.'
-                    : 'Step 2: connect Base Account below for signing (email alone is not enough).'
-                  : 'Step 2: connect Base Account below to load your CSW and unlock signing.'
-                : 'Open in Base App and connect your Base Account wallet before submit.'}
-            </span>
-            <Button type="button" variant="ghost" size="sm" disabled={authBusy} onClick={() => void handleSignOut()}>
-              Sign out
-            </Button>
-          </div>
-        )}
+        ) : null}
 
         {privyAuthed && loading ? (
           <div className="rounded-2xl border border-white/10 bg-black/40 p-6 text-sm text-zinc-400">
@@ -285,7 +332,7 @@ export function AddOwnerBaseApp() {
               </div>
             )}
 
-            {inBaseApp ? (
+            {inBaseApp && !baseWalletLink.ready ? (
               <BaseAppCanonicalWalletLinkPanel
                 enabled={Boolean(privyAuthed)}
                 canonicalCswAddress={canonicalCswAddress}
@@ -294,8 +341,8 @@ export function AddOwnerBaseApp() {
                 linking={baseWalletLink.linking}
                 linkError={baseWalletLink.linkError}
                 onLink={handleLinkBaseAccount}
-                onSignOut={() => void handleSignOut()}
-                signOutBusy={authBusy}
+                onSignOut={() => void handleSignOutPrivy()}
+                signOutBusy={privySignOutBusy || authBusy}
               />
             ) : null}
 

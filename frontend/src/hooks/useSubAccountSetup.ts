@@ -455,6 +455,20 @@ export function useSubAccountSetup() {
     })
   }, [onStageEvent, runWithGuard])
 
+  const disconnectBaseAccountWallet = useCallback(async (): Promise<boolean> => {
+    connectedBaseAccountWalletRef.current = null
+    lastSetupErrorRef.current = null
+    setState((prev) => ({ ...prev, error: null }))
+
+    const embedded = embeddedWallet ?? findEmbeddedWallet(wallets)
+    if (embedded && typeof setActiveWallet === 'function') {
+      await Promise.resolve(setActiveWallet(embedded as Parameters<typeof setActiveWallet>[0])).catch(
+        () => null,
+      )
+    }
+    return true
+  }, [embeddedWallet, setActiveWallet, wallets])
+
   return {
     setupSubAccount: setup,
     provisionSubAccount: provision,
@@ -471,6 +485,7 @@ export function useSubAccountSetup() {
     baseAccountWallet,
     embeddedWallet,
     connectBaseAccountWallet,
+    disconnectBaseAccountWallet,
     getLastSetupError,
   }
 }
