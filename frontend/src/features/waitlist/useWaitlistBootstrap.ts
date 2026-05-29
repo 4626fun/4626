@@ -115,26 +115,6 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (token) {
         headers['X-Privy-Token'] = token
-        try {
-          let canonicalization = await withTimeout(
-            runCanonicalizationPipeline({ privyToken: token }),
-            FLOW_TIMEOUT_MS,
-            'Account sync',
-          )
-          if (!canonicalization.onboardingBootstrapped && canonicalization.flags.needsEmbeddedWallet) {
-            await withTimeout(ensureEmbeddedWallet(), FLOW_TIMEOUT_MS, 'Embedded wallet provisioning')
-            canonicalization = await withTimeout(
-              runCanonicalizationPipeline({ privyToken: token }),
-              FLOW_TIMEOUT_MS,
-              'Account sync',
-            )
-          }
-          if (canonicalization.onboardingBootstrapped && canonicalization.onboarding) {
-            bootstrappedCanonicalWallet = canonicalization.onboarding
-          }
-        } catch (canonicalizationError: unknown) {
-          if (isRecoveryRequiredAuthError(canonicalizationError)) throw canonicalizationError
-        }
       }
 
       const response = await withTimeout(
@@ -175,6 +155,36 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
           throw new Error(SESSION_FINALIZING_RETRY_MESSAGE)
         }
         return null
+      }
+
+      // Run canonical wallet sync only after waitlist identity is settled.
+      // `/api/auth/privy` also hits email-collision guards via wallet sync; doing
+      // that before waitlist bootstrap blocked verified-email rebind for returning users.
+      if (token) {
+        try {
+          let canonicalization = await withTimeout(
+            runCanonicalizationPipeline({ privyToken: token }),
+            FLOW_TIMEOUT_MS,
+            'Account sync',
+          )
+          if (!canonicalization.onboardingBootstrapped && canonicalization.flags.needsEmbeddedWallet) {
+            await withTimeout(ensureEmbeddedWallet(), FLOW_TIMEOUT_MS, 'Embedded wallet provisioning')
+            canonicalization = await withTimeout(
+              runCanonicalizationPipeline({ privyToken: token }),
+              FLOW_TIMEOUT_MS,
+              'Account sync',
+            )
+          }
+          if (canonicalization.onboardingBootstrapped && canonicalization.onboarding) {
+            bootstrappedCanonicalWallet = canonicalization.onboarding
+          }
+        } catch (canonicalizationError: unknown) {
+          if (isRecoveryRequiredAuthError(canonicalizationError)) {
+            // Waitlist bootstrap already succeeded; do not regress into recovery UI.
+          } else {
+            throw canonicalizationError
+          }
+        }
       }
 
       const nextAccount = mergeCanonicalWaitlistAccount(payload.data, bootstrappedCanonicalWallet)

@@ -5,6 +5,7 @@ import {
   assertNoEmailPrivyCollision,
   assertNoWalletPrivyCollision,
 } from '../identity/identityRecovery.js'
+import { runWithWaitlistEmailCollisionAdoption } from '../identity/emailCollisionAdoption.js'
 import { extractPrivyVerifiedEmail } from '../infra/trust.js'
 import { resolveProfilesPrimaryWalletColumn } from './disconnectExternalWallet.js'
 import {
@@ -732,10 +733,21 @@ async function insertOrUpdateProfile(params: {
   existing: ExistingProfile | null
   privyUserId: string | null
   email: string | null
+  privyUser: PrivyUserLike
   classification: ClassifiedLinkedAccounts
 }): Promise<number> {
-  const { db, existing, privyUserId, email, classification } = params
-  await assertNoEmailPrivyCollision({ db, email, privyUserId })
+  const { db, existing, privyUserId, email, privyUser, classification } = params
+  if (email && privyUserId) {
+    await runWithWaitlistEmailCollisionAdoption({
+      db,
+      email,
+      privyUserId,
+      privyUser,
+      action: () => assertNoEmailPrivyCollision({ db, email, privyUserId }),
+    })
+  } else {
+    await assertNoEmailPrivyCollision({ db, email, privyUserId })
+  }
   // Only guard new INSERT paths — existing matches already resolved
   // through the tombstone-aware lookup above. Without this, a wallet-only
   // Privy auth can still mint a fragment even when a canonical-email
@@ -933,7 +945,14 @@ export async function syncUserWallets(db: Db, privyUser: PrivyUserLike): Promise
   const effectiveClassification = applyCanonicalCswPolicyToClassification(
     applyPersistedIdentity({ classification, persisted: persistedWithZora }),
   )
-  const profileId = await insertOrUpdateProfile({ db, existing, privyUserId, email, classification: effectiveClassification })
+  const profileId = await insertOrUpdateProfile({
+    db,
+    existing,
+    privyUserId,
+    email,
+    privyUser,
+    classification: effectiveClassification,
+  })
 
   await clearRoleFlags(db, profileId, effectiveClassification)
 
