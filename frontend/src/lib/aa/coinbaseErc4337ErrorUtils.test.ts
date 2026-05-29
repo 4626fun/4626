@@ -4,6 +4,7 @@ import {
   buildPreflightSimulationRejectionError,
   buildUserOpGasEstimateFailureError,
   extractUserOpReceiptTxHash,
+  isBundlerStubSignatureSimulationArtifact,
   isDeterministicUserOpExecutionError,
   isExecutionRevertedLikeError,
   isPreflightSimulationRejection,
@@ -96,12 +97,53 @@ describe('shouldAdvisorySkipBundlerGasEstimate', () => {
     ).toBe(false)
   })
 
-  it('does not skip without a Zora callGas floor', () => {
+  it('skips ExecutionFailed when preflight direct call already succeeded', () => {
+    expect(
+      shouldAdvisorySkipBundlerGasEstimate({
+        error: {
+          message: 'Execution reverted for an unknown reason.',
+          data: '0x2c4029e9000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000',
+        },
+        firstCallTo: ZORA_ROUTER,
+        floorCallGasLimit: ZORA_FLOOR,
+        preflightDirectCallSucceeded: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('skips Uniswap Universal Router execute when floor is set', () => {
+    expect(
+      shouldAdvisorySkipBundlerGasEstimate({
+        error: new Error('Execution reverted for an unknown reason.'),
+        firstCallTo: ZORA_ROUTER,
+        floorCallGasLimit: ZORA_FLOOR,
+      }),
+    ).toBe(true)
+  })
+
+  it('does not skip without a swap-router callGas floor', () => {
     expect(
       shouldAdvisorySkipBundlerGasEstimate({
         error: new Error('Execution reverted for an unknown reason.'),
         firstCallTo: ZORA_ROUTER,
       }),
+    ).toBe(false)
+  })
+})
+
+describe('isBundlerStubSignatureSimulationArtifact', () => {
+  it('detects ExecutionFailed stub artifacts after successful preflight', () => {
+    expect(
+      isBundlerStubSignatureSimulationArtifact(
+        '0x2c4029e9000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000',
+        true,
+      ),
+    ).toBe(true)
+    expect(
+      isBundlerStubSignatureSimulationArtifact(
+        '0x2c4029e9000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000',
+        false,
+      ),
     ).toBe(false)
   })
 })
