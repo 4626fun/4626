@@ -144,7 +144,7 @@
 
     <!-- HERO -->
     <main>
-      <section class="hero">
+      <section class="hero" data-hero-storm="0">
         <!-- Landscape backdrop — seamless looping forward-flight video.
              The OBSDN technique: a true closed-loop video where the last
              frame matches the first, giving infinite forward motion with
@@ -157,7 +157,7 @@
         </div>
 
         <!-- 3D cube perfectly centered — hero focal point -->
-        <div id="vault-canvas" class="hero__cube" aria-hidden="true"></div>
+        <div id="vault-canvas" class="hero__cube" data-vault-src="procedural" aria-hidden="true"></div>
 
         <!-- Animated lightning strikes (procedural SVG — sits between bg and clouds) -->
         <svg class="hero__lightning" id="hero-lightning" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -854,8 +854,10 @@
         requestAnimationFrame(draw);
       })();
 
-      // ---------- Procedural SVG lightning storm ----------
+      // ---------- Procedural SVG lightning storm (disabled for obsidian hero) ----------
       (function () {
+        const hero = document.querySelector('.hero');
+        if (!hero || hero.dataset.heroStorm !== '1') return;
         const svg = document.getElementById('hero-lightning');
         const layer = document.getElementById('hero-lightning-bolts');
         const flash = document.querySelector('.hero__flash');

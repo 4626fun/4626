@@ -32,8 +32,7 @@ const ANDROID_192 = `/assets/android-chrome-192x192.png?v=${BRAND_ASSET_VERSION}
 const ANDROID_512 = `/assets/android-chrome-512x512.png?v=${BRAND_ASSET_VERSION}`
 const OG_SOCIAL_IMAGE_URL = `https://4626.fun/assets/og-image.png?v=${BRAND_ASSET_VERSION}`
 const TWITTER_SOCIAL_IMAGE_URL = `https://4626.fun/assets/twitter-card.png?v=${BRAND_ASSET_VERSION}`
-const MINIAPP_HERO_URL = OG_SOCIAL_IMAGE_URL
-void `https://4626.fun${siteConfig.assets?.miniappSplash ?? MINIAPP_ICON_PATH}?v=${BRAND_ASSET_VERSION}`
+const MINIAPP_TILE_IMAGE_URL = `https://4626.fun${MINIAPP_ICON_PATH}?v=${BRAND_ASSET_VERSION}`
 const APP_SHELL_MINIAPP_SPLASH_URL = `https://app.4626.fun${siteConfig.assets?.miniappSplash ?? MINIAPP_ICON_PATH}?v=${BRAND_ASSET_VERSION}`
 const SINGLE_FAVICON_TAG = '<link rel="icon" href="/favicon.ico" sizes="any" />'
 const APP_SHELL_FAVICON_TAG = '<link rel="icon" href="https://app.4626.fun/favicon.ico" sizes="any" />'
@@ -109,10 +108,13 @@ describe('public manifest assets', () => {
     expect(marketingHtml).not.toContain('miniapp-hero.png')
     expect(marketingHtml).not.toContain('miniapp-splash.png')
     expect(marketingHtml).not.toContain('app-hero.png?v=6')
+    expect(marketingHtml).toContain(`"imageUrl":"${MINIAPP_TILE_IMAGE_URL}"`)
+    expect(marketingHtml).not.toContain('"imageUrl":"https://4626.fun/assets/og-image.png')
 
     expect(appHtml).toContain(`<meta property="og:image" content="${OG_SOCIAL_IMAGE_URL}" />`)
     expect(appHtml).toContain(`<meta name="twitter:image" content="${TWITTER_SOCIAL_IMAGE_URL}" />`)
-    expect(appHtml).toContain(`"imageUrl":"${MINIAPP_HERO_URL}"`)
+    expect(appHtml).toContain(`"imageUrl":"${MINIAPP_TILE_IMAGE_URL}"`)
+    expect(appHtml).not.toContain('"imageUrl":"https://4626.fun/assets/og-image.png')
     expect(appHtml).toContain('<link rel="canonical" href="https://app.4626.fun/" />')
     expect(appHtml).toContain('<meta property="og:url" content="https://app.4626.fun/" />')
     expect(appHtml).toContain('"url": "https://4626.fun"')
@@ -121,13 +123,14 @@ describe('public manifest assets', () => {
     expect(appHtml).not.toContain('https://app.4626.fun/app-hero.png')
     expect(appHtml).not.toContain('https://4626.fun/miniapp-hero.png')
     expect(appHtml).not.toContain('https://4626.fun/miniapp-splash.png')
-    expect(appHtml).not.toContain('https://4626.fun/og-image.png')
+    expect(appHtml).not.toContain('"imageUrl":"https://4626.fun/assets/og-image.png')
+    expect(appHtml).toContain('https://4626.fun/assets/og-image.png')
     expect(appHtml).not.toContain('https://4626.fun/twitter-card.png')
     expect((appHtml.match(/<meta property="og:image"/g) ?? [])).toHaveLength(1)
     expect((appHtml.match(/<meta name="twitter:image"/g) ?? [])).toHaveLength(1)
 
-    expect(telegramLinkHtml).toContain(`<meta property="og:image" content="${MINIAPP_HERO_URL}" />`)
-    expect(telegramLinkHtml).toContain(`<meta name="twitter:image" content="${MINIAPP_HERO_URL}" />`)
+    expect(telegramLinkHtml).toContain(`<meta property="og:image" content="${MINIAPP_TILE_IMAGE_URL}" />`)
+    expect(telegramLinkHtml).toContain(`<meta name="twitter:image" content="${MINIAPP_TILE_IMAGE_URL}" />`)
     expect(telegramLinkHtml).toContain(SINGLE_FAVICON_TAG)
     expect((telegramLinkHtml.match(/<link rel="icon"/g) ?? []).length).toBe(1)
     expect(telegramLinkHtml).not.toContain('apple-touch-icon')

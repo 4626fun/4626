@@ -5455,3 +5455,86 @@ html.nav-drawer-open body {
     width: var(--pct, 0%) !important;
   }
 }
+
+/* =============================================================
+   OBSIDIAN VAULT HERO — dark studio atmosphere
+   Keep landscape depth but subordinate to black-on-black vault.
+   ============================================================= */
+
+.hero[data-hero-storm="0"] .hero__bg {
+  opacity: 0.28 !important;
+  filter: brightness(0.35) saturate(0.25) contrast(1.05);
+  animation: bgFadeIn 2s var(--ease) 0.05s forwards;
+}
+
+.hero[data-hero-storm="0"] .hero__clouds,
+.hero[data-hero-storm="0"] .hero__parallax {
+  opacity: 0.12 !important;
+  filter: saturate(0.2) brightness(0.45);
+}
+
+.hero[data-hero-storm="0"] .hero__lightning,
+.hero[data-hero-storm="0"] .hero__flash {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden;
+}
+
+.hero[data-hero-storm="0"] .hero__embers {
+  opacity: 0.12 !important;
+  mix-blend-mode: soft-light;
+  filter: saturate(0.15) hue-rotate(180deg);
+}
+
+.hero[data-hero-storm="0"] .hero__cube-halo {
+  display: none !important;
+}
+
+.hero[data-hero-storm="0"] .hero__cube::before {
+  background:
+    radial-gradient(
+      ellipse 42% 40% at 50% 48%,
+      rgba(180, 195, 220, 0.03) 0%,
+      rgba(80, 90, 110, 0.015) 40%,
+      transparent 72%
+    );
+  filter: blur(48px);
+}
+
+.hero[data-hero-storm="0"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 85% 75% at 50% 42%,
+    transparent 42%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+}
+
+.hero[data-hero-storm="0"] .hero__cube canvas {
+  -webkit-mask-image: radial-gradient(
+    ellipse 92% 92% at center,
+    black 0%,
+    black 88%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    ellipse 92% 92% at center,
+    black 0%,
+    black 88%,
+    transparent 100%
+  );
+}
+
+.hero[data-hero-storm="0"] .hero__fade {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, 0.4) 55%,
+    var(--bg) 100%
+  );
+}
+

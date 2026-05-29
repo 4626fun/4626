@@ -942,7 +942,11 @@ contract DeploymentBatcherPhase2Module {
     error Phase2Missing();
     error Phase1StateMismatch();
     error InvalidCreatorTreasury(address provided);
-    error InvalidPayoutRecipient();
+    // Canonical terminology note (AGENTS.md): this error guards the
+    // creatorCoinPayoutRecipient (external earnings) lane. The field name
+    // `payoutRecipient` is retained for on-chain ABI compatibility; all new
+    // code and docs must use the five mandated lane names.
+    error InvalidCreatorCoinPayoutRecipient();
     error InvalidCodeId();
 
     struct FinalizeExecutionResult {
@@ -1030,7 +1034,7 @@ contract DeploymentBatcherPhase2Module {
         if (params.creatorTreasury != address(0) && params.creatorTreasury != protocolTreasury) {
             revert InvalidCreatorTreasury(params.creatorTreasury);
         }
-        if (params.payoutRecipient != address(0)) revert InvalidPayoutRecipient();
+        if (params.payoutRecipient != address(0)) revert InvalidCreatorCoinPayoutRecipient();
         return _deployPhase2CoreBody(params, codeIds, baseSalt, shareSymbolLower);
     }
 
@@ -1376,11 +1380,19 @@ contract DeploymentBatcher is ReentrancyGuard {
         string version;
     }
 
+    // === Canonical Value Lane Terminology (AGENTS.md) ===
+    // The five mandated lane names are: tradeFeeCollector, creatorCoinPayoutRecipient,
+    // creatorTreasury, jackpotCustodian, jackpotPayoutAuthority.
+    // The struct field below retains the legacy name `payoutRecipient` only for
+    // on-chain ABI / calldata compatibility with existing callers. All comments,
+    // errors, and new code must use the canonical `creatorCoinPayoutRecipient`
+    // framing for the external earnings lane (the one that feeds PayoutRouter
+    // → VaultShareBurnStream for PPS accretion).
     struct Phase2Params {
         address creatorToken;
         address owner;
         address creatorTreasury;
-        address payoutRecipient; // CreatorCoin payout recipient.
+        address payoutRecipient; // creatorCoinPayoutRecipient (external earnings lane per AGENTS.md canonical terminology)
         address vault;
         address wrapper;
         address shareOFT;
@@ -1396,7 +1408,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         address creatorToken;
         address owner;
         address creatorTreasury;
-        address payoutRecipient; // CreatorCoin payout recipient.
+        address payoutRecipient; // creatorCoinPayoutRecipient (external earnings lane per AGENTS.md canonical terminology)
         address vault;
         address wrapper;
         address shareOFT;
@@ -1579,7 +1591,11 @@ contract DeploymentBatcher is ReentrancyGuard {
     // FIX: F-26 — admin function to clear stuck Phase 1 state
     error Phase1StateNotStuck();
     error InvalidCreatorTreasury(address provided);
-    error InvalidPayoutRecipient();
+    // Canonical terminology note (AGENTS.md): this error guards the
+    // creatorCoinPayoutRecipient (external earnings) lane. The field name
+    // `payoutRecipient` is retained for on-chain ABI compatibility; all new
+    // code and docs must use the five mandated lane names.
+    error InvalidCreatorCoinPayoutRecipient();
     error DeprecatedFinalizeSolanaParams();
     error Phase3ManagementMismatch(address expected, address actual);
     error CharmFactoryGovernanceMismatch(address expected, address actual);

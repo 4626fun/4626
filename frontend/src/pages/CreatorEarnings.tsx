@@ -367,10 +367,9 @@ export function CreatorEarnings() {
           >
             <div className="space-y-3">
               <span className="label">Creator</span>
-              <h1 className="headline text-4xl sm:text-6xl">Creator earnings</h1>
+              <h1 className="headline text-4xl sm:text-6xl">Creator coin external earnings</h1>
               <p className="text-zinc-600 text-sm font-light max-w-2xl">
-                Lifetime creator earnings from Zora coin trades. Paid to the coin’s
-                <span className="font-mono"> payoutRecipient</span>.
+                Lifetime creator coin external earnings (the <span className="font-mono">creatorCoinPayoutRecipient</span> lane per the canonical reference). Paid to the coin’s payoutRecipient. See <a href="/docs/audits/creatorvault-business-logic-core-structure-audit" className="underline">canonical lanes doc</a>.
               </p>
             </div>
 
@@ -630,7 +629,7 @@ export function CreatorEarnings() {
 
                             <div className="flex flex-col sm:items-end gap-2 shrink-0">
                               <div className="text-right">
-                                <div className="text-xs text-zinc-600">Creator earnings</div>
+                                <div className="text-xs text-zinc-600">Creator coin external earnings (creatorCoinPayoutRecipient lane)</div>
                                 <div className="text-sm font-mono text-zinc-200">{earningsText}</div>
                               </div>
                               <div className="flex items-center gap-3">

@@ -42,9 +42,9 @@ Multiple code paths and comments still reference the five required names (`trade
 - `tradeFeeCollector()` exists on `CreatorShareOFT` with an explicit "Canonical terminology" comment (good).
 - `creatorTreasury` is used in `CreatorGaugeController` and `DeploymentBatcher`.
 - `creatorCoinPayoutRecipient`, `jackpotCustodian`, and `jackpotPayoutAuthority` are almost absent from `.sol` source.
-- The old bare term `payoutRecipient` is still present in:
-  - `contracts/helpers/batchers/DeploymentBatcher.sol` (struct fields + explicit `if (params.payoutRecipient != address(0)) revert` in phase 2 paths, with comments calling it "CreatorCoin payout recipient").
-  - `PayoutRouter.sol` comments ("Safe CreatorCoin payoutRecipient path").
+- The old bare term `payoutRecipient` is still present in source for ABI reasons, but remediation started:
+  - `contracts/helpers/batchers/DeploymentBatcher.sol`: struct fields retained for compatibility; error renamed to `InvalidCreatorCoinPayoutRecipient()`, comments updated with canonical "creatorCoinPayoutRecipient (external earnings lane)" framing + explanatory block (this session).
+  - `PayoutRouter.sol` comments still use legacy phrasing in places ("Safe CreatorCoin payoutRecipient path").
   - `CreatorCoinPolicyController.sol` comments.
 
 **Impact**: The exact anti-pattern the canonical lane policy was written to eliminate still lives in the most important wiring point (the DeploymentBatcher that actually sets the recipient at deploy time).

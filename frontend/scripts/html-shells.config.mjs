@@ -39,7 +39,8 @@ const BASE_HTML_SHELL_CONFIG = {
   twitterCardImageVersion: BRAND_ASSET_VERSION,
   ogImageWidth: '1200',
   ogImageHeight: '630',
-  miniappHeroPath: SHARED_SITE_CONFIG.assets.ogImage,
+  // Base App / fc:miniapp imageUrl must match the white-4-on-black tile (not og-image blue glow).
+  miniappHeroPath: SHARED_SITE_CONFIG.assets.miniappIcon,
   miniappHeroVersion: BRAND_ASSET_VERSION,
   miniappSplashPath: SHARED_SITE_CONFIG.assets.miniappSplash,
   miniappSplashVersion: BRAND_ASSET_VERSION,

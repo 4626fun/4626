@@ -4763,9 +4763,10 @@ function DeployVaultBatcher({
       const depositAmount = minFirstDeposit
       const minimumTotalIdle = (depositAmount * DEFAULT_MIN_IDLE_PERCENT_BPS) / 10_000n
       const auctionSteps = encodeUniswapCcaLinearSteps(DEFAULT_CCA_DURATION_BLOCKS)
-      // Safety: the deployment batcher tries to call `CreatorCoin.setPayoutRecipient(payoutRecipient)` when non-zero.
+      // Safety: the deployment batcher tries to call `CreatorCoin.setPayoutRecipient(...)` when non-zero.
+      // This field in the batcher calldata corresponds to the `creatorCoinPayoutRecipient` (external earnings lane per AGENTS.md).
       // Zora Creator Coins restrict that setter to the coin owner, so the batcher-side internal call reverts (msg.sender=batcher).
-      // We always pass `address(0)` to the batcher and, when needed, set CreatorCoin payoutRecipient from the identity wallet separately.
+      // We always pass `address(0)` to the batcher and, when needed, set the creatorCoinPayoutRecipient from the identity wallet separately after deploy.
       const payoutForDeploy = ZERO_ADDRESS as Address
 
       const weth = getAddress((CONTRACTS.weth ?? BASE_WETH) as Address)
@@ -7533,15 +7534,15 @@ function DeployVaultBatcher({
                   address={expected?.creatorCoinPolicyController}
                   deployed={expectedAddressDeployment?.creatorCoinPolicyController ?? null}
                 />
-                <AddressRow label="Creator coin payout recipient" address={currentPayoutRecipient} />
+                <AddressRow label="Creator coin payout recipient (external earnings)" address={currentPayoutRecipient} />
               </div>
               {payoutMismatch ? (
                 <div className="mt-2 text-[11px] text-amber-300/80">
-                  Creator coin payout recipient will update to{' '}
+                  Creator coin payout recipient (creatorCoinPayoutRecipient lane) will update to{' '}
                   <span className="font-mono text-amber-200">
                     {expectedPayoutRouter ? shortAddress(expectedPayoutRouter) : 'the configured payout router'}
                   </span>{' '}
-                  during deploy. Continue only if this is intended.
+                  during deploy (via PayoutRouter for PPS accretion). Continue only if this is intended.
                 </div>
               ) : null}
             </div>
