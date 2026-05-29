@@ -16,7 +16,7 @@ async function head(url) {
   return {
     ok: res.ok,
     status: res.status,
-    etag: res.headers.get('etag')?.replace(/^"|"$/g, '') ?? '',
+    etag: res.headers.get('etag')?.replace(/^W\//, '').replace(/^"|"$/g, '') ?? '',
     contentType: res.headers.get('content-type') ?? '',
   }
 }
