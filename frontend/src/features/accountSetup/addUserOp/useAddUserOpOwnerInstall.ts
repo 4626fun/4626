@@ -36,8 +36,8 @@ function isUserRejectedWalletAction(error: unknown): boolean {
   return lower.includes('user rejected') || lower.includes('user denied') || lower.includes('rejected the request')
 }
 
-function getErrorMessage(error: unknown): string {
-  const funding = mapAddOwnerFundingErrorMessage(error)
+function getErrorMessage(error: unknown, context?: { fundingPreflightOk?: boolean }): string {
+  const funding = mapAddOwnerFundingErrorMessage(error, context)
   if (funding) return funding
   if (isUserRejectedWalletAction(error)) {
     return 'You dismissed the Base App signing prompt. Swipe up to find the passkey/sign sheet, approve the request, then tap Submit again.'
@@ -338,6 +338,8 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     appendEvent('--- submit ---')
     appendEvent(`lane:entrypoint_userop (validated Base App self-call path) via wallet_sendCalls → ${ENTRY_POINT_V06_BASE}`)
 
+    let submitFundingPreflightOk = fundingAssessment?.ok === true
+
     try {
       let txRequest = preparedTx
       if (!txRequest || alreadyOwner) {
@@ -419,6 +421,9 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       appendEvent(`submit:csw=${csw}`)
       appendEvent(`submit:owner=${ownerToAdd}`)
       appendEvent('submit:wallet_sendCalls_start')
+
+      const fundingPreflightOk = funding?.ok === true
+      submitFundingPreflightOk = fundingPreflightOk
 
       const result = await addOwnerViaBaseAppSendCalls({
         walletRequest,
@@ -524,8 +529,9 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       await onSuccess?.()
       return true
     } catch (error) {
-      appendEvent(`error:${getErrorMessage(error).slice(0, 220)}`)
-      setPageError(getErrorMessage(error))
+      const message = getErrorMessage(error, { fundingPreflightOk: submitFundingPreflightOk })
+      appendEvent(`error:${message.slice(0, 220)}`)
+      setPageError(message)
       return false
     } finally {
       setBusy(false)

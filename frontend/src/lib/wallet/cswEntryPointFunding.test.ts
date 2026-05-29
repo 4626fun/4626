@@ -38,11 +38,26 @@ describe('assessCswUserOpFunding', () => {
 })
 
 describe('mapAddOwnerFundingErrorMessage', () => {
-  it('maps Base App insufficient funds copy', () => {
+  it('maps Base App insufficient funds copy when prefund is unknown', () => {
     expect(
       mapAddOwnerFundingErrorMessage(
         new Error('Error generating transaction. Please make sure you have enough funds'),
       ),
-    ).toMatch(/Send about 0\.001 ETH/)
+    ).toMatch(/send ~0\.001 ETH/)
+  })
+
+  it('maps funded CSW failures to Base App policy-block guidance', () => {
+    expect(
+      mapAddOwnerFundingErrorMessage(
+        new Error('Error generating transaction. Please make sure you have enough funds'),
+        { fundingPreflightOk: true },
+      ),
+    ).toMatch(/misleading/)
+    expect(
+      mapAddOwnerFundingErrorMessage(
+        new Error('Error generating transaction. Please make sure you have enough funds'),
+        { fundingPreflightOk: true },
+      ),
+    ).toMatch(/sub-account/)
   })
 })

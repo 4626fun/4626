@@ -22,10 +22,11 @@ import {
 } from '@/features/accountSetup/addUserOp/useAddUserOpOwnerInstall'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
+import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { RELAY_ROUTER_BASE } from '@/lib/wallet/addOwnerCallShape'
 import { ENTRY_POINT_V06_BASE } from '@/lib/wallet/cswOwnerAbi'
-import { externalBrowserUrlFor, detectInAppEnvironment, isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { formatEthCompact } from '@/lib/wallet/cswEntryPointFunding'
+import { externalBrowserUrlFor, detectInAppEnvironment, isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 
 const BASE_ACCOUNT_LOGO = '/base/base-square-blue.svg'
 
@@ -536,8 +537,16 @@ export function AddOwnerBaseApp() {
               ) : null}
 
               {userOpFlow.pageError && !pendingUserOpHash ? (
-                <div className="rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2.5 text-xs text-red-100">
-                  {userOpFlow.pageError}
+                <div className="rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2.5 text-xs text-red-100 space-y-3">
+                  <p>{userOpFlow.pageError}</p>
+                  {userOpFlow.pageError.includes('misleading') ? (
+                    <a
+                      href={buildWaitlistSetupUrl('base-app')}
+                      className="inline-flex items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white hover:opacity-90"
+                    >
+                      Continue on waitlist (Connect Base App)
+                    </a>
+                  ) : null}
                 </div>
               ) : null}
 

@@ -65,24 +65,41 @@ export function formatEthCompact(wei: bigint): string {
   return `${parsed.toFixed(4)} ETH`
 }
 
-export function mapAddOwnerFundingErrorMessage(error: unknown): string | null {
+export type MapAddOwnerFundingErrorContext = {
+  /** When true, on-chain prefund already passed our soft minimum — treat "funds" errors as Base App policy blocks. */
+  fundingPreflightOk?: boolean
+}
+
+export function mapAddOwnerFundingErrorMessage(
+  error: unknown,
+  context?: MapAddOwnerFundingErrorContext,
+): string | null {
   const message = error instanceof Error ? error.message : String(error ?? '')
   const lower = message.toLowerCase()
 
-  if (
+  const looksLikeFundingSurface =
     lower.includes('enough funds') ||
     lower.includes('error generating transaction') ||
     lower.includes('insufficient funds') ||
     lower.includes('insufficient balance') ||
     lower.includes("didn't pay prefund") ||
     lower.includes('aa21')
-  ) {
+
+  if (!looksLikeFundingSurface) return null
+
+  if (context?.fundingPreflightOk) {
     return (
-      'Base App cannot build the EntryPoint UserOp for the CSW self-call (addOwnerAddress). ' +
-      'Your canonical smart wallet needs a small gas prefund. In Base App: go to your CSW → Receive → ' +
-      'send ~0.001 ETH directly to it. Wait a few seconds, then tap "Rebuild preview" on this page. ' +
-      'The actual addOwner call sends 0 value — this ETH is only for the UserOp gas.'
+      'Base App refused to build the add-owner UserOp even though your CSW already has gas prefund. ' +
+      'Coinbase often blocks third-party sites from owner-mutating selectors and shows a misleading ' +
+      '"not enough funds" error — this is usually not a balance problem. ' +
+      'For Base App wallets, use waitlist Step 2 → Connect Base App (sub-account signing lane) instead of this /add path.'
     )
   }
-  return null
+
+  return (
+    'Base App cannot build the EntryPoint UserOp for the CSW self-call (addOwnerAddress). ' +
+    'Your canonical smart wallet needs a small gas prefund. In Base App: go to your CSW → Receive → ' +
+    'send ~0.001 ETH directly to it. Wait a few seconds, then tap "Rebuild preview" on this page. ' +
+    'The actual addOwner call sends 0 value — this ETH is only for the UserOp gas.'
+  )
 }
