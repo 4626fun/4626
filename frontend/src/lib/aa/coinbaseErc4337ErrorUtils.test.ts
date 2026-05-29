@@ -93,16 +93,17 @@ describe('shouldAdvisorySkipBundlerGasEstimate', () => {
         },
         firstCallTo: ZORA_ROUTER,
         floorCallGasLimit: ZORA_FLOOR,
+        preflightDirectCallSucceeded: true,
       }),
     ).toBe(false)
   })
 
-  it('skips ExecutionFailed when preflight direct call already succeeded', () => {
+  it('skips InvalidContractSignature when preflight direct call succeeded', () => {
     expect(
       shouldAdvisorySkipBundlerGasEstimate({
         error: {
           message: 'Execution reverted for an unknown reason.',
-          data: '0x2c4029e9000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000',
+          data: '0xb0669cbc0000000000000000000000000000000000000000000000000000000000000000',
         },
         firstCallTo: ZORA_ROUTER,
         floorCallGasLimit: ZORA_FLOOR,
@@ -132,17 +133,14 @@ describe('shouldAdvisorySkipBundlerGasEstimate', () => {
 })
 
 describe('isBundlerStubSignatureSimulationArtifact', () => {
-  it('detects ExecutionFailed stub artifacts after successful preflight', () => {
+  it('detects InvalidContractSignature stub artifacts after successful preflight', () => {
     expect(
-      isBundlerStubSignatureSimulationArtifact(
-        '0x2c4029e9000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000',
-        true,
-      ),
+      isBundlerStubSignatureSimulationArtifact('0xb0669cbc0000000000000000000000000000000000000000000000000000000000000000', true),
     ).toBe(true)
     expect(
       isBundlerStubSignatureSimulationArtifact(
         '0x2c4029e9000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000',
-        false,
+        true,
       ),
     ).toBe(false)
   })

@@ -7,7 +7,9 @@ import {
   pickNextZoraBundlerRetrySlippagePct,
   formatZoraRouterSimulationFailure,
   isZoraPermitSignaturePlaceholder,
+  buildZoraBundlerSimulationMismatchError,
   isZoraBundlerSendRetryable,
+  isZoraBundlerSimulationMismatchError,
   isZoraRouterSimulationRetryable,
   mergePermitWithChainNonce,
   quoteNeedsZoraPermitFinalization,
@@ -211,6 +213,8 @@ describe('zoraTradeApi', () => {
     expect(
       isZoraBundlerSendRetryable(new Error('Execution reverted for an unknown reason.')),
     ).toBe(true)
+    expect(isZoraBundlerSendRetryable(buildZoraBundlerSimulationMismatchError())).toBe(true)
+    expect(isZoraBundlerSimulationMismatchError(buildZoraBundlerSimulationMismatchError())).toBe(true)
     expect(isZoraBundlerSendRetryable(new Error('invalid signature'))).toBe(false)
   })
 

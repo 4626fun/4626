@@ -161,8 +161,26 @@ export function buildZoraSlippageEscalationLadder(slippagePct: number): number[]
   return ladder.slice(0, 4)
 }
 
+/** Production eth_call passed but CDP/bundler simulation reverted (common on thin creator pools). */
+export class ZoraBundlerSimulationMismatchError extends Error {
+  override readonly name = 'ZoraBundlerSimulationMismatchError'
+}
+
+export function isZoraBundlerSimulationMismatchError(error: unknown): error is ZoraBundlerSimulationMismatchError {
+  return error instanceof ZoraBundlerSimulationMismatchError
+}
+
+export function buildZoraBundlerSimulationMismatchError(): ZoraBundlerSimulationMismatchError {
+  return new ZoraBundlerSimulationMismatchError(
+    'The swap route passed a static read but the sponsored bundler simulation reverted. ' +
+      'On thin creator pools (e.g. AKITA), try 10–15% slippage, a smaller USDC size, refresh the quote, and re-sign Permit2. ' +
+      'If a prior swap is still pending, wait ~30s first.',
+  )
+}
+
 /** Bundler rejected a UserOp after local Zora eth_call passed — refresh quote and retry once. */
 export function isZoraBundlerSendRetryable(error: unknown): boolean {
+  if (isZoraBundlerSimulationMismatchError(error)) return true
   if (isZoraRouterSimulationRetryable(error)) return true
   const msg = String(error instanceof Error ? error.message : error).toLowerCase()
   if (

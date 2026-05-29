@@ -367,14 +367,13 @@ export function isRpcInvalidParametersEstimateError(error: unknown): boolean {
   return lower.includes('invalid parameters were provided')
 }
 
-/** Bundler stub signatures can false-positive ExecutionFailed / InvalidContractSignature during estimate. */
+/** Bundler stub signatures can false-positive InvalidContractSignature during estimate (not ExecutionFailed). */
 export function isBundlerStubSignatureSimulationArtifact(
   revertData: Hex | undefined,
   preflightDirectCallSucceeded: boolean,
 ): boolean {
   if (!preflightDirectCallSucceeded || !revertData || revertData.length < 10) return false
-  const selector = revertData.slice(0, 10).toLowerCase()
-  return selector === '0x2c4029e9' || selector === '0xb0669cbc'
+  return revertData.slice(0, 10).toLowerCase() === '0xb0669cbc'
 }
 
 /**

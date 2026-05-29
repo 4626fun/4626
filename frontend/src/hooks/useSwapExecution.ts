@@ -56,6 +56,7 @@ import {
   quoteNeedsZoraPermitFinalization,
   pickNextZoraBundlerRetrySlippagePct,
   prepareZoraQuoteForExecute,
+  readZoraQuotedSlippagePct,
 } from '@/lib/zora/zoraTradeApi'
 import {
   getSwapProviderLabel,
@@ -1911,6 +1912,7 @@ export function useSwapExecution(params: {
         getTokenDecimals,
       })
       let swapTxForSend = swapTx
+      let activeSlippagePct = params.parsedSlippage
       if (quote && isZoraProviderQuote(quote)) {
         const amount = readQuoteInputAmount(quote)
         if (!amount) {
@@ -1977,12 +1979,13 @@ export function useSwapExecution(params: {
         assertValidSwapTransaction(built.swap)
         swapTxForSend = built.swap
         setSwapTx(built.swap)
+        activeSlippagePct = readZoraQuotedSlippagePct(executableQuote) ?? activeSlippagePct
       }
       assertSwapSubmitEpochUnchanged(submitEpoch)
       let activeSwapTx = swapTxForSend
       let routing: Awaited<ReturnType<typeof buildAndSendSwap>>['routing'] | undefined
       let send: Awaited<ReturnType<typeof buildAndSendSwap>>['send'] | undefined
-      const maxZoraSendAttempts = quote && isZoraProviderQuote(quote) ? 2 : 1
+      const maxZoraSendAttempts = quote && isZoraProviderQuote(quote) ? 4 : 1
       for (let sendAttempt = 0; sendAttempt < maxZoraSendAttempts; sendAttempt += 1) {
         assertSwapSubmitEpochUnchanged(submitEpoch)
         try {
@@ -2008,9 +2011,10 @@ export function useSwapExecution(params: {
           if (!canRefreshZora) throw sendError
           const amount = readQuoteInputAmount(quote)
           if (!amount || !params.executionAddress) throw sendError
-          const retrySlippagePct = pickNextZoraBundlerRetrySlippagePct(params.parsedSlippage)
+          const retrySlippagePct = pickNextZoraBundlerRetrySlippagePct(activeSlippagePct)
+          if (retrySlippagePct <= activeSlippagePct) throw sendError
           setStatus(
-            `Bundler rejected the swap at ${params.parsedSlippage}% slippage — refreshing at ${retrySlippagePct}%…`,
+            `Bundler rejected the swap at ${activeSlippagePct}% slippage — refreshing at ${retrySlippagePct}%…`,
           )
           const executableQuote = await prepareZoraQuoteForExecute({
             quote,
@@ -2046,6 +2050,7 @@ export function useSwapExecution(params: {
           swapTxForSend = built.swap
           setSwapTx(built.swap)
           setQuote(executableQuote)
+          activeSlippagePct = retrySlippagePct
         }
       }
       if (!routing || !send) {

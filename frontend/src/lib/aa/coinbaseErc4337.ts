@@ -21,7 +21,9 @@ import {
 import { getProductionBaseReadClient } from '@/lib/base/productionBaseReadClient'
 import {
   assertZoraRouterCallExecutesFromCsw,
+  buildZoraBundlerSimulationMismatchError,
   formatZoraRouterSimulationFailure,
+  isZoraBundlerSimulationMismatchError,
 } from '@/lib/zora/zoraTradeApi'
 import { logger } from '@/lib/observability/logger'
 import { trackEvent } from '@/lib/analytics/analytics'
@@ -400,7 +402,16 @@ async function assertBundlerUserOpGasEstimate(params: {
 
     if (estimateError) {
       const revertInfo = extractRevertInfo(estimateError)
-      const firstCallTo = calls[0]?.to
+      const estimateExecutionFailed =
+        revertInfo.revertData?.slice(0, 10).toLowerCase() === '0x2c4029e9' ||
+        revertInfo.errorName === 'ExecutionFailed(uint256,bytes)'
+      if (
+        params.preflightDirectCallSucceeded &&
+        calls.some(isSwapRouterHeavyCall) &&
+        estimateExecutionFailed
+      ) {
+        throw buildZoraBundlerSimulationMismatchError()
+      }
       if (
         shouldAdvisorySkipBundlerGasEstimate({
           error: estimateError,
@@ -2603,6 +2614,9 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     if (mappedExecutionFailure) {
       throw mappedExecutionFailure
     }
+    if (isZoraBundlerSimulationMismatchError(lastError)) {
+      throw lastError
+    }
     if (lc.includes('reverted for an unknown reason')) {
       const zoraCall = attributedCalls.find(
         (call) => isZoraUniversalRouterTarget(call.to) && call.data,
@@ -2624,11 +2638,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
           firstCallTo: zoraCall.to,
         })
         if (mappedBundler) throw mappedBundler
-        throw new Error(
-          'The swap route passed a static read but the sponsored bundler simulation reverted. ' +
-            'On thin creator pools (e.g. AKITA), try 10–15% slippage, a smaller USDC size, refresh the quote, and re-sign Permit2. ' +
-            'If a prior swap is still pending, wait ~30s first.',
-        )
+        throw buildZoraBundlerSimulationMismatchError()
       }
       const formatted = formatZoraRouterSimulationFailure(lastError)
       if (formatted.message.toLowerCase().includes('would revert')) {
