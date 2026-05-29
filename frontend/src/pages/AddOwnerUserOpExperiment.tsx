@@ -263,7 +263,7 @@ export function AddOwnerBaseApp() {
                 ready={baseWalletLink.ready}
                 linking={baseWalletLink.linking}
                 linkError={baseWalletLink.linkError}
-                onLink={baseWalletLink.link}
+                onLink={async () => { await baseWalletLink.link(); }}
                 onSignOut={() => void handleSignOut()}
                 signOutBusy={authBusy}
               />
