@@ -223,16 +223,15 @@ abstract contract UserPositionInvariantBase is RebalanceTestHarness {
     }
 
     /// @notice A compact summary of recovery statistics across all currently exposed users.
-struct UserRecoverySummary {
-    uint256 minBps;
-    uint256 avgBps;
-    uint256 maxBps;
-    uint256 exposedCount;
-}
+    struct UserRecoverySummary {
+        uint256 minBps;
+        uint256 avgBps;
+        uint256 maxBps;
+        uint256 exposedCount;
+    }
 
-/// @notice Returns a summary struct with min/avg/max recovery + count of exposed users.
-///         Extremely useful for a single-line "health check" invariant or logging.
-function getUserRecoverySummary() public view returns (UserRecoverySummary memory summary) {
+    /// @notice Returns a summary struct with min/avg/max recovery + count of exposed users.
+    function getUserRecoverySummary() public view returns (UserRecoverySummary memory summary) {
         uint256 minBps = type(uint256).max;
         uint256 maxBps = 0;
         uint256 sum = 0;

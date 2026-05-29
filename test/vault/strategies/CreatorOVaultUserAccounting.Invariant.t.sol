@@ -233,29 +233,8 @@ contract UserAccountingInvariantHandler is UserPositionInvariantBase {
         return sum / count;
     }
 
-    function getUserRecoverySummary() public view override returns (UserPositionInvariantBase.UserRecoverySummary memory) {
-        uint256 minBps = type(uint256).max;
-        uint256 maxBps = 0;
-        uint256 sum = 0;
-        uint256 count = 0;
-
-        for (uint256 i = 0; i < 3; i++) {
-            address user = testUsers[i];
-            if (userIsExposed(user)) {
-                uint256 rec = userRecoveryBps(user);
-                if (rec < minBps) minBps = rec;
-                if (rec > maxBps) maxBps = rec;
-                sum += rec;
-                count++;
-            }
-        }
-
-        if (count == 0) {
-            return UserPositionInvariantBase.UserRecoverySummary(0, 0, 0, 0);
-        }
-
-        return UserPositionInvariantBase.UserRecoverySummary(minBps, sum / count, maxBps, count);
-    }
+    // getUserRecoverySummary is inherited from the base and works correctly
+    // because it calls the overridden userRecoveryBps().
 }
 
 contract CreatorOVaultUserAccountingInvariantTest is RebalanceTestHarness {
