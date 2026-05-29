@@ -1,25 +1,6 @@
-import {
-  buildWaitlistStepRoutingParams,
-  inferWaitlistEoaOwnerRoutingHint,
-  isParentCswEmbeddedOwnerReady,
-  isZoraLinkedFromAccountSignals,
-  resolveEffectiveExecutionTrack,
-  shouldUseBaseAppSubAccountPath,
-  type UserExecutionAccountSignals,
-  type WaitlistStepRoutingContext,
-} from '@/lib/wallet/userExecutionTrack'
+import { shouldUseBaseAppSubAccountPath, type UserExecutionAccountSignals } from '@/lib/wallet/userExecutionTrack'
 
-export type WaitlistStep = 'auth' | 'connect-base-app' | 'done'
-
-export {
-  buildWaitlistStepRoutingParams,
-  inferWaitlistEoaOwnerRoutingHint,
-  isParentCswEmbeddedOwnerReady,
-  isZoraLinkedFromAccountSignals,
-  resolveEffectiveExecutionTrack,
-  shouldUseBaseAppSubAccountPath,
-  type WaitlistStepRoutingContext,
-}
+export type WaitlistStep = 'auth' | 'done'
 
 type WaitlistAccountWithCanonical = {
   accountSignals: UserExecutionAccountSignals
@@ -31,15 +12,6 @@ function hasRegisteredSubAccountExecution(
   return track === 'sub-account' || track === 'migration-pending'
 }
 
-function hasLegacyOwnerInstallSigning(
-  accountSignals: WaitlistAccountWithCanonical['accountSignals'] | undefined,
-): boolean {
-  return (
-    accountSignals?.executionTrack === 'legacy-owner-install' ||
-    accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true
-  )
-}
-
 /** Parent-CSW legacy owner install — requires on-chain confirmation, not server/db flags alone. */
 function isLegacyParentOwnerSigningReady(params: {
   parentEmbeddedOwnerOnChain?: boolean
@@ -47,14 +19,14 @@ function isLegacyParentOwnerSigningReady(params: {
   return params.parentEmbeddedOwnerOnChain === true
 }
 
-export function isSubAccountExecutionReady(
+function isSubAccountExecutionReady(
   accountSignals?: WaitlistAccountWithCanonical['accountSignals'],
 ): boolean {
   if (accountSignals?.baseSubAccount?.registered === true) return true
   return hasRegisteredSubAccountExecution(accountSignals?.executionTrack)
 }
 
-export function resolveSubAccountAddress(params: {
+function resolveSubAccountAddress(params: {
   baseSubAccount?: string | null
   accountSignals?: WaitlistAccountWithCanonical['accountSignals']
 }): string | null {
@@ -64,72 +36,42 @@ export function resolveSubAccountAddress(params: {
   return fromProfile || null
 }
 
-export function shouldPromptBaseAccountReconnect(params: {
-  subAccountFlowEnabled: boolean
-  accountSignals?: WaitlistAccountWithCanonical['accountSignals']
+export function shouldFocusWaitlistBaseAppConnect(params: {
+  inBaseApp: boolean
+  showBaseAppConnectPanel: boolean
+  signingStepComplete: boolean
+  setupIntent?: string | null
+  subAccountFlowEnabled?: boolean
+  parentEmbeddedOwnerOnChain?: boolean
+  zoraLinked?: boolean
+  onchainEoaOwnerCount?: number
+  account: {
+    emailVerified: boolean
+    accountSignals?: WaitlistAccountWithCanonical['accountSignals']
+  }
 }): boolean {
-  if (!params.subAccountFlowEnabled) return false
-  const signals = params.accountSignals
-  if (!signals?.canonicalCswAddress?.trim()) return false
-  if (isSubAccountExecutionReady(signals)) return false
-  if (signals.executionTrack === 'legacy-owner-install') return false
-  if (signals.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true) return false
-  return signals.executionTrack === 'none-yet'
+  if (params.signingStepComplete) return false
+  if (params.inBaseApp && params.showBaseAppConnectPanel) return true
+  return shouldForceBaseAppConnectStep({
+    setupIntent: params.setupIntent,
+    subAccountFlowEnabled: params.subAccountFlowEnabled,
+    parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
+    zoraLinked: params.zoraLinked,
+    onchainEoaOwnerCount: params.onchainEoaOwnerCount,
+    account: params.account,
+  })
 }
 
-export function isWaitlistSigningReady(account: {
-  accountSignals?: WaitlistAccountWithCanonical['accountSignals']
-}): boolean {
-  if (hasLegacyOwnerInstallSigning(account.accountSignals)) return true
-  if (isSubAccountExecutionReady(account.accountSignals)) return true
-  return false
-}
-
-const SIGNING_ENABLED_NOTICE_RE = /4626 signing is enabled|already enabled/i
-
-/** Server signals plus optimistic UI when a success notice landed before `me` refreshes. */
-export function isWaitlistSigningReadyForUi(
-  account: Parameters<typeof isWaitlistSigningReady>[0],
-  notice?: string | null,
-): boolean {
-  return isWaitlistSigningReady(account) || SIGNING_ENABLED_NOTICE_RE.test(notice ?? '')
-}
-
-export type WaitlistSubAccountConnectOverlay = {
-  parentAddress: string
-  subAccountAddress: string
-}
-
-/** Keep waitlist UI signing-ready while bootstrap catches up after Base App connect. */
-export function applyWaitlistSubAccountConnectOverlay<T extends WaitlistAccountWithCanonical>(
-  account: T,
-  overlay: WaitlistSubAccountConnectOverlay | null | undefined,
-  subAccountStepCompleted: boolean,
-): T {
-  if (!overlay || !subAccountStepCompleted) return account
-  if (isParentCswEmbeddedOwnerReady({ accountSignals: account.accountSignals })) return account
-  if (isWaitlistSigningReady(account)) return account
-
-  const canonical =
-    (typeof account.accountSignals.canonicalCswAddress === 'string' &&
-    account.accountSignals.canonicalCswAddress.trim()
-      ? account.accountSignals.canonicalCswAddress.trim()
-      : null) ?? overlay.parentAddress
-
-  return {
-    ...account,
-    ...('baseSubAccount' in account ? { baseSubAccount: overlay.subAccountAddress } : {}),
-    accountSignals: {
-      ...account.accountSignals,
-      canonicalCswAddress: canonical,
-      executionTrack: 'sub-account',
-      baseSubAccount: {
-        address: overlay.subAccountAddress,
-        isDistinctFromCsw: true,
-        registered: true,
-      },
-    },
-  } as T
+export function resolveWaitlistAccordionOpenStep(params: {
+  manualOpenStep: 1 | 2 | null
+  ownerInstallRequested: boolean
+  stepOneComplete: boolean
+  focusBaseAppConnect: boolean
+}): 1 | 2 {
+  if (params.manualOpenStep === 1 || params.manualOpenStep === 2) return params.manualOpenStep
+  if (params.focusBaseAppConnect) return 2
+  if (params.ownerInstallRequested) return 2
+  return params.stepOneComplete ? 2 : 1
 }
 
 export function shouldForceBaseAppConnectStep(params: {
@@ -249,17 +191,7 @@ export function shouldShowBaseAppConnectPanel(params: {
 export function resolveWaitlistStep(params: {
   account: {
     emailVerified: boolean
-    appAccessStatus?: string | null
-    baseSubAccount?: string | null
-    accountSignals?: WaitlistAccountWithCanonical['accountSignals']
   }
-  /** Unused — kept for call-site stability while routing stays auth → done only. */
-  subAccountFlowEnabled?: boolean
-  embeddedEoaAvailable?: boolean
-  subAccountStepCompleted?: boolean
-  parentEmbeddedOwnerOnChain?: boolean
-  zoraLinked?: boolean
-  onchainEoaOwnerCount?: number
 }): WaitlistStep {
   if (!params.account.emailVerified) return 'auth'
   return 'done'
@@ -267,14 +199,6 @@ export function resolveWaitlistStep(params: {
 
 type CanonicalBootstrapResult = {
   canonicalCswAddress: string | null
-}
-
-export function shouldAutoBootstrapWaitlistSession(_params: {
-  step: WaitlistStep
-  privyAuthed: boolean
-  recoveryRequired: boolean
-}): boolean {
-  return false
 }
 
 export function mergeCanonicalWaitlistAccount<T extends WaitlistAccountWithCanonical>(

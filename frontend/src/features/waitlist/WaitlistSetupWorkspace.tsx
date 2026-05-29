@@ -55,7 +55,7 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
           <h2 className="text-2xl font-semibold text-white">You&apos;re on the waitlist</h2>
           <p className="text-sm text-zinc-400">
             {inBaseApp && !signingStepComplete
-              ? 'Email verified — connect your Base Account wallet in Step 2 below to unlock swaps and chat.'
+              ? 'Email verified — connecting your Base Account wallet unlocks swaps and chat.'
               : canEnterApp
                 ? 'You&apos;re approved — enter the app when ready.'
                 : 'We&apos;ll notify you when your spot opens. Optional setup below unlocks swaps and chat sooner.'}
@@ -68,9 +68,12 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
         onSigningStepCompleteChange={onSigningStepCompleteChange}
         summaryActions={
           <div className="w-full space-y-4">
-            <WaitlistUnlocksPanel score={initialAccount.score} email={initialAccount.email} />
-
-            <WaitlistGroupChatPanel setupComplete={setupComplete} signingReady={signingStepComplete} />
+            {!inBaseApp || signingStepComplete ? (
+              <>
+                <WaitlistUnlocksPanel score={initialAccount.score} email={initialAccount.email} />
+                <WaitlistGroupChatPanel setupComplete={setupComplete} signingReady={signingStepComplete} />
+              </>
+            ) : null}
 
             {canEnterNow ? (
               <div className="space-y-2">

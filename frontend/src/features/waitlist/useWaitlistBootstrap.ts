@@ -6,8 +6,6 @@ import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import type { ApiEnvelope, OnboardingBootstrapResponse } from '@/lib/wallet/onboardingBootstrapTypes'
 
 import { mergeCanonicalWaitlistAccount, resolveWaitlistStep, type WaitlistStep } from './waitlistFlowState'
-import { buildWaitlistStepRoutingParams } from '@/lib/wallet/userExecutionTrack'
-import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { isRecoveryRequiredAuthError } from './waitlistAuthState'
 import {
   FLOW_TIMEOUT_MS,
@@ -27,7 +25,6 @@ import { clearWaitlistAuthPending } from './waitlistAuthPending'
 
 type UseWaitlistBootstrapParams = {
   activeReferralCode: string | null
-  embeddedEoaAddress: string | null | undefined
   ensureEmbeddedWallet: () => Promise<{ address: string }>
   getAccessToken: () => Promise<string | null>
   privyAuthed: boolean
@@ -42,7 +39,6 @@ type UseWaitlistBootstrapParams = {
 export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
   const {
     activeReferralCode,
-    embeddedEoaAddress,
     ensureEmbeddedWallet,
     getAccessToken,
     privyAuthed,
@@ -196,20 +192,11 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
         setError('Verify your email with 4626 to finish creating this account.')
         return nextAccount
       }
-      setStep(
-        resolveWaitlistStep(
-          buildWaitlistStepRoutingParams(nextAccount, {
-            subAccountFlowEnabled: waitlistSubAccountFlowFlag(),
-            embeddedEoaAvailable: Boolean(embeddedEoaAddress),
-            subAccountStepCompleted: false,
-          }),
-        ),
-      )
+      setStep(resolveWaitlistStep({ account: nextAccount }))
       return nextAccount
     },
     [
       activeReferralCode,
-      embeddedEoaAddress,
       ensureEmbeddedWallet,
       getAccessToken,
       privyAuthed,

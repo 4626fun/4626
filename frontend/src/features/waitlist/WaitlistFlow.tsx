@@ -18,6 +18,7 @@ import {
 } from '@/lib/auth/waitlistEntry'
 import { getAppBaseUrl } from '@/lib/env/host'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
 
@@ -124,33 +125,6 @@ function isTelegramMiniAppRuntime(): boolean {
   if (typeof navigator === 'undefined') return false
   const ua = navigator.userAgent.toLowerCase()
   return ua.includes('telegram')
-}
-
-function isBaseInAppBrowser(): boolean {
-  if (typeof navigator === 'undefined') return false
-  const ua = navigator.userAgent.toLowerCase()
-  return (
-    ua.includes('coinbase') ||
-    ua.includes('cbios') ||
-    ua.includes('cbandroid') ||
-    ua.includes('baseapp') ||
-    ua.includes(' base/')
-  )
-}
-
-function hasCoinbaseInjectedProvider(): boolean {
-  if (typeof window === 'undefined') return false
-  const ethereum = (window as any).ethereum
-  if (!ethereum) return false
-  if (Boolean(ethereum.isCoinbaseWallet)) return true
-  if (Array.isArray(ethereum.providers)) {
-    return ethereum.providers.some((provider: any) => Boolean(provider?.isCoinbaseWallet))
-  }
-  return false
-}
-
-function isBaseInAppContext(): boolean {
-  return isBaseInAppBrowser() || hasCoinbaseInjectedProvider()
 }
 
 function useWaitlistAttemptState() {
@@ -337,7 +311,7 @@ export function WaitlistFlow(props: {
 }) {
   const sectionId = props.sectionId ?? 'waitlist'
   const prefersReducedMotion = useReducedMotion()
-  const baseInAppContext = useMemo(() => isBaseInAppContext(), [])
+  const baseInAppContext = useMemo(() => isBaseAppInAppContext(), [])
   const disableHeroMotion = Boolean(prefersReducedMotion || baseInAppContext)
 
   const privy = usePrivy()
@@ -347,7 +321,7 @@ export function WaitlistFlow(props: {
   const privyAuthed = privy.authenticated
   const shouldDestroyPrivySession = privyAuthed && privyClientStatus === 'ready'
   const { getAccessToken } = privy
-  const { embeddedEoaAddress, ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
+  const { ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
 
   const [searchParams, setSearchParams] = useSearchParams()
   const [step, setStep] = useState<WaitlistStep>('auth')
@@ -454,7 +428,6 @@ export function WaitlistFlow(props: {
     recoveryRequiredBootstrapCooldownUntilRef,
   } = useWaitlistBootstrap({
     activeReferralCode,
-    embeddedEoaAddress,
     ensureEmbeddedWallet,
     getAccessToken,
     privyAuthed,

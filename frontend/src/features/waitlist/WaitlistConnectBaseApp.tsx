@@ -446,7 +446,7 @@ function WaitlistConnectBaseAppReady(props: Props) {
             >
               {showRecoveryPanel ? 'Run full Base App setup' : 'Connect Base App'}
             </Button>
-            {!showRecoveryPanel ? (
+            {!showRecoveryPanel && !requireBaseAppConnect ? (
               <SubAccountOwnerInstallPanel
                 variant="inline"
                 parentAddress={parentAddress}

@@ -11,11 +11,14 @@ type WaitlistBaseAppWalletNudgeProps = {
 export function WaitlistBaseAppWalletNudge(props: WaitlistBaseAppWalletNudgeProps) {
   const { stepOneComplete, showConnectPanel, onGoToStepTwo } = props
 
-  const body = !stepOneComplete
-    ? 'Your email is verified. Finish Step 1, then connect your Base Account wallet in Step 2 to unlock swaps and chat.'
-    : showConnectPanel
-      ? 'Your email is verified. Connect your Base Account wallet in Step 2 to enable sponsored swaps and group chat.'
-      : 'Your email is verified. When Step 2 is ready, connect your Base Account wallet to enable signing in Base App.'
+  const body =
+    showConnectPanel && !stepOneComplete
+      ? 'Your email is verified. Connect your Base Account wallet in Step 2 now — Zora linking is optional and can wait.'
+      : !stepOneComplete
+        ? 'Your email is verified. Finish Step 1, then connect your Base Account wallet in Step 2.'
+        : showConnectPanel
+          ? 'Your email is verified. Connect your Base Account wallet in Step 2 to enable sponsored swaps and group chat.'
+          : 'Your email is verified. Step 2 will open when your wallet session is ready.'
 
   return (
     <div
@@ -31,7 +34,7 @@ export function WaitlistBaseAppWalletNudge(props: WaitlistBaseAppWalletNudgeProp
             <p className="mt-1 text-xs leading-relaxed text-brand-50/90">{body}</p>
           </div>
           <Button type="button" variant="secondary" className="h-9 px-3 text-xs" onClick={onGoToStepTwo}>
-            {stepOneComplete && showConnectPanel ? 'Connect in Step 2' : 'Open Step 2'}
+            {showConnectPanel ? 'Open wallet setup' : 'Open Step 2'}
           </Button>
         </div>
       </div>

@@ -20,6 +20,19 @@ describe('WaitlistBaseAppWalletNudge', () => {
     expect(screen.getByRole('button', { name: 'Open Step 2' })).toBeTruthy()
   })
 
+  it('prioritizes wallet connect when the panel is ready before Zora is linked', () => {
+    render(
+      <WaitlistBaseAppWalletNudge
+        stepOneComplete={false}
+        showConnectPanel
+        onGoToStepTwo={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText(/Connect your Base Account wallet in Step 2 now/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Open wallet setup' })).toBeTruthy()
+  })
+
   it('calls through to step 2 when connect panel is ready', async () => {
     const user = userEvent.setup()
     const onGoToStepTwo = vi.fn()
@@ -33,7 +46,7 @@ describe('WaitlistBaseAppWalletNudge', () => {
     )
 
     expect(screen.getByText(/Connect your Base Account wallet in Step 2 to enable sponsored swaps/i)).toBeTruthy()
-    await user.click(screen.getByRole('button', { name: 'Connect in Step 2' }))
+    await user.click(screen.getByRole('button', { name: 'Open wallet setup' }))
     expect(onGoToStepTwo).toHaveBeenCalledTimes(1)
   })
 })

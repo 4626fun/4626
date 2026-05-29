@@ -15,6 +15,7 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { toast } from '@/components/ui/Toast'
+import { useSearchParams } from 'react-router-dom'
 
 import { Button } from '@/components/ui/Button'
 import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
@@ -22,12 +23,13 @@ import { LoadingText } from '@/components/ui/LoadingState'
 import { LinkedIdentitiesSection } from '@/features/accountSetup/LinkedIdentitiesSection'
 import { AccountsManagementPanel } from '@/features/accountSetup/AccountsManagementPanel'
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
-import { shouldShowParentCswAddOwnerPanel, shouldShowBaseAppConnectPanel } from '@/features/waitlist/waitlistFlowState'
+import { shouldShowParentCswAddOwnerPanel, shouldShowBaseAppConnectPanel, shouldFocusWaitlistBaseAppConnect, resolveWaitlistAccordionOpenStep } from '@/features/waitlist/waitlistFlowState'
 import { WaitlistBaseAppWalletNudge } from '@/features/waitlist/WaitlistBaseAppWalletNudge'
 import { inferWaitlistEoaOwnerRoutingHint } from '@/lib/wallet/userExecutionTrack'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { useWaitlistSigningStepComplete } from '@/features/waitlist/useWaitlistSigningStepComplete'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import { readWaitlistSetupIntent } from '@/lib/auth/waitlistEntry'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { shortValue } from './shared'
 import type { useAccountSetupController } from './useAccountSetupController'
@@ -144,6 +146,7 @@ export function AccountSetupWorkspaceView(props: {
   const { context, controller, summaryActions, waitlistFooter, onSigningStepCompleteChange } = props
   const privyClientStatus = usePrivyClientStatus()
   void privyClientStatus
+  const [searchParams] = useSearchParams()
   const inBaseApp = useMemo(() => isBaseAppInAppContext(), [])
   // openStep: null = auto (first incomplete), 1/2/3 = manually opened
   const [openStep, setOpenStep] = useState<1 | 2 | 3 | null>(null)
@@ -287,14 +290,28 @@ export function AccountSetupWorkspaceView(props: {
     zoraLinked && Boolean(canonicalCswAddress) && !connectedOwnerReady && !hasConnectedSigner
 
   if (context === 'waitlist') {
+    const setupIntent = readWaitlistSetupIntent(searchParams.get('setup'))
+    const focusBaseAppConnect = shouldFocusWaitlistBaseAppConnect({
+      inBaseApp,
+      showBaseAppConnectPanel,
+      signingStepComplete,
+      setupIntent,
+      subAccountFlowEnabled,
+      parentEmbeddedOwnerOnChain,
+      zoraLinked,
+      onchainEoaOwnerCount: resolvedOnchainEoaOwnerCount,
+      account: {
+        emailVerified: me.emailVerified === true,
+        accountSignals: me.accountSignals,
+      },
+    })
     // Which top-level step is expanded: null = auto
-    const resolvedOpen: 1 | 2 = ownerInstallResumeState.requested
-      ? 2
-      : openStep === 1 || openStep === 2
-        ? openStep
-        : stepOneComplete
-          ? 2
-          : 1
+    const resolvedOpen = resolveWaitlistAccordionOpenStep({
+      manualOpenStep: openStep === 1 || openStep === 2 ? openStep : null,
+      ownerInstallRequested: ownerInstallResumeState.requested,
+      stepOneComplete,
+      focusBaseAppConnect,
+    })
     const toggleStep = (n: 1 | 2) => {
       setOpenStep(openStep === n ? null : n)
     }
@@ -307,11 +324,11 @@ export function AccountSetupWorkspaceView(props: {
     const badgeActive = 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-brand-primary/22 bg-brand-primary/[0.14] text-[11px] font-bold text-brand-200'
 
     const stepOneStatus: 'done' | 'active' | 'upcoming' =
-      stepOneComplete ? 'done' : resolvedOpen === 1 ? 'active' : 'upcoming'
+      stepOneComplete ? 'done' : focusBaseAppConnect ? 'upcoming' : resolvedOpen === 1 ? 'active' : 'upcoming'
     const stepTwoStatus: 'done' | 'active' | 'upcoming' =
       signingStepComplete
         ? 'done'
-        : ownerInstallPathActive || (stepOneComplete && resolvedOpen === 2)
+        : ownerInstallPathActive || focusBaseAppConnect || (stepOneComplete && resolvedOpen === 2)
           ? 'active'
           : 'upcoming'
 
@@ -434,7 +451,7 @@ export function AccountSetupWorkspaceView(props: {
           </div>
         ) : null}
 
-        {ownerInstallResumeState.requested ? (
+        {ownerInstallResumeState.requested && !inBaseApp && !showBaseAppConnectPanel ? (
           <div className="rounded-2xl bg-[linear-gradient(180deg,rgba(37,99,235,0.16),rgba(37,99,235,0.05))] px-5 py-4 text-sm text-brand-50 ring-1 ring-brand-primary/20">
             <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-brand-200">
               <span className="inline-flex rounded-full bg-brand-primary/15 px-2.5 py-1">Desktop signing setup</span>
@@ -453,7 +470,7 @@ export function AccountSetupWorkspaceView(props: {
           </div>
         ) : null}
 
-        {inBaseApp && !signingStepComplete ? (
+        {inBaseApp && !signingStepComplete && !focusBaseAppConnect ? (
           <WaitlistBaseAppWalletNudge
             stepOneComplete={stepOneComplete}
             showConnectPanel={showBaseAppConnectPanel}
@@ -464,11 +481,19 @@ export function AccountSetupWorkspaceView(props: {
         {/* Heading — single line */}
         <div className="flex items-start justify-between gap-3">
           <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-white">{allDone ? 'Account activated' : 'Activate your account'}</h2>
-          <p className="mt-1 text-sm text-zinc-500">{allDone ? 'All steps completed' : 'Complete both steps to unlock app access'}</p>
+          <h2 className="text-2xl font-semibold tracking-tight text-white">
+            {allDone ? 'Account activated' : focusBaseAppConnect ? 'Connect your wallet' : 'Activate your account'}
+          </h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            {allDone
+              ? 'All steps completed'
+              : focusBaseAppConnect
+                ? 'Link Base App to enable swaps and chat. Zora is optional.'
+                : 'Complete both steps to unlock app access'}
+          </p>
           {!allDone ? (
             <div className="mt-2 inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[11px] text-zinc-300">
-              Step {resolvedOpen} of 2
+              {focusBaseAppConnect ? 'Step 2 · Base App' : `Step ${resolvedOpen} of 2`}
             </div>
           ) : null}
           </div>
@@ -707,6 +732,8 @@ export function AccountSetupWorkspaceView(props: {
                           me.accountSignals.baseSubAccount?.address ?? me.baseSubAccount ?? null
                         }
                         embeddedEoaAddress={embeddedEoaAddress ?? null}
+                        autoConnectOnMount={focusBaseAppConnect}
+                        requireBaseAppConnect={inBaseApp}
                       />
                     ) : showParentCswAddOwnerPanel ? (
                       <ZoraAddOwnerSigningPanelLazy
