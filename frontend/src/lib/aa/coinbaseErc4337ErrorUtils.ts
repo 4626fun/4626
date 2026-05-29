@@ -367,22 +367,36 @@ export function isRpcInvalidParametersEstimateError(error: unknown): boolean {
   return lower.includes('invalid parameters were provided')
 }
 
+/** Bundler stub signatures can false-positive ExecutionFailed / InvalidContractSignature during estimate. */
+export function isBundlerStubSignatureSimulationArtifact(
+  revertData: Hex | undefined,
+  preflightDirectCallSucceeded: boolean,
+): boolean {
+  if (!preflightDirectCallSucceeded || !revertData || revertData.length < 10) return false
+  const selector = revertData.slice(0, 10).toLowerCase()
+  return selector === '0x2c4029e9' || selector === '0xb0669cbc'
+}
+
 /**
  * Bundler gas estimate can fail while eth_call preflight still passes (stub sig, paymaster stub, state drift).
- * When a Zora floor callGasLimit is configured, proceed with that floor only for non-actionable estimate noise
+ * When a swap-router floor callGasLimit is configured, proceed with that floor only for non-actionable estimate noise
  * (invalid RPC params + echoed UserOp callData). Real execution reverts must block send.
  */
 export function shouldAdvisorySkipBundlerGasEstimate(params: {
   error: unknown
   firstCallTo?: string
   floorCallGasLimit?: bigint | null
+  preflightDirectCallSucceeded?: boolean
 }): boolean {
   const floor = params.floorCallGasLimit
   if (typeof floor !== 'bigint' || floor <= 0n) return false
-  const callTo = String(params.firstCallTo ?? '').toLowerCase()
-  if (callTo !== ZORA_UNIVERSAL_ROUTER_BASE) return false
   const revertInfo = extractRevertInfo(params.error)
-  if (isActionableBundlerSimulationRevert(revertInfo.revertData)) return false
+  if (isActionableBundlerSimulationRevert(revertInfo.revertData)) {
+    return isBundlerStubSignatureSimulationArtifact(
+      revertInfo.revertData,
+      params.preflightDirectCallSucceeded === true,
+    )
+  }
   const lower = String(revertInfo.error ?? getErrorDiagnosticMessage(params.error)).toLowerCase()
   if (isRpcInvalidParametersEstimateError(params.error)) {
     return isEchoedBundlerUserOpCallData(revertInfo.revertData) || !revertInfo.revertData

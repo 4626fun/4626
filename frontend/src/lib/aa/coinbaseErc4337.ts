@@ -52,8 +52,6 @@ import {
   isExecutionRevertedLikeError,
   buildUserOpGasEstimateFailureError,
   shouldAdvisorySkipBundlerGasEstimate,
-  isEchoedBundlerUserOpCallData,
-  isRpcInvalidParametersEstimateError,
   isExpectedUserOpTimeoutError,
   isImmediateUserOpRetrySuppressedError,
   isLikelyVerificationGasLimitError,
@@ -299,7 +297,10 @@ function formatGasEstimate(estimate: any) {
 
 const ZORA_UNIVERSAL_ROUTER_ADDRESS = '0x6ff5693b99212da76ad316178a184ab56d299b43' as const
 const ZORA_SWAP_EXECUTE_SELECTOR = '0x24856bc3' as const
-const ZORA_SWAP_CALL_GAS_LIMIT = 4_000_000n
+const UNISWAP_UNIVERSAL_ROUTER_EXECUTE_SELECTOR = '0x3593564c' as const
+const SWAP_PROXY_EXECUTE_SELECTOR = '0x2894adf9' as const
+const SWAP_ROUTER_CALL_GAS_LIMIT = 4_000_000n
+const SWAP_ROUTER_BATCH_CALL_GAS_LIMIT = 5_500_000n
 const ZORA_SEND_CALL_GAS_BUFFER_NUMERATOR = 150n
 const ZORA_SEND_CALL_GAS_BUFFER_DENOMINATOR = 100n
 
@@ -307,15 +308,24 @@ function isZoraUniversalRouterTarget(to: Address | undefined): boolean {
   return String(to ?? '').toLowerCase() === ZORA_UNIVERSAL_ROUTER_ADDRESS
 }
 
-function inferZoraSwapCallGasLimit(
+function isSwapRouterHeavyCall(call: { to: Address; data?: Hex }): boolean {
+  const dataPrefix = String(call.data ?? '').slice(0, 10).toLowerCase()
+  const target = String(call.to ?? '').toLowerCase()
+  if (
+    target === ZORA_UNIVERSAL_ROUTER_ADDRESS &&
+    (dataPrefix === ZORA_SWAP_EXECUTE_SELECTOR ||
+      dataPrefix === UNISWAP_UNIVERSAL_ROUTER_EXECUTE_SELECTOR)
+  ) {
+    return true
+  }
+  return dataPrefix === SWAP_PROXY_EXECUTE_SELECTOR
+}
+
+function inferSwapRouterCallGasLimit(
   calls: Array<{ to: Address; value?: bigint; data?: Hex }>,
 ): bigint | undefined {
-  if (calls.length !== 1) return undefined
-  const call = calls[0]!
-  if (call.to.toLowerCase() !== ZORA_UNIVERSAL_ROUTER_ADDRESS) return undefined
-  const dataPrefix = String(call.data ?? '').slice(0, 10).toLowerCase()
-  if (dataPrefix !== ZORA_SWAP_EXECUTE_SELECTOR) return undefined
-  return ZORA_SWAP_CALL_GAS_LIMIT
+  if (!calls.some(isSwapRouterHeavyCall)) return undefined
+  return calls.length === 1 ? SWAP_ROUTER_CALL_GAS_LIMIT : SWAP_ROUTER_BATCH_CALL_GAS_LIMIT
 }
 
 type BundlerUserOpGasEstimate = {
@@ -332,6 +342,7 @@ async function assertBundlerUserOpGasEstimate(params: {
   callGasLimit?: bigint
   paymasterClient?: { getPaymasterData: any; getPaymasterStubData: any }
   bundlerUrl?: string
+  preflightDirectCallSucceeded?: boolean
 }): Promise<BundlerUserOpGasEstimate> {
   const { bundlerClient, account, calls, verificationGasLimit, paymasterClient } = params
   const client: any = bundlerClient as any
@@ -367,11 +378,8 @@ async function assertBundlerUserOpGasEstimate(params: {
     } catch (e: unknown) {
       estimateError = e
       const firstCallTo = calls[0]?.to
-      const canRetryWithoutPaymaster =
-        Boolean(paymaster) &&
-        isZoraUniversalRouterTarget(firstCallTo) &&
-        (isRpcInvalidParametersEstimateError(e) ||
-          isEchoedBundlerUserOpCallData(extractRevertInfo(e).revertData))
+      const hasSwapRouterCall = calls.some(isSwapRouterHeavyCall)
+      const canRetryWithoutPaymaster = Boolean(paymaster) && hasSwapRouterCall
       if (canRetryWithoutPaymaster) {
         const { paymaster: _paymaster, ...estimateWithoutPaymaster } = estimateParams as {
           paymaster?: unknown
@@ -398,6 +406,7 @@ async function assertBundlerUserOpGasEstimate(params: {
           error: estimateError,
           firstCallTo,
           floorCallGasLimit: params.callGasLimit,
+          preflightDirectCallSucceeded: params.preflightDirectCallSucceeded,
         })
       ) {
         const callGasLimit = resolveUserOpCallGasLimit({
@@ -1461,6 +1470,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   }
 
   // Pre-flight simulation: fail fast when the underlying call would revert on-chain.
+  let preflightDirectCallSucceeded = false
   if (!skipPreflightSimulation) {
     try {
       const preflightClient =
@@ -1492,10 +1502,14 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
           firstCallTo: attributedCalls[0]?.to,
         })
       }
+      preflightDirectCallSucceeded =
+        simResult.directCallResult?.success === true ||
+        (attributedCalls.length > 1 && simResult.success)
       if (AA_DEBUG) {
         logger.debug('[ERC-4337] Pre-flight simulation passed', {
           smartWallet,
           callCount: attributedCalls.length,
+          preflightDirectCallSucceeded,
         })
       }
     } catch (preflightError: unknown) {
@@ -2131,7 +2145,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       logger.debug('[ERC-4337] Failed to read smart wallet balance', { smartWallet, error: msg })
     }
   }
-  const zoraCallGasLimit = inferZoraSwapCallGasLimit(attributedCalls)
+  const swapRouterCallGasLimit = inferSwapRouterCallGasLimit(attributedCalls)
   if (attributedCalls.some((call) => isZoraUniversalRouterTarget(call.to))) {
     for (const call of attributedCalls) {
       if (!isZoraUniversalRouterTarget(call.to) || !call.data) continue
@@ -2152,20 +2166,21 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       calls: attributedCalls,
       verificationGasLimit,
       nonce: correctNonce,
-      callGasLimit: zoraCallGasLimit,
+      callGasLimit: swapRouterCallGasLimit,
       paymasterClient: usePaymaster ? paymasterClient : undefined,
       bundlerUrl: bundlerUrlForBundler,
+      preflightDirectCallSucceeded,
     })
     const sendCallGasLimit = resolveUserOpCallGasLimit({
       estimatedCallGasLimit: bundlerGasEstimate.callGasLimit,
-      floorCallGasLimit: zoraCallGasLimit,
-      bufferNumerator: zoraCallGasLimit ? ZORA_SEND_CALL_GAS_BUFFER_NUMERATOR : undefined,
-      bufferDenominator: zoraCallGasLimit ? ZORA_SEND_CALL_GAS_BUFFER_DENOMINATOR : undefined,
+      floorCallGasLimit: swapRouterCallGasLimit,
+      bufferNumerator: swapRouterCallGasLimit ? ZORA_SEND_CALL_GAS_BUFFER_NUMERATOR : undefined,
+      bufferDenominator: swapRouterCallGasLimit ? ZORA_SEND_CALL_GAS_BUFFER_DENOMINATOR : undefined,
     })
     if (AA_DEBUG && sendCallGasLimit) {
       logger.debug('[ERC-4337] send callGasLimit', {
         sendCallGasLimit: sendCallGasLimit.toString(),
-        zoraFloor: zoraCallGasLimit?.toString() ?? null,
+        swapRouterFloor: swapRouterCallGasLimit?.toString() ?? null,
         fromEstimate: bundlerGasEstimate.callGasLimit?.toString() ?? null,
       })
     }
