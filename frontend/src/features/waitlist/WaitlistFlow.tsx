@@ -59,7 +59,6 @@ import { useWaitlistBootstrap } from './useWaitlistBootstrap'
 import { ReferrerGreetingBanner } from './ReferrerGreetingBanner'
 import {
   clearWaitlistRecoveryGate,
-  readWaitlistRecoveryGate,
   writeWaitlistRecoveryGate,
 } from './waitlistRecoveryGate'
 import {
@@ -397,6 +396,12 @@ export function WaitlistFlow(props: {
   const prevPrivyAuthedRef = useRef(privyAuthed)
 
   useEffect(() => {
+    // Drop stale sessionStorage recovery flags from prior broken attempts so Continue
+    // opens normal Privy email login instead of the legacy handoff loop.
+    clearWaitlistRecoveryGate()
+  }, [])
+
+  useEffect(() => {
     privyAuthedRef.current = privyAuthed
     if (!privyAuthed) {
       privyAuthedBootstrapAttemptedRef.current = false
@@ -502,7 +507,6 @@ export function WaitlistFlow(props: {
           : 'Failed to start account recovery sign-in.',
       )
       setRecoveryRequired(true)
-      writeWaitlistRecoveryGate(true)
     },
     [redirectToCanonicalWaitlist, setError, setRecoveryRequired],
   )
@@ -646,8 +650,7 @@ export function WaitlistFlow(props: {
   ])
 
   const onContinueAuth = useCallback(async () => {
-    const needsExistingAccountRecovery =
-      !privyAuthed && (recoveryRequired || readWaitlistRecoveryGate())
+    const needsExistingAccountRecovery = !privyAuthed && recoveryRequired
     if (needsExistingAccountRecovery) {
       if (!beginRecoveryHandoffAttempt()) return
       try {
@@ -1033,7 +1036,7 @@ export function WaitlistFlow(props: {
     tokenlessFinalizingBootstrapCooldownUntilRef,
   ])
 
-  const authRecoveryUiActive = (recoveryRequired || readWaitlistRecoveryGate()) && !privyAuthed
+  const authRecoveryUiActive = recoveryRequired && !privyAuthed
   const authUi = deriveWaitlistAuthUi({ recoveryRequired: authRecoveryUiActive })
   const authVisibleError = error
   const showAuthBootstrapLoader =

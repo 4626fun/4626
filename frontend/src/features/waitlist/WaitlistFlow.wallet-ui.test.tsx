@@ -485,18 +485,41 @@ describe('WaitlistFlow simplified completion UI', () => {
 
   it('uses legacy recovery handoff only before Privy email auth completes', async () => {
     mockPrivyAuthenticated = false
-    writeWaitlistRecoveryGate(true)
+    let tokenReads = 0
+    mockGetAccessToken.mockImplementation(async () => {
+      tokenReads += 1
+      if (tokenReads <= 2) return 'stale-privy-token'
+      return null
+    })
     let bootstrapCalls = 0
     vi.mocked(apiFetch).mockImplementation(async (input: string) => {
       if (input.startsWith('/api/waitlist/bootstrap')) {
         bootstrapCalls += 1
-        return jsonResponse(WAITLIST_BOOTSTRAP_PAYLOAD) as any
+        return jsonResponse(
+          {
+            success: false,
+            code: 'RECOVERY_REQUIRED_EMAIL_BOUND',
+            error: 'Recovery required',
+            recoveryRequired: true,
+          },
+          false,
+          409,
+        ) as any
+      }
+      if (input.startsWith('/api/auth/logout')) {
+        return jsonResponse({ success: true }) as any
       }
       if (input.startsWith('/api/auth/privy')) {
         return jsonResponse({ success: true }) as any
       }
       if (input.startsWith('/api/auth/handoff/create')) {
         return jsonResponse({ success: true, data: { code: 'handoff-code', expiresAt: '2099-01-01T00:00:00.000Z' } }) as any
+      }
+      if (input.startsWith('/api/waitlist/stats')) {
+        return jsonResponse({
+          success: true,
+          data: { signedUpCount: 0, capacity: 0, spotsRemaining: 0 },
+        }) as any
       }
       throw new Error(`Unhandled apiFetch call: ${input}`)
     })
@@ -518,6 +541,8 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
+    await continueWaitlist()
+
     fireEvent.click(await screen.findByRole('button', { name: /use existing account/i }, { timeout: 5_000 }))
 
     await waitFor(() => {
@@ -529,12 +554,40 @@ describe('WaitlistFlow simplified completion UI', () => {
         }),
       )
     }, { timeout: 5_000 })
-    expect(bootstrapCalls).toBe(1)
+    expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
 
     Object.defineProperty(window, 'location', {
       configurable: true,
       value: originalLocation,
     })
+  })
+
+  it('does not block normal Privy login when a stale recovery gate is persisted', async () => {
+    writeWaitlistRecoveryGate(true)
+    mockPrivyAuthenticated = false
+
+    render(
+      <MemoryRouter>
+        <WaitlistFlow />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('button', { name: /^continue$/i }, { timeout: 5_000 })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /use existing account/i })).toBeNull()
+
+    await continueWaitlist()
+
+    expect(mockLogin).toHaveBeenCalledWith(
+      expect.objectContaining({
+        loginMethods: ['email'],
+      }),
+    )
+    expect(mockLogin).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        disableSignup: true,
+      }),
+    )
+    expect(mockPrivyLogout).not.toHaveBeenCalled()
   })
 
   it('does not reload waitlist when recovery auth bridge is rejected', async () => {
