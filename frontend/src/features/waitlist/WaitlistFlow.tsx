@@ -50,6 +50,7 @@ import {
   PRIVY_LOGOUT_SETTLE_ATTEMPTS,
   PRIVY_LOGOUT_SETTLE_DELAY_MS,
   RECOVERY_REQUIRED_MESSAGE,
+  RECOVERY_REQUIRED_WHILE_PRIVY_AUTHED_MESSAGE,
   SESSION_FINALIZING_RETRY_MESSAGE,
   SESSION_MISMATCH_MESSAGE,
   STALE_PRIVY_SESSION_MESSAGE,
@@ -287,6 +288,19 @@ function WaitlistAuthStep(props: {
             </div>
           ) : null}
 
+          {privyAuthed && recoveryRequired ? (
+            <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/8 px-3.5 py-2.5 text-left text-sm text-amber-100/90">
+              Signed in with Privy
+              {privyEmail ? (
+                <>
+                  {' '}
+                  as <span className="font-medium text-white">{privyEmail}</span>
+                </>
+              ) : null}
+              , but that session is not linked to your existing 4626 account yet.
+            </div>
+          ) : null}
+
           {/* CTA */}
           <motion.div {...stagger(1)} className="mt-4 space-y-2.5">
             <Button
@@ -296,7 +310,7 @@ function WaitlistAuthStep(props: {
               aria-disabled={buttonsDisabled}
               onClick={() => {
                 if (buttonsDisabled) return
-                void (recoveryRequired && !privyAuthed ? onRecoverAccount() : onContinueAuth())
+                void (recoveryRequired ? onRecoverAccount() : onContinueAuth())
               }}
               className="w-full"
             >
@@ -309,7 +323,7 @@ function WaitlistAuthStep(props: {
                 authUi.ctaLabel
               )}
             </Button>
-            {recoveryRequired && !privyAuthed ? (
+            {recoveryRequired ? (
               <button
                 type="button"
                 disabled={busy}
@@ -532,7 +546,11 @@ export function WaitlistFlow(props: {
       if (isRecoveryRequiredAuthError(recoverError)) {
         writeWaitlistRecoveryGate(true)
         setRecoveryRequired(true)
-        setError(RECOVERY_REQUIRED_MESSAGE)
+        setError(
+          privyAuthedRef.current
+            ? RECOVERY_REQUIRED_WHILE_PRIVY_AUTHED_MESSAGE
+            : RECOVERY_REQUIRED_MESSAGE,
+        )
         return
       }
       setError(
@@ -684,8 +702,7 @@ export function WaitlistFlow(props: {
   ])
 
   const onContinueAuth = useCallback(async () => {
-    const needsExistingAccountRecovery = !privyAuthed && recoveryRequired
-    if (needsExistingAccountRecovery) {
+    if (recoveryRequired) {
       if (!beginRecoveryHandoffAttempt()) return
       try {
         await handoffIntoExistingAccount()
@@ -748,7 +765,7 @@ export function WaitlistFlow(props: {
         writeWaitlistRecoveryGate(true)
         clearWaitlistAuthPending()
         setRecoveryRequired(true)
-        setError(RECOVERY_REQUIRED_MESSAGE)
+        setError(privyAuthed ? RECOVERY_REQUIRED_WHILE_PRIVY_AUTHED_MESSAGE : RECOVERY_REQUIRED_MESSAGE)
         return
       }
       setError(
@@ -945,13 +962,16 @@ export function WaitlistFlow(props: {
         writeWaitlistRecoveryGate(true)
         clearWaitlistAuthPending()
         setRecoveryRequired(true)
-        setError(RECOVERY_REQUIRED_MESSAGE)
+        setError(
+          privyAuthed ? RECOVERY_REQUIRED_WHILE_PRIVY_AUTHED_MESSAGE : RECOVERY_REQUIRED_MESSAGE,
+        )
         return
       }
       setError(isSessionMismatch ? SESSION_MISMATCH_MESSAGE : message)
     }
   }, [
     disableAggressiveSessionReset,
+    privyAuthed,
     recoveryRequiredBootstrapCooldownUntilRef,
     resetResolvedAccountState,
     setError,
@@ -965,6 +985,7 @@ export function WaitlistFlow(props: {
     if (recoveryHandoffInFlightRef.current) return
     if (!privyAuthed || privyClientStatus !== 'ready') return
     if (account?.emailVerified) return
+    if (recoveryRequired) return
 
     // Privy can mark the session authenticated before `login()` resolves (email link / redirect).
     if (authAttemptInFlightRef.current) {
@@ -1062,7 +1083,7 @@ export function WaitlistFlow(props: {
     tokenlessFinalizingBootstrapCooldownUntilRef,
   ])
 
-  const authRecoveryUiActive = recoveryRequired && !privyAuthed
+  const authRecoveryUiActive = recoveryRequired
   const authUi = deriveWaitlistAuthUi({ recoveryRequired: authRecoveryUiActive })
   const privyEmail = resolveWaitlistVerifiedEmailHint(privy.user)
   const authVisibleError = error
@@ -1119,7 +1140,9 @@ export function WaitlistFlow(props: {
           if (isRecoveryRequired) {
             writeWaitlistRecoveryGate(true)
             setRecoveryRequired(true)
-            setError(RECOVERY_REQUIRED_MESSAGE)
+            setError(
+              privyAuthed ? RECOVERY_REQUIRED_WHILE_PRIVY_AUTHED_MESSAGE : RECOVERY_REQUIRED_MESSAGE,
+            )
             return
           }
 
@@ -1137,7 +1160,9 @@ export function WaitlistFlow(props: {
   }, [
     authAttemptInFlightRef,
     busy,
+    disableAggressiveSessionReset,
     error,
+    privyAuthed,
     requestBootstrap,
     resetResolvedAccountState,
     setBusy,
@@ -1145,7 +1170,6 @@ export function WaitlistFlow(props: {
     setRecoveryRequired,
     shouldDestroyPrivySession,
     step,
-    disableAggressiveSessionReset,
   ])
 
   return (

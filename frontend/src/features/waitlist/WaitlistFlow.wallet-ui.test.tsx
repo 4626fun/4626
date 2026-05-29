@@ -444,7 +444,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     expect(await screen.findByRole('button', { name: /enter app/i })).toBeTruthy()
   })
 
-  it('retries bootstrap instead of opening legacy recovery when authed and bootstrap returns recovery-required', async () => {
+  it('shows existing-account recovery when authed bootstrap returns recovery-required', async () => {
     mockPrivyAuthenticated = true
     let bootstrapCalls = 0
     vi.mocked(apiFetch).mockImplementation(async (input: string) => {
@@ -476,10 +476,9 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('button', { name: /^continue$/i }, { timeout: 5_000 })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /use existing account/i })).toBeNull()
-    expect(mockLogin).toHaveBeenCalledTimes(0)
-    expect(mockPrivyLogout).toHaveBeenCalledTimes(0)
+    expect(
+      await screen.findByRole('button', { name: /use existing account/i }, { timeout: 5_000 }),
+    ).toBeTruthy()
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
   })
 

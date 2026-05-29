@@ -1,5 +1,7 @@
 export const RECOVERY_REQUIRED_MESSAGE =
   'This email is already on 4626. Tap Use existing account and sign in with the same email you used before.'
+export const RECOVERY_REQUIRED_WHILE_PRIVY_AUTHED_MESSAGE =
+  'This Privy session does not match your existing 4626 account. Tap Use existing account to sign in with the email you used before.'
 export const SESSION_MISMATCH_MESSAGE = 'Signed in as a different account. Tap Continue to try again.'
 export const SESSION_FINALIZING_RETRY_MESSAGE =
   'Finishing sign-in… this usually takes a few seconds.'
