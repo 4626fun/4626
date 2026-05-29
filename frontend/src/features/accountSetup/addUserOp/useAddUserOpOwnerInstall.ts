@@ -87,7 +87,12 @@ async function assertWalletAccountsMatchCsw(
 
 export type AddUserOpOwnerInstallPublicClient = Pick<
   PublicClient,
-  'getTransaction' | 'waitForTransactionReceipt' | 'readContract' | 'getBytecode' | 'request'
+  | 'getTransaction'
+  | 'waitForTransactionReceipt'
+  | 'readContract'
+  | 'getBytecode'
+  | 'request'
+  | 'getBalance'          // needed for funding preflight snapshot
 >
 
 export type UseAddUserOpOwnerInstallParams = {
@@ -353,7 +358,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
         const deadline = Date.now() + 90_000
         while (!landedTxHash && Date.now() < deadline) {
           const receipt = (await publicClient.request({
-            method: 'eth_getUserOperationReceipt',
+            method: 'eth_getUserOperationReceipt' as any,
             params: [result.userOperationHash],
           }).catch(() => null)) as { receipt?: { transactionHash?: string } } | null
           const candidate = receipt?.receipt?.transactionHash
