@@ -36,8 +36,9 @@ import {
   upsertAccount,
   verifyPrivyForAccounts,
 } from '../../../server/_lib/identity/accountsIdentity.js'
-import { runWithOwnedEmailCollisionAdoption } from '../../../server/_lib/identity/emailCollisionAdoption.js'
+import { runWithWaitlistEmailCollisionAdoption } from '../../../server/_lib/identity/emailCollisionAdoption.js'
 import { resolveBasenameHandle } from '../../../server/_lib/identity/basenameResolver.js'
+import { extractPrivyVerifiedEmail } from '../../../server/_lib/infra/trust.js'
 
 type BootstrapBody = { email?: string; referralCode?: string }
 type WaitlistBootstrapResponse =
@@ -526,8 +527,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       privyUser: context.privyUser,
     })
 
-    const privyEmail = normalizeEmail((context.privyUser as any)?.email?.address)
-    await runWithOwnedEmailCollisionAdoption({
+    const privyEmail = normalizeEmail(extractPrivyVerifiedEmail(context.privyUser))
+    await runWithWaitlistEmailCollisionAdoption({
       db: db as any,
       email: privyEmail,
       privyUserId: context.privyUserId,
@@ -543,7 +544,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Only Privy's verified email is allowed to become the canonical account email.
     // Pre-auth form input is intent, not proof.
     if (privyEmail) {
-      await runWithOwnedEmailCollisionAdoption({
+      await runWithWaitlistEmailCollisionAdoption({
         db: db as any,
         email: privyEmail,
         privyUserId: context.privyUserId,

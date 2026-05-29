@@ -82,7 +82,10 @@ describe('POST /api/waitlist/bootstrap', () => {
     assertNoWalletPrivyCollisionMock.mockResolvedValue(undefined)
     verifyPrivyForAccountsMock.mockResolvedValue({
       privyUserId: 'did:privy:test-user',
-      privyUser: { id: 'did:privy:test-user', email: { address: 'user@example.com' } },
+      privyUser: {
+        id: 'did:privy:test-user',
+        email: { address: 'user@example.com', verified: true },
+      },
     })
     classifyLinkedAccountsMock.mockReturnValue({
       embeddedEoa: { address: '0xabc1230000000000000000000000000000000000', chainType: 'evm', clientType: 'privy' },
@@ -194,6 +197,93 @@ describe('POST /api/waitlist/bootstrap', () => {
       email: 'user@example.com',
       requestedPrivyUserId: 'did:privy:test-user',
       existingPrivyUserId: 'did:privy:old-user',
+    })
+    syncEmailIdentityMock.mockRejectedValueOnce(recoveryError).mockResolvedValueOnce(undefined)
+    getDbMock.mockResolvedValue({
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('from profiles') && text.includes('where lower(email) = lower(')) {
+          return {
+            rows: [
+              {
+                id: 42,
+                privy_user_id: 'did:privy:old-user',
+                primary_wallet: '0xAbC1230000000000000000000000000000000000',
+                solana_wallet: null,
+                canonical_solana_wallet: null,
+                operational_solana_wallet: null,
+                embedded_wallet: null,
+                base_sub_account: null,
+                csw_address: null,
+                primary_smart_wallet: null,
+                primary_embedded_eoa: null,
+              },
+            ],
+          }
+        }
+        if (text.includes('update profiles') && text.includes('returning id')) {
+          return { rows: [{ id: 42 }] }
+        }
+        if (text.includes('from profile_wallets') && text.includes('where profile_id =')) {
+          return { rows: [] }
+        }
+        return { rows: [] }
+      }),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+      body: { email: 'user@example.com' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(syncEmailIdentityMock).toHaveBeenCalledTimes(2)
+    expect(upsertLinkedMethodMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        privyUserId: 'did:privy:test-user',
+        type: 'email',
+        value: 'user@example.com',
+        verified: true,
+      }),
+    )
+  })
+
+  it('rebinds an existing waitlist profile when Privy verifies the same email on a new session', async () => {
+    const recoveryError = Object.assign(new Error('collision'), {
+      code: 'IDENTITY_RECOVERY_REQUIRED',
+      reason: 'EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER',
+      email: 'user@example.com',
+      requestedPrivyUserId: 'did:privy:test-user',
+      existingPrivyUserId: 'did:privy:old-user',
+    })
+    verifyPrivyForAccountsMock.mockResolvedValueOnce({
+      privyUserId: 'did:privy:test-user',
+      privyUser: {
+        id: 'did:privy:test-user',
+        email: { address: 'user@example.com', verified: true },
+      },
+    })
+    classifyLinkedAccountsMock.mockReturnValueOnce({
+      embeddedEoa: { address: '0x9999999999999999999999999999999999999999', chainType: 'evm', clientType: 'privy' },
+      activeOwnerWallet: null,
+      canonicalSmartWallet: null,
+      canonicalSolanaWallet: null,
+      operationalSolanaWallet: null,
+      allWallets: [
+        {
+          address: '0x9999999999999999999999999999999999999999',
+          walletType: 'embedded_eoa',
+          provider: 'privy',
+          chain: 'evm',
+          clientType: 'privy',
+        },
+      ],
+      primaryWalletAddress: '0x9999999999999999999999999999999999999999',
     })
     syncEmailIdentityMock.mockRejectedValueOnce(recoveryError).mockResolvedValueOnce(undefined)
     getDbMock.mockResolvedValue({
