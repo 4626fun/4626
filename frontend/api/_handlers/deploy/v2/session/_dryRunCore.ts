@@ -30,6 +30,7 @@ import {
 
 import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
 import { ensureBatcherRegistryAuthorizationOnFork } from '../../../../../server/_lib/deploy/ensureBatcherRegistryAuthorization.js'
+import { ensurePhase3HelperCreate2AuthorizationOnFork } from '../../../../../server/_lib/deploy/ensurePhase3HelperCreate2Authorization.js'
 import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
 
 
@@ -2149,6 +2150,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (registryPrep.ensured) {
           console.warn('[deploy/v2/session/dry-run] creator_registry_batcher_authorized_on_fork', {
             batcher: phase1Batcher.toLowerCase(),
+          })
+        }
+      }
+      if (phase1Batcher && phase3Calls.length > 0) {
+        const phase3AuthPrep = await ensurePhase3HelperCreate2AuthorizationOnFork({
+          publicClient,
+          walletClient,
+          waitForTransactionReceipt: (args) => publicClient.waitForTransactionReceipt(args as any),
+          forkRequest,
+          forkMode,
+          batcher: phase1Batcher,
+          ownerBalanceHex: FORK_BALANCE_HEX,
+        })
+        if (phase3AuthPrep.ensured) {
+          console.warn('[deploy/v2/session/dry-run] phase3_helper_create2_authorized_on_fork', {
+            batcher: phase1Batcher.toLowerCase(),
+            phase3Helper: phase3AuthPrep.phase3Helper.toLowerCase(),
+            create2Deployer: phase3AuthPrep.create2Deployer.toLowerCase(),
           })
         }
       }

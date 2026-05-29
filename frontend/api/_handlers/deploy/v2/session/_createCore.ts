@@ -23,6 +23,7 @@ import {
   resolveWiredCreatorOvaultModules,
 } from '../../../../../src/lib/deploy/phase1ModuleDeploy.js'
 import { assertShareBridgeOftWiringForFinalize } from '../../../../../src/lib/deploy/shareBridgeOftWiring.js'
+import { assertPhase3HelperCreate2Authorization } from '../../../../../server/_lib/deploy/ensurePhase3HelperCreate2Authorization.js'
 import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import {
   handleOptions,
@@ -1423,6 +1424,7 @@ function inferPayoutRecipientMode(value: unknown): 'gauge' | 'payout_router' | n
 
 function extractPhase2CoreInvariantInfo(data: Hex): {
   creatorToken: Address
+  // Internal name kept close to ABI; represents creatorCoinPayoutRecipient (external earnings)
   payoutRecipient: Address | null
   rolePolicyId: bigint | null
 } | null {
@@ -2870,20 +2872,25 @@ export async function validateDeploySessionRequest(params: {
       .map((call) => extractFinalizePhase2InvariantInfo(call.data))
       .find((info): info is NonNullable<typeof info> => Boolean(info)) ?? null
   const inferredTradeFeeCollector = phase2FinalizeInvariantInfo?.gaugeController ?? null
-  const inferredPayoutRecipient = phase2CoreInvariantInfo?.payoutRecipient ?? null
+  // Note on canonical terminology (AGENTS.md): the on-chain field is still named
+  // `payoutRecipient` in Phase2CoreParams for ABI compatibility. In this code
+  // it represents the `creatorCoinPayoutRecipient` (external earnings lane).
+  // When different from the tradeFeeCollector (gaugeController), we route via
+  // PayoutRouter → VaultShareBurnStream (the "payout_router" external mode).
+  const inferredCreatorCoinPayoutRecipient = phase2CoreInvariantInfo?.payoutRecipient ?? null
   const resolvedTradeFeeCollector = requestedTradeFeeCollector ?? inferredTradeFeeCollector
   let resolvedExternalMode: 'gauge' | 'payout_router' = requestedExternalMode ?? 'gauge'
   if (
     !requestedExternalMode &&
-    inferredPayoutRecipient &&
+    inferredCreatorCoinPayoutRecipient &&
     resolvedTradeFeeCollector &&
-    inferredPayoutRecipient.toLowerCase() !== resolvedTradeFeeCollector.toLowerCase()
+    inferredCreatorCoinPayoutRecipient.toLowerCase() !== resolvedTradeFeeCollector.toLowerCase()
   ) {
     resolvedExternalMode = 'payout_router'
   }
   const resolvedPayoutRecipient =
     requestedPayoutRecipient ??
-    inferredPayoutRecipient ??
+    inferredCreatorCoinPayoutRecipient ??
     (resolvedExternalMode === 'gauge' ? resolvedTradeFeeCollector : null)
   const phase2InvariantExpectations: DeployPhase2InvariantExpectations | null = hasPhase2Finalize
     ? {
@@ -2942,6 +2949,26 @@ export async function validateDeploySessionRequest(params: {
 
     if (phase1Calls.length > 0) {
       await assertPhase1BatcherReadiness(phase1Calls)
+    }
+
+    if (phase3Calls.length > 0) {
+      const batcherAddress = getAddress(phase3Calls[0]!.to)
+      const rpc = resolveDeploySessionRpcUrl()
+      const readClient = createPublicClient({
+        chain: base,
+        transport: http(rpc, { timeout: 12_000 }),
+      })
+      try {
+        await assertPhase3HelperCreate2Authorization({
+          publicClient: readClient,
+          batcher: batcherAddress,
+        })
+      } catch (error) {
+        throw new DeploySessionRequestError(
+          409,
+          error instanceof Error ? error.message : String(error),
+        )
+      }
     }
 
     if (phase2CoreCalls.length > 0 && !hasPhase2Finalize) {

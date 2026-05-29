@@ -115,6 +115,14 @@ async function main(): Promise<void> {
   })
   if (!authorized) failures.push(`create2Deployer not authorized for batcher`)
 
+  const phase3HelperAuthorized = await client.readContract({
+    address: create2Deployer,
+    abi: CREATE2_AUTH_ABI,
+    functionName: 'authorizedDeployers',
+    args: [phase3Helper],
+  })
+  if (!phase3HelperAuthorized) failures.push(`create2Deployer not authorized for phase3Helper`)
+
   for (const [label, codeId] of Object.entries({ ...PHASE1_CODE_IDS, ...PHASE3_CODE_IDS })) {
     const [pointer, chunks, size, fromStore] = await Promise.all([
       client.readContract({ address: EXPECTED_STORE, abi: STORE_ABI, functionName: 'pointers', args: [codeId] }),

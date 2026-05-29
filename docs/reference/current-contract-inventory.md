@@ -34,7 +34,7 @@ Scope: current live Base infra addresses plus the canonical `v1.12.1` greenfield
 | `deploymentBatcher` | `0xa99058f424FB3ACC639F59355C65C40149030651` |
 | `deploymentBatcherPhase1Module` | `0x19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87` |
 | `deploymentBatcherPhase2Module` | `0x67FD8A34E5b26F875a9513DFf37521A1ca92d80f` |
-| `deploymentBatcherPhase3Helper` | `0x3c89e20AbccE3d8F6344AFf6c63c82F5619EFFCB` |
+| `deploymentBatcherPhase3Helper` | `0x674a2D5EE33e184e2120B373a9AcB3fef640885c` |
 | `deploymentBatcherUniV4Helper` | `0xF71a6236586077CD29C971443D2cce37B543DcBB` |
 | `deploymentBatcherUtilsHelper` | `0xD71C4910C7bB38FB1089Cca42b0883F1BFFfa28D` |
 | `permit2` | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
@@ -78,7 +78,7 @@ Live batcher child addresses that are read directly from `DeploymentBatcher` are
 
 - `DeploymentBatcherPhase1Module=0x19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87`
 - `DeploymentBatcherPhase2Module=0x67FD8A34E5b26F875a9513DFf37521A1ca92d80f`
-- `DeploymentBatcherPhase3Helper=0x3c89e20AbccE3d8F6344AFf6c63c82F5619EFFCB`
+- `DeploymentBatcherPhase3Helper=0x674a2D5EE33e184e2120B373a9AcB3fef640885c`
 - `DeploymentBatcherUniV4Helper=0xF71a6236586077CD29C971443D2cce37B543DcBB`
 - `DeploymentBatcherUtilsHelper=0xD71C4910C7bB38FB1089Cca42b0883F1BFFfa28D`
 

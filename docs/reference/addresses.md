@@ -32,7 +32,7 @@ Deployed contract addresses for 4626.
 | DeploymentBatcher | `0xa99058f424FB3ACC639F59355C65C40149030651` |
 | DeploymentBatcherPhase1Module | `0x19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87` |
 | DeploymentBatcherPhase2Module | `0x67FD8A34E5b26F875a9513DFf37521A1ca92d80f` |
-| DeploymentBatcherPhase3Helper | `0x3c89e20AbccE3d8F6344AFf6c63c82F5619EFFCB` |
+| DeploymentBatcherPhase3Helper | `0x674a2D5EE33e184e2120B373a9AcB3fef640885c` |
 | DeploymentBatcherUniV4Helper | `0xF71a6236586077CD29C971443D2cce37B543DcBB` |
 | DeploymentBatcherUtilsHelper | `0xD71C4910C7bB38FB1089Cca42b0883F1BFFfa28D` |
 
