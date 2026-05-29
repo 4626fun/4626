@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   assertAddOwnerSelfCallShape,
+  assertAddOwnerSelfCallOwnerArg,
   assertSendCallsEntryPointAddOwnerBundle,
+  parseAddOwnerAddressCalldataOwner,
   RELAY_ROUTER_BASE,
   verifyEntryPointHandleOpsTransaction,
 } from '@/lib/wallet/addOwnerCallShape'
@@ -39,7 +41,7 @@ describe('assertAddOwnerSelfCallShape', () => {
           data: '0xcd6e13f70000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`,
         },
       }),
-    ).toThrow(/RelayRouter multicall blocked/)
+    ).toThrow(/RelayRouter multicall is not allowed/)
   })
 
   it('rejects Relay depository as target', () => {
@@ -51,7 +53,7 @@ describe('assertAddOwnerSelfCallShape', () => {
           data: '0x49290c1c0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`,
         },
       }),
-    ).toThrow(/RelayRouter multicall blocked/)
+    ).toThrow(/RelayRouter multicall is not allowed/)
   })
 
   it('rejects multicall selector even when to is CSW', () => {
@@ -63,7 +65,7 @@ describe('assertAddOwnerSelfCallShape', () => {
           data: '0xcd6e13f70000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`,
         },
       }),
-    ).toThrow(/RelayRouter multicall blocked/)
+    ).toThrow(/RelayRouter multicall is not allowed/)
   })
 
   it('rejects wrong target address', () => {
@@ -88,6 +90,47 @@ describe('assertAddOwnerSelfCallShape', () => {
         },
       }),
     ).toThrow(/addOwnerAddress selector/)
+  })
+
+  it('rejects owner arg mismatch when expectedOwnerToAdd is provided', () => {
+    expect(() =>
+      assertAddOwnerSelfCallShape({
+        csw: CSW,
+        txRequest: { to: CSW, data: validAddOwnerData() },
+        expectedOwnerToAdd: '0x1111111111111111111111111111111111111111',
+      }),
+    ).toThrow(/active Privy embedded EOA/)
+  })
+
+  it('accepts matching owner arg when expectedOwnerToAdd is provided', () => {
+    expect(() =>
+      assertAddOwnerSelfCallShape({
+        csw: CSW,
+        txRequest: { to: CSW, data: validAddOwnerData() },
+        expectedOwnerToAdd: EMBEDDED,
+      }),
+    ).not.toThrow()
+  })
+})
+
+describe('parseAddOwnerAddressCalldataOwner', () => {
+  it('decodes the owner address from addOwnerAddress calldata', () => {
+    expect(parseAddOwnerAddressCalldataOwner(validAddOwnerData())?.toLowerCase()).toBe(EMBEDDED.toLowerCase())
+  })
+
+  it('returns null for non-addOwner calldata', () => {
+    expect(parseAddOwnerAddressCalldataOwner('0xdeadbeef')).toBeNull()
+  })
+})
+
+describe('assertAddOwnerSelfCallOwnerArg', () => {
+  it('throws when calldata owner differs from expected', () => {
+    expect(() =>
+      assertAddOwnerSelfCallOwnerArg({
+        data: validAddOwnerData(),
+        expectedOwnerToAdd: '0x1111111111111111111111111111111111111111',
+      }),
+    ).toThrow(/addOwnerAddress calldata targets/)
   })
 })
 

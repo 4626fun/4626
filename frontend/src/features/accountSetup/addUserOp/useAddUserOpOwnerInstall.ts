@@ -6,6 +6,7 @@ import { useConnections } from 'wagmi'
 
 import {
   assertAddOwnerSelfCallShape,
+  parseAddOwnerAddressCalldataOwner,
   verifyEntryPointHandleOpsTransaction,
 } from '@/lib/wallet/addOwnerCallShape'
 import { addOwnerViaBaseAppSendCalls, encodeAddOwnerCall } from '@/lib/wallet/baseAppOwnerCalls'
@@ -329,6 +330,14 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       setPageError('Canonical wallet or embedded signer is unavailable. Sign in and retry.')
       return false
     }
+    const ownerToAddNormalized = getAddress(privyEmbeddedEoaAddress)
+    const cswNormalized = getAddress(canonicalCswAddress)
+    if (ownerToAddNormalized.toLowerCase() === cswNormalized.toLowerCase()) {
+      setPageError(
+        'The Privy embedded signer must be an EOA to add as owner — it cannot be the same address as the canonical CSW.',
+      )
+      return false
+    }
 
     setBusy(true)
     setSubmitPhaseGuarded('preflight')
@@ -363,7 +372,9 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       assertAddOwnerSelfCallShape({
         csw: canonicalCswAddress,
         txRequest,
+        expectedOwnerToAdd: ownerToAddNormalized,
       })
+      appendEvent(`preflight:server_preview_owner=${ownerToAddNormalized}`)
       appendEvent('preflight:server_preview=self_call_shape_ok')
 
       setSubmitPhaseGuarded('preflight')
@@ -409,17 +420,27 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       )
       appendEvent('preflight:wallet_accounts=canonical_csw')
 
-      const csw = getAddress(canonicalCswAddress) as `0x${string}`
-      const ownerToAdd = getAddress(privyEmbeddedEoaAddress) as `0x${string}`
+      const csw = cswNormalized as `0x${string}`
+      const ownerToAdd = ownerToAddNormalized as `0x${string}`
       const localCall = encodeAddOwnerCall({ csw, ownerToAdd })
       assertAddOwnerSelfCallShape({
         csw,
         txRequest: { to: localCall.to, data: localCall.data as `0x${string}` },
+        expectedOwnerToAdd: ownerToAdd,
       })
+      if (txRequest.data.toLowerCase() !== localCall.data.toLowerCase()) {
+        const previewOwner = parseAddOwnerAddressCalldataOwner(txRequest.data)
+        appendEvent(
+          `preflight:server_preview_calldata_differs preview_owner=${previewOwner ?? 'unknown'} local_owner=${ownerToAdd}`,
+        )
+      } else {
+        appendEvent('preflight:server_preview_calldata_matches_local_encode')
+      }
       appendEvent('preflight:local_encode=self_call_only (no RelayRouter multicall)')
 
       appendEvent(`submit:csw=${csw}`)
       appendEvent(`submit:owner=${ownerToAdd}`)
+      appendEvent(`submit:wallet_sendCalls from=${csw} to=${csw} value=0 ownerArg=${ownerToAdd}`)
       appendEvent('submit:wallet_sendCalls_start')
 
       const fundingPreflightOk = funding?.ok === true

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { getAddress } from 'viem'
 import { base } from 'viem/chains'
 import { usePublicClient } from 'wagmi'
 import { usePrivy } from '@privy-io/react-auth'
@@ -23,7 +24,7 @@ import {
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
-import { RELAY_ROUTER_BASE } from '@/lib/wallet/addOwnerCallShape'
+import { parseAddOwnerAddressCalldataOwner, RELAY_ROUTER_BASE } from '@/lib/wallet/addOwnerCallShape'
 import { ENTRY_POINT_V06_BASE } from '@/lib/wallet/cswOwnerAbi'
 import { formatEthCompact } from '@/lib/wallet/cswEntryPointFunding'
 import { externalBrowserUrlFor, detectInAppEnvironment, isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
@@ -119,11 +120,15 @@ export function AddOwnerBaseApp() {
   )
 
   const privyEmbeddedEoaAddress = useMemo(() => {
-    const candidates = (Array.isArray(privyWallets) ? privyWallets : []) as Array<Record<string, unknown>>
-    const found = pickPrivyEmbeddedEoaWallet(candidates)
-    const address = found?.address
-    return typeof address === 'string' ? address.toLowerCase() : null
-  }, [privyWallets])
+    const runtimeCandidates = (Array.isArray(privyContextWallets) ? privyContextWallets : []) as Array<
+      Record<string, unknown>
+    >
+    const metadataCandidates = (Array.isArray(privyWallets) ? privyWallets : []) as Array<Record<string, unknown>>
+    const fromRuntime = pickPrivyEmbeddedEoaWallet(runtimeCandidates, canonicalCswAddress)
+    const fromMetadata = pickPrivyEmbeddedEoaWallet(metadataCandidates, canonicalCswAddress)
+    const address = fromRuntime?.address ?? fromMetadata?.address
+    return typeof address === 'string' ? getAddress(address).toLowerCase() : null
+  }, [privyContextWallets, privyWallets, canonicalCswAddress])
 
   const baseWalletLink = useEnsureCanonicalBaseAccountWallet({
     enabled: Boolean(privyAuthed && inBaseApp),
@@ -184,12 +189,23 @@ export function AddOwnerBaseApp() {
     userOpFlow.fundingLoading ||
     (userOpFlow.fundingAssessment == null && Boolean(publicClient && canonicalCswAddress))
 
+  const preparedOwnerArg = useMemo(() => {
+    if (!userOpFlow.preparedTx?.data) return null
+    return parseAddOwnerAddressCalldataOwner(userOpFlow.preparedTx.data)
+  }, [userOpFlow.preparedTx?.data])
+
+  const ownerArgMatchesEmbedded =
+    preparedOwnerArg != null &&
+    privyEmbeddedEoaAddress != null &&
+    preparedOwnerArg.toLowerCase() === privyEmbeddedEoaAddress.toLowerCase()
+
   const canSubmitUserOp =
     Boolean(canonicalCswAddress && privyEmbeddedEoaAddress) &&
     !userOpFlow.alreadyOwner &&
     !userOpFlow.prepareLoading &&
     !fundingBlocksSubmit &&
     !fundingPending &&
+    (preparedOwnerArg == null || ownerArgMatchesEmbedded) &&
     (!inBaseApp || baseWalletLink.ready)
 
   const fundingSnapshot = userOpFlow.fundingAssessment?.snapshot
@@ -551,9 +567,26 @@ export function AddOwnerBaseApp() {
               ) : null}
 
               {userOpFlow.preparedTx ? (
-                <div className="rounded-xl border border-white/10 bg-black/30 p-3 font-mono text-[10px] text-zinc-500 break-all">
-                  preview: selector={userOpFlow.preparedTx.data.slice(0, 10)} to={userOpFlow.preparedTx.to}{' '}
-                  (submission uses locally encoded CSW self-call only)
+                <div className="rounded-xl border border-white/10 bg-black/30 p-3 space-y-2 text-[10px] text-zinc-500">
+                  <div className="font-mono break-all">
+                    preview: selector={userOpFlow.preparedTx.data.slice(0, 10)} to={userOpFlow.preparedTx.to}
+                  </div>
+                  <div className="font-mono break-all">
+                    addOwnerAddress(owner={preparedOwnerArg ?? 'decoding…'})
+                  </div>
+                  <div className="font-mono break-all">
+                    submit: wallet_sendCalls.from={canonicalCswAddress} → to={canonicalCswAddress} value=0
+                  </div>
+                  {ownerArgMatchesEmbedded ? (
+                    <div className="text-emerald-400/90">
+                      Server preview owner matches Privy embedded EOA. Submit uses the same locally encoded self-call.
+                    </div>
+                  ) : preparedOwnerArg && privyEmbeddedEoaAddress ? (
+                    <div className="text-amber-300">
+                      Server preview owner ({preparedOwnerArg}) differs from embedded EOA ({privyEmbeddedEoaAddress}).
+                      Tap Rebuild preview or sign out and back in.
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 

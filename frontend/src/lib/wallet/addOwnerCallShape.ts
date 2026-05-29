@@ -1,10 +1,13 @@
+import { decodeFunctionData, getAddress, type Hex } from 'viem'
+import type { PublicClient } from 'viem'
+
 import {
   ADD_OWNER_ADDRESS_SELECTOR,
+  CSW_OWNER_MUTATION_ABI,
   ENTRY_POINT_V06_BASE,
   RELAY_DEPOSITORY_BASE,
   RELAY_MULTICALL_SELECTOR,
 } from '@/lib/wallet/cswOwnerAbi'
-import type { PublicClient } from 'viem'
 
 /**
  * Canonical rule for adding an owner to a Base App Coinbase Smart Wallet (2026):
@@ -50,9 +53,42 @@ function isBlockedRelayTarget(toLower: string): boolean {
   )
 }
 
+export function parseAddOwnerAddressCalldataOwner(data: string): `0x${string}` | null {
+  if (typeof data !== 'string' || data.length < 10) return null
+  try {
+    const decoded = decodeFunctionData({
+      abi: CSW_OWNER_MUTATION_ABI,
+      data: data as Hex,
+    })
+    if (decoded.functionName !== 'addOwnerAddress') return null
+    const owner = decoded.args?.[0]
+    if (typeof owner !== 'string') return null
+    return getAddress(owner)
+  } catch {
+    return null
+  }
+}
+
+export function assertAddOwnerSelfCallOwnerArg(params: {
+  data: string
+  expectedOwnerToAdd: string
+}): void {
+  const expected = getAddress(params.expectedOwnerToAdd)
+  const parsed = parseAddOwnerAddressCalldataOwner(params.data)
+  if (!parsed) {
+    throw new Error('Could not decode addOwnerAddress owner argument from calldata.')
+  }
+  if (parsed.toLowerCase() !== expected.toLowerCase()) {
+    throw new Error(
+      `addOwnerAddress calldata targets ${parsed}, but the active Privy embedded EOA is ${expected}. Rebuild preview after signing in with the correct account.`,
+    )
+  }
+}
+
 export function assertAddOwnerSelfCallShape(params: {
   csw: string
   txRequest: AddOwnerTxRequestShape
+  expectedOwnerToAdd?: string
 }): void {
   const cswLower = params.csw.trim().toLowerCase()
   const toLower = params.txRequest.to.trim().toLowerCase()
@@ -76,6 +112,13 @@ export function assertAddOwnerSelfCallShape(params: {
     throw new Error(
       `Expected addOwnerAddress selector ${ADD_OWNER_ADDRESS_SELECTOR}, got ${selector || '(empty)'}.`,
     )
+  }
+
+  if (params.expectedOwnerToAdd) {
+    assertAddOwnerSelfCallOwnerArg({
+      data: params.txRequest.data,
+      expectedOwnerToAdd: params.expectedOwnerToAdd,
+    })
   }
 }
 
