@@ -6,6 +6,7 @@ import {
   assertCreatorOvaultModuleStorageCompatible,
 } from './ovaultModuleIdentity'
 import {
+  resolveAlignedPhase1DeployDeps,
   resolveCreate2DeployerForBatcher,
   resolveWiredCreatorOvaultModules,
 } from './phase1ModuleDeploy'
@@ -56,6 +57,36 @@ describe('phase1ModuleDeploy', () => {
       batcherAddress: BATCHER,
     })
     expect(wired?.core).toBe(CORE_V2)
+  })
+
+  it('flags misaligned phase1 create2 deployer store pairing', async () => {
+    const publicClient = {
+      readContract: vi.fn(async (args: { address: Address; functionName: string }) => {
+        if (args.functionName === 'phase1Module') return PHASE1
+        if (args.address === PHASE1 && args.functionName === 'create2Deployer') return CREATE2_V2
+        if (args.address === PHASE1 && args.functionName === 'bytecodeStore') {
+          return '0x8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4'
+        }
+        if (args.address === CREATE2_V2 && args.functionName === 'store') {
+          return '0x9C3e2A7bd73690d5b5DC0C47f8dB74c4dc5D1c69'
+        }
+        if (args.address === BATCHER && args.functionName === 'create2Deployer') return LEGACY_CREATE2
+        if (args.address === LEGACY_CREATE2 && args.functionName === 'store') {
+          return '0x8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4'
+        }
+        throw new Error(`unexpected read ${args.functionName}@${args.address}`)
+      }),
+    }
+
+    const aligned = await resolveAlignedPhase1DeployDeps({
+      publicClient,
+      batcherAddress: BATCHER,
+    })
+    expect(aligned.ok).toBe(false)
+    if (!aligned.ok) {
+      expect(aligned.message).toMatch(/Phase1Module create2 deployer is not paired/)
+      expect(aligned.message).toMatch(/setPhase1Module/)
+    }
   })
 })
 

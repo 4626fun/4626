@@ -135,6 +135,110 @@ export async function resolvePhase1ModuleDeployField(params: {
   })
 }
 
+const CREATE2_DEPLOYER_STORE_ABI = [
+  {
+    type: 'function',
+    name: 'store',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+export type Phase1DeployDeps =
+  | { ok: true; create2Deployer: Address; bytecodeStore: Address }
+  | { ok: false; message: string; create2Deployer?: Address; bytecodeStore?: Address; deployerStore?: Address }
+
+async function readCreate2DeployerStore(params: {
+  publicClient: ReadClient
+  create2Deployer: Address
+}): Promise<Address | null> {
+  try {
+    const store = await params.publicClient.readContract({
+      address: params.create2Deployer,
+      abi: CREATE2_DEPLOYER_STORE_ABI,
+      functionName: 'store',
+    })
+    if (!isAddress(String(store))) return null
+    return getAddress(store as Address)
+  } catch {
+    return null
+  }
+}
+
+/** Phase-1 CREATE2 deploy reads bytecode from create2Deployer.store(), not the batcher bytecodeStore getter alone. */
+export async function resolveAlignedPhase1DeployDeps(params: {
+  publicClient: ReadClient
+  batcherAddress: Address
+  fallbacks?: { create2Deployer?: Address | null; bytecodeStore?: Address | null }
+}): Promise<Phase1DeployDeps> {
+  const bytecodeStore =
+    (await resolveBytecodeStoreForBatcher({
+      publicClient: params.publicClient,
+      batcherAddress: params.batcherAddress,
+      fallback: params.fallbacks?.bytecodeStore ?? null,
+    })) ?? null
+  const create2Deployer =
+    (await resolveCreate2DeployerForBatcher({
+      publicClient: params.publicClient,
+      batcherAddress: params.batcherAddress,
+      fallback: params.fallbacks?.create2Deployer ?? null,
+    })) ?? null
+
+  if (!bytecodeStore || !create2Deployer) {
+    return {
+      ok: false,
+      message:
+        `Configured batcher at ${params.batcherAddress} does not expose expected phased deploy interface ` +
+        '(bytecodeStore/create2Deployer). Update VITE_CREATOR_VAULT_BATCHER / CREATOR_VAULT_BATCHER.',
+    }
+  }
+
+  const deployerStore = await readCreate2DeployerStore({
+    publicClient: params.publicClient,
+    create2Deployer,
+  })
+  if (!deployerStore) {
+    return {
+      ok: false,
+      message: `Configured create2 deployer at ${create2Deployer} does not expose expected store() interface.`,
+      create2Deployer,
+      bytecodeStore,
+    }
+  }
+
+  if (deployerStore.toLowerCase() === bytecodeStore.toLowerCase()) {
+    return { ok: true, create2Deployer, bytecodeStore }
+  }
+
+  const shellCreate2 = await readBatcherShellField({
+    publicClient: params.publicClient,
+    batcherAddress: params.batcherAddress,
+    functionName: 'create2Deployer',
+  })
+  const shellStore = shellCreate2
+    ? await readCreate2DeployerStore({ publicClient: params.publicClient, create2Deployer: shellCreate2 })
+    : null
+  const shellAligned =
+    shellCreate2 &&
+    shellStore &&
+    shellStore.toLowerCase() === bytecodeStore.toLowerCase()
+
+  return {
+    ok: false,
+    message:
+      `Phase1Module create2 deployer is not paired with its bytecode store: ` +
+      `bytecodeStore=${bytecodeStore} but create2Deployer(${create2Deployer}).store=${deployerStore}. ` +
+      (shellAligned
+        ? `The batcher shell create2 deployer ${shellCreate2} is store-aligned — redeploy Phase1Module with that deployer ` +
+          'via script/RotateLiveBatcherPhase1ModulesV121.s.sol (UNIVERSAL_CREATE2_DEPLOYER=shell value) and execute setPhase1Module on the Safe.'
+        : 'Rotate Phase1Module wiring so create2Deployer.store() matches bytecodeStore before retrying deploy.'),
+    create2Deployer,
+    bytecodeStore,
+    deployerStore,
+  }
+}
+
 export async function resolveCreate2DeployerForBatcher(params: {
   publicClient: ReadClient
   batcherAddress: Address

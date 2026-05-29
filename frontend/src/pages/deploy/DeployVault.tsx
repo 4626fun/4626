@@ -75,6 +75,7 @@ import {
   readDeployedPhase1CoreAddresses,
 } from '@/lib/deploy/phase1OnchainState'
 import {
+  resolveAlignedPhase1DeployDeps,
   resolveBytecodeStoreForBatcher,
   resolveCreate2DeployerForBatcher,
 } from '@/lib/deploy/phase1ModuleDeploy'
@@ -3483,12 +3484,18 @@ function DeployVaultBatcher({
     staleTime: 30_000,
     retry: 0,
     queryFn: async () => {
-      const create2Deployer = await resolveCreate2DeployerForBatcher({
+      const alignedDeps = await resolveAlignedPhase1DeployDeps({
         publicClient: publicClient!,
         batcherAddress: batcherAddress as Address,
-        fallback: (CONTRACTS.universalCreate2DeployerFromStore ?? null) as Address | null,
+        fallbacks: {
+          create2Deployer: (CONTRACTS.universalCreate2DeployerFromStore ?? null) as Address | null,
+          bytecodeStore: (CONTRACTS.universalBytecodeStore ?? null) as Address | null,
+        },
       })
-      if (!create2Deployer) throw new Error('Create2 deployer not available')
+      if (!alignedDeps.ok) {
+        throw new Error(alignedDeps.message)
+      }
+      const create2Deployer = alignedDeps.create2Deployer
 
       let protocolTreasury: Address | null = null
       try {
@@ -9218,23 +9225,19 @@ function DeployVaultMain() {
         )
       }
 
-      const bytecodeStore = await resolveBytecodeStoreForBatcher({
+      const alignedDeps = await resolveAlignedPhase1DeployDeps({
         publicClient: readClient,
         batcherAddress: batcher,
-        fallback: (CONTRACTS.universalBytecodeStore ?? null) as Address | null,
+        fallbacks: {
+          bytecodeStore: (CONTRACTS.universalBytecodeStore ?? null) as Address | null,
+          create2Deployer: (CONTRACTS.universalCreate2DeployerFromStore ?? null) as Address | null,
+        },
       })
-      const create2Deployer = await resolveCreate2DeployerForBatcher({
-        publicClient: readClient,
-        batcherAddress: batcher,
-        fallback: (CONTRACTS.universalCreate2DeployerFromStore ?? null) as Address | null,
-      })
-      if (!bytecodeStore || !create2Deployer) {
-        throw new Error(
-          `Configured batcher at ${batcher} does not expose expected phased deploy interface (bytecodeStore/create2Deployer). Update VITE_CREATOR_VAULT_BATCHER / CREATOR_VAULT_BATCHER.`,
-        )
+      if (!alignedDeps.ok) {
+        throw new Error(alignedDeps.message)
       }
-      const bytecodeStoreAddress = bytecodeStore as Address
-      const create2DeployerAddress = create2Deployer as Address
+      const bytecodeStoreAddress = alignedDeps.bytecodeStore
+      const create2DeployerAddress = alignedDeps.create2Deployer
 
       let deployerStore: Address | null = null
       try {

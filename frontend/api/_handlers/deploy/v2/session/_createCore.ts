@@ -17,6 +17,7 @@ import { base } from 'viem/chains'
 
 import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
 import {
+  resolveAlignedPhase1DeployDeps,
   resolveBytecodeStoreForBatcher,
   resolveCreate2DeployerForBatcher,
   resolveWiredCreatorOvaultModules,
@@ -1215,16 +1216,17 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
   let create2Deployer: Address
   let bytecodeStore: Address
   try {
-    const [create2Read, storeRead] = await Promise.all([
-      resolveCreate2DeployerForBatcher({ publicClient: readClient, batcherAddress }),
-      resolveBytecodeStoreForBatcher({ publicClient: readClient, batcherAddress }),
-    ])
-    if (!create2Read || !storeRead) {
-      throw new Error('missing phase1 create2 dependencies')
+    const aligned = await resolveAlignedPhase1DeployDeps({
+      publicClient: readClient,
+      batcherAddress,
+    })
+    if (!aligned.ok) {
+      throw new DeploySessionRequestError(409, `phase1 precheck failed: ${aligned.message}`)
     }
-    create2Deployer = getAddress(create2Read)
-    bytecodeStore = getAddress(storeRead)
-  } catch {
+    create2Deployer = getAddress(aligned.create2Deployer)
+    bytecodeStore = getAddress(aligned.bytecodeStore)
+  } catch (error) {
+    if (error instanceof DeploySessionRequestError) throw error
     throw new DeploySessionRequestError(
       409,
       `phase1 precheck failed: could not resolve create2 dependencies for batcher ${batcherAddress}.`,

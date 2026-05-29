@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Script.sol";
 
 import {DeploymentBatcher, DeploymentBatcherPhase1Module} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
+import {UniversalCreate2DeployerFromStore} from "../contracts/factories/UniversalCreate2DeployerFromStore.sol";
 import {CreatorOVaultAdminModule} from "../contracts/vault/modules/CreatorOVaultAdminModule.sol";
 import {CreatorOVaultCoreModule} from "../contracts/vault/modules/CreatorOVaultCoreModule.sol";
 import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorOVaultStrategiesModule.sol";
@@ -21,7 +22,7 @@ contract RotateLiveBatcherPhase1ModulesV121 is Script {
 
     address constant LIVE_BATCHER = 0xa99058f424FB3ACC639F59355C65C40149030651;
     address constant LIVE_STORE = 0x8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4;
-    address constant LIVE_CREATE2_DEPLOYER = 0xF6538d7D18AfFe5057C6f109DBEd33c851A70c7E;
+    address constant LIVE_CREATE2_DEPLOYER = 0x4760216AFd59B843671E0FdFCe6498Ec8CFf38a7;
     address constant LIVE_UTILS_HELPER = 0xD71C4910C7bB38FB1089Cca42b0883F1BFFfa28D;
     address constant DEFAULT_REGISTRY = 0x3f64087dc361Ad52300409E5873b26941D6418B6;
     address constant DEFAULT_VAULT_ACTIVATION_BATCHER = 0x5036FB536f53b15307825eB2006B21E22f0F3193;
@@ -31,7 +32,7 @@ contract RotateLiveBatcherPhase1ModulesV121 is Script {
     string constant VAULT_STRATEGIES_MODULE_SALT_TAG_PREFIX = "base-release:CreatorOVaultStrategiesModule:";
     string constant VAULT_ADMIN_MODULE_SALT_TAG_PREFIX = "base-release:CreatorOVaultAdminModule:";
     string constant LIVE_PHASE1_MODULE_SALT_TAG =
-        "base-release:DeploymentBatcherPhase1Module:v1.12.1-live-batcher";
+        "base-release:DeploymentBatcherPhase1Module:v1.12.1-live-batcher-store-aligned";
 
     bytes32 constant MODULE_STORAGE_V2 = keccak256("CreatorOVaultModuleStorage.v2");
 
@@ -69,6 +70,11 @@ contract RotateLiveBatcherPhase1ModulesV121 is Script {
         address utilsHelperAddr = vm.envOr("LIVE_UTILS_HELPER", LIVE_UTILS_HELPER);
         address registry = vm.envOr("REGISTRY", DEFAULT_REGISTRY);
         address vaultActivation = vm.envOr("VAULT_ACTIVATION_BATCHER", DEFAULT_VAULT_ACTIVATION_BATCHER);
+
+        require(
+            address(UniversalCreate2DeployerFromStore(create2DeployerAddr).store()) == storeAddr,
+            "create2Deployer.store must match UNIVERSAL_BYTECODE_STORE"
+        );
 
         bytes32 coreSalt = _moduleSalt(VAULT_CORE_MODULE_SALT_TAG_PREFIX);
         bytes32 strategiesSalt = _moduleSalt(VAULT_STRATEGIES_MODULE_SALT_TAG_PREFIX);
