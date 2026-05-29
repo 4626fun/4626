@@ -12,10 +12,18 @@ type ZoraAddOwnerSigningPanelProps = {
   controller: AccountSetupController
   className?: string
   onOwnerInstallSuccess?: () => void | Promise<void>
+  onPendingOwnerInstallHash?: (hash: string | null) => void
+  onOwnerInstallPhase?: (phase: string | null) => void
 }
 
 export function ZoraAddOwnerSigningPanel(props: ZoraAddOwnerSigningPanelProps) {
-  const { controller, className = '', onOwnerInstallSuccess } = props
+  const { controller, className = '', onOwnerInstallSuccess, onPendingOwnerInstallHash, onOwnerInstallPhase } = props
+
+  // Respect the broader in-progress state coming from the controller (covers both the
+  // modern Base App self-call path and any other concurrent owner install). This prevents
+  // the confusing situation of offering to start signing while one is already running.
+  const { ownerInstallInProgress, ownerInstallPhase: controllerOwnerInstallPhase } = controller
+  const effectiveOwnerInstallPhase = controllerOwnerInstallPhase
   const {
     authHeaders,
     canonicalCswAddress,
@@ -138,42 +146,59 @@ export function ZoraAddOwnerSigningPanel(props: ZoraAddOwnerSigningPanelProps) {
           <Button
             type="button"
             variant="primary"
-            disabled={ownerWalletConnecting}
+            disabled={ownerWalletConnecting || ownerInstallInProgress}
             loading={ownerWalletConnecting}
             onClick={() => void connectOwnerWallet()}
           >
-            {ownerWalletConnecting ? 'Connecting wallet…' : 'Connect CSW owner wallet'}
+            {ownerInstallInProgress
+              ? 'Owner install in progress'
+              : ownerWalletConnecting
+                ? 'Connecting wallet…'
+                : 'Connect CSW owner wallet'}
           </Button>
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="primary"
-            disabled={!canSubmit || addOwnerFlow.busy}
-            loading={addOwnerFlow.busy || addOwnerFlow.prepareLoading}
-            onClick={() => {
-              void (async () => {
-                const ok = await addOwnerFlow.handleEnableSigning()
-                if (!ok) return
-                await Promise.all([
-                  loadMe({ showSpinner: false }),
-                  refreshCswOwners(),
-                  onOwnerInstallSuccess?.(),
-                ])
-              })()
-            }}
-          >
-            Enable 4626 signing
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={addOwnerFlow.busy}
-            onClick={() => void connectOwnerWallet()}
-          >
-            Switch owner wallet
-          </Button>
+          {ownerInstallInProgress ? (
+            <div className="text-xs text-sky-300">
+              Owner install already in progress
+              {effectiveOwnerInstallPhase === 'awaiting_signature' ? ' — waiting for Base App signature…' : ''}.
+            </div>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="primary"
+                disabled={!canSubmit || addOwnerFlow.busy}
+                loading={addOwnerFlow.busy || addOwnerFlow.prepareLoading}
+                onClick={() => {
+                  // Signal start of an owner install operation to the outer controller
+                  // (powers the shared pending banner in waitlist accordion for both lanes).
+                  onPendingOwnerInstallHash?.(null)
+                  onOwnerInstallPhase?.('starting')
+                  void (async () => {
+                    const ok = await addOwnerFlow.handleEnableSigning()
+                    if (!ok) return
+                    await Promise.all([
+                      loadMe({ showSpinner: false }),
+                      refreshCswOwners(),
+                      onOwnerInstallSuccess?.(),
+                    ])
+                  })()
+                }}
+              >
+                Enable 4626 signing
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={addOwnerFlow.busy}
+                onClick={() => void connectOwnerWallet()}
+              >
+                Switch owner wallet
+              </Button>
+            </>
+          )}
         </div>
       )}
 

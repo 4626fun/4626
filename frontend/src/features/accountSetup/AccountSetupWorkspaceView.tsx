@@ -28,6 +28,7 @@ import { WaitlistBaseAppWalletNudge } from '@/features/waitlist/WaitlistBaseAppW
 import { inferWaitlistEoaOwnerRoutingHint } from '@/lib/wallet/userExecutionTrack'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { useWaitlistSigningStepComplete } from '@/features/waitlist/useWaitlistSigningStepComplete'
+import { WaitlistModernParentOwnerInstall } from './WaitlistModernParentOwnerInstall'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { readWaitlistSetupIntent } from '@/lib/auth/waitlistEntry'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
@@ -91,29 +92,6 @@ function extractOwnerApprovalDebugDiagnostic(errorMessage: string | null | undef
 }
 
 type AccountSetupWorkspaceController = ReturnType<typeof useAccountSetupController>
-
-const LazyZoraAddOwnerSigningPanel = lazy(async () => {
-  const mod = await import('@/features/accountSetup/ZoraAddOwnerSigningPanel')
-  return { default: mod.ZoraAddOwnerSigningPanel }
-})
-
-function ZoraAddOwnerSigningPanelLazy(props: {
-  controller: AccountSetupWorkspaceController
-  className?: string
-  onOwnerInstallSuccess?: () => void | Promise<void>
-}) {
-  return (
-    <Suspense
-      fallback={
-        <div className="text-xs text-zinc-500">
-          <LoadingText intent="processing" size="sm" labelOverride="Loading signing setup..." />
-        </div>
-      }
-    >
-      <LazyZoraAddOwnerSigningPanel {...props} />
-    </Suspense>
-  )
-}
 
 const LazyWaitlistConnectBaseApp = lazy(async () => {
   const mod = await import('@/features/waitlist/WaitlistConnectBaseApp')
@@ -183,6 +161,11 @@ export function AccountSetupWorkspaceView(props: {
     ownerInstallSectionRef,
     ownerPrimaryCtaLabel,
     onchainEoaOwnerCandidates,
+    pendingOwnerInstallHash,
+    setPendingOwnerInstallHash,
+    ownerInstallPhase,
+    setOwnerInstallPhase,
+    ownerInstallInProgress,
     providerCollision,
     readableCswOwners,
     zoraCrossAppCount,
@@ -274,13 +257,24 @@ export function AccountSetupWorkspaceView(props: {
       : executionTrack === 'sub-account'
         ? 'Base App sub-account connected for swaps'
         : '4626 signing enabled'
-    : showBaseAppConnectPanel
-      ? 'Connect Base App to enable sponsored swaps'
-      : showParentCswAddOwnerPanel
-      ? 'Connect a CSW owner wallet and enable 4626 signing'
-      : 'Optional — trade at /swap with an external wallet (EOA mode) if you skip this step'
+    : ownerInstallInProgress || pendingOwnerInstallHash
+      ? ownerInstallPhase === 'awaiting_signature'
+        ? 'Waiting for Base App signature…'
+        : 'Owner install in progress…'
+      : showBaseAppConnectPanel
+        ? 'Connect Base App to enable sponsored swaps'
+        : showParentCswAddOwnerPanel
+          ? 'Connect a CSW owner wallet and enable 4626 signing'
+          : 'Optional — trade at /swap with an external wallet (EOA mode) if you skip this step'
   const sponsorshipDiagnostic = extractSponsorshipDiagnostic(error)
   const ownerApprovalDiagnostic = extractOwnerApprovalDebugDiagnostic(error)
+
+  // Prefer the modern validated Base App self-call path (EntryPoint handleOps)
+  // for parent-CSW owner install whenever we're in a Base App context or the
+  // older sub-account connect panel is not the active one. This makes the
+  // proven 2026 direction the primary experience inside the waitlist.
+  const useModernParentOwnerInstallInWaitlist =
+    showParentCswAddOwnerPanel && (inBaseApp || !showBaseAppConnectPanel)
   // Zora-controlled CBSWs are passkey-owned (P256 keys held in Coinbase
   // Wallet / Base Account), not EOA-owned. The cross-app login surfaces the
   // CBSW address but cannot expose a transactional signer, so we steer users
@@ -451,6 +445,40 @@ export function AccountSetupWorkspaceView(props: {
           {error ? (
             <div role="alert" aria-live="assertive" className="rounded-xl border border-rose-500/20 bg-rose-500/[0.08] px-4 py-3 text-sm text-rose-300">
               <div>{error}</div>
+            </div>
+          ) : null}
+
+          {/* Pending owner install banner also shown in the focused Base App connect path for consistency. */}
+          {(ownerInstallInProgress || pendingOwnerInstallHash) ? (
+            <div className="mb-4 rounded-xl border border-sky-400/30 bg-sky-500/10 p-4 space-y-3 text-xs text-sky-100">
+              <div>
+                <div className="font-semibold">
+                  {ownerInstallPhase === 'awaiting_signature'
+                    ? 'Waiting for Base App signature…'
+                    : 'Owner install in progress — waiting for bundle'}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard?.writeText(pendingOwnerInstallHash || '')}
+                  className="mt-1 block w-full text-left font-mono text-[10px] text-sky-200/80 break-all hover:text-sky-100 active:text-white"
+                >
+                  {pendingOwnerInstallHash || '—'}
+                </button>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={async () => {
+                  await Promise.all([loadMe({ showSpinner: false }), refreshParentEmbeddedOwner?.()])
+                  if (signingStepComplete) {
+                    setPendingOwnerInstallHash?.(null)
+                    setOwnerInstallPhase?.(null)
+                  }
+                }}
+              >
+                Check now (also refresh)
+              </Button>
             </div>
           ) : null}
 
@@ -775,20 +803,93 @@ export function AccountSetupWorkspaceView(props: {
 
                 {isOpen ? (
                   <div className="space-y-2.5 px-4 pb-4 pl-[52px]">
-                    {signingStepComplete ? (
+                    {/* Pending owner install banner — shows the same high-quality waiting UX
+                        as the dedicated /add Base App flow while the user is still on the waitlist page.
+                        Uses the stabilized pendingOwnerInstallHash / ownerInstallInProgress from the controller
+                        (set by the modern hook when it enters awaiting_signature / broadcasting etc.). */}
+                    {(ownerInstallInProgress || pendingOwnerInstallHash) ? (
+                      <div className="rounded-xl border border-sky-400/30 bg-sky-500/10 p-4 space-y-3 text-xs text-sky-100">
+                        <div>
+                          <div className="font-semibold">
+                            {ownerInstallPhase === 'awaiting_signature'
+                              ? 'Waiting for Base App signature…'
+                              : ownerInstallPhase === 'broadcasting' || ownerInstallPhase === 'confirming'
+                                ? 'UserOp submitted — waiting for bundle confirmation'
+                                : 'Owner install in progress'}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => navigator.clipboard?.writeText(pendingOwnerInstallHash || '')}
+                            className="mt-1 block w-full text-left font-mono text-[10px] text-sky-200/80 break-all hover:text-sky-100 active:text-white"
+                            title="Click to copy full UserOp hash"
+                          >
+                            {pendingOwnerInstallHash || '—'}
+                          </button>
+                        </div>
+                        <p className="leading-relaxed text-sky-100/90">
+                          {ownerInstallPhase === 'awaiting_signature'
+                            ? 'Confirm the add-owner request in Base App (passkey or device sign). This step can take up to 3 minutes.'
+                            : 'This can take 1–3 minutes. Keep this tab open. You can safely refresh or come back later.'}
+                        </p>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={async () => {
+                              await Promise.all([
+                                loadMe({ showSpinner: false }),
+                                refreshParentEmbeddedOwner?.(),
+                              ])
+                              // Auto-clear the pending banner once the owner install has landed
+                              // and the signing step reports complete (mirrors the "hide raw errors
+                              // when pending hash present" pattern from the dedicated flow).
+                              if (signingStepComplete) {
+                                setPendingOwnerInstallHash?.(null)
+                                setOwnerInstallPhase?.(null)
+                              }
+                            }}
+                          >
+                            Check now (also refresh)
+                          </Button>
+                          <button
+                            type="button"
+                            className="text-[11px] text-sky-200/70 underline underline-offset-2 hover:text-sky-100"
+                            onClick={() => {
+                              setPendingOwnerInstallHash?.(null)
+                              setOwnerInstallPhase?.(null)
+                            }}
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* While a modern owner install is in-flight (pending hash present), suppress the
+                        normal action buttons/panels to prevent the user from starting a second operation
+                        during the long signature + bundle window. The banner above is the single source
+                        of truth and action surface. */}
+                    {(ownerInstallInProgress || pendingOwnerInstallHash) ? (
+                      <p className="text-xs text-zinc-500">
+                        Owner install in progress. Use the status card above to monitor or check progress.
+                      </p>
+                    ) : signingStepComplete ? (
                       <p className="text-xs text-zinc-400 leading-relaxed">
                         Your embedded signer is confirmed as an on-chain owner of your parent smart wallet.
                       </p>
                     ) : showBaseAppConnectPanel ? (
                       <WaitlistConnectBaseAppLazy {...baseAppConnectProps} />
-                    ) : showParentCswAddOwnerPanel ? (
-                      <ZoraAddOwnerSigningPanelLazy
+                    ) : useModernParentOwnerInstallInWaitlist ? (
+                      <WaitlistModernParentOwnerInstall
                         controller={controller}
-                        onOwnerInstallSuccess={() => refreshParentEmbeddedOwner()}
+                        embeddedEoaAddress={embeddedEoaAddress}
+                        onOwnerInstallSuccess={() => refreshParentEmbeddedOwner?.()}
                       />
                     ) : (
                       <p className="text-xs text-zinc-400 leading-relaxed">
-                        Zora signing setup is available when your smart wallet has a connectable on-chain EOA owner.
+                        Modern Base App owner install (validated self-call) is the primary path for parent-CSW signing.
+                        The older Zora EOA-relay option is available as a fallback when needed.
                         You can still trade at{' '}
                         <a href="/swap" className="text-brand-100 underline underline-offset-2">
                           /swap
@@ -1157,11 +1258,12 @@ export function AccountSetupWorkspaceView(props: {
                     subAccountAddress={me.accountSignals.baseSubAccount?.address ?? me.baseSubAccount ?? null}
                     embeddedEoaAddress={embeddedEoaAddress ?? null}
                   />
-                ) : showParentCswAddOwnerPanel ? (
-                  <ZoraAddOwnerSigningPanelLazy
+                ) : useModernParentOwnerInstallInWaitlist ? (
+                  <WaitlistModernParentOwnerInstall
                     controller={controller}
+                    embeddedEoaAddress={embeddedEoaAddress}
+                    onOwnerInstallSuccess={() => refreshParentEmbeddedOwner?.()}
                     className="mt-4"
-                    onOwnerInstallSuccess={() => refreshParentEmbeddedOwner()}
                   />
                 ) : (
                   <p className="mt-4 text-xs text-zinc-500 leading-relaxed">
@@ -1170,8 +1272,8 @@ export function AccountSetupWorkspaceView(props: {
                         ? '4626 swaps can route through your Base App sub-account.'
                         : '4626 signing is enabled on your canonical wallet.'
                       : subAccountFlowEnabled
-                        ? 'Connect Base App for sponsored swaps, or enable Zora EOA signing when available.'
-                        : 'Enable 4626 signing appears when your Zora smart wallet has a connectable on-chain EOA owner.'}
+                        ? 'Connect Base App for sponsored swaps, or use the modern Base App owner install path (recommended for parent-CSW signing).'
+                        : 'Modern Base App owner install (validated self-call) is the primary way to enable parent-CSW signing. The older Zora EOA-relay option is the legacy fallback.'}
                   </p>
                 )}
                 <div className="mt-4 flex flex-wrap items-start gap-3">

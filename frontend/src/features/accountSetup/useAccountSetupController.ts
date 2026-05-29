@@ -199,6 +199,27 @@ export function useAccountSetupController(params: {
   const ownerInstallSectionRef = useRef<HTMLElement | null>(null)
   const hasInitialDataRef = useRef(Boolean(params.initialData))
   const ownerApprovalRunIdRef = useRef(0)
+  const pendingOwnerInstallHashRef = useRef<string | null>(null)
+
+  // Pending owner install state (especially for the long Base App wallet_sendCalls +
+  // EntryPoint self-call addOwnerAddress path). When set, the waitlist accordion and
+  // other setup surfaces can show the same high-quality "Waiting for Base App signature…",
+  // hash + copy, "Check now (refresh gas)" UX that the dedicated AddOwnerBaseApp page has.
+  const [pendingOwnerInstallHash, setPendingOwnerInstallHash] = useState<string | null>(null)
+  const setPendingOwnerInstallHashGuarded = useCallback((next: string | null) => {
+    pendingOwnerInstallHashRef.current = next
+    setPendingOwnerInstallHash((prev) => (prev === next ? prev : next))
+  }, [])
+
+  // Phase for the current owner install operation (awaiting_signature, broadcasting,
+  // confirming, etc.). Powered by the modern Base App self-call hook when active.
+  // Allows waitlist banners to show precise copy during long signature + bundle waits.
+  const [ownerInstallPhase, setOwnerInstallPhase] = useState<string | null>(null)
+  const ownerInstallPhaseRef = useRef<string | null>(null)
+  const setOwnerInstallPhaseGuarded = useCallback((next: string | null) => {
+    ownerInstallPhaseRef.current = next
+    setOwnerInstallPhase((prev) => (prev === next ? prev : next))
+  }, [])
 
   // Refs for unstable external objects (wagmi/Privy) to prevent React #185 max-update-depth
   // during long async flows (Zora cross-app, owner install wallet_sendCalls signature prompts,
@@ -1026,9 +1047,15 @@ export function useAccountSetupController(params: {
     setNoticeGuarded(null)
     setConnectedOwnerState({ value: null, reason: 'idle' })
     setOwnerDelegationFlags(null)
+
+    // Also clear any pending modern owner install state on explicit reset
+    // (symmetry with the auto-clear we added on successful completion).
+    setPendingOwnerInstallHashGuarded(null)
+    setOwnerInstallPhaseGuarded(null)
+
     await retryOwnerCheck()
     setNoticeGuarded('Signing state reset. Reconnect or switch owner wallet if needed.')
-  }, [retryOwnerCheck])
+  }, [retryOwnerCheck, setPendingOwnerInstallHashGuarded, setOwnerInstallPhaseGuarded])
 
   const onAddRabbyCoOwner = useCallback(async (_advancedOwnerAddress: string) => {
     setError(
@@ -1056,6 +1083,11 @@ export function useAccountSetupController(params: {
       (!connectedAddress || activeExternalOwnerWalletMatchesConnectedAddress),
   )
   const ownerApprovalReady = connectedOwnerReady && (signerClientReady || privySignerClientReady) && !needsEmbeddedWallet
+
+  // When a modern owner install (Base App self-call path) is actively running,
+  // surface this so the waitlist accordion and other surfaces can show consistent
+  // "in progress" language instead of offering to start the same operation again.
+  const ownerInstallInProgress = Boolean(pendingOwnerInstallHash) || (ownerInstallPhase != null && ownerInstallPhase !== 'idle')
   const ownerAuthorityState = useMemo(
     () =>
       deriveOwnerAuthorityState({
@@ -1099,12 +1131,16 @@ export function useAccountSetupController(params: {
       },
       {
         title: 'Wallet signing',
-        description: ownerApprovalReady
-          ? 'Run Enable 4626 signing to add your embedded signer as a CSW owner.'
-          : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
-            ? 'Wait for the signer client to finish hydrating.'
-            : 'Connect and verify a current CSW owner first.',
-        state: connectedOwnerReady ? 'active' : 'blocked',
+        description: ownerInstallInProgress
+          ? ownerInstallPhase === 'awaiting_signature'
+            ? 'Confirm the request in Base App. This can take up to 3 minutes.'
+            : 'Owner install running — waiting for signature or bundle confirmation.'
+          : ownerApprovalReady
+            ? 'Run Enable 4626 signing to add your embedded signer as a CSW owner.'
+            : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
+              ? 'Wait for the signer client to finish hydrating.'
+              : 'Connect and verify a current CSW owner first.',
+        state: ownerInstallInProgress ? 'active' : connectedOwnerReady ? 'active' : 'blocked',
       },
     ],
     [
@@ -1114,15 +1150,32 @@ export function useAccountSetupController(params: {
       ownerSignerAddress,
       privySignerClientReady,
       signerClientReady,
+      ownerInstallInProgress,
+      ownerInstallPhase,
     ],
   )
-  const ownerPrimaryCtaLabel = ownerApprovalReady
-    ? 'Ready to enable signing'
-    : needsEmbeddedWallet
-      ? 'Provisioning embedded wallet…'
-      : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
-        ? 'Finishing wallet session…'
-        : 'Connect owner wallet'
+  const ownerPrimaryCtaLabel = ownerInstallInProgress
+    ? ownerInstallPhase === 'awaiting_signature'
+      ? 'Waiting for Base App signature…'
+      : 'Owner install in progress…'
+    : ownerApprovalReady
+      ? 'Ready to enable signing'
+      : needsEmbeddedWallet
+        ? 'Provisioning embedded wallet…'
+        : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
+          ? 'Finishing wallet session…'
+          : 'Connect owner wallet'
+
+  // Global auto-clear of pending owner install state once the step is complete.
+  // This prevents stale "Waiting for signature…" banners and in-progress labels
+  // after a successful modern Base App owner install (or any other path that
+  // results in the embedded EOA becoming an on-chain owner).
+  useEffect(() => {
+    if (ownerInstallInProgress && ownerApprovalReady) {
+      setPendingOwnerInstallHashGuarded(null);
+      setOwnerInstallPhaseGuarded(null);
+    }
+  }, [ownerInstallInProgress, ownerApprovalReady, setPendingOwnerInstallHashGuarded, setOwnerInstallPhaseGuarded]);
 
   useEffect(() => {
     if (!ownerInstallResumeState.requested) return
@@ -1184,6 +1237,11 @@ export function useAccountSetupController(params: {
     ownerDelegationFlags,
     ownerInstallResumeState,
     ownerInstallSectionRef,
+    pendingOwnerInstallHash,
+    setPendingOwnerInstallHash: setPendingOwnerInstallHashGuarded,
+    ownerInstallPhase,
+    setOwnerInstallPhase: setOwnerInstallPhaseGuarded,
+    ownerInstallInProgress,
     ownerPrimaryCtaLabel,
     ownerSignerAddress,
     ownerSignerChainId,

@@ -102,6 +102,19 @@ export type UseAddUserOpOwnerInstallParams = {
   publicClient: AddUserOpOwnerInstallPublicClient | undefined
   enabled?: boolean
   onSuccess?: () => void | Promise<void>
+  /**
+   * Optional reporter so the hook can sync its pending UserOp hash to an outer
+   * controller (e.g. useAccountSetupController.pendingOwnerInstallHash) when the
+   * modern Base App self-call path is used from the waitlist accordion or other
+   * surfaces. This powers the shared "waiting for signature / bundle" banner.
+   */
+  onPendingHashChange?: (hash: string | null) => void
+  /**
+   * Optional reporter for the current submit phase (awaiting_signature, broadcasting,
+   * confirming, etc.). Allows waitlist surfaces to show precise, phase-aware copy
+   * in their pending banners during the long Base App signature + bundle window.
+   */
+  onPhaseChange?: (phase: string | null) => void
 }
 
 export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams) {
@@ -112,6 +125,8 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     publicClient,
     enabled = true,
     onSuccess,
+    onPendingHashChange,
+    onPhaseChange,
   } = params
 
   const { baseAccountSdk } = useBaseAccountSdk()
@@ -127,6 +142,11 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [callBundleId, setCallBundleId] = useState<string | null>(null)
   const [pendingUserOpHash, setPendingUserOpHash] = useState<string | null>(null)
+
+  const reportPendingUserOpHash = useCallback((next: string | null) => {
+    setPendingUserOpHash(next)
+    onPendingHashChangeRef.current?.(next)
+  }, [])
   const [eventLog, setEventLog] = useState<string[]>([])
   const [submitPhase, setSubmitPhase] = useState<
     'idle' | 'preflight' | 'awaiting_signature' | 'broadcasting' | 'confirming' | 'verifying'
@@ -139,6 +159,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
   const setSubmitPhaseGuarded = useCallback((next: typeof submitPhase) => {
     if (next !== submitPhaseRef.current) {
       setSubmitPhase(next)
+      onPhaseChangeRef.current?.(next)
     }
   }, [])
   const [preparedTx, setPreparedTx] = useState<PreparedOwnerTxRequest | null>(null)
@@ -165,6 +186,19 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
 
   const baseAccountSdkRef = useRef(baseAccountSdk)
   useEffect(() => { baseAccountSdkRef.current = baseAccountSdk }, [baseAccountSdk])
+
+  // Stabilize the optional reporter callback behind a ref so it doesn't participate
+  // in the giant dependency arrays of the main submit effect (same stabilization
+  // discipline used for authHeaders, publicClient, connections, etc.).
+  const onPendingHashChangeRef = useRef(onPendingHashChange)
+  useEffect(() => {
+    onPendingHashChangeRef.current = onPendingHashChange
+  }, [onPendingHashChange])
+
+  const onPhaseChangeRef = useRef(onPhaseChange)
+  useEffect(() => {
+    onPhaseChangeRef.current = onPhaseChange
+  }, [onPhaseChange])
 
   const inBaseApp = isBaseAppInAppContext(detectInAppEnvironment())
 
@@ -291,7 +325,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     setSubmitPhaseGuarded('preflight')
     setPageError(null)
     setPageNotice(null)
-    setPendingUserOpHash(null)
+    reportPendingUserOpHash(null)
     appendEvent('--- submit ---')
     appendEvent(`lane:entrypoint_userop (validated Base App self-call path) via wallet_sendCalls → ${ENTRY_POINT_V06_BASE}`)
 
@@ -404,7 +438,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       // Capture the UserOp hash as soon as we have it (even before the bundle tx lands).
       // This is very useful for the user to monitor / share.
       if (result.userOperationHash) {
-        setPendingUserOpHash(result.userOperationHash)
+        reportPendingUserOpHash(result.userOperationHash)
         appendEvent(`user_op_hash=${result.userOperationHash}`)
       }
 
@@ -473,7 +507,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
         throw new Error('Transaction submitted but owner confirmation is still pending. Retry shortly.')
       }
 
-      setPendingUserOpHash(null)
+      reportPendingUserOpHash(null)
       setAlreadyOwner(true)
       setPageNotice(
         `Owner install succeeded via EntryPoint handleOps (tx ${landedTxHash.slice(0, 10)}…). The CSW executed addOwnerAddress on itself inside the UserOp (msg.sender == address(this)).`,
