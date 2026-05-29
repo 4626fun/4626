@@ -92,18 +92,25 @@ export async function handler(): Promise<void> {
   }
 
   // ── 2. Payout Router Processor (claim + convertAndQueue) ─────────────
-  try {
-    console.log('═══ Payout Router Harvest ═══');
-    payoutRouterResult = await executePayoutRouterHarvest();
-    console.log(
-      `  vaults=${payoutRouterResult.totalVaults} processed=${payoutRouterResult.processed} ` +
-        `claimed=${payoutRouterResult.claimedVaults} converted=${payoutRouterResult.converted} ` +
-        `skipped=${payoutRouterResult.skipped} errors=${payoutRouterResult.errors}`,
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`  payout-router-harvest failed: ${msg}`);
-    errors.push(`payout-router-harvest: ${msg}`);
+  // When Vercel keeper_jobs payout fan-out is enabled, disable direct KPR harvest
+  // to avoid duplicate convertAndQueue / checkpoint() races on the same router.
+  const payoutRouterHarvestEnabled = String(process.env.KPR_PAYOUT_ROUTER_HARVEST_ENABLED ?? '1').trim() !== '0';
+  if (payoutRouterHarvestEnabled) {
+    try {
+      console.log('═══ Payout Router Harvest ═══');
+      payoutRouterResult = await executePayoutRouterHarvest();
+      console.log(
+        `  vaults=${payoutRouterResult.totalVaults} processed=${payoutRouterResult.processed} ` +
+          `claimed=${payoutRouterResult.claimedVaults} converted=${payoutRouterResult.converted} ` +
+          `skipped=${payoutRouterResult.skipped} errors=${payoutRouterResult.errors}`,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`  payout-router-harvest failed: ${msg}`);
+      errors.push(`payout-router-harvest: ${msg}`);
+    }
+  } else {
+    console.log('═══ Payout Router Harvest (skipped — KPR_PAYOUT_ROUTER_HARVEST_ENABLED=0) ═══');
   }
 
   // ── 3. Ajna Bucket Manager (TWAP + liquidity-aware) ──────────────────

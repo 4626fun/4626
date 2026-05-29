@@ -87,7 +87,7 @@ export const BASE_DEFAULTS = {
   // `creatorVaultBatcher`; strict no-EOA deploy preflight checks the
   // batcher's onchain getters.
   universalBytecodeStore: addr('8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4'),
-  universalCreate2DeployerFromStore: addr('4760216AFd59B843671E0FdFCe6498Ec8CFf38a7'),
+  universalCreate2DeployerFromStore: addr('F6538d7D18AfFe5057C6f109DBEd33c851A70c7E'),
   vaultAuxiliaryDeployBatcher: addr('a3986F2F812a80a4Ee4A33646bE5248D9e22eb88'),
 
   // AA helpers
