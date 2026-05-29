@@ -78,7 +78,14 @@ async function rebindEmailCollisionProfile(params: {
   if (!existingPrivyUserId) return false
 
   const profilePrivyUserId = normalizeLower(profileRow?.privy_user_id)
-  if (profilePrivyUserId && profilePrivyUserId !== existingPrivyUserId) return false
+  const requestedPrivyUserId = normalizeLower(collision.requestedPrivyUserId)
+  if (
+    profilePrivyUserId &&
+    profilePrivyUserId !== existingPrivyUserId &&
+    profilePrivyUserId !== requestedPrivyUserId
+  ) {
+    return false
+  }
 
   const updatedProfile = await db.sql`
     UPDATE profiles
@@ -87,6 +94,7 @@ async function rebindEmailCollisionProfile(params: {
       AND (
         privy_user_id IS NULL
         OR LOWER(privy_user_id) = ${existingPrivyUserId}
+        OR LOWER(privy_user_id) = ${normalizeLower(collision.requestedPrivyUserId)}
       )
     RETURNING id;
   `

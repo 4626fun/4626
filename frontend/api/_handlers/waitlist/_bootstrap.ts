@@ -566,11 +566,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             privyUserId: context.privyUserId,
           }),
       })
-      await upsertAccount({
+      await runWithWaitlistEmailCollisionAdoption({
         db: db as any,
-        privyUserId: context.privyUserId,
         email: privyEmail,
-        emailVerified: true,
+        privyUserId: context.privyUserId,
+        privyUser,
+        bootstrapEmailHint,
+        action: () =>
+          upsertAccount({
+            db: db as any,
+            privyUserId: context.privyUserId,
+            email: privyEmail,
+            emailVerified: true,
+          }),
       })
       await upsertBootstrapProfile({
         db: db as any,

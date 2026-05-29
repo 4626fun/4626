@@ -171,6 +171,7 @@ function WaitlistAuthStep(props: {
   authUi: WaitlistEmailUi
   waitlistStats: WaitlistStatsData | null
   busy: boolean
+  privyAuthed: boolean
   privyClientStatus: 'disabled' | 'loading' | 'ready'
   error: string | null
   recoveryRequired: boolean
@@ -184,6 +185,7 @@ function WaitlistAuthStep(props: {
     authUi,
     waitlistStats,
     busy,
+    privyAuthed,
     privyClientStatus,
     error,
     recoveryRequired,
@@ -271,7 +273,7 @@ function WaitlistAuthStep(props: {
               aria-disabled={buttonsDisabled}
               onClick={() => {
                 if (buttonsDisabled) return
-                void (recoveryRequired ? onRecoverAccount() : onContinueAuth())
+                void (recoveryRequired && !privyAuthed ? onRecoverAccount() : onContinueAuth())
               }}
               className="w-full"
             >
@@ -284,7 +286,7 @@ function WaitlistAuthStep(props: {
                 authUi.ctaLabel
               )}
             </Button>
-            {recoveryRequired ? (
+            {recoveryRequired && !privyAuthed ? (
               <button
                 type="button"
                 disabled={busy}
@@ -297,7 +299,7 @@ function WaitlistAuthStep(props: {
           </motion.div>
 
           {/* error */}
-          {error && !recoveryRequired ? (
+          {error && (!recoveryRequired || privyAuthed) ? (
             <motion.div
               {...stagger(2)}
               role="alert"
@@ -359,18 +361,13 @@ export function WaitlistFlow(props: {
   const recoveryHandoffInFlightRef = useRef(false)
   const pendingAuthResumeStartedRef = useRef(false)
   const loginStartedWhileLoggedOutRef = useRef(false)
+  const loginAwaitInProgressRef = useRef(false)
   const startAuthAutoAttemptedRef = useRef(false)
   const finalizingAutoRetryCountRef = useRef(0)
   const finalizingBackgroundRetryCountRef = useRef(0)
   const privyLogoutRef = useRef<null | (() => Promise<void>)>(null)
   const privyAuthedRef = useRef(privyAuthed)
   const privyClientStatusRef = useRef(privyClientStatus)
-
-  useEffect(() => {
-    if (!readWaitlistRecoveryGate()) return
-    setRecoveryRequired(true)
-    setError(RECOVERY_REQUIRED_MESSAGE)
-  }, [setError, setRecoveryRequired])
 
   const wrapClass = 'mx-auto w-full max-w-5xl px-4 py-6 sm:py-8'
   const activeReferralCode = useMemo(() => readStoredWaitlistReferralCode(), [])
@@ -404,14 +401,6 @@ export function WaitlistFlow(props: {
     if (!privyAuthed) {
       privyAuthedBootstrapAttemptedRef.current = false
     }
-  }, [privyAuthed])
-
-  useEffect(() => {
-    if (!prevPrivyAuthedRef.current && privyAuthed) {
-      authBootstrapAutoAttemptedRef.current = false
-      privyAuthedBootstrapAttemptedRef.current = false
-    }
-    prevPrivyAuthedRef.current = privyAuthed
   }, [privyAuthed])
 
   useEffect(() => {
@@ -460,6 +449,21 @@ export function WaitlistFlow(props: {
     finalizingAutoRetryCountRef,
     finalizingBackgroundRetryCountRef,
   })
+
+  useEffect(() => {
+    if (!prevPrivyAuthedRef.current && privyAuthed) {
+      authBootstrapAutoAttemptedRef.current = false
+      // User-initiated Continue owns bootstrap until the attempt finishes; do not
+      // reset this flag mid-flight or auto-bootstrap duplicates the same request.
+      if (!authAttemptInFlightRef.current) {
+        privyAuthedBootstrapAttemptedRef.current = false
+      }
+      clearWaitlistRecoveryGate()
+      setRecoveryRequired(false)
+      recoveryRequiredBootstrapCooldownUntilRef.current = 0
+    }
+    prevPrivyAuthedRef.current = privyAuthed
+  }, [privyAuthed, authAttemptInFlightRef, recoveryRequiredBootstrapCooldownUntilRef, setRecoveryRequired])
 
   const beginRecoveryHandoffAttempt = useCallback((): boolean => {
     if (busy || authAttemptInFlightRef.current || recoveryHandoffInFlightRef.current) return false
@@ -642,7 +646,8 @@ export function WaitlistFlow(props: {
   ])
 
   const onContinueAuth = useCallback(async () => {
-    const needsExistingAccountRecovery = recoveryRequired || readWaitlistRecoveryGate()
+    const needsExistingAccountRecovery =
+      !privyAuthed && (recoveryRequired || readWaitlistRecoveryGate())
     if (needsExistingAccountRecovery) {
       if (!beginRecoveryHandoffAttempt()) return
       try {
@@ -655,6 +660,8 @@ export function WaitlistFlow(props: {
       return
     }
     if (!beginAuthAttempt()) return
+    privyAuthedBootstrapAttemptedRef.current = true
+    authBootstrapAutoAttemptedRef.current = true
     tokenlessFinalizingBootstrapCooldownUntilRef.current = 0
     recoveryRequiredBootstrapCooldownUntilRef.current = 0
     try {
@@ -685,8 +692,10 @@ export function WaitlistFlow(props: {
           return
         }
         loginStartedWhileLoggedOutRef.current = true
+        loginAwaitInProgressRef.current = true
         try {
           await runPrivyLoginWithTimeout(login as (options?: unknown) => Promise<unknown>, buildWaitlistEmailLoginOptions() as any)
+          loginAwaitInProgressRef.current = false
           await settleBootstrapAfterRecoverableLoginError({
             bypassRecoveryCooldown: true,
           })
@@ -700,6 +709,7 @@ export function WaitlistFlow(props: {
           }
           await resetStalePrivySessionAndRetryEmailLogin()
         } finally {
+          loginAwaitInProgressRef.current = false
           loginStartedWhileLoggedOutRef.current = false
         }
       }
@@ -877,6 +887,9 @@ export function WaitlistFlow(props: {
   }, [completionBusy, enterAppUrl, navigateWithSessionHandoff])
 
   const resumePendingWaitlistAuth = useCallback(async () => {
+    clearWaitlistRecoveryGate()
+    setRecoveryRequired(false)
+    recoveryRequiredBootstrapCooldownUntilRef.current = 0
     try {
       await settleBootstrapAfterRecoverableLoginError({
         bypassRecoveryCooldown: true,
@@ -910,6 +923,7 @@ export function WaitlistFlow(props: {
     }
   }, [
     disableAggressiveSessionReset,
+    recoveryRequiredBootstrapCooldownUntilRef,
     resetResolvedAccountState,
     setError,
     setRecoveryRequired,
@@ -921,13 +935,12 @@ export function WaitlistFlow(props: {
     if (step !== 'auth') return
     if (recoveryHandoffInFlightRef.current) return
     if (!privyAuthed || privyClientStatus !== 'ready') return
-    if (recoveryRequired) return
     if (account?.emailVerified) return
 
     // Privy can mark the session authenticated before `login()` resolves (email link / redirect).
     if (authAttemptInFlightRef.current) {
       if (recoveryHandoffInFlightRef.current) return
-      if (!loginStartedWhileLoggedOutRef.current || pendingAuthResumeStartedRef.current) return
+      if (!loginAwaitInProgressRef.current || pendingAuthResumeStartedRef.current) return
       pendingAuthResumeStartedRef.current = true
       void (async () => {
         try {
@@ -1020,10 +1033,11 @@ export function WaitlistFlow(props: {
     tokenlessFinalizingBootstrapCooldownUntilRef,
   ])
 
-  const authUi = deriveWaitlistAuthUi({ recoveryRequired })
+  const authRecoveryUiActive = (recoveryRequired || readWaitlistRecoveryGate()) && !privyAuthed
+  const authUi = deriveWaitlistAuthUi({ recoveryRequired: authRecoveryUiActive })
   const authVisibleError = error
   const showAuthBootstrapLoader =
-    step === 'auth' && busy && !authVisibleError && !recoveryRequired
+    step === 'auth' && busy && !authVisibleError && !authRecoveryUiActive
   const canEnterApp = canEnterAppFromAccountState({
     appAccessStatus: account?.appAccessStatus ?? null,
   })
@@ -1114,9 +1128,10 @@ export function WaitlistFlow(props: {
             authUi={authUi}
             waitlistStats={waitlistStats}
             busy={busy}
+            privyAuthed={privyAuthed}
             privyClientStatus={privyClientStatus}
             error={authVisibleError}
-            recoveryRequired={recoveryRequired}
+            recoveryRequired={authRecoveryUiActive}
             referralCode={activeReferralCode}
             onContinueAuth={onContinueAuth}
             onRecoverAccount={onRecoverAccount}
@@ -1143,9 +1158,10 @@ export function WaitlistFlow(props: {
               authUi={authUi}
               waitlistStats={waitlistStats}
               busy={busy}
+              privyAuthed={privyAuthed}
               privyClientStatus={privyClientStatus}
               error={authVisibleError}
-              recoveryRequired={recoveryRequired}
+              recoveryRequired={authRecoveryUiActive}
               referralCode={activeReferralCode}
               onContinueAuth={onContinueAuth}
               onRecoverAccount={onRecoverAccount}

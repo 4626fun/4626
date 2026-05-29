@@ -1,17 +1,17 @@
 // @vitest-environment happy-dom
 
 import React from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react'
 
 import { apiFetch } from '@/lib/api/apiBase'
 import { AppLoadingProvider } from '@/components/layout/AppLoadingOverlay'
 
 import { WaitlistFlow } from './WaitlistFlow'
 import { WaitlistSetupWorkspace } from './WaitlistSetupWorkspace'
-import { clearWaitlistRecoveryGate } from './waitlistRecoveryGate'
+import { clearWaitlistRecoveryGate, writeWaitlistRecoveryGate } from './waitlistRecoveryGate'
 import { clearWaitlistAuthPending } from './waitlistAuthPending'
 
 const collisionStateRef = vi.hoisted(() => ({
@@ -259,6 +259,11 @@ const WAITLIST_BOOTSTRAP_PAYLOAD = {
 }
 
 describe('WaitlistFlow simplified completion UI', () => {
+  afterEach(() => {
+    cleanup()
+    vi.useRealTimers()
+  })
+
   beforeEach(() => {
     mockPrivyAuthenticated = false
     collisionStateRef.current = {
@@ -439,7 +444,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     expect(await screen.findByRole('button', { name: /enter app/i })).toBeTruthy()
   })
 
-  it('shows manual existing-account recovery when bootstrap returns recovery-required', async () => {
+  it('retries bootstrap instead of opening legacy recovery when authed and bootstrap returns recovery-required', async () => {
     mockPrivyAuthenticated = true
     let bootstrapCalls = 0
     vi.mocked(apiFetch).mockImplementation(async (input: string) => {
@@ -471,30 +476,21 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(
-      await screen.findByText(/this email already has a 4626 account/i, undefined, { timeout: 5_000 }),
-    ).toBeTruthy()
-    expect(await screen.findByRole('button', { name: /use existing account/i }, { timeout: 5_000 })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: /^continue$/i }, { timeout: 5_000 })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /use existing account/i })).toBeNull()
     expect(mockLogin).toHaveBeenCalledTimes(0)
     expect(mockPrivyLogout).toHaveBeenCalledTimes(0)
-    expect(bootstrapCalls).toBeLessThanOrEqual(2)
+    expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
   })
 
-  it('hands off into accounts when user taps existing-account sign-in', async () => {
+  it('uses legacy recovery handoff only before Privy email auth completes', async () => {
+    mockPrivyAuthenticated = false
+    writeWaitlistRecoveryGate(true)
     let bootstrapCalls = 0
     vi.mocked(apiFetch).mockImplementation(async (input: string) => {
       if (input.startsWith('/api/waitlist/bootstrap')) {
         bootstrapCalls += 1
-        return jsonResponse(
-          {
-            success: false,
-            code: 'RECOVERY_REQUIRED_EMAIL_BOUND',
-            error: 'Recovery required',
-            recoveryRequired: true,
-          },
-          false,
-          409,
-        ) as any
+        return jsonResponse(WAITLIST_BOOTSTRAP_PAYLOAD) as any
       }
       if (input.startsWith('/api/auth/privy')) {
         return jsonResponse({ success: true }) as any
@@ -522,25 +518,18 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: /^continue$/i }))
-    const recoverButton = await screen.findByRole('button', { name: /use existing account/i }, { timeout: 5_000 })
-    fireEvent.click(recoverButton)
+    fireEvent.click(await screen.findByRole('button', { name: /use existing account/i }, { timeout: 5_000 }))
 
     await waitFor(() => {
-      expect(
-        vi
-          .mocked(apiFetch)
-          .mock.calls.some(([input]) => String(input).startsWith('/api/auth/handoff/create')),
-      ).toBe(true)
+      expect(mockPrivyLogout).toHaveBeenCalledTimes(1)
+      expect(mockLogin).toHaveBeenCalledWith(
+        expect.objectContaining({
+          loginMethods: ['email'],
+          disableSignup: true,
+        }),
+      )
     }, { timeout: 5_000 })
-    expect(bootstrapCalls).toBeLessThanOrEqual(2)
-    expect(mockPrivyLogout).toHaveBeenCalledTimes(1)
-    expect(mockLogin).toHaveBeenCalledWith(
-      expect.objectContaining({
-        loginMethods: ['email'],
-        disableSignup: true,
-      }),
-    )
+    expect(bootstrapCalls).toBe(1)
 
     Object.defineProperty(window, 'location', {
       configurable: true,
@@ -611,27 +600,14 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     await continueWaitlist()
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /use existing account/i })).toBeTruthy()
-    }, { timeout: 6_000 })
-
-    fireEvent.click(screen.getByRole('button', { name: /use existing account/i }))
-
-    await waitFor(() => {
-      expect(mockPrivyLogout).toHaveBeenCalled()
-      expect(mockLogin).toHaveBeenCalledWith(
-        expect.objectContaining({
-          loginMethods: ['email'],
-          disableSignup: true,
-        }),
-      )
-    }, { timeout: 5_000 })
-
+    expect(await screen.findByRole('button', { name: /^continue$/i }, { timeout: 6_000 })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /use existing account/i })).toBeNull()
     expect(
-      await screen.findByText(/this email already has a 4626 account/i, undefined, { timeout: 5_000 }),
+      await screen.findByText(/this email is already on 4626/i, undefined, { timeout: 5_000 }),
     ).toBeTruthy()
     expect(locationAssign).not.toHaveBeenCalled()
-    expect(bootstrapCalls).toBeLessThanOrEqual(3)
+    expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
+    expect(mockPrivyLogout).not.toHaveBeenCalled()
 
     Object.defineProperty(window, 'location', {
       configurable: true,
@@ -1109,6 +1085,16 @@ describe('WaitlistFlow simplified completion UI', () => {
     }, { timeout: 9_000 })
     // first requiresPrivyAuth + optional cooldown-respected retry to recover
     expect(bootstrapCalls).toBeLessThanOrEqual(3)
+
+    // Drain background retry timers so the next test does not inherit bootstrap calls.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 4_000))
+    })
+    const settledBootstrapCalls = bootstrapCalls
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 400))
+    })
+    expect(bootstrapCalls).toBe(settledBootstrapCalls)
   })
 
   it('opens a recovery circuit breaker when bootstrap keeps returning recovery-required', async () => {
@@ -1152,8 +1138,9 @@ describe('WaitlistFlow simplified completion UI', () => {
       expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     }, { timeout: 6_000 })
 
+    expect(await screen.findByRole('button', { name: /^continue$/i }, { timeout: 5_000 })).toBeTruthy()
     expect(
-      await screen.findByText(/this email already has a 4626 account/i, undefined, { timeout: 5_000 }),
+      await screen.findByText(/this email is already on 4626/i, undefined, { timeout: 5_000 }),
     ).toBeTruthy()
 
     // Allow async follow-ups to settle, then verify calls stay bounded (no ongoing spam loop).
@@ -1295,6 +1282,59 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     expect(await screen.findByRole('heading', { name: /you're on the waitlist/i }, { timeout: 8_000 })).toBeTruthy()
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
+  })
+
+  it('ignores a stale recovery gate after Privy email auth and bootstraps normally', async () => {
+    writeWaitlistRecoveryGate(true)
+    mockPrivyAuthenticated = false
+    let bootstrapCalls = 0
+
+    vi.mocked(apiFetch).mockImplementation(async (input: string) => {
+      if (input.startsWith('/api/waitlist/bootstrap')) {
+        bootstrapCalls += 1
+        return jsonResponse(WAITLIST_BOOTSTRAP_PAYLOAD) as any
+      }
+      if (input.startsWith('/api/auth/privy')) {
+        return jsonResponse({ success: true }) as any
+      }
+      if (input.startsWith('/api/waitlist/stats')) {
+        return jsonResponse({
+          success: true,
+          data: { signedUpCount: 0, capacity: 0, spotsRemaining: 0 },
+        }) as any
+      }
+      throw new Error(`Unhandled apiFetch call: ${input}`)
+    })
+
+    const view = render(
+      <MemoryRouter>
+        <WaitlistFlow />
+      </MemoryRouter>,
+    )
+
+    clearWaitlistAuthPending()
+    mockPrivyAuthenticated = true
+    await act(async () => {
+      view.rerender(
+        <QueryClientProvider
+          client={
+            new QueryClient({
+              defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+            })
+          }
+        >
+          <AppLoadingProvider>
+            <MemoryRouter>
+              <WaitlistFlow />
+            </MemoryRouter>
+          </AppLoadingProvider>
+        </QueryClientProvider>,
+      )
+    })
+
+    expect(await screen.findByRole('heading', { name: /you're on the waitlist/i }, { timeout: 8_000 })).toBeTruthy()
+    expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
+    expect(screen.queryByRole('button', { name: /use existing account/i })).toBeNull()
   })
 
   it('releases busy lock when login hangs and surfaces a retryable timeout', async () => {
