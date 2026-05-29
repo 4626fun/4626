@@ -122,9 +122,13 @@ describe('executeWaitlistBootstrapPipeline', () => {
     expect(runCanonicalization).not.toHaveBeenCalled()
   })
 
-  it('provisions embedded wallet only after bootstrap succeeds', async () => {
+  it('does not provision embedded wallet during waitlist step 1 bootstrap', async () => {
     const callOrder: string[] = []
     let canonicalizationCalls = 0
+    const ensureEmbeddedWallet = vi.fn(async () => {
+      callOrder.push('embedded-wallet')
+      return { address: '0xabc' }
+    })
 
     await executeWaitlistBootstrapPipeline({
       token: 'privy-token',
@@ -142,12 +146,27 @@ describe('executeWaitlistBootstrapPipeline', () => {
           flags: { needsEmbeddedWallet: canonicalizationCalls === 1 },
         }
       },
-      ensureEmbeddedWallet: async () => {
-        callOrder.push('embedded-wallet')
-        return { address: '0xabc' }
-      },
+      ensureEmbeddedWallet,
     })
 
-    expect(callOrder).toEqual(['waitlist/bootstrap', 'auth/privy:1', 'embedded-wallet', 'auth/privy:2'])
+    expect(callOrder).toEqual(['waitlist/bootstrap', 'auth/privy:1'])
+    expect(ensureEmbeddedWallet).not.toHaveBeenCalled()
+  })
+
+  it('still succeeds when canonicalization fails after bootstrap settled identity', async () => {
+    const result = await executeWaitlistBootstrapPipeline({
+      token: 'privy-token',
+      activeReferralCode: null,
+      fetchWaitlistBootstrap: async () => jsonResponse(BOOTSTRAP_PAYLOAD),
+      runCanonicalization: async () => {
+        throw new Error('Account sync timed out')
+      },
+      ensureEmbeddedWallet: async () => ({ address: '0xabc' }),
+    })
+
+    expect(result.kind).toBe('success')
+    if (result.kind === 'success') {
+      expect(result.payload.emailVerified).toBe(true)
+    }
   })
 })

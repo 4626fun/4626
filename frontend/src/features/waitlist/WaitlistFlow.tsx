@@ -163,12 +163,15 @@ function WaitlistAuthStep(props: {
   busy: boolean
   privyAuthed: boolean
   privyClientStatus: 'disabled' | 'loading' | 'ready'
+  privyEmail: string | null
   error: string | null
   recoveryRequired: boolean
   referralCode: string | null
   onContinueAuth: () => void | Promise<void>
   onRecoverAccount: () => void | Promise<void>
   onTryDifferentEmail: () => void | Promise<void>
+  onSignOut?: () => void | Promise<void>
+  signOutBusy?: boolean
   disableMotion?: boolean
 }) {
   const {
@@ -177,12 +180,15 @@ function WaitlistAuthStep(props: {
     busy,
     privyAuthed,
     privyClientStatus,
+    privyEmail,
     error,
     recoveryRequired,
     referralCode,
     onContinueAuth,
     onRecoverAccount,
     onTryDifferentEmail,
+    onSignOut,
+    signOutBusy = false,
     disableMotion = false,
   } = props
 
@@ -250,8 +256,35 @@ function WaitlistAuthStep(props: {
             </div>
           ) : null}
 
-          {recoveryRequired ? (
-            <p className="mt-2 text-sm text-zinc-400">{authUi.subtitle}</p>
+          <p className="mt-2 text-sm text-zinc-400">{authUi.subtitle}</p>
+
+          {privyAuthed && !recoveryRequired ? (
+            <div className="mt-3 rounded-xl border border-zinc-800/80 bg-zinc-950/40 px-3.5 py-2.5 text-left text-sm">
+              <div className="text-zinc-300">
+                Signed in with Privy
+                {privyEmail ? (
+                  <>
+                    {' '}
+                    as <span className="font-medium text-white">{privyEmail}</span>
+                  </>
+                ) : null}
+              </div>
+              <p className="mt-1 text-xs text-zinc-500">
+                {busy
+                  ? 'Creating your 4626 account…'
+                  : 'Tap Continue if the waitlist screen does not advance automatically.'}
+              </p>
+              {onSignOut ? (
+                <button
+                  type="button"
+                  disabled={busy || signOutBusy}
+                  onClick={() => void onSignOut()}
+                  className="mt-2 text-xs text-red-400 transition hover:text-red-300 disabled:opacity-60"
+                >
+                  Sign out
+                </button>
+              ) : null}
+            </div>
           ) : null}
 
           {/* CTA */}
@@ -1031,6 +1064,7 @@ export function WaitlistFlow(props: {
 
   const authRecoveryUiActive = recoveryRequired && !privyAuthed
   const authUi = deriveWaitlistAuthUi({ recoveryRequired: authRecoveryUiActive })
+  const privyEmail = resolveWaitlistVerifiedEmailHint(privy.user)
   const authVisibleError = error
   const showAuthBootstrapLoader =
     step === 'auth' && busy && !authVisibleError && !authRecoveryUiActive
@@ -1126,12 +1160,15 @@ export function WaitlistFlow(props: {
             busy={busy}
             privyAuthed={privyAuthed}
             privyClientStatus={privyClientStatus}
+            privyEmail={privyEmail}
             error={authVisibleError}
             recoveryRequired={authRecoveryUiActive}
             referralCode={activeReferralCode}
             onContinueAuth={onContinueAuth}
             onRecoverAccount={onRecoverAccount}
             onTryDifferentEmail={onTryDifferentEmail}
+            onSignOut={onSignOut}
+            signOutBusy={signOutBusy}
             disableMotion
           />
         ) : step === 'done' && account ? (
@@ -1156,12 +1193,15 @@ export function WaitlistFlow(props: {
               busy={busy}
               privyAuthed={privyAuthed}
               privyClientStatus={privyClientStatus}
+              privyEmail={privyEmail}
               error={authVisibleError}
               recoveryRequired={authRecoveryUiActive}
               referralCode={activeReferralCode}
               onContinueAuth={onContinueAuth}
               onRecoverAccount={onRecoverAccount}
               onTryDifferentEmail={onTryDifferentEmail}
+              onSignOut={onSignOut}
+              signOutBusy={signOutBusy}
             />
           ) : step === 'done' && account ? (
             <motion.div

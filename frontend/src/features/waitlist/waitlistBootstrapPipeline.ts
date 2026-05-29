@@ -78,22 +78,24 @@ export async function executeWaitlistBootstrapPipeline(
     return { kind: 'requires_privy_auth' }
   }
 
+  // Step 1 (email OTP) must not block on embedded-wallet provisioning — that runs
+  // in the waitlist setup workspace after emailVerified advances the user to step 2.
   let bootstrappedCanonicalWallet: OnboardingBootstrapResponse | null = null
   try {
-    let canonicalization = await params.runCanonicalization(params.token)
-    if (!canonicalization.onboardingBootstrapped && canonicalization.flags.needsEmbeddedWallet) {
-      await params.ensureEmbeddedWallet()
-      canonicalization = await params.runCanonicalization(params.token)
-    }
+    const canonicalization = await params.runCanonicalization(params.token)
     if (canonicalization.onboardingBootstrapped && canonicalization.onboarding) {
       bootstrappedCanonicalWallet = canonicalization.onboarding
     }
   } catch (canonicalizationError: unknown) {
-    if (isRecoveryRequiredAuthError(canonicalizationError)) {
-      // Waitlist identity is already settled; do not regress into recovery UI.
-    } else {
-      throw canonicalizationError
+    if (!isRecoveryRequiredAuthError(canonicalizationError)) {
+      const message =
+        canonicalizationError instanceof Error
+          ? canonicalizationError.message
+          : String(canonicalizationError ?? 'unknown')
+      console.warn('waitlist_bootstrap.canonicalization_deferred', { message })
     }
+    // Waitlist identity is already settled from `/api/waitlist/bootstrap`; step 2
+    // reloads `/api/accounts/me` and can retry canonicalization there.
   }
 
   return {

@@ -22,8 +22,8 @@ export function deriveWaitlistAuthUi(options?: { recoveryRequired?: boolean }): 
 
   return {
     title: 'Waitlist',
-    subtitle: 'Sign in with email to save your spot.',
-    ctaLabel: 'Continue',
-    busyLabel: 'Setting up your account…',
+    subtitle: 'Step 1: sign in with email (Privy). Wallet setup is step 2.',
+    ctaLabel: 'Continue with email',
+    busyLabel: 'Finishing sign-in…',
   }
 }
