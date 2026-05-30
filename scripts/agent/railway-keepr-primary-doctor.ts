@@ -29,7 +29,7 @@ function check(name: string, condition: boolean, required: boolean = true) {
 
 console.log('\n=== Keepr Railway Primary Doctor ===')
 console.log('This script checks the most common things that cause the primary to hard-crash on Railway.')
-console.log('On Railway itself you will also see very early [eliza][early] diagnostics in the logs.\n')
+console.log('On Railway itself you will also see very early [eliza][early] diagnostics (a table) during module load.\n')
 
 const AGENT_RUNTIME_ROLE = (process.env.AGENT_RUNTIME_ROLE ?? 'primary').trim().toLowerCase() as 'primary' | 'standby'
 const AGENT_CONSUME_XMTP = ['1', 'true', 'yes'].includes((process.env.AGENT_CONSUME_XMTP ?? '').trim().toLowerCase())

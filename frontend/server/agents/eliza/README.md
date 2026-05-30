@@ -135,7 +135,7 @@ It will print a clear pass/fail checklist of the most common things that cause t
 
 This is the fastest way to catch the exact missing or wrong variable before deploying.
 
-On Railway itself you will also see very early `[eliza][early]` diagnostics printed during module evaluation (before most other code and before the normal health server), which is extremely helpful when the process dies almost instantly.
+On Railway itself you will also see very early `[eliza][early]` diagnostics printed during module evaluation. It now prints a clean table with the status of every critical requirement (role, consume flag, DB, encryption key, volume mount, CSW+Privy, etc.) plus a summary of any problems found. This appears before most other code and before the normal health server.
 
 ### 1. Safe local inspection
 

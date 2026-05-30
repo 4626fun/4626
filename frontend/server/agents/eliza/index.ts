@@ -739,37 +739,40 @@ try {
   const dbDir = process.env.XMTP_DB_DIRECTORY || '/data/xmtp'
   const hasVolume = RUNNING_ON_RAILWAY ? hasDedicatedMount(dbDir) : true
   const mountedAncestor = RUNNING_ON_RAILWAY ? findMountedAncestorPath(dbDir) : null
+  const hasPrivyApp = !!(process.env.PRIVY_APP_ID && process.env.PRIVY_APP_SECRET)
+  const hasPrivyWalletAuth = !!(process.env.PRIVY_WALLET_AUTHORIZATION_KEY && process.env.PRIVY_WALLET_OWNER_ID)
+
+  const criticalIssues: string[] = []
+  if (RUNNING_ON_RAILWAY) {
+    if (AGENT_RUNTIME_ROLE !== 'primary') criticalIssues.push('AGENT_RUNTIME_ROLE must be primary')
+    if (!AGENT_CONSUME_XMTP) criticalIssues.push('AGENT_CONSUME_XMTP must be true')
+    if (!hasDb) criticalIssues.push('DATABASE_URL/POSTGRES_URL required')
+    if (!hasEncKey) criticalIssues.push('XMTP_AGENT_KEY_ENCRYPTION_KEY required')
+    if (!hasVolume) criticalIssues.push('Dedicated volume required for XMTP_DB_DIRECTORY')
+  }
 
   console.error('\n[eliza][early] === KEEPR RAILWAY PRIMARY DIAGNOSTICS ===')
   console.error('[eliza][early] Tip: Run `pnpm agent:railway-keepr-doctor` locally with the same env vars for a full checklist.')
-  console.error('[eliza][early] AGENT_RUNTIME_ROLE          :', AGENT_RUNTIME_ROLE)
-  console.error('[eliza][early] AGENT_CONSUME_XMTP          :', AGENT_CONSUME_XMTP)
-  console.error('[eliza][early] RUNNING_ON_RAILWAY          :', RUNNING_ON_RAILWAY)
-  console.error('[eliza][early] DATABASE_URL / POSTGRES_URL :', hasDb ? 'present' : 'MISSING')
+  console.error('[eliza][early] ----------------------------------------------------------------')
+  console.error('[eliza][early] AGENT_RUNTIME_ROLE            :', AGENT_RUNTIME_ROLE, AGENT_RUNTIME_ROLE === 'primary' ? '(OK)' : '(PROBLEM)')
+  console.error('[eliza][early] AGENT_CONSUME_XMTP            :', AGENT_CONSUME_XMTP ? 'true (OK)' : 'false (PROBLEM on Railway primary)')
+  console.error('[eliza][early] RUNNING_ON_RAILWAY            :', RUNNING_ON_RAILWAY)
+  console.error('[eliza][early] DATABASE_URL / POSTGRES_URL   :', hasDb ? 'present' : 'MISSING')
   console.error('[eliza][early] XMTP_AGENT_KEY_ENCRYPTION_KEY :', hasEncKey ? 'present' : 'MISSING')
-  console.error('[eliza][early] XMTP_DB_DIRECTORY           :', dbDir)
-  console.error('[eliza][early] Dedicated volume mounted    :', hasVolume ? 'yes' : `NO (resolves to ephemeral${mountedAncestor ? `, closest: ${mountedAncestor}` : ''})`)
-  console.error('[eliza][early] CSW + Privy Wallet ID       :', hasCsw && hasCswPrivy ? 'present' : 'MISSING (or incomplete)')
-  console.error('[eliza][early] AGENT_RUNTIME_LOCK_REQUIRED :', AGENT_RUNTIME_LOCK_REQUIRED)
+  console.error('[eliza][early] XMTP_DB_DIRECTORY             :', dbDir)
+  console.error('[eliza][early] Dedicated volume mounted      :', hasVolume ? 'yes' : `NO${mountedAncestor ? ` (closest mount: ${mountedAncestor})` : ''}`)
+  console.error('[eliza][early] CSW + Privy Wallet signer     :', hasCsw && hasCswPrivy ? 'present' : 'MISSING / incomplete')
+  console.error('[eliza][early] Privy server auth (app+wallet):', hasPrivyApp && hasPrivyWalletAuth ? 'present' : 'MISSING')
+  console.error('[eliza][early] AGENT_RUNTIME_LOCK_REQUIRED   :', AGENT_RUNTIME_LOCK_REQUIRED)
+  console.error('[eliza][early] ----------------------------------------------------------------')
 
-  if (RUNNING_ON_RAILWAY) {
-    console.error('[eliza][early] === STRICT RAILWAY PRIMARY RULES ENFORCED ===')
-    if (AGENT_RUNTIME_ROLE !== 'primary') {
-      console.error('[eliza][early] ERROR: AGENT_RUNTIME_ROLE must be "primary" on Railway')
-    }
-    if (!AGENT_CONSUME_XMTP) {
-      console.error('[eliza][early] ERROR: AGENT_CONSUME_XMTP must be true on Railway primary')
-    }
-    if (!hasDb) {
-      console.error('[eliza][early] ERROR: DATABASE_URL / POSTGRES_URL is required')
-    }
-    if (!hasEncKey) {
-      console.error('[eliza][early] ERROR: XMTP_AGENT_KEY_ENCRYPTION_KEY is required for multi-agent')
-    }
-    if (!hasVolume) {
-      console.error('[eliza][early] ERROR: Dedicated Railway volume required for XMTP_DB_DIRECTORY')
-    }
+  if (criticalIssues.length > 0) {
+    console.error('[eliza][early] CRITICAL ISSUES DETECTED:')
+    criticalIssues.forEach(issue => console.error('[eliza][early]   -', issue))
+  } else if (RUNNING_ON_RAILWAY) {
+    console.error('[eliza][early] All hard Railway primary requirements appear satisfied.')
   }
+
   console.error('[eliza][early] === END EARLY DIAGNOSTICS ===\n')
 } catch (e) {
   // Never let early logging crash the process
