@@ -323,7 +323,10 @@ export function formatZoraRouterSimulationFailure(error: unknown): Error {
 
 function isInvalidEthCallSenderParameterError(error: unknown): boolean {
   const msg = String(error instanceof Error ? error.message : error).toLowerCase()
-  return msg.includes('invalid parameters were provided')
+  return (
+    msg.includes('invalid parameters were provided') ||
+    msg.includes('missing or invalid parameters')
+  )
 }
 
 async function ethCallZoraRouterAsCsw(params: {

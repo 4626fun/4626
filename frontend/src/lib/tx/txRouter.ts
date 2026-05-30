@@ -1,4 +1,4 @@
-import { encodeFunctionData } from 'viem'
+import { encodeFunctionData, getAddress } from 'viem'
 
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
@@ -8,10 +8,12 @@ import type { TransactionRequest } from '@/lib/uniswap/tradingApi'
 import { buildWalletSendCallsPayload } from '@/lib/wallet/walletSendCallsPayload'
 import type { AccountCapabilities, SignerType } from '@/wallet/accountContext'
 import {
+  isAllowedAgentCswExecutionSigner,
   isAllowedCanonicalSigner,
   isTargetCanonicalCsw,
   resolvePolicyCanonicalAddress,
   shouldApplyCanonicalEnforcement,
+  TARGET_CANONICAL_CSW_ADDRESS,
 } from '@/wallet/canonicalWalletPolicy'
 
 const COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI = [
@@ -711,6 +713,23 @@ async function sendViaCanonical4337(params: {
   const canonicalIdentity = resolveCanonicalIdentityAddress(context)
   if (!canonicalIdentity || !context.signerAddress || !context.publicClient || !context.walletClient) {
     throw new Error('Canonical smart wallet or owner signer is not ready for ERC-4337 execution')
+  }
+
+  // Early hard block: never allow the historical embedded EOA (or any non-active
+  // owner) to drive canonical4337 execution against the agent / project CSW.
+  if (getAddress(canonicalIdentity) === getAddress(TARGET_CANONICAL_CSW_ADDRESS)) {
+    if (!isAllowedAgentCswExecutionSigner(context.signerAddress)) {
+      const msg = 'Agent CSW canonical execution is restricted to active automation owners only.'
+      context.debug?.({
+        event: 'send_error',
+        mode: decision.mode,
+        reason: 'agent-csw-unauthorized-signer',
+        sender: canonicalIdentity,
+        callTargets: calls.map((c) => c.to),
+        chainId: context.chainId,
+      })
+      throw new Error(msg)
+    }
   }
   const sender = canonicalIdentity
   if (shouldBypassCanonical4337ForSwapRouterValue(calls)) {

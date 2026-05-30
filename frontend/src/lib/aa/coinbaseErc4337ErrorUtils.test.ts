@@ -6,7 +6,10 @@ import {
   extractUserOpReceiptTxHash,
   isBundlerStubSignatureSimulationArtifact,
   isDeterministicUserOpExecutionError,
+  isEchoedBundlerUserOpCallData,
   isExecutionRevertedLikeError,
+  isPaymasterInternalProxyError,
+  isPaymasterPolicyError,
   isPreflightSimulationRejection,
   mapUserOpExecutionFailureMessage,
   PreflightSimulationRejectionError,
@@ -28,6 +31,24 @@ describe('extractUserOpReceiptTxHash', () => {
 
   it('reads top-level transactionHash', () => {
     expect(extractUserOpReceiptTxHash({ success: true, transactionHash: TX_HASH })).toBe(TX_HASH)
+  })
+})
+
+describe('isEchoedBundlerUserOpCallData', () => {
+  it('detects execute and executeBatch echoed payloads', () => {
+    const longExecute = `0xb61d27f6${'ab'.repeat(120)}`
+    const longBatch = `0x34fcd5be${'cd'.repeat(120)}`
+    expect(isEchoedBundlerUserOpCallData(longExecute)).toBe(true)
+    expect(isEchoedBundlerUserOpCallData(longBatch)).toBe(true)
+    expect(isEchoedBundlerUserOpCallData('0x2c4029e9')).toBe(false)
+  })
+})
+
+describe('isPaymasterInternalProxyError', () => {
+  it('is not treated as a sponsorship policy denial', () => {
+    const err = new Error('request denied - paymaster proxy internal error')
+    expect(isPaymasterInternalProxyError(err)).toBe(true)
+    expect(isPaymasterPolicyError(err)).toBe(false)
   })
 })
 
@@ -80,6 +101,34 @@ describe('shouldAdvisorySkipBundlerGasEstimate', () => {
         },
         firstCallTo: ZORA_ROUTER,
         floorCallGasLimit: ZORA_FLOOR,
+      }),
+    ).toBe(true)
+  })
+
+  it('skips executeBatch echoed callData with Missing or invalid parameters', () => {
+    const echoedBatch =
+      `${ECHOED_EXECUTE.slice(0, 10)}4fcd5be${ECHOED_EXECUTE.slice(10)}` as typeof ECHOED_EXECUTE
+    expect(
+      shouldAdvisorySkipBundlerGasEstimate({
+        error: {
+          message:
+            'An error occurred while executing user operation: Missing or invalid parameters. Double check you have provided the correct parameters.',
+        },
+        firstCallTo: ZORA_ROUTER,
+        floorCallGasLimit: ZORA_FLOOR,
+        preflightDirectCallSucceeded: true,
+      }),
+    ).toBe(true)
+    expect(
+      shouldAdvisorySkipBundlerGasEstimate({
+        error: {
+          message:
+            'An error occurred while executing user operation: Missing or invalid parameters. Double check you have provided the correct parameters.',
+          data: echoedBatch,
+        },
+        firstCallTo: ZORA_ROUTER,
+        floorCallGasLimit: ZORA_FLOOR,
+        preflightDirectCallSucceeded: true,
       }),
     ).toBe(true)
   })

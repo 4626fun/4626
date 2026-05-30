@@ -3401,6 +3401,16 @@ async function validateInnerCalls(params: {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  try {
+    return await handlePaymasterRequest(req, res)
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    logger.error('[paymaster-proxy] unhandled handler error', { msg: msg || 'unknown_error' })
+    return res.status(200).json(jsonRpcError(null, -32000, 'paymaster_proxy_internal_error'))
+  }
+}
+
+async function handlePaymasterRequest(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
   if (handleOptions(req, res)) return

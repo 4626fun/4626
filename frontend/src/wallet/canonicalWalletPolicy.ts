@@ -15,22 +15,38 @@ export const TARGET_CANONICAL_CSW_ADDRESS =
   '0xab6d5c10b03300326cd7fab7267ae192842967b5' as const satisfies PolicyAddress
 
 export const TARGET_ALLOWED_OWNER_EOA_ADDRESSES = [
-  // Admin EOA — on-chain owner slot 1 of the canonical CSW.
+  // Admin EOA — on-chain owner slot 1 of the canonical (agent) CSW.
   '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
-  // Historical co-admin — on-chain owner slot 0 of the canonical CSW.
+  // Historical co-admin — on-chain owner slot 0 of the canonical (agent) CSW.
   '0x6c0ea422aa7bb7e1e17c5257f7023c8f05ddf9b3',
-  // Secondary admin EOA — on-chain owner slot 3 of the canonical CSW.
+  // Secondary admin EOA — on-chain owner slot 3 of the canonical (agent) CSW.
   '0xd1780fc23f810b52d8cf277e54842dd8803c9361',
-  // Privy embedded EOA (historical). On-chain owner slot 18 of the canonical
-  // CSW. Kept so profiles that onboarded with the previous Privy embedded
-  // wallet still resolve to the canonical identity.
+  // Privy embedded EOA (historical, slot 18). ONLY for legacy identity / profile
+  // resolution. This EOA is no longer authorized for execution (swaps, UserOps,
+  // canonical4337) on the agent CSW. Using it for signing will be rejected.
   '0xceca13f2686ed061c57620ecdf67e1b8c0f285e9',
-  // Privy server wallet owner used by Railway XMTP runtime. On-chain owner
-  // slot 15 of the canonical CSW. Signs UserOps on the agent's behalf.
+  // Privy server wallet (slot 15) — the active automation / Railway Keepr owner.
+  // This is the only embedded-style signer that should drive canonical4337
+  // actions on the agent CSW for automation.
   '0x858c01556ec5a8531fa4118d595430ac7fd0baf0',
 ] as const satisfies readonly PolicyAddress[]
 
 const TARGET_ALLOWED_OWNER_EOA_SET = new Set<string>(TARGET_ALLOWED_OWNER_EOA_ADDRESSES)
+
+// Active execution signers for the agent CSW (TARGET_CANONICAL_CSW_ADDRESS).
+// These are the ONLY owners permitted to sign canonical4337 / sponsored UserOps
+// and general execution batches on the agent wallet. The historical embedded EOA
+// above is deliberately excluded from this set.
+export const AGENT_CSW_ACTIVE_EXECUTION_OWNER_ADDRESSES = [
+  // Current active automation owner (Railway Keepr / XMTP primary).
+  '0x858c01556ec5a8531fa4118d595430ac7fd0baf0',
+  // Project admin EOAs that are still valid owners.
+  '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+  '0x6c0ea422aa7bb7e1e17c5257f7023c8f05ddf9b3',
+  '0xd1780fc23f810b52d8cf277e54842dd8803c9361',
+] as const satisfies readonly PolicyAddress[]
+
+const AGENT_CSW_ACTIVE_EXECUTION_OWNER_SET = new Set<string>(AGENT_CSW_ACTIVE_EXECUTION_OWNER_ADDRESSES)
 
 export function normalizePolicyAddress(value: string | null | undefined): PolicyAddress | null {
   if (!value || !isAddress(value)) return null
@@ -45,6 +61,18 @@ export function isAllowedOwnerEoa(value: string | null | undefined): boolean {
   const normalized = normalizePolicyAddress(value)
   if (!normalized) return false
   return TARGET_ALLOWED_OWNER_EOA_SET.has(normalized)
+}
+
+/**
+ * Strict check for execution signing on the agent CSW.
+ * Returns true ONLY for the currently active automation + admin owners.
+ * The historical embedded EOA (ceca...) will return false here even though
+ * it may still pass the broader isAllowedOwnerEoa (for legacy identity use).
+ */
+export function isAllowedAgentCswExecutionSigner(value: string | null | undefined): boolean {
+  const normalized = normalizePolicyAddress(value)
+  if (!normalized) return false
+  return AGENT_CSW_ACTIVE_EXECUTION_OWNER_SET.has(normalized)
 }
 
 export function isAllowedCanonicalSigner(value: string | null | undefined): boolean {

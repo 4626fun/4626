@@ -338,6 +338,8 @@ function startRuntime(): void {
         reason: bridge.reason ?? 'unknown',
         roomId: bridge.roomId,
       })
+      // Extra visible line so Railway logs always show the exact blocker
+      console.error(`[hermit] BRIDGE REASON: ${bridge.reason ?? 'unknown'} (room ${bridge.roomId ?? 'n/a'})`)
     }
   } catch (error) {
     const message = asErrorMessage(error)

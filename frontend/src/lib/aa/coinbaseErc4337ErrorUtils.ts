@@ -262,6 +262,7 @@ export function isPaymasterUnavailableError(error: unknown): boolean {
   // as "paymaster unavailable" and trigger unwanted no-paymaster fallback.
   // Only match our own specific error strings that indicate genuine unavailability.
   return (
+    isPaymasterInternalProxyError(error) ||
     lc.includes('cdp paymaster endpoint is not configured') ||
     lc.includes('server misconfigured') ||
     lc.includes('upstream request failed') ||
@@ -270,6 +271,7 @@ export function isPaymasterUnavailableError(error: unknown): boolean {
 }
 
 export function isPaymasterPolicyError(error: unknown): boolean {
+  if (isPaymasterInternalProxyError(error)) return false
   const msg = getErrorDiagnosticMessage(error)
   const lc = msg.toLowerCase()
   return (
@@ -339,6 +341,8 @@ const ZORA_UNIVERSAL_ROUTER_BASE = '0x6ff5693b99212da76ad316178a184ab56d299b43'
 
 /** Coinbase Smart Wallet `execute(address,uint256,bytes)` — bundlers often echo full UserOp callData in RPC errors. */
 const CSW_EXECUTE_SELECTOR = '0xb61d27f6'
+/** Coinbase Smart Wallet `executeBatch((address,uint256,bytes)[])` — same echo behavior for batched swaps. */
+const CSW_EXECUTE_BATCH_SELECTOR = '0x34fcd5be'
 
 const ACTIONABLE_BUNDLER_REVERT_SELECTORS = new Set([
   '0x2c4029e9', // ExecutionFailed(uint256,bytes)
@@ -349,10 +353,11 @@ const ACTIONABLE_BUNDLER_REVERT_SELECTORS = new Set([
   '0x82b42900', // Unauthorized()
 ])
 
-/** Long `0xb61d27f6…` payloads are echoed callData, not a decodable on-chain revert. */
+/** Long CSW execute/executeBatch payloads are echoed callData, not a decodable on-chain revert. */
 export function isEchoedBundlerUserOpCallData(revertData: Hex | undefined): boolean {
   if (!revertData || revertData.length < 200) return false
-  return revertData.slice(0, 10).toLowerCase() === CSW_EXECUTE_SELECTOR
+  const selector = revertData.slice(0, 10).toLowerCase()
+  return selector === CSW_EXECUTE_SELECTOR || selector === CSW_EXECUTE_BATCH_SELECTOR
 }
 
 export function isActionableBundlerSimulationRevert(revertData: Hex | undefined): boolean {
@@ -364,7 +369,18 @@ export function isActionableBundlerSimulationRevert(revertData: Hex | undefined)
 
 export function isRpcInvalidParametersEstimateError(error: unknown): boolean {
   const lower = getErrorDiagnosticMessage(error).toLowerCase()
-  return lower.includes('invalid parameters were provided')
+  return (
+    lower.includes('invalid parameters were provided') ||
+    lower.includes('missing or invalid parameters')
+  )
+}
+
+export function isPaymasterInternalProxyError(error: unknown): boolean {
+  const lower = getErrorDiagnosticMessage(error).toLowerCase()
+  return (
+    lower.includes('paymaster proxy internal error') ||
+    lower.includes('paymaster_proxy_internal_error')
+  )
 }
 
 /** Bundler stub signatures can false-positive InvalidContractSignature during estimate (not ExecutionFailed). */
