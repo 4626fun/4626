@@ -43,6 +43,53 @@ for (const envPath of possibleEnvPaths) {
   } catch {}
 }
 
+// === EARLY ENV DIAGNOSTICS (helps verify "all the .env variables are up") ===
+function print1659EnvDiagnostics(): void {
+  const hasDb = !!(process.env.DATABASE_URL || process.env.POSTGRES_URL)
+  const hasAlfaClubJwt = !!(process.env.ALFACLUB_CHAT_JWT ?? '').trim()
+  const hasPrivyRefresh = !!(process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN && process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN)
+  const hasAlfaClubAuth = hasAlfaClubJwt || hasPrivyRefresh
+
+  const hasPrivateTelegram = !!(process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID || process.env.TELEGRAM_TARGET_CHAT_ID)
+  const hasPublicTelegram = !!(process.env.ALFACLUB_RADAR_TELEGRAM_CHAT_ID || process.env.FUN4626_TELEGRAM_CHAT_ID || process.env.TARGET_CHAT_ID)
+  const hasBotToken = !!(process.env.ALFACLUB_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN)
+
+  const hasBaseRpc = !!(process.env.BASE_RPC_URL)
+  const hasRoom1659Overrides = !!(process.env.ROOM_1659_FRIENDKEY_TOKEN || process.env.ROOM_1659_FRIENDKEY_ID)
+
+  console.error('\n[1659-risk-watcher][early] === 1659 THEATRICAL STACK ENV DIAGNOSTICS ===')
+  console.error('[1659-risk-watcher][early] Tip: Use scripts/ops/1659-theatrical-stack.env.example as the master reference.')
+
+  const criticalMissing: string[] = []
+  if (!hasDb) criticalMissing.push('DATABASE_URL (needed for rich 1659 context + token stores)')
+  if (!hasAlfaClubAuth) criticalMissing.push('AlfaClub auth (ALFACLUB_CHAT_JWT or the Privy refresh triplet) — needed for PnL')
+  if (!hasBotToken) criticalMissing.push('Telegram bot token (ALFACLUB_TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN)')
+  if (!hasPrivateTelegram && !hasPublicTelegram) criticalMissing.push('At least one Telegram destination (private relay or @fun4626)')
+
+  const summary = criticalMissing.length > 0
+    ? `[1659-risk-watcher][early] SUMMARY: ${criticalMissing.length} critical issue(s) — watcher may run degraded or fail`
+    : `[1659-risk-watcher][early] SUMMARY: Core env requirements appear satisfied`
+
+  console.error(summary)
+  console.error('[1659-risk-watcher][early] ----------------------------------------------------------------')
+  console.error('[1659-risk-watcher][early] DATABASE_URL / POSTGRES_URL   :', hasDb ? 'present' : 'MISSING')
+  console.error('[1659-risk-watcher][early] AlfaClub auth (JWT or Privy)  :', hasAlfaClubAuth ? 'present' : 'MISSING')
+  console.error('[1659-risk-watcher][early] Telegram bot token            :', hasBotToken ? 'present' : 'MISSING')
+  console.error('[1659-risk-watcher][early] Private ops relay             :', hasPrivateTelegram ? 'present' : 'missing')
+  console.error('[1659-risk-watcher][early] Public channel (@fun4626)     :', hasPublicTelegram ? 'present' : 'missing')
+  console.error('[1659-risk-watcher][early] BASE_RPC_URL (optional)       :', hasBaseRpc ? 'set' : 'using default')
+  console.error('[1659-risk-watcher][early] ROOM_1659_* overrides         :', hasRoom1659Overrides ? 'set' : 'using built-in defaults')
+  console.error('[1659-risk-watcher][early] ----------------------------------------------------------------')
+
+  if (criticalMissing.length > 0) {
+    console.error('[1659-risk-watcher][early] CRITICAL MISSING:')
+    criticalMissing.forEach(m => console.error('[1659-risk-watcher][early]   -', m))
+  }
+  console.error('[1659-risk-watcher][early] === END EARLY DIAGNOSTICS ===\n')
+}
+
+print1659EnvDiagnostics()
+
 /**
  * Starts a minimal HTTP healthcheck server.
  * Railway (and most platforms) like to have a port to probe.
