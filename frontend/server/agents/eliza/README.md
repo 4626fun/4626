@@ -137,6 +137,8 @@ This is the fastest way to catch the exact missing or wrong variable before depl
 
 On Railway itself you will also see very early `[eliza][early]` diagnostics printed during module evaluation. It now prints a clean table with the status of every critical requirement (role, consume flag, DB, encryption key, volume mount, CSW+Privy, etc.) plus a summary of any problems found. This appears before most other code and before the normal health server.
 
+A standalone copy-paste friendly checklist is also available at `docs/railway-keepr-primary-checklist.md`. Paste it into your Railway service description or team runbook.
+
 The super-early health listener (before most imports) will also return a small JSON payload on `/healthz` with a hint to check the logs for the early table. Once the full health server starts, detailed requests (with the health token) will include `earlyDiagnostics` in the response.
 
 ### 1. Safe local inspection

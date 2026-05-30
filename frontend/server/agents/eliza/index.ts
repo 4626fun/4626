@@ -757,6 +757,12 @@ try {
 
   console.error('\n[eliza][early] === KEEPR RAILWAY PRIMARY DIAGNOSTICS ===')
   console.error('[eliza][early] Tip: Run `pnpm agent:railway-keepr-doctor` locally with the same env vars for a full checklist.')
+
+  const summaryLine = criticalIssues.length > 0 
+    ? `[eliza][early] SUMMARY: Railway primary has ${criticalIssues.length} critical issue(s) — see details below`
+    : `[eliza][early] SUMMARY: All hard Railway primary requirements appear satisfied`
+  console.error(summaryLine)
+
   console.error('[eliza][early] ----------------------------------------------------------------')
   console.error('[eliza][early] AGENT_RUNTIME_ROLE            :', AGENT_RUNTIME_ROLE, AGENT_RUNTIME_ROLE === 'primary' ? '(OK)' : '(PROBLEM)')
   console.error('[eliza][early] AGENT_CONSUME_XMTP            :', AGENT_CONSUME_XMTP ? 'true (OK)' : 'false (PROBLEM on Railway primary)')
