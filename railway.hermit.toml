@@ -14,10 +14,15 @@
 #   - Restart Policy: On Failure
 #   - Max restart retries: 5
 #
+# Recommended environment variables for this service:
+#   ALFACLUB_CHAT_BRIDGE_ENABLED=1          (to actually run the chat bridge)
+#   ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY=1    (to bypass the default Railway safety block)
+#
 # Config-as-code
 #   - Railway Config File: railway.hermit.toml
 #
-# Set these, save, and redeploy. The healthcheck should start passing.
+# Set the UI fields above + the two ALFACLUB_CHAT_BRIDGE_* variables, then redeploy.
+# This is the full working configuration for the dedicated Hermit service.
 # --------------------------------------------------------------------------
 
 [build]
