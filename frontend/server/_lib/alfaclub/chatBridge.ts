@@ -546,6 +546,49 @@ export function isHermitCommandRoom(roomId: string | null | undefined): boolean 
   return flags.hermitCommandRoomIds.includes(roomId)
 }
 
+/** Rooms the Vercel/cron bridge polls each tick (primary + Hermit command surfaces). */
+export function resolveAlfaClubBridgePollRoomIds(
+  flags: Pick<AlfaClubChatBridgeFlags, 'roomId' | 'hermitCommandRoomIds'>,
+): string[] {
+  const ids = new Set<string>()
+  if (flags.roomId) ids.add(flags.roomId)
+  for (const roomId of flags.hermitCommandRoomIds) ids.add(roomId)
+  return [...ids]
+}
+
+export function canBridgeReplyInRoom(
+  flags: Pick<AlfaClubChatBridgeFlags, 'roomId' | 'hermitCommandRoomIds'>,
+  roomId: string,
+): boolean {
+  return resolveAlfaClubBridgePollRoomIds(flags).includes(roomId)
+}
+
+function aggregateBridgeTickResults(
+  results: AlfaClubChatBridgeTickResult[],
+  primaryRoomId: string,
+): AlfaClubChatBridgeTickResult {
+  if (results.length === 0) {
+    return {
+      seeded: false,
+      roomId: primaryRoomId,
+      fetched: 0,
+      unseen: 0,
+      processed: 0,
+      replied: 0,
+      errors: [],
+    }
+  }
+  return {
+    seeded: results.some((entry) => entry.seeded),
+    roomId: primaryRoomId,
+    fetched: results.reduce((sum, entry) => sum + entry.fetched, 0),
+    unseen: results.reduce((sum, entry) => sum + entry.unseen, 0),
+    processed: results.reduce((sum, entry) => sum + entry.processed, 0),
+    replied: results.reduce((sum, entry) => sum + entry.replied, 0),
+    errors: results.flatMap((entry) => entry.errors),
+  }
+}
+
 export function readAlfaClubChatBridgeFlagsForCronTick(): AlfaClubChatBridgeFlags {
   const flags = readAlfaClubChatBridgeFlags()
   const cronLimit = parsePositiveInt(
@@ -2904,8 +2947,8 @@ async function executeCommandBatch(params: {
   roomId: string
   jwt: string
 }): Promise<{ processed: number; replied: number; errors: Array<{ messageId: string; error: string }> }> {
-  // Safety invariant: this bridge only posts replies into its configured room.
-  if (params.flags.roomId && params.roomId !== params.flags.roomId) {
+  // Safety invariant: only reply inside configured bridge/Hermit command rooms.
+  if (!canBridgeReplyInRoom(params.flags, params.roomId)) {
     return { processed: 0, replied: 0, errors: [] }
   }
   const errors: Array<{ messageId: string; error: string }> = []
@@ -3086,6 +3129,8 @@ export type RunBridgeTickOptions = {
   skipLiveWebSocket?: boolean
   /** Cron mode: upsert only slash-command candidates into chat_ingest (less DB write churn). */
   ingestCommandCandidatesOnly?: boolean
+  /** When set, poll/execute against this room instead of flags.roomId only. */
+  pollRoomId?: string
 }
 
 function shouldConnectLiveWebSocket(
@@ -3164,7 +3209,7 @@ async function runBridgeTick(
 ): Promise<AlfaClubChatBridgeTickResult> {
   bridgeAuthState.privyRefreshKickedThisTick = false
   const seedHistoryOnlyOnFirstTick = options.seedHistoryOnlyOnFirstTick ?? true
-  const roomId = flags.roomId as string
+  const roomId = (options.pollRoomId ?? flags.roomId) as string
   let resolvedCommandJwt = await resolveBridgeJwtWithSource(flags.jwt)
   let commandJwt = resolvedCommandJwt.jwt
   if (commandJwt && isKnownBadJwt(commandJwt)) {
@@ -3572,7 +3617,8 @@ export async function runAlfaClubChatBridgeTickOnce(): Promise<RunAlfaClubChatBr
       roomId: flags.roomId,
     }
   }
-  if (!flags.roomId) {
+  const pollRoomIds = resolveAlfaClubBridgePollRoomIds(flags)
+  if (pollRoomIds.length === 0) {
     return {
       ok: false,
       reason: 'env_missing',
@@ -3581,15 +3627,26 @@ export async function runAlfaClubChatBridgeTickOnce(): Promise<RunAlfaClubChatBr
     }
   }
 
-  const data = await runBridgeTick(flags, {
+  const tickOptions: RunBridgeTickOptions = {
     seedHistoryOnlyOnFirstTick: false,
     skipLiveWebSocket: readAlfaClubCronSkipLiveWebSocket(),
     ingestCommandCandidatesOnly: true,
-  })
+  }
+  const roomResults: AlfaClubChatBridgeTickResult[] = []
+  for (const pollRoomId of pollRoomIds) {
+    roomResults.push(
+      await runBridgeTick(flags, {
+        ...tickOptions,
+        pollRoomId,
+      }),
+    )
+  }
+  const primaryRoomId = flags.roomId ?? pollRoomIds[0] ?? ''
+  const data = aggregateBridgeTickResults(roomResults, primaryRoomId)
   return {
     ok: true,
     intervalMs: flags.pollIntervalMs,
-    roomId: flags.roomId,
+    roomId: primaryRoomId,
     data,
   }
 }
@@ -3649,7 +3706,8 @@ export function startAlfaClubChatBridge(opts?: {
       stop,
     }
   }
-  if (!flags.roomId) {
+  const pollRoomIds = resolveAlfaClubBridgePollRoomIds(flags)
+  if (pollRoomIds.length === 0) {
     return {
       started: false,
       reason: 'env_missing',
@@ -3673,8 +3731,10 @@ export function startAlfaClubChatBridge(opts?: {
     if (activeTickPromise !== null) return
     const tickPromise = (async () => {
       try {
-        const result = await runBridgeTick(flags)
-        opts?.onTick?.(result)
+        for (const pollRoomId of pollRoomIds) {
+          const result = await runBridgeTick(flags, { pollRoomId })
+          opts?.onTick?.(result)
+        }
       } catch (error) {
         opts?.onError?.(error)
       }

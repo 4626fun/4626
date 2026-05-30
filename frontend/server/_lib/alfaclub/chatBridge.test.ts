@@ -50,10 +50,12 @@ import {
   _resetAlfaClubChatBridgeStateForTests,
   _runAlfaClubChatBridgeTickForTests,
   _sendRoomMessageViaWebSocketForTests,
+  canBridgeReplyInRoom,
   isHistoryMessageCommandCandidate,
   readAlfaClubChatBridgeFlags,
   readAlfaClubChatBridgeFlagsForCronTick,
   readAlfaClubCronSkipLiveWebSocket,
+  resolveAlfaClubBridgePollRoomIds,
   type AlfaClubChatBridgeFlags,
 } from './chatBridge.js'
 import {
@@ -706,6 +708,45 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0]?.messageId).toBe('m-gmeow')
   })
+
+  it('polls Hermit room 1659 when pollRoomId is set on the tick', async () => {
+    let historyRoomId = ''
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = String(input)
+      if (url.includes('room_history_paginate')) {
+        historyRoomId = new URL(url).searchParams.get('roomId') ?? ''
+        return new Response(
+          JSON.stringify({
+            messages: [
+              {
+                id: 'm-1659-gmeow',
+                date: Date.now() - 2_000,
+                sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+                text: '/gmeow',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }) as unknown as typeof fetch
+    upsertAlfaClubIngestMessagesMock.mockResolvedValueOnce([{ messageId: 'm-1659-gmeow' }])
+
+    await _runAlfaClubChatBridgeTickForTests(
+      makeFlags({ roomId: '1043', hermitCommandRoomIds: ['1043', '1659'] }),
+      {
+        seedHistoryOnlyOnFirstTick: false,
+        ingestCommandCandidatesOnly: true,
+        pollRoomId: '1659',
+      },
+    )
+
+    expect(historyRoomId).toBe('1659')
+  })
 })
 
 describe('AlfaClub chat bridge cron helpers', () => {
@@ -727,6 +768,16 @@ describe('AlfaClub chat bridge cron helpers', () => {
       ALFACLUB_BRIDGE_CRON_HISTORY_LIMIT: '8',
     })
     expect(readAlfaClubChatBridgeFlagsForCronTick().historyLimit).toBe(8)
+  })
+
+  it('resolveAlfaClubBridgePollRoomIds unions primary room and Hermit command rooms', () => {
+    const flags = makeFlags({
+      roomId: '1043',
+      hermitCommandRoomIds: ['1043', '1659'],
+    })
+    expect(resolveAlfaClubBridgePollRoomIds(flags)).toEqual(['1043', '1659'])
+    expect(canBridgeReplyInRoom(flags, '1659')).toBe(true)
+    expect(canBridgeReplyInRoom(flags, '9999')).toBe(false)
   })
 
   it('isHistoryMessageCommandCandidate ignores bot rows and plain chat', () => {
