@@ -14,20 +14,30 @@ pnpm ops:1659-watch:test         # send test to private + public
 pnpm ops:1659-enqueue-recurring  # enqueue a keeper job for this monitor
 ```
 
-## Deployment Options
+## Deployment on Railway (Recommended)
 
-### Option A: Railway (recommended for persistent process)
-- Point a Railway service at `scripts/ops/1659-risk-watcher/`
-- Use the `Dockerfile` in this folder
-- Set your existing Telegram env vars (`ALFACLUB_TELEGRAM_*` etc.)
+This is the cleanest and most reliable way to run the watcher 24/7.
 
-### Option B: As a Keeper Job (managed like all other keepers)
-- Use `pnpm ops:1659-enqueue-recurring` (run on a schedule via Vercel cron or another keeper)
-- This enqueues jobs of kind `1659_hype_risk_monitor`
-- The standard `keeper:jobs:worker` will pick them up and call `/api/keeper/jobs/1659-risk-monitor`
-- Full visibility, retries, deduping, and control via the existing keeper system
+### Steps
 
-See `enqueue-recurring.ts` and the API handler `_1659-risk-monitor.ts`.
+1. In Railway, create a **new service**.
+2. Connect your GitHub repo.
+3. In the service settings, set:
+   - **Root Directory**: `scripts/ops/1659-risk-watcher`
+   - Builder will automatically use the `Dockerfile` (thanks to `railway.json`)
+4. Add these environment variables (reuse the ones you already have for the AlfaClub Telegram relay):
+   - `ALFACLUB_TELEGRAM_BOT_TOKEN` (or fallback `TELEGRAM_BOT_TOKEN`)
+   - `ALFACLUB_TELEGRAM_RELAY_CHAT_ID` or `TELEGRAM_TARGET_CHAT_ID`
+   - `ALFACLUB_TELEGRAM_RELAY_THREAD_ID` (optional)
+   - `FUN4626_TELEGRAM_CHAT_ID` or `ALFACLUB_RADAR_TELEGRAM_CHAT_ID` (for https://t.me/fun4626)
+
+5. Deploy.
+
+The service runs as a long-lived background worker (no HTTP port needed).
+
+**Important**: The script now handles `SIGTERM` properly, which Railway sends during deploys and restarts.
+
+You can monitor logs, metrics, and restarts directly in the Railway dashboard.
 
 ## Environment Variables (reuses what you already have)
 

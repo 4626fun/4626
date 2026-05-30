@@ -328,6 +328,23 @@ export async function run1659RiskTick(options: { once?: boolean } = {}) {
   }
 }
 
+let isShuttingDown = false
+
+function setupGracefulShutdown() {
+  const shutdown = (signal: string) => {
+    if (isShuttingDown) return
+    isShuttingDown = true
+    console.log(`\n[${signal}] Received. Shutting down 1659 risk watcher gracefully...`)
+    setTimeout(() => {
+      console.log('1659 risk watcher stopped.')
+      process.exit(0)
+    }, 1500)
+  }
+
+  process.on('SIGTERM', () => shutdown('SIGTERM')) // Sent by Railway, Docker, etc.
+  process.on('SIGINT', () => shutdown('SIGINT'))
+}
+
 async function main() {
   const args = process.argv.slice(2)
 
@@ -341,6 +358,8 @@ async function main() {
   console.log('Private relay:', hasTelegram ? 'ENABLED' : 'DISABLED')
   console.log('Public @fun4626:', 'ENABLED (via FUN4626_TELEGRAM_CHAT_ID or ALFACLUB_RADAR_TELEGRAM_CHAT_ID)')
 
+  setupGracefulShutdown()
+
   // Run once if requested (useful for keeper jobs)
   if (args.includes('--once')) {
     await run1659RiskTick({ once: true })
@@ -348,17 +367,20 @@ async function main() {
   }
 
   // Continuous mode
-  let lastAlertKey = ''
-
-  while (true) {
+  while (!isShuttingDown) {
     const result = await run1659RiskTick()
 
     if (!result.ok && 'error' in result) {
       console.error('Tick failed:', result.error)
     }
 
-    await new Promise(r => setTimeout(r, THRESHOLDS.pollMs))
+    if (!isShuttingDown) {
+      await new Promise(r => setTimeout(r, THRESHOLDS.pollMs))
+    }
   }
 }
 
-main().catch(console.error)
+main().catch((err) => {
+  console.error('Fatal error in 1659 risk watcher:', err)
+  process.exit(1)
+})
