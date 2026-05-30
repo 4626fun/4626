@@ -75,4 +75,18 @@ A ready-to-use `.env.example` file exists in this folder.
 - **Healthcheck Path**: `/health` (the script automatically starts a tiny server on the assigned `PORT`)
 - **Healthcheck Timeout**: 30 seconds
 
-This setup makes Railway treat the service as healthy even though it is a background worker (not a web app).
+### Healthcheck Response
+
+The `/health` endpoint now returns useful JSON:
+
+```json
+{
+  "status": "ok",
+  "lastTick": "2026-05-30T...",
+  "lastStatus": "success",
+  "uptimeSeconds": 12345,
+  "wallet": "0xEbF9..."
+}
+```
+
+This lets you monitor in Railway when the last successful risk check happened.

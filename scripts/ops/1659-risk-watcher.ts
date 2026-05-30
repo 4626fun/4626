@@ -52,9 +52,16 @@ function startHealthcheckServer() {
   const port = Number(process.env.PORT || 8080)
 
   const server = http.createServer((req, res) => {
-    if (req.url === '/health' || req.url === '/') {
-      res.writeHead(200, { 'Content-Type': 'text/plain' })
-      res.end('ok')
+    if (req.url === '/health' || req.url === '/' || req.url === '/healthz') {
+      const status = {
+        status: 'ok',
+        lastTick: lastSuccessfulTick,
+        lastStatus: lastTickStatus,
+        uptimeSeconds: Math.floor(process.uptime()),
+        wallet: WALLET,
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(status, null, 2))
     } else {
       res.writeHead(404)
       res.end('not found')
@@ -62,10 +69,9 @@ function startHealthcheckServer() {
   })
 
   server.listen(port, '0.0.0.0', () => {
-    console.log(`[healthcheck] Listening on port ${port} (Railway / platform health probes)`)
+    console.log(`[healthcheck] Listening on port ${port} (Railway health probes at /health)`)
   })
 
-  // Graceful shutdown for the server too
   process.on('SIGTERM', () => {
     server.close(() => process.exit(0))
   })
@@ -110,21 +116,30 @@ async function sendViaExistingTelegramRelay(text: string): Promise<{ sent: boole
     payload.message_thread_id = threadId
   }
 
-  try {
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
+  // Simple retry (2 attempts)
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
 
-    if (res.ok) {
-      return { sent: true }
+      if (res.ok) {
+        return { sent: true }
+      }
+      const errText = await res.text().catch(() => '')
+      if (attempt === 2) {
+        return { sent: false, error: `${res.status} ${errText.slice(0, 200)}` }
+      }
+    } catch (e: any) {
+      if (attempt === 2) {
+        return { sent: false, error: e?.message || String(e) }
+      }
+      await new Promise(r => setTimeout(r, 1000))
     }
-    const errText = await res.text().catch(() => '')
-    return { sent: false, error: `${res.status} ${errText.slice(0, 200)}` }
-  } catch (e: any) {
-    return { sent: false, error: e?.message || String(e) }
   }
+  return { sent: false, error: 'unknown_error' }
 }
 
 /**
@@ -153,23 +168,32 @@ async function sendPublicBroadcast(text: string): Promise<{ sent: boolean; error
 
   const endpoint = `https://api.telegram.org/bot${botToken}/sendMessage`
 
-  try {
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        disable_web_page_preview: true,
-      }),
-    })
+  // Simple retry (2 attempts)
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          disable_web_page_preview: true,
+        }),
+      })
 
-    if (res.ok) return { sent: true }
-    const errText = await res.text().catch(() => '')
-    return { sent: false, error: `${res.status} ${errText.slice(0, 200)}` }
-  } catch (e: any) {
-    return { sent: false, error: e?.message || String(e) }
+      if (res.ok) return { sent: true }
+      const errText = await res.text().catch(() => '')
+      if (attempt === 2) {
+        return { sent: false, error: `${res.status} ${errText.slice(0, 200)}` }
+      }
+    } catch (e: any) {
+      if (attempt === 2) {
+        return { sent: false, error: e?.message || String(e) }
+      }
+      await new Promise(r => setTimeout(r, 1000))
+    }
   }
+  return { sent: false, error: 'unknown_error' }
 }
 
 const WALLET = '0xEbF94fA19DB7d2E7905dEcD01DaE4ea9eb4C1FF2'
@@ -350,14 +374,19 @@ export async function run1659RiskTick(options: { once?: boolean } = {}) {
       console.log('ALERT SENT — Private + public @fun4626')
     }
 
+    lastSuccessfulTick = new Date().toISOString()
+    lastTickStatus = 'success'
     return { ok: true, alertsTriggered: alerts.length }
   } catch (e: any) {
     console.error('[1659-risk] tick error', e)
+    lastTickStatus = 'error'
     return { ok: false, error: e.message }
   }
 }
 
 let isShuttingDown = false
+let lastSuccessfulTick: string | null = null
+let lastTickStatus: string = 'never_run'
 
 function setupGracefulShutdown() {
   const shutdown = (signal: string) => {
