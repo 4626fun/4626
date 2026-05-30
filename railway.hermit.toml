@@ -2,11 +2,10 @@
 # Railway deployment config — Hermit AlfaClub/Pinata Creative Agent
 # (for 4626-alfaclub-bridge / hermit.4626.fun service)
 # --------------------------------------------------------------------------
-# EXACT UI SETTINGS TO COPY (for this service in Railway):
+# EXACT UI SETTINGS TO COPY (for 4626-alfaclub-bridge / hermit.4626.fun):
 #
 # Build
 #   Dockerfile Path:          frontend/Dockerfile.hermit
-#   Watch Paths:              (leave empty or use this file's watchPatterns)
 #
 # Deploy
 #   Custom Start Command:     ./node_modules/.bin/tsx server/agents/hermit/bootstrap.ts
@@ -18,20 +17,17 @@
 # Config-as-code
 #   Railway Config File:      railway.hermit.toml
 #
-# This dedicated setup + Dockerfile.hermit is what finally makes the
-# healthcheck pass reliably after all the bootstrap / early listener work.
+# After you set "Railway Config File" to railway.hermit.toml, the Watch Paths
+# will automatically become the Hermit-specific ones below (no need to edit them manually).
+#
+# This is the config that finally makes the healthcheck pass.
 # --------------------------------------------------------------------------
 
 [build]
 dockerfilePath = "frontend/Dockerfile.hermit"
 watchPatterns = [
   "/frontend/Dockerfile.hermit",
-  "/frontend/server/_lib/alfaclub/**",
-  "/frontend/server/_lib/hermit/**",
-  "/frontend/server/_lib/infra/**",
-  "/frontend/server/agents/hermit/**",
-  "/frontend/server/agents/core/**",
-  "/frontend/server/commands/**",
+  "/frontend/server/**",
   "/frontend/api/**",
   "/frontend/src/config/**",
   "/frontend/src/wallet/**",
