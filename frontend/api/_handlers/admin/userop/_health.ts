@@ -277,7 +277,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!db) {
     return res.status(500).json({
       success: false,
-      error: 'Database not configured (set POSTGRES_URL/DATABASE_URL).',
+      error: 'Database not configured (set DATABASE_URL for Supabase, or legacy POSTGRES_URL).',
     } satisfies ApiEnvelope<never>)
   }
 

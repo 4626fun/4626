@@ -752,7 +752,7 @@ try {
   if (RUNNING_ON_RAILWAY) {
     if (AGENT_RUNTIME_ROLE !== 'primary') criticalIssues.push('AGENT_RUNTIME_ROLE must be primary')
     if (!AGENT_CONSUME_XMTP) criticalIssues.push('AGENT_CONSUME_XMTP must be true')
-    if (!hasDb) criticalIssues.push('DATABASE_URL/POSTGRES_URL required')
+    if (!hasDb) criticalIssues.push('DATABASE_URL (Supabase) or POSTGRES_URL (legacy) required')
     if (!hasEncKey) criticalIssues.push('XMTP_AGENT_KEY_ENCRYPTION_KEY required')
     if (!hasVolume) criticalIssues.push('Dedicated volume required for XMTP_DB_DIRECTORY')
   }
@@ -769,7 +769,7 @@ try {
   console.error('[eliza][early] AGENT_RUNTIME_ROLE            :', AGENT_RUNTIME_ROLE, AGENT_RUNTIME_ROLE === 'primary' ? '(OK)' : '(PROBLEM)')
   console.error('[eliza][early] AGENT_CONSUME_XMTP            :', AGENT_CONSUME_XMTP ? 'true (OK)' : 'false (PROBLEM on Railway primary)')
   console.error('[eliza][early] RUNNING_ON_RAILWAY            :', RUNNING_ON_RAILWAY)
-  console.error('[eliza][early] DATABASE_URL / POSTGRES_URL   :', hasDb ? 'present' : 'MISSING')
+  console.error('[eliza][early] DATABASE_URL (Supabase) / POSTGRES_URL (legacy) :', hasDb ? 'present' : 'MISSING')
   console.error('[eliza][early] XMTP_AGENT_KEY_ENCRYPTION_KEY :', hasEncKey ? 'present' : 'MISSING')
   console.error('[eliza][early] XMTP_DB_DIRECTORY             :', dbDir)
   console.error('[eliza][early] Dedicated volume mounted      :', hasVolume ? 'yes' : `NO${mountedAncestor ? ` (closest mount: ${mountedAncestor})` : ''}`)
@@ -2229,7 +2229,7 @@ async function main() {
     console.error('\n--- Railway Primary Keepr Requirements (check these) ---')
     console.error('1. AGENT_RUNTIME_ROLE=primary')
     console.error('2. AGENT_CONSUME_XMTP=true')
-    console.error('3. DATABASE_URL or POSTGRES_URL (Supabase pooler recommended)')
+    console.error('3. DATABASE_URL (Supabase strongly recommended) or POSTGRES_URL (legacy fallback)')
     console.error('4. XMTP_AGENT_KEY_ENCRYPTION_KEY (for multi-agent mode)')
     console.error('5. XMTP_DB_DIRECTORY pointing to a **mounted Railway volume** (not /tmp)')
     console.error('6. If using CSW identity: XMTP_AGENT_CSW_ADDRESS + XMTP_AGENT_PRIVY_WALLET_ID')

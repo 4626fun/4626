@@ -48,7 +48,7 @@ const hasRoom = !!(process.env.ALFACLUB_CHAT_ROOM_ID ?? '').trim() || !!(process
 const hasAlfaClubBootstrap = hasAlfaClubJwt || (hasAlfaClubPrivyAccess && hasAlfaClubPrivyRefresh)
 
 console.log('--- Core Database (required — many alfaclub stores + schema bootstrap are pulled at import time) ---')
-check('DATABASE_URL or POSTGRES_URL present (Supabase pooler recommended)', hasDb)
+check('DATABASE_URL (Supabase strongly preferred) or POSTGRES_URL (legacy fallback)', hasDb)
 
 console.log('\n--- AlfaClub Auth (chat bridge + token stores) ---')
 check('ALFACLUB_CHAT_JWT present (or the three Privy tokens for auto-refresh)', hasAlfaClubBootstrap)

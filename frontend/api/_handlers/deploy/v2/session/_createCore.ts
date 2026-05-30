@@ -24,7 +24,8 @@ import {
 } from '../../../../../src/lib/deploy/phase1ModuleDeploy.js'
 import { assertShareBridgeOftWiringForFinalize } from '../../../../../src/lib/deploy/shareBridgeOftWiring.js'
 import { assertPhase3HelperCreate2Authorization } from '../../../../../server/_lib/deploy/ensurePhase3HelperCreate2Authorization.js'
-import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
+import { ensurePhase3DryRunForkPrep } from '../../../../../server/_lib/deploy/ensurePhase3DryRunForkPrep.js'
+import { isLocalForkRpcUrl, resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import {
   handleOptions,
   readBoundedJsonObjectBody,
@@ -2958,6 +2959,19 @@ export async function validateDeploySessionRequest(params: {
         chain: base,
         transport: http(rpc, { timeout: 12_000 }),
       })
+      if (isLocalForkRpcUrl(rpc)) {
+        try {
+          await ensurePhase3DryRunForkPrep({
+            rpcUrl: rpc,
+            batcher: batcherAddress,
+          })
+        } catch (error) {
+          throw new DeploySessionRequestError(
+            409,
+            error instanceof Error ? error.message : String(error),
+          )
+        }
+      }
       try {
         await assertPhase3HelperCreate2Authorization({
           publicClient: readClient,

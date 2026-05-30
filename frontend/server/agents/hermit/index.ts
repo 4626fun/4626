@@ -58,7 +58,7 @@ try {
 
   const criticalIssues: string[] = []
   if (runningOnRailway) {
-    if (!hasDb) criticalIssues.push('DATABASE_URL or POSTGRES_URL is required (alfaclub stores + schema bootstrap are pulled at import time via chatBridge / command executor)')
+    if (!hasDb) criticalIssues.push('DATABASE_URL (Supabase) or POSTGRES_URL (legacy) is required (alfaclub stores + schema bootstrap are pulled at import time via chatBridge / command executor)')
     if (!hasAlfaClubBootstrap) criticalIssues.push('ALFACLUB_CHAT_JWT (or the three ALFACLUB_CHAT_PRIVY_* tokens) is required for the chat bridge')
   }
 
@@ -72,7 +72,7 @@ try {
 
   console.error('[hermit][early] ----------------------------------------------------------------')
   console.error('[hermit][early] RUNNING_ON_RAILWAY            :', runningOnRailway)
-  console.error('[hermit][early] DATABASE_URL / POSTGRES_URL   :', hasDb ? 'present' : 'MISSING (critical for alfaclub stores)')
+  console.error('[hermit][early] DATABASE_URL (Supabase) / POSTGRES_URL (legacy) :', hasDb ? 'present' : 'MISSING (critical for alfaclub stores)')
   console.error('[hermit][early] ALFACLUB_CHAT_JWT             :', hasAlfaClubJwt ? 'present' : 'missing')
   console.error('[hermit][early] ALFACLUB_CHAT_PRIVY_* triplet :', hasAlfaClubPrivyAccess && hasAlfaClubPrivyRefresh ? 'present' : 'incomplete/missing')
   console.error('[hermit][early] HERMIT_PINATA_CHAT_ENDPOINT   :', hasPinataEndpoint ? 'present' : 'missing (creative /gmeow etc. will be degraded)')

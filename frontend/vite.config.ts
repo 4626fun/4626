@@ -328,9 +328,9 @@ function localApiRoutesPlugin(): Plugin {
       applyLocalDevServerEnv()
 
       // Local dev note:
-      // Our API handlers use `server/_lib/postgres.ts`, which treats `POSTGRES_URL*` as Vercel Postgres.
-      // In local dev we typically want to use `DATABASE_URL` (e.g. Supabase) via `pg`.
-      // Clear Vercel-specific envs so local API routing doesn't accidentally use @vercel/postgres.
+      // Our API handlers now prefer Supabase (via DATABASE_URL + pg driver).
+      // Clear any lingering legacy Vercel Postgres envs (POSTGRES_URL*) so local dev
+      // doesn't accidentally take a deprecated path. Supabase is the single production DB.
       try {
         delete (process.env as any).POSTGRES_URL
         delete (process.env as any).POSTGRES_URL_NON_POOLING

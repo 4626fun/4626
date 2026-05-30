@@ -45,7 +45,7 @@ for (const envPath of possibleEnvPaths) {
 
 // === EARLY ENV DIAGNOSTICS (helps verify "all the .env variables are up") ===
 function print1659EnvDiagnostics(): void {
-  const hasDb = !!(process.env.DATABASE_URL || process.env.POSTGRES_URL)
+  const hasDb = !!(process.env.DATABASE_URL || process.env.POSTGRES_URL) // Supabase preferred
   const hasAlfaClubJwt = !!(process.env.ALFACLUB_CHAT_JWT ?? '').trim()
   const hasPrivyRefresh = !!(process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN && process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN)
   const hasAlfaClubAuth = hasAlfaClubJwt || hasPrivyRefresh
@@ -72,7 +72,7 @@ function print1659EnvDiagnostics(): void {
 
   console.error(summary)
   console.error('[1659-risk-watcher][early] ----------------------------------------------------------------')
-  console.error('[1659-risk-watcher][early] DATABASE_URL / POSTGRES_URL   :', hasDb ? 'present' : 'MISSING')
+  console.error('[1659-risk-watcher][early] DATABASE_URL (Supabase) / POSTGRES_URL (legacy) :', hasDb ? 'present' : 'MISSING')
   console.error('[1659-risk-watcher][early] AlfaClub auth (JWT or Privy)  :', hasAlfaClubAuth ? 'present' : 'MISSING')
   console.error('[1659-risk-watcher][early] Telegram bot token            :', hasBotToken ? 'present' : 'MISSING')
   console.error('[1659-risk-watcher][early] Private ops relay             :', hasPrivateTelegram ? 'present' : 'missing')

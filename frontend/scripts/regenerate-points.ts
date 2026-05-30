@@ -18,7 +18,7 @@
  *   pnpm -C frontend regen:points -- --execute --confirm=REGENERATE-POINTS
  *
  * Env requirements:
- *   - DATABASE_URL (or POSTGRES_URL / POSTGRES_URL_NON_POOLING)
+ *   - DATABASE_URL (Supabase strongly preferred) or POSTGRES_URL (legacy fallback)
  *   - ADMIN_AUDIT_ADDRESS (optional; defaults to first entry of
  *     CREATOR_ACCESS_ADMIN_ADDRESSES)
  */
@@ -96,6 +96,7 @@ async function main(): Promise<void> {
     process.env.POSTGRES_URL ||
     process.env.POSTGRES_URL_NON_POOLING ||
     ''
+  // Note: legacy POSTGRES_URL paths are accepted but Supabase is the single production source of truth.
   if (!dbUrl) die('No DATABASE_URL / POSTGRES_URL configured.')
 
   // Resolve audit attribution (never anonymous — the admin_logs row needs

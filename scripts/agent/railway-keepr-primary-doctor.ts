@@ -56,7 +56,7 @@ if (RUNNING_ON_RAILWAY) {
 }
 
 console.log('\n--- Database & Encryption ---')
-check('DATABASE_URL or POSTGRES_URL present', hasDb)
+check('DATABASE_URL (Supabase preferred) or POSTGRES_URL (legacy)', hasDb)
 check('XMTP_AGENT_KEY_ENCRYPTION_KEY present (for multi-agent)', hasEncKey || !hasDb)
 
 console.log('\n--- XMTP Storage (Critical on Railway) ---')
@@ -96,7 +96,7 @@ if (RUNNING_ON_RAILWAY) {
   if (!AGENT_CONSUME_XMTP && AGENT_RUNTIME_ROLE === 'primary') criticalErrors.push('AGENT_CONSUME_XMTP must be true')
 }
 
-if (!hasDb) criticalErrors.push('DATABASE_URL / POSTGRES_URL is required')
+if (!hasDb) criticalErrors.push('DATABASE_URL (Supabase) / POSTGRES_URL (legacy) is required')
 if (!hasEncKey && hasDb) criticalErrors.push('XMTP_AGENT_KEY_ENCRYPTION_KEY is required for multi-agent')
 
 if (RUNNING_ON_RAILWAY && !hasDedicatedMount(xmptDbDir)) {

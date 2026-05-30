@@ -1,4 +1,5 @@
 import { getDb, isDbConfigured } from '../db/postgres.js'
+import { ensureWorkspaceSchema as ensureWorkspaceSchemaFromBootstrap } from '../db/schemaBootstrap.js'
 
 let workspaceSchemaEnsured = false
 
@@ -10,6 +11,12 @@ export async function ensureWorkspaceSchema(): Promise<void> {
   if (!db) return
 
   try {
+    // Condensed path
+    await ensureWorkspaceSchemaFromBootstrap(db)
+
+    // Legacy raw blocks below are transitional and will be removed.
+    // (The authoritative definitions are now in the 20260529 migration.)
+
     await db.sql`
       CREATE TABLE IF NOT EXISTS workspace_strategy_targets (
         vault_address TEXT NOT NULL,

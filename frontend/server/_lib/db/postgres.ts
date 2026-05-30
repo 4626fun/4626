@@ -1,5 +1,7 @@
 declare const process: { env: Record<string, string | undefined> }
 
+let legacyVercelPostgresWarned = false
+
 function isProbablyPostgresUrl(value: string | null | undefined): boolean {
   const v = typeof value === 'string' ? value.trim() : ''
   if (!v) return false
@@ -17,30 +19,43 @@ function isSupabaseDatabaseUrl(value: string | null | undefined): boolean {
   }
 }
 
-type DbSource = 'vercel_postgres' | 'database_url'
-
-function getDbConfig(): { source: DbSource; connectionString: string } | null {
+/**
+ * Database configuration resolution.
+ *
+ * Policy (as of 2026 cleanup): Supabase is the single source of truth for all
+ * production data. Vercel Postgres (Neon) attachment is legacy and should not
+ * be used for new work. Generic POSTGRES_URL is still accepted for Railway,
+ * local dev, scripts, and older environments, but always uses the standard
+ * `pg` driver (never the deprecated @vercel/postgres path).
+ */
+function getDbConfig(): { source: 'supabase' | 'generic_postgres'; connectionString: string } | null {
   const fromDatabaseUrl = process.env.DATABASE_URL
   const hasSupabaseEnv = Boolean(process.env.SUPABASE_URL || process.env.SUPABASE_SERVICE_ROLE_KEY)
-  const preferDatabaseUrl = isSupabaseDatabaseUrl(fromDatabaseUrl) && hasSupabaseEnv
-  // In production on Vercel, do NOT read DATABASE_URL by default.
-  // - Many projects set DATABASE_URL for external providers (e.g. Supabase) that are incompatible with @vercel/postgres.
-  // - Vercel Postgres sets POSTGRES_URL / POSTGRES_URL_NON_POOLING automatically.
-  // Exception: if DATABASE_URL looks like Supabase and Supabase envs are set, prefer it.
-  const isVercel = Boolean(process.env.VERCEL) || Boolean(process.env.VERCEL_ENV)
-  const fromVercelPool = process.env.POSTGRES_URL
-  if (preferDatabaseUrl && isProbablyPostgresUrl(fromDatabaseUrl)) {
-    return { source: 'database_url', connectionString: (fromDatabaseUrl ?? '').trim() }
+  const looksLikeSupabase = isSupabaseDatabaseUrl(fromDatabaseUrl)
+
+  // Strong Supabase preference: if we have Supabase envs + a Supabase-shaped DATABASE_URL, use it.
+  if (looksLikeSupabase && hasSupabaseEnv && isProbablyPostgresUrl(fromDatabaseUrl)) {
+    return { source: 'supabase', connectionString: (fromDatabaseUrl ?? '').trim() }
   }
-  if (isProbablyPostgresUrl(fromVercelPool)) return { source: 'vercel_postgres', connectionString: (fromVercelPool ?? '').trim() }
 
-  const fromVercelDirect = process.env.POSTGRES_URL_NON_POOLING
-  if (isProbablyPostgresUrl(fromVercelDirect)) return { source: 'vercel_postgres', connectionString: (fromVercelDirect ?? '').trim() }
+  // Legacy Vercel Postgres vars (POSTGRES_URL / POSTGRES_URL_NON_POOLING) are still
+  // accepted as a generic Postgres connection string for Railway / local / scripts.
+  // They are treated as "generic_postgres" and will use the standard `pg` driver.
+  const fromLegacyPool = process.env.POSTGRES_URL
+  if (isProbablyPostgresUrl(fromLegacyPool)) {
+    return { source: 'generic_postgres', connectionString: (fromLegacyPool ?? '').trim() }
+  }
 
-  // Fallback: if Vercel Postgres is not configured, accept DATABASE_URL even on Vercel.
-  // This enables running against external Postgres providers (e.g. Supabase) without requiring POSTGRES_URL.
-  // Only accept actual Postgres connection strings; it's common for other providers to set DATABASE_URL.
-  if (isProbablyPostgresUrl(fromDatabaseUrl)) return { source: 'database_url', connectionString: (fromDatabaseUrl ?? '').trim() }
+  const fromLegacyDirect = process.env.POSTGRES_URL_NON_POOLING
+  if (isProbablyPostgresUrl(fromLegacyDirect)) {
+    return { source: 'generic_postgres', connectionString: (fromLegacyDirect ?? '').trim() }
+  }
+
+  // Final fallback: plain DATABASE_URL (may be Supabase or any other Postgres).
+  if (isProbablyPostgresUrl(fromDatabaseUrl)) {
+    const source: 'supabase' | 'generic_postgres' = looksLikeSupabase ? 'supabase' : 'generic_postgres'
+    return { source, connectionString: (fromDatabaseUrl ?? '').trim() }
+  }
 
   return null
 }
@@ -381,8 +396,8 @@ export function getDbInitError(): string | null {
 
 /**
  * Cron handlers should use this instead of bare `getDb()` so a saturated Supabase pool
- * does not hold the Vercel function until maxDuration (connection acquire can retry
- * for tens of seconds per query).
+ * (or any slow Postgres connection) does not hold the Vercel function until maxDuration.
+ * Connection acquire can retry for tens of seconds per query under load.
  */
 export async function getDbForCron(deadlineMs?: number): Promise<DbPool | null> {
   const ms =
@@ -435,58 +450,30 @@ export async function getDb(): Promise<DbPool | null> {
         if (!cfg2 || !cs) return null
         const ssl = sslOptionsForConnection(cs)
 
-        // Vercel Postgres (Neon): use @vercel/postgres.
-        if (cfg2.source === 'vercel_postgres') {
-          const mod: any = await import('@vercel/postgres')
-          const createPool: any = mod?.createPool
-          const createClient: any = mod?.createClient
-          if (typeof createPool !== 'function' && typeof createClient !== 'function') {
-            initError = 'Missing createPool/createClient exports from @vercel/postgres'
-            return null
-          }
+        const isLegacyVercelPostgres = process.env.POSTGRES_URL || process.env.POSTGRES_URL_NON_POOLING
 
-          // Prefer pooled connections when possible (recommended for serverless),
-          // but fall back to a direct client if the provided connection string is direct-only.
-          try {
-            if (typeof createPool === 'function') {
-              const pool = createPool({ connectionString: cs, ssl })
-              // Some drivers only surface "invalid_connection_string" on first query.
-              // If this happens, fall back to createClient() below.
-              try {
-                await pool.sql`SELECT 1;`
-                cachedDb = pool
-                return cachedDb
-              } catch (e: any) {
-                const msg = e?.message ? String(e.message) : ''
-                const isDirectOnly =
-                  msg.toLowerCase().includes('invalid_connection_string') && msg.toLowerCase().includes('direct connection')
-                if (!isDirectOnly) throw e
-                console.warn('Pool connection string appears to be direct-only; falling back to createClient')
-              }
-            }
-          } catch (e: any) {
-            const msg = e?.message ? String(e.message) : ''
-            // fall through to createClient
-            console.warn('createPool failed, trying createClient', msg)
+        if (isLegacyVercelPostgres && !isSupabaseDatabaseUrl(cs)) {
+          // Legacy path: someone still has Vercel Postgres / Neon vars set but the
+          // connection does not look like Supabase. We now treat it as a generic
+          // Postgres URL and use the standard `pg` driver (the @vercel/postgres
+          // package is deprecated per its own npm deprecation notice).
+          // A loud one-time warning is emitted below so operators notice during deprecation.
+          if (!legacyVercelPostgresWarned) {
+            legacyVercelPostgresWarned = true
+            const isVercelProd = Boolean(process.env.VERCEL) || Boolean(process.env.VERCEL_ENV)
+            console.warn(
+              '[postgres] DEPRECATION: POSTGRES_URL / POSTGRES_URL_NON_POOLING detected without Supabase configuration. ' +
+                'All production data must live on Supabase (qajpnuvqlcfseghnldkl). ' +
+                'The special @vercel/postgres driver path has been removed. Using standard pg driver. ' +
+                (isVercelProd ? 'This is running in Vercel prod — the Vercel Postgres attachment should be removed from the project. ' : '') +
+                'See docs/operations/vercel-cron-production-fixes.md and AGENTS.md for Supabase pooler guidance.'
+            )
           }
-
-          if (typeof createClient !== 'function') {
-            initError = 'createPool failed and createClient is unavailable'
-            return null
-          }
-
-          const client = createClient({ connectionString: cs, ssl })
-          try {
-            if (typeof client?.connect === 'function') await client.connect()
-          } catch {
-            // ignore connect errors here; first query will surface it.
-          }
-
-          cachedDb = client
-          return cachedDb
         }
 
-        // External Postgres (e.g. Supabase): use node-postgres (pg), not @vercel/postgres.
+        // All paths now use node-postgres (pg). Supabase transaction pooler (6543) is the
+        // recommended production configuration. The old @vercel/postgres special case
+        // for Vercel Postgres attachments is retired.
         const pg: any = await import('pg')
         const Pool: any = pg?.Pool
         if (typeof Pool !== 'function') {
@@ -500,6 +487,8 @@ export async function getDb(): Promise<DbPool | null> {
         //
         // We strip sslmode from the URL and rely on the explicit `ssl` option instead, which is
         // consistent and controlled via POSTGRES_SSL_REJECT_UNAUTHORIZED.
+        //
+        // All connections (Supabase or generic) now go through this pg path.
         const poolConnectionString = stripQueryParams(cs, ['sslmode', 'ssl', 'sslrootcert'])
         const isVercelRuntime = Boolean(process.env.VERCEL) || Boolean(process.env.VERCEL_ENV)
         const isSupabaseTarget = isSupabaseDatabaseUrl(poolConnectionString)

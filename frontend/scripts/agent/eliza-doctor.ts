@@ -37,7 +37,7 @@ function mask(value: string): string {
 
 function normalizeMode(): StartupMode {
   const consumeXmtp = envBool('AGENT_CONSUME_XMTP', env('AGENT_RUNTIME_ROLE').toLowerCase() !== 'standby')
-  const hasMultiAgent = has('DATABASE_URL') || has('POSTGRES_URL')
+  const hasMultiAgent = has('DATABASE_URL') || has('POSTGRES_URL') // Supabase preferred; POSTGRES_URL = legacy fallback
   const hasDbKey = has('XMTP_AGENT_KEY_ENCRYPTION_KEY')
   const hasCsw = has('XMTP_AGENT_CSW_ADDRESS') && has('XMTP_AGENT_PRIVY_WALLET_ID')
   const hasEoa = has('XMTP_AGENT_PRIVATE_KEY')
@@ -69,7 +69,7 @@ function configuredChannels(): string[] {
 
 function buildChecks(mode: StartupMode): Check[] {
   const consumeXmtp = envBool('AGENT_CONSUME_XMTP', env('AGENT_RUNTIME_ROLE').toLowerCase() !== 'standby')
-  const dbConfigured = has('DATABASE_URL') || has('POSTGRES_URL')
+  const dbConfigured = has('DATABASE_URL') || has('POSTGRES_URL') // Supabase is canonical
   const configuredXmtpDbDir = env('XMTP_DB_DIRECTORY')
   const effectiveXmtpDbDir = resolveXmtpDbDirectory()
   const displayedXmtpDbDir = configuredXmtpDbDir || effectiveXmtpDbDir

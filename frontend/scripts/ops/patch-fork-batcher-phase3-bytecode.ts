@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 /**
+ * @deprecated Do not use — anvil_setCode on the batcher shell corrupts immutables.
+ * Use scripts/ops/ensure-fork-phase3-helper-aligned.ts instead.
+ *
  * Patch the forked live DeploymentBatcher shell bytecode with the locally compiled
  * artifact. Keeps the canonical batcher address + storage (vault management stays
  * wired) while picking up source fixes such as Phase 3 addStrategy routing.

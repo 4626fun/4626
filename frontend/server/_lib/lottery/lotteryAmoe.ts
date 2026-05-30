@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 
 import { getDb } from '../db/postgres.js'
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
+import { ensureMigrationApplied, ensureAmoeSchema } from '../db/schemaBootstrap.js'
 import { readWaitlistPointsBreakdown } from '../onboarding/waitlistScoring.js'
 import { resolveAmoePointsProfileId } from './amoeProfileResolve.js'
 import { awardAmoeCheckinPoints } from './amoeWaitlistPoints.js'
@@ -278,100 +279,15 @@ function nowIso(): string {
 async function ensureAmoeSchema(db: Db): Promise<void> {
   if (amoeSchemaEnsured) return
   await ensureWaitlistSchema(db as any)
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS lottery_amoe_nonces (
-      nonce TEXT PRIMARY KEY,
-      wallet_address TEXT NOT NULL,
-      creator_coin TEXT NOT NULL,
-      issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      expires_at TIMESTAMPTZ NOT NULL,
-      consumed_at TIMESTAMPTZ
-    );
-  `
-  await db.sql`CREATE INDEX IF NOT EXISTS lottery_amoe_nonces_wallet_creator_idx ON lottery_amoe_nonces (wallet_address, creator_coin, expires_at);`
 
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS lottery_amoe_entries (
-      id BIGSERIAL PRIMARY KEY,
-      nonce_hash TEXT NOT NULL UNIQUE,
-      nonce TEXT NOT NULL,
-      wallet_address TEXT NOT NULL,
-      creator_coin TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'attested',
-      attestation_deadline BIGINT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS lottery_amoe_daily_twitter_checkins (
-      wallet_address TEXT NOT NULL,
-      checkin_date DATE NOT NULL,
-      tweet_id TEXT,
-      tweet_url TEXT,
-      tweet_author_username TEXT,
-      tweet_author_id TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (wallet_address, checkin_date)
-    );
-  `
-  await db.sql`
-    ALTER TABLE lottery_amoe_daily_twitter_checkins
-      ADD COLUMN IF NOT EXISTS tweet_id TEXT,
-      ADD COLUMN IF NOT EXISTS tweet_url TEXT,
-      ADD COLUMN IF NOT EXISTS tweet_author_username TEXT,
-      ADD COLUMN IF NOT EXISTS tweet_author_id TEXT;
-  `
-  await db.sql`
-    CREATE UNIQUE INDEX IF NOT EXISTS lottery_amoe_daily_twitter_tweet_id_unique
-      ON lottery_amoe_daily_twitter_checkins (tweet_id)
-      WHERE tweet_id IS NOT NULL;
-  `
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS lottery_amoe_daily_xmtp_checkins (
-      wallet_address TEXT NOT NULL,
-      checkin_date DATE NOT NULL,
-      message_id TEXT,
-      recipient_address TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (wallet_address, checkin_date)
-    );
-  `
-  await db.sql`
-    ALTER TABLE lottery_amoe_daily_xmtp_checkins
-      ADD COLUMN IF NOT EXISTS message_id TEXT,
-      ADD COLUMN IF NOT EXISTS recipient_address TEXT;
-  `
-  await db.sql`
-    CREATE UNIQUE INDEX IF NOT EXISTS lottery_amoe_daily_xmtp_message_id_unique
-      ON lottery_amoe_daily_xmtp_checkins (message_id)
-      WHERE message_id IS NOT NULL;
-  `
-  await db.sql`
-    ALTER TABLE lottery_amoe_daily_xmtp_checkins ENABLE ROW LEVEL SECURITY;
-  `
-  await db.sql`
-    DROP POLICY IF EXISTS "deny_public_rest" ON lottery_amoe_daily_xmtp_checkins;
-  `
-  await db.sql`
-    CREATE POLICY "deny_public_rest"
-    ON lottery_amoe_daily_xmtp_checkins
-    AS RESTRICTIVE
-    FOR ALL
-    TO public
-    USING (false)
-    WITH CHECK (false);
-  `
+  // Condensed path — all core AMOE lottery tables are now in
+  // `supabase/migrations/20260527000000_amoe_lottery_tables.sql`
+  // (and earlier AMOE migrations) via ensureAmoeSchema().
+  await ensureAmoeSchema(db)
 
-  // AMOE-eligibility view. Mirrors
-  // `supabase/migrations/20260427180000_amoe_eligible_points_view.sql`.
-  // Bootstrap parity matters because dev/preview envs may not have the
-  // migration applied yet — without this CREATE OR REPLACE here, the
-  // first AMOE submit on a fresh DB would fail with `relation does not
-  // exist`. The migration remains the source of truth in CI / prod; this
-  // is the runtime safety net.
-  //
-  // KEEP THIS BLOCK BYTE-FOR-BYTE IDENTICAL TO THE MIGRATION. If you
-  // change one, update the other.
+  // AMOE-eligibility view — intentionally kept as a runtime safety net
+  // for dev/preview environments (mirrors the migration).
+  // KEEP THIS BLOCK BYTE-FOR-BYTE IDENTICAL TO THE MIGRATION.
   await db.sql`
     CREATE OR REPLACE VIEW points_amoe_eligible_balance WITH (security_invoker = true) AS
     SELECT
@@ -415,25 +331,6 @@ async function ensureAmoeSchema(db: Db): Promise<void> {
       )::bigint AS credits
     FROM points
     GROUP BY signup_id;
-  `
-
-  // Burn-credits intents — forward marker the burn-credits handler writes
-  // into one row per (signup_id, spend_ref_id) immediately after a phase-A
-  // points debit. The PR 6c refund cron requires a matching intent row
-  // before emitting an `amoe_entry_refund`, scoping refunds strictly to
-  // phase-A burns and excluding legacy `/api/v1/lottery/amoe/submit`
-  // debits that share the same `source='amoe_entry_spend'`.
-  //
-  // KEEP THIS BLOCK BYTE-FOR-BYTE IDENTICAL TO THE MIGRATION at
-  // `frontend/db/migrations/035_amoe_entry_refund_source.sql` (and its
-  // Supabase mirror). If you change one, update the other.
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS public.amoe_burn_credits_intents (
-      signup_id     BIGINT      NOT NULL,
-      spend_ref_id  TEXT        NOT NULL,
-      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (signup_id, spend_ref_id)
-    );
   `
 
   amoeSchemaEnsured = true

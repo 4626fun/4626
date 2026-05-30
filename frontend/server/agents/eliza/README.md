@@ -105,7 +105,7 @@ The agent will hard-fail early (`process.exit(1)`) on Railway if these are not c
 - `AGENT_RUNTIME_ROLE=primary` (or leave unset — default is primary)
 - `AGENT_CONSUME_XMTP=true` (or leave unset when role is primary)
 - Database:
-  - `DATABASE_URL` or `POSTGRES_URL` (Supabase pooler recommended for Railway)
+  - `DATABASE_URL` (Supabase strongly preferred) or `POSTGRES_URL` (legacy/generic fallback)
 - For multi-agent mode (most production setups):
   - `XMTP_AGENT_KEY_ENCRYPTION_KEY` (32-byte hex)
 - Persistent storage (critical on Railway):
@@ -201,7 +201,7 @@ This is the full server orchestrator.
 
 Required env:
 
-- `DATABASE_URL` or `POSTGRES_URL`
+- `DATABASE_URL` (Supabase) or `POSTGRES_URL` (legacy fallback)
 - `XMTP_AGENT_KEY_ENCRYPTION_KEY`
 - `XMTP_DB_ENCRYPTION_KEY`
 - one LLM provider key

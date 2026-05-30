@@ -71,7 +71,7 @@ const hasRoomOverrides = !!(process.env.ROOM_1659_FRIENDKEY_TOKEN || process.env
 // === Reports ===
 
 console.log('--- 1. Shared Core (required for rich 1659 context in both services) ---')
-check('DATABASE_URL / POSTGRES_URL present (Supabase pooler)', hasDb)
+check('DATABASE_URL (Supabase) / POSTGRES_URL (legacy)', hasDb)
 check('AlfaClub auth (JWT or full Privy refresh triplet)', hasAlfaClubBootstrap)
 
 if (!hasAlfaClubJwt && hasAlfaClubPrivyAccess && hasAlfaClubPrivyRefresh) {
@@ -99,7 +99,7 @@ if (RUNNING_ON_RAILWAY) {
 
 // === Critical blockers summary ===
 const critical: string[] = []
-if (!hasDb) critical.push('DATABASE_URL (or POSTGRES_URL) — needed for alfaclub stores + rich context')
+if (!hasDb) critical.push('DATABASE_URL (Supabase preferred) or POSTGRES_URL — needed for alfaclub stores + rich context')
 if (!hasAlfaClubBootstrap) critical.push('AlfaClub auth (JWT or Privy triplet) — needed for PnL + bridge')
 if (!hasBotToken) critical.push('Telegram bot token — watcher cannot send alerts without it')
 

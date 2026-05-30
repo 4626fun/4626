@@ -199,8 +199,7 @@ The `AMOE_SIGNUP_SALT` env var must already be provisioned (PR 5a prerequisite).
 
 Run [`frontend/db/migrations/034_amoe_publisher_runs.sql`](../../frontend/db/migrations/034_amoe_publisher_runs.sql) on **both** databases:
 
-- Vercel-Postgres (the hot path the cron reads/writes).
-- Supabase mirror (`supabase/migrations/20260429020000_amoe_publisher_runs.sql`) — must apply identical content.
+**Single source of truth: Supabase** (project qajpnuvqlcfseghnldkl). The prior dual "Vercel-Postgres + Supabase mirror" requirement has been retired. Apply only to the canonical Supabase database. The `frontend/db/` copy is only for runtime bootstrap in dev/preview.
 
 Verify after apply:
 
@@ -294,7 +293,7 @@ Every cron invocation logs (search Vercel logs by route `lottery/amoe/publish-cr
 
 ### SQL probes
 
-Run these against Vercel-Postgres (read-only is fine):
+Run these against the canonical Supabase database (project qajpnuvqlcfseghnldkl):
 
 ```sql
 -- 1. Latest run per epoch (last 7 epochs).

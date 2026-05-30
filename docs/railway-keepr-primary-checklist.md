@@ -6,7 +6,7 @@ Use this when setting up or debugging the primary XMTP agent on Railway.
 
 - [ ] `AGENT_RUNTIME_ROLE=primary` (or left unset — default is primary)
 - [ ] `AGENT_CONSUME_XMTP=true` (or left unset when role is primary)
-- [ ] `DATABASE_URL` or `POSTGRES_URL` (Supabase pooler strongly recommended)
+- [ ] `DATABASE_URL` (Supabase strongly recommended) or `POSTGRES_URL` (legacy/generic fallback)
 - [ ] `XMTP_AGENT_KEY_ENCRYPTION_KEY` (32-byte hex) — required for multi-agent mode
 - [ ] `XMTP_DB_DIRECTORY` points to a **mounted Railway Volume** (not `/tmp` or ephemeral storage)
 - [ ] If using CSW identity for the agent (recommended):

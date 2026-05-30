@@ -30,7 +30,11 @@ import {
 
 import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
 import { ensureBatcherRegistryAuthorizationOnFork } from '../../../../../server/_lib/deploy/ensureBatcherRegistryAuthorization.js'
-import { ensurePhase3HelperCreate2AuthorizationOnFork } from '../../../../../server/_lib/deploy/ensurePhase3HelperCreate2Authorization.js'
+import { ensurePhase3DryRunForkPrep } from '../../../../../server/_lib/deploy/ensurePhase3DryRunForkPrep.js'
+import {
+  ensurePhase3VaultStrategyRegistrationOnFork,
+  isDeployPhase3StrategiesCall,
+} from '../../../../../server/_lib/deploy/ensurePhase3VaultStrategyRegistrationOnFork.js'
 import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
 
 
@@ -94,6 +98,7 @@ const DRY_RUN_GAS_BUFFER_BPS = 2_000n
 const DRY_RUN_MIN_GAS_BUFFER = 100_000n
 const DEPLOY_FAILED_SELECTOR = '0xb4f54111'
 const NOT_AUTHORIZED_SELECTOR = '0xea8e4eb5'
+const UNAUTHORIZED_SELECTOR = '0x82b42900'
 const ERC20_INSUFFICIENT_BALANCE_SELECTOR = '0xe450d38c'
 const CCA_REQUIRED_RAISE_HINT_SELECTOR = '0x28e7b618'
 const PHASE2_MISSING_SELECTOR = '0xf79c143b'
@@ -341,6 +346,13 @@ function formatDryRunError(error: unknown): string {
         'NotAuthorized(): CreatorRegistry rejected Phase 2 finalize because the DeploymentBatcher is not an authorized factory. ' +
         'On mainnet, run CreatorRegistry.setAuthorizedFactory(batcher, true) from the registry owner (see script/SeedCreatorRegistry.s.sol). ' +
         'Local dry-runs should auto-impersonate the registry owner on the fork before finalize.'
+      )
+    }
+    if (raw.toLowerCase().includes(UNAUTHORIZED_SELECTOR)) {
+      return (
+        'Unauthorized(): vault strategy registration was attempted from a non-management caller. ' +
+        'Phase 3 requires the DeploymentBatcher shell (management) to call addStrategy after the helper deploys strategies. ' +
+        'Local dry-runs auto-upgrade the Phase3 helper and register strategies from the batcher; restart `pnpm -C frontend dev:deploy-dry-run` if this persists.'
       )
     }
     const insufficientBalance = formatErc20InsufficientBalanceError(raw)
@@ -1837,7 +1849,8 @@ async function runDryRunPhase(params: {
   }) => Promise<Array<{ args?: Record<string, unknown> }>>
   getBlockNumber?: () => Promise<bigint | null>
   allowLocalForkPhase4InvariantSkip?: boolean
-}): Promise<{ phase: DryRunPhaseResult; failure?: DryRunFailure }> {
+}): Promise<{ phase: DryRunPhaseResult; failure?: DryRunFailure; lastSuccessfulTxHash?: Hex }> {
+  let lastSuccessfulTxHash: Hex | undefined
   for (let callIndex = 0; callIndex < params.calls.length; callIndex += 1) {
     let call = params.calls[callIndex]!
     const to = getAddress(call.to)
@@ -1892,7 +1905,7 @@ async function runDryRunPhase(params: {
             }
             throw new Error(revertDetail)
           }
-          // Success
+          lastSuccessfulTxHash = hash
           completed = true
           break
         } catch (sendError) {
@@ -2009,6 +2022,7 @@ async function runDryRunPhase(params: {
       status: 'passed',
       callCount: params.calls.length,
     },
+    lastSuccessfulTxHash,
   }
 }
 
@@ -2154,20 +2168,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
       if (phase1Batcher && phase3Calls.length > 0) {
-        const phase3AuthPrep = await ensurePhase3HelperCreate2AuthorizationOnFork({
-          publicClient: publicClient as any,
-          walletClient: walletClient as any,
-          waitForTransactionReceipt: (args) => publicClient.waitForTransactionReceipt(args as any),
-          forkRequest,
-          forkMode,
+        const phase3ForkPrep = await ensurePhase3DryRunForkPrep({
+          rpcUrl: rpc,
           batcher: phase1Batcher,
           ownerBalanceHex: FORK_BALANCE_HEX,
+          forkMode,
         })
-        if (phase3AuthPrep.ensured) {
+        if (phase3ForkPrep.helperEnsured) {
+          console.warn('[deploy/v2/session/dry-run] phase3_helper_upgraded_on_fork', {
+            batcher: phase1Batcher.toLowerCase(),
+            phase3Helper: phase3ForkPrep.phase3Helper.toLowerCase(),
+          })
+        }
+        if (phase3ForkPrep.create2Ensured) {
           console.warn('[deploy/v2/session/dry-run] phase3_helper_create2_authorized_on_fork', {
             batcher: phase1Batcher.toLowerCase(),
-            phase3Helper: phase3AuthPrep.phase3Helper.toLowerCase(),
-            create2Deployer: phase3AuthPrep.create2Deployer.toLowerCase(),
+            phase3Helper: phase3ForkPrep.phase3Helper.toLowerCase(),
+            create2Deployer: phase3ForkPrep.create2Deployer.toLowerCase(),
           })
         }
       }
@@ -2383,6 +2400,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             failure: result.failure,
           }
           return res.status(200).json({ success: true, data } satisfies ApiEnvelope<DryRunResponse>)
+        }
+        if (
+          phaseEntry.name === 'phase3' &&
+          result.phase.status === 'passed' &&
+          phase1Batcher &&
+          result.lastSuccessfulTxHash
+        ) {
+          const phase3Call = phaseCalls.find(isDeployPhase3StrategiesCall) ?? phaseCalls[0]
+          if (phase3Call) {
+            try {
+              const strategyReg = await ensurePhase3VaultStrategyRegistrationOnFork({
+                publicClient: publicClient as any,
+                walletClient: walletClient as any,
+                waitForTransactionReceipt: (args) => publicClient.waitForTransactionReceipt(args as any),
+                getTransactionReceipt: (args) => publicClient.getTransactionReceipt(args as any),
+                forkRequest,
+                forkMode,
+                batcher: phase1Batcher,
+                phase3Call,
+                deployTxHash: result.lastSuccessfulTxHash,
+                ownerBalanceHex: FORK_BALANCE_HEX,
+              })
+              if (strategyReg.ensured) {
+                console.warn('[deploy/v2/session/dry-run] phase3_vault_strategies_registered_on_fork', {
+                  batcher: phase1Batcher.toLowerCase(),
+                  followupCount: strategyReg.followupCount,
+                })
+              }
+            } catch (strategyRegError) {
+              const data: DryRunResponse = {
+                ok: false,
+                forkMode: forkMode.name,
+                phases,
+                failure: {
+                  phase: 'phase3',
+                  callIndex: Math.max(0, phaseCalls.length - 1),
+                  to: phase1Batcher,
+                  error: formatDryRunError(strategyRegError),
+                },
+              }
+              return res.status(200).json({ success: true, data } satisfies ApiEnvelope<DryRunResponse>)
+            }
+          }
         }
         if (phaseEntry.name === 'phase2Core' && result.phase.status === 'passed' && phase2FinalizeCallsForPlan.length > 0) {
           const phaseEndBlock =
