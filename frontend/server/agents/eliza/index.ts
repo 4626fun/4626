@@ -18,6 +18,17 @@
  *   # Or directly:
  *   POSTGRES_URL=... XMTP_AGENT_KEY_ENCRYPTION_KEY=... tsx server/agents/eliza/index.ts
  *
+ * IMPORTANT FOR RAILWAY DEPLOYMENTS:
+ * This process is intentionally strict on Railway primary. Missing or wrong values for
+ * AGENT_RUNTIME_ROLE, AGENT_CONSUME_XMTP, DATABASE_URL, XMTP_AGENT_KEY_ENCRYPTION_KEY,
+ * a persistent volume for XMTP_DB_DIRECTORY, or the agent's Privy/CSW credentials will
+ * cause an early process.exit(1) with (hopefully) clear errors in the logs.
+ *
+ * We start a minimal health server as early as possible (even before most imports finish)
+ * precisely so Railway healthchecks don't flap while we are still validating env or loading
+ * heavy modules. If you see the "early-boot-or-crashed-early-see-logs" response, check the
+ * Railway logs for the exact missing variable.
+ *
  * Startup modes (checked in priority order):
  *
  *   1. Multi-agent (DB):
@@ -74,6 +85,28 @@ import { getHealthProbeStatusCode } from './_healthStatus.js'
 import { handleXmtpFallbackResponse } from './_xmtpFallback.js'
 
 import { getDb, getDbInitError, isDbConfigured } from '../../_lib/db/postgres.js'
+
+// Super-early minimal health server.
+// This runs as soon as the module starts evaluating, before most imports and
+// before main(). It guarantees that /healthz responds even if the process
+// later crashes during heavy module loading or early validation.
+try {
+  const earlyPort = Number(process.env.PORT ?? '8080') || 8080
+  const earlyServer = http.createServer((req, res) => {
+    const url = (req.url ?? '/').split('?')[0]
+    if (url === '/healthz' || url === '/health' || url === '/') {
+      res.writeHead(200, { 'Content-Type': 'text/plain' })
+      res.end('early-boot-or-crashed-early-see-logs')
+      return
+    }
+    res.writeHead(404)
+    res.end('not found')
+  })
+  earlyServer.listen(earlyPort, '0.0.0.0')
+  // We don't close it — the real startHealthServer() will take over if we reach main().
+} catch {
+  // Ignore — we tried our best to give Railway something to probe.
+}
 import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../_lib/messaging/creatorXmtpAgents.js'
 import { createPrivyScwSigner } from '../../_lib/wallet/privyXmtpSigner.js'
 import { buildAgentRegistration } from '../../_lib/agent/agentRegistration.js'
@@ -693,6 +726,22 @@ const XMTP_REQUIRE_DB_ENCRYPTION = parseEnvBoolean(
   process.env.XMTP_REQUIRE_DB_ENCRYPTION,
   AGENT_CONSUME_XMTP && AGENT_RUNTIME_ROLE === 'primary',
 )
+
+// === VERY EARLY RAILWAY VISIBILITY ===
+// These logs run during module evaluation, before main() and before most other code.
+// They are the only reliable signal when the process dies extremely early due to
+// misconfigured Railway environment variables.
+try {
+  console.error('[eliza][early] AGENT_RUNTIME_ROLE =', AGENT_RUNTIME_ROLE)
+  console.error('[eliza][early] AGENT_CONSUME_XMTP =', AGENT_CONSUME_XMTP)
+  console.error('[eliza][early] RUNNING_ON_RAILWAY =', RUNNING_ON_RAILWAY)
+  console.error('[eliza][early] AGENT_RUNTIME_LOCK_REQUIRED (computed) =', AGENT_RUNTIME_LOCK_REQUIRED)
+  if (RUNNING_ON_RAILWAY) {
+    console.error('[eliza][early] === RUNNING ON RAILWAY — strict primary rules apply ===')
+  }
+} catch (e) {
+  // Never let early logging itself crash the process
+}
 
 function wrapWriteWithNoiseFilter(write: (chunk: any, encoding?: any, cb?: any) => boolean) {
   const ignoredPatterns = [
@@ -2107,9 +2156,24 @@ async function main() {
     }
   }
   if (latestEnvValidation.errors.length > 0) {
+    // Use raw console + explicit flush — this is critical for Railway where
+    // the normal logger may not have time to flush before exit.
+    console.error('\n[eliza][FATAL] Startup validation failed on Railway primary:')
     for (const error of latestEnvValidation.errors) {
-      logger.error('[eliza] startup validation error', { error })
+      console.error('  -', error)
     }
+    console.error('\nRequired for Railway primary (typical):')
+    console.error('  AGENT_RUNTIME_ROLE=primary')
+    console.error('  AGENT_CONSUME_XMTP=true')
+    console.error('  DATABASE_URL (or POSTGRES_URL) + XMTP_AGENT_KEY_ENCRYPTION_KEY')
+    console.error('  Persistent volume mounted at the path pointed to by XMTP_DB_DIRECTORY')
+    console.error('  Privy server wallet credentials for the agent\'s CSW (if using CSW mode)')
+    console.error('\nThe process will now exit. Fix the environment variables on this Railway service and redeploy.\n')
+
+    // Force flush before exit (best effort)
+    if (process.stdout && typeof process.stdout.write === 'function') process.stdout.write('')
+    if (process.stderr && typeof process.stderr.write === 'function') process.stderr.write('')
+
     process.exit(1)
     return
   }

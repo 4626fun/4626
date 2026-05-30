@@ -1,0 +1,117 @@
+#!/usr/bin/env tsx
+/**
+ * Railway Keepr Primary Doctor
+ *
+ * Run this locally (with the same env vars you intend to use on Railway) to validate
+ * that the Keepr primary will actually boot instead of hard-exiting on misconfigured env.
+ *
+ * Usage:
+ *   pnpm -C frontend exec tsx ../scripts/agent/railway-keepr-primary-doctor.ts
+ *
+ * Or with env:
+ *   env $(cat .env | xargs) pnpm -C frontend exec tsx ../scripts/agent/railway-keepr-primary-doctor.ts
+ */
+
+import { isDbConfigured } from '../../frontend/server/_lib/db/postgres.js'
+import { hasDedicatedMount, findMountedAncestorPath } from '../../frontend/server/_lib/messaging/xmtpDbDirectory.js'
+import path from 'node:path'
+
+const RED = '\x1b[31m'
+const GREEN = '\x1b[32m'
+const YELLOW = '\x1b[33m'
+const RESET = '\x1b[0m'
+
+function check(name: string, condition: boolean, required: boolean = true) {
+  const icon = condition ? `${GREEN}✓${RESET}` : required ? `${RED}✗${RESET}` : `${YELLOW}?${RESET}`
+  console.log(`${icon} ${name}`)
+  return condition
+}
+
+console.log('\n=== Keepr Railway Primary Doctor ===\n')
+
+const AGENT_RUNTIME_ROLE = (process.env.AGENT_RUNTIME_ROLE ?? 'primary').trim().toLowerCase() as 'primary' | 'standby'
+const AGENT_CONSUME_XMTP = ['1', 'true', 'yes'].includes((process.env.AGENT_CONSUME_XMTP ?? '').trim().toLowerCase())
+const RUNNING_ON_RAILWAY = Object.keys(process.env).some(k => k.startsWith('RAILWAY_'))
+
+const hasDb = isDbConfigured()
+const hasEncKey = !!(process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()
+const hasPrivateKey = !!(process.env.XMTP_AGENT_PRIVATE_KEY ?? '').trim()
+const hasCswAddress = !!(process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim()
+const hasCswPrivyWallet = !!(process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim()
+const hasCswConfig = hasCswAddress && hasCswPrivyWallet
+
+const multiAgentConfigured = hasDb && hasEncKey
+
+console.log('--- Core Role & Consumption ---')
+check('AGENT_RUNTIME_ROLE=primary', AGENT_RUNTIME_ROLE === 'primary')
+check('AGENT_CONSUME_XMTP=true (or default when role=primary)', AGENT_CONSUME_XMTP || AGENT_RUNTIME_ROLE === 'primary')
+
+if (RUNNING_ON_RAILWAY) {
+  console.log('\n--- Railway Primary Requirements ---')
+  check('Running in Railway context (RAILWAY_* vars present)', true)
+  check('AGENT_RUNTIME_ROLE must be primary on Railway', AGENT_RUNTIME_ROLE === 'primary')
+  check('AGENT_CONSUME_XMTP must be true on Railway primary', AGENT_CONSUME_XMTP || AGENT_RUNTIME_ROLE === 'primary')
+}
+
+console.log('\n--- Database & Encryption ---')
+check('DATABASE_URL or POSTGRES_URL present', hasDb)
+check('XMTP_AGENT_KEY_ENCRYPTION_KEY present (for multi-agent)', hasEncKey || !hasDb)
+
+console.log('\n--- XMTP Storage (Critical on Railway) ---')
+const xmptDbDir = process.env.XMTP_DB_DIRECTORY || '/data/xmtp'
+const isPersistent = !xmptDbDir.startsWith('/tmp')
+check('XMTP_DB_DIRECTORY is not /tmp (persistent storage)', isPersistent)
+
+if (RUNNING_ON_RAILWAY) {
+  const hasVolume = hasDedicatedMount(xmptDbDir)
+  check('Dedicated Railway volume mounted at XMTP_DB_DIRECTORY', hasVolume)
+  if (!hasVolume) {
+    const ancestor = findMountedAncestorPath(xmptDbDir)
+    console.log(`   Current path resolves to ephemeral storage. Closest mount: ${ancestor || 'none'}`)
+    console.log(`   → You must attach a Railway Volume and mount it at ${xmptDbDir}`)
+  }
+}
+
+console.log('\n--- Agent Identity (Recommended: CSW + Privy Server Wallet) ---')
+check('XMTP_AGENT_CSW_ADDRESS present', hasCswAddress)
+check('XMTP_AGENT_PRIVY_WALLET_ID present (the signer for the CSW)', hasCswPrivyWallet)
+
+if (hasCswAddress && !hasCswPrivyWallet) {
+  console.log('   Missing PRIVY_WALLET_ID for the agent\'s CSW')
+}
+
+console.log('\n--- Privy Server Auth (required for CSW signing) ---')
+const hasPrivyApp = !!(process.env.PRIVY_APP_ID && process.env.PRIVY_APP_SECRET)
+const hasPrivyWalletAuth = !!(process.env.PRIVY_WALLET_AUTHORIZATION_KEY && process.env.PRIVY_WALLET_OWNER_ID)
+check('PRIVY_APP_ID + PRIVY_APP_SECRET', hasPrivyApp)
+check('PRIVY_WALLET_AUTHORIZATION_KEY + PRIVY_WALLET_OWNER_ID', hasPrivyWalletAuth)
+
+console.log('\n--- Summary ---')
+const criticalErrors = []
+
+if (RUNNING_ON_RAILWAY) {
+  if (AGENT_RUNTIME_ROLE !== 'primary') criticalErrors.push('AGENT_RUNTIME_ROLE must be "primary"')
+  if (!AGENT_CONSUME_XMTP && AGENT_RUNTIME_ROLE === 'primary') criticalErrors.push('AGENT_CONSUME_XMTP must be true')
+}
+
+if (!hasDb) criticalErrors.push('DATABASE_URL / POSTGRES_URL is required')
+if (!hasEncKey && hasDb) criticalErrors.push('XMTP_AGENT_KEY_ENCRYPTION_KEY is required for multi-agent')
+
+if (RUNNING_ON_RAILWAY && !hasDedicatedMount(xmptDbDir)) {
+  criticalErrors.push(`Dedicated volume required at ${xmptDbDir}`)
+}
+
+if (criticalErrors.length > 0) {
+  console.log(`${RED}CRITICAL ISSUES FOUND:${RESET}`)
+  criticalErrors.forEach(e => console.log(`  - ${e}`))
+  console.log('\nFix these on your Railway service and redeploy.')
+  process.exit(1)
+} else {
+  console.log(`${GREEN}Basic requirements look good for Railway primary.${RESET}`)
+  console.log('If it still crashes, check the detailed logs from the early [eliza][early] output.')
+}
+
+console.log('\nTip: On Railway, add these two temporarily for maximum visibility:')
+console.log('  ELIZA_HEALTH_VERBOSE=true')
+console.log('  XMTP_SUPPRESS_LOG_NOISE=0')
+console.log('')

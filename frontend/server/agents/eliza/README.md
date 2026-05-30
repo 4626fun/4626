@@ -96,6 +96,45 @@ The runtime supports three real execution modes plus one safe inspection mode.
 Production-primary operation is intended to stay on Railway.
 This repo assumes one Railway primary, not a primary/standby deployment pair.
 
+### Railway Primary Keepr Agent — Required Environment Variables (Minimal Checklist)
+
+The agent will hard-fail early (`process.exit(1)`) on Railway if these are not correct. This is by design.
+
+**Must be set for Railway primary:**
+
+- `AGENT_RUNTIME_ROLE=primary` (or leave unset — default is primary)
+- `AGENT_CONSUME_XMTP=true` (or leave unset when role is primary)
+- Database:
+  - `DATABASE_URL` or `POSTGRES_URL` (Supabase pooler recommended for Railway)
+- For multi-agent mode (most production setups):
+  - `XMTP_AGENT_KEY_ENCRYPTION_KEY` (32-byte hex)
+- Persistent storage (critical on Railway):
+  - `XMTP_DB_DIRECTORY` must point to a **mounted Railway volume** (not `/tmp`)
+  - `XMTP_REQUIRE_PERSISTENT_DB=true` (default on for primary)
+- If using Coinbase Smart Wallet for the agent identity (recommended):
+  - `XMTP_AGENT_CSW_ADDRESS`
+  - `XMTP_AGENT_PRIVY_WALLET_ID` (the Privy server wallet that signs for it)
+  - Full Privy server auth: `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_WALLET_AUTHORIZATION_KEY`, `PRIVY_WALLET_OWNER_ID`
+
+**Strongly recommended on Railway primary:**
+- `AGENT_RUNTIME_LOCK_REQUIRED=true` (default when Postgres + primary on Railway)
+
+If any of the above are missing or wrong, you will see the new early `[eliza][early]` logs + the detailed validation errors before the process exits.
+
+See `validateStartupEnv()` in `index.ts` for the full current list of hard errors.
+
+### Quick Diagnostic Command
+
+Run this locally with the environment variables you plan to use on Railway:
+
+```bash
+pnpm agent:railway-keepr-doctor
+```
+
+It will print a clear pass/fail checklist of the most common things that cause the primary to hard-crash on Railway.
+
+This is the fastest way to catch the exact missing or wrong variable before deploying.
+
 ### 1. Safe local inspection
 
 Use this when you want to understand the runtime without connecting to XMTP:

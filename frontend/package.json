@@ -69,6 +69,7 @@
     "ops:1659-risk-watcher": "tsx ../scripts/ops/1659-risk-watcher.ts",
     "ops:1659-risk-watcher:test": "tsx ../scripts/ops/1659-risk-watcher.ts --test-alert",
     "ops:1659-enqueue-recurring": "tsx ../scripts/ops/1659-risk-watcher/enqueue-recurring.ts",
+    "agent:railway-keepr-doctor": "tsx ../scripts/agent/railway-keepr-primary-doctor.ts",
     "control-plane:stuck-scan": "tsx --env-file=.env scripts/control-plane-stuck-operations.ts",
     "alfaclub:chat:smoke": "tsx --env-file=.env scripts/alfaclub-chat-smoke.ts",
     "alfaclub:gmeow:smoke": "tsx --env-file=.env scripts/alfaclub-chat-smoke.ts --preset gmeow",
