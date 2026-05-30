@@ -55,6 +55,12 @@ COPY frontend/packages/server-core/src ./packages/server-core/src
 RUN pnpm install --frozen-lockfile --ignore-scripts \
     && pnpm rebuild
 
+# Build @4626/server-core so that dist/ is generated.
+# The package is imported by command families (e.g. alfaclub.ts) and many
+# server/_lib modules. tsx will look for the dist version when resolving
+# the package.json "main" field.
+RUN cd packages/server-core && node build.mjs
+
 # --------------------------------------------------------------------------
 # Stage 2: Production image
 # --------------------------------------------------------------------------
