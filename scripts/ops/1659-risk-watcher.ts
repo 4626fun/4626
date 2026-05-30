@@ -154,7 +154,7 @@ const THRESHOLDS = {
   pollMs: 30_000,
 }
 
-const hasTelegram = !!(
+const hasPrivateRelay = !!(
   (process.env.ALFACLUB_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN) &&
   (process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID || process.env.TELEGRAM_TARGET_CHAT_ID)
 )
@@ -355,8 +355,12 @@ async function main() {
 
   console.log('=== 1659 Risk Watcher started ===')
   console.log('Watching wallet:', WALLET)
-  console.log('Private relay:', hasTelegram ? 'ENABLED' : 'DISABLED')
-  console.log('Public @fun4626:', 'ENABLED (via FUN4626_TELEGRAM_CHAT_ID or ALFACLUB_RADAR_TELEGRAM_CHAT_ID)')
+
+  const hasPrivate = !!(process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID || process.env.TELEGRAM_TARGET_CHAT_ID)
+  const hasPublic = !!(process.env.FUN4626_TELEGRAM_CHAT_ID || process.env.ALFACLUB_RADAR_TELEGRAM_CHAT_ID || process.env.TARGET_CHAT_ID)
+
+  console.log('Private relay (ops thread):', hasPrivate ? 'ENABLED' : 'MISSING - check ALFACLUB_TELEGRAM_RELAY_CHAT_ID')
+  console.log('Public channel (t.me/fun4626):', hasPublic ? 'ENABLED' : 'MISSING - check ALFACLUB_RADAR_TELEGRAM_CHAT_ID or FUN4626_TELEGRAM_CHAT_ID')
 
   setupGracefulShutdown()
 

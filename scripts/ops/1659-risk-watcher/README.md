@@ -39,9 +39,32 @@ The service runs as a long-lived background worker (no HTTP port needed).
 
 You can monitor logs, metrics, and restarts directly in the Railway dashboard.
 
-## Environment Variables (reuses what you already have)
+## Environment Variables for Railway
 
-- Telegram relay (private): `ALFACLUB_TELEGRAM_BOT_TOKEN`, `ALFACLUB_TELEGRAM_RELAY_CHAT_ID`, optional thread
-- Public broadcast: `FUN4626_TELEGRAM_CHAT_ID` or `ALFACLUB_RADAR_TELEGRAM_CHAT_ID`
+The watcher is designed to reuse the exact same Telegram configuration you already use for AlfaClub / Hermit.
 
-The script loads `.env` from multiple sensible locations automatically.
+### Required variables (copy these into Railway)
+
+```env
+# Bot that can post messages
+ALFACLUB_TELEGRAM_BOT_TOKEN=8741120609:AAHsEkPOKN2eb9mJtNa4aneaYoxQ-oKZoPU
+
+# Private ops relay (detailed alerts)
+ALFACLUB_TELEGRAM_RELAY_CHAT_ID=-1003709479662
+ALFACLUB_TELEGRAM_RELAY_THREAD_ID=2
+
+# Public channel (theatrical alerts visible to everyone)
+ALFACLUB_RADAR_TELEGRAM_CHAT_ID=@fun4626
+```
+
+### Alternative variable names (also supported)
+
+The script tries multiple common names so you can reuse whatever you already have set:
+
+- Bot token: `ALFACLUB_TELEGRAM_BOT_TOKEN` or `TELEGRAM_BOT_TOKEN`
+- Private chat: `ALFACLUB_TELEGRAM_RELAY_CHAT_ID` or `TELEGRAM_TARGET_CHAT_ID`
+- Public channel: `ALFACLUB_RADAR_TELEGRAM_CHAT_ID`, `FUN4626_TELEGRAM_CHAT_ID`, or `TARGET_CHAT_ID`
+
+A ready-to-use `.env.example` file exists in this folder.
+
+**Tip**: After setting the variables in Railway, redeploy the service. The startup logs will show whether it successfully loaded the private relay and public channel.
