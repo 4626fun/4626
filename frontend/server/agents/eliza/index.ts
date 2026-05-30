@@ -727,20 +727,53 @@ const XMTP_REQUIRE_DB_ENCRYPTION = parseEnvBoolean(
   AGENT_CONSUME_XMTP && AGENT_RUNTIME_ROLE === 'primary',
 )
 
-// === VERY EARLY RAILWAY VISIBILITY ===
-// These logs run during module evaluation, before main() and before most other code.
-// They are the only reliable signal when the process dies extremely early due to
-// misconfigured Railway environment variables.
+// === VERY EARLY RAILWAY PRIMARY DIAGNOSTICS ===
+// These run at module evaluation time — the absolute earliest we can log.
+// This is the best chance to see what is wrong when the process dies before
+// normal logging or the full health server can start.
 try {
-  console.error('[eliza][early] AGENT_RUNTIME_ROLE =', AGENT_RUNTIME_ROLE)
-  console.error('[eliza][early] AGENT_CONSUME_XMTP =', AGENT_CONSUME_XMTP)
-  console.error('[eliza][early] RUNNING_ON_RAILWAY =', RUNNING_ON_RAILWAY)
-  console.error('[eliza][early] AGENT_RUNTIME_LOCK_REQUIRED (computed) =', AGENT_RUNTIME_LOCK_REQUIRED)
+  const hasDb = isDbConfigured()
+  const hasEncKey = !!(process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()
+  const hasCsw = !!(process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim()
+  const hasCswPrivy = !!(process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim()
+  const dbDir = process.env.XMTP_DB_DIRECTORY || '/data/xmtp'
+  const hasVolume = RUNNING_ON_RAILWAY ? hasDedicatedMount(dbDir) : true
+  const mountedAncestor = RUNNING_ON_RAILWAY ? findMountedAncestorPath(dbDir) : null
+
+  console.error('\n[eliza][early] === KEEPR RAILWAY PRIMARY DIAGNOSTICS ===')
+  console.error('[eliza][early] Tip: Run `pnpm agent:railway-keepr-doctor` locally with the same env vars for a full checklist.')
+  console.error('[eliza][early] AGENT_RUNTIME_ROLE          :', AGENT_RUNTIME_ROLE)
+  console.error('[eliza][early] AGENT_CONSUME_XMTP          :', AGENT_CONSUME_XMTP)
+  console.error('[eliza][early] RUNNING_ON_RAILWAY          :', RUNNING_ON_RAILWAY)
+  console.error('[eliza][early] DATABASE_URL / POSTGRES_URL :', hasDb ? 'present' : 'MISSING')
+  console.error('[eliza][early] XMTP_AGENT_KEY_ENCRYPTION_KEY :', hasEncKey ? 'present' : 'MISSING')
+  console.error('[eliza][early] XMTP_DB_DIRECTORY           :', dbDir)
+  console.error('[eliza][early] Dedicated volume mounted    :', hasVolume ? 'yes' : `NO (resolves to ephemeral${mountedAncestor ? `, closest: ${mountedAncestor}` : ''})`)
+  console.error('[eliza][early] CSW + Privy Wallet ID       :', hasCsw && hasCswPrivy ? 'present' : 'MISSING (or incomplete)')
+  console.error('[eliza][early] AGENT_RUNTIME_LOCK_REQUIRED :', AGENT_RUNTIME_LOCK_REQUIRED)
+
   if (RUNNING_ON_RAILWAY) {
-    console.error('[eliza][early] === RUNNING ON RAILWAY — strict primary rules apply ===')
+    console.error('[eliza][early] === STRICT RAILWAY PRIMARY RULES ENFORCED ===')
+    if (AGENT_RUNTIME_ROLE !== 'primary') {
+      console.error('[eliza][early] ERROR: AGENT_RUNTIME_ROLE must be "primary" on Railway')
+    }
+    if (!AGENT_CONSUME_XMTP) {
+      console.error('[eliza][early] ERROR: AGENT_CONSUME_XMTP must be true on Railway primary')
+    }
+    if (!hasDb) {
+      console.error('[eliza][early] ERROR: DATABASE_URL / POSTGRES_URL is required')
+    }
+    if (!hasEncKey) {
+      console.error('[eliza][early] ERROR: XMTP_AGENT_KEY_ENCRYPTION_KEY is required for multi-agent')
+    }
+    if (!hasVolume) {
+      console.error('[eliza][early] ERROR: Dedicated Railway volume required for XMTP_DB_DIRECTORY')
+    }
   }
+  console.error('[eliza][early] === END EARLY DIAGNOSTICS ===\n')
 } catch (e) {
-  // Never let early logging itself crash the process
+  // Never let early logging crash the process
+  console.error('[eliza][early] Early diagnostic logging failed:', e)
 }
 
 function wrapWriteWithNoiseFilter(write: (chunk: any, encoding?: any, cb?: any) => boolean) {
@@ -2158,17 +2191,24 @@ async function main() {
   if (latestEnvValidation.errors.length > 0) {
     // Use raw console + explicit flush — this is critical for Railway where
     // the normal logger may not have time to flush before exit.
-    console.error('\n[eliza][FATAL] Startup validation failed on Railway primary:')
+    console.error('\n[eliza][FATAL] Startup validation failed on Railway primary:\n')
     for (const error of latestEnvValidation.errors) {
-      console.error('  -', error)
+      console.error('  ✗', error)
     }
-    console.error('\nRequired for Railway primary (typical):')
-    console.error('  AGENT_RUNTIME_ROLE=primary')
-    console.error('  AGENT_CONSUME_XMTP=true')
-    console.error('  DATABASE_URL (or POSTGRES_URL) + XMTP_AGENT_KEY_ENCRYPTION_KEY')
-    console.error('  Persistent volume mounted at the path pointed to by XMTP_DB_DIRECTORY')
-    console.error('  Privy server wallet credentials for the agent\'s CSW (if using CSW mode)')
-    console.error('\nThe process will now exit. Fix the environment variables on this Railway service and redeploy.\n')
+
+    console.error('\n--- Railway Primary Keepr Requirements (check these) ---')
+    console.error('1. AGENT_RUNTIME_ROLE=primary')
+    console.error('2. AGENT_CONSUME_XMTP=true')
+    console.error('3. DATABASE_URL or POSTGRES_URL (Supabase pooler recommended)')
+    console.error('4. XMTP_AGENT_KEY_ENCRYPTION_KEY (for multi-agent mode)')
+    console.error('5. XMTP_DB_DIRECTORY pointing to a **mounted Railway volume** (not /tmp)')
+    console.error('6. If using CSW identity: XMTP_AGENT_CSW_ADDRESS + XMTP_AGENT_PRIVY_WALLET_ID')
+    console.error('7. Privy server auth keys (PRIVY_APP_ID, PRIVY_APP_SECRET, PRIVY_WALLET_AUTHORIZATION_KEY, PRIVY_WALLET_OWNER_ID)')
+    console.error('8. AGENT_RUNTIME_LOCK_REQUIRED=true (strongly recommended on Railway primary)')
+
+    console.error('\nRun locally with the same env vars:')
+    console.error('  pnpm agent:railway-keepr-doctor')
+    console.error('\nThe process will now exit. Fix the variables on this Railway service and redeploy.\n')
 
     // Force flush before exit (best effort)
     if (process.stdout && typeof process.stdout.write === 'function') process.stdout.write('')

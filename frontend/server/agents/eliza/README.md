@@ -135,6 +135,8 @@ It will print a clear pass/fail checklist of the most common things that cause t
 
 This is the fastest way to catch the exact missing or wrong variable before deploying.
 
+On Railway itself you will also see very early `[eliza][early]` diagnostics printed during module evaluation (before most other code and before the normal health server), which is extremely helpful when the process dies almost instantly.
+
 ### 1. Safe local inspection
 
 Use this when you want to understand the runtime without connecting to XMTP:
