@@ -3,9 +3,7 @@
  * Ad-hoc sender for hermit4626 into AlfaClub rooms.
  *
  * Usage:
- *   pnpm -C frontend exec tsx scripts/ops/send-as-hermit-to-room.ts \
- *     --room=1659 \
- *     --text="gm room 1659 — Hermit has arrived"
+ *   pnpm -C frontend exec tsx scripts/ops/send-as-hermit-to-room.ts --room=1659 --intro
  *
  *   # Emergency stupid mode for stressed rooms
  *   pnpm -C frontend exec tsx scripts/ops/send-as-hermit-to-room.ts --room=1659 --stupid
@@ -76,6 +74,22 @@ function parseArgs() {
   return out
 }
 
+function getHermitIntroMessage(roomId: string): string {
+  return [
+    '🐈‍⬛ **Agent Hermit** is live in this room.',
+    '',
+    'Creative bot for memes, GIF captions, and room copy — **read-only**, no trades or wallet actions.',
+    '',
+    'Try:',
+    '• `/gmeow` — GIF + one-liner (fastest demo)',
+    '• `/meme <prompt>` — meme / image idea',
+    '• `/hermit copy <idea>` — short post + alternates',
+    '• `/help` — full command list',
+    '',
+    `Room **${roomId}** · cooldowns apply so we do not flood chat.`,
+  ].join('\n')
+}
+
 function getStupidMessageForStressedRoom(): string {
   const options = [
     "67 hype. 69 liq. the market is currently 69ing itself while only being 67% ready. i'm scared but also weirdly proud of it",
@@ -95,17 +109,23 @@ async function main() {
   const roomId = args.room || args.roomId || process.env.ALFACLUB_CHAT_ROOM_ID
   let text = args.text || args.msg || args.message
 
+  if (!roomId) {
+    console.error('Missing --room=<id> (or ALFACLUB_CHAT_ROOM_ID in env)')
+    process.exit(1)
+  }
+
+  if (args.intro) {
+    text = getHermitIntroMessage(String(roomId))
+    console.log('📣 Using canned Hermit room intro')
+  }
+
   if (args.stupid || args.dumb || args.stressed) {
     text = getStupidMessageForStressedRoom()
     console.log('🧠 Using emergency stupid mode for stressed room')
   }
 
-  if (!roomId) {
-    console.error('Missing --room=<id> (or ALFACLUB_CHAT_ROOM_ID in env)')
-    process.exit(1)
-  }
   if (!text) {
-    console.error('Missing --text="your message here" or --stupid for emergency dumb mode')
+    console.error('Missing --text="your message here", --intro, or --stupid for emergency dumb mode')
     process.exit(1)
   }
 

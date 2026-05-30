@@ -38,8 +38,32 @@ type PinataGatewayEvent =
   | { type: 'event'; event?: string; payload?: Record<string, unknown> }
   | { type: 'res'; id?: string; ok?: boolean; payload?: Record<string, unknown>; error?: Record<string, unknown> }
 
-const PINATA_GATEWAY_RPC_TIMEOUT_MS = 30_000
+const PINATA_GATEWAY_RPC_TIMEOUT_MS_DEFAULT = 60_000
 const PINATA_HTTP_FALLBACK_TIMEOUT_MS_DEFAULT = 30_000
+
+const PINATA_AGENT_FAILURE_PATTERNS = [
+  /oauth token refresh failed/i,
+  /agent failed before reply/i,
+  /failed to load agent model/i,
+  /incorrect api key provided/i,
+  /no api key found for provider/i,
+  /re-authenticate/i,
+  /all models failed/i,
+] as const
+
+export function isPinataAgentFailureReply(text: string): boolean {
+  const trimmed = text.trim()
+  if (!trimmed) return true
+  return PINATA_AGENT_FAILURE_PATTERNS.some((pattern) => pattern.test(trimmed))
+}
+
+function readPinataGatewayTimeoutMs(): number {
+  const raw = asTrimmed(process.env.HERMIT_PINATA_GATEWAY_TIMEOUT_MS)
+  if (!raw) return PINATA_GATEWAY_RPC_TIMEOUT_MS_DEFAULT
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed <= 0) return PINATA_GATEWAY_RPC_TIMEOUT_MS_DEFAULT
+  return Math.min(Math.max(Math.floor(parsed), 5_000), 180_000)
+}
 
 function readPinataHttpTimeoutMs(): number {
   const raw = asTrimmed(process.env.HERMIT_PINATA_HTTP_TIMEOUT_MS)
@@ -107,6 +131,12 @@ type HermitGatewayRoute = {
   mode: 'webchat' | 'worker'
   deliver: boolean
   sourceIdentity: string
+}
+
+/** Pinata OpenClaw gateway `connect` only accepts a subset of client.mode values. */
+function resolvePinataGatewayClientMode(routeMode: HermitGatewayRoute['mode']): string {
+  if (routeMode === 'webchat') return 'webchat'
+  return 'backend'
 }
 
 function selectHermitGatewayRoute(params: {
@@ -484,7 +514,9 @@ function extractChatFinalText(payload: Record<string, unknown> | undefined): str
     })
     .filter(Boolean)
   const joined = textParts.join('').trim()
-  return joined || null
+  if (!joined) return null
+  if (isPinataAgentFailureReply(joined)) return null
+  return joined
 }
 
 async function runPinataDraftOverGateway(params: {
@@ -548,7 +580,7 @@ async function runPinataDraftOverGateway(params: {
           id: 'openclaw-control-ui',
           version: 'control-ui',
           platform: 'node',
-          mode: route.mode,
+          mode: resolvePinataGatewayClientMode(route.mode),
           instanceId: `hermit-${Date.now()}`,
         },
         role: 'operator',
@@ -560,7 +592,7 @@ async function runPinataDraftOverGateway(params: {
       })
     }
 
-    const timeout = setTimeout(() => finish(null), PINATA_GATEWAY_RPC_TIMEOUT_MS)
+    const timeout = setTimeout(() => finish(null), readPinataGatewayTimeoutMs())
 
     socket.on('open', () => {
       setTimeout(() => sendConnect(), 300)
@@ -605,10 +637,6 @@ async function runPinataDraftOverGateway(params: {
           message: params.prompt,
           deliver: route.deliver,
           idempotencyKey: nextRunId,
-          metadata: {
-            source: route.sourceIdentity || 'none',
-            lane: route.mode,
-          },
         })
         return
       }
@@ -693,11 +721,10 @@ async function runPinataDraft(params: {
       prompt: params.prompt,
     })
     if (viaHttp?.text) return viaHttp
-    logger.warn('[hermit] bridge_http_draft_empty; skipping_gateway_to_avoid_channel_echo', {
+    logger.warn('[hermit] bridge_http_draft_empty; falling_back_to_gateway', {
       sourceIdentity: asTrimmed(params.sourceIdentity) || 'none',
       promptHead: params.prompt.slice(0, 64),
     })
-    return null
   }
 
   const gatewayTarget = toGatewaySocketUrl(cfg.endpoint)
