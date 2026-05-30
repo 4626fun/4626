@@ -89,7 +89,13 @@ EXPOSE 8080
 # XMTP database persistence
 ENV XMTP_DB_DIRECTORY=/data/.xmtp-data
 
-# Entrypoint: fix volume permissions (Railway mounts as root), then drop to node.
-# AGENT_PROCESS=hermit runs the AlfaClub/Pinata Hermit lane without booting the
-# Keepr XMTP runtime. Default remains Keepr for the existing production service.
-CMD ["bash", "-lc", "if [ \"${AGENT_PROCESS:-keepr}\" = \"hermit\" ]; then exec gosu node bash server/agents/hermit/run-hermit.sh; fi; install -d -m 0755 /data/.xmtp-data && find /data/.xmtp-data -xdev -exec chown -h node:node {} + && exec gosu node bash server/agents/eliza/run-agent.sh"]
+# Entrypoint logic.
+# For the dedicated Hermit service (AGENT_PROCESS=hermit), we use a very direct
+# path to maximize the chance the health listener starts quickly.
+#
+# Recommended for the hermit.4626.fun service:
+#   Set AGENT_PROCESS=hermit (already done)
+#   Optionally override Start Command to: bash -lc 'exec gosu node npx tsx server/agents/hermit/bootstrap.ts'
+#
+# The default CMD below supports both modes from one image.
+CMD ["bash", "-lc", "if [ \"${AGENT_PROCESS:-keepr}\" = \"hermit\" ]; then exec gosu node npx tsx server/agents/hermit/bootstrap.ts; fi; install -d -m 0755 /data/.xmtp-data && find /data/.xmtp-data -xdev -exec chown -h node:node {} + && exec gosu node bash server/agents/eliza/run-agent.sh"]
