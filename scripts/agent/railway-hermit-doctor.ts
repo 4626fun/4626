@@ -92,3 +92,32 @@ if (critical.length > 0) {
 
 console.log('\nTip: After setting the vars on Railway, redeploy and look for the raw console table that starts with "[hermit][early]".')
 console.log('That table is emitted at module evaluation time — the only reliable signal when the process dies before the normal health server binds.\n')
+
+// --- Railway dashboard copy-paste helper ---
+console.log('=== Copy-paste ready block for Railway (hermit.4626.fun → Variables) ===')
+console.log('# Paste these as individual variables in the Railway UI (or via railway CLI)')
+console.log('# DATABASE_URL and the AlfaClub auth block are the ones that usually cause the "service unavailable" death.')
+console.log('')
+
+const railwayBlock = [
+  `DATABASE_URL=${process.env.DATABASE_URL ?? 'postgresql://...'}`,
+  '',
+  '# --- AlfaClub auth (at least one path) ---',
+  `ALFACLUB_CHAT_JWT=${process.env.ALFACLUB_CHAT_JWT ?? ''}`,
+  '',
+  '# Or the Privy refresh triplet (recommended for long-lived service):',
+  `ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN=${process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN ?? ''}`,
+  `ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN=${process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN ?? ''}`,
+  '',
+  '# --- Creative brain (Pinata) + 1659 targeting ---',
+  `HERMIT_PINATA_CHAT_ENDPOINT=${process.env.HERMIT_PINATA_CHAT_ENDPOINT ?? ''}`,
+  `HERMIT_PINATA_BEARER_TOKEN=${process.env.HERMIT_PINATA_BEARER_TOKEN ?? ''}`,
+  `ALFACLUB_CHAT_ROOM_ID=${process.env.ALFACLUB_CHAT_ROOM_ID ?? '1659'}`,
+  `ALFACLUB_HERMIT_COMMAND_ROOMS=${process.env.ALFACLUB_HERMIT_COMMAND_ROOMS ?? '1659'}`,
+].join('\n')
+
+console.log(railwayBlock)
+console.log('')
+console.log('After pasting into Railway Variables, hit "Redeploy" (or let the change trigger one).')
+console.log('Then search the new deployment logs for the string: [hermit][early]')
+console.log('=============================================================================\n')
