@@ -82,5 +82,6 @@ ENV PORT=8080
 EXPOSE 8080
 
 # The absolute simplest possible startup for maximum reliability on Railway.
-# bootstrap.ts starts a minimal /healthz listener before any heavy imports.
-CMD ["bash", "-lc", "exec gosu node npx tsx server/agents/hermit/bootstrap.ts"]
+# We use the local tsx binary directly (no npx) and exec so the process is PID 1.
+# bootstrap.ts starts the /healthz listener *before* any heavy module imports.
+CMD exec ./node_modules/.bin/tsx server/agents/hermit/bootstrap.ts
