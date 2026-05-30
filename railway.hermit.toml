@@ -2,25 +2,22 @@
 # Railway deployment config — Hermit AlfaClub/Pinata Creative Agent
 # (for 4626-alfaclub-bridge / hermit.4626.fun service)
 # --------------------------------------------------------------------------
-# EXACT UI SETTINGS TO COPY (for 4626-alfaclub-bridge / hermit.4626.fun):
+# EXACT UI SETTINGS TO COPY (for your 4626-alfaclub-bridge service):
 #
 # Build
-#   Dockerfile Path:          frontend/Dockerfile.hermit
+#   - Dockerfile Path: frontend/Dockerfile.hermit
 #
 # Deploy
-#   Custom Start Command:     ./node_modules/.bin/tsx server/agents/hermit/bootstrap.ts
-#   Healthcheck Path:         /healthz
-#   Healthcheck Timeout:      300
-#   Restart Policy:           On Failure
-#   Max restart retries:      5
+#   - Custom Start Command: ./node_modules/.bin/tsx server/agents/hermit/bootstrap.ts
+#   - Healthcheck Path: /healthz
+#   - Healthcheck Timeout: 300
+#   - Restart Policy: On Failure
+#   - Max restart retries: 5
 #
 # Config-as-code
-#   Railway Config File:      railway.hermit.toml
+#   - Railway Config File: railway.hermit.toml
 #
-# After you set "Railway Config File" to railway.hermit.toml, the Watch Paths
-# will automatically become the Hermit-specific ones below (no need to edit them manually).
-#
-# This is the config that finally makes the healthcheck pass.
+# Set these, save, and redeploy. The healthcheck should start passing.
 # --------------------------------------------------------------------------
 
 [build]
