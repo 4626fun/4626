@@ -1,4 +1,5 @@
 import { getDb, isDbConfigured } from '../db/postgres.js'
+import { ensureAgentRuntimeAuditLedgerSchema } from '../db/schemaBootstrap.js'
 import {
   type ControlAuditEvent,
   type ControlAuditEventType,
@@ -41,38 +42,7 @@ export async function ensureAgentControlAuditSchema(inputDb?: DbLike | null): Pr
   auditSchemaPromise = (async () => {
     const db = await resolveDb(inputDb)
     if (!db) return
-
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS agent_control_audit_events (
-        event_id TEXT PRIMARY KEY,
-        event_type TEXT NOT NULL,
-        proposal_id TEXT NOT NULL,
-        capability_id TEXT NOT NULL,
-        actor_type TEXT NOT NULL,
-        actor_id TEXT NOT NULL,
-        subsystem TEXT NOT NULL,
-        action TEXT NOT NULL,
-        status TEXT NOT NULL,
-        correlation_id TEXT NOT NULL,
-        reason TEXT NULL,
-        error_code TEXT NULL,
-        error_message TEXT NULL,
-        metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS agent_control_audit_events_created_idx
-      ON agent_control_audit_events (created_at DESC);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS agent_control_audit_events_proposal_idx
-      ON agent_control_audit_events (proposal_id, created_at DESC);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS agent_control_audit_events_event_type_idx
-      ON agent_control_audit_events (event_type, created_at DESC);
-    `
+    await ensureAgentRuntimeAuditLedgerSchema(db as any)
     auditSchemaEnsured = true
   })()
   try {

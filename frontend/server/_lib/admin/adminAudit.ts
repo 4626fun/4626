@@ -3,6 +3,7 @@
  */
 
 import { createHmac, randomBytes } from 'node:crypto'
+import { ensureWalletOnchainOpsAuditSchema } from '../db/schemaBootstrap.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
@@ -11,25 +12,7 @@ let schemaEnsured = false
 export async function ensureAdminAuditSchema(db: Db): Promise<void> {
   if (schemaEnsured) return
   try {
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS admin_logs (
-        id BIGSERIAL PRIMARY KEY,
-        admin_address TEXT NOT NULL,
-        action TEXT NOT NULL,
-        target_type TEXT NOT NULL,
-        target_id TEXT NOT NULL,
-        details JSONB NULL,
-        ip_hash TEXT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    // Backfill/migrate older tables that were created without newer columns.
-    // `IF NOT EXISTS` is supported on modern Postgres versions; if it throws, we ignore.
-    try {
-      await db.sql`ALTER TABLE admin_logs ADD COLUMN IF NOT EXISTS ip_hash TEXT NULL;`
-    } catch {
-      // ignore (older Postgres or restricted perms)
-    }
+    await ensureWalletOnchainOpsAuditSchema(db as any)
     schemaEnsured = true
   } catch {
     schemaEnsured = false

@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { ensureZoraCswGateSchema } from '../db/schemaBootstrap.js'
 import { createPublicClient, hashMessage, http, recoverMessageAddress, verifyMessage } from 'viem'
 import { base } from 'viem/chains'
 
@@ -99,47 +100,8 @@ export async function ensureZoraCswGateVerificationSchema(db: Db): Promise<void>
     return
   }
   schemaEnsuring = (async () => {
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS zora_csw_gate_telegram_tokens (
-        token_hash TEXT PRIMARY KEY,
-        csw_address TEXT NOT NULL,
-        requested_telegram_username TEXT NULL,
-        source_url TEXT NULL,
-        expires_at TIMESTAMPTZ NOT NULL,
-        consumed_at TIMESTAMPTZ NULL,
-        consumed_telegram_user_id TEXT NULL,
-        consumed_telegram_username TEXT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS zora_csw_gate_telegram_tokens_csw_idx
-      ON zora_csw_gate_telegram_tokens (csw_address, expires_at DESC);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS zora_csw_gate_telegram_tokens_expires_idx
-      ON zora_csw_gate_telegram_tokens (expires_at);
-    `
-    await db.sql`ALTER TABLE zora_csw_gate_telegram_tokens ENABLE ROW LEVEL SECURITY;`
-    await db.sql`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_policies
-          WHERE schemaname = 'public'
-            AND tablename = 'zora_csw_gate_telegram_tokens'
-            AND policyname = 'zora_csw_gate_telegram_tokens_deny_all'
-        ) THEN
-          CREATE POLICY zora_csw_gate_telegram_tokens_deny_all
-            ON zora_csw_gate_telegram_tokens
-            FOR ALL
-            TO public
-            USING (false)
-            WITH CHECK (false);
-        END IF;
-      END
-      $$;
-    `
+    // Condensed path
+    await ensureZoraCswGateSchema(db)
     schemaEnsured = true
   })()
   try {
@@ -312,42 +274,8 @@ export async function ensureCswEntryChallengeSchema(db: Db): Promise<void> {
     return
   }
   challengeSchemaEnsuring = (async () => {
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS zora_csw_gate_entry_challenges (
-        challenge_hash TEXT PRIMARY KEY,
-        csw_address TEXT NOT NULL,
-        expires_at TIMESTAMPTZ NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS zora_csw_gate_entry_challenges_csw_idx
-      ON zora_csw_gate_entry_challenges (csw_address, expires_at DESC);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS zora_csw_gate_entry_challenges_expires_idx
-      ON zora_csw_gate_entry_challenges (expires_at);
-    `
-    await db.sql`ALTER TABLE zora_csw_gate_entry_challenges ENABLE ROW LEVEL SECURITY;`
-    await db.sql`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_policies
-          WHERE schemaname = 'public'
-            AND tablename = 'zora_csw_gate_entry_challenges'
-            AND policyname = 'zora_csw_gate_entry_challenges_deny_all'
-        ) THEN
-          CREATE POLICY zora_csw_gate_entry_challenges_deny_all
-            ON zora_csw_gate_entry_challenges
-            FOR ALL
-            TO public
-            USING (false)
-            WITH CHECK (false);
-        END IF;
-      END
-      $$;
-    `
+    // Condensed path
+    await ensureZoraCswGateSchema(db)
     challengeSchemaEnsured = true
   })()
   try {

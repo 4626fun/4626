@@ -6,13 +6,9 @@ type Db = { query?: (text: string, params?: any[]) => Promise<{ rows: any[] }>; 
 let schemaEnsured = false
 let schemaEnsurePromise: Promise<void> | null = null
 
-// M-32 (4626-341): The `agent_rate_limits` table is now defined by
-// supabase/migrations/*_kpr_runtime_and_agent_rate_limits_schema.sql.
-// This helper previously issued CREATE TABLE IF NOT EXISTS DDL at
-// application boot. We keep the preflight check to decide whether to
-// use the durable path, but we no longer issue DDL from application
-// code — if the table is missing, the caller falls back to its
-// in-memory limiter (or fail-closed, per `DurableRateLimitOptions`).
+// The `agent_rate_limits` table is defined in supabase/migrations/.
+// This helper performs a lightweight preflight read only. No DDL is
+// ever issued from application code (per the 2026 schema condensation).
 let loggedMissingSchemaWarning = false
 
 async function ensureSchema(db: Db): Promise<void> {

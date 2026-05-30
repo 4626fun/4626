@@ -85,6 +85,7 @@ import { getHealthProbeStatusCode } from './_healthStatus.js'
 import { handleXmtpFallbackResponse } from './_xmtpFallback.js'
 
 import { getDb, getDbInitError, isDbConfigured } from '../../_lib/db/postgres.js'
+import { ensureAgentRuntimeAuditLedgerSchema } from '../../_lib/db/schemaBootstrap.js'
 
 // Super-early minimal health server.
 // This runs as soon as the module starts evaluating, before most imports and
@@ -1043,41 +1044,11 @@ function ensureBackgroundWorker(): void {
   queueEnabled = true
 }
 
-const RUNTIME_LEASE_TABLE_SQL = `
-  CREATE TABLE IF NOT EXISTS agent_runtime_leases (
-    lease_key TEXT PRIMARY KEY,
-    owner_id TEXT NOT NULL,
-    runtime_role TEXT NOT NULL,
-    heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-  ALTER TABLE agent_runtime_leases ENABLE ROW LEVEL SECURITY;
-  DO $$ BEGIN
-    IF NOT EXISTS (
-      SELECT 1 FROM pg_policies WHERE tablename = 'agent_runtime_leases' AND policyname = 'deny_all_non_service'
-    ) THEN
-      CREATE POLICY deny_all_non_service
-        ON agent_runtime_leases
-        FOR ALL
-        TO public
-        USING (false)
-        WITH CHECK (false);
-    END IF;
-  END $$;
-`
-
 let runtimeLeaseSchemaEnsured = false
 
 async function ensureRuntimeLeaseSchema(db: any): Promise<void> {
   if (runtimeLeaseSchemaEnsured) return
-  if (typeof db?.query === 'function') {
-    await db.query(RUNTIME_LEASE_TABLE_SQL)
-  } else {
-    const stmt = [RUNTIME_LEASE_TABLE_SQL] as unknown as TemplateStringsArray
-    ;(stmt as any).raw = [RUNTIME_LEASE_TABLE_SQL]
-    await db.sql(stmt)
-  }
+  await ensureAgentRuntimeAuditLedgerSchema(db as any)
   runtimeLeaseSchemaEnsured = true
 }
 

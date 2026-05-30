@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { getTrustedRequestOrigins, normalizeOrigin } from '../_lib/infra/trust.js'
+import { ensureAuthNonceHandoffSchema } from '../_lib/db/schemaBootstrap.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -30,21 +31,8 @@ let nonceSchemaEnsured = false
 
 export async function ensureNonceSchema(db: DbWithSql): Promise<void> {
   if (nonceSchemaEnsured) return
-  try {
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS auth_nonces (
-        nonce TEXT PRIMARY KEY,
-        issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        expires_at TIMESTAMPTZ NOT NULL,
-        consumed_at TIMESTAMPTZ
-      );
-    `
-    await db.sql`CREATE INDEX IF NOT EXISTS auth_nonces_expires_idx ON auth_nonces (expires_at);`
-    nonceSchemaEnsured = true
-  } catch (err) {
-    nonceSchemaEnsured = false
-    throw err
-  }
+  await ensureAuthNonceHandoffSchema(db as any)
+  nonceSchemaEnsured = true
 }
 
 export async function storeNonce(db: DbWithSql, nonce: string, expiresAt: Date): Promise<void> {

@@ -4,7 +4,7 @@
  * **Condensed model (per AGENTS.md + docs/operations/supabase-schema-condensation.md):**
  * - `supabase/migrations/` is the single source of truth.
  * - Use `ensureAlfaclubSchema()` (and future extensions in schemaBootstrap.ts) for runtime cold-start needs.
- * - `frontend/db/migrations/` mirrors are legacy; do not duplicate new DDL here or as raw strings.
+ * - `frontend/db/migrations-legacy/` is the archived historical mirror; do not add anything here.
  *
  * The user_preference + schema creation is now delegated. The remaining tables below are still defined locally (historical bootstrap). They are high-priority candidates for extraction to dedicated supabase/migrations/ files + delegation in a follow-up pass.
  *
@@ -15,7 +15,7 @@
  */
 
 import { getDb } from '../db/postgres.js'
-import { ensureAlfaclubSchema } from '../db/schemaBootstrap.js'
+import { ensureAlfaclubSchema, ensureFinalAdditiveColumns } from '../db/schemaBootstrap.js'
 
 let schemaEnsured = false
 
@@ -67,23 +67,8 @@ export async function ensureAlfaClubVigilanteSchema(): Promise<void> {
     // Ignore.
   }
 
-  // Additive column extensions that were historically applied in bootstrap
-  // (safe on re-run, kept here for environments that may have older rows).
-  try {
-    await db.sql`ALTER TABLE alfaclub_publications ADD COLUMN IF NOT EXISTS submission_attempts INT NOT NULL DEFAULT 0;`
-  } catch {
-    // Ignore if the column already exists with an incompatible default.
-  }
-  try {
-    await db.sql`ALTER TABLE alfaclub_publications ADD COLUMN IF NOT EXISTS last_submission_error TEXT;`
-  } catch {
-    // Ignore.
-  }
-  try {
-    await db.sql`ALTER TABLE alfaclub_publications ADD COLUMN IF NOT EXISTS last_submission_at TIMESTAMPTZ;`
-  } catch {
-    // Ignore.
-  }
+  // Additive columns now live in the final additive migration.
+  await ensureFinalAdditiveColumns(db as any).catch(() => {})
 }
 
 /** Reset state cache — exposed for tests only. */

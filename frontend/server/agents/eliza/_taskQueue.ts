@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { getDb } from '../../_lib/db/postgres.js'
+import { ensureAgentRuntimeAuditLedgerSchema } from '../../_lib/db/schemaBootstrap.js'
 import { logger } from '../../_lib/infra/logger.js'
 
 type AgentTask = {
@@ -18,47 +19,13 @@ const TASK_RETRY_BASE_MS = Math.max(250, Number(process.env.ELIZA_TASK_RETRY_BAS
 const TASK_RETRY_MAX_MS = Math.max(TASK_RETRY_BASE_MS, Number(process.env.ELIZA_TASK_RETRY_MAX_MS ?? '60000') || 60_000)
 const TASK_STALE_LEASE_MS = Math.max(1_000, Number(process.env.ELIZA_TASK_LEASE_STALE_MS ?? '300000') || 300_000)
 
-const CREATE_QUEUE_TABLE_SQL = `
-  CREATE TABLE IF NOT EXISTS agent_background_tasks (
-    id BIGSERIAL PRIMARY KEY,
-    task_type TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    priority INTEGER NOT NULL DEFAULT 0,
-    payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-    attempts INTEGER NOT NULL DEFAULT 0,
-    max_attempts INTEGER NOT NULL DEFAULT 3,
-    run_after TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    leased_at TIMESTAMPTZ,
-    leased_by TEXT,
-    last_error TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-`
-
-const CREATE_QUEUE_INDEX_SQL = `
-  CREATE INDEX IF NOT EXISTS agent_background_tasks_pending_idx
-    ON agent_background_tasks (status, priority DESC, run_after ASC, created_at ASC);
-`
-
 let queueSchemaEnsured = false
-
-async function execRaw(db: any, text: string): Promise<void> {
-  if (typeof db?.query === 'function') {
-    await db.query(text)
-    return
-  }
-  const stmt = [text] as unknown as TemplateStringsArray
-  ;(stmt as any).raw = [text]
-  await db.sql(stmt)
-}
 
 async function ensureQueueSchema(): Promise<void> {
   if (queueSchemaEnsured) return
   const db = await getDb()
   if (!db) return
-  await execRaw(db as any, CREATE_QUEUE_TABLE_SQL)
-  await execRaw(db as any, CREATE_QUEUE_INDEX_SQL)
+  await ensureAgentRuntimeAuditLedgerSchema(db as any)
   queueSchemaEnsured = true
 }
 

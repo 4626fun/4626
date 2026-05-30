@@ -2,6 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, randomUUID, r
 import type { IAgentRuntime, Memory, Plugin } from '@elizaos/core'
 
 import { getDb } from '../../_lib/db/postgres.js'
+import { ensureAgentMemorySchema } from '../../_lib/db/schemaBootstrap.js'
 import { buildRuntimeSessionContext } from '../../_lib/auth/session.js'
 import { logger } from '../../_lib/infra/logger.js'
 import { getGroveChainId, resolveLensUri, tryUploadImmutableJson } from '../../_lib/lens/lensGrove.js'
@@ -110,149 +111,10 @@ type EncryptedArchiveEnvelope = {
   }
 }
 
-const AGENT_MEMORY_TABLE_SQL = `
-  CREATE TABLE IF NOT EXISTS agent_message_memory (
-    id TEXT PRIMARY KEY,
-    agent_id TEXT NOT NULL,
-    room_id TEXT NOT NULL,
-    entity_id TEXT,
-    role TEXT NOT NULL,
-    conversation_id TEXT NOT NULL,
-    conversation_type TEXT,
-    sender_address TEXT,
-    content TEXT NOT NULL,
-    metadata_json JSONB,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-`
-
-const AGENT_MEMORY_INDEX_SQL = `
-  CREATE INDEX IF NOT EXISTS agent_message_memory_conversation_created_idx
-    ON agent_message_memory (conversation_id, created_at DESC);
-`
-
-const AGENT_MEMORY_AGENT_CONVERSATION_INDEX_SQL = `
-  CREATE INDEX IF NOT EXISTS agent_message_memory_agent_conversation_idx
-    ON agent_message_memory (agent_id, conversation_id);
-`
-
-const PGVECTOR_EXTENSION_SQL = `
-  CREATE SCHEMA IF NOT EXISTS extensions;
-  CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;
-`
-
-const AGENT_MEMORY_EMBEDDING_COLUMN_SQL = `
-  ALTER TABLE agent_message_memory
-  ADD COLUMN IF NOT EXISTS embedding extensions.vector(1536);
-`
-
-const AGENT_MEMORY_EMBEDDING_INDEX_SQL = `
-  CREATE INDEX IF NOT EXISTS agent_message_memory_embedding_ivfflat_idx
-    ON agent_message_memory
-    USING ivfflat (embedding extensions.vector_cosine_ops)
-    WITH (lists = 100);
-`
-
-const AGENT_MEMORY_CONTENT_GIN_INDEX_SQL = `
-  CREATE INDEX IF NOT EXISTS agent_message_memory_content_tsv_idx
-    ON agent_message_memory
-    USING GIN (to_tsvector('simple', content));
-`
-
-const EPISODIC_SUMMARIES_TABLE_SQL = `
-  CREATE TABLE IF NOT EXISTS episodic_summaries (
-    conversation_id TEXT PRIMARY KEY,
-    summary TEXT NOT NULL,
-    last_updated TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    version INT NOT NULL DEFAULT 1
-  );
-`
-
-const FACT_CARDS_TABLE_SQL = `
-  CREATE TABLE IF NOT EXISTS fact_cards (
-    id BIGSERIAL PRIMARY KEY,
-    conversation_id TEXT,
-    entity TEXT,
-    fact TEXT NOT NULL,
-    confidence FLOAT,
-    source_turn_id BIGINT,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-`
-
-const FACT_CARDS_CONVERSATION_ENTITY_UNIQUE_SQL = `
-  CREATE UNIQUE INDEX IF NOT EXISTS fact_cards_conversation_entity_uidx
-    ON fact_cards (conversation_id, entity);
-`
-
-const FACT_CARDS_ENTITY_INDEX_SQL = `
-  CREATE INDEX IF NOT EXISTS idx_fact_cards_entity
-    ON fact_cards(entity, conversation_id);
-`
-
-const TASK_LOOPS_TABLE_SQL = `
-  CREATE TABLE IF NOT EXISTS task_loops (
-    id BIGSERIAL PRIMARY KEY,
-    conversation_id TEXT,
-    task TEXT NOT NULL,
-    status TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-`
-
-const TASK_LOOPS_CONVERSATION_STATUS_INDEX_SQL = `
-  CREATE INDEX IF NOT EXISTS task_loops_conversation_status_idx
-    ON task_loops (conversation_id, status, created_at DESC);
-`
-
-const GROVE_CHAT_MANIFESTS_TABLE_SQL = `
-  CREATE TABLE IF NOT EXISTS grove_chat_manifests (
-    conversation_id TEXT PRIMARY KEY,
-    chunk_list JSONB NOT NULL,
-    root_hash TEXT NOT NULL,
-    encryption_pubkey TEXT,
-    last_archived_at TIMESTAMPTZ,
-    lens_profile_id TEXT
-  );
-`
-
-const GROVE_MANIFEST_CONVERSATION_INDEX_SQL = `
-  CREATE INDEX IF NOT EXISTS idx_manifest_conv
-    ON grove_chat_manifests(conversation_id);
-`
-
-const MEMORY_SNAPSHOTS_TABLE_SQL = `
-  CREATE TABLE IF NOT EXISTS memory_snapshots (
-    conversation_id TEXT PRIMARY KEY,
-    snapshot_json JSONB NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-`
-
-const AGENT_MEMORY_RLS_SQL = `
-  ALTER TABLE agent_message_memory ENABLE ROW LEVEL SECURITY;
-`
-
-const AGENT_MEMORY_POLICY_SQL = `
-  DO $$
-  BEGIN
-    IF NOT EXISTS (
-      SELECT 1
-      FROM pg_policies
-      WHERE schemaname = 'public'
-        AND tablename = 'agent_message_memory'
-        AND policyname = 'agent_message_memory_deny_all'
-    ) THEN
-      CREATE POLICY agent_message_memory_deny_all
-        ON agent_message_memory
-        FOR ALL
-        TO public
-        USING (false)
-        WITH CHECK (false);
-    END IF;
-  END
-  $$;
-`
+// Note: Core agent memory table DDL has been moved to
+// supabase/migrations/20260530000000_agent_memory_schema.sql
+// The constants below for the migrated tables have been removed.
+// Only vector extension + any truly dynamic logic remains here if needed.
 
 function buildDenyAllPolicySql(tableName: string, policyName: string): {
   rlsSql: string
@@ -805,36 +667,22 @@ async function ensureMemorySchema(): Promise<void> {
   const db = await getDb()
   if (!db) return
 
-  await executeSchemaStatement(db, AGENT_MEMORY_TABLE_SQL)
-  await executeOptionalSchemaStatement(db, PGVECTOR_EXTENSION_SQL)
-  await executeOptionalSchemaStatement(db, AGENT_MEMORY_EMBEDDING_COLUMN_SQL)
-  await executeSchemaStatement(db, EPISODIC_SUMMARIES_TABLE_SQL)
-  await executeSchemaStatement(db, FACT_CARDS_TABLE_SQL)
-  await executeSchemaStatement(db, TASK_LOOPS_TABLE_SQL)
-  await executeSchemaStatement(db, GROVE_CHAT_MANIFESTS_TABLE_SQL)
-  await executeSchemaStatement(db, MEMORY_SNAPSHOTS_TABLE_SQL)
+  // Condensed path — core agent memory tables now live in the authoritative migration.
+  await ensureAgentMemorySchema(db)
 
-  await executeOptionalSchemaStatement(db, AGENT_MEMORY_RLS_SQL)
-  await executeOptionalSchemaStatement(db, AGENT_MEMORY_POLICY_SQL)
-  await executeOptionalSchemaStatement(db, EPISODIC_SUMMARIES_RLS.rlsSql)
-  await executeOptionalSchemaStatement(db, EPISODIC_SUMMARIES_RLS.policySql)
-  await executeOptionalSchemaStatement(db, FACT_CARDS_RLS.rlsSql)
-  await executeOptionalSchemaStatement(db, FACT_CARDS_RLS.policySql)
-  await executeOptionalSchemaStatement(db, TASK_LOOPS_RLS.rlsSql)
-  await executeOptionalSchemaStatement(db, TASK_LOOPS_RLS.policySql)
-  await executeOptionalSchemaStatement(db, GROVE_CHAT_MANIFESTS_RLS.rlsSql)
-  await executeOptionalSchemaStatement(db, GROVE_CHAT_MANIFESTS_RLS.policySql)
-  await executeOptionalSchemaStatement(db, MEMORY_SNAPSHOTS_RLS.rlsSql)
-  await executeOptionalSchemaStatement(db, MEMORY_SNAPSHOTS_RLS.policySql)
-
-  await executeSchemaStatement(db, AGENT_MEMORY_INDEX_SQL)
-  await executeSchemaStatement(db, AGENT_MEMORY_AGENT_CONVERSATION_INDEX_SQL)
-  await executeOptionalSchemaStatement(db, AGENT_MEMORY_EMBEDDING_INDEX_SQL)
-  await executeSchemaStatement(db, AGENT_MEMORY_CONTENT_GIN_INDEX_SQL)
-  await executeSchemaStatement(db, FACT_CARDS_ENTITY_INDEX_SQL)
-  await executeSchemaStatement(db, FACT_CARDS_CONVERSATION_ENTITY_UNIQUE_SQL)
-  await executeSchemaStatement(db, TASK_LOOPS_CONVERSATION_STATUS_INDEX_SQL)
-  await executeSchemaStatement(db, GROVE_MANIFEST_CONVERSATION_INDEX_SQL)
+  // Optional vector extension (environment-dependent, kept for now).
+  try {
+    await executeOptionalSchemaStatement(db, `
+      CREATE SCHEMA IF NOT EXISTS extensions;
+      CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;
+    `)
+    await executeOptionalSchemaStatement(db, `
+      ALTER TABLE agent_message_memory
+      ADD COLUMN IF NOT EXISTS embedding extensions.vector(1536);
+    `)
+  } catch {
+    // ignore in constrained environments
+  }
 
   semanticEmbeddingColumnChecked = false
   semanticEmbeddingColumnAvailable = false

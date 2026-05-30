@@ -1,4 +1,5 @@
 import { getDb, isDbConfigured } from '../db/postgres.js'
+import { ensureAgentRuntimeAuditLedgerSchema } from '../db/schemaBootstrap.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
@@ -8,16 +9,7 @@ async function ensureSchema(db: Db): Promise<void> {
   if (schemaEnsured) return
   schemaEnsured = true
   try {
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS agent_api_logs (
-        id BIGSERIAL PRIMARY KEY,
-        endpoint TEXT NOT NULL,
-        method TEXT NOT NULL,
-        ip_hash TEXT NULL,
-        user_agent TEXT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
+    await ensureAgentRuntimeAuditLedgerSchema(db as any)
   } catch {
     schemaEnsured = false
   }

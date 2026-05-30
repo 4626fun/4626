@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { createPublicClient, http, parseAbiItem, type PublicClient } from 'viem'
 import { base } from 'viem/chains'
 import { getDb, getDbForCron } from '../db/postgres.js'
-import { ensureMigrationApplied, ensureCreatorMetricsBaseSchema } from '../db/schemaBootstrap.js'
+import { ensureMigrationApplied, ensureCreatorMetricsBaseSchema, ensureFinalAdditiveColumns } from '../db/schemaBootstrap.js'
 import { logger } from '../infra/logger.js'
 import { requireServerKey } from '../../zora/_shared.js'
 import {
@@ -211,25 +211,11 @@ async function fetchCountCandidate(sdk: any, list: ExploreList, pageSize: number
 }
 
 async function ensureCreatorCoinsDisplayColumns(db: Db): Promise<void> {
-  await db.sql`ALTER TABLE creator_coins ADD COLUMN IF NOT EXISTS unique_holders INTEGER;`
-  await db.sql`ALTER TABLE creator_coins ADD COLUMN IF NOT EXISTS market_cap_delta_24h NUMERIC(38, 12);`
-  await db.sql`ALTER TABLE creator_coins ADD COLUMN IF NOT EXISTS sparkline_30d_values JSONB;`
-  await db.sql`ALTER TABLE creator_coins ADD COLUMN IF NOT EXISTS sparkline_30d_change_pct NUMERIC(12, 4);`
-  await db.sql`ALTER TABLE creator_coins ADD COLUMN IF NOT EXISTS sparkline_30d_updated_at TIMESTAMPTZ;`
+  await ensureFinalAdditiveColumns(db as any).catch(() => {})
 }
 
 async function ensureCreatorMetricsStateColumns(db: Db): Promise<void> {
-  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS checkpoint_block BIGINT;`
-  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS checkpoint_log_index INTEGER;`
-  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS last_hot_refresh_at TIMESTAMPTZ;`
-  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_creators_total BIGINT;`
-  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_market_cap_usd NUMERIC(38, 12);`
-  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_volume_24h_usd NUMERIC(38, 12);`
-  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_fees_24h_usd NUMERIC(38, 12);`
-  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_totals_at TIMESTAMPTZ;`
-  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS explore_checkpoints_json TEXT;`
-  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS explore_backfill_complete BOOLEAN NOT NULL DEFAULT false;`
-  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS explore_last_sync_at TIMESTAMPTZ;`
+  await ensureFinalAdditiveColumns(db as any).catch(() => {})
 }
 
 async function ensureCreatorMetricsConstraints(db: Db): Promise<void> {

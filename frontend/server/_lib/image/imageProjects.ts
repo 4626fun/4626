@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { uploadImageStorageObject } from './imageStorage.js'
 import { getDb } from '../db/postgres.js'
+import { ensureImageGenerationSchema } from '../db/schemaBootstrap.js'
 
 export type ImageGenerationProjectStatus =
   | 'draft'
@@ -81,120 +82,11 @@ export async function ensureImageGenerationSchema() {
   const db = await getDb()
   if (!db) throw new Error('Image generation database unavailable')
 
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS image_generation_projects (
-      id TEXT PRIMARY KEY,
-      owner_address TEXT,
-      status TEXT NOT NULL DEFAULT 'draft',
-      instruction TEXT NOT NULL DEFAULT '',
-      style_preset TEXT,
-      brand_context_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-      last_response_id TEXT,
-      latest_error TEXT,
-      vault_address TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `
+  // Condensed path
+  await ensureImageGenerationSchema(db)
 
-  await db.sql`
-    ALTER TABLE image_generation_projects
-      ADD COLUMN IF NOT EXISTS owner_address TEXT;
-  `
-
-  await db.sql`
-    ALTER TABLE image_generation_projects
-      ADD COLUMN IF NOT EXISTS vault_address TEXT;
-  `
-
-  await db.sql`
-    ALTER TABLE image_generation_projects
-      ADD COLUMN IF NOT EXISTS creator_address TEXT;
-  `
-
-  await db.sql`
-    CREATE INDEX IF NOT EXISTS image_generation_projects_vault_address_idx
-      ON image_generation_projects (vault_address)
-      WHERE vault_address IS NOT NULL;
-  `
-
-  await db.sql`
-    CREATE INDEX IF NOT EXISTS image_generation_projects_creator_address_idx
-      ON image_generation_projects (creator_address)
-      WHERE creator_address IS NOT NULL;
-  `
-
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS image_generation_assets (
-      id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL REFERENCES image_generation_projects(id) ON DELETE CASCADE,
-      role TEXT NOT NULL,
-      filename TEXT,
-      mime_type TEXT NOT NULL,
-      blob_pathname TEXT NOT NULL,
-      blob_url TEXT NOT NULL,
-      byte_size INTEGER NOT NULL DEFAULT 0,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `
-
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS image_generation_attempts (
-      id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL REFERENCES image_generation_projects(id) ON DELETE CASCADE,
-      job_id TEXT,
-      attempt_number INTEGER NOT NULL DEFAULT 1,
-      kind TEXT NOT NULL DEFAULT 'generate',
-      prompt TEXT NOT NULL,
-      revised_prompt TEXT,
-      response_id TEXT,
-      evaluation_json JSONB,
-      score INTEGER,
-      passed BOOLEAN,
-      output_asset_id TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `
-
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS image_generation_jobs (
-      id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL REFERENCES image_generation_projects(id) ON DELETE CASCADE,
-      kind TEXT NOT NULL DEFAULT 'generate',
-      status TEXT NOT NULL DEFAULT 'pending',
-      refine_instruction TEXT,
-      attempts INTEGER NOT NULL DEFAULT 0,
-      max_attempts INTEGER NOT NULL DEFAULT 3,
-      run_after TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      leased_at TIMESTAMPTZ,
-      leased_by TEXT,
-      latest_error TEXT,
-      result_json JSONB,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      completed_at TIMESTAMPTZ
-    );
-  `
-
-  await db.sql`
-    CREATE INDEX IF NOT EXISTS image_generation_assets_project_role_idx
-      ON image_generation_assets (project_id, role, created_at DESC);
-  `
-
-  await db.sql`
-    CREATE INDEX IF NOT EXISTS image_generation_attempts_project_created_idx
-      ON image_generation_attempts (project_id, created_at DESC);
-  `
-
-  await db.sql`
-    CREATE INDEX IF NOT EXISTS image_generation_jobs_project_created_idx
-      ON image_generation_jobs (project_id, created_at DESC);
-  `
-
-  await db.sql`
-    CREATE INDEX IF NOT EXISTS image_generation_jobs_status_run_after_idx
-      ON image_generation_jobs (status, run_after ASC, created_at ASC);
-  `
+  // Legacy raw blocks below are transitional.
+  // All definitions now live in supabase/migrations/20260601000000_image_generation_schema.sql.
 
   schemaEnsured = true
 }

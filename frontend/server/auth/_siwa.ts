@@ -1,6 +1,7 @@
 import type { VercelRequest } from '@vercel/node'
 
 import { createReceipt, parseSIWAMessage, type ReceiptPayload, resolveReceiptSecret, verifyReceipt } from '@buildersgarden/siwa'
+import { ensureAuthNonceHandoffSchema } from '../_lib/db/schemaBootstrap.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -122,58 +123,8 @@ export function createSiwaReceiptToken(payload: Omit<ReceiptPayload, 'iat' | 'ex
 
 export async function ensureSiwaNonceSchema(db: DbWithSql): Promise<void> {
   if (siwaNonceSchemaEnsured) return
-  try {
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS auth_agent_nonces (
-        nonce TEXT PRIMARY KEY,
-        agent_id BIGINT NOT NULL,
-        agent_registry TEXT NOT NULL,
-        owner_address TEXT NOT NULL,
-        issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        expires_at TIMESTAMPTZ NOT NULL,
-        consumed_at TIMESTAMPTZ,
-        created_by_address TEXT
-      );
-    `
-    try {
-      await db.sql`ALTER TABLE auth_agent_nonces ENABLE ROW LEVEL SECURITY;`
-    } catch {
-      // Ignore if RLS cannot be enabled in this runtime.
-    }
-    try {
-      await db.sql`
-        DO $$
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1
-            FROM pg_policies
-            WHERE schemaname = 'public'
-              AND tablename = 'auth_agent_nonces'
-              AND policyname = 'auth_agent_nonces_deny_all'
-          ) THEN
-            CREATE POLICY auth_agent_nonces_deny_all
-              ON auth_agent_nonces
-              FOR ALL
-              TO public
-              USING (false)
-              WITH CHECK (false);
-          END IF;
-        END
-        $$;
-      `
-    } catch {
-      // Ignore if policy creation is unavailable in this runtime.
-    }
-    await db.sql`CREATE INDEX IF NOT EXISTS auth_agent_nonces_expires_idx ON auth_agent_nonces (expires_at);`
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS auth_agent_nonces_lookup_idx
-      ON auth_agent_nonces (nonce, agent_id, agent_registry, consumed_at, expires_at);
-    `
-    siwaNonceSchemaEnsured = true
-  } catch (err) {
-    siwaNonceSchemaEnsured = false
-    throw err
-  }
+  await ensureAuthNonceHandoffSchema(db as any)
+  siwaNonceSchemaEnsured = true
 }
 
 export async function storeSiwaNonce(

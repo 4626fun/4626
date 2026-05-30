@@ -7,6 +7,8 @@
  * verified email is the canonical 4626 identity).
  *
  * Append-only where possible, idempotent at every step:
+
+import { ensureMigrationApplied } from './schemaBootstrap.js'
  *
  *   1. Validate: `to` has verified email, neither side is already merged,
  *      `from.id !== to.id`.
@@ -44,44 +46,22 @@ let profileMergeSchemaEnsured = false
  *  run without a separate migration step. */
 export async function ensureProfileMergeSchema(db: Db): Promise<void> {
   if (profileMergeSchemaEnsured) return
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS privy_user_aliases (
-      privy_user_id TEXT PRIMARY KEY,
-      profile_id BIGINT NOT NULL REFERENCES profiles(id) ON DELETE RESTRICT,
-      source TEXT NOT NULL DEFAULT 'signup',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `
-  await db.sql`
-    CREATE INDEX IF NOT EXISTS privy_user_aliases_profile_idx
-      ON privy_user_aliases (profile_id);
-  `
-  await db.sql`
-    ALTER TABLE profiles
-      ADD COLUMN IF NOT EXISTS merged_into_profile_id BIGINT NULL
-        REFERENCES profiles(id) ON DELETE SET NULL;
-  `
-  await db.sql`
-    CREATE INDEX IF NOT EXISTS profiles_merged_into_idx
-      ON profiles (merged_into_profile_id)
-      WHERE merged_into_profile_id IS NOT NULL;
-  `
-  // Seed aliases from existing privy_user_id values so the resolver's fast
-  // path works for users who existed before the migration.
-  await db.sql`
-    INSERT INTO privy_user_aliases (privy_user_id, profile_id, source)
-    SELECT privy_user_id, id, 'signup'
-    FROM profiles
-    WHERE privy_user_id IS NOT NULL
-      AND privy_user_id <> ''
-      AND merged_into_profile_id IS NULL
-    ON CONFLICT (privy_user_id) DO NOTHING;
-  `
-  // Enable RLS so PostgREST (`anon` / `authenticated` roles) can't reach
-  // the identity-routing metadata. Server handlers connect as `postgres`
-  // via the pooler and bypass RLS — reads/writes stay unaffected.
-  // Idempotent: re-running this DDL is a no-op if RLS is already on.
-  await db.sql`ALTER TABLE privy_user_aliases ENABLE ROW LEVEL SECURITY;`
+  // The authoritative DDL lives in supabase/migrations/20260419200000_profile_merge_infra.sql
+  await ensureMigrationApplied(db as any, '20260419200000_profile_merge_infra.sql').catch(() => {})
+  // Seed is data, not DDL — keep it here as a safe, idempotent cold-start backfill.
+  try {
+    await db.sql`
+      INSERT INTO privy_user_aliases (privy_user_id, profile_id, source)
+      SELECT privy_user_id, id, 'signup'
+      FROM profiles
+      WHERE privy_user_id IS NOT NULL
+        AND privy_user_id <> ''
+        AND merged_into_profile_id IS NULL
+      ON CONFLICT (privy_user_id) DO NOTHING;
+    `
+  } catch {
+    // best effort
+  }
   profileMergeSchemaEnsured = true
 }
 

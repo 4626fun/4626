@@ -107,6 +107,9 @@ jobs:
       - name: Guard server-core boundary for API runtime
         run: pnpm --dir frontend guard:server-core-boundary
 
+      - name: Guard no raw schema DDL (condensation regression prevention)
+        run: pnpm --dir frontend guard:schema
+
       - name: Frontend ESLint
         run: pnpm --dir frontend lint
 

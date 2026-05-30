@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import { getDb } from '../db/postgres.js'
+import { ensureAlfaclubDailyBriefSchema } from '../db/schemaBootstrap.js'
 import { listAllCreators } from './creators.js'
 import { getBasenameName } from '../identity/basenameResolver.js'
 import { getEnsName } from '../identity/ensResolver.js'
@@ -146,19 +147,7 @@ async function ensureDailyBriefSchema(): Promise<void> {
   const db = await getDb()
   if (!db) return
   try {
-    await db.sql`
-      CREATE SCHEMA IF NOT EXISTS alfaclub;
-    `
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS alfaclub.daily_brief_dispatch (
-        dispatch_key TEXT PRIMARY KEY,
-        snapshot_ts TIMESTAMPTZ NOT NULL,
-        previous_snapshot_ts TIMESTAMPTZ NULL,
-        room_id TEXT NOT NULL,
-        message_hash TEXT NOT NULL,
-        sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
+    await ensureAlfaclubDailyBriefSchema(db as any)
   } catch {
     // Best-effort schema init.
   }

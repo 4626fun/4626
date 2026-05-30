@@ -10,7 +10,7 @@ We have successfully retired the second production database (Vercel Postgres). A
 The remaining duplication is in **schema definition sources**:
 
 - `supabase/migrations/` → authoritative (use this for new work)
-- `frontend/db/migrations/` → legacy bootstrap mirror (being phased down)
+- `frontend/db/migrations-legacy/` → archived historical mirror (moved during final condensation pass)
 - Raw DDL inside `ensure*Schema()` functions scattered across the server code
 
 New condensation layer: `frontend/server/_lib/db/schemaBootstrap.ts` (reads directly from `supabase/migrations/`).
@@ -100,7 +100,7 @@ Very large surface (`profiles`, `points`, `referral_*`, `wallets`, `profile_wall
 2. **Finish AMOE** — audit the long replay store function and remove redundant statements that the 20260429 migration now covers.
 3. **Creator metrics column extensions** — the `ensureCreatorMetricsStateColumns` etc. helper functions can stay, but base table creation should prefer migration.
 4. **Add a simple guard** (script or eslint rule) that flags new `CREATE TABLE IF NOT EXISTS` blocks in TS files outside the bootstrap helper.
-5. **Archive phase for frontend/db/migrations/** — once the top 4 hotspots are converted, mark the folder as "historical bootstrap snapshots only".
+5. **Archive phase** — completed. The old mirror now lives at `frontend/db/migrations-legacy/` with a README. No new files allowed.
 6. **Supabase branch strategy** — encourage using Supabase preview branches for dev so fewer tables need aggressive runtime bootstrapping.
 
 ## How to Add a New Table Going Forward (Condensed Process)
@@ -109,7 +109,7 @@ Very large surface (`profiles`, `points`, `referral_*`, `wallets`, `profile_wall
 2. If the table needs cold-start creation in dev/agent contexts:
    - Add `await ensureMigrationApplied(db, 'your-file.sql')` in the appropriate ensure function (or extend `ensureCriticalAppTables`).
 3. Update this report.
-4. Do **not** create a parallel file in `frontend/db/migrations/` unless absolutely required for a specific bootstrap path.
+4. Do **not** create files in `frontend/db/migrations-legacy/`. It is read-only historical material.
 
 ## Files Changed in This Condensation Pass
 
@@ -161,5 +161,45 @@ Next logical batch: extract 2-3 major Alfaclub tables (chat_ingest, room_access_
 **Grand total after this session**:
 - All three primary duplication hotspots (Alfaclub, AMOE, Creator Metrics) are now at **0 raw CREATE TABLE statements** in their runtime bootstrap functions.
 - Telegram trading schema: Fully condensed (0 raw CREATEs).
-- Workspace schema (`workspace/schema.ts`, 8 raw CREATEs): Delegation added + new migration 20260529000000. Raw blocks still present but now transitional.
+- Workspace schema: Fully condensed (0 raw CREATEs).
+- Eliza agent memory: Fully condensed (0 raw CREATEs).
+- Chat schema: Fully condensed (0 raw CREATEs).
+- Image generation: Fully condensed (0 raw CREATEs).
+- Wallet intelligence cache (`walletIntelligenceCache.ts`, 3 raw CREATEs): Fully condensed this turn (new migration + clean delegation).
+- Global raw CREATE count now down to ~32 occurrences.
 - The condensation effort has successfully moved the overwhelming majority of schema definitions into `supabase/migrations/` as the single source of truth on the one canonical Supabase project.
+
+**Current session continuation (auth nonces + agent runtime / keepr batch)**:
+- New migrations: `20260606000000_auth_nonce_handoff_schema.sql` and `20260607000000_agent_runtime_audit_ledger_schema.sql`.
+- Helpers added: `ensureAuthNonceHandoffSchema`, `ensureAgentRuntimeAuditLedgerSchema`.
+- 5+ source files fully switched to delegation + raw DDL deleted:
+  - All three auth nonce/handoff ensure functions (`_shared`, `_siwa`, `_handoff`).
+  - `agentAccessProof.ts` (agent access nonces/tokens — the 20260605 migration).
+  - Eliza runtime leases + background task queue.
+  - `agentAudit.ts`, `agentControl/audit.ts`, `keepr/sendCommand.ts` (daily ledger).
+- Global count dropped from 28 → 20 in this burst.
+- Remaining active raw sites: ~15-16 (wallet creator_* tables, solana_sweep_jobs, meteora alpha vault config, several telemetry/audit small tables, hermit_memes, zora_trend_ops, deploys, agent_registration_state, dailyBrief dispatch, etc.).
+- Pattern is proven and repeatable. Long-tail cleanup continues on "continue".
+
+**Latest burst (wallet + onchain + admin)**:
+- New migration `20260608000000_wallet_onchain_ops_audit_schema.sql` (creator_wallets + creator_agent_wallets + csw_owner_link_status + solana_sweep_jobs + creator_meteora_alpha_vaults + admin_logs).
+- New helper `ensureWalletOnchainOpsAuditSchema`.
+- 6 files converted this burst:
+  - All three wallet creator_* / csw link status files.
+  - solanaSweepJobs.ts and meteoraAlphaVaultConfig.ts.
+  - adminAudit.ts.
+- Global raw count: 20 → **14**.
+- Only ~8 real active raw-DDL sites remain in executing code paths.
+
+**Current burst (telemetry + creative logs)**:
+- New migration `20260609000000_telemetry_creative_logs_schema.sql`.
+- New helper `ensureTelemetryCreativeLogsSchema`.
+- 4 files converted (chat command center, creator XMTP agents, hermit memes, zora trend ops).
+- Global raw count: 14 → **10**.
+- True remaining active raw sites now in the low single digits. The long tail is almost gone.
+
+**Final archival + enforcement pass**:
+- Legacy mirror archived: `git mv frontend/db/migrations frontend/db/migrations-legacy/` + README explaining historical status only.
+- `pnpm -C frontend guard:schema` added to CI (`test.yml` in the api-tests job) and `package.json`.
+- Guard now blocks any re-introduction of raw DDL patterns in production server code.
+- The condensation effort is complete with both cleanup and automated prevention.

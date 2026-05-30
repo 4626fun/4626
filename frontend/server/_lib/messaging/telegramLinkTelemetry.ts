@@ -119,55 +119,7 @@ async function ensureSchema(db: Awaited<ReturnType<typeof getDb>> | null) {
       return
     }
 
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS telegram_link_telemetry_events (
-        id BIGSERIAL PRIMARY KEY,
-        event TEXT NOT NULL,
-        source TEXT NULL,
-        flow_id TEXT NULL,
-        phase TEXT NULL,
-        status TEXT NULL,
-        telegram_user_id TEXT NULL,
-        privy_user_id TEXT NULL,
-        chat_id TEXT NULL,
-        payload JSONB NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    try {
-      await db.sql`ALTER TABLE telegram_link_telemetry_events ENABLE ROW LEVEL SECURITY;`
-    } catch {
-      // Ignore if RLS toggles are unavailable in this runtime.
-    }
-    try {
-      await db.sql`
-        DO $$
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1
-            FROM pg_policies
-            WHERE schemaname = 'public'
-              AND tablename = 'telegram_link_telemetry_events'
-              AND policyname = 'telegram_link_telemetry_events_deny_all'
-          ) THEN
-            CREATE POLICY telegram_link_telemetry_events_deny_all
-              ON telegram_link_telemetry_events
-              FOR ALL
-              TO public
-              USING (false)
-              WITH CHECK (false);
-          END IF;
-        END
-        $$;
-      `
-    } catch {
-      // Ignore if policy creation is unavailable in this runtime.
-    }
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_link_telemetry_events_created_idx
-        ON telegram_link_telemetry_events (created_at DESC);
-    `
-
+    await ensureTelemetryCreativeLogsSchema(db as any)
     schemaEnsured = true
   })()
     .catch((error) => {

@@ -5,7 +5,7 @@
  *
  * Single source of truth: `supabase/migrations/`
  * - Only one Supabase project (`qajpnuvqlcfseghnldkl`).
- * - Never duplicate DDL in `frontend/db/migrations/` (legacy mirror only) or as raw strings in ensure* functions.
+ * - Never duplicate DDL in `frontend/db/migrations-legacy/` (archived historical mirror) or as raw strings in ensure* functions.
  * - All new tables/columns go through proper migrations.
  * - Runtime cold-start needs delegate here.
  *
@@ -209,10 +209,106 @@ export async function ensureWorkspaceSchema(db: Db): Promise<void> {
 }
 
 /**
+ * Agent memory tables (Eliza / runtimeBridge).
+ */
+export async function ensureAgentMemorySchema(db: Db): Promise<void> {
+  await ensureMigrationApplied(db, '20260530000000_agent_memory_schema.sql').catch(() => {})
+}
+
+/**
+ * Chat directory, presence, friend requests, and vault chat tables.
+ */
+export async function ensureChatSchema(db: Db): Promise<void> {
+  await ensureMigrationApplied(db, '20260531000000_chat_schema.sql').catch(() => {})
+}
+
+/**
+ * Image generation projects, assets, attempts, and jobs.
+ */
+export async function ensureImageGenerationSchema(db: Db): Promise<void> {
+  await ensureMigrationApplied(db, '20260601000000_image_generation_schema.sql').catch(() => {})
+}
+
+/**
+ * Wallet intelligence and feedback cache tables.
+ */
+export async function ensureWalletIntelligenceCacheSchema(db: Db): Promise<void> {
+  await ensureMigrationApplied(db, '20260602000000_wallet_intelligence_cache_schema.sql').catch(() => {})
+}
+
+/**
+ * Zora CSW gate Telegram tokens and entry challenges.
+ */
+export async function ensureZoraCswGateSchema(db: Db): Promise<void> {
+  await ensureMigrationApplied(db, '20260603000000_zora_csw_gate_schema.sql').catch(() => {})
+}
+
+/**
+ * Creator access allowlist and access request tables.
+ */
+export async function ensureCreatorAccessSchema(db: Db): Promise<void> {
+  await ensureMigrationApplied(db, '20260604000000_creator_access_schema.sql').catch(() => {})
+}
+
+/**
+ * Agent access nonces and room access tokens.
+ */
+export async function ensureAgentAccessProofSchema(db: Db): Promise<void> {
+  await ensureMigrationApplied(db, '20260605000000_agent_access_schema.sql').catch(() => {})
+}
+
+/**
+ * Auth nonces (general + agent/SIWA) + cross-context handoff codes.
+ * Extracted from the three small auth/* ensure functions.
+ */
+export async function ensureAuthNonceHandoffSchema(db: Db): Promise<void> {
+  await ensureMigrationApplied(db, '20260606000000_auth_nonce_handoff_schema.sql').catch(() => {})
+}
+
+/**
  * Creator metrics base tables.
  */
 export async function ensureCreatorMetricsBaseSchema(db: Db): Promise<void> {
   await ensureMigrationApplied(db, '20260527010000_creator_metrics_base_tables.sql').catch(() => {})
+}
+
+/**
+ * Agent runtime leases, background task queue, API audit, control audit events,
+ * and keepr send ledger.
+ */
+export async function ensureAgentRuntimeAuditLedgerSchema(db: Db): Promise<void> {
+  await ensureMigrationApplied(db, '20260607000000_agent_runtime_audit_ledger_schema.sql').catch(() => {})
+}
+
+/**
+ * Wallet/creator wallet tables, Solana sweep jobs, Meteora Alpha Vault config,
+ * and admin audit logs.
+ */
+export async function ensureWalletOnchainOpsAuditSchema(db: Db): Promise<void> {
+  await ensureMigrationApplied(db, '20260608000000_wallet_onchain_ops_audit_schema.sql').catch(() => {})
+}
+
+/**
+ * Telemetry/event tables + creative tool logs (Hermit memes, Zora trend ops).
+ */
+export async function ensureTelemetryCreativeLogsSchema(db: Db): Promise<void> {
+  await ensureMigrationApplied(db, '20260609000000_telemetry_creative_logs_schema.sql').catch(() => {})
+}
+
+/**
+ * Alfaclub daily brief dispatch (inside private alfaclub schema).
+ * Last major raw DDL site for a dedicated schema table.
+ */
+export async function ensureAlfaclubDailyBriefSchema(db: Db): Promise<void> {
+  await ensureMigrationApplied(db, '20260610000000_alfaclub_daily_brief_dispatch.sql').catch(() => {})
+}
+
+/**
+ * Final set of additive columns that were still being applied via raw
+ * ALTERs in a handful of bootstrap helpers. One-time migration.
+ */
+export async function ensureFinalAdditiveColumns(db: Db): Promise<void> {
+  await ensureMigrationApplied(db, '20260611000000_final_additive_columns.sql').catch(() => {})
 }
 
 /**
