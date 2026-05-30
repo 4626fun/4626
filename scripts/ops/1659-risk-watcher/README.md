@@ -72,21 +72,25 @@ A ready-to-use `.env.example` file exists in this folder.
 ## Railway Service Recommendations
 
 - **Restart Policy**: Always
-- **Healthcheck Path**: `/health` (the script automatically starts a tiny server on the assigned `PORT`)
+- **Healthcheck Path**: `/health`
 - **Healthcheck Timeout**: 30 seconds
+
+A `railway.toml` file is included in the folder with these settings declared.
 
 ### Healthcheck Response
 
-The `/health` endpoint now returns useful JSON:
+The `/health` endpoint returns rich JSON (and returns HTTP 503 when unhealthy):
 
 ```json
 {
   "status": "ok",
   "lastTick": "2026-05-30T...",
   "lastStatus": "success",
+  "lastError": null,
+  "consecutiveFailures": 0,
   "uptimeSeconds": 12345,
   "wallet": "0xEbF9..."
 }
 ```
 
-This lets you monitor in Railway when the last successful risk check happened.
+Railway can use this for automatic health monitoring. After 3 consecutive failures the endpoint will start returning 503.

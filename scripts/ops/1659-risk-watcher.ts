@@ -53,14 +53,18 @@ function startHealthcheckServer() {
 
   const server = http.createServer((req, res) => {
     if (req.url === '/health' || req.url === '/' || req.url === '/healthz') {
+      const isHealthy = consecutiveFailures < 3
       const status = {
-        status: 'ok',
+        status: isHealthy ? 'ok' : 'degraded',
         lastTick: lastSuccessfulTick,
         lastStatus: lastTickStatus,
+        lastError: lastError,
+        consecutiveFailures,
         uptimeSeconds: Math.floor(process.uptime()),
         wallet: WALLET,
       }
-      res.writeHead(200, { 'Content-Type': 'application/json' })
+      const httpStatus = isHealthy ? 200 : 503
+      res.writeHead(httpStatus, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify(status, null, 2))
     } else {
       res.writeHead(404)
@@ -376,17 +380,21 @@ export async function run1659RiskTick(options: { once?: boolean } = {}) {
 
     lastSuccessfulTick = new Date().toISOString()
     lastTickStatus = 'success'
+    lastError = null
+    consecutiveFailures = 0
     return { ok: true, alertsTriggered: alerts.length }
   } catch (e: any) {
     console.error('[1659-risk] tick error', e)
     lastTickStatus = 'error'
-    return { ok: false, error: e.message }
+    lastError = e?.message || String(e)
+    consecutiveFailures++
+    return { ok: false, error: lastError }
   }
 }
 
-let isShuttingDown = false
-let lastSuccessfulTick: string | null = null
-let lastTickStatus: string = 'never_run'
+
+let lastError: string | null = null
+let consecutiveFailures = 0
 
 function setupGracefulShutdown() {
   const shutdown = (signal: string) => {
