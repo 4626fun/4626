@@ -95,8 +95,12 @@ try {
   const earlyServer = http.createServer((req, res) => {
     const url = (req.url ?? '/').split('?')[0]
     if (url === '/healthz' || url === '/health' || url === '/') {
-      res.writeHead(200, { 'Content-Type': 'text/plain' })
-      res.end('early-boot-or-crashed-early-see-logs')
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({
+        status: 'early-boot-or-crashed-early',
+        message: 'Check Railway logs for [eliza][early] diagnostics — this often indicates missing/misconfigured env vars for Railway primary.',
+        tip: 'Run `pnpm agent:railway-keepr-doctor` locally with the same vars.'
+      }))
       return
     }
     res.writeHead(404)
@@ -774,6 +778,21 @@ try {
   }
 
   console.error('[eliza][early] === END EARLY DIAGNOSTICS ===\n')
+
+  // Store for the real health server to surface later (when detailed access is granted)
+  earlyRailwayDiagnostics = {
+    role: AGENT_RUNTIME_ROLE,
+    consumeXmtp: AGENT_CONSUME_XMTP,
+    runningOnRailway: RUNNING_ON_RAILWAY,
+    hasDb,
+    hasEncKey,
+    dbDir,
+    hasVolume,
+    hasCswConfig: hasCsw && hasCswPrivy,
+    hasPrivyServerAuth: hasPrivyApp && hasPrivyWalletAuth,
+    lockRequired: AGENT_RUNTIME_LOCK_REQUIRED,
+    criticalIssues,
+  }
 } catch (e) {
   // Never let early logging crash the process
   console.error('[eliza][early] Early diagnostic logging failed:', e)
@@ -2172,6 +2191,9 @@ async function uploadRegistrationToGrove(): Promise<void> {
 let agentBooted = false
 let lastReadinessLogKey: string | null = null
 
+// Captured very early diagnostics (populated during module evaluation)
+let earlyRailwayDiagnostics: Record<string, unknown> | null = null
+
 async function main() {
   // Suppress known non-fatal native/runtime noise that causes alert fatigue.
   installStderrNoiseFilter()
@@ -2791,6 +2813,7 @@ function startHealthServer() {
           },
           validation: latestEnvValidation,
           readyzLivenessMode: ELIZA_READYZ_LIVENESS_MODE,
+          earlyDiagnostics: earlyRailwayDiagnostics,  // Very early Railway primary checks (available even on fast failure)
         }
       : {
           probe: probePath,
