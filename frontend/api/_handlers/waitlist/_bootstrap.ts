@@ -36,7 +36,7 @@ import {
   upsertAccount,
   verifyPrivyForAccounts,
 } from '../../../server/_lib/identity/accountsIdentity.js'
-import { runWithWaitlistEmailCollisionAdoption } from '../../../server/_lib/identity/emailCollisionAdoption.js'
+import { runWithWaitlistEmailCollisionAdoption, runWithWaitlistWalletCollisionAdoption } from '../../../server/_lib/identity/emailCollisionAdoption.js'
 import { resolveBasenameHandle } from '../../../server/_lib/identity/basenameResolver.js'
 import { loadPrivyUserWithVerifiedEmailRetry } from '../../../server/_lib/infra/privyUserLoad.js'
 import { extractPrivyVerifiedEmail } from '../../../server/_lib/infra/trust.js'
@@ -547,10 +547,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // with no email — the exact failure mode that produced the 728↔1
     // split we just merged. Runs BEFORE any profile upsert so no DB
     // state is written on collision.
-    await assertNoWalletPrivyCollision({
+    await runWithWaitlistWalletCollisionAdoption({
       db: db as any,
+      email: resolvedEmail ?? bootstrapEmailHint,
       privyUserId: context.privyUserId,
-      privyUser: privyUser as any,
+      privyUser: resolvedPrivyUser as any,
+      bootstrapEmailHint,
+      action: () =>
+        assertNoWalletPrivyCollision({
+          db: db as any,
+          privyUserId: context.privyUserId,
+          privyUser: privyUser as any,
+        }),
     })
 
     await runWithWaitlistEmailCollisionAdoption({

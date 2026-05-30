@@ -8,6 +8,7 @@ import {
   clearStoredWaitlistVerifiedEmailHint,
   readStoredWaitlistVerifiedEmailHint,
   resolveWaitlistVerifiedEmailHint,
+  resolveWaitlistPrivyDisplayEmail,
 } from './waitlistVerifiedEmailHint'
 
 describe('waitlistVerifiedEmailHint', () => {
@@ -37,6 +38,11 @@ describe('waitlistVerifiedEmailHint', () => {
   it('falls back to stored hint when Privy hydration lags', () => {
     sessionStorage.setItem(WAITLIST_VERIFIED_EMAIL_HINT_STORAGE_KEY, 'stored@example.com')
     expect(resolveWaitlistVerifiedEmailHint({ id: 'did:privy:test' })).toBe('stored@example.com')
+  })
+
+  it('does not use stored hint for Privy display email', () => {
+    sessionStorage.setItem(WAITLIST_VERIFIED_EMAIL_HINT_STORAGE_KEY, 'stored@example.com')
+    expect(resolveWaitlistPrivyDisplayEmail({ id: 'did:privy:test' })).toBeNull()
   })
 
   it('clears stored hints', () => {

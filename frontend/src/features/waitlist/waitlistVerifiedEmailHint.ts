@@ -47,3 +47,8 @@ export function resolveWaitlistVerifiedEmailHint(user: unknown): string | null {
     readStoredWaitlistVerifiedEmailHint()
   )
 }
+
+/** Display-only: never treat a stored pre-auth hint as a live Privy email session. */
+export function resolveWaitlistPrivyDisplayEmail(user: unknown): string | null {
+  return extractPrivyVerifiedEmailFromUser(user) ?? extractPrivyLinkedEmailFromUser(user)
+}

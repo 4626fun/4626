@@ -14,15 +14,29 @@
 #   - Restart Policy: On Failure
 #   - Max restart retries: 5
 #
-# Recommended environment variables for this service:
-#   ALFACLUB_CHAT_BRIDGE_ENABLED=1          (to actually run the chat bridge)
-#   ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY=1    (to bypass the default Railway safety block)
+# REQUIRED environment variables (add these in Railway Variables for this service):
+#
+#   ALFACLUB_CHAT_BRIDGE_ENABLED=1
+#   ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY=1
+#
+# These two are mandatory to make the actual chat bridge start on this
+# dedicated Railway service. Without them you will keep seeing:
+#   [hermit] AlfaClub chat bridge not started
+#
+# With both set, the bridge will run here and this process becomes the
+# primary long-lived consumer for AlfaClub room commands (including
+# rich 1659 context injection for /hermit /gmeow etc.).
+#
+# You should also have the usual ones:
+#   ALFACLUB_CHAT_JWT (or the Privy triplet)
+#   HERMIT_PINATA_CHAT_ENDPOINT + HERMIT_PINATA_BEARER_TOKEN
+#   ALFACLUB_HERMIT_COMMAND_ROOMS=1659 (or similar)
 #
 # Config-as-code
 #   - Railway Config File: railway.hermit.toml
 #
-# Set the UI fields above + the two ALFACLUB_CHAT_BRIDGE_* variables, then redeploy.
-# This is the full working configuration for the dedicated Hermit service.
+# Apply the UI settings + the two ALFACLUB_CHAT_BRIDGE_* variables above,
+# then redeploy. The bridge should start and the service will be fully live.
 # --------------------------------------------------------------------------
 
 [build]

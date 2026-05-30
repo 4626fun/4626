@@ -22,6 +22,7 @@ import {
   captureWaitlistVerifiedEmailHint,
   clearStoredWaitlistVerifiedEmailHint,
   resolveWaitlistVerifiedEmailHint,
+  resolveWaitlistPrivyDisplayEmail,
 } from './waitlistVerifiedEmailHint'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
@@ -290,14 +291,18 @@ function WaitlistAuthStep(props: {
 
           {privyAuthed && recoveryRequired ? (
             <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/8 px-3.5 py-2.5 text-left text-sm text-amber-100/90">
-              Signed in with Privy
               {privyEmail ? (
                 <>
-                  {' '}
-                  as <span className="font-medium text-white">{privyEmail}</span>
+                  Signed in with Privy as{' '}
+                  <span className="font-medium text-white">{privyEmail}</span>, but that session is not
+                  linked to your existing 4626 account yet.
                 </>
-              ) : null}
-              , but that session is not linked to your existing 4626 account yet.
+              ) : (
+                <>
+                  Your wallet session is connected in Privy, but it is not linked to your existing 4626
+                  account yet. Use existing account and sign in with email OTP.
+                </>
+              )}
             </div>
           ) : null}
 
@@ -1085,7 +1090,7 @@ export function WaitlistFlow(props: {
 
   const authRecoveryUiActive = recoveryRequired
   const authUi = deriveWaitlistAuthUi({ recoveryRequired: authRecoveryUiActive })
-  const privyEmail = resolveWaitlistVerifiedEmailHint(privy.user)
+  const privyEmail = resolveWaitlistPrivyDisplayEmail(privy.user)
   const authVisibleError = error
   const showAuthBootstrapLoader =
     step === 'auth' && busy && !authVisibleError && !authRecoveryUiActive

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { assertNoEmailPrivyCollision } from './identityRecovery'
-import { runWithWaitlistEmailCollisionAdoption } from './emailCollisionAdoption'
+import { runWithWaitlistEmailCollisionAdoption, runWithWaitlistWalletCollisionAdoption } from './emailCollisionAdoption'
 
 const upsertLinkedMethodMock = vi.hoisted(() => vi.fn(async () => {}))
 
@@ -201,5 +201,82 @@ describe('runWithWaitlistEmailCollisionAdoption', () => {
         action: () => assertNoEmailPrivyCollision({ db: db as any, email: 'user@example.com', privyUserId: 'did:privy:new-user' }),
       }),
     ).resolves.toBeUndefined()
+  })
+})
+
+function walletRecoveryError(email: string) {
+  return Object.assign(new Error('wallet collision'), {
+    code: 'IDENTITY_RECOVERY_REQUIRED',
+    reason: 'WALLET_BOUND_TO_CANONICAL_EMAIL_PROFILE',
+    canonicalEmail: email,
+    canonicalProfileId: 710,
+    requestedPrivyUserId: 'did:privy:new-user',
+    wallet: '0x' + 'b'.repeat(40),
+  })
+}
+
+describe('runWithWaitlistWalletCollisionAdoption', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('seeds a privy alias when the incoming session owns canonical profile wallets', async () => {
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('from profiles') && text.includes('where id =')) {
+          return {
+            rows: [
+              {
+                id: 710,
+                privy_user_id: 'did:privy:old-user',
+                primary_wallet: '0x' + 'b'.repeat(40),
+                csw_address: '0x' + 'c'.repeat(40),
+              },
+            ],
+          }
+        }
+        if (text.includes('from profile_wallets')) {
+          return { rows: [] }
+        }
+        if (text.includes('insert into privy_user_aliases')) {
+          return { rows: [] }
+        }
+        return { rows: [] }
+      }),
+    }
+    const action = vi
+      .fn()
+      .mockRejectedValueOnce(walletRecoveryError('user@example.com'))
+      .mockResolvedValueOnce('ok')
+
+    const privyUser = {
+      id: 'did:privy:new-user',
+      linked_accounts: [
+        {
+          type: 'wallet',
+          address: '0x' + 'b'.repeat(40),
+          chain_type: 'ethereum',
+          wallet_client_type: 'coinbase_wallet',
+        },
+      ],
+    }
+
+    const result = await runWithWaitlistWalletCollisionAdoption({
+      db: db as any,
+      email: 'user@example.com',
+      privyUserId: 'did:privy:new-user',
+      privyUser,
+      bootstrapEmailHint: 'user@example.com',
+      action,
+    })
+
+    expect(result).toBe('ok')
+    expect(action).toHaveBeenCalledTimes(2)
+    expect(
+      db.sql.mock.calls.some((call) =>
+        String(call[0]?.join?.(' ') ?? call[0]).toLowerCase().includes('insert into privy_user_aliases'),
+      ),
+    ).toBe(true)
   })
 })
