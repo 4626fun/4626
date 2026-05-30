@@ -62,6 +62,7 @@ function startHealthcheckServer() {
         consecutiveFailures,
         uptimeSeconds: Math.floor(process.uptime()),
         wallet: WALLET,
+        currentPosition: currentPositionSnapshot,
       }
       const httpStatus = isHealthy ? 200 : 503
       res.writeHead(httpStatus, { 'Content-Type': 'application/json' })
@@ -382,12 +383,22 @@ export async function run1659RiskTick(options: { once?: boolean } = {}) {
     lastTickStatus = 'success'
     lastError = null
     consecutiveFailures = 0
-    return { ok: true, alertsTriggered: alerts.length }
+
+    // Store latest snapshot for healthcheck
+    currentPositionSnapshot = {
+      mark: hl.mark,
+      distPts: hl.distPts,
+      roe: hl.roe,
+      isDangerous: hl.distPts < 2.0,
+    }
+
+    return { ok: true, alertsTriggered: alerts.length, position: currentPositionSnapshot }
   } catch (e: any) {
     console.error('[1659-risk] tick error', e)
     lastTickStatus = 'error'
     lastError = e?.message || String(e)
     consecutiveFailures++
+    currentPositionSnapshot = null
     return { ok: false, error: lastError }
   }
 }
@@ -427,6 +438,21 @@ async function main() {
 
   console.log('Private relay (ops thread):', hasPrivate ? 'ENABLED' : 'MISSING - check ALFACLUB_TELEGRAM_RELAY_CHAT_ID')
   console.log('Public channel (t.me/fun4626):', hasPublic ? 'ENABLED' : 'MISSING - check ALFACLUB_RADAR_TELEGRAM_CHAT_ID or FUN4626_TELEGRAM_CHAT_ID')
+
+  const startupMsg = [
+    `🟢 **1659 Risk Watcher is now LIVE**`,
+    ``,
+    `Watching: ${WALLET}`,
+    `Thresholds: Mark ≥ ${THRESHOLDS.markHigh} | Liq dist ≤ ${THRESHOLDS.liqDistancePts}pts | ROE ≤ ${THRESHOLDS.roeBad}%`,
+    ``,
+    `Private relay: ${hasPrivate ? 'connected' : 'NOT CONFIGURED'}`,
+    `Public channel (@fun4626): ${hasPublic ? 'connected' : 'NOT CONFIGURED'}`,
+    ``,
+    `Healthcheck available on /health`,
+  ].join('\n')
+
+  await sendRiskAlert(startupMsg)
+  await sendPublicBroadcast(startupMsg.replace(/\*\*/g, ''))
 
   // Start HTTP healthcheck server if Railway (or any platform) sets PORT
   if (process.env.PORT) {

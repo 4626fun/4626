@@ -94,3 +94,9 @@ The `/health` endpoint returns rich JSON (and returns HTTP 503 when unhealthy):
 ```
 
 Railway can use this for automatic health monitoring. After 3 consecutive failures the endpoint will start returning 503.
+
+It also includes the latest position snapshot (`currentPosition`) so you can see the live risk level directly from the healthcheck.
+
+### Startup Notification
+
+Every time the watcher starts (including after Railway deploys), it sends a "🟢 1659 Risk Watcher is now LIVE" message to both your private relay and the public https://t.me/fun4626 channel. This is very useful to confirm it's running after deploys.
