@@ -41,13 +41,14 @@ You can monitor logs, metrics, and restarts directly in the Railway dashboard.
 
 ## Environment Variables for Railway
 
-**Best practice**: Use the master environment file for the full 1659 theatrical stack:
+**Best practice**: Use the master environment file + the unified doctor:
 
 ```bash
 scripts/ops/1659-theatrical-stack.env.example
+pnpm 1659:doctor
 ```
 
-This single file covers everything needed for both the risk watcher **and** the Hermit creative agent (including the rich 1659 context with live Hyperliquid + on-chain curve + PnL).
+The `pnpm 1659:doctor` command checks **everything** for the full stack (Hermit + Watcher + rich context) in one go and gives you ready-to-paste Railway blocks.
 
 ### Minimum for the watcher alone (Telegram only)
 
