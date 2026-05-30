@@ -13,6 +13,11 @@
 
 import http from 'node:http'
 
+// Emit as early as possible after the http import (imports are hoisted, so this is one of the first executable lines).
+console.error('[hermit-bootstrap] bootstrap.ts module evaluation started');
+console.error(`[hermit-bootstrap] PORT from env: ${process.env.PORT || 'undefined (will default to 8080)'}`);
+console.error(`[hermit-bootstrap] Node version: ${process.version}`);
+
 const PORT = Number(process.env.PORT ?? '8080') || 8080
 
 const server = http.createServer((req, res) => {
