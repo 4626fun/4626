@@ -5,6 +5,7 @@ import { getAddress } from 'viem'
 import { base } from 'viem/chains'
 import { useAccount, useConnections, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 
+import { mergeAccountMeWithBootstrap } from '@/lib/account/mergeAccountMeBootstrap'
 import { apiFetch } from '@/lib/api/apiBase'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
@@ -414,7 +415,8 @@ export function useAccountSetupController(params: {
           throw new Error(readApiError(mePayload, 'Failed to load account state.'))
         }
 
-        setMeGuarded(mePayload.data)
+        const mergedMe = await mergeAccountMeWithBootstrap(mePayload.data, getAccessTokenNow)
+        setMeGuarded(mergedMe)
         if (zoraResult.status !== 'fulfilled') {
           setZoraStatus(null)
         } else {

@@ -130,10 +130,17 @@ export function AddOwnerBaseApp() {
     return typeof address === 'string' ? getAddress(address).toLowerCase() : null
   }, [privyContextWallets, privyWallets, canonicalCswAddress])
 
+  const provisionalBaseWalletAddress = useMemo(
+    () => resolveAddOwnerBaseWalletAddress(privyContextWallets, null),
+    [privyContextWallets],
+  )
+
+  const effectiveCanonicalCswAddress = canonicalCswAddress ?? provisionalBaseWalletAddress
+
   const baseWalletLink = useEnsureCanonicalBaseAccountWallet({
     enabled: Boolean(privyAuthed && inBaseApp),
-    canonicalCswAddress,
-    autoConnect: Boolean(canonicalCswAddress),
+    canonicalCswAddress: effectiveCanonicalCswAddress,
+    autoConnect: Boolean(effectiveCanonicalCswAddress),
   })
 
   const handleLinkBaseAccount = useCallback(async () => {
@@ -165,6 +172,8 @@ export function AddOwnerBaseApp() {
     [baseWalletLink.providerAccounts, privyContextWallets],
   )
 
+  const resolvedCanonicalCswAddress = canonicalCswAddress ?? connectedBaseWalletAddress
+
   // Stabilize onSuccess so it doesn't cause the hook's useCallbacks / effects to
   // be recreated on every render of this page (common source of React #185 during
   // long async wallet operations).
@@ -173,11 +182,11 @@ export function AddOwnerBaseApp() {
   }, [loadMe])
 
   const userOpFlow = useAddUserOpOwnerInstall({
-    canonicalCswAddress,
+    canonicalCswAddress: resolvedCanonicalCswAddress,
     privyEmbeddedEoaAddress,
     authHeaders,
     publicClient: stablePublicClient,
-    enabled: Boolean(privyAuthed && canonicalCswAddress && privyEmbeddedEoaAddress),
+    enabled: Boolean(privyAuthed && resolvedCanonicalCswAddress && privyEmbeddedEoaAddress),
     onSuccess: handleInstallSuccess,
   })
 
@@ -187,7 +196,7 @@ export function AddOwnerBaseApp() {
     userOpFlow.fundingAssessment != null && !userOpFlow.fundingAssessment.ok
   const fundingPending =
     userOpFlow.fundingLoading ||
-    (userOpFlow.fundingAssessment == null && Boolean(publicClient && canonicalCswAddress))
+    (userOpFlow.fundingAssessment == null && Boolean(publicClient && resolvedCanonicalCswAddress))
 
   const preparedOwnerArg = useMemo(() => {
     if (!userOpFlow.preparedTx?.data) return null
@@ -200,7 +209,7 @@ export function AddOwnerBaseApp() {
     preparedOwnerArg.toLowerCase() === privyEmbeddedEoaAddress.toLowerCase()
 
   const canSubmitUserOp =
-    Boolean(canonicalCswAddress && privyEmbeddedEoaAddress) &&
+    Boolean(resolvedCanonicalCswAddress && privyEmbeddedEoaAddress) &&
     !userOpFlow.alreadyOwner &&
     !userOpFlow.prepareLoading &&
     !fundingBlocksSubmit &&
@@ -264,7 +273,8 @@ export function AddOwnerBaseApp() {
           privyEmbeddedEoa={privyEmbeddedEoaAddress}
           has4626Session={hasSession}
           sessionAddress={authAddress}
-          canonicalCswAddress={canonicalCswAddress}
+          canonicalCswAddress={resolvedCanonicalCswAddress}
+          profileCanonicalCswAddress={canonicalCswAddress}
           baseAccountReady={baseWalletLink.ready}
           baseProviderAccounts={baseWalletLink.providerAccounts}
           baseWalletAddress={connectedBaseWalletAddress}
@@ -354,7 +364,7 @@ export function AddOwnerBaseApp() {
             {inBaseApp && !baseWalletLink.ready ? (
               <BaseAppCanonicalWalletLinkPanel
                 enabled={Boolean(privyAuthed)}
-                canonicalCswAddress={canonicalCswAddress}
+                canonicalCswAddress={resolvedCanonicalCswAddress}
                 missingCanonicalCsw={!canonicalCswAddress}
                 ready={baseWalletLink.ready}
                 linking={baseWalletLink.linking}
@@ -370,7 +380,7 @@ export function AddOwnerBaseApp() {
                 <div className="rounded-xl border border-white/10 bg-black/30 p-3">
                   <dt className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Canonical CSW</dt>
                   <dd className="mt-1 break-all font-mono text-zinc-300">
-                    {canonicalCswAddress ?? (inBaseApp ? 'Connect Base Account below' : 'not linked')}
+                    {resolvedCanonicalCswAddress ?? (inBaseApp ? 'Connect Base Account below' : 'not linked')}
                   </dd>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-black/30 p-3">

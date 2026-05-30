@@ -35,7 +35,10 @@ type AddOwnerConnectionStatusPanelProps = {
   privyEmbeddedEoa: string | null
   has4626Session: boolean
   sessionAddress: string | null
+  /** Effective CSW for submit gating (profile CSW, or Base provider when profile not synced yet). */
   canonicalCswAddress: string | null
+  /** Persisted profile CSW from `/api/accounts/me` — may lag behind the connected Base wallet. */
+  profileCanonicalCswAddress?: string | null
   baseAccountReady: boolean
   baseProviderAccounts: string[] | null
   baseWalletAddress: string | null
@@ -57,6 +60,7 @@ export function AddOwnerConnectionStatusPanel(props: AddOwnerConnectionStatusPan
     has4626Session,
     sessionAddress,
     canonicalCswAddress,
+    profileCanonicalCswAddress,
     baseAccountReady,
     baseProviderAccounts,
     baseWalletAddress,
@@ -69,6 +73,7 @@ export function AddOwnerConnectionStatusPanel(props: AddOwnerConnectionStatusPan
   } = props
 
   const expectedCsw = normalizeWalletAddress(canonicalCswAddress)
+  const profileCsw = normalizeWalletAddress(profileCanonicalCswAddress)
   const providerAddr =
     normalizeWalletAddress(baseProviderAccounts?.[0]) ??
     normalizeWalletAddress(baseWalletAddress)
@@ -165,8 +170,12 @@ export function AddOwnerConnectionStatusPanel(props: AddOwnerConnectionStatusPan
             </div>
             <div>
               <dt className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">Profile canonical CSW</dt>
-              <dd className="mt-0.5 break-all font-mono text-zinc-300" title={expectedCsw ?? undefined}>
-                {expectedCsw ? shortAddr(expectedCsw) : 'Not on profile yet'}
+              <dd className="mt-0.5 break-all font-mono text-zinc-300" title={profileCsw ?? expectedCsw ?? undefined}>
+                {profileCsw
+                  ? shortAddr(profileCsw)
+                  : expectedCsw && providerAddr === expectedCsw
+                    ? `${shortAddr(expectedCsw)} (from Base connect)`
+                    : 'Not on profile yet'}
               </dd>
             </div>
             <div>

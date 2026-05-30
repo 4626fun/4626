@@ -102,11 +102,13 @@ The Vercel cron is the canonical writer. The chat-bridge tick is a reader.
 ### 3. Railway — non-AlfaClub long-lived agents
 
 Hosts the Eliza primary, XMTP transport, Telegram / Twitter / Discord
-relays. **Does not** run the AlfaClub Privy refresher in-process: the
-`startAlfaClubPrivyTokenRefresher` loop is gated by
-`ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED` (default off; see PR #458). Without
-that flag, a Railway redeploy cannot race the Vercel cron for the `chat_jwt`
-slot. Bridge polling is independently gated by `ALFACLUB_CHAT_BRIDGE_ENABLED`.
+relays. **For the dedicated Hermit service (hermit.4626.fun):** it is now recommended
+to set `ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED=1` on this service only.
+This makes the long-lived Hermit process the owner of token rotation for the
+AlfaClub bridge (especially important for 1659 theatrical marketing).
+
+Other Railway services (Keepr primary, etc.) should leave the flag unset so
+the Vercel cron remains the writer.
 
 > **Operational invariant — leave both AlfaClub flags UNSET on
 > Railway.** The Vercel cron is canonical. If Railway also has

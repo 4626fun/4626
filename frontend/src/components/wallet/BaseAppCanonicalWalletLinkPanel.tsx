@@ -78,7 +78,7 @@ export function BaseAppCanonicalWalletLinkPanel(props: BaseAppCanonicalWalletLin
         type="button"
         variant="primary"
         className="inline-flex w-full items-center justify-center gap-2"
-        disabled={linking || !canonicalCswAddress}
+        disabled={linking || (!missingCanonicalCsw && !canonicalCswAddress)}
         loading={linking}
         onClick={() => void onLink()}
       >

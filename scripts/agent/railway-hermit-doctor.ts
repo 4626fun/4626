@@ -52,6 +52,7 @@ check('DATABASE_URL or POSTGRES_URL present (Supabase pooler recommended)', hasD
 
 console.log('\n--- AlfaClub Auth (chat bridge + token stores) ---')
 check('ALFACLUB_CHAT_JWT present (or the three Privy tokens for auto-refresh)', hasAlfaClubBootstrap)
+console.log('   (For hermit.4626.fun: also set ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED=1 so this service owns rotation)')
 if (!hasAlfaClubJwt && hasAlfaClubPrivyAccess && hasAlfaClubPrivyRefresh) {
   console.log('   (Privy refresh triplet detected — refresher can bootstrap the identity token)')
 }

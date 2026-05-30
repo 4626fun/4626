@@ -105,7 +105,7 @@ export function useEnsureCanonicalBaseAccountWallet(params: EnsureCanonicalBaseA
   ])
 
   useEffect(() => {
-    if (!params.enabled || !params.canonicalCswAddress) return
+    if (!params.enabled) return
     void refreshProviderAccounts()
   }, [params.canonicalCswAddress, params.enabled, refreshProviderAccounts, wallets])
 

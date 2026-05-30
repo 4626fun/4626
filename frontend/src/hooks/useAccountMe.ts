@@ -3,7 +3,10 @@ import { usePrivy } from '@privy-io/react-auth'
 
 import { apiFetch } from '@/lib/api/apiBase'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
-import { mergeCanonicalWaitlistAccount } from '@/features/waitlist/waitlistFlowState'
+import {
+  fetchBootstrapExecutionSignals,
+  mergeBootstrapSignals,
+} from '@/lib/account/mergeAccountMeBootstrap'
 
 /**
  * Lightweight cache-aware hook over `GET /api/accounts/me`.
@@ -31,105 +34,8 @@ import { mergeCanonicalWaitlistAccount } from '@/features/waitlist/waitlistFlowS
 
 type GetAccessTokenFn = () => Promise<string | null>
 
-type BootstrapExecutionSignals = {
-  canonicalCswAddress: string
-  privyEmbeddedEoaAddress: string
-  executionTrack: AccountSetupMe['accountSignals']['executionTrack']
-  privyEmbeddedEoaIsOwnerOfCanonicalCsw: boolean
-  baseSubAccount: AccountSetupMe['accountSignals']['baseSubAccount']
-}
-
 let inFlight: Promise<AccountSetupMe | null> | null = null
 let cached: AccountSetupMe | null | undefined = undefined
-
-async function fetchBootstrapExecutionSignals(
-  getAccessToken: GetAccessTokenFn,
-): Promise<BootstrapExecutionSignals | null> {
-  const token = await getAccessToken().catch(() => null)
-  if (!token) return null
-  try {
-    const res = await apiFetch('/api/onboarding/bootstrap', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'X-Privy-Token': token,
-      },
-      body: JSON.stringify({}),
-    })
-    const body = (await res.json().catch(() => null)) as
-      | {
-          success: boolean
-          data: {
-            canonicalCswAddress?: string
-            privyEmbeddedEoaAddress?: string
-            executionTrack?: AccountSetupMe['accountSignals']['executionTrack']
-            privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean
-            privyIsOwner?: boolean
-            baseSubAccount?: AccountSetupMe['accountSignals']['baseSubAccount']
-          } | null
-        }
-      | null
-    if (!res.ok || !body?.success || !body.data) return null
-    const ownerFlag =
-      body.data.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true || body.data.privyIsOwner === true
-    return {
-      canonicalCswAddress: String(body.data.canonicalCswAddress ?? ''),
-      privyEmbeddedEoaAddress: String(body.data.privyEmbeddedEoaAddress ?? ''),
-      executionTrack: body.data.executionTrack ?? 'none-yet',
-      privyEmbeddedEoaIsOwnerOfCanonicalCsw: ownerFlag,
-      baseSubAccount: body.data.baseSubAccount ?? {
-        address: null,
-        registered: false,
-        isDistinctFromCsw: false,
-      },
-    }
-  } catch {
-    return null
-  }
-}
-
-function mergeBootstrapSignals(
-  payload: AccountSetupMe | null,
-  bootstrap: BootstrapExecutionSignals,
-): AccountSetupMe {
-  const baseSignals = payload?.accountSignals
-  const executionTrack =
-    baseSignals?.executionTrack && baseSignals.executionTrack !== 'none-yet'
-      ? baseSignals.executionTrack
-      : bootstrap.executionTrack
-  const privyEmbeddedEoaIsOwnerOfCanonicalCsw =
-    baseSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true
-      ? true
-      : bootstrap.privyEmbeddedEoaIsOwnerOfCanonicalCsw
-        ? true
-        : baseSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw ?? null
-
-  const mergedAccount = mergeCanonicalWaitlistAccount(
-    {
-      privyUserId: payload?.privyUserId ?? '',
-      email: payload?.email ?? null,
-      emailVerified: payload?.emailVerified ?? false,
-      appAccessStatus: payload?.appAccessStatus ?? null,
-      baseSubAccount: payload?.baseSubAccount ?? bootstrap.baseSubAccount.address,
-      linkedMethods: payload?.linkedMethods ?? {},
-      score: payload?.score ?? { points: 0, tier: 0 },
-      accountSignals: {
-        linked: baseSignals?.linked ?? false,
-        canonicalCswAddress: baseSignals?.canonicalCswAddress ?? bootstrap.canonicalCswAddress ?? null,
-        creatorCoin: baseSignals?.creatorCoin ?? null,
-        zoraHandle: baseSignals?.zoraHandle ?? null,
-        lastResolvedAt: baseSignals?.lastResolvedAt ?? null,
-        baseSubAccount: baseSignals?.baseSubAccount ?? bootstrap.baseSubAccount,
-        executionTrack,
-        privyEmbeddedEoaIsOwnerOfCanonicalCsw,
-      },
-    },
-    bootstrap,
-  )
-
-  return mergedAccount
-}
 
 async function fetchAccountMe(getAccessToken: GetAccessTokenFn | null): Promise<AccountSetupMe | null> {
   if (inFlight) return inFlight

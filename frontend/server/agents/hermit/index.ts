@@ -77,6 +77,7 @@ import {
 import { startAlfaClubPrivyTokenRefresher } from '../../_lib/alfaclub/privyTokenRefresher.js'
 import { logger } from '../../_lib/infra/logger.js'
 import { isDbConfigured } from '../../_lib/db/postgres.js'
+import { readAlfaClubChatToken, readAlfaClubPrivyAccessToken } from '../../_lib/alfaclub/chatTokenStore.js'
 
 declare const process: {
   env: Record<string, string | undefined>
@@ -131,6 +132,7 @@ try {
   console.error('[hermit][early] ALFACLUB_CHAT_ROOM_ID         :', hasRoom ? hasRoom : 'not set')
   console.error('[hermit][early] ALFACLUB_HERMIT_COMMAND_ROOMS :', hasHermitCommandRooms ? hasHermitCommandRooms : 'not set')
   console.error('[hermit][early] Any room targeting            :', hasAnyRoomTargeting ? 'yes' : 'no (bridge may skip most work)')
+  console.error('[hermit][early] Privy Token Refresher         :', (process.env.ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED ?? '').trim() ? 'ENABLED (this Hermit owns rotation)' : 'disabled (Vercel cron expected to be writer)')
   console.error('[hermit][early] ----------------------------------------------------------------')
 
   if (criticalIssues.length > 0) {
@@ -157,13 +159,6 @@ try {
   console.error('[hermit][early] Early diagnostic logging failed (non-fatal):', e)
 }
 
-declare const process: {
-  env: Record<string, string | undefined>
-  on: (event: string, cb: (...args: any[]) => void) => void
-  exit: (code?: number) => void
-  uptime: () => number
-}
-
 type RuntimeState = {
   startedAt: string
   bridgeStarted: boolean
@@ -173,6 +168,12 @@ type RuntimeState = {
   lastTickAt: string | null
   lastTick: Pick<AlfaClubChatBridgeTickResult, 'roomId' | 'fetched' | 'unseen' | 'processed' | 'errors'> | null
   lastError: string | null
+  // Token refresh state (for dynamic Privy token management on Railway Hermit)
+  tokenRefresherStarted: boolean
+  tokenRefresherReason: string | null
+  lastSuccessfulTokenRefreshAt: string | null
+  chatJwtExpiresAt: string | null
+  accessTokenExpiresAt: string | null
 }
 
 type TickRollupState = {
@@ -194,6 +195,11 @@ const state: RuntimeState = {
   lastTickAt: null,
   lastTick: null,
   lastError: null,
+  tokenRefresherStarted: false,
+  tokenRefresherReason: null,
+  lastSuccessfulTokenRefreshAt: null,
+  chatJwtExpiresAt: null,
+  accessTokenExpiresAt: null,
 }
 
 let stopBridge: (() => void) | null = null
@@ -238,6 +244,27 @@ function flushTickRollup(nowMs: number, force = false): void {
     })
   }
   resetTickRollup(nowMs)
+}
+
+async function refreshTokenExpiryState(): Promise<void> {
+  try {
+    const [chatToken, accessToken] = await Promise.all([
+      readAlfaClubChatToken().catch(() => null),
+      readAlfaClubPrivyAccessToken().catch(() => null),
+    ])
+
+    if (chatToken?.expiresAt) {
+      state.chatJwtExpiresAt = chatToken.expiresAt
+    }
+    if (accessToken?.expiresAt) {
+      state.accessTokenExpiresAt = accessToken.expiresAt
+    }
+    if (chatToken?.updatedAt) {
+      state.lastSuccessfulTokenRefreshAt = chatToken.updatedAt
+    }
+  } catch (err) {
+    // Non-fatal — health endpoint will just show older values
+  }
 }
 
 function startHealthServer(): void {
@@ -370,6 +397,9 @@ function startRuntime(): void {
 
   try {
     const refresher = startAlfaClubPrivyTokenRefresher()
+    state.tokenRefresherStarted = refresher.started
+    state.tokenRefresherReason = refresher.reason ?? null
+
     if (!refresher.started) {
       logger.info('[hermit] AlfaClub Privy token refresher not started', {
         reason: refresher.reason ?? 'unknown',
@@ -378,7 +408,11 @@ function startRuntime(): void {
       stopRefresher = refresher.stop
       logger.info('[hermit] AlfaClub Privy token refresher started', {
         intervalMinutes: 30,
+        role: 'primary writer for alfaclub_runtime_secret (this Hermit instance owns token rotation)',
       })
+
+      // Capture initial token expiry for observability
+      void refreshTokenExpiryState()
     }
   } catch (error) {
     logger.warn('[hermit] AlfaClub Privy token refresher not started', {

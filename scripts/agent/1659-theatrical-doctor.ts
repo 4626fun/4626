@@ -81,6 +81,7 @@ if (!hasAlfaClubJwt && hasAlfaClubPrivyAccess && hasAlfaClubPrivyRefresh) {
 console.log('\n--- 2. Hermit Creative Agent (hermit.4626.fun) ---')
 check('HERMIT_PINATA_CHAT_ENDPOINT + BEARER_TOKEN', hasPinataEndpoint && hasPinataBearer, false)
 check('ALFACLUB_HERMIT_COMMAND_ROOMS (or ALFACLUB_CHAT_ROOM_ID) includes 1659', hasHermitRooms, false)
+console.log('   (Recommended: ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED=1 on this service only)')
 
 console.log('\n--- 3. 1659 Risk Watcher (Telegram alerts) ---')
 check('Telegram bot token (ALFACLUB_TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN)', hasBotToken)
