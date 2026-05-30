@@ -41,8 +41,14 @@ function isUserRejectedWalletAction(error: unknown): boolean {
   return lower.includes('user rejected') || lower.includes('user denied') || lower.includes('rejected the request')
 }
 
-function getErrorMessage(error: unknown, context?: { fundingPreflightOk?: boolean }): string {
-  const funding = mapAddOwnerFundingErrorMessage(error, context)
+function getErrorMessage(
+  error: unknown,
+  context?: { fundingPreflightOk?: boolean; surface?: 'add-owner-page' | 'default' },
+): string {
+  const funding = mapAddOwnerFundingErrorMessage(error, {
+    fundingPreflightOk: context?.fundingPreflightOk,
+    surface: context?.surface ?? 'add-owner-page',
+  })
   if (funding) return funding
   if (isUserRejectedWalletAction(error)) {
     return 'You dismissed the Base App signing prompt. Swipe up to find the passkey/sign sheet, approve the request, then tap Submit again.'
@@ -325,7 +331,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     void refreshFunding()
   }, [canonicalCswAddress, enabled, refreshFunding])  // refreshFunding is stable wrt publicClient (uses ref)
 
-  const handleSubmitUserOp = useCallback(async (): Promise<boolean> => {
+  const handleSubmitUserOp = useCallback(async (options?: { relayMethodAOnly?: boolean }): Promise<boolean> => {
     if (busyRef.current) {
       appendEvent('submit:ignored_reentrant')
       return false
@@ -453,8 +459,38 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       let landedTxHash: `0x${string}` | null = null
       let usedRelayFallback = false
 
-      try {
-        const result = await addOwnerViaBaseAppSendCalls({
+      const runRelayMethodA = async (): Promise<void> => {
+        appendEvent('fallback:relay_method_a_start')
+        setSubmitPhaseGuarded('awaiting_signature')
+        setPageNotice(
+          'Submitting via Relay Method A (Depository depositNative Part 1 + EntryPoint Part 2). Part 2 lands addOwnerAddress inside a CSW UserOp — not RelayRouter multicall.',
+        )
+
+        const headers = await authHeadersRef.current()
+        const relayResult = await executeAddOwnerRelayMethodA({
+          canonicalCswAddress: csw,
+          privyEmbeddedEoaAddress: ownerToAdd,
+          authHeaders: headers,
+          publicClient: publicClientRef.current as PublicClient | undefined,
+          walletRequest,
+          baseAccountSdk: baseAccountSdkRef.current,
+          fundingPreflightOk: submitFundingPreflightOk,
+          appendEvent,
+          onTxHash: (hash) => {
+            setTxHash(hash)
+            appendEvent(`relay_part2:tx_hash=${hash}`)
+          },
+        })
+        landedTxHash = relayResult.txHash
+        usedRelayFallback = true
+        reportPendingUserOpHash(null)
+      }
+
+      if (options?.relayMethodAOnly) {
+        await runRelayMethodA()
+      } else {
+        try {
+          const result = await addOwnerViaBaseAppSendCalls({
           walletRequest,
           csw,
           ownerToAdd,
@@ -510,39 +546,18 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
           )
         }
         setCallBundleId(result.callBundleId)
-      } catch (directError) {
-        if (
-          !shouldAttemptRelayMethodAFallback(directError, {
-            fundingPreflightOk: submitFundingPreflightOk,
-          })
-        ) {
-          throw directError
+        } catch (directError) {
+          if (
+            !shouldAttemptRelayMethodAFallback(directError, {
+              fundingPreflightOk: submitFundingPreflightOk,
+            })
+          ) {
+            throw directError
+          }
+
+          appendEvent('fallback:direct_sendCalls_failed → relay_method_a')
+          await runRelayMethodA()
         }
-
-        appendEvent('fallback:direct_sendCalls_failed → relay_method_a')
-        setSubmitPhaseGuarded('awaiting_signature')
-        setPageNotice(
-          'Direct addOwner UserOp was blocked. Retrying via Relay Method A (depositNative Part 1 + EntryPoint Part 2)…',
-        )
-
-        const headers = await authHeadersRef.current()
-        const relayResult = await executeAddOwnerRelayMethodA({
-          canonicalCswAddress: csw,
-          privyEmbeddedEoaAddress: ownerToAdd,
-          authHeaders: headers,
-          publicClient: publicClientRef.current as PublicClient | undefined,
-          walletRequest,
-          baseAccountSdk: baseAccountSdkRef.current,
-          fundingPreflightOk: submitFundingPreflightOk,
-          appendEvent,
-          onTxHash: (hash) => {
-            setTxHash(hash)
-            appendEvent(`relay_part2:tx_hash=${hash}`)
-          },
-        })
-        landedTxHash = relayResult.txHash
-        usedRelayFallback = true
-        reportPendingUserOpHash(null)
       }
 
       if (!landedTxHash) {
@@ -596,7 +611,10 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       await onSuccess?.()
       return true
     } catch (error) {
-      const message = getErrorMessage(error, { fundingPreflightOk: submitFundingPreflightOk })
+      const message = getErrorMessage(error, {
+        fundingPreflightOk: submitFundingPreflightOk,
+        surface: 'add-owner-page',
+      })
       appendEvent(`error:${message.slice(0, 220)}`)
       setPageError(message)
       return false

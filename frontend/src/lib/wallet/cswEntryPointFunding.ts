@@ -68,6 +68,8 @@ export function formatEthCompact(wei: bigint): string {
 export type MapAddOwnerFundingErrorContext = {
   /** When true, on-chain prefund already passed our soft minimum — treat "funds" errors as Base App policy blocks. */
   fundingPreflightOk?: boolean
+  /** `/add` surfaces Relay Method A guidance; default surfaces waitlist sub-account lane. */
+  surface?: 'add-owner-page' | 'default'
 }
 
 export function mapAddOwnerFundingErrorMessage(
@@ -88,6 +90,14 @@ export function mapAddOwnerFundingErrorMessage(
   if (!looksLikeFundingSurface) return null
 
   if (context?.fundingPreflightOk) {
+    if (context.surface === 'add-owner-page') {
+      return (
+        'Base App refused to build the direct add-owner UserOp even though your CSW already has gas prefund. ' +
+        'The Review sheet often shows a misleading "not enough funds" message — this is not RelayRouter multicall ' +
+        '(this page submits CSW → CSW addOwnerAddress for EntryPoint handleOps). Tap Cancel on that sheet, then use ' +
+        '"Submit via Relay Method A" below — that matches your earlier successful installs (Depository Part 1 + EntryPoint Part 2).'
+      )
+    }
     return (
       'Base App refused to build the add-owner UserOp even though your CSW already has gas prefund. ' +
       'Coinbase often blocks third-party sites from owner-mutating selectors and shows a misleading ' +

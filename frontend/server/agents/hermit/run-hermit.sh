@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+set -x   # Trace every command for maximum visibility
 
 # This script is the absolute earliest point we can log when Railway starts the Hermit container.
 # The goal is maximum visibility during the 5-minute healthcheck window.

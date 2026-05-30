@@ -23,7 +23,6 @@ import {
 } from '@/features/accountSetup/addUserOp/useAddUserOpOwnerInstall'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
-import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { parseAddOwnerAddressCalldataOwner, RELAY_ROUTER_BASE } from '@/lib/wallet/addOwnerCallShape'
 import { ENTRY_POINT_V06_BASE } from '@/lib/wallet/cswOwnerAbi'
 import { formatEthCompact } from '@/lib/wallet/cswEntryPointFunding'
@@ -435,9 +434,21 @@ export function AddOwnerBaseApp() {
               ) : null}
 
               {userOpFlow.busy && userOpFlow.submitPhase === 'awaiting_signature' ? (
-                <div className="rounded-xl border border-sky-400/25 bg-sky-500/10 px-3 py-2.5 text-xs text-sky-100">
-                  Confirm the add-owner request in Base App (passkey or device sign). Swipe up if the
-                  prompt is behind this page — this step can take up to 3 minutes.
+                <div className="space-y-2">
+                  {userOpFlow.fundingAssessment?.ok ? (
+                    <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-100">
+                      If Base App shows &ldquo;Error generating transaction&rdquo; or &ldquo;not enough funds&rdquo;,
+                      that is usually misleading — your CSW already has gas prefund, and this page does{' '}
+                      <strong className="font-medium">not</strong> send addOwner through RelayRouter multicall (
+                      <span className="font-mono">0xb92f…fff4f</span>). Tap <strong className="font-medium">Cancel</strong>{' '}
+                      on that sheet, then use <strong className="font-medium">Submit via Relay Method A</strong> below
+                      (same EntryPoint handleOps path as your earlier successful installs).
+                    </div>
+                  ) : null}
+                  <div className="rounded-xl border border-sky-400/25 bg-sky-500/10 px-3 py-2.5 text-xs text-sky-100">
+                    Confirm the add-owner request in Base App (passkey or device sign). Swipe up if the
+                    prompt is behind this page — this step can take up to 3 minutes.
+                  </div>
                 </div>
               ) : null}
 
@@ -537,6 +548,14 @@ export function AddOwnerBaseApp() {
                   <Button
                     type="button"
                     variant="secondary"
+                    disabled={!canSubmitUserOp || userOpFlow.busy || !userOpFlow.inBaseApp}
+                    onClick={() => void userOpFlow.handleSubmitUserOp({ relayMethodAOnly: true })}
+                  >
+                    {userOpFlow.busy ? 'Submitting…' : 'Submit via Relay Method A'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
                     disabled={userOpFlow.prepareLoading || userOpFlow.busy}
                     onClick={() => void userOpFlow.loadPrepare()}
                   >
@@ -567,13 +586,16 @@ export function AddOwnerBaseApp() {
               {userOpFlow.pageError && !pendingUserOpHash ? (
                 <div className="rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2.5 text-xs text-red-100 space-y-3">
                   <p>{userOpFlow.pageError}</p>
-                  {userOpFlow.pageError.includes('misleading') ? (
-                    <a
-                      href={buildWaitlistSetupUrl('base-app')}
-                      className="inline-flex items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white hover:opacity-90"
+                  {userOpFlow.pageError.includes('Relay Method A') ? (
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      disabled={!canSubmitUserOp || userOpFlow.busy}
+                      onClick={() => void userOpFlow.handleSubmitUserOp({ relayMethodAOnly: true })}
                     >
-                      Continue on waitlist (Connect Base App)
-                    </a>
+                      Submit via Relay Method A
+                    </Button>
                   ) : null}
                 </div>
               ) : null}
