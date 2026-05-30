@@ -49,6 +49,7 @@ COPY frontend/patches/ ./patches/
 # Include @4626/server-core (required by command families and server/_lib)
 COPY frontend/packages/server-core/package.json ./packages/server-core/package.json
 COPY frontend/packages/server-core/tsconfig.json ./packages/server-core/tsconfig.json
+COPY frontend/packages/server-core/build.mjs ./packages/server-core/build.mjs
 COPY frontend/packages/server-core/src ./packages/server-core/src
 
 # Install dependencies
