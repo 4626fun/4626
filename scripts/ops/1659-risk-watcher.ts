@@ -26,6 +26,7 @@
 import { config as loadDotenv } from 'dotenv'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import http from 'http'
 
 // Robust env loading: try repo root first, then frontend/, then current dir
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -40,6 +41,34 @@ for (const envPath of possibleEnvPaths) {
   try {
     loadDotenv({ path: envPath })
   } catch {}
+}
+
+/**
+ * Starts a minimal HTTP healthcheck server.
+ * Railway (and most platforms) like to have a port to probe.
+ * Returns 200 OK on /health or /.
+ */
+function startHealthcheckServer() {
+  const port = Number(process.env.PORT || 8080)
+
+  const server = http.createServer((req, res) => {
+    if (req.url === '/health' || req.url === '/') {
+      res.writeHead(200, { 'Content-Type': 'text/plain' })
+      res.end('ok')
+    } else {
+      res.writeHead(404)
+      res.end('not found')
+    }
+  })
+
+  server.listen(port, '0.0.0.0', () => {
+    console.log(`[healthcheck] Listening on port ${port} (Railway / platform health probes)`)
+  })
+
+  // Graceful shutdown for the server too
+  process.on('SIGTERM', () => {
+    server.close(() => process.exit(0))
+  })
 }
 
 /**
@@ -361,6 +390,11 @@ async function main() {
 
   console.log('Private relay (ops thread):', hasPrivate ? 'ENABLED' : 'MISSING - check ALFACLUB_TELEGRAM_RELAY_CHAT_ID')
   console.log('Public channel (t.me/fun4626):', hasPublic ? 'ENABLED' : 'MISSING - check ALFACLUB_RADAR_TELEGRAM_CHAT_ID or FUN4626_TELEGRAM_CHAT_ID')
+
+  // Start HTTP healthcheck server if Railway (or any platform) sets PORT
+  if (process.env.PORT) {
+    startHealthcheckServer()
+  }
 
   setupGracefulShutdown()
 

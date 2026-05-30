@@ -5,13 +5,13 @@ FROM node:20.19-alpine
 
 WORKDIR /app
 
-# Install tsx (we use npx so we don't need global install)
 RUN npm install -g tsx
 
-# Copy only the script (it is now self-contained)
 COPY 1659-risk-watcher.ts ./
 
 ENV NODE_ENV=production
+# Railway sets PORT automatically. The script will start a healthcheck server on it.
+EXPOSE 8080
 
-# Railway will send SIGTERM on deploys/restarts — the script now handles it
+# The script handles SIGTERM gracefully for clean Railway deploys
 CMD ["tsx", "1659-risk-watcher.ts"]

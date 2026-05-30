@@ -67,4 +67,12 @@ The script tries multiple common names so you can reuse whatever you already hav
 
 A ready-to-use `.env.example` file exists in this folder.
 
-**Tip**: After setting the variables in Railway, redeploy the service. The startup logs will show whether it successfully loaded the private relay and public channel.
+**Tip**: After setting the variables in Railway, redeploy the service. The startup logs will clearly show the status of the private relay and public channel.
+
+## Railway Service Recommendations
+
+- **Restart Policy**: Always
+- **Healthcheck Path**: `/health` (the script automatically starts a tiny server on the assigned `PORT`)
+- **Healthcheck Timeout**: 30 seconds
+
+This setup makes Railway treat the service as healthy even though it is a background worker (not a web app).
