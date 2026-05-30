@@ -22,6 +22,10 @@ import { withWalletRequestTimeout } from '@/lib/wallet/cswSendCalls'
 import { getProductionBaseReadClient } from '@/lib/base/productionBaseReadClient'
 import { detectInAppEnvironment, isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import {
+  executeAddOwnerRelayMethodA,
+  shouldAttemptRelayMethodAFallback,
+} from '@/features/accountSetup/addUserOp/addOwnerRelayFallback'
+import {
   confirmOwnerInstall,
   fetchPrepareAddPrivyOwner,
   type PreparedOwnerTxRequest,
@@ -446,67 +450,107 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       const fundingPreflightOk = funding?.ok === true
       submitFundingPreflightOk = fundingPreflightOk
 
-      const result = await addOwnerViaBaseAppSendCalls({
-        walletRequest,
-        csw,
-        ownerToAdd,
-        chainId: base.id,
-        timeoutMs: 120_000,
-        publicClient: publicClient as Pick<AddUserOpOwnerInstallPublicClient, 'request'> | undefined,
-        onTelemetry: (event) => {
-          appendEvent(`sendCalls:${event.step}`)
-          const nextPhase =
-            event.step === 'preflight' ? 'preflight'
-            : event.step === 'prompt_sign' ? 'awaiting_signature'
-            : event.step === 'broadcast_success' ? 'broadcasting'
-            : event.step === 'status_poll' ? 'confirming'
-            : event.step === 'status_resolved' ? 'verifying'
-            : event.step === 'broadcast_error' ? 'idle'
-            : null
+      let landedTxHash: `0x${string}` | null = null
+      let usedRelayFallback = false
 
-          if (nextPhase && nextPhase !== submitPhaseRef.current) {
-            setSubmitPhaseGuarded(nextPhase)
-          }
-        },
-      })
+      try {
+        const result = await addOwnerViaBaseAppSendCalls({
+          walletRequest,
+          csw,
+          ownerToAdd,
+          chainId: base.id,
+          timeoutMs: 120_000,
+          publicClient: publicClient as Pick<AddUserOpOwnerInstallPublicClient, 'request'> | undefined,
+          onTelemetry: (event) => {
+            appendEvent(`sendCalls:${event.step}`)
+            const nextPhase =
+              event.step === 'preflight' ? 'preflight'
+              : event.step === 'prompt_sign' ? 'awaiting_signature'
+              : event.step === 'broadcast_success' ? 'broadcasting'
+              : event.step === 'status_poll' ? 'confirming'
+              : event.step === 'status_resolved' ? 'verifying'
+              : event.step === 'broadcast_error' ? 'idle'
+              : null
 
-      // Capture the UserOp hash as soon as we have it (even before the bundle tx lands).
-      // This is very useful for the user to monitor / share.
-      if (result.userOperationHash) {
-        reportPendingUserOpHash(result.userOperationHash)
-        appendEvent(`user_op_hash=${result.userOperationHash}`)
-      }
+            if (nextPhase && nextPhase !== submitPhaseRef.current) {
+              setSubmitPhaseGuarded(nextPhase)
+            }
+          },
+        })
 
-      let landedTxHash = result.transactionHash
-      const pcForPoll = publicClientRef.current
-      if (!landedTxHash && result.userOperationHash && pcForPoll) {
-        appendEvent(`poll:user_op_hash=${result.userOperationHash}`)
-        const deadline = Date.now() + 90_000
-        while (!landedTxHash && Date.now() < deadline) {
-          const receipt = (await pcForPoll.request({
-            method: 'eth_getUserOperationReceipt' as any,
-            params: [result.userOperationHash],
-          }).catch(() => null)) as { receipt?: { transactionHash?: string } } | null
-          const candidate = receipt?.receipt?.transactionHash
-          if (typeof candidate === 'string' && /^0x[0-9a-fA-F]{64}$/.test(candidate)) {
-            landedTxHash = candidate as `0x${string}`
-            break
-          }
-          await new Promise((resolve) => setTimeout(resolve, 2_000))
+        if (result.userOperationHash) {
+          reportPendingUserOpHash(result.userOperationHash)
+          appendEvent(`user_op_hash=${result.userOperationHash}`)
         }
+
+        landedTxHash = result.transactionHash
+        const pcForPoll = publicClientRef.current
+        if (!landedTxHash && result.userOperationHash && pcForPoll) {
+          appendEvent(`poll:user_op_hash=${result.userOperationHash}`)
+          const deadline = Date.now() + 90_000
+          while (!landedTxHash && Date.now() < deadline) {
+            const receipt = (await pcForPoll.request({
+              method: 'eth_getUserOperationReceipt' as any,
+              params: [result.userOperationHash],
+            }).catch(() => null)) as { receipt?: { transactionHash?: string } } | null
+            const candidate = receipt?.receipt?.transactionHash
+            if (typeof candidate === 'string' && /^0x[0-9a-fA-F]{64}$/.test(candidate)) {
+              landedTxHash = candidate as `0x${string}`
+              break
+            }
+            await new Promise((resolve) => setTimeout(resolve, 2_000))
+          }
+        }
+
+        if (!landedTxHash) {
+          throw new Error(
+            result.userOperationHash
+              ? `UserOp submitted (${result.userOperationHash.slice(0, 10)}…) but bundle tx hash is still pending. Wait 30s and tap Rebuild preview — or check Base App activity.`
+              : 'wallet_sendCalls completed without a transaction hash. Wait for Base App to finish, then retry.',
+          )
+        }
+        setCallBundleId(result.callBundleId)
+      } catch (directError) {
+        if (
+          !shouldAttemptRelayMethodAFallback(directError, {
+            fundingPreflightOk: submitFundingPreflightOk,
+          })
+        ) {
+          throw directError
+        }
+
+        appendEvent('fallback:direct_sendCalls_failed → relay_method_a')
+        setSubmitPhaseGuarded('awaiting_signature')
+        setPageNotice(
+          'Direct addOwner UserOp was blocked. Retrying via Relay Method A (depositNative Part 1 + EntryPoint Part 2)…',
+        )
+
+        const headers = await authHeadersRef.current()
+        const relayResult = await executeAddOwnerRelayMethodA({
+          canonicalCswAddress: csw,
+          privyEmbeddedEoaAddress: ownerToAdd,
+          authHeaders: headers,
+          publicClient: publicClientRef.current as PublicClient | undefined,
+          walletRequest,
+          baseAccountSdk: baseAccountSdkRef.current,
+          fundingPreflightOk: submitFundingPreflightOk,
+          appendEvent,
+          onTxHash: (hash) => {
+            setTxHash(hash)
+            appendEvent(`relay_part2:tx_hash=${hash}`)
+          },
+        })
+        landedTxHash = relayResult.txHash
+        usedRelayFallback = true
+        reportPendingUserOpHash(null)
       }
 
       if (!landedTxHash) {
-        throw new Error(
-          result.userOperationHash
-            ? `UserOp submitted (${result.userOperationHash.slice(0, 10)}…) but bundle tx hash is still pending. Wait 30s and tap Rebuild preview — or check Base App activity.`
-            : 'wallet_sendCalls completed without a transaction hash. Wait for Base App to finish, then retry.',
-        )
+        throw new Error('Owner install did not return a transaction hash.')
       }
 
       setTxHash(landedTxHash)
       appendEvent(`tx_hash=${landedTxHash}`)
-      setCallBundleId(result.callBundleId)
 
       const pcForVerify = publicClientRef.current
       if (pcForVerify) {
@@ -545,7 +589,9 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       reportPendingUserOpHash(null)
       setAlreadyOwner(true)
       setPageNotice(
-        `Owner install succeeded via EntryPoint handleOps (tx ${landedTxHash.slice(0, 10)}…). The CSW executed addOwnerAddress on itself inside the UserOp (msg.sender == address(this)).`,
+        usedRelayFallback
+          ? `Owner install succeeded via Relay Method A (tx ${landedTxHash.slice(0, 10)}…). Part 2 landed through EntryPoint handleOps with CSW executeWithoutChainIdValidation → addOwnerAddress.`
+          : `Owner install succeeded via EntryPoint handleOps (tx ${landedTxHash.slice(0, 10)}…). The CSW executed addOwnerAddress on itself inside the UserOp (msg.sender == address(this)).`,
       )
       await onSuccess?.()
       return true

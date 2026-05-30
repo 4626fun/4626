@@ -204,7 +204,7 @@ function extractTweetUrl(response: string): string | null {
   return match?.[0] ?? null
 }
 
-type HermitRoomContext = {
+export type HermitRoomContext = {
   roomId: string | null
   userPreferences:
     | {

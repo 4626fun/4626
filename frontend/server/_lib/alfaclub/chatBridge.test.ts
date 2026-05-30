@@ -103,6 +103,7 @@ function makeFlags(overrides: Partial<AlfaClubChatBridgeFlags> = {}): AlfaClubCh
     killSwitch: false,
     enabled: true,
     roomId: '1043',
+    hermitCommandRoomIds: [],
     jwt: 'jwt-current',
     ingestJwt: null,
     botToken: null,

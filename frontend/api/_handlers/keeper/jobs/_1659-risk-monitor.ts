@@ -1,3 +1,5 @@
+// Repo-root script; not on the frontend tsconfig.node surface.
+// @ts-expect-error resolved at deploy bundle time
 import { run1659RiskTick } from '../../../../scripts/ops/1659-risk-watcher.js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 

@@ -731,6 +731,8 @@ const XMTP_REQUIRE_DB_ENCRYPTION = parseEnvBoolean(
   AGENT_CONSUME_XMTP && AGENT_RUNTIME_ROLE === 'primary',
 )
 
+let earlyRailwayDiagnostics: Record<string, unknown> | null = null
+
 // === VERY EARLY RAILWAY PRIMARY DIAGNOSTICS ===
 // These run at module evaluation time — the absolute earliest we can log.
 // This is the best chance to see what is wrong when the process dies before
@@ -2196,9 +2198,6 @@ async function uploadRegistrationToGrove(): Promise<void> {
 
 let agentBooted = false
 let lastReadinessLogKey: string | null = null
-
-// Captured very early diagnostics (populated during module evaluation)
-let earlyRailwayDiagnostics: Record<string, unknown> | null = null
 
 async function main() {
   // Suppress known non-fatal native/runtime noise that causes alert fatigue.

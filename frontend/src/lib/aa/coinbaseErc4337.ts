@@ -373,13 +373,13 @@ async function assertBundlerUserOpGasEstimate(params: {
       return {}
     }
 
+    const firstCallTo = calls[0]?.to
     let estimate: unknown = null
     let estimateError: unknown = null
     try {
       estimate = await client.estimateUserOperationGas(estimateParams)
     } catch (e: unknown) {
       estimateError = e
-      const firstCallTo = calls[0]?.to
       const hasSwapRouterCall = calls.some(isSwapRouterHeavyCall)
       const canRetryWithoutPaymaster = Boolean(paymaster) && hasSwapRouterCall
       if (canRetryWithoutPaymaster) {

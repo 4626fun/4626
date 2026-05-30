@@ -833,7 +833,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     mockLogin.mockReset()
     mockLogin.mockImplementation(
       () =>
-        new Promise<void>(() => {
+        new Promise<undefined>(() => {
           // Simulates email verification completing outside the login() promise.
         }),
     )

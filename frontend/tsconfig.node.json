@@ -24,6 +24,7 @@
     "packages/server-core/src/**/*.ts",
     "api/**/*.ts",
     "api/_handlers/**/*.ts",
+    "api/_handlers/**/*.d.ts",
     "server/_lib/**/*.ts",
     "server/_lib/**/*.d.ts",
     "server/auth/**/*.ts",
@@ -57,7 +58,10 @@
     "shared/wallet/bytecode.ts",
     "src/wallet/canonicalWalletPolicy.ts",
     "src/lib/env/**/*.ts",
-    "src/lib/routes/**/*.ts"
+    "src/lib/routes/**/*.ts",
+    "src/lib/relay/goldenRelayPart1Shape.ts",
+    "src/lib/wallet/cswOwnerMutationEncode.ts",
+    "src/lib/wallet/cswOwnerAbi.ts"
   ],
   "exclude": [
     "src/**/*.test.ts",

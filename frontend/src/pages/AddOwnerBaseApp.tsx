@@ -249,6 +249,8 @@ export function AddOwnerBaseApp() {
             <p className="text-zinc-300">
               Correct shape: one <span className="font-mono">wallet_sendCalls</span> bundle containing a
               single CSW → CSW <span className="font-mono">addOwnerAddress</span> self-call (zero value).
+              If Base App blocks that UserOp, this page automatically retries via Relay Method A
+              (Depository <span className="font-mono">depositNative</span> Part 1 + EntryPoint Part 2).
               Base App turns this into a UserOp that the wallet itself executes.
             </p>
           </div>

@@ -1754,6 +1754,7 @@ describe('runBridgeTick — Cloudflare challenge remediation', () => {
       killSwitch: false,
       enabled: true,
       roomId: '1043',
+      hermitCommandRoomIds: [],
       jwt: 'command.jwt.value',
       ingestJwt: null,
       botToken: null,
