@@ -4,9 +4,71 @@
  * Long-lived Railway process for the creative AlfaClub / Pinata lane. This is
  * intentionally separate from the Keepr XMTP runtime so Hermit restarts,
  * Pinata failures, and chat polling do not affect critical Keepr automation.
+ *
+ * IMPORTANT FOR RAILWAY (hermit.4626.fun):
+ *   The real health server is started at the bottom. Anything that throws
+ *   during static import evaluation of the alfaclub bridge + command surface
+ *   (chatTokenStore, getDb, ensureAlfaClubVigilanteSchema, skillRouter, etc.)
+ *   will kill the process before that server binds. Railway will report
+ *   repeated "service unavailable" on /healthz with zero application logs.
+ *
+ *   We therefore start a super-minimal listener using ONLY node:http + env reads
+ *   at the very first line of the file, before any other imports. This listener
+ *   survives early crashes and surfaces the guidance to look for the
+ *   [hermit][early] raw console table in the Railway logs.
  */
 
 import http from 'node:http'
+
+// === SUPER-EARLY MINIMAL HEALTH LISTENER ===
+// This runs before ANY other imports. If the later static imports (chatBridge,
+// command registry, alfaclub stores, skillRouter, room1659 context, etc.) throw,
+// this listener is still answering and Railway will stop seeing "connection refused".
+// The real server started later in startHealthServer() will take over the port.
+const EARLY_PORT = Number(process.env.PORT ?? '8080') || 8080
+try {
+  const earlyServer = http.createServer((req, res) => {
+    const method = String(req.method ?? 'GET').toUpperCase()
+    const url = (req.url ?? '/').split('?')[0]
+
+    if (method !== 'GET' && method !== 'HEAD') {
+      res.writeHead(405, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ ok: false, error: 'Method not allowed' }))
+      return
+    }
+    if (url === '/robots.txt') {
+      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' })
+      res.end('User-agent: *\nDisallow: /\n')
+      return
+    }
+    if (url !== '/healthz' && url !== '/readyz') {
+      res.writeHead(404, { 'content-type': 'text/plain' })
+      res.end('Not found')
+      return
+    }
+
+    res.writeHead(503, {
+      'cache-control': 'no-store',
+      'content-type': 'application/json',
+    })
+    res.end(
+      JSON.stringify({
+        ok: false,
+        service: 'hermit-alfaclub',
+        probe: url,
+        status: 'early-boot-or-crashed-early',
+        message: 'Check Railway logs for [hermit][early] diagnostics table — this almost always means a missing critical env var (DATABASE_URL or AlfaClub chat tokens) in the import graph.',
+        tip: 'Run `pnpm agent:railway-hermit-doctor` locally with the same vars you set on this Railway service.',
+      }),
+    )
+  })
+  earlyServer.listen(EARLY_PORT, () => {
+    // Use console.error so it is guaranteed to appear even if stdout is buffered differently.
+    console.error(`[hermit][early] minimal health listener active on port ${EARLY_PORT} (pre-import)`)
+  })
+} catch (e) {
+  console.error('[hermit][early] failed to start minimal pre-import listener:', e)
+}
 
 import {
   type AlfaClubChatBridgeTickResult,
@@ -14,6 +76,86 @@ import {
 } from '../../_lib/alfaclub/chatBridge.js'
 import { startAlfaClubPrivyTokenRefresher } from '../../_lib/alfaclub/privyTokenRefresher.js'
 import { logger } from '../../_lib/infra/logger.js'
+import { isDbConfigured } from '../../_lib/db/postgres.js'
+
+declare const process: {
+  env: Record<string, string | undefined>
+  on: (event: string, cb: (...args: any[]) => void) => void
+  exit: (code?: number) => void
+  uptime: () => number
+}
+
+let earlyHermitDiagnostics: Record<string, unknown> | null = null
+
+// === VERY EARLY HERMIT RAILWAY DIAGNOSTICS ===
+// These run at module evaluation time — before startRuntime() and before the
+// heavy alfaclub + command surface imports have a chance to throw.
+// When the dedicated hermit.4626.fun service dies with "service unavailable"
+// on /healthz and zero logs, this block + the pre-import listener above are
+// the only things that can still produce output.
+try {
+  const hasDb = isDbConfigured()
+  const hasAlfaClubJwt = !!(process.env.ALFACLUB_CHAT_JWT ?? '').trim()
+  const hasAlfaClubPrivyAccess = !!(process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN ?? '').trim()
+  const hasAlfaClubPrivyRefresh = !!(process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN ?? '').trim()
+  const hasPinataEndpoint = !!(process.env.HERMIT_PINATA_CHAT_ENDPOINT ?? '').trim()
+  const hasPinataBearer = !!(process.env.HERMIT_PINATA_BEARER_TOKEN ?? '').trim()
+  const hasRoom = !!(process.env.ALFACLUB_CHAT_ROOM_ID ?? '').trim()
+  const hasHermitCommandRooms = !!(process.env.ALFACLUB_HERMIT_COMMAND_ROOMS ?? '').trim()
+  const hasAnyRoomTargeting = hasRoom || hasHermitCommandRooms
+
+  const hasAlfaClubBootstrap = hasAlfaClubJwt || (hasAlfaClubPrivyAccess && hasAlfaClubPrivyRefresh)
+  const runningOnRailway = Object.keys(process.env).some((k) => k.startsWith('RAILWAY_'))
+
+  const criticalIssues: string[] = []
+  if (runningOnRailway) {
+    if (!hasDb) criticalIssues.push('DATABASE_URL or POSTGRES_URL is required (alfaclub stores + schema bootstrap are pulled at import time via chatBridge / command executor)')
+    if (!hasAlfaClubBootstrap) criticalIssues.push('ALFACLUB_CHAT_JWT (or the three ALFACLUB_CHAT_PRIVY_* tokens) is required for the chat bridge')
+  }
+
+  console.error('\n[hermit][early] === HERMIT RAILWAY DIAGNOSTICS ===')
+  console.error('[hermit][early] Tip: Run `pnpm agent:railway-hermit-doctor` locally with the same env vars for a full checklist.')
+
+  const summaryLine = criticalIssues.length > 0
+    ? `[hermit][early] SUMMARY: ${criticalIssues.length} critical issue(s) — Hermit will almost certainly die before the real health server binds`
+    : `[hermit][early] SUMMARY: Core requirements for boot appear satisfied`
+  console.error(summaryLine)
+
+  console.error('[hermit][early] ----------------------------------------------------------------')
+  console.error('[hermit][early] RUNNING_ON_RAILWAY            :', runningOnRailway)
+  console.error('[hermit][early] DATABASE_URL / POSTGRES_URL   :', hasDb ? 'present' : 'MISSING (critical for alfaclub stores)')
+  console.error('[hermit][early] ALFACLUB_CHAT_JWT             :', hasAlfaClubJwt ? 'present' : 'missing')
+  console.error('[hermit][early] ALFACLUB_CHAT_PRIVY_* triplet :', hasAlfaClubPrivyAccess && hasAlfaClubPrivyRefresh ? 'present' : 'incomplete/missing')
+  console.error('[hermit][early] HERMIT_PINATA_CHAT_ENDPOINT   :', hasPinataEndpoint ? 'present' : 'missing (creative /gmeow etc. will be degraded)')
+  console.error('[hermit][early] HERMIT_PINATA_BEARER_TOKEN    :', hasPinataBearer ? 'present' : 'missing')
+  console.error('[hermit][early] ALFACLUB_CHAT_ROOM_ID         :', hasRoom ? hasRoom : 'not set')
+  console.error('[hermit][early] ALFACLUB_HERMIT_COMMAND_ROOMS :', hasHermitCommandRooms ? hasHermitCommandRooms : 'not set')
+  console.error('[hermit][early] Any room targeting            :', hasAnyRoomTargeting ? 'yes' : 'no (bridge may skip most work)')
+  console.error('[hermit][early] ----------------------------------------------------------------')
+
+  if (criticalIssues.length > 0) {
+    console.error('[hermit][early] CRITICAL ISSUES (will cause silent death before /healthz binds):')
+    criticalIssues.forEach((issue) => console.error('[hermit][early]   -', issue))
+  } else if (runningOnRailway) {
+    console.error('[hermit][early] All hard boot requirements appear satisfied. If still "unavailable", the crash is happening after this point — check the first lines after this table.')
+  }
+
+  console.error('[hermit][early] === END EARLY DIAGNOSTICS ===\n')
+
+  earlyHermitDiagnostics = {
+    runningOnRailway,
+    hasDb,
+    hasAlfaClubJwt,
+    hasAlfaClubPrivyBootstrap: hasAlfaClubPrivyAccess && hasAlfaClubPrivyRefresh,
+    hasPinataEndpoint,
+    hasPinataBearer,
+    hasAnyRoomTargeting,
+    criticalIssues,
+  }
+} catch (e) {
+  // Never let early logging itself crash the process.
+  console.error('[hermit][early] Early diagnostic logging failed (non-fatal):', e)
+}
 
 declare const process: {
   env: Record<string, string | undefined>
@@ -137,6 +279,7 @@ function startHealthServer(): void {
         service: 'hermit-alfaclub',
         probe: url,
         uptimeSeconds: Math.floor(process.uptime()),
+        earlyDiagnostics: earlyHermitDiagnostics,
         ...state,
       }),
     )
