@@ -5,70 +5,17 @@
  * intentionally separate from the Keepr XMTP runtime so Hermit restarts,
  * Pinata failures, and chat polling do not affect critical Keepr automation.
  *
- * IMPORTANT FOR RAILWAY (hermit.4626.fun):
- *   The real health server is started at the bottom. Anything that throws
- *   during static import evaluation of the alfaclub bridge + command surface
- *   (chatTokenStore, getDb, ensureAlfaClubVigilanteSchema, skillRouter, etc.)
- *   will kill the process before that server binds. Railway will report
- *   repeated "service unavailable" on /healthz with zero application logs.
+ * RAILWAY HEALTHCHECK NOTE:
+ * The absolute earliest listener lives in `bootstrap.ts`. It binds a minimal
+ * HTTP server on PORT before any other modules are evaluated. This file
+ * (`index.ts`) is loaded via dynamic import *after* the listener is up.
  *
- *   We therefore start a super-minimal listener using ONLY node:http + env reads
- *   at the very first line of the file, before any other imports. This listener
- *   survives early crashes and surfaces the guidance to look for the
- *   [hermit][early] raw console table in the Railway logs.
+ * All the rich early diagnostics (`[hermit][early]`) and the real health
+ * server still live in this file and will replace the bootstrap listener
+ * once evaluation succeeds.
  */
 
 import http from 'node:http'
-
-// === SUPER-EARLY MINIMAL HEALTH LISTENER ===
-// This runs before ANY other imports. If the later static imports (chatBridge,
-// command registry, alfaclub stores, skillRouter, room1659 context, etc.) throw,
-// this listener is still answering and Railway will stop seeing "connection refused".
-// The real server started later in startHealthServer() will take over the port.
-const EARLY_PORT = Number(process.env.PORT ?? '8080') || 8080
-try {
-  const earlyServer = http.createServer((req, res) => {
-    const method = String(req.method ?? 'GET').toUpperCase()
-    const url = (req.url ?? '/').split('?')[0]
-
-    if (method !== 'GET' && method !== 'HEAD') {
-      res.writeHead(405, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ ok: false, error: 'Method not allowed' }))
-      return
-    }
-    if (url === '/robots.txt') {
-      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' })
-      res.end('User-agent: *\nDisallow: /\n')
-      return
-    }
-    if (url !== '/healthz' && url !== '/readyz') {
-      res.writeHead(404, { 'content-type': 'text/plain' })
-      res.end('Not found')
-      return
-    }
-
-    res.writeHead(503, {
-      'cache-control': 'no-store',
-      'content-type': 'application/json',
-    })
-    res.end(
-      JSON.stringify({
-        ok: false,
-        service: 'hermit-alfaclub',
-        probe: url,
-        status: 'early-boot-or-crashed-early',
-        message: 'Check Railway logs for [hermit][early] diagnostics table — this almost always means a missing critical env var (DATABASE_URL or AlfaClub chat tokens) in the import graph.',
-        tip: 'Run `pnpm agent:railway-hermit-doctor` locally with the same vars you set on this Railway service.',
-      }),
-    )
-  })
-  earlyServer.listen(EARLY_PORT, () => {
-    // Use console.error so it is guaranteed to appear even if stdout is buffered differently.
-    console.error(`[hermit][early] minimal health listener active on port ${EARLY_PORT} (pre-import)`)
-  })
-} catch (e) {
-  console.error('[hermit][early] failed to start minimal pre-import listener:', e)
-}
 
 import {
   type AlfaClubChatBridgeTickResult,
