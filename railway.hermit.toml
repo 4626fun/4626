@@ -1,12 +1,20 @@
 # --------------------------------------------------------------------------
-# Railway deployment config — Hermit AlfaClub/Pinata Agent
+# Railway deployment config — Hermit AlfaClub/Pinata Creative Agent
 # --------------------------------------------------------------------------
-# Deploy:
-#   railway up --service 4626-hermit-agent -c
+# This is the dedicated config for the long-lived Hermit service
+# (the AlfaClub chat bridge + Pinata creative brain, used for 1659 theatrical
+# marketing etc.).
 #
-# This service uses the shared agent image with AGENT_PROCESS=hermit, so it
-# starts only the AlfaClub chat bridge and Privy token refresher. Keepr/XMTP
-# remains isolated in the main Railway service.
+# In Railway UI for this service:
+#   - Dockerfile Path: frontend/Dockerfile.hermit   (or leave default if using this file)
+#   - Railway Config File: railway.hermit.toml
+#   - Custom Start Command (recommended for maximum reliability):
+#       ./node_modules/.bin/tsx server/agents/hermit/bootstrap.ts
+#   - Healthcheck Path: /healthz
+#   - Healthcheck Timeout: 300
+#
+# This file + Dockerfile.hermit are intentionally minimal compared to the
+# general Keepr agent config.
 # --------------------------------------------------------------------------
 
 [build]
@@ -32,7 +40,15 @@ watchPatterns = [
 
 [deploy]
 numReplicas = 1
+
+# Healthcheck must succeed for the deploy to be considered healthy.
+# bootstrap.ts serves /healthz very early (before heavy imports).
 healthcheckPath = "/healthz"
-healthcheckTimeout = 120
+healthcheckTimeout = 300   # 5 minutes — generous for first cold start + module load
+
+# Restart on crash (common during early debugging of env / module issues).
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
+
+# Start command can be left to the Dockerfile CMD, or overridden in UI
+# to the ultra-minimal form above for fastest health listener start.
