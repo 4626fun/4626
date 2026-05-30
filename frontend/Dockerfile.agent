@@ -1,8 +1,10 @@
 # --------------------------------------------------------------------------
-# 4626 XMTP Agent — Production Dockerfile
+# 4626 Agent — Production Dockerfile (Keepr + Hermit)
 # --------------------------------------------------------------------------
-# Runs the Keepr XMTP agent as a persistent long-lived process.
-# Only includes the frontend/ workspace (no Solidity/Foundry deps).
+# Runs long-lived agent processes (Keepr XMTP primary or Hermit AlfaClub/Pinata).
+# Includes the frontend/ workspace + selected internal packages (notably
+# @4626/server-core, which is now imported by command families and many
+# server/_lib modules used by the Hermit bridge).
 #
 # Build:
 #   docker build -f frontend/Dockerfile.agent -t 4626-agent .
@@ -36,6 +38,14 @@ COPY frontend/package.json frontend/pnpm-lock.yaml ./
 # workspace and does not contain frontend patches.
 COPY frontend/patches/ ./patches/
 
+# Include @4626/server-core (workspace package) so pnpm can resolve the
+# workspace:* link during install. This package is now imported by command
+# families (e.g. alfaclub.ts) and many server/_lib modules used by the
+# Hermit bridge and other agent surfaces.
+COPY frontend/packages/server-core/package.json ./packages/server-core/package.json
+COPY frontend/packages/server-core/tsconfig.json ./packages/server-core/tsconfig.json
+COPY frontend/packages/server-core/src ./packages/server-core/src
+
 # Install ALL deps (tsx, @elizaos/core are in devDependencies).
 # Use --ignore-scripts first to avoid OOM from parallel native builds,
 # then rebuild native modules sequentially.
@@ -52,6 +62,11 @@ WORKDIR /app
 # Copy installed node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/package.json ./package.json
+
+# Copy the server-core workspace package (source + built artifacts if present).
+# This is required at runtime because several command families and _lib modules
+# now import from '@4626/server-core'.
+COPY --from=deps /app/packages/server-core ./packages/server-core
 
 # Copy server + API + config source used by agent runtime.
 # Some agent command modules import Telegram webhook helpers from `api/_handlers/*`,
