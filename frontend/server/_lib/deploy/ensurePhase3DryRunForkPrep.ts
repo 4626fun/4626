@@ -5,6 +5,7 @@ import { isLocalForkRpcUrl } from '../onchain/baseRpcUrl.js'
 import type { ForkImpersonationMode } from './ensureBatcherRegistryAuthorization.js'
 import { ensurePhase3DryRunHelperOnFork } from './ensurePhase3DryRunHelperOnFork.js'
 import { ensurePhase3HelperCreate2AuthorizationOnFork } from './ensurePhase3HelperCreate2Authorization.js'
+import { ensureVaultAuxiliaryDeployBatcherOnFork } from './ensureVaultAuxiliaryDeployBatcherOnFork.js'
 
 const DEFAULT_FORK_BALANCE_HEX = '0x56bc75e2d63100000' as Hex
 
@@ -39,6 +40,13 @@ export async function ensurePhase3DryRunForkPrep(params: {
   create2Ensured: boolean
   phase3Helper: Address
   create2Deployer: Address
+  auxiliaryAlreadyAligned: boolean
+  auxiliaryEnsured: boolean
+  configuredAuxiliaryBatcher: Address
+  previousAuxiliaryBatcher: Address
+  auxiliaryBatcher: Address
+  auxiliaryCreate2AlreadyAuthorized: boolean
+  auxiliaryCreate2Ensured: boolean
 }> {
   const rpcUrl = params.rpcUrl.trim()
   if (!isLocalForkRpcUrl(rpcUrl)) {
@@ -75,6 +83,17 @@ export async function ensurePhase3DryRunForkPrep(params: {
     ownerBalanceHex,
   })
 
+  const auxiliaryPrep = await ensureVaultAuxiliaryDeployBatcherOnFork({
+    publicClient: publicClient as any,
+    walletClient: walletClient as any,
+    waitForTransactionReceipt,
+    forkRequest,
+    forkMode,
+    batcher,
+    rpcUrl,
+    ownerBalanceHex,
+  })
+
   return {
     ran: true,
     helperAlreadyAligned: helperPrep.alreadyAligned,
@@ -83,5 +102,12 @@ export async function ensurePhase3DryRunForkPrep(params: {
     create2Ensured: authPrep.ensured,
     phase3Helper: authPrep.phase3Helper,
     create2Deployer: authPrep.create2Deployer,
+    auxiliaryAlreadyAligned: auxiliaryPrep.alreadyAligned,
+    auxiliaryEnsured: auxiliaryPrep.ensured,
+    configuredAuxiliaryBatcher: auxiliaryPrep.configuredAuxiliaryBatcher,
+    previousAuxiliaryBatcher: auxiliaryPrep.previousAuxiliaryBatcher,
+    auxiliaryBatcher: auxiliaryPrep.auxiliaryBatcher,
+    auxiliaryCreate2AlreadyAuthorized: auxiliaryPrep.create2AlreadyAuthorized,
+    auxiliaryCreate2Ensured: auxiliaryPrep.create2Ensured,
   }
 }

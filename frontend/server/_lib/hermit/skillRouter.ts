@@ -18,6 +18,7 @@
  * here, stop — that belongs in the auth lane, not the creative lane.
  */
 import { pickGmeowLocalLine, pickRandomHermitMeme } from './memeStore.js'
+import { formatHermitCommandRoomHelp } from '../alfaclub/hermitAlfaClubHelp.js'
 import type {
   HermitExecutionParams,
   HermitExecutionResult,
@@ -1002,7 +1003,8 @@ export function buildPinataPromptForHermit(params: {
   ].join('\n')
 }
 
-function buildHermitHelpReply(): string {
+function buildHermitHelpReply(roomId?: string | null): string {
+  if (roomId) return formatHermitCommandRoomHelp(roomId)
   return [
     'Hermit drafts room-ready copy.',
     '',
@@ -1016,6 +1018,8 @@ function buildHermitHelpReply(): string {
     '- `/hermit announce reward drop opens in 30 minutes`',
     '- `/hermit quest best vault thesis wins custom role`',
     '- `/hermit tone make this clearer: we are shipping tonight`',
+    '',
+    'In an AlfaClub Hermit room, `/help` lists the full catalog.',
   ].join('\n')
 }
 
@@ -1606,7 +1610,7 @@ export async function executeHermitCommand(
       return {
         kind: 'hermit',
         provider: 'local',
-        reply: buildHermitHelpReply(),
+        reply: buildHermitHelpReply(params.roomId),
       }
     }
 

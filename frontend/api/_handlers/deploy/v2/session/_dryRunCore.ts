@@ -31,6 +31,7 @@ import {
 import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
 import { ensureBatcherRegistryAuthorizationOnFork } from '../../../../../server/_lib/deploy/ensureBatcherRegistryAuthorization.js'
 import { ensurePhase3DryRunForkPrep } from '../../../../../server/_lib/deploy/ensurePhase3DryRunForkPrep.js'
+import { remapAuxiliaryDeployBatcherCalls } from '../../../../../server/_lib/deploy/ensureVaultAuxiliaryDeployBatcherOnFork.js'
 import {
   ensurePhase3VaultStrategyRegistrationOnFork,
   isDeployPhase3StrategiesCall,
@@ -2069,6 +2070,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         body,
         requireCalls: true,
       })
+    let phase3CallsForPlan = phase3Calls
 
     if (!isLocalFork) {
       throw new DeploySessionRequestError(400, LOCAL_FORK_ONLY_ERROR)
@@ -2167,7 +2169,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           })
         }
       }
-      if (phase1Batcher && phase3Calls.length > 0) {
+      if (phase1Batcher && phase3CallsForPlan.length > 0) {
         const phase3ForkPrep = await ensurePhase3DryRunForkPrep({
           rpcUrl: rpc,
           batcher: phase1Batcher,
@@ -2187,12 +2189,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             create2Deployer: phase3ForkPrep.create2Deployer.toLowerCase(),
           })
         }
+        if (phase3ForkPrep.auxiliaryEnsured) {
+          console.warn('[deploy/v2/session/dry-run] vault_auxiliary_batcher_redeployed_on_fork', {
+            batcher: phase1Batcher.toLowerCase(),
+            previousAuxiliaryBatcher: phase3ForkPrep.previousAuxiliaryBatcher.toLowerCase(),
+            auxiliaryBatcher: phase3ForkPrep.auxiliaryBatcher.toLowerCase(),
+          })
+        }
+        if (phase3ForkPrep.auxiliaryCreate2Ensured) {
+          console.warn('[deploy/v2/session/dry-run] vault_auxiliary_batcher_create2_authorized_on_fork', {
+            batcher: phase1Batcher.toLowerCase(),
+            auxiliaryBatcher: phase3ForkPrep.auxiliaryBatcher.toLowerCase(),
+          })
+        }
+        if (
+          phase3ForkPrep.auxiliaryBatcher.toLowerCase() !==
+          phase3ForkPrep.previousAuxiliaryBatcher.toLowerCase()
+        ) {
+          phase3CallsForPlan = remapAuxiliaryDeployBatcherCalls(
+            phase3CallsForPlan,
+            phase3ForkPrep.previousAuxiliaryBatcher,
+            phase3ForkPrep.auxiliaryBatcher,
+          )
+        }
       }
       const phasePlan: Array<{ name: DryRunPhaseName; calls: Call[] }> = [
         { name: 'phase1', calls: phase1Calls },
         { name: 'phase2Core', calls: phase2CoreCallsForPlan },
         { name: 'phase2Finalize', calls: phase2FinalizeCallsForPlan },
-        { name: 'phase3', calls: phase3Calls },
+        { name: 'phase3', calls: phase3CallsForPlan },
         { name: 'phase4', calls: phase4Calls },
       ]
 

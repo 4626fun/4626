@@ -218,6 +218,7 @@ function deployPhase3HelperViaForge(params: {
     params.rpcUrl,
     '--private-key',
     ANVIL_DEPLOYER_KEY,
+    '--legacy',
     '--broadcast',
     '--constructor-args',
     params.create2Deployer,

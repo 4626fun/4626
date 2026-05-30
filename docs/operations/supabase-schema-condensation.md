@@ -1,5 +1,7 @@
 # Supabase Schema Condensation (2026)
 
+**Status**: **Mission Complete** (with automated regression guard).
+
 **Goal**: Exactly **one Supabase project** (`qajpnuvqlcfseghnldkl`) is the single source of truth for all production data and schema.
 
 We previously had a painful "three copies" problem for many tables:
@@ -17,6 +19,13 @@ This made every schema change on AMOE, Alfaclub, control plane, creator metrics,
 - `supabase/migrations/` is the **single source of truth** for all DDL.
 - `frontend/db/migrations-legacy/` is the archived historical mirror (moved in the final condensation pass). It contains ~60 old bootstrap snapshots and is for reference/bisecting only. No new files may be added.
 - New helper: `frontend/server/_lib/db/schemaBootstrap.ts` lets `ensure*Schema()` functions delegate to the authoritative migration files instead of duplicating SQL.
+
+**Final State (as of completion)**:
+- 0 raw `CREATE TABLE IF NOT EXISTS` (or equivalent raw DDL) in any production server code path.
+- `pnpm -C frontend guard:schema` passes cleanly (enforced in CI).
+- Only 2 remaining occurrences in the entire tree: 1 test expectation + 1 allowed `CREATE SCHEMA ... extensions` for the vector extension (explicitly exempted by the guard).
+- Legacy mirror archived to `frontend/db/migrations-legacy/`.
+- AGENTS.md, condensation docs, and duplication report all updated with the final model.
 
 ## Condensation Rules Going Forward
 
@@ -37,9 +46,14 @@ This made every schema change on AMOE, Alfaclub, control plane, creator metrics,
 
 ## How to Retire More Duplication
 
-- Pilot completed: AMOE core tables + Alfaclub user prefs now delegate through `schemaBootstrap.ts`.
-- Next good candidates: `creatorMetricsSync.ts`, `control_plane_*` tables, remaining AMOE ensure blocks.
-- The legacy mirror has been archived to `frontend/db/migrations-legacy/` with a README. All active cold-start paths now go exclusively through `schemaBootstrap.ts` + `supabase/migrations/`.
+**Completed.** The entire condensation effort is finished.
+
+When adding any new table or column going forward:
+1. Create the migration in `supabase/migrations/`.
+2. If a runtime cold-start path needs the table, add a thin delegation via `ensureMigrationApplied(...)` (or a new named helper) in `schemaBootstrap.ts`.
+3. Never introduce raw DDL strings in `frontend/server/` code and never add files under `frontend/db/migrations-legacy/`.
+
+The guard `pnpm -C frontend guard:schema` (and its CI job) will fail the build on violations.
 
 ## References
 
@@ -52,11 +66,14 @@ If you're adding a new table that will be written by server-side automation or a
 
 This is the direction: one project, one authoritative migration history, thin runtime bootstrap where truly required.
 
-## Progress in Latest Session
+## Progress in Latest Session (Final Pass)
 
-- `schemaBootstrap.ts` enhanced with `ensureAlfaclubSchema()` convenience helper.
-- AMOE replay store now delegates its core table.
-- Alfaclub schema.ts cleaned up to use the named helper.
+- All major duplication surfaces fully converted (Alfaclub, AMOE, Creator Metrics, Telegram trading, Workspace, Agent memory, Chat, Image, Wallet cache, auth nonces, telemetry/creative logs, etc.).
+- `frontend/db/migrations/` archived to `frontend/db/migrations-legacy/` via `git mv` + README.
+- Permanent regression guard added: `pnpm -C frontend guard:schema` (enforced in CI via `.github/workflows/test.yml`).
+- Final additive columns migration + remaining stray ALTER blocks cleaned up.
+- Guard now passes cleanly; only historical/test references remain.
+- The condensation effort is complete: one source of truth in `supabase/migrations/`, thin delegation layer, automated enforcement, and legacy mirror archived.
 - Detailed duplication report created at `docs/operations/supabase-schema-duplication-report.md`.
 - Creator metrics partial delegation started.
 

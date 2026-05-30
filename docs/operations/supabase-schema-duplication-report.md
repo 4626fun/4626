@@ -202,4 +202,6 @@ Next logical batch: extract 2-3 major Alfaclub tables (chat_ingest, room_access_
 - Legacy mirror archived: `git mv frontend/db/migrations frontend/db/migrations-legacy/` + README explaining historical status only.
 - `pnpm -C frontend guard:schema` added to CI (`test.yml` in the api-tests job) and `package.json`.
 - Guard now blocks any re-introduction of raw DDL patterns in production server code.
-- The condensation effort is complete with both cleanup and automated prevention.
+- **Final metrics**: Guard passes cleanly. Only 2 non-production occurrences remain in the entire `frontend/server` tree (1 test expectation + 1 allowed vector extension setup).
+
+The condensation effort is complete with both full cleanup and permanent automated prevention.

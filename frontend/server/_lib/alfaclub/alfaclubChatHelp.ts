@@ -1,4 +1,6 @@
+import { isHermitCommandRoom } from './chatBridge.js'
 import { readOperationalAlfaClubRoomIds } from './creatorRoomLinks.js'
+import { formatHermitCommandRoomHelp } from './hermitAlfaClubHelp.js'
 
 export function parseAlfaClubRoomIdFromChatId(chatId: string | undefined): string | null {
   const trimmed = String(chatId ?? '').trim()
@@ -56,6 +58,8 @@ export function formatAlfaClubCommandHelp(): string {
 
 export function resolveAlfaClubHelpText(chatId: string | undefined): string | null {
   const roomId = parseAlfaClubRoomIdFromChatId(chatId)
-  if (!roomId || !isAlfaClubOpsRoomId(roomId)) return null
-  return formatAlfaClubOpsRoomHelp(roomId)
+  if (!roomId) return null
+  if (isHermitCommandRoom(roomId)) return formatHermitCommandRoomHelp(roomId)
+  if (isAlfaClubOpsRoomId(roomId)) return formatAlfaClubOpsRoomHelp(roomId)
+  return null
 }
