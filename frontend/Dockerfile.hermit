@@ -1,0 +1,86 @@
+# --------------------------------------------------------------------------
+# 4626 Hermit Agent — Dedicated Production Dockerfile
+# --------------------------------------------------------------------------
+# This is a minimal, dedicated image for the Hermit AlfaClub/Pinata creative
+# agent (hermit.4626.fun).
+#
+# It is intentionally separate from the general agent image (Dockerfile.agent)
+# to avoid complex entrypoint logic that has been causing repeated healthcheck
+# failures on Railway.
+#
+# Key features:
+# - Starts the health listener in bootstrap.ts as early as possible.
+# - Uses the same dependency and source layout as the main agent image.
+#
+# Build (from repo root):
+#   docker build -f frontend/Dockerfile.hermit -t 4626-hermit .
+#
+# Railway service configuration:
+#   - Root Directory: (leave as repo root or frontend if you prefer)
+#   - Dockerfile Path: frontend/Dockerfile.hermit
+#   - Environment Variables: AGENT_PROCESS=hermit (optional, not used in this image)
+#   - Recommended Start Command override (if you want to be extra safe):
+#       bash -lc 'exec gosu node npx tsx server/agents/hermit/bootstrap.ts'
+#
+# Healthcheck: /healthz (served by bootstrap.ts immediately on startup)
+# --------------------------------------------------------------------------
+
+FROM node:22-bookworm-slim AS base
+
+# Install OS deps for native modules (sharp, etc.) + gosu for dropping privileges
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ ca-certificates gosu \
+    && rm -rf /var/lib/apt/lists/*
+
+# Enable corepack for pnpm
+RUN corepack enable && corepack prepare pnpm@10.15.1 --activate
+
+WORKDIR /app
+
+# --------------------------------------------------------------------------
+# Stage 1: Install dependencies
+# --------------------------------------------------------------------------
+FROM base AS deps
+
+# Copy package manifests + patch files
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+COPY frontend/patches/ ./patches/
+
+# Include @4626/server-core (required by command families and server/_lib)
+COPY frontend/packages/server-core/package.json ./packages/server-core/package.json
+COPY frontend/packages/server-core/tsconfig.json ./packages/server-core/tsconfig.json
+COPY frontend/packages/server-core/src ./packages/server-core/src
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile --ignore-scripts \
+    && pnpm rebuild
+
+# --------------------------------------------------------------------------
+# Stage 2: Production image
+# --------------------------------------------------------------------------
+FROM base AS runner
+
+WORKDIR /app
+
+# Copy installed node_modules and package.json
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/package.json ./package.json
+
+# Copy the server-core workspace package
+COPY --from=deps /app/packages/server-core ./packages/server-core
+
+# Copy only what the Hermit runtime needs
+COPY frontend/server ./server
+COPY frontend/api ./api
+COPY frontend/src/config ./src/config
+COPY frontend/src/lib ./src/lib
+COPY frontend/src/wallet ./src/wallet
+COPY frontend/tsconfig.json frontend/tsconfig.node.json ./
+
+# Health check port
+ENV PORT=8080
+EXPOSE 8080
+
+# The absolute simplest possible startup for maximum reliability on Railway.
+# bootstrap.ts starts a minimal /healthz listener before any heavy imports.
+CMD ["bash", "-lc", "exec gosu node npx tsx server/agents/hermit/bootstrap.ts"]
