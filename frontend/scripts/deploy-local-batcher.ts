@@ -7,7 +7,7 @@ import { base } from 'viem/chains'
 import { isDeprecatedCreatorVaultBatcherAddress } from '../src/config/contracts.defaults.js'
 import { deploymentBatcherNotConfiguredMessage } from '../src/lib/deploy/deploymentBatcherConfigError.js'
 
-const DEFAULT_SOURCE_BATCHER = '0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8' as Address
+const DEFAULT_SOURCE_BATCHER = '0xa99058f424FB3ACC639F59355C65C40149030651' as Address
 // Anvil account #0. Local-only default used to deploy the replacement batcher onto the fork.
 const DEFAULT_ANVIL_DEPLOYER_PRIVATE_KEY =
   '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
@@ -126,6 +126,10 @@ async function main() {
     'vaultCoreModule',
     'vaultStrategiesModule',
     'vaultAdminModule',
+    'phase2Module',
+    'phase3Helper',
+    'uniV4Helper',
+    'utilsHelper',
   ] as const
 
   const protocolAutomation = await (async () => {
@@ -147,10 +151,7 @@ async function main() {
     constructorGetterNames.map((name) => readAddressGetter(name)),
   )
   constructorArgs.splice(4, 0, protocolAutomation)
-  const deployedBatcher = runForgeCreate([
-    ...constructorArgs,
-    '0x0000000000000000000000000000000000000000',
-  ])
+  const deployedBatcher = runForgeCreate(constructorArgs)
   process.stdout.write(deployedBatcher)
 }
 

@@ -208,16 +208,6 @@ contract DeploymentBatcherPhase3Helper {
         // Solana share liquidity is seeded via the 30% ShareOFT auto-bridge at
         // finalizePhase2 instead of a Phase-3 SolanaBridgeStrategy allocation.
         if (params.solanaWeightBps != 0) revert InvalidWeight();
-
-        if (params.charmWeightBps != 0) {
-            ICreatorOVaultStrategyManager(params.vault).addStrategy(out.charmStrategy, params.charmWeightBps);
-        }
-        if (params.ajnaWeightBps != 0) {
-            ICreatorOVaultStrategyManager(params.vault).addStrategy(out.ajnaStrategy, params.ajnaWeightBps);
-        }
-        if (params.enableAutoAllocate) {
-            ICreatorOVaultStrategyManager(params.vault).setAutoAllocate(true);
-        }
     }
 
     function _resolveAjnaPool(address creatorToken) internal returns (address ajnaPool) {
@@ -2140,6 +2130,18 @@ contract DeploymentBatcher is ReentrancyGuard {
         _requireOwner(params.owner);
         bytes32 baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
         out = phase3Helper.deployPhase3Strategies(params, codeIds, baseSalt);
+
+        // Vault management stays on the batcher shell after finalizePhase2 ownership
+        // transfer; Phase 3 helper is an external module so it must not call addStrategy.
+        if (params.charmWeightBps != 0) {
+            ICreatorOVaultStrategyManager(params.vault).addStrategy(out.charmStrategy, params.charmWeightBps);
+        }
+        if (params.ajnaWeightBps != 0) {
+            ICreatorOVaultStrategyManager(params.vault).addStrategy(out.ajnaStrategy, params.ajnaWeightBps);
+        }
+        if (params.enableAutoAllocate) {
+            ICreatorOVaultStrategyManager(params.vault).setAutoAllocate(true);
+        }
 
         emit Phase3StrategiesDeployed(
             params.creatorToken,

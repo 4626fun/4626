@@ -157,17 +157,21 @@ contract MockVaultStrategyManagerForPhase3 {
     uint256[] public weights;
     bool public autoAllocate;
 
+    error Unauthorized();
+
     constructor(address owner_) {
         owner = owner_;
         managementAddress = owner_;
     }
 
     function addStrategy(address strategy, uint256 weight) external {
+        if (msg.sender != managementAddress && msg.sender != owner) revert Unauthorized();
         strategies.push(strategy);
         weights.push(weight);
     }
 
     function setAutoAllocate(bool enabled) external {
+        if (msg.sender != managementAddress && msg.sender != owner) revert Unauthorized();
         autoAllocate = enabled;
     }
 

@@ -288,6 +288,17 @@ if [[ "$USE_LOCAL_BATCHER" != "1" ]]; then
     echo "Failed to align fork Phase1Module. Restart deploy dry-run or rerun ensure-fork-phase1-module-aligned.ts." >&2
     exit 1
   }
+  if [[ "${DEPLOY_DRY_RUN_PATCH_BATCHER_BYTECODE:-0}" == "1" ]]; then
+    echo "Patching fork DeploymentBatcher shell bytecode from local forge artifact..."
+    (
+      cd "$FRONTEND_DIR"
+      DEPLOY_DRY_RUN_LOCAL_RPC_URL="$LOCAL_RPC_URL" \
+        pnpm exec tsx "scripts/ops/patch-fork-batcher-phase3-bytecode.ts"
+    ) || {
+      echo "Failed to patch fork batcher bytecode. Run forge build at repo root, then retry." >&2
+      exit 1
+    }
+  fi
 fi
 if [[ "$USE_LOCAL_BATCHER" == "1" ]]; then
   echo "Deploying local DeploymentBatcher override onto the fork..."

@@ -174,12 +174,15 @@ contract MockVaultStrategyManager {
     mapping(address => uint256) public addedWeights;
     bool public autoAllocate;
 
+    error Unauthorized();
+
     constructor(address owner_) {
         owner = owner_;
         managementAddress = owner_;
     }
 
     function addStrategy(address strategy, uint256 weight) external {
+        if (msg.sender != managementAddress && msg.sender != owner) revert Unauthorized();
         addedWeights[strategy] = weight;
     }
 
@@ -192,6 +195,7 @@ contract MockVaultStrategyManager {
     }
 
     function setAutoAllocate(bool enabled) external {
+        if (msg.sender != managementAddress && msg.sender != owner) revert Unauthorized();
         autoAllocate = enabled;
     }
 }
