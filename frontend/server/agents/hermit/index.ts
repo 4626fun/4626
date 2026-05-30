@@ -17,6 +17,7 @@
 
 import http from 'node:http'
 
+import { closeEarlyHealthServer } from './healthHandoff.js'
 import {
   type AlfaClubChatBridgeTickResult,
   startAlfaClubChatBridge,
@@ -402,5 +403,13 @@ process.on('uncaughtException', (error: Error) => {
   })
 })
 
-startHealthServer()
-startRuntime()
+void closeEarlyHealthServer()
+  .catch((err) => {
+    logger.warn('[hermit] failed to close bootstrap health listener (continuing)', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  })
+  .finally(() => {
+    startHealthServer()
+    startRuntime()
+  })

@@ -13,6 +13,8 @@
 
 import http from 'node:http'
 
+import { registerEarlyHealthServer } from './healthHandoff.js'
+
 // Emit as early as possible after the http import (imports are hoisted, so this is one of the first executable lines).
 console.error('[hermit-bootstrap] bootstrap.ts module evaluation started');
 console.error(`[hermit-bootstrap] PORT from env: ${process.env.PORT || 'undefined (will default to 8080)'}`);
@@ -42,24 +44,29 @@ const server = http.createServer((req, res) => {
     return
   }
 
-  // Always return 503 during the bootstrap window.
-  // Once the real app loads it will replace this server.
-  res.writeHead(503, {
+  // /healthz is liveness — Railway treats non-2xx as "service unavailable".
+  // /readyz stays 503 until index.ts replaces this listener after module load.
+  const ready = url === '/readyz'
+  res.writeHead(ready ? 503 : 200, {
     'cache-control': 'no-store',
     'content-type': 'application/json',
   })
 
   res.end(
     JSON.stringify({
-      ok: false,
+      ok: !ready,
       service: 'hermit-alfaclub',
       probe: url,
-      status: 'early-bootstrap',
-      message: 'Checking Railway logs for [hermit][early] diagnostics table. The main module is still evaluating.',
-      tip: 'Run pnpm 1659:doctor or pnpm agent:railway-hermit-doctor locally with the same env.',
+      status: ready ? 'early-bootstrap-not-ready' : 'early-bootstrap',
+      message: ready
+        ? 'Main Hermit module is still evaluating.'
+        : 'Process is alive; main Hermit module is still evaluating.',
+      tip: 'Run pnpm agent:railway-hermit-doctor locally with the same env.',
     }),
   )
 })
+
+registerEarlyHealthServer(server)
 
 server.listen(PORT, '0.0.0.0', () => {
   // Use console.error so it appears even if stdout is buffered differently.

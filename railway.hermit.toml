@@ -10,9 +10,9 @@
 # --------------------------------------------------------------------------
 
 [build]
-dockerfilePath = "frontend/Dockerfile.agent"
+dockerfilePath = "frontend/Dockerfile.hermit"
 watchPatterns = [
-  "/frontend/Dockerfile.agent",
+  "/frontend/Dockerfile.hermit",
   "/frontend/server/_lib/alfaclub/**",
   "/frontend/server/_lib/hermit/**",
   "/frontend/server/_lib/infra/**",
