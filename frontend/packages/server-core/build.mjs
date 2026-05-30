@@ -2,8 +2,8 @@
 /**
  * Bundler-based build for @4626/server-core.
  *
- * Uses esbuild (already a devDependency of the frontend workspace) to transpile
- * all .ts files in src/ → dist/, preserving module structure.
+ * Uses esbuild (already a devDependency of the frontend workspace) to bundle
+ * each src/*.ts entry into dist/*.js with server/ dependencies inlined.
  *
  * We also run tsc --emitDeclarationOnly for .d.ts (best effort).
  *
@@ -11,7 +11,7 @@
  * sees raw .ts sources via the package exports.
  */
 import { execSync } from 'child_process';
-import { rmSync, mkdirSync, readdirSync, statSync } from 'fs';
+import { readFileSync, rmSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { resolve, dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 
@@ -66,23 +66,32 @@ function collectTsEntries(dir, base = dir) {
 const entryPoints = collectTsEntries(SRC_DIR);
 console.log(`[server-core] Found ${entryPoints.length} .ts files to transpile.`);
 
-console.log('[server-core] Running esbuild (transpile only, no bundle)...');
+console.log('[server-core] Running esbuild (bundle per entry, external npm only)...');
 
 await build({
   entryPoints,
   outdir: OUT_DIR,
-  outbase: SRC_DIR,           // preserve src/ folder structure under dist/
-  bundle: false,              // critical: keep individual modules
+  outbase: SRC_DIR, // preserve src/ folder structure under dist/
+  bundle: true, // inline ../../../server/* re-exports into each dist entry
   platform: 'node',
   format: 'esm',
   target: 'node20',
   sourcemap: true,
-  // Keep the .js extension imports that already exist in the source
   loader: { '.ts': 'ts' },
+  packages: 'external',
   logLevel: 'warning',
 });
 
 console.log('[server-core] JS output written to dist/.');
+
+// Production must not depend on ../../../server paths outside the package.
+const authOut = join(OUT_DIR, 'auth.js');
+const authSource = readFileSync(authOut, 'utf8');
+if (authSource.includes('../../../server/')) {
+  throw new Error(
+    '[server-core] dist/auth.js still references ../../../server — bundle step failed; API routes will 500 in production.',
+  );
+}
 
 // Remove any stray folders that may have been created
 for (const name of ['packages', 'server', 'src']) {
@@ -93,4 +102,4 @@ for (const name of ['packages', 'server', 'src']) {
 }
 
 console.log('[server-core] Build finished successfully.');
-console.log('            dist/ contains real .js for production (types are provided via source + path mappings in dev).');
+console.log('            dist/ contains self-contained .js entrypoints for production.');
