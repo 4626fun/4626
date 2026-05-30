@@ -25,6 +25,7 @@
     "ops:1659-watch:test": "pnpm -C frontend ops:1659-risk-watcher:test",
     "ops:1659-watch:help": "echo 'Run: pnpm ops:1659-watch  |  pnpm ops:1659-watch:test (sends test alerts to private + t.me/fun4626)'",
     "ops:1659-enqueue-recurring": "pnpm -C frontend exec tsx ../scripts/ops/1659-risk-watcher/enqueue-recurring.ts",
+    "ops:1659-verify-env": "pnpm -C frontend exec tsx ../scripts/ops/1659-risk-watcher.ts --verify-env",
     "agent:railway-keepr-doctor": "pnpm -C frontend exec tsx ../scripts/agent/railway-keepr-primary-doctor.ts",
     "agent:railway-hermit-doctor": "pnpm -C frontend exec tsx ../scripts/agent/railway-hermit-doctor.ts"
   },

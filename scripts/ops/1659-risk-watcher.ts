@@ -90,6 +90,22 @@ function print1659EnvDiagnostics(): void {
 
 print1659EnvDiagnostics()
 
+// Stronger validation + friendly banner
+const criticalForRichContext = [
+  process.env.DATABASE_URL || process.env.POSTGRES_URL,
+  process.env.ALFACLUB_CHAT_JWT || (process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN && process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN),
+]
+
+const hasRichContext = criticalForRichContext.every(Boolean)
+
+if (!hasRichContext) {
+  console.error('[1659-risk-watcher] ⚠️  Running with LIMITED 1659 context (no DATABASE_URL or AlfaClub auth).')
+  console.error('[1659-risk-watcher]     Alerts will still fire, but they will be much less rich.')
+  console.error('[1659-risk-watcher]     See scripts/ops/1659-theatrical-stack.env.example for the full set.\n')
+} else {
+  console.error('[1659-risk-watcher] ✅ Rich 1659 context enabled (Hyperliquid + on-chain curve + PnL will be injected).\n')
+}
+
 /**
  * Starts a minimal HTTP healthcheck server.
  * Railway (and most platforms) like to have a port to probe.
@@ -474,6 +490,11 @@ async function main() {
 
   if (args.includes('--test-alert') || args.includes('--test')) {
     await sendTestAlert()
+    return
+  }
+
+  if (args.includes('--dry-run') || args.includes('--verify-env')) {
+    console.log('[1659-risk-watcher] Dry-run / env verification requested. Exiting after diagnostics.')
     return
   }
 

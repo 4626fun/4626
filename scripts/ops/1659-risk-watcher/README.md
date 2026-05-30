@@ -41,33 +41,44 @@ You can monitor logs, metrics, and restarts directly in the Railway dashboard.
 
 ## Environment Variables for Railway
 
-The watcher is designed to reuse the exact same Telegram configuration you already use for AlfaClub / Hermit.
+**Best practice**: Use the master environment file for the full 1659 theatrical stack:
 
-### Required variables (copy these into Railway)
-
-```env
-# Bot that can post messages
-ALFACLUB_TELEGRAM_BOT_TOKEN=8741120609:AAHsEkPOKN2eb9mJtNa4aneaYoxQ-oKZoPU
-
-# Private ops relay (detailed alerts)
-ALFACLUB_TELEGRAM_RELAY_CHAT_ID=-1003709479662
-ALFACLUB_TELEGRAM_RELAY_THREAD_ID=2
-
-# Public channel (theatrical alerts visible to everyone)
-ALFACLUB_RADAR_TELEGRAM_CHAT_ID=@fun4626
+```bash
+scripts/ops/1659-theatrical-stack.env.example
 ```
+
+This single file covers everything needed for both the risk watcher **and** the Hermit creative agent (including the rich 1659 context with live Hyperliquid + on-chain curve + PnL).
+
+### Minimum for the watcher alone (Telegram only)
+
+The watcher reuses your existing AlfaClub/Hermit Telegram relay config.
+
+Required (at minimum):
+- `ALFACLUB_TELEGRAM_BOT_TOKEN` (or fallback `TELEGRAM_BOT_TOKEN`)
+- At least one destination:
+  - Private ops relay: `ALFACLUB_TELEGRAM_RELAY_CHAT_ID` (or `TELEGRAM_TARGET_CHAT_ID`)
+  - Public channel: `ALFACLUB_RADAR_TELEGRAM_CHAT_ID` / `FUN4626_TELEGRAM_CHAT_ID`
+
+For **rich** 1659 context in the alerts (strongly recommended), you also need from the master file:
+- `DATABASE_URL`
+- AlfaClub auth (`ALFACLUB_CHAT_JWT` or the Privy refresh triplet)
 
 ### Alternative variable names (also supported)
 
-The script tries multiple common names so you can reuse whatever you already have set:
+The script accepts many common names so you can reuse whatever you already have:
 
 - Bot token: `ALFACLUB_TELEGRAM_BOT_TOKEN` or `TELEGRAM_BOT_TOKEN`
 - Private chat: `ALFACLUB_TELEGRAM_RELAY_CHAT_ID` or `TELEGRAM_TARGET_CHAT_ID`
 - Public channel: `ALFACLUB_RADAR_TELEGRAM_CHAT_ID`, `FUN4626_TELEGRAM_CHAT_ID`, or `TARGET_CHAT_ID`
 
-A ready-to-use `.env.example` file exists in this folder.
+**Tip**: After setting variables in Railway, redeploy. On startup you will see a clear block:
 
-**Tip**: After setting the variables in Railway, redeploy the service. The startup logs will clearly show the status of the private relay and public channel.
+```
+[1659-risk-watcher][early] === 1659 THEATRICAL STACK ENV DIAGNOSTICS ===
+[1659-risk-watcher][early] SUMMARY: ...
+```
+
+Plus a ✅ / ⚠️ line telling you whether rich 1659 context (Hyperliquid + curve + PnL) is enabled.
 
 ## Railway Service Recommendations
 
