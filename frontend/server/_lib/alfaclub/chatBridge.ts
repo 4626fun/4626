@@ -2091,6 +2091,7 @@ type BridgeState = {
   liveFallbackActive: boolean
   liveSocket: BridgeWebSocket | null
   liveSocketJwt: string | null
+  liveSocketWebsocketUrl: string | null
   liveSocketRoomId: string | null
 }
 
@@ -2103,6 +2104,7 @@ let bridgeState: BridgeState = {
   liveFallbackActive: false,
   liveSocket: null,
   liveSocketJwt: null,
+  liveSocketWebsocketUrl: null,
   liveSocketRoomId: null,
 }
 
@@ -2767,7 +2769,21 @@ function closeLiveSocket(): void {
   }
   bridgeState.liveSocket = null
   bridgeState.liveSocketJwt = null
+  bridgeState.liveSocketWebsocketUrl = null
   bridgeState.liveSocketRoomId = null
+}
+
+function shouldReuseLiveCommandSocket(params: {
+  jwt: string
+  roomId: string
+  websocketUrl: string
+  flags: AlfaClubChatBridgeFlags
+}): boolean {
+  if (!bridgeState.liveSocket || bridgeState.liveSocketJwt !== params.jwt) return false
+  if (bridgeState.liveSocketWebsocketUrl !== params.websocketUrl) return false
+  // AlfaClub WS URL is JWT-scoped, not room-scoped — rotating poll rooms must not churn.
+  if (params.flags.wsIngestAllRoomsEnabled) return true
+  return bridgeState.liveSocketRoomId === params.roomId
 }
 
 function decodeWsEventData(data: unknown): string | null {
@@ -2958,11 +2974,7 @@ function ensureLiveCommandSocket(params: {
     return
   }
 
-  if (
-    bridgeState.liveSocket &&
-    bridgeState.liveSocketJwt === params.jwt &&
-    bridgeState.liveSocketRoomId === params.roomId
-  ) {
+  if (shouldReuseLiveCommandSocket(params)) {
     return
   }
 
@@ -2982,6 +2994,7 @@ function ensureLiveCommandSocket(params: {
   const socket = new WebSocketCtor(wsUrl.toString())
   bridgeState.liveSocket = socket
   bridgeState.liveSocketJwt = params.jwt
+  bridgeState.liveSocketWebsocketUrl = params.websocketUrl
   bridgeState.liveSocketRoomId = params.roomId
   let socketOpened = false
 
@@ -3025,8 +3038,11 @@ function ensureLiveCommandSocket(params: {
       // Fail-open: ingest should never block chat command processing.
     })
     if (!bridgeState.liveFallbackActive) return
+    const pollRoomIds = params.flags.wsIngestAllRoomsEnabled
+      ? new Set(resolveAlfaClubBridgePollRoomIds(params.flags))
+      : new Set([params.roomId])
     const roomMessages = inboundMessages
-      .filter((message) => message.roomId === params.roomId)
+      .filter((message) => pollRoomIds.has(message.roomId))
       .map((message): AlfaClubRoomHistoryMessage => ({
         id: message.id,
         date: message.date,
@@ -3063,6 +3079,7 @@ function ensureLiveCommandSocket(params: {
     if (bridgeState.liveSocket !== socket) return
     bridgeState.liveSocket = null
     bridgeState.liveSocketJwt = null
+    bridgeState.liveSocketWebsocketUrl = null
     bridgeState.liveSocketRoomId = null
   }
 
@@ -3084,6 +3101,7 @@ function ensureLiveCommandSocket(params: {
     if (bridgeState.liveSocket !== socket) return
     bridgeState.liveSocket = null
     bridgeState.liveSocketJwt = null
+    bridgeState.liveSocketWebsocketUrl = null
     bridgeState.liveSocketRoomId = null
   }
 
@@ -3924,6 +3942,7 @@ export function startAlfaClubChatBridge(opts?: {
     liveFallbackActive: false,
     liveSocket: null,
     liveSocketJwt: null,
+    liveSocketWebsocketUrl: null,
     liveSocketRoomId: null,
   }
 
@@ -4149,6 +4168,7 @@ export function _resetAlfaClubChatBridgeStateForTests(): void {
     liveFallbackActive: false,
     liveSocket: null,
     liveSocketJwt: null,
+    liveSocketWebsocketUrl: null,
     liveSocketRoomId: null,
   }
   bridgeAuthState.lastBadJwt = null

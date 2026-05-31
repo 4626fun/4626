@@ -262,6 +262,50 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     expect(_getBridgeAuthStateForTests().lastBadJwt).toBe('jwt-current')
   })
 
+  it('reuses one websocket when ingesting all rooms across poll room rotation', () => {
+    const flags = makeFlags({
+      wsIngestAllRoomsEnabled: true,
+      roomId: '1659',
+      hermitCommandRoomIds: ['1043'],
+    })
+
+    _ensureLiveCommandSocketForTests({
+      websocketUrl: flags.websocketUrl,
+      roomId: '1659',
+      jwt: 'jwt-a',
+      flags,
+    })
+    expect(FakeWebSocket.instances).toHaveLength(1)
+
+    _ensureLiveCommandSocketForTests({
+      websocketUrl: flags.websocketUrl,
+      roomId: '1043',
+      jwt: 'jwt-a',
+      flags,
+    })
+    expect(FakeWebSocket.instances).toHaveLength(1)
+  })
+
+  it('reconnects websocket when poll room changes without ingest-all mode', () => {
+    const flags = makeFlags({ wsIngestAllRoomsEnabled: false })
+
+    _ensureLiveCommandSocketForTests({
+      websocketUrl: flags.websocketUrl,
+      roomId: '1043',
+      jwt: 'jwt-a',
+      flags,
+    })
+    expect(FakeWebSocket.instances).toHaveLength(1)
+
+    _ensureLiveCommandSocketForTests({
+      websocketUrl: flags.websocketUrl,
+      roomId: '1659',
+      jwt: 'jwt-a',
+      flags,
+    })
+    expect(FakeWebSocket.instances.length).toBeGreaterThanOrEqual(2)
+  })
+
   it('backs off websocket reconnects after consecutive ws_error events', () => {
     const flags = makeFlags()
 
