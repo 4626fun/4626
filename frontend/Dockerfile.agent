@@ -77,6 +77,7 @@ COPY frontend/src/config ./src/config
 COPY frontend/src/lib ./src/lib
 COPY frontend/src/wallet ./src/wallet
 COPY frontend/tsconfig.json frontend/tsconfig.node.json ./
+COPY frontend/shared ./shared
 
 # Create persistent XMTP database directory
 # Mount a volume here to preserve agent installations across restarts

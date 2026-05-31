@@ -90,6 +90,7 @@ COPY frontend/src/config ./src/config
 COPY frontend/src/lib ./src/lib
 COPY frontend/src/wallet ./src/wallet
 COPY frontend/tsconfig.json frontend/tsconfig.node.json ./
+COPY frontend/shared ./shared
 
 # Health check port
 ENV PORT=8080

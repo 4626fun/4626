@@ -19,6 +19,7 @@ watchPatterns = [
   "/frontend/tsconfig.json",
   "/frontend/tsconfig.node.json",
   "/patches/**",
+  "/frontend/shared/**",
   "/railway.toml"
 ]
 
