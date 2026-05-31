@@ -1082,26 +1082,41 @@ export async function runAlfaClubDailyBrief(params: {
   if (opsFooter) {
     messageText = `${messageText}\n\n${opsFooter}`
   }
-  const send = await sendAlfaClubRoomText({
-    text: messageText,
-    roomId: flags.roomId,
-    flags: readAlfaClubChatBridgeFlags(),
-  })
-  await recordDailyBriefDispatch({
-    key,
-    snapshotTs,
-    previousSnapshotTs,
-    roomId: flags.roomId,
-    messageText,
-  })
-  return {
-    ok: true,
-    snapshotTs,
-    previousSnapshotTs,
-    sent: true,
-    skippedDuplicate: false,
-    roomId: flags.roomId,
-    lane: send.lane,
-    messageText,
+  try {
+    const send = await sendAlfaClubRoomText({
+      text: messageText,
+      roomId: flags.roomId,
+      flags: readAlfaClubChatBridgeFlags(),
+    })
+    await recordDailyBriefDispatch({
+      key,
+      snapshotTs,
+      previousSnapshotTs,
+      roomId: flags.roomId,
+      messageText,
+    })
+    return {
+      ok: true,
+      snapshotTs,
+      previousSnapshotTs,
+      sent: true,
+      skippedDuplicate: false,
+      roomId: flags.roomId,
+      lane: send.lane,
+      messageText,
+    }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message.slice(0, 120) : 'send_failed'
+    return {
+      ok: false,
+      reason,
+      snapshotTs,
+      previousSnapshotTs,
+      sent: false,
+      skippedDuplicate: false,
+      roomId: flags.roomId,
+      lane: null,
+      messageText,
+    }
   }
 }

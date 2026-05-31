@@ -1498,6 +1498,14 @@ function isProxyPathNotAllowedError(error: unknown): boolean {
   return message.includes('bot_message_failed:404') && message.includes('"error":"path_not_allowed"')
 }
 
+function isBotMessageForbiddenError(error: unknown): boolean {
+  const message = (error instanceof Error ? error.message : String(error)).trim()
+  return (
+    message.includes('bot_message_failed:403') ||
+    (message.includes('bot_message_failed:404') && message.includes('"error":"forbidden"'))
+  )
+}
+
 async function sendRoomMessageViaBotTokenWithProxyFallback(params: {
   apiBaseUrl: string
   directApiBaseUrl: string
@@ -3974,30 +3982,45 @@ export async function sendAlfaClubRoomText(params: {
   const text = String(params.text ?? '').trim()
   if (!text) throw new Error('alfaclub_message_empty')
 
+  const jwt = (await resolveBridgeJwt(params.jwt ?? flags.jwt ?? null))?.trim() ?? ''
+  const idempotencyKey = buildBotMessageIdempotencyKey({
+    roomId,
+    messageId: params.replyToMessageId ?? `room-text-${Date.now()}`,
+  })
+
   if (flags.botToken) {
-    await sendRoomMessageViaBotTokenWithProxyFallback({
-      apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
-      directApiBaseUrl: flags.apiBaseUrl,
-      botToken: flags.botToken,
-      roomId,
-      text,
-      replyToMessageId: params.replyToMessageId,
-      proxySecret: resolveAlfaClubProxySecret(flags),
-      idempotencyKey: buildBotMessageIdempotencyKey({
+    try {
+      await sendRoomMessageViaBotTokenWithProxyFallback({
+        apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
+        directApiBaseUrl: flags.apiBaseUrl,
+        botToken: flags.botToken,
         roomId,
-        messageId: params.replyToMessageId ?? `daily-brief-${Date.now()}`,
-      }),
-      timeoutMs: flags.sendTimeoutMs,
-    })
-    return { lane: params.replyToMessageId ? 'bot_token_with_reply_id' : 'bot_token_without_reply_id' }
+        text,
+        replyToMessageId: params.replyToMessageId,
+        proxySecret: resolveAlfaClubProxySecret(flags),
+        idempotencyKey,
+        timeoutMs: flags.sendTimeoutMs,
+      })
+      return {
+        lane: params.replyToMessageId ? 'bot_token_with_reply_id' : 'bot_token_without_reply_id',
+      }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      if (!jwt || !isBotMessageForbiddenError(error)) {
+        throw error
+      }
+      logger.warn('[alfaclub-chat] bot_send_forbidden:fallback_jwt', {
+        roomId,
+        error: detail.slice(0, 180),
+      })
+    }
   }
 
-  const jwt = (params.jwt ?? flags.jwt ?? '').trim()
   if (!jwt) throw new Error('alfaclub_jwt_missing')
   const wsLane = await sendRoomMessageViaWebSocket({
     websocketUrl: flags.websocketUrl,
-    wsProxyHttpSendUrl: null,
-    wsProxySecret: null,
+    wsProxyHttpSendUrl: flags.wsProxyHttpSendUrl,
+    wsProxySecret: flags.wsProxySecret,
     jwt,
     roomId,
     text,
@@ -4005,7 +4028,10 @@ export async function sendAlfaClubRoomText(params: {
     replyToMessageId: params.replyToMessageId,
     timeoutMs: flags.sendTimeoutMs,
   })
-  return { lane: wsLane === 'ws_proxy_http' ? 'ws_proxy_http_primary' : 'websocket_primary' }
+  const jwtLane = wsLane === 'ws_proxy_http' ? 'ws_proxy_http_primary' : 'websocket_primary'
+  return {
+    lane: flags.botToken ? `${jwtLane}_after_bot_forbidden` : jwtLane,
+  }
 }
 
 export function _resetAlfaClubChatBridgeStateForTests(): void {
