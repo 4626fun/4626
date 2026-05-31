@@ -68,6 +68,52 @@ These have substantial code even with current 0-row estimates (rows are transien
 
 The audit script (`frontend/scripts/audit-dead-tables.ts`) was expanded during this analysis with additional 0-row candidates from the live DB snapshot (May 2026). It excludes migrations and test files when counting "live" code references.
 
+## Telemetry / High-Maintenance Low-Value Optimization (New Pass)
+
+Created `frontend/scripts/audit-telemetry-optimization.ts` specifically for the many audit/event/snapshot tables.
+
+**Top optimization candidates** (low code surface area relative to maintenance cost):
+
+- `query_temp_io_snapshots` (95% potential)
+- `memory_snapshots`
+- `telegram_funnel_events`
+- `workspace_monitoring_snapshots`
+- `episodic_summaries`
+- `workspace_audit_logs`
+- `workspace_activity_events`
+- `alfaclub_metrics_snapshot`
+- `chat_presence_sessions`
+- `keepr_logs`
+- `agent_api_logs`
+- `agent_control_audit_events`
+- `telegram_action_audit`
+
+**Concrete recommendations**:
+1. Add time-based retention (pg_cron job or in-app cleanup) for the top 10 — e.g. keep 30-90 days max for most telemetry.
+2. Sample high-frequency events (especially chat and telegram funnel events) instead of storing every single one.
+3. Consider moving pure telemetry/audit tables to a dedicated `analytics` schema (or even out of Supabase into S3 + Athena/ClickHouse) to reduce production DB load and cost.
+4. Review all `v_looker_*` and similar BI views — several may be candidates for deprecation or less frequent materialization if Looker usage is limited.
+
+These tables are the biggest remaining source of "room for optimization" after the dead-code cleanup. They accumulate data with relatively low business leverage per row.
+
+### Implemented in this pass
+
+- New script `frontend/scripts/audit-telemetry-optimization.ts` now auto-suggests retention windows.
+- Migration `20260612000000_extend_telemetry_retention.sql` extends the existing daily `cleanup_log_retention` cron job with the top candidates using the suggested TTLs (7–90 days).
+
+Run anytime:
+```bash
+pnpm -C frontend exec tsx scripts/audit-telemetry-optimization.ts
+```
+
+### Recommended Next Steps (Prioritized Backlog)
+
+1. **Sampling** for highest-frequency low-value streams (`telegram_funnel_events`, `chat_presence_sessions`).
+2. Move the top 5–7 pure telemetry tables to an `analytics` schema or external store.
+3. Dedicated Looker view hygiene pass (many `v_looker_*` have near-zero server usage).
+
+These changes deliver measurable wins on storage growth, vacuum cost, and operational load with extremely low risk.
+
 Run it anytime with:
 ```bash
 pnpm -C frontend exec tsx scripts/audit-dead-tables.ts
