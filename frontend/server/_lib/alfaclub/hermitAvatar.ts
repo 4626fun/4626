@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import sharp from 'sharp'
-import { renderPremiumTokenIcon } from '../../../api/_handlers/token/_premiumTokenIconRenderer.js'
+import { renderPremiumTokenIcon } from '../token/renderPremiumTokenIcon.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)

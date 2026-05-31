@@ -101,7 +101,17 @@ for (const name of ['packages', 'server', 'src']) {
   }
 }
 
-const serverEntryPoints = collectServerReexportEntryPoints()
+/** Server modules that import api/_handlers and need bundled .js siblings on Vercel. */
+const SERVER_API_RUNTIME_BRIDGE_ENTRY_POINTS = [
+  resolve(frontendRoot, 'server/_lib/token/renderPremiumTokenIcon.ts'),
+]
+
+const serverEntryPoints = [
+  ...new Set([
+    ...collectServerReexportEntryPoints(),
+    ...SERVER_API_RUNTIME_BRIDGE_ENTRY_POINTS,
+  ]),
+]
 console.log(`[server-core] Emitting ${serverEntryPoints.length} server/*.js runtime siblings for Vercel...`)
 for (const tsPath of serverEntryPoints) {
   const jsPath = tsPath.replace(/\.ts$/, '.js')
