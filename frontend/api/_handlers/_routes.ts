@@ -33,7 +33,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'token/image': () => import('./token/_image.js'),
   'token/hermit-avatar': () => import('./token/_hermitAvatar.js'),
   'telegram/webhook': () => import('./telegram/_webhook.js'),
-  'telegram/hermit-webhook': () => import('../telegram/hermit-webhook.js'),
+  'telegram/hermit-webhook': () => import('./telegram/_hermit-webhook.js'),
 
   'onboarding/bootstrap': () => import('./onboarding/_bootstrap.js'),
   'onboarding/register-sub-account': () => import('./onboarding/_register-sub-account.js'),
