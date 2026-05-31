@@ -9,6 +9,7 @@ import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { Spinner } from '@/components/ui/Spinner'
 import { requestOpenChat } from '@/lib/chat/openChat'
 import { getMarketingBaseUrl } from '@/lib/env/host'
+import { resolveClientAgentXmtpAddress } from '@/lib/xmtp/agentXmtpAddress'
 
 // PR 2 — AMOE Linear Parity. Mirrors the server-side constants in
 // `frontend/server/_lib/lottery/lotteryAmoe.ts` and the on-chain math in
@@ -25,9 +26,7 @@ function formatDailyCreditLabel(credits: number): string {
   return credits === 1 ? '1 point' : `${credits} points`
 }
 const BASE_CEILING_PPM = 40_000 // 4%, hard ceiling at $10K-equivalent
-const AMOE_XMTP_AGENT_ADDRESS = (
-  import.meta.env.VITE_AGENT_XMTP_ADDRESS ?? '0xab6d5c10b03300326cd7fab7267ae192842967b5'
-).trim().toLowerCase() as Address
+const AMOE_XMTP_AGENT_ADDRESS = resolveClientAgentXmtpAddress() as Address
 
 function estimateWinChancePPM(pointsBurned: number): number {
   if (!Number.isFinite(pointsBurned) || pointsBurned < AMOE_MIN_POINTS) return 0

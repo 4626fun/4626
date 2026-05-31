@@ -33,7 +33,7 @@ describe('canonicalWalletPolicy', () => {
     )
   })
 
-  it('applies canonical enforcement for target canonical or allowed owner signer', () => {
+  it('applies canonical enforcement only for the platform canonical CSW identity', () => {
     expect(
       shouldApplyCanonicalEnforcement({
         canonicalAddress: CANONICAL_CSW_ADDRESS,
@@ -41,15 +41,30 @@ describe('canonicalWalletPolicy', () => {
     ).toBe(true)
     expect(
       shouldApplyCanonicalEnforcement({
-        signerAddress: CANONICAL_CSW_ALLOWED_OWNER_EOAS[2],
+        executionAddress: CANONICAL_CSW_ADDRESS,
       }),
     ).toBe(true)
+    expect(
+      shouldApplyCanonicalEnforcement({
+        canonicalAddress: '0x1111111111111111111111111111111111111111',
+        signerAddress: CANONICAL_CSW_ALLOWED_OWNER_EOAS[0],
+      }),
+    ).toBe(false)
     expect(
       shouldApplyCanonicalEnforcement({
         canonicalAddress: '0x1111111111111111111111111111111111111111',
         signerAddress: '0x2222222222222222222222222222222222222222',
       }),
     ).toBe(false)
+  })
+
+  it('keeps execution allowlist aligned with allowed owner EOAs', () => {
+    expect(CANONICAL_CSW_EXECUTION_OWNER_ADDRESSES).toHaveLength(
+      CANONICAL_CSW_ALLOWED_OWNER_EOAS.length,
+    )
+    for (const owner of CANONICAL_CSW_ALLOWED_OWNER_EOAS) {
+      expect(isAllowedCanonicalCswExecutionSigner(owner)).toBe(true)
+    }
   })
 
   it('resolves canonical address to target when signer is an allowed owner', () => {

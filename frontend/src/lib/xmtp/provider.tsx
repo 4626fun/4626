@@ -31,6 +31,7 @@ import {
   isCanonicalCsw,
   shouldApplyCanonicalEnforcement,
 } from '@/wallet/canonicalWalletPolicy'
+import { resolveClientAgentXmtpAddress } from '@/lib/xmtp/agentXmtpAddress'
 import { CANONICAL_SCW_CHAIN_ID, decideXmtpSignerType, resolveXmtpChainId } from '@/lib/xmtp/signerUtils'
 import {
   buildNotRegisteredDmMessage,
@@ -2005,8 +2006,8 @@ export function XmtpChatProvider({
         // Auto-create a DM conversation with the Keepr agent so it appears
         // in the user's chat list.  We do NOT send any message on behalf of
         // the user — the agent will greet them when they send their first message.
-        const agentAddr = (import.meta.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim()
-        if (agentAddr && /^0x[a-fA-F0-9]{40}$/.test(agentAddr)) {
+        const agentAddr = resolveClientAgentXmtpAddress()
+        if (/^0x[a-fA-F0-9]{40}$/.test(agentAddr)) {
           void (async () => {
             try {
               const alreadyExists = normalizedSummaries.some(

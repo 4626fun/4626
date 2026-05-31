@@ -23,6 +23,9 @@ export const CANONICAL_CSW_ADDRESS =
   '0xab6d5c10b03300326cd7fab7267ae192842967b5' as const satisfies PolicyAddress
 
 export const CANONICAL_CSW_ALLOWED_OWNER_EOAS = [
+  // When adding a new owner to CANONICAL_CSW_ADDRESS on-chain (`addOwnerAddress`),
+  // append the owner EOA here AND to CANONICAL_CSW_EXECUTION_OWNER_ADDRESSES below,
+  // then run canonicalWalletPolicy.test.ts. See csw-agent-lifecycle.mdc § Owner allowlist.
   // Admin EOA — on-chain owner slot 1 of the canonical CSW.
   '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
   // Co-admin / Base App passkey owner — on-chain owner slot 0.
@@ -74,15 +77,16 @@ export function isAllowedCanonicalSigner(value: string | null | undefined): bool
   return isCanonicalCsw(value) || isAllowedOwnerEoa(value)
 }
 
+/** True when the active profile or execution wallet is the platform canonical CSW. */
 export function shouldApplyCanonicalEnforcement(params: {
   canonicalAddress?: string | null
   executionAddress?: string | null
+  /** Reserved for call-site compatibility; enforcement is identity-scoped, not signer-scoped. */
   signerAddress?: string | null
 }): boolean {
   return (
     isCanonicalCsw(params.canonicalAddress ?? null) ||
-    isCanonicalCsw(params.executionAddress ?? null) ||
-    isAllowedOwnerEoa(params.signerAddress ?? null)
+    isCanonicalCsw(params.executionAddress ?? null)
   )
 }
 

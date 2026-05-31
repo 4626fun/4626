@@ -22,6 +22,7 @@ import { canMessageAddressOnCurrentEnv, useXmtp, type ChatConversation } from '@
 import { getBasenameProfileByName, resolveBasenameAddress } from '@/lib/basename/basename-api'
 import { cn } from '@/lib/shared/utils'
 import { toast } from '@/components/ui/Toast'
+import { CANONICAL_CSW_ADDRESS, CANONICAL_CSW_ALLOWED_OWNER_EOAS } from '@/wallet/canonicalWalletPolicy'
 import { EthosAvatarScoreBadge, EthosAvatarScoreForAddress, getEthosScorePalette, useEthosScore } from './EthosScorePill'
 
 type AgentRow = {
@@ -54,8 +55,7 @@ type AgentsResponse = {
 
 const PRESENCE_OPT_IN_KEY = '4626.chat.presence.optedIn'
 const RAIL_WIDTH_CLASS = 'w-[320px] xl:w-[336px]'
-const CANONICAL_4626_AGENT_ADDRESS = '0xab6d5c10b03300326cd7fab7267ae192842967b5'
-const CANONICAL_4626_MAIN_ACCOUNT = '0xb05cf01231cf2ff99499682e64d3780d57c80fdd'
+const CANONICAL_4626_MAIN_ACCOUNT = CANONICAL_CSW_ALLOWED_OWNER_EOAS[0]
 
 type FriendState = 'none' | 'accepted' | 'pending_incoming' | 'pending_outgoing'
 
@@ -87,7 +87,7 @@ function resolveAgentAddress(value: string | null | undefined): `0x${string}` | 
 }
 
 function isCanonical4626AgentAddress(value: string | null | undefined): boolean {
-  return value?.toLowerCase() === CANONICAL_4626_AGENT_ADDRESS
+  return value?.toLowerCase() === CANONICAL_CSW_ADDRESS
 }
 
 function isCanonical4626MainAccount(value: string | null | undefined): boolean {

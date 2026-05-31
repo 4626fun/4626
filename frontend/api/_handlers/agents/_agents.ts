@@ -14,6 +14,7 @@ import {
 } from '../../../src/lib/agent/erc8004AgentUriPolicy.js'
 import { getErc8004PublicOrigin } from '../../../server/_lib/infra/origin.js'
 import { readCanonicalCswAddressEnv } from '../../../server/_lib/wallet/canonicalCswEnv.js'
+import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -48,6 +49,7 @@ function resolveAgentAddress(): `0x${string}` | null {
     readCanonicalCswAddressEnv(),
     (process.env.XMTP_AGENT_ADDRESS ?? '').trim(),
     (process.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim(),
+    CANONICAL_CSW_ADDRESS,
   ]
   for (const raw of candidates) {
     if (isAddressLike(raw)) return raw.toLowerCase() as `0x${string}`

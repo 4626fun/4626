@@ -107,3 +107,21 @@ This file covers **server-side** delegation for the XMTP agent, ERC-8004 identit
 - Deploy-session temporary owners MUST be removed after deployment completes.
 - ERC-8004 `agentWallet` MUST point to the CSW address, not any Privy wallet.
 - If adding a new server-side signing flow, follow the same delegation pattern: Privy signs → CSW executes.
+
+## Platform CSW owner allowlist (required after `addOwnerAddress`)
+
+When a new owner is installed on the platform canonical CSW (`CANONICAL_CSW_ADDRESS`, `0xAb6d5…967b5`), update **both** policy lists in `frontend/src/wallet/canonicalWalletPolicy.ts`:
+
+1. `CANONICAL_CSW_ALLOWED_OWNER_EOAS` — identity/persistence/signing classification
+2. `CANONICAL_CSW_EXECUTION_OWNER_ADDRESSES` — UserOp / `canonical4337` execution gate (`txRouter.ts`, `coinbaseErc4337.ts`)
+
+**Checklist after any on-chain `addOwnerAddress` on the platform CSW:**
+
+1. Query `ownerAtIndex(i)` / `isOwnerAddress(newEoa)` on Base to confirm slot and address.
+2. Append the checksummed lowercase EOA to **both** arrays above with a slot comment.
+3. Run `pnpm -C frontend exec vitest run src/wallet/canonicalWalletPolicy.test.ts src/lib/tx/txRouter.test.ts`.
+4. If the owner is the new Privy embedded EOA (user-initiated frontend lane) or Privy server wallet (Railway automation), update `CANONICAL_CSW_PRIVY_WALLET_ID` / `CANONICAL_CSW_OWNER_INDEX` env on Railway/Vercel as needed.
+
+**Do not** rely on signer-only policy triggers — enforcement applies only when `profiles.csw_address` or the execution wallet is the platform CSW (`shouldApplyCanonicalEnforcement`). Allowlisted admin EOAs signing against a personal CSW profile must not activate platform policy.
+
+**Client/server agent inbox address:** `VITE_AGENT_XMTP_ADDRESS` overrides the default; when unset, client code falls back to `CANONICAL_CSW_ADDRESS` via `frontend/src/lib/xmtp/agentXmtpAddress.ts`. Server APIs use `readCanonicalCswAddressEnv()` with the same policy constant as final fallback.

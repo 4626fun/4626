@@ -31,6 +31,7 @@ import {
   resolveDmRecipient,
   type DmRecipientResolution,
 } from '@/lib/xmtp/socialIdentity'
+import { resolveClientAgentXmtpAddressLower } from '@/lib/xmtp/agentXmtpAddress'
 import { resolveDmRoute } from './dmRouting'
 import { ChatBar } from './ChatBar'
 import { ChatWindow } from './ChatWindow'
@@ -41,7 +42,7 @@ import { shouldAutoConnectMessaging } from './autoConnectPolicy'
 import { useChatActivation } from './useChatActivation'
 
 const MAX_OPEN_WINDOWS = 3
-const AGENT_XMTP_ADDRESS = String(import.meta.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim().toLowerCase()
+const AGENT_XMTP_ADDRESS = resolveClientAgentXmtpAddressLower()
 const AGENT_DISPLAY_NAME = String(import.meta.env.VITE_AGENT_DISPLAY_NAME ?? 'akita').trim() || 'akita'
 const XMTP_ENV_LABEL = String(import.meta.env.VITE_XMTP_ENV ?? 'production').trim().toLowerCase() || 'production'
 const DM_PREVIEW_LOOKUP_DEBOUNCE_MS = 450
