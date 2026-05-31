@@ -9,11 +9,13 @@
 
 import {
   isDailyBriefRoomSameAsBridgeRoom,
+  listDailyBriefPostRoomCandidates,
   readAlfaClubDailyBriefSeparateFromBridge,
   resolveAlfaClubBridgeRoomId,
   resolveDailyBriefRoomId,
   runAlfaClubDailyBrief,
 } from '../../server/_lib/alfaclub/dailyBrief.js'
+import { readAlfaClubChatBridgeFlags } from '../../server/_lib/alfaclub/chatBridge.js'
 
 declare const process: { env: Record<string, string | undefined>; argv: string[]; exit: (code: number) => void }
 
@@ -39,37 +41,39 @@ async function main(): Promise<void> {
   const briefRoom = resolveDailyBriefRoomId()
   const separate = readAlfaClubDailyBriefSeparateFromBridge()
   const sameAsBridge = isDailyBriefRoomSameAsBridgeRoom(briefRoom)
+  const bridgeFlags = readAlfaClubChatBridgeFlags()
+  const postCandidates = listDailyBriefPostRoomCandidates(bridgeFlags)
 
   console.log('AlfaClub digest room setup')
   console.log('')
   console.log(`  Bridge (commands):     ${bridgeRoom}`)
-  console.log(`  Digest target:         ${briefRoom}`)
+  console.log(`  Digest preference:     ${briefRoom}`)
+  console.log(`  Post candidates:       ${postCandidates.join(' → ')}`)
   console.log(`  Separate-from-bridge:  ${separate ? 'on' : 'off'}`)
   console.log(`  Same room as bridge:   ${sameAsBridge ? 'yes' : 'no'}`)
   console.log('')
   console.log('Recommended Vercel production env:')
   console.log(`  ALFACLUB_CHAT_ROOM_ID=1043`)
-  console.log(`  ALFACLUB_DAILY_BRIEF_ROOM_ID=<read-only-digest-room>`)
-  console.log(`  ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE=1`)
+  console.log(`  ALFACLUB_HERMIT_COMMAND_ROOMS=1043,1659`)
+  console.log(`  # ALFACLUB_DAILY_BRIEF_ROOM_ID optional — cron tries candidates until bot key works`)
   console.log('')
   console.log('After deploy, test from the bridge room:')
   console.log('  /alfa brief post')
   console.log('')
 
-  if (separate && sameAsBridge) {
-    console.log(
-      'WARN: SEPARATE_FROM_BRIDGE is on but digest room equals bridge — cron will skip (brief_room_same_as_bridge).',
-    )
-    console.log('Set --room=<id> or ALFACLUB_DAILY_BRIEF_ROOM_ID in env.')
-    console.log('')
+  if (separate && sameAsBridge && briefRoom === resolveDailyBriefRoomId()) {
+    const explicitBrief = Boolean(process.env.ALFACLUB_DAILY_BRIEF_ROOM_ID?.trim())
+    if (explicitBrief) {
+      console.log(
+        'WARN: SEPARATE_FROM_BRIDGE is on but ALFACLUB_DAILY_BRIEF_ROOM_ID equals bridge — cron will skip (brief_room_same_as_bridge).',
+      )
+      console.log('Unset ALFACLUB_DAILY_BRIEF_ROOM_ID to use dynamic bot-reachable rooms.')
+      console.log('')
+    }
   }
 
   if (hasFlag('post-test')) {
-    if (separate && sameAsBridge) {
-      console.error('Refusing --post-test: configure a digest room different from the bridge room first.')
-      process.exit(2)
-    }
-    console.log('Posting test digest (forceSend)…')
+    console.log('Posting test digest (forceSend, dynamic room)…')
     const result = await runAlfaClubDailyBrief({
       flags: {
         enabled: true,

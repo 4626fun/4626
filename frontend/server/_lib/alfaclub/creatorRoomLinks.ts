@@ -39,16 +39,17 @@ export function buildAlfaClubRoomUrl(roomId: string): string {
 
 export function readOperationalAlfaClubRoomIds(): Set<string> {
   const ids = new Set<string>()
-  const candidates = [
-    process.env.ALFACLUB_CHAT_ROOM_ID,
-    process.env.ALFACLUB_DAILY_BRIEF_ROOM_ID,
-    process.env.TELEGRAM_TO_ALFACLUB_ROOM_ID,
-    DEFAULT_OPERATIONAL_ROOM_ID,
-  ]
-  for (const raw of candidates) {
+  const push = (raw: string | undefined) => {
     const value = String(raw ?? '').trim().replace(/^"+|"+$/g, '')
     if (/^\d+$/.test(value)) ids.add(value)
   }
+  push(process.env.ALFACLUB_CHAT_ROOM_ID)
+  push(process.env.ALFACLUB_DAILY_BRIEF_ROOM_ID)
+  push(process.env.TELEGRAM_TO_ALFACLUB_ROOM_ID)
+  for (const part of String(process.env.ALFACLUB_HERMIT_COMMAND_ROOMS ?? '').split(',')) {
+    push(part)
+  }
+  ids.add(DEFAULT_OPERATIONAL_ROOM_ID)
   return ids
 }
 

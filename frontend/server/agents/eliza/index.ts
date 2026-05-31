@@ -87,6 +87,7 @@ import { handleXmtpFallbackResponse } from './_xmtpFallback.js'
 import { getDb, getDbInitError, isDbConfigured } from '../../_lib/db/postgres.js'
 import { ensureAgentRuntimeAuditLedgerSchema } from '../../_lib/db/schemaBootstrap.js'
 import { closeEarlyHealthServer } from '../hermit/healthHandoff.js'
+import { isKeeprRailwayAlfaClubSplit } from '../../_lib/alfaclub/keeprAlfaClubSplit.js'
 import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../_lib/messaging/creatorXmtpAgents.js'
 import { createPrivyScwSigner } from '../../_lib/wallet/privyXmtpSigner.js'
 import { buildAgentRegistration } from '../../_lib/agent/agentRegistration.js'
@@ -715,6 +716,7 @@ try {
   const hasEncKey = !!(process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()
   const hasCsw = !!readCanonicalCswAddressEnv()
   const hasCswPrivy = !!readCanonicalCswPrivyWalletIdEnv()
+  const hasSingleAgentCsw = hasCsw && hasCswPrivy
   const dbDir = process.env.XMTP_DB_DIRECTORY || '/data/xmtp'
   const hasVolume = RUNNING_ON_RAILWAY ? hasDedicatedMount(dbDir) : true
   const mountedAncestor = RUNNING_ON_RAILWAY ? findMountedAncestorPath(dbDir) : null
@@ -726,7 +728,9 @@ try {
     if (AGENT_RUNTIME_ROLE !== 'primary') criticalIssues.push('AGENT_RUNTIME_ROLE must be primary')
     if (!AGENT_CONSUME_XMTP) criticalIssues.push('AGENT_CONSUME_XMTP must be true')
     if (!hasDb) criticalIssues.push('DATABASE_URL (Supabase) or POSTGRES_URL (legacy) required')
-    if (!hasEncKey) criticalIssues.push('XMTP_AGENT_KEY_ENCRYPTION_KEY required')
+    if (!hasEncKey && !hasSingleAgentCsw && !(process.env.XMTP_AGENT_PRIVATE_KEY ?? '').trim()) {
+      criticalIssues.push('XMTP_AGENT_KEY_ENCRYPTION_KEY required for multi-agent mode (or configure single-agent CSW)')
+    }
     if (!hasVolume) criticalIssues.push('Dedicated volume required for XMTP_DB_DIRECTORY')
   }
 
@@ -743,11 +747,28 @@ try {
   console.error('[eliza][early] AGENT_CONSUME_XMTP            :', AGENT_CONSUME_XMTP ? 'true (OK)' : 'false (PROBLEM on Railway primary)')
   console.error('[eliza][early] RUNNING_ON_RAILWAY            :', RUNNING_ON_RAILWAY)
   console.error('[eliza][early] DATABASE_URL (Supabase) / POSTGRES_URL (legacy) :', hasDb ? 'present' : 'MISSING')
-  console.error('[eliza][early] XMTP_AGENT_KEY_ENCRYPTION_KEY :', hasEncKey ? 'present' : 'MISSING')
+  console.error('[eliza][early] XMTP_AGENT_KEY_ENCRYPTION_KEY :', hasEncKey
+    ? 'present'
+    : hasSingleAgentCsw
+      ? 'not required (single-agent CSW mode)'
+      : 'MISSING')
   console.error('[eliza][early] XMTP_DB_DIRECTORY             :', dbDir)
   console.error('[eliza][early] Dedicated volume mounted      :', hasVolume ? 'yes' : `NO${mountedAncestor ? ` (closest mount: ${mountedAncestor})` : ''}`)
   console.error('[eliza][early] CSW + Privy Wallet signer     :', hasCsw && hasCswPrivy ? 'present' : 'MISSING / incomplete')
-  console.error('[eliza][early] Privy server auth (app+wallet):', hasPrivyApp && hasPrivyWalletAuth ? 'present' : 'MISSING')
+  console.error(
+    '[eliza][early] Privy server auth (app+wallet):',
+    hasPrivyApp && hasPrivyWalletAuth
+      ? 'present'
+      : hasSingleAgentCsw
+        ? 'optional (CSW delegated signer path)'
+        : 'MISSING',
+  )
+  console.error(
+    '[eliza][early] AlfaClub in-process bridge      :',
+    isKeeprRailwayAlfaClubSplit()
+      ? 'skipped (Hermit/Vercel bot — not Keepr)'
+      : 'may start if ALFACLUB_CHAT_BRIDGE_ENABLED=1',
+  )
   console.error('[eliza][early] AGENT_RUNTIME_LOCK_REQUIRED   :', AGENT_RUNTIME_LOCK_REQUIRED)
   console.error('[eliza][early] ----------------------------------------------------------------')
 
@@ -770,7 +791,9 @@ try {
     dbDir,
     hasVolume,
     hasCswConfig: hasCsw && hasCswPrivy,
+    hasSingleAgentCsw,
     hasPrivyServerAuth: hasPrivyApp && hasPrivyWalletAuth,
+    alfaclubSkippedOnKeeprSplit: isKeeprRailwayAlfaClubSplit(),
     lockRequired: AGENT_RUNTIME_LOCK_REQUIRED,
     criticalIssues,
   }
@@ -2402,6 +2425,11 @@ async function main() {
     // Fire-and-forget: upload enriched agent registration to Lens Grove
     void uploadRegistrationToGrove()
 
+    if (isKeeprRailwayAlfaClubSplit()) {
+      logger.info('[keepr] AlfaClub skipped — Hermit/Vercel own the AlfaClub bot (not Keepr XMTP primary)', {
+        hint: 'Set ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY=1 only on 4626-alfaclub-bridge / Hermit Railway service',
+      })
+    } else {
     // AlfaClub Integrity Vigilante — Railway-side feedback relayer that
     // forwards queued ERC-8004 giveFeedback calldata onchain as UserOps
     // through the canonical CSW. Opt-in via
@@ -2534,6 +2562,7 @@ async function main() {
         })
       }
     })()
+    } // end !isKeeprRailwayAlfaClubSplit
 
     // Graceful shutdown
     process.on('SIGINT', () => void shutdown())

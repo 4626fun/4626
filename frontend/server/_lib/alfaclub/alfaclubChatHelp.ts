@@ -28,7 +28,7 @@ export function formatAlfaClubOpsRoomHelp(roomId: string): string {
     '**/gmeow** · **/meme** — GIF in chat first, X link second when posted',
     '**/help** — this message',
     '',
-    'Creator rooms: `alfaclub.app/room/{id}` (e.g. Flip → room 2).',
+    'Creator rooms: `alfaclub.app/room/{id}` (their trading room — not this ops room).',
   ].join('\n')
 }
 
@@ -38,13 +38,12 @@ export function formatAlfaClubCommandHelp(): string {
     '',
     '**Rooms**',
     '  Creator links → `alfaclub.app/room/{id}` (their trading room).',
-    '  Bot/ops room = commands + digest only — not a creator room.',
-    '  Example: Flip Research (token #2) → room 2, not room 1043.',
+    '  Bot/ops rooms (1043, 1659) = commands + digest when configured — not creator rooms.',
     '',
     '**Commands**',
     '  `/alfa` — compact top-N leaderboard',
     '  `/alfa brief` — preview digest (chat only)',
-    '  `/alfa brief post` — post digest to `ALFACLUB_DAILY_BRIEF_ROOM_ID`',
+    '  `/alfa brief post` — post digest to the first bot-reachable command room',
     '  `/alfa <address>` — one creator (score + room link when known)',
     '  `/alfa chart [kind] [limit]` — room analytics chart (IPFS image)',
     '  `/alfa status` or `/bridge status` — pipeline + bridge auth health',

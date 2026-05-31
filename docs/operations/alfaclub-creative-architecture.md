@@ -290,19 +290,16 @@ AlfaClub auth.
 - Official Hermit command rooms for hermit4626:
   - **1043** (primary ops/creative surface)
   - **1659** (https://alfaclub.app/rooms/1659/)
-  - In either: `/bridge` or `/alfa status` for pipeline + JWT health; `/help` for command list.
-  - Flip Research digest lives at `alfaclub.app/room/2` (separate room).
+  - In **1043** or **1659**: `/bridge` or `/alfa status` for pipeline + JWT health; `/help` for command list.
+  - Daily digest cron posts to the bridge room unless `ALFACLUB_DAILY_BRIEF_ROOM_ID` points at a room the bot can reach (we do not use room 2 — no post access).
 - Local env checklist (no secrets printed):
   `pnpm -C frontend exec tsx scripts/ops/alfaclub-env-preflight.ts`
 - Full Hermit creative audit (tests + seeds + probe + manual room checklist):
   `bash frontend/scripts/ops/audit-hermit-e2e.sh --strict`
   Add `--production-env` to run preflight/probe against Vercel production vars.
-- **Digest split (recommended):** set on Vercel:
-  `ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE=1`,
-  `ALFACLUB_DAILY_BRIEF_ROOM_ID=<read-only-room>`,
-  keep `ALFACLUB_CHAT_ROOM_ID=1043` for commands only.
-  Test: `/alfa brief post` from 1043 (posts to digest room).
-  Helper: `pnpm -C frontend exec tsx scripts/ops/alfaclub-digest-room-setup.ts --room=<id>`.
+- **Digest (default):** leave `ALFACLUB_DAILY_BRIEF_ROOM_ID` unset so cron posts to
+  `ALFACLUB_CHAT_ROOM_ID` (1043). Only set a separate digest room when the bridge
+  account can post there.
 
 ### Before merging changes that touch hermit seeds
 

@@ -95,6 +95,57 @@ export function resolveDailyBriefRoomId(): string {
   return resolveAlfaClubBridgeRoomId()
 }
 
+export function hasExplicitDailyBriefRoomId(): boolean {
+  return normalizeRoomId(process.env.ALFACLUB_DAILY_BRIEF_ROOM_ID) !== null
+}
+
+/** Ordered rooms to try when posting the digest (first bot-reachable win). */
+export function listDailyBriefPostRoomCandidates(
+  bridgeFlags: Pick<
+    ReturnType<typeof readAlfaClubChatBridgeFlags>,
+    'roomId' | 'hermitCommandRoomIds'
+  > = readAlfaClubChatBridgeFlags(),
+): string[] {
+  const seen = new Set<string>()
+  const ordered: string[] = []
+  const push = (raw: string | null | undefined) => {
+    const id = normalizeRoomId(raw)
+    if (!id || seen.has(id)) return
+    seen.add(id)
+    ordered.push(id)
+  }
+  push(normalizeRoomId(process.env.ALFACLUB_DAILY_BRIEF_ROOM_ID))
+  push(bridgeFlags.roomId ?? resolveAlfaClubBridgeRoomId())
+  for (const id of bridgeFlags.hermitCommandRoomIds) push(id)
+  push(DEFAULT_ROOM_ID)
+  return ordered
+}
+
+export async function sendDailyBriefToReachableRoom(params: {
+  text: string
+  flags?: ReturnType<typeof readAlfaClubChatBridgeFlags>
+}): Promise<{ roomId: string; lane: string; candidates: string[]; messageText: string }> {
+  const flags = params.flags ?? readAlfaClubChatBridgeFlags()
+  const candidates = listDailyBriefPostRoomCandidates(flags)
+  let lastError: unknown = null
+  for (const roomId of candidates) {
+    let messageText = params.text
+    const opsFooter = formatAlfaClubBriefOpsRoomFooter(roomId)
+    if (opsFooter) {
+      messageText = `${messageText}\n\n${opsFooter}`
+    }
+    try {
+      const send = await sendAlfaClubRoomText({ text: messageText, roomId, flags })
+      return { roomId, lane: send.lane, candidates, messageText }
+    } catch (error) {
+      lastError = error
+    }
+  }
+  const message =
+    lastError instanceof Error ? lastError.message.slice(0, 120) : 'daily_brief_no_reachable_room'
+  throw new Error(message)
+}
+
 /** When true, cron/manual post skips if digest room equals the command bridge room. */
 export function readAlfaClubDailyBriefSeparateFromBridge(): boolean {
   return parseBool(process.env.ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE ?? '0')
@@ -184,6 +235,22 @@ async function hasDailyBriefDispatch(key: string): Promise<boolean> {
       SELECT 1
       FROM alfaclub.daily_brief_dispatch
       WHERE dispatch_key = ${key}
+      LIMIT 1;
+    `
+    return (result.rows?.length ?? 0) > 0
+  } catch {
+    return false
+  }
+}
+
+async function hasDailyBriefDispatchForSnapshot(snapshotTs: string): Promise<boolean> {
+  const db = await getDb()
+  if (!db) return false
+  try {
+    const result = await db.sql`
+      SELECT 1
+      FROM alfaclub.daily_brief_dispatch
+      WHERE snapshot_ts = ${snapshotTs}
       LIMIT 1;
     `
     return (result.rows?.length ?? 0) > 0
@@ -990,6 +1057,7 @@ export async function runAlfaClubDailyBrief(params: {
   const flags = params.flags ?? readAlfaClubDailyBriefFlags()
   if (
     readAlfaClubDailyBriefSeparateFromBridge() &&
+    hasExplicitDailyBriefRoomId() &&
     isDailyBriefRoomSameAsBridgeRoom(flags.roomId)
   ) {
     return {
@@ -1036,8 +1104,7 @@ export async function runAlfaClubDailyBrief(params: {
 
   const timestamps = await listRecentSnapshotTimestamps(2)
   const previousSnapshotTs = timestamps.find((ts) => ts !== snapshotTs) ?? null
-  const key = dispatchKey({ snapshotTs, roomId: flags.roomId })
-  if (!flags.forceSend && (await hasDailyBriefDispatch(key))) {
+  if (!flags.forceSend && (await hasDailyBriefDispatchForSnapshot(snapshotTs))) {
     return {
       ok: true,
       snapshotTs,
@@ -1078,21 +1145,15 @@ export async function runAlfaClubDailyBrief(params: {
   }
 
   let messageText = formatAlfaClubDailyBrief(built.formatInput)
-  const opsFooter = formatAlfaClubBriefOpsRoomFooter(flags.roomId)
-  if (opsFooter) {
-    messageText = `${messageText}\n\n${opsFooter}`
-  }
   try {
-    const send = await sendAlfaClubRoomText({
-      text: messageText,
-      roomId: flags.roomId,
-      flags: readAlfaClubChatBridgeFlags(),
-    })
+    const send = await sendDailyBriefToReachableRoom({ text: messageText })
+    messageText = send.messageText
+    const key = dispatchKey({ snapshotTs, roomId: send.roomId })
     await recordDailyBriefDispatch({
       key,
       snapshotTs,
       previousSnapshotTs,
-      roomId: flags.roomId,
+      roomId: send.roomId,
       messageText,
     })
     return {
@@ -1101,7 +1162,7 @@ export async function runAlfaClubDailyBrief(params: {
       previousSnapshotTs,
       sent: true,
       skippedDuplicate: false,
-      roomId: flags.roomId,
+      roomId: send.roomId,
       lane: send.lane,
       messageText,
     }

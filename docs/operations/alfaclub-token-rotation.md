@@ -144,8 +144,22 @@ In the command bridge room:
 - `/help` — lists commands
 - `/gmeow` — local GIF (no Pinata unless you add prompt text)
 - `/bridge status` — bridge config summary
-- `/alfa brief post` — digest to **room 2** when
-  `ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE=1`
+- `/alfa brief post` — post digest to the configured digest room (defaults to the
+  bridge room when `ALFACLUB_DAILY_BRIEF_ROOM_ID` is unset)
+
+## Digest room (production baseline)
+
+Daily digest posts **dynamically**: cron tries command rooms where the bot API
+key can post (`ALFACLUB_CHAT_ROOM_ID`, then `ALFACLUB_HERMIT_COMMAND_ROOMS`).
+Leave `ALFACLUB_DAILY_BRIEF_ROOM_ID` unset unless you need an explicit override
+(and the bridge account can reach that room). We do **not** target room 2.
+
+| Env | Production value | Purpose |
+| --- | --- | --- |
+| `ALFACLUB_CHAT_ROOM_ID` | `1043` | Command bridge room |
+| `ALFACLUB_HERMIT_COMMAND_ROOMS` | `1043,1659` | Hermit command rooms (digest fallback order) |
+| `ALFACLUB_DAILY_BRIEF_ROOM_ID` | *(unset)* | Optional override tried first |
+| `ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE` | `0` / unset | Only blocks when explicit brief room equals bridge |
 
 ## GitHub auth-health monitor secret
 
@@ -172,19 +186,16 @@ Exit `0` = healthy; exit `1` = read the `alfaclub-auth-health: FAIL <reason>`
 line and follow the matching row in
 [`alfaclub-auth-hardening.md` § Recommended monitoring thresholds](./alfaclub-auth-hardening.md).
 
-## Digest room split (production baseline)
-
-| Env | Production value | Purpose |
-| --- | --- | --- |
-| `ALFACLUB_CHAT_ROOM_ID` | `1043` | Legacy single primary command room (still supported) |
-| `ALFACLUB_HERMIT_COMMAND_ROOMS` | `1043,1659` | Official Hermit creative + command rooms (comma list). Room 1659 = https://alfaclub.app/rooms/1659/ |
-| `ALFACLUB_DAILY_BRIEF_ROOM_ID` | `2` | Flip Research digest (`alfaclub.app/room/2`) |
-| `ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE` | `1` | Cron skips digest in bridge room |
-
-Plan without posting:
+Plan digest room without posting:
 
 ```sh
 pnpm -C frontend exec tsx scripts/ops/alfaclub-digest-room-setup.ts
+```
+
+Test post to the bridge room (requires bot access in that room):
+
+```sh
+pnpm -C frontend exec tsx scripts/ops/alfaclub-digest-room-setup.ts --post-test
 ```
 
 Force a test digest (needs `DATABASE_URL` + valid tokens):

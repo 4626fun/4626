@@ -55,6 +55,9 @@ import {
 import { readAlfaClubChatToken } from './chatTokenStore.js'
 import { requestImmediatePrivyRefresh } from './privyTokenRefresher.js'
 import { parseTelegramChatRef } from './telegramChatRef.js'
+import { isKeeprRailwayAlfaClubSplit } from './keeprAlfaClubSplit.js'
+
+export { isKeeprRailwayAlfaClubSplit } from './keeprAlfaClubSplit.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -285,20 +288,8 @@ function parseBool(value: string | undefined): boolean {
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
 }
 
-function isRailwayRuntime(): boolean {
-  return Boolean(
-    normalizeEnvScalar(process.env.RAILWAY_SERVICE_ID) ||
-      normalizeEnvScalar(process.env.RAILWAY_PROJECT_ID) ||
-      normalizeEnvScalar(process.env.RAILWAY_ENVIRONMENT_ID),
-  )
-}
-
-function isRailwayBridgeOverrideEnabled(): boolean {
-  return parseBool(process.env.ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY)
-}
-
 function shouldBlockRailwayBridge(flags: Pick<AlfaClubChatBridgeFlags, 'enabled'>): boolean {
-  return flags.enabled && isRailwayRuntime() && !isRailwayBridgeOverrideEnabled()
+  return flags.enabled && isKeeprRailwayAlfaClubSplit()
 }
 
 function parseBoolWithDefault(value: string | undefined, fallback: boolean): boolean {

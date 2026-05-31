@@ -15,9 +15,9 @@ import {
   buildAlfaClubBriefContext,
   formatAlfaClubDailyBrief,
   formatAlfaClubLeaderboardChat,
+  listDailyBriefPostRoomCandidates,
   readAlfaClubDailyBriefFlags,
   resolveAlfaClubBridgeRoomId,
-  resolveDailyBriefRoomId,
   runAlfaClubDailyBrief,
 } from '../../_lib/alfaclub/dailyBrief.js'
 import {
@@ -1135,7 +1135,6 @@ export async function executeAlfaclubCommandFamily(params: {
     return { ok: true, response: formatAlfaClubDailyBrief(built.formatInput) }
   }
   if (parsed.sub === 'brief-post') {
-    const briefRoomId = resolveDailyBriefRoomId()
     const result = await runAlfaClubDailyBrief({
       flags: { ...readAlfaClubDailyBriefFlags(), forceSend: true },
     })
@@ -1143,23 +1142,24 @@ export async function executeAlfaclubCommandFamily(params: {
       return {
         ok: false,
         response: [
-          'Daily digest is not posted into the command bridge room.',
-          'Set `ALFACLUB_DAILY_BRIEF_ROOM_ID` to a read-only room and keep',
-          '`ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE=1` on Vercel.',
+          'Daily digest is configured to skip the bridge room while',
+          '`ALFACLUB_DAILY_BRIEF_ROOM_ID` equals `ALFACLUB_CHAT_ROOM_ID`.',
+          'Unset the brief room id or turn off `ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE`.',
           `Bridge room: ${resolveAlfaClubBridgeRoomId()}.`,
         ].join(' '),
       }
     }
     if (!result.ok || !result.sent) {
       const reason = result.reason ?? 'not_sent'
+      const candidates = listDailyBriefPostRoomCandidates().join(' → ')
       return {
         ok: false,
-        response: `Digest post failed (${reason}). Target room ${briefRoomId}.`,
+        response: `Digest post failed (${reason}). Tried rooms: ${candidates}.`,
       }
     }
     return {
       ok: true,
-      response: `Daily digest posted to room **${briefRoomId}** (${result.lane ?? 'sent'}).`,
+      response: `Daily digest posted to room **${result.roomId}** (${result.lane ?? 'sent'}).`,
     }
   }
   if (parsed.sub === 'creator') {
