@@ -3,6 +3,7 @@ import sharp from 'sharp'
 import {
   buildPremiumSubjectStack,
   renderCreatorSignature,
+  renderPremiumStackedUnderlay,
   type PremiumTokenIconParams,
 } from '../premium-classic/renderPremiumTokenIcon.js'
 import { renderV2BackgroundCard } from './background.js'
@@ -25,22 +26,23 @@ function compositeStep(input: Buffer, blend: BlendMode): sharp.OverlayOptions {
 }
 
 /**
- * Premium v2: Fuji LUT, masked bg darken, flat dark card, extended ghost stack, platinum bezel, hybrid glow.
- * Hero and breakout share the same subject grade so ears do not mismatch the body.
+ * Premium v2: Fuji LUT, flat card, ghost stack across full card (silhouette spills into padding),
+ * bezel-only glow, platinum frame.
  */
 export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Promise<Buffer> {
-  const gradedParams = await gradeV2SourceParams({
-    ...params,
-    stackUnderlayClip: params.stackUnderlayClip ?? 'extended',
+  const gradedParams = await gradeV2SourceParams(params)
+  const subject = await buildPremiumSubjectStack({
+    ...gradedParams,
+    stackUnderlayClip: 'chamber',
   })
-  const subject = await buildPremiumSubjectStack(gradedParams)
   const {
     size,
     layout,
     heroCompositeLayer,
     breakoutLayer,
-    stackedUnderlay,
+    stackedUnderlay: chamberUnderlay,
     analysis,
+    subjectPlacement,
   } = subject
   const sourceClass = analysis?.sourceClass as SubjectSourceClass | undefined
 
@@ -49,6 +51,25 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
     sourceClass,
     size,
   })
+
+  const stackedUnderlay =
+    segmentationMask &&
+    gradedParams.sourceImage?.length &&
+    analysis &&
+    subjectPlacement
+      ? await renderPremiumStackedUnderlay({
+          size,
+          layout,
+          sourceImage: Buffer.from(gradedParams.sourceImage),
+          scale: subjectPlacement.renderScale,
+          fit: subjectPlacement.fitMode,
+          sourceClass: analysis.sourceClass,
+          hasTransparency: analysis.hasTransparency,
+          topBiasPx: subjectPlacement.topBiasPx,
+          clipRegion: 'card',
+          subjectAlphaMaskPng: segmentationMask.subjectMaskPng,
+        })
+      : chamberUnderlay
 
   const backgroundCard = await renderV2BackgroundCard({ size, layout })
   const outerGlow = await renderV2OuterGlow({ size, layout })
@@ -65,10 +86,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
     edgeVignette: true,
   })
 
-  const overlays: sharp.OverlayOptions[] = [
-    compositeStep(outerGlow, 'screen'),
-    compositeStep(frameBloom, 'screen'),
-  ]
+  const overlays: sharp.OverlayOptions[] = []
   if (stackedUnderlay.rearLayerB) {
     overlays.push(compositeStep(stackedUnderlay.rearLayerB, 'over'))
   }
@@ -76,6 +94,8 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
     overlays.push(compositeStep(stackedUnderlay.rearLayerA, 'over'))
   }
   overlays.push(
+    compositeStep(outerGlow, 'screen'),
+    compositeStep(frameBloom, 'screen'),
     compositeStep(heroLayer, 'over'),
     compositeStep(premiumFrame, 'over'),
   )

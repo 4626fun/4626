@@ -47,6 +47,7 @@ async function main(): Promise<void> {
     'v1/alfaclub/chat-auth-health',
     'v1/alfaclub/chat-bridge-run',
     'v1/alfaclub/daily-brief',
+    'telegram/hermit-webhook',
   ]) {
     try {
       await probe(subpath)

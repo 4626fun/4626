@@ -145,6 +145,47 @@ export async function darkenLayerBackgroundWithMask(params: {
     .toBuffer()
 }
 
+/** Darkened non-subject pixels only — the in-frame “pattern” v2 can spill into outer padding. */
+export async function extractDarkBackgroundPattern(params: {
+  layer: Buffer
+  mask: SubjectSegmentationMask
+}): Promise<Buffer> {
+  const { layer, mask } = params
+  const { width, height, subjectMaskPng } = mask
+
+  const brightness = Number.isFinite(BACKGROUND_BRIGHTNESS)
+    ? Math.max(0.5, Math.min(1, BACKGROUND_BRIGHTNESS))
+    : 0.72
+  const saturation = Number.isFinite(BACKGROUND_SATURATION)
+    ? Math.max(0.5, Math.min(1.2, BACKGROUND_SATURATION))
+    : 0.92
+
+  const darkened = await sharp(layer)
+    .modulate({ brightness, saturation })
+    .png()
+    .toBuffer()
+
+  const maskAlpha = await sharp(subjectMaskPng).extractChannel('alpha').raw().toBuffer({
+    resolveWithObject: true,
+  })
+  const px = width * height
+  const invMaskRgba = Buffer.alloc(px * 4, 255)
+  for (let i = 0; i < px; i += 1) {
+    invMaskRgba[i * 4 + 3] = 255 - (maskAlpha.data[i] ?? 0)
+  }
+  const invMaskPng = await sharp(invMaskRgba, {
+    raw: { width, height, channels: 4 },
+  })
+    .png()
+    .toBuffer()
+
+  return sharp(darkened)
+    .ensureAlpha()
+    .composite([{ input: invMaskPng, blend: 'dest-in' }])
+    .png()
+    .toBuffer()
+}
+
 /** @deprecated Use resolveSubjectSegmentationMask + darkenLayerBackgroundWithMask */
 export async function darkenPhotoBackgroundWithSegmentation(params: {
   heroLayer: Buffer

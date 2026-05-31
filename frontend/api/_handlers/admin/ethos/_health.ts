@@ -85,26 +85,106 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Explore creator lists (all sort modes) and the 137+ charts.
     // All recommendations are for CREATE INDEX CONCURRENTLY and must be applied via migration
     // (or carefully in a maintenance window). Never auto-execute from the UI.
-    const recommendedIndexes = [
+    const baseRecommendations = [
       {
         name: 'idx_creator_ethos_projection_ethos_vol_mc_created',
         definition: 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_creator_ethos_projection_ethos_vol_mc_created ON public.creator_ethos_projection (ethos_score DESC NULLS LAST, volume_24h_usd DESC NULLS LAST, market_cap_usd DESC NULLS LAST, created_at DESC) WHERE ethos_score IS NOT NULL;',
         rationale: 'Covers the primary Explore sort (ethos + volume + market cap) + ethosMin filter + recency tie-breakers used by almost all creator list modes on v_explore_creators.',
-        target: 'creator_ethos_projection (single source of truth for all Explore sorts)'
+        target: 'creator_ethos_projection (single source of truth for all Explore sorts)',
+        derived: false as const,
       },
       {
         name: 'idx_creator_ethos_projection_created_ethos',
         definition: 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_creator_ethos_projection_created_ethos ON public.creator_ethos_projection (created_at DESC, ethos_score DESC NULLS LAST) WHERE ethos_score IS NOT NULL;',
         rationale: 'Supports NEW_CREATORS + quality-gated recent sorts that combine recency with ethos threshold.',
-        target: 'creator_ethos_projection'
+        target: 'creator_ethos_projection',
+        derived: false as const,
       },
       {
         name: 'idx_ethos_daily_snapshots_date_score_mc',
         definition: 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ethos_daily_snapshots_date_score_mc ON public.creator_ethos_daily_snapshots (snapshot_date DESC, ethos_score DESC NULLS LAST, market_cap_usd DESC NULLS LAST);',
         rationale: 'Accelerates 30d/90d time-series and cohort panels that join snapshots on date + score + size.',
-        target: 'creator_ethos_daily_snapshots'
-      }
+        target: 'creator_ethos_daily_snapshots',
+        derived: false as const,
+      },
     ];
+
+    // Dynamically derive additional recommendations by inspecting live slow/expensive queries.
+    // This is the "based on observed slow query patterns" part of the admin health surface.
+    // We only ever propose indexes on the single interconnected source (projection + snapshots).
+    // No new tables, no bucket tables, no fragmentation.
+    const slowQueries = slowQueriesRows.rows ?? [];
+    const dynamicRecommendations: any[] = [];
+
+    const hasPattern = (sample: string, cols: string[]) =>
+      cols.every((c) => sample.toLowerCase().includes(c.toLowerCase()));
+
+    for (const q of slowQueries) {
+      const sample = String(q.query_sample || '');
+
+      // If we see expensive queries touching ethos_score + volume/market cap together
+      // on the projection (very common in Explore multi-sort paths), reinforce the main composite.
+      if (
+        (hasPattern(sample, ['ethos_score', 'volume_24h']) || hasPattern(sample, ['ethos_score', 'market_cap'])) &&
+        sample.toLowerCase().includes('creator_ethos_projection')
+      ) {
+        dynamicRecommendations.push({
+          name: 'idx_creator_ethos_projection_ethos_vol_mc_created',
+          definition: 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_creator_ethos_projection_ethos_vol_mc_created ON public.creator_ethos_projection (ethos_score DESC NULLS LAST, volume_24h_usd DESC NULLS LAST, market_cap_usd DESC NULLS LAST, created_at DESC) WHERE ethos_score IS NOT NULL;',
+          rationale: 'Observed in recent expensive queries involving ethos_score + volume/market_cap filters/sorts on the projection. Reinforces the primary composite for Explore + chart workloads.',
+          target: 'creator_ethos_projection (single source)',
+          derived: true as const,
+          observedIn: q.chart_tag || 'chart-query',
+        });
+      }
+
+      // Recency + ethos patterns (new creators, quality sorts)
+      if (
+        hasPattern(sample, ['created_at', 'ethos_score']) &&
+        sample.toLowerCase().includes('creator_ethos_projection')
+      ) {
+        dynamicRecommendations.push({
+          name: 'idx_creator_ethos_projection_created_ethos',
+          definition: 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_creator_ethos_projection_created_ethos ON public.creator_ethos_projection (created_at DESC, ethos_score DESC NULLS LAST) WHERE ethos_score IS NOT NULL;',
+          rationale: 'Seen in slow queries combining created_at recency with ethos_score thresholds (common in NEW_CREATORS / quality leaderboards).',
+          target: 'creator_ethos_projection',
+          derived: true as const,
+          observedIn: q.chart_tag || 'chart-query',
+        });
+      }
+
+      // Snapshot time-series patterns
+      if (
+        (hasPattern(sample, ['snapshot_date', 'ethos']) || hasPattern(sample, ['snapshot_hour', 'ethos'])) &&
+        (sample.toLowerCase().includes('daily_snapshots') || sample.toLowerCase().includes('hourly_snapshots'))
+      ) {
+        dynamicRecommendations.push({
+          name: 'idx_ethos_daily_snapshots_date_score_mc',
+          definition: 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ethos_daily_snapshots_date_score_mc ON public.creator_ethos_daily_snapshots (snapshot_date DESC, ethos_score DESC NULLS LAST, market_cap_usd DESC NULLS LAST);',
+          rationale: 'Expensive time-series or cohort queries hitting daily/hourly snapshots with date + score predicates.',
+          target: 'creator_ethos_*_snapshots',
+          derived: true as const,
+          observedIn: q.chart_tag || 'chart-query',
+        });
+      }
+    }
+
+    // Dedupe: prefer derived versions when we have live evidence, otherwise keep base
+    const recByName = new Map<string, any>();
+    for (const r of baseRecommendations) recByName.set(r.name, r);
+    for (const d of dynamicRecommendations) {
+      // If we have live evidence for a base one, mark the base as having live signal
+      if (recByName.has(d.name)) {
+        const existing = recByName.get(d.name)!;
+        existing.derived = true;
+        existing.observedIn = d.observedIn;
+        existing.rationale = d.rationale; // prefer the live-observed rationale
+      } else {
+        recByName.set(d.name, d);
+      }
+    }
+
+    const recommendedIndexes = Array.from(recByName.values());
 
     return res.status(200).json({
       success: true,
@@ -115,6 +195,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         unusedIndexes: unusedRows.rows ?? [],
         slowChartQueries: slowQueriesRows.rows ?? [],
         recommendedIndexes,
+        indexRecommendationsSummary: {
+          total: recommendedIndexes.length,
+          withLiveEvidence: recommendedIndexes.filter((r: any) => r.derived).length,
+        },
         checkedAt: new Date().toISOString(),
         checkedBy: admin,
       }

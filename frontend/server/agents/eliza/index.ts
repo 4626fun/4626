@@ -86,32 +86,7 @@ import { handleXmtpFallbackResponse } from './_xmtpFallback.js'
 
 import { getDb, getDbInitError, isDbConfigured } from '../../_lib/db/postgres.js'
 import { ensureAgentRuntimeAuditLedgerSchema } from '../../_lib/db/schemaBootstrap.js'
-
-// Super-early minimal health server.
-// This runs as soon as the module starts evaluating, before most imports and
-// before main(). It guarantees that /healthz responds even if the process
-// later crashes during heavy module loading or early validation.
-try {
-  const earlyPort = Number(process.env.PORT ?? '8080') || 8080
-  const earlyServer = http.createServer((req, res) => {
-    const url = (req.url ?? '/').split('?')[0]
-    if (url === '/healthz' || url === '/health' || url === '/') {
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({
-        status: 'early-boot-or-crashed-early',
-        message: 'Check Railway logs for [eliza][early] diagnostics — this often indicates missing/misconfigured env vars for Railway primary.',
-        tip: 'Run `pnpm agent:railway-keepr-doctor` locally with the same vars.'
-      }))
-      return
-    }
-    res.writeHead(404)
-    res.end('not found')
-  })
-  earlyServer.listen(earlyPort, '0.0.0.0')
-  // We don't close it — the real startHealthServer() will take over if we reach main().
-} catch {
-  // Ignore — we tried our best to give Railway something to probe.
-}
+import { closeEarlyHealthServer } from '../hermit/healthHandoff.js'
 import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../_lib/messaging/creatorXmtpAgents.js'
 import { createPrivyScwSigner } from '../../_lib/wallet/privyXmtpSigner.js'
 import { buildAgentRegistration } from '../../_lib/agent/agentRegistration.js'
@@ -2171,6 +2146,13 @@ async function main() {
   // Suppress known non-fatal native/runtime noise that causes alert fatigue.
   installStderrNoiseFilter()
 
+  // Hand off from bootstrap.ts early listener (if present) before binding the full server.
+  await closeEarlyHealthServer().catch((err) => {
+    logger.warn('[eliza] failed to close bootstrap health listener (continuing)', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  })
+
   // Start health check server FIRST so Railway healthcheck passes during boot
   startHealthServer()
   void emitTelemetryEvent('runtime_boot', {
@@ -2804,7 +2786,7 @@ function startHealthServer() {
     res.writeHead(statusCode, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify(payload))
   })
-  server.listen(port, () => {
+  server.listen(port, '0.0.0.0', () => {
     logger.info(`[eliza] Health check server listening on :${port}/healthz`)
   })
 }

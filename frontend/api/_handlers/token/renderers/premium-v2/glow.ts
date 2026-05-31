@@ -54,55 +54,61 @@ function frameGlowStrokeSvg(params: {
 </svg>`
 }
 
-async function buildGlowFromStroke(glowBase: Buffer, size: number): Promise<Buffer> {
+/** Bezel ring only — keeps glow off the outer card padding (was reading as a second frame). */
+async function createBezelGlowClipMask(layout: PremiumLayout): Promise<Buffer> {
+  const expand = Math.max(2, Math.round(layout.frameStroke * 0.5))
+  const chamberR = Math.max(1, layout.chamberRadius - Math.max(1, Math.round(layout.chamberSize * 0.012)))
+  const outerSvg = `<svg width="${layout.size}" height="${layout.size}" xmlns="http://www.w3.org/2000/svg">
+  <rect
+    x="${layout.frameX - expand}"
+    y="${layout.frameY - expand}"
+    width="${layout.frameSize + expand * 2}"
+    height="${layout.frameSize + expand * 2}"
+    rx="${layout.frameRadius + expand}"
+    fill="white"
+  />
+</svg>`
+  const chamberHoleSvg = `<svg width="${layout.size}" height="${layout.size}" xmlns="http://www.w3.org/2000/svg">
+  <rect
+    x="${layout.chamberX}"
+    y="${layout.chamberY}"
+    width="${layout.chamberSize}"
+    height="${layout.chamberSize}"
+    rx="${chamberR}"
+    fill="#000"
+  />
+</svg>`
+  const [outer, hole] = await Promise.all([
+    sharp(Buffer.from(outerSvg)).png().toBuffer(),
+    sharp(Buffer.from(chamberHoleSvg)).png().toBuffer(),
+  ])
+  return sharp(outer)
+    .composite([{ input: hole, blend: 'dest-out' }])
+    .png()
+    .toBuffer()
+}
+
+/** Rim + soft only — no wide ambient that floods padding corners. */
+async function buildV2GlowFromStroke(glowBase: Buffer, size: number): Promise<Buffer> {
   const rim = await sharp(glowBase)
     .blur(Math.max(3, size * 0.008))
     .png()
     .toBuffer()
   const soft = await sharp(glowBase)
-    .blur(Math.max(12, size * 0.024))
-    .png()
-    .toBuffer()
-  const ambient = await sharp(glowBase)
-    .blur(Math.max(28, size * 0.055))
+    .blur(Math.max(10, size * 0.016))
     .png()
     .toBuffer()
 
   return createTransparentCanvas(size)
     .composite([
-      { input: await applyOpacity(ambient, 0.14), blend: 'screen' },
-      { input: await applyOpacity(soft, 0.11), blend: 'screen' },
+      { input: await applyOpacity(soft, 0.1), blend: 'screen' },
       { input: await applyOpacity(rim, 0.2), blend: 'screen' },
     ])
     .png()
     .toBuffer()
 }
 
-async function cutGlowHole(merged: Buffer, layout: PremiumLayout, size: number): Promise<Buffer> {
-  const cutInset = Math.max(1, Math.round(layout.frameStroke * 0.5))
-  const holeSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-  <rect
-    x="${layout.frameX + cutInset}"
-    y="${layout.frameY + cutInset}"
-    width="${Math.max(1, layout.frameSize - cutInset * 2)}"
-    height="${Math.max(1, layout.frameSize - cutInset * 2)}"
-    rx="${Math.max(1, layout.frameRadius - cutInset)}"
-    fill="#fff"
-  />
-</svg>`
-  return sharp(merged)
-    .ensureAlpha()
-    .composite([
-      {
-        input: await sharp(Buffer.from(holeSvg)).blur(Math.max(5, size * 0.01)).png().toBuffer(),
-        blend: 'dest-out',
-      },
-    ])
-    .png()
-    .toBuffer()
-}
-
-/** Frame halo — `TOKEN_ICON_V2_GLOW_TINT=white|blue|hybrid` (default hybrid). */
+/** Frame halo on the bezel only — `TOKEN_ICON_V2_GLOW_TINT=white|blue|hybrid`. */
 export async function renderV2OuterGlow(params: {
   size: number
   layout: PremiumLayout
@@ -127,16 +133,12 @@ export async function renderV2OuterGlow(params: {
 
   if (tint === 'white' || tint === 'hybrid') {
     const whiteBase = await sharp(Buffer.from(whiteSvg)).png().toBuffer()
-    layers.push(await buildGlowFromStroke(whiteBase, size))
+    layers.push(await buildV2GlowFromStroke(whiteBase, size))
   }
   if (tint === 'blue' || tint === 'hybrid') {
     const blueBase = await sharp(Buffer.from(blueSvg)).png().toBuffer()
-    const blueGlow = await buildGlowFromStroke(blueBase, size)
-    layers.push(
-      tint === 'hybrid'
-        ? await applyOpacity(blueGlow, 0.55)
-        : blueGlow,
-    )
+    const blueGlow = await buildV2GlowFromStroke(blueBase, size)
+    layers.push(tint === 'hybrid' ? await applyOpacity(blueGlow, 0.55) : blueGlow)
   }
 
   let merged = await createTransparentCanvas(size).png().toBuffer()
@@ -144,7 +146,12 @@ export async function renderV2OuterGlow(params: {
     merged = await sharp(merged).composite([{ input: layer, blend: 'screen' }]).png().toBuffer()
   }
 
-  return cutGlowHole(merged, layout, size)
+  const bezelMask = await createBezelGlowClipMask(layout)
+  return sharp(merged)
+    .ensureAlpha()
+    .composite([{ input: bezelMask, blend: 'dest-in' }])
+    .png()
+    .toBuffer()
 }
 
 /** Soft edge light on the bezel stroke. */

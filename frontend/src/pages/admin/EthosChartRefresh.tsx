@@ -30,7 +30,13 @@ interface HealthData {
     definition: string;
     rationale: string;
     target: string;
+    derived?: boolean;
+    observedIn?: string;
   }>;
+  indexRecommendationsSummary?: {
+    total: number;
+    withLiveEvidence: number;
+  };
   checkedAt: string;
   checkedBy: string;
 }
@@ -360,33 +366,53 @@ export default function EthosChartRefresh() {
               </div>
             )}
 
-            {/* Suggested New Indexes — read-only recommendations for the single interconnected source */}
+            {/* Suggested New Indexes — now with live derivation from slow query patterns */}
             {health.recommendedIndexes && health.recommendedIndexes.length > 0 && (
               <div>
-                <h3 className="font-medium mb-2 text-sm text-emerald-600">Suggested New Indexes (Access Pattern Driven)</h3>
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-medium text-sm text-emerald-600">Suggested New Indexes (from access patterns + live slow queries)</h3>
+                  {health.indexRecommendationsSummary && (
+                    <span className="text-[10px] rounded bg-emerald-500/10 px-1.5 py-0.5 text-emerald-400">
+                      {health.indexRecommendationsSummary.withLiveEvidence} / {health.indexRecommendationsSummary.total} have live evidence
+                    </span>
+                  )}
+                </div>
                 <p className="text-[10px] text-muted-foreground mb-2">
-                  High-value <code>CREATE INDEX CONCURRENTLY</code> candidates for the dominant filter + multi-sort patterns on <strong>the single source</strong> (<code>creator_ethos_projection</code> + <code>v_explore_creators</code>). All Explore sort modes (market cap, ethos, volume, recency, quality) and the 137+ charts must continue to be ORDER BY variants over these same rows.
+                  High-value <code>CREATE INDEX CONCURRENTLY</code> candidates for the single interconnected source (<code>creator_ethos_projection</code> + <code>v_explore_creators</code> + snapshots). 
+                  All Explore sorts (market cap, ethos, volume, recency, quality filters) remain pure <strong>ORDER BY</strong> on the same rows. Items with the amber badge were reinforced or added because they appeared in recent expensive chart-tagged queries.
                 </p>
                 <div className="space-y-2 text-xs">
                   {health.recommendedIndexes.map((rec, i) => (
-                    <div key={i} className="rounded border border-emerald-600/30 bg-emerald-950/10 p-2">
-                      <div className="font-medium text-emerald-400">{rec.name}</div>
+                    <div key={i} className={`rounded p-2 ${rec.derived ? 'border border-amber-500/40 bg-amber-950/10' : 'border border-emerald-600/30 bg-emerald-950/10'}`}>
+                      <div className="flex items-center gap-2">
+                        <div className="font-medium text-emerald-400">{rec.name}</div>
+                        {rec.derived && (
+                          <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-medium text-amber-400">
+                            derived from live slow queries
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[10px] text-muted-foreground mt-0.5">{rec.rationale}</div>
                       <div className="font-mono text-[10px] mt-1 bg-black/40 p-1.5 rounded break-all">
                         {rec.definition}
                       </div>
-                      <button
-                        onClick={() => navigator.clipboard?.writeText(rec.definition)}
-                        className="mt-1 text-[10px] text-emerald-400 hover:text-emerald-300 underline"
-                      >
-                        Copy CREATE statement
-                      </button>
-                      <span className="ml-2 text-[10px] text-muted-foreground">Target: {rec.target}</span>
+                      <div className="mt-1 flex items-center gap-2">
+                        <button
+                          onClick={() => navigator.clipboard?.writeText(rec.definition)}
+                          className="text-[10px] text-emerald-400 hover:text-emerald-300 underline"
+                        >
+                          Copy CREATE statement
+                        </button>
+                        <span className="text-[10px] text-muted-foreground">Target: {rec.target}</span>
+                        {rec.observedIn && (
+                          <span className="text-[9px] text-amber-400/80">observed in: {rec.observedIn}</span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
                 <div className="text-[10px] text-emerald-600/80 mt-1">
-                  These are advisory only. Apply via a proper Supabase migration after review. Never auto-execute CREATE from the UI.
+                  Advisory only. All proposals target the single source of truth. Apply via migration. No CREATEs are executed from the UI.
                 </div>
               </div>
             )}

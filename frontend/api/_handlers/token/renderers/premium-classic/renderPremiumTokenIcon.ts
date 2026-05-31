@@ -23,8 +23,8 @@ export type PremiumTokenIconParams = {
   symbol?: string
   signatureText?: string
   renderPreset?: RenderPreset
-  /** `extended` clips ghost stack to the full card (spills into padding outside the bezel). Default `chamber`. */
-  stackUnderlayClip?: 'chamber' | 'extended'
+  /** Ghost stack clip: `chamber` (default), `card` (full card — continuous into padding), or legacy padding/extended. */
+  stackUnderlayClip?: 'chamber' | 'card' | 'padding-outside-frame' | 'extended'
 }
 
 export type PremiumLayout = {
@@ -1927,6 +1927,14 @@ async function createUnderlayRecedeLayer(layout: PremiumLayout): Promise<Buffer>
   return sharp(Buffer.from(svg)).png().toBuffer()
 }
 
+/** Whole icon card — ghost stack can run from chamber through padding without a frame cut. */
+async function createCardStackMask(layout: PremiumLayout): Promise<Buffer> {
+  const svg = `<svg width="${layout.size}" height="${layout.size}" xmlns="http://www.w3.org/2000/svg">
+  <rect width="${layout.size}" height="${layout.size}" rx="${layout.cardRadius}" fill="white"/>
+</svg>`
+  return sharp(Buffer.from(svg)).png().toBuffer()
+}
+
 async function createRearStackMask(layout: PremiumLayout): Promise<Buffer> {
   const radius = Math.max(1, layout.chamberRadius - Math.max(1, Math.round(layout.chamberSize * 0.012)))
   const svg = `<svg width="${layout.size}" height="${layout.size}" xmlns="http://www.w3.org/2000/svg">
@@ -1988,7 +1996,9 @@ async function renderStackedArtworkUnderlay(params: {
   sourceClass: SourceClass
   hasTransparency: boolean
   topBiasPx?: number
-  clipRegion?: 'chamber' | 'extended'
+  clipRegion?: 'chamber' | 'card' | 'padding-outside-frame' | 'extended'
+  /** When `clipRegion` is `card`, limits spill to subject alpha (not the full art box). */
+  subjectAlphaMaskPng?: Buffer
 }): Promise<StackedArtworkUnderlay> {
   const { layout } = params
   const stackConfig = getStackConfigForSourceClass({
@@ -2000,9 +2010,13 @@ async function renderStackedArtworkUnderlay(params: {
   }
 
   const chamberMask =
-    params.clipRegion === 'extended'
-      ? await createExtendedStackMask(layout)
-      : await createRearStackMask(layout)
+    params.clipRegion === 'card'
+      ? await createCardStackMask(layout)
+      : params.clipRegion === 'padding-outside-frame'
+        ? await createPaddingOutsideFrameMask(layout)
+        : params.clipRegion === 'extended'
+          ? await createExtendedStackMask(layout)
+          : await createRearStackMask(layout)
   const recedeLayer = await createUnderlayRecedeLayer(layout)
   const renderedLayers: Buffer[] = []
   for (const layer of stackConfig.layers) {
@@ -2017,7 +2031,7 @@ async function renderStackedArtworkUnderlay(params: {
         ? Math.round((params.topBiasPx ?? 0) * layer.topBiasMultiplier)
         : 0
 
-    const shifted = await renderPlacedSourceCanvasWithOffset({
+    let shifted = await renderPlacedSourceCanvasWithOffset({
       sourceImage: params.sourceImage,
       layout,
       scale: layerScale,
@@ -2027,11 +2041,37 @@ async function renderStackedArtworkUnderlay(params: {
       offsetXpx,
       offsetYpx,
     })
+    if (params.clipRegion === 'card' && params.subjectAlphaMaskPng) {
+      shifted = await sharp(shifted)
+        .ensureAlpha()
+        .composite([{ input: params.subjectAlphaMaskPng, blend: 'dest-in' }])
+        .png()
+        .toBuffer()
+    }
     const clipped = await sharp(shifted)
       .ensureAlpha()
       .composite([{ input: chamberMask, blend: 'dest-in' }])
       .png()
       .toBuffer()
+
+    if (params.clipRegion === 'card') {
+      let silhouette = clipped
+      const blurPx =
+        layer.blurPx > 0.12 && params.sourceClass !== 'pixelArt'
+          ? layer.blurPx * 1.2
+          : layer.blurPx
+      if (blurPx > 0.12) {
+        silhouette = await sharp(silhouette).blur(blurPx).png().toBuffer()
+      }
+      silhouette = await sharp(silhouette)
+        .greyscale()
+        .ensureAlpha()
+        .modulate({ brightness: 0.3, saturation: 0 })
+        .png()
+        .toBuffer()
+      renderedLayers.push(await applyOpacity(silhouette, layer.opacity * 1.08))
+      continue
+    }
 
     let processed = await sharp(clipped)
       .modulate({
@@ -2051,7 +2091,12 @@ async function renderStackedArtworkUnderlay(params: {
       .composite([{ input: await applyOpacity(recedeLayer, 0.36), blend: 'multiply' }])
       .png()
       .toBuffer()
-    const opacityScale = params.clipRegion === 'extended' ? 1.22 : 1
+    const opacityScale =
+      params.clipRegion === 'padding-outside-frame'
+        ? 0.72
+        : params.clipRegion === 'extended'
+          ? 1.22
+          : 1
     renderedLayers.push(await applyOpacity(processed, layer.opacity * opacityScale))
   }
 
@@ -4130,6 +4175,12 @@ function buildCompositeStep(input: Buffer, blend: BlendMode): sharp.OverlayOptio
   return { input, blend }
 }
 
+export type PremiumSubjectPlacement = {
+  renderScale: number
+  topBiasPx: number
+  fitMode: ArtworkFitMode
+}
+
 export type PremiumSubjectStack = {
   size: number
   layout: PremiumLayout
@@ -4139,6 +4190,37 @@ export type PremiumSubjectStack = {
   breakoutLayer: Buffer | null
   stackedUnderlay: StackedArtworkUnderlay
   sourceClassForHero: SourceClass
+  /** Hero placement used for artwork + optional v2 field-pattern extension. */
+  subjectPlacement: PremiumSubjectPlacement | null
+}
+
+/** Same geometry as in-frame hero — for v2 padding field-pattern extension. */
+export async function renderPremiumPlacedSourceCanvas(params: {
+  sourceImage: Buffer
+  layout: PremiumLayout
+  scale: number
+  fit: ArtworkFitMode
+  sourceClass: SourceClass
+  topBiasPx?: number
+}): Promise<Buffer> {
+  return renderPlacedSourceCanvas(params)
+}
+
+export type PremiumStackedUnderlay = StackedArtworkUnderlay
+
+export async function renderPremiumStackedUnderlay(params: {
+  size: number
+  layout: PremiumLayout
+  sourceImage: Buffer
+  scale: number
+  fit: ArtworkFitMode
+  sourceClass: SourceClass
+  hasTransparency: boolean
+  topBiasPx?: number
+  clipRegion?: 'chamber' | 'card' | 'padding-outside-frame' | 'extended'
+  subjectAlphaMaskPng?: Buffer
+}): Promise<PremiumStackedUnderlay> {
+  return renderStackedArtworkUnderlay(params)
 }
 
 export async function buildPremiumSubjectStack(params: PremiumTokenIconParams): Promise<PremiumSubjectStack> {
@@ -4185,6 +4267,7 @@ export async function buildPremiumSubjectStack(params: PremiumTokenIconParams): 
   let stackedUnderlay: StackedArtworkUnderlay = { rearLayerB: null, rearLayerA: null }
   let breakoutLayer: Buffer | null = null
   let sourceClassForHero: SourceClass = 'generic'
+  let subjectPlacement: PremiumSubjectPlacement | null = null
 
   if (normalizedSource && analysis) {
     sourceClassForHero = analysis.sourceClass
@@ -4255,6 +4338,11 @@ export async function buildPremiumSubjectStack(params: PremiumTokenIconParams): 
       } else {
         segmentationFailureReasonForLog = 'segmentation-unavailable'
       }
+    }
+    subjectPlacement = {
+      renderScale,
+      topBiasPx,
+      fitMode: analysis.fitMode,
     }
     stackedUnderlay = await renderStackedArtworkUnderlay({
       size,
@@ -4447,6 +4535,7 @@ export async function buildPremiumSubjectStack(params: PremiumTokenIconParams): 
     })
     stackedUnderlay = { rearLayerB: null, rearLayerA: null }
     sourceClassForHero = 'generic'
+    subjectPlacement = null
   }
 
   const heroContactShadow = await renderHeroContactShadow({
@@ -4473,6 +4562,7 @@ export async function buildPremiumSubjectStack(params: PremiumTokenIconParams): 
     breakoutLayer,
     stackedUnderlay,
     sourceClassForHero,
+    subjectPlacement,
   }
 }
 

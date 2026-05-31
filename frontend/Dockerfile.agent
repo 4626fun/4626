@@ -35,18 +35,26 @@ COPY frontend/package.json frontend/pnpm-lock.yaml ./
 COPY frontend/patches/ ./patches/
 
 # Include @4626/server-core (workspace package) so pnpm can resolve the
-# workspace:* link during install. This package is now imported by command
-# families (e.g. alfaclub.ts) and many server/_lib modules used by the
-# Hermit bridge and other agent surfaces.
+# workspace:* link during install. Command families and server/_lib modules
+# import from dist/ at runtime — build.mjs must run in this stage.
 COPY frontend/packages/server-core/package.json ./packages/server-core/package.json
 COPY frontend/packages/server-core/tsconfig.json ./packages/server-core/tsconfig.json
+COPY frontend/packages/server-core/build.mjs ./packages/server-core/build.mjs
 COPY frontend/packages/server-core/src ./packages/server-core/src
+
+COPY frontend/server ./server
+COPY frontend/api/_handlers/token ./api/_handlers/token
+COPY frontend/src/config ./src/config
+COPY frontend/src/lib ./src/lib
+COPY frontend/src/wallet ./src/wallet
 
 # Install ALL deps (tsx, @elizaos/core are in devDependencies).
 # Use --ignore-scripts first to avoid OOM from parallel native builds,
 # then rebuild native modules sequentially.
 RUN pnpm install --frozen-lockfile --ignore-scripts \
     && pnpm rebuild
+
+RUN cd packages/server-core && node build.mjs
 
 # --------------------------------------------------------------------------
 # Stage 2: Production image
@@ -59,15 +67,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/package.json ./package.json
 
-# Copy the server-core workspace package (source + built artifacts if present).
-# This is required at runtime because several command families and _lib modules
-# now import from '@4626/server-core'.
+# Copy the server-core workspace package (dist + runtime siblings from build.mjs).
 COPY --from=deps /app/packages/server-core ./packages/server-core
 
-# Copy server + API + config source used by agent runtime.
-# Some agent command modules import Telegram webhook helpers from `api/_handlers/*`,
-# so `frontend/api` must be present in the image.
-COPY frontend/server ./server
+# server tree includes build.mjs runtime siblings (e.g. renderPremiumTokenIcon.js)
+COPY --from=deps /app/server ./server
 COPY frontend/api ./api
 COPY frontend/src/config ./src/config
 COPY frontend/src/lib ./src/lib
@@ -85,10 +89,5 @@ EXPOSE 8080
 # XMTP database persistence
 ENV XMTP_DB_DIRECTORY=/data/.xmtp-data
 
-# Entrypoint logic - optimized for the dedicated Hermit service.
-#
-# For hermit.4626.fun, the cleanest thing is to set this as the Start Command override:
-#     ./node_modules/.bin/tsx server/agents/hermit/bootstrap.ts
-#
-# The default below also works if you just set AGENT_PROCESS=hermit.
-CMD ["bash", "-lc", "if [ \"${AGENT_PROCESS:-keepr}\" = \"hermit\" ]; then exec ./node_modules/.bin/tsx server/agents/hermit/bootstrap.ts; fi; install -d -m 0755 /data/.xmtp-data && find /data/.xmtp-data -xdev -exec chown -h node:node {} + && exec gosu node bash server/agents/eliza/run-agent.sh"]
+# Entrypoint: volume permissions, then bootstrap.ts (health listener before heavy imports).
+CMD ["bash", "-lc", "if [ \"${AGENT_PROCESS:-keepr}\" = \"hermit\" ]; then exec ./node_modules/.bin/tsx server/agents/hermit/bootstrap.ts; fi; install -d -m 0755 /data/.xmtp-data && find /data/.xmtp-data -xdev -exec chown -h node:node {} + && exec gosu node ./node_modules/.bin/tsx server/agents/eliza/bootstrap.ts"]
