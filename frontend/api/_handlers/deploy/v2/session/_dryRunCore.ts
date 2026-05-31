@@ -1850,8 +1850,14 @@ async function runDryRunPhase(params: {
   }) => Promise<Array<{ args?: Record<string, unknown> }>>
   getBlockNumber?: () => Promise<bigint | null>
   allowLocalForkPhase4InvariantSkip?: boolean
-}): Promise<{ phase: DryRunPhaseResult; failure?: DryRunFailure; lastSuccessfulTxHash?: Hex }> {
+}): Promise<{
+  phase: DryRunPhaseResult
+  failure?: DryRunFailure
+  lastSuccessfulTxHash?: Hex
+  deployPhase3StrategiesTxHash?: Hex
+}> {
   let lastSuccessfulTxHash: Hex | undefined
+  let deployPhase3StrategiesTxHash: Hex | undefined
   for (let callIndex = 0; callIndex < params.calls.length; callIndex += 1) {
     let call = params.calls[callIndex]!
     const to = getAddress(call.to)
@@ -1907,6 +1913,9 @@ async function runDryRunPhase(params: {
             throw new Error(revertDetail)
           }
           lastSuccessfulTxHash = hash
+          if (params.name === 'phase3' && isDeployPhase3StrategiesCall(call)) {
+            deployPhase3StrategiesTxHash = hash
+          }
           completed = true
           break
         } catch (sendError) {
@@ -2024,6 +2033,7 @@ async function runDryRunPhase(params: {
       callCount: params.calls.length,
     },
     lastSuccessfulTxHash,
+    deployPhase3StrategiesTxHash,
   }
 }
 
@@ -2429,11 +2439,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (
           phaseEntry.name === 'phase3' &&
           result.phase.status === 'passed' &&
-          phase1Batcher &&
-          result.lastSuccessfulTxHash
+          phase1Batcher
         ) {
-          const phase3Call = phaseCalls.find(isDeployPhase3StrategiesCall) ?? phaseCalls[0]
-          if (phase3Call) {
+          const phase3DeployCall = phaseCalls.find(isDeployPhase3StrategiesCall)
+          const deployPhase3TxHash = result.deployPhase3StrategiesTxHash
+          if (phase3DeployCall && deployPhase3TxHash) {
             try {
               const strategyReg = await ensurePhase3VaultStrategyRegistrationOnFork({
                 publicClient: publicClient as any,
@@ -2443,8 +2453,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 forkRequest,
                 forkMode,
                 batcher: phase1Batcher,
-                phase3Call,
-                deployTxHash: result.lastSuccessfulTxHash,
+                phase3Call: phase3DeployCall,
+                deployTxHash: deployPhase3TxHash,
                 ownerBalanceHex: FORK_BALANCE_HEX,
               })
               if (strategyReg.ensured) {

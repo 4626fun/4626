@@ -53,9 +53,14 @@ import {
   searchZoraCreatorCoinsForSwap,
   zoraCoinsToSwapTokenOptions,
 } from '@/lib/swap/zoraTokenSearch'
-import { enrichSwapTokenOption, swapTokenOptionNeedsLabelEnrichment } from '@/lib/swap/swapTokenLabels'
+import {
+  enrichSwapTokenOption,
+  resolveSwapTokenVerified,
+  swapTokenOptionNeedsLabelEnrichment,
+} from '@/lib/swap/swapTokenLabels'
 import { fetchWalletZoraHoldingsBundle } from '@/lib/zora/walletHoldings'
-import { deriveSwapUsdEstimates } from '@/lib/swap/swapAmountUsd'
+import { deriveSwapUsdEstimates, isNativeEthToken, isUsdStablecoinToken } from '@/lib/swap/swapAmountUsd'
+import { extractSwapQuoteDetails } from '@/lib/swap/swapQuoteDetails'
 import { amountUnitsFromBalancePercent } from '@/lib/swap/swapDisplayAmount'
 import { useSwapAssetBalance } from '@/lib/swap/useSwapAssetBalance'
 import { useSwapTokenUsdPrices } from '@/lib/swap/useSwapTokenUsdPrices'
@@ -64,7 +69,6 @@ import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { resolveEffectiveExecutionTrack, deriveAccountChromeExecution, shouldUseBaseAppSubAccountPath, isZoraLinkedFromAccountSignals } from '@/lib/wallet/userExecutionTrack'
 import { resolveEmbeddedOwnerOnCanonicalCsw } from '@/lib/wallet/cswOwnerRead'
-import { pickQuote } from '@/lib/uniswap/tradingApi'
 import { type WalletMode } from '@/lib/uniswap/walletMode'
 import {
   evaluateCanonicalSignerGate,
@@ -229,8 +233,6 @@ async function fetchSwapCreatorCoinOptions(params: {
   return enrichDiscoveredSwapTokenOptions(sliced)
 }
 
-type QuoteShape = Record<string, unknown>
-
 let warnedSwapPrivyHookFailure = false
 let canonicalSessionAutoRefreshAttemptedGlobal = false
 function warnSwapPrivyHookFailure(scope: string, error: unknown) {
@@ -376,12 +378,6 @@ function parsePositiveAmountToUnits(value: string, decimals: number): bigint | n
   } catch {
     return null
   }
-}
-
-function formatPercent(value: unknown): string | null {
-  const n = typeof value === 'number' ? value : Number(value)
-  if (!Number.isFinite(n)) return null
-  return `${n.toFixed(2)}%`
 }
 
 // ─── Liquidity position card ────────────────────────────────────────────────
@@ -1457,8 +1453,7 @@ export function Swap() {
       const resolved = enriched ?? option
       return {
         ...resolved,
-        // Never auto-trust URL-injected creator/share tokens; only core defaults to verified.
-        verified: resolved.verified ?? (resolved.group === 'core'),
+        verified: resolveSwapTokenVerified(resolved),
         sectionTag:
           resolved.group === 'creator' ? 'creator' : resolved.group === 'share' ? 'content' : undefined,
       }
@@ -1664,6 +1659,24 @@ export function Swap() {
     [amountInUnits, buyAmountDisplay, tokenIn, tokenOut, swapUsdPrices],
   )
 
+  const tokenOutUsdPrice = useMemo(() => {
+    const normalized = tokenOut.trim().toLowerCase()
+    if (isUsdStablecoinToken(tokenOut)) return 1
+    if (isNativeEthToken(tokenOut)) return swapUsdPrices.ethUsd > 0 ? swapUsdPrices.ethUsd : null
+    return swapUsdPrices.tokenUsdByAddress.get(normalized) ?? null
+  }, [swapUsdPrices.ethUsd, swapUsdPrices.tokenUsdByAddress, tokenOut])
+
+  const swapQuoteDetails = useMemo(
+    () =>
+      extractSwapQuoteDetails({
+        quote,
+        ethUsd: swapUsdPrices.ethUsd,
+        tokenOutDecimals: tokenOutBalanceQuery.data?.decimals ?? 18,
+        tokenOutUsd: tokenOutUsdPrice,
+      }),
+    [quote, swapUsdPrices.ethUsd, tokenOutBalanceQuery.data?.decimals, tokenOutUsdPrice],
+  )
+
   const tokenOutBalanceLabel = useMemo(() => {
     if (!tokenOutBalanceQuery.isSuccess || !tokenOutBalanceQuery.data) return undefined
     return fmtBalFromAmount(tokenOutBalanceQuery.data.formatted, tokenOutSymbol)
@@ -1738,62 +1751,6 @@ export function Swap() {
     refreshAuthSession,
   ])
 
-  const selectedQuote = useMemo<QuoteShape | null>(() => {
-    if (!quote) return null
-    const candidate = pickQuote(quote) ?? quote
-    return candidate as QuoteShape
-  }, [quote])
-
-  const routeSummary = useMemo(() => {
-    const routeCandidate =
-      selectedQuote?.route ?? selectedQuote?.routeString ?? selectedQuote?.routing ?? quote?.routing
-    if (routeCandidate === null || routeCandidate === undefined) return null
-    const text = String(routeCandidate).trim()
-    return text || null
-  }, [selectedQuote, quote])
-
-  const priceImpactLabel = useMemo(() => {
-    const priceImpactCandidate =
-      selectedQuote?.priceImpact ??
-      selectedQuote?.priceImpactPercent ??
-      quote?.priceImpact ??
-      quote?.priceImpactPercent
-    return formatPercent(priceImpactCandidate)
-  }, [selectedQuote, quote])
-
-  const gasEstimateLabel = useMemo(() => {
-    const gasCandidate =
-      selectedQuote?.gasFeeUSD ??
-      selectedQuote?.gasEstimateUSD ??
-      quote?.gasFeeUSD ??
-      quote?.gasEstimateUSD
-    if (typeof gasCandidate === 'string' && gasCandidate.trim()) return gasCandidate
-    const numeric = typeof gasCandidate === 'number' ? gasCandidate : Number(gasCandidate)
-    if (!Number.isFinite(numeric)) return null
-    return `$${numeric.toFixed(2)}`
-  }, [selectedQuote, quote])
-
-  const lpFeeUsd = useMemo(() => {
-    const candidate = selectedQuote?.lpFee
-    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
-      return `$${candidate.toFixed(2)}`
-    }
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate.trim()
-    }
-    return null
-  }, [selectedQuote])
-
-  const protocolFeeUsd = useMemo(() => {
-    const candidate = selectedQuote?.protocolFee
-    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
-      return `$${candidate.toFixed(2)}`
-    }
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate.trim()
-    }
-    return null
-  }, [selectedQuote])
 
   const handleSwitchTokens = useCallback(() => {
     switchTokens()
@@ -2095,11 +2052,13 @@ export function Swap() {
                         }
                         quoteUpdatedAt={quoteUpdatedAt ? new Date(quoteUpdatedAt).toLocaleTimeString() : null}
                         approvalRequired={approvalRequired}
-                        routeSummary={routeSummary}
-                        gasEstimateLabel={gasEstimateLabel}
-                        priceImpactLabel={priceImpactLabel}
-                        lpFeeUsd={lpFeeUsd}
-                        protocolFeeUsd={protocolFeeUsd}
+                        routeSummary={swapQuoteDetails.routeSummary}
+                        routeLegs={swapQuoteDetails.routeLegs}
+                        gasEstimateLabel={swapQuoteDetails.gasEstimateLabel}
+                        priceImpactLabel={swapQuoteDetails.priceImpactLabel}
+                        lpFeeUsd={swapQuoteDetails.lpFeeUsd}
+                        protocolFeeUsd={swapQuoteDetails.protocolFeeUsd}
+                        quoteAggregatorLabel={swapQuoteDetails.aggregatorLabel}
                         selectedChainId={swapChainId}
                         walletChainId={walletChainId}
                         onSelectChain={handleSelectSwapChain}

@@ -5,7 +5,12 @@ import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import { APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/env/host'
 import { buildCdpPriceRequest, executeCdpSwap, fetchCdpSwapPrice } from '@/lib/swap/cdpApi'
-import { resolveSwapProviderSelection, shouldFallbackToUniswap, type SwapProvider } from '@/lib/swap/providerConfig'
+import {
+  resolveSwapProviderSelection,
+  shouldFallbackToUniswap,
+  shouldFallbackToZoraTrade,
+  type SwapProvider,
+} from '@/lib/swap/providerConfig'
 import {
   buildSwapFromZoraQuote,
   fetchZoraTradeQuoteFromApi,
@@ -299,6 +304,68 @@ async function fetchTradeQuoteFromUniswap(body: TradeQuoteRequest): Promise<Trad
   return await post<TradeQuoteResponse>(API_ENDPOINTS.uniswap.quote, upstreamBody)
 }
 
+function isPrimaryQuoteWithoutRoute(quote: TradeQuoteResponse): boolean {
+  const providerRaw =
+    typeof (quote as { provider?: unknown }).provider === 'string'
+      ? String((quote as { provider?: string }).provider).trim().toLowerCase()
+      : ''
+  if (providerRaw === 'zora') return false
+  if ((quote as { liquidityAvailable?: boolean }).liquidityAvailable === false) return true
+
+  const picked = pickQuote(quote)
+  const outputAmount =
+    (picked?.output as { amount?: unknown } | undefined)?.amount ??
+    (quote as { toAmount?: unknown }).toAmount ??
+    picked?.amountOut
+  const normalizedOut = String(outputAmount ?? '').trim()
+  return !normalizedOut || normalizedOut === '0'
+}
+
+async function fetchZoraTradeQuoteForRequest(
+  body: TradeQuoteRequest,
+  normalizedAmount: string,
+): Promise<TradeQuoteResponse> {
+  const swapper = String(body.swapper ?? '').trim()
+  if (!swapper) throw new Error('Swapper address is required for Zora trade quotes')
+  const zoraPayload = await fetchZoraTradeQuoteFromApi({
+    tokenIn: body.tokenIn,
+    tokenOut: body.tokenOut,
+    amountIn: normalizedAmount,
+    sender: swapper,
+    slippagePct: Number(body.slippageTolerance ?? 0.5),
+  })
+  return zoraTradeQuoteToResponse({
+    tokenIn: body.tokenIn,
+    tokenOut: body.tokenOut,
+    amountIn: normalizedAmount,
+    payload: zoraPayload,
+  })
+}
+
+async function fetchPrimaryProviderQuote(
+  body: TradeQuoteRequest,
+  effectivePrimary: SwapProvider,
+  effectiveFallback: SwapProvider | null,
+): Promise<TradeQuoteResponse> {
+  if (effectivePrimary === 'uniswap') {
+    const quote = await fetchTradeQuoteFromUniswap(body)
+    return attachProviderMetadata(quote, 'uniswap')
+  }
+  try {
+    const cdpQuote = await fetchTradeQuoteFromCdp(body)
+    return attachProviderMetadata(cdpQuote, 'cdp')
+  } catch (error) {
+    if (effectiveFallback !== 'uniswap' || !shouldFallbackToUniswap(error)) {
+      throw error
+    }
+    const fallbackQuote = await fetchTradeQuoteFromUniswap(body)
+    return attachProviderMetadata(fallbackQuote, 'uniswap', {
+      fallbackUsed: true,
+      preferredProvider: 'cdp',
+    })
+  }
+}
+
 async function fetchTradeQuoteFromCdp(body: TradeQuoteRequest): Promise<TradeQuoteResponse> {
   const sameChain = Number(body.tokenInChainId) === Number(body.tokenOutChainId)
   if (!sameChain) {
@@ -452,41 +519,27 @@ export async function fetchTradeQuote(body: TradeQuoteRequest): Promise<TradeQuo
   const pending = quoteInFlight.get(key)
   if (pending) return pending
 
-  const request = (async () => {
-    if (shouldUseZoraTradeRoute(normalizedBody, Boolean(normalizedBody.useZoraTradeRoute))) {
-      const swapper = String(normalizedBody.swapper ?? '').trim()
-      if (!swapper) throw new Error('Swapper address is required for Zora trade quotes')
-      const zoraPayload = await fetchZoraTradeQuoteFromApi({
-        tokenIn: normalizedBody.tokenIn,
-        tokenOut: normalizedBody.tokenOut,
-        amountIn: normalizedAmount,
-        sender: swapper,
-        slippagePct: Number(normalizedBody.slippageTolerance ?? 0.5),
-      })
-      return zoraTradeQuoteToResponse({
-        tokenIn: normalizedBody.tokenIn,
-        tokenOut: normalizedBody.tokenOut,
-        amountIn: normalizedAmount,
-        payload: zoraPayload,
-      })
-    }
+  const zoraEligible = shouldUseZoraTradeRoute(normalizedBody, Boolean(normalizedBody.useZoraTradeRoute))
 
-    if (effectivePrimary === 'uniswap') {
-      const quote = await fetchTradeQuoteFromUniswap(normalizedBody)
-      return attachProviderMetadata(quote, 'uniswap')
-    }
+  const request = (async () => {
     try {
-      const cdpQuote = await fetchTradeQuoteFromCdp(normalizedBody)
-      return attachProviderMetadata(cdpQuote, 'cdp')
+      const quote = await fetchPrimaryProviderQuote(normalizedBody, effectivePrimary, effectiveFallback)
+      if (zoraEligible && isPrimaryQuoteWithoutRoute(quote)) {
+        throw new Error('No route for pair')
+      }
+      return quote
     } catch (error) {
-      if (effectiveFallback !== 'uniswap' || !shouldFallbackToUniswap(error)) {
+      if (!zoraEligible || !shouldFallbackToZoraTrade(error)) {
         throw error
       }
-      const fallbackQuote = await fetchTradeQuoteFromUniswap(normalizedBody)
-      return attachProviderMetadata(fallbackQuote, 'uniswap', {
+      const preferredProvider =
+        effectivePrimary === 'cdp' && effectiveFallback === 'uniswap' ? 'cdp' : effectivePrimary
+      const zoraQuote = await fetchZoraTradeQuoteForRequest(normalizedBody, normalizedAmount)
+      return {
+        ...zoraQuote,
         fallbackUsed: true,
-        preferredProvider: 'cdp',
-      })
+        preferredProvider,
+      } as TradeQuoteResponse
     }
   })()
     .then((data) => {

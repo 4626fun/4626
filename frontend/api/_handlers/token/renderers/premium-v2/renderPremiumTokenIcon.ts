@@ -2,7 +2,11 @@ import sharp from 'sharp'
 
 import {
   buildPremiumSubjectStack,
+  renderBackgroundCard,
   renderCreatorSignature,
+  renderFrameBloom,
+  renderOuterGlow,
+  renderPremiumFrame,
   renderPremiumStackedUnderlay,
   type PremiumTokenIconParams,
 } from '../premium-classic/renderPremiumTokenIcon.js'
@@ -11,11 +15,18 @@ import { solidifyBreakoutLayer } from './breakout.js'
 import { renderV2PremiumFrame } from './frame.js'
 import { renderV2FrameBloom, renderV2OuterGlow } from './glow.js'
 import {
+  applyPremiumHeroPresentation,
   finishV2SubjectLayer,
   resolveV2SegmentationMaskForIcon,
   type SubjectSourceClass,
 } from './subject.js'
-import { gradeV2SourceParams } from './subjectGrade.js'
+import {
+  resolveV2CardUnderlaySourceClass,
+  resolveV2SegmentationSourceClass,
+  resolveV2SilhouetteSpillClipRegion,
+  shouldSkipV2HeroBackgroundDarken,
+} from './cardUnderlay.js'
+import { applyV2SubjectLut } from './subjectGrade.js'
 
 export type { PremiumTokenIconParams }
 
@@ -26,13 +37,14 @@ function compositeStep(input: Buffer, blend: BlendMode): sharp.OverlayOptions {
 }
 
 /**
- * Premium v2: Fuji LUT, flat card, ghost stack across full card (silhouette spills into padding),
- * bezel-only glow, platinum frame.
+ * Premium v2: Fuji on subject layers only, v2 card + platinum frame for standard coins.
+ * Prepared hero cutouts use classic background/chrome (blue bezel + padding atmosphere) so
+ * the hat breakout matches production; subject still gets Fuji via applyV2SubjectLut.
  */
 export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Promise<Buffer> {
-  const gradedParams = await gradeV2SourceParams(params)
+  const preparedHeroCutoutBreakout = Boolean(params.heroCutoutSourceImage?.length)
   const subject = await buildPremiumSubjectStack({
-    ...gradedParams,
+    ...params,
     stackUnderlayClip: 'chamber',
   })
   const {
@@ -45,48 +57,71 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
     subjectPlacement,
   } = subject
   const sourceClass = analysis?.sourceClass as SubjectSourceClass | undefined
+  const skipHeroBackgroundDarken = analysis ? shouldSkipV2HeroBackgroundDarken(analysis) : false
+  const segmentationSourceClass = analysis
+    ? resolveV2SegmentationSourceClass(analysis, sourceClass)
+    : sourceClass
 
-  const segmentationMask = await resolveV2SegmentationMaskForIcon({
-    sourceImage: gradedParams.sourceImage,
-    sourceClass,
-    size,
-  })
+  const segmentationMask = preparedHeroCutoutBreakout
+    ? null
+    : await resolveV2SegmentationMaskForIcon({
+        sourceImage: params.sourceImage,
+        sourceClass: segmentationSourceClass,
+        size,
+      })
 
   const stackedUnderlay =
+    !preparedHeroCutoutBreakout &&
     segmentationMask &&
-    gradedParams.sourceImage?.length &&
+    params.sourceImage?.length &&
     analysis &&
     subjectPlacement
       ? await renderPremiumStackedUnderlay({
           size,
           layout,
-          sourceImage: Buffer.from(gradedParams.sourceImage),
+          sourceImage: Buffer.from(params.sourceImage),
           scale: subjectPlacement.renderScale,
           fit: subjectPlacement.fitMode,
-          sourceClass: analysis.sourceClass,
+          sourceClass: resolveV2CardUnderlaySourceClass(analysis),
           hasTransparency: analysis.hasTransparency,
           topBiasPx: subjectPlacement.topBiasPx,
-          clipRegion: 'card',
+          clipRegion: resolveV2SilhouetteSpillClipRegion(),
           subjectAlphaMaskPng: segmentationMask.subjectMaskPng,
         })
       : chamberUnderlay
 
-  const backgroundCard = await renderV2BackgroundCard({ size, layout })
-  const outerGlow = await renderV2OuterGlow({ size, layout })
-  const frameBloom = await renderV2FrameBloom({ size, layout })
-  const premiumFrame = await renderV2PremiumFrame({ size, layout })
+  const [backgroundCard, outerGlow, frameBloom, premiumFrame] = preparedHeroCutoutBreakout
+    ? await Promise.all([
+        renderBackgroundCard({ size, layout, omitBottomRightAura: true }),
+        renderOuterGlow({ size, layout, omitBottomRightAura: true }),
+        renderFrameBloom({ size, layout }),
+        renderPremiumFrame({ size, layout }),
+      ])
+    : await Promise.all([
+        renderV2BackgroundCard({ size, layout }),
+        renderV2OuterGlow({ size, layout }),
+        renderV2FrameBloom({ size, layout }),
+        renderV2PremiumFrame({ size, layout }),
+      ])
 
-  const heroLayer = await finishV2SubjectLayer({
-    layer: heroCompositeLayer,
-    layout,
-    sourceImage: gradedParams.sourceImage,
-    sourceClass,
-    size,
-    segmentationMask,
-    edgeVignette: true,
-  })
+  const heroBase = preparedHeroCutoutBreakout
+    ? await applyPremiumHeroPresentation(heroCompositeLayer, sourceClass, size)
+    : await finishV2SubjectLayer({
+        layer: heroCompositeLayer,
+        layout,
+        sourceImage: params.sourceImage,
+        sourceClass,
+        size,
+        segmentationMask,
+        edgeVignette: true,
+        skipBackgroundDarken: skipHeroBackgroundDarken,
+      })
+  const heroLayer = await applyV2SubjectLut(heroBase)
 
-  const overlays: sharp.OverlayOptions[] = []
+  const overlays: sharp.OverlayOptions[] = [
+    compositeStep(outerGlow, 'screen'),
+    compositeStep(frameBloom, 'screen'),
+  ]
   if (stackedUnderlay.rearLayerB) {
     overlays.push(compositeStep(stackedUnderlay.rearLayerB, 'over'))
   }
@@ -94,23 +129,26 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
     overlays.push(compositeStep(stackedUnderlay.rearLayerA, 'over'))
   }
   overlays.push(
-    compositeStep(outerGlow, 'screen'),
-    compositeStep(frameBloom, 'screen'),
     compositeStep(heroLayer, 'over'),
     compositeStep(premiumFrame, 'over'),
   )
 
   if (breakoutLayer) {
-    const breakoutFinished = await finishV2SubjectLayer({
-      layer: breakoutLayer,
-      layout,
-      sourceImage: gradedParams.sourceImage,
-      sourceClass,
-      size,
-      segmentationMask,
-      edgeVignette: false,
-    })
-    const breakout = await solidifyBreakoutLayer(breakoutFinished)
+    const breakoutBase = preparedHeroCutoutBreakout
+      ? breakoutLayer
+      : await solidifyBreakoutLayer(
+          await finishV2SubjectLayer({
+            layer: breakoutLayer,
+            layout,
+            sourceImage: params.sourceImage,
+            sourceClass,
+            size,
+            segmentationMask,
+            edgeVignette: false,
+            skipBackgroundDarken: skipHeroBackgroundDarken,
+          }),
+        )
+    const breakout = await applyV2SubjectLut(breakoutBase)
     overlays.push(compositeStep(breakout, 'over'))
   }
 
@@ -125,9 +163,11 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
     overlays.push(compositeStep(signature, 'over'))
   }
 
+  const flattenBg = preparedHeroCutoutBreakout ? '#000000' : '#010203'
+
   return sharp(backgroundCard)
     .composite(overlays)
-    .flatten({ background: '#010203' })
+    .flatten({ background: flattenBg })
     .png()
     .toBuffer()
 }

@@ -96,12 +96,8 @@ export function deriveSwapUsdEstimates(params: {
   const amountIn = parsePositiveHumanAmount(params.amountInUnits)
   const amountOut = parsePositiveHumanAmount(params.estimatedOut)
 
-  let sellUsd = amountIn != null ? humanAmountToUsd(amountIn, params.tokenIn, params.prices) : null
-  let buyUsd = amountOut != null ? humanAmountToUsd(amountOut, params.tokenOut, params.prices) : null
-
-  // Exact-input swaps: mirror sell USD to buy only when we have a positive output amount.
-  if (sellUsd == null && buyUsd != null) sellUsd = buyUsd
-  if (buyUsd == null && sellUsd != null && amountOut != null && amountOut > 0) buyUsd = sellUsd
+  const sellUsd = amountIn != null ? humanAmountToUsd(amountIn, params.tokenIn, params.prices) : null
+  const buyUsd = amountOut != null ? humanAmountToUsd(amountOut, params.tokenOut, params.prices) : null
 
   return {
     amountInUsd: sellUsd != null ? formatSwapUsd(sellUsd) : null,

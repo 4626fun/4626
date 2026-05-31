@@ -132,12 +132,12 @@ export async function applyLut3dToPngBuffer(
   const intensity = clampIntensity(options.intensity)
   const maxDimension = options.maxDimension ?? DEFAULT_MAX_DIMENSION
 
-  let pipeline = sharp(input).ensureAlpha()
-  const meta = await pipeline.metadata()
+  const meta = await sharp(input).metadata()
   const w = meta.width ?? 0
   const h = meta.height ?? 0
   if (!w || !h) return input
 
+  let pipeline = sharp(input).ensureAlpha()
   if (Math.max(w, h) > maxDimension) {
     pipeline = pipeline.resize({
       width: w >= h ? maxDimension : undefined,
@@ -148,7 +148,7 @@ export async function applyLut3dToPngBuffer(
   }
 
   const { data, info } = await pipeline.raw().toBuffer({ resolveWithObject: true })
-  const rgba = new Uint8ClampedArray(data.buffer, data.byteOffset, data.byteLength)
+  const rgba = new Uint8ClampedArray(Buffer.from(data))
   applyLut3dToRgba(rgba, info.width, info.height, lut, intensity)
   return sharp(Buffer.from(rgba), {
     raw: { width: info.width, height: info.height, channels: 4 },

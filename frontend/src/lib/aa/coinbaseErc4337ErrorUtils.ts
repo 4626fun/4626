@@ -1,6 +1,7 @@
 import { decodeErrorResult, type Hex } from 'viem'
 
 import { isHexString } from '@/lib/aa/coinbaseErc4337Signature'
+import { ZORA_SWAP_SIMULATION_FAILED_MESSAGE } from '@/lib/swap/swapStatusCopy'
 
 /** Bundlers vary receipt shape — read tx hash from nested or top-level fields. */
 export function extractUserOpReceiptTxHash(receipt: unknown): Hex | null {
@@ -589,9 +590,7 @@ export function buildPreflightSimulationRejectionError(params: {
     revertData?.startsWith('0x2c4029e9') ||
     callTo === ZORA_UNIVERSAL_ROUTER_BASE
   ) {
-    return new PreflightSimulationRejectionError(
-      'The Zora swap would revert on your smart wallet. Refresh the quote, confirm the Permit2 signature, and ensure the wallet holds enough of the token you are selling.',
-    )
+    return new PreflightSimulationRejectionError(ZORA_SWAP_SIMULATION_FAILED_MESSAGE)
   }
 
   const detail = direct?.error ?? params.simResult.error ?? 'Underlying call would revert'

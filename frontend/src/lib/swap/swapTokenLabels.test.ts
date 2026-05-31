@@ -6,6 +6,7 @@ import { AKITA_DEFAULTS } from '@/config/contracts.defaults'
 import {
   isAddressLikeSwapSymbol,
   isOpaqueInternalTokenLabel,
+  resolveSwapTokenVerified,
   swapTokenOptionNeedsLabelEnrichment,
 } from './swapTokenLabels'
 import type { SwapTokenOption } from '@/components/swap/TokenSelectorModal'
@@ -26,6 +27,35 @@ describe('swapTokenLabels', () => {
     const address = getAddress(AKITA_DEFAULTS.token)
     expect(isAddressLikeSwapSymbol('0x5b67...fa75', address)).toBe(true)
     expect(isAddressLikeSwapSymbol('AKITA', address)).toBe(false)
+  })
+
+  it('treats zora creator/share tokens as verified unless explicitly marked false', () => {
+    const address = getAddress(AKITA_DEFAULTS.token)
+    expect(
+      resolveSwapTokenVerified({
+        address,
+        symbol: 'AKITA',
+        name: 'Akita',
+        group: 'creator',
+      }),
+    ).toBe(true)
+    expect(
+      resolveSwapTokenVerified({
+        address,
+        symbol: '0x5b67...fa75',
+        name: '0x5b67...fa75',
+        group: 'creator',
+      }),
+    ).toBe(true)
+    expect(
+      resolveSwapTokenVerified({
+        address,
+        symbol: '0x5b67...fa75',
+        name: '0x5b67...fa75',
+        group: 'share',
+        verified: false,
+      }),
+    ).toBe(false)
   })
 
   it('enriches mis-registered share stubs that still use address placeholders', () => {

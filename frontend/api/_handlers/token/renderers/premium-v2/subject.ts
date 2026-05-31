@@ -102,17 +102,19 @@ export async function finishV2SubjectLayer(params: {
   segmentationMask: SubjectSegmentationMask | null
   /** Breakout sits above frame — skip edge vignette to avoid double-darkening. */
   edgeVignette: boolean
+  /** Opaque avatar coins (pixel / low-res illustration) — keep flat bg like classic. */
+  skipBackgroundDarken?: boolean
 }): Promise<Buffer> {
   let out = await applyPremiumHeroPresentation(params.layer, params.sourceClass, params.size)
 
-  if (params.segmentationMask) {
+  if (params.segmentationMask && !params.skipBackgroundDarken) {
     out = await darkenLayerBackgroundWithMask({
       layer: out,
       mask: params.segmentationMask,
     })
   }
 
-  if (params.edgeVignette) {
+  if (params.edgeVignette && !params.skipBackgroundDarken) {
     out = await applyPremiumChamberVignette(out, params.layout, params.segmentationMask)
   }
 

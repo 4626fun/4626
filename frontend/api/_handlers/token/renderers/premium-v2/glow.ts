@@ -171,5 +171,11 @@ export async function renderV2FrameBloom(params: {
     .png()
     .toBuffer()
   const bloomOpacity = tint === 'white' ? 0.3 : tint === 'blue' ? 0.34 : 0.32
-  return applyOpacity(merged, size <= 128 ? bloomOpacity * 0.85 : bloomOpacity)
+  const bloomed = await applyOpacity(merged, size <= 128 ? bloomOpacity * 0.85 : bloomOpacity)
+  const bezelMask = await createBezelGlowClipMask(layout)
+  return sharp(bloomed)
+    .ensureAlpha()
+    .composite([{ input: bezelMask, blend: 'dest-in' }])
+    .png()
+    .toBuffer()
 }

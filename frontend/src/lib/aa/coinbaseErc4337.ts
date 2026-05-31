@@ -25,6 +25,7 @@ import {
   formatZoraRouterSimulationFailure,
   isZoraBundlerSimulationMismatchError,
 } from '@/lib/zora/zoraTradeApi'
+import { ZORA_SWAP_SIMULATION_FAILED_MESSAGE } from '@/lib/swap/swapStatusCopy'
 import { logger } from '@/lib/observability/logger'
 import { trackEvent } from '@/lib/analytics/analytics'
 import { DATA_SUFFIX } from '@/lib/base/baseBuilderCodes'
@@ -1090,7 +1091,7 @@ export async function simulateSmartWalletCalls(params: {
       success: false,
       error:
         directCallResult.error ??
-        'Zora swap would revert on your smart wallet. Increase slippage, try a smaller size, and refresh the quote.',
+        ZORA_SWAP_SIMULATION_FAILED_MESSAGE,
       revertData: directCallResult.revertData,
       errorName: directCallResult.errorName,
       directCallResult,

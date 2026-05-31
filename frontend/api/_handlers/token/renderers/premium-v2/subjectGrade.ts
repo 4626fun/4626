@@ -4,12 +4,73 @@ import {
   generateSegmentationMask,
   type SegmentationModel,
 } from '../../_segmentation.js'
-import { applyLut3dToUint8Source } from '../../../../../server/_lib/image/lut3dGrade.js'
+import {
+  applyLut3dToPngBuffer,
+  loadDefaultLut3d,
+} from '../../../../../server/_lib/image/lut3dGrade.js'
 import type { PremiumTokenIconParams } from '../premium-classic/renderPremiumTokenIcon.js'
 import type { SubjectSourceClass } from './subject.js'
 
-/** Fuji Classic Chrome — same LUT family as fujilab; improves subject/background separation before compose. */
-const V2_LUT_INTENSITY = Number(process.env.TOKEN_ICON_V2_LUT_INTENSITY ?? 0.36)
+/** Fuji Classic Chrome — same LUT family as fujilab. */
+export function resolveV2LutIntensity(): number {
+  const raw = Number(process.env.TOKEN_ICON_V2_LUT_INTENSITY ?? 0.36)
+  return Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 0.36
+}
+
+let cachedDefaultLut: Awaited<ReturnType<typeof loadDefaultLut3d>> | null = null
+
+async function getV2Lut() {
+  if (!cachedDefaultLut) cachedDefaultLut = await loadDefaultLut3d()
+  return cachedDefaultLut
+}
+
+/**
+ * Fuji grade on a subject layer only (hero / breakout). Skips transparent pixels so
+ * bezel and padding are not tinted; keeps hero/cutout alignment vs pre-compose LUT.
+ */
+export async function applyV2SubjectLut(layer: Buffer): Promise<Buffer> {
+  const intensity = resolveV2LutIntensity()
+  if (intensity <= 0) return layer
+
+  const { data: orig, info } = await sharp(layer)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  const px = info.width * info.height
+  const lut = await getV2Lut()
+  const graded = await applyLut3dToPngBuffer(layer, lut, { intensity })
+  const { data: out } = await sharp(graded)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+
+  for (let i = 0; i < px; i += 1) {
+    const o = i * 4
+    const a = orig[o + 3] ?? 0
+    if (a < 10) {
+      out[o] = orig[o]
+      out[o + 1] = orig[o + 1]
+      out[o + 2] = orig[o + 2]
+      out[o + 3] = a
+      continue
+    }
+    out[o + 3] = a
+  }
+
+  return sharp(Buffer.from(out), {
+    raw: { width: info.width, height: info.height, channels: 4 },
+  })
+    .png()
+    .toBuffer()
+}
+
+/** @deprecated Prefer applyV2SubjectLut on hero/breakout layers before chrome composite. */
+export async function applyV2PostComposeLut(png: Buffer): Promise<Buffer> {
+  const intensity = resolveV2LutIntensity()
+  if (intensity <= 0) return png
+  const lut = await getV2Lut()
+  return applyLut3dToPngBuffer(png, lut, { intensity })
+}
 
 const BACKGROUND_DARKEN_ENABLED = process.env.TOKEN_ICON_V2_BACKGROUND_DARKEN !== '0'
 const BACKGROUND_BRIGHTNESS = Number(process.env.TOKEN_ICON_V2_BACKGROUND_BRIGHTNESS ?? 0.72)
@@ -73,25 +134,14 @@ export async function resolveSubjectSegmentationMask(params: {
   return { width, height, subjectMaskPng }
 }
 
-/** Grade artwork with Fuji 3DL (fujilab-style) before classic subject/breakout stack. */
+/**
+ * v2 applies Fuji on the flattened composite (see applyV2PostComposeLut), not on raw source bytes,
+ * so prepared hero cutouts stay aligned with the in-frame subject.
+ */
 export async function gradeV2SourceParams(
   params: PremiumTokenIconParams,
 ): Promise<PremiumTokenIconParams> {
-  const intensity = Number.isFinite(V2_LUT_INTENSITY)
-    ? Math.max(0, Math.min(1, V2_LUT_INTENSITY))
-    : 0.36
-  if (intensity <= 0) return params
-
-  const [sourceImage, heroCutoutSourceImage] = await Promise.all([
-    applyLut3dToUint8Source(params.sourceImage, { intensity }),
-    applyLut3dToUint8Source(params.heroCutoutSourceImage, { intensity }),
-  ])
-
-  return {
-    ...params,
-    sourceImage,
-    heroCutoutSourceImage,
-  }
+  return params
 }
 
 export async function darkenLayerBackgroundWithMask(params: {

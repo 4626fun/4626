@@ -27,6 +27,7 @@ import {
 } from '@/lib/uniswap/policy'
 import { fetchSwapAssetBalanceViaApi } from '@/lib/swap/useSwapAssetBalance'
 import { resolveSwapTokenDecimals } from '@/lib/swap/swapTokenDecimals'
+import { SWAP_PREPARE_STATUS, swapPermitProgressStatus } from '@/lib/swap/swapStatusCopy'
 import { normalizeUniswapError, type NormalizedUniswapError, type UniswapErrorCode } from '@/lib/uniswap/error'
 import { areEquivalentSwapTokens, BASE_CHAIN_ID, getNestedAmountOut, NATIVE_TOKEN_ADDRESS } from '@/lib/uniswap/swapUtils'
 import { isAllowedCanonicalSigner, isCanonicalCsw, shouldApplyCanonicalEnforcement } from '@/wallet/canonicalWalletPolicy'
@@ -538,7 +539,7 @@ export function useSwapExecution(params: {
   const [permitSignaturePending, setPermitSignaturePending] = useState(false)
   const [permitSignatureReady, setPermitSignatureReady] = useState(false)
   const [fallbackActive, setFallbackActive] = useState(false)
-  const [swapProvider, setSwapProvider] = useState<'uniswap' | 'cdp'>('uniswap')
+  const [swapProvider, setSwapProvider] = useState<'uniswap' | 'cdp' | 'zora'>('uniswap')
   const [txState, setTxState] = useState<TxLifecycleState>('idle')
   const [txHash, setTxHash] = useState<string | null>(null)
   const [swapCompletion, setSwapCompletion] = useState<SwapCompletion | null>(null)
@@ -1060,7 +1061,8 @@ export function useSwapExecution(params: {
   const syncPermitRequirement = useCallback((nextQuote: TradeQuoteResponse | null | undefined) => {
     const requiresPermit = Boolean(pickPermitData(nextQuote))
     const providerRaw = typeof (nextQuote as any)?.provider === 'string' ? String((nextQuote as any).provider).trim().toLowerCase() : ''
-    const provider = providerRaw === 'cdp' ? 'cdp' : 'uniswap'
+    const provider =
+      providerRaw === 'cdp' ? 'cdp' : providerRaw === 'zora' ? 'zora' : 'uniswap'
     const fallback = Boolean((nextQuote as any)?.fallbackUsed)
     setSwapProvider(provider)
     setFallbackActive(fallback)
@@ -1100,7 +1102,7 @@ export function useSwapExecution(params: {
       throw new Error('Connected wallet does not support typed-data signatures required for Permit2.')
     }
 
-    setStatus('Permit2 signature required. Confirm in wallet…')
+    setStatus(swapPermitProgressStatus(params.executionMode))
     try {
       const signature = await signer.signTypedData({
         account: params.signerAddress,
@@ -1114,14 +1116,14 @@ export function useSwapExecution(params: {
       }
       setPermitSignaturePending(false)
       setPermitSignatureReady(true)
-      setStatus('Permit2 signature captured. Building swap…')
+      setStatus('Preparing swap…')
       return { permitData, signature }
     } catch (error) {
       setPermitSignaturePending(false)
       setPermitSignatureReady(false)
       throw error
     }
-  }, [params.walletClient, params.signerAddress])
+  }, [params.walletClient, params.signerAddress, params.executionMode])
 
   const finalizeZoraQuoteIfNeeded = useCallback(
     async (nextQuote: TradeQuoteResponse, amount: string): Promise<TradeQuoteResponse> => {
@@ -1145,7 +1147,7 @@ export function useSwapExecution(params: {
         throw new Error('Execution address is required to refresh the Zora trade quote.')
       }
 
-      setStatus('Permit2 signature required. Confirm in wallet…')
+      setStatus(swapPermitProgressStatus(params.executionMode))
       return executeZoraCswQuoteWithEscalation({
         quote: nextQuote,
         tokenIn: effectiveTokenIn,
@@ -1163,6 +1165,7 @@ export function useSwapExecution(params: {
     [
       effectiveTokenIn,
       params.executionAddress,
+      params.executionMode,
       params.parsedSlippage,
       params.publicClient,
       params.signerAddress,
@@ -1912,7 +1915,10 @@ export function useSwapExecution(params: {
         getTokenDecimals,
       })
       let swapTxForSend = swapTx
-      let activeSlippagePct = params.parsedSlippage
+      let activeSlippagePct = Math.max(
+        params.parsedSlippage,
+        readZoraQuotedSlippagePct(quote) ?? 0,
+      )
       if (quote && isZoraProviderQuote(quote)) {
         const amount = readQuoteInputAmount(quote)
         if (!amount) {
@@ -1944,7 +1950,7 @@ export function useSwapExecution(params: {
             )
           }
         }
-        setStatus('Refreshing Zora quote for submit…')
+        setStatus(SWAP_PREPARE_STATUS)
         const executableQuote = await prepareZoraQuoteForExecute({
           quote,
           tokenIn: effectiveTokenIn,
@@ -1979,7 +1985,10 @@ export function useSwapExecution(params: {
         assertValidSwapTransaction(built.swap)
         swapTxForSend = built.swap
         setSwapTx(built.swap)
-        activeSlippagePct = readZoraQuotedSlippagePct(executableQuote) ?? activeSlippagePct
+        activeSlippagePct = Math.max(
+          activeSlippagePct,
+          readZoraQuotedSlippagePct(executableQuote) ?? 0,
+        )
       }
       assertSwapSubmitEpochUnchanged(submitEpoch)
       let activeSwapTx = swapTxForSend
@@ -2011,11 +2020,12 @@ export function useSwapExecution(params: {
           if (!canRefreshZora) throw sendError
           const amount = readQuoteInputAmount(quote)
           if (!amount || !params.executionAddress) throw sendError
-          const retrySlippagePct = pickNextZoraBundlerRetrySlippagePct(activeSlippagePct)
-          if (retrySlippagePct <= activeSlippagePct) throw sendError
-          setStatus(
-            `Bundler rejected the swap at ${activeSlippagePct}% slippage — refreshing at ${retrySlippagePct}%…`,
-          )
+          let retrySlippagePct = pickNextZoraBundlerRetrySlippagePct(activeSlippagePct)
+          if (retrySlippagePct != null && retrySlippagePct > params.parsedSlippage + 1e-9) {
+            retrySlippagePct = null
+          }
+          if (retrySlippagePct == null || retrySlippagePct <= activeSlippagePct) throw sendError
+          setStatus(SWAP_PREPARE_STATUS)
           const executableQuote = await prepareZoraQuoteForExecute({
             quote,
             tokenIn: effectiveTokenIn,

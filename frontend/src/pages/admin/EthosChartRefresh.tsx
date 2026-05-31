@@ -32,6 +32,8 @@ interface HealthData {
     target: string;
     derived?: boolean;
     observedIn?: string;
+    migrationFilename?: string;
+    migrationContent?: string;
   }>;
   indexRecommendationsSummary?: {
     total: number;
@@ -50,6 +52,9 @@ export default function EthosChartRefresh() {
   // Executable index drop state (safety: requires exact name re-type)
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [confirmText, setConfirmText] = useState('');
+
+  // Expandable slow query rows (indices into the slowChartQueries array)
+  const [expandedSlow, setExpandedSlow] = useState<Set<number>>(new Set());
 
   const fetchHealth = async () => {
     setHealthLoading(true);
@@ -164,6 +169,15 @@ export default function EthosChartRefresh() {
   const cancelDropConfirmation = () => {
     setDropTarget(null);
     setConfirmText('');
+  };
+
+  const toggleSlowQuery = (idx: number) => {
+    setExpandedSlow(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
   };
 
   return (
@@ -355,13 +369,34 @@ export default function EthosChartRefresh() {
                 <p className="text-[10px] text-muted-foreground mb-2">
                   Pulled from <code>ethos_expensive_chart_queries</code> (statements carrying <code>supabase-chart:*</code> tags or touching the unified Ethos tables). Use to validate that new composite indexes on the single source are helping the real 137+ chart workload.
                 </p>
-                <div className="overflow-x-auto text-[10px] font-mono bg-black/30 p-2 rounded max-h-[180px] overflow-y-auto">
-                  {health.slowChartQueries.slice(0, 8).map((q: any, i: number) => (
-                    <div key={i} className="mb-1 border-b border-white/10 pb-1 last:border-0">
-                      <span className="text-amber-400">[{q.chart_tag}]</span> mean {q.mean_ms}ms / total {q.total_ms}ms / {q.calls} calls
-                      <div className="text-zinc-400 truncate">{q.query_sample}...</div>
-                    </div>
-                  ))}
+                <div className="overflow-x-auto text-[10px] font-mono bg-black/30 p-2 rounded max-h-[220px] overflow-y-auto">
+                  {health.slowChartQueries.slice(0, 8).map((q: any, i: number) => {
+                    const isExpanded = expandedSlow.has(i);
+                    const full = String(q.query_sample || '');
+                    const display = isExpanded ? full : (full.length > 160 ? full.slice(0, 160) + '...' : full);
+                    return (
+                      <div
+                        key={i}
+                        role="button"
+                        tabIndex={0}
+                        className="mb-1 border-b border-white/10 pb-1 last:border-0 cursor-pointer hover:bg-white/5 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                        onClick={() => toggleSlowQuery(i)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            toggleSlowQuery(i);
+                          }
+                        }}
+                        title="Click or press Enter/Space to expand/collapse full query"
+                      >
+                        <span className="text-amber-400">[{q.chart_tag}]</span> mean {q.mean_ms}ms / total {q.total_ms}ms / {q.calls} calls
+                        <div className="text-zinc-400 whitespace-pre-wrap break-all">{display}</div>
+                        <div className="text-[9px] text-zinc-500 mt-0.5">
+                          {isExpanded ? 'click to collapse' : 'click to expand full query text'}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -396,13 +431,24 @@ export default function EthosChartRefresh() {
                       <div className="font-mono text-[10px] mt-1 bg-black/40 p-1.5 rounded break-all">
                         {rec.definition}
                       </div>
-                      <div className="mt-1 flex items-center gap-2">
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
                         <button
                           onClick={() => navigator.clipboard?.writeText(rec.definition)}
                           className="text-[10px] text-emerald-400 hover:text-emerald-300 underline"
                         >
                           Copy CREATE statement
                         </button>
+                        {rec.migrationContent && (
+                          <button
+                            onClick={() => {
+                              const text = `-- Suggested filename: ${rec.migrationFilename}\n\n${rec.migrationContent}`;
+                              navigator.clipboard?.writeText(text);
+                            }}
+                            className="text-[10px] text-emerald-400 hover:text-emerald-300 underline"
+                          >
+                            Copy full migration file
+                          </button>
+                        )}
                         <span className="text-[10px] text-muted-foreground">Target: {rec.target}</span>
                         {rec.observedIn && (
                           <span className="text-[9px] text-amber-400/80">observed in: {rec.observedIn}</span>

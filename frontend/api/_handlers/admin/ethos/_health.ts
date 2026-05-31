@@ -186,6 +186,54 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const recommendedIndexes = Array.from(recByName.values());
 
+    // Generate ready-to-apply Supabase migration snippets for every recommendation.
+    // This turns the admin dashboard into a source of production-grade migration files
+    // while keeping all proposed indexes strictly on the single interconnected source.
+    function generateMigration(rec: any) {
+      const today = new Date();
+      const ymd = today.toISOString().slice(0, 10).replace(/-/g, '');
+      const safeName = rec.name.replace(/[^a-z0-9_]/gi, '_').toLowerCase();
+      const filename = `${ymd}000000_${safeName}.sql`;
+
+      const observed = rec.observedIn ? `Observed in slow queries tagged: ${rec.observedIn}\n` : '';
+      const evidence = rec.derived ? ' (derived from live expensive chart queries)' : '';
+
+      const content = `-- Supabase migration generated from Ethos Chart Admin health dashboard
+-- Date: ${today.toISOString()}
+-- Recommendation: ${rec.name}${evidence}
+-- Target (single source of truth): ${rec.target}
+-- 
+-- Rationale:
+-- ${rec.rationale}
+-- ${observed}
+-- IMPORTANT: This index supports the unified Ethos model. All Explore sort modes
+-- (market cap, ethos score, volume, recency, quality filters, etc.) must continue
+-- to be implemented as different ORDER BY clauses against v_explore_creators /
+-- creator_ethos_projection — never as separate tables or bucketed data.
+--
+-- Apply with: supabase db push  (or psql against the pooler)
+-- The CONCURRENTLY form is safe for production (no long locks).
+
+BEGIN;
+
+${rec.definition}
+
+-- For rollback (run manually if needed):
+-- DROP INDEX CONCURRENTLY IF EXISTS ${rec.name};
+
+COMMIT;
+`;
+
+      return { migrationFilename: filename, migrationContent: content.trim() };
+    }
+
+    // Attach migration artifacts to every recommendation
+    for (const rec of recommendedIndexes) {
+      const mig = generateMigration(rec);
+      (rec as any).migrationFilename = mig.migrationFilename;
+      (rec as any).migrationContent = mig.migrationContent;
+    }
+
     return res.status(200).json({
       success: true,
       data: {

@@ -2041,7 +2041,12 @@ async function renderStackedArtworkUnderlay(params: {
       offsetXpx,
       offsetYpx,
     })
-    if (params.clipRegion === 'card' && params.subjectAlphaMaskPng) {
+    const useSubjectSilhouetteSpill =
+      !!params.subjectAlphaMaskPng &&
+      (params.clipRegion === 'card' ||
+        params.clipRegion === 'padding-outside-frame' ||
+        params.clipRegion === 'extended')
+    if (useSubjectSilhouetteSpill && params.subjectAlphaMaskPng) {
       shifted = await sharp(shifted)
         .ensureAlpha()
         .composite([{ input: params.subjectAlphaMaskPng, blend: 'dest-in' }])
@@ -2054,7 +2059,7 @@ async function renderStackedArtworkUnderlay(params: {
       .png()
       .toBuffer()
 
-    if (params.clipRegion === 'card') {
+    if (useSubjectSilhouetteSpill) {
       let silhouette = clipped
       const blurPx =
         layer.blurPx > 0.12 && params.sourceClass !== 'pixelArt'
@@ -2069,7 +2074,13 @@ async function renderStackedArtworkUnderlay(params: {
         .modulate({ brightness: 0.3, saturation: 0 })
         .png()
         .toBuffer()
-      renderedLayers.push(await applyOpacity(silhouette, layer.opacity * 1.08))
+      const spillOpacityScale =
+        params.clipRegion === 'extended'
+          ? 1.38
+          : params.clipRegion === 'padding-outside-frame'
+            ? 1.28
+            : 1.08
+      renderedLayers.push(await applyOpacity(silhouette, layer.opacity * spillOpacityScale))
       continue
     }
 
@@ -2702,6 +2713,24 @@ export async function renderArtworkLayer(params: {
     .toBuffer()
 }
 
+function resolvePreparedBreakoutTopLiftRatio(params: {
+  maskKind?: 'heroCutout' | 'sourceAlpha' | 'rembgCutout'
+  sourceClass?: SourceClass
+}): number {
+  const isPrepared = params.maskKind === 'heroCutout' || params.maskKind === 'rembgCutout'
+  if (!isPrepared) return 0
+  switch (params.sourceClass) {
+    case 'pixelArt':
+      return 0.3
+    case 'illustration':
+      return 0.52
+    case 'portraitPhoto':
+      return 0.38
+    default:
+      return 0.34
+  }
+}
+
 async function createTopBreakoutMask(params: {
   size: number
   layout: PremiumLayout
@@ -2718,14 +2747,24 @@ async function createTopBreakoutMask(params: {
   const breakoutX = Math.max(0, Math.round(params.breakoutWindow?.x ?? layout.breakoutX))
   const breakoutWidth = Math.max(1, Math.round(params.breakoutWindow?.width ?? layout.breakoutWidth))
   const breakoutRight = Math.min(size, breakoutX + breakoutWidth)
-  const top = isPixelPreparedCutout
-    ? Math.max(0, layout.breakoutY - Math.round(layout.breakoutHeight * 0.30))
-    : layout.breakoutY
+  const topLiftRatio = resolvePreparedBreakoutTopLiftRatio({
+    maskKind: params.maskKind,
+    sourceClass: params.sourceClass,
+  })
+  const top = isHeroCutout
+    ? 0
+    : topLiftRatio > 0
+      ? Math.max(0, layout.breakoutY - Math.round(layout.breakoutHeight * topLiftRatio))
+      : layout.breakoutY
   const rembgDepthMultiplier =
     isPreparedCutout
       ? (params.sourceClass === 'pixelArt' ? (isHeroCutout ? 1.62 : 1.78) : params.sourceClass === 'illustration' ? 1.28 : 1.16)
       : 1
-  const bottom = Math.min(size, top + Math.round(layout.breakoutHeight * rembgDepthMultiplier))
+  const depthBottom = top + Math.round(layout.breakoutHeight * rembgDepthMultiplier)
+  const overlapIntoChamberPx = Math.max(1, Math.round(layout.frameStroke * (isHeroCutout && isIllustration ? 0.72 : 0.5)))
+  const bottom = isHeroCutout && isIllustration
+    ? Math.min(size, Math.max(depthBottom, layout.chamberY + overlapIntoChamberPx))
+    : Math.min(size, depthBottom)
   const height = Math.max(1, bottom - top)
   const radius = Math.max(1, Math.round((breakoutRight - breakoutX) * 0.30))
   const topHoldOffset = isPreparedCutout ? '100%' : isIllustration ? '30%' : '32%'
@@ -3115,10 +3154,12 @@ async function createTopBreakoutSubjectMask(params: {
   forceAlphaThreshold?: number
   breakoutWindow?: { x: number; width: number }
   preferUpperSubjectMatte?: boolean
+  maskKind?: 'heroCutout' | 'sourceAlpha' | 'rembgCutout'
 }): Promise<Buffer | null> {
   const { sourceCanvas, layout } = params
   const isIllustration = params.sourceClass === 'illustration'
   const isPixelArt = params.sourceClass === 'pixelArt'
+  const isHeroCutout = params.maskKind === 'heroCutout'
   const forceAlphaMask = Boolean(params.forceAlphaMask)
   const strictContourGates = Boolean(params.strictContourGates)
   const preferUpperSubjectMatte = Boolean(params.preferUpperSubjectMatte)
@@ -3145,7 +3186,15 @@ async function createTopBreakoutSubjectMask(params: {
   const x1 = preferUpperMatteRegion
     ? Math.min(width, layout.chamberX + layout.chamberSize + chamberPadX)
     : Math.min(width, breakoutWindowX + regionShiftX + breakoutWindowWidth + regionPadX)
-  const y0 = Math.max(0, layout.breakoutY - regionPadY)
+  const preparedTopLift = resolvePreparedBreakoutTopLiftRatio({
+    maskKind: params.maskKind,
+    sourceClass: params.sourceClass,
+  })
+  const y0 = isHeroCutout
+    ? Math.max(0, layout.breakoutY - Math.round(layout.breakoutHeight * 0.58))
+    : preparedTopLift > 0
+      ? Math.max(0, layout.breakoutY - Math.round(layout.breakoutHeight * (preparedTopLift + 0.08)))
+      : Math.max(0, layout.breakoutY - regionPadY)
   const y1 = preferUpperMatteRegion
     ? Math.min(height, layout.chamberY + Math.round(layout.chamberSize * (isPixelArt ? 0.64 : 0.60)))
     : Math.min(height, layout.breakoutY + Math.round(layout.breakoutHeight * yExtendMul))
@@ -3228,7 +3277,7 @@ async function createTopBreakoutSubjectMask(params: {
   }
 
   let contourConstrained = false
-  if (forceAlphaMask && !strictContourGates && !preferUpperSubjectMatte && presentCount > 0) {
+  if (forceAlphaMask && !strictContourGates && !preferUpperSubjectMatte && !isHeroCutout && presentCount > 0) {
     const contourMask = Buffer.alloc(width * height, 0)
     for (let x = x0; x < x1; x += 1) {
       let topY = -1
@@ -3355,7 +3404,7 @@ async function createTopBreakoutSubjectMask(params: {
     // Explicit cutouts (prepared hero/rembg) should bypass conservative contour gates.
     if (
       presentRatio < 0.002 ||
-      presentRatio > 0.92 ||
+      (!isHeroCutout && presentRatio > 0.92) ||
       heightRatio < 0.06 ||
       (strictContourGates && (
         (widthRatio > 0.98 && (topWeightedRatio > 0.52 || flatnessRatio > 2.6)) ||
@@ -3370,6 +3419,7 @@ async function createTopBreakoutSubjectMask(params: {
       return null
     }
     if (
+      !isHeroCutout &&
       params.sourceClass === 'illustration' &&
       topWeightedRatio > 0.52 &&
       widthRatio > 0.95 &&
@@ -3602,9 +3652,13 @@ export async function renderBreakoutLayer(params: {
       (params.subjectMaskKind === 'rembgCutout' || params.subjectMaskKind === 'heroCutout') &&
       params.sourceClass === 'pixelArt'
         ? 0.08
-        : params.subjectMaskKind === 'heroCutout'
-          ? 0.1
-          : isIllustrationBreakout ? 0.046 : undefined,
+        : params.subjectMaskKind === 'heroCutout' && params.sourceClass === 'illustration'
+          ? 0.12
+          : params.subjectMaskKind === 'heroCutout'
+            ? 0.1
+            : isIllustrationBreakout
+              ? 0.046
+              : undefined,
   })
   let subjectRefCanvas: Buffer | null = null
   if (params.subjectMaskSourceImage && params.subjectMaskSourceImage.length > 0) {
@@ -3633,9 +3687,13 @@ export async function renderBreakoutLayer(params: {
           (params.subjectMaskKind === 'rembgCutout' || params.subjectMaskKind === 'heroCutout') &&
           params.sourceClass === 'pixelArt'
             ? 0.08
-            : params.subjectMaskKind === 'heroCutout'
-              ? 0.1
-              : isIllustrationBreakout ? 0.046 : undefined,
+            : params.subjectMaskKind === 'heroCutout' && params.sourceClass === 'illustration'
+              ? 0.12
+              : params.subjectMaskKind === 'heroCutout'
+                ? 0.1
+                : isIllustrationBreakout
+                  ? 0.046
+                  : undefined,
         cropPosition: params.subjectMaskKind === 'heroCutout' ? 'top' : undefined,
       })
       await writeBreakoutDebugAsset('1b-breakout-subject-ref-canvas.png', subjectRefCanvas)
@@ -3667,6 +3725,7 @@ export async function renderBreakoutLayer(params: {
     sourceCanvas: subjectRefCanvas ?? sourceCanvas,
     layout,
     sourceClass: params.sourceClass,
+    maskKind: params.subjectMaskKind,
     forceAlphaMask: hasPreparedMaskSource,
     forceAlphaThreshold:
       hasPreparedMaskSource && params.subjectMaskKind === 'heroCutout'
@@ -3790,7 +3849,11 @@ export async function renderBreakoutLayer(params: {
     params.subjectMaskKind === 'rembgCutout'
       ? 0
       : params.subjectMaskKind === 'heroCutout'
-        ? (params.sourceClass === 'pixelArt' ? 0.34 : (isIllustrationBreakout ? 0.4 : 0.42))
+        ? (params.sourceClass === 'pixelArt'
+          ? 0.34
+          : params.sourceClass === 'illustration'
+            ? 0
+            : 0.42)
       : (isIllustrationBreakout ? 0.46 : 0.5)
   if (breakoutEdgeBlur >= 0.3) {
     maskedSharp = maskedSharp.blur(breakoutEdgeBlur)
@@ -3798,7 +3861,10 @@ export async function renderBreakoutLayer(params: {
   let masked = await maskedSharp
     .png()
     .toBuffer()
-  if ((params.subjectMaskKind === 'rembgCutout' || params.subjectMaskKind === 'heroCutout') && params.sourceClass === 'pixelArt') {
+  const shouldNudgePreparedBreakout =
+    (params.subjectMaskKind === 'rembgCutout' || params.subjectMaskKind === 'heroCutout') &&
+    (params.sourceClass === 'pixelArt' || params.sourceClass === 'illustration')
+  if (shouldNudgePreparedBreakout) {
     const { data, info } = await sharp(masked)
       .ensureAlpha()
       .raw()
@@ -3809,9 +3875,25 @@ export async function renderBreakoutLayer(params: {
       const breakoutCenterX = bounds.minX + bounds.width / 2
       const maxShiftX = Math.max(2, Math.round(layout.chamberSize * 0.05))
       const shiftX = Math.round(clamp(chamberCenterX - breakoutCenterX, -maxShiftX, maxShiftX))
-      const targetTopY = Math.max(0, layout.breakoutY - Math.round(layout.breakoutHeight * 0.36))
-      const maxShiftY = Math.max(5, Math.round(layout.chamberSize * 0.05))
-      const shiftY = Math.round(clamp(targetTopY - bounds.minY, -maxShiftY, maxShiftY))
+      const skipVerticalNudge =
+        params.subjectMaskKind === 'heroCutout' && params.sourceClass === 'illustration'
+      const topLiftTarget =
+        params.sourceClass === 'illustration'
+          ? 0.62
+          : 0.36
+      const targetTopY = Math.max(0, layout.breakoutY - Math.round(layout.breakoutHeight * topLiftTarget))
+      const maxShiftY = Math.max(
+        5,
+        Math.round(
+          layout.chamberSize *
+            (params.sourceClass === 'illustration'
+              ? 0.14
+              : 0.05),
+        ),
+      )
+      const shiftY = skipVerticalNudge
+        ? 0
+        : Math.round(clamp(targetTopY - bounds.minY, -maxShiftY, maxShiftY))
       if (shiftX !== 0 || shiftY !== 0) {
         masked = await shiftLayerCanvas({
           layer: masked,
@@ -4379,7 +4461,10 @@ export async function buildPremiumSubjectStack(params: PremiumTokenIconParams): 
             : analysis.sourceClass === 'portraitPhoto'
               ? 0.34
               : 0.22
-      const breakoutTopBiasPx = analysis.sourceClass === 'illustration'
+      const breakoutTopBiasPx =
+        breakoutPlan.mode === 'heroCutout' && analysis.sourceClass === 'illustration'
+          ? topBiasPx
+          : analysis.sourceClass === 'illustration'
         ? Math.max(0, Math.round(layout.chamberSize * (
             resolvedPreset === 'hero'
               ? (
@@ -4395,11 +4480,14 @@ export async function buildPremiumSubjectStack(params: PremiumTokenIconParams): 
                 ? Math.max(topBiasPx, Math.round(layout.chamberSize * 0.09))
                 : topBiasPx
           )
-      const breakoutScale = clamp(
-        renderScale * (analysis.sourceClass === 'illustration' && resolvedPreset === 'hero' ? 1.03 : 1),
-        0.84,
-        1.16,
-      )
+      const breakoutScale =
+        breakoutPlan.mode === 'heroCutout'
+          ? renderScale
+          : clamp(
+              renderScale * (analysis.sourceClass === 'illustration' && resolvedPreset === 'hero' ? 1.03 : 1),
+              0.84,
+              1.16,
+            )
       if (breakoutPlan.mode === 'rembgCutout' && rembgSegmentation?.maskPngRgba) {
         const rembgCoverageMaxThreshold = getSegmentationBreakoutMaxCoverage(analysis.sourceClass)
         rembgCoverage = await measureBreakoutMaskCoverage({

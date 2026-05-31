@@ -25,6 +25,12 @@ describe('pickNextZoraBundlerRetrySlippagePct', () => {
     expect(pickNextZoraBundlerRetrySlippagePct(5)).toBe(10)
     expect(pickNextZoraBundlerRetrySlippagePct(7)).toBe(10)
     expect(pickNextZoraBundlerRetrySlippagePct(10)).toBe(15)
+    expect(pickNextZoraBundlerRetrySlippagePct(15)).toBe(20)
+  })
+
+  it('returns null when no higher ladder step exists', () => {
+    expect(pickNextZoraBundlerRetrySlippagePct(25)).toBe(30)
+    expect(pickNextZoraBundlerRetrySlippagePct(30)).toBeNull()
   })
 })
 
@@ -191,9 +197,10 @@ describe('zoraTradeApi', () => {
   })
 
   it('builds slippage escalation ladder from user setting upward', () => {
-    expect(buildZoraSlippageEscalationLadder(0.5)).toEqual([0.5, 2, 5, 10])
-    expect(buildZoraSlippageEscalationLadder(3)).toEqual([3, 5, 10, 15])
-    expect(buildZoraSlippageEscalationLadder(12)).toEqual([12, 15])
+    expect(buildZoraSlippageEscalationLadder(0.5)).toEqual([0.5, 2, 5, 10, 15, 20])
+    expect(buildZoraSlippageEscalationLadder(3)).toEqual([3, 5, 10, 15, 20, 25])
+    expect(buildZoraSlippageEscalationLadder(12)).toEqual([12, 15, 20, 25, 30])
+    expect(buildZoraSlippageEscalationLadder(25)).toEqual([25, 30])
   })
 
   it('reads quoted slippage percent from refreshed Zora payload', () => {
@@ -222,7 +229,7 @@ describe('zoraTradeApi', () => {
     expect(
       isZoraRouterSimulationRetryable(
         new Error(
-          'The Zora swap would revert on your smart wallet. This is usually a stale quote, tight slippage, or not enough pool liquidity',
+          'This swap would fail on-chain — usually because the quote is stale, slippage is too tight, or the pool cannot fill this size',
         ),
       ),
     ).toBe(true)

@@ -1,7 +1,7 @@
 import { swapProviderFlag } from '@/lib/flags/featureFlags'
 import { normalizeUniswapError } from '@/lib/uniswap/error'
 
-export type SwapProvider = 'uniswap' | 'cdp'
+export type SwapProvider = 'uniswap' | 'cdp' | 'zora'
 export type SwapProviderMode = 'uniswap' | 'cdp' | 'hybrid'
 
 export type SwapProviderSelection = {
@@ -67,6 +67,38 @@ export function shouldFallbackToUniswap(error: unknown): boolean {
   return true
 }
 
-export function getSwapProviderLabel(provider: SwapProvider): 'Uniswap' | 'CDP' {
-  return provider === 'cdp' ? 'CDP' : 'Uniswap'
+/** True when Uniswap/CDP cannot route the pair — safe to try Zora creator pools next. */
+export function shouldFallbackToZoraTrade(error: unknown): boolean {
+  const normalized = normalizeUniswapError(error)
+  if (
+    normalized.code === 'INSUFFICIENT_FUNDS' ||
+    normalized.code === 'INSUFFICIENT_GAS' ||
+    normalized.code === 'AUTH_REQUIRED' ||
+    normalized.code === 'FORBIDDEN_ORIGIN' ||
+    normalized.code === 'CHAIN_MISMATCH' ||
+    normalized.code === 'WALLET_REJECTED'
+  ) {
+    return false
+  }
+
+  const msg = normalized.message.toLowerCase()
+  if (
+    msg.includes('no route') ||
+    msg.includes('route not found') ||
+    msg.includes('no liquidity') ||
+    msg.includes('liquidity unavailable') ||
+    msg.includes('unsupported pair') ||
+    msg.includes('pair not supported') ||
+    (msg.includes('not found') && msg.includes('route'))
+  ) {
+    return true
+  }
+
+  return false
+}
+
+export function getSwapProviderLabel(provider: SwapProvider): 'Uniswap' | 'CDP' | 'Zora' {
+  if (provider === 'cdp') return 'CDP'
+  if (provider === 'zora') return 'Zora'
+  return 'Uniswap'
 }

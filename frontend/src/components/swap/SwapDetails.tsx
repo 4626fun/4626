@@ -4,9 +4,11 @@ import { AnimatePresence, motion } from 'framer-motion'
 
 import { RouteDisplay } from '@/components/swap/RouteDisplay'
 import { cn } from '@/lib/shared/utils'
+import type { SwapRouteLeg } from '@/lib/swap/swapQuoteDetails'
 
 type SwapDetailsProps = {
   routeSummary: string | null
+  routeLegs?: SwapRouteLeg[]
   aggregator?: string
   executionPrice?: string | null
   marketPrice?: string | null
@@ -32,6 +34,7 @@ function impactColorClass(label: string | null): string {
 
 export function SwapDetails({
   routeSummary,
+  routeLegs,
   aggregator,
   executionPrice,
   marketPrice,
@@ -70,6 +73,7 @@ export function SwapDetails({
           >
             <RouteDisplay
               routeSummary={routeSummary}
+              routeLegs={routeLegs}
               aggregator={aggregator}
               executionPrice={executionPrice}
               marketPrice={marketPrice}
@@ -122,18 +126,24 @@ export function SwapDetails({
                 background: 'linear-gradient(165deg, rgb(var(--vault-card) / 0.54), rgb(var(--vault-card-raised) / 0.42))',
               }}
             >
-              <div className="flex items-center justify-between text-vault-subtext">
-                <span>Estimated gas</span>
-                <span className="app-meta-value text-vault-text">{gasEstimateLabel ?? '—'}</span>
-              </div>
-              <div className="flex items-center justify-between text-vault-subtext">
-                <span>LP fee</span>
-                <span className="app-meta-value text-vault-text">{lpFeeUsd ?? '—'}</span>
-              </div>
-              <div className="flex items-center justify-between text-vault-subtext">
-                <span>Protocol fee</span>
-                <span className="app-meta-value text-vault-text">{protocolFeeUsd ?? '—'}</span>
-              </div>
+              {gasEstimateLabel ? (
+                <div className="flex items-center justify-between text-vault-subtext">
+                  <span>Estimated gas</span>
+                  <span className="app-meta-value text-vault-text">{gasEstimateLabel}</span>
+                </div>
+              ) : null}
+              {lpFeeUsd ? (
+                <div className="flex items-center justify-between text-vault-subtext">
+                  <span>LP fee</span>
+                  <span className="app-meta-value text-vault-text">{lpFeeUsd}</span>
+                </div>
+              ) : null}
+              {protocolFeeUsd ? (
+                <div className="flex items-center justify-between text-vault-subtext">
+                  <span>Protocol fee</span>
+                  <span className="app-meta-value text-vault-text">{protocolFeeUsd}</span>
+                </div>
+              ) : null}
               <div className="flex items-center justify-between text-vault-subtext">
                 <span>Price impact</span>
                 <span className={cn('rounded-full px-2 py-0.5 text-xs font-semibold', impactColorClass(priceImpactLabel))}>

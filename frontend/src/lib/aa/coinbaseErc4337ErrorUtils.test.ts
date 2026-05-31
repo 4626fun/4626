@@ -201,7 +201,8 @@ describe('buildUserOpGasEstimateFailureError', () => {
       new Error('Execution reverted for an unknown reason.'),
       '0x6fF5693b99212Da76ad316178A184AB56D299b43',
     )
-    expect(err.message).toContain('Zora swap would revert')
+    expect(err.message).toContain('stale')
+    expect(err.message).toContain('slippage')
   })
 })
 
@@ -233,7 +234,7 @@ describe('mapUserOpExecutionFailureMessage', () => {
       { firstCallTo: '0x6fF5693b99212Da76ad316178A184AB56D299b43' },
     )
     expect(err).toBeInstanceOf(PreflightSimulationRejectionError)
-    expect(err?.message).toContain('Zora swap would revert')
+    expect(err?.message).toContain('would fail on-chain')
   })
 })
 

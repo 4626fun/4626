@@ -1,3 +1,5 @@
+import { ZORA_SWAP_SIMULATION_FAILED_MESSAGE } from '@/lib/swap/swapStatusCopy'
+
 export type UniswapErrorCode =
   | 'INSUFFICIENT_FUNDS'
   | 'INSUFFICIENT_GAS'
@@ -118,8 +120,7 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
   ) {
     return {
       code: 'SLIPPAGE_EXCEEDED',
-      message:
-        'The Zora swap would revert on your smart wallet. This is usually stale quote data, tight slippage, or insufficient pool liquidity — not a balance issue. Try a smaller amount, increase slippage, refresh the quote, then re-sign Permit2 if prompted.',
+      message: ZORA_SWAP_SIMULATION_FAILED_MESSAGE,
       retryable: true,
     }
   }

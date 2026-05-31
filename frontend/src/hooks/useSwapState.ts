@@ -2,6 +2,15 @@ import { useCallback, useMemo, useState } from 'react'
 
 import { sanitizeDecimalInput, sanitizeIntegerInput } from '@/lib/uniswap/swapUtils'
 
+/** UI slippage input may go higher on thin creator pools; policy may still cap via env. */
+export const SWAP_SLIPPAGE_UI_MAX_PCT = 50
+
+export function parseSwapSlippagePct(slippagePct: string): number {
+  const n = Number(slippagePct)
+  if (!Number.isFinite(n) || n <= 0) return 0.5
+  return Math.min(SWAP_SLIPPAGE_UI_MAX_PCT, n)
+}
+
 export function useSwapState(params: {
   initialTokenIn: string
   initialTokenOut: string
@@ -26,11 +35,7 @@ export function useSwapState(params: {
     setDeadlineMinutesState(sanitizeIntegerInput(value, 3))
   }, [])
 
-  const parsedSlippage = useMemo(() => {
-    const n = Number(slippagePct)
-    if (!Number.isFinite(n) || n <= 0) return 0.5
-    return Math.min(5, n)
-  }, [slippagePct])
+  const parsedSlippage = useMemo(() => parseSwapSlippagePct(slippagePct), [slippagePct])
 
   const parsedDeadlineMinutes = useMemo(() => {
     const n = Number(deadlineMinutes)

@@ -387,6 +387,86 @@ describe('fetchTradeQuote', () => {
     const calledUrls = fetchMock.mock.calls.map(([url]) => String(url))
     expect(calledUrls).toEqual(['/__api/cdp/swap/price'])
   })
+
+  it('tries uniswap before zora for creator pairs when uniswap has no route', async () => {
+    const originalWindow = (globalThis as any).window
+    ;(globalThis as any).window = { location: { origin: 'http://localhost:5174' } }
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: false, error: 'Not found' }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: false, error: 'No route for pair' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            call: {
+              target: '0x0000000000000000000000000000000000000001',
+              data: '0x1234',
+              value: '0',
+            },
+            quote: { amountOut: '999' },
+          },
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    try {
+      const result = await fetchTradeQuote({
+        ...quoteRequest('8800'),
+        useZoraTradeRoute: true,
+      })
+      expect(result.provider).toBe('zora')
+      expect(result.fallbackUsed).toBe(true)
+      expect(result.preferredProvider).toBe('uniswap')
+      const calledUrls = fetchMock.mock.calls.map(([url]) => String(url))
+      expect(calledUrls[0]).toContain('/uniswap/quote')
+      expect(calledUrls[1]).toContain('/uniswap/quote')
+      expect(calledUrls[2]).toContain('/zora/tradeQuote')
+    } finally {
+      if (originalWindow === undefined) {
+        delete (globalThis as any).window
+      } else {
+        ;(globalThis as any).window = originalWindow
+      }
+    }
+  })
+
+  it('returns uniswap quote for creator pairs when uniswap routes the pair', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: async () => ({
+        success: true,
+        data: { ...quoteResponse('CLASSIC'), requestId: 'rq_uniswap_creator' },
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchTradeQuote({
+      ...quoteRequest('8801'),
+      useZoraTradeRoute: true,
+    })
+    expect(result.provider).toBe('uniswap')
+    expect(result.fallbackUsed).toBeFalsy()
+    const calledUrls = fetchMock.mock.calls.map(([url]) => String(url))
+    expect(calledUrls.some((url) => url.includes('/uniswap/quote'))).toBe(true)
+    expect(calledUrls.some((url) => url.includes('/zora/tradeQuote'))).toBe(false)
+  })
 })
 
 describe('permit helpers', () => {

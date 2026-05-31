@@ -7,6 +7,7 @@ import { ChainSelector } from '@/components/trade/ChainSelector'
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import type { SupportedChainId } from '@/config/chains'
+import type { SwapRouteLeg } from '@/lib/swap/swapQuoteDetails'
 import type { TokenDisplay } from '@/lib/uniswap/swapUtils'
 
 type SwapCardProps = {
@@ -33,6 +34,7 @@ type SwapCardProps = {
   tokenInAddress: string
   tokenOutAddress: string
   routeSummary: string | null
+  routeLegs?: SwapRouteLeg[]
   gasEstimateLabel: string | null
   priceImpactLabel: string | null
   lpFeeUsd?: string | null
@@ -50,7 +52,8 @@ type SwapCardProps = {
   onConfirmUnverified: () => void
   executionMode: 'canonical' | 'eoa'
   fallbackActive: boolean
-  swapProviderLabel: 'Uniswap' | 'CDP'
+  swapProviderLabel: 'Uniswap' | 'CDP' | 'Zora'
+  quoteAggregatorLabel?: 'Uniswap' | 'CDP' | 'Zora'
   needsUnverifiedConfirmation: boolean
   unverifiedTokenLabel?: string | null
   onResetUnverified: () => void
@@ -179,9 +182,10 @@ export function SwapCard(props: SwapCardProps) {
 
       <SwapDetails
         routeSummary={props.routeSummary}
+        routeLegs={props.routeLegs}
         slippagePct={props.slippagePct}
         onSetSlippagePct={props.onSetSlippagePct}
-        aggregator={props.routeSummary ? props.swapProviderLabel : undefined}
+        aggregator={props.quoteAggregatorLabel ?? props.swapProviderLabel}
         gasEstimateLabel={props.gasEstimateLabel}
         priceImpactLabel={props.priceImpactLabel}
         lpFeeUsd={props.lpFeeUsd ?? null}

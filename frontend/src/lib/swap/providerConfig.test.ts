@@ -5,6 +5,7 @@ import {
   requiresCanonicalExecutionForSwapMode,
   resolveSwapProviderSelection,
   shouldFallbackToUniswap,
+  shouldFallbackToZoraTrade,
 } from './providerConfig'
 
 describe('swap provider selection', () => {
@@ -49,5 +50,12 @@ describe('swap provider guardrail helpers', () => {
   it('exposes stable provider labels', () => {
     expect(getSwapProviderLabel('uniswap')).toBe('Uniswap')
     expect(getSwapProviderLabel('cdp')).toBe('CDP')
+    expect(getSwapProviderLabel('zora')).toBe('Zora')
+  })
+
+  it('falls back to zora only for missing-route errors', () => {
+    expect(shouldFallbackToZoraTrade(new Error('No route for pair'))).toBe(true)
+    expect(shouldFallbackToZoraTrade(new Error('Insufficient token balance'))).toBe(false)
+    expect(shouldFallbackToZoraTrade(new Error('not authenticated'))).toBe(false)
   })
 })
