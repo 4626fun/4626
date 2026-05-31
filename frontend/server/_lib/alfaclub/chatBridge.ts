@@ -44,6 +44,10 @@ import {
 } from './authHealthStore.js'
 import { upsertAlfaClubIngestMessages, type AlfaClubIngestMessage, type AlfaClubInsertedIngestMessage } from './chatIngestStore.js'
 import {
+  filterUnrepliedCommandMessageIds,
+  recordCommandReply,
+} from './commandReplyLedger.js'
+import {
   collectHermitRoomWelcomeCandidates,
   formatHermitRoomWelcome,
   tryInsertHermitRoomWelcomeSent,
@@ -1507,6 +1511,19 @@ function isBotMessageForbiddenError(error: unknown): boolean {
     message.includes('bot_message_failed:403') ||
     (message.includes('bot_message_failed:404') && message.includes('"error":"forbidden"'))
   )
+}
+
+function isJwtMessageAuthError(error: unknown): boolean {
+  const message = (error instanceof Error ? error.message : String(error)).trim()
+  return (
+    message.includes('jwt_message_failed:401') ||
+    message.includes('invalid or revoked token')
+  )
+}
+
+function shouldSkipRawWebSocketSend(flags: AlfaClubChatBridgeFlags): boolean {
+  if (flags.wsProxyHttpSendUrl) return false
+  return readAlfaClubCronSkipLiveWebSocket()
 }
 
 async function sendRoomMessageViaJwtHttp(params: {
@@ -3158,11 +3175,19 @@ async function executeCommandBatch(params: {
   if (!canBridgeReplyInRoom(params.flags, params.roomId)) {
     return { processed: 0, replied: 0, errors: [] }
   }
+  const unrepliedIds = await filterUnrepliedCommandMessageIds({
+    roomId: params.roomId,
+    messageIds: params.commands.map((command) => command.id),
+  })
+  const commands = params.commands.filter((command) => unrepliedIds.has(command.id))
+  if (commands.length === 0) {
+    return { processed: 0, replied: 0, errors: [] }
+  }
   const errors: Array<{ messageId: string; error: string }> = []
   let replied = 0
   let latestMarkReadDate = 0
 
-  for (const command of params.commands) {
+  for (const command of commands) {
     const commandHead = command.text.trim().split(/\s+/, 1)[0] ?? command.text.trim()
     logger.info('[alfaclub-chat] command_execute_start', {
       roomId: params.roomId,
@@ -3223,6 +3248,11 @@ async function executeCommandBatch(params: {
         sender: command.sender,
         lane,
         hasAttachments: attachments.length > 0,
+      })
+      await recordCommandReply({
+        roomId: params.roomId,
+        messageId: command.id,
+        commandHead,
       })
       if (reactionEmoji) {
         await reactToAlfaClubTriggerMessage({
@@ -3297,7 +3327,7 @@ async function executeCommandBatch(params: {
   }
 
   return {
-    processed: params.commands.length,
+    processed: commands.length,
     replied,
     errors,
   }
@@ -4127,6 +4157,7 @@ export async function sendAlfaClubRoomText(params: {
             : 'jwt_http_without_reply_id_after_bot_forbidden',
         }
       } catch (jwtHttpError) {
+        let lastJwtHttpError: unknown = jwtHttpError
         logger.warn('[alfaclub-chat] jwt_http_send_failed:fallback_ws', {
           roomId,
           error: (jwtHttpError instanceof Error ? jwtHttpError.message : String(jwtHttpError)).slice(
@@ -4134,6 +4165,44 @@ export async function sendAlfaClubRoomText(params: {
             180,
           ),
         })
+        if (isJwtMessageAuthError(jwtHttpError)) {
+          await requestImmediatePrivyRefresh('bridge_auth_fail').catch(() => {})
+          const refreshedJwt =
+            (await resolveBridgeJwt(params.jwt ?? flags.jwt ?? null))?.trim() ?? ''
+          if (refreshedJwt && refreshedJwt !== jwt) {
+            try {
+              await sendRoomMessageViaJwtHttpWithProxyFallback({
+                apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
+                directApiBaseUrl: flags.apiBaseUrl,
+                jwt: refreshedJwt,
+                roomId,
+                text,
+                replyToMessageId: params.replyToMessageId,
+                proxySecret: resolveAlfaClubProxySecret(flags),
+                timeoutMs: flags.sendTimeoutMs,
+              })
+              return {
+                lane: params.replyToMessageId
+                  ? 'jwt_http_with_reply_id_after_refresh'
+                  : 'jwt_http_without_reply_id_after_refresh',
+              }
+            } catch (retryError) {
+              lastJwtHttpError = retryError
+              logger.warn('[alfaclub-chat] jwt_http_send_failed:after_refresh', {
+                roomId,
+                error: (retryError instanceof Error ? retryError.message : String(retryError)).slice(
+                  0,
+                  180,
+                ),
+              })
+            }
+          }
+        }
+        if (shouldSkipRawWebSocketSend(flags)) {
+          throw lastJwtHttpError instanceof Error
+            ? lastJwtHttpError
+            : new Error(String(lastJwtHttpError))
+        }
       }
     }
   }

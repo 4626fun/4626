@@ -6,6 +6,7 @@ const {
   requestImmediatePrivyRefreshMock,
   upsertAlfaClubIngestMessagesMock,
   executeDeterministicCommandMock,
+  repliedCommandLedgerMock,
 } = vi.hoisted(() => ({
   loggerMock: {
     info: vi.fn(),
@@ -16,6 +17,17 @@ const {
   requestImmediatePrivyRefreshMock: vi.fn(),
   upsertAlfaClubIngestMessagesMock: vi.fn(async () => [] as Array<{ messageId: string }>),
   executeDeterministicCommandMock: vi.fn(async () => ({ responseText: '' })),
+  repliedCommandLedgerMock: new Set<string>(),
+}))
+
+vi.mock('./commandReplyLedger.js', () => ({
+  filterUnrepliedCommandMessageIds: vi.fn(
+    async ({ messageIds }: { roomId: string; messageIds: string[] }) =>
+      new Set(messageIds.filter((id) => !repliedCommandLedgerMock.has(id))),
+  ),
+  recordCommandReply: vi.fn(async ({ messageId }: { roomId: string; messageId: string }) => {
+    repliedCommandLedgerMock.add(messageId)
+  }),
 }))
 
 vi.mock('../infra/logger.js', () => ({
@@ -177,6 +189,7 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     upsertAlfaClubIngestMessagesMock.mockResolvedValue([])
     executeDeterministicCommandMock.mockReset()
     executeDeterministicCommandMock.mockResolvedValue({ responseText: '' })
+    repliedCommandLedgerMock.clear()
     FakeWebSocket.instances = []
     ;(globalThis as { WebSocket?: unknown }).WebSocket = FakeWebSocket
     _resetBridgeAuthHealthForTests()
@@ -650,6 +663,27 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     expect(first.processed).toBe(1)
     expect(second.processed).toBe(0)
     expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('command reply ledger skips commands that were already answered', async () => {
+    const nowMs = Date.now()
+    repliedCommandLedgerMock.add('m-alfa-once')
+    mockHistoryMessages([
+      {
+        id: 'm-alfa-once',
+        date: nowMs - 10_000,
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: '/alfa',
+      },
+    ])
+    upsertAlfaClubIngestMessagesMock.mockResolvedValueOnce([{ messageId: 'm-alfa-once' }])
+
+    const result = await _runAlfaClubChatBridgeTickForTests(makeFlags(), {
+      seedHistoryOnlyOnFirstTick: false,
+    })
+
+    expect(result.processed).toBe(0)
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
   })
 
   it('processes recent slash commands on first seed tick', async () => {
