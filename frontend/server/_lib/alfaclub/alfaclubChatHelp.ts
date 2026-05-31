@@ -1,6 +1,6 @@
 import { isHermitCommandRoom } from './chatBridge.js'
 import { readOperationalAlfaClubRoomIds } from './creatorRoomLinks.js'
-import { formatHermitCommandRoomHelp } from './hermitAlfaClubHelp.js'
+import { formatHermitCommandRoomHelp } from '../hermit/hermitAlfaClubHelp.js'
 
 export function parseAlfaClubRoomIdFromChatId(chatId: string | undefined): string | null {
   const trimmed = String(chatId ?? '').trim()

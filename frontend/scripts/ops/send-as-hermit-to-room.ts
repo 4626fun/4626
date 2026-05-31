@@ -20,7 +20,7 @@ import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { sendAlfaClubRoomText } from '../../server/_lib/alfaclub/chatBridge.js'
 import { readAlfaClubChatToken } from '../../server/_lib/alfaclub/chatTokenStore.js'
-import { formatHermitRoomIntro } from '../../server/_lib/alfaclub/hermitAlfaClubHelp.js'
+import { formatHermitRoomIntro } from '../../server/_lib/hermit/hermitAlfaClubHelp.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const FRONTEND_ROOT = resolve(__dirname, '../../..')

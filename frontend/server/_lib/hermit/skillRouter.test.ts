@@ -4,6 +4,7 @@ import { applyEnv } from '../../../api/__tests__/helpers'
 import {
   _hermitPromptBuildersForTests,
   executeHermitCommand,
+  pinataEndpointSupportsHttpDraft,
   shouldPreferPinataHttpDraft,
   shouldRequestPinataGmeowCaption,
 } from './skillRouter'
@@ -179,9 +180,9 @@ describe('executeHermitCommand', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('uses HTTP draft (not gateway) for AlfaClub bridge /gmeow to avoid channel echo', async () => {
+  it('uses HTTP draft (not gateway) for AlfaClub bridge /gmeow on non-Pinata draft endpoints', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://x7lmjaxx.agents.pinata.cloud',
+      HERMIT_PINATA_CHAT_ENDPOINT: 'https://draft.example/v1/chat',
       HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
       HERMIT_GMEOW_PINATA_CAPTION: 'always',
     })
@@ -200,17 +201,38 @@ describe('executeHermitCommand', () => {
     expect(result.provider).toBe('pinata')
     expect(result.reply).toContain('bridge-safe cat laugh.')
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://x7lmjaxx.agents.pinata.cloud')
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://draft.example/v1/chat')
   })
 
-  it('shouldPreferPinataHttpDraft defaults to HTTP for bridge-runner', () => {
-    restoreEnv = applyEnv({ HERMIT_PINATA_BRIDGE_HTTP_ONLY: undefined })
+  it('shouldPreferPinataHttpDraft defaults to HTTP for bridge-runner on generic endpoints', () => {
+    restoreEnv = applyEnv({
+      HERMIT_PINATA_BRIDGE_HTTP_ONLY: undefined,
+      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
+    })
     expect(
       shouldPreferPinataHttpDraft({
         sourceIdentity: 'alfaclub-bridge-runner',
         prompt: 'casual meme caption only',
       }),
     ).toBe(true)
+  })
+
+  it('shouldPreferPinataHttpDraft uses gateway for Pinata-hosted agents', () => {
+    restoreEnv = applyEnv({
+      HERMIT_PINATA_BRIDGE_HTTP_ONLY: undefined,
+      HERMIT_PINATA_CHAT_ENDPOINT: 'https://x7lmjaxx.agents.pinata.cloud',
+    })
+    expect(
+      shouldPreferPinataHttpDraft({
+        sourceIdentity: 'alfaclub-bridge-runner',
+        prompt: 'casual meme caption only',
+      }),
+    ).toBe(false)
+  })
+
+  it('pinataEndpointSupportsHttpDraft is false for agents.pinata.cloud hosts', () => {
+    expect(pinataEndpointSupportsHttpDraft('https://x7lmjaxx.agents.pinata.cloud')).toBe(false)
+    expect(pinataEndpointSupportsHttpDraft('https://pinata.example/chat')).toBe(true)
   })
 
   it('shouldPreferPinataHttpDraft allows gateway when HERMIT_PINATA_BRIDGE_HTTP_ONLY=0', () => {

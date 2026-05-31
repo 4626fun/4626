@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { formatHermitCommandRoomHelp, HERMIT_COMMAND_ROOM_HELP_MAX_CHARS } from '../../_lib/alfaclub/hermitAlfaClubHelp.js'
+import { formatHermitCommandRoomHelp, HERMIT_COMMAND_ROOM_HELP_MAX_CHARS } from '../../_lib/hermit/hermitAlfaClubHelp.js'
 import { executeHelpCommandFamily } from './help.js'
 
 describe('executeHelpCommandFamily', () => {

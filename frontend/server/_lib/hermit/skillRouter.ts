@@ -18,7 +18,7 @@
  * here, stop — that belongs in the auth lane, not the creative lane.
  */
 import { pickGmeowLocalLine, pickRandomHermitMeme } from './memeStore.js'
-import { formatHermitCommandRoomHelp } from '../alfaclub/hermitAlfaClubHelp.js'
+import { formatHermitCommandRoomHelp } from './hermitAlfaClubHelp.js'
 import type {
   HermitExecutionParams,
   HermitExecutionResult,
@@ -476,24 +476,32 @@ function readPinataBridgeHttpOnlyEnabled(): boolean {
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
 }
 
+/** Pinata-hosted OpenClaw agents only expose creative draft over gateway WS — root HTTPS POST 404s. */
+export function pinataEndpointSupportsHttpDraft(rawEndpoint: string | undefined): boolean {
+  const endpoint = asTrimmed(rawEndpoint)
+  if (!endpoint) return false
+  return toGatewaySocketUrl(endpoint) === null
+}
+
 /**
  * AlfaClub bridge calls Pinata for generation only — Vercel posts the
  * formatted reply. OpenClaw gateway `chat.send` on a Pinata agent that
  * also has an AlfaClub channel/skill mirrors the full worker prompt and
  * raw JSON assistant output into the live room as duplicate "4626" /
  * "Agent Hermit" messages. Prefer the stateless HTTP draft path for
- * bridge-initiated strict-JSON creative calls so nothing hits the
- * session-bound channel plugin.
+ * bridge-initiated strict-JSON creative calls when the endpoint exposes
+ * one; Pinata `.agents.pinata.cloud` hosts use gateway WS only.
  */
 export function shouldPreferPinataHttpDraft(params: {
   sourceIdentity?: string | null
   prompt: string
+  endpoint?: string | null
 }): boolean {
+  const endpoint = asTrimmed(params.endpoint) || asTrimmed(process.env.HERMIT_PINATA_CHAT_ENDPOINT)
+  if (!pinataEndpointSupportsHttpDraft(endpoint)) return false
   if (readPinataBridgeHttpOnlyEnabled()) return true
   const source = asTrimmed(params.sourceIdentity).toLowerCase()
   if (source === 'alfaclub-bridge-runner') {
-    // Default on for Vercel bridge: faster than gateway WS and avoids duplicate
-    // OpenClaw channel echoes. Set HERMIT_PINATA_BRIDGE_HTTP_ONLY=0 to force gateway.
     return !readPinataBridgeHttpOnlyDisabled()
   }
   return isStrictJsonHermitWorkerPrompt(params.prompt)
@@ -714,6 +722,7 @@ async function runPinataDraft(params: {
   const preferHttp = shouldPreferPinataHttpDraft({
     sourceIdentity: params.sourceIdentity,
     prompt: params.prompt,
+    endpoint: cfg.endpoint,
   })
   if (preferHttp) {
     const viaHttp = await runPinataDraftOverHttp({
