@@ -106,8 +106,13 @@ These tables are the biggest remaining source of "room for optimization" after t
   - `chat_command_center_events` (in `chatCommandCenterTelemetry.ts`)
 
 **Extended wiring + actual cleanup (this slice)**:
-- Dropped `query_temp_io_snapshots` (highest analyzer potential, confirmed complete orphan: no writers, no CREATE, no types anywhere in the tree). New migration `20260705000000_drop_orphan_query_temp_io_snapshots.sql`.
-- Removed from analyzer candidate list.
+- Dropped `query_temp_io_snapshots` (highest analyzer potential, confirmed complete orphan: no writers, no CREATE, no types anywhere in the tree). New migrations: table drop + retention function cleanup.
+- `index_usage_snapshots` investigated in depth:
+  - Real intentional Phase 6 tooling (March 2026): `capture_index_usage_snapshot()`, `index_drop_candidates()`, `index_drop_migration_draft()`.
+  - No automated callers in app code or kpr/ (only the schema + types + legacy hardening).
+  - Usage is manual / on-demand only. The "auto-generate index drop drafts" workflow appears cold.
+  - Not a drop candidate (has historical value), but good candidate for future analytics schema carve-out or deprecation of the drop-draft functions.
+- Added `getTelemetrySampleRate(tableName?)` helper for observability of per-table rates.
 - Enhanced sampler with table-aware `shouldSampleEvent(tableName, key)` + per-table env override support (`TELEMETRY_SAMPLE_RATE_<table>`).
 - Wired deterministic sampling (early returns before INSERT) into:
   - `chat_presence_sessions` (presence.ts — heartbeats)

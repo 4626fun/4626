@@ -36,6 +36,25 @@ export function shouldSampleTelemetry(key: string | number | null | undefined): 
 }
 
 /**
+ * Returns the effective sample rate (0.0–1.0) for a given table.
+ *
+ * Resolution order:
+ *   1. TELEMETRY_SAMPLE_RATE_<normalized_table>
+ *   2. TELEMETRY_SAMPLE_RATE (global)
+ *   3. 1.0 (no sampling)
+ *
+ * Useful for logging, dashboards, or admin surfaces that want to show
+ * "this table is currently sampled at 12%".
+ */
+export function getTelemetrySampleRate(tableName?: string): number {
+  const tableKey = tableName ? normalizeTableForEnv(tableName) : null
+  const specificEnv = tableKey ? `TELEMETRY_SAMPLE_RATE_${tableKey}` : null
+  const specific = specificEnv ? process.env[specificEnv] : undefined
+  const rateSource = specific !== undefined ? specific : process.env.TELEMETRY_SAMPLE_RATE
+  return Math.max(0, Math.min(1, parseNumber(rateSource, 1)))
+}
+
+/**
  * Table-aware deterministic sampling.
  *
  * Checks for a table-specific rate env (TELEMETRY_SAMPLE_RATE_<table>) first,
@@ -48,15 +67,12 @@ export function shouldSampleEvent(
   key: string | number | null | undefined,
   rateEnv: string = 'TELEMETRY_SAMPLE_RATE',
 ): boolean {
-  const tableKey = normalizeTableForEnv(tableName)
-  const specificEnv = `${rateEnv}_${tableKey}`
-  const specific = process.env[specificEnv]
-  const rateSource = specific !== undefined ? specific : process.env[rateEnv]
-  const rate = Math.max(0, Math.min(1, parseNumber(rateSource, 1)))
+  const rate = getTelemetrySampleRate(tableName)
 
   if (rate >= 1) return true
   if (rate <= 0) return false
 
+  const tableKey = normalizeTableForEnv(tableName)
   const str = `${tableKey}:${String(key ?? 'anonymous')}`
   const hash = createHash('sha256').update(str).digest('hex')
   const bucket = parseInt(hash.slice(0, 8), 16) / 0xffffffff

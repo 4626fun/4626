@@ -32,8 +32,11 @@ const TELEMETRY_CANDIDATES = [
   'telegram_funnel_events',
   'telegram_link_telemetry_events',
   'telegram_action_tokens',
-  'index_usage_snapshots',
-  // 'query_temp_io_snapshots' — dropped 20260705000000 (confirmed orphan: no writers, no types, no creation migration)
+  // 'index_usage_snapshots' — intentional but cold Phase 6 (2026-03) monitoring tooling.
+  // Has real capture_index_usage_snapshot() + drop-candidate functions.
+  // No automated callers found in app/kpr code. Manual / on-demand only.
+  // Candidate for analytics schema move rather than drop or aggressive sampling.
+  // 'query_temp_io_snapshots' — dropped 20260705000000 (confirmed orphan)
   'ethos_score_sync_state',
   'zora_profiles_refresh_state',
   'creator_metrics_daily_snapshots',
