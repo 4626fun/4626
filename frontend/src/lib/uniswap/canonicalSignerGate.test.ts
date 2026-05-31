@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import { evaluateCanonicalSignerGate } from './canonicalSignerGate'
+import { CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
+
+const USER_CANONICAL_CSW = '0xcccccccccccccccccccccccccccccccccccccccc'
 
 describe('evaluateCanonicalSignerGate', () => {
   it('is not required in eoa mode', () => {
@@ -22,7 +25,7 @@ describe('evaluateCanonicalSignerGate', () => {
   it('fails with privy-client-disabled when canonical mode has no Privy client', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
-      canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      canonicalAddress: CANONICAL_CSW_ADDRESS,
       clientStatus: 'disabled',
       authStatus: 'unknown',
       embeddedWalletDetected: false,
@@ -40,7 +43,7 @@ describe('evaluateCanonicalSignerGate', () => {
   it('returns auth-loading while Privy client is initializing', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
-      canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      canonicalAddress: CANONICAL_CSW_ADDRESS,
       clientStatus: 'loading',
       authStatus: 'unknown',
       embeddedWalletDetected: false,
@@ -58,7 +61,7 @@ describe('evaluateCanonicalSignerGate', () => {
   it('fails when embedded wallet is missing in canonical mode', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
-      canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      canonicalAddress: CANONICAL_CSW_ADDRESS,
       clientStatus: 'ready',
       authStatus: 'authenticated',
       embeddedWalletDetected: false,
@@ -76,7 +79,7 @@ describe('evaluateCanonicalSignerGate', () => {
   it('returns auth-loading while Privy state is unresolved and no embedded wallet is detected', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
-      canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      canonicalAddress: CANONICAL_CSW_ADDRESS,
       clientStatus: 'ready',
       authStatus: 'unknown',
       embeddedWalletDetected: false,
@@ -94,7 +97,7 @@ describe('evaluateCanonicalSignerGate', () => {
   it('fails with auth-required when canonical mode is not Privy-authenticated', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
-      canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      canonicalAddress: CANONICAL_CSW_ADDRESS,
       clientStatus: 'ready',
       authStatus: 'unauthenticated',
       embeddedWalletDetected: false,
@@ -112,7 +115,7 @@ describe('evaluateCanonicalSignerGate', () => {
   it('fails when ownership check is still pending', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
-      canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      canonicalAddress: CANONICAL_CSW_ADDRESS,
       clientStatus: 'ready',
       authStatus: 'authenticated',
       embeddedWalletDetected: true,
@@ -131,7 +134,7 @@ describe('evaluateCanonicalSignerGate', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
       executionTrack: 'sub-account',
-      canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      canonicalAddress: CANONICAL_CSW_ADDRESS,
       baseSubAccountAddress: '0x2222222222222222222222222222222222222222',
       subAccountProviderReady: true,
       clientStatus: 'ready',
@@ -151,7 +154,7 @@ describe('evaluateCanonicalSignerGate', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
       executionTrack: 'migration-pending',
-      canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      canonicalAddress: CANONICAL_CSW_ADDRESS,
       baseSubAccountAddress: '0x2222222222222222222222222222222222222222',
       subAccountProviderReady: false,
       clientStatus: 'ready',
@@ -171,7 +174,7 @@ describe('evaluateCanonicalSignerGate', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
       executionTrack: 'migration-pending',
-      canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      canonicalAddress: CANONICAL_CSW_ADDRESS,
       baseSubAccountAddress: '0x2222222222222222222222222222222222222222',
       subAccountProviderReady: false,
       clientStatus: 'ready',
@@ -191,7 +194,7 @@ describe('evaluateCanonicalSignerGate', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
       executionTrack: 'none-yet',
-      canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      canonicalAddress: USER_CANONICAL_CSW,
       clientStatus: 'ready',
       authStatus: 'authenticated',
       embeddedWalletDetected: true,
@@ -209,7 +212,7 @@ describe('evaluateCanonicalSignerGate', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
       executionTrack: 'none-yet',
-      canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      canonicalAddress: CANONICAL_CSW_ADDRESS,
       clientStatus: 'ready',
       authStatus: 'authenticated',
       embeddedWalletDetected: true,
@@ -226,7 +229,7 @@ describe('evaluateCanonicalSignerGate', () => {
   it('fails when embedded wallet is not an owner', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
-      canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      canonicalAddress: CANONICAL_CSW_ADDRESS,
       clientStatus: 'ready',
       authStatus: 'authenticated',
       embeddedWalletDetected: true,
@@ -244,11 +247,11 @@ describe('evaluateCanonicalSignerGate', () => {
   it('is ready when embedded wallet can sign and is owner', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
-      canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      canonicalAddress: CANONICAL_CSW_ADDRESS,
       clientStatus: 'ready',
       authStatus: 'authenticated',
       embeddedWalletDetected: true,
-      embeddedWalletAddress: '0x1111111111111111111111111111111111111111',
+      embeddedWalletAddress: '0xceca13f2686ed061c57620ecdf67e1b8c0f285e9',
       embeddedWalletCanSign: true,
       ownerCheckStatus: 'owner',
     })

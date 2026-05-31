@@ -13,6 +13,7 @@ import {
   STRICT_IMMUTABLE_AGENT_URI_SUMMARY,
 } from '../../../src/lib/agent/erc8004AgentUriPolicy.js'
 import { getErc8004PublicOrigin } from '../../../server/_lib/infra/origin.js'
+import { readCanonicalCswAddressEnv } from '../../../server/_lib/wallet/canonicalCswEnv.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -44,7 +45,7 @@ function isAddressLike(value: string): boolean {
 
 function resolveAgentAddress(): `0x${string}` | null {
   const candidates = [
-    (process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim(),
+    readCanonicalCswAddressEnv(),
     (process.env.XMTP_AGENT_ADDRESS ?? '').trim(),
     (process.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim(),
   ]

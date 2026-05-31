@@ -34,6 +34,7 @@ import {
   formatFeedbackValue,
   ratingLabel,
 } from '../agent/erc8004.js'
+import { readCanonicalCswAddressEnv } from '../wallet/canonicalCswEnv.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -135,7 +136,7 @@ export async function buildReputationGraph(params: {
 
   // 2. Agent node - include XMTP/CSW address if available
   const agentNodeId = `agent:${agentId}`
-  const xmtpAddress = (process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim().toLowerCase() || undefined
+  const xmtpAddress = readCanonicalCswAddressEnv().toLowerCase() || undefined
   nodes.push({
     id: agentNodeId,
     label: `Agent #${agentId}`,

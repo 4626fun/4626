@@ -23,7 +23,7 @@ import { logger } from '@/lib/observability/logger'
 // Constants
 // ---------------------------------------------------------------------------
 
-// Canonical smart wallet — kept in sync with TARGET_CANONICAL_CSW_ADDRESS in
+// Canonical smart wallet — kept in sync with CANONICAL_CSW_ADDRESS in
 // src/wallet/canonicalWalletPolicy.ts. Migrated 2026-04-23 from
 // 0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef.
 export const CANONICAL_SMART_WALLET = '0xab6d5c10b03300326cd7fab7267ae192842967b5'

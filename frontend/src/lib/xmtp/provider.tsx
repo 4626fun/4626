@@ -27,8 +27,8 @@ import { prefetchIdentities } from '@/hooks/useIdentity'
 import { resolveModePreferredIdentity, shouldRequireAuthBackedXmtpIdentity } from '@/lib/xmtp/identityResolver'
 import { useAccountContext } from '@/wallet/accountContext'
 import {
-  TARGET_CANONICAL_CSW_ADDRESS,
-  isTargetCanonicalCsw,
+  CANONICAL_CSW_ADDRESS,
+  isCanonicalCsw,
   shouldApplyCanonicalEnforcement,
 } from '@/wallet/canonicalWalletPolicy'
 import { CANONICAL_SCW_CHAIN_ID, decideXmtpSignerType, resolveXmtpChainId } from '@/lib/xmtp/signerUtils'
@@ -1565,7 +1565,7 @@ export function XmtpChatProvider({
         )
       }
 
-      const expectedAuthAddress = normalizeEvmAddress(policyApplies ? TARGET_CANONICAL_CSW_ADDRESS : preferred)
+      const expectedAuthAddress = normalizeEvmAddress(policyApplies ? CANONICAL_CSW_ADDRESS : preferred)
       if (expectedAuthAddress && authAddress !== expectedAuthAddress) {
         throw new Error(
           'XMTP session identity does not match the smart wallet selected for messaging. Reconnect wallet, sign in again, and retry.',
@@ -1574,13 +1574,13 @@ export function XmtpChatProvider({
     }
 
     if (policyApplies) {
-      if (preferred !== TARGET_CANONICAL_CSW_ADDRESS) {
+      if (preferred !== CANONICAL_CSW_ADDRESS) {
         console.warn('[xmtp] canonical policy overriding identity resolution to target CSW', {
           connected,
           resolvedBeforeOverride: preferred,
         })
       }
-      preferred = TARGET_CANONICAL_CSW_ADDRESS
+      preferred = CANONICAL_CSW_ADDRESS
       isCanonicalSmartWallet = true
     }
 
@@ -1624,7 +1624,7 @@ export function XmtpChatProvider({
       }
     }
 
-    if (isCanonicalSmartWallet && !isTargetCanonicalCsw(preferred) && policyApplies) {
+    if (isCanonicalSmartWallet && !isCanonicalCsw(preferred) && policyApplies) {
       console.warn('[xmtp] canonical policy detected non-target smart wallet identity', {
         preferred,
       })

@@ -112,8 +112,8 @@ The agent will hard-fail early (`process.exit(1)`) on Railway if these are not c
   - `XMTP_DB_DIRECTORY` must point to a **mounted Railway volume** (not `/tmp`)
   - `XMTP_REQUIRE_PERSISTENT_DB=true` (default on for primary)
 - If using Coinbase Smart Wallet for the agent identity (recommended):
-  - `XMTP_AGENT_CSW_ADDRESS`
-  - `XMTP_AGENT_PRIVY_WALLET_ID` (the Privy server wallet that signs for it)
+  - `CANONICAL_CSW_ADDRESS`
+  - `CANONICAL_CSW_PRIVY_WALLET_ID` (the Privy server wallet that signs for it)
   - Full Privy server auth: `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_WALLET_AUTHORIZATION_KEY`, `PRIVY_WALLET_OWNER_ID`
 
 **Strongly recommended on Railway primary:**
@@ -162,8 +162,8 @@ This is the normal Railway deployment path for this repo.
 
 Required env:
 
-- `XMTP_AGENT_CSW_ADDRESS`
-- `XMTP_AGENT_PRIVY_WALLET_ID`
+- `CANONICAL_CSW_ADDRESS`
+- `CANONICAL_CSW_PRIVY_WALLET_ID` (legacy: `XMTP_AGENT_PRIVY_WALLET_ID`)
 - Privy server credentials
 - `XMTP_DB_ENCRYPTION_KEY`
 - one LLM provider key

@@ -14,14 +14,15 @@ import { useFacilitator as createFacilitatorClient } from 'x402/verify'
 
 import { getCanonicalOrigin } from '../infra/origin.js'
 import siteConfig from '../../../shared/site-config.json' with { type: 'json' }
-import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
+import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
+import { readCanonicalCswAddressEnv } from '../wallet/canonicalCswEnv.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
 const DEFAULT_NETWORK = 'base' as const
 const DEFAULT_PRICE_USD = 1
 const DEFAULT_MAX_TIMEOUT_SECONDS = 300
-const DEFAULT_PAY_TO = TARGET_CANONICAL_CSW_ADDRESS
+const DEFAULT_PAY_TO = CANONICAL_CSW_ADDRESS
 const X402_VERSION = 1
 const PAYMENT_ALLOW_HEADERS = [
   'PAYMENT-SIGNATURE',
@@ -113,7 +114,7 @@ function resolvePayTo(): `0x${string}` {
   const candidates = [
     (process.env.ERC8004_REVIEW_PAY_TO ?? '').trim(),
     (process.env.X402_PAY_TO ?? '').trim(),
-    (process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim(),
+    readCanonicalCswAddressEnv(),
     (process.env.XMTP_AGENT_ADDRESS ?? '').trim(),
     (process.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim(),
     DEFAULT_PAY_TO,

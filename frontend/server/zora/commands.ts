@@ -27,6 +27,7 @@ import { assertTeeAttestationOrThrow } from '../_lib/agent/teeAttestationGate.js
 import { readCswReplaySafeHash, wrapCswOwnerSignature } from '../_lib/wallet/cswOwnerSignature.js'
 import type { KeeprVaultRow } from '../_lib/keepr/keeprRegistry.js'
 import type { KeeprRole, KeeprCommandResult } from '../commands/types.js'
+import { readCanonicalCswAddressEnv } from '../_lib/wallet/canonicalCswEnv.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -44,14 +45,14 @@ const BASE_CHAIN_ID = 8453
  * — On trades (`referrer`): earns 0.04% per trade executed through Keepr.
  *
  * Set via ZORA_PLATFORM_REFERRER_ADDRESS env var.
- * Falls back to the CSW address (XMTP_AGENT_CSW_ADDRESS) if not set.
+ * Falls back to `CANONICAL_CSW_ADDRESS` if not set.
  */
 function getPlatformReferrerAddress(): Address | undefined {
   const explicit = (process.env.ZORA_PLATFORM_REFERRER_ADDRESS ?? '').trim()
   if (explicit && isAddress(explicit)) return getAddress(explicit) as Address
 
   // Fallback: use the canonical CSW address
-  const csw = (process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim()
+  const csw = readCanonicalCswAddressEnv()
   if (csw && isAddress(csw)) return getAddress(csw) as Address
 
   return undefined

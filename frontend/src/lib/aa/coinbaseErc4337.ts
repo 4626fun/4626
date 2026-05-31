@@ -29,8 +29,8 @@ import { logger } from '@/lib/observability/logger'
 import { trackEvent } from '@/lib/analytics/analytics'
 import { DATA_SUFFIX } from '@/lib/base/baseBuilderCodes'
 import {
-  TARGET_CANONICAL_CSW_ADDRESS,
-  isAllowedAgentCswExecutionSigner,
+  CANONICAL_CSW_ADDRESS,
+  isAllowedCanonicalCswExecutionSigner,
 } from '@/wallet/canonicalWalletPolicy'
 import { applyBuilderDataSuffixToCalls } from './coinbaseErc4337BuilderSuffix'
 import {
@@ -1433,18 +1433,15 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     waitForOnChainReceipt = true,
   } = params
 
-  // Hard safety gate for the agent / project canonical CSW.
-  // Only the currently active automation + admin execution owners are permitted
-  // to sign UserOps against it. The historical embedded EOA is intentionally
-  // excluded from execution even if it passes broader legacy identity checks.
-  if (getAddress(smartWallet) === getAddress(TARGET_CANONICAL_CSW_ADDRESS)) {
-    if (!isAllowedAgentCswExecutionSigner(ownerAddress)) {
+  // Execution allowlist for CANONICAL_CSW_ADDRESS (canonical parent CSW).
+  if (getAddress(smartWallet) === getAddress(CANONICAL_CSW_ADDRESS)) {
+    if (!isAllowedCanonicalCswExecutionSigner(ownerAddress)) {
       const msg =
-        'Unauthorized signer for agent canonical CSW. Only active automation owners may execute canonical4337 actions on the agent wallet. Historical embedded EOAs are no longer permitted for execution.'
-      logger.error('[ERC-4337] Agent CSW execution signer rejected', {
+        'Unauthorized signer for canonical CSW. Connect a wallet that is an on-chain owner of your smart wallet, or finish 4626 signing setup in account settings.'
+      logger.error('[ERC-4337] Canonical CSW execution signer rejected', {
         smartWallet,
         ownerAddress,
-        reason: 'historical-or-unauthorized-owner',
+        reason: 'unauthorized-canonical-csw-owner',
       })
       throw new Error(msg)
     }

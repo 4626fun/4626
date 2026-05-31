@@ -30,7 +30,7 @@
 
 import { executeDeterministicCommand } from '../../agents/core/executeDeterministicCommand.js'
 import { matchesAnyCommandFamily } from '../../commands/registry.js'
-import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
+import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
 import { extractTelegramRelayCommandText } from './telegramChatRef.js'
 import { logger } from '../infra/logger.js'
 import WebSocket from 'ws'
@@ -710,7 +710,7 @@ export function isHistoryMessageCommandCandidate(message: AlfaClubRoomHistoryMes
   const commandText = extractTelegramRelayCommandText(normalized.text)
   const telegramRelayedCommand = isTelegramRelayedSlashCommand(normalized.text, commandText)
   if (!isHexAddress(normalized.sender) && !telegramRelayedCommand) return false
-  if (normalized.sender === TARGET_CANONICAL_CSW_ADDRESS.toLowerCase()) return false
+  if (normalized.sender === CANONICAL_CSW_ADDRESS.toLowerCase()) return false
   const trustedBareGmeow = isBareGmeowFromTrustedSender(commandText, normalized.sender)
   return trustedBareGmeow || isAlfaClubSlashCommandText(commandText)
 }
@@ -773,7 +773,7 @@ export function collectAlfaClubCommandMessages(params: {
     const telegramRelayedCommand = isTelegramRelayedSlashCommand(entry.text, commandText)
     if (!isHexAddress(entry.sender) && !telegramRelayedCommand) continue
     if (self && entry.sender === self) continue
-    if (entry.sender === TARGET_CANONICAL_CSW_ADDRESS.toLowerCase()) continue
+    if (entry.sender === CANONICAL_CSW_ADDRESS.toLowerCase()) continue
     const trustedBareGmeow = isBareGmeowFromTrustedSender(commandText, entry.sender)
     if (!trustedBareGmeow && !isAlfaClubSlashCommandText(commandText)) continue
     commands.push({
@@ -1935,7 +1935,7 @@ async function maybeSendHermitRoomWelcomes(params: {
 
   let welcomed = 0
   for (const candidate of candidates) {
-    if (candidate.senderAddress === TARGET_CANONICAL_CSW_ADDRESS.toLowerCase()) continue
+    if (candidate.senderAddress === CANONICAL_CSW_ADDRESS.toLowerCase()) continue
     const claimed = await tryInsertHermitRoomWelcomeSent({
       roomId: candidate.roomId,
       senderAddress: candidate.senderAddress,
@@ -2951,7 +2951,7 @@ function ensureLiveCommandSocket(params: {
     const commands = collectAlfaClubCommandMessages({
       messages: roomMessages,
       seenMessageIds: bridgeState.seenMessageIds,
-      selfAddress: TARGET_CANONICAL_CSW_ADDRESS,
+      selfAddress: CANONICAL_CSW_ADDRESS,
     })
     pushLiveCommands(commands)
   }
@@ -3636,7 +3636,7 @@ async function runBridgeTick(
       const recentCommands = collectAlfaClubCommandMessages({
         messages: recentMessages,
         seenMessageIds: new Set<string>(),
-        selfAddress: TARGET_CANONICAL_CSW_ADDRESS,
+        selfAddress: CANONICAL_CSW_ADDRESS,
       })
       const recentBatch =
         recentCommands.length > 0
@@ -3675,7 +3675,7 @@ async function runBridgeTick(
   const commands = collectAlfaClubCommandMessages({
     messages: commandSourceMessages,
     seenMessageIds: new Set<string>(),
-    selfAddress: TARGET_CANONICAL_CSW_ADDRESS,
+    selfAddress: CANONICAL_CSW_ADDRESS,
   })
   if (commands.length > 0) {
     logger.info('[alfaclub-chat] command_batch_detected', {

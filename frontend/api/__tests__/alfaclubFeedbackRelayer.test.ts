@@ -76,7 +76,7 @@ const OWNER = {
 }
 
 const PRIVY_ENV = {
-  XMTP_AGENT_PRIVY_WALLET_ID: 'walletid-test',
+  CANONICAL_CSW_PRIVY_WALLET_ID: 'walletid-test',
   PRIVY_APP_ID: 'privy-app',
   PRIVY_APP_SECRET: 'privy-secret',
   PRIVY_WALLET_AUTHORIZATION_KEY: 'authkey',
@@ -149,7 +149,7 @@ describe('relayAlfaClubFeedbackOnce — short-circuits', () => {
   it('returns skipped=privy_env_missing when required Privy env is absent', async () => {
     restoreEnv = applyEnv({
       ...RELAYER_ENABLED,
-      XMTP_AGENT_PRIVY_WALLET_ID: undefined,
+      CANONICAL_CSW_PRIVY_WALLET_ID: undefined,
       PRIVY_APP_ID: undefined,
       PRIVY_APP_SECRET: undefined,
       PRIVY_WALLET_AUTHORIZATION_KEY: undefined,

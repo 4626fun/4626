@@ -14,6 +14,11 @@
 
 import { isDbConfigured } from '../../frontend/server/_lib/db/postgres.js'
 import { hasDedicatedMount, findMountedAncestorPath } from '../../frontend/server/_lib/messaging/xmtpDbDirectory.js'
+import {
+  hasCanonicalCswRuntimeConfig,
+  readCanonicalCswAddressEnv,
+  readCanonicalCswPrivyWalletIdEnv,
+} from '../../frontend/server/_lib/wallet/canonicalCswEnv.js'
 import path from 'node:path'
 
 const RED = '\x1b[31m'
@@ -38,9 +43,9 @@ const RUNNING_ON_RAILWAY = Object.keys(process.env).some(k => k.startsWith('RAIL
 const hasDb = isDbConfigured()
 const hasEncKey = !!(process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()
 const hasPrivateKey = !!(process.env.XMTP_AGENT_PRIVATE_KEY ?? '').trim()
-const hasCswAddress = !!(process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim()
-const hasCswPrivyWallet = !!(process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim()
-const hasCswConfig = hasCswAddress && hasCswPrivyWallet
+const hasCswAddress = !!readCanonicalCswAddressEnv()
+const hasCswPrivyWallet = !!readCanonicalCswPrivyWalletIdEnv()
+const hasCswConfig = hasCanonicalCswRuntimeConfig()
 
 const multiAgentConfigured = hasDb && hasEncKey
 
@@ -75,8 +80,8 @@ if (RUNNING_ON_RAILWAY) {
 }
 
 console.log('\n--- Agent Identity (Recommended: CSW + Privy Server Wallet) ---')
-check('XMTP_AGENT_CSW_ADDRESS present', hasCswAddress)
-check('XMTP_AGENT_PRIVY_WALLET_ID present (the signer for the CSW)', hasCswPrivyWallet)
+check('CANONICAL_CSW_ADDRESS present', hasCswAddress)
+check('CANONICAL_CSW_PRIVY_WALLET_ID present (the signer for the CSW)', hasCswPrivyWallet)
 
 if (hasCswAddress && !hasCswPrivyWallet) {
   console.log('   Missing PRIVY_WALLET_ID for the agent\'s CSW')

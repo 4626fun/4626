@@ -69,7 +69,7 @@ This file covers **server-side** delegation for the XMTP agent, ERC-8004 identit
   - Uses the CSW's `replaySafeHash()` for ERC-1271 validation.
 - The XMTP agent presents as the CSW address, not the Privy EOA.
 - File: `frontend/server/_lib/privyXmtpSigner.ts`, `frontend/server/agents/eliza/index.ts`
-- Env: `XMTP_AGENT_CSW_ADDRESS`, `XMTP_AGENT_PRIVY_WALLET_ID`, `XMTP_AGENT_CSW_OWNER_INDEX`
+- Env: `CANONICAL_CSW_ADDRESS`, `CANONICAL_CSW_PRIVY_WALLET_ID`, `CANONICAL_CSW_OWNER_INDEX` (legacy `XMTP_AGENT_CSW_*` read as fallback)
 
 ### 5. ERC-8004 Agent Registration (server action)
 - Agent registration payload is built with the CSW address injected into XMTP and `agentWallet` service entries.
@@ -91,9 +91,9 @@ This file covers **server-side** delegation for the XMTP agent, ERC-8004 identit
 
 | Variable | Purpose | Scope |
 |---|---|---|
-| `XMTP_AGENT_CSW_ADDRESS` | CSW address the XMTP agent presents as | Server |
-| `XMTP_AGENT_PRIVY_WALLET_ID` | Privy wallet ID used as delegated signer | Server |
-| `XMTP_AGENT_CSW_OWNER_INDEX` | Owner index of Privy wallet in CSW MultiOwnable | Server |
+| `CANONICAL_CSW_ADDRESS` | Canonical parent CSW the XMTP runtime presents as | Server |
+| `CANONICAL_CSW_PRIVY_WALLET_ID` | Privy wallet ID used as delegated signer | Server |
+| `CANONICAL_CSW_OWNER_INDEX` | Owner index of Privy wallet in CSW MultiOwnable | Server |
 | `PRIVY_WALLET_AUTHORIZATION_KEY` | P-256 key for signing Privy API requests | Server |
 | `PRIVY_WALLET_OWNER_ID` | Key quorum ID for creating agent wallets | Server |
 | `ERC8004_AGENT_REGISTRY` | ERC-8004 Identity Registry address | Server |

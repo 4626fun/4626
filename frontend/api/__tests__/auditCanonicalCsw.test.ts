@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { auditProfileCswRow } from '../../server/_lib/wallet/auditCanonicalCsw.ts'
-import { TARGET_CANONICAL_CSW_ADDRESS } from '../../src/wallet/canonicalWalletPolicy.ts'
+import { CANONICAL_CSW_ADDRESS } from '../../src/wallet/canonicalWalletPolicy.ts'
 
 describe('auditProfileCswRow', () => {
   it('flags Zora Privy owner EOAs stored as CSW', async () => {
     const hasDeployedBytecode = vi.fn(async (address: string | null | undefined) => {
       if (!address) return false
-      return address.toLowerCase() === TARGET_CANONICAL_CSW_ADDRESS
+      return address.toLowerCase() === CANONICAL_CSW_ADDRESS
     })
 
     const audit = await auditProfileCswRow({
@@ -24,7 +24,7 @@ describe('auditProfileCswRow', () => {
       zoraCanonicalCsw: '0x6c0ea422aa7bb7e1e17c5257f7023c8f05ddf9b3',
     })
 
-    expect(audit?.expectedCsw).toBe(TARGET_CANONICAL_CSW_ADDRESS)
+    expect(audit?.expectedCsw).toBe(CANONICAL_CSW_ADDRESS)
     expect(audit?.reasons).toContain('csw_is_allowed_owner_eoa')
     expect(audit?.reasons).toContain('csw_has_no_bytecode')
     expect(audit?.reasons).toContain('policy_resolved_csw_differs')

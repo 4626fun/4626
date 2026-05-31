@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
-import { TARGET_CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
+import { CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
 
 import { resolveSwapBalanceOwner } from './resolveSwapBalanceOwner'
 
 describe('resolveSwapBalanceOwner', () => {
-  it('maps allowed owner EOAs to the policy canonical CSW when profile canonical is the agent CSW', () => {
+  it('maps allowed owner EOAs to the canonical CSW when profile canonical is CANONICAL_CSW_ADDRESS', () => {
     expect(
       resolveSwapBalanceOwner({
-        accountMeCanonicalCsw: TARGET_CANONICAL_CSW_ADDRESS,
+        accountMeCanonicalCsw: CANONICAL_CSW_ADDRESS,
         privyEmbeddedEoa: '0xceca13f2686ed061c57620ecdf67e1b8c0f285e9',
       }),
-    ).toBe(TARGET_CANONICAL_CSW_ADDRESS)
+    ).toBe(CANONICAL_CSW_ADDRESS)
   })
 
   it('keeps a personal canonical CSW for balance reads even when signer is a shared allowed owner EOA', () => {

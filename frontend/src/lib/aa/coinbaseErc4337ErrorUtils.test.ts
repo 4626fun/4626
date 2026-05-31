@@ -36,8 +36,8 @@ describe('extractUserOpReceiptTxHash', () => {
 
 describe('isEchoedBundlerUserOpCallData', () => {
   it('detects execute and executeBatch echoed payloads', () => {
-    const longExecute = `0xb61d27f6${'ab'.repeat(120)}`
-    const longBatch = `0x34fcd5be${'cd'.repeat(120)}`
+    const longExecute = `0xb61d27f6${'ab'.repeat(120)}` as `0x${string}`
+    const longBatch = `0x34fcd5be${'cd'.repeat(120)}` as `0x${string}`
     expect(isEchoedBundlerUserOpCallData(longExecute)).toBe(true)
     expect(isEchoedBundlerUserOpCallData(longBatch)).toBe(true)
     expect(isEchoedBundlerUserOpCallData('0x2c4029e9')).toBe(false)

@@ -10,6 +10,7 @@ import {
   getIdentityRegistryAddress,
 } from './erc8004.js'
 import { buildReputationGraph } from '../lens/reputationGraph.js'
+import { readCanonicalCswAddressEnv } from '../wallet/canonicalCswEnv.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -147,7 +148,7 @@ export function extractCanonicalCsw(payload: RegistrationFile): string | null {
     if (fromXmtpService) return fromXmtpService
   }
 
-  const fromEnv = readAddressLike((process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim())
+  const fromEnv = readAddressLike(readCanonicalCswAddressEnv())
   return fromEnv
 }
 

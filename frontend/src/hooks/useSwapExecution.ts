@@ -29,7 +29,7 @@ import { fetchSwapAssetBalanceViaApi } from '@/lib/swap/useSwapAssetBalance'
 import { resolveSwapTokenDecimals } from '@/lib/swap/swapTokenDecimals'
 import { normalizeUniswapError, type NormalizedUniswapError, type UniswapErrorCode } from '@/lib/uniswap/error'
 import { areEquivalentSwapTokens, BASE_CHAIN_ID, getNestedAmountOut, NATIVE_TOKEN_ADDRESS } from '@/lib/uniswap/swapUtils'
-import { isAllowedCanonicalSigner, isTargetCanonicalCsw, shouldApplyCanonicalEnforcement } from '@/wallet/canonicalWalletPolicy'
+import { isAllowedCanonicalSigner, isCanonicalCsw, shouldApplyCanonicalEnforcement } from '@/wallet/canonicalWalletPolicy'
 import type { components } from '@/lib/uniswap/generated/tradeApi'
 import {
   assertValidSwapTransaction,
@@ -230,9 +230,9 @@ export function deriveSwapExecutionReadiness(params: {
 
   const canonicalPolicyReady =
     params.executionMode !== 'canonical' ||
-    (isTargetCanonicalCsw(params.canonicalAddress ?? null) &&
+    (isCanonicalCsw(params.canonicalAddress ?? null) &&
       (params.executionTrack === 'sub-account' ||
-        (isTargetCanonicalCsw(params.executionAddress ?? null) && isAllowedCanonicalSigner(params.signerAddress ?? null))))
+        (isCanonicalCsw(params.executionAddress ?? null) && isAllowedCanonicalSigner(params.signerAddress ?? null))))
 
   if (params.cdpCanonicalOnlyMode && !canonicalPolicyReady) return false
   if (params.canonicalPolicyApplies && !canonicalPolicyReady) return false
@@ -245,7 +245,7 @@ export function shouldDisablePermit2ForSwap(params: {
   executionAddress?: string | null
 }): boolean {
   if (params.executionMode === 'canonical') return true
-  if (isTargetCanonicalCsw(params.executionAddress ?? null)) return true
+  if (isCanonicalCsw(params.executionAddress ?? null)) return true
 
   const canonical = params.canonicalAddress?.trim().toLowerCase()
   const execution = params.executionAddress?.trim().toLowerCase()
@@ -865,11 +865,11 @@ export function useSwapExecution(params: {
     if (params.executionMode !== 'canonical') {
       throw new Error('Canonical CSW policy requires canonical execution mode.')
     }
-    if (!isTargetCanonicalCsw(params.canonicalAddress ?? null)) {
+    if (!isCanonicalCsw(params.canonicalAddress ?? null)) {
       throw new Error('Canonical CSW policy requires the configured canonical smart wallet identity.')
     }
     const subAccountExecution = params.executionTrack === 'sub-account'
-    if (!subAccountExecution && !isTargetCanonicalCsw(params.executionAddress ?? null)) {
+    if (!subAccountExecution && !isCanonicalCsw(params.executionAddress ?? null)) {
       throw new Error('Canonical CSW policy blocked non-canonical execution address.')
     }
     if (!subAccountExecution && !isAllowedCanonicalSigner(params.signerAddress ?? null)) {
@@ -878,7 +878,7 @@ export function useSwapExecution(params: {
     if (
       !subAccountExecution &&
       params.signerType === 'SMART_WALLET' &&
-      !isTargetCanonicalCsw(params.signerAddress ?? null)
+      !isCanonicalCsw(params.signerAddress ?? null)
     ) {
       throw new Error('Canonical CSW policy blocked non-canonical smart-wallet signer usage.')
     }

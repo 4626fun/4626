@@ -36,10 +36,10 @@
  *      XMTP_AGENT_KEY_ENCRYPTION_KEY   — AES-256-GCM key for decrypting agent keys
  *
  *   2. Single-agent CSW (recommended for production single-agent):
- *      XMTP_AGENT_CSW_ADDRESS          — Coinbase Smart Wallet address (XMTP identity)
- *      XMTP_AGENT_PRIVY_WALLET_ID      — Privy server wallet ID (delegated signer)
- *      XMTP_AGENT_CSW_CHAIN_ID         — Chain ID (default: 8453 for Base)
- *      XMTP_AGENT_CSW_OWNER_INDEX      — Optional owner index hint in CSW's MultiOwnable list
+ *      CANONICAL_CSW_ADDRESS           — Canonical parent CSW (XMTP identity)
+ *      CANONICAL_CSW_PRIVY_WALLET_ID   — Privy server wallet ID (delegated signer)
+ *      CANONICAL_CSW_CHAIN_ID            — Chain ID (default: 8453 for Base)
+ *      CANONICAL_CSW_OWNER_INDEX         — Optional owner index hint in CSW's MultiOwnable list
  *      Requires PRIVY_APP_ID, PRIVY_APP_SECRET, PRIVY_WALLET_AUTHORIZATION_KEY,
  *      PRIVY_WALLET_OWNER_ID to be set for Privy wallet API access.
  *
@@ -122,8 +122,16 @@ import { createCorrelationLogger, logger } from '../../_lib/infra/logger.js'
 import { emitTelemetryEvent } from '../../_lib/infra/telemetry.js'
 import { claimDailyXmtpCheckin } from '../../_lib/lottery/lotteryAmoe.js'
 import {
-  TARGET_CANONICAL_CSW_ADDRESS,
-  isTargetCanonicalCsw,
+  readCanonicalCswAddressEnv,
+  readCanonicalCswOwnerIndexEnv,
+  readCanonicalCswPrivyWalletIdEnv,
+  readCanonicalCswSkipEnforcementEnv,
+  readCanonicalCswChainIdEnv,
+  hasCanonicalCswRuntimeConfig,
+} from '../../_lib/wallet/canonicalCswEnv.js'
+import {
+  CANONICAL_CSW_ADDRESS,
+  isCanonicalCsw,
   normalizePolicyAddress,
 } from '../../../src/wallet/canonicalWalletPolicy.js'
 import path from 'node:path'
@@ -161,20 +169,10 @@ declare const process: {
 
 const XMTP_ENV = ((process.env.XMTP_ENV ?? 'production').trim()) as 'production' | 'dev' | 'local'
 
-// Emergency escape hatch: when true, XMTP_AGENT_CSW_ADDRESS is honored even
-// when it does not match TARGET_CANONICAL_CSW_ADDRESS. Intended for the case
-// where the on-chain owner set of the canonical CSW has drifted away from the
-// Privy server wallet and we need the agent to breathe as a *different* CSW
-// (still Privy-owned) while the canonical identity is being recovered.
-//
-// Scope: XMTP identity only. The rest of the app (canonicalWalletPolicy,
-// Zora referrer, ERC-8004 agent registration, admin helpers) keeps treating
-// TARGET_CANONICAL_CSW_ADDRESS as authoritative, so the two identities will
-// be visibly divergent from user-facing endpoints. Do not leave this flag on
-// in steady state.
-const XMTP_AGENT_CSW_SKIP_CANONICAL = /^(1|true|yes)$/i.test(
-  (process.env.XMTP_AGENT_CSW_SKIP_CANONICAL ?? '').trim(),
-)
+// Emergency escape hatch: when true, a configured `CANONICAL_CSW_ADDRESS` env value
+// is honored even when it does not match the policy constant `CANONICAL_CSW_ADDRESS`.
+// Legacy alias: `CANONICAL_CSW_SKIP_ENFORCEMENT`.
+const CANONICAL_CSW_SKIP_ENFORCEMENT = readCanonicalCswSkipEnforcementEnv()
 
 const POLL_INTERVAL_MS = 60_000
 const MAX_AGENTS = Number(process.env.MAX_AGENTS ?? '50')
@@ -741,8 +739,8 @@ let earlyRailwayDiagnostics: Record<string, unknown> | null = null
 try {
   const hasDb = isDbConfigured()
   const hasEncKey = !!(process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()
-  const hasCsw = !!(process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim()
-  const hasCswPrivy = !!(process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim()
+  const hasCsw = !!readCanonicalCswAddressEnv()
+  const hasCswPrivy = !!readCanonicalCswPrivyWalletIdEnv()
   const dbDir = process.env.XMTP_DB_DIRECTORY || '/data/xmtp'
   const hasVolume = RUNNING_ON_RAILWAY ? hasDedicatedMount(dbDir) : true
   const mountedAncestor = RUNNING_ON_RAILWAY ? findMountedAncestorPath(dbDir) : null
@@ -846,10 +844,10 @@ function validateStartupEnv(): EnvValidationResult {
   const hasDb = isDbConfigured()
   const hasEncKey = !!(process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()
   const hasPrivateKey = !!(process.env.XMTP_AGENT_PRIVATE_KEY ?? '').trim()
-  const configuredCswRaw = (process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim()
+  const configuredCswRaw = readCanonicalCswAddressEnv()
   const configuredCsw = normalizePolicyAddress(configuredCswRaw)
   const hasCswAddress = !!configuredCswRaw
-  const hasCswPrivyWallet = !!(process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim()
+  const hasCswPrivyWallet = !!readCanonicalCswPrivyWalletIdEnv()
   const hasCswConfig = hasCswAddress && hasCswPrivyWallet
   const multiAgentConfigured = hasDb && hasEncKey
 
@@ -952,22 +950,22 @@ function validateStartupEnv(): EnvValidationResult {
   }
 
   if (hasCswAddress && !hasCswPrivyWallet) {
-    errors.push('XMTP_AGENT_PRIVY_WALLET_ID is required when XMTP_AGENT_CSW_ADDRESS is set.')
+    errors.push('CANONICAL_CSW_PRIVY_WALLET_ID is required when CANONICAL_CSW_ADDRESS is set.')
   }
   if (!hasCswAddress && hasCswPrivyWallet) {
-    errors.push('XMTP_AGENT_CSW_ADDRESS is required when XMTP_AGENT_PRIVY_WALLET_ID is set.')
+    errors.push('CANONICAL_CSW_ADDRESS is required when CANONICAL_CSW_PRIVY_WALLET_ID is set.')
   }
   if (hasCswAddress && !configuredCsw) {
-    errors.push('XMTP_AGENT_CSW_ADDRESS must be a valid EVM address.')
+    errors.push('CANONICAL_CSW_ADDRESS must be a valid EVM address.')
   }
-  if (configuredCsw && !isTargetCanonicalCsw(configuredCsw)) {
-    if (XMTP_AGENT_CSW_SKIP_CANONICAL) {
+  if (configuredCsw && !isCanonicalCsw(configuredCsw)) {
+    if (CANONICAL_CSW_SKIP_ENFORCEMENT) {
       warnings.push(
-        `XMTP_AGENT_CSW_SKIP_CANONICAL=true: XMTP identity will run as ${configuredCsw} instead of canonical ${TARGET_CANONICAL_CSW_ADDRESS}. Business identity (Zora referrer, ERC-8004, admin) still treats the canonical address as authoritative — DIVERGENT identities in effect.`,
+        `CANONICAL_CSW_SKIP_ENFORCEMENT=true: XMTP identity will run as ${configuredCsw} instead of policy ${CANONICAL_CSW_ADDRESS}. Business identity (Zora referrer, ERC-8004, admin) still treats the policy address as authoritative — DIVERGENT identities in effect.`,
       )
     } else {
       warnings.push(
-        `XMTP_AGENT_CSW_ADDRESS (${configuredCsw}) does not match canonical target ${TARGET_CANONICAL_CSW_ADDRESS}; startup will enforce canonical target identity.`,
+        `CANONICAL_CSW_ADDRESS (${configuredCsw}) does not match policy ${CANONICAL_CSW_ADDRESS}; startup will enforce policy identity.`,
       )
     }
   }
@@ -1221,7 +1219,7 @@ function summarizeInboundMessageForLog(params: {
 }
 
 const EVM_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
-const AMOE_XMTP_TASK_AGENT_ADDRESS = TARGET_CANONICAL_CSW_ADDRESS.toLowerCase()
+const AMOE_XMTP_TASK_AGENT_ADDRESS = CANONICAL_CSW_ADDRESS.toLowerCase()
 
 function isExpectedAmoeXmtpAwardingError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '')
@@ -1935,13 +1933,13 @@ async function startSingleAgentEoa(privateKey: `0x${string}`): Promise<RunningAg
  * vault deployments.
  *
  * Required env vars:
- *   XMTP_AGENT_CSW_ADDRESS        — The canonical Coinbase Smart Wallet address
- *   XMTP_AGENT_PRIVY_WALLET_ID    — Privy server wallet ID (added as CSW owner)
+ *   CANONICAL_CSW_ADDRESS           — The canonical parent CSW address
+ *   CANONICAL_CSW_PRIVY_WALLET_ID   — Privy server wallet ID (added as CSW owner)
  *
  * Optional:
- *   XMTP_AGENT_CSW_CHAIN_ID       — Chain ID where the CSW is deployed (default: 8453)
+ *   CANONICAL_CSW_CHAIN_ID          — Chain ID where the CSW is deployed (default: 8453)
  */
-async function startSingleAgentCsw(params: {
+async function startSingleCanonicalCsw(params: {
   cswAddress: `0x${string}`
   privyWalletId: string
   ownerIndex?: number
@@ -1949,8 +1947,8 @@ async function startSingleAgentCsw(params: {
 }): Promise<RunningAgent> {
   const dbEncryptionKey = getEffectiveDbEncryptionKey()
   const dbPath = makeDbPath({ enforceSingleFileForEnv: true })
-  const swarmProfile = resolveSwarmProfile('single-agent-csw')
-  const runtimeBridge = initializeRuntimeBridge('single-agent-csw')
+  const swarmProfile = resolveSwarmProfile('single-canonical-csw')
+  const runtimeBridge = initializeRuntimeBridge('single-canonical-csw')
   const signer = createPrivyScwSigner({
     walletId: params.privyWalletId,
     cswAddress: params.cswAddress,
@@ -1990,7 +1988,7 @@ async function startSingleAgentCsw(params: {
         sentAtMs: msg.sentAtMs ?? msg.sentAt?.getTime?.() ?? null,
       },
       {
-        agentKey: 'single-agent-csw',
+        agentKey: 'single-canonical-csw',
         runtimeBridge,
       },
     )
@@ -2044,7 +2042,7 @@ async function startSingleAgentCsw(params: {
             messageId: m.messageId ?? null,
             sentAtMs: m.sentAtMs ?? m.sentAt?.getTime?.() ?? null,
           },
-          { agentKey: 'single-agent-csw', runtimeBridge },
+          { agentKey: 'single-canonical-csw', runtimeBridge },
         )
       })
       await activeXmtp.start()
@@ -2062,7 +2060,7 @@ async function startSingleAgentCsw(params: {
   })
 
   return {
-    creatorAddress: 'single-agent-csw',
+    creatorAddress: 'single-canonical-csw',
     xmtp: activeXmtp,
     runtimeBridge,
     rowFingerprint: `single-agent:csw:${params.cswAddress.toLowerCase()}`,
@@ -2100,22 +2098,22 @@ async function uploadRegistrationToGrove(): Promise<void> {
       return
     }
 
-    const configuredCsw = normalizePolicyAddress((process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim())
-    if (configuredCsw && !isTargetCanonicalCsw(configuredCsw)) {
-      if (XMTP_AGENT_CSW_SKIP_CANONICAL) {
+    const configuredCsw = normalizePolicyAddress(readCanonicalCswAddressEnv())
+    if (configuredCsw && !isCanonicalCsw(configuredCsw)) {
+      if (CANONICAL_CSW_SKIP_ENFORCEMENT) {
         regLogger.warn(
-          '[eliza] Skipping Grove registration upload: XMTP_AGENT_CSW_SKIP_CANONICAL=true would publish ERC-8004 metadata with a divergent XMTP identity. Resolve canonical ownership, then unset the bypass flag to re-enable.',
-          { configured: configuredCsw, canonical: TARGET_CANONICAL_CSW_ADDRESS, correlationId },
+          '[eliza] Skipping Grove registration upload: CANONICAL_CSW_SKIP_ENFORCEMENT=true would publish ERC-8004 metadata with a divergent XMTP identity. Resolve canonical ownership, then unset the bypass flag to re-enable.',
+          { configured: configuredCsw, canonical: CANONICAL_CSW_ADDRESS, correlationId },
         )
         return
       }
-      regLogger.warn('[eliza] XMTP agent CSW mismatch detected; using canonical target agent key', {
+      regLogger.warn('[eliza] configured canonical CSW differs from policy constant; using policy agent key', {
         configured: configuredCsw,
-        expected: TARGET_CANONICAL_CSW_ADDRESS,
+        expected: CANONICAL_CSW_ADDRESS,
         correlationId,
       })
     }
-    const agentKey = `single-csw:${TARGET_CANONICAL_CSW_ADDRESS}`
+    const agentKey = `single-csw:${CANONICAL_CSW_ADDRESS}`
     const publish = await withRetry({
       operation: 'grove_registration_upload',
       maxRetries: EXTERNAL_MAX_RETRIES,
@@ -2203,7 +2201,7 @@ async function main() {
     console.error('3. DATABASE_URL (Supabase strongly recommended) or POSTGRES_URL (legacy fallback)')
     console.error('4. XMTP_AGENT_KEY_ENCRYPTION_KEY (for multi-agent mode)')
     console.error('5. XMTP_DB_DIRECTORY pointing to a **mounted Railway volume** (not /tmp)')
-    console.error('6. If using CSW identity: XMTP_AGENT_CSW_ADDRESS + XMTP_AGENT_PRIVY_WALLET_ID')
+    console.error('6. If using CSW identity: CANONICAL_CSW_ADDRESS + CANONICAL_CSW_PRIVY_WALLET_ID')
     console.error('7. Privy server auth keys (PRIVY_APP_ID, PRIVY_APP_SECRET, PRIVY_WALLET_AUTHORIZATION_KEY, PRIVY_WALLET_OWNER_ID)')
     console.error('8. AGENT_RUNTIME_LOCK_REQUIRED=true (strongly recommended on Railway primary)')
 
@@ -2222,8 +2220,7 @@ async function main() {
   const hasDb = isDbConfigured()
   const hasEncKey = !!(process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()
   const hasPrivateKey = !!(process.env.XMTP_AGENT_PRIVATE_KEY ?? '').trim()
-  const hasCswConfig = !!(process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim() &&
-    !!(process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim()
+  const hasCswConfig = hasCanonicalCswRuntimeConfig()
   const multiAgentMode = hasDb && hasEncKey
   const shouldRunXmtp = AGENT_CONSUME_XMTP
   const runtimeLockRequired = shouldRunXmtp && AGENT_RUNTIME_LOCK_REQUIRED
@@ -2370,33 +2367,33 @@ async function main() {
     // Single-agent CSW mode: Privy server wallet signs on behalf of your CSW.
     // Same delegation pattern used for ERC-4337 UserOps & vault deployments.
     // -----------------------------------------------------------------------
-    const configuredCsw = normalizePolicyAddress((process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim())
-    const divergentConfigured = configuredCsw && !isTargetCanonicalCsw(configuredCsw)
-    if (divergentConfigured && !XMTP_AGENT_CSW_SKIP_CANONICAL) {
+    const configuredCsw = normalizePolicyAddress(readCanonicalCswAddressEnv())
+    const divergentConfigured = configuredCsw && !isCanonicalCsw(configuredCsw)
+    if (divergentConfigured && !CANONICAL_CSW_SKIP_ENFORCEMENT) {
       logger.warn('[eliza] overriding configured CSW with canonical target', {
         configured: configuredCsw,
-        expected: TARGET_CANONICAL_CSW_ADDRESS,
+        expected: CANONICAL_CSW_ADDRESS,
       })
-    } else if (divergentConfigured && XMTP_AGENT_CSW_SKIP_CANONICAL) {
-      logger.warn('[eliza] XMTP_AGENT_CSW_SKIP_CANONICAL=true — running XMTP identity on configured CSW, NOT canonical', {
+    } else if (divergentConfigured && CANONICAL_CSW_SKIP_ENFORCEMENT) {
+      logger.warn('[eliza] CANONICAL_CSW_SKIP_ENFORCEMENT=true — running XMTP identity on configured CSW, NOT canonical', {
         xmtpCsw: configuredCsw,
-        canonicalCsw: TARGET_CANONICAL_CSW_ADDRESS,
+        canonicalCsw: CANONICAL_CSW_ADDRESS,
         note: 'Temporary bypass. Unset the flag once the canonical CSW owner set is restored.',
       })
     }
     const cswAddress = (
-      divergentConfigured && XMTP_AGENT_CSW_SKIP_CANONICAL
+      divergentConfigured && CANONICAL_CSW_SKIP_ENFORCEMENT
         ? (configuredCsw as `0x${string}`)
-        : (TARGET_CANONICAL_CSW_ADDRESS as `0x${string}`)
+        : (CANONICAL_CSW_ADDRESS as `0x${string}`)
     )
-    const privyWalletId = (process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim()
-    const chainId = Number(process.env.XMTP_AGENT_CSW_CHAIN_ID ?? '8453') || 8453
-    const ownerIndexRaw = (process.env.XMTP_AGENT_CSW_OWNER_INDEX ?? '').trim()
+    const privyWalletId = readCanonicalCswPrivyWalletIdEnv()
+    const chainId = readCanonicalCswChainIdEnv()
+    const ownerIndexRaw = readCanonicalCswOwnerIndexEnv()
     const ownerIndexParsed = ownerIndexRaw ? Number(ownerIndexRaw) : Number.NaN
     const ownerIndex =
       Number.isFinite(ownerIndexParsed) && ownerIndexParsed >= 0 ? Math.floor(ownerIndexParsed) : undefined
     if (ownerIndexRaw && ownerIndex === undefined) {
-      logger.warn('[eliza] invalid XMTP_AGENT_CSW_OWNER_INDEX; ignoring and auto-detecting at runtime', {
+      logger.warn('[eliza] invalid CANONICAL_CSW_OWNER_INDEX; ignoring and auto-detecting at runtime', {
         value: ownerIndexRaw,
       })
     }
@@ -2412,8 +2409,8 @@ async function main() {
       }`,
     )
 
-    const running = await startSingleAgentCsw({ cswAddress, privyWalletId, ownerIndex, chainId })
-    runningAgents.set('single-agent-csw', running)
+    const running = await startSingleCanonicalCsw({ cswAddress, privyWalletId, ownerIndex, chainId })
+    runningAgents.set('single-canonical-csw', running)
 
     console.log(`\n  Agent XMTP identity: ${running.xmtp.address}`)
     console.log(`  Test: https://xmtp.chat/dm/${running.xmtp.address}`)
@@ -2579,7 +2576,7 @@ async function main() {
   } else {
     logger.error(
       '[eliza] No agent credentials configured. Set one of:\n' +
-      '  1. XMTP_AGENT_CSW_ADDRESS + XMTP_AGENT_PRIVY_WALLET_ID (CSW mode — recommended)\n' +
+      '  1. CANONICAL_CSW_ADDRESS + CANONICAL_CSW_PRIVY_WALLET_ID (CSW mode — recommended)\n' +
       '  2. XMTP_AGENT_PRIVATE_KEY (EOA mode — dev/testing)\n' +
       '  3. XMTP_AGENT_KEY_ENCRYPTION_KEY + DATABASE_URL (multi-agent mode)',
     )

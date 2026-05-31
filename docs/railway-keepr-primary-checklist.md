@@ -10,8 +10,8 @@ Use this when setting up or debugging the primary XMTP agent on Railway.
 - [ ] `XMTP_AGENT_KEY_ENCRYPTION_KEY` (32-byte hex) — required for multi-agent mode
 - [ ] `XMTP_DB_DIRECTORY` points to a **mounted Railway Volume** (not `/tmp` or ephemeral storage)
 - [ ] If using CSW identity for the agent (recommended):
-  - [ ] `XMTP_AGENT_CSW_ADDRESS`
-  - [ ] `XMTP_AGENT_PRIVY_WALLET_ID`
+  - [ ] `CANONICAL_CSW_ADDRESS`
+  - [ ] `CANONICAL_CSW_PRIVY_WALLET_ID`
   - [ ] Full Privy server auth set:
     - [ ] `PRIVY_APP_ID`
     - [ ] `PRIVY_APP_SECRET`

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { detectSignerType } from './detectSignerType'
-import { TARGET_ALLOWED_OWNER_EOA_ADDRESSES } from '../canonicalWalletPolicy'
+import { CANONICAL_CSW_ALLOWED_OWNER_EOAS } from '../canonicalWalletPolicy'
 
 describe('detectSignerType', () => {
   it('classifies eoa when onchain bytecode confirms EOA, even with AA capability hints', () => {
@@ -42,7 +42,7 @@ describe('detectSignerType', () => {
 
   it('keeps canonical owner EOAs classified as EOA when bytecode is empty', () => {
     const result = detectSignerType({
-      signerAddress: TARGET_ALLOWED_OWNER_EOA_ADDRESSES[0],
+      signerAddress: CANONICAL_CSW_ALLOWED_OWNER_EOAS[0],
       capabilities: { paymasterService: true, atomicStatus: 'ready', supports5792: true },
       hasContractCode: false,
     })

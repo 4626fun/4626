@@ -19,14 +19,14 @@ These are **display names only**. Env vars still store opaque Privy IDs.
 | Key quorum (server owner) | `PRIVY_WALLET_OWNER_ID` | **4626 Server Agent Owner** | `cre-privy-signer` |
 | Wallet policy (agent constraint) | `PRIVY_WALLET_POLICY_ID` | **4626 Agent Wallet Policy** | `4626-prod-autoprovision-<timestamp>` |
 | Deploy/agent signer wallet | *(per wallet)* | **4626 Agent Signer (server)** | `4626.base.eth` on `0xfB11237…` |
-| XMTP primary agent wallet | `XMTP_AGENT_PRIVY_WALLET_ID` | **4626 XMTP Agent Signer** | *(unset)* |
+| Canonical CSW XMTP signer wallet | `CANONICAL_CSW_PRIVY_WALLET_ID` (legacy: `XMTP_AGENT_PRIVY_WALLET_ID`) | **4626 XMTP Agent Signer** | *(unset)* |
 
 Production IDs (2026-05, do not rotate without updating env):
 
 - `PRIVY_WALLET_OWNER_ID` → `lr8vgu2l0wnmwg824n4jrtr3`
 - `PRIVY_WALLET_POLICY_ID` → `a7vgzko1jhidbaqqg1whufnc`
 - Agent signer wallet → `qka29gnn1to96pji6kw2qcq0` (`0xfB11237…`)
-- XMTP agent wallet → `wyji2bc8j6sfcu5nilf4325h` (`0x858c0155…`)
+- XMTP agent wallet → `wyji2bc8j6sfcu5nilf4325h` (`0x858c0155…`) — set `CANONICAL_CSW_PRIVY_WALLET_ID`
 
 ## Apply / verify labels
 

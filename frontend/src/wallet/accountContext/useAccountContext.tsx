@@ -14,7 +14,7 @@ import { readPreferredAccountMode, writePreferredAccountMode } from './storage'
 import { deriveAccountUiFlags } from './deriveUiFlags'
 import {
   isAllowedCanonicalSigner,
-  isTargetCanonicalCsw,
+  isCanonicalCsw,
   resolvePolicyCanonicalAddress,
   shouldApplyCanonicalEnforcement,
 } from '../canonicalWalletPolicy'
@@ -186,7 +186,7 @@ export function AccountContextProvider(props: { children: ReactNode }) {
 
     if (!canonicalPolicyApplies || !policyCanonicalAddress) return baseResolution
 
-    const signerIsCanonicalCsw = isTargetCanonicalCsw(signerAddress)
+    const signerIsCanonicalCsw = isCanonicalCsw(signerAddress)
     const signerIsAllowedEoa =
       signerType === 'EOA' &&
       isAllowedCanonicalSigner(signerAddress) &&

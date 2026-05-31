@@ -58,7 +58,7 @@ Defined in: [server/agents/eliza/character.ts:11](https://github.com/wenakita/46
 
 ##### id
 
-> **id**: `"0xab6d5c10b03300326cd7fab7267ae192842967b5"` = `TARGET_CANONICAL_CSW_ADDRESS`
+> **id**: `"0xab6d5c10b03300326cd7fab7267ae192842967b5"` = `CANONICAL_CSW_ADDRESS`
 
 ##### knowledge
 
