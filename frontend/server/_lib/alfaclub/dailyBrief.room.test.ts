@@ -7,7 +7,7 @@ import {
   readAlfaClubDailyBriefSeparateFromBridge,
   resolveDailyBriefRoomId,
   resolveAlfaClubBridgeRoomId,
-  sendDailyBriefToReachableRoom,
+  sendDailyBriefToCommandRooms,
 } from './dailyBrief.js'
 
 vi.mock('./chatBridge.js', async () => {
@@ -30,10 +30,16 @@ describe('daily brief room resolution', () => {
     restoreEnv = null
   })
 
-  it('uses command rooms only (bridge + hermit list)', () => {
+  it('uses hermit command rooms when configured', () => {
     expect(
       listDailyBriefCommandRoomIds({ roomId: '1043', hermitCommandRoomIds: ['1043', '1659'] }),
     ).toEqual(['1043', '1659'])
+  })
+
+  it('falls back to bridge room when hermit list is empty', () => {
+    expect(listDailyBriefCommandRoomIds({ roomId: '1043', hermitCommandRoomIds: [] })).toEqual([
+      '1043',
+    ])
   })
 
   it('resolveDailyBriefRoomId picks the primary command room', () => {
@@ -52,22 +58,39 @@ describe('daily brief room resolution', () => {
     expect(resolveAlfaClubBridgeRoomId()).toBe('1043')
   })
 
-  it('sendDailyBriefToReachableRoom falls through forbidden rooms', async () => {
+  it('sendDailyBriefToCommandRooms posts to every reachable command room', async () => {
     const { sendAlfaClubRoomText } = await import('./chatBridge.js')
     vi.mocked(sendAlfaClubRoomText).mockReset()
     vi.mocked(sendAlfaClubRoomText)
       .mockRejectedValueOnce(new Error('bot_message_failed:403'))
       .mockResolvedValueOnce({ lane: 'bot_token_without_reply_id' })
 
-    const result = await sendDailyBriefToReachableRoom({
+    const result = await sendDailyBriefToCommandRooms({
       text: 'hello',
       flags: {
-        roomId: '2001',
+        roomId: '1043',
         hermitCommandRoomIds: ['2001', '1043'],
       } as ReturnType<typeof import('./chatBridge.js').readAlfaClubChatBridgeFlags>,
     })
 
-    expect(result.roomId).toBe('1043')
+    expect(result.posted.map((post) => post.roomId)).toEqual(['1043'])
+    expect(sendAlfaClubRoomText).toHaveBeenCalledTimes(2)
+  })
+
+  it('sendDailyBriefToCommandRooms posts to all command rooms when all succeed', async () => {
+    const { sendAlfaClubRoomText } = await import('./chatBridge.js')
+    vi.mocked(sendAlfaClubRoomText).mockReset()
+    vi.mocked(sendAlfaClubRoomText).mockResolvedValue({ lane: 'bot_token_without_reply_id' })
+
+    const result = await sendDailyBriefToCommandRooms({
+      text: 'hello',
+      flags: {
+        roomId: '1043',
+        hermitCommandRoomIds: ['1043', '1659'],
+      } as ReturnType<typeof import('./chatBridge.js').readAlfaClubChatBridgeFlags>,
+    })
+
+    expect(result.posted.map((post) => post.roomId)).toEqual(['1043', '1659'])
     expect(sendAlfaClubRoomText).toHaveBeenCalledTimes(2)
   })
 })

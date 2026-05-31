@@ -93,7 +93,7 @@ export function resolveDailyBriefRoomId(): string {
   return listDailyBriefCommandRoomIds()[0] ?? resolveAlfaClubBridgeRoomId()
 }
 
-/** Command rooms the bot already operates in (bridge + Hermit list). */
+/** Command rooms the bot operates in (`ALFACLUB_HERMIT_COMMAND_ROOMS`, else bridge room). */
 export function listDailyBriefCommandRoomIds(
   bridgeFlags: Pick<
     ReturnType<typeof readAlfaClubChatBridgeFlags>,
@@ -108,8 +108,11 @@ export function listDailyBriefCommandRoomIds(
     seen.add(id)
     ordered.push(id)
   }
-  push(bridgeFlags.roomId ?? resolveAlfaClubBridgeRoomId())
-  for (const id of bridgeFlags.hermitCommandRoomIds) push(id)
+  if (bridgeFlags.hermitCommandRoomIds.length > 0) {
+    for (const id of bridgeFlags.hermitCommandRoomIds) push(id)
+  } else {
+    push(bridgeFlags.roomId ?? resolveAlfaClubBridgeRoomId())
+  }
   if (ordered.length > 0) return ordered
   return [DEFAULT_ROOM_ID]
 }
@@ -117,14 +120,22 @@ export function listDailyBriefCommandRoomIds(
 /** @deprecated Use listDailyBriefCommandRoomIds */
 export const listDailyBriefPostRoomCandidates = listDailyBriefCommandRoomIds
 
-export async function sendDailyBriefToReachableRoom(params: {
+export type DailyBriefPostedRoom = {
+  roomId: string
+  lane: string
+  messageText: string
+}
+
+export async function sendDailyBriefToCommandRooms(params: {
   text: string
   flags?: ReturnType<typeof readAlfaClubChatBridgeFlags>
-}): Promise<{ roomId: string; lane: string; candidates: string[]; messageText: string }> {
+}): Promise<{ posted: DailyBriefPostedRoom[]; commandRoomIds: string[] }> {
   const flags = params.flags ?? readAlfaClubChatBridgeFlags()
-  const candidates = listDailyBriefCommandRoomIds(flags)
+  const commandRoomIds = listDailyBriefCommandRoomIds(flags)
+  const posted: DailyBriefPostedRoom[] = []
   let lastError: unknown = null
-  for (const roomId of candidates) {
+
+  for (const roomId of commandRoomIds) {
     let messageText = params.text
     const opsFooter = formatAlfaClubBriefOpsRoomFooter(roomId)
     if (opsFooter) {
@@ -132,14 +143,34 @@ export async function sendDailyBriefToReachableRoom(params: {
     }
     try {
       const send = await sendAlfaClubRoomText({ text: messageText, roomId, flags })
-      return { roomId, lane: send.lane, candidates, messageText }
+      posted.push({ roomId, lane: send.lane, messageText })
     } catch (error) {
       lastError = error
     }
   }
-  const message =
-    lastError instanceof Error ? lastError.message.slice(0, 120) : 'daily_brief_no_reachable_room'
-  throw new Error(message)
+
+  if (posted.length === 0) {
+    const message =
+      lastError instanceof Error ? lastError.message.slice(0, 120) : 'daily_brief_no_reachable_room'
+    throw new Error(message)
+  }
+
+  return { posted, commandRoomIds }
+}
+
+/** @deprecated Prefer sendDailyBriefToCommandRooms */
+export async function sendDailyBriefToReachableRoom(params: {
+  text: string
+  flags?: ReturnType<typeof readAlfaClubChatBridgeFlags>
+}): Promise<{ roomId: string; lane: string; candidates: string[]; messageText: string }> {
+  const result = await sendDailyBriefToCommandRooms(params)
+  const first = result.posted[0]
+  return {
+    roomId: first.roomId,
+    lane: first.lane,
+    candidates: result.commandRoomIds,
+    messageText: first.messageText,
+  }
 }
 
 /** @deprecated Separate digest room is retired — digest posts to command rooms only. */
@@ -1130,24 +1161,27 @@ export async function runAlfaClubDailyBrief(params: {
 
   let messageText = formatAlfaClubDailyBrief(built.formatInput)
   try {
-    const send = await sendDailyBriefToReachableRoom({ text: messageText })
-    messageText = send.messageText
-    const key = dispatchKey({ snapshotTs, roomId: send.roomId })
-    await recordDailyBriefDispatch({
-      key,
-      snapshotTs,
-      previousSnapshotTs,
-      roomId: send.roomId,
-      messageText,
-    })
+    const send = await sendDailyBriefToCommandRooms({ text: messageText })
+    messageText = send.posted[0]?.messageText ?? messageText
+    for (const post of send.posted) {
+      await recordDailyBriefDispatch({
+        key: dispatchKey({ snapshotTs, roomId: post.roomId }),
+        snapshotTs,
+        previousSnapshotTs,
+        roomId: post.roomId,
+        messageText: post.messageText,
+      })
+    }
+    const roomId = send.posted.map((post) => post.roomId).join(', ')
+    const lane = send.posted.map((post) => post.lane).join(', ')
     return {
       ok: true,
       snapshotTs,
       previousSnapshotTs,
       sent: true,
       skippedDuplicate: false,
-      roomId: send.roomId,
-      lane: send.lane,
+      roomId,
+      lane,
       messageText,
     }
   } catch (error) {

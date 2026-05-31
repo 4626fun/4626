@@ -28,7 +28,7 @@ async function main(): Promise<void> {
   console.log('')
   console.log(`  Bridge room:      ${bridgeRoom}`)
   console.log(`  Command rooms:    ${commandRooms.join(', ')}`)
-  console.log(`  Posts to:         first command room the bot key can reach`)
+  console.log(`  Posts to:         every command room above (skip rooms the bot cannot post)`)
   console.log('')
   console.log('Production env (keep it simple):')
   console.log('  ALFACLUB_CHAT_ROOM_ID=1043')

@@ -1147,7 +1147,7 @@ export async function executeAlfaclubCommandFamily(params: {
     }
     return {
       ok: true,
-      response: `Daily digest posted to room **${result.roomId}** (${result.lane ?? 'sent'}).`,
+      response: `Daily digest posted to rooms **${result.roomId}**.`,
     }
   }
   if (parsed.sub === 'creator') {
