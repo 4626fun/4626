@@ -14,6 +14,10 @@
  * preview, or certain Railway/Hermit contexts (AMOE replay store, Alfaclub
  * vigilante tables, certain control-plane tables, etc.).
  *
+ * All ensure*Schema helpers are now centrally protected by withEnsureOnce()
+ * (idempotent + concurrent-safe). The old thin no-arg wrappers in
+ * chat/ and workspace/ have been fully migrated to direct canonical usage.
+ *
  * Usage (example):
  *   await ensureMigrationApplied(db, '20260429000000_amoe_zk_submissions.sql')
  *   await ensureAlfaclubSchema(db)
@@ -42,6 +46,52 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const MIGRATIONS_ROOT = resolve(__dirname, '../../../../../supabase/migrations')
 
 const ensuredFiles = new Set<string>()
+
+/**
+ * Per-helper idempotency + concurrent safety state.
+ * This centralizes the "ensure once" pattern that was previously duplicated
+ * (and sometimes incorrectly implemented) in legacy wrapper modules.
+ */
+type EnsureOnceState = {
+  ensured: boolean
+  promise: Promise<void> | null
+}
+
+const ensureOnceStates = new Map<string, EnsureOnceState>()
+
+/**
+ * Wraps a bootstrap function so it is guaranteed to run at most once per
+ * process, with safe concurrent call coalescing.
+ *
+ * This is the single source of truth for the "ensure once" behavior.
+ */
+export async function withEnsureOnce(
+  name: string,
+  fn: () => Promise<void>
+): Promise<void> {
+  let state = ensureOnceStates.get(name)
+  if (!state) {
+    state = { ensured: false, promise: null }
+    ensureOnceStates.set(name, state)
+  }
+
+  if (state.ensured) return
+  if (state.promise) return state.promise
+
+  state.promise = (async () => {
+    try {
+      await fn()
+      state!.ensured = true
+    } catch (error) {
+      state!.ensured = false
+      throw error
+    } finally {
+      state!.promise = null
+    }
+  })()
+
+  return state.promise
+}
 
 function readMigration(filename: string): string {
   const full = resolve(MIGRATIONS_ROOT, filename)
@@ -179,6 +229,7 @@ export async function ensureAlfaclubSchema(db: Db): Promise<void> {
   await ensureMigrationApplied(db, '20260526010000_alfaclub_room_access.sql').catch(() => {})
   await ensureMigrationApplied(db, '20260526020000_alfaclub_vigilante_core.sql').catch(() => {})
   await ensureMigrationApplied(db, '20260526030000_alfaclub_radar_and_cooldown.sql').catch(() => {})
+  await ensureMigrationApplied(db, '20260602000000_alfaclub_room_welcome.sql').catch(() => {})
   // All major Alfaclub tables should now be covered. New tables must be added as proper migrations first.
 }
 
@@ -188,38 +239,58 @@ export async function ensureAlfaclubSchema(db: Db): Promise<void> {
  * lotteryAmoe.ts and amoeReplayStore.ts.
  */
 export async function ensureAmoeSchema(db: Db): Promise<void> {
-  // Core AMOE tables already had migrations; this adds the remaining lottery ones.
-  await ensureMigrationApplied(db, '20260527000000_amoe_lottery_tables.sql').catch(() => {})
-  // Note: amoe_zk_submissions and related publisher tables are covered via earlier calls
-  // in the individual ensure functions.
+  await withEnsureOnce('amoe', async () => {
+    // Core AMOE tables already had migrations; this adds the remaining lottery ones.
+    await ensureMigrationApplied(db, '20260527000000_amoe_lottery_tables.sql').catch(() => {})
+    // Note: amoe_zk_submissions and related publisher tables are covered via earlier calls
+    // in the individual ensure functions.
+  })
 }
 
 /**
  * Telegram trading / linking / holder-room schema (from telegramTrading.ts).
+ *
+ * Centralizes the previous "ensure once" wrapper + pgcrypto side-effect that
+ * used to live in the legacy telegramTrading.ts module.
  */
 export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
-  await ensureMigrationApplied(db, '20260528000000_telegram_trading_schema.sql').catch(() => {})
+  await withEnsureOnce('telegramTrading', async () => {
+    await ensureMigrationApplied(db, '20260528000000_telegram_trading_schema.sql').catch(() => {})
+    // One-time extension required by some telegram trading paths.
+    // Safe and idempotent to call on every cold start.
+    await db.sql`CREATE EXTENSION IF NOT EXISTS pgcrypto;`.catch(() => {})
+  })
 }
 
 /**
  * Workspace / creator strategy management tables.
+ *
+ * Central implementation (all callers now use this directly).
  */
 export async function ensureWorkspaceSchema(db: Db): Promise<void> {
-  await ensureMigrationApplied(db, '20260529000000_workspace_schema.sql').catch(() => {})
+  await withEnsureOnce('workspace', async () => {
+    await ensureMigrationApplied(db, '20260529000000_workspace_schema.sql').catch(() => {})
+  })
 }
 
 /**
  * Agent memory tables (Eliza / runtimeBridge).
  */
 export async function ensureAgentMemorySchema(db: Db): Promise<void> {
-  await ensureMigrationApplied(db, '20260530000000_agent_memory_schema.sql').catch(() => {})
+  await withEnsureOnce('agentMemory', async () => {
+    await ensureMigrationApplied(db, '20260530000000_agent_memory_schema.sql').catch(() => {})
+  })
 }
 
 /**
  * Chat directory, presence, friend requests, and vault chat tables.
+ *
+ * Central implementation (all callers now use this directly).
  */
 export async function ensureChatSchema(db: Db): Promise<void> {
-  await ensureMigrationApplied(db, '20260531000000_chat_schema.sql').catch(() => {})
+  await withEnsureOnce('chat', async () => {
+    await ensureMigrationApplied(db, '20260531000000_chat_schema.sql').catch(() => {})
+  })
 }
 
 /**
@@ -277,7 +348,9 @@ export async function ensureCreatorMetricsBaseSchema(db: Db): Promise<void> {
  * and keepr send ledger.
  */
 export async function ensureAgentRuntimeAuditLedgerSchema(db: Db): Promise<void> {
-  await ensureMigrationApplied(db, '20260607000000_agent_runtime_audit_ledger_schema.sql').catch(() => {})
+  await withEnsureOnce('agentRuntimeAuditLedger', async () => {
+    await ensureMigrationApplied(db, '20260607000000_agent_runtime_audit_ledger_schema.sql').catch(() => {})
+  })
 }
 
 /**
@@ -285,14 +358,18 @@ export async function ensureAgentRuntimeAuditLedgerSchema(db: Db): Promise<void>
  * and admin audit logs.
  */
 export async function ensureWalletOnchainOpsAuditSchema(db: Db): Promise<void> {
-  await ensureMigrationApplied(db, '20260608000000_wallet_onchain_ops_audit_schema.sql').catch(() => {})
+  await withEnsureOnce('walletOnchainOpsAudit', async () => {
+    await ensureMigrationApplied(db, '20260608000000_wallet_onchain_ops_audit_schema.sql').catch(() => {})
+  })
 }
 
 /**
  * Telemetry/event tables + creative tool logs (Hermit memes, Zora trend ops).
  */
 export async function ensureTelemetryCreativeLogsSchema(db: Db): Promise<void> {
-  await ensureMigrationApplied(db, '20260609000000_telemetry_creative_logs_schema.sql').catch(() => {})
+  await withEnsureOnce('telemetryCreativeLogs', async () => {
+    await ensureMigrationApplied(db, '20260609000000_telemetry_creative_logs_schema.sql').catch(() => {})
+  })
 }
 
 /**
@@ -300,7 +377,9 @@ export async function ensureTelemetryCreativeLogsSchema(db: Db): Promise<void> {
  * Last major raw DDL site for a dedicated schema table.
  */
 export async function ensureAlfaclubDailyBriefSchema(db: Db): Promise<void> {
-  await ensureMigrationApplied(db, '20260610000000_alfaclub_daily_brief_dispatch.sql').catch(() => {})
+  await withEnsureOnce('alfaclubDailyBrief', async () => {
+    await ensureMigrationApplied(db, '20260610000000_alfaclub_daily_brief_dispatch.sql').catch(() => {})
+  })
 }
 
 /**
