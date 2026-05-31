@@ -10,60 +10,47 @@ export const HERMIT_TONE_NAMES = [
   'concise',
 ] as const
 
+/** AlfaClub bot sends truncate at 2_000 chars — keep help under this budget. */
+export const HERMIT_COMMAND_ROOM_HELP_MAX_CHARS = 2_000
+
 const ROOM_1659_ID = '1659'
 
 function formatHermitCreativeSection(): string[] {
   return [
-    '**Hermit — creative (read-only, no trades or wallet actions)**',
-    '• `/gmeow [vibe]` — meme GIF + one-liner in chat (fastest demo)',
-    '• `/meme <prompt>` — meme / image concept (+ attachment when generation is up)',
-    '• `/hermit copy <idea>` — short post, CTA, and alternates',
-    '• `/hermit announce <news>` — announcement-style room update',
-    '• `/hermit quest <reward/task>` — quest or reward-drop copy',
-    '• `/hermit tone <message>` — rewrite your message with sharper social tone',
-    '• `/hermit help` — Hermit modes cheat sheet',
-    '• `/hermit setup` — language, tone, and saved prefs for this room',
+    '**Hermit — creative (read-only)**',
+    '• `/gmeow [vibe]` — GIF + one-liner',
+    '• `/meme <prompt>` — meme / image concept',
+    '• `/hermit copy|announce|quest|tone <text>` — room copy drafts',
+    '• `/hermit setup` · `/hermit help`',
   ]
 }
 
 function formatHermitPersonalizationSection(): string[] {
   return [
     '**Hermit — your style (per room, per wallet)**',
-    'Language / dialect — `/hermit lang <flag>` or drop a flag in any `/hermit`, `/meme`, `/gmeow` message:',
-    '  🇲🇽 Mexican · 🇦🇷 Rioplatense · 🇨🇴 Colombian · 🇨🇱 Chilean · 🇵🇪 Peruvian · 🇻🇪 Venezuelan · 🇵🇷 Caribbean · 🇪🇸 European · 🌎 Neutral LATAM',
-    `Tone — \`/hermit tone <name>\` where name is one of: ${HERMIT_TONE_NAMES.join(', ')}`,
-    '  (Single-word tone = save default. Multi-word = rewrite that message.)',
-    '• `/hermit prefs` — show what Hermit remembers for you here',
-    '• `/hermit reset` — clear your Hermit preferences in this room',
+    '• `/hermit lang <flag>` — 🇲🇽 🇦🇷 🇨🇴 🇨🇱 🇵🇪 🇻🇪 🇵🇷 🇪🇸 🌎 (or drop a flag in any Hermit message)',
+    `• \`/hermit tone <name>\` — ${HERMIT_TONE_NAMES.join(', ')} (one word = save default; multi-word = rewrite)`,
+    '• `/hermit prefs` · `/hermit reset`',
   ]
 }
 
 function formatAlfaToolsSection(): string[] {
   return [
-    '**AlfaClub tools (this room)**',
-    '• `/alfa` — compact top-N leaderboard',
-    '• `/alfa brief` — preview daily digest (chat only)',
-    '• `/alfa brief post` — post digest to the configured brief room (ops)',
-    '• `/alfa <address>` — one creator (score + room link when known)',
-    '• `/alfa chart [kind] [limit]` — room analytics chart (IPFS image)',
-    '  Chart kinds: `top-volume` · `tier-mix` · `pnl-distribution`',
-    '• `/alfa status` · `/bridge status` — pipeline + bridge auth health',
-    '• `/alfa quote-key` · `/alfa buy-key` · `/alfa create-room` — onchain room keys',
+    '**AlfaClub tools**',
+    '• `/alfa` · `/alfa brief` · `/alfa brief post` · `/alfa <address>` · `/alfa chart [kind]`',
+    '• `/alfa status` · `/bridge status` · `/alfa quote-key` · `/alfa buy-key` · `/alfa create-room`',
+    '• Charts: `top-volume` · `tier-mix` · `pnl-distribution`',
   ]
 }
 
 function formatCooldownSection(): string[] {
-  return [
-    '**Cooldowns**',
-    '`/gmeow` ~5 min · `/meme` ~10 min per sender (when enabled) so chat does not flood.',
-  ]
+  return ['**Cooldowns** — `/gmeow` ~5m · `/meme` ~10m per sender (when enabled).']
 }
 
 function formatRoomContextSection(roomId: string): string[] {
   if (roomId === ROOM_1659_ID) {
     return [
-      '**Room 1659**',
-      'Hermit drafts can include live market context here (Hyperliquid hype/liq, spot PnL, FriendKey curve) when you run `/hermit`, `/meme`, or `/gmeow`.',
+      '**Room 1659** — Hermit may inject live market context (Hyperliquid hype/liq, spot PnL, FriendKey curve).',
     ]
   }
   return []
@@ -72,8 +59,8 @@ function formatRoomContextSection(roomId: string): string[] {
 function formatRoomOrientationSection(roomId: string): string[] {
   return [
     '**Room map**',
-    `You are in Hermit command room **${roomId}** — slash commands + creative drops, not a creator trading order book.`,
-    'Creator trading rooms live at `alfaclub.app/room/{id}` (example: Flip Research token #2 → room **2**, not this ops surface).',
+    `Hermit command room **${roomId}** — slash commands + creative drops, not a creator trading order book.`,
+    'Creator rooms: `alfaclub.app/room/{id}` (example: Flip token #2 → room **2**).',
   ]
 }
 
@@ -94,12 +81,7 @@ export function formatHermitCommandRoomHelp(roomId: string): string {
     ...formatCooldownSection(),
     ...(formatRoomContextSection(id).length > 0 ? ['', ...formatRoomContextSection(id)] : []),
     '',
-    '**Examples**',
-    '• `/gmeow stressed market`',
-    '• `/meme akita doge black cat dark luxury`',
-    '• `/hermit announce reward drop opens in 30 minutes`',
-    '• `/hermit lang 🇲🇽` · `/hermit tone degen`',
-    '',
+    '**Examples** — `/gmeow stressed market` · `/meme akita dark luxury` · `/hermit announce reward drop in 30m`',
     'Send `/help` anytime for this list.',
   ].join('\n')
 }
