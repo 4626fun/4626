@@ -28,7 +28,6 @@
  *     `chat_jwt` row but does not write it.
  */
 
-import { executeDeterministicCommand } from '../../agents/core/executeDeterministicCommand.js'
 import { matchesAnyCommandFamily } from '../../commands/registry.js'
 import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
 import { extractTelegramRelayCommandText } from './telegramChatRef.js'
@@ -3068,6 +3067,9 @@ async function executeCommandBatch(params: {
       command: commandHead,
     })
     try {
+      const { executeDeterministicCommand } = await import(
+        '../../agents/core/executeDeterministicCommand.js'
+      )
       const result = await executeDeterministicCommand({
         groupId: params.flags.groupId,
         senderWallet: resolveCommandSenderWallet(command.sender),
