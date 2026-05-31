@@ -1,6 +1,7 @@
 import { getDb, isDbConfigured } from '@4626/server-core'
 import { ensureKeeprSchema } from '../../keepr/keeprSchema.js'
 import { executeKeeprStrategyAction } from '../../../keepr/strategyActionExecutor.js'
+import { shouldSampleEvent } from '../../infra/telemetrySampling.js'
 import type { OperatorAction } from '../operatorActions.js'
 import {
   executeVaultReport,
@@ -90,20 +91,23 @@ async function executeSolanaReconcile(action: Extract<OperatorAction, { type: 's
   const upstreamResponse = await upstream.json().catch(() => null)
   const status = upstream.ok ? 'completed' : 'failed'
 
-  await db.sql`
-    INSERT INTO keepr_workflow_checkpoints (workflow, checkpoint_key, status, response_json, updated_at)
-    VALUES (
-      ${action.workflow},
-      ${action.checkpointKey},
-      ${status === 'completed' ? 'completed' : 'failed'},
-      ${JSON.stringify(upstreamResponse ?? {})}::jsonb,
-      NOW()
-    )
-    ON CONFLICT (workflow, checkpoint_key) DO UPDATE SET
-      status = EXCLUDED.status,
-      response_json = EXCLUDED.response_json,
-      updated_at = NOW();
-  `
+  // Workflow checkpoints are high-volume during keeper automation. Sample by (workflow, key).
+  if (shouldSampleEvent('keepr_workflow_checkpoints', `${action.workflow}:${action.checkpointKey}`)) {
+    await db.sql`
+      INSERT INTO keepr_workflow_checkpoints (workflow, checkpoint_key, status, response_json, updated_at)
+      VALUES (
+        ${action.workflow},
+        ${action.checkpointKey},
+        ${status === 'completed' ? 'completed' : 'failed'},
+        ${JSON.stringify(upstreamResponse ?? {})}::jsonb,
+        NOW()
+      )
+      ON CONFLICT (workflow, checkpoint_key) DO UPDATE SET
+        status = EXCLUDED.status,
+        response_json = EXCLUDED.response_json,
+        updated_at = NOW();
+    `
+  }
 
   if (!upstream.ok) {
     throw new OperatorActionExecutionError(`solana_reconcile_failed:${upstream.status}`, {

@@ -6,6 +6,7 @@ import {
   resolveTelegramWebhookIngressLane,
   shouldRelayTelegramToAlfaclubOnCanonicalWebhook,
 } from '../_handlers/telegram/webhook/ingress.js'
+import { resolveHermitTelegramWebhookPublicUrl } from '../_handlers/telegram/webhook/hermitWebhookUrl.js'
 import { applyEnv, createMockReq, createMockRes } from './helpers.js'
 
 const { relayTelegramMessageToAlfaClubMock } = vi.hoisted(() => ({
@@ -43,6 +44,20 @@ describe('telegram webhook ingress', () => {
       }),
     ).toBe(false)
     expect(readTelegramToAlfaclubIngressHost({ TELEGRAM_TO_ALFACLUB_INGRESS_HOST: '' })).toBeNull()
+  })
+
+  it('prefers HERMIT_TELEGRAM_WEBHOOK_URL override for setWebhook target', () => {
+    expect(
+      resolveHermitTelegramWebhookPublicUrl({
+        TELEGRAM_TO_ALFACLUB_INGRESS_HOST: 'hermit.4626.fun',
+        HERMIT_TELEGRAM_WEBHOOK_URL: 'https://app.4626.fun/api/telegram/hermit-webhook',
+      }),
+    ).toBe('https://app.4626.fun/api/telegram/hermit-webhook')
+    expect(
+      resolveHermitTelegramWebhookPublicUrl({
+        TELEGRAM_TO_ALFACLUB_INGRESS_HOST: 'hermit.4626.fun',
+      }),
+    ).toBe('https://hermit.4626.fun/api/telegram/webhook')
   })
 })
 

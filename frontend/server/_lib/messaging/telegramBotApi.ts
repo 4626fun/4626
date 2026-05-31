@@ -91,6 +91,33 @@ export async function setTelegramChatMenuButton(params: {
   })
 }
 
+export type TelegramWebhookInfo = {
+  url?: string
+  has_custom_certificate?: boolean
+  pending_update_count?: number
+  last_error_date?: number
+  last_error_message?: string
+  max_connections?: number
+  allowed_updates?: string[]
+}
+
+export async function getTelegramWebhookInfo(botToken: string): Promise<TelegramWebhookInfo> {
+  const token = asTrimmed(botToken)
+  if (!token) {
+    throw new Error('telegram_bot_api_config_missing')
+  }
+  const response = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`)
+  const text = await response.text().catch(() => '')
+  if (!response.ok) {
+    throw new Error(`telegram_get_webhook_info_failed_${response.status}:${text.slice(0, 180)}`)
+  }
+  const parsed = JSON.parse(text) as { ok?: boolean; result?: TelegramWebhookInfo; description?: string }
+  if (!parsed?.ok || !parsed.result) {
+    throw new Error(`telegram_get_webhook_info_rejected:${asTrimmed(parsed?.description).slice(0, 120)}`)
+  }
+  return parsed.result
+}
+
 export async function setTelegramWebhook(params: {
   botToken: string
   url: string

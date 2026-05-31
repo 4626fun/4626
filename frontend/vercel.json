@@ -499,6 +499,26 @@
       "dest": "/api/token/image?address=$1&format=$2&size=64"
     },
     {
+      "src": "/api/telegram/webhook",
+      "has": [
+        {
+          "type": "host",
+          "value": "hermit.4626.fun"
+        }
+      ],
+      "dest": "/api/telegram/hermit-webhook"
+    },
+    {
+      "src": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "hermit.4626.fun"
+        }
+      ],
+      "dest": "/api/telegram/hermit-webhook"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "/api/[...path]?path=$1"
     },

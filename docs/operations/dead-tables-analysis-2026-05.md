@@ -116,6 +116,9 @@ These tables are the biggest remaining source of "room for optimization" after t
   - `keepr_logs` (keeprRegistry.ts — two write sites)
   - `telegram_action_audit` (telegramTrading.ts)
   - `episodic_summaries` + `memory_snapshots` (runtimeBridge.ts, keyed by conversation_id)
+  - `control_plane_events` + `control_plane_stages` (controlPlane/operations.ts — safeInsertEvent + create stage path)
+  - `keepr_workflow_checkpoints` (controlPlane/executors/executeOperatorAction.ts)
+  - `alfaclub_metrics_snapshot` (alfaclub/publicationLedger.ts — per-creator in the batch writer)
 
 Run the improved script anytime:
 ```bash
@@ -124,11 +127,12 @@ pnpm -C frontend exec tsx scripts/audit-telemetry-optimization.ts
 
 ### Recommended Next Steps (Prioritized Backlog)
 
-1. ~~Roll out sampling more broadly~~ (chat_presence_sessions, telegram_link_telemetry_events, keepr_logs, agent_*_audit/logs, workspace_*, episodic/memory, telegram_action_audit — **done**).
-2. Add per-table rate envs + tune the noisiest (presence, funnels, agent control plane) in production via `TELEMETRY_SAMPLE_RATE_*`.
-3. Move the top 5–7 pure telemetry tables (`query_temp_io_snapshots`, `memory_snapshots`, `episodic_summaries`, workspace snapshots, alfaclub metrics snapshot, etc.) to an `analytics` schema or external store (S3 + query engine).
-4. Dedicated Looker view hygiene pass (many `v_looker_*` have near-zero server usage).
-5. Re-run retention migration + analyzer after new high-volume tables appear.
+1. ~~Roll out sampling more broadly~~ (chat_presence_sessions, telegram_* telemetry, keepr_* (logs + checkpoints), agent_*_audit/logs, workspace_*, episodic/memory, control_plane_* (events + stages), alfaclub_metrics_snapshot — **done**).
+2. **query_temp_io_snapshots**: No active writers found in current codebase (only retention + analyzer). Confirm external/legacy producer or drop the table if truly unused.
+3. Add per-table rate envs + tune the noisiest (presence, funnels, control plane, keepr workflows) in production via `TELEMETRY_SAMPLE_RATE_*`.
+4. Move the top remaining pure telemetry tables (`query_temp_io_snapshots` if still written, `memory_snapshots`, `episodic_summaries`, workspace snapshots, etc.) to an `analytics` schema or external store (S3 + query engine).
+5. Dedicated Looker view hygiene pass (many `v_looker_*` have near-zero server usage).
+6. Re-run retention migration + analyzer after new high-volume tables appear.
 
 These changes (retention + sampling) together are the highest-ROI optimization available after the schema condensation work. Expected impact: significant reduction in storage growth, vacuum cost, and index bloat on the hottest tables.
 

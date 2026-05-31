@@ -1,7 +1,10 @@
 # --------------------------------------------------------------------------
 # Railway deployment config — Hermit AlfaClub/Pinata Creative Agent
-# (for 4626-alfaclub-bridge / hermit.4626.fun service)
+# (4626-hermit-agent / 4626-alfaclub-bridge Railway service)
 # --------------------------------------------------------------------------
+# Custom domain hermit.4626.fun is owned by Vercel for Telegram webhook ingress
+# (see TELEGRAM_TO_ALFACLUB_INGRESS_HOST + HERMIT_TELEGRAM_WEBHOOK_URL). Railway
+# health stays on *.up.railway.app — do not attach hermit.4626.fun here.
 # EXACT UI SETTINGS TO COPY (for your 4626-alfaclub-bridge service):
 #
 # Build
