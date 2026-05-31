@@ -6,6 +6,8 @@
  * read as fallbacks only until Railway/Vercel env is migrated.
  */
 
+import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
+
 function readEnvFirst(...keys: readonly string[]): string {
   for (const key of keys) {
     const value = (process.env[key] ?? '').trim()
@@ -49,4 +51,25 @@ export function readCanonicalCswSkipEnforcementEnv(): boolean {
 
 export function hasCanonicalCswRuntimeConfig(): boolean {
   return Boolean(readCanonicalCswAddressEnv() && readCanonicalCswPrivyWalletIdEnv())
+}
+
+function isAddressLike(value: string): value is `0x${string}` {
+  return /^0x[a-fA-F0-9]{40}$/.test(value)
+}
+
+/**
+ * Public XMTP agent inbox / agent-directory address for server handlers.
+ * Mirrors client `resolveClientAgentXmtpAddress()` precedence.
+ */
+export function resolveServerAgentInboxAddress(): `0x${string}` {
+  const candidates = [
+    readCanonicalCswAddressEnv(),
+    (process.env.XMTP_AGENT_ADDRESS ?? '').trim(),
+    (process.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim(),
+    CANONICAL_CSW_ADDRESS,
+  ]
+  for (const raw of candidates) {
+    if (isAddressLike(raw)) return raw.toLowerCase() as `0x${string}`
+  }
+  return CANONICAL_CSW_ADDRESS.toLowerCase() as `0x${string}`
 }

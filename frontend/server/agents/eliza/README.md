@@ -155,7 +155,7 @@ This boots the runtime shape, health checks, and env validation without becoming
 Production-primary boot is blocked off Railway by default unless you explicitly set `ELIZA_ALLOW_OFF_RAILWAY_PRIMARY=true`.
 Treat this as a local diagnostic mode, not a second deployment target.
 
-### 2. Single-agent CSW mode
+### 2. Single canonical CSW mode
 
 This is the production-shaped single-agent path.
 This is the normal Railway deployment path for this repo.

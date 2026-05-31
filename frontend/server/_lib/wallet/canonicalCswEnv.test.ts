@@ -5,6 +5,7 @@ import {
   readCanonicalCswAddressEnv,
   readCanonicalCswPrivyWalletIdEnv,
   readCanonicalCswSkipEnforcementEnv,
+  resolveServerAgentInboxAddress,
 } from './canonicalCswEnv.js'
 
 const ENV_KEYS = [
@@ -14,6 +15,8 @@ const ENV_KEYS = [
   'XMTP_AGENT_PRIVY_WALLET_ID',
   'CANONICAL_CSW_SKIP_ENFORCEMENT',
   'XMTP_AGENT_CSW_SKIP_CANONICAL',
+  'XMTP_AGENT_ADDRESS',
+  'VITE_AGENT_XMTP_ADDRESS',
 ] as const
 
 const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]])) as Record<
@@ -53,5 +56,17 @@ describe('canonicalCswEnv', () => {
     delete process.env.CANONICAL_CSW_SKIP_ENFORCEMENT
     process.env.XMTP_AGENT_CSW_SKIP_CANONICAL = 'true'
     expect(readCanonicalCswSkipEnforcementEnv()).toBe(true)
+  })
+
+  it('resolveServerAgentInboxAddress prefers CANONICAL_CSW_ADDRESS env', () => {
+    process.env.CANONICAL_CSW_ADDRESS = '0x1111111111111111111111111111111111111111'
+    delete process.env.XMTP_AGENT_ADDRESS
+    delete process.env.VITE_AGENT_XMTP_ADDRESS
+    expect(resolveServerAgentInboxAddress()).toBe('0x1111111111111111111111111111111111111111')
+  })
+
+  it('resolveServerAgentInboxAddress falls back to policy constant', () => {
+    for (const key of ENV_KEYS) delete process.env[key]
+    expect(resolveServerAgentInboxAddress()).toBe('0xab6d5c10b03300326cd7fab7267ae192842967b5')
   })
 })

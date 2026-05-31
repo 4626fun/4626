@@ -15,7 +15,7 @@ import { useFacilitator as createFacilitatorClient } from 'x402/verify'
 import { getCanonicalOrigin } from '../infra/origin.js'
 import siteConfig from '../../../shared/site-config.json' with { type: 'json' }
 import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
-import { readCanonicalCswAddressEnv } from '../wallet/canonicalCswEnv.js'
+import { resolveServerAgentInboxAddress } from '../wallet/canonicalCswEnv.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -111,18 +111,14 @@ function normalizePrice(raw: number | string | undefined): number {
 }
 
 function resolvePayTo(): `0x${string}` {
-  const candidates = [
+  const explicit = [
     (process.env.ERC8004_REVIEW_PAY_TO ?? '').trim(),
     (process.env.X402_PAY_TO ?? '').trim(),
-    readCanonicalCswAddressEnv(),
-    (process.env.XMTP_AGENT_ADDRESS ?? '').trim(),
-    (process.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim(),
-    DEFAULT_PAY_TO,
   ]
-  for (const candidate of candidates) {
+  for (const candidate of explicit) {
     if (isAddressLike(candidate)) return candidate
   }
-  return DEFAULT_PAY_TO
+  return resolveServerAgentInboxAddress()
 }
 
 function resolveResourceUrl(req: VercelRequest, resourcePath: string): string {

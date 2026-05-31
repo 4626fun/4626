@@ -55,13 +55,20 @@ if (!/^0x[0-9a-fA-F]{64}$/.test(PRIVATE_KEY)) {
   process.exit(1);
 }
 
+/** Policy default — matches `CANONICAL_CSW_ADDRESS` in frontend canonicalWalletPolicy.ts */
+const POLICY_CANONICAL_CSW =
+  "0xab6d5c10b03300326cd7fab7267ae192842967b5" as const;
+
 const TARGET_INBOX_ADDRESS = (
   process.env.TARGET_INBOX_ADDRESS ??
-  "0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef"
+  process.env.CANONICAL_CSW_ADDRESS ??
+  POLICY_CANONICAL_CSW
 ).toLowerCase();
 
 const CANONICAL_CSW = (
-  process.env.CANONICAL_CSW ?? "0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef"
+  process.env.CANONICAL_CSW_ADDRESS ??
+  process.env.CANONICAL_CSW ??
+  POLICY_CANONICAL_CSW
 ) as Hex;
 
 const NEW_OWNER = (

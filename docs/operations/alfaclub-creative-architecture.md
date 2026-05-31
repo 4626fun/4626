@@ -294,6 +294,9 @@ AlfaClub auth.
   - Flip Research digest lives at `alfaclub.app/room/2` (separate room).
 - Local env checklist (no secrets printed):
   `pnpm -C frontend exec tsx scripts/ops/alfaclub-env-preflight.ts`
+- Full Hermit creative audit (tests + seeds + probe + manual room checklist):
+  `bash frontend/scripts/ops/audit-hermit-e2e.sh --strict`
+  Add `--production-env` to run preflight/probe against Vercel production vars.
 - **Digest split (recommended):** set on Vercel:
   `ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE=1`,
   `ALFACLUB_DAILY_BRIEF_ROOM_ID=<read-only-room>`,

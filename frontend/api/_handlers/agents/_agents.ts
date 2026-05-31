@@ -13,8 +13,7 @@ import {
   STRICT_IMMUTABLE_AGENT_URI_SUMMARY,
 } from '../../../src/lib/agent/erc8004AgentUriPolicy.js'
 import { getErc8004PublicOrigin } from '../../../server/_lib/infra/origin.js'
-import { readCanonicalCswAddressEnv } from '../../../server/_lib/wallet/canonicalCswEnv.js'
-import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
+import { resolveServerAgentInboxAddress } from '../../../server/_lib/wallet/canonicalCswEnv.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -44,17 +43,8 @@ function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
 
-function resolveAgentAddress(): `0x${string}` | null {
-  const candidates = [
-    readCanonicalCswAddressEnv(),
-    (process.env.XMTP_AGENT_ADDRESS ?? '').trim(),
-    (process.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim(),
-    CANONICAL_CSW_ADDRESS,
-  ]
-  for (const raw of candidates) {
-    if (isAddressLike(raw)) return raw.toLowerCase() as `0x${string}`
-  }
-  return null
+function resolveAgentAddress(): `0x${string}` {
+  return resolveServerAgentInboxAddress()
 }
 
 function parseSupportedTrust(raw: string | undefined): string[] {
