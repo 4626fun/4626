@@ -33,7 +33,8 @@
 # You should also have the usual ones:
 #   ALFACLUB_CHAT_JWT (or the Privy triplet)
 #   HERMIT_PINATA_CHAT_ENDPOINT + HERMIT_PINATA_BEARER_TOKEN
-#   ALFACLUB_HERMIT_COMMAND_ROOMS=1659 (or similar)
+#   ALFACLUB_CHAT_ROOM_ID=1043 (primary / legacy single-room paths)
+#   ALFACLUB_HERMIT_COMMAND_ROOMS=1043,1659 (both Hermit command rooms)
 #
 # Config-as-code
 #   - Railway Config File: railway.hermit.toml
