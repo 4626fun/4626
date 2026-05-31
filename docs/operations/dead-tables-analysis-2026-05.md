@@ -105,7 +105,9 @@ These tables are the biggest remaining source of "room for optimization" after t
   - `telegram_funnel_events` (in `telegramTrading.ts`)
   - `chat_command_center_events` (in `chatCommandCenterTelemetry.ts`)
 
-**Extended wiring (next slice)**:
+**Extended wiring + actual cleanup (this slice)**:
+- Dropped `query_temp_io_snapshots` (highest analyzer potential, confirmed complete orphan: no writers, no CREATE, no types anywhere in the tree). New migration `20260705000000_drop_orphan_query_temp_io_snapshots.sql`.
+- Removed from analyzer candidate list.
 - Enhanced sampler with table-aware `shouldSampleEvent(tableName, key)` + per-table env override support (`TELEMETRY_SAMPLE_RATE_<table>`).
 - Wired deterministic sampling (early returns before INSERT) into:
   - `chat_presence_sessions` (presence.ts — heartbeats)
@@ -128,7 +130,11 @@ pnpm -C frontend exec tsx scripts/audit-telemetry-optimization.ts
 ### Recommended Next Steps (Prioritized Backlog)
 
 1. ~~Roll out sampling more broadly~~ (chat_presence_sessions, telegram_* telemetry, keepr_* (logs + checkpoints), agent_*_audit/logs, workspace_*, episodic/memory, control_plane_* (events + stages), alfaclub_metrics_snapshot — **done**).
-2. **query_temp_io_snapshots**: No active writers found in current codebase (only retention + analyzer). Confirm external/legacy producer or drop the table if truly unused.
+2. **query_temp_io_snapshots** — **dropped**.
+   - Exhaustive search (code, kpr/, all migrations, legacy, types, scripts): zero writers, zero CREATE TABLE, zero TypeScript definition.
+   - Only footprint was a DELETE inside the 2026-06-12 retention job + the analyzer itself.
+   - Created migration `20260705000000_drop_orphan_query_temp_io_snapshots.sql`.
+   - This was the single highest "optimization potential" item from the analyzer. Removing it directly reduces the table count and maintenance surface.
 3. Add per-table rate envs + tune the noisiest (presence, funnels, control plane, keepr workflows) in production via `TELEMETRY_SAMPLE_RATE_*`.
 4. Move the top remaining pure telemetry tables (`query_temp_io_snapshots` if still written, `memory_snapshots`, `episodic_summaries`, workspace snapshots, etc.) to an `analytics` schema or external store (S3 + query engine).
 5. Dedicated Looker view hygiene pass (many `v_looker_*` have near-zero server usage).

@@ -33,7 +33,7 @@ const TELEMETRY_CANDIDATES = [
   'telegram_link_telemetry_events',
   'telegram_action_tokens',
   'index_usage_snapshots',
-  'query_temp_io_snapshots',
+  // 'query_temp_io_snapshots' — dropped 20260705000000 (confirmed orphan: no writers, no types, no creation migration)
   'ethos_score_sync_state',
   'zora_profiles_refresh_state',
   'creator_metrics_daily_snapshots',
