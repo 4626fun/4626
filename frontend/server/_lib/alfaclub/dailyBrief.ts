@@ -90,17 +90,11 @@ export function resolveAlfaClubBridgeRoomId(): string {
 }
 
 export function resolveDailyBriefRoomId(): string {
-  const explicit = normalizeRoomId(process.env.ALFACLUB_DAILY_BRIEF_ROOM_ID)
-  if (explicit) return explicit
-  return resolveAlfaClubBridgeRoomId()
+  return listDailyBriefCommandRoomIds()[0] ?? resolveAlfaClubBridgeRoomId()
 }
 
-export function hasExplicitDailyBriefRoomId(): boolean {
-  return normalizeRoomId(process.env.ALFACLUB_DAILY_BRIEF_ROOM_ID) !== null
-}
-
-/** Ordered rooms to try when posting the digest (first bot-reachable win). */
-export function listDailyBriefPostRoomCandidates(
+/** Command rooms the bot already operates in (bridge + Hermit list). */
+export function listDailyBriefCommandRoomIds(
   bridgeFlags: Pick<
     ReturnType<typeof readAlfaClubChatBridgeFlags>,
     'roomId' | 'hermitCommandRoomIds'
@@ -114,19 +108,21 @@ export function listDailyBriefPostRoomCandidates(
     seen.add(id)
     ordered.push(id)
   }
-  push(normalizeRoomId(process.env.ALFACLUB_DAILY_BRIEF_ROOM_ID))
   push(bridgeFlags.roomId ?? resolveAlfaClubBridgeRoomId())
   for (const id of bridgeFlags.hermitCommandRoomIds) push(id)
-  push(DEFAULT_ROOM_ID)
-  return ordered
+  if (ordered.length > 0) return ordered
+  return [DEFAULT_ROOM_ID]
 }
+
+/** @deprecated Use listDailyBriefCommandRoomIds */
+export const listDailyBriefPostRoomCandidates = listDailyBriefCommandRoomIds
 
 export async function sendDailyBriefToReachableRoom(params: {
   text: string
   flags?: ReturnType<typeof readAlfaClubChatBridgeFlags>
 }): Promise<{ roomId: string; lane: string; candidates: string[]; messageText: string }> {
   const flags = params.flags ?? readAlfaClubChatBridgeFlags()
-  const candidates = listDailyBriefPostRoomCandidates(flags)
+  const candidates = listDailyBriefCommandRoomIds(flags)
   let lastError: unknown = null
   for (const roomId of candidates) {
     let messageText = params.text
@@ -146,9 +142,14 @@ export async function sendDailyBriefToReachableRoom(params: {
   throw new Error(message)
 }
 
-/** When true, cron/manual post skips if digest room equals the command bridge room. */
+/** @deprecated Separate digest room is retired — digest posts to command rooms only. */
 export function readAlfaClubDailyBriefSeparateFromBridge(): boolean {
-  return parseBool(process.env.ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE ?? '0')
+  return false
+}
+
+/** @deprecated Separate digest room is retired. */
+export function hasExplicitDailyBriefRoomId(): boolean {
+  return false
 }
 
 export function isDailyBriefRoomSameAsBridgeRoom(briefRoomId: string): boolean {
@@ -1055,23 +1056,6 @@ export async function runAlfaClubDailyBrief(params: {
   flags?: DailyBriefFlags
 } = {}): Promise<AlfaClubDailyBriefResult> {
   const flags = params.flags ?? readAlfaClubDailyBriefFlags()
-  if (
-    readAlfaClubDailyBriefSeparateFromBridge() &&
-    hasExplicitDailyBriefRoomId() &&
-    isDailyBriefRoomSameAsBridgeRoom(flags.roomId)
-  ) {
-    return {
-      ok: false,
-      reason: 'brief_room_same_as_bridge',
-      snapshotTs: null,
-      previousSnapshotTs: null,
-      sent: false,
-      skippedDuplicate: false,
-      roomId: flags.roomId,
-      lane: null,
-      messageText: null,
-    }
-  }
   if (!flags.enabled) {
     return {
       ok: false,

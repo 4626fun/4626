@@ -15,9 +15,8 @@ import {
   buildAlfaClubBriefContext,
   formatAlfaClubDailyBrief,
   formatAlfaClubLeaderboardChat,
-  listDailyBriefPostRoomCandidates,
+  listDailyBriefCommandRoomIds,
   readAlfaClubDailyBriefFlags,
-  resolveAlfaClubBridgeRoomId,
   runAlfaClubDailyBrief,
 } from '../../_lib/alfaclub/dailyBrief.js'
 import {
@@ -1138,23 +1137,12 @@ export async function executeAlfaclubCommandFamily(params: {
     const result = await runAlfaClubDailyBrief({
       flags: { ...readAlfaClubDailyBriefFlags(), forceSend: true },
     })
-    if (result.reason === 'brief_room_same_as_bridge') {
-      return {
-        ok: false,
-        response: [
-          'Daily digest is configured to skip the bridge room while',
-          '`ALFACLUB_DAILY_BRIEF_ROOM_ID` equals `ALFACLUB_CHAT_ROOM_ID`.',
-          'Unset the brief room id or turn off `ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE`.',
-          `Bridge room: ${resolveAlfaClubBridgeRoomId()}.`,
-        ].join(' '),
-      }
-    }
     if (!result.ok || !result.sent) {
       const reason = result.reason ?? 'not_sent'
-      const candidates = listDailyBriefPostRoomCandidates().join(' → ')
+      const rooms = listDailyBriefCommandRoomIds().join(', ')
       return {
         ok: false,
-        response: `Digest post failed (${reason}). Tried rooms: ${candidates}.`,
+        response: `Digest post failed (${reason}). Command rooms: ${rooms}.`,
       }
     }
     return {

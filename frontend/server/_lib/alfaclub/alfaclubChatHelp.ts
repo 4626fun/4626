@@ -43,7 +43,7 @@ export function formatAlfaClubCommandHelp(): string {
     '**Commands**',
     '  `/alfa` — compact top-N leaderboard',
     '  `/alfa brief` — preview digest (chat only)',
-    '  `/alfa brief post` — post digest to the first bot-reachable command room',
+    '  `/alfa brief post` — post digest to the bot command room (1043 by default)',
     '  `/alfa <address>` — one creator (score + room link when known)',
     '  `/alfa chart [kind] [limit]` — room analytics chart (IPFS image)',
     '  `/alfa status` or `/bridge status` — pipeline + bridge auth health',

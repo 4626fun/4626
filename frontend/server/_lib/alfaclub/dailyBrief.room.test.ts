@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyEnv } from '../../../api/__tests__/helpers'
 import {
   isDailyBriefRoomSameAsBridgeRoom,
-  listDailyBriefPostRoomCandidates,
+  listDailyBriefCommandRoomIds,
   readAlfaClubDailyBriefSeparateFromBridge,
   resolveDailyBriefRoomId,
   resolveAlfaClubBridgeRoomId,
@@ -30,31 +30,20 @@ describe('daily brief room resolution', () => {
     restoreEnv = null
   })
 
-  it('uses explicit brief room when set', () => {
-    restoreEnv = applyEnv({
-      ALFACLUB_CHAT_ROOM_ID: '1043',
-      ALFACLUB_DAILY_BRIEF_ROOM_ID: '2001',
-    })
-    expect(resolveDailyBriefRoomId()).toBe('2001')
-    expect(isDailyBriefRoomSameAsBridgeRoom('2001')).toBe(false)
+  it('uses command rooms only (bridge + hermit list)', () => {
+    expect(
+      listDailyBriefCommandRoomIds({ roomId: '1043', hermitCommandRoomIds: ['1043', '1659'] }),
+    ).toEqual(['1043', '1659'])
   })
 
-  it('falls back to bridge room when brief room unset', () => {
-    restoreEnv = applyEnv({
-      ALFACLUB_CHAT_ROOM_ID: '1043',
-      ALFACLUB_DAILY_BRIEF_ROOM_ID: undefined,
-    })
+  it('resolveDailyBriefRoomId picks the primary command room', () => {
+    restoreEnv = applyEnv({ ALFACLUB_CHAT_ROOM_ID: '1043' })
     expect(resolveDailyBriefRoomId()).toBe('1043')
     expect(isDailyBriefRoomSameAsBridgeRoom('1043')).toBe(true)
   })
 
-  it('readAlfaClubDailyBriefSeparateFromBridge parses env when on', () => {
+  it('readAlfaClubDailyBriefSeparateFromBridge is always off', () => {
     restoreEnv = applyEnv({ ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE: '1' })
-    expect(readAlfaClubDailyBriefSeparateFromBridge()).toBe(true)
-  })
-
-  it('readAlfaClubDailyBriefSeparateFromBridge parses env when off', () => {
-    restoreEnv = applyEnv({ ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE: '0' })
     expect(readAlfaClubDailyBriefSeparateFromBridge()).toBe(false)
   })
 
@@ -63,35 +52,7 @@ describe('daily brief room resolution', () => {
     expect(resolveAlfaClubBridgeRoomId()).toBe('1043')
   })
 
-  it('listDailyBriefPostRoomCandidates dedupes and prefers bridge then hermit rooms', () => {
-    restoreEnv = applyEnv({
-      ALFACLUB_CHAT_ROOM_ID: '1043',
-      ALFACLUB_HERMIT_COMMAND_ROOMS: '1043,1659',
-    })
-    expect(listDailyBriefPostRoomCandidates({ roomId: '1043', hermitCommandRoomIds: ['1043', '1659'] })).toEqual([
-      '1043',
-      '1659',
-    ])
-  })
-
-  it('listDailyBriefPostRoomCandidates tries explicit brief room first when set', () => {
-    restoreEnv = applyEnv({
-      ALFACLUB_CHAT_ROOM_ID: '1043',
-      ALFACLUB_DAILY_BRIEF_ROOM_ID: '2001',
-      ALFACLUB_HERMIT_COMMAND_ROOMS: '1043,1659',
-    })
-    expect(listDailyBriefPostRoomCandidates({ roomId: '1043', hermitCommandRoomIds: ['1043', '1659'] })).toEqual([
-      '2001',
-      '1043',
-      '1659',
-    ])
-  })
-
   it('sendDailyBriefToReachableRoom falls through forbidden rooms', async () => {
-    restoreEnv = applyEnv({
-      ALFACLUB_DAILY_BRIEF_ROOM_ID: '2001',
-      ALFACLUB_CHAT_ROOM_ID: '1043',
-    })
     const { sendAlfaClubRoomText } = await import('./chatBridge.js')
     vi.mocked(sendAlfaClubRoomText).mockReset()
     vi.mocked(sendAlfaClubRoomText)
@@ -101,8 +62,8 @@ describe('daily brief room resolution', () => {
     const result = await sendDailyBriefToReachableRoom({
       text: 'hello',
       flags: {
-        roomId: '1043',
-        hermitCommandRoomIds: ['1043', '1659'],
+        roomId: '2001',
+        hermitCommandRoomIds: ['2001', '1043'],
       } as ReturnType<typeof import('./chatBridge.js').readAlfaClubChatBridgeFlags>,
     })
 
