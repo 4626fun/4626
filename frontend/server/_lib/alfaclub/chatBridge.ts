@@ -1495,7 +1495,10 @@ async function sendRoomMessageViaBotToken(params: {
 function isProxyPathNotAllowedError(error: unknown): boolean {
   if (!(error instanceof Error)) return false
   const message = error.message
-  return message.includes('bot_message_failed:404') && message.includes('"error":"path_not_allowed"')
+  return (
+    (message.includes('bot_message_failed:404') || message.includes('jwt_message_failed:404')) &&
+    message.includes('"error":"path_not_allowed"')
+  )
 }
 
 function isBotMessageForbiddenError(error: unknown): boolean {
@@ -1504,6 +1507,81 @@ function isBotMessageForbiddenError(error: unknown): boolean {
     message.includes('bot_message_failed:403') ||
     (message.includes('bot_message_failed:404') && message.includes('"error":"forbidden"'))
   )
+}
+
+async function sendRoomMessageViaJwtHttp(params: {
+  apiBaseUrl: string
+  directApiBaseUrl: string
+  jwt: string
+  roomId: string
+  text: string
+  replyToMessageId?: string
+  proxySecret?: string | null
+  timeoutMs: number
+}): Promise<void> {
+  const url = new URL(`/api/room/${encodeURIComponent(params.roomId)}/message`, params.apiBaseUrl)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), params.timeoutMs)
+  let response: Response
+  try {
+    response = await fetch(url.toString(), {
+      method: 'POST',
+      headers: {
+        ...buildAlfaClubApiHeaders({
+          jwt: params.jwt,
+          fingerprintBaseUrl: params.directApiBaseUrl,
+          proxySecret: params.proxySecret,
+        }),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        body: truncateAlfaClubBotMessage(params.text),
+        ...(params.replyToMessageId ? { reply_id: params.replyToMessageId } : {}),
+      }),
+      signal: controller.signal,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`jwt_message_failed:timeout:${message}`)
+  } finally {
+    clearTimeout(timeout)
+  }
+  const bodyText = await response.text().catch(() => '')
+  if (!response.ok) {
+    const detail = redactForDiagnostics(bodyText.replace(/\s+/g, ' ').slice(0, 160))
+    throw new Error(`jwt_message_failed:${response.status}${detail ? `:${detail}` : ''}`)
+  }
+}
+
+async function sendRoomMessageViaJwtHttpWithProxyFallback(params: {
+  apiBaseUrl: string
+  directApiBaseUrl: string
+  jwt: string
+  roomId: string
+  text: string
+  replyToMessageId?: string
+  proxySecret?: string | null
+  timeoutMs: number
+}): Promise<void> {
+  try {
+    await sendRoomMessageViaJwtHttp(params)
+  } catch (error) {
+    const usingProxy = params.apiBaseUrl !== params.directApiBaseUrl
+    if (!usingProxy || !isProxyPathNotAllowedError(error)) {
+      throw error
+    }
+    logger.warn('[alfaclub-chat] jwt_reply_proxy_path_not_allowed:retry_direct', {
+      roomId: params.roomId,
+      apiBaseUrl: params.apiBaseUrl,
+      directApiBaseUrl: params.directApiBaseUrl,
+    })
+    recordBridgeProxyFallbackDirect()
+    await sendRoomMessageViaJwtHttp({
+      ...params,
+      apiBaseUrl: params.directApiBaseUrl,
+      proxySecret: null,
+    })
+  }
 }
 
 async function sendRoomMessageViaBotTokenWithProxyFallback(params: {
@@ -4013,6 +4091,31 @@ export async function sendAlfaClubRoomText(params: {
         roomId,
         error: detail.slice(0, 180),
       })
+      try {
+        await sendRoomMessageViaJwtHttpWithProxyFallback({
+          apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
+          directApiBaseUrl: flags.apiBaseUrl,
+          jwt,
+          roomId,
+          text,
+          replyToMessageId: params.replyToMessageId,
+          proxySecret: resolveAlfaClubProxySecret(flags),
+          timeoutMs: flags.sendTimeoutMs,
+        })
+        return {
+          lane: params.replyToMessageId
+            ? 'jwt_http_with_reply_id_after_bot_forbidden'
+            : 'jwt_http_without_reply_id_after_bot_forbidden',
+        }
+      } catch (jwtHttpError) {
+        logger.warn('[alfaclub-chat] jwt_http_send_failed:fallback_ws', {
+          roomId,
+          error: (jwtHttpError instanceof Error ? jwtHttpError.message : String(jwtHttpError)).slice(
+            0,
+            180,
+          ),
+        })
+      }
     }
   }
 
