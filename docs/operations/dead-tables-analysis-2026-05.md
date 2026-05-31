@@ -72,9 +72,9 @@ The audit script (`frontend/scripts/audit-dead-tables.ts`) was expanded during t
 
 Created `frontend/scripts/audit-telemetry-optimization.ts` specifically for the many audit/event/snapshot tables.
 
-**Top optimization candidates** (low code surface area relative to maintenance cost):
+**Top optimization candidates** (low code surface area relative to maintenance cost) — historical at start of pass:
 
-- `query_temp_io_snapshots` (95% potential)
+- `query_temp_io_snapshots` (95% potential) — **dropped** via 20260705000000 (confirmed complete orphan)
 - `memory_snapshots`
 - `telegram_funnel_events`
 - `workspace_monitoring_snapshots`
@@ -136,7 +136,7 @@ pnpm -C frontend exec tsx scripts/audit-telemetry-optimization.ts
    - Created migration `20260705000000_drop_orphan_query_temp_io_snapshots.sql`.
    - This was the single highest "optimization potential" item from the analyzer. Removing it directly reduces the table count and maintenance surface.
 3. Add per-table rate envs + tune the noisiest (presence, funnels, control plane, keepr workflows) in production via `TELEMETRY_SAMPLE_RATE_*`.
-4. Move the top remaining pure telemetry tables (`query_temp_io_snapshots` if still written, `memory_snapshots`, `episodic_summaries`, workspace snapshots, etc.) to an `analytics` schema or external store (S3 + query engine).
+4. Move the top remaining pure telemetry tables (`memory_snapshots`, `episodic_summaries`, workspace snapshots, control_plane_*, keepr checkpoints, etc.) to an `analytics` schema or external store (S3 + query engine).
 5. Dedicated Looker view hygiene pass (many `v_looker_*` have near-zero server usage).
 6. Re-run retention migration + analyzer after new high-volume tables appear.
 
