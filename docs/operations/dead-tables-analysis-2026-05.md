@@ -113,6 +113,7 @@ These tables are the biggest remaining source of "room for optimization" after t
   - Usage is manual / on-demand only. The "auto-generate index drop drafts" workflow appears cold.
   - Not a drop candidate (has historical value), but good candidate for future analytics schema carve-out or deprecation of the drop-draft functions.
 - Added `getTelemetrySampleRate(tableName?)` helper for observability of per-table rates.
+- Wired sampling for `telegram_action_tokens` (high-volume short-lived Telegram action tokens in telegramTrading.ts) using the new observable helper. Token issuance to callers remains 100%; only the durable row is sampled.
 - Enhanced sampler with table-aware `shouldSampleEvent(tableName, key)` + per-table env override support (`TELEMETRY_SAMPLE_RATE_<table>`).
 - Wired deterministic sampling (early returns before INSERT) into:
   - `chat_presence_sessions` (presence.ts — heartbeats)

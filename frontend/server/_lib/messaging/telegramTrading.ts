@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { ensureTelegramTradingSchema as ensureTelegramTradingSchemaFromBootstrap } from '../db/schemaBootstrap.js'
-import { shouldSampleEvent } from '../infra/telemetrySampling.js'
+import { getTelemetrySampleRate, shouldSampleEvent } from '../infra/telemetrySampling.js'
 import { shouldSample } from '../infra/telemetrySampling.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -550,6 +550,22 @@ export async function createTelegramActionToken(params: {
   const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString()
   const token = randomBytes(18).toString('base64url')
   const tokenHash = hashTelegramActionToken(token)
+
+  // High-volume short-lived action tokens (Telegram trading/automation).
+  // Always issue the token to the caller; only thin the durable row when sampling < 1.
+  const sampleKey = `${userId}:${actionType}`
+  if (!shouldSampleEvent('telegram_action_tokens', sampleKey)) {
+    // Token is still returned and usable — we simply skip persisting the row for volume control.
+    return { token, expiresAt }
+  }
+
+  // Optional observability: surface the effective rate for this table (new helper).
+  const effectiveRate = getTelemetrySampleRate('telegram_action_tokens')
+  if (effectiveRate < 1) {
+    // One-time style note; in hot paths this can be gated further or sent to structured logs.
+    // console.debug('[telemetry] sampling telegram_action_tokens', { rate: effectiveRate })
+  }
+
   await params.db.sql`
     INSERT INTO telegram_action_tokens (
       token_hash,
