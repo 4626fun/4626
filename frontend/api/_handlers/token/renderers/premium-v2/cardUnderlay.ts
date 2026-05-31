@@ -39,14 +39,9 @@ export function shouldSkipV2HeroBackgroundDarken(analysis: V2SourceAnalysisSlice
 }
 
 /**
- * Where the dark subject silhouette may render: in-chamber plus card padding outside the bezel.
- * (Not the full card rectangle — that duplicated the frame read in padding.)
- * When a prepared hero-cutout breakout is drawn, skip padding spill — it fights the hat band.
+ * Ghost stack stays inside the chamber only. Padding outside the bezel uses
+ * `fieldPattern` + `paddingSilhouette` (one rembg-shaped spill — no offset ghost copies).
  */
-export function resolveV2SilhouetteSpillClipRegion(options?: {
-  hasBreakoutLayer?: boolean
-  heroCutoutBreakout?: boolean
-}): 'chamber' | 'extended' {
-  if (options?.hasBreakoutLayer && options?.heroCutoutBreakout) return 'chamber'
-  return 'extended'
+export function resolveV2StackClipRegion(): 'chamber' {
+  return 'chamber'
 }

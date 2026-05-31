@@ -1,16 +1,12 @@
 import sharp from 'sharp'
 
-import {
-  renderPremiumPlacedSourceCanvas,
-  type PremiumLayout,
-  type PremiumSubjectPlacement,
-} from '../premium-classic/renderPremiumTokenIcon.js'
+import type { PremiumLayout, PremiumSubjectPlacement } from '../premium-classic/renderPremiumTokenIcon.js'
 import type { SubjectSegmentationMask } from './subjectGrade.js'
 import type { SubjectSourceClass } from './subject.js'
 
 const PADDING_SILHOUETTE_ENABLED = process.env.TOKEN_ICON_V2_PADDING_SILHOUETTE !== '0'
-const PADDING_SILHOUETTE_OPACITY = Number(process.env.TOKEN_ICON_V2_PADDING_SILHOUETTE_OPACITY ?? 0.52)
-const PADDING_SILHOUETTE_BLUR_RATIO = Number(process.env.TOKEN_ICON_V2_PADDING_SILHOUETTE_BLUR ?? 0.038)
+const PADDING_SILHOUETTE_OPACITY = Number(process.env.TOKEN_ICON_V2_PADDING_SILHOUETTE_OPACITY ?? 0.64)
+const PADDING_SILHOUETTE_BLUR_RATIO = Number(process.env.TOKEN_ICON_V2_PADDING_SILHOUETTE_BLUR ?? 0.032)
 
 async function applyOpacity(layer: Buffer, opacity: number): Promise<Buffer> {
   if (opacity >= 0.999) return layer
@@ -53,27 +49,18 @@ async function createPaddingOutsideFrameMask(layout: PremiumLayout): Promise<Buf
 export async function renderV2PaddingSilhouetteBleed(params: {
   size: number
   layout: PremiumLayout
-  sourceImage?: Uint8Array
   sourceClass?: SubjectSourceClass
   segmentationMask: SubjectSegmentationMask | null
   placement: PremiumSubjectPlacement | null
 }): Promise<Buffer | null> {
   if (!PADDING_SILHOUETTE_ENABLED) return null
-  const { size, layout, sourceImage, sourceClass, segmentationMask, placement } = params
-  if (!sourceImage?.length || !segmentationMask || !placement) return null
+  const { size, layout, sourceClass, segmentationMask, placement } = params
+  if (!segmentationMask || !placement) return null
   if (sourceClass === 'brightBadge') return null
 
-  const placed = await renderPremiumPlacedSourceCanvas({
-    sourceImage: Buffer.from(sourceImage),
-    layout,
-    scale: placement.renderScale,
-    fit: placement.fitMode,
-    sourceClass: sourceClass ?? 'generic',
-    topBiasPx: placement.topBiasPx,
-  })
-
+  // Full-card rembg mask — breakout ears sit above the placed art box.
   const blurPx = Math.max(1.2, PADDING_SILHOUETTE_BLUR_RATIO * size)
-  let silhouette = await sharp(placed)
+  let silhouette = await sharp(segmentationMask.subjectMaskPng)
     .ensureAlpha()
     .extractChannel('alpha')
     .toColourspace('b-w')
@@ -81,7 +68,7 @@ export async function renderV2PaddingSilhouetteBleed(params: {
     .toBuffer()
 
   silhouette = await sharp(silhouette)
-    .modulate({ brightness: 0.22, saturation: 0 })
+    .modulate({ brightness: 0.28, saturation: 0 })
     .blur(blurPx)
     .png()
     .toBuffer()

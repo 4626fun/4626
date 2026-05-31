@@ -2031,8 +2031,20 @@ async function renderStackedArtworkUnderlay(params: {
         ? Math.round((params.topBiasPx ?? 0) * layer.topBiasMultiplier)
         : 0
 
+    const useSubjectSilhouetteSpill =
+      !!params.subjectAlphaMaskPng &&
+      (params.clipRegion === 'card' ||
+        params.clipRegion === 'padding-outside-frame' ||
+        params.clipRegion === 'extended')
+    const spillUsesFullCardMask =
+      useSubjectSilhouetteSpill &&
+      (params.clipRegion === 'padding-outside-frame' || params.clipRegion === 'extended')
+
     let shifted = await renderPlacedSourceCanvasWithOffset({
-      sourceImage: params.sourceImage,
+      sourceImage:
+        spillUsesFullCardMask && params.subjectAlphaMaskPng
+          ? params.subjectAlphaMaskPng
+          : params.sourceImage,
       layout,
       scale: layerScale,
       fit: params.fit,
@@ -2041,12 +2053,7 @@ async function renderStackedArtworkUnderlay(params: {
       offsetXpx,
       offsetYpx,
     })
-    const useSubjectSilhouetteSpill =
-      !!params.subjectAlphaMaskPng &&
-      (params.clipRegion === 'card' ||
-        params.clipRegion === 'padding-outside-frame' ||
-        params.clipRegion === 'extended')
-    if (useSubjectSilhouetteSpill && params.subjectAlphaMaskPng) {
+    if (useSubjectSilhouetteSpill && params.subjectAlphaMaskPng && !spillUsesFullCardMask) {
       shifted = await sharp(shifted)
         .ensureAlpha()
         .composite([{ input: params.subjectAlphaMaskPng, blend: 'dest-in' }])

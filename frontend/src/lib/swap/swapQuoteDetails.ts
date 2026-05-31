@@ -1,7 +1,8 @@
-import { formatUnits } from 'viem'
+import { formatUnits, getAddress, isAddress } from 'viem'
 
+import { parsePositiveHumanAmount, formatSwapUsd } from '@/lib/swap/swapAmountUsd'
+import { formatSwapDisplayAmount, parseSwapDisplayNumber } from '@/lib/swap/swapDisplayAmount'
 import { isZoraProviderQuote } from '@/lib/zora/zoraTradeApi'
-import { formatSwapUsd } from '@/lib/swap/swapAmountUsd'
 import { pickQuote, type TradeQuoteResponse } from '@/lib/uniswap/tradingApi'
 
 const ROUTING_ENUM = new Set([
@@ -21,6 +22,8 @@ export type SwapRouteLeg = {
   protocolLabel: string
   tokenIn: string
   tokenOut: string
+  tokenInAddress?: `0x${string}` | null
+  tokenOutAddress?: `0x${string}` | null
   feePercentLabel: string | null
   poolAddress: string | null
 }
@@ -57,6 +60,13 @@ function readTokenSymbol(token: unknown): string | null {
   if (!token || typeof token !== 'object') return null
   const sym = (token as { symbol?: string }).symbol
   return typeof sym === 'string' && sym.trim() ? sym.trim() : null
+}
+
+function readTokenAddress(token: unknown): `0x${string}` | null {
+  if (!token || typeof token !== 'object') return null
+  const address = (token as { address?: string }).address
+  if (typeof address !== 'string' || !address.trim() || !isAddress(address.trim())) return null
+  return getAddress(address.trim())
 }
 
 function readPoolProtocol(pool: Record<string, unknown>): SwapRouteLeg['protocol'] {
@@ -125,6 +135,8 @@ export function parseSwapRouteFromClassicQuote(classic: Record<string, unknown> 
           protocolLabel: protocolLabel(protocol),
           tokenIn: tokenIn ?? '?',
           tokenOut: tokenOut ?? '?',
+          tokenInAddress: readTokenAddress(pool.tokenIn),
+          tokenOutAddress: readTokenAddress(pool.tokenOut),
           feePercentLabel,
           poolAddress:
             typeof pool.address === 'string' && pool.address.trim() ? pool.address.trim() : null,
@@ -202,34 +214,48 @@ function parsePositiveNumber(value: unknown): number | null {
   return n
 }
 
-/** gasFeeUSD from Uniswap is sometimes native ETH — convert tiny values using ethUsd. */
+/** Uniswap `gasFeeUSD` is already denominated in USDC; `gasFee` is wei on EVM chains. */
 export function formatQuoteGasEstimateLabel(params: {
   quote: TradeQuoteResponse | null | undefined
   ethUsd: number
+  /** Parent-CSW paymaster swaps — user does not pay network gas out of pocket. */
+  sponsoredExecution?: boolean
 }): string | null {
+  if (params.sponsoredExecution) {
+    return 'Sponsored'
+  }
+
   const classic = readClassicQuote(params.quote)
-  const sources = [
+  const usdSources = [
     classic?.gasFeeUSD,
     classic?.gasEstimateUSD,
     (params.quote as { gasFeeUSD?: unknown } | null)?.gasFeeUSD,
     (params.quote as { gasEstimateUSD?: unknown } | null)?.gasEstimateUSD,
   ]
 
-  for (const raw of sources) {
+  for (const raw of usdSources) {
     const n = parsePositiveNumber(raw)
     if (n == null) continue
-    const asUsd =
-      typeof raw === 'string' && raw.includes('$')
-        ? n
-        : n < 0.05 && params.ethUsd > 0
-          ? n * params.ethUsd
-          : n
-    return formatSwapUsd(asUsd)
+    return formatSwapUsd(n)
   }
 
-  const gasFeeEth = parsePositiveNumber(classic?.gasFee ?? (params.quote as { gasFee?: unknown } | null)?.gasFee)
-  if (gasFeeEth != null && params.ethUsd > 0) {
-    return formatSwapUsd(gasFeeEth * params.ethUsd)
+  const gasFeeRaw = classic?.gasFee ?? (params.quote as { gasFee?: unknown } | null)?.gasFee
+  if (gasFeeRaw != null && params.ethUsd > 0) {
+    const gasFeeStr = String(gasFeeRaw).trim()
+    if (/^\d+$/.test(gasFeeStr)) {
+      try {
+        const eth = Number(formatUnits(BigInt(gasFeeStr), 18))
+        if (Number.isFinite(eth) && eth > 0) {
+          return formatSwapUsd(eth * params.ethUsd)
+        }
+      } catch {
+        // fall through to human-readable parse
+      }
+    }
+    const gasFeeEth = parsePositiveNumber(gasFeeRaw)
+    if (gasFeeEth != null && gasFeeEth > 0 && gasFeeEth < 1) {
+      return formatSwapUsd(gasFeeEth * params.ethUsd)
+    }
   }
 
   return null
@@ -254,11 +280,64 @@ function formatPortionFeeUsd(params: {
   }
 }
 
+/** Uniswap-style "1 USDC = 95840.4 akita" execution rate from quoted amounts. */
+export function formatSwapExchangeRate(params: {
+  amountIn: string
+  tokenInSymbol: string
+  amountOut: string
+  tokenOutSymbol: string
+}): string | null {
+  const inSym = String(params.tokenInSymbol ?? '').trim()
+  const outSym = String(params.tokenOutSymbol ?? '').trim()
+  if (!inSym || !outSym) return null
+
+  const inAmt = parsePositiveHumanAmount(params.amountIn) ?? parseSwapDisplayNumber(params.amountIn)
+  const outAmt = parsePositiveHumanAmount(params.amountOut) ?? parseSwapDisplayNumber(params.amountOut)
+  if (inAmt == null || outAmt == null || inAmt <= 0 || outAmt <= 0) return null
+
+  const rate = outAmt / inAmt
+  if (!Number.isFinite(rate) || rate <= 0) return null
+
+  const formattedRate = formatSwapDisplayAmount(String(rate), outSym)
+  return `1 ${inSym} = ${formattedRate} ${outSym}`
+}
+
+export function summarizeRouteProtocols(legs: SwapRouteLeg[]): string | null {
+  if (legs.length === 0) return null
+  const protocols = new Set(legs.map((leg) => leg.protocol).filter((p) => p !== 'unknown'))
+  const labels: string[] = []
+  if (protocols.has('v2')) labels.push('V2')
+  if (protocols.has('v3')) labels.push('V3')
+  if (protocols.has('v4')) labels.push('V4')
+  if (labels.length === 0) return null
+  return `${labels.join(' + ')} 100%`
+}
+
+export type SwapNetworkCostDisplay = {
+  primary: string
+  sponsoredFree: boolean
+}
+
+/** Network cost row — sponsored canonical swaps show "<$0.01" + Free badge like Uniswap. */
+export function formatSwapNetworkCostDisplay(params: {
+  gasEstimateLabel: string | null
+  sponsoredExecution?: boolean
+}): SwapNetworkCostDisplay | null {
+  if (params.sponsoredExecution || params.gasEstimateLabel === 'Sponsored') {
+    return { primary: '<$0.01', sponsoredFree: true }
+  }
+  if (params.gasEstimateLabel) {
+    return { primary: params.gasEstimateLabel, sponsoredFree: false }
+  }
+  return null
+}
+
 export function extractSwapQuoteDetails(params: {
   quote: TradeQuoteResponse | null | undefined
   ethUsd: number
   tokenOutDecimals?: number
   tokenOutUsd?: number | null
+  sponsoredExecution?: boolean
 }): SwapQuoteDetails {
   const classic = readClassicQuote(params.quote)
 
@@ -280,7 +359,11 @@ export function extractSwapQuoteDetails(params: {
     routeSummary: extractSwapRouteSummary(params.quote),
     routeLegs: parsedRoute.legs.length > 0 ? parsedRoute.legs : extractSwapRouteLegs(params.quote),
     aggregatorLabel: resolveQuoteAggregatorLabel(params.quote),
-    gasEstimateLabel: formatQuoteGasEstimateLabel({ quote: params.quote, ethUsd: params.ethUsd }),
+    gasEstimateLabel: formatQuoteGasEstimateLabel({
+      quote: params.quote,
+      ethUsd: params.ethUsd,
+      sponsoredExecution: params.sponsoredExecution,
+    }),
     priceImpactLabel: formatSwapPriceImpactLabel(priceImpactCandidate),
     lpFeeUsd: null,
     protocolFeeUsd,

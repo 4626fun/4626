@@ -28,6 +28,7 @@ import {
 import { fetchSwapAssetBalanceViaApi } from '@/lib/swap/useSwapAssetBalance'
 import { resolveSwapTokenDecimals } from '@/lib/swap/swapTokenDecimals'
 import { SWAP_PREPARE_STATUS, swapPermitProgressStatus } from '@/lib/swap/swapStatusCopy'
+import { signPermit2ForExecutionWallet } from '@/lib/swap/permit2CswSign'
 import { normalizeUniswapError, type NormalizedUniswapError, type UniswapErrorCode } from '@/lib/uniswap/error'
 import { areEquivalentSwapTokens, BASE_CHAIN_ID, getNestedAmountOut, NATIVE_TOKEN_ADDRESS } from '@/lib/uniswap/swapUtils'
 import { isAllowedCanonicalSigner, isCanonicalCsw, shouldApplyCanonicalEnforcement } from '@/wallet/canonicalWalletPolicy'
@@ -245,8 +246,10 @@ export function shouldDisablePermit2ForSwap(params: {
   canonicalAddress?: string | null
   executionAddress?: string | null
 }): boolean {
+  // Parent CSW swaps use Permit2 typed data with CSW ERC-1271 owner wrapping.
+  if (isCanonicalCsw(params.executionAddress ?? null)) return false
+
   if (params.executionMode === 'canonical') return true
-  if (isCanonicalCsw(params.executionAddress ?? null)) return true
 
   const canonical = params.canonicalAddress?.trim().toLowerCase()
   const execution = params.executionAddress?.trim().toLowerCase()
@@ -1104,26 +1107,23 @@ export function useSwapExecution(params: {
 
     setStatus(swapPermitProgressStatus(params.executionMode))
     try {
-      const signature = await signer.signTypedData({
-        account: params.signerAddress,
-        domain: typed.domain,
-        types: typed.types,
-        primaryType: typed.primaryType,
-        message: typed.message,
+      const signed = await signPermit2ForExecutionWallet({
+        permitData,
+        signerAddress: params.signerAddress,
+        executionAddress: params.executionAddress,
+        walletClient: signer,
+        publicClient: params.publicClient as any,
       })
-      if (typeof signature !== 'string' || !signature.startsWith('0x')) {
-        throw new Error('Wallet returned an invalid Permit2 signature.')
-      }
       setPermitSignaturePending(false)
       setPermitSignatureReady(true)
       setStatus('Preparing swap…')
-      return { permitData, signature }
+      return { permitData: signed.permitData, signature: signed.signature }
     } catch (error) {
       setPermitSignaturePending(false)
       setPermitSignatureReady(false)
       throw error
     }
-  }, [params.walletClient, params.signerAddress, params.executionMode])
+  }, [params.walletClient, params.signerAddress, params.executionAddress, params.executionMode, params.publicClient])
 
   const finalizeZoraQuoteIfNeeded = useCallback(
     async (nextQuote: TradeQuoteResponse, amount: string): Promise<TradeQuoteResponse> => {

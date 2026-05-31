@@ -183,6 +183,10 @@ export function SwapCard(props: SwapCardProps) {
       <SwapDetails
         routeSummary={props.routeSummary}
         routeLegs={props.routeLegs}
+        amountIn={props.amountInUnits}
+        tokenInSymbol={props.tokenInSymbol}
+        amountOut={props.estimatedOut}
+        tokenOutSymbol={props.tokenOutSymbol}
         slippagePct={props.slippagePct}
         onSetSlippagePct={props.onSetSlippagePct}
         aggregator={props.quoteAggregatorLabel ?? props.swapProviderLabel}
@@ -191,6 +195,8 @@ export function SwapCard(props: SwapCardProps) {
         lpFeeUsd={props.lpFeeUsd ?? null}
         protocolFeeUsd={props.protocolFeeUsd ?? null}
         quoteUpdatedAt={props.quoteUpdatedAt ?? null}
+        sponsoredExecution={props.executionMode === 'canonical'}
+        showUniswapBranding={showUniswapBranding}
       />
     </div>
   )

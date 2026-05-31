@@ -27,6 +27,9 @@ Do not set `TOKEN_ICON_RENDERER=fuji-lut-experimental` in production until compa
 - `TOKEN_ICON_V2_LUT_INTENSITY` — Fuji 3DL mix (default `0.36`)
 - `TOKEN_ICON_V2_GLOW_TINT` — `white` | `blue` | `hybrid` (default `hybrid`)
 - `TOKEN_ICON_V2_BACKGROUND_DARKEN` — rembg mask darken on photo bg (default on; set `0` to disable)
-- `TOKEN_ICON_V2_BACKGROUND_BRIGHTNESS` — bg brightness multiplier (default `0.62`)
+- `TOKEN_ICON_V2_BACKGROUND_BRIGHTNESS` — bg brightness multiplier (default `0.72`)
+- `TOKEN_ICON_V2_FIELD_PATTERN` — rembg dark-bg spill into padding (default on; set `0` to disable)
+- `TOKEN_ICON_V2_PADDING_SILHOUETTE` — soft subject silhouette in padding (default on; set `0` to disable)
+- `TOKEN_ICON_V2_PADDING_SILHOUETTE_OPACITY` — padding silhouette strength (default `0.64`)
 
 LUT assets: `frontend/server/_lib/image/luts/` (see `fuji-attribution.md`).

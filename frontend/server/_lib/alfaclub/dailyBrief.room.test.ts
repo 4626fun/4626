@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { applyEnv } from '../../../api/__tests__/helpers'
 import {
+  hasExplicitDailyBriefRoomId,
   isDailyBriefRoomSameAsBridgeRoom,
   listDailyBriefCommandRoomIds,
+  listDailyBriefPostRoomIds,
   readAlfaClubDailyBriefSeparateFromBridge,
   resolveDailyBriefRoomId,
   resolveAlfaClubBridgeRoomId,
@@ -46,6 +48,15 @@ describe('daily brief room resolution', () => {
     restoreEnv = applyEnv({ ALFACLUB_CHAT_ROOM_ID: '1043' })
     expect(resolveDailyBriefRoomId()).toBe('1043')
     expect(isDailyBriefRoomSameAsBridgeRoom('1043')).toBe(true)
+  })
+
+  it('listDailyBriefPostRoomIds uses ALFACLUB_DAILY_BRIEF_ROOM_ID when set', () => {
+    restoreEnv = applyEnv({ ALFACLUB_DAILY_BRIEF_ROOM_ID: '1659' })
+    expect(hasExplicitDailyBriefRoomId()).toBe(true)
+    expect(resolveDailyBriefRoomId()).toBe('1659')
+    expect(
+      listDailyBriefPostRoomIds({ roomId: '1043', hermitCommandRoomIds: ['1043', '1659'] }),
+    ).toEqual(['1659'])
   })
 
   it('readAlfaClubDailyBriefSeparateFromBridge is always off', () => {
@@ -92,5 +103,23 @@ describe('daily brief room resolution', () => {
 
     expect(result.posted.map((post) => post.roomId)).toEqual(['1043', '1659'])
     expect(sendAlfaClubRoomText).toHaveBeenCalledTimes(2)
+  })
+
+  it('sendDailyBriefToCommandRooms posts only to explicit brief room when configured', async () => {
+    restoreEnv = applyEnv({ ALFACLUB_DAILY_BRIEF_ROOM_ID: '1659' })
+    const { sendAlfaClubRoomText } = await import('./chatBridge.js')
+    vi.mocked(sendAlfaClubRoomText).mockReset()
+    vi.mocked(sendAlfaClubRoomText).mockResolvedValue({ lane: 'bot_token_without_reply_id' })
+
+    const result = await sendDailyBriefToCommandRooms({
+      text: 'hello',
+      flags: {
+        roomId: '1043',
+        hermitCommandRoomIds: ['1043', '1659'],
+      } as ReturnType<typeof import('./chatBridge.js').readAlfaClubChatBridgeFlags>,
+    })
+
+    expect(result.posted.map((post) => post.roomId)).toEqual(['1659'])
+    expect(sendAlfaClubRoomText).toHaveBeenCalledTimes(1)
   })
 })

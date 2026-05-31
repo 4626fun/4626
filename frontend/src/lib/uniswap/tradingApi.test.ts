@@ -105,6 +105,46 @@ describe('buildSwap', () => {
     ).rejects.toThrow('Invalid swap transaction: missing call data')
   })
 
+  it('forwards Permit2 payloads with decimal-string uint fields for Uniswap protobuf JSON', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: { swap: VALID_TX },
+      }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await buildSwap({
+      quote: { quoteId: 'q_permit_shape' },
+      permitData: {
+        domain: { name: 'Permit2', chainId: 8453, verifyingContract: '0x000000000022D473030F116dDEE9F6B43aC78BA3' },
+        values: {
+          details: {
+            token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+            amount: '1461501637330902918203684832716283019655932542975',
+            expiration: 1779463380,
+            nonce: 12,
+          },
+          spender: '0x2626664c2603336E57B271c5C0b26F421741e481',
+          sigDeadline: 1776873180,
+        },
+      },
+      signature: '0xabc',
+      includeGasInfo: false,
+      refreshGasPrice: false,
+      simulateTransaction: false,
+    })
+
+    const forwarded = JSON.parse(String((fetchMock as any).mock.calls[0]?.[1]?.body ?? '{}'))
+    const details = forwarded.permitData.values.details
+    expect(details.expiration).toBe('1779463380')
+    expect(details.nonce).toBe('12')
+    expect(details.amount).toBe('1461501637330902918203684832716283019655932542975')
+    expect(forwarded.permitData.values.sigDeadline).toBe('1776873180')
+  })
+
   it('strips stale Permit2 fields from swap requests when Permit2 is disabled', async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,

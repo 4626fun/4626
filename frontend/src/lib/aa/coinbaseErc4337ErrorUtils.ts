@@ -594,6 +594,12 @@ export function buildPreflightSimulationRejectionError(params: {
   }
 
   const detail = direct?.error ?? params.simResult.error ?? 'Underlying call would revert'
+  const detailLc = String(detail).toLowerCase()
+  if (detailLc.includes('transfer_from_failed')) {
+    return new PreflightSimulationRejectionError(
+      'Permit2 approval is missing for this smart-wallet swap. Refresh the quote, sign the Permit2 prompt when asked, then retry.',
+    )
+  }
   return new PreflightSimulationRejectionError(
     `This transaction would revert on your smart wallet (${detail}). Refresh and try again.`,
   )

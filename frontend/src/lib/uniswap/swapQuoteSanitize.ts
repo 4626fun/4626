@@ -162,6 +162,100 @@ export function sanitizeClassicQuoteForSwap(quote: Record<string, unknown>): Rec
   return next
 }
 
+function coercePermitDecimalString(value: unknown): string | null {
+  if (value == null) return null
+  if (typeof value === 'bigint') return value.toString()
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && Number.isInteger(value)) {
+    // uint160/uint256 must stay decimal strings — large JS numbers lose precision and stringify to 1e+48.
+    if (value <= Number.MAX_SAFE_INTEGER) return String(value)
+    return null
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    if (/^\d+$/.test(trimmed)) return trimmed
+  }
+  return null
+}
+
+function resolvePermitTokenAddress(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return ADDRESS_RE.test(trimmed) ? trimmed : null
+  }
+  if (isPlainObject(value)) {
+    const nested =
+      typeof value.address === 'string'
+        ? value.address.trim()
+        : typeof value.token === 'string'
+          ? value.token.trim()
+          : ''
+    return ADDRESS_RE.test(nested) ? nested : null
+  }
+  return null
+}
+
+/**
+ * Uniswap /swap protobuf JSON expects Permit2 numeric fields as decimal strings
+ * (see trade-api PermitSingle examples: amount, expiration, nonce, sigDeadline).
+ */
+export function sanitizePermitDataForSwapApi(
+  permitData: Record<string, unknown>,
+): Record<string, unknown> {
+  const domain = isPlainObject(permitData.domain) ? { ...permitData.domain } : null
+  const valuesRaw = isPlainObject(permitData.values)
+    ? permitData.values
+    : isPlainObject(permitData.message)
+      ? permitData.message
+      : null
+
+  if (!domain || !valuesRaw) return permitData
+
+  const chainId = domain.chainId
+  if (typeof chainId === 'string' && /^\d+$/.test(chainId.trim())) {
+    domain.chainId = Number(chainId.trim())
+  }
+
+  const values: Record<string, unknown> = {}
+
+  if (isPlainObject(valuesRaw.details)) {
+    const detailsRaw = valuesRaw.details as Record<string, unknown>
+    const details: Record<string, string> = {}
+    const token = resolvePermitTokenAddress(detailsRaw.token)
+    const amount = coercePermitDecimalString(detailsRaw.amount)
+    const expiration = coercePermitDecimalString(detailsRaw.expiration)
+    const nonce = coercePermitDecimalString(detailsRaw.nonce)
+
+    if (token) details.token = token
+    if (amount != null) details.amount = amount
+    if (expiration != null) details.expiration = expiration
+    if (nonce != null) details.nonce = nonce
+
+    if (Object.keys(details).length > 0) {
+      values.details = details
+    }
+  }
+
+  const sigDeadline = coercePermitDecimalString(valuesRaw.sigDeadline)
+  if (sigDeadline != null) values.sigDeadline = sigDeadline
+
+  if (typeof valuesRaw.spender === 'string') {
+    const spender = valuesRaw.spender.trim()
+    if (ADDRESS_RE.test(spender)) values.spender = spender
+  }
+
+  const next: Record<string, unknown> = {
+    domain,
+    values,
+  }
+
+  if (isPlainObject(permitData.types)) {
+    next.types = permitData.types
+  }
+
+  return next
+}
+
 export function sanitizeCreateSwapRequestPayload(body: Record<string, unknown>): Record<string, unknown> {
   const next: Record<string, unknown> = { ...body }
   delete next.permit2Disabled
@@ -169,6 +263,10 @@ export function sanitizeCreateSwapRequestPayload(body: Record<string, unknown>):
 
   if (isPlainObject(next.quote)) {
     next.quote = sanitizeClassicQuoteForSwap(next.quote)
+  }
+
+  if (isPlainObject(next.permitData)) {
+    next.permitData = sanitizePermitDataForSwapApi(next.permitData)
   }
 
   return next

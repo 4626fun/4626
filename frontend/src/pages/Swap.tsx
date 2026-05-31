@@ -1673,8 +1673,15 @@ export function Swap() {
         ethUsd: swapUsdPrices.ethUsd,
         tokenOutDecimals: tokenOutBalanceQuery.data?.decimals ?? 18,
         tokenOutUsd: tokenOutUsdPrice,
+        sponsoredExecution: executionMode === 'canonical',
       }),
-    [quote, swapUsdPrices.ethUsd, tokenOutBalanceQuery.data?.decimals, tokenOutUsdPrice],
+    [
+      quote,
+      swapUsdPrices.ethUsd,
+      tokenOutBalanceQuery.data?.decimals,
+      tokenOutUsdPrice,
+      executionMode,
+    ],
   )
 
   const tokenOutBalanceLabel = useMemo(() => {

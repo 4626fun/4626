@@ -531,6 +531,14 @@ async function enableForkImpersonation(params: {
   )
 }
 
+async function warpForkTimestampForPhase4Launch(params: {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+}): Promise<void> {
+  const now = Math.floor(Date.now() / 1000)
+  await params.request({ method: 'evm_setNextBlockTimestamp', params: [now] })
+  await params.request({ method: 'evm_mine', params: [] })
+}
+
 async function resetForkState(params: {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>
 }): Promise<void> {
@@ -2085,6 +2093,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!isLocalFork) {
       throw new DeploySessionRequestError(400, LOCAL_FORK_ONLY_ERROR)
     }
+    const strictPhase4Launch = process.env.DEPLOY_DRY_RUN_STRICT_PHASE4 === '1'
 
     const publicClient = createPublicClient({
       chain: base,
@@ -2397,6 +2406,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             })
           }
           phaseCalls = raiseAlignedPhase4Calls
+          try {
+            await warpForkTimestampForPhase4Launch({ request: forkRequest })
+            console.warn('[deploy/v2/session/dry-run] phase4_fork_timestamp_warped_to_now', {
+              smartWallet: smartWallet.toLowerCase(),
+            })
+          } catch (warpError) {
+            console.warn('[deploy/v2/session/dry-run] phase4_fork_timestamp_warp_skipped', {
+              smartWallet: smartWallet.toLowerCase(),
+              message: formatDryRunError(warpError),
+            })
+          }
         }
         const phaseStartBlock =
           typeof (publicClient as any).getBlockNumber === 'function'
@@ -2424,7 +2444,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             typeof (publicClient as any).getBlockNumber === 'function'
               ? await publicClient.getBlockNumber().catch(() => null)
               : null,
-          allowLocalForkPhase4InvariantSkip: isLocalFork,
+          allowLocalForkPhase4InvariantSkip: isLocalFork && !strictPhase4Launch,
         })
         phases.push(result.phase)
         if (result.failure) {

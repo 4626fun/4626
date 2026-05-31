@@ -106,4 +106,79 @@ describe('sanitizeCreateSwapRequestPayload', () => {
     expect((sanitized.quote as Record<string, unknown>).routing).toBeUndefined()
     expect((sanitized.quote as Record<string, unknown>)._provider).toBeUndefined()
   })
+
+  it('normalizes permitData values for Uniswap protobuf JSON', () => {
+    const sanitized = sanitizeCreateSwapRequestPayload({
+      quote: { input: { token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', amount: '1' } },
+      permitData: {
+        domain: { name: 'Permit2', chainId: '8453', verifyingContract: '0x000000000022D473030F116dDEE9F6B43aC78BA3' },
+        types: { PermitSingle: [{ name: 'details', type: 'PermitDetails' }] },
+        values: {
+          details: {
+            token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+            amount: 1461501637330902918203684832716283019655932542975n,
+            expiration: '1893456000',
+            nonce: '12',
+          },
+          spender: '0x2626664c2603336E57B271c5C0b26F421741e481',
+          sigDeadline: 1893456000n,
+        },
+      },
+      signature: '0xabc',
+    })
+
+    const permit = sanitized.permitData as Record<string, unknown>
+    const values = permit.values as Record<string, unknown>
+    const details = values.details as Record<string, unknown>
+    expect((permit.domain as Record<string, unknown>).chainId).toBe(8453)
+    expect(details.amount).toBe('1461501637330902918203684832716283019655932542975')
+    expect(details.expiration).toBe('1893456000')
+    expect(details.nonce).toBe('12')
+    expect(values.sigDeadline).toBe('1893456000')
+  })
+
+  it('matches Uniswap trade-api PermitSingle string field conventions', () => {
+    const sanitized = sanitizeCreateSwapRequestPayload({
+      quote: { input: { token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', amount: '1' } },
+      permitData: {
+        domain: {
+          name: 'Permit2',
+          chainId: 8453,
+          verifyingContract: '0x000000000022D473030F116dDEE9F6B43aC78BA3',
+        },
+        types: {
+          PermitSingle: [
+            { name: 'details', type: 'PermitDetails' },
+            { name: 'spender', type: 'address' },
+            { name: 'sigDeadline', type: 'uint256' },
+          ],
+          PermitDetails: [
+            { name: 'token', type: 'address' },
+            { name: 'amount', type: 'uint160' },
+            { name: 'expiration', type: 'uint48' },
+            { name: 'nonce', type: 'uint48' },
+          ],
+        },
+        values: {
+          details: {
+            token: { address: '0x624e2e7fDc8903165F64891672267AB0FCB98831', chainId: 8453 },
+            amount: '1461501637330902918203684832716283019655932542975',
+            expiration: 1779463380,
+            nonce: 0,
+          },
+          spender: '0x6ff5693b99212da76ad316178a184ab56d299b43',
+          sigDeadline: 1776873180,
+        },
+      },
+      signature: '0xabc',
+    })
+
+    const values = (sanitized.permitData as Record<string, unknown>).values as Record<string, unknown>
+    const details = values.details as Record<string, unknown>
+    expect(details.token).toBe('0x624e2e7fDc8903165F64891672267AB0FCB98831')
+    expect(details.amount).toBe('1461501637330902918203684832716283019655932542975')
+    expect(details.expiration).toBe('1779463380')
+    expect(details.nonce).toBe('0')
+    expect(values.sigDeadline).toBe('1776873180')
+  })
 })

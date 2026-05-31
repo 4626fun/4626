@@ -1,10 +1,6 @@
 import sharp from 'sharp'
 
-import {
-  renderPremiumPlacedSourceCanvas,
-  type PremiumLayout,
-  type PremiumSubjectPlacement,
-} from '../premium-classic/renderPremiumTokenIcon.js'
+import type { PremiumLayout, PremiumSubjectPlacement } from '../premium-classic/renderPremiumTokenIcon.js'
 import {
   extractDarkBackgroundPattern,
   type SubjectSegmentationMask,
@@ -57,26 +53,17 @@ async function createPaddingOutsideFrameMask(layout: PremiumLayout): Promise<Buf
 export async function renderV2ExtendedFieldPattern(params: {
   size: number
   layout: PremiumLayout
-  sourceImage?: Uint8Array
+  heroLayer: Buffer
   sourceClass?: SubjectSourceClass
   segmentationMask: SubjectSegmentationMask | null
   placement: PremiumSubjectPlacement | null
 }): Promise<Buffer | null> {
   if (!FIELD_PATTERN_ENABLED) return null
-  const { size, layout, sourceImage, sourceClass, segmentationMask, placement } = params
-  if (!sourceImage?.length || !segmentationMask || !placement) return null
+  const { size, layout, heroLayer, sourceClass, segmentationMask, placement } = params
+  if (!segmentationMask || !placement) return null
   if (sourceClass === 'brightBadge') return null
 
-  const placed = await renderPremiumPlacedSourceCanvas({
-    sourceImage: Buffer.from(sourceImage),
-    layout,
-    scale: placement.renderScale,
-    fit: placement.fitMode,
-    sourceClass: sourceClass ?? 'generic',
-    topBiasPx: placement.topBiasPx,
-  })
-
-  let pattern = await extractDarkBackgroundPattern({ layer: placed, mask: segmentationMask })
+  let pattern = await extractDarkBackgroundPattern({ layer: heroLayer, mask: segmentationMask })
 
   const blurPx = Math.max(0, FIELD_PATTERN_BLUR_RATIO) * size
   if (blurPx >= 0.35) {

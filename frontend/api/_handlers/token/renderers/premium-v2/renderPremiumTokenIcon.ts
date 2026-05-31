@@ -23,9 +23,11 @@ import {
 import {
   resolveV2CardUnderlaySourceClass,
   resolveV2SegmentationSourceClass,
-  resolveV2SilhouetteSpillClipRegion,
+  resolveV2StackClipRegion,
   shouldSkipV2HeroBackgroundDarken,
 } from './cardUnderlay.js'
+import { renderV2ExtendedFieldPattern } from './fieldPattern.js'
+import { renderV2PaddingSilhouetteBleed } from './paddingSilhouette.js'
 import { applyV2SubjectLut } from './subjectGrade.js'
 
 export type { PremiumTokenIconParams }
@@ -70,25 +72,58 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
         size,
       })
 
+  const hasRembgBreakout = Boolean(breakoutLayer) && !preparedHeroCutoutBreakout
+  const stackSourceClass =
+    analysis && subjectPlacement ? resolveV2CardUnderlaySourceClass(analysis) : sourceClass
+
+  // Offset ghost copies read as a second ear beside breakout; padding spill is enough.
+  const useChamberGhostStack = !hasRembgBreakout
+
   const stackedUnderlay =
+    useChamberGhostStack &&
     !preparedHeroCutoutBreakout &&
     segmentationMask &&
     params.sourceImage?.length &&
     analysis &&
-    subjectPlacement
+    subjectPlacement &&
+    stackSourceClass
       ? await renderPremiumStackedUnderlay({
           size,
           layout,
           sourceImage: Buffer.from(params.sourceImage),
           scale: subjectPlacement.renderScale,
           fit: subjectPlacement.fitMode,
-          sourceClass: resolveV2CardUnderlaySourceClass(analysis),
+          sourceClass: stackSourceClass,
           hasTransparency: analysis.hasTransparency,
           topBiasPx: subjectPlacement.topBiasPx,
-          clipRegion: resolveV2SilhouetteSpillClipRegion(),
+          clipRegion: resolveV2StackClipRegion(),
           subjectAlphaMaskPng: segmentationMask.subjectMaskPng,
         })
       : chamberUnderlay
+
+  const paddingSpillParams =
+    !preparedHeroCutoutBreakout &&
+    segmentationMask &&
+    subjectPlacement &&
+    stackSourceClass
+      ? {
+          size,
+          layout,
+          sourceClass: stackSourceClass,
+          segmentationMask,
+          placement: subjectPlacement,
+        }
+      : null
+
+  const [paddingFieldPattern, paddingSilhouette] = paddingSpillParams
+    ? await Promise.all([
+        renderV2ExtendedFieldPattern({
+          ...paddingSpillParams,
+          heroLayer: heroCompositeLayer,
+        }),
+        renderV2PaddingSilhouetteBleed(paddingSpillParams),
+      ])
+    : [null, null]
 
   const [backgroundCard, outerGlow, frameBloom, premiumFrame] = preparedHeroCutoutBreakout
     ? await Promise.all([
@@ -122,11 +157,17 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
     compositeStep(outerGlow, 'screen'),
     compositeStep(frameBloom, 'screen'),
   ]
+  if (paddingFieldPattern) {
+    overlays.push(compositeStep(paddingFieldPattern, 'over'))
+  }
   if (stackedUnderlay.rearLayerB) {
     overlays.push(compositeStep(stackedUnderlay.rearLayerB, 'over'))
   }
   if (stackedUnderlay.rearLayerA) {
     overlays.push(compositeStep(stackedUnderlay.rearLayerA, 'over'))
+  }
+  if (paddingSilhouette) {
+    overlays.push(compositeStep(paddingSilhouette, 'over'))
   }
   overlays.push(
     compositeStep(heroLayer, 'over'),
@@ -135,7 +176,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
 
   if (breakoutLayer) {
     const breakoutBase = preparedHeroCutoutBreakout
-      ? breakoutLayer
+      ? await applyPremiumHeroPresentation(breakoutLayer, sourceClass, size)
       : await solidifyBreakoutLayer(
           await finishV2SubjectLayer({
             layer: breakoutLayer,

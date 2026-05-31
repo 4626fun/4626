@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isOpaqueAvatarCoin,
   resolveV2CardUnderlaySourceClass,
-  resolveV2SilhouetteSpillClipRegion,
+  resolveV2StackClipRegion,
   shouldSkipV2HeroBackgroundDarken,
 } from '../_handlers/token/renderers/premium-v2/cardUnderlay.js'
 
@@ -14,17 +14,11 @@ describe('premiumV2CardUnderlay', () => {
     sourceClass: 'illustration',
   }
 
-  it('routes Jesse-like opaque avatars to pixelArt stack with extended spill', () => {
+  it('routes Jesse-like opaque avatars to pixelArt stack; padding spill is separate layers', () => {
     expect(isOpaqueAvatarCoin(jesseLike)).toBe(true)
     expect(resolveV2CardUnderlaySourceClass(jesseLike)).toBe('pixelArt')
     expect(shouldSkipV2HeroBackgroundDarken(jesseLike)).toBe(true)
-    expect(resolveV2SilhouetteSpillClipRegion()).toBe('extended')
-    expect(
-      resolveV2SilhouetteSpillClipRegion({
-        hasBreakoutLayer: true,
-        heroCutoutBreakout: true,
-      }),
-    ).toBe('chamber')
+    expect(resolveV2StackClipRegion()).toBe('chamber')
   })
 
   it('keeps generic photo coins on their native stack class', () => {
@@ -35,5 +29,6 @@ describe('premiumV2CardUnderlay', () => {
     }
     expect(isOpaqueAvatarCoin(akitaLike)).toBe(false)
     expect(resolveV2CardUnderlaySourceClass(akitaLike)).toBe('generic')
+    expect(resolveV2StackClipRegion()).toBe('chamber')
   })
 })

@@ -8,7 +8,9 @@
 
 import {
   listDailyBriefCommandRoomIds,
+  listDailyBriefPostRoomIds,
   resolveAlfaClubBridgeRoomId,
+  resolveDailyBriefRoomId,
   runAlfaClubDailyBrief,
 } from '../../server/_lib/alfaclub/dailyBrief.js'
 import { readAlfaClubChatBridgeFlags } from '../../server/_lib/alfaclub/chatBridge.js'
@@ -23,17 +25,18 @@ async function main(): Promise<void> {
   const bridgeRoom = resolveAlfaClubBridgeRoomId()
   const bridgeFlags = readAlfaClubChatBridgeFlags()
   const commandRooms = listDailyBriefCommandRoomIds(bridgeFlags)
+  const postRooms = listDailyBriefPostRoomIds(bridgeFlags)
 
   console.log('AlfaClub daily digest')
   console.log('')
   console.log(`  Bridge room:      ${bridgeRoom}`)
   console.log(`  Command rooms:    ${commandRooms.join(', ')}`)
-  console.log(`  Posts to:         every command room above (skip rooms the bot cannot post)`)
+  console.log(`  Posts to:         ${postRooms.join(', ')}`)
   console.log('')
-  console.log('Production env (keep it simple):')
+  console.log('Production env:')
   console.log('  ALFACLUB_CHAT_ROOM_ID=1043')
   console.log('  ALFACLUB_HERMIT_COMMAND_ROOMS=1043,1659')
-  console.log('  (no ALFACLUB_DAILY_BRIEF_ROOM_ID needed)')
+  console.log('  ALFACLUB_DAILY_BRIEF_ROOM_ID=1659   # digest only in 1659; commands still work in both')
   console.log('')
 
   if (hasFlag('post-test')) {

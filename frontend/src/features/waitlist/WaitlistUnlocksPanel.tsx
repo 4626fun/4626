@@ -24,6 +24,7 @@ export function WaitlistUnlocksPanel({
 
   return (
     <div className={`space-y-3.5 ${className}`}>
+      <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">Progress & referrals</p>
       <div className="flex items-baseline justify-between gap-3">
         <Link
           to="/leaderboard"

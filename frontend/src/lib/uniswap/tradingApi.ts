@@ -22,6 +22,7 @@ import {
   coerceSwapTransactionValue,
   normalizeSwapApiResponsePayload,
   sanitizeClassicQuoteForSwap,
+  sanitizePermitDataForSwapApi,
 } from '@/lib/uniswap/swapQuoteSanitize'
 
 const DEFAULT_RETRIES = 2
@@ -622,6 +623,9 @@ export async function buildSwap(
   const swapBody: Record<string, unknown> = {
     ...normalizedBody,
     quote: sanitizeClassicQuoteForSwap(normalizedBody.quote as Record<string, unknown>),
+  }
+  if (isPlainObject(swapBody.permitData)) {
+    swapBody.permitData = sanitizePermitDataForSwapApi(swapBody.permitData)
   }
   const response = await post<CreateSwapResponse>(API_ENDPOINTS.uniswap.swap, swapBody)
   const normalized = normalizeSwapApiResponsePayload(response) as CreateSwapResponse

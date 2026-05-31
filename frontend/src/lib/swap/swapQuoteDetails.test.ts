@@ -3,10 +3,13 @@ import { describe, expect, it } from 'vitest'
 import {
   extractSwapRouteSummary,
   formatQuoteGasEstimateLabel,
+  formatSwapExchangeRate,
+  formatSwapNetworkCostDisplay,
   formatSwapPriceImpactLabel,
   formatUniswapPoolFeePercent,
   normalizePriceImpactPercent,
   parseSwapRouteFromClassicQuote,
+  summarizeRouteProtocols,
 } from './swapQuoteDetails'
 
 describe('swapQuoteDetails', () => {
@@ -38,13 +41,32 @@ describe('swapQuoteDetails', () => {
     expect(formatSwapPriceImpactLabel(-100)).toBeNull()
   })
 
-  it('converts tiny gasFeeUSD values from eth to usd', () => {
+  it('uses gasFeeUSD directly as usd (Uniswap API is USDC-denominated)', () => {
     expect(
       formatQuoteGasEstimateLabel({
         quote: { quote: { gasFeeUSD: '0.004087454597225348' } } as any,
         ethUsd: 3000,
       }),
-    ).toBe('$12.26')
+    ).toBe('$0.004087')
+  })
+
+  it('shows sponsored label for canonical paymaster execution', () => {
+    expect(
+      formatQuoteGasEstimateLabel({
+        quote: { quote: { gasFeeUSD: '4.71' } } as any,
+        ethUsd: 3000,
+        sponsoredExecution: true,
+      }),
+    ).toBe('Sponsored')
+  })
+
+  it('converts gasFee wei to usd when gasFeeUSD is absent', () => {
+    expect(
+      formatQuoteGasEstimateLabel({
+        quote: { quote: { gasFee: '1570000000000000' } } as any,
+        ethUsd: 3000,
+      }),
+    ).toBe('$4.71')
   })
 
   it('builds full token path including the sell token', () => {
@@ -78,5 +100,32 @@ describe('swapQuoteDetails', () => {
   it('formats uniswap pool fee tiers', () => {
     expect(formatUniswapPoolFeePercent(3000)).toBe('0.30%')
     expect(formatUniswapPoolFeePercent(10000)).toBe('1.00%')
+  })
+
+  it('formats execution exchange rate from quoted amounts', () => {
+    expect(
+      formatSwapExchangeRate({
+        amountIn: '1',
+        tokenInSymbol: 'USDC',
+        amountOut: '95840.4',
+        tokenOutSymbol: 'akita',
+      }),
+    ).toBe('1 USDC = 95840.4 akita')
+  })
+
+  it('summarizes mixed v3/v4 route protocols', () => {
+    expect(
+      summarizeRouteProtocols([
+        { protocol: 'v3', protocolLabel: 'Uniswap V3', tokenIn: 'USDC', tokenOut: 'WETH', feePercentLabel: '0.30%', poolAddress: null },
+        { protocol: 'v4', protocolLabel: 'Uniswap V4', tokenIn: 'WETH', tokenOut: 'AKITA', feePercentLabel: '3.00%', poolAddress: null },
+      ]),
+    ).toBe('V3 + V4 100%')
+  })
+
+  it('shows free network cost for sponsored execution', () => {
+    expect(formatSwapNetworkCostDisplay({ gasEstimateLabel: 'Sponsored', sponsoredExecution: true })).toEqual({
+      primary: '<$0.01',
+      sponsoredFree: true,
+    })
   })
 })

@@ -24,6 +24,7 @@ export interface TooltipProps {
   openDelay?: number
   closeDelay?: number
   hasInteractiveContent?: boolean
+  contentClassName?: string
 }
 
 const SIDE_MAP = {
@@ -40,6 +41,7 @@ export function Tooltip({
   openDelay,
   closeDelay,
   hasInteractiveContent,
+  contentClassName,
 }: TooltipProps) {
   return (
     <TooltipPrimitive.Root delayDuration={openDelay} disableHoverableContent={!hasInteractiveContent}>
@@ -50,6 +52,7 @@ export function Tooltip({
           sideOffset={6}
           className={cn(
             'z-50 max-w-xs rounded-lg border border-white/10 bg-vault-card-raised px-3 py-2 text-xs text-vault-text shadow-lg',
+            contentClassName,
           )}
           {...(closeDelay != null ? { hideWhenDetached: true } : {})}
         >

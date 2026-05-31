@@ -80,6 +80,8 @@ describe('formatAlfaClubDailyBrief', () => {
     expect(text).toContain('↓ dropped top-5')
     expect(text).toContain(ADDR_C.slice(0, 6))
     expect(text).toContain('partial leaderboard')
+    expect(text).toContain('leads at score')
+    expect(text).toContain('score 0.148')
   })
 
   it('ops room footer clarifies digest vs creator trading rooms', () => {
@@ -118,6 +120,12 @@ describe('formatAlfaClubDailyBrief', () => {
       newCreators: 0,
       activeCreators24h: 0,
     })).toContain('partial leaderboard')
+    expect(formatIndexedScopeLine({
+      creatorsTracked: 1655,
+      rankedCount: 2,
+      newCreators: 0,
+      activeCreators24h: 0,
+    })).toContain('Score is a 0–1 composite')
   })
 
   it('legacy format keeps the long sectioned layout when compact is off', () => {
