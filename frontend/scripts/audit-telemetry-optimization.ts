@@ -102,8 +102,15 @@ async function main() {
   console.log('\nRecommendations:')
   console.log('  1. Add pg_cron or application-level TTL using the suggested values above.')
   console.log('  2. Consider moving pure telemetry to a separate "analytics" schema or external store.')
-  console.log('  3. Sample high-frequency events (funnel, presence, chat).')
+  console.log('  3. Sample high-frequency events (see recommended rates below).')
   console.log('  4. Review Looker-specific views (v_looker_*) for consolidation or less frequent refresh.')
+
+  console.log('\nRecommended sampling (apply via TELEMETRY_SAMPLE_RATE or per-table logic):')
+  console.log('  telegram_funnel_events          → 0.10 – 0.20 (very high volume)')
+  console.log('  chat_command_center_events      → 0.15 – 0.30')
+  console.log('  chat_presence_sessions          → 0.10 – 0.20')
+  console.log('  agent_api_logs                  → 0.20 – 0.50 (lower volume)')
+  console.log('  keepr_logs                      → 0.30 – 0.70')
 }
 
 main().catch(console.error)

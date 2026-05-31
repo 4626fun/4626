@@ -1,5 +1,6 @@
 import { getDb } from '../db/postgres.js'
 import { ensureTelemetryCreativeLogsSchema } from '../db/schemaBootstrap.js'
+import { shouldSample } from '../infra/telemetrySampling.js'
 
 type EventInput = {
   event: string
@@ -25,6 +26,11 @@ export async function trackChatCommandCenterEvent(input: EventInput): Promise<vo
     await ensureSchema()
     const db = await getDb()
     if (!db) return
+
+    // High-volume command center sampling
+    const sampleKey = input.conversationId ?? input.commandId ?? input.event
+    if (!shouldSample(sampleKey)) return
+
     await db.sql`
       INSERT INTO chat_command_center_events (
         event,

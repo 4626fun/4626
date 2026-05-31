@@ -98,21 +98,25 @@ These tables are the biggest remaining source of "room for optimization" after t
 
 ### Implemented in this pass
 
-- New script `frontend/scripts/audit-telemetry-optimization.ts` now auto-suggests retention windows.
-- Migration `20260612000000_extend_telemetry_retention.sql` extends the existing daily `cleanup_log_retention` cron job with the top candidates using the suggested TTLs (7–90 days).
+- New script `frontend/scripts/audit-telemetry-optimization.ts` now auto-suggests retention windows + recommended sampling rates.
+- Migration `20260612000000_extend_telemetry_retention.sql` extends the existing daily `cleanup_log_retention` cron job.
+- Created `frontend/server/_lib/infra/telemetrySampling.ts` (deterministic hash-based sampler controlled by `TELEMETRY_SAMPLE_RATE`).
+- Wired sampling into the two highest-volume paths:
+  - `telegram_funnel_events` (in `telegramTrading.ts`)
+  - `chat_command_center_events` (in `chatCommandCenterTelemetry.ts`)
 
-Run anytime:
+Run the improved script anytime:
 ```bash
 pnpm -C frontend exec tsx scripts/audit-telemetry-optimization.ts
 ```
 
 ### Recommended Next Steps (Prioritized Backlog)
 
-1. **Sampling** for highest-frequency low-value streams (`telegram_funnel_events`, `chat_presence_sessions`).
+1. **Roll out sampling more broadly** (chat_presence_sessions, telegram_link_telemetry_events, keepr_logs, agent_api_logs).
 2. Move the top 5–7 pure telemetry tables to an `analytics` schema or external store.
 3. Dedicated Looker view hygiene pass (many `v_looker_*` have near-zero server usage).
 
-These changes deliver measurable wins on storage growth, vacuum cost, and operational load with extremely low risk.
+These changes (retention + sampling) together are the highest-ROI optimization available after the schema condensation work. Expected impact: significant reduction in storage growth, vacuum cost, and index bloat on the hottest tables.
 
 Run it anytime with:
 ```bash

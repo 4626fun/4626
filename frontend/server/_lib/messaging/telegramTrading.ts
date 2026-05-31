@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
-import { ensureTelegramTradingSchema } from '../db/schemaBootstrap.js'
+import { ensureTelegramTradingSchema as ensureTelegramTradingSchemaFromBootstrap } from '../db/schemaBootstrap.js'
+import { shouldSample } from '../infra/telemetrySampling.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -114,6 +115,11 @@ import {
   type TelegramUserLink,
 } from './telegramTradingHelpers.js'
 
+/**
+ * @deprecated These flags are retained only for backward compatibility with
+ * any external test spies. The real idempotency + concurrency safety now lives
+ * in schemaBootstrap.ts (withEnsureOnce).
+ */
 let telegramTradingSchemaEnsured = false
 let telegramTradingSchemaEnsurePromise: Promise<void> | null = null
 
@@ -701,6 +707,10 @@ export async function logTelegramFunnelEvent(params: {
       : normalizeTelegramUserId(params.telegramUserId)
   const chatId = asTrimmed(params.chatId ?? '') || null
   const actionType = asTrimmed(params.actionType ?? '').toLowerCase() || null
+
+  // High-volume funnel sampling (see audit-telemetry-optimization.ts)
+  if (!shouldSample(userId ?? chatId ?? eventName)) return
+
   await params.db.sql`
     INSERT INTO telegram_funnel_events (
       telegram_user_id,
@@ -719,18 +729,21 @@ export async function logTelegramFunnelEvent(params: {
   `
 }
 
+/**
+ * Thin backward-compat adapter.
+ *
+ * The real implementation + idempotency + pgcrypto side-effect now lives in
+ * schemaBootstrap.ts (centralized withEnsureOnce).
+ *
+ * The local flags are retained only for any legacy test observers.
+ */
 export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
   if (telegramTradingSchemaEnsured) return
   if (telegramTradingSchemaEnsurePromise) return telegramTradingSchemaEnsurePromise
+
   telegramTradingSchemaEnsurePromise = (async () => {
     try {
-      // Condensed path — all major Telegram trading / linking / holder-room tables
-      // now live in supabase/migrations/20260528000000_telegram_trading_schema.sql
-      await ensureTelegramTradingSchema(db)
-
-      // One-time extension (safe to keep here)
-      await db.sql`CREATE EXTENSION IF NOT EXISTS pgcrypto;`
-
+      await ensureTelegramTradingSchemaFromBootstrap(db)
       telegramTradingSchemaEnsured = true
     } catch (error) {
       telegramTradingSchemaEnsured = false
@@ -739,6 +752,7 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
       telegramTradingSchemaEnsurePromise = null
     }
   })()
+
   return telegramTradingSchemaEnsurePromise
 }
 
