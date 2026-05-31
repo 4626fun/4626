@@ -86,7 +86,7 @@ function getErc8004Meta(req: VercelRequest): {
  * GET /api/agents
  *
  * Directory-compatible agent listing endpoint (XMTP Agent Directory shape).
- * If XMTP_AGENT_ADDRESS is configured, returns a single 4626 agent entry.
+ * Returns the canonical CSW inbox via resolveServerAgentInboxAddress().
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setPublicCors(res)

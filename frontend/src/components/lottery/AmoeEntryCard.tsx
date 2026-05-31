@@ -26,7 +26,7 @@ function formatDailyCreditLabel(credits: number): string {
   return credits === 1 ? '1 point' : `${credits} points`
 }
 const BASE_CEILING_PPM = 40_000 // 4%, hard ceiling at $10K-equivalent
-const AMOE_XMTP_AGENT_ADDRESS = resolveClientAgentXmtpAddress() as Address
+const AMOE_CANONICAL_CSW_INBOX = resolveClientAgentXmtpAddress() as Address
 
 function estimateWinChancePPM(pointsBurned: number): number {
   if (!Number.isFinite(pointsBurned) || pointsBurned < AMOE_MIN_POINTS) return 0
@@ -300,7 +300,7 @@ export function AmoeEntryCard(props: {
     setStatusMessage('Send a DM to agent 4626 in chat. Points are awarded after the message is sent.')
     requestOpenChat({
       kind: 'dm',
-      peerAddress: AMOE_XMTP_AGENT_ADDRESS,
+      peerAddress: AMOE_CANONICAL_CSW_INBOX,
       nameHint: 'agent 4626',
     })
   }, [protocolEntryMode, walletAddress])

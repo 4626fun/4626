@@ -4,10 +4,10 @@ import { CANONICAL_CSW_ADDRESS, type PolicyAddress } from '@/wallet/canonicalWal
 
 /**
  * XMTP agent inbox address for client surfaces (chat rail, auto-DM, AMOE).
- * Prefer `VITE_AGENT_XMTP_ADDRESS` when set; otherwise the policy canonical CSW.
+ * Optional `VITE_CANONICAL_CSW_ADDRESS` override; otherwise the policy constant.
  */
 export function resolveClientAgentXmtpAddress(): PolicyAddress {
-  const override = String(import.meta.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim()
+  const override = String(import.meta.env.VITE_CANONICAL_CSW_ADDRESS ?? '').trim()
   if (override && isAddress(override)) {
     return getAddress(override).toLowerCase() as PolicyAddress
   }

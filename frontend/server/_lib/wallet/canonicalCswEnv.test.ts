@@ -11,12 +11,7 @@ import {
 const ENV_KEYS = [
   'CANONICAL_CSW_ADDRESS',
   'CANONICAL_CSW_PRIVY_WALLET_ID',
-  'XMTP_AGENT_CSW_ADDRESS',
-  'XMTP_AGENT_PRIVY_WALLET_ID',
   'CANONICAL_CSW_SKIP_ENFORCEMENT',
-  'XMTP_AGENT_CSW_SKIP_CANONICAL',
-  'XMTP_AGENT_ADDRESS',
-  'VITE_AGENT_XMTP_ADDRESS',
 ] as const
 
 const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]])) as Record<
@@ -33,16 +28,14 @@ afterEach(() => {
 })
 
 describe('canonicalCswEnv', () => {
-  it('prefers CANONICAL_CSW_* over legacy XMTP_AGENT_CSW_*', () => {
+  it('reads CANONICAL_CSW_ADDRESS when set', () => {
     process.env.CANONICAL_CSW_ADDRESS = '0x1111111111111111111111111111111111111111'
-    process.env.XMTP_AGENT_CSW_ADDRESS = '0x2222222222222222222222222222222222222222'
     expect(readCanonicalCswAddressEnv()).toBe('0x1111111111111111111111111111111111111111')
   })
 
-  it('falls back to legacy XMTP_AGENT_CSW_* when CANONICAL_CSW_* is unset', () => {
+  it('returns empty when CANONICAL_CSW_ADDRESS is unset', () => {
     delete process.env.CANONICAL_CSW_ADDRESS
-    process.env.XMTP_AGENT_CSW_ADDRESS = '0x3333333333333333333333333333333333333333'
-    expect(readCanonicalCswAddressEnv()).toBe('0x3333333333333333333333333333333333333333')
+    expect(readCanonicalCswAddressEnv()).toBe('')
   })
 
   it('detects full runtime config from canonical env names', () => {
@@ -52,16 +45,13 @@ describe('canonicalCswEnv', () => {
     expect(readCanonicalCswPrivyWalletIdEnv()).toBe('wallet-abc')
   })
 
-  it('reads skip enforcement from canonical or legacy flag', () => {
-    delete process.env.CANONICAL_CSW_SKIP_ENFORCEMENT
-    process.env.XMTP_AGENT_CSW_SKIP_CANONICAL = 'true'
+  it('reads skip enforcement flag', () => {
+    process.env.CANONICAL_CSW_SKIP_ENFORCEMENT = 'true'
     expect(readCanonicalCswSkipEnforcementEnv()).toBe(true)
   })
 
   it('resolveServerAgentInboxAddress prefers CANONICAL_CSW_ADDRESS env', () => {
     process.env.CANONICAL_CSW_ADDRESS = '0x1111111111111111111111111111111111111111'
-    delete process.env.XMTP_AGENT_ADDRESS
-    delete process.env.VITE_AGENT_XMTP_ADDRESS
     expect(resolveServerAgentInboxAddress()).toBe('0x1111111111111111111111111111111111111111')
   })
 

@@ -65,11 +65,7 @@ const TARGET_INBOX_ADDRESS = (
   POLICY_CANONICAL_CSW
 ).toLowerCase();
 
-const CANONICAL_CSW = (
-  process.env.CANONICAL_CSW_ADDRESS ??
-  process.env.CANONICAL_CSW ??
-  POLICY_CANONICAL_CSW
-) as Hex;
+const CANONICAL_CSW = (process.env.CANONICAL_CSW_ADDRESS ?? POLICY_CANONICAL_CSW) as Hex;
 
 const NEW_OWNER = (
   process.env.NEW_OWNER ?? "0xfB11237C0D82520832fc0Dc52Feb8eb5E2e81A4b"

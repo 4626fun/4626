@@ -134,7 +134,6 @@ async function planChanges(): Promise<PlannedChange[]> {
   const xmtpWalletId = getArg(
     '--xmtp-wallet-id',
     process.env.CANONICAL_CSW_PRIVY_WALLET_ID?.trim() ||
-      process.env.XMTP_AGENT_PRIVY_WALLET_ID?.trim() ||
       DEFAULT_XMTP_WALLET_ID,
   )!
 

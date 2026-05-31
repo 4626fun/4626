@@ -69,7 +69,7 @@ This file covers **server-side** delegation for the XMTP agent, ERC-8004 identit
   - Uses the CSW's `replaySafeHash()` for ERC-1271 validation.
 - The XMTP agent presents as the CSW address, not the Privy EOA.
 - File: `frontend/server/_lib/privyXmtpSigner.ts`, `frontend/server/agents/eliza/index.ts`
-- Env: `CANONICAL_CSW_ADDRESS`, `CANONICAL_CSW_PRIVY_WALLET_ID`, `CANONICAL_CSW_OWNER_INDEX` (legacy `XMTP_AGENT_CSW_*` read as fallback)
+- Env: `CANONICAL_CSW_ADDRESS`, `CANONICAL_CSW_PRIVY_WALLET_ID`, `CANONICAL_CSW_OWNER_INDEX`
 
 ### 5. ERC-8004 Agent Registration (server action)
 - Agent registration payload is built with the CSW address injected into XMTP and `agentWallet` service entries.
@@ -99,6 +99,20 @@ This file covers **server-side** delegation for the XMTP agent, ERC-8004 identit
 | `ERC8004_AGENT_REGISTRY` | ERC-8004 Identity Registry address | Server |
 | `ERC8004_AGENT_ID` | Agent token ID in the registry | Server |
 
+### Retired env aliases (hard cutover)
+
+Do not set these on Railway/Vercel — code no longer reads them:
+
+| Retired | Use instead |
+|---|---|
+| `XMTP_AGENT_CSW_ADDRESS` | `CANONICAL_CSW_ADDRESS` |
+| `XMTP_AGENT_CSW_CHAIN_ID` | `CANONICAL_CSW_CHAIN_ID` |
+| `XMTP_AGENT_CSW_OWNER_INDEX` | `CANONICAL_CSW_OWNER_INDEX` |
+| `XMTP_AGENT_PRIVY_WALLET_ID` | `CANONICAL_CSW_PRIVY_WALLET_ID` |
+| `XMTP_AGENT_CSW_SKIP_CANONICAL` | `CANONICAL_CSW_SKIP_ENFORCEMENT` |
+| `XMTP_AGENT_ADDRESS` | `CANONICAL_CSW_ADDRESS` |
+| `VITE_AGENT_XMTP_ADDRESS` | `VITE_CANONICAL_CSW_ADDRESS` (client-only; optional) |
+
 ## Rules for Code Changes
 
 - Follow `ERC-4337-Wallet-Invariants.mdc` for canonical wallet/account selection; this file does not redefine those rules.
@@ -124,4 +138,4 @@ When a new owner is installed on the platform canonical CSW (`CANONICAL_CSW_ADDR
 
 **Do not** rely on signer-only policy triggers — enforcement applies only when `profiles.csw_address` or the execution wallet is the platform CSW (`shouldApplyCanonicalEnforcement`). Allowlisted admin EOAs signing against a personal CSW profile must not activate platform policy.
 
-**Client/server agent inbox address:** `VITE_AGENT_XMTP_ADDRESS` overrides the default; when unset, client code falls back to `CANONICAL_CSW_ADDRESS` via `frontend/src/lib/xmtp/agentXmtpAddress.ts`. Server APIs use `readCanonicalCswAddressEnv()` with the same policy constant as final fallback.
+**Client/server agent inbox address:** optional `VITE_CANONICAL_CSW_ADDRESS` overrides the policy constant on client surfaces via `frontend/src/lib/xmtp/agentXmtpAddress.ts`. Server APIs use `readCanonicalCswAddressEnv()` with the same policy constant as final fallback (`resolveServerAgentInboxAddress`).

@@ -171,7 +171,6 @@ const XMTP_ENV = ((process.env.XMTP_ENV ?? 'production').trim()) as 'production'
 
 // Emergency escape hatch: when true, a configured `CANONICAL_CSW_ADDRESS` env value
 // is honored even when it does not match the policy constant `CANONICAL_CSW_ADDRESS`.
-// Legacy alias: `CANONICAL_CSW_SKIP_ENFORCEMENT`.
 const CANONICAL_CSW_SKIP_ENFORCEMENT = readCanonicalCswSkipEnforcementEnv()
 
 const POLL_INTERVAL_MS = 60_000

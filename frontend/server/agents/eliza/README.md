@@ -163,7 +163,7 @@ This is the normal Railway deployment path for this repo.
 Required env:
 
 - `CANONICAL_CSW_ADDRESS`
-- `CANONICAL_CSW_PRIVY_WALLET_ID` (legacy: `XMTP_AGENT_PRIVY_WALLET_ID`)
+- `CANONICAL_CSW_PRIVY_WALLET_ID`
 - Privy server credentials
 - `XMTP_DB_ENCRYPTION_KEY`
 - one LLM provider key

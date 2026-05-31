@@ -2,8 +2,8 @@
  * Canonical CSW runtime env (`CANONICAL_CSW_*`).
  *
  * One smart wallet address for profiles, XMTP, vault owner, and swap execution.
- * Prefer `CANONICAL_CSW_*` in all new config; legacy `XMTP_AGENT_CSW_*` keys are
- * read as fallbacks only until Railway/Vercel env is migrated.
+ * Legacy `XMTP_AGENT_CSW_*` / `XMTP_AGENT_PRIVY_WALLET_ID` aliases were removed —
+ * set `CANONICAL_CSW_*` on Railway/Vercel/local env.
  */
 
 import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
@@ -22,23 +22,23 @@ function readEnvFlag(...keys: readonly string[]): boolean {
 
 /** On-chain canonical parent CSW address (XMTP inbox, vault owner, swap sender). */
 export function readCanonicalCswAddressEnv(): string {
-  return readEnvFirst('CANONICAL_CSW_ADDRESS', 'XMTP_AGENT_CSW_ADDRESS')
+  return readEnvFirst('CANONICAL_CSW_ADDRESS')
 }
 
 /** Chain id where the canonical CSW is deployed (default Base mainnet). */
 export function readCanonicalCswChainIdEnv(): number {
-  const raw = readEnvFirst('CANONICAL_CSW_CHAIN_ID', 'XMTP_AGENT_CSW_CHAIN_ID')
+  const raw = readEnvFirst('CANONICAL_CSW_CHAIN_ID')
   return Number(raw || '8453') || 8453
 }
 
 /** Optional MultiOwnable owner-index hint for the server Privy signer. */
 export function readCanonicalCswOwnerIndexEnv(): string {
-  return readEnvFirst('CANONICAL_CSW_OWNER_INDEX', 'XMTP_AGENT_CSW_OWNER_INDEX')
+  return readEnvFirst('CANONICAL_CSW_OWNER_INDEX')
 }
 
 /** Privy server wallet id that signs UserOps / XMTP for the canonical CSW. */
 export function readCanonicalCswPrivyWalletIdEnv(): string {
-  return readEnvFirst('CANONICAL_CSW_PRIVY_WALLET_ID', 'XMTP_AGENT_PRIVY_WALLET_ID')
+  return readEnvFirst('CANONICAL_CSW_PRIVY_WALLET_ID')
 }
 
 /**
@@ -46,7 +46,7 @@ export function readCanonicalCswPrivyWalletIdEnv(): string {
  * Emergency escape hatch only — business identity still uses the policy constant.
  */
 export function readCanonicalCswSkipEnforcementEnv(): boolean {
-  return readEnvFlag('CANONICAL_CSW_SKIP_ENFORCEMENT', 'XMTP_AGENT_CSW_SKIP_CANONICAL')
+  return readEnvFlag('CANONICAL_CSW_SKIP_ENFORCEMENT')
 }
 
 export function hasCanonicalCswRuntimeConfig(): boolean {
@@ -62,14 +62,7 @@ function isAddressLike(value: string): value is `0x${string}` {
  * Mirrors client `resolveClientAgentXmtpAddress()` precedence.
  */
 export function resolveServerAgentInboxAddress(): `0x${string}` {
-  const candidates = [
-    readCanonicalCswAddressEnv(),
-    (process.env.XMTP_AGENT_ADDRESS ?? '').trim(),
-    (process.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim(),
-    CANONICAL_CSW_ADDRESS,
-  ]
-  for (const raw of candidates) {
-    if (isAddressLike(raw)) return raw.toLowerCase() as `0x${string}`
-  }
+  const configured = readCanonicalCswAddressEnv()
+  if (isAddressLike(configured)) return configured.toLowerCase() as `0x${string}`
   return CANONICAL_CSW_ADDRESS.toLowerCase() as `0x${string}`
 }
