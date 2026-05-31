@@ -100,6 +100,6 @@ export function formatHermitRoomIntro(roomId: string): string {
     '• `/hermit copy <idea>` — short post + alternates',
     '• `/help` — full command list',
     '',
-    `Room **${id}** · cooldowns apply on `/gmeow` and `/meme` so we do not flood chat.`,
+    `Room **${id}** · cooldowns apply on /gmeow and /meme so we do not flood chat.`,
   ].join('\n')
 }
