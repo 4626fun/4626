@@ -105,6 +105,18 @@ These tables are the biggest remaining source of "room for optimization" after t
   - `telegram_funnel_events` (in `telegramTrading.ts`)
   - `chat_command_center_events` (in `chatCommandCenterTelemetry.ts`)
 
+**Extended wiring (next slice)**:
+- Enhanced sampler with table-aware `shouldSampleEvent(tableName, key)` + per-table env override support (`TELEMETRY_SAMPLE_RATE_<table>`).
+- Wired deterministic sampling (early returns before INSERT) into:
+  - `chat_presence_sessions` (presence.ts — heartbeats)
+  - `telegram_link_telemetry_events` (telegramLinkTelemetry.ts)
+  - All 4 workspace tables: `workspace_monitoring_snapshots`, `workspace_alert_events`, `workspace_activity_events`, `workspace_audit_logs` (repository.ts, keyed by vault)
+  - `agent_api_logs` (agentAudit.ts)
+  - `agent_control_audit_events` (agentControl/audit.ts)
+  - `keepr_logs` (keeprRegistry.ts — two write sites)
+  - `telegram_action_audit` (telegramTrading.ts)
+  - `episodic_summaries` + `memory_snapshots` (runtimeBridge.ts, keyed by conversation_id)
+
 Run the improved script anytime:
 ```bash
 pnpm -C frontend exec tsx scripts/audit-telemetry-optimization.ts
@@ -112,9 +124,11 @@ pnpm -C frontend exec tsx scripts/audit-telemetry-optimization.ts
 
 ### Recommended Next Steps (Prioritized Backlog)
 
-1. **Roll out sampling more broadly** (chat_presence_sessions, telegram_link_telemetry_events, keepr_logs, agent_api_logs).
-2. Move the top 5–7 pure telemetry tables to an `analytics` schema or external store.
-3. Dedicated Looker view hygiene pass (many `v_looker_*` have near-zero server usage).
+1. ~~Roll out sampling more broadly~~ (chat_presence_sessions, telegram_link_telemetry_events, keepr_logs, agent_*_audit/logs, workspace_*, episodic/memory, telegram_action_audit — **done**).
+2. Add per-table rate envs + tune the noisiest (presence, funnels, agent control plane) in production via `TELEMETRY_SAMPLE_RATE_*`.
+3. Move the top 5–7 pure telemetry tables (`query_temp_io_snapshots`, `memory_snapshots`, `episodic_summaries`, workspace snapshots, alfaclub metrics snapshot, etc.) to an `analytics` schema or external store (S3 + query engine).
+4. Dedicated Looker view hygiene pass (many `v_looker_*` have near-zero server usage).
+5. Re-run retention migration + analyzer after new high-volume tables appear.
 
 These changes (retention + sampling) together are the highest-ROI optimization available after the schema condensation work. Expected impact: significant reduction in storage growth, vacuum cost, and index bloat on the hottest tables.
 

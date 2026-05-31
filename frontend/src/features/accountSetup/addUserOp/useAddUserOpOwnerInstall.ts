@@ -331,7 +331,12 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     void refreshFunding()
   }, [canonicalCswAddress, enabled, refreshFunding])  // refreshFunding is stable wrt publicClient (uses ref)
 
-  const handleSubmitUserOp = useCallback(async (options?: { relayMethodAOnly?: boolean }): Promise<boolean> => {
+  const handleSubmitUserOp = useCallback(async (options?: {
+    /** Skip direct addOwner-only wallet_sendCalls; use Depository Part 1 + EntryPoint Part 2 only. */
+    relayMethodAOnly?: boolean
+    /** Advanced: try direct CSW self-call addOwner via wallet_sendCalls before Relay (non–Base App only). */
+    directSendCallsOnly?: boolean
+  }): Promise<boolean> => {
     if (busyRef.current) {
       appendEvent('submit:ignored_reentrant')
       return false
@@ -355,7 +360,14 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     setPageNotice(null)
     reportPendingUserOpHash(null)
     appendEvent('--- submit ---')
-    appendEvent(`lane:entrypoint_userop (validated Base App self-call path) via wallet_sendCalls → ${ENTRY_POINT_V06_BASE}`)
+    const preferRelayMethodAFirst =
+      options?.relayMethodAOnly === true ||
+      (inBaseApp && options?.directSendCallsOnly !== true)
+    appendEvent(
+      preferRelayMethodAFirst
+        ? `lane:relay_method_a_primary (Depository Part 1 + EntryPoint Part 2 addOwner UserOp → ${ENTRY_POINT_V06_BASE}; not RelayRouter multicall)`
+        : `lane:entrypoint_userop_direct (CSW self-call addOwner via wallet_sendCalls → ${ENTRY_POINT_V06_BASE})`,
+    )
 
     let submitFundingPreflightOk = fundingAssessment?.ok === true
 
@@ -486,7 +498,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
         reportPendingUserOpHash(null)
       }
 
-      if (options?.relayMethodAOnly) {
+      if (preferRelayMethodAFirst) {
         await runRelayMethodA()
       } else {
         try {
@@ -627,6 +639,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     alreadyOwner,
     appendEvent,
     canonicalCswAddress,
+    inBaseApp,
     loadPrepare,
     onSuccess,
     preparedTx,

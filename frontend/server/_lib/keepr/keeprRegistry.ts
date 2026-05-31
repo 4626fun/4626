@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { resolveKeeprEffectiveActionType } from '../agentControl/trustZones.js'
 import { ensureKeeprSchema } from './keeprSchema.js'
 import { getDb } from '../db/postgres.js'
+import { shouldSampleEvent } from '../infra/telemetrySampling.js'
 
 export type KeeprConfigV1 = {
   version: number
@@ -230,23 +231,25 @@ export async function upsertKeeprVault(params: { config: KeeprConfigV1; actorWal
       updated_at = NOW();
   `
 
-  await db.sql`
-    INSERT INTO keepr_logs (vault_address, actor_wallet, event_type, details)
-    VALUES (
-      ${vaultAddress},
-      ${params.actorWallet ? String(params.actorWallet).toLowerCase() : null},
-      ${'config_upsert'},
-      ${{
-        configHash: hash,
-        groupId,
-        lensGroupAddress,
-        chainId,
-        gatingEnabled,
-        joinLocked,
-        gatingMode,
-      }}
-    );
-  `
+  if (shouldSampleEvent('keepr_logs', vaultAddress)) {
+    await db.sql`
+      INSERT INTO keepr_logs (vault_address, actor_wallet, event_type, details)
+      VALUES (
+        ${vaultAddress},
+        ${params.actorWallet ? String(params.actorWallet).toLowerCase() : null},
+        ${'config_upsert'},
+        ${{
+          configHash: hash,
+          groupId,
+          lensGroupAddress,
+          chainId,
+          gatingEnabled,
+          joinLocked,
+          gatingMode,
+        }}
+      );
+    `
+  }
 
   const row = await getKeeprVaultByVaultAddress(vaultAddress as `0x${string}`)
   if (!row) throw new Error('keepr_vault_upsert_failed')
@@ -370,13 +373,15 @@ export async function setKeeprJoinLocked(params: {
     WHERE vault_address = ${String(params.vaultAddress).toLowerCase()};
   `
 
-  await db.sql`
-    INSERT INTO keepr_logs (vault_address, actor_wallet, event_type, details)
-    VALUES (
-      ${String(params.vaultAddress).toLowerCase()},
-      ${params.actorWallet ? String(params.actorWallet).toLowerCase() : null},
-      ${params.joinLocked ? 'join_locked' : 'join_unlocked'},
-      ${{}}
-    );
-  `
+  if (shouldSampleEvent('keepr_logs', params.vaultAddress)) {
+    await db.sql`
+      INSERT INTO keepr_logs (vault_address, actor_wallet, event_type, details)
+      VALUES (
+        ${String(params.vaultAddress).toLowerCase()},
+        ${params.actorWallet ? String(params.actorWallet).toLowerCase() : null},
+        ${params.joinLocked ? 'join_locked' : 'join_unlocked'},
+        ${{}}
+      );
+    `
+  }
 }

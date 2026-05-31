@@ -88,15 +88,15 @@ async function main() {
     if (db) {
       const projection = await loadCreatorEthosProjectionByAddresses(db, [creator])
       const row = projection.get(creator) ?? null
-      console.log('creator_ethos_projection:', row ?? '(no row)')
+      console.log('v_explore_creators (or creator_ethos_projection) — canonical unified source for all sortable Explore data:', row ?? '(no row)')
 
       const merged = await loadMergedCreatorEthosByAddresses([creator])
       console.log('merged_ethos (projection + resolver):', merged.get(creator) ?? '(no score)')
     } else {
-      console.log('creator_ethos_projection: db_unavailable')
+      console.log('v_explore_creators (or creator_ethos_projection) — canonical unified source for all sortable Explore data: db_unavailable')
     }
   } else {
-    console.log('creator_ethos_projection: DATABASE_URL not configured (skip)')
+    console.log('v_explore_creators (or creator_ethos_projection) — canonical unified source for all sortable Explore data: DATABASE_URL not configured (skip)')
   }
 
   const exploreUrl = `${baseUrl}/api/zora/explore?list=TOP_VOLUME_CREATORS_24H&count=50`

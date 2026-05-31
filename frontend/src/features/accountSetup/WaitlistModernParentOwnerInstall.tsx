@@ -51,8 +51,11 @@ export function WaitlistModernParentOwnerInstall({
   return (
     <div className={`space-y-2 text-xs ${className}`}>
       <div className="text-zinc-400">
-        Finish owner install on your parent smart wallet using the validated Base App path
-        (EntryPoint self-call).
+        Add your Privy embedded signer as a CSW owner through the EntryPoint (
+        <span className="font-mono text-zinc-300">handleOps</span>
+        ) so the wallet self-calls{' '}
+        <span className="font-mono text-zinc-300">addOwnerAddress</span>. Do not use RelayRouter
+        multicall — the router is not an owner and the call will not index.
       </div>
 
       {/* Compact preflight / funding status (mirrors the dedicated flow, kept small for accordion) */}
@@ -101,20 +104,53 @@ export function WaitlistModernParentOwnerInstall({
           Prepare owner install
         </Button>
       ) : (
-        <Button
-          type="button"
-          variant="primary"
-          size="sm"
-          disabled={busy}
-          loading={busy}
-          onClick={() => void modernInstall.handleSubmitUserOp?.()}
-        >
-          Submit in Base App
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            disabled={busy}
+            loading={busy}
+            onClick={() =>
+              void modernInstall.handleSubmitUserOp?.(
+                modernInstall.inBaseApp ? { relayMethodAOnly: true } : undefined,
+              )
+            }
+          >
+            {modernInstall.inBaseApp ? 'Enable 4626 signing' : 'Submit in Base App'}
+          </Button>
+          {modernInstall.inBaseApp ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() => void modernInstall.handleSubmitUserOp?.({ directSendCallsOnly: true })}
+            >
+              Advanced: direct sendCalls
+            </Button>
+          ) : null}
+        </div>
       )}
 
       {modernInstall.pageError ? (
-        <p className="text-rose-300">{modernInstall.pageError}</p>
+        <div className="space-y-2">
+          <p className="text-rose-300">{modernInstall.pageError}</p>
+          {modernInstall.inBaseApp &&
+          (modernInstall.pageError.includes('Relay') ||
+            modernInstall.pageError.includes('Error generating transaction') ||
+            modernInstall.pageError.includes('RelayRouter')) ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() => void modernInstall.handleSubmitUserOp?.({ relayMethodAOnly: true })}
+            >
+              Retry EntryPoint path (Relay Method A)
+            </Button>
+          ) : null}
+        </div>
       ) : null}
 
       {modernInstall.submitPhase && modernInstall.submitPhase !== 'idle' ? (

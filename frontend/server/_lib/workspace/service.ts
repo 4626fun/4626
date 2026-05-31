@@ -4,7 +4,7 @@ import { getKeeprVaultByVaultAddress, type KeeprVaultRow } from '../keepr/keeprR
 import { getKeeprVaultAutomationByVaultAddress } from '../keepr/keeprAutomation.js'
 import { listCreatorXmtpAgents, type CreatorXmtpAgentRow } from '../messaging/creatorXmtpAgents.js'
 import { getDb } from '../db/postgres.js'
-import { ensureTelegramTradingSchema } from '../messaging/telegramTrading.js'
+import { ensureTelegramTradingSchema } from '../db/schemaBootstrap.js'
 import {
   createActivityEvent,
   getWorkspaceCounts,

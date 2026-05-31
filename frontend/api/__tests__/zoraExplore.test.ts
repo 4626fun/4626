@@ -183,7 +183,7 @@ describe('GET /api/zora/explore', () => {
         if (query.includes('to_regclass')) {
           return { rows: [{ has_projection: true }] }
         }
-        if (query.includes('creator_ethos_projection')) {
+        if (query.includes('v_explore_creators (unified view over projection)')) {
           return {
             rows: [
               {
@@ -197,7 +197,7 @@ describe('GET /api/zora/explore', () => {
                 fees_24h_usd: '12.5',
                 ethos_score: 1979,
                 ethos_level: 'reputable',
-                ethos_score_source: 'creator_ethos_projection',
+                ethos_score_source: 'v_explore_creators (unified view over projection)',
               },
             ],
           }

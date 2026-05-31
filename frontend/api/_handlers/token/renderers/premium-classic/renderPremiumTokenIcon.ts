@@ -3,8 +3,8 @@ import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import sharp from 'sharp'
-import { generateSegmentationMask, type SegmentationModel } from './_segmentation.js'
-import { ensureFontconfig } from '../../../server/_lib/infra/ensureFontconfig.js'
+import { generateSegmentationMask, type SegmentationModel } from '../../_segmentation.js'
+import { ensureFontconfig } from '../../../../../server/_lib/infra/ensureFontconfig.js'
 
 type BlendMode = NonNullable<sharp.OverlayOptions['blend']>
 type ArtworkFitMode = 'cover' | 'contain'
@@ -17,18 +17,17 @@ export type PremiumTokenIconParams = {
   heroCutoutSourceImage?: Uint8Array
   suppressBreakout?: boolean
   // Opt-in: allow the heroCutout breakout layer for non-pixelArt sources.
-  // The default safety gate (added in commit af17f3d61 to suppress occasional
-  // glitches on generic token cutouts) is bypassed only when callers pass a
-  // hand-curated heroCutoutSourceImage that they trust. Token icon renders MUST
-  // leave this off; opt-in is for caller-owned avatars that want the 3D hat /
-  // top-of-frame breakout the heroCutout path is designed to produce.
+  // Default off for arbitrary cutouts; `/api/token/image` sets true when Zora
+  // returns a trusted heroCutoutArtworkUrl (same 3D top-of-frame breakout as Hermit).
   allowHeroCutoutBreakoutForNonPixelArt?: boolean
   symbol?: string
   signatureText?: string
   renderPreset?: RenderPreset
+  /** `extended` clips ghost stack to the full card (spills into padding outside the bezel). Default `chamber`. */
+  stackUnderlayClip?: 'chamber' | 'extended'
 }
 
-type PremiumLayout = {
+export type PremiumLayout = {
   size: number
   cardRadius: number
   frameX: number
@@ -1184,10 +1183,19 @@ function decideBreakoutPlan(params: {
     analysis.topCenterStdDev > 36 &&
     analysis.topOccupancy > 0.55 &&
     analysis.topOccupancy < 0.90
+  // Opaque creator photos that miss portraitPhoto heuristics (e.g. busy top frame / pets).
+  const genericOpaqueRembgCandidate =
+    breakoutRequested &&
+    !analysis.hasTransparency &&
+    analysis.sourceClass === 'generic' &&
+    analysis.topCenterStdDev > 20 &&
+    analysis.topOccupancy > 0.08 &&
+    analysis.topOccupancy < 0.92
   const rembgCandidate =
     illustrationRembgCandidate ||
     portraitRembgCandidate ||
-    pixelArtRembgCandidate
+    pixelArtRembgCandidate ||
+    genericOpaqueRembgCandidate
 
   if (params.suppressBreakout) {
     return { mode: 'none', breakoutRequested, rembgCandidate, reason: 'suppressed' }
@@ -1216,8 +1224,20 @@ function decideBreakoutPlan(params: {
 export async function renderBackgroundCard(params: {
   size: number
   layout: PremiumLayout
+  /** Drop the card-level blue bloom in the bottom-right (reference / premium-v2). */
+  omitBottomRightAura?: boolean
 }): Promise<Buffer> {
-  const { size, layout } = params
+  const { size, layout, omitBottomRightAura = false } = params
+  const cardAuraBrLayer = omitBottomRightAura
+    ? ''
+    : `  <rect width="${size}" height="${size}" rx="${layout.cardRadius}" fill="url(#cardAuraBr)"/>`
+  const cardAuraBrDef = omitBottomRightAura
+    ? ''
+    : `    <radialGradient id="cardAuraBr" cx="77%" cy="78%" r="60%">
+      <stop offset="0%" stop-color="rgba(47,125,255,0.18)"/>
+      <stop offset="40%" stop-color="rgba(36,76,172,0.042)"/>
+      <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
+    </radialGradient>`
   const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <radialGradient id="cardGradient" cx="50%" cy="42%" r="63%">
@@ -1230,11 +1250,7 @@ export async function renderBackgroundCard(params: {
       <stop offset="34%" stop-color="rgba(39,83,190,0.032)"/>
       <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
     </radialGradient>
-    <radialGradient id="cardAuraBr" cx="77%" cy="78%" r="60%">
-      <stop offset="0%" stop-color="rgba(47,125,255,0.18)"/>
-      <stop offset="40%" stop-color="rgba(36,76,172,0.042)"/>
-      <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
-    </radialGradient>
+${cardAuraBrDef}
     <radialGradient id="cardVignette" cx="50%" cy="56%" r="72%">
       <stop offset="48%" stop-color="rgba(0,0,0,0)"/>
       <stop offset="100%" stop-color="rgba(0,0,0,0.82)"/>
@@ -1259,7 +1275,7 @@ export async function renderBackgroundCard(params: {
   <rect width="${size}" height="${size}" fill="#000000"/>
   <rect width="${size}" height="${size}" rx="${layout.cardRadius}" fill="url(#cardGradient)"/>
   <rect width="${size}" height="${size}" rx="${layout.cardRadius}" fill="url(#cardAuraTl)"/>
-  <rect width="${size}" height="${size}" rx="${layout.cardRadius}" fill="url(#cardAuraBr)"/>
+${cardAuraBrLayer}
   <rect width="${size}" height="${size}" rx="${layout.cardRadius}" fill="url(#cardVignette)"/>
   <rect
     x="${layout.chamberX}"
@@ -1351,8 +1367,10 @@ export async function renderBackgroundCard(params: {
 export async function renderOuterGlow(params: {
   size: number
   layout: PremiumLayout
+  /** Drop directional blue bloom in the bottom-right outside the frame. */
+  omitBottomRightAura?: boolean
 }): Promise<Buffer> {
-  const { size, layout } = params
+  const { size, layout, omitBottomRightAura = false } = params
   const glowStroke = Math.max(22, Math.round(layout.frameStroke * 1.28))
   const inset = glowStroke / 2
   const glowSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
@@ -1394,6 +1412,17 @@ export async function renderOuterGlow(params: {
     .blur(Math.min(620, Math.max(200, size * 0.52)))
     .png()
     .toBuffer()
+  const auraBrDef = omitBottomRightAura
+    ? ''
+    : `    <radialGradient id="auraBr" cx="80%" cy="82%" r="82%">
+      <stop offset="0%" stop-color="rgba(47,125,255,0.62)"/>
+      <stop offset="40%" stop-color="rgba(47,125,255,0.28)"/>
+      <stop offset="78%" stop-color="rgba(47,125,255,0.09)"/>
+      <stop offset="100%" stop-color="rgba(47,111,255,0)"/>
+    </radialGradient>`
+  const auraBrLayer = omitBottomRightAura
+    ? ''
+    : `  <rect width="${size}" height="${size}" fill="url(#auraBr)" />`
   const directionalAuraSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <radialGradient id="auraTl" cx="24%" cy="22%" r="72%">
@@ -1402,15 +1431,10 @@ export async function renderOuterGlow(params: {
       <stop offset="72%" stop-color="rgba(88,142,255,0.02)"/>
       <stop offset="100%" stop-color="rgba(47,111,255,0)"/>
     </radialGradient>
-    <radialGradient id="auraBr" cx="80%" cy="82%" r="82%">
-      <stop offset="0%" stop-color="rgba(47,125,255,0.62)"/>
-      <stop offset="40%" stop-color="rgba(47,125,255,0.28)"/>
-      <stop offset="78%" stop-color="rgba(47,125,255,0.09)"/>
-      <stop offset="100%" stop-color="rgba(47,111,255,0)"/>
-    </radialGradient>
+${auraBrDef}
   </defs>
   <rect width="${size}" height="${size}" fill="url(#auraTl)" />
-  <rect width="${size}" height="${size}" fill="url(#auraBr)" />
+${auraBrLayer}
 </svg>`
   const directionalAura = await sharp(Buffer.from(directionalAuraSvg)).png().toBuffer()
   const merged = await createTransparentCanvas(size)
@@ -1918,6 +1942,43 @@ async function createRearStackMask(layout: PremiumLayout): Promise<Buffer> {
   return sharp(Buffer.from(svg)).png().toBuffer()
 }
 
+/** Card padding outside the bezel (not a separate background frame). */
+async function createPaddingOutsideFrameMask(layout: PremiumLayout): Promise<Buffer> {
+  const cardSvg = `<svg width="${layout.size}" height="${layout.size}" xmlns="http://www.w3.org/2000/svg">
+  <rect width="${layout.size}" height="${layout.size}" rx="${layout.cardRadius}" fill="white"/>
+</svg>`
+  const frameHoleSvg = `<svg width="${layout.size}" height="${layout.size}" xmlns="http://www.w3.org/2000/svg">
+  <rect
+    x="${layout.frameX}"
+    y="${layout.frameY}"
+    width="${layout.frameSize}"
+    height="${layout.frameSize}"
+    rx="${layout.frameRadius}"
+    fill="#000"
+  />
+</svg>`
+  const [card, hole] = await Promise.all([
+    sharp(Buffer.from(cardSvg)).png().toBuffer(),
+    sharp(Buffer.from(frameHoleSvg)).png().toBuffer(),
+  ])
+  return sharp(card)
+    .composite([{ input: hole, blend: 'dest-out' }])
+    .png()
+    .toBuffer()
+}
+
+/** In-chamber ghost plus the same pattern spilling into outer card padding. */
+async function createExtendedStackMask(layout: PremiumLayout): Promise<Buffer> {
+  const [chamberMask, paddingMask] = await Promise.all([
+    createRearStackMask(layout),
+    createPaddingOutsideFrameMask(layout),
+  ])
+  return sharp(paddingMask)
+    .composite([{ input: chamberMask, blend: 'lighten' }])
+    .png()
+    .toBuffer()
+}
+
 async function renderStackedArtworkUnderlay(params: {
   size: number
   layout: PremiumLayout
@@ -1927,6 +1988,7 @@ async function renderStackedArtworkUnderlay(params: {
   sourceClass: SourceClass
   hasTransparency: boolean
   topBiasPx?: number
+  clipRegion?: 'chamber' | 'extended'
 }): Promise<StackedArtworkUnderlay> {
   const { layout } = params
   const stackConfig = getStackConfigForSourceClass({
@@ -1937,7 +1999,10 @@ async function renderStackedArtworkUnderlay(params: {
     return { rearLayerB: null, rearLayerA: null }
   }
 
-  const chamberMask = await createRearStackMask(layout)
+  const chamberMask =
+    params.clipRegion === 'extended'
+      ? await createExtendedStackMask(layout)
+      : await createRearStackMask(layout)
   const recedeLayer = await createUnderlayRecedeLayer(layout)
   const renderedLayers: Buffer[] = []
   for (const layer of stackConfig.layers) {
@@ -1986,7 +2051,8 @@ async function renderStackedArtworkUnderlay(params: {
       .composite([{ input: await applyOpacity(recedeLayer, 0.36), blend: 'multiply' }])
       .png()
       .toBuffer()
-    renderedLayers.push(await applyOpacity(processed, layer.opacity))
+    const opacityScale = params.clipRegion === 'extended' ? 1.22 : 1
+    renderedLayers.push(await applyOpacity(processed, layer.opacity * opacityScale))
   }
 
   if (renderedLayers.length === 1) {
@@ -3763,10 +3829,7 @@ export async function renderBreakoutLayer(params: {
         params.sourceClass === 'pixelArt' ? 0.96 : 0.98,
       )
     } else if (params.subjectMaskKind === 'heroCutout') {
-      breakoutOpacity = Math.max(
-        breakoutOpacity,
-        params.sourceClass === 'pixelArt' ? 0.9 : 0.96,
-      )
+      breakoutOpacity = 1
     }
     // For rembg-driven breakouts, skip dark contact shadow to avoid black fringe residue.
     if (params.subjectMaskKind !== 'rembgCutout') {
@@ -3960,7 +4023,7 @@ async function computeRegionLuma(params: {
   return weightedLuma / alphaWeight
 }
 
-async function renderCreatorSignature(params: {
+export async function renderCreatorSignature(params: {
   size: number
   layout: PremiumLayout
   signatureText: string
@@ -4067,7 +4130,18 @@ function buildCompositeStep(input: Buffer, blend: BlendMode): sharp.OverlayOptio
   return { input, blend }
 }
 
-export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Promise<Buffer> {
+export type PremiumSubjectStack = {
+  size: number
+  layout: PremiumLayout
+  resolvedPreset: RenderPreset
+  analysis: SourceAnalysis | null
+  heroCompositeLayer: Buffer
+  breakoutLayer: Buffer | null
+  stackedUnderlay: StackedArtworkUnderlay
+  sourceClassForHero: SourceClass
+}
+
+export async function buildPremiumSubjectStack(params: PremiumTokenIconParams): Promise<PremiumSubjectStack> {
   const size = sanitizeSize(params.size)
   if (BREAKOUT_RUNTIME_LOG_ENABLED) {
     await logBreakoutRuntimeBannerOnce()
@@ -4106,11 +4180,6 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
 
   const resolvedPreset = resolveRenderPreset(params.renderPreset, analysis?.sourceClass)
   const layout = getTokenIconLayout(size, resolvedPreset)
-
-  const backgroundCard = await renderBackgroundCard({ size, layout })
-  const outerGlow = await renderOuterGlow({ size, layout })
-  const frameBloom = await renderFrameBloom({ size, layout })
-  const premiumFrame = await renderPremiumFrame({ size, layout })
 
   let artworkLayer: Buffer
   let stackedUnderlay: StackedArtworkUnderlay = { rearLayerB: null, rearLayerA: null }
@@ -4196,6 +4265,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       sourceClass: analysis.sourceClass,
       hasTransparency: analysis.hasTransparency,
       topBiasPx,
+      clipRegion: params.stackUnderlayClip ?? 'chamber',
     })
     artworkLayer = await renderArtworkLayer({
       size,
@@ -4212,11 +4282,15 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
 
     if (allowBreakoutForLayout) {
       const breakoutOpacity =
-        analysis.sourceClass === 'illustration'
-          ? (resolvedPreset === 'hero' ? 0.86 : 0.82)
-          : analysis.sourceClass === 'portraitPhoto'
-            ? 0.34
-            : 0.22
+        breakoutPlan.mode === 'heroCutout'
+          ? 1
+          : breakoutPlan.mode === 'rembgCutout'
+            ? (analysis.sourceClass === 'pixelArt' ? 0.96 : 1)
+          : analysis.sourceClass === 'illustration'
+            ? (resolvedPreset === 'hero' ? 0.86 : 0.82)
+            : analysis.sourceClass === 'portraitPhoto'
+              ? 0.34
+              : 0.22
       const breakoutTopBiasPx = analysis.sourceClass === 'illustration'
         ? Math.max(0, Math.round(layout.chamberSize * (
             resolvedPreset === 'hero'
@@ -4389,6 +4463,35 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
         .png()
         .toBuffer()
     : artworkLayer
+
+  return {
+    size,
+    layout,
+    resolvedPreset,
+    analysis,
+    heroCompositeLayer,
+    breakoutLayer,
+    stackedUnderlay,
+    sourceClassForHero,
+  }
+}
+
+export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Promise<Buffer> {
+  const subject = await buildPremiumSubjectStack(params)
+  const {
+    size,
+    layout,
+    resolvedPreset,
+    analysis,
+    heroCompositeLayer,
+    breakoutLayer,
+    stackedUnderlay,
+  } = subject
+
+  const backgroundCard = await renderBackgroundCard({ size, layout })
+  const outerGlow = await renderOuterGlow({ size, layout })
+  const frameBloom = await renderFrameBloom({ size, layout })
+  const premiumFrame = await renderPremiumFrame({ size, layout })
 
   const overlays: sharp.OverlayOptions[] = [
     buildCompositeStep(outerGlow, 'screen'),

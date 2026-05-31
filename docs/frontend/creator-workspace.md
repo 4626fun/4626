@@ -72,7 +72,7 @@ Supported action families:
 
 ## Persistence Model
 
-Workspace tables are bootstrapped by `ensureWorkspaceSchema()`:
+Workspace tables are bootstrapped by `ensureWorkspaceSchema()` (canonical implementation in `server/_lib/db/schemaBootstrap.ts`):
 
 - `workspace_strategy_targets`
 - `workspace_monitoring_snapshots`

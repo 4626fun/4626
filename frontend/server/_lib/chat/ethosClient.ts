@@ -1,5 +1,5 @@
 import { getDb } from '../db/postgres.js'
-import { ensureChatSchema } from './schema.js'
+import { ensureChatSchema } from '../db/schemaBootstrap.js'
 
 export type EthosScore = {
   score: number | null
@@ -264,7 +264,7 @@ export async function getCachedEthosScoreByAddress(rawAddress: string): Promise<
 
   const db = await getDb()
   if (!db) return null
-  await ensureChatSchema()
+  await ensureChatSchema(db)
 
   const cached = await db.sql`
     SELECT ethos_score, ethos_level, ethos_score_updated_at

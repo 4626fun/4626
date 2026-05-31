@@ -255,11 +255,12 @@ export function AddOwnerBaseApp() {
               indexes.
             </p>
             <p className="text-zinc-300">
-              Correct shape: one <span className="font-mono">wallet_sendCalls</span> bundle containing a
-              single CSW → CSW <span className="font-mono">addOwnerAddress</span> self-call (zero value).
-              If Base App blocks that UserOp, this page automatically retries via Relay Method A
-              (Depository <span className="font-mono">depositNative</span> Part 1 + EntryPoint Part 2).
-              Base App turns this into a UserOp that the wallet itself executes.
+              The primary button uses Relay Method A: Depository{' '}
+              <span className="font-mono">depositNative</span> (Part 1) then EntryPoint{' '}
+              <span className="font-mono">handleOps</span> with{' '}
+              <span className="font-mono">addOwnerAddress</span> inside the CSW UserOp (Part 2) — the
+              same shape as your earlier successful installs. Relay rides alongside as a same-chain leg;
+              the privileged call is never proxied through RelayRouter multicall.
             </p>
           </div>
         </div>
@@ -527,7 +528,7 @@ export function AddOwnerBaseApp() {
                     type="button"
                     variant="primary"
                     disabled={!canSubmitUserOp || userOpFlow.busy || !userOpFlow.inBaseApp}
-                    onClick={() => void userOpFlow.handleSubmitUserOp()}
+                    onClick={() => void userOpFlow.handleSubmitUserOp({ relayMethodAOnly: true })}
                   >
                     {userOpFlow.busy
                       ? userOpFlow.submitPhase === 'preflight'
@@ -540,18 +541,18 @@ export function AddOwnerBaseApp() {
                             ? 'Verifying EntryPoint trace…'
                             : userOpFlow.submitPhase === 'broadcasting'
                               ? 'Broadcasting UserOp…'
-                              : 'Submitting EntryPoint UserOp…'
+                              : 'Submitting via EntryPoint…'
                       : userOpFlow.prepareLoading
                         ? 'Preparing…'
-                        : 'Submit CSW self-UserOp (wallet_sendCalls)'}
+                        : 'Enable 4626 signing (EntryPoint UserOp)'}
                   </Button>
                   <Button
                     type="button"
                     variant="secondary"
                     disabled={!canSubmitUserOp || userOpFlow.busy || !userOpFlow.inBaseApp}
-                    onClick={() => void userOpFlow.handleSubmitUserOp({ relayMethodAOnly: true })}
+                    onClick={() => void userOpFlow.handleSubmitUserOp({ directSendCallsOnly: true })}
                   >
-                    {userOpFlow.busy ? 'Submitting…' : 'Submit via Relay Method A'}
+                    {userOpFlow.busy ? 'Submitting…' : 'Advanced: direct addOwner sendCalls'}
                   </Button>
                   <Button
                     type="button"

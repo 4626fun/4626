@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { uploadImageStorageObject } from './imageStorage.js'
 import { getDb } from '../db/postgres.js'
-import { ensureImageGenerationSchema } from '../db/schemaBootstrap.js'
+import { ensureImageGenerationSchema as ensureImageGenerationSchemaFromBootstrap } from '../db/schemaBootstrap.js'
 
 export type ImageGenerationProjectStatus =
   | 'draft'
@@ -82,11 +82,8 @@ export async function ensureImageGenerationSchema() {
   const db = await getDb()
   if (!db) throw new Error('Image generation database unavailable')
 
-  // Condensed path
-  await ensureImageGenerationSchema(db)
-
-  // Legacy raw blocks below are transitional.
-  // All definitions now live in supabase/migrations/20260601000000_image_generation_schema.sql.
+  // Condensed path — all logic now centralized in schemaBootstrap.ts (withEnsureOnce)
+  await ensureImageGenerationSchemaFromBootstrap(db)
 
   schemaEnsured = true
 }

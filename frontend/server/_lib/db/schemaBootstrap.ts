@@ -297,7 +297,9 @@ export async function ensureChatSchema(db: Db): Promise<void> {
  * Image generation projects, assets, attempts, and jobs.
  */
 export async function ensureImageGenerationSchema(db: Db): Promise<void> {
-  await ensureMigrationApplied(db, '20260601000000_image_generation_schema.sql').catch(() => {})
+  await withEnsureOnce('imageGeneration', async () => {
+    await ensureMigrationApplied(db, '20260601000000_image_generation_schema.sql').catch(() => {})
+  })
 }
 
 /**
@@ -318,7 +320,9 @@ export async function ensureZoraCswGateSchema(db: Db): Promise<void> {
  * Creator access allowlist and access request tables.
  */
 export async function ensureCreatorAccessSchema(db: Db): Promise<void> {
-  await ensureMigrationApplied(db, '20260604000000_creator_access_schema.sql').catch(() => {})
+  await withEnsureOnce('creatorAccess', async () => {
+    await ensureMigrationApplied(db, '20260604000000_creator_access_schema.sql').catch(() => {})
+  })
 }
 
 /**

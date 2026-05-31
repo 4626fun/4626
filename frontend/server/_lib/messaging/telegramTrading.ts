@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { ensureTelegramTradingSchema as ensureTelegramTradingSchemaFromBootstrap } from '../db/schemaBootstrap.js'
+import { shouldSampleEvent } from '../infra/telemetrySampling.js'
 import { shouldSample } from '../infra/telemetrySampling.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -654,6 +655,11 @@ export async function logTelegramActionAudit(params: {
   const actionType = asTrimmed(params.actionType).toLowerCase()
   const status = asTrimmed(params.status).toLowerCase() || 'unknown'
   if (!userId || !chatId || !canonical || !actionType) return
+
+  // Telegram action audit (trading/automation). Sample for volume control while preserving per-user traces.
+  if (!shouldSampleEvent('telegram_action_audit', `${userId}:${actionType}`)) {
+    return
+  }
 
   await params.db.sql`
     INSERT INTO telegram_action_audit (

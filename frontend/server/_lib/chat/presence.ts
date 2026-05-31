@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
 
 import { getDb } from '../db/postgres.js'
-import { ensureChatSchema } from './schema.js'
+import { ensureChatSchema } from '../db/schemaBootstrap.js'
+import { shouldSampleEvent } from '../infra/telemetrySampling.js'
 import { getCachedEthosScoreByAddress } from './ethosClient.js'
 import {
   ethosCanonicalReadEnabled,
@@ -39,11 +40,17 @@ export async function recordPresenceHeartbeat(params: {
 }): Promise<void> {
   const db = await getDb()
   if (!db) throw new Error('db_not_configured')
-  await ensureChatSchema()
+  await ensureChatSchema(db)
 
   const status = params.status === 'recent' ? 'recent' : 'available'
   const sessionIdHash = sha256(`${params.address}:${params.ip ?? ''}:${params.userAgent ?? ''}`)
   const userAgentHash = params.userAgent ? sha256(params.userAgent) : null
+
+  // High-volume telemetry: presence heartbeats. Deterministic sampling keeps
+  // per-user consistency while cutting write volume when TELEMETRY_SAMPLE_RATE < 1.
+  if (!shouldSampleEvent('chat_presence_sessions', params.address)) {
+    return
+  }
 
   await db.sql`
     INSERT INTO chat_presence_sessions (
@@ -128,7 +135,7 @@ export async function listAvailableChatUsers(params: {
 }): Promise<ChatAvailabilityUser[]> {
   const db = await getDb()
   if (!db) return []
-  await ensureChatSchema()
+  await ensureChatSchema(db)
   const limit = Math.max(1, Math.min(100, Math.floor(params.limit ?? 40)))
   const viewer = params.viewerAddress ? String(params.viewerAddress).toLowerCase() : null
 
