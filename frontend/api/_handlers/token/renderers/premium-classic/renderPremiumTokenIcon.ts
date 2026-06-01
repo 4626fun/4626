@@ -969,8 +969,17 @@ async function analyzeSourceImage(params: {
 
   const centerVsEdge = centerLuma - edgeLuma
 
+  const detailedLowResIllustration =
+    lowResolution &&
+    hasTransparency &&
+    topOccupancy > 0.04 &&
+    colorBucketCount > 520 &&
+    strongEdgeRatio > 0.09 &&
+    strongEdgeRatio < 0.2
+
   const pixelArtLike =
     !brightBadgeLike &&
+    !detailedLowResIllustration &&
     lowResolution &&
     (colorBucketCount < 620 || meanChroma < 24) &&
     strongEdgeRatio > 0.105
@@ -3844,12 +3853,47 @@ export async function renderBreakoutLayer(params: {
   await writeBreakoutDebugAsset('4a-breakout-after-window-mask.png', maskedAfterBreakoutMask)
   await debugLogLayerBounds('breakoutAfterWindowMask', maskedAfterBreakoutMask)
   maskedSharp = sharp(maskedAfterBreakoutMask).ensureAlpha()
-  if (subjectMask) {
+  let applyBreakoutSubjectMask = Boolean(subjectMask)
+  if (subjectMask && params.subjectMaskKind === 'rembgCutout') {
+    const [{ data: windowData, info: windowInfo }, { data: subjectData, info: subjectInfo }] =
+      await Promise.all([
+        sharp(maskedAfterBreakoutMask).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+        sharp(subjectMask).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+      ])
+    const windowBounds = getAlphaBounds(windowData, windowInfo.width, windowInfo.height, windowInfo.channels)
+    const subjectBounds = getAlphaBounds(
+      subjectData,
+      subjectInfo.width,
+      subjectInfo.height,
+      subjectInfo.channels,
+    )
+    if (windowBounds && subjectBounds) {
+      const heightRatio = subjectBounds.height / Math.max(1, windowBounds.height)
+      // Upper-subject matte on rembg can collapse tall hats to a thin brim strip — keep window crop instead.
+      if (heightRatio < 0.45) {
+        applyBreakoutSubjectMask = false
+        if (BREAKOUT_DEBUG_LOG_ENABLED) {
+          console.info('[breakout-debug]', JSON.stringify({
+            step: 'renderBreakoutLayer:skip-subject-mask',
+            reason: 'subject-mask-too-thin',
+            windowBounds,
+            subjectBounds,
+            heightRatio,
+            sourceClass: params.sourceClass ?? 'unknown',
+          }))
+        }
+      }
+    }
+  }
+  if (subjectMask && applyBreakoutSubjectMask) {
     maskedSharp = maskedSharp.composite([{ input: subjectMask, blend: 'dest-in' }])
     const maskedAfterSubjectMask = await maskedSharp.png().toBuffer()
     await writeBreakoutDebugAsset('4ab-breakout-after-subject-mask.png', maskedAfterSubjectMask)
     await debugLogLayerBounds('breakoutAfterSubjectMask', maskedAfterSubjectMask)
     maskedSharp = sharp(maskedAfterSubjectMask).ensureAlpha()
+  } else if (subjectMask && BREAKOUT_DEBUG_LOG_ENABLED) {
+    await writeBreakoutDebugAsset('4ab-breakout-after-subject-mask.png', maskedAfterBreakoutMask)
+    await debugLogLayerBounds('breakoutAfterSubjectMask', maskedAfterBreakoutMask)
   }
   maskedSharp = maskedSharp.composite([{ input: aboveFrameMask, blend: 'dest-in' }])
   const breakoutEdgeBlur =
