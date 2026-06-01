@@ -3937,7 +3937,8 @@ export async function renderBreakoutLayer(params: {
       const maxShiftX = Math.max(2, Math.round(layout.chamberSize * 0.05))
       const shiftX = Math.round(clamp(chamberCenterX - breakoutCenterX, -maxShiftX, maxShiftX))
       const skipVerticalNudge =
-        params.subjectMaskKind === 'heroCutout' && params.sourceClass === 'illustration'
+        params.sourceClass === 'illustration' &&
+        (params.subjectMaskKind === 'heroCutout' || params.subjectMaskKind === 'rembgCutout')
       const topLiftTarget =
         params.sourceClass === 'illustration'
           ? 0.62

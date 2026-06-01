@@ -86,6 +86,7 @@ describe('findCoinbaseSmartWalletOwnerIndex persisted hints', () => {
     })
 
     expect(result).toEqual({ ownerIndex: 2, ownerCount: 3 })
+    expect(publicClient.readContract.mock.calls.filter((call) => call[0]?.functionName === 'ownerCount').length).toBe(0)
     expect(publicClient.readContract.mock.calls.filter((call) => call[0]?.functionName === 'ownerAtIndex').length).toBe(1)
   })
 })

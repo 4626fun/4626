@@ -77,7 +77,9 @@ import {
 import {
   fetchCoinbaseSmartWalletOwners,
   findCoinbaseSmartWalletOwnerIndex,
+  readContractWithRpcRetry,
   resetOwnerIndexCacheForTests,
+  resolveOwnersReadClient,
 } from './coinbaseErc4337Owners'
 import { writePersistedCswOwnerIndex } from './cswOwnerIndexPersistence'
 import { recordUserOpTelemetry, type UserOpTelemetrySample } from './coinbaseErc4337Telemetry'
@@ -1571,8 +1573,9 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       // Self-auth Base App signs personal_sign [hash, csw]. The CSW address is never an
       // ownerAtIndex entry — scanning all slots (starting with WebAuthn owner[0]) is slow
       // and can RPC-timeout before we reach the session-key owner slot.
-      const countRaw = (await withTimeout(
-        publicClient.readContract({
+      const ownerReadClient = resolveOwnersReadClient(publicClient)
+      const countRaw = (await readContractWithRpcRetry('ownerCount read', () =>
+        ownerReadClient.readContract({
           address: smartWallet,
           abi: [{
             type: 'function' as const,
@@ -1583,8 +1586,6 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
           }],
           functionName: 'ownerCount',
         }),
-        RPC_READ_TIMEOUT_MS,
-        'ownerCount read',
       )) as bigint
       ownerCount = Number(countRaw)
       if (AA_DEBUG) {

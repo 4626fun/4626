@@ -11,7 +11,7 @@ import {
 } from '../premium-classic/renderPremiumTokenIcon.js'
 import { renderV2BackgroundCard } from './background.js'
 import { solidifyBreakoutLayer } from './breakout.js'
-import { createHeroBreakoutOverlapClearMask } from './breakoutHeroClearance.js'
+import { eraseHeroUnderBreakoutLayer } from './breakoutHeroClearance.js'
 import { renderV2PremiumFrame } from './frame.js'
 import { renderV2FrameBloom, renderV2OuterGlow } from './glow.js'
 import {
@@ -128,19 +128,6 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
         skipBackgroundDarken: skipHeroBackgroundDarken,
       })
   let heroLayer = await applyV2SubjectLut(heroBase)
-  if (breakoutLayer && !preparedHeroCutoutBreakout) {
-    const heroClearMask = await createHeroBreakoutOverlapClearMask({
-      size,
-      layout,
-      sourceClass,
-      maskKind: 'rembgCutout',
-    })
-    heroLayer = await sharp(heroLayer)
-      .ensureAlpha()
-      .composite([{ input: heroClearMask, blend: 'dest-in' }])
-      .png()
-      .toBuffer()
-  }
 
   const overlays: sharp.OverlayOptions[] = [
     compositeStep(outerGlow, 'screen'),
@@ -163,6 +150,9 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       breakoutBase = await solidifyBreakoutLayer(breakoutBase)
     }
     const breakout = await applyV2SubjectLut(breakoutBase)
+    if (!preparedHeroCutoutBreakout) {
+      heroLayer = await eraseHeroUnderBreakoutLayer({ heroLayer, breakoutLayer: breakout, layout })
+    }
     overlays.push(compositeStep(breakout, 'over'))
   }
 
