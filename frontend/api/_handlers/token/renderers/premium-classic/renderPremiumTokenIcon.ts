@@ -4281,6 +4281,8 @@ export type PremiumSubjectStack = {
   sourceClassForHero: SourceClass
   /** Hero placement used for artwork + optional v2 field-pattern extension. */
   subjectPlacement: PremiumSubjectPlacement | null
+  /** Rembg mask from the same pass that built `breakoutLayer` (icon-sized), when available. */
+  rembgMaskPngRgba: Buffer | null
 }
 
 /** Same geometry as in-frame hero — for v2 padding field-pattern extension. */
@@ -4357,6 +4359,7 @@ export async function buildPremiumSubjectStack(params: PremiumTokenIconParams): 
   let breakoutLayer: Buffer | null = null
   let sourceClassForHero: SourceClass = 'generic'
   let subjectPlacement: PremiumSubjectPlacement | null = null
+  let rembgSegmentation: SegmentationExtraction | null = null
 
   if (normalizedSource && analysis) {
     sourceClassForHero = analysis.sourceClass
@@ -4398,7 +4401,6 @@ export async function buildPremiumSubjectStack(params: PremiumTokenIconParams): 
         : analysis.fitMode === 'cover' && allowBreakoutForLayout && analysis.sourceClass === 'illustration'
           ? Math.max(1, Math.round(layout.chamberSize * (resolvedPreset === 'hero' ? 0.016 : 0.009)))
           : 0
-    let rembgSegmentation: SegmentationExtraction | null = null
     let rembgCoverage = 0
     let rembgCoveragePass = false
     if (breakoutPlan.mode === 'rembgCutout') {
@@ -4658,6 +4660,7 @@ export async function buildPremiumSubjectStack(params: PremiumTokenIconParams): 
     stackedUnderlay,
     sourceClassForHero,
     subjectPlacement,
+    rembgMaskPngRgba: rembgSegmentation?.maskPngRgba ?? null,
   }
 }
 

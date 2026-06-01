@@ -43,6 +43,8 @@ type SwapCardProps = {
   walletChainId?: number | null
   onSelectChain: (chainId: SupportedChainId) => void
   slippagePct: string
+  slippageIsAuto?: boolean
+  onSetSlippageAuto?: () => void
   onOpenTokenSelector: (side: 'input' | 'output') => void
   onAmountChange: (value: string) => void
   onQuickPercent: (pct: number, tokenBalance?: string | null) => void
@@ -187,7 +189,13 @@ export function SwapCard(props: SwapCardProps) {
         tokenInSymbol={props.tokenInSymbol}
         amountOut={props.estimatedOut}
         tokenOutSymbol={props.tokenOutSymbol}
+        tokenInAddress={props.tokenInAddress}
+        tokenOutAddress={props.tokenOutAddress}
+        tokenInLogoUrl={props.tokenInDisplay.logoUrl}
+        tokenOutLogoUrl={props.tokenOutDisplay.logoUrl}
         slippagePct={props.slippagePct}
+        slippageIsAuto={props.slippageIsAuto}
+        onSetSlippageAuto={props.onSetSlippageAuto}
         onSetSlippagePct={props.onSetSlippagePct}
         aggregator={props.quoteAggregatorLabel ?? props.swapProviderLabel}
         gasEstimateLabel={props.gasEstimateLabel}

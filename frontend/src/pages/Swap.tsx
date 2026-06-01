@@ -60,6 +60,7 @@ import {
 } from '@/lib/swap/swapTokenLabels'
 import { fetchWalletZoraHoldingsBundle } from '@/lib/zora/walletHoldings'
 import { deriveSwapUsdEstimates, isNativeEthToken, isUsdStablecoinToken } from '@/lib/swap/swapAmountUsd'
+import { formatSlippagePctForDisplay } from '@/lib/swap/swapAutoSlippage'
 import { extractSwapQuoteDetails } from '@/lib/swap/swapQuoteDetails'
 import { amountUnitsFromBalancePercent } from '@/lib/swap/swapDisplayAmount'
 import { useSwapAssetBalance } from '@/lib/swap/useSwapAssetBalance'
@@ -551,6 +552,8 @@ export function Swap() {
     setTokenOut,
     amountInUnits,
     setAmountInUnits,
+    slippageAuto,
+    setSlippageAuto,
     slippagePct,
     setSlippagePct,
     activePanel,
@@ -1568,6 +1571,7 @@ export function Swap() {
   // ─── Swap execution ───────────────────────────────────────────────────────
   const {
     estimatedOut,
+    effectiveSlippagePct,
     quote,
     busy,
     status,
@@ -1613,6 +1617,7 @@ export function Swap() {
     tokenOut,
     amountInUnits,
     parsedSlippage,
+    slippageAuto,
     parsedDeadlineMinutes,
     preferZoraTradeRoute,
     chainId: swapChainId,
@@ -1838,6 +1843,8 @@ export function Swap() {
   const busyRef = useRef(busy)
   busyRef.current = busy
 
+  const autoQuoteSlippagePct = slippageAuto ? effectiveSlippagePct : parsedSlippage
+
   // Debounced auto-quote: only fires when actual swap inputs change.
   useEffect(() => {
     // Quotes are read-only and only need a session plus execution address.
@@ -1856,7 +1863,8 @@ export function Swap() {
     tokenIn,
     tokenOut,
     amountInUnits,
-    parsedSlippage,
+    autoQuoteSlippagePct,
+    slippageAuto,
     executionAddress,
     quoteReady,
     quoteCooldownActive,
@@ -1864,6 +1872,10 @@ export function Swap() {
     txState,
     handleQuote,
   ])
+
+  const slippageDisplayPct = slippageAuto
+    ? formatSlippagePctForDisplay(effectiveSlippagePct)
+    : slippagePct
 
   // One-click flow: after review/build, immediately execute without an extra in-app confirm modal.
   useEffect(() => {
@@ -2069,7 +2081,9 @@ export function Swap() {
                         selectedChainId={swapChainId}
                         walletChainId={walletChainId}
                         onSelectChain={handleSelectSwapChain}
-                        slippagePct={slippagePct}
+                        slippagePct={slippageDisplayPct}
+                        slippageIsAuto={slippageAuto}
+                        onSetSlippageAuto={setSlippageAuto}
                         onOpenTokenSelector={openTokenSelector}
                         onAmountChange={setAmountInUnits}
                         onQuickPercent={(pct) => {

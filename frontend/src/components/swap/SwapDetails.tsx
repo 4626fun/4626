@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
 import { SwapRoutePopover } from '@/components/swap/SwapRoutePopover'
@@ -10,6 +10,7 @@ import {
   formatSwapNetworkCostDisplay,
   type SwapRouteLeg,
 } from '@/lib/swap/swapQuoteDetails'
+import { buildSwapRouteTokenLookup } from '@/lib/swap/swapRouteTokenLookup'
 
 type SwapDetailsProps = {
   routeSummary: string | null
@@ -19,8 +20,13 @@ type SwapDetailsProps = {
   tokenInSymbol?: string
   amountOut?: string
   tokenOutSymbol?: string
+  tokenInAddress?: string
+  tokenOutAddress?: string
+  tokenInLogoUrl?: string | null
+  tokenOutLogoUrl?: string | null
   slippagePct: string
   onSetSlippagePct: (next: string) => void
+  onSetSlippageAuto?: () => void
   gasEstimateLabel: string | null
   priceImpactLabel: string | null
   lpFeeUsd?: string | null
@@ -33,7 +39,6 @@ type SwapDetailsProps = {
 }
 
 const slippagePresets = ['0.1', '0.5', '1', '2', '5']
-const DEFAULT_SLIPPAGE = '0.5'
 
 function impactColorClass(label: string | null): string {
   if (!label) return 'text-zinc-400'
@@ -69,6 +74,10 @@ export function SwapDetails({
   tokenInSymbol,
   amountOut,
   tokenOutSymbol,
+  tokenInAddress,
+  tokenOutAddress,
+  tokenInLogoUrl,
+  tokenOutLogoUrl,
   slippagePct,
   onSetSlippagePct,
   gasEstimateLabel,
@@ -78,9 +87,32 @@ export function SwapDetails({
   quoteUpdatedAt,
   sponsoredExecution = false,
   showUniswapBranding = true,
-  slippageIsAuto,
+  slippageIsAuto = false,
+  onSetSlippageAuto,
 }: SwapDetailsProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
+
+  const routeTokenLookup = useMemo(
+    () =>
+      buildSwapRouteTokenLookup({
+        tokenInSymbol: tokenInSymbol ?? '',
+        tokenInAddress: tokenInAddress ?? '',
+        tokenInLogoUrl,
+        tokenOutSymbol: tokenOutSymbol ?? '',
+        tokenOutAddress: tokenOutAddress ?? '',
+        tokenOutLogoUrl,
+        routeLegs,
+      }),
+    [
+      tokenInSymbol,
+      tokenInAddress,
+      tokenInLogoUrl,
+      tokenOutSymbol,
+      tokenOutAddress,
+      tokenOutLogoUrl,
+      routeLegs,
+    ],
+  )
 
   const exchangeRate =
     amountIn && tokenInSymbol && amountOut && tokenOutSymbol
@@ -97,7 +129,7 @@ export function SwapDetails({
     sponsoredExecution,
   })
 
-  const showAutoSlippage = slippageIsAuto ?? slippagePct === DEFAULT_SLIPPAGE
+  const showAutoSlippage = slippageIsAuto
 
   const hasSecondaryDetails =
     Boolean(lpFeeUsd) ||
@@ -154,6 +186,7 @@ export function SwapDetails({
         <SwapRoutePopover
           routeSummary={routeSummary}
           routeLegs={routeLegs}
+          routeTokenLookup={routeTokenLookup}
           aggregator={aggregator}
           showUniswapBranding={showUniswapBranding}
         />
@@ -169,16 +202,32 @@ export function SwapDetails({
             transition={{ duration: 0.16 }}
           >
             <div className="flex flex-wrap items-center gap-1.5">
+              {onSetSlippageAuto ? (
+                <button
+                  type="button"
+                  onClick={() => onSetSlippageAuto()}
+                  className={cn(
+                    'rounded-lg border px-2 py-1 text-[10px] font-medium',
+                    showAutoSlippage
+                      ? 'border-brand-primary/45 bg-brand-primary/18 text-vault-text'
+                      : 'border-[rgb(var(--vault-border-strong)/0.45)] bg-[rgb(var(--vault-card-raised)/0.72)] text-vault-subtext',
+                  )}
+                >
+                  Auto
+                </button>
+              ) : null}
               <input
                 type="text"
                 inputMode="decimal"
                 value={slippagePct}
                 onChange={(event) => onSetSlippagePct(event.target.value)}
+                disabled={showAutoSlippage}
                 className={cn(
                   'h-8 w-20 rounded-lg border px-2 text-[11px]',
                   'text-vault-text placeholder:text-vault-muted outline-none',
                   'bg-[rgb(var(--vault-card-raised)/0.82)]',
                   'border-[rgb(var(--vault-border-strong)/0.62)] focus:border-brand-primary/70',
+                  showAutoSlippage && 'cursor-not-allowed opacity-70',
                 )}
                 aria-label="Slippage percent"
                 placeholder="0.5"
@@ -189,11 +238,13 @@ export function SwapDetails({
                   type="button"
                   key={preset}
                   onClick={() => onSetSlippagePct(preset)}
+                  disabled={showAutoSlippage}
                   className={cn(
                     'rounded-lg border px-1.5 py-1 text-[10px] font-medium',
-                    slippagePct === preset
+                    !showAutoSlippage && slippagePct === preset
                       ? 'border-brand-primary/45 bg-brand-primary/18 text-vault-text'
                       : 'border-[rgb(var(--vault-border-strong)/0.45)] bg-[rgb(var(--vault-card-raised)/0.72)] text-vault-subtext',
+                    showAutoSlippage && 'cursor-not-allowed opacity-50',
                   )}
                 >
                   {preset}%

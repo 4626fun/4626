@@ -134,6 +134,33 @@ export async function resolveSubjectSegmentationMask(params: {
   return { width, height, subjectMaskPng }
 }
 
+/** Reuse the rembg mask from `buildPremiumSubjectStack` so hero darken aligns with breakout cutout. */
+export async function subjectSegmentationMaskFromRgba(
+  maskPngRgba: Buffer,
+  width: number,
+  height: number,
+): Promise<SubjectSegmentationMask> {
+  const maskAlpha = await sharp(maskPngRgba)
+    .resize(width, height, { fit: 'fill' })
+    .ensureAlpha()
+    .extractChannel('alpha')
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+
+  const px = width * height
+  const subjectMaskRgba = Buffer.alloc(px * 4, 255)
+  for (let i = 0; i < px; i += 1) {
+    subjectMaskRgba[i * 4 + 3] = maskAlpha.data[i] ?? 0
+  }
+  const subjectMaskPng = await sharp(subjectMaskRgba, {
+    raw: { width, height, channels: 4 },
+  })
+    .png()
+    .toBuffer()
+
+  return { width, height, subjectMaskPng }
+}
+
 /**
  * v2 applies Fuji on the flattened composite (see applyV2PostComposeLut), not on raw source bytes,
  * so prepared hero cutouts stay aligned with the in-frame subject.

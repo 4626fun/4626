@@ -734,6 +734,8 @@ export async function executeZoraCswQuoteWithEscalation(params: {
   amountIn: string
   sender: string
   slippagePct: number
+  /** When set (auto slippage), simulation may escalate above `slippagePct` up to this cap. */
+  slippageEscalationCapPct?: number
   signerAddress: string
   executionAddress?: string | null
   walletClient: ZoraCswWalletClient
@@ -762,12 +764,16 @@ export async function executeZoraCswQuoteWithEscalation(params: {
     readZoraQuotedSlippagePct(params.quote) ?? 0,
   )
   const isCswExecution = await isDeployedSmartWalletExecutionAddress(params.executionAddress)
+  const escalationCap =
+    params.slippageEscalationCapPct != null && Number.isFinite(params.slippageEscalationCapPct)
+      ? params.slippageEscalationCapPct
+      : params.slippagePct
   // Thin creator pools (e.g. AKITA) usually need ≥5% on CSW-sponsored paths; 0.5% often passes
   // stale pending eth_call but reverts on bundler simulation.
   const rawLadder = buildZoraSlippageEscalationLadder(
     isCswExecution ? Math.max(startSlippage, 5) : startSlippage,
   )
-  const ladder = rawLadder.filter((pct) => pct <= params.slippagePct + 1e-9)
+  const ladder = rawLadder.filter((pct) => pct <= escalationCap + 1e-9)
   const effectiveLadder =
     ladder.length > 0
       ? ladder
@@ -842,6 +848,7 @@ export async function prepareZoraQuoteForExecute(params: {
   amountIn: string
   sender: string
   slippagePct: number
+  slippageEscalationCapPct?: number
   signerAddress: string
   executionAddress?: string | null
   walletClient: ZoraCswWalletClient

@@ -1,12 +1,18 @@
 import { Info } from 'lucide-react'
 
+import { TokenAvatar } from '@/components/swap/TokenAvatar'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { cn } from '@/lib/shared/utils'
 import { summarizeRouteProtocols, type SwapRouteLeg } from '@/lib/swap/swapQuoteDetails'
+import {
+  resolveSwapRouteTokenMeta,
+  type SwapRouteTokenMeta,
+} from '@/lib/swap/swapRouteTokenLookup'
 
 type SwapRoutePopoverProps = {
   routeSummary: string | null
   routeLegs?: SwapRouteLeg[]
+  routeTokenLookup?: Record<string, SwapRouteTokenMeta>
   aggregator?: string
   showUniswapBranding?: boolean
 }
@@ -20,12 +26,31 @@ function RouteHopConnector() {
   )
 }
 
-function RouteTokenChip({ label, feePercent }: { label: string; feePercent?: string | null }) {
+function RouteTokenChip({
+  meta,
+  feePercent,
+}: {
+  meta: SwapRouteTokenMeta
+  feePercent?: string | null
+}) {
   return (
     <span className="relative inline-flex shrink-0 flex-col items-center gap-0.5">
-      <span className="rounded-full border border-white/12 bg-white/8 px-2 py-0.5 text-[11px] font-medium text-zinc-200">
-        {label}
-      </span>
+      <TokenAvatar
+        symbol={meta.symbol}
+        imageUrl={meta.imageUrl}
+        token={
+          meta.address
+            ? {
+                address: meta.address,
+                logoUrl: meta.imageUrl ?? undefined,
+              }
+            : undefined
+        }
+        size={24}
+        withFallbackLabel
+        className="shrink-0"
+      />
+      <span className="max-w-[3.25rem] truncate text-[9px] font-medium text-zinc-400">{meta.symbol}</span>
       {feePercent ? (
         <span className="rounded-md border border-white/10 bg-zinc-800/80 px-1 py-px text-[9px] font-medium tabular-nums text-zinc-400">
           {feePercent}
@@ -35,22 +60,26 @@ function RouteTokenChip({ label, feePercent }: { label: string; feePercent?: str
   )
 }
 
+function routeMetaForSymbol(
+  lookup: Record<string, SwapRouteTokenMeta> | undefined,
+  symbol: string,
+): SwapRouteTokenMeta {
+  if (lookup) return resolveSwapRouteTokenMeta(lookup, symbol)
+  return resolveSwapRouteTokenMeta({}, symbol)
+}
+
 function RouteVisualPath({
   routeSummary,
   routeLegs,
+  routeTokenLookup,
 }: {
   routeSummary: string | null
   routeLegs: SwapRouteLeg[]
+  routeTokenLookup?: Record<string, SwapRouteTokenMeta>
 }) {
   const protocolSummary = summarizeRouteProtocols(routeLegs)
 
   if (routeLegs.length > 0) {
-    const tokens: string[] = []
-    for (const leg of routeLegs) {
-      if (tokens.length === 0) tokens.push(leg.tokenIn)
-      tokens.push(leg.tokenOut)
-    }
-
     return (
       <div className="space-y-2">
         {protocolSummary ? (
@@ -61,9 +90,14 @@ function RouteVisualPath({
         <div className="flex flex-wrap items-end gap-1">
           {routeLegs.map((leg, index) => (
             <span key={`${leg.tokenIn}-${leg.tokenOut}-${index}`} className="flex items-end gap-1">
-              {index === 0 ? <RouteTokenChip label={leg.tokenIn} /> : null}
+              {index === 0 ? (
+                <RouteTokenChip meta={routeMetaForSymbol(routeTokenLookup, leg.tokenIn)} />
+              ) : null}
               <RouteHopConnector />
-              <RouteTokenChip label={leg.tokenOut} feePercent={leg.feePercentLabel} />
+              <RouteTokenChip
+                meta={routeMetaForSymbol(routeTokenLookup, leg.tokenOut)}
+                feePercent={leg.feePercentLabel}
+              />
             </span>
           ))}
         </div>
@@ -81,11 +115,11 @@ function RouteVisualPath({
   if (tokens.length === 0) return null
 
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className="flex flex-wrap items-end gap-1">
       {tokens.map((token, index) => (
-        <span key={`${token}-${index}`} className="flex items-center gap-1">
+        <span key={`${token}-${index}`} className="flex items-end gap-1">
           {index > 0 ? <RouteHopConnector /> : null}
-          <RouteTokenChip label={token} />
+          <RouteTokenChip meta={routeMetaForSymbol(routeTokenLookup, token)} />
         </span>
       ))}
     </div>
@@ -95,6 +129,7 @@ function RouteVisualPath({
 export function SwapRoutePopover({
   routeSummary,
   routeLegs = [],
+  routeTokenLookup,
   aggregator,
   showUniswapBranding = true,
 }: SwapRoutePopoverProps) {
@@ -112,7 +147,11 @@ export function SwapRoutePopover({
       </div>
 
       {hasRoute ? (
-        <RouteVisualPath routeSummary={routeSummary} routeLegs={routeLegs} />
+        <RouteVisualPath
+          routeSummary={routeSummary}
+          routeLegs={routeLegs}
+          routeTokenLookup={routeTokenLookup}
+        />
       ) : (
         <p className="text-xs text-zinc-400">Route details appear after a quote is ready.</p>
       )}

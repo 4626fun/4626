@@ -26,7 +26,10 @@ import {
 } from './cardUnderlay.js'
 import { renderV2ExtendedFieldPattern } from './fieldPattern.js'
 import { renderV2PaddingSilhouetteBleed } from './paddingSilhouette.js'
-import { applyV2SubjectLut } from './subjectGrade.js'
+import {
+  applyV2SubjectLut,
+  subjectSegmentationMaskFromRgba,
+} from './subjectGrade.js'
 
 export type { PremiumTokenIconParams }
 
@@ -51,6 +54,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
     breakoutLayer,
     analysis,
     subjectPlacement,
+    rembgMaskPngRgba,
   } = subject
   const sourceClass = analysis?.sourceClass as SubjectSourceClass | undefined
   const skipHeroBackgroundDarken = analysis ? shouldSkipV2HeroBackgroundDarken(analysis) : false
@@ -60,11 +64,13 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
 
   const segmentationMask = preparedHeroCutoutBreakout
     ? null
-    : await resolveV2SegmentationMaskForIcon({
-        sourceImage: params.sourceImage,
-        sourceClass: segmentationSourceClass,
-        size,
-      })
+    : rembgMaskPngRgba
+      ? await subjectSegmentationMaskFromRgba(rembgMaskPngRgba, size, size)
+      : await resolveV2SegmentationMaskForIcon({
+          sourceImage: params.sourceImage,
+          sourceClass: segmentationSourceClass,
+          size,
+        })
 
   const stackSourceClass =
     analysis && subjectPlacement ? resolveV2CardUnderlaySourceClass(analysis) : sourceClass
@@ -137,20 +143,10 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
   )
 
   if (breakoutLayer) {
-    const breakoutBase = preparedHeroCutoutBreakout
-      ? await applyPremiumHeroPresentation(breakoutLayer, sourceClass, size)
-      : await solidifyBreakoutLayer(
-          await finishV2SubjectLayer({
-            layer: breakoutLayer,
-            layout,
-            sourceImage: params.sourceImage,
-            sourceClass,
-            size,
-            segmentationMask,
-            edgeVignette: false,
-            skipBackgroundDarken: skipHeroBackgroundDarken,
-          }),
-        )
+    let breakoutBase = await applyPremiumHeroPresentation(breakoutLayer, sourceClass, size)
+    if (!preparedHeroCutoutBreakout) {
+      breakoutBase = await solidifyBreakoutLayer(breakoutBase)
+    }
     const breakout = await applyV2SubjectLut(breakoutBase)
     overlays.push(compositeStep(breakout, 'over'))
   }
