@@ -664,7 +664,7 @@ function byChronologicalOrder(a: NormalizedHistoryMessage, b: NormalizedHistoryM
 
 function isAlfaClubSlashCommandText(text: string): boolean {
   if (!text.trimStart().startsWith('/')) return false
-  return matchesAnyCommandFamily(text, ['alfaclub', 'hermit'])
+  return matchesAnyCommandFamily(text, ['alfaclub', 'hermit', 'help'])
 }
 
 /**

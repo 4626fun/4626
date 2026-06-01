@@ -638,6 +638,22 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     expect(commands[0]?.text).toBe('/alfa status')
   })
 
+  it('accepts /halp commands for help-family routing', () => {
+    const commands = collectAlfaClubCommandMessages({
+      messages: [
+        {
+          id: 'm-halp',
+          date: Date.now(),
+          sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+          text: '/halp',
+        },
+      ],
+      seenMessageIds: new Set<string>(),
+    })
+    expect(commands).toHaveLength(1)
+    expect(commands[0]?.text).toBe('/halp')
+  })
+
   it('cron mode does not re-run /gmeow when ingest upsert is an update (not a new row)', async () => {
     const nowMs = Date.now()
     mockHistoryMessages([

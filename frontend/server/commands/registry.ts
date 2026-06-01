@@ -66,6 +66,7 @@ const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
   {
     head: 'help',
     family: 'help',
+    aliases: ['halp'],
     botMenu: {
       private: 'Show available commands',
       group: 'Show available commands',
