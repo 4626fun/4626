@@ -1,4 +1,4 @@
-/** Shared Hermit + AlfaClub help copy for `/help` and `/hermit help`. */
+/** Shared Hermit + AlfaClub help copy for `/help`, `/halp`, and `/hermit help`. */
 
 export const HERMIT_TONE_NAMES = [
   'clean',
@@ -15,6 +15,10 @@ export const HERMIT_COMMAND_ROOM_HELP_MAX_CHARS = 2_000
 
 const ROOM_1659_ID = '1659'
 
+export type HermitCommandRoomHelpOptions = {
+  positionBlock?: string | null
+}
+
 function formatHermitCreativeSection(): string[] {
   return [
     '**Hermit — creative (read-only)**',
@@ -22,6 +26,13 @@ function formatHermitCreativeSection(): string[] {
     '• `/meme <prompt>` — meme / image concept',
     '• `/hermit copy|announce|quest|tone <text>` — room copy drafts',
     '• `/hermit setup` · `/hermit help`',
+  ]
+}
+
+function formatHermitCreativeSectionCompact(): string[] {
+  return [
+    '**Commands**',
+    '• `/gmeow` · `/meme` · `/hermit copy …` · `/alfa` · `/alfa brief`',
   ]
 }
 
@@ -64,10 +75,36 @@ function formatRoomOrientationSection(roomId: string): string[] {
   ]
 }
 
+function trimHelpToBudget(text: string): string {
+  if (text.length <= HERMIT_COMMAND_ROOM_HELP_MAX_CHARS) return text
+  return `${text.slice(0, HERMIT_COMMAND_ROOM_HELP_MAX_CHARS - 1).trimEnd()}…`
+}
+
 /** Full help body for Hermit command rooms (`ALFACLUB_HERMIT_COMMAND_ROOMS`). */
-export function formatHermitCommandRoomHelp(roomId: string): string {
+export function formatHermitCommandRoomHelp(
+  roomId: string,
+  options?: HermitCommandRoomHelpOptions,
+): string {
   const id = String(roomId ?? '').trim() || 'unknown'
-  return [
+  const positionBlock = options?.positionBlock?.trim() || null
+
+  if (positionBlock) {
+    const body = [
+      '🐈‍⬛ **4626 / Agent Hermit**',
+      '',
+      positionBlock,
+      '',
+      ...formatHermitCreativeSectionCompact(),
+      '',
+      '• `/hermit prefs` · `/hermit tone` · `/help` refreshes this snapshot',
+      ...(id === ROOM_1659_ID
+        ? ['', '_Room 1659 reads Hyperliquid + FriendKey for the wallet sending the command._']
+        : []),
+    ].join('\n')
+    return trimHelpToBudget(body)
+  }
+
+  const body = [
     '🐈‍⬛ **4626 / Agent Hermit — room help**',
     '',
     ...formatRoomOrientationSection(id),
@@ -82,8 +119,9 @@ export function formatHermitCommandRoomHelp(roomId: string): string {
     ...(formatRoomContextSection(id).length > 0 ? ['', ...formatRoomContextSection(id)] : []),
     '',
     '**Examples** — `/gmeow stressed market` · `/meme akita dark luxury` · `/hermit announce reward drop in 30m`',
-    'Send `/help` anytime for this list.',
+    'Send `/help` or `/halp` anytime for this list.',
   ].join('\n')
+  return trimHelpToBudget(body)
 }
 
 /** Short intro for ops scripts; points readers at `/help` for the full catalog. */
@@ -98,7 +136,7 @@ export function formatHermitRoomIntro(roomId: string): string {
     '• `/gmeow` — GIF + one-liner (fastest demo)',
     '• `/meme <prompt>` — meme / image idea',
     '• `/hermit copy <idea>` — short post + alternates',
-    '• `/help` — full command list',
+    '• `/help` or `/halp` — your position + command list',
     '',
     `Room **${id}** · cooldowns apply on /gmeow and /meme so we do not flood chat.`,
   ].join('\n')

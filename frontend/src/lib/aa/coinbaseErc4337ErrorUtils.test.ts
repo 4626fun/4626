@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildPreflightSimulationRejectionError,
+  isSwapPreflightSimulationRetryable,
   buildUserOpGasEstimateFailureError,
   extractUserOpReceiptTxHash,
   isBundlerStubSignatureSimulationArtifact,
@@ -239,7 +240,7 @@ describe('mapUserOpExecutionFailureMessage', () => {
 })
 
 describe('buildPreflightSimulationRejectionError', () => {
-  it('returns Zora-specific copy for Universal Router calls', () => {
+  it('returns generic swap copy for Universal Router ExecutionFailed without slippage hint', () => {
     const err = buildPreflightSimulationRejectionError({
       simResult: {
         directCallResult: {
@@ -250,9 +251,24 @@ describe('buildPreflightSimulationRejectionError', () => {
       firstCallTo: '0x6fF5693b99212Da76ad316178A184AB56D299b43',
     })
     expect(err).toBeInstanceOf(PreflightSimulationRejectionError)
-    expect(err.message).toContain('Zora swap would revert')
-    expect(err.message).toContain('Permit2')
+    expect(err.message).toContain('would fail on-chain')
     expect(isPreflightSimulationRejection(err)).toBe(true)
+    expect(isSwapPreflightSimulationRetryable(err)).toBe(true)
+  })
+
+  it('returns slippage-specific copy when inner revert indicates minOut failure', () => {
+    const err = buildPreflightSimulationRejectionError({
+      simResult: {
+        directCallResult: {
+          errorName: 'ExecutionFailed(uint256,bytes)',
+          revertData:
+            '0x2c4029e900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000486aa621000000000000000000000000000000000000000000000000000000000',
+        },
+      },
+      firstCallTo: '0x6fF5693b99212Da76ad316178A184AB56D299b43',
+    })
+    expect(err.message).toContain('Slippage tolerance is too tight')
+    expect(isSwapPreflightSimulationRetryable(err)).toBe(true)
   })
 
   it('returns Permit2 signature copy when inner revert is InvalidContractSignature', () => {

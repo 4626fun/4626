@@ -39,6 +39,9 @@ export function resolveAutoSwapSlippagePct(input: ResolveAutoSwapSlippageInput):
   let floor = 0.5
   if (isZora) {
     floor = isCanonical ? 5 : 2
+  } else if (isCanonical) {
+    // Creator-coin Uniswap routes on CSW need more than API DEFAULT auto slippage.
+    floor = 2
   }
 
   const impact = input.priceImpactPercent
@@ -48,6 +51,15 @@ export function resolveAutoSwapSlippagePct(input: ResolveAutoSwapSlippageInput):
   }
 
   return snapSlippageToLadder(floor)
+}
+
+/** Next ladder step after a simulation/send failure (Uniswap + canonical CSW). */
+export function pickNextSwapSlippageEscalationPct(slippagePct: number): number | null {
+  const capped = Math.min(SWAP_AUTO_SLIPPAGE_ESCALATION_CAP_PCT, Math.max(0.5, slippagePct))
+  for (const step of SLIPPAGE_LADDER_PCT) {
+    if (step > capped + 1e-9) return step
+  }
+  return null
 }
 
 export function formatSlippagePctForDisplay(pct: number): string {

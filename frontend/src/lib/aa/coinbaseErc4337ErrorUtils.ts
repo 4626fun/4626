@@ -467,6 +467,48 @@ export function isPreflightSimulationRejection(error: unknown): error is Preflig
   return error instanceof PreflightSimulationRejectionError
 }
 
+/** True when a fresh quote + higher slippage may fix a CSW preflight revert (not Permit2/auth). */
+export function isSwapPreflightSimulationRetryable(error: unknown): boolean {
+  if (isPreflightSimulationRejection(error)) {
+    const msg = error.message.toLowerCase()
+    if (
+      msg.includes('permit2 rejected') ||
+      msg.includes('permit2 approval is missing') ||
+      msg.includes('malformed or stale') ||
+      msg.includes('transfer_from_failed') ||
+      msg.includes('not an on-chain owner') ||
+      msg.includes('embedded signer is not')
+    ) {
+      return false
+    }
+    return (
+      msg.includes('slippage') ||
+      msg.includes('would fail on-chain') ||
+      msg.includes('would revert') ||
+      msg.includes('stale') ||
+      msg.includes('too tight') ||
+      msg.includes('liquidity')
+    )
+  }
+  const msg = getErrorDiagnosticMessage(error).toLowerCase()
+  if (
+    msg.includes('permit2 rejected') ||
+    msg.includes('0xb0669cbc') ||
+    msg.includes('invalidcontractsignature') ||
+    msg.includes('not an on-chain owner')
+  ) {
+    return false
+  }
+  return (
+    msg.includes('would fail on-chain') ||
+    msg.includes('would revert') ||
+    msg.includes('0x2c4029e9') ||
+    msg.includes('slippage') ||
+    msg.includes('stale quote') ||
+    msg.includes('liquidity')
+  )
+}
+
 export function parseUserOpGasLimitField(value: unknown): bigint | null {
   if (typeof value === 'bigint' && value > 0n) return value
   if (typeof value === 'number' && Number.isFinite(value) && value > 0) return BigInt(Math.floor(value))
@@ -551,7 +593,11 @@ export function extractExecutionFailedInnerSelector(revertData?: Hex): string | 
       return inner.slice(0, 10).toLowerCase()
     }
   } catch {
-    return null
+    // Fall through — some RPC simulators return partially encoded nested reverts.
+  }
+  const lower = revertData.toLowerCase()
+  for (const selector of ['0x486aa621', '0x8199f5f3', '0xb0669cbc', '0x3b99b53d']) {
+    if (lower.includes(selector.slice(2))) return selector
   }
   return null
 }
@@ -585,6 +631,24 @@ export function buildPreflightSimulationRejectionError(params: {
     )
   }
 
+  const detail = direct?.error ?? params.simResult.error ?? 'Underlying call would revert'
+  const detailLc = String(detail).toLowerCase()
+  const slippageInnerSelectors = new Set(['0x486aa621', '0x8199f5f3'])
+  const likelySlippageFailure =
+    (innerSelector != null && slippageInnerSelectors.has(innerSelector)) ||
+    detailLc.includes('slippage') ||
+    detailLc.includes('too little') ||
+    detailLc.includes('toolittle') ||
+    detailLc.includes('minimum output') ||
+    detailLc.includes('minout') ||
+    detailLc.includes('stf')
+
+  if (likelySlippageFailure) {
+    return new PreflightSimulationRejectionError(
+      'Slippage tolerance is too tight for this pool. Auto mode will retry with higher slippage; you can also raise slippage manually and refresh the quote.',
+    )
+  }
+
   if (
     errorName === 'ExecutionFailed(uint256,bytes)' ||
     revertData?.startsWith('0x2c4029e9') ||
@@ -592,9 +656,6 @@ export function buildPreflightSimulationRejectionError(params: {
   ) {
     return new PreflightSimulationRejectionError(ZORA_SWAP_SIMULATION_FAILED_MESSAGE)
   }
-
-  const detail = direct?.error ?? params.simResult.error ?? 'Underlying call would revert'
-  const detailLc = String(detail).toLowerCase()
   if (detailLc.includes('transfer_from_failed')) {
     return new PreflightSimulationRejectionError(
       'Permit2 approval is missing for this smart-wallet swap. Refresh the quote, sign the Permit2 prompt when asked, then retry.',

@@ -388,7 +388,10 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
       return resolveVaultRole({ senderWallet: params.senderWallet, vault })
     }
 
-    const helpResult = executeHelpCommandFamily(raw, { chatId: params.chatId })
+    const helpResult = await executeHelpCommandFamily(raw, {
+      chatId: params.chatId,
+      senderWallet: params.senderWallet,
+    })
     if (helpResult) {
       return helpResult
     }

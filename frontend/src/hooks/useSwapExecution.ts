@@ -1196,7 +1196,6 @@ export function useSwapExecution(params: {
       params.executionAddress,
       effectiveParsedSlippage,
       params.slippageAuto,
-      params.parsedSlippage,
       permit2DisabledForSwap,
       params.executionMode,
       params.preferZoraTradeRoute,

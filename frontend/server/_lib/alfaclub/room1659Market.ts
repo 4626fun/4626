@@ -433,6 +433,49 @@ export type Room1659MarketSummaryForPrompt = {
   yourPosition: string
 }
 
+/** Compact position summary for `/help` and `/halp` in room 1659. */
+export function formatRoom1659PositionHelpBlock(
+  snapshot: Room1659MarketSnapshot,
+  walletAddress?: string | null,
+): string {
+  const walletLabel = walletAddress
+    ? `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}`
+    : 'your wallet'
+  const lines: string[] = [`**Your position** (${walletLabel})`]
+
+  if (!snapshot.ok) {
+    lines.push('_Live position data unavailable right now._')
+    return lines.join('\n')
+  }
+
+  if (snapshot.userPosition) {
+    const p = snapshot.userPosition
+    const side = (p.side ?? 'flat').toUpperCase()
+    const size = p.sizeUsd != null ? `$${Number(p.sizeUsd).toFixed(0)}` : '?'
+    const pnl =
+      p.unrealizedPnlUsd != null
+        ? `${p.unrealizedPnlUsd >= 0 ? '+' : ''}$${Number(p.unrealizedPnlUsd).toFixed(0)} PnL`
+        : null
+    const liq =
+      p.liquidationPrice != null ? `LIQ @ $${Number(p.liquidationPrice).toFixed(2)}` : null
+    lines.push(`- ${side} ${size}${pnl ? ` · ${pnl}` : ''}${liq ? ` · ${liq}` : ''}`)
+  } else {
+    lines.push('- No open Hyperliquid position for this wallet in room 1659.')
+  }
+
+  const meta: string[] = []
+  if (snapshot.hype != null) meta.push(`Hype **${snapshot.hype}**`)
+  if (snapshot.liquidation != null) meta.push(`Liq **${snapshot.liquidation}**`)
+  const keyBalance = snapshot.onchain?.userBalance
+  if (keyBalance != null && keyBalance > 0n) {
+    const keys = Number(keyBalance)
+    meta.push(`${keys.toLocaleString('en-US')} FriendKey${keys === 1 ? '' : 's'}`)
+  }
+  if (meta.length > 0) lines.push(`- ${meta.join(' · ')}`)
+
+  return lines.join('\n')
+}
+
 /**
  * Produces a high-signal, theatrical-marketing-ready block for Hermit.
  * This is the text that actually reaches the model when someone types

@@ -31,7 +31,7 @@ export async function renderV2PaddingSilhouetteBleed(params: {
   if (!segmentationMask || !placement) return null
   if (sourceClass === 'brightBadge') return null
 
-  // Full-card rembg mask — breakout ears sit above the placed art box.
+  // Full-card rembg mask, clipped to padding outside the bezel (top-center breakout band excluded).
   const blurPx = Math.max(1.2, PADDING_SILHOUETTE_BLUR_RATIO * size)
   let silhouette = await sharp(segmentationMask.subjectMaskPng)
     .ensureAlpha()
