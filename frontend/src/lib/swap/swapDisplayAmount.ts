@@ -33,11 +33,48 @@ export function parseSwapDisplayNumber(raw: string | number): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-/** Comma-grouped balance with at most 2 decimal places (e.g. 654,538.89). */
-function formatBalanceCentsLabel(abs: number): string {
-  return trimSwapAmountTrailingZeros(
-    abs.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }),
-  )
+/** Round a decimal string to cents without losing large integer precision. */
+function roundBalanceStringToCents(normalized: string): string {
+  const negative = normalized.startsWith('-')
+  const unsigned = (negative ? normalized.slice(1) : normalized).trim()
+  if (!unsigned || unsigned === '0') return '0'
+  if (!/^\d*\.?\d+$/.test(unsigned)) {
+    const n = parseSwapDisplayNumber(unsigned)
+    return n == null ? '0' : roundBalanceStringToCents(String(Math.abs(n)))
+  }
+
+  const prefix = negative ? '-' : ''
+  const [intPartRaw = '0', fracPart = ''] = unsigned.split('.')
+  let intDigits = intPartRaw.replace(/^0+(?=\d)/, '') || '0'
+
+  const d0 = fracPart[0] ?? '0'
+  const d1 = fracPart[1] ?? '0'
+  const d2 = fracPart[2] ?? '0'
+
+  let c0 = Number(d0)
+  let c1 = Number(d1)
+  if (d2 >= '5') {
+    c1 += 1
+    if (c1 >= 10) {
+      c1 = 0
+      c0 += 1
+      if (c0 >= 10) {
+        c0 = 0
+        intDigits = (BigInt(intDigits) + 1n).toString()
+      }
+    }
+  }
+
+  const groupedInt = BigInt(intDigits).toLocaleString('en-US')
+  if (!fracPart || (c0 === 0 && c1 === 0)) {
+    return `${prefix}${groupedInt}`
+  }
+
+  return trimSwapAmountTrailingZeros(`${prefix}${groupedInt}.${c0}${String(c1)}`)
+}
+
+function formatBalanceCentsLabelFromNormalized(normalized: string): string {
+  return roundBalanceStringToCents(normalized.replace(/^-/, ''))
 }
 
 /**
@@ -58,16 +95,16 @@ export function formatSwapTokenBalanceLabel(raw: string | number, symbol?: strin
 
   if (stable) {
     if (abs >= 1) {
-      return formatBalanceCentsLabel(abs)
+      return formatBalanceCentsLabelFromNormalized(normalized)
     }
     return trimSwapAmountTrailingZeros(abs.toFixed(6))
   }
 
   if (abs >= 1) {
-    return formatBalanceCentsLabel(abs)
+    return formatBalanceCentsLabelFromNormalized(normalized)
   }
   if (abs >= 0.01) {
-    return formatBalanceCentsLabel(abs)
+    return formatBalanceCentsLabelFromNormalized(normalized)
   }
   if (abs >= 0.00001) {
     return trimSwapAmountTrailingZeros(abs.toFixed(5))

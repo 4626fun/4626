@@ -62,7 +62,7 @@ import { fetchWalletZoraHoldingsBundle } from '@/lib/zora/walletHoldings'
 import { deriveSwapUsdEstimates, isNativeEthToken, isUsdStablecoinToken } from '@/lib/swap/swapAmountUsd'
 import { formatSlippagePctForDisplay } from '@/lib/swap/swapAutoSlippage'
 import { extractSwapQuoteDetails } from '@/lib/swap/swapQuoteDetails'
-import { amountUnitsFromBalancePercent } from '@/lib/swap/swapDisplayAmount'
+import { amountUnitsFromBalancePercent, formatSwapTokenBalanceLabel } from '@/lib/swap/swapDisplayAmount'
 import { useSwapAssetBalance } from '@/lib/swap/useSwapAssetBalance'
 import { useSwapTokenUsdPrices } from '@/lib/swap/useSwapTokenUsdPrices'
 import { isBaseAccountWallet, useSwapSubAccountRuntime } from '@/lib/swap/useSwapSubAccountRuntime'
@@ -362,11 +362,9 @@ function pickPrivyEmbeddedEoaAddressFromUser(user: any): Address | null {
 
 function fmtBalFromAmount(amount: string | null | undefined, symbol: string): string | undefined {
   if (amount == null || amount === '') return undefined
-  const n = parseFloat(amount)
-  if (!Number.isFinite(n)) return undefined
-  if (n === 0) return `0 ${symbol}`
-  if (n < 0.0001) return `<0.0001 ${symbol}`
-  return `${parseFloat(n.toPrecision(4))} ${symbol}`
+  const formatted = formatSwapTokenBalanceLabel(amount, symbol)
+  if (!formatted || formatted === '0') return `0 ${symbol}`
+  return `${formatted} ${symbol}`
 }
 
 function parsePositiveAmountToUnits(value: string, decimals: number): bigint | null {

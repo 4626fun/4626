@@ -39,7 +39,7 @@ describe('formatSwapDisplayAmount', () => {
 describe('formatSwapTokenBalanceLabel', () => {
   it('comma-groups large balances to cents (654,538.89 style)', () => {
     expect(formatSwapTokenBalanceLabel('654538.89230025562217', 'akita')).toBe('654,538.89')
-    expect(formatSwapTokenBalanceLabel('103654538.896', 'akita')).toBe('103,654,538.90')
+    expect(formatSwapTokenBalanceLabel('103654538.896', 'akita')).toBe('103,654,538.9')
     expect(formatSwapTokenBalanceLabel('10312658.93179696315806', 'b20')).toBe('10,312,658.93')
     expect(formatSwapTokenBalanceLabel('103300000', 'akita')).toBe('103,300,000')
     expect(formatSwapTokenBalanceLabel('103300000.78', 'akita')).toBe('103,300,000.78')
