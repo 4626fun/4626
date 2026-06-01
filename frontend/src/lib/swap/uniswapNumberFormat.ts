@@ -46,7 +46,6 @@ function nDecimals(decimals: number): FormatCreator {
 }
 
 const TwoDecimals = nDecimals(2)
-const ThreeDecimals = nDecimals(3)
 const FiveDecimals = nDecimals(5)
 
 const FiveDecimalsMaxTwoDecimalsMin: FormatCreator = {
@@ -139,7 +138,7 @@ function getFormatterRule(input: number, formatter: Formatter): FormatterRule {
       return rule
     }
   }
-  return { formatter: formatter.defaultFormat }
+  return { upperBound: Infinity, formatter: formatter.defaultFormat }
 }
 
 function applyFormatterRule(input: number, rule: FormatterRule): string {

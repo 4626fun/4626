@@ -10,7 +10,6 @@ import { ensureVaultAuxiliaryDeployBatcherOnFork } from './ensureVaultAuxiliaryD
 const DEFAULT_FORK_BALANCE_HEX = '0x56bc75e2d63100000' as Hex
 
 const ANVIL_FORK_MODE: ForkImpersonationMode = {
-  name: 'anvil',
   impersonateMethod: 'anvil_impersonateAccount',
   stopMethod: 'anvil_stopImpersonatingAccount',
   setBalanceMethod: 'anvil_setBalance',

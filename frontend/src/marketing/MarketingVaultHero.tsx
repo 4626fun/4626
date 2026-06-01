@@ -16,23 +16,24 @@ function VaultScene() {
 
   useFrame((state, dt) => {
     if (!root.current) return
-    root.current.rotation.y += dt * 0.1
+    root.current.rotation.y += dt * 0.05
     const t = state.clock.elapsedTime
-    const tx = mouse.x * 0.6
-    const ty = mouse.y * 0.36
-    root.current.rotation.y += tx * 0.012
-    root.current.rotation.x = -0.22 + ty * 0.28
-    root.current.position.y = Math.sin(t * 0.7) * 0.04 - scrollY * 0.0006
-    root.current.position.x = mouse.x * 0.16
+    const tx = mouse.x * 0.45
+    const ty = mouse.y * 0.28
+    root.current.rotation.y += tx * 0.007
+    root.current.rotation.x = -0.19 + ty * 0.16
+    root.current.position.y = Math.sin(t * 0.6) * 0.03 - scrollY * 0.0004
+    root.current.position.x = mouse.x * 0.1
   })
 
-  const particleCount = lowPower ? 120 : 420
+  const particleCount = lowPower ? 80 : 190
 
   return (
     <>
-      <ambientLight intensity={0.35} color="#1a1035" />
-      <directionalLight position={[2.5, 3.5, 2.5]} intensity={1.2} color="#c4b5fd" />
-      <directionalLight position={[-2.5, -0.5, 0.5]} intensity={0.55} color="#6366f1" />
+      <ambientLight intensity={0.22} color="#090911" />
+      <directionalLight position={[2.6, 2.8, 3.2]} intensity={0.78} color="#c8d3ff" />
+      <directionalLight position={[-2.5, 0.8, -2.2]} intensity={0.36} color="#7a67c8" />
+      <directionalLight position={[0.2, -1.8, 1.2]} intensity={0.2} color="#2b2245" />
 
       <group ref={root}>
         <Suspense fallback={null}>
@@ -45,9 +46,9 @@ function VaultScene() {
 
       <EffectComposer enableNormalPass={false}>
         <Bloom
-          intensity={0.35}
-          luminanceThreshold={0.72}
-          luminanceSmoothing={0.4}
+          intensity={0.2}
+          luminanceThreshold={0.78}
+          luminanceSmoothing={0.52}
           mipmapBlur
         />
       </EffectComposer>
@@ -75,11 +76,11 @@ export function MarketingVaultHero() {
       className="hero__vault-canvas"
       style={{ width: '100%', height: '100%', display: 'block' }}
       gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
-      camera={{ position: [0, 0.35, 6.6], fov: 22, near: 0.05, far: 100 }}
+      camera={{ position: [0, 0.3, 5.8], fov: 21, near: 0.05, far: 100 }}
       dpr={[1, 2.5]}
       onCreated={({ gl, scene }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping
-        gl.toneMappingExposure = 1.05
+        gl.toneMappingExposure = 0.95
         const tex = makePurpleEnvTexture(gl)
         scene.environment = tex
         scene.background = null

@@ -523,7 +523,7 @@ async function submitCanonicalApprovalBeforeSwap(params: {
     waitForTransactionReceipt?: (args: { hash: `0x${string}`; timeout?: number }) => Promise<unknown>
   } | null | undefined
   onStatus: (status: string) => void
-  updateAttemptDebug: (patch: Partial<SwapTxAttemptDebug> & { stage: 'approval' | 'swap' }) => void
+  updateAttemptDebug: (attempt: SwapTxAttemptDebug) => void
 }): Promise<void> {
   params.onStatus('Submitting token approval…')
   const { routing, send } = await buildAndSendApproval({

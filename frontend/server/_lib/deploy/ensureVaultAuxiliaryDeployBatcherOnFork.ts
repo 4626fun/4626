@@ -86,6 +86,7 @@ type ReadContractClient = {
     args?: readonly unknown[]
   }) => Promise<unknown>
   getBytecode: (args: { address: Address }) => Promise<Hex | undefined>
+  getTransactionCount: (args: { address: Address }) => Promise<number>
 }
 
 type SendTransactionClient = {
@@ -101,21 +102,21 @@ type SendTransactionClient = {
 export type DryRunCall = {
   to: Address
   data: Hex
-  value?: bigint
+  value?: bigint | number | string
 }
 
-export function remapAuxiliaryDeployBatcherCalls(
-  calls: DryRunCall[],
+export function remapAuxiliaryDeployBatcherCalls<T extends DryRunCall>(
+  calls: T[],
   from: Address,
   to: Address,
-): DryRunCall[] {
+): T[] {
   const fromLower = getAddress(from).toLowerCase()
   const toAddress = getAddress(to)
   let rewrote = false
   const remapped = calls.map((call) => {
     if (getAddress(call.to).toLowerCase() !== fromLower) return call
     rewrote = true
-    return { ...call, to: toAddress }
+    return { ...call, to: toAddress } as T
   })
   return rewrote ? remapped : calls
 }

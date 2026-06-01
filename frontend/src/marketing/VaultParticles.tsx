@@ -13,7 +13,7 @@ const VERT = /* glsl */ `
   void main() {
     vPhase = aPhase;
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = 2.2 * (220.0 / -mv.z);
+    gl_PointSize = 1.35 * (220.0 / -mv.z);
     gl_Position = projectionMatrix * mv;
   }
 `
@@ -25,9 +25,9 @@ const FRAG = /* glsl */ `
     vec2 c = gl_PointCoord - 0.5;
     float d = length(c);
     if (d > 0.5) discard;
-    float pulse = 0.55 + 0.45 * sin(uTime * 1.4 + vPhase * 6.28);
-    vec3 col = mix(vec3(0.25, 0.08, 0.45), vec3(0.65, 0.45, 1.0), pulse);
-    float alpha = smoothstep(0.5, 0.08, d) * 0.35 * pulse;
+    float pulse = 0.58 + 0.42 * sin(uTime * 1.15 + vPhase * 6.28);
+    vec3 col = mix(vec3(0.16, 0.08, 0.28), vec3(0.4, 0.28, 0.65), pulse);
+    float alpha = smoothstep(0.5, 0.08, d) * 0.16 * pulse;
     gl_FragColor = vec4(col, alpha);
   }
 `
@@ -44,7 +44,7 @@ export function VaultParticles({ count = 420 }: VaultParticlesProps) {
       fragmentShader: FRAG,
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
     })
   }, [])
 
@@ -52,11 +52,11 @@ export function VaultParticles({ count = 420 }: VaultParticlesProps) {
     const positions = new Float32Array(count * 3)
     const phases = new Float32Array(count)
     for (let i = 0; i < count; i++) {
-      const r = 1.4 + seeded01(i + 1) * 1.6
+      const r = 1.65 + seeded01(i + 1) * 1.3
       const theta = seeded01(i + 11) * Math.PI * 2
       const phi = Math.acos(2 * seeded01(i + 23) - 1)
       positions[i * 3] = r * Math.sin(phi) * Math.cos(theta)
-      positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * 0.65
+      positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * 0.58
       positions[i * 3 + 2] = r * Math.cos(phi)
       phases[i] = seeded01(i + 37)
     }
@@ -73,7 +73,7 @@ export function VaultParticles({ count = 420 }: VaultParticlesProps) {
     // three.js shader uniform mutation inside r3f render loop is intentional.
     // eslint-disable-next-line react-hooks/immutability
     if (uTime) uTime.value = state.clock.elapsedTime
-    if (group.current) group.current.rotation.y = state.clock.elapsedTime * 0.04
+    if (group.current) group.current.rotation.y = state.clock.elapsedTime * 0.022
   })
 
   return (

@@ -237,7 +237,7 @@ function parsePositiveInt(raw: string | undefined, fallback: number, max: number
   return Math.min(parsed, max)
 }
 
-function normalizeRoomId(raw: string | undefined): string | null {
+function normalizeRoomId(raw: string | null | undefined): string | null {
   const value = (raw ?? '').trim()
   return /^\d+$/.test(value) ? value : null
 }

@@ -42,7 +42,7 @@ export function VaultModel({ lightningPulse }: VaultModelProps) {
 
   useFrame((state) => {
     const t = state.clock.elapsedTime
-    const breath = 0.75 + Math.sin(t * 1.6) * 0.2 + lightningPulse * 1.8
+    const breath = 0.22 + Math.sin(t * 1.05) * 0.06 + lightningPulse * 0.95
     for (const m of emissiveMats) {
       // three.js material mutation inside r3f render loop is intentional.
       // eslint-disable-next-line react-hooks/immutability

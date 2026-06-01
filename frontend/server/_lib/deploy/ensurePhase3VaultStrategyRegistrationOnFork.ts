@@ -184,7 +184,10 @@ export async function ensurePhase3VaultStrategyRegistrationOnFork(params: {
         abi: [PHASE3_STRATEGIES_DEPLOYED_EVENT],
         data: log.data,
         topics: log.topics as [Hex, ...Hex[]] | [],
-      })
+      }) as {
+        eventName: string
+        args: { charmStrategy: Address; ajnaStrategy: Address }
+      }
       if (parsed.eventName !== 'Phase3StrategiesDeployed') continue
       charmStrategy = getAddress(parsed.args.charmStrategy as Address)
       ajnaStrategy = getAddress(parsed.args.ajnaStrategy as Address)

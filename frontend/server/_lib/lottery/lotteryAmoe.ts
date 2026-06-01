@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 
 import { getDb } from '../db/postgres.js'
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
-import { ensureMigrationApplied, ensureAmoeSchema } from '../db/schemaBootstrap.js'
+import { ensureMigrationApplied, ensureAmoeSchema as ensureAmoeSchemaBootstrap } from '../db/schemaBootstrap.js'
 import { readWaitlistPointsBreakdown } from '../onboarding/waitlistScoring.js'
 import { resolveAmoePointsProfileId } from './amoeProfileResolve.js'
 import { awardAmoeCheckinPoints } from './amoeWaitlistPoints.js'
@@ -283,7 +283,7 @@ async function ensureAmoeSchema(db: Db): Promise<void> {
   // Condensed path — all core AMOE lottery tables are now in
   // `supabase/migrations/20260527000000_amoe_lottery_tables.sql`
   // (and earlier AMOE migrations) via ensureAmoeSchema().
-  await ensureAmoeSchema(db)
+  await ensureAmoeSchemaBootstrap(db as any)
 
   // AMOE-eligibility view — intentionally kept as a runtime safety net
   // for dev/preview environments (mirrors the migration).
