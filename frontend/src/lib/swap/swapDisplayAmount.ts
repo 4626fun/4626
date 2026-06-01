@@ -33,12 +33,24 @@ export function parseSwapDisplayNumber(raw: string | number): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+/** Comma-grouped balance with at most 2 decimal places (e.g. 654,538.89). */
+function formatBalanceCentsLabel(abs: number): string {
+  return trimSwapAmountTrailingZeros(
+    abs.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }),
+  )
+}
+
 /**
- * Uniswap token-selector style balances: ~2 decimals for large holdings, up to 4–5 for
- * fractional amounts, stables pinned to cents when >= 1.
+ * Token balance labels: comma-grouped with up to 2 decimals for holdings (654,538.89);
+ * stables pinned to cents when >= 1; smaller fractional amounts keep extra precision.
  */
 export function formatSwapTokenBalanceLabel(raw: string | number, symbol?: string): string {
-  const n = parseSwapDisplayNumber(raw)
+  const normalized = String(raw ?? '')
+    .trim()
+    .replace(/,/g, '')
+  if (!normalized || normalized === '0' || normalized === '0.0') return '0'
+
+  const n = parseSwapDisplayNumber(normalized)
   if (n == null || n === 0) return '0'
 
   const abs = Math.abs(n)
@@ -46,22 +58,16 @@ export function formatSwapTokenBalanceLabel(raw: string | number, symbol?: strin
 
   if (stable) {
     if (abs >= 1) {
-      return trimSwapAmountTrailingZeros(
-        abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-      )
+      return formatBalanceCentsLabel(abs)
     }
     return trimSwapAmountTrailingZeros(abs.toFixed(6))
   }
 
-  if (abs >= 1_000) {
-    return trimSwapAmountTrailingZeros(
-      abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    )
-  }
   if (abs >= 1) {
-    return trimSwapAmountTrailingZeros(
-      abs.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 4 }),
-    )
+    return formatBalanceCentsLabel(abs)
+  }
+  if (abs >= 0.01) {
+    return formatBalanceCentsLabel(abs)
   }
   if (abs >= 0.00001) {
     return trimSwapAmountTrailingZeros(abs.toFixed(5))
