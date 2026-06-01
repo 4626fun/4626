@@ -23,11 +23,14 @@ type LogoCacheShape = Record<string, string>
 const STORAGE_KEY = 'swap-token-logo-cache-v1'
 const logoCache: LogoCacheShape = {}
 
+/** Canonical Zora ERC-20 mark — Uniswap's Base asset list does not ship a logo for 0x420…0777. */
+export const ZORA_TOKEN_LOGO_URL = '/brands/zora-token.svg'
+
 const knownTokenLogoSeedByChainAndAddress: Record<string, string> = {
   // ETH / WETH / USDC / USDT / ZORA on Base (common tokens in default swap flow)
   '8453:0x0000000000000000000000000000000000000000': 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
   '8453:0x4200000000000000000000000000000000000006': 'https://assets.coingecko.com/coins/images/2518/small/weth.png',
-  '8453:0x4200000000000000000000000000000000000777': 'https://zora.co/assets/favicon/apple-touch-icon.png',
+  '8453:0x4200000000000000000000000000000000000777': ZORA_TOKEN_LOGO_URL,
   '8453:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913': 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
   '8453:0xfde4c96c8593536e31f229ea8f37b2ad2699bb2': 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
   '8453:0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf': 'https://assets.coingecko.com/coins/images/40143/small/cbbtc.webp',
@@ -137,13 +140,16 @@ export function getTokenLogo(token: TokenLogoSeed): TokenLogoLookup {
   const knownTokenLogo = getKnownTokenLogo(token.address || '', chainId)
   const knownCoreToken = Boolean(knownTokenLogo)
   const shouldUseExternalRegistryFallbacks = token.group === 'core' || knownCoreToken
-  const internalRendererFallback = address
-    ? token.group === 'creator'
-      ? canonicalTokenImageUrl(address, chainId, 'creator')
-      : token.group === 'share'
-        ? canonicalTokenImageUrl(address, chainId, 'share')
-        : canonicalTokenImageUrl(address, chainId)
-    : null
+  const skipPremiumRendererForKnownCore =
+    knownCoreToken && (token.group === 'core' || token.group === undefined)
+  const internalRendererFallback =
+    address && !skipPremiumRendererForKnownCore
+      ? token.group === 'creator'
+        ? canonicalTokenImageUrl(address, chainId, 'creator')
+        : token.group === 'share'
+          ? canonicalTokenImageUrl(address, chainId, 'share')
+          : canonicalTokenImageUrl(address, chainId)
+      : null
   const externalRegistryFallbacks = shouldUseExternalRegistryFallbacks && address ? tokenLogoFallbacksForChain(address, chainId) : []
 
   const groupedFallbacks = dedupe([

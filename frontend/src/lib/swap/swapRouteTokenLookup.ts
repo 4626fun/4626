@@ -2,6 +2,7 @@ import { getAddress, isAddress } from 'viem'
 
 import { CONTRACTS } from '@/config/contracts'
 import type { SwapRouteLeg } from '@/lib/swap/swapQuoteDetails'
+import { ZORA_TOKEN_LOGO_URL } from '@/lib/tokens/tokenLogo'
 import { uniswapBaseLogo } from '@/lib/uniswap/swapUtils'
 
 export type SwapRouteTokenMeta = {
@@ -37,9 +38,19 @@ export function resolveKnownBaseRouteTokenAddress(symbol: string): `0x${string}`
 
 /** Curated logo for common hop symbols — avoids premium renderer chips on route popovers. */
 export function resolveKnownBaseRouteTokenImageUrl(symbol: string): string | null {
-  const address = resolveKnownBaseRouteTokenAddress(symbol)
-  if (!address) return null
-  return uniswapBaseLogo(address)
+  switch (symbol.trim().toUpperCase()) {
+    case 'ZORA':
+      return ZORA_TOKEN_LOGO_URL
+    case 'ETH':
+    case 'WETH':
+      return uniswapBaseLogo(CONTRACTS.weth)
+    case 'USDC':
+      return uniswapBaseLogo(CONTRACTS.usdc)
+    default: {
+      const address = resolveKnownBaseRouteTokenAddress(symbol)
+      return address ? uniswapBaseLogo(address) : null
+    }
+  }
 }
 
 export function buildSwapRouteTokenLookup(params: {

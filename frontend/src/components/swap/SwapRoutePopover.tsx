@@ -5,11 +5,10 @@ import { Tooltip } from '@/components/ui/Tooltip'
 import { cn } from '@/lib/shared/utils'
 import { summarizeRouteProtocols, type SwapRouteLeg } from '@/lib/swap/swapQuoteDetails'
 import {
-  resolveKnownBaseRouteTokenAddress,
+  resolveKnownBaseRouteTokenImageUrl,
   resolveSwapRouteTokenMeta,
   type SwapRouteTokenMeta,
 } from '@/lib/swap/swapRouteTokenLookup'
-import { tokenLogoFallbacks } from '@/lib/uniswap/swapUtils'
 
 type SwapRoutePopoverProps = {
   routeSummary: string | null
@@ -39,17 +38,7 @@ function RouteTokenChip({
     <span className="relative inline-flex shrink-0 flex-col items-center gap-0.5">
       <TokenAvatar
         symbol={meta.symbol}
-        imageUrl={meta.imageUrl}
-        token={
-          meta.address
-            ? {
-                address: meta.address,
-                logoUrl: meta.imageUrl ?? undefined,
-                logoUrls: tokenLogoFallbacks(meta.address),
-                group: resolveKnownBaseRouteTokenAddress(meta.symbol) ? 'core' : undefined,
-              }
-            : undefined
-        }
+        imageUrl={meta.imageUrl ?? resolveKnownBaseRouteTokenImageUrl(meta.symbol)}
         size={24}
         withFallbackLabel
         className="shrink-0"

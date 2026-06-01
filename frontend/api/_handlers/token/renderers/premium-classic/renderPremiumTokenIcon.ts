@@ -977,9 +977,19 @@ async function analyzeSourceImage(params: {
     strongEdgeRatio > 0.09 &&
     strongEdgeRatio < 0.2
 
+  /** Opaque Zora banners with a dominant head/hat band (neste-class) — not pixel grids. */
+  const opaqueBannerIllustration =
+    lowResolution &&
+    !hasTransparency &&
+    topOccupancy > 0.55 &&
+    topOccupancy < 0.94 &&
+    topCenterStdDev > 38 &&
+    strongEdgeRatio < 0.22
+
   const pixelArtLike =
     !brightBadgeLike &&
     !detailedLowResIllustration &&
+    !opaqueBannerIllustration &&
     lowResolution &&
     (colorBucketCount < 620 || meanChroma < 24) &&
     strongEdgeRatio > 0.105
@@ -2852,7 +2862,7 @@ async function createBreakoutAboveFrameMask(params: {
       isPreparedCutout
         ? (
             params.sourceClass === 'pixelArt'
-              ? (isHeroCutout ? 0.62 : 0.78)
+              ? (isHeroCutout ? 0.62 : 0.38)
               : isIllustration ? 0.62 : (isHeroCutout ? 0.42 : 0.42)
           )
         : isIllustration ? 0.38 : 0.05

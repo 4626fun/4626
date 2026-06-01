@@ -63,6 +63,7 @@ import { deriveSwapUsdEstimates, isNativeEthToken, isUsdStablecoinToken } from '
 import { formatSlippagePctForDisplay } from '@/lib/swap/swapAutoSlippage'
 import { extractSwapQuoteDetails } from '@/lib/swap/swapQuoteDetails'
 import { amountUnitsFromBalancePercent, formatSwapTokenBalanceLabel } from '@/lib/swap/swapDisplayAmount'
+import { ZORA_TOKEN_LOGO_URL } from '@/lib/tokens/tokenLogo'
 import { useSwapAssetBalance } from '@/lib/swap/useSwapAssetBalance'
 import { useSwapTokenUsdPrices } from '@/lib/swap/useSwapTokenUsdPrices'
 import { isBaseAccountWallet, useSwapSubAccountRuntime } from '@/lib/swap/useSwapSubAccountRuntime'
@@ -139,8 +140,8 @@ const CORE_TOKENS: TokenOption[] = [
     name: 'Zora',
     address: CONTRACTS.zora,
     group: 'core',
-    logoUrl: uniswapBaseLogo(CONTRACTS.zora),
-    logoUrls: tokenLogoFallbacks(CONTRACTS.zora),
+    logoUrl: ZORA_TOKEN_LOGO_URL,
+    logoUrls: [ZORA_TOKEN_LOGO_URL],
   },
 ]
 
