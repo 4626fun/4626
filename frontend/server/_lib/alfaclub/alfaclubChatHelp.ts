@@ -93,7 +93,7 @@ async function buildHermitComprehensiveHelpPayload(params: {
   }
 
   const sections: string[] = [
-    '🧠 **Agent Hermit — Hyperliquid intelligence brief (opposite of /halp tone)**',
+    '🧠 **Agent Hermit — Hyperliquid intelligence brief**',
     buildHyperliquidPositionReport({
       walletAddress: params.senderWallet,
       hlState: state,
@@ -131,7 +131,7 @@ async function buildHermitComprehensiveHelpPayload(params: {
         }
         if (snapshot.userPosition?.side) {
           marketPulse.push(
-            `- Your latest HL leg: **${snapshot.userPosition.side.toUpperCase()}** · PnL ${
+            `- Room portfolio HL leg (**${snapshot.hyperliquidUser.slice(0, 6)}…${snapshot.hyperliquidUser.slice(-4)}**): **${snapshot.userPosition.side.toUpperCase()}** · PnL ${
               snapshot.userPosition.unrealizedPnlUsd != null
                 ? `${snapshot.userPosition.unrealizedPnlUsd >= 0 ? '+' : ''}$${Number(snapshot.userPosition.unrealizedPnlUsd).toFixed(0)}`
                 : '?'

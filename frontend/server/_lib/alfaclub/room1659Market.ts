@@ -28,6 +28,7 @@ import { readAlfaClubChatBridgeFlags, buildAlfaClubApiHeaders } from './chatBrid
 import { readAlfaClubChatToken } from './chatTokenStore.js'
 import { createPublicClient, http, parseAbi, type Address } from 'viem'
 import { base } from 'viem/chains'
+import { ALFACLUB } from '../wallet/alfaclub.js'
 
 /**
  * Exact port of BondingCurveLib.getPrice from the official FriendDotSpace/contracts repo.
@@ -66,6 +67,31 @@ export function friendKeyGetPrice(supply: bigint, amount: bigint, divisor: bigin
 // USDC on Base has 6 decimals for this bonding curve
 const USDC_DECIMALS = 1_000_000n
 
+const ROOM_1659_DEFAULT_HL_PORTFOLIO_USER = '0xebf94fa19db7d2e7905decd01dae4ea9eb4c1ff2' as const
+const EVM_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
+
+/**
+ * Room 1659 uses a dedicated Hyperliquid portfolio identity for room-level market context.
+ * Override via ROOM_1659_HYPERLIQUID_PORTFOLIO_USER when needed.
+ */
+export function resolveRoom1659HyperliquidPortfolioUser(): string {
+  const configured = String(process.env.ROOM_1659_HYPERLIQUID_PORTFOLIO_USER ?? '').trim()
+  if (EVM_ADDRESS_RE.test(configured)) return configured.toLowerCase()
+  return ROOM_1659_DEFAULT_HL_PORTFOLIO_USER
+}
+
+/** Canonical FriendKey contract for room-key supply/pricing reads on Base. */
+export function resolveRoom1659FriendKeyAddress(): Address {
+  const configured = String(process.env.ROOM_1659_FRIENDKEY_TOKEN ?? '').trim()
+  if (EVM_ADDRESS_RE.test(configured)) return configured as Address
+  return ALFACLUB.friendKey
+}
+
+function normalizeEvmAddress(raw: unknown): string | null {
+  const value = String(raw ?? '').trim()
+  return EVM_ADDRESS_RE.test(value) ? value.toLowerCase() : null
+}
+
 export function formatUsdc(raw: bigint | null | undefined): string {
   if (raw == null) return '?'
   const whole = Number(raw / USDC_DECIMALS)
@@ -75,6 +101,7 @@ export function formatUsdc(raw: bigint | null | undefined): string {
 }
 
 export type Room1659MarketSnapshot = {
+  hyperliquidUser: string
   hype: number | null          // e.g. 67
   liquidation: number | null   // e.g. 69
   userPosition?: {
@@ -136,15 +163,23 @@ export async function resolveRoom1659MarketContext(
   senderAddress: string
 ): Promise<Room1659MarketSnapshot> {
   const now = new Date().toISOString();
+  const defaultHyperliquidUser = resolveRoom1659HyperliquidPortfolioUser()
+  let hyperliquidUser = defaultHyperliquidUser
 
   try {
     // === Real endpoints observed from AlfaClub client in room 1659 ===
 
     // 1. User's spot positions in room 1659 (direct from AlfaClub)
     let userSpotPositions = null;
+    let roomFundWalletAddress: string | null = null
     try {
       const positionsRes = await fetchAlfaClubSpot(`/api/spot/positions?roomId=1659`);
       userSpotPositions = positionsRes?.positions ?? positionsRes ?? null;
+      roomFundWalletAddress = normalizeEvmAddress(positionsRes?.fund?.roomWalletAddress)
+      if (roomFundWalletAddress) {
+        // Prefer room fund wallet from AlfaClub spot API as the canonical HL portfolio user.
+        hyperliquidUser = roomFundWalletAddress
+      }
     } catch (e) {
       // fail open
     }
@@ -152,7 +187,7 @@ export async function resolveRoom1659MarketContext(
     // 2. PNL history for hype signals
     let pnlHistory = null;
     try {
-      pnlHistory = await fetchAlfaClubSpot(`/api/room/pnl-history?roomId=1659&period=7d`);
+      pnlHistory = await fetchAlfaClubSpot(`/api/spot/pnl-history?roomId=1659&period=7d`);
     } catch {}
 
     // 3. Spot token market data (dexscreener for the room's token 0x5b67... ) - great for price/volume as hype signal
@@ -164,13 +199,13 @@ export async function resolveRoom1659MarketContext(
     } catch {}
 
     // 4. Hyperliquid data (rich version)
-    const hlUserState = await getClearinghouseState(senderAddress);
+    const hlUserState = await getClearinghouseState(hyperliquidUser);
 
     // === On-chain FriendKey data for room 1659 (FULLY ENABLED) ===
-    // Official contract from Alfa Club contract list:
-    // 0xAF0Bf8593dC6CA973DF2132731B0F9B5F974FA9F
+    // Official contract from Alfa Club contract list (FriendKey):
+    // ALFACLUB.friendKey
     // Numeric tokenId: 1659 (confirmed by you)
-    const ROOM_1659_FRIENDKEY = (process.env.ROOM_1659_FRIENDKEY_TOKEN || '0xAF0Bf8593dC6CA973DF2132731B0F9B5F974FA9F') as Address;
+    const ROOM_1659_FRIENDKEY = resolveRoom1659FriendKeyAddress();
     let onchainData = null;
     try {
       onchainData = await fetchRoom1659OnchainData(ROOM_1659_FRIENDKEY, senderAddress as Address);
@@ -185,6 +220,7 @@ export async function resolveRoom1659MarketContext(
     const liquidation = hlUserState?.assetPositions?.[0]?.liquidationPx ?? null;
 
     return {
+      hyperliquidUser,
       hype,
       liquidation,
       userPosition: mapToPosition(userSpotPositions, hlUserState),
@@ -195,6 +231,7 @@ export async function resolveRoom1659MarketContext(
     };
   } catch (err: any) {
     return {
+      hyperliquidUser,
       hype: null,
       liquidation: null,
       userPosition: null,
@@ -438,10 +475,16 @@ export function formatRoom1659PositionHelpBlock(
   snapshot: Room1659MarketSnapshot,
   walletAddress?: string | null,
 ): string {
+  const hlLabel = snapshot.hyperliquidUser
+    ? `${snapshot.hyperliquidUser.slice(0, 6)}…${snapshot.hyperliquidUser.slice(-4)}`
+    : 'room portfolio'
   const walletLabel = walletAddress
     ? `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}`
     : 'your wallet'
-  const lines: string[] = [`**Your position** (${walletLabel})`]
+  const lines: string[] = [
+    `**Room 1659 HL position** (${hlLabel})`,
+    `(_viewer wallet: ${walletLabel}_)`,
+  ]
 
   if (!snapshot.ok) {
     lines.push('_Live position data unavailable right now._')
@@ -460,7 +503,7 @@ export function formatRoom1659PositionHelpBlock(
       p.liquidationPrice != null ? `LIQ @ $${Number(p.liquidationPrice).toFixed(2)}` : null
     lines.push(`- ${side} ${size}${pnl ? ` · ${pnl}` : ''}${liq ? ` · ${liq}` : ''}`)
   } else {
-    lines.push('- No open Hyperliquid position for this wallet in room 1659.')
+    lines.push('- No open Hyperliquid position on the room 1659 portfolio user.')
   }
 
   const meta: string[] = []
