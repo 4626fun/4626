@@ -49,7 +49,7 @@ async function readPermit2AllowanceNonce(params: {
     address: permit2Address[base.id],
     functionName: 'allowance',
     args: [params.permitOwner, params.token, params.spender],
-  })) as readonly [bigint, bigint, number]
+  })) as readonly [bigint, number, number]
   return Number(nonce)
 }
 

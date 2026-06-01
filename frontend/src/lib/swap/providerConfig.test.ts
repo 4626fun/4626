@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   getSwapProviderLabel,
   requiresCanonicalExecutionForSwapMode,
   resolveSwapProviderSelection,
+  resolveTradeQuoteClientOptions,
   shouldFallbackToUniswap,
   shouldFallbackToZoraTrade,
 } from './providerConfig'
@@ -35,6 +36,10 @@ describe('swap provider selection', () => {
 })
 
 describe('swap provider guardrail helpers', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('requires canonical execution in cdp and hybrid modes', () => {
     expect(requiresCanonicalExecutionForSwapMode('uniswap')).toBe(false)
     expect(requiresCanonicalExecutionForSwapMode('cdp')).toBe(true)
@@ -57,5 +62,31 @@ describe('swap provider guardrail helpers', () => {
     expect(shouldFallbackToZoraTrade(new Error('No route for pair'))).toBe(true)
     expect(shouldFallbackToZoraTrade(new Error('Insufficient token balance'))).toBe(false)
     expect(shouldFallbackToZoraTrade(new Error('not authenticated'))).toBe(false)
+  })
+
+  it('pins uniswap-only quote requests to the Trading API', () => {
+    vi.stubEnv('VITE_SWAP_PROVIDER', 'uniswap')
+    expect(resolveTradeQuoteClientOptions({ preferZoraTradeRoute: true })).toEqual({
+      providerOverride: 'uniswap',
+      useZoraTradeRoute: false,
+    })
+  })
+
+  it('pins cdp-only quote requests without zora trade route', () => {
+    vi.stubEnv('VITE_SWAP_PROVIDER', 'cdp')
+    expect(resolveTradeQuoteClientOptions({ preferZoraTradeRoute: true })).toEqual({
+      providerOverride: 'cdp',
+      useZoraTradeRoute: false,
+    })
+  })
+
+  it('allows zora trade route only in hybrid mode when preferred', () => {
+    vi.stubEnv('VITE_SWAP_PROVIDER', 'hybrid')
+    expect(resolveTradeQuoteClientOptions({ preferZoraTradeRoute: true })).toEqual({
+      useZoraTradeRoute: true,
+    })
+    expect(resolveTradeQuoteClientOptions({ preferZoraTradeRoute: false })).toEqual({
+      useZoraTradeRoute: false,
+    })
   })
 })

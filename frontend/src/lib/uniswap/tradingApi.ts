@@ -32,6 +32,11 @@ const QUOTE_CACHE_TTL_MS = 8_000
 const quoteCache = new Map<string, { at: number; data: TradeQuoteResponse }>()
 const quoteInFlight = new Map<string, Promise<TradeQuoteResponse>>()
 
+/** Drop cached quotes before review/submit refresh so Uniswap API returns fresh routes. */
+export function invalidateTradeQuoteCache(): void {
+  quoteCache.clear()
+}
+
 export type Routing = components['schemas']['Routing']
 export type QuoteRequest = components['schemas']['QuoteRequest']
 export type QuoteResponse = components['schemas']['QuoteResponse']

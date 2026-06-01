@@ -1,5 +1,6 @@
 import { swapProviderFlag } from '@/lib/flags/featureFlags'
 import { normalizeUniswapError } from '@/lib/uniswap/error'
+import type { TradeQuoteRequest } from '@/lib/uniswap/tradingApi'
 
 export type SwapProvider = 'uniswap' | 'cdp' | 'zora'
 export type SwapProviderMode = 'uniswap' | 'cdp' | 'hybrid'
@@ -101,4 +102,18 @@ export function getSwapProviderLabel(provider: SwapProvider): 'Uniswap' | 'CDP' 
   if (provider === 'cdp') return 'CDP'
   if (provider === 'zora') return 'Zora'
   return 'Uniswap'
+}
+
+/** Client quote requests: pin Uniswap Trading API when mode is uniswap-only. */
+export function resolveTradeQuoteClientOptions(params: {
+  preferZoraTradeRoute?: boolean
+}): Pick<TradeQuoteRequest, 'providerOverride' | 'useZoraTradeRoute'> {
+  const selection = resolveSwapProviderSelection()
+  if (selection.mode === 'uniswap') {
+    return { providerOverride: 'uniswap', useZoraTradeRoute: false }
+  }
+  if (selection.mode === 'cdp') {
+    return { providerOverride: 'cdp', useZoraTradeRoute: false }
+  }
+  return { useZoraTradeRoute: Boolean(params.preferZoraTradeRoute) }
 }

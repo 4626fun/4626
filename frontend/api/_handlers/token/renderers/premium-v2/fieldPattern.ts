@@ -1,6 +1,7 @@
 import sharp from 'sharp'
 
 import type { PremiumLayout, PremiumSubjectPlacement } from '../premium-classic/renderPremiumTokenIcon.js'
+import { createPaddingSpillMask } from './paddingSpillMask.js'
 import {
   extractDarkBackgroundPattern,
   type SubjectSegmentationMask,
@@ -16,32 +17,6 @@ async function applyOpacity(layer: Buffer, opacity: number): Promise<Buffer> {
   return sharp(layer)
     .ensureAlpha()
     .linear([1, 1, 1, opacity], [0, 0, 0, 0])
-    .png()
-    .toBuffer()
-}
-
-/** Card padding outside the bezel — where the dark bg pattern should spill. */
-async function createPaddingOutsideFrameMask(layout: PremiumLayout): Promise<Buffer> {
-  const { size } = layout
-  const cardSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-  <rect width="${size}" height="${size}" rx="${layout.cardRadius}" fill="white"/>
-</svg>`
-  const frameHoleSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-  <rect
-    x="${layout.frameX}"
-    y="${layout.frameY}"
-    width="${layout.frameSize}"
-    height="${layout.frameSize}"
-    rx="${layout.frameRadius}"
-    fill="#000"
-  />
-</svg>`
-  const [card, hole] = await Promise.all([
-    sharp(Buffer.from(cardSvg)).png().toBuffer(),
-    sharp(Buffer.from(frameHoleSvg)).png().toBuffer(),
-  ])
-  return sharp(card)
-    .composite([{ input: hole, blend: 'dest-out' }])
     .png()
     .toBuffer()
 }
@@ -76,7 +51,7 @@ export async function renderV2ExtendedFieldPattern(params: {
     .png()
     .toBuffer()
 
-  const paddingMask = await createPaddingOutsideFrameMask(layout)
+  const paddingMask = await createPaddingSpillMask(layout)
   pattern = await sharp(pattern)
     .ensureAlpha()
     .composite([{ input: paddingMask, blend: 'dest-in' }])

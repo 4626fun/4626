@@ -1,6 +1,7 @@
 import sharp from 'sharp'
 
 import type { PremiumLayout, PremiumSubjectPlacement } from '../premium-classic/renderPremiumTokenIcon.js'
+import { createPaddingSpillMask } from './paddingSpillMask.js'
 import type { SubjectSegmentationMask } from './subjectGrade.js'
 import type { SubjectSourceClass } from './subject.js'
 
@@ -13,31 +14,6 @@ async function applyOpacity(layer: Buffer, opacity: number): Promise<Buffer> {
   return sharp(layer)
     .ensureAlpha()
     .linear([1, 1, 1, opacity], [0, 0, 0, 0])
-    .png()
-    .toBuffer()
-}
-
-async function createPaddingOutsideFrameMask(layout: PremiumLayout): Promise<Buffer> {
-  const { size } = layout
-  const cardSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-  <rect width="${size}" height="${size}" rx="${layout.cardRadius}" fill="white"/>
-</svg>`
-  const frameHoleSvg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-  <rect
-    x="${layout.frameX}"
-    y="${layout.frameY}"
-    width="${layout.frameSize}"
-    height="${layout.frameSize}"
-    rx="${layout.frameRadius}"
-    fill="#000"
-  />
-</svg>`
-  const [card, hole] = await Promise.all([
-    sharp(Buffer.from(cardSvg)).png().toBuffer(),
-    sharp(Buffer.from(frameHoleSvg)).png().toBuffer(),
-  ])
-  return sharp(card)
-    .composite([{ input: hole, blend: 'dest-out' }])
     .png()
     .toBuffer()
 }
@@ -73,7 +49,7 @@ export async function renderV2PaddingSilhouetteBleed(params: {
     .png()
     .toBuffer()
 
-  const paddingMask = await createPaddingOutsideFrameMask(layout)
+  const paddingMask = await createPaddingSpillMask(layout)
   silhouette = await sharp(silhouette)
     .ensureAlpha()
     .composite([{ input: paddingMask, blend: 'dest-in' }])
@@ -82,6 +58,6 @@ export async function renderV2PaddingSilhouetteBleed(params: {
 
   const opacity = Number.isFinite(PADDING_SILHOUETTE_OPACITY)
     ? Math.max(0, Math.min(1, PADDING_SILHOUETTE_OPACITY))
-    : 0.52
+    : 0.64
   return applyOpacity(silhouette, opacity)
 }

@@ -7,6 +7,7 @@ import {
   evaluateSwapSessionGate,
   resolveCanonicalSubmitSession,
   shouldDisablePermit2ForSwap,
+  shouldSimulateSwapBuild,
   shouldSimulateSwapTransaction,
 } from './useSwapExecution'
 import { requiresCanonicalExecutionForSwapMode } from '@/lib/swap/providerConfig'
@@ -357,6 +358,46 @@ describe('shouldSimulateSwapTransaction', () => {
 
   it('allows simulation only for standalone swap builds', () => {
     expect(shouldSimulateSwapTransaction(false, false)).toBe(true)
+  })
+})
+
+describe('shouldSimulateSwapBuild', () => {
+  it('never simulates canonical CSW or Zora quote builds', () => {
+    expect(
+      shouldSimulateSwapBuild({
+        executionMode: 'canonical',
+        isZoraQuote: false,
+        requiresApprovalTx: false,
+        wrapsNativeEthForCanonical: false,
+      }),
+    ).toBe(false)
+    expect(
+      shouldSimulateSwapBuild({
+        executionMode: 'eoa',
+        isZoraQuote: true,
+        requiresApprovalTx: false,
+        wrapsNativeEthForCanonical: false,
+      }),
+    ).toBe(false)
+  })
+
+  it('simulates external EOA Uniswap builds when no batching is required', () => {
+    expect(
+      shouldSimulateSwapBuild({
+        executionMode: 'eoa',
+        isZoraQuote: false,
+        requiresApprovalTx: false,
+        wrapsNativeEthForCanonical: false,
+      }),
+    ).toBe(true)
+    expect(
+      shouldSimulateSwapBuild({
+        executionMode: 'eoa',
+        isZoraQuote: false,
+        requiresApprovalTx: true,
+        wrapsNativeEthForCanonical: false,
+      }),
+    ).toBe(false)
   })
 })
 
