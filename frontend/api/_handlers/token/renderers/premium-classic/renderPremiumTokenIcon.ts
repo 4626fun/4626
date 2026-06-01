@@ -3303,7 +3303,15 @@ async function createTopBreakoutSubjectMask(params: {
   }
 
   let contourConstrained = false
-  if (forceAlphaMask && !strictContourGates && !preferUpperSubjectMatte && !isHeroCutout && presentCount > 0) {
+  if (
+    forceAlphaMask &&
+    !strictContourGates &&
+    !preferUpperSubjectMatte &&
+    !isHeroCutout &&
+    !isIllustration &&
+    params.sourceClass !== 'portraitPhoto' &&
+    presentCount > 0
+  ) {
     const contourMask = Buffer.alloc(width * height, 0)
     for (let x = x0; x < x1; x += 1) {
       let topY = -1
@@ -3764,7 +3772,10 @@ export async function renderBreakoutLayer(params: {
       params.subjectMaskKind === 'rembgCutout' &&
       params.sourceClass !== 'illustration',
     breakoutWindow: breakoutWindow ?? undefined,
-    preferUpperSubjectMatte: hasPreparedMaskSource && params.subjectMaskKind === 'rembgCutout',
+    preferUpperSubjectMatte:
+      hasPreparedMaskSource &&
+      params.subjectMaskKind === 'rembgCutout' &&
+      params.sourceClass === 'pixelArt',
   })
   let breakoutWindowForMask = breakoutWindow
   if ((params.subjectMaskKind === 'rembgCutout' || params.subjectMaskKind === 'heroCutout') && subjectMask) {
@@ -3831,6 +3842,10 @@ export async function renderBreakoutLayer(params: {
       }
     }
   }
+  const breakoutSeedCanvas =
+    params.subjectMaskKind === 'rembgCutout'
+      ? (params.sourceClass === 'pixelArt' ? (subjectRefCanvas ?? sourceCanvas) : sourceCanvas)
+      : subjectRefCanvas ?? sourceCanvas
   const breakoutMask = await createTopBreakoutMask({
     size,
     layout,
@@ -3852,10 +3867,6 @@ export async function renderBreakoutLayer(params: {
   await debugLogLayerBounds('subjectMask', subjectMaskDebug)
   await debugLogLayerBounds('aboveFrameMask', aboveFrameMask)
 
-  const breakoutSeedCanvas =
-    params.subjectMaskKind === 'rembgCutout'
-      ? (params.sourceClass === 'pixelArt' ? (subjectRefCanvas ?? sourceCanvas) : sourceCanvas)
-      : subjectRefCanvas ?? sourceCanvas
   let maskedSharp = sharp(breakoutSeedCanvas)
     .ensureAlpha()
     .composite([{ input: breakoutMask, blend: 'dest-in' }])
@@ -3864,7 +3875,7 @@ export async function renderBreakoutLayer(params: {
   await debugLogLayerBounds('breakoutAfterWindowMask', maskedAfterBreakoutMask)
   maskedSharp = sharp(maskedAfterBreakoutMask).ensureAlpha()
   let applyBreakoutSubjectMask = Boolean(subjectMask)
-  if (subjectMask && params.subjectMaskKind === 'rembgCutout') {
+  if (subjectMask && params.subjectMaskKind === 'rembgCutout' && applyBreakoutSubjectMask) {
     const [{ data: windowData, info: windowInfo }, { data: subjectData, info: subjectInfo }] =
       await Promise.all([
         sharp(maskedAfterBreakoutMask).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
@@ -4794,33 +4805,9 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
   if (BREAKOUT_RUNTIME_LOG_ENABLED) {
     const rembg = await probeRembgRuntime()
     console.info('[token/image] premium breakout mode', JSON.stringify({
-      mode: breakoutModeForLog,
-      reason: breakoutDecisionReason,
       breakoutDrawn: Boolean(breakoutLayer),
-      fallbackBandEnabled: ALLOW_PREMIUM_FALLBACK_BAND,
-      illustrationBreakoutExtraDownPx: ILLUSTRATION_BREAKOUT_EXTRA_DOWN_PX,
       suppressBreakout: Boolean(params.suppressBreakout),
       sourceClass: analysis?.sourceClass ?? null,
-      fitMode: analysis?.fitMode ?? null,
-      lowResolution: analysis?.lowResolution ?? null,
-      hasTransparency: analysis?.hasTransparency ?? null,
-      sourceAlphaBreakoutAllowed: sourceAlphaBreakoutAllowedForLog,
-      rembgCandidate: rembgCandidateForLog,
-      topCenterStdDev: analysis?.topCenterStdDev ?? null,
-      topOccupancy: analysis?.topOccupancy ?? null,
-      breakoutDesired: breakoutDesiredForLog,
-      hasHeroCutoutSource: Boolean(params.heroCutoutSourceImage && params.heroCutoutSourceImage.length > 0),
-      segmentationEnabled: PREMIUM_SEGMENTATION_ENABLED,
-      segmentationApplied: segmentationAppliedForLog,
-      segmentationModel: segmentationModelForLog,
-      segmentationExecutable: segmentationExecutableForLog,
-      segmentationCoverage: segmentationCoverageForLog,
-      segmentationCoverageMinThreshold: PREMIUM_BREAKOUT_MASK_MIN_COVERAGE,
-      segmentationCoverageMaxThreshold: segmentationCoverageMaxThresholdForLog,
-      segmentationAlignmentDeltaPx: segmentationAlignmentDeltaForLog,
-      segmentationMaskTopY: segmentationMaskTopYForLog,
-      segmentationTargetTopY: segmentationTargetTopYForLog,
-      segmentationFailureReason: segmentationFailureReasonForLog,
       rembgAvailable: rembg.available,
       rembgExecutable: rembg.executable,
       preset: resolvedPreset,

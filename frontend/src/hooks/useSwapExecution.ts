@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { erc20Abi, formatUnits, getAddress, isAddress, parseUnits } from 'viem'
+import { erc20Abi, formatUnits, getAddress, isAddress, parseUnits, type Hex } from 'viem'
 import { debugLogsFlag } from '@/lib/flags/featureFlags'
 import { CONTRACTS } from '@/config/contracts'
 
 import {
   pollCanonicalUserOpTransactionHash,
   readAnyPendingUserOpHashForWallet,
+  simulateSmartWalletCalls,
   waitForPriorPendingUserOp,
 } from '@/lib/aa/coinbaseErc4337'
-import { isSwapPreflightSimulationRetryable } from '@/lib/aa/coinbaseErc4337ErrorUtils'
+import {
+  buildPreflightSimulationRejectionError,
+  isSwapPreflightSimulationRetryable,
+} from '@/lib/aa/coinbaseErc4337ErrorUtils'
+import { getProductionBaseReadClient } from '@/lib/base/productionBaseReadClient'
 import { appendAppSwapActivity } from '@/lib/account/appActivityJournal'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import {
@@ -62,6 +67,7 @@ import {
   type TransactionRequest,
 } from '@/lib/uniswap/tradingApi'
 import {
+  assertZoraRouterCallExecutesFromCsw,
   executeZoraCswQuoteWithEscalation,
   isZoraBundlerSendRetryable,
   isZoraProviderQuote,
@@ -82,6 +88,7 @@ const QUOTE_TTL_MS = 30_000
 const QUOTE_REUSE_MS = 8_000
 const HARD_FAILURE_WINDOW_MS = 20_000
 const HARD_FAILURE_THRESHOLD = 3
+const UNIVERSAL_ROUTER_BASE = '0x6ff5693b99212da76ad316178a184ab56d299b43'
 const HARD_FAILURE_COOLDOWN_MS = 15_000
 const CALIBUR_DELEGATION_ADDRESS = '0x000000009B1D0aF20D8C6d0A44e162d11F9b8f00' as const
 const WETH_DEPOSIT_SELECTOR = '0xd0e30db0'
@@ -485,6 +492,81 @@ function isCdpProviderQuote(value: TradeQuoteResponse | null | undefined): boole
     .toLowerCase() === 'cdp'
 }
 
+function toCanonicalPreflightCalls(params: {
+  executionAddress: string
+  bundledApprovalTx?: TransactionRequest | null
+  swapTx: TransactionRequest
+}): Array<{ to: `0x${string}`; value?: bigint; data?: Hex }> {
+  const calls: Array<{ to: `0x${string}`; value?: bigint; data?: Hex }> = []
+  const approval = params.bundledApprovalTx
+  if (approval?.to && approval?.data) {
+    calls.push({
+      to: getAddress(String(approval.to)),
+      data: String(approval.data) as Hex,
+      value: BigInt(typeof approval.value === 'string' ? approval.value : approval.value ?? '0'),
+    })
+  }
+  if (!params.swapTx.to || !params.swapTx.data) return calls
+  calls.push({
+    to: getAddress(String(params.swapTx.to)),
+    data: String(params.swapTx.data) as Hex,
+    value: BigInt(typeof params.swapTx.value === 'string' ? params.swapTx.value : params.swapTx.value ?? '0'),
+  })
+  return calls
+}
+
+async function submitCanonicalApprovalBeforeSwap(params: {
+  approvalTx: TransactionRequest
+  sendContext: TxRouterContext
+  publicClient: {
+    waitForTransactionReceipt?: (args: { hash: `0x${string}`; timeout?: number }) => Promise<unknown>
+  } | null | undefined
+  onStatus: (status: string) => void
+  updateAttemptDebug: (patch: Partial<SwapTxAttemptDebug> & { stage: 'approval' | 'swap' }) => void
+}): Promise<void> {
+  params.onStatus('Submitting token approval…')
+  const { routing, send } = await buildAndSendApproval({
+    context: params.sendContext,
+    approvalTx: params.approvalTx,
+  })
+  const debugHash = send.transactionHash ?? send.txHashes[0] ?? send.userOpHash ?? null
+  params.updateAttemptDebug({
+    stage: 'approval',
+    mode: routing.mode,
+    method: send.method,
+    sender: send.sender,
+    txHash: debugHash,
+    callsId: send.callsId,
+    callTargets: [params.approvalTx.to],
+    at: Date.now(),
+  })
+
+  const userOpHash = send.userOpHash ?? null
+  if (userOpHash && params.publicClient) {
+    const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+    const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+    const priorStatus = await waitForPriorPendingUserOp({
+      publicClient: params.publicClient as Parameters<typeof waitForPriorPendingUserOp>[0]['publicClient'],
+      bundlerUrl,
+      userOpHash,
+      onStatus: params.onStatus,
+    })
+    if (priorStatus === 'timeout') {
+      throw new Error('Token approval is still confirming on Base. Wait ~30 seconds, then try the swap again.')
+    }
+    if (priorStatus === 'failed') {
+      throw new Error('Token approval failed on-chain. Refresh the quote and try again.')
+    }
+  } else if (send.transactionHash && params.publicClient?.waitForTransactionReceipt) {
+    await params.publicClient
+      .waitForTransactionReceipt({ hash: send.transactionHash as `0x${string}`, timeout: 90_000 })
+      .catch(() => null)
+  }
+
+  params.onStatus('Approval confirmed. Preparing swap…')
+  invalidateTradeQuoteCache()
+}
+
 async function prepareCanonicalUniswapSwapForSend(params: {
   amount: string
   slippagePct: number
@@ -498,6 +580,7 @@ async function prepareCanonicalUniswapSwapForSend(params: {
   executionAddress: string
   swapChainId: number | string
   parsedDeadlineMinutes: number
+  bundledApprovalTx?: TransactionRequest | null
   onStatus: (status: string) => void
 }): Promise<{ swapTx: TransactionRequest; quote: TradeQuoteResponse }> {
   params.onStatus(SWAP_PREPARE_STATUS)
@@ -530,6 +613,40 @@ async function prepareCanonicalUniswapSwapForSend(params: {
     deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
   })
   assertValidSwapTransaction(built.swap)
+  const preflightCalls = toCanonicalPreflightCalls({
+    executionAddress: params.executionAddress,
+    bundledApprovalTx: params.bundledApprovalTx,
+    swapTx: built.swap,
+  })
+  if (preflightCalls.length > 0) {
+    const routerOnly =
+      preflightCalls.length === 1 &&
+      String(preflightCalls[0]?.to ?? '').toLowerCase() === UNIVERSAL_ROUTER_BASE
+    if (routerOnly) {
+      const swapCall = preflightCalls[0]!
+      await assertZoraRouterCallExecutesFromCsw({
+        executionAddress: getAddress(params.executionAddress),
+        call: {
+          target: swapCall.to,
+          data: swapCall.data ?? '0x',
+          value: String(swapCall.value ?? 0n),
+        },
+      })
+    } else {
+      const readClient = getProductionBaseReadClient()
+      const simResult = await simulateSmartWalletCalls({
+        publicClient: readClient,
+        smartWallet: getAddress(params.executionAddress),
+        calls: preflightCalls,
+      })
+      if (!simResult.success) {
+        throw buildPreflightSimulationRejectionError({
+          simResult,
+          firstCallTo: preflightCalls[preflightCalls.length - 1]?.to,
+        })
+      }
+    }
+  }
   return { swapTx: built.swap, quote: freshQuote }
 }
 
@@ -1171,7 +1288,8 @@ export function useSwapExecution(params: {
   )
 
   const buildQuoteRequest = useCallback(
-    (amount: string): TradeQuoteRequest => {
+    (amount: string, slippageOverride?: number): TradeQuoteRequest => {
+      const slippageTolerance = slippageOverride ?? effectiveParsedSlippage
       const useUniswapAutoSlippage = Boolean(params.slippageAuto) && !params.preferZoraTradeRoute
       return {
         tokenIn: effectiveTokenIn,
@@ -1183,7 +1301,7 @@ export function useSwapExecution(params: {
         swapper: params.executionAddress!,
         ...(useUniswapAutoSlippage
           ? { autoSlippage: 'DEFAULT' as const }
-          : { slippageTolerance: effectiveParsedSlippage }),
+          : { slippageTolerance }),
         routingPreference: 'BEST_PRICE',
         permitAmount: permit2DisabledForSwap ? undefined : 'EXACT',
         walletModeKey: params.executionMode,
@@ -1978,7 +2096,8 @@ export function useSwapExecution(params: {
     setError('')
     setStatus('Signing and submitting swap…')
     try {
-      const approvalTx = options?.approvalTx ?? null
+      let bundledApprovalTx = options?.approvalTx ?? null
+      let hadSeparateCanonicalApproval = false
       if (params.executionMode === 'canonical') {
         const sessionGuard = await resolveCanonicalSubmitSession(
           {
@@ -1995,13 +2114,52 @@ export function useSwapExecution(params: {
           throw new Error(sessionGuard.message)
         }
       }
+      if (
+        params.executionMode === 'canonical' &&
+        permit2DisabledForSwap &&
+        params.executionAddress &&
+        quote &&
+        !isZoraProviderQuote(quote) &&
+        !isCdpProviderQuote(quote)
+      ) {
+        const amount = readQuoteInputAmount(quote)
+        if (amount) {
+          const freshApproval = await checkTradeApproval({
+            walletAddress: params.executionAddress,
+            token: effectiveTokenIn,
+            amount,
+            chainId: swapChainId,
+            tokenOut: params.tokenOut,
+            tokenOutChainId: swapChainId,
+            includeGasInfo: true,
+            permit2Disabled: true,
+          })
+          setApprovalData(freshApproval)
+          if (hasApprovalTransaction(freshApproval)) {
+            bundledApprovalTx = toExecutionTransaction(freshApproval.approval as Record<string, unknown>)
+          } else {
+            bundledApprovalTx = null
+          }
+        }
+      }
       // Canary users get a best-effort 7702 preflight; send path still falls
       // back to canonical ERC-4337 on any issue.
       if (params.executionMode === 'canonical' && canary7702Eligible) {
         await run7702DryRun({ silent: true }).catch(() => null)
       }
-      const context = buildRouterContext()
-      const routePreview = detectTxSendMode(context)
+      let sendContext = buildRouterContext()
+      if (params.executionMode === 'canonical' && bundledApprovalTx) {
+        hadSeparateCanonicalApproval = true
+        await submitCanonicalApprovalBeforeSwap({
+          approvalTx: bundledApprovalTx,
+          sendContext,
+          publicClient: params.publicClient,
+          onStatus: setStatus,
+          updateAttemptDebug,
+        })
+        bundledApprovalTx = null
+      }
+      const routePreview = detectTxSendMode(sendContext)
       if (swapDebugEnabled) {
         console.debug('[swap][send][swap]', {
           chainId: Number(swapChainId),
@@ -2015,7 +2173,7 @@ export function useSwapExecution(params: {
           capabilities: normalizedCapabilities,
           detectedMode: routePreview.mode,
           detectedReason: routePreview.reason,
-          bundledApproval: Boolean(approvalTx),
+          bundledApproval: Boolean(bundledApprovalTx),
         })
       }
       const wrapTx = wrapNativeInputForSponsoredCanonical
@@ -2075,13 +2233,14 @@ export function useSwapExecution(params: {
           }
         }
         setStatus(SWAP_PREPARE_STATUS)
+        const zoraPrepareSlippagePct = Math.max(effectiveParsedSlippage, activeSlippagePct)
         const executableQuote = await prepareZoraQuoteForExecute({
           quote,
           tokenIn: effectiveTokenIn,
           tokenOut: params.tokenOut,
           amountIn: amount,
           sender: params.executionAddress,
-          slippagePct: effectiveParsedSlippage,
+          slippagePct: zoraPrepareSlippagePct,
           slippageEscalationCapPct,
           signerAddress: params.signerAddress!,
           executionAddress: params.executionAddress,
@@ -2114,6 +2273,7 @@ export function useSwapExecution(params: {
           activeSlippagePct,
           readZoraQuotedSlippagePct(executableQuote) ?? 0,
         )
+        sendContext = { ...sendContext, zoraRouterValidatedBeforeSend: true }
       } else if (
         quote &&
         !isZoraProviderQuote(quote) &&
@@ -2140,12 +2300,14 @@ export function useSwapExecution(params: {
           executionAddress: params.executionAddress,
           swapChainId,
           parsedDeadlineMinutes: params.parsedDeadlineMinutes,
+          bundledApprovalTx: bundledApprovalTx,
           onStatus: setStatus,
         })
         swapTxForSend = prepared.swapTx
         setSwapTx(prepared.swapTx)
         setQuote(prepared.quote)
         setQuoteUpdatedAt(Date.now())
+        sendContext = { ...sendContext, zoraRouterValidatedBeforeSend: true }
       }
       assertSwapSubmitEpochUnchanged(submitEpoch)
       let activeSwapTx = swapTxForSend
@@ -2164,13 +2326,13 @@ export function useSwapExecution(params: {
         try {
           const result = wrapTx
             ? await buildAndSendCalls({
-                context,
-                calls: [wrapTx, ...(approvalTx ? [approvalTx] : []), activeSwapTx],
+                context: sendContext,
+                calls: [wrapTx, ...(bundledApprovalTx ? [bundledApprovalTx] : []), activeSwapTx],
               })
             : await buildAndSendSwap({
-                context,
+                context: sendContext,
                 swapTx: activeSwapTx,
-                approvalTx,
+                approvalTx: bundledApprovalTx,
               })
           routing = result.routing
           send = result.send
@@ -2186,6 +2348,7 @@ export function useSwapExecution(params: {
             if (!amount || !params.executionAddress) throw sendError
             const retrySlippagePct = resolveSwapSendRetrySlippagePct({
               sendAttempt,
+              maxSendAttempts,
               activeSlippagePct,
               slippageAuto: Boolean(params.slippageAuto),
               parsedSlippage: params.parsedSlippage,
@@ -2196,6 +2359,7 @@ export function useSwapExecution(params: {
             })
             if (retrySlippagePct == null) throw sendError
             setStatus(SWAP_PREPARE_STATUS)
+            sendContext = { ...sendContext, zoraRouterValidatedBeforeSend: false }
             const executableQuote = await prepareZoraQuoteForExecute({
               quote: activeQuoteForRetry,
               tokenIn: effectiveTokenIn,
@@ -2233,6 +2397,7 @@ export function useSwapExecution(params: {
             setQuote(executableQuote)
             activeQuoteForRetry = executableQuote
             activeSlippagePct = retrySlippagePct
+            sendContext = { ...sendContext, zoraRouterValidatedBeforeSend: true }
             continue
           }
 
@@ -2245,6 +2410,7 @@ export function useSwapExecution(params: {
             if (!amount || !params.executionAddress) throw sendError
             const retrySlippagePct = resolveSwapSendRetrySlippagePct({
               sendAttempt,
+              maxSendAttempts,
               activeSlippagePct,
               slippageAuto: Boolean(params.slippageAuto),
               parsedSlippage: params.parsedSlippage,
@@ -2267,6 +2433,7 @@ export function useSwapExecution(params: {
               executionAddress: params.executionAddress,
               swapChainId,
               parsedDeadlineMinutes: params.parsedDeadlineMinutes,
+              bundledApprovalTx: null,
               onStatus: setStatus,
             })
             activeSwapTx = prepared.swapTx
@@ -2276,6 +2443,7 @@ export function useSwapExecution(params: {
             setQuoteUpdatedAt(Date.now())
             activeQuoteForRetry = prepared.quote
             activeSlippagePct = retrySlippagePct
+            sendContext = { ...sendContext, zoraRouterValidatedBeforeSend: true }
             continue
           }
 
@@ -2292,8 +2460,8 @@ export function useSwapExecution(params: {
       setTxState('success')
       setStatus(nextHash ? '' : 'Swap submitted. Confirming on Base…')
 
-      const approvalHash = approvalTx ? send.txHashes[0] ?? debugHash : null
-      if (approvalTx) {
+      if (!hadSeparateCanonicalApproval && bundledApprovalTx) {
+        const approvalHash = send.txHashes[0] ?? debugHash
         updateAttemptDebug({
           stage: 'approval',
           mode: routing.mode,
@@ -2301,7 +2469,7 @@ export function useSwapExecution(params: {
           sender: send.sender,
           txHash: approvalHash,
           callsId: send.callsId,
-          callTargets: [approvalTx.to],
+          callTargets: [bundledApprovalTx.to],
           at: Date.now(),
         })
       }
@@ -2438,6 +2606,7 @@ export function useSwapExecution(params: {
     syncPermitRequirement,
     signPermitIfRequired,
     permit2DisabledForSwap,
+    toExecutionTransaction,
   ])
 
   const executeOrderNow = useCallback(async () => {

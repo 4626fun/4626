@@ -85,11 +85,11 @@ import {
   waitForMessagingWallet,
 } from '@/lib/xmtp/waitForMessagingWallet'
 import { finishRestoredXmtpClient } from '@/lib/xmtp/xmtpConnectOrchestrator'
+import { registerBuiltClientInboxViaCreate } from '@/lib/xmtp/xmtpBuiltClientRegistration'
 import {
   Client,
   LogLevel,
   Opfs,
-  toSafeSigner,
   encodeText,
   isActions,
   isReaction,
@@ -1857,56 +1857,16 @@ export function XmtpChatProvider({
         return signerSelectionPromise
       }
 
-      const registerRestoredInstallation = async (client: Client, activeSigner: Signer): Promise<void> => {
-        const alreadyRegistered = await client.isRegistered()
-        if (alreadyRegistered) return
-
-        const { signatureText, signatureRequestId } = await client.unsafe_createInboxSignatureText()
-        if (!signatureText || !signatureRequestId) {
-          throw new Error('XMTP could not create inbox registration signature text for this installation')
-        }
-
-        const signature = await activeSigner.signMessage(signatureText)
-        const safeSigner = await toSafeSigner(activeSigner, signature)
-        await client.unsafe_applySignatureRequest(safeSigner, signatureRequestId)
-
-        if (!(await client.isRegistered())) {
-          throw new Error(`XMTP identity registration did not complete (${activeSigner.type} signer)`)
-        }
-      }
-
       const registerRestoredInstallationWithFallback = async (
         client: Client,
         signers: Signer[],
-      ): Promise<Signer> => {
-        const uniqueSigners: Signer[] = []
-        for (const candidate of signers) {
-          if (!uniqueSigners.some((existing) => existing.type === candidate.type)) {
-            uniqueSigners.push(candidate)
-          }
-        }
-
-        let lastError: unknown = null
-        for (const registrationSigner of uniqueSigners) {
-          try {
-            await registerRestoredInstallation(client, registrationSigner)
-            return registrationSigner
-          } catch (registerErr) {
-            lastError = registerErr
-            const registerMsg = registerErr instanceof Error ? registerErr.message : String(registerErr)
-            if (/reject|denied|cancel|user rejected/i.test(registerMsg)) {
-              throw registerErr
-            }
-            console.warn(
-              `[xmtp] In-place registration with ${registrationSigner.type} signer failed; trying next signer if available…`,
-              registerMsg,
-            )
-          }
-        }
-
-        throw lastError instanceof Error
-          ? lastError
-          : new Error(String(lastError ?? 'XMTP identity registration failed for all signer types'))
+        restoreOptions: Record<string, unknown>,
+      ): Promise<{ client: Client; signer: Signer }> => {
+        return registerBuiltClientInboxViaCreate({
+          buildClient: client,
+          signers,
+          restoreOptions,
+        })
       }
 
       // Shared setup: sync conversations, start streams, mark connected.
@@ -2157,19 +2117,43 @@ export function XmtpChatProvider({
           return
         }
 
-        clientRef.current = buildClient
-        setInboxId(buildClient.inboxId ?? null)
+        let activeClient = buildClient
+        const restoreOptionsForCreate = buildClientRestoreOptions(
+          baseOptions,
+          encKeyBytes,
+          storedInstallationMeta,
+          true,
+        )
+
+        if (!(await activeClient.isRegistered())) {
+          xmtpDebug('[xmtp] Built client is not registered — registering via Client.create on stored OPFS path')
+          const signerSelection = await getSignerSelection()
+          const registered = await registerRestoredInstallationWithFallback(
+            activeClient,
+            [signerSelection.signer, signerSelection.scwSigner, signerSelection.eoaSigner],
+            restoreOptionsForCreate,
+          )
+          activeClient = registered.client
+          writeStoredSignerType(xmtpIdentityAddress, registered.signer.type)
+        }
+
+        clientRef.current = activeClient
+        setInboxId(activeClient.inboxId ?? null)
 
         const finishResult = await finishRestoredXmtpClient({
-          setupConversations: () => setupConversations(buildClient),
+          setupConversations: () => setupConversations(activeClient),
+          isRegistered: () => activeClient.isRegistered(),
           registerWithFallback: async () => {
             const signerSelection = await getSignerSelection()
-            const registrationSigner = await registerRestoredInstallationWithFallback(buildClient, [
-              signerSelection.signer,
-              signerSelection.scwSigner,
-              signerSelection.eoaSigner,
-            ])
-            writeStoredSignerType(xmtpIdentityAddress, registrationSigner.type)
+            const registered = await registerRestoredInstallationWithFallback(
+              activeClient,
+              [signerSelection.signer, signerSelection.scwSigner, signerSelection.eoaSigner],
+              restoreOptionsForCreate,
+            )
+            activeClient = registered.client
+            clientRef.current = activeClient
+            setInboxId(activeClient.inboxId ?? null)
+            writeStoredSignerType(xmtpIdentityAddress, registered.signer.type)
           },
           isLocalStateInvalidError: isLocalXmtpStateInvalidError,
         })
@@ -2180,7 +2164,7 @@ export function XmtpChatProvider({
 
         console.warn('[xmtp] Client.build restored but finishRestoredXmtpClient failed:', finishResult.message)
         try {
-          buildClient.close()
+          activeClient.close()
         } catch {}
         clientRef.current = null
 

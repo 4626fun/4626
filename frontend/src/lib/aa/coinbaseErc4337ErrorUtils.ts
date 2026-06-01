@@ -572,6 +572,38 @@ export function mapUserOpExecutionFailureMessage(
   })
 }
 
+const KNOWN_INNER_REVERT_SELECTORS = [
+  '486aa621',
+  '8199f5f3',
+  'b0669cbc',
+  '3b99b53d',
+  '7939f424',
+  '86aa6210',
+] as const
+
+function readInnerRevertSelector(inner: unknown): string | null {
+  if (inner == null) return null
+  let hex = ''
+  if (typeof inner === 'string') {
+    hex = inner.startsWith('0x') ? inner.slice(2) : inner
+  } else if (inner instanceof Uint8Array) {
+    hex = Array.from(inner, (byte) => byte.toString(16).padStart(2, '0')).join('')
+  } else {
+    return null
+  }
+  const lower = hex.toLowerCase()
+  for (const selector of KNOWN_INNER_REVERT_SELECTORS) {
+    if (lower.includes(selector)) {
+      if (selector === '86aa6210') return '0x486aa621'
+      return `0x${selector}`
+    }
+  }
+  if (lower.length >= 8) {
+    return `0x${lower.slice(0, 8)}`
+  }
+  return null
+}
+
 export function extractExecutionFailedInnerSelector(revertData?: Hex): string | null {
   if (!revertData || !revertData.startsWith('0x2c4029e9')) return null
   try {
@@ -589,9 +621,8 @@ export function extractExecutionFailedInnerSelector(revertData?: Hex): string | 
       data: revertData,
     })
     const inner = decoded.args?.[1]
-    if (typeof inner === 'string' && inner.startsWith('0x') && inner.length >= 10) {
-      return inner.slice(0, 10).toLowerCase()
-    }
+    const fromInner = readInnerRevertSelector(inner)
+    if (fromInner) return fromInner
   } catch {
     // Fall through — some RPC simulators return partially encoded nested reverts.
   }
@@ -633,7 +664,7 @@ export function buildPreflightSimulationRejectionError(params: {
 
   const detail = direct?.error ?? params.simResult.error ?? 'Underlying call would revert'
   const detailLc = String(detail).toLowerCase()
-  const slippageInnerSelectors = new Set(['0x486aa621', '0x8199f5f3'])
+  const slippageInnerSelectors = new Set(['0x486aa621', '0x8199f5f3', '0x86aa6210'])
   const likelySlippageFailure =
     (innerSelector != null && slippageInnerSelectors.has(innerSelector)) ||
     detailLc.includes('slippage') ||
@@ -649,11 +680,30 @@ export function buildPreflightSimulationRejectionError(params: {
     )
   }
 
+  const allowanceFailure =
+    innerSelector === '0x7939f424' ||
+    detailLc.includes('transfer_from_failed') ||
+    detailLc.includes('transfer_from') ||
+    detailLc.includes('insufficient allowance') ||
+    detailLc.includes('exceeds allowance') ||
+    detailLc.includes('insufficient funds')
+
+  if (allowanceFailure) {
+    return new PreflightSimulationRejectionError(
+      'Token allowance is missing for this swap. If approval is still confirming, wait ~30 seconds, refresh the quote, then retry.',
+    )
+  }
+
   if (
     errorName === 'ExecutionFailed(uint256,bytes)' ||
     revertData?.startsWith('0x2c4029e9') ||
     callTo === ZORA_UNIVERSAL_ROUTER_BASE
   ) {
+    if (innerSelector) {
+      return new PreflightSimulationRejectionError(
+        `${ZORA_SWAP_SIMULATION_FAILED_MESSAGE} (revert ${innerSelector})`,
+      )
+    }
     return new PreflightSimulationRejectionError(ZORA_SWAP_SIMULATION_FAILED_MESSAGE)
   }
   if (detailLc.includes('transfer_from_failed')) {

@@ -204,6 +204,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      cookie:
+        specifier: ^1.1.1
+        version: 1.1.1
       flags:
         specifier: ^4.0.6
         version: 4.0.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -252,6 +255,9 @@ importers:
       satori:
         specifier: ^0.26.0
         version: 0.26.0
+      set-cookie-parser:
+        specifier: ^2.7.2
+        version: 2.7.2
       sharp:
         specifier: ^0.34.5
         version: 0.34.5

@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
+import { getAddress } from 'viem'
 
 import {
   buildWalletSendCallsPayload,
   chainIdToHex,
   WALLET_SEND_CALLS_VERSION,
 } from './walletSendCallsPayload.js'
+import { CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
 
-const CSW = '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF' as const
+const CSW = getAddress(CANONICAL_CSW_ADDRESS)
 
 describe('buildWalletSendCallsPayload', () => {
   it('uses wallet_sendCalls v2.0.0 with from and chainId', () => {

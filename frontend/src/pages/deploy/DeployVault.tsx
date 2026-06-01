@@ -16,6 +16,7 @@ import {
   normalizeHexSuffix,
   parsePositiveTokenAmount,
   resolveDeploymentVersionSearchMaxTries,
+  resolveDeploymentVersionSearchTargets,
   type DeploymentVanityVersionSearchOutcome,
   parseUint8,
   parseUniswapV3Fee,
@@ -117,7 +118,10 @@ import {
   derivePayoutRouterSalt,
   deriveVaultShareBurnStreamSalt,
 } from '@/lib/deploy/create2Salts'
-import { findPerVaultVanityVersionWithWasm } from '@/lib/vanity/perVaultVanityWasm'
+import {
+  findPerVaultVanityVersionWithWasm,
+  isPerVaultVanityWasmConfigured,
+} from '@/lib/vanity/perVaultVanityWasm'
 import {
   type DeploySessionStatusData,
 } from '@/lib/deploy/sessionClient'
@@ -969,7 +973,11 @@ async function findDeploymentVersionForVanityTargets(params: {
   if (!vaultPrefix && !shareSuffix) return null
   const maxTries = Math.max(1, Math.floor(params.maxTries))
 
-  if (typeof WebAssembly !== 'undefined' && typeof fetch === 'function') {
+  if (
+    isPerVaultVanityWasmConfigured() &&
+    typeof WebAssembly !== 'undefined' &&
+    typeof fetch === 'function'
+  ) {
     let startAttempt = 0
     try {
       while (startAttempt < maxTries) {
@@ -3604,12 +3612,12 @@ function DeployVaultBatcher({
       let deploymentVersionUsed = deploymentVersion
       let vanityVersionSearchWarning: string | null = null
       let vanityVersionSearchOutcome: DeploymentVanityVersionSearchOutcome = 'not_applicable'
-      // Apply deployment-version search for deterministic vanity when possible.
-      // When Phase-1 salt overrides are unavailable, also attempt share-suffix matching
-      // via version search (with share suffix taking priority over vault prefix fallback).
-      const useVersionSearchForShareSuffix = Boolean(shareOftVanitySuffix) && !supportsPhase1WithSalt
-      const versionSearchVaultPrefix = vaultVanityPrefix ?? null
-      const versionSearchShareSuffix = useVersionSearchForShareSuffix ? shareOftVanitySuffix : null
+      const { vaultPrefix: versionSearchVaultPrefix, shareSuffix: versionSearchShareSuffix } =
+        resolveDeploymentVersionSearchTargets({
+          vaultVanityPrefix: vaultVanityPrefix ?? null,
+          shareOftVanitySuffix: shareOftVanitySuffix ?? null,
+          supportsPhase1WithSalt,
+        })
       const usingDefaultVaultVanityTarget = versionSearchVaultPrefix === DEFAULT_VAULT_VANITY_PREFIX
       const usingDefaultShareVanityTarget =
         !versionSearchShareSuffix || versionSearchShareSuffix === DEFAULT_SHARE_OFT_VANITY_SUFFIX
@@ -3661,30 +3669,6 @@ function DeployVaultBatcher({
           })
           if (foundVersion) {
             vanityVersionSearchOutcome = 'combined_match'
-          }
-          // If both targets are requested and a combined hit wasn't found,
-          // prioritize deterministic share suffix for deploy correctness/UX.
-          if (!foundVersion && versionSearchVaultPrefix && versionSearchShareSuffix) {
-            foundVersion = await findDeploymentVersionForVanityTargets({
-              create2Deployer,
-              creatorToken,
-              owner,
-              chainId: base.id,
-              baseVersion: deploymentVersion,
-              vaultPrefix: null,
-              shareSuffix: versionSearchShareSuffix,
-              maxTries: shareOftVanityMaxTries,
-              vaultInitCode,
-              shareOftInitCode,
-              shareSymbol,
-              isAddressDeployed: async (addr) => {
-                const bc = await publicClient!.getBytecode({ address: addr })
-                return !!bc && bc !== '0x'
-              },
-            })
-            if (foundVersion) {
-              vanityVersionSearchOutcome = 'share_only_match'
-            }
           }
           if (!foundVersion) {
             if (versionSearchVaultPrefix && versionSearchShareSuffix) {

@@ -65,6 +65,7 @@ export function pickNextSwapSlippageEscalationPct(slippagePct: number): number |
 /** Pick slippage for a send-time retry; may refresh at the same pct when escalation is blocked (stale quote). */
 export function resolveSwapSendRetrySlippagePct(params: {
   sendAttempt: number
+  maxSendAttempts?: number
   activeSlippagePct: number
   slippageAuto: boolean
   parsedSlippage: number
@@ -73,6 +74,10 @@ export function resolveSwapSendRetrySlippagePct(params: {
   sendError: unknown
   isRetryable: (error: unknown) => boolean
 }): number | null {
+  const retriesRemain =
+    params.maxSendAttempts == null || params.sendAttempt + 1 < params.maxSendAttempts
+  if (!retriesRemain || !params.isRetryable(params.sendError)) return null
+
   let retrySlippagePct = params.pickNext(params.activeSlippagePct)
   if (
     !params.slippageAuto &&
@@ -84,17 +89,10 @@ export function resolveSwapSendRetrySlippagePct(params: {
   if (retrySlippagePct != null && retrySlippagePct > params.slippageEscalationCapPct + 1e-9) {
     retrySlippagePct = null
   }
-  if (
-    (retrySlippagePct == null || retrySlippagePct <= params.activeSlippagePct) &&
-    params.isRetryable(params.sendError) &&
-    params.sendAttempt === 0
-  ) {
-    return params.activeSlippagePct
+  if (retrySlippagePct != null && retrySlippagePct > params.activeSlippagePct + 1e-9) {
+    return retrySlippagePct
   }
-  if (retrySlippagePct == null || retrySlippagePct <= params.activeSlippagePct) {
-    return null
-  }
-  return retrySlippagePct
+  return params.activeSlippagePct
 }
 
 export function formatSlippagePctForDisplay(pct: number): string {

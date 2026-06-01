@@ -67,6 +67,8 @@ export type TxRouterContext = {
   waitForOnChainReceipt?: boolean
   /** Canonical4337 only: start on a fresh EntryPoint nonce key (swap AA25 avoidance). */
   preferEphemeralNonceLane?: boolean
+  /** Zora CSW path: submit-time prepare already production-simulated router calldata. */
+  zoraRouterValidatedBeforeSend?: boolean
 }
 
 export type TxRoutingDecision = {
@@ -795,6 +797,7 @@ async function sendViaCanonical4337(params: {
       onSubmissionStatus: context.onSubmissionStatus,
       waitForOnChainReceipt: context.waitForOnChainReceipt ?? true,
       preferEphemeralNonceLane: context.preferEphemeralNonceLane ?? false,
+      zoraRouterValidatedBeforeSend: context.zoraRouterValidatedBeforeSend === true,
       // Let the ERC-4337 helper handle attribution so it can preserve canonical
       // calldata for strict paymaster policies (e.g. Universal Router execute).
       calls: calls.map((call) => ({

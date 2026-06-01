@@ -348,6 +348,17 @@ async function fetchZoraTradeQuoteForRequest(
   })
 }
 
+async function fetchUniswapFallbackQuote(
+  body: TradeQuoteRequest,
+  preferredProvider: SwapProvider,
+): Promise<TradeQuoteResponse> {
+  const fallbackQuote = await fetchTradeQuoteFromUniswap(body)
+  return attachProviderMetadata(fallbackQuote, 'uniswap', {
+    fallbackUsed: true,
+    preferredProvider,
+  })
+}
+
 async function fetchPrimaryProviderQuote(
   body: TradeQuoteRequest,
   effectivePrimary: SwapProvider,
@@ -359,16 +370,17 @@ async function fetchPrimaryProviderQuote(
   }
   try {
     const cdpQuote = await fetchTradeQuoteFromCdp(body)
-    return attachProviderMetadata(cdpQuote, 'cdp')
+    const withMeta = attachProviderMetadata(cdpQuote, 'cdp')
+    // CDP can return HTTP 200 with no liquidity — try Uniswap before Zora fallback.
+    if (effectiveFallback === 'uniswap' && isPrimaryQuoteWithoutRoute(withMeta)) {
+      return await fetchUniswapFallbackQuote(body, 'cdp')
+    }
+    return withMeta
   } catch (error) {
     if (effectiveFallback !== 'uniswap' || !shouldFallbackToUniswap(error)) {
       throw error
     }
-    const fallbackQuote = await fetchTradeQuoteFromUniswap(body)
-    return attachProviderMetadata(fallbackQuote, 'uniswap', {
-      fallbackUsed: true,
-      preferredProvider: 'cdp',
-    })
+    return await fetchUniswapFallbackQuote(body, 'cdp')
   }
 }
 

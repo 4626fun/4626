@@ -26,6 +26,33 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): 
   })
 }
 
+export function getWaitlistNetworkUnstableMessage(): string {
+  return '4626 could not reach the server. Stay on this page and tap Continue again in a few seconds.'
+}
+
+export function isTransientWaitlistNetworkError(error: unknown): boolean {
+  const text =
+    typeof error === 'string'
+      ? error
+      : typeof (error as { message?: unknown })?.message === 'string'
+        ? String((error as { message: string }).message)
+        : ''
+  const normalized = text.trim().toLowerCase()
+  if (!normalized) return false
+  return (
+    normalized === 'failed to fetch' ||
+    normalized.includes('failed to fetch dynamically imported module') ||
+    normalized.includes('networkerror') ||
+    normalized.includes('network error') ||
+    normalized.includes('load failed') ||
+    normalized.includes('blocked by cors') ||
+    normalized.includes('err_connection_refused') ||
+    normalized.includes('err_network_changed') ||
+    (normalized.includes('access-control-allow-origin') && normalized.includes('privy')) ||
+    normalized.includes('email verification is unavailable in this client')
+  )
+}
+
 export function readApiErrorMessage(payload: unknown, fallback: string): string {
   if (payload && typeof payload === 'object') {
     const maybeError = (payload as { error?: unknown }).error

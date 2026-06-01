@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildShareOftVanityUserWarning,
   resolveDeploymentVersionSearchMaxTries,
+  resolveDeploymentVersionSearchTargets,
 } from './deployVaultHelpers'
 
 describe('deploy vanity version search', () => {
@@ -30,7 +31,27 @@ describe('deploy vanity version search', () => {
     ).toBe(10_000)
   })
 
-  it('suppresses warning when combined vanity match succeeds on salt-disabled batcher', () => {
+  it('searches share suffix only on salt-disabled batchers', () => {
+    expect(
+      resolveDeploymentVersionSearchTargets({
+        vaultVanityPrefix: '4626',
+        shareOftVanitySuffix: '4626',
+        supportsPhase1WithSalt: false,
+      }),
+    ).toEqual({ vaultPrefix: null, shareSuffix: '4626' })
+  })
+
+  it('searches vault prefix when salt overrides handle share suffix', () => {
+    expect(
+      resolveDeploymentVersionSearchTargets({
+        vaultVanityPrefix: '4626',
+        shareOftVanitySuffix: '4626',
+        supportsPhase1WithSalt: true,
+      }),
+    ).toEqual({ vaultPrefix: '4626', shareSuffix: null })
+  })
+
+  it('suppresses warning when share suffix matches on salt-disabled batcher', () => {
     expect(
       buildShareOftVanityUserWarning({
         shareOftVanitySuffix: '4626',
@@ -39,17 +60,5 @@ describe('deploy vanity version search', () => {
         versionSearchOutcome: 'combined_match',
       }),
     ).toBeNull()
-  })
-
-  it('explains share-only match without the old not-guaranteed copy', () => {
-    const warning = buildShareOftVanityUserWarning({
-      shareOftVanitySuffix: '4626',
-      vaultVanityPrefix: '4626',
-      saltOverrideDisabled: true,
-      versionSearchOutcome: 'share_only_match',
-    })
-    expect(warning).toContain('Share suffix 4626 matched via deployment-version search')
-    expect(warning).not.toContain('not guaranteed')
-    expect(warning).not.toContain('Prioritizing share suffix')
   })
 })

@@ -28,6 +28,19 @@ import type {
 } from './types.js'
 import WebSocket from 'ws'
 import { logger } from '../infra/logger.js'
+import { getClearinghouseState } from '../alfaclub/hyperliquid.js'
+import { formatRoom1659MarketForHermit, resolveRoom1659MarketContext } from '../alfaclub/room1659Market.js'
+import {
+  buildComprehensivePositionReport,
+  formatPositionAlertStatusBlock,
+} from '../alfaclub/positionReport.js'
+import {
+  disablePositionAlert,
+  parseHermitAlertCommandArgs,
+  readPositionAlert,
+  resolveTelegramChatIdForWallet,
+  upsertPositionAlert,
+} from '../alfaclub/positionAlertStore.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -988,11 +1001,8 @@ export function buildPinataPromptForHermit(params: {
       `Current liquidation level: ${m.liquidation ?? 'unknown'}`,
     ]
 
-    if (m.userPosition) {
-      lines.push(m.userPosition) // already formatted with rich multi-line on-chain curve data
-    } else {
-      lines.push('You currently have no open position in this room.')
-    }
+    const formatted = formatRoom1659MarketForHermit(m)
+    lines.push(formatted.yourPosition)
 
     lines.push('')
     lines.push('INSTRUCTION FOR HERMIT: This room is stressed and theatrical. Turn the numbers above (especially the quadratic curve acceleration, low supply, and liquidation tension) into unhinged, quotable, cinematic, memeable lines. Be dramatic. Be memorable. The "Do not be overly dramatic" rule is suspended for room 1659.')
@@ -1285,6 +1295,7 @@ const HERMIT_SETUP_SUBCOMMANDS = new Set([
   'reset',
   'lang',
   'tone',
+  'alert',
 ])
 
 function isFlagOnlyInput(text: string): boolean {
@@ -1477,7 +1488,191 @@ async function handleHermitSetupSubcommand(
     }
   }
 
+  if (subcommand === 'alert') {
+    return handleHermitAlertSubcommand(params, args)
+  }
+
   return null
+}
+
+async function handleHermitAlertSubcommand(
+  params: HermitExecutionParams,
+  args: string,
+): Promise<HermitExecutionResult> {
+  const roomId = params.roomId?.trim()
+  if (!roomId) {
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: 'Position alerts are only available inside an AlfaClub Hermit command room.',
+    }
+  }
+
+  const parsed = parseHermitAlertCommandArgs(args)
+  if (parsed.action === 'invalid') {
+    return { kind: 'hermit', provider: 'local', reply: parsed.reason }
+  }
+
+  const sender = params.senderAddress
+
+  if (parsed.action === 'off') {
+    await disablePositionAlert({ roomId, senderAddress: sender })
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: 'Position alerts disabled for this room. Run `/position` anytime for a live snapshot.',
+    }
+  }
+
+  if (parsed.action === 'status') {
+    const alert = await readPositionAlert({ roomId, senderAddress: sender })
+    const telegramLinked = await resolveTelegramChatIdForWallet(sender)
+    const lines = [
+      '🔔 **Position alert settings**',
+      '',
+      ...formatPositionAlertStatusBlock(alert),
+    ]
+    if (telegramLinked) {
+      lines.push(`• Linked Telegram: **yes** (\`${telegramLinked}\`)`)
+    } else {
+      lines.push('• Linked Telegram: **no** — link via 4626 Telegram Mini App, then `/hermit alert telegram on`')
+    }
+    return { kind: 'hermit', provider: 'local', reply: lines.join('\n') }
+  }
+
+  if (parsed.action === 'telegram') {
+    if (parsed.enabled) {
+      const chatId = await resolveTelegramChatIdForWallet(sender)
+      if (!chatId) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply:
+            'No linked Telegram account found for this wallet. Complete 4626 Telegram linking first, then retry `/hermit alert telegram on`.',
+        }
+      }
+      await upsertPositionAlert({
+        roomId,
+        senderAddress: sender,
+        enabled: true,
+        telegramEnabled: true,
+      })
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: `Telegram DMs **enabled** for position alerts (chat \`${chatId}\`). Set thresholds with \`/hermit alert liq 10\` and/or \`/hermit alert target 5000\`.`,
+      }
+    }
+    await upsertPositionAlert({
+      roomId,
+      senderAddress: sender,
+      telegramEnabled: false,
+    })
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: 'Telegram DMs disabled for position alerts. In-room `/position` still works anytime.',
+    }
+  }
+
+  if (parsed.action === 'liq') {
+    const saved = await upsertPositionAlert({
+      roomId,
+      senderAddress: sender,
+      enabled: true,
+      liquidationWarnPct: parsed.pct,
+    })
+    if (!saved) {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: 'Could not save alert settings right now. Try again in a moment.',
+      }
+    }
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: [
+        `Liquidation alert set — Telegram when within **${parsed.pct}%** of liquidation price.`,
+        'Enable DMs with `/hermit alert telegram on` if you have not already.',
+        'Check everything with `/position`.',
+      ].join('\n'),
+    }
+  }
+
+  if (parsed.action === 'target') {
+    const saved = await upsertPositionAlert({
+      roomId,
+      senderAddress: sender,
+      enabled: true,
+      targetPnlUsd: parsed.usd,
+    })
+    if (!saved) {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: 'Could not save alert settings right now. Try again in a moment.',
+      }
+    }
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: [
+        `Target gain alert set — **+$${parsed.usd.toLocaleString('en-US')}** unrealized PnL.`,
+        'Default fire at 90% of target; override with `/hermit alert progress 80`.',
+        'Enable DMs with `/hermit alert telegram on`.',
+      ].join('\n'),
+    }
+  }
+
+  if (parsed.action === 'progress') {
+    const saved = await upsertPositionAlert({
+      roomId,
+      senderAddress: sender,
+      enabled: true,
+      targetProgressPct: parsed.pct,
+    })
+    if (!saved) {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: 'Could not save alert settings right now. Try again in a moment.',
+      }
+    }
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: `Target alert will fire at **${parsed.pct}%** of your configured gain target.`,
+    }
+  }
+
+  return {
+    kind: 'hermit',
+    provider: 'local',
+    reply: 'Unknown alert command. Try `/hermit alert status`.',
+  }
+}
+
+async function buildPositionCommandReply(params: HermitExecutionParams): Promise<string> {
+  const roomId = params.roomId?.trim() || 'unknown'
+  const wallet = params.senderAddress
+  const hlState = await getClearinghouseState(wallet)
+  let room1659Snapshot = params.room1659Market ?? null
+  if (roomId === '1659' && !room1659Snapshot) {
+    try {
+      room1659Snapshot = await resolveRoom1659MarketContext(wallet)
+    } catch {
+      room1659Snapshot = null
+    }
+  }
+  const alert = roomId !== 'unknown' ? await readPositionAlert({ roomId, senderAddress: wallet }) : null
+  return buildComprehensivePositionReport({
+    roomId,
+    walletAddress: wallet,
+    hlState,
+    room1659Snapshot,
+    alert,
+  })
 }
 
 const HERMIT_ONBOARDING_NUDGE =
@@ -1521,6 +1716,14 @@ export async function executeHermitCommand(
 ): Promise<HermitExecutionResult> {
   const { command, args } = splitCommandAndArgs(params.commandText)
   const userPreferences: HermitUserPreferences | null = params.userPreferences ?? null
+
+  if (command === '/position') {
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: await buildPositionCommandReply(params),
+    }
+  }
 
   if (command === '/gmeow') {
     const vibeTag = args.trim() || undefined

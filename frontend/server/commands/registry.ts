@@ -175,7 +175,7 @@ const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
   { head: 'ai', family: 'ai' },
   { head: 'coin', family: 'coin' },
   { head: 'send', family: 'send' },
-  { head: 'hermit', family: 'hermit', aliases: ['gmeow', 'meme'] },
+  { head: 'hermit', family: 'hermit', aliases: ['gmeow', 'meme', 'position'] },
 ] as const
 
 const BOT_MENU_ORDER: Record<CommandScope, readonly string[]> = {

@@ -217,6 +217,26 @@ export function resolveDeploymentVersionSearchMaxTries(params: {
   return 0
 }
 
+/**
+ * Vault prefix and ShareOFT suffix on salt-disabled batchers both derive from the same
+ * deployment-version string. Hitting two independent 4-nibble patterns in one scan is
+ * infeasible in-browser — when share suffix needs version search, skip vault prefix.
+ */
+export function resolveDeploymentVersionSearchTargets(params: {
+  vaultVanityPrefix: string | null
+  shareOftVanitySuffix: string | null
+  supportsPhase1WithSalt: boolean
+}): { vaultPrefix: string | null; shareSuffix: string | null } {
+  const useVersionSearchForShareSuffix =
+    Boolean(params.shareOftVanitySuffix) && !params.supportsPhase1WithSalt
+  const shareSuffix = useVersionSearchForShareSuffix ? params.shareOftVanitySuffix : null
+  const vaultPrefix =
+    params.vaultVanityPrefix && (params.supportsPhase1WithSalt || !shareSuffix)
+      ? params.vaultVanityPrefix
+      : null
+  return { vaultPrefix, shareSuffix }
+}
+
 export function buildShareOftVanityUserWarning(params: {
   shareOftVanitySuffix: string | null
   vaultVanityPrefix: string | null
@@ -225,26 +245,16 @@ export function buildShareOftVanityUserWarning(params: {
 }): string | null {
   if (!params.saltOverrideDisabled) return null
 
-  const suffix = params.shareOftVanitySuffix ?? ''
-  const prefix = params.vaultVanityPrefix ?? ''
-
-  if (params.versionSearchOutcome === 'combined_match') {
+  if (
+    params.versionSearchOutcome === 'combined_match' ||
+    params.versionSearchOutcome === 'share_only_match'
+  ) {
     return null
-  }
-
-  if (params.versionSearchOutcome === 'share_only_match') {
-    return (
-      `Share suffix ${suffix} matched via deployment-version search ` +
-      `(this batcher uses version strings instead of Phase-1 salt overrides). ` +
-      (prefix
-        ? `Vault prefix 0x${prefix} was not found in the same search window — vault address stays deterministic (best-effort).`
-        : '')
-    )
   }
 
   if (params.versionSearchOutcome === 'missed_defaults') {
     return (
-      'Default vanity targets were not found in the current deployment-version search window. ' +
+      'Default share suffix was not found in the current deployment-version search window. ' +
       'Continuing with deterministic deployment addresses (best-effort).'
     )
   }

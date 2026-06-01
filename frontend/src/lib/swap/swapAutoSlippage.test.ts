@@ -108,10 +108,27 @@ describe('resolveSwapSendRetrySlippagePct', () => {
     ).toBe(5)
   })
 
-  it('returns null when retryable but not the first send attempt', () => {
+  it('refreshes at the same slippage when already at the escalation cap', () => {
     expect(
       resolveSwapSendRetrySlippagePct({
         sendAttempt: 1,
+        maxSendAttempts: 4,
+        activeSlippagePct: 30,
+        slippageAuto: true,
+        parsedSlippage: 0.5,
+        slippageEscalationCapPct: 30,
+        pickNext: pickNextSwapSlippageEscalationPct,
+        sendError: preflightErr,
+        isRetryable: () => true,
+      }),
+    ).toBe(30)
+  })
+
+  it('returns null when no send retries remain', () => {
+    expect(
+      resolveSwapSendRetrySlippagePct({
+        sendAttempt: 3,
+        maxSendAttempts: 4,
         activeSlippagePct: 30,
         slippageAuto: true,
         parsedSlippage: 0.5,

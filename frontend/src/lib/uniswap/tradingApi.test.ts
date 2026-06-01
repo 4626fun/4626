@@ -383,6 +383,48 @@ describe('fetchTradeQuote', () => {
     }
   })
 
+  it('uses cdp->uniswap fallback in hybrid mode when cdp returns no route', async () => {
+    vi.stubEnv('VITE_SWAP_PROVIDER', 'hybrid')
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            toAmount: '0',
+            minToAmount: '0',
+            liquidityAvailable: false,
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: { ...quoteResponse('CLASSIC'), requestId: 'rq_hybrid_cdp_empty' },
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchTradeQuote({
+      ...quoteRequest('5300'),
+      useZoraTradeRoute: true,
+    })
+    expect(result.provider).toBe('uniswap')
+    expect(result.fallbackUsed).toBe(true)
+    expect(result.preferredProvider).toBe('cdp')
+
+    const calledUrls = fetchMock.mock.calls.map(([url]) => String(url))
+    expect(calledUrls[0]).toContain('/cdp/swap/price')
+    expect(calledUrls[1]).toContain('/uniswap/quote')
+    expect(calledUrls.some((url) => url.includes('/zora/tradeQuote'))).toBe(false)
+  })
+
   it('uses cdp->uniswap fallback in hybrid mode for retryable cdp errors', async () => {
     vi.stubEnv('VITE_SWAP_PROVIDER', 'hybrid')
     const fetchMock = vi

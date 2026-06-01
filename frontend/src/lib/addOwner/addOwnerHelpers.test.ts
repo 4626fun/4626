@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { getAddress } from 'viem'
 
 import {
   sanitizeAddOwnerRelayPreview,
@@ -9,11 +10,14 @@ import {
   RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
   RELAY_MULTICALL_SELECTOR,
 } from '@/lib/wallet/cswOwnerAbi'
+import { CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
+
+const CSW = getAddress(CANONICAL_CSW_ADDRESS)
 
 const BASE_PREVIEW: AddOwnerPreview = {
   txRequest: {
     chainId: 8453,
-    to: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+    to: CSW,
     data: '0x0f0f3f24000000000000000000000000b2aad65a5402714bf428a66731ae62ba5c45cac0',
     value: '0x0',
   },

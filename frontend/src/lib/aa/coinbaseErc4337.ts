@@ -1065,21 +1065,52 @@ export async function simulateSmartWalletCalls(params: {
   // First, try to simulate the direct target call (as if smart wallet is msg.sender)
   // This bypasses the smart wallet's authorization checks and tests just the target contract
   let directCallResult: { success: boolean; error?: string; revertData?: Hex; errorName?: string } | undefined
-  if (calls.length === 1 && calls[0]?.data && typeof client?.call === 'function') {
-    const call = calls[0]!
-    // Match Zora prepare-time eth_call (`latest`). `pending` can diverge and false-fail after a passing quote refresh.
-    const blockNumber = isZoraUniversalRouterTarget(call.to) ? 'latest' : 'pending'
-    try {
-      await client.call({
-        to: call.to,
-        data: call.data,
-        value: call.value ?? 0n,
-        account: smartWallet,
-        blockNumber,
-      })
+  if (calls.length > 0 && typeof client?.call === 'function') {
+    if (calls.length === 1) {
+      const call = calls[0]!
+      // Match Zora prepare-time eth_call (`latest`). `pending` can diverge and false-fail after a passing quote refresh.
+      const blockNumber = isZoraUniversalRouterTarget(call.to) ? 'latest' : 'pending'
+      try {
+        await client.call({
+          to: call.to,
+          data: call.data,
+          value: call.value ?? 0n,
+          account: smartWallet,
+          blockNumber,
+        })
+        directCallResult = { success: true }
+      } catch (e: unknown) {
+        directCallResult = { success: false, ...extractRevertInfo(e) }
+      }
+    } else {
+      for (let index = 0; index < calls.length; index += 1) {
+        const call = calls[index]!
+        const blockNumber = isZoraUniversalRouterTarget(call.to) ? 'latest' : 'pending'
+        try {
+          await client.call({
+            to: call.to,
+            data: call.data,
+            value: call.value ?? 0n,
+            account: smartWallet,
+            blockNumber,
+          })
+        } catch (e: unknown) {
+          const legFailure = { success: false as const, ...extractRevertInfo(e) }
+          directCallResult = legFailure
+          return {
+            success: false,
+            error:
+              index > 0
+                ? legFailure.error ??
+                  'Swap leg would revert before prior calls land on-chain. Submit approval first, wait for confirmation, then retry the swap.'
+                : legFailure.error,
+            revertData: legFailure.revertData,
+            errorName: legFailure.errorName,
+            directCallResult: legFailure,
+          }
+        }
+      }
       directCallResult = { success: true }
-    } catch (e: unknown) {
-      directCallResult = { success: false, ...extractRevertInfo(e) }
     }
   }
 
@@ -1194,6 +1225,9 @@ export async function simulateSmartWalletCalls(params: {
     // unless the underlying router call already succeeded.
     if (unauthorizedExecute) {
       if (calls.length === 1 && isZoraUniversalRouterTarget(calls[0]?.to)) {
+        if (directCallResult?.success) {
+          return { success: true, directCallResult }
+        }
         return {
           success: false,
           error:
@@ -1210,6 +1244,23 @@ export async function simulateSmartWalletCalls(params: {
           error:
             directCallResult?.error ??
             'Underlying swap call simulation did not complete. Refresh the quote and try again.',
+          revertData: directCallResult?.revertData,
+          errorName: directCallResult?.errorName,
+          directCallResult,
+        }
+      }
+      if (calls.length > 1) {
+        if (directCallResult?.success) {
+          return {
+            success: true,
+            directCallResult,
+          }
+        }
+        return {
+          success: false,
+          error:
+            directCallResult?.error ??
+            'Batch swap simulation did not complete. Refresh the quote and try again.',
           revertData: directCallResult?.revertData,
           errorName: directCallResult?.errorName,
           directCallResult,
@@ -1383,6 +1434,8 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   allowEoaSignMessageFallback?: boolean
   verificationGasLimits?: bigint[]
   skipPreflightSimulation?: boolean
+  /** Zora prepare path already ran production eth_call on this exact router calldata. */
+  zoraRouterValidatedBeforeSend?: boolean
   skipPaymaster?: boolean
   retryOnInvalidSignature?: boolean
   retryOnPrefund?: boolean
@@ -1425,6 +1478,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     allowEoaSignMessageFallback = true,
     verificationGasLimits: verificationGasLimitsOverride,
     skipPreflightSimulation,
+    zoraRouterValidatedBeforeSend = false,
     skipPaymaster = false,
     retryOnInvalidSignature = true,
     retryOnPrefund = true,
@@ -1502,8 +1556,8 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   }
 
   // Pre-flight simulation: fail fast when the underlying call would revert on-chain.
-  let preflightDirectCallSucceeded = false
-  if (!skipPreflightSimulation) {
+  let preflightDirectCallSucceeded = zoraRouterValidatedBeforeSend
+  if (!skipPreflightSimulation && !zoraRouterValidatedBeforeSend) {
     try {
       const preflightClient =
         attributedCalls.length === 1 && isZoraUniversalRouterTarget(attributedCalls[0]?.to)
@@ -1536,7 +1590,10 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       }
       preflightDirectCallSucceeded =
         simResult.directCallResult?.success === true ||
-        (attributedCalls.length > 1 && simResult.success)
+        (attributedCalls.length > 1 && simResult.success) ||
+        (simResult.success &&
+          attributedCalls.length === 1 &&
+          isZoraUniversalRouterTarget(attributedCalls[0]?.to))
       if (AA_DEBUG) {
         logger.debug('[ERC-4337] Pre-flight simulation passed', {
           smartWallet,
@@ -2177,7 +2234,10 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     }
   }
   const swapRouterCallGasLimit = inferSwapRouterCallGasLimit(attributedCalls)
-  if (attributedCalls.some((call) => isZoraUniversalRouterTarget(call.to))) {
+  if (
+    !zoraRouterValidatedBeforeSend &&
+    attributedCalls.some((call) => isZoraUniversalRouterTarget(call.to))
+  ) {
     for (const call of attributedCalls) {
       if (!isZoraUniversalRouterTarget(call.to) || !call.data) continue
       await assertZoraRouterCallExecutesFromCsw({

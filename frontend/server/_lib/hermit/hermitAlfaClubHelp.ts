@@ -22,9 +22,11 @@ export type HermitCommandRoomHelpOptions = {
 function formatHermitCreativeSection(): string[] {
   return [
     '**Hermit — creative (read-only)**',
+    '• `/position` — full HL + room 1659 snapshot + alert CTAs',
     '• `/gmeow [vibe]` — GIF + one-liner',
     '• `/meme <prompt>` — meme / image concept',
     '• `/hermit copy|announce|quest|tone <text>` — room copy drafts',
+    '• `/hermit alert` — Telegram liquidation / target-gain alerts',
     '• `/hermit setup` · `/hermit help`',
   ]
 }
@@ -32,7 +34,7 @@ function formatHermitCreativeSection(): string[] {
 function formatHermitCreativeSectionCompact(): string[] {
   return [
     '**Commands**',
-    '• `/gmeow` · `/meme` · `/hermit copy …` · `/alfa` · `/alfa brief`',
+    '• `/position` · `/gmeow` · `/meme` · `/hermit alert` · `/alfa brief`',
   ]
 }
 
@@ -96,7 +98,7 @@ export function formatHermitCommandRoomHelp(
       '',
       ...formatHermitCreativeSectionCompact(),
       '',
-      '• `/hermit prefs` · `/hermit tone` · `/help` refreshes this snapshot',
+      '• `/hermit prefs` · `/hermit tone` · `/position` · `/help` refreshes this snapshot',
       ...(id === ROOM_1659_ID
         ? ['', '_Room 1659 reads Hyperliquid + FriendKey for the wallet sending the command._']
         : []),

@@ -3,7 +3,7 @@ import { getAddress, hashTypedData, isAddress, numberToHex, type Hex, type Publi
 import { base } from 'viem/chains'
 
 import {
-  extractExecutionFailedInnerSelector,
+  buildPreflightSimulationRejectionError,
   extractRevertInfo,
   isPreflightSimulationRejection,
   isSwapPreflightSimulationRetryable,
@@ -283,46 +283,26 @@ export async function fetchZoraTradeQuoteFromApi(params: {
   return data
 }
 
+const UNIVERSAL_ROUTER_BASE = '0x6ff5693b99212da76ad316178a184ab56d299b43'
+
 /** Map a production `eth_call` failure from the Zora Universal Router into user-facing copy. */
 export function formatZoraRouterSimulationFailure(error: unknown): Error {
   const info = extractRevertInfo(error)
-  const revertData = info.revertData
-  const selector = revertData?.slice(0, 10).toLowerCase()
-
-  if (selector === '0x3b99b53d') {
-    return new Error(
-      'Swap route data from Zora is malformed or stale. Refresh the quote and try again.',
-    )
-  }
-
-  if (selector === '0xb0669cbc') {
-    return new Error(
-      'Permit2 rejected the smart-wallet signature. Refresh the quote, sign again when prompted, then retry.',
-    )
-  }
-
-  const innerSelector = extractExecutionFailedInnerSelector(revertData)
-  if (innerSelector === '0xb0669cbc') {
-    return new Error(
-      'Permit2 rejected the smart-wallet signature. Refresh the quote, sign again when prompted, then retry.',
-    )
-  }
-
-  const isExecutionFailed =
-    selector === '0x2c4029e9' ||
-    info.errorName === 'ExecutionFailed(uint256,bytes)' ||
-    String(info.error ?? '')
-      .toLowerCase()
-      .includes('executionfailed')
-
-  if (isExecutionFailed) {
-    return new Error(ZORA_SWAP_SIMULATION_FAILED_MESSAGE)
-  }
-
-  const detail = info.errorName ?? info.error ?? 'unknown revert'
-  return new Error(
-    `Zora swap would revert on-chain (${detail}). Refresh the quote and try again.`,
-  )
+  return buildPreflightSimulationRejectionError({
+    simResult: {
+      success: false,
+      error: info.error,
+      revertData: info.revertData,
+      errorName: info.errorName,
+      directCallResult: {
+        success: false,
+        error: info.error,
+        revertData: info.revertData,
+        errorName: info.errorName,
+      },
+    },
+    firstCallTo: UNIVERSAL_ROUTER_BASE,
+  })
 }
 
 function isInvalidEthCallSenderParameterError(error: unknown): boolean {

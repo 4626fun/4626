@@ -387,6 +387,13 @@ export async function ensureAlfaclubDailyBriefSchema(db: Db): Promise<void> {
   })
 }
 
+/** Hermit position alert subscriptions (liquidation / target PnL Telegram DMs). */
+export async function ensureAlfaclubPositionAlertSchema(db: Db): Promise<void> {
+  await withEnsureOnce('alfaclubPositionAlert', async () => {
+    await ensureMigrationApplied(db, '20260707000000_alfaclub_position_alerts.sql').catch(() => {})
+  })
+}
+
 /**
  * Final set of additive columns that were still being applied via raw
  * ALTERs in a handful of bootstrap helpers. One-time migration.

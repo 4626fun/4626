@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
+import { getAddress } from 'viem'
 
 import { executeAddOwnerViaSendCalls } from './executeAddOwnerViaSendCalls.js'
+import { CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
 
-const CSW = '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF' as const
+const CSW = getAddress(CANONICAL_CSW_ADDRESS)
 const OWNER = '0xB2aaD65A5402714bf428a66731ae62BA5c45CAC0' as const
 
 describe('executeAddOwnerViaSendCalls', () => {

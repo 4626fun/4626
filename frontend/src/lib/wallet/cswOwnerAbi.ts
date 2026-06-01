@@ -15,7 +15,7 @@ export const MAX_OWNER_MUTATION_RELAY_DEPOSIT_SEED_WEI = 100_000_000_000_000n
 export const GOLDEN_RELAY_PART1_ORDER_ID =
   '0x8cc58ae3d8f127fbe4c8327958cf9c638f4d3b25547ddcbb190c8ce8e853797a' as const
 
-/** Probe / reference parent CSW from the May 5 golden add-owner trace. */
+/** Pre-migration probe CSW from the May 5 2026 golden add-owner trace (not current canonical). */
 export const GOLDEN_RELAY_PART1_PROBE_CSW =
   '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF' as const
 

@@ -27,9 +27,9 @@ with a clear message instead of a `-32507` bundler revert.
   MetaMask, Rabby, WalletConnect-mediated wallets, Privy embedded wallets.
 - Control of one of the **on-chain EOA owner private keys** for the CSW you
   are testing. For the canonical CSW
-  `0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef` on Base, eligible owners are:
-  - `0x5E1a0AFa913aD95aA3762b18Ea9AdD73d31313cf`
-  - `0xCf8D17Ce01B73637ef936fe7c47bA7100b820142`
+  `0xAb6d5C10b03300326cd7fab7267ae192842967b5` on Base (`CANONICAL_CSW_ADDRESS`),
+  see the live owner allowlist in `frontend/src/wallet/canonicalWalletPolicy.ts`
+  (`CANONICAL_CSW_ALLOWED_OWNER_EOAS` / `CANONICAL_CSW_EXECUTION_OWNER_ADDRESSES`).
 - A live preview of the app with the dev probe accessible at
   `app.4626.fun/dev/csw-signature-probe`.
 - Optional but recommended: a separate Coinbase / Base App session connected

@@ -56,7 +56,9 @@ import {
   SESSION_MISMATCH_MESSAGE,
   STALE_PRIVY_SESSION_MESSAGE,
   getWalletProviderCollisionMessage,
+  getWaitlistNetworkUnstableMessage,
   isSessionFinalizingError,
+  isTransientWaitlistNetworkError,
   isWalletProviderCollisionError,
   withTimeout,
 } from './waitlistBootstrapUtils'
@@ -96,19 +98,11 @@ function isSessionEmailMismatchError(message: unknown): boolean {
 }
 
 export function isPrivyLoginBootstrapError(error: unknown): boolean {
-  const text = typeof error === 'string' ? error : typeof (error as any)?.message === 'string' ? (error as any).message : ''
-  const normalized = text.trim().toLowerCase()
-  return (
-    normalized.includes('failed to fetch') ||
-    normalized.includes('networkerror') ||
-    normalized.includes('blocked by cors') ||
-    (normalized.includes('access-control-allow-origin') && normalized.includes('privy')) ||
-    normalized.includes('email verification is unavailable in this client')
-  )
+  return isTransientWaitlistNetworkError(error)
 }
 
 function getSignInNetworkUnstableMessage(): string {
-  return 'Sign-in network is unstable right now. Stay on this page and retrying will continue automatically.'
+  return getWaitlistNetworkUnstableMessage()
 }
 
 function isTelegramMiniAppRuntime(): boolean {
@@ -777,11 +771,11 @@ export function WaitlistFlow(props: {
         return
       }
       setError(
-        !privyAuthed && isPrivyLoginBootstrapError(authError)
-            ? getSignInNetworkUnstableMessage()
-            : typeof authError?.message === 'string'
-              ? authError.message
-              : 'Failed to start sign-in.',
+        isPrivyLoginBootstrapError(authError)
+          ? getSignInNetworkUnstableMessage()
+          : typeof authError?.message === 'string'
+            ? authError.message
+            : 'Failed to start sign-in.',
       )
     } finally {
       endAuthAttempt()
@@ -975,7 +969,13 @@ export function WaitlistFlow(props: {
         )
         return
       }
-      setError(isSessionMismatch ? SESSION_MISMATCH_MESSAGE : message)
+      setError(
+        isSessionMismatch
+          ? SESSION_MISMATCH_MESSAGE
+          : isTransientWaitlistNetworkError(bootstrapError)
+            ? getWaitlistNetworkUnstableMessage()
+            : message,
+      )
     }
   }, [
     disableAggressiveSessionReset,

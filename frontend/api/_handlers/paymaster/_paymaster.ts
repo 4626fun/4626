@@ -2527,18 +2527,18 @@ async function validateInnerCalls(params: {
         let swapInputToken = approvedToken ?? wrappedToken
         if (
           !swapInputToken &&
-          swapRouterKind === 'zora-universal' &&
+          (swapRouterKind === 'zora-universal' || swapRouterKind === 'universal') &&
           swapRouterCallData &&
           approvalCalls === 0
         ) {
-          // Zora trades embed Permit2 in router calldata (no separate approve inner call).
+          // Trading API / Zora quotes embed Permit2 in router calldata (no separate approve inner call).
           const candidates = [configuredUsdc, expectedZoraToken, expectedWethToken, permit2].filter(
             (token): token is Address => Boolean(token),
           )
           swapInputToken = resolveSwapInputTokenFromRouterCalldata(swapRouterCallData, candidates)
           // Permit2 payloads may not repeat the sell token as a bare 20-byte needle; still
           // sponsor the known Zora single-call lane with USDC policy when shape matches.
-          if (!swapInputToken && swapRouterCalls === 1) {
+          if (!swapInputToken && swapRouterKind === 'zora-universal' && swapRouterCalls === 1) {
             swapInputToken = configuredUsdc
           }
         }
@@ -2553,7 +2553,9 @@ async function validateInnerCalls(params: {
         }
 
         const zoraPermitEmbeddedSwap =
-          swapRouterKind === 'zora-universal' && approvalCalls === 0 && swapRouterCalls === 1
+          (swapRouterKind === 'zora-universal' || swapRouterKind === 'universal') &&
+          approvalCalls === 0 &&
+          swapRouterCalls === 1
 
         return {
           matched:

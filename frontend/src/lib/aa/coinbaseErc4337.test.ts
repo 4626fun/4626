@@ -215,6 +215,30 @@ describe('coinbaseErc4337 latency helpers', () => {
     expect(result.errorName).toBe('NotOwner()')
   })
 
+  it('treats Unauthorized execute simulation as success when Universal Router direct call passed', async () => {
+    const UNIVERSAL_ROUTER = '0x6fF5693b99212Da76ad316178A184AB56D299b43'
+    const call = vi.fn(async () => undefined)
+    const simulateContract = vi.fn(async () => {
+      const err = new Error('execution reverted') as Error & { data?: string }
+      err.data = '0x82b42900'
+      throw err
+    })
+    const client = {
+      call,
+      simulateContract,
+    }
+
+    const result = await simulateSmartWalletCalls({
+      publicClient: client as any,
+      smartWallet: SMART_WALLET as `0x${string}`,
+      calls: [{ to: UNIVERSAL_ROUTER as `0x${string}`, data: '0x3593564c' as `0x${string}` }],
+    })
+
+    expect(result.success).toBe(true)
+    expect(call).toHaveBeenCalledTimes(1)
+    expect(simulateContract).toHaveBeenCalledTimes(1)
+  })
+
   it('treats bundler probe timeout as non-fatal', async () => {
     vi.useFakeTimers()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})

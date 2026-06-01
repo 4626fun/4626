@@ -9,7 +9,8 @@ returns a bundler `-32507` validation revert.
 
 ## TL;DR
 
-For the canonical CSW at `0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef` on Base, the
+For the canonical CSW at `0xAb6d5C10b03300326cd7fab7267ae192842967b5` on Base (migrated
+2026-04-23 from `0x4beabd…`; see `frontend/src/wallet/canonicalWalletPolicy.ts`), the
 Base App popup signs with a **per-session sub-account key that is not in the CSW's
 on-chain owner array**. ERC-1271 and bundler validation both correctly reject it.
 There is no client-side fix.

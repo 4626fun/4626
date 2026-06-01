@@ -27,7 +27,7 @@ Implementation anchors:
 
 ## Confirmed reference (March 9)
 
-- CSW: `0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef`
+- CSW: `0xAb6d5C10b03300326cd7fab7267ae192842967b5` (`CANONICAL_CSW_ADDRESS`; migrated 2026-04-23 from `0x4beabd…`)
 - EntryPoint v0.6: `0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789`
 - Replayable nonce key: `8453` (`0x2105`)
 - Known userOpHash: `0x70255628ea8816f84e6d0657cabfdca810d1024e0d147ce75c3c6174dc2c5b1a`

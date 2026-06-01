@@ -6,7 +6,9 @@
 | `premium-v2` | `premium-v2/` | Fuji LUT + rembg bg darken, v2 card/moat background, platinum bezel, hybrid glow. Offline compare until sign-off. |
 | `fuji-lut-experimental` | `fuji-lut-experimental/` | Pre-grades `sourceImage` / `heroCutoutSourceImage` with CPU 3DL LUT, then delegates to classic. |
 
-**Breakout:** When Zora supplies `heroCutoutArtworkUrl`, `/api/token/image` passes `allowHeroCutoutBreakoutForNonPixelArt` + `renderPreset: hero` so the subject pops above the frame (same opt-in as Hermit avatars). Without a hero cutout, breakout may still come from rembg segmentation when enabled.
+**Breakout (current policy):** Top breakout only — Zora `heroCutoutArtworkUrl` when present, else rembg top window for opaque illustrations/portraits. No side-padding breakout (deferred). `premium-v2` reuses `buildPremiumSubjectStack` from classic for breakout; v2 adds LUT/card/glow and padding atmosphere only when breakout is absent.
+
+**Breakout fixes kept for rembg illustrations:** no column-contour thinning, `preferUpperSubjectMatte` only for pixel art, `opaqueBannerIllustration` classification for Zora-style banners.
 
 ## Offline A/B
 
