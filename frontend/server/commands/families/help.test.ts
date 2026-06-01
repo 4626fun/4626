@@ -75,7 +75,7 @@ describe('executeHelpCommandFamily', () => {
       senderWallet: TEST_WALLET,
     })
     expect(result?.ok).toBe(true)
-    expect(result?.response).toContain('Your position')
+    expect(result?.response).toContain('Room 1659 HL position')
     expect(result?.response).toContain('LONG')
     expect(result?.response).toContain('/gmeow')
     expect(result?.response).not.toContain('Keepr')

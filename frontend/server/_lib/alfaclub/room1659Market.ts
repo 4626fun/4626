@@ -81,10 +81,17 @@ export function resolveRoom1659HyperliquidPortfolioUser(): string {
 }
 
 /**
- * Room 1659 market context always tracks the dedicated room portfolio wallet.
- * Sender wallet is intentionally ignored for Hyperliquid account selection.
+ * Room 1659 market context defaults to the requesting sender wallet.
+ * Set ROOM_1659_HYPERLIQUID_FORCE_PORTFOLIO=1 to force the shared room portfolio.
  */
-export function resolveRoom1659HyperliquidUserForSnapshot(_senderAddress: string): string {
+export function resolveRoom1659HyperliquidUserForSnapshot(senderAddress: string): string {
+  const forcePortfolio = ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.ROOM_1659_HYPERLIQUID_FORCE_PORTFOLIO ?? '').trim().toLowerCase(),
+  )
+  if (!forcePortfolio) {
+    const normalizedSender = String(senderAddress ?? '').trim().toLowerCase()
+    if (EVM_ADDRESS_RE.test(normalizedSender)) return normalizedSender
+  }
   return resolveRoom1659HyperliquidPortfolioUser()
 }
 
