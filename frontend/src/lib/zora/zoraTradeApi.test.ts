@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getAddress } from 'viem'
 
+import { PreflightSimulationRejectionError } from '@/lib/aa/coinbaseErc4337ErrorUtils'
 import {
   buildSwapFromZoraQuote,
   buildZoraSlippageEscalationLadder,
@@ -186,13 +187,13 @@ describe('zoraTradeApi', () => {
     expect(zoraPermitNonceDrifted(2, 2)).toBe(false)
   })
 
-  it('maps ExecutionFailed router simulation to slippage/liquidity guidance', () => {
+  it('maps ExecutionFailed router simulation to swap guidance', () => {
     const err = formatZoraRouterSimulationFailure({
       cause: {
         data: '0x2c4029e9000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000060',
       },
     })
-    expect(err.message).toContain('not a USDC balance issue')
+    expect(err.message).toContain('would fail on-chain')
     expect(err.message).toContain('slippage')
   })
 
@@ -223,6 +224,13 @@ describe('zoraTradeApi', () => {
     expect(isZoraBundlerSendRetryable(buildZoraBundlerSimulationMismatchError())).toBe(true)
     expect(isZoraBundlerSimulationMismatchError(buildZoraBundlerSimulationMismatchError())).toBe(true)
     expect(isZoraBundlerSendRetryable(new Error('invalid signature'))).toBe(false)
+    expect(
+      isZoraBundlerSendRetryable(
+        new PreflightSimulationRejectionError(
+          'This swap would fail on-chain — usually because the quote is stale, slippage is too tight',
+        ),
+      ),
+    ).toBe(true)
   })
 
   it('classifies router simulation failures as slippage-retryable', () => {

@@ -31,6 +31,7 @@ import { resolveSwapTokenDecimals } from '@/lib/swap/swapTokenDecimals'
 import {
   resolveAutoSwapSlippagePct,
   pickNextSwapSlippageEscalationPct,
+  resolveSwapSendRetrySlippagePct,
   SWAP_AUTO_SLIPPAGE_ESCALATION_CAP_PCT,
 } from '@/lib/swap/swapAutoSlippage'
 import { normalizePriceImpactPercent } from '@/lib/swap/swapQuoteDetails'
@@ -2183,18 +2184,17 @@ export function useSwapExecution(params: {
           if (canRefreshZora) {
             const amount = readQuoteInputAmount(activeQuoteForRetry)
             if (!amount || !params.executionAddress) throw sendError
-            let retrySlippagePct = pickNextZoraBundlerRetrySlippagePct(activeSlippagePct)
-            if (
-              !params.slippageAuto &&
-              retrySlippagePct != null &&
-              retrySlippagePct > params.parsedSlippage + 1e-9
-            ) {
-              retrySlippagePct = null
-            }
-            if (retrySlippagePct != null && retrySlippagePct > slippageEscalationCapPct + 1e-9) {
-              retrySlippagePct = null
-            }
-            if (retrySlippagePct == null || retrySlippagePct <= activeSlippagePct) throw sendError
+            const retrySlippagePct = resolveSwapSendRetrySlippagePct({
+              sendAttempt,
+              activeSlippagePct,
+              slippageAuto: Boolean(params.slippageAuto),
+              parsedSlippage: params.parsedSlippage,
+              slippageEscalationCapPct,
+              pickNext: pickNextZoraBundlerRetrySlippagePct,
+              sendError,
+              isRetryable: isZoraBundlerSendRetryable,
+            })
+            if (retrySlippagePct == null) throw sendError
             setStatus(SWAP_PREPARE_STATUS)
             const executableQuote = await prepareZoraQuoteForExecute({
               quote: activeQuoteForRetry,
@@ -2243,18 +2243,17 @@ export function useSwapExecution(params: {
           if (canRefreshUniswap) {
             const amount = readQuoteInputAmount(activeQuoteForRetry)
             if (!amount || !params.executionAddress) throw sendError
-            let retrySlippagePct = pickNextSwapSlippageEscalationPct(activeSlippagePct)
-            if (
-              !params.slippageAuto &&
-              retrySlippagePct != null &&
-              retrySlippagePct > params.parsedSlippage + 1e-9
-            ) {
-              retrySlippagePct = null
-            }
-            if (retrySlippagePct != null && retrySlippagePct > slippageEscalationCapPct + 1e-9) {
-              retrySlippagePct = null
-            }
-            if (retrySlippagePct == null || retrySlippagePct <= activeSlippagePct) throw sendError
+            const retrySlippagePct = resolveSwapSendRetrySlippagePct({
+              sendAttempt,
+              activeSlippagePct,
+              slippageAuto: Boolean(params.slippageAuto),
+              parsedSlippage: params.parsedSlippage,
+              slippageEscalationCapPct,
+              pickNext: pickNextSwapSlippageEscalationPct,
+              sendError,
+              isRetryable: isSwapPreflightSimulationRetryable,
+            })
+            if (retrySlippagePct == null) throw sendError
             const prepared = await prepareCanonicalUniswapSwapForSend({
               amount,
               slippagePct: retrySlippagePct,

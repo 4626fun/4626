@@ -5,7 +5,9 @@ import {
   parsePriceImpactPercentFromLabel,
   pickNextSwapSlippageEscalationPct,
   resolveAutoSwapSlippagePct,
+  resolveSwapSendRetrySlippagePct,
 } from '@/lib/swap/swapAutoSlippage'
+import { PreflightSimulationRejectionError } from '@/lib/aa/coinbaseErc4337ErrorUtils'
 
 describe('resolveAutoSwapSlippagePct', () => {
   it('uses 5% floor for canonical Zora routes', () => {
@@ -68,6 +70,57 @@ describe('pickNextSwapSlippageEscalationPct', () => {
     expect(pickNextSwapSlippageEscalationPct(2)).toBe(5)
     expect(pickNextSwapSlippageEscalationPct(5)).toBe(10)
     expect(pickNextSwapSlippageEscalationPct(30)).toBeNull()
+  })
+})
+
+describe('resolveSwapSendRetrySlippagePct', () => {
+  const preflightErr = new PreflightSimulationRejectionError(
+    'This swap would fail on-chain — usually because the quote is stale, slippage is too tight',
+  )
+
+  it('escalates slippage on the first retry when auto mode allows it', () => {
+    expect(
+      resolveSwapSendRetrySlippagePct({
+        sendAttempt: 0,
+        activeSlippagePct: 5,
+        slippageAuto: true,
+        parsedSlippage: 0.5,
+        slippageEscalationCapPct: 30,
+        pickNext: pickNextSwapSlippageEscalationPct,
+        sendError: preflightErr,
+        isRetryable: () => true,
+      }),
+    ).toBe(10)
+  })
+
+  it('refreshes at the same slippage when manual mode blocks escalation', () => {
+    expect(
+      resolveSwapSendRetrySlippagePct({
+        sendAttempt: 0,
+        activeSlippagePct: 5,
+        slippageAuto: false,
+        parsedSlippage: 5,
+        slippageEscalationCapPct: 5,
+        pickNext: pickNextSwapSlippageEscalationPct,
+        sendError: preflightErr,
+        isRetryable: () => true,
+      }),
+    ).toBe(5)
+  })
+
+  it('returns null when retryable but not the first send attempt', () => {
+    expect(
+      resolveSwapSendRetrySlippagePct({
+        sendAttempt: 1,
+        activeSlippagePct: 30,
+        slippageAuto: true,
+        parsedSlippage: 0.5,
+        slippageEscalationCapPct: 30,
+        pickNext: pickNextSwapSlippageEscalationPct,
+        sendError: preflightErr,
+        isRetryable: () => true,
+      }),
+    ).toBeNull()
   })
 })
 

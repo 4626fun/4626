@@ -5,6 +5,8 @@ import { base } from 'viem/chains'
 import {
   extractExecutionFailedInnerSelector,
   extractRevertInfo,
+  isPreflightSimulationRejection,
+  isSwapPreflightSimulationRetryable,
 } from '@/lib/aa/coinbaseErc4337ErrorUtils'
 import { findCoinbaseSmartWalletOwnerIndex } from '@/lib/aa/coinbaseErc4337Owners'
 import { getProductionBaseReadClient } from '@/lib/base/productionBaseReadClient'
@@ -181,6 +183,9 @@ export function buildZoraBundlerSimulationMismatchError(): ZoraBundlerSimulation
 /** Bundler rejected a UserOp after local Zora eth_call passed — refresh quote and retry once. */
 export function isZoraBundlerSendRetryable(error: unknown): boolean {
   if (isZoraBundlerSimulationMismatchError(error)) return true
+  if (isPreflightSimulationRejection(error) && isSwapPreflightSimulationRetryable(error)) {
+    return true
+  }
   if (isZoraRouterSimulationRetryable(error)) return true
   const msg = String(error instanceof Error ? error.message : error).toLowerCase()
   if (
@@ -215,6 +220,7 @@ export function isZoraRouterSimulationRetryable(error: unknown): boolean {
     return false
   }
   return (
+    msg.includes('would fail on-chain') ||
     msg.includes('would revert') ||
     msg.includes('malformed or stale') ||
     msg.includes('0x2c4029e9') ||

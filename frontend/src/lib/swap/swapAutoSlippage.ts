@@ -62,6 +62,41 @@ export function pickNextSwapSlippageEscalationPct(slippagePct: number): number |
   return null
 }
 
+/** Pick slippage for a send-time retry; may refresh at the same pct when escalation is blocked (stale quote). */
+export function resolveSwapSendRetrySlippagePct(params: {
+  sendAttempt: number
+  activeSlippagePct: number
+  slippageAuto: boolean
+  parsedSlippage: number
+  slippageEscalationCapPct: number
+  pickNext: (current: number) => number | null
+  sendError: unknown
+  isRetryable: (error: unknown) => boolean
+}): number | null {
+  let retrySlippagePct = params.pickNext(params.activeSlippagePct)
+  if (
+    !params.slippageAuto &&
+    retrySlippagePct != null &&
+    retrySlippagePct > params.parsedSlippage + 1e-9
+  ) {
+    retrySlippagePct = null
+  }
+  if (retrySlippagePct != null && retrySlippagePct > params.slippageEscalationCapPct + 1e-9) {
+    retrySlippagePct = null
+  }
+  if (
+    (retrySlippagePct == null || retrySlippagePct <= params.activeSlippagePct) &&
+    params.isRetryable(params.sendError) &&
+    params.sendAttempt === 0
+  ) {
+    return params.activeSlippagePct
+  }
+  if (retrySlippagePct == null || retrySlippagePct <= params.activeSlippagePct) {
+    return null
+  }
+  return retrySlippagePct
+}
+
 export function formatSlippagePctForDisplay(pct: number): string {
   if (!Number.isFinite(pct)) return '0.5'
   const rounded = Math.round(pct * 100) / 100

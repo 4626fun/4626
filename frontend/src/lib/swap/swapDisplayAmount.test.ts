@@ -45,8 +45,8 @@ describe('formatSwapTokenBalanceLabel', () => {
     expect(formatSwapTokenBalanceLabel('103300000.78', 'akita')).toBe('103,300,000.78')
   })
 
-  it('uses two decimals for mid-sized holdings', () => {
-    expect(formatSwapTokenBalanceLabel('5.4729', 'SOL')).toBe('5.47')
+  it('keeps significant digits for mid-sized holdings (Uniswap TokenTx)', () => {
+    expect(formatSwapTokenBalanceLabel('5.4729', 'SOL')).toBe('5.4729')
   })
 
   it('keeps extra precision for tiny fractional amounts', () => {

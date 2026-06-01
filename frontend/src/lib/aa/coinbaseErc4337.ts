@@ -1065,8 +1065,8 @@ export async function simulateSmartWalletCalls(params: {
   let directCallResult: { success: boolean; error?: string; revertData?: Hex; errorName?: string } | undefined
   if (calls.length === 1 && calls[0]?.data && typeof client?.call === 'function') {
     const call = calls[0]!
-    // Match bundler/UserOp simulation timing — `latest` can pass while paymaster estimate reverts.
-    const blockNumber = 'pending'
+    // Match Zora prepare-time eth_call (`latest`). `pending` can diverge and false-fail after a passing quote refresh.
+    const blockNumber = isZoraUniversalRouterTarget(call.to) ? 'latest' : 'pending'
     try {
       await client.call({
         to: call.to,
