@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { resolveOwnerMutationSignerContext } from '@/lib/relay/resolveOwnerMutationSignerContext'
+import { CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
 
-const CSW = '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'
-const PARENT = '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'
+const CSW = CANONICAL_CSW_ADDRESS
+const PARENT = CANONICAL_CSW_ADDRESS
 const EMBED = '0x1b77A85C5dCf6302FF60265F615F99030b5Bc475'
 const OWNER = '0x5e1a0afa913ad95aa3762b18ea9add73d31313cf'
 

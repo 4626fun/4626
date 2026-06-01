@@ -25,8 +25,9 @@ vi.mock('./etherscanV2.js', () => ({
 const { getTrayWalletPortfolioDebank, getTrayWalletPortfolioBaseEtherscan } = mocks
 
 import { resolveTrayWalletPortfolio } from './trayPortfolioResolve.js'
+import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.ts'
 
-const ADDR = '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'
+const ADDR = CANONICAL_CSW_ADDRESS
 
 function portfolio(overrides: Partial<{ totalUsdValue: number; topTokens: unknown[] }> = {}) {
   return {

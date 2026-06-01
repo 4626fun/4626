@@ -31,7 +31,7 @@ describe('auditProfileCswRow', () => {
   })
 
   it('passes legitimate Base CSW profiles', async () => {
-    const baseCsw = '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'
+    const baseCsw = CANONICAL_CSW_ADDRESS
     const hasDeployedBytecode = vi.fn(async (address: string | null | undefined) => {
       return address?.toLowerCase() === baseCsw
     })

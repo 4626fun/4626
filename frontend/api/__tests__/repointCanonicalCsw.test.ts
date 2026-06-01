@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { repointCanonicalCswOnProfile } from '../../server/_lib/wallet/repointCanonicalCsw.ts'
+import { CANONICAL_CSW_ADDRESS } from '../../src/wallet/canonicalWalletPolicy.ts'
 
 describe('repointCanonicalCswOnProfile', () => {
   it('replaces a stale CSW and embedded signer on the profile row', async () => {
@@ -30,13 +31,13 @@ describe('repointCanonicalCswOnProfile', () => {
     const result = await repointCanonicalCswOnProfile({
       db: db as any,
       profileId: 1,
-      canonicalCswAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+      canonicalCswAddress: CANONICAL_CSW_ADDRESS,
       embeddedEoaAddress: '0xb2aad65a5402714bf428a66731ae62ba5c45cac0',
       clearBaseSubAccount: true,
     })
 
     expect(result.previousCswAddress).toBe('0x6c0ea422aa7bb7e1e17c5257f7023c8f05ddf9b3')
-    expect(result.canonicalCswAddress).toBe('0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef')
+    expect(result.canonicalCswAddress).toBe(CANONICAL_CSW_ADDRESS)
     expect(result.nextEmbeddedEoa).toBe('0xb2aad65a5402714bf428a66731ae62ba5c45cac0')
     expect(result.clearedBaseSubAccount).toBe('0x6c0ea422aa7bb7e1e17c5257f7023c8f05ddf9b3')
     expect(calls.some((call) => call.includes('update profiles'))).toBe(true)

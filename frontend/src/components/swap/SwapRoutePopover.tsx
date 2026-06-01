@@ -5,9 +5,11 @@ import { Tooltip } from '@/components/ui/Tooltip'
 import { cn } from '@/lib/shared/utils'
 import { summarizeRouteProtocols, type SwapRouteLeg } from '@/lib/swap/swapQuoteDetails'
 import {
+  resolveKnownBaseRouteTokenAddress,
   resolveSwapRouteTokenMeta,
   type SwapRouteTokenMeta,
 } from '@/lib/swap/swapRouteTokenLookup'
+import { tokenLogoFallbacks } from '@/lib/uniswap/swapUtils'
 
 type SwapRoutePopoverProps = {
   routeSummary: string | null
@@ -43,6 +45,8 @@ function RouteTokenChip({
             ? {
                 address: meta.address,
                 logoUrl: meta.imageUrl ?? undefined,
+                logoUrls: tokenLogoFallbacks(meta.address),
+                group: resolveKnownBaseRouteTokenAddress(meta.symbol) ? 'core' : undefined,
               }
             : undefined
         }

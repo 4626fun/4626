@@ -40,6 +40,7 @@ describe('swapRouteTokenLookup', () => {
     expect(resolveSwapRouteTokenMeta(lookup, 'USDC').address).toBe(CONTRACTS.usdc)
     expect(resolveSwapRouteTokenMeta(lookup, 'WETH').address).toBe(CONTRACTS.weth)
     expect(resolveSwapRouteTokenMeta(lookup, 'ZORA').address).toBe(CONTRACTS.zora)
+    expect(resolveSwapRouteTokenMeta(lookup, 'ZORA').imageUrl).toContain('Uniswap/assets')
     expect(resolveSwapRouteTokenMeta(lookup, 'akita').imageUrl).toBe('/api/v1/token/akita.png')
   })
 

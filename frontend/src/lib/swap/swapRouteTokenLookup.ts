@@ -2,6 +2,7 @@ import { getAddress, isAddress } from 'viem'
 
 import { CONTRACTS } from '@/config/contracts'
 import type { SwapRouteLeg } from '@/lib/swap/swapQuoteDetails'
+import { uniswapBaseLogo } from '@/lib/uniswap/swapUtils'
 
 export type SwapRouteTokenMeta = {
   symbol: string
@@ -34,6 +35,13 @@ export function resolveKnownBaseRouteTokenAddress(symbol: string): `0x${string}`
   }
 }
 
+/** Curated logo for common hop symbols — avoids premium renderer chips on route popovers. */
+export function resolveKnownBaseRouteTokenImageUrl(symbol: string): string | null {
+  const address = resolveKnownBaseRouteTokenAddress(symbol)
+  if (!address) return null
+  return uniswapBaseLogo(address)
+}
+
 export function buildSwapRouteTokenLookup(params: {
   tokenInSymbol: string
   tokenInAddress: string
@@ -58,7 +66,10 @@ export function buildSwapRouteTokenLookup(params: {
     lookup[key] = {
       symbol: trimmedSymbol,
       address: resolvedAddress,
-      imageUrl: imageUrl ?? existing?.imageUrl ?? null,
+      imageUrl:
+        imageUrl ??
+        existing?.imageUrl ??
+        resolveKnownBaseRouteTokenImageUrl(trimmedSymbol),
     }
   }
 
@@ -84,6 +95,6 @@ export function resolveSwapRouteTokenMeta(
   return {
     symbol: trimmedSymbol,
     address: resolveKnownBaseRouteTokenAddress(trimmedSymbol),
-    imageUrl: null,
+    imageUrl: resolveKnownBaseRouteTokenImageUrl(trimmedSymbol),
   }
 }
