@@ -2103,25 +2103,12 @@ svg.hero__lightning #hero-lightning-bolts path {
   );
 }
 
-/* Warm gold ambient haze BEHIND the cube — reads as god-ray spill from
-   the cube into the sky. Stays behind via z-index so it never tints the
-   cube body itself. */
+/* Halo removed: the cube reads as a clean obsidian crystal against the sky
+   with no gold/purple glow behind it. (Kept as a no-op so any later cascade
+   referencing this selector stays inert.) */
 .hero__cube::before {
-  content: "";
-  position: absolute;
-  inset: -22%;
-  z-index: -1;
-  background:
-    radial-gradient(ellipse 50% 48% at 50% 55%,
-      rgba(255, 200, 120, 0.22) 0%,
-      rgba(180, 140, 80, 0.10) 35%,
-      transparent 70%),
-    radial-gradient(ellipse 75% 70% at 50% 60%,
-      rgba(40, 30, 60, 0.35) 0%,
-      rgba(20, 15, 30, 0.15) 50%,
-      transparent 100%);
-  filter: blur(28px);
-  pointer-events: none;
+  content: none;
+  display: none;
 }
 
 /* =============================================================

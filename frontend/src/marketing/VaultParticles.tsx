@@ -26,8 +26,8 @@ const FRAG = /* glsl */ `
     float d = length(c);
     if (d > 0.5) discard;
     float pulse = 0.58 + 0.42 * sin(uTime * 1.15 + vPhase * 6.28);
-    vec3 col = mix(vec3(0.16, 0.08, 0.28), vec3(0.4, 0.28, 0.65), pulse);
-    float alpha = smoothstep(0.5, 0.08, d) * 0.16 * pulse;
+    vec3 col = mix(vec3(0.03, 0.06, 0.16), vec3(0.12, 0.34, 0.92), pulse);
+    float alpha = smoothstep(0.5, 0.08, d) * 0.13 * pulse;
     gl_FragColor = vec4(col, alpha);
   }
 `

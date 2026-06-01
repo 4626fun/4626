@@ -1,6 +1,6 @@
 /**
  * Adapted from cortiz2894/flow-shield-effect (see tools/vault-images/NOTICE.md).
- * Purple storm preset for 4626 marketing vault hero.
+ * Base-blue storm preset for 4626 marketing vault hero.
  */
 import * as THREE from 'three'
 
@@ -107,7 +107,7 @@ export const fragmentShader = /* glsl */ `
   }
 
   vec3 lifeColor(float life){
-    return mix(vec3(0.35, 0.08, 0.55), uColor, life);
+    return mix(vec3(0.02, 0.12, 0.4), uColor, life);
   }
 
   float hexPattern(vec2 p){
@@ -150,10 +150,12 @@ export const fragmentShader = /* glsl */ `
     }
 
     vec3 lColor = lifeColor(uLife);
-    float intensity = hex * uHexOpacity * (0.3 + fresnel*0.7) + fresnel*0.45;
+    // Idle fresnel dome kept very low so there is no resting "halo"; the shield
+    // only reads when a lightning ring (ringContrib) sweeps across it.
+    float intensity = hex * uHexOpacity * (0.3 + fresnel*0.7) + fresnel*0.12;
     vec3 shieldColor = lColor * intensity * 2.0 + lColor * flowNoise * fresnel * uFlowIntensity * 0.35;
     shieldColor += lColor * ringContrib * uHitIntensity;
-    float alpha = clamp(intensity * uOpacity * revealMask, 0.0, 1.0);
+    float alpha = clamp((intensity + ringContrib * uHitIntensity) * uOpacity * revealMask, 0.0, 1.0);
     gl_FragColor = vec4(shieldColor, alpha);
   }
 `
@@ -165,23 +167,23 @@ export function createShieldMaterial(): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
-      uColor: { value: new THREE.Color('#8b5cf6') },
+      uColor: { value: new THREE.Color('#0052ff') },
       uLife: { value: 1 },
       uHexScale: { value: 2.8 },
       uEdgeWidth: { value: 0.07 },
-      uFresnelPower: { value: 2.45 },
-      uFresnelStrength: { value: 1.05 },
-      uOpacity: { value: 0.12 },
+      uFresnelPower: { value: 2.6 },
+      uFresnelStrength: { value: 0.6 },
+      uOpacity: { value: 0.14 },
       uReveal: { value: 1 },
       uFlashSpeed: { value: 0.5 },
       uFlashIntensity: { value: 0.08 },
       uNoiseScale: { value: 1.1 },
-      uNoiseEdgeColor: { value: new THREE.Color('#a78bfa') },
+      uNoiseEdgeColor: { value: new THREE.Color('#4d8bff') },
       uNoiseEdgeWidth: { value: 0.02 },
       uNoiseEdgeIntensity: { value: 4 },
       uNoiseEdgeSmoothness: { value: 0.5 },
       uHexOpacity: { value: 0.03 },
-      uShowHex: { value: 0.28 },
+      uShowHex: { value: 0.1 },
       uFlowScale: { value: 2.2 },
       uFlowSpeed: { value: 0.7 },
       uFlowIntensity: { value: 0.95 },
@@ -191,7 +193,7 @@ export function createShieldMaterial(): THREE.ShaderMaterial {
       uHitRingWidth: { value: 0.11 },
       uHitMaxRadius: { value: 0.9 },
       uHitDuration: { value: 0.9 },
-      uHitIntensity: { value: 1.45 },
+      uHitIntensity: { value: 1.9 },
       uHitImpactRadius: { value: 0.35 },
       uFadeStart: { value: -0.2 },
     },

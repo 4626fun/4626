@@ -3,6 +3,8 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 
+import { applyPremiumObsidian, type PremiumObsidianResult } from './vaultMaterial'
+
 const GLB_URL = '/immersive/assets/vault/ethereum_vault.glb'
 
 useGLTF.preload(GLB_URL)
@@ -16,18 +18,10 @@ export function VaultModel({ lightningPulse }: VaultModelProps) {
   const gltf = useGLTF(GLB_URL)
   const scene = useMemo(() => gltf.scene.clone(true), [gltf.scene])
 
-  const emissiveMats = useMemo(() => {
-    const mats: THREE.MeshStandardMaterial[] = []
-    scene.traverse((obj) => {
-      if (!('isMesh' in obj) || !(obj as THREE.Mesh).isMesh) return
-      const mesh = obj as THREE.Mesh
-      const mat = mesh.material
-      const list = Array.isArray(mat) ? mat : [mat]
-      for (const m of list) {
-        if (m && 'emissive' in m) mats.push(m as THREE.MeshStandardMaterial)
-      }
-    })
-    return mats
+  const obsidian = useRef<PremiumObsidianResult | null>(null)
+  useMemo(() => {
+    obsidian.current?.dispose()
+    obsidian.current = applyPremiumObsidian(scene)
   }, [scene])
 
   useEffect(() => {
@@ -35,18 +29,24 @@ export function VaultModel({ lightningPulse }: VaultModelProps) {
     const size = box.getSize(new THREE.Vector3())
     const center = box.getCenter(new THREE.Vector3())
     const maxDim = Math.max(size.x, size.y, size.z, 0.001)
-    const scale = 1.75 / maxDim
+    const scale = 4.0 / maxDim
     scene.scale.setScalar(scale)
     scene.position.sub(center.multiplyScalar(scale))
   }, [scene])
 
+  useEffect(() => () => obsidian.current?.dispose(), [])
+
   useFrame((state) => {
+    const o = obsidian.current
+    if (!o) return
     const t = state.clock.elapsedTime
-    const breath = 0.22 + Math.sin(t * 1.05) * 0.06 + lightningPulse * 0.95
-    for (const m of emissiveMats) {
-      // three.js material mutation inside r3f render loop is intentional.
+    // Veins stay dark at idle; blue glow spikes only on lightning beats.
+    // three.js material mutation inside r3f render loop is intentional.
+    o.veinMat.emissiveIntensity = lightningPulse * 1.8
+    const accentGlow = 0.18 + Math.sin(t * 0.9) * 0.04 + lightningPulse * 0.6
+    for (const a of o.accents) {
       // eslint-disable-next-line react-hooks/immutability
-      m.emissiveIntensity = breath
+      a.emissiveIntensity = accentGlow
     }
   })
 

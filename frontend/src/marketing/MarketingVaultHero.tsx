@@ -1,9 +1,7 @@
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Suspense, useRef } from 'react'
 import * as THREE from 'three'
-import { Bloom, EffectComposer } from '@react-three/postprocessing'
 
-import { ForceShieldMesh } from './shield/ForceShieldMesh'
 import { useVaultHeroMotion } from './useVaultHeroMotion'
 import { VaultModel } from './VaultModel'
 import { VaultParticles } from './VaultParticles'
@@ -14,44 +12,36 @@ function VaultScene() {
   const root = useRef<THREE.Group>(null)
   const { lightningPulse, mouse, scrollY, lowPower } = useVaultHeroMotion()
 
-  useFrame((state, dt) => {
+  useFrame((_state, dt) => {
     if (!root.current) return
-    root.current.rotation.y += dt * 0.05
-    const t = state.clock.elapsedTime
-    const tx = mouse.x * 0.45
-    const ty = mouse.y * 0.28
-    root.current.rotation.y += tx * 0.007
-    root.current.rotation.x = -0.19 + ty * 0.16
-    root.current.position.y = Math.sin(t * 0.6) * 0.03 - scrollY * 0.0004
-    root.current.position.x = mouse.x * 0.1
+    // obsdn-style continuous turntable; subtle mouse parallax, no vertical bob.
+    root.current.rotation.y += dt * 0.14
+    root.current.rotation.x = THREE.MathUtils.damp(
+      root.current.rotation.x,
+      -0.12 + mouse.y * 0.1,
+      4,
+      dt,
+    )
+    root.current.position.x = THREE.MathUtils.damp(root.current.position.x, mouse.x * 0.08, 4, dt)
+    root.current.position.y = THREE.MathUtils.damp(root.current.position.y, -scrollY * 0.0004, 4, dt)
   })
 
-  const particleCount = lowPower ? 80 : 190
+  const particleCount = lowPower ? 70 : 150
 
   return (
     <>
-      <ambientLight intensity={0.22} color="#090911" />
-      <directionalLight position={[2.6, 2.8, 3.2]} intensity={0.78} color="#c8d3ff" />
-      <directionalLight position={[-2.5, 0.8, -2.2]} intensity={0.36} color="#7a67c8" />
-      <directionalLight position={[0.2, -1.8, 1.2]} intensity={0.2} color="#2b2245" />
+      <ambientLight intensity={0.34} color="#0d1018" />
+      <directionalLight position={[2.6, 3.2, 3.2]} intensity={1.05} color="#eef2ff" />
+      <directionalLight position={[-2.8, 1.0, -1.8]} intensity={0.5} color="#9fb4d8" />
+      <directionalLight position={[0.2, -2.0, 1.4]} intensity={0.22} color="#1b2336" />
 
       <group ref={root}>
         <Suspense fallback={null}>
           <VaultModel lightningPulse={lightningPulse} />
         </Suspense>
-        <ForceShieldMesh radius={1.12} lightningPulse={lightningPulse} />
       </group>
 
       <VaultParticles count={particleCount} />
-
-      <EffectComposer enableNormalPass={false}>
-        <Bloom
-          intensity={0.2}
-          luminanceThreshold={0.78}
-          luminanceSmoothing={0.52}
-          mipmapBlur
-        />
-      </EffectComposer>
     </>
   )
 }
@@ -80,8 +70,8 @@ export function MarketingVaultHero() {
       dpr={[1, 2.5]}
       onCreated={({ gl, scene }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping
-        gl.toneMappingExposure = 0.95
-        const tex = makePurpleEnvTexture(gl)
+        gl.toneMappingExposure = 1.0
+        const tex = makeStudioEnvTexture(gl)
         scene.environment = tex
         scene.background = null
       }}
@@ -91,18 +81,24 @@ export function MarketingVaultHero() {
   )
 }
 
-function makePurpleEnvTexture(renderer: THREE.WebGLRenderer) {
+function makeStudioEnvTexture(renderer: THREE.WebGLRenderer) {
+  // Cool neutral studio: a soft top key + cooler floor so obsidian facets read
+  // without a colored cast washing them out.
   const c = document.createElement('canvas')
   c.width = 512
   c.height = 256
   const ctx = c.getContext('2d')!
-  ctx.fillStyle = '#030208'
+  const base = ctx.createLinearGradient(0, 0, 0, 256)
+  base.addColorStop(0, '#0c1018')
+  base.addColorStop(0.5, '#060810')
+  base.addColorStop(1, '#03040a')
+  ctx.fillStyle = base
   ctx.fillRect(0, 0, 512, 256)
-  const g = ctx.createRadialGradient(256, 80, 8, 256, 80, 220)
-  g.addColorStop(0, 'rgba(90, 40, 160, 0.55)')
-  g.addColorStop(0.45, 'rgba(40, 18, 80, 0.22)')
-  g.addColorStop(1, 'rgba(0, 0, 0, 0)')
-  ctx.fillStyle = g
+  const key = ctx.createRadialGradient(256, 56, 8, 256, 56, 240)
+  key.addColorStop(0, 'rgba(210, 224, 255, 0.55)')
+  key.addColorStop(0.5, 'rgba(120, 150, 210, 0.16)')
+  key.addColorStop(1, 'rgba(0, 0, 0, 0)')
+  ctx.fillStyle = key
   ctx.fillRect(0, 0, 512, 256)
   const tex = new THREE.CanvasTexture(c)
   tex.mapping = THREE.EquirectangularReflectionMapping
