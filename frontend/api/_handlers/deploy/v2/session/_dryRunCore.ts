@@ -32,6 +32,10 @@ import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deplo
 import { ensureBatcherRegistryAuthorizationOnFork } from '../../../../../server/_lib/deploy/ensureBatcherRegistryAuthorization.js'
 import { ensureCreatorOracleLaunchPricingOnFork } from '../../../../../server/_lib/deploy/ensureCreatorOracleLaunchPricingOnFork.js'
 import { ensurePhase3DryRunForkPrep } from '../../../../../server/_lib/deploy/ensurePhase3DryRunForkPrep.js'
+import {
+  AUCTION_ALREADY_PENDING_FOR_TOKEN_SELECTOR,
+  ensurePendingAuctionGateClearOnFork,
+} from '../../../../../server/_lib/deploy/ensurePendingAuctionGateClearOnFork.js'
 import { remapAuxiliaryDeployBatcherCalls } from '../../../../../server/_lib/deploy/ensureVaultAuxiliaryDeployBatcherOnFork.js'
 import {
   ensurePhase3VaultStrategyRegistrationOnFork,
@@ -105,6 +109,7 @@ const ERC20_INSUFFICIENT_BALANCE_SELECTOR = '0xe450d38c'
 /** CCALaunchStrategy.LaunchOracleInvalidPrice(int256,int256) — not a raise hint. */
 const LAUNCH_ORACLE_INVALID_PRICE_SELECTOR = '0x28e7b618'
 const PHASE2_MISSING_SELECTOR = '0xf79c143b'
+const AUCTION_ALREADY_PENDING_SELECTOR = AUCTION_ALREADY_PENDING_FOR_TOKEN_SELECTOR
 const SELECTOR_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'
 const SELECTOR_DEPLOY_PHASE2_CORE = '0xf9344d88'
 const SELECTOR_PHASE1_DEPLOY = '0x3c51ca4e'
@@ -342,6 +347,12 @@ function formatDryRunError(error: unknown): string {
       return (
         'DeployFailed(): CREATE2 deployment failed because a deterministic deployment address is already used. ' +
         'For local dry-runs, reset the fork or skip the already-completed deterministic phase before retrying.'
+      )
+    }
+    if (raw.toLowerCase().includes(AUCTION_ALREADY_PENDING_SELECTOR)) {
+      return (
+        'AuctionAlreadyPendingForToken: a prior dry-run already deferred an auction for this creator coin + owner on the fork. ' +
+        'Local dry-runs should clear the pending-auction gate before Phase 2 finalize; restart `pnpm -C frontend dev:deploy-dry-run` if this persists.'
       )
     }
     if (raw.toLowerCase().includes(NOT_AUTHORIZED_SELECTOR)) {
@@ -2171,6 +2182,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           console.warn('[deploy/v2/session/dry-run] creator_registry_batcher_authorized_on_fork', {
             batcher: phase1Batcher.toLowerCase(),
           })
+        }
+        const finalizeIdentity = extractFinalizePhase2Identity(phase2FinalizeCallsForPlan)
+        if (finalizeIdentity) {
+          const pendingGatePrep = await ensurePendingAuctionGateClearOnFork({
+            publicClient: publicClient as any,
+            forkRequest,
+            forkMode: forkMode.name,
+            batcher: phase1Batcher,
+            creatorToken: finalizeIdentity.creatorToken,
+            owner: finalizeIdentity.owner,
+          })
+          if (pendingGatePrep.cleared) {
+            console.warn('[deploy/v2/session/dry-run] pending_auction_gate_cleared_on_fork', {
+              batcher: phase1Batcher.toLowerCase(),
+              creatorToken: finalizeIdentity.creatorToken.toLowerCase(),
+              owner: finalizeIdentity.owner.toLowerCase(),
+            })
+          }
         }
       }
       if (phase1Batcher && phase3CallsForPlan.length > 0) {

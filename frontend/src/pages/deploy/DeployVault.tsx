@@ -12,16 +12,26 @@ import {
   normalizeAddressLike,
   normalizeBytes32,
   normalizeDeploymentVersion,
+  buildSaltDisabledShareSuffixInfoNotice,
   buildShareOftVanityUserWarning,
   normalizeHexSuffix,
   parsePositiveTokenAmount,
   resolveDeploymentVersionSearchMaxTries,
   resolveDeploymentVersionSearchTargets,
+  needsCombinedSaltDisabledVanitySearch,
   type DeploymentVanityVersionSearchOutcome,
   parseUint8,
   parseUniswapV3Fee,
   sameAddress,
 } from './deployVaultHelpers'
+import {
+  deriveDeployBaseSalt,
+  deriveShareOftSaltFromVersion,
+  findDeploymentVersionForVanityTargets,
+  predictCreate2AddressFromInitCode,
+  saltForDeployLabel,
+} from '@/lib/deploy/perVaultVanityVersionSearch'
+import { fetchServerCombinedVanityVersion } from '@/lib/deploy/fetchServerCombinedVanityVersion'
 import {
   debugSignatureReady,
   ensureSignatureHex,
@@ -118,10 +128,6 @@ import {
   derivePayoutRouterSalt,
   deriveVaultShareBurnStreamSalt,
 } from '@/lib/deploy/create2Salts'
-import {
-  findPerVaultVanityVersionWithWasm,
-  isPerVaultVanityWasmConfigured,
-} from '@/lib/vanity/perVaultVanityWasm'
 import {
   type DeploySessionStatusData,
 } from '@/lib/deploy/sessionClient'
@@ -806,18 +812,6 @@ function encodeUniswapCcaLinearSteps(durationBlocks: bigint): Hex {
   return concatHex(steps)
 }
 
-function deriveBaseSalt(params: { creatorToken: Address; owner: Address; chainId: number; version: string }): Hex {
-  const { creatorToken, owner, chainId, version } = params
-  return keccak256(
-    encodePacked(['address', 'address', 'uint256', 'string'], [
-      creatorToken,
-      owner,
-      BigInt(chainId),
-      `4626:deploy:${version}`,
-    ]),
-  )
-}
-
 // L-16: Map known revert reasons / extension conflicts to user-friendly
 // messages. Raw error.message is never rendered in production because it
 // may leak internal contract storage slot names, addresses, or logic
@@ -940,169 +934,24 @@ export function DeployVault() {
   )
 }
 
+function deriveBaseSalt(params: { creatorToken: Address; owner: Address; chainId: number; version: string }): Hex {
+  return deriveDeployBaseSalt(params)
+}
+
 function saltFor(baseSalt: Hex, label: string): Hex {
-  return keccak256(encodePacked(['bytes32', 'string'], [baseSalt, label]))
+  return saltForDeployLabel(baseSalt, label)
 }
 
 function deriveShareOftSalt(params: { owner: Address; shareSymbol: string; version: string }): Hex {
-  const base = keccak256(encodePacked(['address', 'string'], [params.owner, params.shareSymbol.toLowerCase()]))
-  return keccak256(encodePacked(['bytes32', 'string'], [base, `CreatorShareOFT:${params.version}`]))
+  return deriveShareOftSaltFromVersion(params)
+}
+
+function predictCreate2Address(params: { create2Deployer: Address; salt: Hex; initCode: Hex }): Address {
+  return predictCreate2AddressFromInitCode(params)
 }
 
 function deriveOftBootstrapSalt(): Hex {
   return keccak256(encodePacked(['string'], ['4626:OFTBootstrapRegistry:v1']))
-}
-
-async function findDeploymentVersionForVanityTargets(params: {
-  create2Deployer: Address
-  creatorToken: Address
-  owner: Address
-  chainId: number
-  baseVersion: string
-  vaultPrefix?: string | null
-  shareSuffix?: string | null
-  maxTries: number
-  vaultInitCode: Hex
-  shareOftInitCode: Hex
-  shareSymbol: string
-  isAddressDeployed?: (addr: Address) => Promise<boolean>
-  yieldEvery?: number
-}): Promise<string | null> {
-  const vaultPrefix = normalizeHexSuffix(params.vaultPrefix ?? null)
-  const shareSuffix = normalizeHexSuffix(params.shareSuffix ?? null)
-  if (!vaultPrefix && !shareSuffix) return null
-  const maxTries = Math.max(1, Math.floor(params.maxTries))
-
-  if (
-    isPerVaultVanityWasmConfigured() &&
-    typeof WebAssembly !== 'undefined' &&
-    typeof fetch === 'function'
-  ) {
-    let startAttempt = 0
-    try {
-      while (startAttempt < maxTries) {
-        const result = await findPerVaultVanityVersionWithWasm({
-          create2Deployer: params.create2Deployer,
-          creatorToken: params.creatorToken,
-          owner: params.owner,
-          chainId: params.chainId,
-          baseVersion: params.baseVersion,
-          vaultPrefix,
-          shareSuffix,
-          startAttempt,
-          maxAttempts: maxTries - startAttempt,
-          vaultInitCodeHash: vaultPrefix ? keccak256(params.vaultInitCode) : null,
-          shareOftInitCodeHash: shareSuffix ? keccak256(params.shareOftInitCode) : null,
-          shareSymbol: shareSuffix ? params.shareSymbol : null,
-        })
-        const toCheck: Address[] = []
-        for (const value of [result.vaultAddress, result.shareOftAddress]) {
-          if (value && isAddress(value)) toCheck.push(getAddress(value))
-        }
-        if (params.isAddressDeployed && toCheck.length > 0) {
-          const deployedStates = await Promise.all(toCheck.map((addr) => params.isAddressDeployed!(addr)))
-          if (deployedStates.some(Boolean)) {
-            startAttempt = result.attempt + 1
-            continue
-          }
-        }
-        return result.version
-      }
-      return null
-    } catch (err) {
-      logger.warn('[DeployVault] Rust WASM vanity search failed; falling back to TypeScript mirror', {
-        error: err instanceof Error ? err.message : String(err ?? ''),
-      })
-    }
-  }
-
-  return findDeploymentVersionForVanityTargetsInTypescript({
-    ...params,
-    vaultPrefix,
-    shareSuffix,
-    maxTries,
-  })
-}
-
-async function findDeploymentVersionForVanityTargetsInTypescript(params: {
-  create2Deployer: Address
-  creatorToken: Address
-  owner: Address
-  chainId: number
-  baseVersion: string
-  vaultPrefix?: string | null
-  shareSuffix?: string | null
-  maxTries: number
-  vaultInitCode: Hex
-  shareOftInitCode: Hex
-  shareSymbol: string
-  isAddressDeployed?: (addr: Address) => Promise<boolean>
-  yieldEvery?: number
-}): Promise<string | null> {
-  const vaultPrefix = normalizeHexSuffix(params.vaultPrefix ?? null)
-  const shareSuffix = normalizeHexSuffix(params.shareSuffix ?? null)
-  if (!vaultPrefix && !shareSuffix) return null
-  const maxTries = Math.max(1, Math.floor(params.maxTries))
-  const yieldEvery = Math.max(256, Math.floor(params.yieldEvery ?? 4096))
-
-  for (let i = 0; i < maxTries; i += 1) {
-    if (i > 0 && i % yieldEvery === 0) {
-      // Yield periodically so large vanity scans do not freeze the UI thread.
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    }
-    const candidateVersion = i === 0 ? params.baseVersion : `${params.baseVersion}-v${i.toString(36)}`
-    const baseSalt = deriveBaseSalt({
-      creatorToken: params.creatorToken,
-      owner: params.owner,
-      chainId: params.chainId,
-      version: candidateVersion,
-    })
-
-    let vaultAddress: Address | null = null
-    if (vaultPrefix) {
-      const vaultSalt = saltFor(baseSalt, 'vault')
-      vaultAddress = predictCreate2Address({
-        create2Deployer: params.create2Deployer,
-        salt: vaultSalt,
-        initCode: params.vaultInitCode,
-      })
-      if (vaultAddress.slice(2, 2 + vaultPrefix.length).toLowerCase() !== vaultPrefix) continue
-    }
-
-    let shareAddress: Address | null = null
-    if (shareSuffix) {
-      const shareSalt = deriveShareOftSalt({
-        owner: params.owner,
-        shareSymbol: params.shareSymbol,
-        version: candidateVersion,
-      })
-      shareAddress = predictCreate2Address({
-        create2Deployer: params.create2Deployer,
-        salt: shareSalt,
-        initCode: params.shareOftInitCode,
-      })
-      if (!shareAddress.toLowerCase().endsWith(shareSuffix)) continue
-    }
-
-    if (params.isAddressDeployed) {
-      const toCheck = [vaultAddress, shareAddress].filter((v): v is Address => Boolean(v))
-      if (toCheck.length > 0) {
-        try {
-          const deployedStates = await Promise.all(toCheck.map((addr) => params.isAddressDeployed!(addr)))
-          if (deployedStates.some(Boolean)) continue
-        } catch {
-          // ignore deployed-check failures; allow candidate version
-        }
-      }
-    }
-    return candidateVersion
-  }
-  return null
-}
-
-function predictCreate2Address(params: { create2Deployer: Address; salt: Hex; initCode: Hex }): Address {
-  const bytecodeHash = keccak256(params.initCode)
-  return getCreate2Address({ from: params.create2Deployer, salt: params.salt, bytecodeHash })
 }
 
 async function fetchAdminAuth(): Promise<AdminAuthResponse> {
@@ -3650,6 +3499,11 @@ function DeployVaultBatcher({
             vaultVanityMaxTries,
             shareOftVanityMaxTries,
           })
+          const combinedSaltDisabledSearch = needsCombinedSaltDisabledVanitySearch({
+            supportsPhase1WithSalt,
+            vaultPrefix: versionSearchVaultPrefix,
+            shareSuffix: versionSearchShareSuffix,
+          })
           let foundVersion = await findDeploymentVersionForVanityTargets({
             create2Deployer,
             creatorToken,
@@ -3667,8 +3521,42 @@ function DeployVaultBatcher({
               return !!bc && bc !== '0x'
             },
           })
+          if (!foundVersion && combinedSaltDisabledSearch && versionSearchVaultPrefix && versionSearchShareSuffix) {
+            try {
+              logger.info('[DeployVault] combined_vanity_server_search_start', {
+                vaultPrefix: versionSearchVaultPrefix,
+                shareSuffix: versionSearchShareSuffix,
+                clientAttempts: versionSearchMaxTries,
+              })
+              foundVersion = await fetchServerCombinedVanityVersion({
+                create2Deployer,
+                creatorToken,
+                owner,
+                chainId: base.id,
+                baseVersion: deploymentVersion,
+                vaultPrefix: versionSearchVaultPrefix,
+                shareSuffix: versionSearchShareSuffix,
+                startAttempt: versionSearchMaxTries,
+                vaultInitCode,
+                shareOftInitCode,
+                shareSymbol,
+              })
+            } catch (serverSearchError) {
+              logger.warn('[DeployVault] combined_vanity_server_search_failed', {
+                error: serverSearchError instanceof Error ? serverSearchError.message : String(serverSearchError ?? ''),
+              })
+            }
+          }
           if (foundVersion) {
-            vanityVersionSearchOutcome = 'combined_match'
+            if (versionSearchVaultPrefix && versionSearchShareSuffix) {
+              vanityVersionSearchOutcome = 'combined_match'
+            } else if (versionSearchVaultPrefix) {
+              vanityVersionSearchOutcome = 'vault_only_match'
+            } else if (versionSearchShareSuffix) {
+              vanityVersionSearchOutcome = 'share_only_match'
+            } else {
+              vanityVersionSearchOutcome = 'combined_match'
+            }
           }
           if (!foundVersion) {
             if (versionSearchVaultPrefix && versionSearchShareSuffix) {
@@ -3767,6 +3655,13 @@ function DeployVaultBatcher({
       if (vanityVersionSearchWarning && !shareOftVanityWarning) {
         shareOftVanityWarning = vanityVersionSearchWarning
       }
+      const shareOftVanityInfo = buildSaltDisabledShareSuffixInfoNotice({
+        versionSearchOutcome: vanityVersionSearchOutcome,
+        vaultVanityPrefix: versionSearchVaultPrefix,
+        shareOftVanitySuffix,
+        saltOverrideDisabled: shareOftVanityUnsupportedByBatcher,
+        deploymentVersionUsed,
+      })
 
       const derivedShareOftSalt = deriveShareOftSalt({ owner, shareSymbol, version: deploymentVersionUsed })
       let shareOftSaltOverrideUsed = shareOftSaltOverride
@@ -3981,6 +3876,7 @@ function DeployVaultBatcher({
         deploymentVersion: deploymentVersionUsed,
         shareOftSaltOverride: shareOftSaltOverrideUsed ?? null,
         shareOftVanityWarning,
+        shareOftVanityInfo,
         expected: {
           vault: vaultAddress,
           wrapper: wrapperAddress,
@@ -4002,6 +3898,7 @@ function DeployVaultBatcher({
   const expectedDeploymentVersion = expectedQuery.data?.deploymentVersion ?? deploymentVersion
   const expectedShareOftSaltOverride = expectedQuery.data?.shareOftSaltOverride ?? null
   const expectedShareOftVanityWarning = expectedQuery.data?.shareOftVanityWarning ?? null
+  const expectedShareOftVanityInfo = expectedQuery.data?.shareOftVanityInfo ?? null
   const expectedGauge = expected?.gaugeController ?? null
   const expectedBurnStream = expected?.burnStream ?? null
   const expectedPayoutRouter = expected?.payoutRouter ?? null
@@ -7170,7 +7067,7 @@ function DeployVaultBatcher({
       : null
   const vanityDefaultNotice =
     !vanityCustomPaidNotice && (vaultVanityPrefix || shareOftVanitySuffix)
-      ? `Default vanity targets: vault 0x${DEFAULT_VAULT_VANITY_PREFIX}, share ${DEFAULT_SHARE_OFT_VANITY_SUFFIX} (best-effort).`
+      ? `Default vanity: vault prefix 0x${DEFAULT_VAULT_VANITY_PREFIX} (priority on greenfield batchers); share suffix ${DEFAULT_SHARE_OFT_VANITY_SUFFIX} when salt overrides are available (best-effort).`
       : null
 
   const disabledReason =
@@ -7339,6 +7236,9 @@ function DeployVaultBatcher({
       ) : null}
       {vanityDefaultNotice ? (
         <div className="text-[11px] text-zinc-600">{vanityDefaultNotice}</div>
+      ) : null}
+      {expectedShareOftVanityInfo ? (
+        <div className="text-[11px] text-zinc-500">{expectedShareOftVanityInfo}</div>
       ) : null}
       {expectedShareOftVanityWarning ? (
         <div className="text-[11px] text-amber-300/80">{expectedShareOftVanityWarning}</div>

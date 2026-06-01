@@ -135,6 +135,19 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
   }
 
   if (
+    msg.includes('756688fe') ||
+    msg.includes('invalidnonce') ||
+    msg.includes('permit2 authorization is stale')
+  ) {
+    return {
+      code: 'QUOTE_EXPIRED',
+      message:
+        'This swap\'s Permit2 authorization is stale (nonce already used). Refresh the quote and try again. If another swap is still confirming, wait ~30 seconds first.',
+      retryable: true,
+    }
+  }
+
+  if (
     msg.includes('swap simulation passed but the sponsored') ||
     msg.includes('bundler rejected') ||
     msg.includes('bundler could not simulate')

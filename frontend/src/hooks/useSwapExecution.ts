@@ -11,6 +11,7 @@ import {
 } from '@/lib/aa/coinbaseErc4337'
 import {
   buildPreflightSimulationRejectionError,
+  isPermit2InvalidNonceError,
   isSwapPreflightSimulationRetryable,
 } from '@/lib/aa/coinbaseErc4337ErrorUtils'
 import { getProductionBaseReadClient } from '@/lib/base/productionBaseReadClient'
@@ -548,7 +549,7 @@ async function submitCanonicalApprovalBeforeSwap(params: {
     const priorStatus = await waitForPriorPendingUserOp({
       publicClient: params.publicClient as Parameters<typeof waitForPriorPendingUserOp>[0]['publicClient'],
       bundlerUrl,
-      userOpHash,
+      userOpHash: userOpHash as `0x${string}`,
       onStatus: params.onStatus,
     })
     if (priorStatus === 'timeout') {
@@ -583,71 +584,90 @@ async function prepareCanonicalUniswapSwapForSend(params: {
   bundledApprovalTx?: TransactionRequest | null
   onStatus: (status: string) => void
 }): Promise<{ swapTx: TransactionRequest; quote: TradeQuoteResponse }> {
-  params.onStatus(SWAP_PREPARE_STATUS)
-  invalidateTradeQuoteCache()
-  const freshQuote = await fetchTradeQuote(params.buildQuoteRequest(params.amount, params.slippagePct))
-  params.assertSwapSubmitEpochUnchanged(params.submitEpoch)
-  if (
-    isZoraProviderQuote(freshQuote) ||
-    isCdpProviderQuote(freshQuote) ||
-    !params.guardRoutingPolicy(freshQuote.routing)
-  ) {
-    throw new Error('Fresh Uniswap quote is not executable for this pair.')
-  }
-  params.syncPermitRequirement(freshQuote)
-  const selectedQuote = pickSwapQuote(freshQuote)
-  if (!selectedQuote) {
-    throw new Error('Quote does not contain executable swap payload.')
-  }
-  const permitPayload = params.permit2DisabledForSwap ? {} : await params.signPermitIfRequired(freshQuote)
-  params.assertSwapSubmitEpochUnchanged(params.submitEpoch)
-  const built = await buildSwap({
-    quote: selectedQuote,
-    ...permitPayload,
-    permit2Disabled: params.permit2DisabledForSwap,
-    simulateTransaction: false,
-    executionAddress: params.executionAddress,
-    chainId: Number(params.swapChainId),
-    includeGasInfo: false,
-    refreshGasPrice: true,
-    deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
-  })
-  assertValidSwapTransaction(built.swap)
-  const preflightCalls = toCanonicalPreflightCalls({
-    executionAddress: params.executionAddress,
-    bundledApprovalTx: params.bundledApprovalTx,
-    swapTx: built.swap,
-  })
-  if (preflightCalls.length > 0) {
-    const routerOnly =
-      preflightCalls.length === 1 &&
-      String(preflightCalls[0]?.to ?? '').toLowerCase() === UNIVERSAL_ROUTER_BASE
-    if (routerOnly) {
-      const swapCall = preflightCalls[0]!
-      await assertZoraRouterCallExecutesFromCsw({
-        executionAddress: getAddress(params.executionAddress),
-        call: {
-          target: swapCall.to,
-          data: swapCall.data ?? '0x',
-          value: String(swapCall.value ?? 0n),
-        },
-      })
+  const maxAttempts = 2
+  let lastError: unknown = null
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) {
+      params.onStatus('Refreshing quote after stale Permit2 authorization…')
     } else {
-      const readClient = getProductionBaseReadClient()
-      const simResult = await simulateSmartWalletCalls({
-        publicClient: readClient,
-        smartWallet: getAddress(params.executionAddress),
-        calls: preflightCalls,
-      })
-      if (!simResult.success) {
-        throw buildPreflightSimulationRejectionError({
-          simResult,
-          firstCallTo: preflightCalls[preflightCalls.length - 1]?.to,
-        })
+      params.onStatus(SWAP_PREPARE_STATUS)
+    }
+    invalidateTradeQuoteCache()
+    const freshQuote = await fetchTradeQuote(params.buildQuoteRequest(params.amount, params.slippagePct))
+    params.assertSwapSubmitEpochUnchanged(params.submitEpoch)
+    if (
+      isZoraProviderQuote(freshQuote) ||
+      isCdpProviderQuote(freshQuote) ||
+      !params.guardRoutingPolicy(freshQuote.routing)
+    ) {
+      throw new Error('Fresh Uniswap quote is not executable for this pair.')
+    }
+    params.syncPermitRequirement(freshQuote)
+    const selectedQuote = pickSwapQuote(freshQuote)
+    if (!selectedQuote) {
+      throw new Error('Quote does not contain executable swap payload.')
+    }
+    const permitPayload = params.permit2DisabledForSwap ? {} : await params.signPermitIfRequired(freshQuote)
+    params.assertSwapSubmitEpochUnchanged(params.submitEpoch)
+    const built = await buildSwap({
+      quote: selectedQuote,
+      ...permitPayload,
+      permit2Disabled: params.permit2DisabledForSwap,
+      simulateTransaction: false,
+      executionAddress: params.executionAddress,
+      chainId: Number(params.swapChainId),
+      includeGasInfo: false,
+      refreshGasPrice: true,
+      deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
+    })
+    assertValidSwapTransaction(built.swap)
+    const preflightCalls = toCanonicalPreflightCalls({
+      executionAddress: params.executionAddress,
+      bundledApprovalTx: params.bundledApprovalTx,
+      swapTx: built.swap,
+    })
+    if (preflightCalls.length > 0) {
+      try {
+        const routerOnly =
+          preflightCalls.length === 1 &&
+          String(preflightCalls[0]?.to ?? '').toLowerCase() === UNIVERSAL_ROUTER_BASE
+        if (routerOnly) {
+          const swapCall = preflightCalls[0]!
+          await assertZoraRouterCallExecutesFromCsw({
+            executionAddress: getAddress(params.executionAddress),
+            call: {
+              target: swapCall.to,
+              data: swapCall.data ?? '0x',
+              value: String(swapCall.value ?? 0n),
+            },
+          })
+        } else {
+          const readClient = getProductionBaseReadClient()
+          const simResult = await simulateSmartWalletCalls({
+            publicClient: readClient,
+            smartWallet: getAddress(params.executionAddress),
+            calls: preflightCalls,
+          })
+          if (!simResult.success) {
+            throw buildPreflightSimulationRejectionError({
+              simResult,
+              firstCallTo: preflightCalls[preflightCalls.length - 1]?.to,
+            })
+          }
+        }
+      } catch (preflightError) {
+        lastError = preflightError
+        if (attempt + 1 < maxAttempts && isPermit2InvalidNonceError(preflightError)) {
+          continue
+        }
+        throw preflightError
       }
     }
+    return { swapTx: built.swap, quote: freshQuote }
   }
-  return { swapTx: built.swap, quote: freshQuote }
+
+  throw lastError instanceof Error ? lastError : new Error('Swap preflight failed after Permit2 nonce refresh.')
 }
 
 function readQuoteInputAmount(value: TradeQuoteResponse | null | undefined): string | null {
@@ -2358,6 +2378,7 @@ export function useSwapExecution(params: {
               isRetryable: isZoraBundlerSendRetryable,
             })
             if (retrySlippagePct == null) throw sendError
+            if (!activeQuoteForRetry) throw sendError
             setStatus(SWAP_PREPARE_STATUS)
             sendContext = { ...sendContext, zoraRouterValidatedBeforeSend: false }
             const executableQuote = await prepareZoraQuoteForExecute({

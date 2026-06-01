@@ -284,4 +284,20 @@ describe('buildPreflightSimulationRejectionError', () => {
     })
     expect(err.message).toContain('Permit2 rejected the smart-wallet signature')
   })
+
+  it('returns Permit2 InvalidNonce copy when inner revert is 0x756688fe', () => {
+    const err = buildPreflightSimulationRejectionError({
+      simResult: {
+        directCallResult: {
+          errorName: 'ExecutionFailed(uint256,bytes)',
+          revertData:
+            '0x2c4029e900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000756688fe00000000000000000000000000000000000000000000000000000000',
+        },
+      },
+      firstCallTo: '0x6fF5693b99212Da76ad316178A184AB56D299b43',
+    })
+    expect(err.message).toContain('Permit2 authorization is stale')
+    expect(err.message).not.toContain('slippage')
+    expect(isSwapPreflightSimulationRetryable(err)).toBe(true)
+  })
 })

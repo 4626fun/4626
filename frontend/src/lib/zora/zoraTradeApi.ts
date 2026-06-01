@@ -5,6 +5,7 @@ import { base } from 'viem/chains'
 import {
   buildPreflightSimulationRejectionError,
   extractRevertInfo,
+  isPermit2InvalidNonceRevert,
   isPreflightSimulationRejection,
   isSwapPreflightSimulationRetryable,
 } from '@/lib/aa/coinbaseErc4337ErrorUtils'
@@ -25,7 +26,11 @@ import {
 } from '@/lib/uniswap/tradingApi'
 import { coerceSwapTransactionValue } from '@/lib/uniswap/swapQuoteSanitize'
 import { NATIVE_TOKEN_ADDRESS } from '@/lib/uniswap/swapUtils'
-import { SWAP_PREPARE_STATUS, ZORA_SWAP_SIMULATION_FAILED_MESSAGE } from '@/lib/swap/swapStatusCopy'
+import {
+  PERMIT2_INVALID_NONCE_MESSAGE,
+  SWAP_PREPARE_STATUS,
+  ZORA_SWAP_SIMULATION_FAILED_MESSAGE,
+} from '@/lib/swap/swapStatusCopy'
 
 export type ZoraTradeQuotePermit = {
   signature: string
@@ -173,7 +178,19 @@ export function isZoraBundlerSimulationMismatchError(error: unknown): error is Z
   return error instanceof ZoraBundlerSimulationMismatchError
 }
 
-export function buildZoraBundlerSimulationMismatchError(): ZoraBundlerSimulationMismatchError {
+export function buildZoraBundlerSimulationMismatchError(cause?: unknown): ZoraBundlerSimulationMismatchError {
+  const revert = extractRevertInfo(cause)
+  if (
+    isPermit2InvalidNonceRevert({
+      revertData: revert.revertData,
+      errorMessage: revert.error,
+    })
+  ) {
+    return new ZoraBundlerSimulationMismatchError(
+      'The swap looked valid locally but the sponsored transaction simulation failed. ' +
+        PERMIT2_INVALID_NONCE_MESSAGE,
+    )
+  }
   return new ZoraBundlerSimulationMismatchError(
     'The swap looked valid locally but the sponsored transaction simulation failed. ' +
       ZORA_SWAP_SIMULATION_FAILED_MESSAGE,

@@ -1,4 +1,4 @@
-import { buildAlfaClubHelpResponse } from '../../_lib/alfaclub/alfaclubChatHelp.js'
+import { buildAlfaClubHelpPayload } from '../../_lib/alfaclub/alfaclubChatHelp.js'
 import type { KeeprCommandResult } from '../types.js'
 import { formatKeeprHelp } from './keepr.js'
 
@@ -10,12 +10,25 @@ export async function executeHelpCommandFamily(
 ): Promise<KeeprCommandResult | null> {
   const match = String(text ?? '').match(GLOBAL_HELP_RE)
   if (!match) return null
-  const alfaClubHelp = await buildAlfaClubHelpResponse({
+  const comprehensive = /^\/?\s*halp\b/i.test(String(text ?? ''))
+  const alfaClubHelp = await buildAlfaClubHelpPayload({
     chatId: context?.chatId,
     senderWallet: context?.senderWallet,
+    comprehensive,
   })
   if (alfaClubHelp) {
-    return { ok: true, response: alfaClubHelp }
+    return {
+      ok: true,
+      response: alfaClubHelp.text,
+      ...(alfaClubHelp.followUpText
+        ? {
+            action: {
+              action: 'help.followup',
+              alfaclubFollowUpText: alfaClubHelp.followUpText,
+            },
+          }
+        : {}),
+    }
   }
   return { ok: true, response: formatKeeprHelp(match[1] ?? null) }
 }

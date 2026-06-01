@@ -28,7 +28,7 @@
 // Run:
 //   XMTP_AGENT_PRIVATE_KEY=0x... \
 //   TARGET_INBOX_ADDRESS=0x4beab… \
-//   CANONICAL_CSW=0x4beab… \
+//   CANONICAL_CSW_ADDRESS=0xAb6d5… \
 //   NEW_OWNER=0xfB11… \
 //   pnpm tsx src/sendAddOwnerTxToSelf.ts
 //

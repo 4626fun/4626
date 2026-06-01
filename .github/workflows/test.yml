@@ -110,6 +110,9 @@ jobs:
       - name: Guard no raw schema DDL (condensation regression prevention)
         run: pnpm --dir frontend guard:schema
 
+      - name: Guard canonical CSW env and legacy address regressions
+        run: pnpm --dir frontend guard:canonical-csw
+
       - name: Frontend ESLint
         run: pnpm --dir frontend lint
 

@@ -87,7 +87,7 @@ describe('executeHelpCommandFamily', () => {
       chatId: 'alfaclub:1659',
       senderWallet: TEST_WALLET,
     })
-    expect(result?.response).toContain('Your position')
+    expect(result?.response).toContain('Hyperliquid intelligence brief')
   })
 
   it('returns Hyperliquid position help for /help in alfaclub:1043', async () => {

@@ -25,7 +25,10 @@ import {
   formatZoraRouterSimulationFailure,
   isZoraBundlerSimulationMismatchError,
 } from '@/lib/zora/zoraTradeApi'
-import { ZORA_SWAP_SIMULATION_FAILED_MESSAGE } from '@/lib/swap/swapStatusCopy'
+import {
+  PERMIT2_INVALID_NONCE_MESSAGE,
+  ZORA_SWAP_SIMULATION_FAILED_MESSAGE,
+} from '@/lib/swap/swapStatusCopy'
 import { logger } from '@/lib/observability/logger'
 import { trackEvent } from '@/lib/analytics/analytics'
 import { DATA_SUFFIX } from '@/lib/base/baseBuilderCodes'
@@ -62,6 +65,7 @@ import {
   isExpectedUserOpTimeoutError,
   isImmediateUserOpRetrySuppressedError,
   isLikelyVerificationGasLimitError,
+  isPermit2InvalidNonceError,
   buildPreflightSimulationRejectionError,
   extractExecutionFailedInnerSelector,
   mapUserOpExecutionFailureMessage,
@@ -417,7 +421,7 @@ async function assertBundlerUserOpGasEstimate(params: {
         calls.some(isSwapRouterHeavyCall) &&
         estimateExecutionFailed
       ) {
-        throw buildZoraBundlerSimulationMismatchError()
+        throw buildZoraBundlerSimulationMismatchError(estimateError)
       }
       if (
         shouldAdvisorySkipBundlerGasEstimate({
@@ -2718,7 +2722,12 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
           firstCallTo: zoraCall.to,
         })
         if (mappedBundler) throw mappedBundler
-        throw buildZoraBundlerSimulationMismatchError()
+        if (isPermit2InvalidNonceError(lastError)) {
+          throw new Error(
+            `The swap looked valid locally but the sponsored transaction simulation failed. ${PERMIT2_INVALID_NONCE_MESSAGE}`,
+          )
+        }
+        throw buildZoraBundlerSimulationMismatchError(lastError)
       }
       const formatted = formatZoraRouterSimulationFailure(lastError)
       if (formatted.message.toLowerCase().includes('would revert')) {

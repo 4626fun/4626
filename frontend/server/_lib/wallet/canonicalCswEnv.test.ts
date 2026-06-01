@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   hasCanonicalCswRuntimeConfig,
+  listRetiredCanonicalCswEnvKeys,
   readCanonicalCswAddressEnv,
   readCanonicalCswPrivyWalletIdEnv,
   readCanonicalCswSkipEnforcementEnv,
   resolveServerAgentInboxAddress,
+  RETIRED_CANONICAL_CSW_ENV_KEYS,
 } from './canonicalCswEnv.js'
 
 const ENV_KEYS = [
@@ -58,5 +60,13 @@ describe('canonicalCswEnv', () => {
   it('resolveServerAgentInboxAddress falls back to policy constant', () => {
     for (const key of ENV_KEYS) delete process.env[key]
     expect(resolveServerAgentInboxAddress()).toBe('0xab6d5c10b03300326cd7fab7267ae192842967b5')
+  })
+
+  it('lists retired env keys when still set in the environment', () => {
+    for (const key of RETIRED_CANONICAL_CSW_ENV_KEYS) delete process.env[key]
+    process.env.XMTP_AGENT_CSW_ADDRESS = '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef'
+    expect(listRetiredCanonicalCswEnvKeys()).toEqual(['XMTP_AGENT_CSW_ADDRESS'])
+    delete process.env.XMTP_AGENT_CSW_ADDRESS
+    expect(listRetiredCanonicalCswEnvKeys()).toEqual([])
   })
 })

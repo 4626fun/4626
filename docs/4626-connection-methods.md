@@ -29,6 +29,8 @@
 
 4626 uses Coinbase Smart Wallets (CSW) as the canonical user account. A CSW is a smart contract wallet on Base that signs transactions via WebAuthn passkeys — every transaction triggers a browser popup (Touch ID, Face ID, or hardware key).
 
+For the **4626 canonical account**, `profiles.csw_address` === **`CANONICAL_CSW_ADDRESS`** (`0xAb6d5C10b03300326cd7fab7267ae192842967b5` in `frontend/src/wallet/canonicalWalletPolicy.ts`). XMTP agent 4626 inbox, Railway Keepr ERC-4337 sender, AKITA vault owner, sponsored swaps, and owner-install are **roles on that one wallet** — not a parallel "agent CSW." Runtime env: `CANONICAL_CSW_*` / optional `VITE_CANONICAL_CSW_ADDRESS` via `canonicalCswEnv.ts` and `agentXmtpAddress.ts`. Retired: `XMTP_AGENT_CSW_*`, `VITE_AGENT_XMTP_ADDRESS`.
+
 This is secure but disruptive for an app that sends frequent transactions. 4626 solves this differently for two distinct contexts:
 
 - **User-initiated sponsored swaps** use the **parent CSW** as the ERC-4337 sender, signed silently by a Privy embedded EOA that is a CSW owner.
@@ -594,16 +596,20 @@ These invariants are enforced in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc` 
 
 ### Identity Invariants
 
-- The user's Coinbase Smart Wallet is the canonical account and universal identity.
+- The user's Coinbase Smart Wallet is the canonical account and universal identity (`profiles.csw_address`).
+- For the **4626 canonical account**, `profiles.csw_address` === `CANONICAL_CSW_ADDRESS` (`0xAb6d5…967b5`) — XMTP inbox, AKITA vault owner, and Keepr sender are roles on that wallet, not separate accounts.
 - Do not automatically create a new CSW.
 - Do not silently switch to a Privy Smart Wallet.
 - Privy EOAs and Privy Smart Wallets are signer/owner identities only.
+- Do not reintroduce retired env `XMTP_AGENT_CSW_*` / `VITE_AGENT_XMTP_ADDRESS`; CI guard `pnpm -C frontend guard:canonical-csw` blocks regressions.
 
 ### Execution Path Invariants
 
-- User-initiated frontend transactions use the sub-account as execution address.
-- Server-side agent operations use the CSW directly as execution address.
-- Code changes must respect which path applies — do not mix them.
+- User-initiated frontend execution defaults to the **parent CSW** (`profiles.csw_address`) via `legacy-owner-install` / `canonical4337`, signed by the Privy embedded EOA.
+- Optional **sub-account** (`sendCalls`) is flag-gated and **swap-only** — not the deploy default.
+- Server-side Railway XMTP / Keepr / ERC-8004 uses **`CANONICAL_CSW_ADDRESS`** (same as that account's `profiles.csw_address`).
+- Deploy-session automation uses the **creator's** `profiles.csw_address` with a temporary delegated owner.
+- Code changes must respect which path applies — do not mix tracks silently.
 
 ### Owner Installation Invariants
 

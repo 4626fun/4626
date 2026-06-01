@@ -81,6 +81,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'deploy/v2/session/start': () => import('./deploy/v2/session/_start.js'),
   'deploy/v2/session/status': () => import('./deploy/v2/session/_status.js'),
   'deploy/config': () => import('./deploy/_config.js'),
+  'deploy/vanity/per-vault-version': () => import('./deploy/_vanityPerVaultVersion.js'),
   'deploy/smartWalletOwner': () => import('./deploy/_smartWalletOwner.js'),
   'deploy/smartWalletOwners': () => import('./deploy/_smartWalletOwners.js'),
   'keeper/jobs/enqueue': () => import('./keeper/jobs/_enqueue.js'),

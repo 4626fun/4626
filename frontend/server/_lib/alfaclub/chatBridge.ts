@@ -975,7 +975,7 @@ function extractAlfaClubActionAttachments(action: unknown): AlfaClubMessageAttac
 
 function extractAlfaClubFollowUpText(action: unknown): string | null {
   if (!isJsonRecord(action)) return null
-  if (action.action !== 'hermit.command') return null
+  if (action.action !== 'hermit.command' && action.action !== 'help.followup') return null
   const followUp = typeof action.alfaclubFollowUpText === 'string' ? action.alfaclubFollowUpText.trim() : ''
   return followUp.length > 0 ? followUp : null
 }

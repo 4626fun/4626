@@ -116,11 +116,21 @@ Do not set these on Railway/Vercel — code no longer reads them:
 | `XMTP_AGENT_ADDRESS` | `CANONICAL_CSW_ADDRESS` |
 | `VITE_AGENT_XMTP_ADDRESS` | `VITE_CANONICAL_CSW_ADDRESS` (client-only; optional) |
 
-**Code entry points:** server env — `frontend/server/_lib/wallet/canonicalCswEnv.ts` (`readCanonicalCswAddressEnv`, `resolveServerAgentInboxAddress`); client inbox — `frontend/src/lib/xmtp/agentXmtpAddress.ts` (`resolveClientAgentXmtpAddress`); chat UI constant — `CANONICAL_CSW_INBOX_ADDRESS` in `frontend/src/components/chat/ChatWidget.tsx` and `frontend/src/lib/chat/agentIdentity.ts`. Policy constant and allowlists — `frontend/src/wallet/canonicalWalletPolicy.ts`.
+**Code entry points (SSoT — do not bypass):**
+
+| Surface | Module | Export |
+| --- | --- | --- |
+| Policy constant + owner allowlists | `frontend/src/wallet/canonicalWalletPolicy.ts` | `CANONICAL_CSW_ADDRESS`, `CANONICAL_CSW_*_OWNER_*` |
+| Server runtime env | `frontend/server/_lib/wallet/canonicalCswEnv.ts` | `readCanonicalCsw*Env`, `resolveServerAgentInboxAddress`, `listRetiredCanonicalCswEnvKeys` |
+| Client XMTP inbox | `frontend/src/lib/xmtp/agentXmtpAddress.ts` | `resolveClientAgentXmtpAddress` |
+| Chat UI | `frontend/src/components/chat/ChatWidget.tsx`, `agentIdentity.ts` | `CANONICAL_CSW_INBOX_ADDRESS` (from client resolver) |
+
+**Regression guard:** `pnpm -C frontend guard:canonical-csw` (CI) — blocks retired env reads, direct `process.env.CANONICAL_CSW_*` outside `canonicalCswEnv.ts`, and pre-migration address literals.
 
 ## Rules for Code Changes
 
 - Follow `ERC-4337-Wallet-Invariants.mdc` for canonical wallet/account selection; this file does not redefine those rules.
+- Before merging wallet/agent/env changes, run `pnpm -C frontend guard:canonical-csw` — blocks retired `XMTP_AGENT_CSW_*` reads and pre-migration CSW address literals in runtime code.
 - NEVER extract private keys from Privy; always use `secp256k1_sign` or `eth_sendTransaction` RPCs.
 - Railway XMTP agent MUST present as the **canonical CSW** address (`CANONICAL_CSW_ADDRESS`), not the Privy EOA. Deploy-session and ERC-8004 bind to the canonical CSW they operate on (4626 canonical CSW for operator registration; creator `profiles.csw_address` for deploy-session).
 - Deploy-session temporary owners MUST be removed after deployment completes.

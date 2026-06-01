@@ -1,7 +1,13 @@
 import { decodeErrorResult, type Hex } from 'viem'
 
 import { isHexString } from '@/lib/aa/coinbaseErc4337Signature'
-import { ZORA_SWAP_SIMULATION_FAILED_MESSAGE } from '@/lib/swap/swapStatusCopy'
+import {
+  PERMIT2_INVALID_NONCE_MESSAGE,
+  ZORA_SWAP_SIMULATION_FAILED_MESSAGE,
+} from '@/lib/swap/swapStatusCopy'
+
+/** Permit2 `InvalidNonce()` — stale or already-consumed permit nonce in swap calldata. */
+export const PERMIT2_INVALID_NONCE_SELECTOR = '0x756688fe'
 
 /** Bundlers vary receipt shape — read tx hash from nested or top-level fields. */
 export function extractUserOpReceiptTxHash(receipt: unknown): Hex | null {
@@ -42,6 +48,7 @@ const KNOWN_ERROR_SELECTORS: Record<string, string> = {
   '0xb4f54111': 'DeployFailed()',
   '0x2c4029e9': 'ExecutionFailed(uint256,bytes)',
   '0xb0669cbc': 'InvalidContractSignature()',
+  '0x756688fe': 'InvalidNonce()',
   '0x3b99b53d': 'SliceOutOfBounds()',
 }
 
@@ -467,8 +474,43 @@ export function isPreflightSimulationRejection(error: unknown): error is Preflig
   return error instanceof PreflightSimulationRejectionError
 }
 
+function revertDataStartsWithSelector(revertData: string | undefined, selector: string): boolean {
+  if (!revertData) return false
+  return revertData.toLowerCase().startsWith(selector.toLowerCase())
+}
+
+export function isPermit2InvalidNonceRevert(params: {
+  revertData?: Hex | string | null
+  innerSelector?: string | null
+  errorMessage?: string | null
+}): boolean {
+  const selector = PERMIT2_INVALID_NONCE_SELECTOR.toLowerCase()
+  if (params.innerSelector?.toLowerCase() === selector) return true
+  if (revertDataStartsWithSelector(String(params.revertData ?? ''), selector)) return true
+  const msg = String(params.errorMessage ?? '').toLowerCase()
+  return msg.includes('invalidnonce') || msg.includes(selector.slice(2))
+}
+
+export function isPermit2InvalidNonceError(error: unknown): boolean {
+  if (error instanceof PreflightSimulationRejectionError) {
+    return (
+      error.message === PERMIT2_INVALID_NONCE_MESSAGE ||
+      error.message.toLowerCase().includes('nonce already used')
+    )
+  }
+  const msg = getErrorDiagnosticMessage(error).toLowerCase()
+  return (
+    msg.includes('invalidnonce') ||
+    msg.includes('756688fe') ||
+    msg.includes('permit2 authorization is stale')
+  )
+}
+
 /** True when a fresh quote + higher slippage may fix a CSW preflight revert (not Permit2/auth). */
 export function isSwapPreflightSimulationRetryable(error: unknown): boolean {
+  if (isPermit2InvalidNonceError(error)) {
+    return true
+  }
   if (isPreflightSimulationRejection(error)) {
     const msg = error.message.toLowerCase()
     if (
@@ -505,6 +547,8 @@ export function isSwapPreflightSimulationRetryable(error: unknown): boolean {
     msg.includes('0x2c4029e9') ||
     msg.includes('slippage') ||
     msg.includes('stale quote') ||
+    msg.includes('756688fe') ||
+    msg.includes('invalidnonce') ||
     msg.includes('liquidity')
   )
 }
@@ -577,6 +621,7 @@ const KNOWN_INNER_REVERT_SELECTORS = [
   '8199f5f3',
   'b0669cbc',
   '3b99b53d',
+  '756688fe',
   '7939f424',
   '86aa6210',
 ] as const
@@ -627,7 +672,13 @@ export function extractExecutionFailedInnerSelector(revertData?: Hex): string | 
     // Fall through — some RPC simulators return partially encoded nested reverts.
   }
   const lower = revertData.toLowerCase()
-  for (const selector of ['0x486aa621', '0x8199f5f3', '0xb0669cbc', '0x3b99b53d']) {
+  for (const selector of [
+    '0x486aa621',
+    '0x8199f5f3',
+    '0xb0669cbc',
+    '0x3b99b53d',
+    PERMIT2_INVALID_NONCE_SELECTOR,
+  ]) {
     if (lower.includes(selector.slice(2))) return selector
   }
   return null
@@ -654,16 +705,30 @@ export function buildPreflightSimulationRejectionError(params: {
       'Swap route data from Zora is malformed or stale. Refresh the quote and try again.',
     )
   }
+  if (directRevert?.startsWith(PERMIT2_INVALID_NONCE_SELECTOR)) {
+    return new PreflightSimulationRejectionError(PERMIT2_INVALID_NONCE_MESSAGE)
+  }
 
   const innerSelector = extractExecutionFailedInnerSelector(direct?.revertData ?? params.simResult.revertData)
+  const detail = direct?.error ?? params.simResult.error ?? 'Underlying call would revert'
+  const detailLc = String(detail).toLowerCase()
+
   if (innerSelector === '0xb0669cbc') {
     return new PreflightSimulationRejectionError(
       'Permit2 rejected the smart-wallet signature. Refresh the quote, sign again when prompted, then retry the swap.',
     )
   }
 
-  const detail = direct?.error ?? params.simResult.error ?? 'Underlying call would revert'
-  const detailLc = String(detail).toLowerCase()
+  if (
+    isPermit2InvalidNonceRevert({
+      innerSelector,
+      revertData: direct?.revertData ?? params.simResult.revertData,
+      errorMessage: detail,
+    })
+  ) {
+    return new PreflightSimulationRejectionError(PERMIT2_INVALID_NONCE_MESSAGE)
+  }
+
   const slippageInnerSelectors = new Set(['0x486aa621', '0x8199f5f3', '0x86aa6210'])
   const likelySlippageFailure =
     (innerSelector != null && slippageInnerSelectors.has(innerSelector)) ||

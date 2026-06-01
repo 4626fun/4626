@@ -652,7 +652,23 @@
       </div>
     </div>
 
-    <script type="module" src="./vault.js"></script>
+    <!-- Obsidian vault: R3F island (default). ?hero=legacy → vanilla vault.js -->
+    <script type="module">
+      (async () => {
+        const immersive = '/immersive/';
+        const loadLegacy = () => import(`${immersive}vault.js`);
+        if (new URLSearchParams(location.search).get('hero') === 'legacy') {
+          await loadLegacy();
+          return;
+        }
+        try {
+          await import(`${immersive}vault-hero/vault-hero.js`);
+        } catch (err) {
+          console.warn('[vault-hero] R3F bundle failed, falling back to vault.js', err);
+          await loadLegacy();
+        }
+      })();
+    </script>
 
     <!-- Page-fold transition: when Launch App is clicked, the entire site
          folds away in 3D (skewed perspective + rotation) and reveals the

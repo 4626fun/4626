@@ -46,6 +46,7 @@ These appear before most other code and before the normal health server.
 3. Pointing `XMTP_DB_DIRECTORY` at ephemeral storage instead of a mounted volume.
 4. Missing `XMTP_AGENT_KEY_ENCRYPTION_KEY` when `DATABASE_URL` is set.
 5. Incomplete Privy server wallet credentials for the agent's CSW.
+6. **Retired env still set** (`XMTP_AGENT_CSW_*`, `VITE_AGENT_XMTP_ADDRESS`) — code ignores these; use `CANONICAL_CSW_*` only. Doctor and Eliza early logs flag them on Railway.
 
 ## Related Commands
 

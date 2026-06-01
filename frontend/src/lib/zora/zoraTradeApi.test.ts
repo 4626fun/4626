@@ -233,6 +233,15 @@ describe('zoraTradeApi', () => {
     ).toBe(true)
   })
 
+  it('maps bundler mismatch with Permit2 InvalidNonce to stale-authorization copy', () => {
+    const err = buildZoraBundlerSimulationMismatchError({
+      message:
+        'Execution reverted for an unknown reason. Details: execution reverted: 0x756688fe',
+      data: '0x756688fe',
+    })
+    expect(err.message).toContain('Permit2 authorization is stale')
+  })
+
   it('classifies router simulation failures as slippage-retryable', () => {
     expect(
       isZoraRouterSimulationRetryable(

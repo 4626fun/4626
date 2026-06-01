@@ -8,6 +8,24 @@
 
 import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
 
+/** Hard-cutover env aliases — code no longer reads these; ops must migrate to CANONICAL_CSW_*. */
+export const RETIRED_CANONICAL_CSW_ENV_KEYS = [
+  'XMTP_AGENT_CSW_ADDRESS',
+  'XMTP_AGENT_CSW_CHAIN_ID',
+  'XMTP_AGENT_CSW_OWNER_INDEX',
+  'XMTP_AGENT_PRIVY_WALLET_ID',
+  'XMTP_AGENT_CSW_SKIP_CANONICAL',
+  'XMTP_AGENT_ADDRESS',
+  'VITE_AGENT_XMTP_ADDRESS',
+] as const
+
+export type RetiredCanonicalCswEnvKey = (typeof RETIRED_CANONICAL_CSW_ENV_KEYS)[number]
+
+/** Non-empty retired env vars still present in the process environment (ops drift signal). */
+export function listRetiredCanonicalCswEnvKeys(): RetiredCanonicalCswEnvKey[] {
+  return RETIRED_CANONICAL_CSW_ENV_KEYS.filter((key) => Boolean((process.env[key] ?? '').trim()))
+}
+
 function readEnvFirst(...keys: readonly string[]): string {
   for (const key of keys) {
     const value = (process.env[key] ?? '').trim()

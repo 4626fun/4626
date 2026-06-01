@@ -104,6 +104,7 @@ import {
   readCanonicalCswSkipEnforcementEnv,
   readCanonicalCswChainIdEnv,
   hasCanonicalCswRuntimeConfig,
+  listRetiredCanonicalCswEnvKeys,
 } from '../../_lib/wallet/canonicalCswEnv.js'
 import {
   CANONICAL_CSW_ADDRESS,
@@ -722,8 +723,13 @@ try {
   const mountedAncestor = RUNNING_ON_RAILWAY ? findMountedAncestorPath(dbDir) : null
   const hasPrivyApp = !!(process.env.PRIVY_APP_ID && process.env.PRIVY_APP_SECRET)
   const hasPrivyWalletAuth = !!(process.env.PRIVY_WALLET_AUTHORIZATION_KEY && process.env.PRIVY_WALLET_OWNER_ID)
+  const retiredCanonicalCswEnv = listRetiredCanonicalCswEnvKeys()
 
   const criticalIssues: string[] = []
+  if (retiredCanonicalCswEnv.length > 0) {
+    const retiredMsg = `Retired canonical CSW env still set (ignored by code — migrate to CANONICAL_CSW_*): ${retiredCanonicalCswEnv.join(', ')}`
+    if (RUNNING_ON_RAILWAY) criticalIssues.push(retiredMsg)
+  }
   if (RUNNING_ON_RAILWAY) {
     if (AGENT_RUNTIME_ROLE !== 'primary') criticalIssues.push('AGENT_RUNTIME_ROLE must be primary')
     if (!AGENT_CONSUME_XMTP) criticalIssues.push('AGENT_CONSUME_XMTP must be true')
@@ -755,6 +761,10 @@ try {
   console.error('[eliza][early] XMTP_DB_DIRECTORY             :', dbDir)
   console.error('[eliza][early] Dedicated volume mounted      :', hasVolume ? 'yes' : `NO${mountedAncestor ? ` (closest mount: ${mountedAncestor})` : ''}`)
   console.error('[eliza][early] CSW + Privy Wallet signer     :', hasCsw && hasCswPrivy ? 'present' : 'MISSING / incomplete')
+  console.error(
+    '[eliza][early] Retired XMTP_AGENT_CSW_* env keys     :',
+    retiredCanonicalCswEnv.length > 0 ? retiredCanonicalCswEnv.join(', ') : 'none (OK)',
+  )
   console.error(
     '[eliza][early] Privy server auth (app+wallet):',
     hasPrivyApp && hasPrivyWalletAuth
@@ -964,6 +974,16 @@ function validateStartupEnv(): EnvValidationResult {
       warnings.push(
         `CANONICAL_CSW_ADDRESS (${configuredCsw}) does not match policy ${CANONICAL_CSW_ADDRESS}; startup will enforce policy identity.`,
       )
+    }
+  }
+
+  const retiredCanonicalCswEnv = listRetiredCanonicalCswEnvKeys()
+  if (retiredCanonicalCswEnv.length > 0) {
+    const retiredMsg = `Retired canonical CSW env keys are set but ignored by code — remove and use CANONICAL_CSW_* only: ${retiredCanonicalCswEnv.join(', ')}`
+    if (RUNNING_ON_RAILWAY) {
+      errors.push(retiredMsg)
+    } else {
+      warnings.push(retiredMsg)
     }
   }
 

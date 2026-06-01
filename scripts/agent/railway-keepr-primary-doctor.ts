@@ -16,6 +16,7 @@ import { isDbConfigured } from '../../frontend/server/_lib/db/postgres.js'
 import { hasDedicatedMount, findMountedAncestorPath } from '../../frontend/server/_lib/messaging/xmtpDbDirectory.js'
 import {
   hasCanonicalCswRuntimeConfig,
+  listRetiredCanonicalCswEnvKeys,
   readCanonicalCswAddressEnv,
   readCanonicalCswPrivyWalletIdEnv,
 } from '../../frontend/server/_lib/wallet/canonicalCswEnv.js'
@@ -88,6 +89,14 @@ if (RUNNING_ON_RAILWAY) {
 }
 
 console.log('\n--- Agent Identity (Recommended: CSW + Privy Server Wallet) ---')
+const retiredCanonicalCswEnv = listRetiredCanonicalCswEnvKeys()
+check(
+  'No retired XMTP_AGENT_CSW_* / VITE_AGENT_XMTP_* env keys',
+  retiredCanonicalCswEnv.length === 0,
+)
+if (retiredCanonicalCswEnv.length > 0) {
+  console.log(`   Remove ignored legacy keys and use CANONICAL_CSW_*: ${retiredCanonicalCswEnv.join(', ')}`)
+}
 check('CANONICAL_CSW_ADDRESS present', hasCswAddress)
 check('CANONICAL_CSW_PRIVY_WALLET_ID present (the signer for the CSW)', hasCswPrivyWallet)
 
