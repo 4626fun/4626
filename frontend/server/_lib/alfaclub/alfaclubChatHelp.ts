@@ -55,10 +55,12 @@ async function buildHermitComprehensiveHelpPayload(params: {
     import('./positionAlertStore.js'),
   ])
 
-  const [state, alert] = await Promise.all([
+  const [stateResult, alertResult] = await Promise.allSettled([
     getClearinghouseState(params.senderWallet),
     readHyperliquidPositionAlert(params.senderWallet),
   ])
+  const state = stateResult.status === 'fulfilled' ? stateResult.value : null
+  const alert = alertResult.status === 'fulfilled' ? alertResult.value : null
 
   const marketRead: string[] = ['📈 **Market read (alpha analyst mode)**']
   if (!state?.assetPositions || state.assetPositions.length === 0) {
@@ -100,31 +102,45 @@ async function buildHermitComprehensiveHelpPayload(params: {
     marketRead.join('\n'),
   ]
 
+  if (stateResult.status === 'rejected' || alertResult.status === 'rejected') {
+    sections.push(
+      [
+        '⚠️ **Data source note**',
+        '- One or more upstream sources were unavailable this cycle.',
+        '- Showing the best available snapshot; retry `/halp` in a moment for full enrichment.',
+      ].join('\n'),
+    )
+  }
+
   if (params.roomId === '1659') {
-    const { resolveRoom1659MarketContext } = await import('./room1659Market.js')
-    const snapshot = await resolveRoom1659MarketContext(params.senderWallet)
     const marketPulse: string[] = ['📡 **Market pulse (room 1659 context)**']
-    if (!snapshot.ok) {
+    try {
+      const { resolveRoom1659MarketContext } = await import('./room1659Market.js')
+      const snapshot = await resolveRoom1659MarketContext(params.senderWallet)
+      if (!snapshot.ok) {
+        marketPulse.push('- Live room pulse unavailable this cycle.')
+      } else {
+        if (snapshot.hype != null) marketPulse.push(`- Hype score: **${snapshot.hype}/100**`)
+        if (snapshot.liquidation != null) {
+          marketPulse.push(`- Liquidation pressure signal: **${snapshot.liquidation}**`)
+        }
+        if (snapshot.roomTotalOpenInterestUsd != null) {
+          marketPulse.push(
+            `- Observed open interest proxy: **$${Number(snapshot.roomTotalOpenInterestUsd).toFixed(0)}**`,
+          )
+        }
+        if (snapshot.userPosition?.side) {
+          marketPulse.push(
+            `- Your latest HL leg: **${snapshot.userPosition.side.toUpperCase()}** · PnL ${
+              snapshot.userPosition.unrealizedPnlUsd != null
+                ? `${snapshot.userPosition.unrealizedPnlUsd >= 0 ? '+' : ''}$${Number(snapshot.userPosition.unrealizedPnlUsd).toFixed(0)}`
+                : '?'
+            }`,
+          )
+        }
+      }
+    } catch {
       marketPulse.push('- Live room pulse unavailable this cycle.')
-    } else {
-      if (snapshot.hype != null) marketPulse.push(`- Hype score: **${snapshot.hype}/100**`)
-      if (snapshot.liquidation != null) {
-        marketPulse.push(`- Liquidation pressure signal: **${snapshot.liquidation}**`)
-      }
-      if (snapshot.roomTotalOpenInterestUsd != null) {
-        marketPulse.push(
-          `- Observed open interest proxy: **$${Number(snapshot.roomTotalOpenInterestUsd).toFixed(0)}**`,
-        )
-      }
-      if (snapshot.userPosition?.side) {
-        marketPulse.push(
-          `- Your latest HL leg: **${snapshot.userPosition.side.toUpperCase()}** · PnL ${
-            snapshot.userPosition.unrealizedPnlUsd != null
-              ? `${snapshot.userPosition.unrealizedPnlUsd >= 0 ? '+' : ''}$${Number(snapshot.userPosition.unrealizedPnlUsd).toFixed(0)}`
-              : '?'
-          }`,
-        )
-      }
     }
     sections.push(marketPulse.join('\n'))
   }
