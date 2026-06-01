@@ -22,11 +22,11 @@ export type HermitCommandRoomHelpOptions = {
 function formatHermitCreativeSection(): string[] {
   return [
     '**Hermit — creative (read-only)**',
-    '• `/position` — full HL + room 1659 snapshot + alert CTAs',
+    '• `/position` — Hyperliquid positions + alert setup',
     '• `/gmeow [vibe]` — GIF + one-liner',
     '• `/meme <prompt>` — meme / image concept',
     '• `/hermit copy|announce|quest|tone <text>` — room copy drafts',
-    '• `/hermit alert` — Telegram liquidation / target-gain alerts',
+    '• `/hermit alert` — Hyperliquid Telegram alerts (defaults)',
     '• `/hermit setup` · `/hermit help`',
   ]
 }
@@ -34,7 +34,7 @@ function formatHermitCreativeSection(): string[] {
 function formatHermitCreativeSectionCompact(): string[] {
   return [
     '**Commands**',
-    '• `/position` · `/gmeow` · `/meme` · `/hermit alert` · `/alfa brief`',
+    '• `/position` · `/hermit alert` · `/gmeow` · `/meme` · `/alfa brief`',
   ]
 }
 
@@ -100,7 +100,7 @@ export function formatHermitCommandRoomHelp(
       '',
       '• `/hermit prefs` · `/hermit tone` · `/position` · `/help` refreshes this snapshot',
       ...(id === ROOM_1659_ID
-        ? ['', '_Room 1659 reads Hyperliquid + FriendKey for the wallet sending the command._']
+        ? ['', '_Alerts track your Hyperliquid wallet, not AlfaClub room keys._']
         : []),
     ].join('\n')
     return trimHelpToBudget(body)

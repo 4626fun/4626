@@ -170,6 +170,28 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
     }
   }
 
+  // Paymaster proxy did not classify a Universal Router swap (deploy-only fallback).
+  if (
+    msg.includes('missing_primary_call') &&
+    msg.includes('6ff5693b99212da76ad316178a184ab56d299b43')
+  ) {
+    return {
+      code: 'QUOTE_EXPIRED',
+      message:
+        'Gas sponsorship rejected this swap route shape. Refresh the quote and try again; if it keeps failing, wait ~30s and retry once more.',
+      retryable: true,
+    }
+  }
+
+  if (msg.includes('swap_router_command_not_allowed') || msg.includes('swap_router_non_canonical_encoding')) {
+    return {
+      code: 'QUOTE_EXPIRED',
+      message:
+        'This swap route is not eligible for gas sponsorship yet. Refresh the quote and try again.',
+      retryable: true,
+    }
+  }
+
   // Restored app session / paymaster auth
   if (
     msg.includes('missing 4626 session token') ||

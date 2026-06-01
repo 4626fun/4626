@@ -1,12 +1,17 @@
 import { logger } from '../infra/logger.js'
 import { getClearinghouseState } from './hyperliquid.js'
 import {
+  HL_POSITION_ALERT_SCOPE,
   listEnabledPositionAlerts,
   markPositionAlertFired,
   resolveTelegramChatIdForWallet,
   type PositionAlertConfig,
 } from './positionAlertStore.js'
-import { formatPositionAlertTriggerMessage } from './positionReport.js'
+import {
+  formatHyperliquidLiqAlertMessage,
+  formatHyperliquidTargetAlertMessage,
+  sumHyperliquidUnrealizedPnl,
+} from './positionReport.js'
 import {
   computeLiquidationProximityPct,
   computeTargetProgressPct,
@@ -91,6 +96,10 @@ async function evaluateAlert(params: {
   let skippedNoTelegram = 0
   let errors = 0
 
+  if (params.alert.roomId !== HL_POSITION_ALERT_SCOPE) {
+    return { liqSent, targetSent, skippedCooldown, skippedNoTelegram, errors }
+  }
+
   if (!params.alert.telegramEnabled) {
     return { liqSent, targetSent, skippedCooldown, skippedNoTelegram: 1, errors }
   }
@@ -104,36 +113,45 @@ async function evaluateAlert(params: {
   }
 
   const hl = await getClearinghouseState(params.alert.senderAddress)
-  const pos = hl?.assetPositions?.[0]
-  if (!pos?.side || pos.entryPx == null || pos.liquidationPx == null || pos.positionValue == null || pos.unrealizedPnl == null) {
-    return { liqSent, targetSent, skippedCooldown, skippedNoTelegram, errors }
-  }
-
-  const mark = estimateMarkPrice({
-    entryPx: pos.entryPx,
-    positionValueUsd: pos.positionValue,
-    unrealizedPnlUsd: pos.unrealizedPnl,
-    side: pos.side,
-  })
+  const legs = hl?.assetPositions ?? []
 
   if (
     params.alert.liquidationWarnPct != null &&
-    mark != null &&
     !withinCooldown(params.alert.lastLiqAlertAt, params.cooldownMs, params.nowMs)
   ) {
-    const liqDist = computeLiquidationProximityPct({
-      markPrice: mark,
-      liquidationPrice: pos.liquidationPx,
-      side: pos.side,
-    })
-    if (liqDist != null && liqDist <= params.alert.liquidationWarnPct) {
-      const text = formatPositionAlertTriggerMessage({
-        kind: 'liq',
-        roomId: params.alert.roomId,
-        walletAddress: params.alert.senderAddress,
-        coin: pos.coin ?? 'HL',
+    const atRisk: Array<{ coin: string; side: string; liqDistPct: number }> = []
+    for (const pos of legs) {
+      if (
+        !pos.side ||
+        pos.entryPx == null ||
+        pos.liquidationPx == null ||
+        pos.positionValue == null ||
+        pos.unrealizedPnl == null
+      ) {
+        continue
+      }
+      const mark = estimateMarkPrice({
+        entryPx: pos.entryPx,
+        positionValueUsd: pos.positionValue,
+        unrealizedPnlUsd: pos.unrealizedPnl,
         side: pos.side,
-        liqDistPct: liqDist,
+      })
+      if (mark == null) continue
+      const liqDist = computeLiquidationProximityPct({
+        markPrice: mark,
+        liquidationPrice: pos.liquidationPx,
+        side: pos.side,
+      })
+      if (liqDist != null && liqDist <= params.alert.liquidationWarnPct) {
+        atRisk.push({ coin: pos.coin ?? 'HL', side: pos.side, liqDistPct: liqDist })
+      }
+    }
+
+    if (atRisk.length > 0) {
+      const text = formatHyperliquidLiqAlertMessage({
+        walletAddress: params.alert.senderAddress,
+        warnPct: params.alert.liquidationWarnPct,
+        legs: atRisk,
       })
       const ok = await sendTelegramDm({ chatId, text, botToken: params.botToken })
       if (ok) {
@@ -155,28 +173,27 @@ async function evaluateAlert(params: {
     params.alert.targetPnlUsd != null &&
     !withinCooldown(params.alert.lastTargetAlertAt, params.cooldownMs, params.nowMs)
   ) {
-    const progress = computeTargetProgressPct(pos.unrealizedPnl, params.alert.targetPnlUsd)
-    if (progress != null && progress >= params.alert.targetProgressPct) {
-      const text = formatPositionAlertTriggerMessage({
-        kind: 'target',
-        roomId: params.alert.roomId,
-        walletAddress: params.alert.senderAddress,
-        coin: pos.coin ?? 'HL',
-        side: pos.side,
-        currentPnlUsd: pos.unrealizedPnl,
-        targetPnlUsd: params.alert.targetPnlUsd,
-        progressPct: progress,
-      })
-      const ok = await sendTelegramDm({ chatId, text, botToken: params.botToken })
-      if (ok) {
-        await markPositionAlertFired({
-          roomId: params.alert.roomId,
-          senderAddress: params.alert.senderAddress,
-          kind: 'target',
+    const totalPnl = sumHyperliquidUnrealizedPnl(hl)
+    if (totalPnl != null) {
+      const progress = computeTargetProgressPct(totalPnl, params.alert.targetPnlUsd)
+      if (progress != null && progress >= params.alert.targetProgressPct) {
+        const text = formatHyperliquidTargetAlertMessage({
+          walletAddress: params.alert.senderAddress,
+          targetPnlUsd: params.alert.targetPnlUsd,
+          progressPct: progress,
+          currentPnlUsd: totalPnl,
         })
-        targetSent = true
-      } else {
-        errors += 1
+        const ok = await sendTelegramDm({ chatId, text, botToken: params.botToken })
+        if (ok) {
+          await markPositionAlertFired({
+            roomId: params.alert.roomId,
+            senderAddress: params.alert.senderAddress,
+            kind: 'target',
+          })
+          targetSent = true
+        } else {
+          errors += 1
+        }
       }
     }
   } else if (params.alert.targetPnlUsd != null && withinCooldown(params.alert.lastTargetAlertAt, params.cooldownMs, params.nowMs)) {
@@ -203,7 +220,9 @@ export async function runPositionAlerts(): Promise<PositionAlertRunResult> {
 
   const bridgeFlags = readAlfaClubChatBridgeFlags()
   const botToken = bridgeFlags.botToken
-  const alerts = await listEnabledPositionAlerts()
+  const alerts = (await listEnabledPositionAlerts()).filter(
+    (row) => row.roomId === HL_POSITION_ALERT_SCOPE,
+  )
   const nowMs = Date.now()
 
   let liqSent = 0
@@ -228,7 +247,6 @@ export async function runPositionAlerts(): Promise<PositionAlertRunResult> {
     } catch (error) {
       errors += 1
       logger.warn('position_alert.evaluate_failed', {
-        roomId: alert.roomId,
         sender: alert.senderAddress,
         message: error instanceof Error ? error.message : String(error),
       })

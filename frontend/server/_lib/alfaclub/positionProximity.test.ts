@@ -40,4 +40,10 @@ describe('parseHermitAlertCommandArgs', () => {
     expect(parseHermitAlertCommandArgs('telegram on')).toEqual({ action: 'telegram', enabled: true })
     expect(parseHermitAlertCommandArgs('off')).toEqual({ action: 'off' })
   })
+
+  it('bare alert enables defaults', () => {
+    expect(parseHermitAlertCommandArgs('')).toEqual({ action: 'default' })
+    expect(parseHermitAlertCommandArgs('on')).toEqual({ action: 'default' })
+    expect(parseHermitAlertCommandArgs('status')).toEqual({ action: 'status' })
+  })
 })

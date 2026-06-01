@@ -5,17 +5,20 @@ export type PolicyAddress = `0x${string}`
 /**
  * Canonical parent CSW policy (`CANONICAL_CSW_ADDRESS`).
  *
- * One on-chain wallet — not a separate "agent wallet" vs "user wallet". The same
- * address is profiles.csw_address, the XMTP inbox, AKITA vault owner, and the
- * parent CSW for user-initiated `canonical4337` / owner-install. Use only
- * "canonical CSW" in product copy and policy code; role labels (XMTP agent,
- * vault owner) describe what uses the address, not a second account.
+ * One canonical Coinbase Smart Wallet per 4626 account — stored as
+ * `profiles.csw_address` and mirrored here as the policy constant for the
+ * 4626 canonical account. Not a separate "agent wallet" vs "user wallet":
+ * the same address is custody, XMTP inbox, AKITA vault owner, Railway Keepr
+ * sender, and parent-CSW `canonical4337` / owner-install when that account
+ * is in scope.
  *
- * Runtime env mirror: `CANONICAL_CSW_ADDRESS` (see `canonicalCswEnv.ts`).
+ * Migrated 2026-04-23 from legacy `XMTP_AGENT_CSW_*` split
+ * (`0x4beabd…04ef` → `0xAb6d5…967b5`). Runtime env: `CANONICAL_CSW_*`
+ * (`canonicalCswEnv.ts`). Other verified accounts have their own
+ * `profiles.csw_address` (same role, different on-chain address).
  *
- * User-initiated frontend signing: Privy embedded EOA (owner slot 18) via
- * `legacy-owner-install`. Server automation: Privy server wallet (slot 15).
- * Base App / admin: passkey and admin EOAs on the allowlist below.
+ * Signing lanes on this wallet: Privy embedded EOA (slot 18) for frontend;
+ * Privy server wallet (slot 15) for Railway automation; admin/passkey EOAs below.
  */
 
 // Canonical CSW migrated on 2026-04-23 from 0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef

@@ -5,17 +5,21 @@ alwaysApply: true
 
 # ERC-4337 Wallet Invariants (Canonical Account)
 
-This file is the authority for canonical wallet/account selection. Use `csw-agent-lifecycle.mdc` for server-side delegated-signer and agent-identity mechanics, and use `AGENTS.md` for product-level onboarding and execution gating.
+This file is the authority for canonical wallet/account selection. Use `csw-agent-lifecycle.mdc` for server-side delegated-signer and agent-identity mechanics, `AGENTS.md` § Canonical CSW identity for product-level summary, and `docs/ACCOUNT_MODEL.md` for user populations and existing-flow inventory.
 
-Full architecture: `docs/4626-connection-methods.md` — three connection methods (CSW, external EOA, Telegram), the three-tier CSW address model, and the `executionMode` / send-mode routing table.
+Full architecture: `docs/4626-connection-methods.md` — three connection methods (CSW, external EOA, Telegram), the CSW address model, and the `executionMode` / send-mode routing table.
 
 ## Canonical account
 
 - The user's originally created Zora Coinbase Smart Wallet is the canonical **asset-holding account** (`profiles.csw_address`). This is what `basescan`, Zora, and the Coinbase app display, and it is the source of truth for asset checks, onchain owner index resolution, and canonical account views.
+- **`CANONICAL_CSW_ADDRESS`** (`frontend/src/wallet/canonicalWalletPolicy.ts`) is the policy pin for the **4626 canonical account's** `profiles.csw_address` (`0xAb6d5…967b5`). It is the **same wallet**, not a parallel "agent CSW." XMTP agent 4626 inbox, Railway Keepr ERC-4337 sender, AKITA vault owner, sponsored `canonical4337` swaps, and owner-install all use this address when that account is active. Hard cutover **2026-04-23** from legacy `XMTP_AGENT_CSW_*` env; use `CANONICAL_CSW_*` / optional `VITE_CANONICAL_CSW_ADDRESS` (`canonicalCswEnv.ts`).
 - Do not automatically create a new Coinbase Smart Wallet.
 - Do not silently switch the primary account to a Privy Smart Wallet.
 - Privy EOAs and Privy Smart Wallets are signer/owner identities only, not the canonical asset-holding account.
 - Deviation from the canonical wallet is allowed only with explicit product requirement or explicit user opt-in migration.
+- Role labels (XMTP agent, vault owner, swap sender) describe **what uses** the canonical CSW — not a second account. Do not reintroduce a split "agent wallet vs user wallet" model.
+
+Details: `.cursor/rules/csw-agent-lifecycle.mdc` § Canonical CSW owner allowlist.
 
 ## Execution address depends on the execution track
 
@@ -23,10 +27,14 @@ The canonical asset-holding account above does not automatically equal the ERC-4
 
 - **User-initiated frontend execution (CSW, `executionMode === 'canonical'`)**: the default ERC-4337 `sender` / execution address for sponsored swaps is the parent CSW (`profiles.csw_address`) through `canonical4337`, with the Privy embedded EOA (`profiles.primary_embedded_eoa`) signing as a confirmed CSW owner. This is the first-class proven path for canonical custody and gas sponsorship. An app-scoped sub-account (`profiles.base_sub_account`) may still exist as optional future/app-scoped infrastructure, but user-facing routes must not promote it as the sender unless that route actively submits from the sub-account provider.
 - **User-initiated frontend execution (external EOA, `executionMode === 'eoa'`)**: no sub-account. `msg.sender` is the user's EOA directly. `sendTransaction` is used; ERC-4337 UserOps do not apply to this track.
-- **Server-side agent and deploy-session ERC-4337 UserOps (XMTP agent, ERC-8004 identity, deploy-session automation)**: the ERC-4337 `sender` is the parent CSW (`profiles.csw_address`), with a Privy server wallet added as a delegated owner via `addOwnerAddress`. Mechanics are defined in `.cursor/rules/csw-agent-lifecycle.mdc`. This track MUST NOT route through sub-accounts — sub-accounts are scoped to the user's browser session.
+- **Server-side ERC-4337 UserOps** — parent CSW as `sender`, Privy server wallet delegated via `addOwnerAddress` (see `.cursor/rules/csw-agent-lifecycle.mdc`):
+  - **Railway XMTP / Keepr / ERC-8004**: `sender` = canonical CSW (`CANONICAL_CSW_ADDRESS` === that account's `profiles.csw_address`).
+  - **Deploy-session automation**: `sender` = the **creator's** canonical CSW (`profiles.csw_address`) with a temporary delegated owner removed after deploy completes.
+  - Neither server track routes through sub-accounts.
 
 ## Common rules across tracks
 
-- `msg.sender` MUST match the track — sponsored canonical swaps use the parent CSW; server-side automation uses the parent CSW with its server-side delegated signer; sub-account sends are allowed only for routes that explicitly opt into the sub-account provider.
-- Asset checks, balance reads, and owner index resolution always use the parent CSW, regardless of which track is executing.
+- `msg.sender` MUST match the track — sponsored canonical swaps use the account's parent CSW; deploy-session uses the creator's parent CSW with a server delegated signer; Railway/Keepr uses the 4626 canonical CSW with its server delegated signer; sub-account sends are allowed only for routes that explicitly opt into the sub-account provider (flag-gated user swap lane).
+- Asset checks, balance reads, and owner index resolution always use the parent CSW (`profiles.csw_address`), regardless of which track is executing.
+- **`shouldApplyCanonicalEnforcement`** applies when the active canonical or execution wallet equals `CANONICAL_CSW_ADDRESS` (same address as that account's `profiles.csw_address`). Allowlisted admin EOAs operating a different account's CSW must not trigger 4626 policy gates.
 - If you are unsure which track applies to a code path, check whether the caller is a wagmi/Privy connector in the user's browser (user-initiated frontend) or a server/agent surface (server-side). When in doubt, do not fall back silently — surface the ambiguity.

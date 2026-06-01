@@ -2,6 +2,11 @@ import { logger } from '../infra/logger.js'
 import { getDb } from '../db/postgres.js'
 import { ensureAlfaclubPositionAlertSchema } from '../db/schemaBootstrap.js'
 
+declare const process: { env: Record<string, string | undefined> }
+
+/** Wallet-scoped Hyperliquid alerts — not tied to an AlfaClub room. */
+export const HL_POSITION_ALERT_SCOPE = 'hyperliquid'
+
 export type PositionAlertConfig = {
   roomId: string
   senderAddress: string
@@ -65,6 +70,22 @@ function rowToConfig(row: AlertRow): PositionAlertConfig {
     lastTargetAlertAt: row.last_target_alert_at,
     updatedAt: row.updated_at,
   }
+}
+
+export async function readHyperliquidPositionAlert(
+  senderAddress: string,
+): Promise<PositionAlertConfig | null> {
+  return readPositionAlert({ roomId: HL_POSITION_ALERT_SCOPE, senderAddress })
+}
+
+export async function upsertHyperliquidPositionAlert(
+  params: Omit<Parameters<typeof upsertPositionAlert>[0], 'roomId'>,
+): Promise<PositionAlertConfig | null> {
+  return upsertPositionAlert({ ...params, roomId: HL_POSITION_ALERT_SCOPE })
+}
+
+export async function disableHyperliquidPositionAlert(senderAddress: string): Promise<boolean> {
+  return disablePositionAlert({ roomId: HL_POSITION_ALERT_SCOPE, senderAddress })
 }
 
 export async function readPositionAlert(params: {
@@ -228,6 +249,7 @@ export async function markPositionAlertFired(params: {
 
 export type ParsedAlertCommand =
   | { action: 'status' }
+  | { action: 'default' }
   | { action: 'off' }
   | { action: 'telegram'; enabled: boolean }
   | { action: 'liq'; pct: number }
@@ -235,9 +257,55 @@ export type ParsedAlertCommand =
   | { action: 'progress'; pct: number }
   | { action: 'invalid'; reason: string }
 
+export type HyperliquidAlertDefaults = {
+  liquidationWarnPct: number
+  targetPnlUsd: number | null
+  targetProgressPct: number
+}
+
+/** Default HL alert bundle — overridable via env on Vercel. */
+export function readHyperliquidAlertDefaults(): HyperliquidAlertDefaults {
+  const liq = parseOptionalPct(process.env.HL_ALERT_DEFAULT_LIQ_PCT ?? '10') ?? 10
+  const targetRaw = process.env.HL_ALERT_DEFAULT_TARGET_PNL_USD ?? '5000'
+  const targetTrimmed = targetRaw.trim()
+  const targetPnlUsd =
+    targetTrimmed === '' || targetTrimmed === '0'
+      ? null
+      : parseOptionalUsd(targetTrimmed.replace(/[$,]/g, ''))
+  const targetProgressPct =
+    parseOptionalPct(process.env.HL_ALERT_DEFAULT_TARGET_PROGRESS_PCT ?? '90') ?? 90
+  return { liquidationWarnPct: liq, targetPnlUsd, targetProgressPct }
+}
+
+export function describeHyperliquidAlertDefaults(defaults = readHyperliquidAlertDefaults()): string[] {
+  const lines = [`• Liquidation: within **${defaults.liquidationWarnPct}%** on any HL leg`]
+  if (defaults.targetPnlUsd != null) {
+    lines.push(
+      `• Target PnL: **+$${defaults.targetPnlUsd.toLocaleString('en-US')}** combined (fire at **${defaults.targetProgressPct}%**)`,
+    )
+  }
+  return lines
+}
+
+export async function enableDefaultHyperliquidPositionAlert(
+  senderAddress: string,
+  options?: { telegramEnabled?: boolean },
+): Promise<PositionAlertConfig | null> {
+  const defaults = readHyperliquidAlertDefaults()
+  return upsertHyperliquidPositionAlert({
+    senderAddress,
+    enabled: true,
+    liquidationWarnPct: defaults.liquidationWarnPct,
+    targetPnlUsd: defaults.targetPnlUsd,
+    targetProgressPct: defaults.targetProgressPct,
+    ...(options?.telegramEnabled != null ? { telegramEnabled: options.telegramEnabled } : {}),
+  })
+}
+
 export function parseHermitAlertCommandArgs(args: string): ParsedAlertCommand {
   const trimmed = args.trim()
-  if (!trimmed || trimmed.toLowerCase() === 'status') return { action: 'status' }
+  if (trimmed.toLowerCase() === 'status') return { action: 'status' }
+  if (!trimmed || /^(on|enable|default|start)$/i.test(trimmed)) return { action: 'default' }
   if (/^(off|disable|stop)$/i.test(trimmed)) return { action: 'off' }
 
   const parts = trimmed.split(/\s+/).filter(Boolean)
@@ -252,7 +320,11 @@ export function parseHermitAlertCommandArgs(args: string): ParsedAlertCommand {
   if (head === 'liq' || head === 'liquidation') {
     const pct = parseOptionalPct(parts[1])
     if (pct == null) {
-      return { action: 'invalid', reason: 'Usage: `/hermit alert liq <percent>` — e.g. `10` warns within 10% of liquidation.' }
+      return {
+        action: 'invalid',
+        reason:
+          'Usage: `/hermit alert liq <percent>` — e.g. `10` warns within 10% of liquidation on any HL leg.',
+      }
     }
     return { action: 'liq', pct }
   }
@@ -282,7 +354,7 @@ export function parseHermitAlertCommandArgs(args: string): ParsedAlertCommand {
   return {
     action: 'invalid',
     reason:
-      'Usage: `/hermit alert status` · `liq 10` · `target 5000` · `progress 80` · `telegram on` · `off`',
+      'Usage: `/hermit alert` (defaults) · `status` · `off` · optional `liq 10` · `target 5000`',
   }
 }
 

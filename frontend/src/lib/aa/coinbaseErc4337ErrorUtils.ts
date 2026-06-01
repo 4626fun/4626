@@ -730,7 +730,18 @@ export function isPaymasterAuthPolicyError(error: unknown): boolean {
 export function isPaymasterRoutingPolicyError(error: unknown): boolean {
   const msg = getErrorDiagnosticMessage(error)
   const lc = msg.toLowerCase()
-  return lc.includes('unsupported chainid') || lc.includes('unsupported entrypoint')
+  if (lc.includes('unsupported chainid') || lc.includes('unsupported entrypoint')) return true
+  // Swap UserOps misclassified as deploy hit the same proxy on self-funded retry.
+  if (
+    lc.includes('missing_primary_call') &&
+    lc.includes('6ff5693b99212da76ad316178a184ab56d299b43')
+  ) {
+    return true
+  }
+  if (lc.includes('swap_router_non_canonical_encoding') || lc.includes('swap_router_command_not_allowed')) {
+    return true
+  }
+  return false
 }
 
 export function formatMetaMessages(error: unknown): string | null {

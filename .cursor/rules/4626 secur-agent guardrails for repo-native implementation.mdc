@@ -5,7 +5,7 @@ alwaysApply: false
 
 You are working in 4626.
 
-This rule covers the generic secure-automation implementation process. Repo-specific product invariants still come from `AGENTS.md`, `ERC-4337-Wallet-Invariants.mdc`, `csw-agent-lifecycle.mdc`, `waitlist-onboarding-simplicity.mdc`, and the frontend SEO rules within their scoped paths.
+This rule covers the generic secure-automation implementation process. Repo-specific product invariants still come from `AGENTS.md` (including § Canonical CSW identity), `ERC-4337-Wallet-Invariants.mdc`, `csw-agent-lifecycle.mdc`, `waitlist-onboarding-simplicity.mdc`, `docs/ACCOUNT_MODEL.md`, and the frontend SEO rules within their scoped paths.
 
 Core stance:
 - Treat any LLM, bot, or automation path as untrusted input.

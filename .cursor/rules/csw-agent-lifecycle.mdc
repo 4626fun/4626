@@ -15,23 +15,26 @@ globs:
 
 # CSW-to-Agent Lifecycle (Delegation Model)
 
-The user's Zora-created Coinbase Smart Wallet (CSW) is the canonical account AND the agent identity.
-The CSW never "becomes" a separate agent — the agent identity is layered onto the CSW through owner delegation.
+The canonical parent Coinbase Smart Wallet (`profiles.csw_address`) **is** the account — agent identity is layered onto it through owner delegation, not a separate wallet contract.
+
+For the **4626 canonical account**, `profiles.csw_address` === `CANONICAL_CSW_ADDRESS` (`0xAb6d5…967b5`). That **one address** is custody, XMTP agent 4626 inbox, AKITA vault owner, Railway Keepr sender, and parent-CSW swap/owner-install. The 2026-04-23 migration unified legacy `XMTP_AGENT_CSW_*` env with the canonical account CSW (previously `0x4beabd…04ef`). Do not document or implement a second "agent CSW" alongside the canonical CSW for this account.
+
+Other verified 4626 accounts each have their own `profiles.csw_address` (same canonical-CSW **role**, different on-chain address). Deploy-session automation uses **that creator's** canonical CSW as ERC-4337 sender.
 
 ## Scope
 
-This file covers **server-side** delegation for the XMTP agent, ERC-8004 identity, and deploy-session automation — all of which use the parent CSW as the ERC-4337 `sender` with a Privy server wallet delegated via `addOwnerAddress`.
+This file covers **server-side** delegation for the XMTP agent, ERC-8004 identity, and deploy-session automation — canonical parent CSW as ERC-4337 `sender` with a Privy server wallet delegated via `addOwnerAddress`. Railway XMTP/Keepr uses the 4626 canonical CSW (`CANONICAL_CSW_ADDRESS`).
 
-**User-initiated frontend transactions** (swaps, vault interactions submitted from `app.4626.fun`) do NOT use this delegation path. They route through an app-scoped sub-account whose signer is the user's Privy embedded EOA. See `docs/4626-connection-methods.md` Section 2 and `.cursor/rules/ERC-4337-Wallet-Invariants.mdc` for the user-initiated track.
+**User-initiated frontend transactions** (swaps, vault interactions from `app.4626.fun`) do **not** use server delegation. Default path: the account's parent CSW (`profiles.csw_address`) as `canonical4337` sender, signed by the Privy embedded EOA when `executionTrack === 'legacy-owner-install'`. Sub-account `sendCalls` is an **optional, flag-gated** swap-only lane — not the default canonical path. See `docs/4626-connection-methods.md` and `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
 
 ## Architecture Invariant
 
-- Wallet/account selection rules live in `ERC-4337-Wallet-Invariants.mdc`; this file defines how delegated signers and agent identity layer onto that canonical wallet for the **server-side track**.
-- The CSW is the canonical asset-holding account (per `ERC-4337-Wallet-Invariants.mdc`).
-- Privy server wallets are delegated signers added to the CSW's MultiOwnable owner list.
-- The XMTP agent, ERC-8004 identity, and deploy-session automation all present as the CSW address.
-- No private key extraction ever occurs; Privy signs on behalf of the CSW via its API.
-- Do not repurpose this delegation path for user-initiated frontend transactions — those use sub-accounts, not parent-CSW owner delegation.
+- Wallet/account selection rules live in `ERC-4337-Wallet-Invariants.mdc`; this file defines delegated signers and agent identity for the **server-side track**.
+- The canonical CSW (`profiles.csw_address`) is the asset-holding account. `CANONICAL_CSW_ADDRESS` pins the 4626 canonical account's row — same wallet, not a parallel identity.
+- Privy server wallets are delegated signers added to a CSW's MultiOwnable owner list.
+- XMTP agent, ERC-8004 identity, and deploy-session automation present as the **canonical CSW address** they operate on (4626 canonical CSW for Railway; creator's `profiles.csw_address` for deploy-session).
+- No private key extraction; Privy signs on behalf of the CSW via its API.
+- Do not repurpose server delegation for routine user-initiated swaps — users sign with embedded EOA on their parent CSW (or optional sub-account when flagged).
 
 ## Lifecycle (chronological)
 
@@ -67,7 +70,7 @@ This file covers **server-side** delegation for the XMTP agent, ERC-8004 identit
   - Signs messages via Privy `secp256k1_sign` API.
   - Wraps signatures in `SignatureWrapper` struct with the CSW owner index.
   - Uses the CSW's `replaySafeHash()` for ERC-1271 validation.
-- The XMTP agent presents as the CSW address, not the Privy EOA.
+- The XMTP agent presents as the **canonical CSW** address (`CANONICAL_CSW_ADDRESS` / `profiles.csw_address`), not the Privy EOA.
 - File: `frontend/server/_lib/privyXmtpSigner.ts`, `frontend/server/agents/eliza/index.ts`
 - Env: `CANONICAL_CSW_ADDRESS`, `CANONICAL_CSW_PRIVY_WALLET_ID`, `CANONICAL_CSW_OWNER_INDEX`
 
@@ -91,7 +94,7 @@ This file covers **server-side** delegation for the XMTP agent, ERC-8004 identit
 
 | Variable | Purpose | Scope |
 |---|---|---|
-| `CANONICAL_CSW_ADDRESS` | Canonical parent CSW the XMTP runtime presents as | Server |
+| `CANONICAL_CSW_ADDRESS` | Canonical CSW (`profiles.csw_address`) the Railway XMTP runtime presents as | Server |
 | `CANONICAL_CSW_PRIVY_WALLET_ID` | Privy wallet ID used as delegated signer | Server |
 | `CANONICAL_CSW_OWNER_INDEX` | Owner index of Privy wallet in CSW MultiOwnable | Server |
 | `PRIVY_WALLET_AUTHORIZATION_KEY` | P-256 key for signing Privy API requests | Server |
@@ -113,29 +116,31 @@ Do not set these on Railway/Vercel — code no longer reads them:
 | `XMTP_AGENT_ADDRESS` | `CANONICAL_CSW_ADDRESS` |
 | `VITE_AGENT_XMTP_ADDRESS` | `VITE_CANONICAL_CSW_ADDRESS` (client-only; optional) |
 
+**Code entry points:** server env — `frontend/server/_lib/wallet/canonicalCswEnv.ts` (`readCanonicalCswAddressEnv`, `resolveServerAgentInboxAddress`); client inbox — `frontend/src/lib/xmtp/agentXmtpAddress.ts` (`resolveClientAgentXmtpAddress`); chat UI constant — `CANONICAL_CSW_INBOX_ADDRESS` in `frontend/src/components/chat/ChatWidget.tsx` and `frontend/src/lib/chat/agentIdentity.ts`. Policy constant and allowlists — `frontend/src/wallet/canonicalWalletPolicy.ts`.
+
 ## Rules for Code Changes
 
 - Follow `ERC-4337-Wallet-Invariants.mdc` for canonical wallet/account selection; this file does not redefine those rules.
 - NEVER extract private keys from Privy; always use `secp256k1_sign` or `eth_sendTransaction` RPCs.
-- XMTP agent MUST present as the CSW address, not the Privy EOA address.
+- Railway XMTP agent MUST present as the **canonical CSW** address (`CANONICAL_CSW_ADDRESS`), not the Privy EOA. Deploy-session and ERC-8004 bind to the canonical CSW they operate on (4626 canonical CSW for operator registration; creator `profiles.csw_address` for deploy-session).
 - Deploy-session temporary owners MUST be removed after deployment completes.
 - ERC-8004 `agentWallet` MUST point to the CSW address, not any Privy wallet.
 - If adding a new server-side signing flow, follow the same delegation pattern: Privy signs → CSW executes.
 
-## Platform CSW owner allowlist (required after `addOwnerAddress`)
+## Canonical CSW owner allowlist (4626 policy constant)
 
-When a new owner is installed on the platform canonical CSW (`CANONICAL_CSW_ADDRESS`, `0xAb6d5…967b5`), update **both** policy lists in `frontend/src/wallet/canonicalWalletPolicy.ts`:
+When a new owner is installed on the 4626 canonical CSW (`CANONICAL_CSW_ADDRESS` === `profiles.csw_address`, `0xAb6d5…967b5`), update **both** policy lists in `frontend/src/wallet/canonicalWalletPolicy.ts`:
 
 1. `CANONICAL_CSW_ALLOWED_OWNER_EOAS` — identity/persistence/signing classification
 2. `CANONICAL_CSW_EXECUTION_OWNER_ADDRESSES` — UserOp / `canonical4337` execution gate (`txRouter.ts`, `coinbaseErc4337.ts`)
 
-**Checklist after any on-chain `addOwnerAddress` on the platform CSW:**
+**Checklist after any on-chain `addOwnerAddress` on the 4626 canonical CSW:**
 
 1. Query `ownerAtIndex(i)` / `isOwnerAddress(newEoa)` on Base to confirm slot and address.
 2. Append the checksummed lowercase EOA to **both** arrays above with a slot comment.
 3. Run `pnpm -C frontend exec vitest run src/wallet/canonicalWalletPolicy.test.ts src/lib/tx/txRouter.test.ts`.
 4. If the owner is the new Privy embedded EOA (user-initiated frontend lane) or Privy server wallet (Railway automation), update `CANONICAL_CSW_PRIVY_WALLET_ID` / `CANONICAL_CSW_OWNER_INDEX` env on Railway/Vercel as needed.
 
-**Do not** rely on signer-only policy triggers — enforcement applies only when `profiles.csw_address` or the execution wallet is the platform CSW (`shouldApplyCanonicalEnforcement`). Allowlisted admin EOAs signing against a personal CSW profile must not activate platform policy.
+**Do not** rely on signer-only policy triggers — enforcement applies when `profiles.csw_address` or the execution wallet equals `CANONICAL_CSW_ADDRESS` (`shouldApplyCanonicalEnforcement`). Allowlisted admin EOAs operating a different account's CSW must not activate 4626 canonical policy.
 
-**Client/server agent inbox address:** optional `VITE_CANONICAL_CSW_ADDRESS` overrides the policy constant on client surfaces via `frontend/src/lib/xmtp/agentXmtpAddress.ts`. Server APIs use `readCanonicalCswAddressEnv()` with the same policy constant as final fallback (`resolveServerAgentInboxAddress`).
+**Client/server agent inbox address:** chat and curated agent rows target `CANONICAL_CSW_INBOX_ADDRESS` (same value as `CANONICAL_CSW_ADDRESS`). Optional `VITE_CANONICAL_CSW_ADDRESS` overrides the policy constant on client surfaces via `resolveClientAgentXmtpAddress()`. Server APIs use `readCanonicalCswAddressEnv()` with the policy constant as final fallback (`resolveServerAgentInboxAddress()`).
