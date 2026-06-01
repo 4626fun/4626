@@ -84,6 +84,69 @@ describe('executeHermitCommand', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('supports /arena status in room 1659 when enabled', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+    })
+    const result = await executeHermitCommand({
+      commandText: '/arena status',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('Arena status:')
+    expect(result.reply).toContain('enabled=true')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects /arena commands outside allowed rooms', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+    })
+    const result = await executeHermitCommand({
+      commandText: '/arena status',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1043',
+    })
+    expect(result.reply).toContain('only enabled in approved rooms')
+  })
+
+  it('enforces HIP-3 xyz prefix on /arena trade', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_TRADING_ENABLED: '1',
+      ARENA_DRY_RUN: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+    })
+    const result = await executeHermitCommand({
+      commandText: '/arena trade open foo:bar long 1000 2',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+    expect(result.reply).toContain('xyz: prefix')
+  })
+
+  it('keeps /arena execution in dry-run by default', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_TRADING_ENABLED: '1',
+      ARENA_DRY_RUN: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+    })
+    const result = await executeHermitCommand({
+      commandText: '/arena trade open xyz:GOLD long 5000 3',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+    expect(result.reply).toContain('Open submitted for xyz:GOLD.')
+    expect(result.reply).toContain('[dry-run]')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('uses a rotating bundled meme for plain /gmeow', async () => {
     const result = await executeHermitCommand({
       commandText: '/gmeow',

@@ -23,6 +23,7 @@ function formatHermitCreativeSection(): string[] {
   return [
     '**Hermit — creative (read-only)**',
     '• `/position` — Hyperliquid positions + alert setup',
+    '• `/arena ...` — Virtuals Arena controls (room/flag gated)',
     '• `/gmeow [vibe]` — GIF + one-liner',
     '• `/meme <prompt>` — meme / image concept',
     '• `/hermit copy|announce|quest|tone <text>` — room copy drafts',
@@ -34,7 +35,7 @@ function formatHermitCreativeSection(): string[] {
 function formatHermitCreativeSectionCompact(): string[] {
   return [
     '**Commands**',
-    '• `/position` · `/hermit alert` · `/gmeow` · `/meme` · `/alfa brief`',
+    '• `/position` · `/arena status` · `/hermit alert` · `/gmeow` · `/meme` · `/alfa brief`',
   ]
 }
 

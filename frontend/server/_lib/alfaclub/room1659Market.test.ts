@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ALFACLUB } from '../wallet/alfaclub.js'
 import {
   resolveRoom1659FriendKeyAddress,
+  resolveRoom1659HyperliquidUserForSnapshot,
   resolveRoom1659HyperliquidPortfolioUser,
 } from './room1659Market.js'
 
@@ -28,6 +29,32 @@ describe('room1659 market constants', () => {
     vi.stubEnv('ROOM_1659_HYPERLIQUID_PORTFOLIO_USER', '0x2222222222222222222222222222222222222222')
     expect(resolveRoom1659HyperliquidPortfolioUser()).toBe(
       '0x2222222222222222222222222222222222222222',
+    )
+  })
+})
+
+describe('room1659 Hyperliquid user selection', () => {
+  it('does not depend on sender wallet for room 1659 snapshots', () => {
+    vi.stubEnv('ROOM_1659_HYPERLIQUID_PORTFOLIO_USER', '')
+    const expected = '0xebf94fa19db7d2e7905decd01dae4ea9eb4c1ff2'
+
+    expect(resolveRoom1659HyperliquidUserForSnapshot('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')).toBe(
+      expected,
+    )
+    expect(resolveRoom1659HyperliquidUserForSnapshot('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')).toBe(
+      expected,
+    )
+  })
+
+  it('uses configured room 1659 portfolio wallet for every sender', () => {
+    vi.stubEnv('ROOM_1659_HYPERLIQUID_PORTFOLIO_USER', '0x3333333333333333333333333333333333333333')
+    const expected = '0x3333333333333333333333333333333333333333'
+
+    expect(resolveRoom1659HyperliquidUserForSnapshot('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')).toBe(
+      expected,
+    )
+    expect(resolveRoom1659HyperliquidUserForSnapshot('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')).toBe(
+      expected,
     )
   })
 })

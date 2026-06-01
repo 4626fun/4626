@@ -43,6 +43,16 @@ import {
   resolveTelegramChatIdForWallet,
   upsertHyperliquidPositionAlert,
 } from '../alfaclub/positionAlertStore.js'
+import { arenaCommandAllowedForRoom, readArenaConfig } from '../arena/arenaConfig.js'
+import {
+  listArenaAssets,
+  runArenaActivateUnifiedAccount,
+  runArenaAddApiWallet,
+  runArenaDepositUsdc,
+  runArenaJoin,
+  runArenaStatus,
+  runArenaTrade,
+} from '../arena/arenaClient.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -220,6 +230,80 @@ function parseHermitDraftMode(args: string): { mode: HermitDraftMode; prompt: st
     }
   }
   return { mode: 'copy', prompt: trimmed }
+}
+
+type ParsedArenaCommand =
+  | { kind: 'help' | 'status' | 'assets' | 'join' | 'activate' | 'add-api-wallet' }
+  | { kind: 'deposit'; amountUsd: number }
+  | {
+      kind: 'trade'
+      action: 'open' | 'close'
+      pair: string
+      side?: 'long' | 'short'
+      sizeUsd?: number
+      leverage?: number
+    }
+
+function parseArenaCommandArgs(args: string): ParsedArenaCommand | null {
+  const trimmed = args.trim()
+  if (!trimmed || trimmed === 'help') return { kind: 'help' }
+  const parts = trimmed.split(/\s+/)
+  const sub = (parts[0] ?? '').toLowerCase()
+
+  if (sub === 'status') return { kind: 'status' }
+  if (sub === 'assets') return { kind: 'assets' }
+  if (sub === 'join') return { kind: 'join' }
+  if (sub === 'activate' || sub === 'activate-unified-account') return { kind: 'activate' }
+  if (sub === 'add-api-wallet' || sub === 'api-wallet') return { kind: 'add-api-wallet' }
+
+  if (sub === 'deposit') {
+    const amountUsd = Number(parts[1] ?? '')
+    if (!Number.isFinite(amountUsd) || amountUsd <= 0) return null
+    return { kind: 'deposit', amountUsd }
+  }
+
+  if (sub === 'trade') {
+    const action = (parts[1] ?? '').toLowerCase()
+    if (action === 'close') {
+      const pair = parts[2] ?? ''
+      if (!pair) return null
+      return { kind: 'trade', action: 'close', pair }
+    }
+    if (action === 'open') {
+      const pair = parts[2] ?? ''
+      const side = (parts[3] ?? '').toLowerCase()
+      const sizeUsd = Number(parts[4] ?? '')
+      const leverage = Number(parts[5] ?? '')
+      if (!pair || (side !== 'long' && side !== 'short')) return null
+      if (!Number.isFinite(sizeUsd) || sizeUsd <= 0) return null
+      if (!Number.isFinite(leverage) || leverage <= 0) return null
+      return {
+        kind: 'trade',
+        action: 'open',
+        pair,
+        side,
+        sizeUsd,
+        leverage,
+      }
+    }
+  }
+  return null
+}
+
+function formatArenaUsage(): string {
+  return [
+    '**Arena controls (room-gated)**',
+    '- `/arena status`',
+    '- `/arena assets`',
+    '- `/arena join`',
+    '- `/arena activate`',
+    '- `/arena add-api-wallet`',
+    '- `/arena deposit <usdc>`',
+    '- `/arena trade open <pair> <long|short> <sizeUsd> <leverage>`',
+    '- `/arena trade close <pair>`',
+    '',
+    'HIP-3 pairs must use `xyz:` (example: `xyz:GOLD`).',
+  ].join('\n')
 }
 
 function trimList(values: string[], max = 6): string[] {
@@ -1728,6 +1812,102 @@ export async function executeHermitCommand(
   const { command, args } = splitCommandAndArgs(params.commandText)
   const userPreferences: HermitUserPreferences | null = params.userPreferences ?? null
 
+  if (command === '/arena') {
+    const parsed = parseArenaCommandArgs(args)
+    if (!parsed) {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: formatArenaUsage(),
+      }
+    }
+    if (!arenaCommandAllowedForRoom(params.roomId ?? null)) {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: 'Arena commands are only enabled in approved rooms.',
+      }
+    }
+
+    const config = readArenaConfig()
+    if (parsed.kind === 'help') {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: formatArenaUsage(),
+      }
+    }
+    if (parsed.kind === 'status') {
+      const result = await runArenaStatus(config)
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: result.ok
+          ? `Arena status: enabled=${String(result.details?.enabled)} tradingEnabled=${String(result.details?.tradingEnabled)} dryRun=${String(result.details?.dryRun)}`
+          : `Arena status unavailable: ${result.message}`,
+      }
+    }
+    if (parsed.kind === 'assets') {
+      const result = await listArenaAssets(config)
+      if (!result.ok) {
+        return { kind: 'hermit', provider: 'local', reply: `Arena assets unavailable: ${result.message}` }
+      }
+      const assets = Array.isArray(result.details?.assets) ? (result.details?.assets as string[]) : []
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: `Arena assets (${assets.length}): ${assets.join(', ')}`,
+      }
+    }
+    if (parsed.kind === 'join') {
+      const result = await runArenaJoin(config)
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: result.ok ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}` : result.message,
+      }
+    }
+    if (parsed.kind === 'activate') {
+      const result = await runArenaActivateUnifiedAccount(config)
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: result.ok ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}` : result.message,
+      }
+    }
+    if (parsed.kind === 'add-api-wallet') {
+      const result = await runArenaAddApiWallet(config)
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: result.ok ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}` : result.message,
+      }
+    }
+    if (parsed.kind === 'deposit') {
+      const result = await runArenaDepositUsdc(parsed.amountUsd, config)
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: result.ok ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}` : result.message,
+      }
+    }
+    const result = await runArenaTrade(
+      {
+        action: parsed.action,
+        pair: parsed.pair,
+        ...(parsed.side ? { side: parsed.side } : {}),
+        ...(parsed.sizeUsd ? { sizeUsd: parsed.sizeUsd } : {}),
+        ...(parsed.leverage ? { leverage: parsed.leverage } : {}),
+      },
+      config,
+    )
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: result.ok ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}` : result.message,
+    }
+  }
+
   if (command === '/position') {
     return {
       kind: 'hermit',
@@ -1911,6 +2091,6 @@ export async function executeHermitCommand(
   }
 
   throw commandError(
-    'Unsupported Hermit command. Use /gmeow, /hermit [copy|announce|quest|tone], or /meme.',
+    'Unsupported Hermit command. Use /gmeow, /hermit [copy|announce|quest|tone], /meme, /position, or /arena.',
   )
 }

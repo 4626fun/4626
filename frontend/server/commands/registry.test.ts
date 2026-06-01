@@ -30,6 +30,7 @@ describe('command registry', () => {
     expect(getCommandFamily('/meme akita')).toBe('hermit')
     expect(getCommandFamily('/hermit help')).toBe('hermit')
     expect(getCommandFamily('/position')).toBe('hermit')
+    expect(getCommandFamily('/arena status')).toBe('hermit')
   })
 
   it('matches one or more command families', () => {

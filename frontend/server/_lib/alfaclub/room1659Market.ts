@@ -80,16 +80,19 @@ export function resolveRoom1659HyperliquidPortfolioUser(): string {
   return ROOM_1659_DEFAULT_HL_PORTFOLIO_USER
 }
 
+/**
+ * Room 1659 market context always tracks the dedicated room portfolio wallet.
+ * Sender wallet is intentionally ignored for Hyperliquid account selection.
+ */
+export function resolveRoom1659HyperliquidUserForSnapshot(_senderAddress: string): string {
+  return resolveRoom1659HyperliquidPortfolioUser()
+}
+
 /** Canonical FriendKey contract for room-key supply/pricing reads on Base. */
 export function resolveRoom1659FriendKeyAddress(): Address {
   const configured = String(process.env.ROOM_1659_FRIENDKEY_TOKEN ?? '').trim()
   if (EVM_ADDRESS_RE.test(configured)) return configured as Address
   return ALFACLUB.friendKey
-}
-
-function normalizeEvmAddress(raw: unknown): string | null {
-  const value = String(raw ?? '').trim()
-  return EVM_ADDRESS_RE.test(value) ? value.toLowerCase() : null
 }
 
 export function formatUsdc(raw: bigint | null | undefined): string {
@@ -163,23 +166,16 @@ export async function resolveRoom1659MarketContext(
   senderAddress: string
 ): Promise<Room1659MarketSnapshot> {
   const now = new Date().toISOString();
-  const defaultHyperliquidUser = resolveRoom1659HyperliquidPortfolioUser()
-  let hyperliquidUser = defaultHyperliquidUser
+  const hyperliquidUser = resolveRoom1659HyperliquidUserForSnapshot(senderAddress)
 
   try {
     // === Real endpoints observed from AlfaClub client in room 1659 ===
 
     // 1. User's spot positions in room 1659 (direct from AlfaClub)
     let userSpotPositions = null;
-    let roomFundWalletAddress: string | null = null
     try {
       const positionsRes = await fetchAlfaClubSpot(`/api/spot/positions?roomId=1659`);
       userSpotPositions = positionsRes?.positions ?? positionsRes ?? null;
-      roomFundWalletAddress = normalizeEvmAddress(positionsRes?.fund?.roomWalletAddress)
-      if (roomFundWalletAddress) {
-        // Prefer room fund wallet from AlfaClub spot API as the canonical HL portfolio user.
-        hyperliquidUser = roomFundWalletAddress
-      }
     } catch (e) {
       // fail open
     }

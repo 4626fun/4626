@@ -157,6 +157,7 @@ async function buildHermitComprehensiveHelpPayload(params: {
   const ctaSection = [
     '🚀 **Action CTA**',
     '- Turn on defaults now: **`/hermit alert`**',
+    '- Arena lane check: **`/arena status`**',
     '- Force refresh intelligence: **`/position`**',
     '- Disable anytime: **`/hermit alert off`**',
     '',
@@ -232,6 +233,7 @@ export function formatAlfaClubCommandHelp(): string {
     '  `/alfa chart [kind] [limit]` — room analytics chart (IPFS image)',
     '  `/alfa status` or `/bridge status` — pipeline + bridge auth health',
     '  `/alfa quote-key` · `/alfa buy-key` · `/alfa create-room` — onchain room keys',
+    '  `/arena status|assets|join|activate|add-api-wallet|deposit|trade` — Arena controls (1659 + flags)',
     '',
     '**Hermit** (ops room): `/gmeow` · `/meme` — GIF in chat first, then X link when posted.',
     '',
