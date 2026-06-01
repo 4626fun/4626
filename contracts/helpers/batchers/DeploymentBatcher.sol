@@ -752,14 +752,16 @@ contract DeploymentBatcherPhase1Module {
     function deployPhase1Core(
         DeploymentBatcher.Phase1Params calldata params,
         DeploymentBatcher.CodeIds calldata codeIds,
-        DeploymentBatcher.Phase1SplitState calldata existing
+        DeploymentBatcher.Phase1SplitState calldata existing,
+        bytes32 shareOftSaltOverride
     ) external returns (DeploymentBatcher.Phase1Result memory out, DeploymentBatcher.Phase1SplitState memory state) {
         if (address(this) != batcher) revert NotBatcherContext();
         if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
         _requirePhase1CodeIds(codeIds);
         if (bytes(params.shareSymbol).length > 32) revert SymbolTooLong();
 
-        (bytes32 shareOftSalt, bytes32 paramsHash, bytes32 codeIdsHash,) = _phase1Identity(params, codeIds);
+        (bytes32 shareOftSalt, bytes32 paramsHash, bytes32 codeIdsHash,) =
+            _phase1Identity(params, codeIds, shareOftSaltOverride);
 
         state = existing;
         if (state.coreDone) {
@@ -809,14 +811,16 @@ contract DeploymentBatcherPhase1Module {
     function finalizePhase1Split(
         DeploymentBatcher.Phase1Params calldata params,
         DeploymentBatcher.CodeIds calldata codeIds,
-        DeploymentBatcher.Phase1SplitState calldata existing
+        DeploymentBatcher.Phase1SplitState calldata existing,
+        bytes32 shareOftSaltOverride
     ) external returns (DeploymentBatcher.Phase1Result memory out, DeploymentBatcher.Phase1SplitState memory state) {
         if (address(this) != batcher) revert NotBatcherContext();
         if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
         _requirePhase1CodeIds(codeIds);
         if (bytes(params.shareSymbol).length > 32) revert SymbolTooLong();
 
-        (bytes32 expectedShareOftSalt, bytes32 paramsHash, bytes32 codeIdsHash,) = _phase1Identity(params, codeIds);
+        (bytes32 expectedShareOftSalt, bytes32 paramsHash, bytes32 codeIdsHash,) =
+            _phase1Identity(params, codeIds, shareOftSaltOverride);
         string memory shareSymbolUpper = utilsHelper.toUpper(params.shareSymbol);
 
         state = existing;
@@ -872,14 +876,17 @@ contract DeploymentBatcherPhase1Module {
 
     function _phase1Identity(
         DeploymentBatcher.Phase1Params calldata params,
-        DeploymentBatcher.CodeIds calldata codeIds
+        DeploymentBatcher.CodeIds calldata codeIds,
+        bytes32 shareOftSaltOverride
     )
         internal
         returns (bytes32 shareOftSalt, bytes32 paramsHash, bytes32 codeIdsHash, bytes32 baseSalt)
     {
         string memory shareSymbolLower = utilsHelper.toLower(params.shareSymbol);
         baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
-        shareOftSalt = utilsHelper.deriveShareOftSalt(params.owner, shareSymbolLower, params.version);
+        shareOftSalt = shareOftSaltOverride == bytes32(0)
+            ? utilsHelper.deriveShareOftSalt(params.owner, shareSymbolLower, params.version)
+            : shareOftSaltOverride;
         paramsHash = utilsHelper.phase1ParamsHash(
             params.creatorToken,
             params.owner,
@@ -1560,7 +1567,6 @@ contract DeploymentBatcher is ReentrancyGuard {
     error Phase1Missing();
     error Phase1CoreMissing();
     error Phase1StateMismatch();
-    error SaltOverrideDisabled();
     error InvalidWeight();
     error V3PoolMissing();
     error MissingInitialSqrtPriceX96();
@@ -1858,8 +1864,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         CodeIds calldata codeIds,
         bytes32 shareOftSaltOverride
     ) external nonReentrant returns (Phase1Result memory out) {
-        if (shareOftSaltOverride != bytes32(0)) revert SaltOverrideDisabled();
-        return _deployPhase1CoreInternal(params, codeIds);
+        return _deployPhase1CoreInternal(params, codeIds, shareOftSaltOverride);
     }
 
     function finalizePhase1WithSalt(
@@ -1867,11 +1872,14 @@ contract DeploymentBatcher is ReentrancyGuard {
         CodeIds calldata codeIds,
         bytes32 shareOftSaltOverride
     ) external nonReentrant returns (Phase1Result memory out) {
-        if (shareOftSaltOverride != bytes32(0)) revert SaltOverrideDisabled();
-        return _finalizePhase1InternalSplit(params, codeIds);
+        return _finalizePhase1InternalSplit(params, codeIds, shareOftSaltOverride);
     }
 
-    function _deployPhase1CoreInternal(Phase1Params calldata params, CodeIds calldata codeIds)
+    function _deployPhase1CoreInternal(
+        Phase1Params calldata params,
+        CodeIds calldata codeIds,
+        bytes32 shareOftSaltOverride
+    )
         internal
         returns (Phase1Result memory out)
     {
@@ -1883,7 +1891,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         bool wasCoreDone = existing.coreDone;
         bytes memory moduleOut = _delegatePhase1(
             abi.encodeWithSelector(
-                DeploymentBatcherPhase1Module.deployPhase1Core.selector, params, codeIds, existing
+                DeploymentBatcherPhase1Module.deployPhase1Core.selector, params, codeIds, existing, shareOftSaltOverride
             )
         );
         Phase1SplitState memory newState;
@@ -1902,7 +1910,11 @@ contract DeploymentBatcher is ReentrancyGuard {
         }
     }
 
-    function _finalizePhase1InternalSplit(Phase1Params calldata params, CodeIds calldata codeIds)
+    function _finalizePhase1InternalSplit(
+        Phase1Params calldata params,
+        CodeIds calldata codeIds,
+        bytes32 shareOftSaltOverride
+    )
         internal
         returns (Phase1Result memory out)
     {
@@ -1914,7 +1926,11 @@ contract DeploymentBatcher is ReentrancyGuard {
         bool wasFinalized = existing.finalized;
         bytes memory moduleOut = _delegatePhase1(
             abi.encodeWithSelector(
-                DeploymentBatcherPhase1Module.finalizePhase1Split.selector, params, codeIds, existing
+                DeploymentBatcherPhase1Module.finalizePhase1Split.selector,
+                params,
+                codeIds,
+                existing,
+                shareOftSaltOverride
             )
         );
         Phase1SplitState memory newState;

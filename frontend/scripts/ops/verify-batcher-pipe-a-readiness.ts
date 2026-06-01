@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { createPublicClient, getAddress, http, isAddress, type Address, type Hex } from 'viem'
+import { createPublicClient, encodeFunctionData, getAddress, http, isAddress, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 
 import {
@@ -75,7 +75,60 @@ const BATCHER_VIEW_ABI = [
   },
 ] as const
 
+const BATCHER_PHASE1_WITH_SALT_ABI = [
+  {
+    type: 'function',
+    name: 'deployPhase1CoreWithSalt',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vaultName', type: 'string' },
+          { name: 'vaultSymbol', type: 'string' },
+          { name: 'shareName', type: 'string' },
+          { name: 'shareSymbol', type: 'string' },
+          { name: 'version', type: 'string' },
+        ],
+      },
+      {
+        name: 'codeIds',
+        type: 'tuple',
+        components: [
+          { name: 'vault', type: 'bytes32' },
+          { name: 'wrapper', type: 'bytes32' },
+          { name: 'shareOFT', type: 'bytes32' },
+          { name: 'gauge', type: 'bytes32' },
+          { name: 'cca', type: 'bytes32' },
+          { name: 'oracle', type: 'bytes32' },
+          { name: 'oftBootstrap', type: 'bytes32' },
+        ],
+      },
+      { name: 'shareOftSaltOverride', type: 'bytes32' },
+    ],
+    outputs: [
+      {
+        name: 'out',
+        type: 'tuple',
+        components: [
+          { name: 'oftBootstrapRegistry', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+        ],
+      },
+    ],
+  },
+] as const
+
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
+const SALT_OVERRIDE_DISABLED_SELECTOR = '0xe7fdf838'
 
 type CheckResult = {
   id: string
@@ -135,6 +188,54 @@ async function readSolanaShareOftPeer(
   }
 }
 
+async function detectPhase1SaltOverrideSupport(
+  client: ReturnType<typeof createPublicClient>,
+  batcher: Address,
+): Promise<{ supported: boolean; detail: string }> {
+  const probeSalt = `0x${'11'.repeat(32)}` as Hex
+  const phase1Params = {
+    creatorToken: '0x0000000000000000000000000000000000000001' as Address,
+    owner: '0x0000000000000000000000000000000000000002' as Address,
+    vaultName: 'probe',
+    vaultSymbol: 'pOV',
+    shareName: 'probe share',
+    shareSymbol: 'psh',
+    version: 'v-probe',
+  } as const
+  const codeIds = {
+    vault: ZERO_BYTES32,
+    wrapper: ZERO_BYTES32,
+    shareOFT: ZERO_BYTES32,
+    gauge: ZERO_BYTES32,
+    cca: ZERO_BYTES32,
+    oracle: ZERO_BYTES32,
+    oftBootstrap: ZERO_BYTES32,
+  } as const
+
+  try {
+    await client.call({
+      to: batcher,
+      data: encodeFunctionData({
+        abi: BATCHER_PHASE1_WITH_SALT_ABI,
+        functionName: 'deployPhase1CoreWithSalt',
+        args: [phase1Params, codeIds, probeSalt],
+      }),
+    })
+    // If this unexpectedly succeeds, salt override is definitely enabled.
+    return { supported: true, detail: 'probe call unexpectedly succeeded with non-zero override' }
+  } catch (error) {
+    const message = (error instanceof Error ? error.message : String(error ?? '')).toLowerCase()
+    if (message.includes(SALT_OVERRIDE_DISABLED_SELECTOR) || message.includes('saltoverridedisabled')) {
+      return { supported: false, detail: 'reverted SaltOverrideDisabled on non-zero override probe' }
+    }
+    // Any other revert means the function accepted the non-zero override and failed later (owner/codeid/etc).
+    return {
+      supported: true,
+      detail: `non-salt revert on probe (${message.slice(0, 180) || 'unknown'})`,
+    }
+  }
+}
+
 async function main() {
   if (hasFlag('--help')) {
     usage()
@@ -157,7 +258,7 @@ async function main() {
   const rpcUrl = getArg('--rpc', process.env.BASE_RPC_URL || 'https://mainnet.base.org')
   const client = createPublicClient({ chain: base, transport: http(rpcUrl) })
 
-  const [phase1Module, phase2Module, adapter, destination, runtime, peerRead, registryAuthorized] =
+  const [phase1Module, phase2Module, adapter, destination, runtime, peerRead, registryAuthorized, saltSupport] =
     await Promise.all([
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'phase1Module' }),
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'phase2Module' }),
@@ -166,6 +267,7 @@ async function main() {
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'getOVaultRuntimeConfig' }),
     readSolanaShareOftPeer(client, batcher),
     readBatcherRegistryAuthorized({ publicClient: client, batcher, registry: BASE_MAINNET_CREATOR_REGISTRY }),
+    detectPhase1SaltOverrideSupport(client, batcher),
   ])
 
   const runtimeTuple = runtime as { hubComposer: Address; solanaEid: number; enabled: boolean }
@@ -216,6 +318,11 @@ async function main() {
       id: 'solana_share_oft_peer_configured',
       ok: peerRead.supported && peerRead.peer !== null,
       detail: peerRead.peer ?? (peerRead.supported ? 'unset (zero)' : 'n/a until batcher cutover'),
+    },
+    {
+      id: 'phase1_salt_override_enabled',
+      ok: saltSupport.supported,
+      detail: saltSupport.detail,
     },
   ]
 

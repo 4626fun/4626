@@ -56,17 +56,21 @@ export function isDeprecatedCreatorVaultBatcherAddress(value: string | null | un
 export const PRE_V110_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('f941Bb68e4f083f3F531cc598d5C08d0b8FfbA7E')
 
 /**
- * Split Phase-1 batchers expose *WithSalt entrypoints but revert non-zero
- * `shareOftSaltOverride` with `SaltOverrideDisabled()` — vanity salt must stay
- * in the CREATE2 version string only.
+ * Split Phase-1 batchers that expose *WithSalt entrypoints but still reject
+ * non-zero `shareOftSaltOverride` with `SaltOverrideDisabled()`.
+ *
+ * Keep this list explicit and historical: do not key off the canonical
+ * `SPLIT_PHASE1_DEPLOYMENT_BATCHER` constant so a future salt-enabled cutover
+ * does not accidentally stay marked as disabled.
  */
+export const SPLIT_PHASE1_SALT_DISABLED_BATCHER = addr('a99058f424FB3ACC639F59355C65C40149030651')
 const SHARE_OFT_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
   PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V110_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V1110_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V1111_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V1112_PIPE_A_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
-  SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  SPLIT_PHASE1_SALT_DISABLED_BATCHER.toLowerCase(),
 ])
 
 export function isShareOftSaltOverrideDisabledBatcher(value: string | null | undefined): boolean {

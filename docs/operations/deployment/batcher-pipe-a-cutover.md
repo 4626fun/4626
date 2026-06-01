@@ -11,6 +11,7 @@ Pipe A finalize requires the **live** `DeploymentBatcher` bytecode to include:
 - `solanaShareOftPeer()` storage + `setSolanaShareOftPeer(bytes32)`
 - OVault runtime enabled with Solana EID `30168`
 - Non-zero `solanaBridgeAdapter` + `solanaDestination`
+- Phase-1 `*WithSalt` path accepts non-zero `shareOftSaltOverride` (for independent ShareOFT vanity mining)
 
 Registry peer OR batcher default peer must resolve before finalize; the module seeds registry from `batcher.solanaShareOftPeer()` when registry peer is unset.
 
@@ -22,6 +23,10 @@ pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
 ```
 
 Exit `0` = ready. Exit `2` = blocked (typical failure: `solana_share_oft_peer_selector` on pre-Pipe-A batcher).
+
+The readiness output now includes:
+
+- `phase1_salt_override_enabled` — PASS means `deployPhase1CoreWithSalt` accepts non-zero overrides (non-salt reverts are expected on probe).
 
 ## Cutover paths
 
@@ -79,6 +84,7 @@ CONFIGURE_SOLANA_SHARE_OFT_PEER=1 SOLANA_SHARE_OFT_PEER=0x<mesh-peer> \
 | Check | Command |
 |-------|---------|
 | Readiness script | `verify-batcher-pipe-a-readiness.ts` → exit 0 |
+| Salt override support | `phase1_salt_override_enabled` must be `ok: true` |
 | OVault runtime | `cast call $BATCHER "getOVaultRuntimeConfig()(address,uint32,bool)"` |
 | Default peer | `cast call $BATCHER "solanaShareOftPeer()(bytes32)"` |
 | Deploy UI | `/deploy/vault` → Pipe A wiring panel shows peer + quoted LZ fee |

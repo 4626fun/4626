@@ -244,7 +244,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         batcher.deployPhase3Strategies(params, codeIds);
     }
 
-    function test_phase1SaltOverrideEntrypoints_areDisabled() public {
+    function test_phase1SaltOverrideEntrypoints_acceptOverrideInput() public {
         DeploymentBatcher.Phase1Params memory params = DeploymentBatcher.Phase1Params({
             creatorToken: makeAddr("creatorToken"),
             owner: address(this),
@@ -265,12 +265,31 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         });
 
         bytes32 saltOverride = keccak256("custom-share-oft-salt");
+        bytes4 disabledSelector = bytes4(keccak256("SaltOverrideDisabled()"));
 
-        vm.expectRevert(DeploymentBatcher.SaltOverrideDisabled.selector);
-        batcher.deployPhase1CoreWithSalt(params, codeIds, saltOverride);
+        try batcher.deployPhase1CoreWithSalt(params, codeIds, saltOverride) {
+            // no-op
+        } catch (bytes memory err) {
+            if (err.length >= 4) {
+                bytes4 sel;
+                assembly {
+                    sel := mload(add(err, 32))
+                }
+                assertTrue(sel != disabledSelector, "salt override unexpectedly disabled for deployPhase1CoreWithSalt");
+            }
+        }
 
-        vm.expectRevert(DeploymentBatcher.SaltOverrideDisabled.selector);
-        batcher.finalizePhase1WithSalt(params, codeIds, saltOverride);
+        try batcher.finalizePhase1WithSalt(params, codeIds, saltOverride) {
+            // no-op
+        } catch (bytes memory err) {
+            if (err.length >= 4) {
+                bytes4 sel;
+                assembly {
+                    sel := mload(add(err, 32))
+                }
+                assertTrue(sel != disabledSelector, "salt override unexpectedly disabled for finalizePhase1WithSalt");
+            }
+        }
     }
 
     function test_phase2ShareSplitAndDepositBounds_remainFixed() public view {
