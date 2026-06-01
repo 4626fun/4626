@@ -32,9 +32,11 @@ describe('swapQuoteDetails', () => {
     )
   })
 
-  it('normalizes fractional price impact to percent', () => {
-    expect(normalizePriceImpactPercent(0.005)).toBe(0.5)
-    expect(formatSwapPriceImpactLabel(0.005)).toBe('0.50%')
+  it('treats Uniswap priceImpact as percent (not decimal fraction)', () => {
+    expect(normalizePriceImpactPercent(0.04)).toBe(0.04)
+    expect(formatSwapPriceImpactLabel(0.04)).toBe('0.04%')
+    expect(formatSwapPriceImpactLabel(4)).toBe('4.00%')
+    expect(formatSwapPriceImpactLabel(0.005)).toBe('0.01%')
   })
 
   it('drops bogus -100% price impact', () => {
@@ -122,9 +124,9 @@ describe('swapQuoteDetails', () => {
     ).toBe('V3 + V4 100%')
   })
 
-  it('shows free network cost for sponsored execution', () => {
+  it('shows sponsored network cost for canonical paymaster execution', () => {
     expect(formatSwapNetworkCostDisplay({ gasEstimateLabel: 'Sponsored', sponsoredExecution: true })).toEqual({
-      primary: '<$0.01',
+      primary: 'Free',
       sponsoredFree: true,
     })
   })

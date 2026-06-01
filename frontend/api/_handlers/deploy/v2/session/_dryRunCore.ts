@@ -30,6 +30,7 @@ import {
 
 import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
 import { ensureBatcherRegistryAuthorizationOnFork } from '../../../../../server/_lib/deploy/ensureBatcherRegistryAuthorization.js'
+import { ensureCreatorOracleLaunchPricingOnFork } from '../../../../../server/_lib/deploy/ensureCreatorOracleLaunchPricingOnFork.js'
 import { ensurePhase3DryRunForkPrep } from '../../../../../server/_lib/deploy/ensurePhase3DryRunForkPrep.js'
 import { remapAuxiliaryDeployBatcherCalls } from '../../../../../server/_lib/deploy/ensureVaultAuxiliaryDeployBatcherOnFork.js'
 import {
@@ -101,7 +102,8 @@ const DEPLOY_FAILED_SELECTOR = '0xb4f54111'
 const NOT_AUTHORIZED_SELECTOR = '0xea8e4eb5'
 const UNAUTHORIZED_SELECTOR = '0x82b42900'
 const ERC20_INSUFFICIENT_BALANCE_SELECTOR = '0xe450d38c'
-const CCA_REQUIRED_RAISE_HINT_SELECTOR = '0x28e7b618'
+/** CCALaunchStrategy.LaunchOracleInvalidPrice(int256,int256) — not a raise hint. */
+const LAUNCH_ORACLE_INVALID_PRICE_SELECTOR = '0x28e7b618'
 const PHASE2_MISSING_SELECTOR = '0xf79c143b'
 const SELECTOR_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'
 const SELECTOR_DEPLOY_PHASE2_CORE = '0xf9344d88'
@@ -406,27 +408,10 @@ function formatErc20InsufficientBalanceError(raw: string): string | null {
   }
 }
 
-function parseRaiseHintFromCustomError(raw: string): bigint | null {
-  const lower = raw.toLowerCase()
-  const selectorIndex = lower.indexOf(CCA_REQUIRED_RAISE_HINT_SELECTOR)
-  if (selectorIndex < 0) return null
-  const afterSelector = raw.slice(selectorIndex + CCA_REQUIRED_RAISE_HINT_SELECTOR.length)
-  const payloadMatch = afterSelector.match(/[0-9a-fA-F]{64,}/)
-  if (!payloadMatch) return null
-  try {
-    const payload = payloadMatch[0]!
-    const words = payload.match(/[0-9a-fA-F]{64}/g) ?? []
-    let hint: bigint | null = null
-    for (const word of words) {
-      const value = BigInt(`0x${word}`)
-      if (value > 0n && (hint === null || value > hint)) {
-        hint = value
-      }
-    }
-    return hint
-  } catch {
-    return null
-  }
+function parseRaiseHintFromCustomError(_raw: string): bigint | null {
+  // Legacy helper retained for phase4 retry scaffolding; 0x28e7b618 is
+  // LaunchOracleInvalidPrice, not a required-raise hint.
+  return null
 }
 
 function isLaunchDeferredAuctionCall(call: Call): boolean {
@@ -2004,7 +1989,7 @@ async function runDryRunPhase(params: {
         params.allowLocalForkPhase4InvariantSkip === true &&
         params.name === 'phase4' &&
         isLaunchDeferredAuctionCall(call) &&
-        formatted.toLowerCase().includes(CCA_REQUIRED_RAISE_HINT_SELECTOR)
+        formatted.toLowerCase().includes(LAUNCH_ORACLE_INVALID_PRICE_SELECTOR)
       ) {
         console.warn('[deploy/v2/session/dry-run] phase4_launch_skipped_known_local_fork_invariant', {
           reason: formatted,
@@ -2416,6 +2401,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               smartWallet: smartWallet.toLowerCase(),
               message: formatDryRunError(warpError),
             })
+          }
+          const phase2LaunchDeps = extractFinalizePhase2CoreAddresses(phase2FinalizeCallsForPlan)
+          const phase2Identity = extractFinalizePhase2Identity(phase2FinalizeCallsForPlan)
+          if (phase2LaunchDeps?.oracle) {
+            try {
+              const oracleSeed = await ensureCreatorOracleLaunchPricingOnFork({
+                oracle: phase2LaunchDeps.oracle,
+                creatorToken: phase2Identity?.creatorToken,
+                publicClient: publicClient as any,
+                walletClient: walletClient as any,
+                waitForTransactionReceipt: (args) => publicClient.waitForTransactionReceipt(args as any),
+                forkRequest,
+                forkMode,
+              })
+              if (oracleSeed.seeded) {
+                console.warn('[deploy/v2/session/dry-run] phase4_creator_oracle_price_seeded', {
+                  smartWallet: smartWallet.toLowerCase(),
+                  oracle: oracleSeed.oracle.toLowerCase(),
+                  creatorToken: phase2Identity?.creatorToken?.toLowerCase() ?? null,
+                  creatorPrice: oracleSeed.creatorPrice?.toString() ?? null,
+                  ethPrice: oracleSeed.ethPrice?.toString() ?? null,
+                  priceSource: oracleSeed.priceSource ?? null,
+                  priceSourceDetail: oracleSeed.priceSourceDetail ?? null,
+                })
+              }
+            } catch (oracleSeedError) {
+              console.warn('[deploy/v2/session/dry-run] phase4_creator_oracle_price_seed_failed', {
+                smartWallet: smartWallet.toLowerCase(),
+                oracle: phase2LaunchDeps.oracle.toLowerCase(),
+                message: formatDryRunError(oracleSeedError),
+              })
+            }
           }
         }
         const phaseStartBlock =

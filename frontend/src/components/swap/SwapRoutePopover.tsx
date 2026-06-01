@@ -142,7 +142,7 @@ export function SwapRoutePopover({
           placement="left"
           hasInteractiveContent
           openDelay={0}
-          contentClassName="max-w-sm"
+          contentClassName="max-w-sm border-vault-borderStrong bg-vault-cardRaised p-3 shadow-2xl"
         >
           <button
             type="button"

@@ -38,10 +38,3 @@ export function shouldSkipV2HeroBackgroundDarken(analysis: V2SourceAnalysisSlice
   return isOpaqueAvatarCoin(analysis)
 }
 
-/**
- * Ghost stack stays inside the chamber only. Padding outside the bezel uses
- * `fieldPattern` + `paddingSilhouette` (one rembg-shaped spill — no offset ghost copies).
- */
-export function resolveV2StackClipRegion(): 'chamber' {
-  return 'chamber'
-}

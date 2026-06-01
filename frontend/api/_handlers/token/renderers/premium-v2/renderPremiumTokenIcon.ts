@@ -7,7 +7,6 @@ import {
   renderFrameBloom,
   renderOuterGlow,
   renderPremiumFrame,
-  renderPremiumStackedUnderlay,
   type PremiumTokenIconParams,
 } from '../premium-classic/renderPremiumTokenIcon.js'
 import { renderV2BackgroundCard } from './background.js'
@@ -23,7 +22,6 @@ import {
 import {
   resolveV2CardUnderlaySourceClass,
   resolveV2SegmentationSourceClass,
-  resolveV2StackClipRegion,
   shouldSkipV2HeroBackgroundDarken,
 } from './cardUnderlay.js'
 import { renderV2ExtendedFieldPattern } from './fieldPattern.js'
@@ -45,16 +43,12 @@ function compositeStep(input: Buffer, blend: BlendMode): sharp.OverlayOptions {
  */
 export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Promise<Buffer> {
   const preparedHeroCutoutBreakout = Boolean(params.heroCutoutSourceImage?.length)
-  const subject = await buildPremiumSubjectStack({
-    ...params,
-    stackUnderlayClip: 'chamber',
-  })
+  const subject = await buildPremiumSubjectStack(params)
   const {
     size,
     layout,
     heroCompositeLayer,
     breakoutLayer,
-    stackedUnderlay: chamberUnderlay,
     analysis,
     subjectPlacement,
   } = subject
@@ -72,34 +66,8 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
         size,
       })
 
-  const hasRembgBreakout = Boolean(breakoutLayer) && !preparedHeroCutoutBreakout
   const stackSourceClass =
     analysis && subjectPlacement ? resolveV2CardUnderlaySourceClass(analysis) : sourceClass
-
-  // Offset ghost copies read as a second ear beside breakout; padding spill is enough.
-  const useChamberGhostStack = !hasRembgBreakout
-
-  const stackedUnderlay =
-    useChamberGhostStack &&
-    !preparedHeroCutoutBreakout &&
-    segmentationMask &&
-    params.sourceImage?.length &&
-    analysis &&
-    subjectPlacement &&
-    stackSourceClass
-      ? await renderPremiumStackedUnderlay({
-          size,
-          layout,
-          sourceImage: Buffer.from(params.sourceImage),
-          scale: subjectPlacement.renderScale,
-          fit: subjectPlacement.fitMode,
-          sourceClass: stackSourceClass,
-          hasTransparency: analysis.hasTransparency,
-          topBiasPx: subjectPlacement.topBiasPx,
-          clipRegion: resolveV2StackClipRegion(),
-          subjectAlphaMaskPng: segmentationMask.subjectMaskPng,
-        })
-      : chamberUnderlay
 
   const paddingSpillParams =
     !preparedHeroCutoutBreakout &&
@@ -159,12 +127,6 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
   ]
   if (paddingFieldPattern) {
     overlays.push(compositeStep(paddingFieldPattern, 'over'))
-  }
-  if (stackedUnderlay.rearLayerB) {
-    overlays.push(compositeStep(stackedUnderlay.rearLayerB, 'over'))
-  }
-  if (stackedUnderlay.rearLayerA) {
-    overlays.push(compositeStep(stackedUnderlay.rearLayerA, 'over'))
   }
   if (paddingSilhouette) {
     overlays.push(compositeStep(paddingSilhouette, 'over'))

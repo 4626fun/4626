@@ -3,6 +3,7 @@
  * Offline A/B for 1+ creator coins: fetch Zora artwork, render classic vs fuji-lut.
  *
  *   pnpm -C frontend exec tsx scripts/compare-token-icon-creators.ts
+ *   pnpm -C frontend exec tsx scripts/compare-token-icon-creators.ts --explore 5
  *   pnpm -C frontend exec tsx scripts/compare-token-icon-creators.ts --creator 0x5b6741...
  */
 
@@ -44,17 +45,64 @@ function loadEnvFile(envPath: string): void {
   }
 }
 
-function parseCreators(argv: string[]): Array<{ slug: string; address: string }> {
+function slugFromExploreNode(node: {
+  address?: string | null
+  symbol?: string | null
+  name?: string | null
+  creatorProfile?: { handle?: string | null } | null
+}): string {
+  const handle = node.creatorProfile?.handle?.trim()
+  const sym = String(node.symbol ?? node.name ?? '')
+    .replace(/^\$/, '')
+    .trim()
+  const raw = handle || sym || String(node.address ?? '').slice(2, 10)
+  return raw.replace(/[^a-z0-9_-]/gi, '_').slice(0, 40) || 'creator'
+}
+
+async function discoverExploreCreators(
+  sdk: Awaited<ReturnType<typeof loadZoraSdk>>,
+  count: number,
+  exclude: Set<string>,
+): Promise<Array<{ slug: string; address: string }>> {
+  const res = await sdk.getExploreTopVolumeCreators24h({
+    query: { count: Math.min(50, count + exclude.size + 8) },
+    path: { chain: 'base' },
+  })
+  const edges = res?.data?.exploreList?.edges ?? []
   const out: Array<{ slug: string; address: string }> = []
+  for (const edge of edges) {
+    const node = edge?.node
+    const address = String(node?.address ?? '').toLowerCase()
+    if (!/^0x[a-f0-9]{40}$/.test(address) || exclude.has(address)) continue
+    exclude.add(address)
+    out.push({ slug: slugFromExploreNode(node ?? {}), address })
+    if (out.length >= count) break
+  }
+  return out
+}
+
+function parseCreators(argv: string[]): {
+  creators: Array<{ slug: string; address: string }>
+  exploreExtra: number
+} {
+  const out: Array<{ slug: string; address: string }> = []
+  let exploreExtra = 0
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--creator' && argv[i + 1]) {
       const address = argv[++i].toLowerCase()
       const known = DEFAULT_CREATORS.find((c) => c.address === address)
       out.push({ slug: known?.slug ?? address.slice(2, 10), address })
+      continue
+    }
+    if (a === '--explore' && argv[i + 1]) {
+      exploreExtra = Math.max(0, Number.parseInt(argv[++i], 10) || 0)
     }
   }
-  return out.length > 0 ? out : DEFAULT_CREATORS
+  return {
+    creators: out.length > 0 ? out : DEFAULT_CREATORS,
+    exploreExtra,
+  }
 }
 
 async function fetchUrlBytes(url: string): Promise<Uint8Array> {
@@ -190,12 +238,20 @@ async function main() {
   loadEnvFile(path.join(FRONTEND_ROOT, '.env.local'))
   loadEnvFile(path.join(FRONTEND_ROOT, '.env'))
 
-  const creators = parseCreators(process.argv)
+  const { creators: baseCreators, exploreExtra } = parseCreators(process.argv)
   const outRoot = path.resolve(FRONTEND_ROOT, 'tmp/token-icon-compare')
   const sdk = await loadZoraSdk()
 
+  const exclude = new Set(baseCreators.map((c) => c.address))
+  const exploreCreators =
+    exploreExtra > 0 ? await discoverExploreCreators(sdk, exploreExtra, exclude) : []
+  const creators = [...baseCreators, ...exploreCreators]
+
   console.log(`Output: ${outRoot}`)
   console.log(`Creators: ${creators.map((c) => c.slug).join(', ')}`)
+  if (exploreCreators.length > 0) {
+    console.log(`Explore add-ons: ${exploreCreators.map((c) => `${c.slug} (${c.address})`).join(', ')}`)
+  }
 
   await renderBreakoutReference(outRoot)
 

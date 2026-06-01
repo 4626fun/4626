@@ -10,15 +10,17 @@ and what that means operationally.
 
 On local Anvil/Hardhat fork simulation, `launchDeferredAuction(...)` can revert with selector:
 
-- `0x28e7b618`
+- `0x28e7b618` — `LaunchOracleInvalidPrice(int256 creatorUsdPrice, int256 ethUsdPrice)` from `CCALaunchStrategy`
 
-even after all deploy-session phase rewrites and candidate retries are applied.
+Typical fork cause: Phase 2 deploys a fresh `CreatorOracle` with **no initialized creator USD price** (`creatorUsdPrice = 0`) while Chainlink ETH/USD is valid. Dry-run seeds `initializeCreatorPrice` on the fork oracle (owner-impersonated) before Phase 4 when strict launch is enabled.
 
-Observed behavior in this mode:
+**Pricing source:** dry-run uses the same market-floor lane as Deploy UI (`computeMarketFloorQuote` → CREATOR/ZORA v4 TWAP + conservative ZORA→ETH, converted to creator USD via oracle `getEthPrice()`). Only when that resolution fails does dry-run fall back to a small default ($0.01 in 1e18 units).
+
+Observed behavior when seeding is unavailable or still fails:
 
 - Phase 1/2/3 calls are reproducible and verifiable.
-- Phase 4 launch invariant can remain non-actionable in local-fork context.
-- Multiple rewrite candidates for launch params can still revert with the same selector.
+- Phase 4 launch invariant can remain non-actionable in local-fork context **after oracle seeding fails**.
+- Retry candidates keyed off `0x28e7b618` do not help — that selector is oracle pricing, not required-raise hints.
 
 This is treated as a **local-fork simulation artifact/invariant blocker**, not a proof that production launch will fail.
 

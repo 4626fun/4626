@@ -9,6 +9,7 @@ import { WalletProviders } from '@/web3/Web3Providers'
 import { WaitlistUnlocksPanel } from './WaitlistUnlocksPanel'
 import { WaitlistGroupChatPanel } from './WaitlistGroupChatPanel'
 import { WaitlistWorkspaceHeader } from './WaitlistWorkspaceHeader'
+import { WaitlistLeaderboardPanel } from './WaitlistLeaderboardPanel'
 
 type WaitlistSetupWorkspaceProps = {
   initialAccount: AccountSetupMe
@@ -74,12 +75,9 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
       ) : waitlistJoined ? (
         <section aria-label="Approval status" className="space-y-2">
           <p className="text-sm text-zinc-300">Waiting for approval.</p>
-          <a
-            href="/leaderboard"
-            className="inline-flex h-9 items-center rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/[0.08]"
-          >
-            View leaderboard
-          </a>
+          <p className="text-xs text-zinc-500 lg:hidden">
+            Open the leaderboard section below to see where you rank.
+          </p>
         </section>
       ) : null}
 
@@ -92,8 +90,12 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
     </div>
   )
 
+  const gridClass = showChatAside
+    ? 'grid grid-cols-1 gap-5 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(260px,min(360px,32vw))] lg:items-start lg:gap-6'
+    : 'grid grid-cols-1 gap-5 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)] lg:items-start lg:gap-6'
+
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6">
+    <div className="mx-auto w-full max-w-[90rem] space-y-5 px-0 sm:space-y-6">
       {showWorkspaceHeader ? (
         <WaitlistWorkspaceHeader
           canEnterApp={canEnterApp}
@@ -102,34 +104,44 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
         />
       ) : null}
 
-      <div
-        className={
-          showChatAside
-            ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start'
-            : 'mx-auto max-w-[640px]'
-        }
-      >
-        <div className="min-w-0 space-y-4">
-          <AccountSetupWorkspaceView
-            context="waitlist"
-            controller={controller}
-            onSigningStepCompleteChange={onSigningStepCompleteChange}
-            summaryActions={primaryColumnActions}
-            waitlistFooter={
-              <button
-                type="button"
-                onClick={() => void onSignOut()}
-                disabled={signOutBusy}
-                className="text-xs text-zinc-400 transition hover:text-zinc-300 disabled:opacity-50"
-              >
-                {signOutBusy ? 'Signing out...' : 'Sign out'}
-              </button>
-            }
-          />
+      <div className={gridClass}>
+        <WaitlistLeaderboardPanel layout="rail" />
+
+        <div className="min-w-0 space-y-5">
+          <div className="mx-auto w-full max-w-[640px] lg:max-w-none">
+            <AccountSetupWorkspaceView
+              context="waitlist"
+              controller={controller}
+              onSigningStepCompleteChange={onSigningStepCompleteChange}
+              summaryActions={primaryColumnActions}
+              waitlistFooter={
+                <button
+                  type="button"
+                  onClick={() => void onSignOut()}
+                  disabled={signOutBusy}
+                  className="text-xs text-zinc-400 transition hover:text-zinc-300 disabled:opacity-50"
+                >
+                  {signOutBusy ? 'Signing out...' : 'Sign out'}
+                </button>
+              }
+            />
+          </div>
+
+          <WaitlistLeaderboardPanel layout="mobile" />
+
+          {showChatAside ? (
+            <div className="lg:hidden">
+              <WaitlistGroupChatPanel
+                setupComplete={setupComplete}
+                signingReady={signingStepComplete}
+                layout="mobile"
+              />
+            </div>
+          ) : null}
         </div>
 
         {showChatAside ? (
-          <aside className="min-w-0 lg:sticky lg:top-6" aria-label="Waitlist group chat">
+          <aside className="hidden min-w-0 lg:block lg:sticky lg:top-6" aria-label="Waitlist group chat">
             <WaitlistGroupChatPanel
               setupComplete={setupComplete}
               signingReady={signingStepComplete}

@@ -187,14 +187,11 @@ export function resolveQuoteAggregatorLabel(quote: TradeQuoteResponse | null | u
   return 'Uniswap'
 }
 
+/** Uniswap Trading API `priceImpact` is already a percent (0–100); e.g. 0.04 = 0.04%, 4 = 4%. */
 export function normalizePriceImpactPercent(value: unknown): number | null {
   if (value == null) return null
-  let n = typeof value === 'number' ? value : Number(String(value).replace('%', '').trim())
+  const n = typeof value === 'number' ? value : Number(String(value).replace('%', '').trim())
   if (!Number.isFinite(n)) return null
-
-  if (Math.abs(n) > 0 && Math.abs(n) <= 1) {
-    n *= 100
-  }
 
   if (Math.abs(n) >= 50) return null
   return n
@@ -318,13 +315,13 @@ export type SwapNetworkCostDisplay = {
   sponsoredFree: boolean
 }
 
-/** Network cost row — sponsored canonical swaps show "<$0.01" + Free badge like Uniswap. */
+/** Network cost row — sponsored canonical swaps: user pays $0 (paymaster covers gas). */
 export function formatSwapNetworkCostDisplay(params: {
   gasEstimateLabel: string | null
   sponsoredExecution?: boolean
 }): SwapNetworkCostDisplay | null {
   if (params.sponsoredExecution || params.gasEstimateLabel === 'Sponsored') {
-    return { primary: '<$0.01', sponsoredFree: true }
+    return { primary: 'Free', sponsoredFree: true }
   }
   if (params.gasEstimateLabel) {
     return { primary: params.gasEstimateLabel, sponsoredFree: false }

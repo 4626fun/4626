@@ -12,8 +12,11 @@ import {
   normalizeAddressLike,
   normalizeBytes32,
   normalizeDeploymentVersion,
+  buildShareOftVanityUserWarning,
   normalizeHexSuffix,
   parsePositiveTokenAmount,
+  resolveDeploymentVersionSearchMaxTries,
+  type DeploymentVanityVersionSearchOutcome,
   parseUint8,
   parseUniswapV3Fee,
   sameAddress,
@@ -61,6 +64,7 @@ import {
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
   SPLIT_PHASE1_PHASE3_HELPER,
   isDeprecatedCreatorVaultBatcherAddress,
+  isShareOftSaltOverrideDisabledBatcher,
   normalizeCreatorVaultBatcherAddress,
 } from '@/config/contracts.defaults'
 import { deploymentBatcherNotConfiguredMessage } from '@/lib/deploy/deploymentBatcherConfigError'
@@ -191,11 +195,6 @@ const BATCHER_PHASE1_FINALIZE_SELECTOR = 'a98ec9d8'
 const BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR = '3bc09a8b'
 const BATCHER_PHASE2_FINALIZE_WITH_PERMIT2_SELECTOR = '0ecf9382'
 const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
-const KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
-  '0x004684670d284ef607e1b2424fcf8ccbda8ef828',
-  '0xe3f9490cfd6bd3d68010405d18bf772c167e7178',
-  '0xf941bb68e4f083f3f531cc598d5c08d0b8ffba7e',
-])
 // The phased deployment batcher v4+ exposes these immutables as getters. We use this as a
 // compatibility gate to avoid legacy batchers that deploy module-uninitialized vaults.
 const BATCHER_VAULT_CORE_MODULE_SELECTOR = '22c40b75'
@@ -2680,7 +2679,11 @@ function DeployVaultBatcher({
     }
   }, [legacyDeploySessionStorageKey])
   const shareOftVanityCacheRef = useRef<{ key: string; salt: Hex } | null>(null)
-  const vaultVanityVersionCacheRef = useRef<{ key: string; version: string } | null>(null)
+  const vaultVanityVersionCacheRef = useRef<{
+    key: string
+    version: string
+    outcome?: DeploymentVanityVersionSearchOutcome
+  } | null>(null)
   const shareOftVanitySkipLogKeyRef = useRef<string | null>(null)
   const creatorCoinOwnerUnresolvedLogKeyRef = useRef<string | null>(null)
   const ensurePaymasterSession = useCallback(async () => {
@@ -3552,7 +3555,7 @@ function DeployVaultBatcher({
       const batcherBytecodeLower = (batcherBytecode ?? '0x').toLowerCase()
       const batcherAddressLower = String(batcherAddress ?? '').toLowerCase()
       const saltOverridesDisabledByBatcher =
-        KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS.has(batcherAddressLower) ||
+        isShareOftSaltOverrideDisabledBatcher(batcherAddressLower) ||
         batcherBytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR)
       const supportsLegacyPhase1WithSaltSelector = (() => {
         if (!batcherBytecode || batcherBytecode === '0x') return false
@@ -3600,6 +3603,7 @@ function DeployVaultBatcher({
 
       let deploymentVersionUsed = deploymentVersion
       let vanityVersionSearchWarning: string | null = null
+      let vanityVersionSearchOutcome: DeploymentVanityVersionSearchOutcome = 'not_applicable'
       // Apply deployment-version search for deterministic vanity when possible.
       // When Phase-1 salt overrides are unavailable, also attempt share-suffix matching
       // via version search (with share suffix taking priority over vault prefix fallback).
@@ -3624,18 +3628,20 @@ function DeployVaultBatcher({
           versionSearchShareSuffix ?? '',
           String(vaultVanityMaxTries),
           String(shareOftVanityMaxTries),
-          '0',
+          supportsPhase1WithSalt ? 'salt' : 'version',
         ].join(':')
         const cached = vaultVanityVersionCacheRef.current
         if (cached?.key === vanityTargetsKey) {
           deploymentVersionUsed = cached.version
+          vanityVersionSearchOutcome = cached.outcome ?? 'not_applicable'
         } else {
-          const versionSearchMaxTries =
-            versionSearchVaultPrefix && versionSearchShareSuffix
-              ? Math.min(10_000, vaultVanityMaxTries, shareOftVanityMaxTries)
-              : versionSearchVaultPrefix
-                ? vaultVanityMaxTries
-                : shareOftVanityMaxTries
+          const versionSearchMaxTries = resolveDeploymentVersionSearchMaxTries({
+            hasVaultPrefix: Boolean(versionSearchVaultPrefix),
+            hasShareSuffix: Boolean(versionSearchShareSuffix),
+            supportsPhase1WithSalt,
+            vaultVanityMaxTries,
+            shareOftVanityMaxTries,
+          })
           let foundVersion = await findDeploymentVersionForVanityTargets({
             create2Deployer,
             creatorToken,
@@ -3653,6 +3659,9 @@ function DeployVaultBatcher({
               return !!bc && bc !== '0x'
             },
           })
+          if (foundVersion) {
+            vanityVersionSearchOutcome = 'combined_match'
+          }
           // If both targets are requested and a combined hit wasn't found,
           // prioritize deterministic share suffix for deploy correctness/UX.
           if (!foundVersion && versionSearchVaultPrefix && versionSearchShareSuffix) {
@@ -3674,38 +3683,42 @@ function DeployVaultBatcher({
               },
             })
             if (foundVersion) {
-              vanityVersionSearchWarning =
-                `Could not satisfy vault prefix 0x${versionSearchVaultPrefix} with share suffix ${versionSearchShareSuffix} in the same version search window. ` +
-                `Prioritizing share suffix ${versionSearchShareSuffix} for this deploy.`
+              vanityVersionSearchOutcome = 'share_only_match'
             }
           }
           if (!foundVersion) {
             if (versionSearchVaultPrefix && versionSearchShareSuffix) {
               if (!usingDefaultVaultVanityTarget || !usingDefaultShareVanityTarget) {
+                vanityVersionSearchOutcome = 'missed_custom'
                 throw new Error(
                   `Unable to find a deployment version matching vault prefix "0x${versionSearchVaultPrefix}" and share suffix "${versionSearchShareSuffix}" ` +
                     `in ${versionSearchMaxTries.toLocaleString()} tries (share-only fallback also failed after ${shareOftVanityMaxTries.toLocaleString()} tries).`,
                 )
               }
+              vanityVersionSearchOutcome = 'missed_defaults'
               vanityVersionSearchWarning =
                 `Default vanity targets (0x${versionSearchVaultPrefix} / ${versionSearchShareSuffix}) were not found in the current search window. ` +
                 'Continuing with deterministic deployment addresses.'
             } else if (versionSearchShareSuffix) {
               if (!usingDefaultShareVanityTarget) {
+                vanityVersionSearchOutcome = 'missed_custom'
                 throw new Error(
                   `Unable to find ShareOFT vanity suffix "${versionSearchShareSuffix}" in ${shareOftVanityMaxTries.toLocaleString()} deployment-version tries.`,
                 )
               }
+              vanityVersionSearchOutcome = 'missed_defaults'
               vanityVersionSearchWarning =
                 `Default share suffix "${versionSearchShareSuffix}" was not found in the current search window. ` +
                 'Continuing with deterministic deployment addresses.'
             } else if (versionSearchVaultPrefix) {
               if (!usingDefaultVaultVanityTarget) {
+                vanityVersionSearchOutcome = 'missed_custom'
                 throw new Error(
                   `Unable to find vault vanity prefix "0x${versionSearchVaultPrefix}" in ${vaultVanityMaxTries.toLocaleString()} deployment-version tries. ` +
                     'Increase VITE_VAULT_VANITY_MAX_TRIES and retry.',
                 )
               }
+              vanityVersionSearchOutcome = 'missed_defaults'
               vanityVersionSearchWarning =
                 `Default vault prefix "0x${versionSearchVaultPrefix}" was not found in the current search window. ` +
                 'Continuing with deterministic deployment addresses.'
@@ -3713,7 +3726,11 @@ function DeployVaultBatcher({
           }
           if (foundVersion) {
             deploymentVersionUsed = foundVersion
-            vaultVanityVersionCacheRef.current = { key: vanityTargetsKey, version: foundVersion }
+            vaultVanityVersionCacheRef.current = {
+              key: vanityTargetsKey,
+              version: foundVersion,
+              outcome: vanityVersionSearchOutcome,
+            }
           }
         }
       }
@@ -3727,19 +3744,28 @@ function DeployVaultBatcher({
 
       const shareOftVanityUnsupportedByBatcher = !supportsPhase1WithSalt && Boolean(shareOftVanitySuffix)
       const batcherDisplay = batcherAddress ? shortAddress(batcherAddress) : 'unknown'
-      let shareOftVanityWarning: string | null = null
-      if (shareOftVanityUnsupportedByBatcher) {
-        if (shareVanityIsCustom) {
-          const blockingMessage =
-            `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides. ` +
-            `Custom share token vanity suffix "${shareOftVanitySuffix}" is blocked for this deploy.`
-          logger.warn('[DeployVault] share_oft_vanity_suffix_blocked', {
-            batcher: batcherAddress,
-            suffix: shareOftVanitySuffix,
-            reason: 'phase1_salt_overrides_not_supported',
-          })
-          throw new Error(blockingMessage)
-        }
+      let shareOftVanityWarning: string | null = buildShareOftVanityUserWarning({
+        shareOftVanitySuffix,
+        vaultVanityPrefix: versionSearchVaultPrefix,
+        saltOverrideDisabled: shareOftVanityUnsupportedByBatcher,
+        versionSearchOutcome: vanityVersionSearchOutcome,
+      })
+      if (shareOftVanityUnsupportedByBatcher && shareVanityIsCustom) {
+        const blockingMessage =
+          `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides. ` +
+          `Custom share token vanity suffix "${shareOftVanitySuffix}" is blocked for this deploy.`
+        logger.warn('[DeployVault] share_oft_vanity_suffix_blocked', {
+          batcher: batcherAddress,
+          suffix: shareOftVanitySuffix,
+          reason: 'phase1_salt_overrides_not_supported',
+        })
+        throw new Error(blockingMessage)
+      }
+      if (
+        shareOftVanityUnsupportedByBatcher &&
+        !shareVanityIsCustom &&
+        vanityVersionSearchOutcome === 'not_applicable'
+      ) {
         const skipLogKey = buildShareVanitySkipLogKey({
           batcher: batcherAddress,
           suffix: shareOftVanitySuffix,
@@ -3753,14 +3779,9 @@ function DeployVaultBatcher({
             reason: 'phase1_salt_overrides_not_supported',
           })
         }
-        shareOftVanityWarning =
-          `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides, so default share suffix ` +
-          `"${shareOftVanitySuffix}" is not guaranteed for this deploy.`
       }
-      if (vanityVersionSearchWarning) {
-        shareOftVanityWarning = shareOftVanityWarning
-          ? `${shareOftVanityWarning} ${vanityVersionSearchWarning}`
-          : vanityVersionSearchWarning
+      if (vanityVersionSearchWarning && !shareOftVanityWarning) {
+        shareOftVanityWarning = vanityVersionSearchWarning
       }
 
       const derivedShareOftSalt = deriveShareOftSalt({ owner, shareSymbol, version: deploymentVersionUsed })
@@ -5363,7 +5384,7 @@ function DeployVaultBatcher({
       }
       const batcherAddressLower = String(batcherAddress ?? '').toLowerCase()
       const splitPhase1SaltOverrideDisabled = (
-        KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS.has(batcherAddressLower) ||
+        isShareOftSaltOverrideDisabledBatcher(batcherAddressLower) ||
         batcherBytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR)
       )
       const supportsLegacyPhase1WithSalt = (() => {

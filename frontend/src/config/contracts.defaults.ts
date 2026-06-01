@@ -52,6 +52,31 @@ export function isDeprecatedCreatorVaultBatcherAddress(value: string | null | un
   return DEPRECATED_CREATOR_VAULT_BATCHERS.has(trimmed.toLowerCase())
 }
 
+/** Historical split Phase-1 batcher that also rejects non-zero share vanity salt overrides. */
+export const PRE_V110_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('f941Bb68e4f083f3F531cc598d5C08d0b8FfbA7E')
+
+/**
+ * Split Phase-1 batchers expose *WithSalt entrypoints but revert non-zero
+ * `shareOftSaltOverride` with `SaltOverrideDisabled()` — vanity salt must stay
+ * in the CREATE2 version string only.
+ */
+const SHARE_OFT_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
+  PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V110_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V1110_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V1111_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V1112_PIPE_A_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+])
+
+export function isShareOftSaltOverrideDisabledBatcher(value: string | null | undefined): boolean {
+  if (value == null) return false
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return false
+  return SHARE_OFT_SALT_OVERRIDE_DISABLED_BATCHERS.has(trimmed.toLowerCase())
+}
+
 export function normalizeCreatorVaultBatcherAddress(
   value: string | null | undefined,
 ): ContractAddress | null | undefined {

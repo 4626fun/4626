@@ -18,10 +18,7 @@ async function applyOpacity(layer: Buffer, opacity: number): Promise<Buffer> {
     .toBuffer()
 }
 
-/**
- * Soft dark subject shape in card padding — same silhouette read as in-chamber ghosts,
- * without offset copies that look like a second frame.
- */
+/** Soft dark subject shape in card padding outside the bezel (not inside the chamber). */
 export async function renderV2PaddingSilhouetteBleed(params: {
   size: number
   layout: PremiumLayout

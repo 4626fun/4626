@@ -120,7 +120,7 @@ export function SwapDetails({
               <span className="app-meta-value text-vault-text">{networkCost.primary}</span>
               {networkCost.sponsoredFree ? (
                 <Badge variant="muted" size="xs" className="normal-case tracking-normal text-zinc-300">
-                  Free
+                  Sponsored
                 </Badge>
               ) : null}
             </span>

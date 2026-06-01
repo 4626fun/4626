@@ -184,3 +184,70 @@ export async function findCreate2SaltForSuffix(params: {
   }
   return null
 }
+
+/** Combined vault+share version search cap when Phase-1 salt overrides can satisfy share suffix separately. */
+export const COMBINED_VANITY_VERSION_SEARCH_CAP = 10_000
+
+export type DeploymentVanityVersionSearchOutcome =
+  | 'not_applicable'
+  | 'combined_match'
+  | 'share_only_match'
+  | 'missed_defaults'
+  | 'missed_custom'
+
+export function resolveDeploymentVersionSearchMaxTries(params: {
+  hasVaultPrefix: boolean
+  hasShareSuffix: boolean
+  supportsPhase1WithSalt: boolean
+  vaultVanityMaxTries: number
+  shareOftVanityMaxTries: number
+}): number {
+  if (params.hasVaultPrefix && params.hasShareSuffix) {
+    if (!params.supportsPhase1WithSalt) {
+      return Math.min(params.vaultVanityMaxTries, params.shareOftVanityMaxTries)
+    }
+    return Math.min(
+      COMBINED_VANITY_VERSION_SEARCH_CAP,
+      params.vaultVanityMaxTries,
+      params.shareOftVanityMaxTries,
+    )
+  }
+  if (params.hasVaultPrefix) return params.vaultVanityMaxTries
+  if (params.hasShareSuffix) return params.shareOftVanityMaxTries
+  return 0
+}
+
+export function buildShareOftVanityUserWarning(params: {
+  shareOftVanitySuffix: string | null
+  vaultVanityPrefix: string | null
+  saltOverrideDisabled: boolean
+  versionSearchOutcome: DeploymentVanityVersionSearchOutcome
+}): string | null {
+  if (!params.saltOverrideDisabled) return null
+
+  const suffix = params.shareOftVanitySuffix ?? ''
+  const prefix = params.vaultVanityPrefix ?? ''
+
+  if (params.versionSearchOutcome === 'combined_match') {
+    return null
+  }
+
+  if (params.versionSearchOutcome === 'share_only_match') {
+    return (
+      `Share suffix ${suffix} matched via deployment-version search ` +
+      `(this batcher uses version strings instead of Phase-1 salt overrides). ` +
+      (prefix
+        ? `Vault prefix 0x${prefix} was not found in the same search window — vault address stays deterministic (best-effort).`
+        : '')
+    )
+  }
+
+  if (params.versionSearchOutcome === 'missed_defaults') {
+    return (
+      'Default vanity targets were not found in the current deployment-version search window. ' +
+      'Continuing with deterministic deployment addresses (best-effort).'
+    )
+  }
+
+  return null
+}

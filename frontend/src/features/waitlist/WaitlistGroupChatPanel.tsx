@@ -16,7 +16,7 @@ import { WaitlistGroupChatSurface } from './WaitlistGroupChatSurface'
 type WaitlistGroupChatPanelProps = {
   setupComplete: boolean
   signingReady: boolean
-  layout?: 'inline' | 'sidebar'
+  layout?: 'inline' | 'sidebar' | 'mobile'
 }
 
 export function WaitlistGroupChatPanel(props: WaitlistGroupChatPanelProps) {
@@ -57,7 +57,7 @@ function WaitlistGroupChatPanelBody({
 }: {
   signingReady: boolean
   statusQuery: ReturnType<typeof useWaitlistXmtpStatus>
-  layout: 'inline' | 'sidebar'
+  layout: 'inline' | 'sidebar' | 'mobile'
 }) {
   const { status: xmtpStatus } = useXmtp()
   const messagingReady = xmtpStatus === 'connected'
@@ -185,12 +185,14 @@ function WaitlistChatSection({
   layout = 'inline',
 }: {
   children: React.ReactNode
-  layout?: 'inline' | 'sidebar'
+  layout?: 'inline' | 'sidebar' | 'mobile'
 }) {
   const shellClass =
     layout === 'sidebar'
       ? 'flex h-full min-h-[320px] flex-col space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 lg:min-h-[min(72vh,640px)]'
-      : 'space-y-3 pt-1'
+      : layout === 'mobile'
+        ? 'flex min-h-[280px] flex-col space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 max-h-[min(55vh,480px)]'
+        : 'space-y-3 pt-1'
 
   return (
     <section aria-label="Waitlist group chat" className={shellClass}>
