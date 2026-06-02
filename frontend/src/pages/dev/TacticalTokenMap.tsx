@@ -1,9 +1,10 @@
-import { Billboard, Grid } from '@react-three/drei'
+import { Grid, useGLTF } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import * as THREE from 'three'
+import { MeshSurfaceSampler } from 'three/examples/jsm/math/MeshSurfaceSampler.js'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 
@@ -12,24 +13,21 @@ import { PageMeta } from '@/components/seo/PageMeta'
  *
  * Recreates the synthwave/tactical reference: a tilted grid plane to the
  * horizon, a glowing white perimeter ring, orange low-poly wireframe terrain,
- * and a central holographic "tower" on a gear/projector pad — except the
- * hologram is a real creator-coin token logo (defaults to AKITA). The logo is
- * keyed by luminance so its dark icon card drops out and only the subject
- * glows as a cyan hologram (scanlines + flicker + travelling scan bar).
+ * and a central rotating hologram on a gear/projector pad — here the hologram is
+ * a real 3D Shiba Inu model (Quaternius "Shiba Inu", CC0) projected as a cyan
+ * wireframe + fresnel surface with scanlines and a travelling scan band. The
+ * Shiba breed matches the AKITA token logo (a red/tan Shiba).
  *
- * Override target with `?token=0x..&symbol=TICKER&name=Display Name`.
+ * Override HUD labels with `?token=0x..&symbol=TICKER&name=Display Name`.
  *
- * Marketing-route safe: no wagmi / Privy hooks. The logo texture is loaded as a
- * same-origin image from `/api/token/image`.
+ * Marketing-route safe: no wagmi / Privy hooks. The model is a same-origin GLB
+ * at `/dev/akita-hunyuan.glb`.
  */
 
 const AKITA_TOKEN = '0x5b674196812451b7cec024fe9d22d2c0b172fa75'
-
-function tokenImageUrl(address: string, size = 512) {
-  // `style=raw` returns the creator artwork without the premium card frame —
-  // a cleaner source for the holographic projection.
-  return `/api/token/image?address=${address}&size=${size}&style=raw`
-}
+// Image-to-3D AKITA mesh generated from the token logo (Hunyuan3D-2.1, shape-only).
+const SHIBA_MODEL_URL = '/dev/akita-hunyuan.glb'
+useGLTF.preload(SHIBA_MODEL_URL)
 
 function shortAddr(a: string) {
   return a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a
@@ -65,31 +63,6 @@ function fbm(x: number, z: number) {
   return a
 }
 
-function useImageTexture(url: string) {
-  const [tex, setTex] = useState<THREE.Texture | null>(null)
-  useEffect(() => {
-    let active = true
-    const loader = new THREE.TextureLoader()
-    loader.setCrossOrigin('anonymous')
-    loader.load(
-      url,
-      (t) => {
-        if (!active) return
-        t.colorSpace = THREE.SRGBColorSpace
-        setTex(t)
-      },
-      undefined,
-      () => {
-        if (active) setTex(null)
-      },
-    )
-    return () => {
-      active = false
-    }
-  }, [url])
-  return tex
-}
-
 // ---------------------------------------------------------------------------
 // Scene pieces
 // ---------------------------------------------------------------------------
@@ -117,9 +90,9 @@ function TerrainRing() {
           Math.sin(ang * 3 - 1.2),
           Math.sin(ang * 5 + 2.0),
         )
-        const cluster = Math.pow(Math.max(0, lobes), 3)
-        const n = Math.pow(Math.max(0, fbm(x * 0.9 + 11, z * 0.9 + 7)), 1.6)
-        const h = env * (0.06 + 0.94 * cluster) * n * 2.6
+        const cluster = Math.pow(Math.max(0, lobes), 5)
+        const n = Math.pow(Math.max(0, fbm(x * 0.9 + 11, z * 0.9 + 7)), 2.0)
+        const h = env * (0.02 + 0.98 * cluster) * n * 2.1
         const idx = (ri * cols + ai) * 3
         pos[idx] = x
         pos[idx + 1] = h
@@ -149,9 +122,9 @@ function TerrainRing() {
     () =>
       new THREE.ShaderMaterial({
         uniforms: {
-          uColor: { value: new THREE.Color('#ff7d1f') },
-          uLow: { value: 0.05 },
-          uHigh: { value: 0.85 },
+          uColor: { value: new THREE.Color('#e8681a') },
+          uLow: { value: 0.08 },
+          uHigh: { value: 0.95 },
         },
         vertexShader: /* glsl */ `
           varying float vH;
@@ -168,7 +141,7 @@ function TerrainRing() {
           void main() {
             float a = smoothstep(uLow, uHigh, vH);
             if (a < 0.03) discard;
-            gl_FragColor = vec4(uColor * (0.45 + 0.8 * a), a);
+            gl_FragColor = vec4(uColor * (0.3 + 0.7 * a), a * 0.9);
           }
         `,
         wireframe: true,
@@ -185,8 +158,8 @@ function TerrainRing() {
 function PerimeterRing() {
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
-      <torusGeometry args={[4.65, 0.022, 8, 160]} />
-      <meshBasicMaterial color="#eaf4ff" toneMapped={false} />
+      <torusGeometry args={[4.65, 0.018, 8, 160]} />
+      <meshBasicMaterial color="#284a6e" transparent opacity={0.6} toneMapped={false} />
     </mesh>
   )
 }
@@ -206,143 +179,246 @@ function ProjectorPad() {
   return (
     <group position={[0, 0.05, 0]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[1.05, 0.018, 6, 96]} />
-        <meshBasicMaterial color="#dfeeff" toneMapped={false} />
+        <torusGeometry args={[1.05, 0.014, 6, 96]} />
+        <meshBasicMaterial color="#2c5a86" transparent opacity={0.55} toneMapped={false} />
       </mesh>
       {teeth.map((t, i) => (
         <mesh key={i} position={[t.x, 0, t.z]} rotation={[0, t.ry, 0]}>
           <boxGeometry args={[0.05, 0.02, 0.17]} />
-          <meshBasicMaterial color="#cfe6ff" toneMapped={false} />
+          <meshBasicMaterial color="#264f76" transparent opacity={0.55} toneMapped={false} />
         </mesh>
       ))}
     </group>
   )
 }
 
-const HOLO_VERT = /* glsl */ `
-  varying vec2 vUv;
+// Holographic point-cloud projection. Inspired by TSL/WebGPU node-based
+// particle holograms (e.g. hologram-particles.vercel.app), recreated on this
+// project's WebGL R3F stack: the GLB surface is sampled into ~48k glowing
+// points that shimmer, run a vertical scan sweep, and disperse/reform on scan.
+const PARTICLE_COUNT = 48000
+const SCAN_DURATION_MS = 1700
+
+const HOLO_POINTS_VERT = /* glsl */ `
+  uniform float uTime;
+  uniform float uSize;
+  uniform float uPixelRatio;
+  uniform float uUnit;       // model local height (jitter/disperse scale)
+  uniform float uDisperse;   // 0 assembled -> 1 fully scattered
+  uniform float uScanY;      // current scan sweep height (local space)
+  attribute vec3 aNormal;
+  attribute vec3 aRand;
+  attribute float aSeed;
+  varying float vGlow;
+  varying float vSeed;
+
   void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vSeed = aSeed;
+    vec3 pos = position;
+
+    // Idle shimmer: tiny breathing along the surface normal + lateral drift.
+    float flick = sin(uTime * 3.0 + aSeed * 50.0);
+    pos += aNormal * (0.012 * uUnit * flick);
+    pos.x += sin(uTime * 1.3 + aRand.x * 30.0) * 0.006 * uUnit;
+    pos.z += cos(uTime * 1.1 + aRand.z * 30.0) * 0.006 * uUnit;
+
+    // Continuous ambient drift: a slow, ever-present outward turbulence so the
+    // hologram feels alive even when no scan is running.
+    vec3 driftDir = normalize(aNormal + (aRand - 0.5));
+    float drift = (0.5 + 0.5 * sin(uTime * 0.7 + aSeed * 24.0));
+    pos += driftDir * drift * 0.03 * uUnit;
+
+    // Dispersion burst: scatter outward along normal + a random direction,
+    // staggered per particle so the cloud blows apart and reassembles.
+    float d = clamp(uDisperse - aSeed * 0.25, 0.0, 1.0);
+    vec3 dir = normalize(aNormal + (aRand - 0.5) * 1.4);
+    pos += dir * d * uUnit * (0.5 + aRand.y * 1.6);
+
+    // Vertical scan band: particles near the sweep line flare bright.
+    float scan = smoothstep(0.12 * uUnit, 0.0, abs(position.y - uScanY));
+
+    vGlow = 0.4 + flick * 0.28 + scan * 1.4;
+
+    vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+    gl_Position = projectionMatrix * mv;
+    float size = uSize * (0.45 + aRand.y * 0.85 + scan * 1.6);
+    gl_PointSize = clamp(size * uPixelRatio * (8.0 / -mv.z), 1.0, 9.0);
   }
 `
-const HOLO_FRAG = /* glsl */ `
-  uniform sampler2D uMap;
-  uniform float uTime;
+const HOLO_POINTS_FRAG = /* glsl */ `
   uniform vec3 uColor;
-  uniform float uOpacity;
-  varying vec2 vUv;
+  uniform vec3 uColor2;
+  varying float vGlow;
+  varying float vSeed;
   void main() {
-    vec4 tex = texture2D(uMap, vUv);
-    // Soft-feathered panel mask: fade all four edges so the projection reads
-    // as a floating hologram, not a hard rectangle.
-    float ex = smoothstep(0.0, 0.16, vUv.x) * smoothstep(1.0, 0.84, vUv.x);
-    float ey = smoothstep(0.0, 0.14, vUv.y) * smoothstep(1.0, 0.86, vUv.y);
-    float mask = ex * ey;
-    if (mask < 0.01) discard;
-    // monochrome hologram from photo luminance, with a glow floor
-    float lum = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
-    float tone = 0.28 + 1.05 * pow(lum, 0.92);
-    float scan = 0.5 + 0.5 * sin(vUv.y * 150.0 - uTime * 5.0);
-    float barPos = fract(uTime * 0.13);
-    float bar = smoothstep(0.05, 0.0, abs(vUv.y - barPos));
-    float flicker = 0.88 + 0.12 * sin(uTime * 26.0);
-    float intensity = (tone * (0.72 + 0.28 * scan) * flicker + bar * 0.32) * mask;
-    vec3 col = uColor * intensity;
-    float a = clamp(intensity, 0.0, 1.0) * uOpacity;
-    gl_FragColor = vec4(col, a);
+    vec2 uv = gl_PointCoord - 0.5;
+    float r = length(uv);
+    if (r > 0.5) discard;
+    float soft = smoothstep(0.5, 0.0, r);
+    float core = smoothstep(0.16, 0.0, r);
+    vec3 col = mix(uColor, uColor2, vSeed);
+    float a = (soft * 0.45 + core * 0.95) * clamp(vGlow, 0.0, 2.0);
+    gl_FragColor = vec4(col * (0.4 + vGlow), a);
   }
 `
 
-function HoloLogo({ texture }: { texture: THREE.Texture }) {
-  const matRef = useRef<THREE.ShaderMaterial>(null)
-  const uniforms = useMemo(
-    () => ({
-      uMap: { value: texture },
+function HoloDog({ scanTick }: { scanTick: number }) {
+  const spin = useRef<THREE.Group>(null)
+  const bob = useRef<THREE.Group>(null)
+  const burstStart = useRef<number>(-1)
+  const { scene } = useGLTF(SHIBA_MODEL_URL)
+
+  // Held in a ref (not useMemo) because the uniforms are mutated per-frame in
+  // useFrame; mutating a useMemo result trips react-hooks/immutability.
+  const materialRef = useRef<THREE.ShaderMaterial | null>(null)
+  const material = (materialRef.current ??= new THREE.ShaderMaterial({
+    uniforms: {
       uTime: { value: 0 },
-      uColor: { value: new THREE.Color('#62e0ff') },
-      uOpacity: { value: 1.85 },
-    }),
-    [texture],
-  )
+      uSize: { value: 2.6 },
+      uPixelRatio: { value: Math.min(window.devicePixelRatio || 1, 2) },
+      uUnit: { value: 1 },
+      uDisperse: { value: 0 },
+      uScanY: { value: 0 },
+      uColor: { value: new THREE.Color('#3fb6ff') },
+      uColor2: { value: new THREE.Color('#cdf6ff') },
+    },
+    vertexShader: HOLO_POINTS_VERT,
+    fragmentShader: HOLO_POINTS_FRAG,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+  }))
+
+  // Sample the GLB surface into a glowing point cloud + normalize to pad height.
+  const { geometry, offset, scale, unit, minY, maxY } = useMemo(() => {
+    const root = scene.clone(true)
+    root.updateMatrixWorld(true)
+    const meshes: THREE.Mesh[] = []
+    root.traverse((child) => {
+      const m = child as THREE.Mesh
+      if (m.isMesh && m.geometry) meshes.push(m)
+    })
+
+    const positions = new Float32Array(PARTICLE_COUNT * 3)
+    const normals = new Float32Array(PARTICLE_COUNT * 3)
+    const rands = new Float32Array(PARTICLE_COUNT * 3)
+    const seeds = new Float32Array(PARTICLE_COUNT)
+
+    // Distribute points across meshes weighted by vertex count.
+    const weights = meshes.map((m) => m.geometry.attributes.position!.count)
+    const totalW = weights.reduce((a, b) => a + b, 0) || 1
+
+    const tmpP = new THREE.Vector3()
+    const tmpN = new THREE.Vector3()
+    const nMat = new THREE.Matrix3()
+    let ptr = 0
+    meshes.forEach((m, i) => {
+      const n =
+        i === meshes.length - 1
+          ? PARTICLE_COUNT - ptr
+          : Math.floor((PARTICLE_COUNT * weights[i]!) / totalW)
+      const sampler = new MeshSurfaceSampler(m).build()
+      nMat.getNormalMatrix(m.matrixWorld)
+      for (let k = 0; k < n; k++) {
+        sampler.sample(tmpP, tmpN)
+        tmpP.applyMatrix4(m.matrixWorld)
+        tmpN.applyMatrix3(nMat).normalize()
+        const o = (ptr + k) * 3
+        positions[o] = tmpP.x
+        positions[o + 1] = tmpP.y
+        positions[o + 2] = tmpP.z
+        normals[o] = tmpN.x
+        normals[o + 1] = tmpN.y
+        normals[o + 2] = tmpN.z
+        rands[o] = Math.random()
+        rands[o + 1] = Math.random()
+        rands[o + 2] = Math.random()
+        seeds[ptr + k] = Math.random()
+      }
+      ptr += n
+    })
+
+    const box = new THREE.Box3()
+    const v = new THREE.Vector3()
+    for (let k = 0; k < PARTICLE_COUNT; k++) {
+      box.expandByPoint(v.set(positions[k * 3]!, positions[k * 3 + 1]!, positions[k * 3 + 2]!))
+    }
+    const size = new THREE.Vector3()
+    const center = new THREE.Vector3()
+    box.getSize(size)
+    box.getCenter(center)
+    const targetHeight = 2.2
+    const s = targetHeight / (size.y || 1)
+
+    const geom = new THREE.BufferGeometry()
+    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    geom.setAttribute('aNormal', new THREE.BufferAttribute(normals, 3))
+    geom.setAttribute('aRand', new THREE.BufferAttribute(rands, 3))
+    geom.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1))
+
+    return {
+      geometry: geom,
+      scale: s,
+      offset: [-center.x * s, -box.min.y * s, -center.z * s] as [number, number, number],
+      unit: size.y || 1,
+      minY: box.min.y,
+      maxY: box.max.y,
+    }
+  }, [scene])
+
+  useEffect(() => {
+    const m = materialRef.current
+    if (m) m.uniforms.uUnit!.value = unit
+  }, [unit])
+
+  // Kick off a disperse/reform burst whenever the scan button fires.
+  useEffect(() => {
+    if (scanTick > 0) burstStart.current = performance.now()
+  }, [scanTick])
+
   useFrame((state) => {
-    const u = matRef.current?.uniforms.uTime
-    if (u) u.value = state.clock.elapsedTime
+    const t = state.clock.elapsedTime
+    material.uniforms.uTime!.value = t
+
+    const range = maxY - minY || 1
+    let burst = 0
+    let scanY = minY + ((t * 0.35) % 1) * range // gentle idle sweep
+    if (burstStart.current >= 0) {
+      const p = (performance.now() - burstStart.current) / SCAN_DURATION_MS
+      if (p >= 1) {
+        burstStart.current = -1
+      } else {
+        burst = Math.sin(p * Math.PI) * 0.65 // rise then fall
+        scanY = minY + p * range // one fast top-to-bottom sweep
+      }
+    }
+    material.uniforms.uDisperse!.value = burst
+    material.uniforms.uScanY!.value = scanY
+
+    // Bias to a 3/4 side profile (most dog-readable) and spin slowly.
+    if (spin.current) spin.current.rotation.y = Math.PI * 0.5 + t * 0.18
+    if (bob.current) bob.current.position.y = 0.12 + Math.sin(t * 1.3) * 0.04
   })
+
   return (
-    <Billboard position={[0, 1.7, 0]}>
-      <mesh>
-        <planeGeometry args={[2.5, 2.5]} />
-        <shaderMaterial
-          ref={matRef}
-          uniforms={uniforms}
-          vertexShader={HOLO_VERT}
-          fragmentShader={HOLO_FRAG}
-          transparent
-          depthWrite={false}
-          side={THREE.DoubleSide}
-          blending={THREE.AdditiveBlending}
-          toneMapped={false}
-        />
-      </mesh>
-    </Billboard>
+    <group ref={bob} position={[0, 0.12, 0]}>
+      <group ref={spin}>
+        <group scale={scale} position={offset}>
+          <points geometry={geometry} material={material} />
+        </group>
+      </group>
+    </group>
   )
 }
 
-function HoloTower({ texture }: { texture: THREE.Texture | null }) {
-  const cage = useRef<THREE.Group>(null)
-  const root = useRef<THREE.Group>(null)
-  useFrame((state) => {
-    const t = state.clock.elapsedTime
-    if (cage.current) cage.current.rotation.y = t * 0.5
-    if (root.current) root.current.position.y = Math.sin(t * 1.4) * 0.05
-  })
+function HoloProjection({ scanTick }: { scanTick: number }) {
   return (
-    <group ref={root}>
+    <group>
       <ProjectorPad />
-      {/* projection beam */}
-      <mesh position={[0, 1.8, 0]}>
-        <cylinderGeometry args={[0.06, 0.85, 3.6, 36, 1, true]} />
-        <meshBasicMaterial
-          color="#39b9ff"
-          transparent
-          opacity={0.05}
-          side={THREE.DoubleSide}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-          toneMapped={false}
-        />
-      </mesh>
-      {/* rotating wireframe data tower */}
-      <group ref={cage}>
-        <mesh position={[0, 1.85, 0]}>
-          <cylinderGeometry args={[0.55, 0.55, 3.5, 6, 8, true]} />
-          <meshBasicMaterial
-            color="#3aa0ff"
-            wireframe
-            transparent
-            opacity={0.11}
-            toneMapped={false}
-          />
-        </mesh>
-      </group>
-      {/* the AKITA hologram itself (when texture is ready) */}
-      {texture ? (
-        <HoloLogo texture={texture} />
-      ) : (
-        <Billboard position={[0, 1.85, 0]}>
-          <mesh>
-            <planeGeometry args={[1.4, 1.4]} />
-            <meshBasicMaterial
-              color="#62e0ff"
-              transparent
-              opacity={0.25}
-              blending={THREE.AdditiveBlending}
-              toneMapped={false}
-            />
-          </mesh>
-        </Billboard>
-      )}
+      <Suspense fallback={null}>
+        <HoloDog scanTick={scanTick} />
+      </Suspense>
     </group>
   )
 }
@@ -398,43 +474,40 @@ function Rig({ pointerRef }: { pointerRef: React.RefObject<{ x: number; y: numbe
 function Scene({
   scanTick,
   pointerRef,
-  tokenUrl,
 }: {
   scanTick: number
   pointerRef: React.RefObject<{ x: number; y: number }>
-  tokenUrl: string
 }) {
-  const texture = useImageTexture(tokenUrl)
   return (
     <>
-      <color attach="background" args={['#02040a']} />
-      <fog attach="fog" args={['#02040a', 18, 44]} />
-      <ambientLight intensity={0.4} />
+      <color attach="background" args={['#010309']} />
+      <fog attach="fog" args={['#010309', 16, 46]} />
+      <ambientLight intensity={0.28} />
 
       <Grid
         position={[0, 0, 0]}
         infiniteGrid
         followCamera={false}
-        cellSize={0.55}
-        cellThickness={0.5}
-        cellColor="#143158"
-        sectionSize={2.75}
-        sectionThickness={1}
-        sectionColor="#2f6bff"
-        fadeDistance={52}
-        fadeStrength={2}
+        cellSize={0.5}
+        cellThickness={0.4}
+        cellColor="#0c1f3a"
+        sectionSize={2.5}
+        sectionThickness={0.8}
+        sectionColor="#1c4488"
+        fadeDistance={50}
+        fadeStrength={2.4}
       />
 
       <TerrainRing />
       <PerimeterRing />
-      <HoloTower texture={texture} />
+      <HoloProjection scanTick={scanTick} />
       <ScanRing scanTick={scanTick} />
 
       <Rig pointerRef={pointerRef} />
 
       <EffectComposer>
-        <Bloom intensity={1.05} luminanceThreshold={0.18} luminanceSmoothing={0.22} mipmapBlur />
-        <Vignette offset={0.22} darkness={0.86} />
+        <Bloom intensity={0.7} luminanceThreshold={0.32} luminanceSmoothing={0.2} mipmapBlur />
+        <Vignette offset={0.2} darkness={0.95} />
       </EffectComposer>
     </>
   )
@@ -453,7 +526,6 @@ export function TacticalTokenMap() {
   const pointerRef = useRef({ x: 0, y: 0 })
   const [scanTick, setScanTick] = useState(0)
   const [scanning, setScanning] = useState(false)
-  const tokenUrl = useMemo(() => tokenImageUrl(token), [token])
 
   const nodes = useMemo(
     () => [
@@ -494,7 +566,7 @@ export function TacticalTokenMap() {
         dpr={[1, 2]}
         camera={{ position: [0, 7, 12.5], fov: 36, near: 0.1, far: 100 }}
       >
-        <Scene scanTick={scanTick} pointerRef={pointerRef} tokenUrl={tokenUrl} />
+        <Scene scanTick={scanTick} pointerRef={pointerRef} />
       </Canvas>
 
       {/* CRT scanlines + vignette overlay */}

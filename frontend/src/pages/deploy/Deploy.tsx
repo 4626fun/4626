@@ -1,11 +1,21 @@
-import { Link } from 'react-router-dom'
+import { Suspense, lazy } from 'react'
 
-import { Button } from '@/components/ui/Button'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { useScreenshotReady } from '@/lib/ui/screenshotMode'
 
-const CARD_BASE =
-  'vault-surface vault-hover-lift rounded-2xl p-6 sm:p-8 border border-[rgb(var(--vault-border-strong)/0.6)]'
+const DeployChoiceCards = lazy(() => import('./DeployChoiceCards'))
+
+const FALLBACK_CARD =
+  'vault-surface vault-hover-lift rounded-2xl p-6 sm:p-8 border border-[rgb(var(--vault-border-strong)/0.6)] min-h-[320px]'
+
+function ChoiceFallback() {
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2" aria-hidden>
+      <div className={FALLBACK_CARD} />
+      <div className={FALLBACK_CARD} />
+    </div>
+  )
+}
 
 export function Deploy() {
   useScreenshotReady(true)
@@ -29,37 +39,40 @@ export function Deploy() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <article className={CARD_BASE}>
-                <div className="space-y-2">
-                  <div className="text-xs uppercase tracking-[0.18em] text-brand-primary/80">1. Coin</div>
-                  <h2 className="text-2xl font-medium text-white">Launch Creator Coin</h2>
-                  <p className="text-sm text-zinc-400">
-                    Launch your Zora Creator Coin on Base with sponsored gas and metadata tooling.
-                  </p>
-                </div>
-                <div className="mt-5">
-                  <Button variant="primary" asChild>
-                    <Link to="/deploy/coin">Go To Coin</Link>
-                  </Button>
-                </div>
-              </article>
+            <Suspense fallback={<ChoiceFallback />}>
+              <DeployChoiceCards />
+            </Suspense>
 
-              <article className={CARD_BASE}>
-                <div className="space-y-2">
-                  <div className="text-xs uppercase tracking-[0.18em] text-brand-primary/80">2. Vault</div>
-                  <h2 className="text-2xl font-medium text-white">Deploy Vault</h2>
-                  <p className="text-sm text-zinc-400">
-                    Use your Creator Coin to deploy the full vault stack and continue launch operations.
-                  </p>
-                </div>
-                <div className="mt-5">
-                  <Button variant="primary" asChild>
-                    <Link to="/deploy/vault">Go To Vault</Link>
-                  </Button>
-                </div>
-              </article>
-            </div>
+            <p className="font-mono text-[11px] leading-relaxed text-zinc-600">
+              3D card interaction adapted from{' '}
+              <a
+                href="https://experiments.thisiswhitespace.com/trace-cards"
+                target="_blank"
+                rel="noreferrer"
+                className="text-zinc-500 underline decoration-zinc-700 underline-offset-2 transition-colors hover:text-brand-primary"
+              >
+                Trace Cards 3D
+              </a>{' '}
+              by{' '}
+              <a
+                href="https://x.com/kaolti/status/2059421425438441583"
+                target="_blank"
+                rel="noreferrer"
+                className="text-zinc-500 underline decoration-zinc-700 underline-offset-2 transition-colors hover:text-brand-primary"
+              >
+                @kaolti
+              </a>{' '}
+              — built from the{' '}
+              <a
+                href="https://9394465493527.gumroad.com/l/ejmqn"
+                target="_blank"
+                rel="noreferrer"
+                className="text-zinc-500 underline decoration-zinc-700 underline-offset-2 transition-colors hover:text-brand-primary"
+              >
+                licensed Cursor transcript
+              </a>{' '}
+              we purchased.
+            </p>
           </div>
         </div>
       </section>

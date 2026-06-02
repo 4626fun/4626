@@ -278,3 +278,4 @@ docs/4626-control-plane-visual.html
 test-ledger/
 kpr/test-ledger/
 
+.venv-3d/
