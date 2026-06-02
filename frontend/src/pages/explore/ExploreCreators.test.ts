@@ -62,10 +62,15 @@ vi.mock('@/components/explore/TokenRow', () => ({
   TokenRowSkeleton: () => React.createElement('div', null, 'skeleton'),
 }))
 
-vi.mock('@/components/explore/tableColumns', () => ({
-  getExploreColumns: () => [],
-  getHorizontalScrollStops: () => [0],
-}))
+vi.mock('@/components/explore/tableColumns', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/components/explore/tableColumns')>()
+  return {
+    ...actual,
+    getExploreColumns: () => [],
+    getHorizontalScrollStops: () => [0],
+    EXPLORE_COLLAPSED_IDENTITY_WIDTH_PX: actual.EXPLORE_COLLAPSED_IDENTITY_WIDTH_PX ?? 280,
+  }
+})
 
 vi.mock('@/hooks/useMigratedCoins', () => ({
   useMigratedCoins: () => ({ migratedCoins: new Set<string>() }),

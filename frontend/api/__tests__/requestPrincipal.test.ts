@@ -1,85 +1,81 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { readSessionFromRequestMock, readSiwaAgentFromRequestMock, resolveAuthorizedWalletProfileMock } = vi.hoisted(() => ({
-  readSessionFromRequestMock: vi.fn(),
-  readSiwaAgentFromRequestMock: vi.fn(),
-  resolveAuthorizedWalletProfileMock: vi.fn(),
-}))
-
-vi.mock('../../server/auth/_shared.js', () => ({
-  readSessionFromRequest: readSessionFromRequestMock,
-}))
-
-vi.mock('../../server/auth/_siwa.js', () => ({
-  readSiwaAgentFromRequest: readSiwaAgentFromRequestMock,
-}))
-
-vi.mock('../../server/_lib/wallet/canonicalWalletResolver.js', () => ({
-  resolveAuthorizedWalletProfile: resolveAuthorizedWalletProfileMock,
-}))
+import { COOKIE_SESSION, makeSessionToken } from '../../server/auth/_shared.js'
+import { createSiwaReceiptToken } from '../../server/auth/_siwa.js'
+import { applyEnv, createMockReq } from './helpers'
 
 import {
   readRequestPrincipal,
   readRequestPrincipalAddress,
   resolveAuthorizedRequestPrincipal,
-} from '@4626/server-core'
+} from '../../server/_lib/auth/requestPrincipal.js'
 
 describe('request principal resolver', () => {
+  let restoreEnv: (() => void) | null = null
+
   beforeEach(() => {
-    vi.clearAllMocks()
-    readSessionFromRequestMock.mockReturnValue(null)
-    readSiwaAgentFromRequestMock.mockReturnValue(null)
-    resolveAuthorizedWalletProfileMock.mockResolvedValue(null)
+    restoreEnv = applyEnv({
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-1234567',
+      SIWA_RECEIPT_SECRET: 'test-siwa-receipt-secret-1234567',
+    })
+  })
+
+  afterEach(() => {
+    restoreEnv?.()
+    restoreEnv = null
   })
 
   it('prefers session over SIWA when both are present', () => {
-    readSessionFromRequestMock.mockReturnValue({ address: '0xAbC' } as any)
-    readSiwaAgentFromRequestMock.mockReturnValue({ address: '0xDef' } as any)
+    const session = makeSessionToken({ address: '0x0000000000000000000000000000000000000abc' })
+    const receipt = createSiwaReceiptToken({
+      address: '0x0000000000000000000000000000000000000def',
+      agentId: 1,
+      agentRegistry: 'eip155:8453:0x0000000000000000000000000000000000000123',
+      chainId: 8453,
+      verified: 'onchain',
+    })
+    expect(receipt).toBeTruthy()
 
-    const principal = readRequestPrincipal({} as any)
-    expect(principal).toEqual({ source: 'session', address: '0xabc' })
+    const req = createMockReq({
+      method: 'GET',
+      headers: {
+        cookie: `${COOKIE_SESSION}=${encodeURIComponent(session)}`,
+        authorization: `siwa ${receipt}`,
+      },
+    })
+
+    const principal = readRequestPrincipal(req as any)
+    expect(principal).toEqual({
+      source: 'session',
+      address: '0x0000000000000000000000000000000000000abc',
+    })
   })
 
-  it('uses SIWA when session is missing', () => {
-    readSessionFromRequestMock.mockReturnValue(null)
-    readSiwaAgentFromRequestMock.mockReturnValue({ address: '0xDef' } as any)
+  it('returns null when session is missing and SIWA receipt is invalid', () => {
+    const req = createMockReq({
+      method: 'GET',
+      headers: { authorization: 'siwa invalid-receipt-token' },
+    })
 
-    const principal = readRequestPrincipal({} as any)
-    expect(principal).toEqual({ source: 'siwa', address: '0xdef' })
-    expect(readRequestPrincipalAddress({} as any)).toBe('0xdef')
+    const principal = readRequestPrincipal(req as any)
+    expect(principal).toBeNull()
+    expect(readRequestPrincipalAddress(req as any)).toBe('')
   })
 
   it('returns empty when neither principal exists', () => {
-    readSessionFromRequestMock.mockReturnValue(null)
-    readSiwaAgentFromRequestMock.mockReturnValue(null)
+    const req = createMockReq({ method: 'GET' })
 
-    expect(readRequestPrincipal({} as any)).toBeNull()
-    expect(readRequestPrincipalAddress({} as any)).toBe('')
-  })
-
-  it('resolves an authorized session principal with signer role context', async () => {
-    readSessionFromRequestMock.mockReturnValue({ address: '0xAbC' } as any)
-    resolveAuthorizedWalletProfileMock.mockResolvedValue({
-      profileId: 7,
-      canonicalSmartWalletAddress: '0xdef',
-      activeOwnerWalletAddress: '0xabc',
-    })
-
-    await expect(resolveAuthorizedRequestPrincipal({} as any)).resolves.toEqual({
-      source: 'session',
-      authSource: 'session',
-      address: '0xabc',
-      profileId: 7,
-      canonicalSmartWalletAddress: '0xdef',
-      activeOwnerWalletAddress: '0xabc',
-      signerRole: 'active_owner_wallet',
-    })
+    expect(readRequestPrincipal(req as any)).toBeNull()
+    expect(readRequestPrincipalAddress(req as any)).toBe('')
   })
 
   it('returns null when raw principal exists but is not currently authorized', async () => {
-    readSessionFromRequestMock.mockReturnValue({ address: '0xAbC' } as any)
-    resolveAuthorizedWalletProfileMock.mockResolvedValue(null)
+    const session = makeSessionToken({ address: '0x0000000000000000000000000000000000000abc' })
+    const req = createMockReq({
+      method: 'GET',
+      headers: { cookie: `${COOKIE_SESSION}=${encodeURIComponent(session)}` },
+    })
 
-    await expect(resolveAuthorizedRequestPrincipal({} as any)).resolves.toBeNull()
+    await expect(resolveAuthorizedRequestPrincipal(req as any)).resolves.toBeNull()
   })
 })

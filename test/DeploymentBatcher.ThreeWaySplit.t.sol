@@ -41,26 +41,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
 
         vault = new MockOwnableVaultForPhase3Bounds(address(this));
         DeploymentBatcherFixture deployer = new DeploymentBatcherFixture();
-        DeploymentBatcherFixture.BatcherConfig memory cfg = DeploymentBatcherFixture.BatcherConfig({
-            registry: makeAddr("registry"),
-            bytecodeStore: makeAddr("bytecodeStore"),
-            create2Deployer: makeAddr("create2Deployer"),
-            protocolTreasury: protocolTreasury,
-            protocolAutomation: protocolAutomation,
-            poolManager: makeAddr("poolManager"),
-            taxHook: makeAddr("taxHook"),
-            chainlinkEthUsd: makeAddr("chainlinkEthUsd"),
-            vaultActivationBatcher: makeAddr("vaultActivationBatcher"),
-            lotteryManager: makeAddr("lotteryManager"),
-            permit2: makeAddr("permit2"),
-            usdc: makeAddr("usdc"),
-            uniswapV3Factory: makeAddr("uniswapV3Factory"),
-            uniswapRouter: makeAddr("uniswapRouter"),
-            ajnaFactory: makeAddr("ajnaFactory"),
-            vaultCoreModule: makeAddr("vaultCoreModule"),
-            vaultStrategiesModule: makeAddr("vaultStrategiesModule"),
-            vaultAdminModule: makeAddr("vaultAdminModule")
-        });
+        DeploymentBatcherFixture.BatcherConfig memory cfg = _defaultBatcherConfig();
         (batcher,) = deployer.deployBatcher(cfg);
         rolePolicyManager = new VaultRolePolicyManager(address(this));
         vault.setManagement(address(batcher));
@@ -339,5 +320,26 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
     function _seedPendingAuctionAmount(bytes32 baseSalt, uint256 amount) internal {
         bytes32 pendingBase = keccak256(abi.encode(baseSalt, uint256(PENDING_AUCTIONS_SLOT)));
         vm.store(address(batcher), bytes32(uint256(pendingBase) + 2), bytes32(amount));
+    }
+
+    function _defaultBatcherConfig() internal returns (DeploymentBatcherFixture.BatcherConfig memory cfg) {
+        cfg.registry = makeAddr("registry");
+        cfg.bytecodeStore = makeAddr("bytecodeStore");
+        cfg.create2Deployer = makeAddr("create2Deployer");
+        cfg.protocolTreasury = protocolTreasury;
+        cfg.protocolAutomation = protocolAutomation;
+        cfg.poolManager = makeAddr("poolManager");
+        cfg.taxHook = makeAddr("taxHook");
+        cfg.chainlinkEthUsd = makeAddr("chainlinkEthUsd");
+        cfg.vaultActivationBatcher = makeAddr("vaultActivationBatcher");
+        cfg.lotteryManager = makeAddr("lotteryManager");
+        cfg.permit2 = makeAddr("permit2");
+        cfg.usdc = makeAddr("usdc");
+        cfg.uniswapV3Factory = makeAddr("uniswapV3Factory");
+        cfg.uniswapRouter = makeAddr("uniswapRouter");
+        cfg.ajnaFactory = makeAddr("ajnaFactory");
+        cfg.vaultCoreModule = makeAddr("vaultCoreModule");
+        cfg.vaultStrategiesModule = makeAddr("vaultStrategiesModule");
+        cfg.vaultAdminModule = makeAddr("vaultAdminModule");
     }
 }

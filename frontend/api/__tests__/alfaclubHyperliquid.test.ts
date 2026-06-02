@@ -77,13 +77,21 @@ describe('hyperliquid — getClearinghouseState', () => {
       accountValueUsd: 1234.56,
       totalNtlPosUsd: 500,
       totalRawUsdUsd: 500.5,
+      crossAccountValueUsd: null,
+      withdrawableUsd: null,
     })
   })
 
-  it('returns null when the response is missing marginSummary', async () => {
+  it('returns a nullable state object when marginSummary is missing', async () => {
     restore = mockFetchOnce({ body: { unexpected: 'shape' } })
     const state = await getClearinghouseState(TEST_ADDR)
-    expect(state).toBeNull()
+    expect(state).toEqual({
+      accountValueUsd: null,
+      totalNtlPosUsd: null,
+      totalRawUsdUsd: null,
+      crossAccountValueUsd: null,
+      withdrawableUsd: null,
+    })
   })
 
   it('returns null when the response is not OK', async () => {

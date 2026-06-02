@@ -51,8 +51,8 @@ const hasAlfaClubPrivyRefresh = !!(process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN
 const hasAlfaClubBootstrap = hasAlfaClubJwt || (hasAlfaClubPrivyAccess && hasAlfaClubPrivyRefresh)
 
 // === Hermit-specific ===
-const hasPinataEndpoint = !!(process.env.HERMIT_PINATA_CHAT_ENDPOINT ?? '').trim()
-const hasPinataBearer = !!(process.env.HERMIT_PINATA_BEARER_TOKEN ?? '').trim()
+const hasHermitEndpoint = !!(process.env.HERMIT_AGENT_CHAT_ENDPOINT ?? '').trim()
+const hasHermitBearer = !!(process.env.HERMIT_AGENT_BEARER_TOKEN ?? '').trim()
 const hasHermitRooms = !!(process.env.ALFACLUB_HERMIT_COMMAND_ROOMS ?? '').trim() || !!(process.env.ALFACLUB_CHAT_ROOM_ID ?? '').trim()
 
 // === Watcher-specific (Telegram) ===
@@ -79,7 +79,7 @@ if (!hasAlfaClubJwt && hasAlfaClubPrivyAccess && hasAlfaClubPrivyRefresh) {
 }
 
 console.log('\n--- 2. Hermit Creative Agent (hermit.4626.fun) ---')
-check('HERMIT_PINATA_CHAT_ENDPOINT + BEARER_TOKEN', hasPinataEndpoint && hasPinataBearer, false)
+check('HERMIT_AGENT_CHAT_ENDPOINT + BEARER_TOKEN', hasHermitEndpoint && hasHermitBearer, false)
 check('ALFACLUB_HERMIT_COMMAND_ROOMS (or ALFACLUB_CHAT_ROOM_ID) includes 1659', hasHermitRooms, false)
 console.log('   (Recommended: ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED=1 on this service only)')
 
@@ -130,9 +130,9 @@ const hermitBlock = [
   `ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN=${process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN ?? ''}`,
   `ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN=${process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN ?? ''}`,
   '',
-  '# Creative brain',
-  `HERMIT_PINATA_CHAT_ENDPOINT=${process.env.HERMIT_PINATA_CHAT_ENDPOINT ?? ''}`,
-  `HERMIT_PINATA_BEARER_TOKEN=${process.env.HERMIT_PINATA_BEARER_TOKEN ?? ''}`,
+  '# Creative brain (first-party /api/hermit/draft via AI Gateway)',
+  `HERMIT_AGENT_CHAT_ENDPOINT=${process.env.HERMIT_AGENT_CHAT_ENDPOINT ?? 'https://app.4626.fun/api/hermit/draft'}`,
+  `HERMIT_AGENT_BEARER_TOKEN=${process.env.HERMIT_AGENT_BEARER_TOKEN ?? ''}`,
   '',
   '# Room targeting',
   `ALFACLUB_HERMIT_COMMAND_ROOMS=${process.env.ALFACLUB_HERMIT_COMMAND_ROOMS ?? '1659'}`,

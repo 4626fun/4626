@@ -72,6 +72,7 @@ import { LaunchCoinCard } from '@/features/waitlist/LaunchCoinCard'
 import { CONTRACTS } from '@/config/contracts'
 import { wagmiConfig } from '@/config/wagmi'
 import {
+  BASE_DEFAULTS,
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
   SPLIT_PHASE1_PHASE3_HELPER,
   isDeprecatedCreatorVaultBatcherAddress,
@@ -466,6 +467,10 @@ type DeployRuntimeConfigResponse = {
   zoraToken: Address | null
   payoutRouterZoraWethFee: number
   payoutRouterWethCreatorFee: number
+  impairmentClaims: Address | null
+  impairmentRecoveryEscrow: Address | null
+  impairmentGuardian: Address | null
+  impairmentChallengeWindowSeconds: number | null
 }
 
 type RolePolicyRuleLabel = 'any' | 'must_equal_owner' | 'must_be_allowlisted' | 'unknown'
@@ -1297,6 +1302,13 @@ const CHARM_FACTORY_ABI = [
 const CREATOR_VAULT_ADMIN_ABI = [
   {
     type: 'function',
+    name: 'management',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
     name: 'burnStream',
     stateMutability: 'view',
     inputs: [],
@@ -1341,6 +1353,86 @@ const CREATOR_VAULT_ADMIN_ABI = [
     name: 'deployToStrategies',
     stateMutability: 'nonpayable',
     inputs: [],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'impairmentGuardian',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'impairmentClaims',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'impairmentRecoveryEscrow',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'impairmentChallengeWindow',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint64' }],
+  },
+  {
+    type: 'function',
+    name: 'setImpairmentGuardian',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'guardian', type: 'address' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setImpairmentClaims',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'claims', type: 'address' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setImpairmentRecoveryEscrow',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'escrow', type: 'address' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setImpairmentChallengeWindow',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'window', type: 'uint64' }],
+    outputs: [],
+  },
+] as const
+
+const IMPAIRMENT_AUX_OWNED_ABI = [
+  {
+    type: 'function',
+    name: 'owner',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'vault',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'setVault',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'vault_', type: 'address' }],
     outputs: [],
   },
 ] as const
@@ -4623,6 +4715,26 @@ function DeployVaultBatcher({
         parseUniswapV3Fee(runtimeConfig?.payoutRouterZoraWethFee) ?? DEFAULT_PAYOUT_ROUTER_ZORA_WETH_FEE
       const payoutRouterWethCreatorFee =
         parseUniswapV3Fee(runtimeConfig?.payoutRouterWethCreatorFee) ?? DEFAULT_PAYOUT_ROUTER_WETH_CREATOR_FEE
+      const impairmentClaimsAddress = normalizeAddressLike(
+        runtimeConfig?.impairmentClaims ?? (CONTRACTS as any).impairmentClaims ?? null,
+      )
+      const impairmentRecoveryEscrowAddress = normalizeAddressLike(
+        runtimeConfig?.impairmentRecoveryEscrow ?? (CONTRACTS as any).impairmentRecoveryEscrow ?? null,
+      )
+      const impairmentGuardianAddress = normalizeAddressLike(
+        runtimeConfig?.impairmentGuardian ?? (CONTRACTS as any).impairmentGuardian ?? null,
+      )
+      const configuredImpairmentChallengeWindowSeconds = (() => {
+        const raw = runtimeConfig?.impairmentChallengeWindowSeconds
+        if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) return Math.floor(raw)
+        if (raw == null) return BASE_DEFAULTS.impairmentChallengeWindowSeconds
+        return null
+      })()
+      if (Boolean(impairmentClaimsAddress) !== Boolean(impairmentRecoveryEscrowAddress)) {
+        throw new Error(
+          'Impairment config is incomplete. Configure both impairment claims and recovery escrow addresses.',
+        )
+      }
       if (!publicClient) throw new Error('Network client not ready')
       const vaultAuxiliaryDeployBatcher = normalizeAddressLike(CONTRACTS.vaultAuxiliaryDeployBatcher)
       if (
@@ -5097,6 +5209,177 @@ function DeployVaultBatcher({
           args: [minimumTotalIdle],
         }),
       } as const
+
+      const impairmentPhase3Calls: Array<{ target: Address; value: bigint; data: Hex }> = []
+      const currentVaultImpairmentConfig = await (async () => {
+        try {
+          const [management, guardian, claims, escrow, challengeWindow] = await Promise.all([
+            publicClient.readContract({
+              address: expected.vault,
+              abi: CREATOR_VAULT_ADMIN_ABI,
+              functionName: 'management',
+            }),
+            publicClient.readContract({
+              address: expected.vault,
+              abi: CREATOR_VAULT_ADMIN_ABI,
+              functionName: 'impairmentGuardian',
+            }),
+            publicClient.readContract({
+              address: expected.vault,
+              abi: CREATOR_VAULT_ADMIN_ABI,
+              functionName: 'impairmentClaims',
+            }),
+            publicClient.readContract({
+              address: expected.vault,
+              abi: CREATOR_VAULT_ADMIN_ABI,
+              functionName: 'impairmentRecoveryEscrow',
+            }),
+            publicClient.readContract({
+              address: expected.vault,
+              abi: CREATOR_VAULT_ADMIN_ABI,
+              functionName: 'impairmentChallengeWindow',
+            }),
+          ])
+          return {
+            management: normalizeAddressLike(management) ?? ZERO_ADDRESS,
+            guardian: normalizeAddressLike(guardian) ?? ZERO_ADDRESS,
+            claims: normalizeAddressLike(claims) ?? ZERO_ADDRESS,
+            escrow: normalizeAddressLike(escrow) ?? ZERO_ADDRESS,
+            challengeWindow:
+              typeof challengeWindow === 'bigint'
+                ? Number(challengeWindow)
+                : Number(challengeWindow ?? BASE_DEFAULTS.impairmentChallengeWindowSeconds),
+          }
+        } catch {
+          return {
+            management: ZERO_ADDRESS,
+            guardian: ZERO_ADDRESS,
+            claims: ZERO_ADDRESS,
+            escrow: ZERO_ADDRESS,
+            challengeWindow: BASE_DEFAULTS.impairmentChallengeWindowSeconds,
+          }
+        }
+      })()
+      if (
+        impairmentClaimsAddress &&
+        !sameAddress(currentVaultImpairmentConfig.claims, impairmentClaimsAddress)
+      ) {
+        impairmentPhase3Calls.push({
+          target: expected.vault,
+          value: 0n,
+          data: encodeFunctionData({
+            abi: CREATOR_VAULT_ADMIN_ABI,
+            functionName: 'setImpairmentClaims',
+            args: [impairmentClaimsAddress],
+          }),
+        })
+      }
+      if (
+        impairmentRecoveryEscrowAddress &&
+        !sameAddress(currentVaultImpairmentConfig.escrow, impairmentRecoveryEscrowAddress)
+      ) {
+        impairmentPhase3Calls.push({
+          target: expected.vault,
+          value: 0n,
+          data: encodeFunctionData({
+            abi: CREATOR_VAULT_ADMIN_ABI,
+            functionName: 'setImpairmentRecoveryEscrow',
+            args: [impairmentRecoveryEscrowAddress],
+          }),
+        })
+      }
+      if (
+        impairmentGuardianAddress &&
+        !sameAddress(currentVaultImpairmentConfig.guardian, impairmentGuardianAddress)
+      ) {
+        impairmentPhase3Calls.push({
+          target: expected.vault,
+          value: 0n,
+          data: encodeFunctionData({
+            abi: CREATOR_VAULT_ADMIN_ABI,
+            functionName: 'setImpairmentGuardian',
+            args: [impairmentGuardianAddress],
+          }),
+        })
+      }
+      if (
+        configuredImpairmentChallengeWindowSeconds !== null &&
+        configuredImpairmentChallengeWindowSeconds > 0 &&
+        currentVaultImpairmentConfig.challengeWindow !== configuredImpairmentChallengeWindowSeconds
+      ) {
+        const challengeWindowCallData = encodeFunctionData({
+          abi: CREATOR_VAULT_ADMIN_ABI,
+          functionName: 'setImpairmentChallengeWindow',
+          args: [BigInt(configuredImpairmentChallengeWindowSeconds)],
+        })
+        const canSetChallengeWindow = await (async () => {
+          try {
+            await publicClient.call({
+              to: expected.vault,
+              data: challengeWindowCallData,
+              account: owner,
+            })
+            return true
+          } catch {
+            return false
+          }
+        })()
+        if (!canSetChallengeWindow) {
+          throw new Error(
+            `Cannot set impairment challenge window from ${shortAddress(owner)}. ` +
+              `Current management is ${shortAddress(currentVaultImpairmentConfig.management)}.`,
+          )
+        }
+        impairmentPhase3Calls.push({
+          target: expected.vault,
+          value: 0n,
+          data: challengeWindowCallData,
+        })
+      }
+      const ensureImpairmentAuxVaultLinkCall = async (label: 'claims' | 'escrow', target: Address) => {
+        let currentOwner = ZERO_ADDRESS
+        let linkedVault = ZERO_ADDRESS
+        try {
+          const [ownerRead, vaultRead] = await Promise.all([
+            publicClient.readContract({
+              address: target,
+              abi: IMPAIRMENT_AUX_OWNED_ABI,
+              functionName: 'owner',
+            }),
+            publicClient.readContract({
+              address: target,
+              abi: IMPAIRMENT_AUX_OWNED_ABI,
+              functionName: 'vault',
+            }),
+          ])
+          currentOwner = normalizeAddressLike(ownerRead) ?? ZERO_ADDRESS
+          linkedVault = normalizeAddressLike(vaultRead) ?? ZERO_ADDRESS
+        } catch {
+          throw new Error(`Cannot read impairment ${label} ownership/vault state at ${target}.`)
+        }
+        if (sameAddress(linkedVault, expected.vault)) return
+        if (!sameAddress(currentOwner, owner)) {
+          throw new Error(
+            `Impairment ${label} contract owner is ${shortAddress(currentOwner)} but deploy owner is ${shortAddress(owner)}. ` +
+              `Transfer ownership or update runtime impairment contract addresses before deploy.`,
+          )
+        }
+        impairmentPhase3Calls.push({
+          target,
+          value: 0n,
+          data: encodeFunctionData({
+            abi: IMPAIRMENT_AUX_OWNED_ABI,
+            functionName: 'setVault',
+            args: [expected.vault],
+          }),
+        })
+      }
+      if (impairmentClaimsAddress) {
+        await ensureImpairmentAuxVaultLinkCall('claims', impairmentClaimsAddress)
+      }
+      if (impairmentRecoveryEscrowAddress) {
+        await ensureImpairmentAuxVaultLinkCall('escrow', impairmentRecoveryEscrowAddress)
+      }
 
       const vaultDeployToStrategiesCall = {
         target: expected.vault,
@@ -6003,6 +6286,8 @@ function DeployVaultBatcher({
             getAddress(expectedCreate2Deployer).toLowerCase(),
             getAddress(expected.vault).toLowerCase(),
             getAddress(expectedPayoutRouter).toLowerCase(),
+            ...(impairmentClaimsAddress ? [getAddress(impairmentClaimsAddress).toLowerCase()] : []),
+            ...(impairmentRecoveryEscrowAddress ? [getAddress(impairmentRecoveryEscrowAddress).toLowerCase()] : []),
           ])
           for (const c of calls) {
             const to = getAddress(c.target).toLowerCase()
@@ -6035,6 +6320,7 @@ function DeployVaultBatcher({
           vaultSetMinimumIdleCall,
           // Apply 30/30/30 from the 90% deployable bucket; keep 10% idle.
           vaultDeployToStrategiesCall,
+          ...impairmentPhase3Calls,
           ...phase2Create2Calls,
           ...phase2ConfigCalls,
         ]

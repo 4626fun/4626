@@ -23,9 +23,18 @@ This runbook covers the 4626 `Arena` control lane exposed through Hermit command
   - `ARENA_ENABLED`
   - `ARENA_TRADING_ENABLED`
   - `ARENA_DRY_RUN`
+  - `ARENA_AGENT_ID`
+  - `ARENA_AGENT_WALLET_ADDRESS`
+  - `ARENA_HL_API_WALLET_ADDRESS` (optional)
   - `ARENA_DGCLAW_DIR`
   - optional `ARENA_ALLOWED_ROOM_IDS`
   - optional `ARENA_ASSET_ALLOWLIST`
+
+## Active 4626 Arena identity (akitai)
+
+- Control room: `1659`
+- Arena Agent ID: `019e82af-2e66-7645-af23-69e9f14351f4`
+- Arena V2 wallet: `0x30068c6bccf43e9eb5cdb68fb978f32f744d870c`
 
 ## Migration (Legacy Agent -> V2 wallet)
 

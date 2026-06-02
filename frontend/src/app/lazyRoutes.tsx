@@ -248,4 +248,8 @@ export const MetaballOsProbe = lazyNamed(
   () => import('../pages/dev/MetaballOsProbe'),
   'MetaballOsProbe',
 )
+export const TacticalTokenMap = lazyNamed(
+  () => import('../pages/dev/TacticalTokenMap'),
+  'TacticalTokenMap',
+)
 export const AmoeQuickTasks = lazyNamed(() => import('../pages/AmoeQuickTasks'), 'AmoeQuickTasks')

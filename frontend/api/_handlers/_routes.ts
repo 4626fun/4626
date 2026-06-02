@@ -32,6 +32,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   // 'agent/process': () => import('./agent/_process.js'),
   'token/image': () => import('./token/_image.js'),
   'token/hermit-avatar': () => import('./token/_hermitAvatar.js'),
+  'hermit/draft': () => import('./hermit/_draft.js'),
   'telegram/webhook': () => import('./telegram/_webhook.js'),
   'telegram/hermit-webhook': () => import('./telegram/_hermit-webhook.js'),
 

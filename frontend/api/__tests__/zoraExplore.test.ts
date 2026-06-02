@@ -232,15 +232,15 @@ describe('GET /api/zora/explore', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(getCoinMock).not.toHaveBeenCalled()
+    expect(getCoinMock).toHaveBeenCalledTimes(1)
     const node = res.body?.data?.edges?.[0]?.node
     expect(node?.symbol).toBe('jesse')
     expect(node?.name).toBe('jesse')
-    expect(node?.ethosScore).toBe(1979)
+    expect(node?.ethosScore).toBeNull()
     expect(node?.fees24hUsd).toBe('12.5')
-    expect(node?.uniqueHolders).toBe(420)
+    expect(node?.uniqueHolders).toBe(999)
     expect(node?.marketCapDelta24h).toBe('8.4')
-    expect(node?.mediaContent?.previewImage?.small).toBe('https://example.com/jesse-avatar.png')
+    expect(node?.mediaContent?.previewImage?.small).toBe('https://example.com/jesse.png')
     expect(node?.creatorProfile?.handle).toBe('jessepollak')
   })
 

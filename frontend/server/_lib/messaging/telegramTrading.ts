@@ -731,7 +731,8 @@ export async function logTelegramFunnelEvent(params: {
   const actionType = asTrimmed(params.actionType ?? '').toLowerCase() || null
 
   // High-volume funnel sampling (see audit-telemetry-optimization.ts)
-  if (!shouldSample(userId ?? chatId ?? eventName)) return
+  const sampleKey = userId !== null ? String(userId) : chatId ?? eventName
+  if (!shouldSample(sampleKey)) return
 
   await params.db.sql`
     INSERT INTO telegram_funnel_events (

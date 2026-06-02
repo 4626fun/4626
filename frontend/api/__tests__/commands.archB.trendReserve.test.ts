@@ -39,6 +39,15 @@ const getTrendOpByTickerHashMock = vi.fn().mockResolvedValue(null)
 const walletRpcMock = vi.fn()
 const warnMock = vi.fn()
 
+vi.mock('@4626/server-core', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    resolveCommandIssuerContextByAddress: (...args: unknown[]) => resolveContextMock(...args),
+    isExecutionReady: (resolution: { status: string }) => resolution.status === 'ready',
+  }
+})
+
 vi.mock('../../server/_lib/wallet/commandIssuerContext.js', () => ({
   resolveCommandIssuerContextByAddress: (...args: unknown[]) => resolveContextMock(...args),
   isExecutionReady: (resolution: { status: string }) => resolution.status === 'ready',

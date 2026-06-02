@@ -19,10 +19,10 @@
  *
  * It does NOT own:
  *   - creative reply generation (`/hermit`, `/meme`, `/gmeow`) — those are
- *     delegated to the Hermit / Pinata creative lane (`hermit/skillRouter.ts`)
- *     via the deterministic executor's `hermit` family branch. The Pinata
+ *     delegated to the Hermit creative lane (`hermit/skillRouter.ts`)
+ *     via the deterministic executor's `hermit` family branch. The Hermit
  *     agent itself runs out-of-process; only its API endpoint + bearer
- *     are wired here through `HERMIT_PINATA_*` env.
+ *     are wired here through `HERMIT_AGENT_*` env.
  *   - Privy session-token rotation — that is the canonical Vercel cron at
  *     `/api/v1/alfaclub/chat-token-refresh`. The bridge reads the rotated
  *     `chat_jwt` row but does not write it.

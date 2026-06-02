@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
 import {IStrategy} from "../../interfaces/IStrategy.sol";
 import {IStrategyValuation} from "../../interfaces/IStrategyValuation.sol";
@@ -17,12 +18,22 @@ interface ICreatorOVaultStrategiesModuleInternal {
     function __ejectDisabledStrategy(address strategy) external;
 }
 
+interface ICreatorOImpairmentClaims {
+    function mintFromVault(address account, uint256 epochId, uint256 amount) external;
+    function balanceOf(address account, uint256 id) external view returns (uint256);
+}
+
+interface ICreatorORecoveryEscrow {
+    function notifyRecovery(address asset, uint256 epochId, uint256 amount) external;
+    function claimRecovery(address asset, uint256 epochId, address receiver, uint256 amount) external;
+}
+
 /// @notice Core ERC-4626 + queue + profit unlocking + reporting logic for CreatorOVault.
 /// @dev Must be invoked via delegatecall from CreatorOVault.
 contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModuleIdentity {
     using SafeERC20 for IERC20;
     bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.core");
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v2");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v3");
 
     // ---- constants (must match vault) ----
     uint16 internal constant MAX_FEE = 2_000;
@@ -32,6 +43,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     uint256 internal constant MAX_PRICE_CHANGE_BPS = 1000;
     uint256 internal constant MINIMUM_FIRST_DEPOSIT = 50_000_000e18;
     uint8 internal constant MAX_VALUATION_MISS_THRESHOLD = 30;
+    uint256 internal constant IMPAIR_REASON_MAX = 7;
 
     // ---- events (must match vault signatures) ----
     event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares);
@@ -48,6 +60,27 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     event WithdrawalQueued(address indexed user, uint256 shares, uint256 unlockBlock);
     event WithdrawalClaimed(address indexed user, uint256 assets);
     event WithdrawalCancelled(address indexed user, uint256 shares);
+    event ImpairmentChallengeWindowUpdated(uint64 newWindow);
+    event ImpairmentTripped(
+        uint256 indexed epochId,
+        address indexed strategy,
+        uint256 indexed reasonCode,
+        uint256 tripBlock,
+        uint256 totalSharesAtTrip
+    );
+    event ImpairmentTripCleared(uint256 indexed epochId, address indexed strategy);
+    event ImpairmentRootProposed(uint256 indexed epochId, bytes32 indexed root, uint64 unlockTime);
+    event ImpairmentRootChallenged(uint256 indexed epochId, address indexed challenger, string reason);
+    event ImpairmentRootCleared(uint256 indexed epochId);
+    event ImpairmentRootFinalized(uint256 indexed epochId, bytes32 indexed root, uint256 totalClaimSupply);
+    event ImpairmentFinalized(
+        uint256 indexed epochId, address indexed strategy, bytes32 indexed root, uint256 excludedBookValue
+    );
+    event ImpairmentRecoveryNotified(uint256 indexed epochId, address indexed asset, uint256 amount);
+    event ImpairmentRecoveryClaimed(
+        uint256 indexed epochId, address indexed account, address indexed receiver, uint256 amount
+    );
+    event ImpairmentResolved(uint256 indexed epochId);
 
     // ---- errors (must match vault selectors) ----
     error ZeroAddress();
@@ -72,6 +105,24 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     error TransferAmountMismatch(uint256 expected, uint256 actual);
     error ModulesNotSet();
     error OnlyGaugeController();
+    error VaultNotNormal();
+    error VaultNotSuspect();
+    error NoActiveImpairment();
+    error ImpairmentAlreadyActive(uint256 epochId);
+    error InvalidImpairmentEpoch(uint256 epochId);
+    error InvalidImpairmentTransition(uint256 epochId);
+    error StrategyAlreadyImpaired(address strategy);
+    error StrategyNotImpaired(address strategy);
+    error InvalidImpairmentReason(uint256 reasonCode);
+    error ImpairmentRootNotReady(uint64 unlockTime);
+    error ImpairmentRootRequired(uint256 epochId);
+    error ImpairmentRootAlreadyFinalized(uint256 epochId);
+    error ImpairmentRootChallengedErr(uint256 epochId);
+    error ChallengeWindowNotConfigured();
+    error ClaimAlreadyMinted(uint256 epochId, address account);
+    error InvalidClaimProof(uint256 epochId, address account);
+    error NothingToClaim(uint256 epochId, address account);
+    error RecoveryEscrowNotConfigured();
 
     // =================================
     // PROFIT UNLOCKING
@@ -172,7 +223,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         uint256 len = strategyList.length;
         for (uint256 i; i < len; i++) {
             address strategy = strategyList[i];
-            if (activeStrategies[strategy]) {
+            if (activeStrategies[strategy] && !strategyImpaired[strategy]) {
                 total += _getStrategyAssetsSafe(strategy);
             }
         }
@@ -199,7 +250,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         uint256 len = strategyList.length;
         for (uint256 i; i < len; i++) {
             address strategy = strategyList[i];
-            if (!activeStrategies[strategy]) continue;
+            if (!activeStrategies[strategy] || strategyImpaired[strategy]) continue;
             if (allowMissGrace && threshold > 0 && strategyValuationMisses[strategy] > 0) continue;
 
             try IStrategyValuation(strategy).isValuationReady() returns (bool ok) {
@@ -222,6 +273,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     }
 
     function deposit(uint256 assets, address receiver) external onlyDelegateCall returns (uint256 shares) {
+        if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
         if (assets == 0) revert ZeroAmount();
         if (receiver == address(0)) revert ZeroAddress();
         _processProfitUnlock();
@@ -265,6 +317,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     }
 
     function mint(uint256 shares, address receiver) external onlyDelegateCall returns (uint256 assets) {
+        if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
         if (shares == 0) revert ZeroShares();
         if (receiver == address(0)) revert ZeroAddress();
         _processProfitUnlock();
@@ -304,6 +357,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     }
 
     function redeem(uint256 shares, address receiver, address owner_) external onlyDelegateCall returns (uint256 assets) {
+        if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
         // FIX: L-01 — enforce pause on redeem to align with maxWithdraw/maxRedeem returning 0
         if (paused) revert Paused();
         if (shares == 0) revert ZeroShares();
@@ -334,6 +388,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     }
 
     function withdraw(uint256 assets, address receiver, address owner_) external onlyDelegateCall returns (uint256 shares) {
+        if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
         // FIX: L-01 — enforce pause on withdraw to align with maxWithdraw/maxRedeem returning 0
         if (paused) revert Paused();
         if (assets == 0) revert ZeroAmount();
@@ -442,6 +497,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     // =================================
 
     function maxDeposit(address receiver) external view onlyDelegateCall returns (uint256) {
+        if (vaultMode != VaultMode.Normal) return 0;
         if (paused || isShutdown) return 0;
         if (whitelistEnabled && !whitelist[receiver]) return 0;
         if (_firstStrategyValuationNotReady(false) != address(0)) return 0;
@@ -459,6 +515,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     }
 
     function maxMint(address receiver) external view onlyDelegateCall returns (uint256) {
+        if (vaultMode != VaultMode.Normal) return 0;
         if (paused || isShutdown) return 0;
         if (whitelistEnabled && !whitelist[receiver]) return 0;
         if (_firstStrategyValuationNotReady(false) != address(0)) return 0;
@@ -469,6 +526,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     }
 
     function maxWithdraw(address owner_) external view onlyDelegateCall returns (uint256) {
+        if (vaultMode != VaultMode.Normal) return 0;
         if (paused) return 0;
         uint256 userShares = _balances[owner_];
         if (userShares == 0) return 0;
@@ -479,6 +537,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     }
 
     function maxRedeem(address owner_) external view onlyDelegateCall returns (uint256) {
+        if (vaultMode != VaultMode.Normal) return 0;
         if (paused) return 0;
         uint256 userShares = _balances[owner_];
         if (userShares == 0) return 0;
@@ -711,7 +770,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
                 --i;
             }
             address strategy = strategyList[i];
-            if (!activeStrategies[strategy]) continue;
+            if (!activeStrategies[strategy] || strategyImpaired[strategy]) continue;
 
             if (_isValuationReady(strategy)) {
                 strategyValuationMisses[strategy] = 0;
@@ -788,6 +847,179 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         _checkPriceChange(priceBefore, priceAfter);
 
         emit CapitalInjected(msg.sender, amount, priceAfter);
+    }
+
+    // =================================
+    // IMPAIRMENT SIDE-POCKET (V1)
+    // =================================
+
+    function setImpairmentChallengeWindow(uint64 window) external onlyDelegateCall {
+        impairmentChallengeWindow = window;
+        emit ImpairmentChallengeWindowUpdated(window);
+    }
+
+    function tripImpairment(address strategy, uint256 reasonCode) external onlyDelegateCall returns (uint256 epochId) {
+        if (strategy == address(0)) revert ZeroAddress();
+        if (reasonCode == 0 || reasonCode > IMPAIR_REASON_MAX) revert InvalidImpairmentReason(reasonCode);
+        if (activeImpairmentEpoch != 0) revert ImpairmentAlreadyActive(activeImpairmentEpoch);
+        if (!_isStrategyListed(strategy)) revert StrategyNotImpaired(strategy);
+        if (strategyImpaired[strategy]) revert StrategyAlreadyImpaired(strategy);
+
+        epochId = nextImpairmentEpochId == 0 ? 1 : nextImpairmentEpochId;
+        nextImpairmentEpochId = epochId + 1;
+        activeImpairmentEpoch = epochId;
+        vaultMode = VaultMode.Suspect;
+        strategyImpaired[strategy] = true;
+
+        ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
+        epoch.status = ImpairmentEpochStatus.Tripped;
+        epoch.strategy = strategy;
+        epoch.reasonCode = reasonCode;
+        epoch.tripBlock = block.number;
+        epoch.trippedAt = uint64(block.timestamp);
+        epoch.totalSharesAtTrip = _totalSupply;
+
+        emit ImpairmentTripped(epochId, strategy, reasonCode, block.number, _totalSupply);
+    }
+
+    function clearImpairmentTrip(uint256 epochId) external onlyDelegateCall {
+        if (epochId == 0 || epochId != activeImpairmentEpoch) revert InvalidImpairmentEpoch(epochId);
+        ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
+        if (epoch.status != ImpairmentEpochStatus.Tripped) revert InvalidImpairmentTransition(epochId);
+
+        epoch.status = ImpairmentEpochStatus.Resolved;
+        epoch.resolvedAt = uint64(block.timestamp);
+        strategyImpaired[epoch.strategy] = false;
+        activeImpairmentEpoch = 0;
+        vaultMode = VaultMode.Normal;
+        emit ImpairmentTripCleared(epochId, epoch.strategy);
+        emit ImpairmentResolved(epochId);
+    }
+
+    function proposeImpairmentRoot(
+        uint256 epochId,
+        bytes32 snapshotRoot,
+        uint256 totalClaimSupply,
+        address recoveryAsset
+    ) external onlyDelegateCall {
+        if (snapshotRoot == bytes32(0)) revert InvalidAmount();
+        if (recoveryAsset == address(0)) revert ZeroAddress();
+        if (impairmentChallengeWindow == 0) revert ChallengeWindowNotConfigured();
+        if (epochId == 0 || epochId != activeImpairmentEpoch) revert InvalidImpairmentEpoch(epochId);
+
+        ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
+        if (epoch.status != ImpairmentEpochStatus.Tripped) revert InvalidImpairmentTransition(epochId);
+        if (epoch.snapshotRoot != bytes32(0)) revert ImpairmentRootAlreadyFinalized(epochId);
+        if (totalClaimSupply == 0) totalClaimSupply = epoch.totalSharesAtTrip;
+
+        epoch.snapshotRoot = snapshotRoot;
+        epoch.totalClaimSupply = totalClaimSupply;
+        epoch.recoveryAsset = recoveryAsset;
+        uint64 unlock = uint64(block.timestamp) + impairmentChallengeWindow;
+        impairmentRootUnlockTime[epochId] = unlock;
+        emit ImpairmentRootProposed(epochId, snapshotRoot, unlock);
+    }
+
+    function challengeImpairmentRoot(uint256 epochId, string calldata reason) external onlyDelegateCall {
+        if (epochId == 0) revert InvalidImpairmentEpoch(epochId);
+        ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
+        if (epoch.status != ImpairmentEpochStatus.Tripped) revert InvalidImpairmentTransition(epochId);
+        if (epoch.snapshotRoot == bytes32(0)) revert ImpairmentRootRequired(epochId);
+        impairmentRootChallenged[epochId] = true;
+        emit ImpairmentRootChallenged(epochId, msg.sender, reason);
+    }
+
+    function clearImpairmentRootAfterChallenge(uint256 epochId) external onlyDelegateCall {
+        if (epochId == 0) revert InvalidImpairmentEpoch(epochId);
+        ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
+        if (epoch.status != ImpairmentEpochStatus.Tripped) revert InvalidImpairmentTransition(epochId);
+        if (!impairmentRootChallenged[epochId]) revert ImpairmentRootChallengedErr(epochId);
+        epoch.snapshotRoot = bytes32(0);
+        epoch.totalClaimSupply = 0;
+        epoch.recoveryAsset = address(0);
+        impairmentRootUnlockTime[epochId] = 0;
+        impairmentRootChallenged[epochId] = false;
+        emit ImpairmentRootCleared(epochId);
+    }
+
+    function finalizeImpairment(uint256 epochId) external onlyDelegateCall {
+        if (epochId == 0 || epochId != activeImpairmentEpoch) revert InvalidImpairmentEpoch(epochId);
+        ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
+        if (epoch.status != ImpairmentEpochStatus.Tripped) revert InvalidImpairmentTransition(epochId);
+        if (epoch.snapshotRoot == bytes32(0)) revert ImpairmentRootRequired(epochId);
+        if (impairmentRootChallenged[epochId]) revert ImpairmentRootChallengedErr(epochId);
+
+        uint64 unlock = impairmentRootUnlockTime[epochId];
+        if (block.timestamp < unlock) revert ImpairmentRootNotReady(unlock);
+
+        epoch.status = ImpairmentEpochStatus.Finalized;
+        epoch.finalizedAt = uint64(block.timestamp);
+        epoch.excludedBookValue = _getStrategyAssetsSafe(epoch.strategy);
+        activeImpairmentEpoch = 0;
+        vaultMode = VaultMode.Normal;
+        emit ImpairmentRootFinalized(epochId, epoch.snapshotRoot, epoch.totalClaimSupply);
+        emit ImpairmentFinalized(epochId, epoch.strategy, epoch.snapshotRoot, epoch.excludedBookValue);
+    }
+
+    function mintImpairmentClaim(uint256 epochId, address account, uint256 amount, bytes32[] calldata proof)
+        external
+        onlyDelegateCall
+    {
+        if (account == address(0)) revert ZeroAddress();
+        if (amount == 0) revert InvalidAmount();
+        ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
+        if (epoch.status == ImpairmentEpochStatus.None) revert InvalidImpairmentEpoch(epochId);
+        if (epoch.status != ImpairmentEpochStatus.Finalized && epoch.status != ImpairmentEpochStatus.Resolved) {
+            revert InvalidImpairmentTransition(epochId);
+        }
+        if (impairmentClaimMinted[epochId][account]) revert ClaimAlreadyMinted(epochId, account);
+        bytes32 leaf = keccak256(abi.encode(epochId, account, amount));
+        bool valid = MerkleProof.verify(proof, epoch.snapshotRoot, leaf);
+        if (!valid) revert InvalidClaimProof(epochId, account);
+        if (impairmentClaims == address(0)) revert RecoveryEscrowNotConfigured();
+
+        impairmentClaimMinted[epochId][account] = true;
+        ICreatorOImpairmentClaims(impairmentClaims).mintFromVault(account, epochId, amount);
+    }
+
+    function notifyImpairmentRecovery(uint256 epochId, uint256 amount) external onlyDelegateCall {
+        ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
+        if (epoch.status != ImpairmentEpochStatus.Finalized && epoch.status != ImpairmentEpochStatus.Resolved) {
+            revert InvalidImpairmentTransition(epochId);
+        }
+        if (impairmentRecoveryEscrow == address(0)) revert RecoveryEscrowNotConfigured();
+        IERC20(epoch.recoveryAsset).safeTransfer(impairmentRecoveryEscrow, amount);
+        ICreatorORecoveryEscrow(impairmentRecoveryEscrow).notifyRecovery(epoch.recoveryAsset, epochId, amount);
+        epoch.totalRecovered += amount;
+        emit ImpairmentRecoveryNotified(epochId, epoch.recoveryAsset, amount);
+    }
+
+    function claimImpairmentRecovery(uint256 epochId, address receiver, uint256 /*claimUnits*/ ) external onlyDelegateCall returns (uint256 amountOut) {
+        if (receiver == address(0)) revert ZeroAddress();
+        ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
+        if (epoch.totalClaimSupply == 0) revert InvalidImpairmentEpoch(epochId);
+        uint256 claimUnits = ICreatorOImpairmentClaims(impairmentClaims).balanceOf(msg.sender, epochId);
+        uint256 gross = (epoch.totalRecovered * claimUnits) / epoch.totalClaimSupply;
+        uint256 already = impairmentAmountClaimed[epochId][msg.sender];
+        if (gross <= already) revert NothingToClaim(epochId, msg.sender);
+        amountOut = gross - already;
+        impairmentAmountClaimed[epochId][msg.sender] = gross;
+        epoch.totalClaimed += amountOut;
+        ICreatorORecoveryEscrow(impairmentRecoveryEscrow).claimRecovery(epoch.recoveryAsset, epochId, receiver, amountOut);
+        if (epoch.status == ImpairmentEpochStatus.Finalized && epoch.totalClaimed >= epoch.totalRecovered) {
+            epoch.status = ImpairmentEpochStatus.Resolved;
+            epoch.resolvedAt = uint64(block.timestamp);
+            emit ImpairmentResolved(epochId);
+        }
+        emit ImpairmentRecoveryClaimed(epochId, msg.sender, receiver, amountOut);
+    }
+
+    function _isStrategyListed(address strategy) internal view returns (bool) {
+        uint256 len = strategyList.length;
+        for (uint256 i = 0; i < len; i++) {
+            if (strategyList[i] == strategy) return true;
+        }
+        return false;
     }
 
     function _revertBytes(bytes memory ret) internal pure {

@@ -131,7 +131,7 @@ async function buildHermitComprehensiveHelpPayload(params: {
         }
         if (snapshot.userPosition?.side) {
           marketPulse.push(
-            `- Room portfolio HL leg (**${snapshot.hyperliquidUser.slice(0, 6)}…${snapshot.hyperliquidUser.slice(-4)}**): **${snapshot.userPosition.side.toUpperCase()}** · PnL ${
+            `- Room 1659 HL leg (**${snapshot.hyperliquidUser.slice(0, 6)}…${snapshot.hyperliquidUser.slice(-4)}**): **${snapshot.userPosition.side.toUpperCase()}** · PnL ${
               snapshot.userPosition.unrealizedPnlUsd != null
                 ? `${snapshot.userPosition.unrealizedPnlUsd >= 0 ? '+' : ''}$${Number(snapshot.userPosition.unrealizedPnlUsd).toFixed(0)}`
                 : '?'

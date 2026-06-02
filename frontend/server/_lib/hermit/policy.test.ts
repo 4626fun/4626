@@ -93,17 +93,17 @@ describe('resolveHermitGatewayUrl', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv }
-    delete process.env.HERMIT_PINATA_GATEWAY_BASE
+    delete process.env.HERMIT_AGENT_GATEWAY_BASE
   })
 
   it('builds clean branded IPFS URLs from the gateway base', () => {
-    process.env.HERMIT_PINATA_GATEWAY_BASE = 'https://4626.fun'
+    process.env.HERMIT_AGENT_GATEWAY_BASE = 'https://4626.fun'
 
     expect(resolveHermitGatewayUrl('bafycat')).toBe('https://4626.fun/ipfs/bafycat')
   })
 
   it('does not duplicate /ipfs when the configured base already includes it', () => {
-    process.env.HERMIT_PINATA_GATEWAY_BASE = 'https://4626.fun/ipfs/'
+    process.env.HERMIT_AGENT_GATEWAY_BASE = 'https://4626.fun/ipfs/'
 
     expect(resolveHermitGatewayUrl('bafycat')).toBe('https://4626.fun/ipfs/bafycat')
   })

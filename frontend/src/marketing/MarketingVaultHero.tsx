@@ -4,13 +4,12 @@ import * as THREE from 'three'
 
 import { useVaultHeroMotion } from './useVaultHeroMotion'
 import { VaultModel } from './VaultModel'
-import { VaultParticles } from './VaultParticles'
 
 const POSTER_URL = '/immersive/assets/vault/ethereum_vault_poster.png'
 
 function VaultScene() {
   const root = useRef<THREE.Group>(null)
-  const { lightningPulse, mouse, scrollY, lowPower } = useVaultHeroMotion()
+  const { mouse, scrollY } = useVaultHeroMotion()
 
   useFrame((_state, dt) => {
     if (!root.current) return
@@ -26,22 +25,28 @@ function VaultScene() {
     root.current.position.y = THREE.MathUtils.damp(root.current.position.y, -scrollY * 0.0004, 4, dt)
   })
 
-  const particleCount = lowPower ? 70 : 150
-
   return (
     <>
-      <ambientLight intensity={0.34} color="#0d1018" />
-      <directionalLight position={[2.6, 3.2, 3.2]} intensity={1.05} color="#eef2ff" />
-      <directionalLight position={[-2.8, 1.0, -1.8]} intensity={0.5} color="#9fb4d8" />
-      <directionalLight position={[0.2, -2.0, 1.4]} intensity={0.22} color="#1b2336" />
+      <ambientLight intensity={0.45} color="#1a2233" />
+      {/* Key — warm-cool white from upper right, the primary read light. */}
+      <directionalLight position={[2.6, 3.2, 3.2]} intensity={1.5} color="#eef2ff" />
+      {/* Soft side fill. */}
+      <directionalLight position={[-2.8, 1.2, -1.4]} intensity={0.65} color="#9fb4d8" />
+      {/* Cool fill from below so the lower pyramid reads as a solid, converging
+          crystal instead of a black under-mass. */}
+      <directionalLight position={[0.0, -2.6, 1.8]} intensity={0.55} color="#7088b8" />
+      {/* Rim / back light — crisp luminous edge that separates the silhouette
+          from the dusk sky. Kept near-neutral white: a saturated blue back light
+          throws blue specular streaks across the facets that read as an energy
+          "force field" beam, which we explicitly do not want. */}
+      <directionalLight position={[-1.4, 2.6, -3.8]} intensity={1.45} color="#e9eef6" />
+      <directionalLight position={[1.8, -1.0, -3.4]} intensity={0.8} color="#dde4f0" />
 
       <group ref={root}>
         <Suspense fallback={null}>
-          <VaultModel lightningPulse={lightningPulse} />
+          <VaultModel />
         </Suspense>
       </group>
-
-      <VaultParticles count={particleCount} />
     </>
   )
 }
@@ -70,7 +75,7 @@ export function MarketingVaultHero() {
       dpr={[1, 2.5]}
       onCreated={({ gl, scene }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping
-        gl.toneMappingExposure = 1.0
+        gl.toneMappingExposure = 1.08
         const tex = makeStudioEnvTexture(gl)
         scene.environment = tex
         scene.background = null
@@ -89,14 +94,14 @@ function makeStudioEnvTexture(renderer: THREE.WebGLRenderer) {
   c.height = 256
   const ctx = c.getContext('2d')!
   const base = ctx.createLinearGradient(0, 0, 0, 256)
-  base.addColorStop(0, '#0c1018')
-  base.addColorStop(0.5, '#060810')
-  base.addColorStop(1, '#03040a')
+  base.addColorStop(0, '#1a2030')
+  base.addColorStop(0.5, '#0c1018')
+  base.addColorStop(1, '#05070e')
   ctx.fillStyle = base
   ctx.fillRect(0, 0, 512, 256)
   const key = ctx.createRadialGradient(256, 56, 8, 256, 56, 240)
-  key.addColorStop(0, 'rgba(210, 224, 255, 0.55)')
-  key.addColorStop(0.5, 'rgba(120, 150, 210, 0.16)')
+  key.addColorStop(0, 'rgba(220, 232, 255, 0.85)')
+  key.addColorStop(0.5, 'rgba(130, 162, 222, 0.24)')
   key.addColorStop(1, 'rgba(0, 0, 0, 0)')
   ctx.fillStyle = key
   ctx.fillRect(0, 0, 512, 256)

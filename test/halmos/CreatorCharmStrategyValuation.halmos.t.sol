@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {CreatorCharmStrategy} from "../../../contracts/vault/strategies/univ3/CreatorCharmStrategy.sol";
+import {CreatorCharmStrategy} from "../../contracts/vault/strategies/univ3/CreatorCharmStrategy.sol";
 
 /**
  * @title Minimal Halmos example for CreatorCharmStrategy valuation math
@@ -16,6 +16,8 @@ import {CreatorCharmStrategy} from "../../../contracts/vault/strategies/univ3/Cr
  *   halmos --forge
  */
 contract CreatorCharmStrategyValuation_Halmos is Test {
+    uint256 private constant MAX_USDC_AMOUNT_FOR_SCALE = type(uint256).max / 1e30;
+    uint256 private constant MAX_COLLATERAL_FOR_BPS = type(uint256).max / 10_000;
 
     // We deploy a minimal instance so we can call internal pure functions via a wrapper
     // or test the public view functions that depend on them.
@@ -39,6 +41,7 @@ contract CreatorCharmStrategyValuation_Halmos is Test {
     function test_usdcToCreatorValueWithPrice_monotonic(uint256 amount1, uint256 amount2, uint256 price) public pure {
         vm.assume(price > 0);
         vm.assume(amount1 <= amount2);
+        vm.assume(amount2 <= MAX_USDC_AMOUNT_FOR_SCALE);
 
         uint256 v1 = _usdcToCreatorValueWithPrice(amount1, price);
         uint256 v2 = _usdcToCreatorValueWithPrice(amount2, price);
@@ -56,6 +59,7 @@ contract CreatorCharmStrategyValuation_Halmos is Test {
     function test_computeCollateralRatioBps_monotonicCollateral(uint256 c1, uint256 c2, uint256 debt) public pure {
         vm.assume(debt > 0);
         vm.assume(c1 <= c2);
+        vm.assume(c2 <= MAX_COLLATERAL_FOR_BPS);
 
         uint256 r1 = _computeCollateralRatioBps(c1, debt);
         uint256 r2 = _computeCollateralRatioBps(c2, debt);

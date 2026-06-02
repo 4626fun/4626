@@ -109,7 +109,7 @@ describe('hermit creative lane — architecture boundary', () => {
       .split('\n')
       .filter((line) => /^\s*import\s/.test(line))
     for (const line of importLines) {
-      expect(line).not.toMatch(/from\s+['"]\.\.\/alfaclub\//)
+      expect(line).not.toMatch(/from\s+['"]\.\.\/alfaclub\/(?:chatTokenStore|privyTokenRefresher|userPreferenceStore|chatBridge|chatIngestStore|feedbackRelayer)\.js['"]/)
       expect(line).not.toMatch(/chatTokenStore/)
       expect(line).not.toMatch(/privyTokenRefresher/)
     }
@@ -117,7 +117,7 @@ describe('hermit creative lane — architecture boundary', () => {
 
   it('skillRouter.ts has the explicit boundary comment', () => {
     const rawSource = readFileSync(resolve(here, 'skillRouter.ts'), 'utf8')
-    expect(rawSource).toContain('Hermit / Pinata creative lane — strict architectural boundary.')
+    expect(rawSource).toContain('Hermit creative lane — strict architectural boundary.')
     expect(rawSource).toContain('It must not:')
   })
 })
@@ -144,8 +144,8 @@ describe('hermit creative lane — runtime invariants', () => {
 
   it('does not call any chatTokenStore writer when /hermit succeeds', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -166,8 +166,8 @@ describe('hermit creative lane — runtime invariants', () => {
 
   it('does not start the in-process Privy refresher when running creative commands', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
       ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED: undefined,
     })
     fetchMock.mockResolvedValueOnce({

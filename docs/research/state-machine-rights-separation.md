@@ -1,165 +1,57 @@
-I've created a clean, well-formatted Markdown document for you.
+# State Machine and Rights Separation (ADR)
 
-**File created:**  
-
-
----
-
-### Preview of the Document
-
-```markdown
-# Impairment Side-Pocket Implementation Plan
-
-**Version:** 1.1  
-**Date:** May 31, 2026  
-**Status:** Draft for Review
+**Status:** Accepted for v1  
+**Date:** June 1, 2026  
+**Scope:** `CreatorOVault` impairment handling policy
 
 ---
 
-## Goal
+## Decision
 
-Ship an onchain impairment handling mechanism for CreatorOVault that:
+Use a two-layer impairment model:
 
-- Keeps the main ERC-4626 share token **fungible and composable** as a clean-book representation.
-- Distinguishes between normal mark-to-market volatility and **true impairment** (where no reliable price exists).
-- Allocates recovery value **only** to holders present at the time of true impairment.
-- Minimizes trust, uses objective triggers where possible, and avoids discretionary NAV marking.
-- Acknowledges real limitations around downstream composability.
+1. **Vault mode** (`Normal`, `Suspect`) controls ERC-4626 settlement safety.
+2. **Impairment epochs** (`Tripped`, `Finalized`, `Resolved`) control side-pocket recovery rights.
 
----
-
-## Core Design Principles
-
-1. **Separate liquidity rights from recovery rights**  
-   The main ERC-4626 share represents only the clean book after impairment.
-
-2. **Different tools for different problems**
-   - Mark-to-market volatility → Socialization + fast exit is often acceptable.
-   - True impairment (exploited, frozen, or illiquid with no reliable price) → Requires snapshot-based side-pocketing.
-
-3. **Minimize trust**  
-   Make triggers as objective and on-chain verifiable as possible. Limit the power and speed of any privileged actor.
-
-4. **Accept imperfect composability**  
-   The main share stays fungible, but full economic rights may require claim-aware integrations downstream.
+Main ERC-4626 shares remain fungible and represent clean-book assets only after impairment finalization. Recovery economics are separated into epoch claim rights.
 
 ---
 
-## State Machine
+## Why
 
-```mermaid
-flowchart TD
-    Normal -->|Degradation Signal| Degraded
-    Degraded -->|Recover / Exit Position| Normal
-    Degraded -->|True Impairment Confirmed| Impaired
-    Impaired -->|finalizeImpairment| SidePocketed
-    SidePocketed -->|notifyRecovery| Recovering
-    Recovering --> Resolved
-    SidePocketed --> Resolved
-```
-
-**States:**
-- `Normal` — Standard operation
-- `Degraded` — Strategy under stress but still has a live/reliable price
-- `Impaired` / `SidePocketed` — True impairment. Triggers snapshot claims and flow restrictions.
+When a strategy becomes unpriceable, formulaic NAV marking creates unfair wealth transfer. Side-pocketing avoids forced socialization at a known-wrong price while preserving clean-book fungibility for downstream integrations.
 
 ---
 
-## Implementation Phases
+## v1 Policy Locks
 
-### Phase 1 — Storage, Events & State Machine
-
-- Extend `CreatorOVaultModuleStorage.sol` with impairment fields and state enum.
-- Add clear events for all state transitions and claim actions.
-- Bump storage version.
-
-### Phase 2 — Triggers & Flow Control
-
-- Add two trigger paths:
-  - `signalDegradation()` — for mark-to-market stress (lighter response).
-  - `tripImpairment()` — for true impairment (stronger conditions + potential timelock).
-- `finalizeImpairment()` must be atomic and:
-  - Capture snapshot / Merkle root
-  - Restrict deposits
-  - Move withdrawals to queue (or async)
-  - Remove impaired strategy from clean `totalAssets()`
-
-**Optional:** For vaults with only fully onchain assets, support **in-kind redemptions** during impaired states to avoid NAV pricing issues.
-
-### Phase 3 — Recovery Claim Rights
-
-- Deploy `ImpairmentClaim` (ERC-1155) with epoch-based IDs.
-- Users mint claims via Merkle proof from the snapshot taken at finalization.
-- Claims are **separate** from the main ERC-4626 share token.
-- **Default:** Claims are transferable.
-
-### Phase 4 — Recovery Distribution
-
-- `notifyRecovery(epochId, amount)` — only for realized inflows via approved paths.
-- `claimRecovery()` — pro-rata distribution to claim holders.
-- Recovered value **never** flows back into the main vault NAV.
-
-### Phase 5 — Integration with Existing Modules
-
-- Connect with strategy ejection, `buyDebt()`, and migration logic in `CreatorOVaultStrategiesModule`.
-- Route related debt purchase proceeds to the claim pool, not the clean book.
-
-### Phase 6 — Extensibility
-
-Add lightweight hook points for:
-- Pre/post impairment actions
-- Custom logic during `Degraded` state
-- Alternative claim distribution methods
-
-### Phase 7 — Testing & Invariants
-
-- Test both `Degraded` and `Impaired` paths.
-- Verify post-impairment depositors cannot acquire recovery claims.
-- Enforce conservation invariants.
+- Snapshot boundary is the **trip block**.
+- Only one active `Tripped` epoch at a time.
+- Claims are **non-transferable** in v1.
+- Root finalization requires a challenge window before claims are mintable.
+- Recovery is recognized from realized proceeds only.
+- `excludedBookValue` is diagnostic metadata only.
 
 ---
 
-## Trust Model & Minimization
+## Trust Model
 
-There is no perfect trustless solution. Therefore:
-
-- `tripImpairment()` should be restricted to a limited guardian set or require strong on-chain conditions + timelock where feasible.
-- `finalizeImpairment()` should be as atomic and objective as possible.
-- `notifyRecovery()` is restricted to trusted unwind/settlement paths.
-- **Goal:** Minimize the set of actors who can act, slow them down reasonably, and maximize on-chain verifiability of triggers.
-
-These assumptions must be clearly documented.
+- Guardian/emergency lane may freeze via `tripImpairment`, but cannot assign manual impaired NAV.
+- Governance may tune controls and reinstate strategies, but cannot allocate recovery outside claim rules.
+- Recovery distribution is deterministic and pro-rata to finalized snapshot claims.
 
 ---
 
-## Honest Limitations
+## Required User and Integrator Disclosure
 
-- **Downstream composability is imperfect.** Recovery claims will likely accrue to integration contracts (Morpho, Aave, etc.) unless claim-aware adapters are built.
-- Side-pocketing adds meaningful complexity. For many mark-to-market scenarios, simpler socialization + fast exit may be preferable.
-- Strong atomicity protection requires restricting instant deposits/redemptions during impaired states.
+If shares are held by a wrapper/lending market at `tripBlock`, that contract receives claim rights in v1. Beneficial-owner pass-through is out of scope until claim-aware adapters are shipped.
 
 ---
 
-## Summary of Key Decisions
+## Non-Negotiable Invariants
 
-| Decision | Rationale |
-|---------|---------|
-| Separate `Degraded` and `Impaired` states | Avoid over-applying heavy side-pocketing to normal volatility |
-| Transferable ERC-1155 claims by default | Gives users optionality and improves practicality |
-| Atomic `finalizeImpairment()` | Closes same-block arbitrage window |
-| No recovery value flows back to main NAV | Prevents post-impairment depositors from capturing upside |
-| Lightweight extensibility hooks | Allows future customization without core bloat |
-| Explicit Trust Model section | Honest framing of necessary trust assumptions |
-
----
-
-*Document generated based on design discussions around ERC-4626 impairment handling, atomicity constraints, and composability trade-offs.*
-```
-
----
-
-The file is ready at:
-
-****
-
-Would you like me to make any adjustments to the document (tone, structure, additional sections, etc.)?
+1. No atomic ERC-4626 entry/exit settlement while vault is `Suspect`.
+2. Finalized impaired strategy contributes zero to clean-book `totalAssets()`.
+3. Recovery value is never counted in both clean NAV and recovery claims.
+4. Post-trip entrants cannot obtain prior epoch recovery rights via deposit/mint.
+5. Claims/recovery cannot be processed before root finalization.

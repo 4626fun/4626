@@ -40,7 +40,9 @@
     "server/agents/**/*.ts",
     "scripts/**/*.d.ts",
     "src/config/contracts.defaults.ts",
+    "src/config/contracts.ts",
     "src/deploy/**/*.ts",
+    "src/lib/cca/**/*.ts",
     "src/lib/deploy/**/*.ts",
     "src/lib/deploy/create2Salts.ts",
     "src/lib/deploy/deploymentBatcherConfigError.ts",
@@ -59,9 +61,11 @@
     "src/wallet/canonicalWalletPolicy.ts",
     "src/lib/env/**/*.ts",
     "src/lib/routes/**/*.ts",
+    "src/lib/vanity/**/*.ts",
     "src/lib/relay/goldenRelayPart1Shape.ts",
     "src/lib/wallet/cswOwnerMutationEncode.ts",
-    "src/lib/wallet/cswOwnerAbi.ts"
+    "src/lib/wallet/cswOwnerAbi.ts",
+    "src/pages/deploy/deployVaultHelpers.ts"
   ],
   "exclude": [
     "src/**/*.test.ts",

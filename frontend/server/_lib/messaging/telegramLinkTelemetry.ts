@@ -1,5 +1,6 @@
 import { logger } from '../infra/logger.js'
 import { getDb, getDbInitError, isDbConfigured } from '../db/postgres.js'
+import { ensureTelemetryCreativeLogsSchema } from '../db/schemaBootstrap.js'
 import { shouldSampleEvent } from '../infra/telemetrySampling.js'
 
 type TelegramLinkTelemetryInput = {

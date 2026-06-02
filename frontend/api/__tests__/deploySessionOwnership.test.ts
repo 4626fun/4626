@@ -856,7 +856,8 @@ describe('deploy session ownership guardrails', () => {
             data: makeFinalizePhase2Data(),
           },
         ],
-        phase3Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x12345678' }],
+        phase3Calls: [],
+        phase4Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x12345678' }],
         solanaOvault: {
           enabled: true,
           assetMintOrigin: 'existing',

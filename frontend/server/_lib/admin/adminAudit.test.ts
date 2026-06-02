@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 
+const { ensureWalletOnchainOpsAuditSchemaMock } = vi.hoisted(() => ({
+  ensureWalletOnchainOpsAuditSchemaMock: vi.fn(async () => {}),
+}))
+
+vi.mock('../db/schemaBootstrap.js', () => ({
+  ensureWalletOnchainOpsAuditSchema: ensureWalletOnchainOpsAuditSchemaMock,
+}))
+
 describe('ensureAdminAuditSchema', () => {
   it('backfills the ip_hash column for existing tables', async () => {
     vi.resetModules()
@@ -15,6 +23,8 @@ describe('ensureAdminAuditSchema', () => {
     const { ensureAdminAuditSchema } = await import('./adminAudit')
     await ensureAdminAuditSchema(db as any)
 
-    expect(executed.join('\n')).toMatch(/ALTER TABLE\s+admin_logs\s+ADD COLUMN IF NOT EXISTS\s+ip_hash\b/i)
+    expect(ensureWalletOnchainOpsAuditSchemaMock).toHaveBeenCalledTimes(1)
+    expect(ensureWalletOnchainOpsAuditSchemaMock).toHaveBeenCalledWith(db)
+    expect(executed).toHaveLength(0)
   })
 })

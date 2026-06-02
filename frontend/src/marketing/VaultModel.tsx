@@ -1,5 +1,4 @@
 import { useGLTF } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 
@@ -9,19 +8,18 @@ const GLB_URL = '/immersive/assets/vault/ethereum_vault.glb'
 
 useGLTF.preload(GLB_URL)
 
-type VaultModelProps = {
-  lightningPulse: number
-}
-
-export function VaultModel({ lightningPulse }: VaultModelProps) {
+export function VaultModel() {
   const group = useRef<THREE.Group>(null)
   const gltf = useGLTF(GLB_URL)
   const scene = useMemo(() => gltf.scene.clone(true), [gltf.scene])
 
   const obsidian = useRef<PremiumObsidianResult | null>(null)
-  useMemo(() => {
-    obsidian.current?.dispose()
+  useEffect(() => {
     obsidian.current = applyPremiumObsidian(scene)
+    return () => {
+      obsidian.current?.dispose()
+      obsidian.current = null
+    }
   }, [scene])
 
   useEffect(() => {
@@ -29,26 +27,25 @@ export function VaultModel({ lightningPulse }: VaultModelProps) {
     const size = box.getSize(new THREE.Vector3())
     const center = box.getCenter(new THREE.Vector3())
     const maxDim = Math.max(size.x, size.y, size.z, 0.001)
-    const scale = 4.0 / maxDim
-    scene.scale.setScalar(scale)
-    scene.position.sub(center.multiplyScalar(scale))
+    // The GLB is a tall 1.62:1 bipyramid which reads as a stretched ETH logo.
+    // Compress the vertical axis so it reads as a balanced obsidian octahedron
+    // (~1.3:1, like a cut gem) and size it a touch larger while staying fully
+    // framed (camera sees ~2.1 units tall — never crop, that re-creates the
+    // dark "box").
+    const base = 2.05 / maxDim
+    const vSquash = 0.82
+    scene.scale.set(base, base * vSquash, base)
+    scene.position.set(
+      -center.x * base,
+      -center.y * base * vSquash,
+      -center.z * base,
+    )
   }, [scene])
 
-  useEffect(() => () => obsidian.current?.dispose(), [])
-
-  useFrame((state) => {
-    const o = obsidian.current
-    if (!o) return
-    const t = state.clock.elapsedTime
-    // Veins stay dark at idle; blue glow spikes only on lightning beats.
-    // three.js material mutation inside r3f render loop is intentional.
-    o.veinMat.emissiveIntensity = lightningPulse * 1.8
-    const accentGlow = 0.18 + Math.sin(t * 0.9) * 0.04 + lightningPulse * 0.6
-    for (const a of o.accents) {
-      // eslint-disable-next-line react-hooks/immutability
-      a.emissiveIntensity = accentGlow
-    }
-  })
+  // The gem is pure obsidian stone — no emissive veins, no seam glow. Lightning
+  // lives in the sky (CSS bolts/flash), never as a blue "force field" beam on
+  // the crystal itself. Materials initialise with emissiveIntensity 0 and stay
+  // there, so there is no per-frame material mutation to run here.
 
   return (
     <group ref={group}>

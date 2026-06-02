@@ -51,6 +51,9 @@ export type ApiContracts = {
   usdc: ContractAddress
   permit2: ContractAddress
   strategyDeploymentBatcher?: ContractAddress
+  impairmentClaims?: ContractAddress
+  impairmentRecoveryEscrow?: ContractAddress
+  impairmentGuardian?: ContractAddress
 }
 
 function pickAddress(envKey: string, fallback?: string): ContractAddress | undefined {
@@ -128,5 +131,11 @@ export function getApiContracts(): ApiContracts {
     usdc: pickAddress('USDC_TOKEN', BASE_DEFAULTS.usdc)!,
     permit2: pickAddress('PERMIT2', BASE_DEFAULTS.permit2)!,
     strategyDeploymentBatcher: pickAddress('STRATEGY_DEPLOYMENT_BATCHER'),
+    impairmentClaims: pickAddressProdSafe('IMPAIRMENT_CLAIMS', BASE_DEFAULTS.impairmentClaims),
+    impairmentRecoveryEscrow: pickAddressProdSafe(
+      'IMPAIRMENT_RECOVERY_ESCROW',
+      BASE_DEFAULTS.impairmentRecoveryEscrow,
+    ),
+    impairmentGuardian: pickAddressProdSafe('IMPAIRMENT_GUARDIAN', BASE_DEFAULTS.impairmentGuardian),
   }
 }

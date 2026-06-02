@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Hermit / Pinata / AlfaClub creative lane — automated audit + manual checklist.
+# Hermit / AlfaClub creative lane — automated audit + manual checklist.
 #
-# Runs repo-local gates (tests, seeds, env preflight, Pinata probe) and prints
+# Runs repo-local gates (tests, seeds, env preflight, Hermit probe) and prints
 # the live-room steps operators still do by hand.
 #
 # Usage (from repo root):
@@ -13,7 +13,7 @@
 #   --strict           Exit 1 if any automated check fails
 #   --production-env   Run env preflight + creative probe via `vercel env run -e production`
 #   --skip-tests       Skip Vitest Hermit suite
-#   --skip-probe       Skip probe-pinata-hermit.ts (needs HERMIT_PINATA_*)
+#   --skip-probe       Skip probe-pinata-hermit.ts (needs HERMIT_AGENT_*)
 #   --skip-pinata      Skip Pinata CLI agent/gateway checks
 #   --help             Show usage
 
@@ -112,7 +112,7 @@ resolve_pinata_cli() {
 }
 
 resolve_agent_id() {
-  local endpoint="${HERMIT_PINATA_CHAT_ENDPOINT:-}"
+  local endpoint="${HERMIT_AGENT_CHAT_ENDPOINT:-}"
   if [[ -z "$endpoint" ]]; then
     echo "x7lmjaxx"
     return 0
@@ -168,14 +168,14 @@ else
   log_fail "alfaclub-env-preflight --strict"
 fi
 
-log_section "4. Pinata creative probe (skillRouter → gateway)"
+log_section "4. Hermit creative probe (skillRouter)"
 if [[ "$SKIP_PROBE" -eq 1 ]]; then
   log_warn "skipped (--skip-probe)"
 else
   if run_in_env pnpm exec tsx scripts/ops/probe-pinata-hermit.ts; then
     log_ok "probe-pinata-hermit"
   else
-    log_fail "probe-pinata-hermit (check HERMIT_PINATA_* and agent status)"
+    log_fail "probe-pinata-hermit (check HERMIT_AGENT_* and agent status)"
   fi
 fi
 
@@ -189,7 +189,7 @@ else
   else
     load_local_env
     AGENT_ID="$(resolve_agent_id)"
-    echo "agent: $AGENT_ID (from HERMIT_PINATA_CHAT_ENDPOINT or default)"
+    echo "agent: $AGENT_ID (from HERMIT_AGENT_CHAT_ENDPOINT or default)"
 
     if STATUS_JSON="$("$PINATA_BIN" agents get "$AGENT_ID" 2>/dev/null)"; then
       AGENT_STATUS="$(python3 - <<'PY' "$STATUS_JSON"
@@ -271,8 +271,8 @@ if [[ "$PRODUCTION_ENV" -eq 1 ]]; then
         vercel env run -e production -- python3 - <<'PY'
 import os
 checks = {
-    "HERMIT_PINATA_CHAT_ENDPOINT": lambda v: bool(v.strip()) and "agents.pinata.cloud" in v,
-    "HERMIT_PINATA_BEARER_TOKEN": lambda v: len(v.strip()) >= 8,
+    "HERMIT_AGENT_CHAT_ENDPOINT": lambda v: len(v.strip()) >= 8,
+    "HERMIT_AGENT_BEARER_TOKEN": lambda v: len(v.strip()) >= 8,
     "ALFACLUB_HERMIT_COMMAND_ROOMS": lambda v: "1043" in v or "1659" in v,
     "ALFACLUB_CHAT_BRIDGE_ENABLED": lambda v: v.strip() in ("1", "true", "yes", "on"),
 }
@@ -307,10 +307,10 @@ Run these in live rooms after automated checks pass:
 
   [ ] /bridge or /alfa status — JWT + bridge pipeline healthy
   [ ] /help — Hermit catalog, under 2k chars
-  [ ] /hermit copy probe ok one line only — Pinata copy, no unavailable error
+  [ ] /hermit copy probe ok one line only — Hermit copy, no unavailable error
   [ ] /meme akita noir — caption; inline GIF/image if provider returns HTTPS asset
-  [ ] /gmeow — bare command: local GIF (fast) unless HERMIT_GMEOW_PINATA_CAPTION=always
-  [ ] /gmeow moon — Pinata caption when args present
+  [ ] /gmeow — bare command: local GIF (fast) unless HERMIT_GMEOW_HERMIT_CAPTION=always
+  [ ] /gmeow moon — Hermit caption when args present
   [ ] /hermit announce drop nuevo — Spanish values, English JSON keys
 
 Ops hygiene:

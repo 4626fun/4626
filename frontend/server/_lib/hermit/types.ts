@@ -110,5 +110,5 @@ export type HermitExecutionResult = {
   meme?: HermitMeme
   imagePrompt?: string
   mediaAttachments?: HermitMediaAttachment[]
-  provider: 'local' | 'pinata'
+  provider: 'local' | 'hermit'
 }

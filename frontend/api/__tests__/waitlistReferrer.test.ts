@@ -11,7 +11,7 @@ const { getDbMock, ensureWaitlistSchemaMock, checkRateLimitMock } = vi.hoisted((
 
 vi.mock('@4626/server-core', async () => {
   const actual = await vi.importActual<typeof import('@4626/server-core')>(
-    '../../@4626/server-core',
+    '@4626/server-core',
   )
   return {
     ...actual,

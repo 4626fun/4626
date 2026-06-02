@@ -262,8 +262,8 @@ describe('/meme — end-to-end via executeHermitCommand', () => {
     fetchMock = vi.fn()
     ;(globalThis as unknown as { fetch: typeof fetch }).fetch = fetchMock as unknown as typeof fetch
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
     })
   })
 
@@ -288,7 +288,7 @@ describe('/meme — end-to-end via executeHermitCommand', () => {
       senderAddress: ALICE,
     })
     expect(result.kind).toBe('meme')
-    expect(result.provider).toBe('pinata')
+    expect(result.provider).toBe('hermit')
     expect(result.mediaAttachments).toEqual([
       { url, type: 'photo', filename: 'meme.png', mime_type: 'image/png' },
     ])

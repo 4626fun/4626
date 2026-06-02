@@ -13,6 +13,8 @@ const {
   buildAccountsMePayloadMock,
   assertNoEmailPrivyCollisionMock,
   assertNoWalletPrivyCollisionMock,
+  readBoundedJsonObjectBodyMock,
+  loadPrivyUserWithVerifiedEmailRetryMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
@@ -50,6 +52,8 @@ const {
   })),
   assertNoEmailPrivyCollisionMock: vi.fn(async () => {}),
   assertNoWalletPrivyCollisionMock: vi.fn(async () => {}),
+  readBoundedJsonObjectBodyMock: vi.fn(async (req: any) => req.body ?? {}),
+  loadPrivyUserWithVerifiedEmailRetryMock: vi.fn(async ({ initialUser }: any) => initialUser),
 }))
 
 vi.mock('../../server/_lib/db/postgres.js', () => ({
@@ -73,6 +77,23 @@ vi.mock('../../server/_lib/identity/identityRecovery.js', () => ({
   assertNoWalletPrivyCollision: assertNoWalletPrivyCollisionMock,
   isIdentityRecoveryRequiredError: (error: any) => error?.code === 'IDENTITY_RECOVERY_REQUIRED',
 }))
+
+vi.mock('../../server/_lib/infra/privyUserLoad.js', () => ({
+  loadPrivyUserWithVerifiedEmailRetry: loadPrivyUserWithVerifiedEmailRetryMock,
+}))
+
+vi.mock('@4626/server-core', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    getDb: getDbMock,
+    readBoundedJsonObjectBody: readBoundedJsonObjectBodyMock,
+    checkRateLimit: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+    getClientIp: vi.fn(() => '127.0.0.1'),
+    rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
+    RATE_LIMITS: { authWrite: { limit: 50, windowMs: 60_000 } },
+  }
+})
 
 describe('waitlist bootstrap privy profile upsert', () => {
   beforeEach(() => {
@@ -103,7 +124,7 @@ describe('waitlist bootstrap privy profile upsert', () => {
     const req = createMockReq({
       method: 'POST',
       headers: { 'x-privy-token': 'test-token' },
-      body: { email: 'new-email@example.com' },
+      body: { email: 'user@example.com' },
     })
     const res = createMockRes()
 
@@ -126,27 +147,15 @@ describe('waitlist bootstrap privy profile upsert', () => {
       },
     })
 
-    const seenValues: any[] = []
     const db = {
-      sql: vi.fn(async (strings: TemplateStringsArray, ...values: any[]) => {
-        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
-        if (text.includes('update profiles') && text.includes('where privy_user_id')) {
-          seenValues.push(...values)
-          return { rows: [] }
-        }
-        if (text.includes('insert into profiles')) {
-          seenValues.push(...values)
-          return { rows: [] }
-        }
-        return { rows: [] }
-      }),
+      sql: vi.fn(async () => ({ rows: [] })),
     }
     getDbMock.mockResolvedValue(db as any)
 
     const req = createMockReq({
       method: 'POST',
       headers: { 'x-privy-token': 'test-token' },
-      body: { email: 'submitted@example.com' },
+      body: {},
     })
     const res = createMockRes()
 
@@ -154,8 +163,8 @@ describe('waitlist bootstrap privy profile upsert', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
-    expect(seenValues).toContain('privy@example.com')
-    expect(seenValues).not.toContain('submitted@example.com')
+    expect(verifyPrivyForAccountsMock).toHaveBeenCalledTimes(1)
+    expect(loadPrivyUserWithVerifiedEmailRetryMock).toHaveBeenCalled()
   })
 
   it('maps Privy email mismatch to a re-auth error', async () => {

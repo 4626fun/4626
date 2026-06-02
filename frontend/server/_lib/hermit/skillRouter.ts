@@ -1,8 +1,8 @@
 /**
- * Hermit / Pinata creative lane — strict architectural boundary.
+ * Hermit creative lane — strict architectural boundary.
  *
  * This module owns ONLY creative generation (`/hermit`, `/meme`, `/gmeow`)
- * by delegating to the Pinata-hosted Open Claw / Hermit agent. It must not:
+ * by delegating to a Hermit-hosted creative agent endpoint. It must not:
  *
  *   - read or write `alfaclub_runtime_secret` rows (auth state),
  *   - call `chatTokenStore` helpers,
@@ -26,7 +26,6 @@ import type {
   HermitPreferenceLister,
   HermitUserPreferences,
 } from './types.js'
-import WebSocket from 'ws'
 import { logger } from '../infra/logger.js'
 import { getClearinghouseState } from '../alfaclub/hyperliquid.js'
 import { formatRoom1659MarketForHermit } from '../alfaclub/room1659Market.js'
@@ -60,11 +59,6 @@ type PinataChatResult = {
   text: string
 }
 
-type PinataGatewayEvent =
-  | { type: 'event'; event?: string; payload?: Record<string, unknown> }
-  | { type: 'res'; id?: string; ok?: boolean; payload?: Record<string, unknown>; error?: Record<string, unknown> }
-
-const PINATA_GATEWAY_RPC_TIMEOUT_MS_DEFAULT = 60_000
 const PINATA_HTTP_FALLBACK_TIMEOUT_MS_DEFAULT = 30_000
 
 const PINATA_AGENT_FAILURE_PATTERNS = [
@@ -83,16 +77,8 @@ export function isPinataAgentFailureReply(text: string): boolean {
   return PINATA_AGENT_FAILURE_PATTERNS.some((pattern) => pattern.test(trimmed))
 }
 
-function readPinataGatewayTimeoutMs(): number {
-  const raw = asTrimmed(process.env.HERMIT_PINATA_GATEWAY_TIMEOUT_MS)
-  if (!raw) return PINATA_GATEWAY_RPC_TIMEOUT_MS_DEFAULT
-  const parsed = Number(raw)
-  if (!Number.isFinite(parsed) || parsed <= 0) return PINATA_GATEWAY_RPC_TIMEOUT_MS_DEFAULT
-  return Math.min(Math.max(Math.floor(parsed), 5_000), 180_000)
-}
-
 function readPinataHttpTimeoutMs(): number {
-  const raw = asTrimmed(process.env.HERMIT_PINATA_HTTP_TIMEOUT_MS)
+  const raw = asTrimmed(process.env.HERMIT_AGENT_HTTP_TIMEOUT_MS)
   if (!raw) return PINATA_HTTP_FALLBACK_TIMEOUT_MS_DEFAULT
   const parsed = Number(raw)
   if (!Number.isFinite(parsed) || parsed <= 0) return PINATA_HTTP_FALLBACK_TIMEOUT_MS_DEFAULT
@@ -108,90 +94,6 @@ function asTrimmed(value: unknown): string {
 const HERMIT_STRICT_JSON_SYSTEM_LINE = 'You are Hermit crafting one short meme line for AlfaChat.'
 const HERMIT_STRICT_JSON_OUTPUT_LINE = 'Output STRICT JSON only:'
 const HERMIT_STRICT_JSON_SCHEMA_LINE = '{"line":"string"}'
-const HERMIT_STRICT_JSON_WEBCHAT_DENY_REGEX =
-  /You are Hermit crafting one short meme line for AlfaChat\.[\s\S]*Output STRICT JSON only:[\s\S]*\{"line":"string"\}/m
-
-function isStrictJsonHermitWorkerPrompt(text: string): boolean {
-  const body = text.trim()
-  if (!body) return false
-  return (
-    body.includes(HERMIT_STRICT_JSON_SYSTEM_LINE) &&
-    body.includes(HERMIT_STRICT_JSON_OUTPUT_LINE) &&
-    body.includes(HERMIT_STRICT_JSON_SCHEMA_LINE)
-  )
-}
-
-function readHermitWebchatHumanIdentity(): string {
-  const configured = asTrimmed(process.env.HERMIT_WEBCHAT_HUMAN_IDENTITY).toLowerCase()
-  if (configured) return configured
-  // Default to the canonical 4626 human identity unless overridden.
-  return '0xb05cf01231cf2ff99499682e64d3780d57c80fdd'
-}
-
-function readHermitWebchatDenySources(): Set<string> {
-  const raw = asTrimmed(process.env.HERMIT_WEBCHAT_DENY_SOURCES)
-  const values = (raw ? raw : 'openclaw-control-ui,alfaclub-bridge-runner')
-    .split(',')
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean)
-  return new Set(values)
-}
-
-function isHermitSourceDeniedForWebchat(sourceIdentity: string): boolean {
-  if (!sourceIdentity) return false
-  return readHermitWebchatDenySources().has(sourceIdentity.toLowerCase())
-}
-
-function readHermitWorkerSessionKey(): string {
-  const value = asTrimmed(process.env.HERMIT_WORKER_SESSION_KEY)
-  return value || 'alfaclub-worker'
-}
-
-function readHermitWebchatSessionKey(): string {
-  const value = asTrimmed(process.env.HERMIT_WEBCHAT_SESSION_KEY)
-  return value || 'main'
-}
-
-type HermitGatewayRoute = {
-  sessionKey: string
-  mode: 'webchat' | 'worker'
-  deliver: boolean
-  sourceIdentity: string
-}
-
-/** Pinata OpenClaw gateway `connect` only accepts a subset of client.mode values. */
-function resolvePinataGatewayClientMode(routeMode: HermitGatewayRoute['mode']): string {
-  if (routeMode === 'webchat') return 'webchat'
-  return 'backend'
-}
-
-function selectHermitGatewayRoute(params: {
-  prompt: string
-  sourceIdentity: string
-  senderAddress: string
-}): HermitGatewayRoute {
-  const sourceIdentity = params.sourceIdentity.trim().toLowerCase()
-  const isStrictJson = isStrictJsonHermitWorkerPrompt(params.prompt)
-  const sourceDenied = isHermitSourceDeniedForWebchat(sourceIdentity)
-  const humanIdentity = readHermitWebchatHumanIdentity()
-  const isHumanSender = params.senderAddress.trim().toLowerCase() === humanIdentity
-  const allowWebchat = isHumanSender && !isStrictJson && !sourceDenied
-  if (!allowWebchat) {
-    return {
-      sessionKey: readHermitWorkerSessionKey(),
-      mode: 'worker',
-      deliver: false,
-      sourceIdentity,
-    }
-  }
-  return {
-    sessionKey: readHermitWebchatSessionKey(),
-    mode: 'webchat',
-    deliver: false,
-    sourceIdentity,
-  }
-}
-
 function isLikelyPinataProviderErrorText(value: string): boolean {
   const text = value.trim().toLowerCase()
   if (!text) return false
@@ -489,284 +391,71 @@ function inferPublicMediaAttachment(url: string): HermitMediaAttachment | null {
   }
 }
 
-function readPinataHermitConfig(): { endpoint: string; bearer: string } | null {
-  const endpoint = asTrimmed(process.env.HERMIT_PINATA_CHAT_ENDPOINT)
-  const bearer = asTrimmed(process.env.HERMIT_PINATA_BEARER_TOKEN)
+function readHermitAgentConfig(): { endpoint: string; bearer: string } | null {
+  const endpoint = asTrimmed(process.env.HERMIT_AGENT_CHAT_ENDPOINT)
+  const bearer = asTrimmed(process.env.HERMIT_AGENT_BEARER_TOKEN)
   if (!endpoint || !bearer) return null
   return { endpoint, bearer }
 }
 
 /**
- * Whether /gmeow should call Pinata for an extra caption line.
+ * Whether /gmeow should call Hermit agent for an extra caption line.
  *
- * Default (env unset): Pinata one-liner when configured; else local hooks + rotating GIFs.
- * - `HERMIT_GMEOW_PINATA_CAPTION=always` — call Pinata on every /gmeow when configured.
- * - `HERMIT_GMEOW_PINATA_CAPTION=prompt` — call Pinata only when the user adds text after /gmeow.
- * - `HERMIT_GMEOW_PINATA_CAPTION=0` — never call Pinata for /gmeow (local hooks only).
- * - `HERMIT_GMEOW_PINATA_CAPTION=local` — force local hooks even when Pinata is configured.
+ * Default (env unset): Hermit-agent one-liner when configured; else local hooks + rotating GIFs.
+ * - `HERMIT_GMEOW_HERMIT_CAPTION=always` — call Hermit agent on every /gmeow when configured.
+ * - `HERMIT_GMEOW_HERMIT_CAPTION=prompt` — call Hermit agent only when the user adds text after /gmeow.
+ * - `HERMIT_GMEOW_HERMIT_CAPTION=0` — never call Hermit agent for /gmeow (local hooks only).
+ * - `HERMIT_GMEOW_HERMIT_CAPTION=local` — force local hooks even when Hermit agent is configured.
  */
 export function shouldRequestPinataGmeowCaption(userPromptAfterCommand: string): boolean {
-  const mode = asTrimmed(process.env.HERMIT_GMEOW_PINATA_CAPTION).toLowerCase()
-  if (mode === '0' || mode === 'false' || mode === 'no' || mode === 'off' || mode === 'never') {
+  const mode = asTrimmed(process.env.HERMIT_GMEOW_HERMIT_CAPTION)
+  const normalizedMode = mode.toLowerCase()
+  if (normalizedMode === '0' || normalizedMode === 'false' || normalizedMode === 'no' || normalizedMode === 'off' || normalizedMode === 'never') {
     return false
   }
-  if (mode === 'local' || mode === 'offline') {
+  if (normalizedMode === 'local' || normalizedMode === 'offline') {
     return false
   }
   if (
-    mode === '1' ||
-    mode === 'true' ||
-    mode === 'yes' ||
-    mode === 'on' ||
-    mode === 'always' ||
-    mode === 'all' ||
-    mode === 'legacy'
+    normalizedMode === '1' ||
+    normalizedMode === 'true' ||
+    normalizedMode === 'yes' ||
+    normalizedMode === 'on' ||
+    normalizedMode === 'always' ||
+    normalizedMode === 'all' ||
+    normalizedMode === 'legacy'
   ) {
     return true
   }
-  if (mode === 'prompt' || mode === 'args' || mode === 'text') {
+  if (normalizedMode === 'prompt' || normalizedMode === 'args' || normalizedMode === 'text') {
     return userPromptAfterCommand.trim().length > 0
   }
-  // Env unset: creative Pinata line when endpoint is configured (caller still gates on config).
+  // Env unset: creative Hermit-agent line when endpoint is configured (caller still gates on config).
   return true
 }
 
-function toGatewaySocketUrl(rawEndpoint: string): { wsUrl: string; origin: string } | null {
-  let parsed: URL
-  try {
-    parsed = new URL(rawEndpoint)
-  } catch {
-    return null
-  }
-
-  const host = parsed.hostname.toLowerCase()
-  const isPinataGatewayHost =
-    host.endsWith('.agents.pinata.cloud') || host.endsWith('.apps.pinata.cloud')
-  if (!isPinataGatewayHost) return null
-
-  const wsProtocol = parsed.protocol === 'https:' || parsed.protocol === 'wss:' ? 'wss:' : 'ws:'
-  const originProtocol = parsed.protocol === 'wss:' ? 'https:' : parsed.protocol === 'ws:' ? 'http:' : parsed.protocol
-  const wsUrl = `${wsProtocol}//${parsed.host}${parsed.pathname || '/'}`
-  const origin = `${originProtocol}//${parsed.host}`
-  return { wsUrl, origin }
-}
-
 function toPinataHttpChatUrl(rawEndpoint: string): string {
-  const gateway = toGatewaySocketUrl(rawEndpoint)
-  if (!gateway) return rawEndpoint
-  try {
-    const parsed = new URL(rawEndpoint)
-    const httpProtocol =
-      parsed.protocol === 'wss:' ? 'https:' : parsed.protocol === 'ws:' ? 'http:' : parsed.protocol
-    const path = !parsed.pathname || parsed.pathname === '/' ? '' : parsed.pathname
-    return `${httpProtocol}//${parsed.host}${path}`
-  } catch {
-    return rawEndpoint
-  }
+  return rawEndpoint
 }
 
-function readPinataBridgeHttpOnlyDisabled(): boolean {
-  const raw = asTrimmed(process.env.HERMIT_PINATA_BRIDGE_HTTP_ONLY).toLowerCase()
-  return raw === '0' || raw === 'false' || raw === 'no' || raw === 'off'
-}
-
-function readPinataBridgeHttpOnlyEnabled(): boolean {
-  const raw = asTrimmed(process.env.HERMIT_PINATA_BRIDGE_HTTP_ONLY).toLowerCase()
-  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
-}
-
-/** Pinata-hosted OpenClaw agents only expose creative draft over gateway WS — root HTTPS POST 404s. */
 export function pinataEndpointSupportsHttpDraft(rawEndpoint: string | undefined): boolean {
   const endpoint = asTrimmed(rawEndpoint)
   if (!endpoint) return false
-  return toGatewaySocketUrl(endpoint) === null
+  return endpoint.startsWith('http://') || endpoint.startsWith('https://')
 }
 
 /**
- * AlfaClub bridge calls Pinata for generation only — Vercel posts the
- * formatted reply. OpenClaw gateway `chat.send` on a Pinata agent that
- * also has an AlfaClub channel/skill mirrors the full worker prompt and
- * raw JSON assistant output into the live room as duplicate "4626" /
- * "Agent Hermit" messages. Prefer the stateless HTTP draft path for
- * bridge-initiated strict-JSON creative calls when the endpoint exposes
- * one; Pinata `.agents.pinata.cloud` hosts use gateway WS only.
+ * Hermit draft calls are HTTP-only and must target first-party endpoints
+ * (Vercel or Railway), not Pinata gateway chat transports.
  */
 export function shouldPreferPinataHttpDraft(params: {
   sourceIdentity?: string | null
   prompt: string
   endpoint?: string | null
 }): boolean {
-  const endpoint = asTrimmed(params.endpoint) || asTrimmed(process.env.HERMIT_PINATA_CHAT_ENDPOINT)
+  const endpoint = asTrimmed(params.endpoint) || asTrimmed(process.env.HERMIT_AGENT_CHAT_ENDPOINT)
   if (!pinataEndpointSupportsHttpDraft(endpoint)) return false
-  if (readPinataBridgeHttpOnlyEnabled()) return true
-  const source = asTrimmed(params.sourceIdentity).toLowerCase()
-  if (source === 'alfaclub-bridge-runner') {
-    return !readPinataBridgeHttpOnlyDisabled()
-  }
-  return isStrictJsonHermitWorkerPrompt(params.prompt)
-}
-
-function extractChatFinalText(payload: Record<string, unknown> | undefined): string | null {
-  if (!payload) return null
-  const state = typeof payload.state === 'string' ? payload.state : ''
-  if (state !== 'final') return null
-  const message = payload.message
-  if (!message || typeof message !== 'object' || Array.isArray(message)) return null
-  const content = (message as { content?: unknown }).content
-  if (!Array.isArray(content)) return null
-  const textParts = content
-    .map((entry) => {
-      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return ''
-      const text = (entry as { text?: unknown }).text
-      return typeof text === 'string' ? text : ''
-    })
-    .filter(Boolean)
-  const joined = textParts.join('').trim()
-  if (!joined) return null
-  if (isPinataAgentFailureReply(joined)) return null
-  return joined
-}
-
-async function runPinataDraftOverGateway(params: {
-  endpoint: string
-  bearer: string
-  prompt: string
-  senderAddress?: string
-  sourceIdentity?: string | null
-}): Promise<PinataChatResult | null> {
-  const gateway = toGatewaySocketUrl(params.endpoint)
-  if (!gateway) return null
-  const route = selectHermitGatewayRoute({
-    prompt: params.prompt,
-    sourceIdentity: asTrimmed(params.sourceIdentity),
-    senderAddress: asTrimmed(params.senderAddress),
-  })
-
-  return await new Promise<PinataChatResult | null>((resolve) => {
-    const socket = new WebSocket(gateway.wsUrl, {
-      headers: {
-        Authorization: `Bearer ${params.bearer}`,
-        Origin: gateway.origin,
-        'User-Agent':
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      },
-    })
-
-    let settled = false
-    let connectSent = false
-    let connected = false
-    let runId: string | null = null
-
-    const finish = (result: PinataChatResult | null): void => {
-      if (settled) return
-      settled = true
-      clearTimeout(timeout)
-      try {
-        socket.close()
-      } catch {}
-      resolve(result)
-    }
-
-    const sendReq = (id: string, method: string, payload: Record<string, unknown>): void => {
-      socket.send(
-        JSON.stringify({
-          type: 'req',
-          id,
-          method,
-          params: payload,
-        }),
-      )
-    }
-
-    const sendConnect = (): void => {
-      if (settled || connectSent) return
-      connectSent = true
-      sendReq('connect-1', 'connect', {
-        minProtocol: 3,
-        maxProtocol: 3,
-        client: {
-          id: 'openclaw-control-ui',
-          version: 'control-ui',
-          platform: 'node',
-          mode: resolvePinataGatewayClientMode(route.mode),
-          instanceId: `hermit-${Date.now()}`,
-        },
-        role: 'operator',
-        scopes: ['operator.admin', 'operator.approvals', 'operator.pairing'],
-        caps: ['tool-events'],
-        auth: { token: params.bearer },
-        userAgent: 'Mozilla/5.0',
-        locale: 'en-US',
-      })
-    }
-
-    const timeout = setTimeout(() => finish(null), readPinataGatewayTimeoutMs())
-
-    socket.on('open', () => {
-      setTimeout(() => sendConnect(), 300)
-    })
-
-    socket.on('message', (raw) => {
-      if (settled) return
-      let msg: PinataGatewayEvent
-      try {
-        msg = JSON.parse(String(raw)) as PinataGatewayEvent
-      } catch {
-        return
-      }
-
-      if (msg.type === 'event') {
-        if (msg.event === 'connect.challenge') {
-          sendConnect()
-          return
-        }
-        if (msg.event === 'chat') {
-          const payload = msg.payload
-          if (!payload || typeof payload !== 'object') return
-          if (runId && (payload as { runId?: unknown }).runId !== runId) return
-          const text = extractChatFinalText(payload)
-          if (text) finish({ text })
-          return
-        }
-        return
-      }
-
-      if (msg.type !== 'res') return
-      if (msg.id === 'connect-1') {
-        if (!msg.ok) {
-          finish(null)
-          return
-        }
-        connected = true
-        const nextRunId = `hermit-${Date.now()}`
-        runId = nextRunId
-        sendReq('chat-send-1', 'chat.send', {
-          sessionKey: route.sessionKey,
-          message: params.prompt,
-          deliver: route.deliver,
-          idempotencyKey: nextRunId,
-        })
-        return
-      }
-
-      if (!connected) return
-      if (msg.id === 'chat-send-1') {
-        if (!msg.ok) {
-          finish(null)
-          return
-        }
-        const payload = msg.payload
-        runId =
-          payload && typeof payload === 'object' && typeof payload.runId === 'string'
-            ? payload.runId
-            : null
-        return
-      }
-    })
-
-    socket.on('close', () => finish(null))
-    socket.on('error', () => finish(null))
-  })
+  return true
 }
 
 async function runPinataDraftOverHttp(params: {
@@ -774,7 +463,7 @@ async function runPinataDraftOverHttp(params: {
   bearer: string
   prompt: string
 }): Promise<PinataChatResult | null> {
-  // Bound by `HERMIT_PINATA_HTTP_TIMEOUT_MS` so a hung creative backend
+  // Bound by `HERMIT_AGENT_HTTP_TIMEOUT_MS` so a hung creative backend
   // cannot stall the AlfaClub chat-bridge tick or leave a /hermit
   // serverless invocation running until Vercel kills it.
   const controller = new AbortController()
@@ -815,50 +504,8 @@ async function runPinataDraft(params: {
   senderAddress?: string
   sourceIdentity?: string | null
 }): Promise<PinataChatResult | null> {
-  const cfg = readPinataHermitConfig()
+  const cfg = readHermitAgentConfig()
   if (!cfg) return null
-
-  const preferHttp = shouldPreferPinataHttpDraft({
-    sourceIdentity: params.sourceIdentity,
-    prompt: params.prompt,
-    endpoint: cfg.endpoint,
-  })
-  if (preferHttp) {
-    const viaHttp = await runPinataDraftOverHttp({
-      endpoint: cfg.endpoint,
-      bearer: cfg.bearer,
-      prompt: params.prompt,
-    })
-    if (viaHttp?.text) return viaHttp
-    logger.warn('[hermit] bridge_http_draft_empty; falling_back_to_gateway', {
-      sourceIdentity: asTrimmed(params.sourceIdentity) || 'none',
-      promptHead: params.prompt.slice(0, 64),
-    })
-  }
-
-  const gatewayTarget = toGatewaySocketUrl(cfg.endpoint)
-  if (gatewayTarget) {
-    const route = selectHermitGatewayRoute({
-      prompt: params.prompt,
-      sourceIdentity: asTrimmed(params.sourceIdentity),
-      senderAddress: asTrimmed(params.senderAddress),
-    })
-    if (route.mode === 'webchat' && HERMIT_STRICT_JSON_WEBCHAT_DENY_REGEX.test(params.prompt)) {
-      logger.warn('[hermit] dropped_webchat_strict_json_prompt', {
-        sourceIdentity: route.sourceIdentity || 'none',
-        sessionKey: route.sessionKey,
-      })
-      return null
-    }
-    const viaGateway = await runPinataDraftOverGateway({
-      endpoint: cfg.endpoint,
-      bearer: cfg.bearer,
-      prompt: params.prompt,
-      senderAddress: params.senderAddress,
-      sourceIdentity: params.sourceIdentity,
-    })
-    return viaGateway?.text ? viaGateway : null
-  }
 
   return runPinataDraftOverHttp({
     endpoint: cfg.endpoint,
@@ -1891,20 +1538,27 @@ export async function executeHermitCommand(
         reply: result.ok ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}` : result.message,
       }
     }
-    const result = await runArenaTrade(
-      {
-        action: parsed.action,
-        pair: parsed.pair,
-        ...(parsed.side ? { side: parsed.side } : {}),
-        ...(parsed.sizeUsd ? { sizeUsd: parsed.sizeUsd } : {}),
-        ...(parsed.leverage ? { leverage: parsed.leverage } : {}),
-      },
-      config,
-    )
+    if (parsed.kind === 'trade') {
+      const result = await runArenaTrade(
+        {
+          action: parsed.action,
+          pair: parsed.pair,
+          ...(parsed.side ? { side: parsed.side } : {}),
+          ...(parsed.sizeUsd ? { sizeUsd: parsed.sizeUsd } : {}),
+          ...(parsed.leverage ? { leverage: parsed.leverage } : {}),
+        },
+        config,
+      )
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: result.ok ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}` : result.message,
+      }
+    }
     return {
       kind: 'hermit',
       provider: 'local',
-      reply: result.ok ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}` : result.message,
+      reply: formatArenaUsage(),
     }
   }
 
@@ -1926,7 +1580,7 @@ export async function executeHermitCommand(
     let draft: PinataChatResult | null = null
     let fallbackReason: 'pinata_throw' | 'pinata_provider_error_text' | null = null
     const pinataCaptionRequested =
-      shouldRequestPinataGmeowCaption(args) && readPinataHermitConfig() !== null
+      shouldRequestPinataGmeowCaption(args) && readHermitAgentConfig() !== null
     if (pinataCaptionRequested) {
       try {
         draft = await runPinataDraft({
@@ -1962,7 +1616,7 @@ export async function executeHermitCommand(
     }
     const draftedLine = draftedLineLooksLikeProviderError ? '' : draftedLineRaw
     const reply = draftedLine ? `${draftedLine}\n${meme.url}` : localReply
-    const provider = draftedLine ? 'pinata' : 'local'
+    const provider = draftedLine ? 'hermit' : 'local'
     logger.info('[hermit] /gmeow resolved', {
       provider,
       fallbackReason,
@@ -1992,13 +1646,13 @@ export async function executeHermitCommand(
     }
     if (!draft?.text) {
       throw commandError(
-        'Hermit meme path unavailable. Configure HERMIT_PINATA_CHAT_ENDPOINT and HERMIT_PINATA_BEARER_TOKEN.',
+        'Hermit meme path unavailable. Configure HERMIT_AGENT_CHAT_ENDPOINT and HERMIT_AGENT_BEARER_TOKEN.',
       )
     }
     const image = formatHermitImageResult(draft.text)
     const result: HermitExecutionResult = {
       kind: 'meme',
-      provider: 'pinata',
+      provider: 'hermit',
       imagePrompt: image.imagePrompt,
       reply: image.reply,
       ...(image.mediaAttachments.length > 0
@@ -2017,7 +1671,7 @@ export async function executeHermitCommand(
       }
     }
 
-    // Setup / personalization subcommands run locally — no Pinata
+    // Setup / personalization subcommands run locally — no external Hermit call
     // call, no onboarding nudge (the user is explicitly in setup
     // mode already, so the nudge would be redundant). They are
     // routed BEFORE parseHermitDraftMode so the words `setup`,
@@ -2079,12 +1733,12 @@ export async function executeHermitCommand(
     }
     if (!draft?.text) {
       throw commandError(
-        'Hermit Pinata path unavailable. Configure HERMIT_PINATA_CHAT_ENDPOINT and HERMIT_PINATA_BEARER_TOKEN.',
+        'Hermit agent path unavailable. Configure HERMIT_AGENT_CHAT_ENDPOINT and HERMIT_AGENT_BEARER_TOKEN.',
       )
     }
     const result: HermitExecutionResult = {
       kind: 'hermit',
-      provider: 'pinata',
+      provider: 'hermit',
       reply: formatHermitReplyFromDraft(draft.text),
     }
     return await withOnboardingNudge(params, result)

@@ -27,6 +27,7 @@ For XMTP agent operations, use the **[Eliza Runtime](/operations/deployment/eliz
 | **[Oracle Post-Deploy QA](/operations/oracle-post-deploy-qa)** | Read-only post-deploy oracle verification runbook and triage guide |
 | **[Explore metrics operations](/operations/explore-metrics-operations)** | Indexed Explore sync, crons, Looker ops dashboard, and health checks |
 | **[Dune analytics runbook](/operations/dune-analytics-runbook)** | Public on-chain dashboards (Ramses-style spellbook path) and `VITE_DUNE_DASHBOARD_URL` wiring |
+| **[Impairment Side-Pocket Lifecycle Drill](/operations/impairment-side-pocket-lifecycle-drill)** | End-to-end v1 impairment simulation: trip → root challenge/finalize → recovery notify → claim/resolve |
 | **[Ethos Canonical Score Cache](/operations/ethos-canonical-score-cache)** | Rollout and operations runbook for canonical Ethos identity-key caching, sync, and read cutover |
 | **[XMTP Browser Connect Canary](/operations/xmtp-browser-connect-canary)** | Layer 3 manual canary — real wallet connect, reload restore, Smart Wallet path, and recovery checklist |
 | **[Greenfield Launch Readiness](/operations/greenfield-launch-readiness)** | Repeatable gate before opening vault deploy to creators (Pipe A batcher, Solana infra, keeper defaults) |

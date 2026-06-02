@@ -168,6 +168,15 @@ export const BASE_DEFAULTS = {
   // an unconfigured environment fails loudly at the consumer rather than
   // routing writes to a stale or wrong address.
   alfaCreatorKeyLpFactory: addr('0000000000000000000000000000000000000000'),
+
+  // Impairment-v1 auxiliary defaults.
+  // Keep zero-by-default so unconfigured environments fail closed instead of
+  // accidentally wiring stale impairment endpoints into new deploys.
+  impairmentClaims: addr('0000000000000000000000000000000000000000'),
+  impairmentRecoveryEscrow: addr('0000000000000000000000000000000000000000'),
+  impairmentGuardian: addr('0000000000000000000000000000000000000000'),
+  // 1 day default in CreatorOVault constructor; runtime can override via env.
+  impairmentChallengeWindowSeconds: 86_400,
 } as const
 
 export const AKITA_DEFAULTS = {

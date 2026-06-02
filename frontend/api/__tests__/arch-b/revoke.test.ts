@@ -33,7 +33,7 @@ vi.mock('@4626/server-core', () => ({
   RATE_LIMITS: { adminAction: { windowMs: 60_000, maxRequests: 30 } },
 }))
 
-vi.mock('../../../server/_lib/wallet/commandIssuerContext.js', () => ({
+vi.mock('@4626/server-core/identity', () => ({
   revokeCommandIssuerContext: mocks.revokeCommandIssuerContext,
 }))
 
@@ -92,10 +92,10 @@ describe('POST /api/arch-b/revoke', () => {
     expect(res.body.data.profileId).toBe(PROFILE_ID)
     expect(res.body.data.reason).toBe('user_revoked')
     expect(typeof res.body.data.revokedAt).toBe('string')
-    expect(mocks.revokeCommandIssuerContext).toHaveBeenCalledWith({
-      profileId: PROFILE_ID,
-      reason: 'user_revoked',
-    })
+    expect(mocks.revokeCommandIssuerContext).toHaveBeenCalledWith(
+      PROFILE_ID,
+      'user_revoked',
+    )
   })
 
   it('returns 200 with custom reason', async () => {
@@ -114,12 +114,12 @@ describe('POST /api/arch-b/revoke', () => {
     expect(res.statusCode).toBe(405)
   })
 
-  it('returns 503 when revokeCommandIssuerContext returns db_unavailable', async () => {
-    mocks.revokeCommandIssuerContext.mockResolvedValue({ ok: false, error: 'db_unavailable' })
+  it('returns 500 when revokeCommandIssuerContext returns false', async () => {
+    mocks.revokeCommandIssuerContext.mockResolvedValue(false)
     const req = createMockReq({ method: 'POST' })
     const res = createMockRes()
     await handler(req, res)
-    expect(res.statusCode).toBe(503)
-    expect(res.body.error).toBe('db_unavailable')
+    expect(res.statusCode).toBe(500)
+    expect(res.body.error).toBe('revoke_failed')
   })
 })

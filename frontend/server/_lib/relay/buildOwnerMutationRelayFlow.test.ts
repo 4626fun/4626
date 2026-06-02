@@ -183,7 +183,7 @@ describe('validateSelectedOwnerMutationRelayUserCall', () => {
 
   it('rejects depository depositNative when depositor is not the funding CSW', () => {
     const wrongDepositor = '0x0000000000000000000000000000000000000001' as const
-    const fundingCsw = getAddress(CANONICAL_CSW_ADDRESS)
+    const fundingCsw = getAddress(CANONICAL_CSW_ADDRESS) as `0x${string}`
     const depositData = encodeFunctionData({
       abi: RELAY_DEPOSITORY_ABI,
       functionName: 'depositNative',
@@ -274,7 +274,7 @@ describe('validateSelectedOwnerMutationRelayUserCall', () => {
 })
 
 describe('buildOwnerMutationRelayFlow deposit re-quote', () => {
-  const CSW = getAddress(CANONICAL_CSW_ADDRESS)
+  const CSW = getAddress(CANONICAL_CSW_ADDRESS) as `0x${string}`
   const OWNER = '0xB2aaD65A5402714bf428a66731ae62BA5c45CAC0' as const
   const requestId = `0x${'aa'.repeat(32)}` as const
   afterEach(() => {

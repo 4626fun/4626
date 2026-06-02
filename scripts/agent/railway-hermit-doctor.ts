@@ -41,8 +41,8 @@ const hasDb = isDbConfigured()
 const hasAlfaClubJwt = !!(process.env.ALFACLUB_CHAT_JWT ?? '').trim()
 const hasAlfaClubPrivyAccess = !!(process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN ?? '').trim()
 const hasAlfaClubPrivyRefresh = !!(process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN ?? '').trim()
-const hasPinataEndpoint = !!(process.env.HERMIT_PINATA_CHAT_ENDPOINT ?? '').trim()
-const hasPinataBearer = !!(process.env.HERMIT_PINATA_BEARER_TOKEN ?? '').trim()
+const hasHermitEndpoint = !!(process.env.HERMIT_AGENT_CHAT_ENDPOINT ?? '').trim()
+const hasHermitBearer = !!(process.env.HERMIT_AGENT_BEARER_TOKEN ?? '').trim()
 const hasRoom = !!(process.env.ALFACLUB_CHAT_ROOM_ID ?? '').trim() || !!(process.env.ALFACLUB_HERMIT_COMMAND_ROOMS ?? '').trim()
 
 const hasAlfaClubBootstrap = hasAlfaClubJwt || (hasAlfaClubPrivyAccess && hasAlfaClubPrivyRefresh)
@@ -60,11 +60,11 @@ if (hasAlfaClubJwt && !hasAlfaClubPrivyAccess) {
   console.log('   (Only raw JWT present — bridge will work until expiry; refresher will not be able to rotate it)')
 }
 
-console.log('\n--- Hermit Creative (Pinata OpenClaw) ---')
-check('HERMIT_PINATA_CHAT_ENDPOINT present', hasPinataEndpoint, false)
-check('HERMIT_PINATA_BEARER_TOKEN present', hasPinataBearer, false)
-if (hasPinataEndpoint && !hasPinataBearer) {
-  console.log('   Pinata endpoint without bearer token will cause creative commands to fail at runtime (not boot).')
+console.log('\n--- Hermit Creative (first-party /api/hermit/draft via AI Gateway) ---')
+check('HERMIT_AGENT_CHAT_ENDPOINT present', hasHermitEndpoint, false)
+check('HERMIT_AGENT_BEARER_TOKEN present', hasHermitBearer, false)
+if (hasHermitEndpoint && !hasHermitBearer) {
+  console.log('   Hermit endpoint without bearer token will cause creative commands to fail at runtime (not boot).')
 }
 
 console.log('\n--- Room Targeting (for 1659 theatrical marketing etc.) ---')
@@ -110,9 +110,9 @@ const railwayBlock = [
   `ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN=${process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN ?? ''}`,
   `ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN=${process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN ?? ''}`,
   '',
-  '# --- Creative brain (Pinata) + 1659 targeting ---',
-  `HERMIT_PINATA_CHAT_ENDPOINT=${process.env.HERMIT_PINATA_CHAT_ENDPOINT ?? ''}`,
-  `HERMIT_PINATA_BEARER_TOKEN=${process.env.HERMIT_PINATA_BEARER_TOKEN ?? ''}`,
+  '# --- Creative brain (first-party /api/hermit/draft) + 1659 targeting ---',
+  `HERMIT_AGENT_CHAT_ENDPOINT=${process.env.HERMIT_AGENT_CHAT_ENDPOINT ?? 'https://app.4626.fun/api/hermit/draft'}`,
+  `HERMIT_AGENT_BEARER_TOKEN=${process.env.HERMIT_AGENT_BEARER_TOKEN ?? ''}`,
   `ALFACLUB_CHAT_ROOM_ID=${process.env.ALFACLUB_CHAT_ROOM_ID ?? '1659'}`,
   `ALFACLUB_HERMIT_COMMAND_ROOMS=${process.env.ALFACLUB_HERMIT_COMMAND_ROOMS ?? '1659'}`,
 ].join('\n')
