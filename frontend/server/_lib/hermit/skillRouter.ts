@@ -28,7 +28,10 @@ import type {
 } from './types.js'
 import { logger } from '../infra/logger.js'
 import { getClearinghouseState } from '../alfaclub/hyperliquid.js'
-import { formatRoom1659MarketForHermit } from '../alfaclub/room1659Market.js'
+import {
+  formatRoom1659MarketForHermit,
+  resolveRoom1659HyperliquidUserForSnapshot,
+} from '../alfaclub/room1659Market.js'
 import {
   buildHyperliquidPositionReport,
   formatPositionAlertStatusBlock,
@@ -1407,11 +1410,17 @@ async function handleHermitAlertSubcommand(
 }
 
 async function buildPositionCommandReply(params: HermitExecutionParams): Promise<string> {
-  const wallet = params.senderAddress
-  const hlState = await getClearinghouseState(wallet)
-  const alert = await readHyperliquidPositionAlert(wallet)
+  // Room 1659 tracks a dedicated room-level Hyperliquid portfolio rather than
+  // the sender's personal wallet. Keep alert config per-sender, but pull HL
+  // positions for the room portfolio so /position matches the room context.
+  const hlWallet =
+    params.roomId === '1659'
+      ? resolveRoom1659HyperliquidUserForSnapshot(params.senderAddress)
+      : params.senderAddress
+  const hlState = await getClearinghouseState(hlWallet)
+  const alert = await readHyperliquidPositionAlert(params.senderAddress)
   return buildHyperliquidPositionReport({
-    walletAddress: wallet,
+    walletAddress: hlWallet,
     hlState,
     alert,
   })

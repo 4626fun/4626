@@ -55,8 +55,18 @@ async function buildHermitComprehensiveHelpPayload(params: {
     import('./positionAlertStore.js'),
   ])
 
+  // Room 1659 tracks a dedicated room-level Hyperliquid portfolio, not the
+  // sender's personal wallet. Resolve the HL identity through the room
+  // resolver so the snapshot/position report match the room context shown in
+  // the "Market pulse" section below. Alert config stays per-sender.
+  let hlWallet = params.senderWallet
+  if (params.roomId === '1659') {
+    const { resolveRoom1659HyperliquidUserForSnapshot } = await import('./room1659Market.js')
+    hlWallet = resolveRoom1659HyperliquidUserForSnapshot(params.senderWallet)
+  }
+
   const [stateResult, alertResult] = await Promise.allSettled([
-    getClearinghouseState(params.senderWallet),
+    getClearinghouseState(hlWallet),
     readHyperliquidPositionAlert(params.senderWallet),
   ])
   const state = stateResult.status === 'fulfilled' ? stateResult.value : null
@@ -95,7 +105,7 @@ async function buildHermitComprehensiveHelpPayload(params: {
   const sections: string[] = [
     '🧠 **Agent Hermit — Hyperliquid intelligence brief**',
     buildHyperliquidPositionReport({
-      walletAddress: params.senderWallet,
+      walletAddress: hlWallet,
       hlState: state,
       alert,
     }),
