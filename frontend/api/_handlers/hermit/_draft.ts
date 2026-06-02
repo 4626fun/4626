@@ -45,13 +45,69 @@ const MAX_PROMPT_CHARS = 8_000
 const MAX_OUTPUT_TOKENS_DEFAULT = 400
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 
+/**
+ * Nous Hermes 4 is a hybrid-reasoning model. Through OpenAI-compatible hosts
+ * (OpenRouter, self-hosted vLLM/SGLang) it frequently inlines its chain of
+ * thought as `<think>…</think>` into the message content. The skill router
+ * expects a single short line (often strict JSON), so a leaked reasoning block
+ * either poisons the room copy or consumes the whole token budget. We both
+ * instruct the model to skip reasoning (steerable, low-refusal) AND strip any
+ * artifacts that slip through.
+ */
+const HERMES_OUTPUT_GUARD =
+  'Respond with only the final message. Do not include analysis, planning, chain-of-thought, or <think> tags.'
+
 function asTrimmed(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
 type ModelResolution =
-  | { ok: true; model: LanguageModel }
+  | { ok: true; kind: 'gateway' | 'compatible'; model: LanguageModel }
   | { ok: false; status: number; error: string }
+
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Remove reasoning artifacts that hybrid models (Hermes) leak into content:
+ * closed `<think>`/`<reasoning>` blocks, an unclosed trailing block left when
+ * reasoning is truncated by the token cap, and any stray tags from partial
+ * streams. No-op for clean output (gateway/gpt path).
+ */
+function stripReasoningArtifacts(text: string): string {
+  return text
+    .replace(/<think\b[^>]*>[\s\S]*?<\/think>/gi, '')
+    .replace(/<reasoning\b[^>]*>[\s\S]*?<\/reasoning>/gi, '')
+    .replace(/<think\b[^>]*>[\s\S]*$/gi, '')
+    .replace(/<reasoning\b[^>]*>[\s\S]*$/gi, '')
+    .replace(/<\/?(?:think|reasoning)\b[^>]*>/gi, '')
+    .trim()
+}
+
+/**
+ * Map upstream failures to accurate status codes so the caller's fallback and
+ * observability are honest (timeout vs rate limit vs generic). Avoid echoing
+ * provider internals on classified failures; only generic errors pass through
+ * a length-bounded message.
+ */
+function classifyModelError(error: unknown): { status: number; message: string } {
+  const name = typeof (error as { name?: unknown })?.name === 'string' ? (error as { name: string }).name : ''
+  const raw = error instanceof Error ? error.message : 'Draft generation failed'
+  if (name === 'TimeoutError' || name === 'AbortError' || /\baborted\b|timed?\s?out/i.test(raw)) {
+    return { status: 504, message: 'Draft timed out' }
+  }
+  const statusCode = Number((error as { statusCode?: unknown })?.statusCode)
+  if (statusCode === 429 || /\b429\b|rate[\s-]?limit|too many requests/i.test(raw)) {
+    return { status: 429, message: 'Upstream model rate limited' }
+  }
+  return { status: 502, message: raw.slice(0, 240) }
+}
 
 /**
  * Resolve the model backend from env. Returns a plain string for the AI Gateway
@@ -68,7 +124,7 @@ function resolveHermitModel(): ModelResolution {
 
   if (!useCompatible) {
     // AI Gateway path: the SDK accepts a `provider/model` string directly.
-    return { ok: true, model: modelId }
+    return { ok: true, kind: 'gateway', model: modelId }
   }
 
   const apiKey =
@@ -82,6 +138,16 @@ function resolveHermitModel(): ModelResolution {
   }
 
   const baseURL = explicitBaseUrl || OPENROUTER_BASE_URL
+  // Fail closed on a malformed override rather than surfacing an opaque SDK
+  // error mid-generation. The default OpenRouter URL always passes.
+  if (!isValidHttpUrl(baseURL)) {
+    return {
+      ok: false,
+      status: 503,
+      error: 'Hermit OpenAI-compatible base URL is invalid',
+    }
+  }
+
   const compat = createOpenAICompatible({
     name: 'hermit-agent',
     baseURL,
@@ -93,7 +159,7 @@ function resolveHermitModel(): ModelResolution {
       'X-Title': '4626 Hermit',
     },
   })
-  return { ok: true, model: compat(modelId) }
+  return { ok: true, kind: 'compatible', model: compat(modelId) }
 }
 
 function readTimeoutMs(): number {
@@ -164,7 +230,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!resolved.ok) {
     return res.status(resolved.status).json({ error: resolved.error })
   }
-  const system = asTrimmed(process.env.HERMIT_AGENT_SYSTEM)
+
+  // On the Hermes / OpenAI-compatible path, lead with the reasoning-suppression
+  // guard so the model returns only the final line. The gateway (gpt) path does
+  // not emit reasoning, so it uses the operator system prompt unchanged.
+  const operatorSystem = asTrimmed(process.env.HERMIT_AGENT_SYSTEM)
+  const system =
+    resolved.kind === 'compatible'
+      ? [HERMES_OUTPUT_GUARD, operatorSystem].filter(Boolean).join('\n\n')
+      : operatorSystem
 
   try {
     const { text } = await generateText({
@@ -176,13 +250,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       maxRetries: 1,
       abortSignal: AbortSignal.timeout(readTimeoutMs()),
     })
-    const reply = asTrimmed(text)
+    const reply = stripReasoningArtifacts(typeof text === 'string' ? text : '')
     if (!reply) {
       return res.status(502).json({ error: 'Empty draft from model' })
     }
     return res.status(200).json({ text: reply })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Draft generation failed'
-    return res.status(502).json({ error: message.slice(0, 240) })
+    const classified = classifyModelError(error)
+    return res.status(classified.status).json({ error: classified.message })
   }
 }

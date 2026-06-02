@@ -219,4 +219,82 @@ describe('POST /api/hermit/draft', () => {
     expect(createOpenAICompatibleMock).not.toHaveBeenCalled()
     expect(generateTextMock).not.toHaveBeenCalled()
   })
+
+  it('returns 503 when HERMIT_AGENT_BASE_URL is malformed', async () => {
+    restoreEnv?.()
+    restoreEnv = applyEnv({
+      HERMIT_AGENT_BEARER_TOKEN: 'secret-token',
+      HERMIT_AGENT_BASE_URL: 'not-a-url',
+      HERMIT_AGENT_API_KEY: 'self-host-key',
+    })
+    const req = createMockReq({ method: 'POST', headers: AUTH, body: { prompt: 'gm' } })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(503)
+    expect(generateTextMock).not.toHaveBeenCalled()
+  })
+
+  it('strips a leaked <think> reasoning block from the returned line (Hermes)', async () => {
+    generateTextMock.mockResolvedValueOnce({
+      text: '<think>The user wants a hype line. I should be punchy.</think>gm degens, vault season is on 🚀',
+    })
+    const req = createMockReq({ method: 'POST', headers: AUTH, body: { prompt: 'hype line' } })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toEqual({ text: 'gm degens, vault season is on 🚀' })
+  })
+
+  it('returns 502 when reasoning consumed the budget (only a truncated <think> block)', async () => {
+    generateTextMock.mockResolvedValueOnce({ text: '<think>still reasoning when the token cap hit and' })
+    const req = createMockReq({ method: 'POST', headers: AUTH, body: { prompt: 'hi' } })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(502)
+    expect(generateTextMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('prepends the reasoning-suppression guard to the system prompt on the Hermes path', async () => {
+    restoreEnv?.()
+    restoreEnv = applyEnv({
+      HERMIT_AGENT_BEARER_TOKEN: 'secret-token',
+      HERMIT_AGENT_PROVIDER: 'openrouter',
+      HERMIT_AGENT_MODEL: 'nousresearch/hermes-4-70b',
+      OPENROUTER_API_KEY: 'or-key',
+      HERMIT_AGENT_SYSTEM: 'You are Hermit, gremlin of the vault.',
+    })
+    const req = createMockReq({ method: 'POST', headers: AUTH, body: { prompt: 'gm' } })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(200)
+    const sentSystem: string = generateTextMock.mock.calls[0][0].system
+    expect(sentSystem).toContain('Do not include analysis, planning, chain-of-thought, or <think> tags')
+    expect(sentSystem).toContain('You are Hermit, gremlin of the vault.')
+  })
+
+  it('does not add the reasoning guard on the gateway path', async () => {
+    const req = createMockReq({ method: 'POST', headers: AUTH, body: { prompt: 'hi' } })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(generateTextMock.mock.calls[0][0].system).toBeUndefined()
+  })
+
+  it('maps a timeout/abort failure to 504', async () => {
+    generateTextMock.mockRejectedValueOnce(Object.assign(new Error('The operation was aborted'), { name: 'TimeoutError' }))
+    const req = createMockReq({ method: 'POST', headers: AUTH, body: { prompt: 'hi' } })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(504)
+    expect(res.body?.error).toBe('Draft timed out')
+  })
+
+  it('maps an upstream rate-limit failure to 429', async () => {
+    generateTextMock.mockRejectedValueOnce(Object.assign(new Error('rate limit exceeded'), { statusCode: 429 }))
+    const req = createMockReq({ method: 'POST', headers: AUTH, body: { prompt: 'hi' } })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(429)
+    expect(res.body?.error).toBe('Upstream model rate limited')
+  })
 })
