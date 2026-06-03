@@ -6,12 +6,20 @@ declare const process: { env: Record<string, string | undefined> }
 
 let schemaChecked = false
 let schemaCheckPromise: Promise<boolean> | null = null
+let warnedMissingUnifiedChartRefreshFn = false
 
 async function hasProjectionTable(db: Db): Promise<boolean> {
   const result = await db.sql`
     SELECT to_regclass('public.creator_ethos_projection') IS NOT NULL AS has_projection;
   `
   return Boolean(result.rows?.[0]?.has_projection)
+}
+
+async function hasFunction(db: Db, signature: string): Promise<boolean> {
+  const result = await db.sql`
+    SELECT to_regprocedure(${signature}) IS NOT NULL AS available;
+  `
+  return Boolean(result.rows?.[0]?.available)
 }
 
 export async function ensureCreatorEthosProjectionSchema(db: Db): Promise<boolean> {
@@ -625,7 +633,19 @@ export async function refreshCreatorEthosProjection(params: {
 
   // Refresh all interconnected chart materialized views (unified approach)
   try {
-    await params.db.sql`SELECT public.refresh_all_ethos_chart_views();`
+    const hasUnifiedChartRefreshFn = await hasFunction(
+      params.db,
+      'public.refresh_all_ethos_chart_views()',
+    )
+    if (hasUnifiedChartRefreshFn) {
+      await params.db.sql`SELECT public.refresh_all_ethos_chart_views();`
+      warnedMissingUnifiedChartRefreshFn = false
+    } else if (!warnedMissingUnifiedChartRefreshFn) {
+      warnedMissingUnifiedChartRefreshFn = true
+      console.warn(
+        '[creatorEthosProjection] skipping chart views refresh; function public.refresh_all_ethos_chart_views() is missing',
+      )
+    }
   } catch (e) {
     console.warn('[creatorEthosProjection] failed to refresh chart views', e)
   }
