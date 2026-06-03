@@ -62,7 +62,7 @@ describe('arenaClient create/register (acp path)', () => {
     expect(result).toHaveProperty('message')
   })
 
-  it('parse helper (internal via create) tolerates common acp-style output', async () => {
+  it('runArenaCreateAgent exercises the parser and returns correct shape', async () => {
     const cfg = mockConfig({ dryRun: true, creationEnabled: true })
     const r = await runArenaCreateAgent(cfg)
     expect(typeof r.ok).toBe('boolean')

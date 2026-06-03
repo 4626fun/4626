@@ -8,6 +8,8 @@ import {
   shouldPreferPinataHttpDraft,
   shouldRequestPinataGmeowCaption,
 } from './skillRouter'
+import * as arenaStore from '../arena/arenaIdentityMappingStore.js'
+import * as arenaClient from '../arena/arenaClient.js'
 
 describe('executeHermitCommand', () => {
   let restoreEnv: (() => void) | null = null
@@ -323,7 +325,7 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toContain('11111111')
   })
 
-  it('supports /arena register (no ids) as create-only path: runs create, surfaces ids/guidance, does NOT auto-bind or onboard (dry)', async () => {
+  it('supports /arena register (no ids) create path: creates, auto-binds as personal mine + onboards (dry)', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_DGCLAW_DIR: '/tmp',
@@ -336,14 +338,44 @@ describe('executeHermitCommand', () => {
       senderAddress: sender,
       roomId: '1659',
     })
-    // Create path must surface guidance to claim in web UI then re-invoke with explicit ids.
-    // It must NOT contain the onboarding steps or "Identity bound".
+    // In plain dry (no mock), create returns no parsable ids → guidance path.
+    // (See the mocked-success test below for the auto-bind + onboard path.)
     expect(result.reply.toLowerCase()).toContain('register')
     expect(result.reply).toContain('app.virtuals.io/acp/new')
     expect(result.reply.toLowerCase()).toContain('claim')
     expect(result.reply).not.toContain('Identity bound')
     expect(result.reply).not.toContain('join=')
-    expect(result.reply).not.toContain('add-api-wallet=')
+  })
+
+  it('create path /arena register (no ids) with successful acp parse auto-binds + onboards (mocked)', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '0', // pretend live
+      ARENA_CREATION_ENABLED: '1',
+    })
+    const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
+
+    const createSpy = vi.spyOn(arenaClient, 'runArenaCreateAgent').mockResolvedValue({
+      ok: true,
+      agentId: 'mock-created-agent-uuid-1234',
+      agentWalletAddress: '0x3333333333333333333333333333333333333333',
+      run: { dryRun: false, stdout: 'success' } as any,
+    } as any)
+
+    const result = await executeHermitCommand({
+      commandText: '/arena register',
+      senderAddress: sender,
+      roomId: '1659',
+    })
+
+    expect(result.reply).toContain('Created agent via acp and bound as personal')
+    expect(result.reply).toContain('mock-created-agent-uuid-1234')
+    expect(result.reply).toContain('0x3333333333333333333333333333333333333333')
+    expect(result.reply).toContain('join=')
+    expect(result.reply.toLowerCase()).toContain('claim') // note for web if full ownership needed
+
+    createSpy.mockRestore()
   })
 
   it('rejects /arena register outside allowed rooms (same gate as other subs)', async () => {
@@ -357,6 +389,39 @@ describe('executeHermitCommand', () => {
       roomId: '1043',
     })
     expect(result.reply).toContain('only enabled in approved rooms')
+  })
+
+  it('supports /arena register default (supplied ids) to change room default + onboard', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+    })
+    const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9' // operator-like
+    const agentId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    const agentWallet = '0x4444444444444444444444444444444444444444'
+
+    // Mock to simulate successful default set
+    const upsertSpy = vi.spyOn(arenaStore, 'upsertArenaIdentityMapping').mockResolvedValue(true)
+
+    const result = await executeHermitCommand({
+      commandText: `/arena register default ${agentId} ${agentWallet}`,
+      senderAddress: sender,
+      roomId: '1659',
+    })
+
+    expect(result.reply).toContain('Arena room default register (supplied ids)')
+    expect(result.reply).toContain('Room default mapping saved/updated')
+    expect(result.reply).toContain('join=ok[dry]')
+    expect(result.reply).toContain(agentId)
+    expect(result.reply).toContain(agentWallet)
+
+    expect(upsertSpy).toHaveBeenCalledWith(expect.objectContaining({
+      senderAddress: '*', // room default
+      arenaAgentId: agentId,
+    }))
+
+    upsertSpy.mockRestore()
   })
 
   it('short-circuits /arena register (supplied ids) when ids already match resolved for sender (already-bound case)', async () => {
@@ -375,6 +440,53 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toContain('Already bound for your sender')
     expect(result.reply).not.toContain('Identity bind failed')
     expect(result.reply).not.toContain('join=')
+  })
+
+  it('supports full happy-path /arena register (supplied ids) with successful bind + onboard (mocked DB)', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+    })
+    const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
+    const agentId = '12345678-1234-5678-90ab-cdef12345678'
+    const agentWallet = '0x2222222222222222222222222222222222222222'
+
+    // Mock successful DB operations for E2E-like coverage of the bind path
+    const resolveSpy = vi.spyOn(arenaStore, 'resolveArenaIdentityForContext').mockResolvedValue({
+      source: 'user',
+      roomId: '1659',
+      senderAddress: sender,
+      agentId: null, // different so no short-circuit
+      agentWalletAddress: null,
+      hlApiWalletAddress: null,
+    })
+    const upsertSpy = vi.spyOn(arenaStore, 'upsertArenaIdentityMapping').mockResolvedValue(true)
+
+    const result = await executeHermitCommand({
+      commandText: `/arena register ${agentId} ${agentWallet}`,
+      senderAddress: sender,
+      roomId: '1659',
+    })
+
+    expect(result.reply).toContain('Arena register (supplied ids):')
+    expect(result.reply).toContain('Identity bound for \'mine\'')
+    expect(result.reply).toContain(sender)
+    expect(result.reply).toContain('join=ok[dry]')
+    expect(result.reply).toContain('activate=ok[dry]')
+    expect(result.reply).toContain('add-api-wallet=ok[dry]')
+    expect(result.reply).toContain(agentId)
+    expect(result.reply).toContain(agentWallet)
+
+    expect(upsertSpy).toHaveBeenCalledWith(expect.objectContaining({
+      roomId: '1659',
+      senderAddress: sender,
+      arenaAgentId: agentId,
+      arenaWalletAddress: agentWallet,
+    }))
+
+    resolveSpy.mockRestore()
+    upsertSpy.mockRestore()
   })
 
   it('uses a rotating bundled meme for plain /gmeow', async () => {

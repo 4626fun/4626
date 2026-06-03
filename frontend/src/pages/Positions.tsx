@@ -5,6 +5,8 @@ import { useQuery } from '@tanstack/react-query'
 import { PositionsChartSurface } from '@/components/positions/PositionsChartSurface'
 import { PositionsEventInspector } from '@/components/positions/PositionsEventInspector'
 import { PositionsEventLegend } from '@/components/positions/PositionsEventLegend'
+import { PositionsMarketRail } from '@/components/positions/PositionsMarketRail'
+import { PositionsMarketSignal } from '@/components/positions/PositionsMarketSignal'
 import type { ChartOverlayEvent, TimelineResponse } from '@/components/positions/types'
 import { Button } from '@/components/ui/Button'
 import { apiFetch } from '@/lib/api/apiBase'
@@ -33,6 +35,78 @@ function nearestCandleClose(ts: number, candles: TimelineResponse['candles']): n
   return best.close
 }
 
+type PositionFill = { time: number; side: 'long' | 'short' | null; size: number | null; price: number | null }
+
+/**
+ * Reconstructs the running net position (signed size + average entry) from a market's
+ * fills, so we can value the room's open exposure at any past timestamp. A long fill
+ * (buy) increases the position; a short fill (sell) decreases it. Reduces keep the
+ * existing average entry; flips reset it to the fill price. Approximate but truthful —
+ * derived only from real fills, not synthesized.
+ */
+function buildPositionContextResolver(fills: PositionFill[]) {
+  const sorted = [...fills].sort((a, b) => a.time - b.time)
+  const states: { time: number; net: number; avgEntry: number }[] = []
+  let net = 0
+  let avgEntry = 0
+  for (const fill of sorted) {
+    const qty = Math.abs(fill.size ?? 0)
+    if (qty > 0) {
+      const signed = (fill.side === 'short' ? -1 : 1) * qty
+      const px = fill.price ?? avgEntry
+      const sameDirection = net === 0 || net > 0 === signed > 0
+      if (sameDirection) {
+        const newNet = net + signed
+        const denom = Math.abs(newNet)
+        avgEntry = denom > 0 ? (avgEntry * Math.abs(net) + px * qty) / denom : avgEntry
+        net = newNet
+      } else {
+        const newNet = net + signed
+        if (newNet === 0) {
+          net = 0
+          avgEntry = 0
+        } else if (newNet > 0 !== net > 0) {
+          net = newNet
+          avgEntry = px
+        } else {
+          net = newNet
+        }
+      }
+    }
+    states.push({ time: fill.time, net, avgEntry })
+  }
+  return (timeMs: number, markPrice: number | null) => {
+    let resolved = { net: 0, avgEntry: 0 }
+    for (const state of states) {
+      if (state.time <= timeMs) resolved = state
+      else break
+    }
+    if (resolved.net === 0) {
+      return { side: null, size: 0, avgEntry: null, markPrice, unrealizedPnl: null }
+    }
+    const side: 'long' | 'short' = resolved.net > 0 ? 'long' : 'short'
+    const unrealizedPnl =
+      markPrice != null && resolved.avgEntry > 0 ? (markPrice - resolved.avgEntry) * resolved.net : null
+    return { side, size: Math.abs(resolved.net), avgEntry: resolved.avgEntry, markPrice, unrealizedPnl }
+  }
+}
+
+function inferExitReason(event: Pick<ChartOverlayEvent, 'action' | 'dir'>): string | null {
+  if (event.action === 'liquidated') return 'Liquidation'
+  if (event.action !== 'close') return null
+  const dir = (event.dir ?? '').toLowerCase()
+  if (dir.includes('liquidat') || dir.includes('liq')) return 'Liquidation'
+  return 'Manual Close'
+}
+
+// Finer candles when zoomed in, coarser for long windows — keeps us under Hyperliquid's
+// ~5000-candle snapshot cap while reducing how many messages collide on a single candle.
+function intervalForWindow(windowHours: number): string {
+  if (windowHours <= 24) return '5m'
+  if (windowHours <= 72) return '15m'
+  return '1h'
+}
+
 async function fetchRoomTimelineBySymbol(
   windowHours: number,
   symbol: string | null,
@@ -40,6 +114,7 @@ async function fetchRoomTimelineBySymbol(
   const params = new URLSearchParams({
     roomId: '1659',
     windowHours: String(windowHours),
+    interval: intervalForWindow(windowHours),
   })
   if (symbol && symbol.trim().length > 0) {
     params.set('symbol', symbol.trim().toUpperCase())
@@ -55,17 +130,14 @@ async function fetchRoomTimelineBySymbol(
 export function Positions() {
   const [chatScope, setChatScope] = useState<'host' | 'all' | 'sender'>('all')
   const [selectedSender, setSelectedSender] = useState<string | null>(null)
-  const [selectedMarket, setSelectedMarket] = useState<string>('all')
+  const [selectedMarket, setSelectedMarket] = useState<string>('')
   const [windowHours, setWindowHours] = useState<24 | 72 | 168>(168)
   const [densityMode, setDensityMode] = useState<'all' | 'major'>('all')
   const [showTrades, setShowTrades] = useState(true)
-  const [showHostMessages, setShowHostMessages] = useState(true)
-  const [showRoomMessages, setShowRoomMessages] = useState(true)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [hoveredEventId, setHoveredEventId] = useState<string | null>(null)
 
   const selectedSymbolForQuery = useMemo(() => {
-    if (selectedMarket === 'all') return null
     const [symbol] = selectedMarket.split('/')
     const normalized = (symbol ?? '').trim().toUpperCase()
     return normalized || null
@@ -77,11 +149,13 @@ export function Positions() {
     staleTime: 30_000,
   })
 
-  useEffect(() => {
-    const available = new Set(['all', ...(data?.markets ?? [])])
-    if (!available.has(selectedMarket)) {
-      setSelectedMarket(data?.defaultMarket ?? 'all')
-    }
+  // Resolve the active market during render instead of syncing via an effect.
+  // `selectedMarket` is the raw user choice (empty until they pick one); we fall
+  // back to the server default whenever the choice is empty or no longer available.
+  const effectiveMarket = useMemo(() => {
+    const available = data?.markets ?? []
+    if (selectedMarket && available.includes(selectedMarket)) return selectedMarket
+    return data?.defaultMarket ?? selectedMarket
   }, [data?.defaultMarket, data?.markets, selectedMarket])
 
   const senderOptions = useMemo(() => {
@@ -102,15 +176,27 @@ export function Positions() {
         : chatScope === 'sender' && selectedSender
           ? source.filter((event) => event.senderAddress === selectedSender)
           : source
-    if (selectedMarket === 'all') return byScope
-    return byScope.filter((event) => event.market == null || event.market === selectedMarket)
-  }, [chatScope, data?.chatEvents, selectedMarket, selectedSender])
+    if (!effectiveMarket) return byScope
+    // Market-specific messages stay decoupled; room-wide chatter (null market) is
+    // general social signal and surfaces on every market.
+    return byScope.filter((event) => event.market === effectiveMarket || event.market == null)
+  }, [chatScope, data?.chatEvents, effectiveMarket, selectedSender])
 
   const filteredTradeEvents = useMemo(() => {
     const source = data?.tradeEvents ?? []
-    if (selectedMarket === 'all') return source
-    return source.filter((event) => event.market === selectedMarket)
-  }, [data?.tradeEvents, selectedMarket])
+    if (!effectiveMarket) return source
+    return source.filter((event) => event.market === effectiveMarket)
+  }, [data?.tradeEvents, effectiveMarket])
+
+  const selectedSummary = useMemo(() => {
+    const summaries = data?.marketSummaries ?? []
+    return summaries.find((summary) => summary.market === effectiveMarket) ?? summaries[0] ?? null
+  }, [data?.marketSummaries, effectiveMarket])
+
+  const lastPrice = useMemo(() => {
+    const candles = data?.candles ?? []
+    return candles.length > 0 ? candles[candles.length - 1]!.close : null
+  }, [data?.candles])
 
   const allOverlayEvents = useMemo<ChartOverlayEvent[]>(() => {
     const candles = data?.candles ?? []
@@ -123,21 +209,35 @@ export function Positions() {
           action: event.action,
           side: event.side,
           price: event.price,
+          size: event.size,
+          closedPnl: event.closedPnl,
+          dir: event.dir,
         }))
       : []
-    const chats = filteredChatEvents
-      .filter((event) => (event.isHost ? showHostMessages : showRoomMessages))
-      .map<ChartOverlayEvent>((event) => ({
+    const resolvePositionContext = buildPositionContextResolver(
+      filteredTradeEvents.map((event) => ({
+        time: event.time,
+        side: event.side,
+        size: event.size,
+        price: event.price,
+      })),
+    )
+    const chats = filteredChatEvents.map<ChartOverlayEvent>((event) => {
+      const markPrice = nearestCandleClose(event.time, candles)
+      return {
         id: event.id,
         time: event.time,
         market: event.market,
         kind: event.isHost ? 'host-chat' : 'chat',
         text: event.text,
         senderLabel: event.senderLabel,
+        senderAvatarUrl: event.senderAvatarUrl,
         senderAddress: event.senderAddress,
         isFirstFromSender: event.isFirstFromSender,
-        price: nearestCandleClose(event.time, candles),
-      }))
+        price: markPrice,
+        contextAtTime: resolvePositionContext(event.time, markPrice),
+      }
+    })
     const merged = [...trades, ...chats].sort((a, b) => a.time - b.time)
     if (densityMode === 'all') return merged
     const major = merged
@@ -162,8 +262,6 @@ export function Positions() {
     densityMode,
     filteredChatEvents,
     filteredTradeEvents,
-    showHostMessages,
-    showRoomMessages,
     showTrades,
     selectedEventId,
   ])
@@ -207,7 +305,7 @@ export function Positions() {
     <div className="relative pb-24 md:pb-0">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-52 bg-gradient-to-b from-sky-500/10 to-transparent" />
       <section className="cinematic-section">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="max-w-[1760px] mx-auto px-4 sm:px-6">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -217,110 +315,55 @@ export function Positions() {
             <span className="label">Positions Timeline</span>
             <h1 className="headline text-4xl sm:text-6xl mt-4">Room 1659 Intelligence Surface</h1>
             <p className="text-zinc-400 text-sm font-light mt-3">
-              Hyperliquid-style market chart with room 1659 trade lifecycle overlays and chat context.
+              Per-market social signal and historical indicator — room 1659 messages alongside live
+              and historical positions, mapped to the market they reference.
             </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {[24, 72, 168].map((hours) => (
-                <Button
-                  key={hours}
-                  variant={windowHours === hours ? 'primary' : 'secondary'}
-                  size="sm"
-                  className="btn-compact rounded-full text-xs"
-                  onClick={() => setWindowHours(hours as 24 | 72 | 168)}
-                >
-                  {hours === 24 ? '24h' : hours === 72 ? '3d' : '7d'}
-                </Button>
-              ))}
-              <Button
-                variant={densityMode === 'major' ? 'primary' : 'secondary'}
-                size="sm"
-                className="btn-compact rounded-full text-xs"
-                onClick={() => setDensityMode((mode) => (mode === 'major' ? 'all' : 'major'))}
-              >
-                {densityMode === 'major' ? 'Major markers' : 'All markers'}
-              </Button>
-              <Button
-                variant={showTrades ? 'primary' : 'secondary'}
-                size="sm"
-                className="btn-compact rounded-full text-xs"
-                onClick={() => setShowTrades((value) => !value)}
-              >
-                Trades
-              </Button>
-              <Button
-                variant={showHostMessages ? 'primary' : 'secondary'}
-                size="sm"
-                className="btn-compact rounded-full text-xs"
-                onClick={() => setShowHostMessages((value) => !value)}
-              >
-                Host msgs
-              </Button>
-              <Button
-                variant={showRoomMessages ? 'primary' : 'secondary'}
-                size="sm"
-                className="btn-compact rounded-full text-xs"
-                onClick={() => setShowRoomMessages((value) => !value)}
-              >
-                Room msgs
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="btn-compact rounded-full text-xs"
-                onClick={() => void refetch()}
-                disabled={isFetching}
-              >
-                {isFetching ? 'Refreshing…' : 'Refresh'}
-              </Button>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <select
                 className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
-                value={selectedMarket}
+                value={effectiveMarket}
                 onChange={(event) => setSelectedMarket(event.target.value)}
               >
-                <option value="all">All markets</option>
                 {(data?.markets ?? []).map((market) => (
                   <option key={market} value={market}>
                     {market}
                   </option>
                 ))}
               </select>
-              <Button
-                variant={chatScope === 'host' ? 'primary' : 'secondary'}
-                size="sm"
-                className="btn-compact rounded-full text-xs"
-                onClick={() => {
-                  setChatScope('host')
-                  setSelectedSender(null)
-                }}
+              <select
+                className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
+                value={String(windowHours)}
+                onChange={(event) => setWindowHours(Number(event.target.value) as 24 | 72 | 168)}
               >
-                Host chats
-              </Button>
-              <Button
-                variant={chatScope === 'all' ? 'primary' : 'secondary'}
-                size="sm"
-                className="btn-compact rounded-full text-xs"
-                onClick={() => {
-                  setChatScope('all')
-                  setSelectedSender(null)
-                }}
+                <option value="24">24h</option>
+                <option value="72">3d</option>
+                <option value="168">7d</option>
+              </select>
+              <select
+                className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
+                value={densityMode}
+                onChange={(event) => setDensityMode(event.target.value as 'all' | 'major')}
               >
-                All chats
-              </Button>
-              <Button
-                variant={chatScope === 'sender' ? 'primary' : 'secondary'}
-                size="sm"
-                className="btn-compact rounded-full text-xs"
-                onClick={() => {
-                  setChatScope('sender')
-                  if (!selectedSender && senderOptions.length > 0) {
+                <option value="all">All events</option>
+                <option value="major">Key events only</option>
+              </select>
+              <select
+                className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
+                value={chatScope}
+                onChange={(event) => {
+                  const scope = event.target.value as 'host' | 'all' | 'sender'
+                  setChatScope(scope)
+                  if (scope !== 'sender') {
+                    setSelectedSender(null)
+                  } else if (!selectedSender && senderOptions.length > 0) {
                     setSelectedSender(senderOptions[0]!.address)
                   }
                 }}
               >
-                Sender filter
-              </Button>
+                <option value="all">All room messages</option>
+                <option value="host">Host only</option>
+                <option value="sender">Specific sender</option>
+              </select>
               {chatScope === 'sender' && (
                 <select
                   className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
@@ -334,47 +377,84 @@ export function Positions() {
                   ))}
                 </select>
               )}
+              <Button
+                variant={showTrades ? 'primary' : 'secondary'}
+                size="sm"
+                className="btn-compact rounded-full text-xs"
+                onClick={() => setShowTrades((value) => !value)}
+              >
+                Trades
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="btn-compact rounded-full text-xs"
+                onClick={() => void refetch()}
+                disabled={isFetching}
+              >
+                {isFetching ? 'Refreshing…' : 'Refresh'}
+              </Button>
             </div>
+            <p className="mt-2 text-[11px] text-zinc-500">
+              Message scope controls chat overlays; “Trades” toggles position events.
+            </p>
           </motion.div>
 
-          <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4 sm:p-6">
-            {isLoading ? (
-              <div className="text-sm text-zinc-400">Loading room timeline…</div>
-            ) : error ? (
-              <div className="text-sm text-red-300">
-                Failed to load timeline: {error instanceof Error ? error.message : 'unknown error'}
-              </div>
-            ) : (data?.candles.length ?? 0) === 0 ? (
-              <div className="text-sm text-zinc-400">No candle data available in this timeframe.</div>
-            ) : (
-              <div className="space-y-4">
-                <PositionsChartSurface
-                  candles={data?.candles ?? []}
-                  events={allOverlayEvents}
-                  selectedEventId={selectedEventId}
-                  onSelectEvent={setSelectedEventId}
-                  onHoverEvent={setHoveredEventId}
-                />
-                <PositionsEventLegend />
-              </div>
-            )}
-          </div>
+          {data && !isLoading && !error && (data.marketSummaries?.length ?? 0) > 0 && (
+            <div className="mb-4 space-y-4">
+              <PositionsMarketRail
+                summaries={data.marketSummaries}
+                selectedMarket={effectiveMarket}
+                onSelect={setSelectedMarket}
+              />
+              <PositionsMarketSignal
+                summary={selectedSummary}
+                lastPrice={lastPrice}
+                roomWideMessageCount={data.roomWideMessageCount ?? 0}
+              />
+            </div>
+          )}
 
-          <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,2fr),minmax(320px,1fr)]">
-            <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4 sm:p-5">
+          {/* Chart + side panel (timeline events & inspector) */}
+          <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+            <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-3 sm:p-4">
+              {isLoading ? (
+                <div className="text-sm text-zinc-400">Loading room timeline…</div>
+              ) : error ? (
+                <div className="text-sm text-red-300">
+                  Failed to load timeline: {error instanceof Error ? error.message : 'unknown error'}
+                </div>
+              ) : (data?.candles.length ?? 0) === 0 ? (
+                <div className="text-sm text-zinc-400">No candle data available in this timeframe.</div>
+              ) : (
+                <div className="space-y-4">
+                  <PositionsChartSurface
+                    candles={data?.candles ?? []}
+                    events={allOverlayEvents}
+                    selectedEventId={selectedEventId}
+                    onSelectEvent={setSelectedEventId}
+                    onHoverEvent={setHoveredEventId}
+                  />
+                  <PositionsEventLegend />
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-4 lg:sticky lg:top-6 self-start">
+              <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4 sm:p-5">
               <div className="label">Timeline events ({displayedEventRows.length})</div>
-              <div className="mt-3 max-h-[360px] overflow-y-auto space-y-2">
+              <div className="mt-3 max-h-[48vh] overflow-y-auto space-y-2 pr-1 [scrollbar-gutter:stable]">
                 {displayedEventRows.map((event) => (
                   <button
                     key={event.id}
                     type="button"
                     onClick={() => setSelectedEventId(event.id)}
-                    className={`w-full text-left rounded-md border p-2 text-xs transition ${
+                    className={`w-full text-left rounded-lg border p-2.5 text-xs transition ${
                       selectedEventId === event.id
                         ? 'border-sky-400/60 bg-sky-400/10'
                         : hoveredEventId === event.id
                           ? 'border-violet-400/60 bg-violet-400/10'
-                        : 'border-white/5 bg-white/[0.03] hover:border-sky-400/40'
+                        : 'border-white/5 bg-white/[0.03] hover:border-sky-400/40 hover:bg-white/[0.05]'
                     }`}
                   >
                     <div className="text-zinc-300">
@@ -387,20 +467,38 @@ export function Positions() {
                           ? 'Host message'
                           : 'Room message'}
                     </div>
+                    {event.kind === 'trade' &&
+                      (event.action === 'close' || event.action === 'liquidated') &&
+                      typeof event.closedPnl === 'number' && (
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <span className="rounded-full border border-white/15 bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-zinc-300">
+                            {inferExitReason(event)}
+                          </span>
+                          <span
+                            className={`text-[11px] ${
+                              event.closedPnl >= 0 ? 'text-emerald-300' : 'text-rose-300'
+                            }`}
+                          >
+                            P/L {event.closedPnl >= 0 ? '+' : ''}
+                            ${event.closedPnl.toFixed(2)}
+                          </span>
+                        </div>
+                      )}
                     {event.text && <div className="mt-1 text-zinc-300">{event.text.slice(0, 180)}</div>}
                   </button>
                 ))}
               </div>
-            </div>
-            <div className="lg:sticky lg:top-24 h-fit">
-              <PositionsEventInspector
-                event={selectedEvent ?? null}
-                index={Math.max(0, selectedEventIndex)}
-                total={allOverlayEvents.length}
-                onPrevious={() => stepEvent(-1)}
-                onNext={() => stepEvent(1)}
-                onClear={() => setSelectedEventId(null)}
-              />
+              </div>
+              <div className="h-fit">
+                <PositionsEventInspector
+                  event={selectedEvent ?? null}
+                  index={Math.max(0, selectedEventIndex)}
+                  total={allOverlayEvents.length}
+                  onPrevious={() => stepEvent(-1)}
+                  onNext={() => stepEvent(1)}
+                  onClear={() => setSelectedEventId(null)}
+                />
+              </div>
             </div>
           </div>
         </div>

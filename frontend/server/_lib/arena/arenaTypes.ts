@@ -1,13 +1,3 @@
-export type ArenaCommandName =
-  | 'status'
-  | 'assets'
-  | 'join'
-  | 'activate-unified-account'
-  | 'add-api-wallet'
-  | 'deposit'
-  | 'trade'
-  | 'register'
-
 export type ArenaTradeAction = 'open' | 'close'
 export type ArenaTradeSide = 'long' | 'short'
 export type ArenaTradeMarket = 'crypto' | 'hip3'
