@@ -3,6 +3,7 @@ import { getDb } from '../db/postgres.js'
 import { ensureAlfaclubPositionAlertSchema } from '../db/schemaBootstrap.js'
 
 declare const process: { env: Record<string, string | undefined> }
+let warnedMissingPositionAlertTable = false
 
 /** Wallet-scoped Hyperliquid alerts — not tied to an AlfaClub room. */
 export const HL_POSITION_ALERT_SCOPE = 'hyperliquid'
@@ -72,6 +73,17 @@ function rowToConfig(row: AlertRow): PositionAlertConfig {
   }
 }
 
+async function hasPositionAlertTable(db: NonNullable<Awaited<ReturnType<typeof getDb>>>): Promise<boolean> {
+  try {
+    const result = await db.sql`
+      SELECT to_regclass('alfaclub.position_alert') IS NOT NULL AS has_table;
+    `
+    return Boolean(result.rows?.[0]?.has_table)
+  } catch {
+    return false
+  }
+}
+
 export async function readHyperliquidPositionAlert(
   senderAddress: string,
 ): Promise<PositionAlertConfig | null> {
@@ -99,6 +111,8 @@ export async function readPositionAlert(params: {
   const db = await getDb()
   if (!db) return null
   await ensureAlfaclubPositionAlertSchema(db)
+  const tableExists = await hasPositionAlertTable(db)
+  if (!tableExists) return null
 
   const result = await db.sql`
     SELECT room_id, sender_address, enabled, telegram_enabled,
@@ -128,6 +142,8 @@ export async function upsertPositionAlert(params: {
   const db = await getDb()
   if (!db) return null
   await ensureAlfaclubPositionAlertSchema(db)
+  const tableExists = await hasPositionAlertTable(db)
+  if (!tableExists) return null
 
   const existing = await readPositionAlert({ roomId, senderAddress })
 
@@ -185,6 +201,8 @@ export async function disablePositionAlert(params: {
   const db = await getDb()
   if (!db) return false
   await ensureAlfaclubPositionAlertSchema(db)
+  const tableExists = await hasPositionAlertTable(db)
+  if (!tableExists) return false
 
   try {
     await db.sql`
@@ -203,6 +221,17 @@ export async function listEnabledPositionAlerts(limit = 200): Promise<PositionAl
     const db = await getDb()
     if (!db) return []
     await ensureAlfaclubPositionAlertSchema(db)
+    const tableExists = await hasPositionAlertTable(db)
+    if (!tableExists) {
+      if (!warnedMissingPositionAlertTable) {
+        warnedMissingPositionAlertTable = true
+        logger.warn('position_alert.table_missing', {
+          message: 'alfaclub.position_alert is missing; returning empty alert set',
+        })
+      }
+      return []
+    }
+    warnedMissingPositionAlertTable = false
 
     const capped = Math.min(Math.max(1, limit), 500)
     const result = await db.sql`

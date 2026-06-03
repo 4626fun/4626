@@ -90,8 +90,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     } satisfies ApiEnvelope<{ txHash: string; status: string }>)
   } catch (err) {
-    console.error('[keeper/report] Error:', err)
     if (isKnownKeeperReportGasRejection(err)) {
+      console.warn('[keeper/report] known gas rejection', {
+        message: err instanceof Error ? err.message : String(err),
+      })
       return res.status(200).json({
         success: false,
         error: 'keeper_report_gas_rejected',
@@ -101,6 +103,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
       } satisfies ApiEnvelope<{ status: string; reason: string }>)
     }
+    console.error('[keeper/report] Error:', err)
     return res.status(500).json({
       success: false,
       error: err instanceof Error ? err.message : 'Unknown error',

@@ -25,10 +25,21 @@ import { PageMeta } from '@/components/seo/PageMeta'
  */
 
 const AKITA_TOKEN = '0x5b674196812451b7cec024fe9d22d2c0b172fa75'
-// Image-to-3D AKITA mesh generated from the token logo (Hunyuan3D-2.1, shape-only).
-const SHIBA_MODEL_URL = '/dev/akita-hunyuan.glb'
-useGLTF.preload(SHIBA_MODEL_URL)
+const MODEL_LIBRARY = [
+  {
+    id: 'akita-hunyuan',
+    label: 'Akita (Hunyuan)',
+    url: '/dev/akita-hunyuan.glb',
+  },
+  {
+    id: 'cat-hologram',
+    label: 'Cat (Hologram)',
+    url: '/dev/cat-hologram.glb',
+  },
+] as const
+MODEL_LIBRARY.forEach((model) => useGLTF.preload(model.url))
 type ModelAssetStatus = 'checking' | 'ready' | 'missing'
+type TacticalModel = { id: string; label: string; url: string }
 
 function shortAddr(a: string) {
   return a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a
@@ -204,7 +215,7 @@ function ProjectorPad() {
 //     shimmer / dissolve organically;
 //   • a fresnel rim term glows the silhouette like a true hologram;
 //   • the scan button still fires a vertical sweep + disperse/reform burst.
-const PARTICLE_COUNT = 30000
+const PARTICLE_COUNT = 12000
 const SCAN_DURATION_MS = 1700
 
 // Ashima 3D simplex noise — used for the shimmer/dissolve displacement.
@@ -349,11 +360,11 @@ function seededUnitFloat(seed: number) {
   return x - Math.floor(x)
 }
 
-function HoloDog({ scanTick }: { scanTick: number }) {
+function HoloDog({ scanTick, modelUrl }: { scanTick: number; modelUrl: string }) {
   const spin = useRef<THREE.Group>(null)
   const bob = useRef<THREE.Group>(null)
   const burstStart = useRef<number>(-1)
-  const { scene } = useGLTF(SHIBA_MODEL_URL)
+  const { scene } = useGLTF(modelUrl)
 
   const material = useMemo(
     () =>
@@ -515,7 +526,7 @@ function HoloDog({ scanTick }: { scanTick: number }) {
   )
 }
 
-function MissingDogFallback() {
+function HoloFallback({ loading = false }: { loading?: boolean }) {
   const ref = useRef<THREE.Group>(null)
   useFrame((state) => {
     if (!ref.current) return
@@ -525,11 +536,17 @@ function MissingDogFallback() {
     <group ref={ref} position={[0, 0.82, 0]}>
       <mesh>
         <icosahedronGeometry args={[0.68, 1]} />
-        <meshBasicMaterial color="#7fe6ff" wireframe transparent opacity={0.95} toneMapped={false} />
+        <meshBasicMaterial
+          color={loading ? '#6faed4' : '#7fe6ff'}
+          wireframe
+          transparent
+          opacity={loading ? 0.55 : 0.95}
+          toneMapped={false}
+        />
       </mesh>
       <mesh position={[0, -0.76, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.4, 0.52, 48]} />
-        <meshBasicMaterial color="#5cc7ff" transparent opacity={0.75} toneMapped={false} />
+        <meshBasicMaterial color={loading ? '#4c86b8' : '#5cc7ff'} transparent opacity={0.75} toneMapped={false} />
       </mesh>
     </group>
   )
@@ -537,20 +554,22 @@ function MissingDogFallback() {
 
 function HoloProjection({
   scanTick,
+  modelUrl,
   modelAssetStatus,
 }: {
   scanTick: number
+  modelUrl: string
   modelAssetStatus: ModelAssetStatus
 }) {
   return (
     <group>
       <ProjectorPad />
       {modelAssetStatus === 'ready' ? (
-        <Suspense fallback={null}>
-          <HoloDog scanTick={scanTick} />
+        <Suspense fallback={<HoloFallback loading />}>
+          <HoloDog scanTick={scanTick} modelUrl={modelUrl} />
         </Suspense>
       ) : (
-        <MissingDogFallback />
+        <HoloFallback loading={modelAssetStatus !== 'missing'} />
       )}
     </group>
   )
@@ -607,12 +626,21 @@ function Rig({ pointerRef }: { pointerRef: React.RefObject<{ x: number; y: numbe
 function Scene({
   scanTick,
   pointerRef,
-  modelAssetStatus,
+  selectedModels,
 }: {
   scanTick: number
   pointerRef: React.RefObject<{ x: number; y: number }>
-  modelAssetStatus: ModelAssetStatus
+  selectedModels: Array<TacticalModel & { status: ModelAssetStatus }>
 }) {
+  const holoPositions = useMemo(() => {
+    if (selectedModels.length <= 1) return [[0, 0, 0] as const]
+    const radius = selectedModels.length <= 3 ? 1.55 : 2.15
+    return selectedModels.map((_, idx) => {
+      const t = (idx / selectedModels.length) * Math.PI * 2
+      return [Math.cos(t) * radius, 0, Math.sin(t) * radius] as const
+    })
+  }, [selectedModels])
+
   return (
     <>
       <color attach="background" args={['#010309']} />
@@ -635,7 +663,15 @@ function Scene({
 
       <TerrainRing />
       <PerimeterRing />
-      <HoloProjection scanTick={scanTick} modelAssetStatus={modelAssetStatus} />
+      {selectedModels.map((model, idx) => (
+        <group key={model.id} position={holoPositions[idx] ?? [0, 0, 0]}>
+          <HoloProjection
+            scanTick={scanTick}
+            modelUrl={model.url}
+            modelAssetStatus={model.status}
+          />
+        </group>
+      ))}
       <ScanRing scanTick={scanTick} />
 
       <Rig pointerRef={pointerRef} />
@@ -657,29 +693,60 @@ export function TacticalTokenMap() {
   const token = (params.get('token') || AKITA_TOKEN).toLowerCase()
   const symbol = (params.get('symbol') || 'AKITA').toUpperCase()
   const name = params.get('name') || 'Akita'
+  const requestedModels = (params.get('models') || params.get('model') || 'akita-hunyuan')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
 
   const pointerRef = useRef({ x: 0, y: 0 })
   const [scanTick, setScanTick] = useState(0)
   const [scanning, setScanning] = useState(false)
-  const [modelAssetStatus, setModelAssetStatus] = useState<ModelAssetStatus>('checking')
+  const [modelCatalog, setModelCatalog] = useState<TacticalModel[]>(() => [...MODEL_LIBRARY])
+  const [customModelUrl, setCustomModelUrl] = useState('')
+  const [selectedModelIds, setSelectedModelIds] = useState<string[]>(() => {
+    const chosen = requestedModels
+      .map((request) => MODEL_LIBRARY.find((m) => m.id === request || m.url === request)?.id)
+      .filter((value): value is string => Boolean(value))
+    return chosen.length > 0 ? chosen : ['akita-hunyuan']
+  })
+  const [modelStatuses, setModelStatuses] = useState<Record<string, ModelAssetStatus>>({})
+
+  const selectedModels = useMemo(
+    () => modelCatalog.filter((model) => selectedModelIds.includes(model.id)),
+    [modelCatalog, selectedModelIds],
+  )
 
   useEffect(() => {
     let cancelled = false
-    async function checkModelAsset() {
-      try {
-        const headRes = await fetch(SHIBA_MODEL_URL, { method: 'HEAD', cache: 'no-store' })
-        if (!cancelled) {
-          setModelAssetStatus(headRes.ok ? 'ready' : 'missing')
+    async function checkModelAssets() {
+      if (selectedModels.length === 0) return
+      if (!cancelled) {
+        setModelStatuses((prev) => {
+          const next = { ...prev }
+          for (const model of selectedModels) {
+            next[model.id] = 'checking'
+          }
+          return next
+        })
+      }
+      for (const model of selectedModels) {
+        try {
+          const headRes = await fetch(model.url, { method: 'HEAD', cache: 'no-store' })
+          if (!cancelled) {
+            setModelStatuses((prev) => ({ ...prev, [model.id]: headRes.ok ? 'ready' : 'missing' }))
+          }
+        } catch {
+          if (!cancelled) {
+            setModelStatuses((prev) => ({ ...prev, [model.id]: 'missing' }))
+          }
         }
-      } catch {
-        if (!cancelled) setModelAssetStatus('missing')
       }
     }
-    void checkModelAsset()
+    void checkModelAssets()
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [selectedModels])
 
   const nodes = useMemo(
     () => [
@@ -697,6 +764,40 @@ export function TacticalTokenMap() {
     setScanning(true)
     window.setTimeout(() => setScanning(false), 1700)
   }
+
+  function toggleSelectedModel(modelId: string) {
+    setSelectedModelIds((prev) => {
+      if (prev.includes(modelId)) {
+        if (prev.length === 1) return prev
+        return prev.filter((id) => id !== modelId)
+      }
+      return [...prev, modelId]
+    })
+  }
+
+  function addCustomModel() {
+    const url = customModelUrl.trim()
+    if (!url) return
+    const existing = modelCatalog.find((model) => model.url === url)
+    if (existing) {
+      setSelectedModelIds((prev) => (prev.includes(existing.id) ? prev : [...prev, existing.id]))
+      setCustomModelUrl('')
+      return
+    }
+    const safeId = `custom-${Date.now()}`
+    const nextModel: TacticalModel = {
+      id: safeId,
+      label: `Custom ${modelCatalog.filter((m) => m.id.startsWith('custom-')).length + 1}`,
+      url,
+    }
+    useGLTF.preload(url)
+    setModelCatalog((prev) => [...prev, nextModel])
+    setSelectedModelIds((prev) => [...prev, safeId])
+    setCustomModelUrl('')
+  }
+
+  const missingModels = selectedModels.filter((model) => modelStatuses[model.id] === 'missing')
+  const anyModelChecking = selectedModels.some((model) => modelStatuses[model.id] === 'checking')
 
   return (
     <div
@@ -720,7 +821,14 @@ export function TacticalTokenMap() {
         dpr={[1, 2]}
         camera={{ position: [0, 7, 12.5], fov: 36, near: 0.1, far: 100 }}
       >
-        <Scene scanTick={scanTick} pointerRef={pointerRef} modelAssetStatus={modelAssetStatus} />
+        <Scene
+          scanTick={scanTick}
+          pointerRef={pointerRef}
+          selectedModels={selectedModels.map((model) => ({
+            ...model,
+            status: modelStatuses[model.id] ?? 'checking',
+          }))}
+        />
       </Canvas>
 
       {/* CRT scanlines + vignette overlay */}
@@ -755,6 +863,46 @@ export function TacticalTokenMap() {
           {scanning ? 'SCANNING' : 'STANDBY'}
         </div>
         <div className="mt-1 text-[rgba(120,170,240,0.65)]">GRID A–F · 1–5</div>
+      </div>
+
+      {/* Mid-right GLB selector */}
+      <div className="absolute right-7 top-20 z-20 w-[320px] rounded border border-[rgba(95,170,255,0.42)] bg-[rgba(5,20,42,0.74)] p-3 text-[10px] uppercase tracking-[0.14em] text-[rgba(165,220,255,0.92)] backdrop-blur-sm">
+        <div className="mb-2 text-[11px] tracking-[0.2em] text-[rgba(145,205,255,0.95)]">Hologram Units</div>
+        <div className="space-y-1">
+          {modelCatalog.map((model) => {
+            const checked = selectedModelIds.includes(model.id)
+            const status = modelStatuses[model.id]
+            return (
+              <label key={model.id} className="flex cursor-pointer items-center gap-2 text-[9px]">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleSelectedModel(model.id)}
+                  className="h-3 w-3 accent-cyan-400"
+                />
+                <span className="flex-1 truncate">{model.label}</span>
+                <span className="text-[rgba(130,180,230,0.7)]">
+                  {status === 'missing' ? 'missing' : status === 'ready' ? 'ready' : '...'}
+                </span>
+              </label>
+            )
+          })}
+        </div>
+        <div className="mt-3 flex gap-2">
+          <input
+            value={customModelUrl}
+            onChange={(e) => setCustomModelUrl(e.target.value)}
+            placeholder="/dev/another.glb"
+            className="h-7 flex-1 border border-[rgba(95,170,255,0.4)] bg-[rgba(3,14,30,0.78)] px-2 text-[10px] normal-case tracking-normal text-[rgba(185,230,255,0.96)] outline-none placeholder:text-[rgba(125,170,210,0.55)]"
+          />
+          <button
+            type="button"
+            onClick={addCustomModel}
+            className="h-7 border border-[rgba(110,205,255,0.55)] bg-[rgba(25,76,138,0.42)] px-2 text-[9px] text-[rgba(185,235,255,0.96)] transition hover:border-[rgba(145,230,255,0.9)] hover:text-white"
+          >
+            Add
+          </button>
+        </div>
       </div>
 
       {/* Bottom-left node list */}
@@ -794,14 +942,14 @@ export function TacticalTokenMap() {
 
       {/* Bottom-right info */}
       <div className="pointer-events-none absolute bottom-7 right-7 text-right text-[11px] text-[rgba(120,170,240,0.6)]">
-        {modelAssetStatus === 'missing' ? (
+        {missingModels.length > 0 ? (
           <div className="rounded border border-[rgba(255,130,90,0.7)] bg-[rgba(90,20,12,0.45)] px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-[rgba(255,170,140,0.95)]">
-            Model missing: /dev/akita-hunyuan.glb
+            Missing: {missingModels.map((model) => model.url).join(', ')}
           </div>
-        ) : modelAssetStatus === 'checking' ? (
-          'Checking model…'
+        ) : anyModelChecking ? (
+          'Checking model(s)…'
         ) : (
-          'ⓘ INFO'
+          `ⓘ ${selectedModels.length} hologram${selectedModels.length === 1 ? '' : 's'} online`
         )}
       </div>
     </div>

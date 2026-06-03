@@ -822,7 +822,9 @@ function buildHermitHelpReply(roomId?: string | null): string {
     '- `/position` — your HL snapshot + proactive risk brief',
     '- `/position chart` — timeline chart link + marker counts',
     '- `/position markers all` — expanded trade/chat marker list',
-    '- `/position marker <n>` — inspect one marker with full context',
+    '- `/position host markers` — host-only chat markers',
+    '- `/position sender <address|me>` — sender-specific chat markers',
+    '- `/position marker latest|trade 1|host 1|<n>` — inspect marker context',
     '- `/signal` — position-aware enter/exit bias from your live entries',
     '- `/market` — broader majors + AlfaClub market scope',
     '',
@@ -1644,7 +1646,12 @@ function positionSubcommandUsage(): string {
     '- `/position` — live Hyperliquid snapshot + risk brief',
     '- `/position chart` — timeline chart link + marker counts',
     '- `/position markers all` — expanded numbered marker feed (trade + chat)',
-    '- `/position marker <n>` — inspect one marker with thread/trade context',
+    '- `/position host markers` — host-only chat marker feed',
+    '- `/position sender <address|me>` — sender-specific chat marker feed',
+    '- `/position marker latest` — newest marker',
+    '- `/position marker trade <n>` — nth most recent trade marker (1 = newest)',
+    '- `/position marker host <n>` — nth most recent host-chat marker (1 = newest)',
+    '- `/position marker <n>` — exact marker index from marker lists',
   ].join('\n')
 }
 
@@ -1663,6 +1670,8 @@ async function buildPositionChartCommandReply(params: HermitExecutionParams): Pr
     '',
     'In chat:',
     '- `/position markers all` for the full indexed list',
+    '- `/position host markers` for host-only chats',
+    '- `/position sender <address|me>` for one sender',
     '- `/position marker <n>` to inspect one marker',
   ].join('\n')
 }
@@ -1685,17 +1694,107 @@ async function buildPositionMarkersAllReply(params: HermitExecutionParams): Prom
   ].join('\n')
 }
 
+function normalizePositionSenderFilter(raw: string, senderAddress: string): string | null {
+  const token = raw.trim().toLowerCase()
+  if (!token) return null
+  if (token === 'me') return senderAddress.toLowerCase()
+  if (/^0x[a-f0-9]{40}$/.test(token)) return token
+  return null
+}
+
+async function buildPositionFilteredChatMarkersReply(
+  params: HermitExecutionParams,
+  filter:
+    | { kind: 'host' }
+    | {
+        kind: 'sender'
+        senderAddress: string
+      },
+): Promise<string> {
+  if (!params.roomId) {
+    return 'Marker feed is available in AlfaClub room contexts only.'
+  }
+  const events = await buildPositionMarkerEvents(params)
+  const chats = events.filter(
+    (event): event is Extract<PositionMarkerEvent, { kind: 'chat' }> => event.kind === 'chat',
+  )
+  const filtered =
+    filter.kind === 'host'
+      ? chats.filter((event) => event.chat.isHost)
+      : chats.filter((event) => event.chat.senderAddress.toLowerCase() === filter.senderAddress)
+
+  if (filtered.length === 0) {
+    if (filter.kind === 'host') {
+      return 'No host chat markers found in this timeline window yet.'
+    }
+    return `No chat markers found for ${filter.senderAddress} in this timeline window yet.`
+  }
+
+  const maxRows = 80
+  const slice = filtered.slice(-maxRows)
+  const heading =
+    filter.kind === 'host'
+      ? `🧭 **Host chat markers** (latest ${slice.length} of ${filtered.length})`
+      : `🧭 **Sender chat markers** (${filter.senderAddress.slice(0, 6)}…${filter.senderAddress.slice(-4)}) — latest ${slice.length} of ${filtered.length}`
+
+  return [
+    heading,
+    ...slice.map((event) => event.summary),
+    '',
+    'Inspect one marker: `/position marker <n>`',
+  ].join('\n')
+}
+
 async function buildPositionMarkerDetailReply(
   params: HermitExecutionParams,
-  markerIndex: number,
+  markerSelector:
+    | { kind: 'index'; markerIndex: number }
+    | { kind: 'latest' }
+    | { kind: 'trade_recent'; nth: number }
+    | { kind: 'host_recent'; nth: number },
 ): Promise<string> {
   if (!params.roomId) {
     return 'Marker detail is available in AlfaClub room contexts only.'
   }
   const events = await buildPositionMarkerEvents(params)
-  const target = events.find((event) => event.markerIndex === markerIndex)
+  if (events.length === 0) {
+    return 'No timeline markers found in this window yet. Retry after new fills or chat activity.'
+  }
+
+  const targetBySelector = (() => {
+    if (markerSelector.kind === 'index') {
+      return events.find((event) => event.markerIndex === markerSelector.markerIndex) ?? null
+    }
+    if (markerSelector.kind === 'latest') {
+      return events[events.length - 1] ?? null
+    }
+    if (markerSelector.kind === 'trade_recent') {
+      const trades = events.filter(
+        (event): event is Extract<PositionMarkerEvent, { kind: 'trade' }> => event.kind === 'trade',
+      )
+      if (trades.length === 0) return null
+      return trades[trades.length - markerSelector.nth] ?? null
+    }
+    const hostChats = events.filter(
+      (event): event is Extract<PositionMarkerEvent, { kind: 'chat' }> =>
+        event.kind === 'chat' && event.chat.isHost,
+    )
+    if (hostChats.length === 0) return null
+    return hostChats[hostChats.length - markerSelector.nth] ?? null
+  })()
+
+  const target = targetBySelector
   if (!target) {
-    return `Marker #${markerIndex} not found. Use \`/position markers all\` for valid indexes.`
+    if (markerSelector.kind === 'index') {
+      return `Marker #${markerSelector.markerIndex} not found. Use \`/position markers all\` for valid indexes.`
+    }
+    if (markerSelector.kind === 'trade_recent') {
+      return `Trade marker #${markerSelector.nth} not found. Use \`/position markers all\` to inspect available trades.`
+    }
+    if (markerSelector.kind === 'host_recent') {
+      return `Host marker #${markerSelector.nth} not found. Use \`/position host markers\` to inspect available host chats.`
+    }
+    return 'No latest marker found. Use `/position markers all` first.'
   }
 
   if (target.kind === 'trade') {
@@ -1748,7 +1847,16 @@ type PositionSubcommand =
   | { kind: 'default' }
   | { kind: 'chart' }
   | { kind: 'markers_all' }
-  | { kind: 'marker'; markerIndex: number }
+  | { kind: 'host_markers' }
+  | { kind: 'sender_markers'; senderToken: string }
+  | {
+      kind: 'marker'
+      selector:
+        | { kind: 'index'; markerIndex: number }
+        | { kind: 'latest' }
+        | { kind: 'trade_recent'; nth: number }
+        | { kind: 'host_recent'; nth: number }
+    }
   | { kind: 'usage' }
 
 function parsePositionSubcommand(rawArgs: string): PositionSubcommand {
@@ -1756,8 +1864,33 @@ function parsePositionSubcommand(rawArgs: string): PositionSubcommand {
   if (!args) return { kind: 'default' }
   if (/^chart$/i.test(args)) return { kind: 'chart' }
   if (/^markers\s+all$/i.test(args)) return { kind: 'markers_all' }
+  if (/^host\s+markers$/i.test(args)) return { kind: 'host_markers' }
+  const senderMatch = args.match(/^sender\s+(.+)$/i)
+  if (senderMatch?.[1]) return { kind: 'sender_markers', senderToken: senderMatch[1].trim() }
+  if (/^marker\s+latest$/i.test(args) || /^marker\s+last$/i.test(args)) {
+    return { kind: 'marker', selector: { kind: 'latest' } }
+  }
+  const markerTradeMatch = args.match(/^marker\s+trade\s+(\d+)$/i)
+  if (markerTradeMatch?.[1]) {
+    return {
+      kind: 'marker',
+      selector: { kind: 'trade_recent', nth: Number(markerTradeMatch[1]) },
+    }
+  }
+  const markerHostMatch = args.match(/^marker\s+host\s+(\d+)$/i)
+  if (markerHostMatch?.[1]) {
+    return {
+      kind: 'marker',
+      selector: { kind: 'host_recent', nth: Number(markerHostMatch[1]) },
+    }
+  }
   const markerMatch = args.match(/^marker\s+(\d+)$/i)
-  if (markerMatch?.[1]) return { kind: 'marker', markerIndex: Number(markerMatch[1]) }
+  if (markerMatch?.[1]) {
+    return {
+      kind: 'marker',
+      selector: { kind: 'index', markerIndex: Number(markerMatch[1]) },
+    }
+  }
   return { kind: 'usage' }
 }
 
@@ -2015,11 +2148,37 @@ export async function executeHermitCommand(
         reply: await buildPositionMarkersAllReply(params),
       }
     }
+    if (parsed.kind === 'host_markers') {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: await buildPositionFilteredChatMarkersReply(params, { kind: 'host' }),
+      }
+    }
+    if (parsed.kind === 'sender_markers') {
+      const senderAddress = normalizePositionSenderFilter(parsed.senderToken, params.senderAddress)
+      if (!senderAddress) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply:
+            'Invalid sender filter. Use `/position sender <0x...>` or `/position sender me`.',
+        }
+      }
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: await buildPositionFilteredChatMarkersReply(params, {
+          kind: 'sender',
+          senderAddress,
+        }),
+      }
+    }
     if (parsed.kind === 'marker') {
       return {
         kind: 'hermit',
         provider: 'local',
-        reply: await buildPositionMarkerDetailReply(params, parsed.markerIndex),
+        reply: await buildPositionMarkerDetailReply(params, parsed.selector),
       }
     }
     if (parsed.kind === 'usage') {

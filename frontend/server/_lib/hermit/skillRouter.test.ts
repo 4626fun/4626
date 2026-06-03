@@ -142,7 +142,79 @@ describe('executeHermitCommand', () => {
 
     expect(result.kind).toBe('hermit')
     expect(result.provider).toBe('local')
-    expect(result.reply).toMatch(/Marker #1|not found/)
+    expect(result.reply).toMatch(/Marker #1|not found|No timeline markers found/)
+  })
+
+  it('supports /position marker latest alias', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/position marker latest',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toMatch(/Marker #|No latest marker found|No timeline markers found/)
+  })
+
+  it('supports /position marker trade 1 alias', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/position marker trade 1',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toMatch(/Marker #|Trade marker #1 not found|No timeline markers found/)
+  })
+
+  it('supports /position marker host 1 alias', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/position marker host 1',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toMatch(/Marker #|Host marker #1 not found|No timeline markers found/)
+  })
+
+  it('supports /position host markers in room contexts', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/position host markers',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toMatch(/Host chat markers|No host chat markers found/)
+  })
+
+  it('supports /position sender me in room contexts', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/position sender me',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toMatch(/Sender chat markers|No chat markers found/)
+  })
+
+  it('rejects invalid /position sender filter', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/position sender not-an-address',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('Invalid sender filter')
   })
 
   it('supports /arena status in room 1659 when enabled', async () => {

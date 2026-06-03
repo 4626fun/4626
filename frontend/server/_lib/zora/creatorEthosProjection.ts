@@ -8,6 +8,7 @@ let schemaChecked = false
 let schemaCheckPromise: Promise<boolean> | null = null
 let warnedMissingUnifiedChartRefreshFn = false
 let warnedMissingMarketCapBucketsRefreshFn = false
+let warnedMissing15MinSnapshotFn = false
 
 async function hasProjectionTable(db: Db): Promise<boolean> {
   const result = await db.sql`
@@ -620,7 +621,19 @@ export async function refreshCreatorEthosProjection(params: {
 
   // Ultra high-resolution 15-min snapshots (use with short retention)
   try {
-    await params.db.sql`SELECT public.snapshot_creator_ethos_15min();`
+    const has15MinSnapshotFn = await hasFunction(
+      params.db,
+      'public.snapshot_creator_ethos_15min()',
+    )
+    if (has15MinSnapshotFn) {
+      await params.db.sql`SELECT public.snapshot_creator_ethos_15min();`
+      warnedMissing15MinSnapshotFn = false
+    } else if (!warnedMissing15MinSnapshotFn) {
+      warnedMissing15MinSnapshotFn = true
+      console.warn(
+        '[creatorEthosProjection] skipping 15min snapshot; function public.snapshot_creator_ethos_15min() is missing',
+      )
+    }
   } catch (e) {
     console.warn('[creatorEthosProjection] failed to snapshot 15min Ethos data', e)
   }
