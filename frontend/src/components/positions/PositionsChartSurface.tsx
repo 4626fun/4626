@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   CandlestickSeries,
   ColorType,
+  CrosshairMode,
+  LineStyle,
   type MouseEventParams,
   type IChartApi,
   type ISeriesApi,
@@ -138,6 +140,20 @@ function senderInitial(event: ChartOverlayEvent): string {
   return (event.senderLabel ?? event.senderAddress ?? '?').slice(0, 1).toUpperCase()
 }
 
+// Deterministic, attractive gradient derived from the sender identity, used as the avatar
+// backdrop so messages without a usable pfp (e.g. some Hermit bot posts) still render a
+// polished circular icon instead of a flat gray dot.
+function senderGradient(event: ChartOverlayEvent): string {
+  const seed = (event.senderAddress ?? event.senderLabel ?? 'room').toLowerCase()
+  let hash = 0
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0
+  }
+  const h1 = hash % 360
+  const h2 = (h1 + 48 + (hash % 60)) % 360
+  return `linear-gradient(135deg, hsl(${h1} 70% 52%), hsl(${h2} 72% 40%))`
+}
+
 type AvatarOverlay = {
   id: string
   event: ChartOverlayEvent
@@ -246,7 +262,7 @@ export function PositionsChartSurface(props: {
         shape: markerShape(primary),
         position: markerPosition(primary),
         color: isSelected ? '#f8fafc' : markerColor(primary),
-        size: isSelected ? 2 : 1,
+        size: isSelected ? 3 : 2,
         text,
       })
     }
@@ -472,7 +488,7 @@ export function PositionsChartSurface(props: {
   }, [props.selectedEventId])
 
   return (
-    <div className="relative h-[82vh] min-h-[600px] w-full">
+    <div className="relative h-[72vh] min-h-[520px] w-full">
       <div ref={containerRef} className="h-full w-full" />
 
       {/* Visitor control: spacing between events and candles */}
@@ -521,8 +537,11 @@ export function PositionsChartSurface(props: {
           onClick={() => onSelectEventRef.current(avatar.event.id)}
           aria-label={`Message from ${senderDisplayName(avatar.event)}`}
         >
-          <span className="relative block h-6 w-6 overflow-hidden rounded-full bg-zinc-800">
-            <span className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-zinc-200">
+          <span
+            className="relative block h-6 w-6 overflow-hidden rounded-full"
+            style={{ background: senderGradient(avatar.event) }}
+          >
+            <span className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-white/90">
               {senderInitial(avatar.event)}
             </span>
             {avatar.event.senderAvatarUrl && (
@@ -549,14 +568,13 @@ export function PositionsChartSurface(props: {
         <div
           className="pointer-events-none absolute z-30 w-[320px] max-w-[78vw] rounded-2xl border border-white/20 bg-zinc-950/96 p-3 shadow-2xl backdrop-blur-sm"
           style={{
+            // Dock into the candle-free whitespace at the top of the pane and centre over
+            // the hovered candle, so the card never floats across the live price action.
             left: `${Math.min(
-              Math.max(hoveredChat.x + 18, 12),
-              (containerRef.current?.clientWidth ?? 9999) - 340,
+              Math.max(hoveredChat.x - 160, 12),
+              (containerRef.current?.clientWidth ?? 9999) - 332,
             )}px`,
-            top: `${Math.min(
-              Math.max(hoveredChat.y - 176, 12),
-              (containerRef.current?.clientHeight ?? 9999) - 220,
-            )}px`,
+            top: '12px',
           }}
         >
           {hoveredChat.count <= 1 ? (
@@ -653,8 +671,11 @@ export function PositionsChartSurface(props: {
                     key={message.id}
                     className="flex gap-2 rounded-lg border border-white/5 bg-white/[0.03] p-2"
                   >
-                    <span className="relative block h-6 w-6 shrink-0 overflow-hidden rounded-full bg-zinc-800">
-                      <span className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-zinc-200">
+                    <span
+                      className="relative block h-6 w-6 shrink-0 overflow-hidden rounded-full"
+                      style={{ background: senderGradient(message) }}
+                    >
+                      <span className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-white/90">
                         {senderInitial(message)}
                       </span>
                       {message.senderAvatarUrl && (
@@ -686,7 +707,7 @@ export function PositionsChartSurface(props: {
                         </span>
                       </div>
                       {message.text && (
-                        <div className="mt-0.5 line-clamp-3 whitespace-pre-wrap text-[12px] leading-snug text-zinc-200">
+                        <div className="mt-0.5 line-clamp-2 whitespace-pre-wrap text-[12px] leading-snug text-zinc-200">
                           {message.text}
                         </div>
                       )}
@@ -755,6 +776,14 @@ export function PositionsChartSurface(props: {
                   {coinFromMarket(hoveredTrade.event.market)
                     ? ` ${coinFromMarket(hoveredTrade.event.market)}`
                     : ''}
+                </div>
+              </>
+            )}
+            {hoveredTrade.event.price != null && hoveredTrade.event.size != null && (
+              <>
+                <div className="text-zinc-500">Notional</div>
+                <div className="text-right text-zinc-100">
+                  {formatUsd(Math.abs(hoveredTrade.event.price * hoveredTrade.event.size))}
                 </div>
               </>
             )}

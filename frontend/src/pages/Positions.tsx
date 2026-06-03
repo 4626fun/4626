@@ -304,20 +304,29 @@ export function Positions() {
   return (
     <div className="relative pb-24 md:pb-0">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-52 bg-gradient-to-b from-sky-500/10 to-transparent" />
-      <section className="cinematic-section">
-        <div className="max-w-[1760px] mx-auto px-4 sm:px-6">
+      <section className="cinematic-section !py-6 sm:!py-8 lg:!py-10">
+        <div className="max-w-[1920px] mx-auto px-4 sm:px-6">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="mb-8"
+            className="mb-4"
           >
-            <span className="label">Positions Timeline</span>
-            <h1 className="headline text-4xl sm:text-6xl mt-4">Room 1659 Intelligence Surface</h1>
-            <p className="text-zinc-400 text-sm font-light mt-3">
-              Per-market social signal and historical indicator — room 1659 messages alongside live
-              and historical positions, mapped to the market they reference.
+            <span className="label">Social Trading Signal</span>
+            <h1 className="headline text-3xl sm:text-4xl mt-2">SignalScope</h1>
+            <p className="text-zinc-400 text-sm font-light mt-2">
+              Per-market social signal and historical indicator — live and historical positions
+              overlaid with the chatter that called them, mapped to the market they reference.
             </p>
+            <a
+              href="https://alfaclub.app/rooms/1659/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-sky-400/30 bg-sky-400/10 px-3 py-1 text-xs font-medium text-sky-200 transition hover:border-sky-400/60 hover:bg-sky-400/15"
+            >
+              Powered by AlfaClub · Room 1659
+              <span aria-hidden>↗</span>
+            </a>
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <select
                 className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
@@ -401,7 +410,7 @@ export function Positions() {
           </motion.div>
 
           {data && !isLoading && !error && (data.marketSummaries?.length ?? 0) > 0 && (
-            <div className="mb-4 space-y-4">
+            <div className="mb-3 space-y-3">
               <PositionsMarketRail
                 summaries={data.marketSummaries}
                 selectedMarket={effectiveMarket}
@@ -416,7 +425,7 @@ export function Positions() {
           )}
 
           {/* Chart + side panel (timeline events & inspector) */}
-          <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+          <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
             <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-3 sm:p-4">
               {isLoading ? (
                 <div className="text-sm text-zinc-400">Loading room timeline…</div>
@@ -440,10 +449,10 @@ export function Positions() {
               )}
             </div>
 
-            <div className="space-y-4 lg:sticky lg:top-6 self-start">
-              <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4 sm:p-5">
-              <div className="label">Timeline events ({displayedEventRows.length})</div>
-              <div className="mt-3 max-h-[48vh] overflow-y-auto space-y-2 pr-1 [scrollbar-gutter:stable]">
+            <div className="flex flex-col gap-4 lg:sticky lg:top-6 self-start lg:h-[72vh] lg:min-h-[520px]">
+              <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4 sm:p-5 flex flex-col min-h-0 lg:flex-1">
+              <div className="label shrink-0">Timeline events ({displayedEventRows.length})</div>
+              <div className="mt-3 max-h-[48vh] lg:max-h-none lg:flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 [scrollbar-gutter:stable]">
                 {displayedEventRows.map((event) => (
                   <button
                     key={event.id}
@@ -489,7 +498,7 @@ export function Positions() {
                 ))}
               </div>
               </div>
-              <div className="h-fit">
+              <div className="shrink-0">
                 <PositionsEventInspector
                   event={selectedEvent ?? null}
                   index={Math.max(0, selectedEventIndex)}

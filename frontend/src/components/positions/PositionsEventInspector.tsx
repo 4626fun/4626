@@ -53,6 +53,25 @@ function formatSize(value: number | null | undefined): string {
   return Math.abs(value).toLocaleString('en-US', { maximumFractionDigits: 4 })
 }
 
+/** Notional (USD) exposure of a fill = |price × size|. */
+function notionalUsd(
+  price: number | null | undefined,
+  size: number | null | undefined,
+): number | null {
+  if (price == null || size == null || !Number.isFinite(price) || !Number.isFinite(size)) {
+    return null
+  }
+  return Math.abs(price * size)
+}
+
+function formatUsd(value: number): string {
+  return value.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: value >= 100 ? 0 : 2,
+  })
+}
+
 export function PositionsEventInspector(props: {
   event: ChartOverlayEvent | null
   index: number
@@ -126,6 +145,12 @@ export function PositionsEventInspector(props: {
                 {formatSize(event.size)}
                 {coinFromMarket(event.market) ? ` ${coinFromMarket(event.market)}` : ''}
               </span>
+            </div>
+          )}
+          {event.kind === 'trade' && notionalUsd(event.price, event.size) != null && (
+            <div className="text-zinc-300">
+              Notional:{' '}
+              <span className="text-zinc-100">{formatUsd(notionalUsd(event.price, event.size)!)}</span>
             </div>
           )}
           {event.kind === 'trade' &&
