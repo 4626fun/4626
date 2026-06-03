@@ -44,6 +44,8 @@ const { build } = await import(pathToFileURL(esbuildMain).href);
 const ROOT = resolve(__dirname, '..'); // frontend root when run via pnpm filter
 const SRC_DIR = resolve(__dirname, 'src');
 const OUT_DIR = resolve(__dirname, 'dist');
+const REPO_ROOT = resolve(__dirname, '../../..');
+const SUPABASE_MIGRATIONS_ROOT = resolve(REPO_ROOT, 'supabase/migrations');
 
 console.log('[server-core] Cleaning dist...');
 rmSync(OUT_DIR, { recursive: true, force: true });
@@ -79,6 +81,9 @@ await build({
   sourcemap: true,
   loader: { '.ts': 'ts' },
   packages: 'external',
+  define: {
+    __4626_SUPABASE_MIGRATIONS_ROOT__: JSON.stringify(SUPABASE_MIGRATIONS_ROOT),
+  },
   logLevel: 'warning',
 });
 
