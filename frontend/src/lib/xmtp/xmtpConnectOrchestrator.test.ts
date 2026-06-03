@@ -155,6 +155,22 @@ describe('finishRestoredXmtpClient', () => {
     }
   })
 
+  it('retries setup without registration when identity is already registered', async () => {
+    let setupCount = 0
+    const result = await finishRestoredXmtpClient({
+      setupConversations: async () => {
+        setupCount += 1
+        if (setupCount === 1) throw new Error('Uninitialized identity')
+      },
+      registerWithFallback: async () => {
+        throw new Error('register should not run')
+      },
+      isLocalStateInvalidError: isLocalXmtpStateInvalidError,
+      isRegistered: async () => true,
+    })
+    expect(result).toEqual({ ok: true, setupCalls: 2, registerCalls: 0 })
+  })
+
   it('marks invalid local state without attempting registration', async () => {
     const result = await finishRestoredXmtpClient({
       setupConversations: async () => {

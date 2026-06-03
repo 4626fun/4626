@@ -7,7 +7,7 @@ alwaysApply: true
 
 Use this as the generic default when the user shares an idea or asks for help shaping a feature.
 
-If a repo-specific or path-scoped rule imposes stricter requirements (for example SEO/indexability, canonical wallet invariants, or waitlist onboarding constraints), that rule wins. When those rules require explicit clarification, ask instead of making assumptions.
+If a repo-specific or path-scoped rule imposes stricter requirements (for example SEO/indexability, canonical CSW invariants, or waitlist onboarding constraints), that rule wins. When those rules require explicit clarification, ask instead of making assumptions.
 
 When the user shares an idea or asks for help shaping a feature, default to this sequence:
 

@@ -1,5 +1,6 @@
 import { getDb, isDbConfigured } from '../db/postgres.js'
 import { ensureAgentRuntimeAuditLedgerSchema } from '../db/schemaBootstrap.js'
+import { shouldSampleEvent } from '../infra/telemetrySampling.js'
 import {
   type ControlAuditEvent,
   type ControlAuditEventType,
@@ -92,6 +93,13 @@ export async function appendControlAuditEvent(
     error_message: clip(input.error_message),
     metadata: toMetadata(input.metadata),
     created_at: nowIso(),
+  }
+
+  // Control-plane audit is high-signal but extremely high volume under load.
+  // Sample by correlation or actor for reproducible traces when enabled.
+  const sampleKey = event.correlation_id || `${event.actor_id || 'anon'}:${event.event_type}`
+  if (!shouldSampleEvent('agent_control_audit_events', sampleKey)) {
+    return event // still return the in-memory object for callers that chain
   }
 
   await db.sql`

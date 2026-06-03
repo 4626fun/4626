@@ -67,6 +67,17 @@ export function isAddressLikeSwapSymbol(symbol: string | undefined, address: str
   }
 }
 
+/** Only explicit `verified: false` (raw address paste) stays unverified in swap UI. */
+export function resolveSwapTokenVerified(option: SwapTokenOption): boolean {
+  if (option.verified === false) return false
+  if (option.verified === true) return true
+  if (option.group === 'core' || option.group === 'creator' || option.group === 'share') return true
+  if (option.sectionTag === 'trend' || option.sectionTag === 'creator' || option.sectionTag === 'content') {
+    return true
+  }
+  return false
+}
+
 export function swapTokenOptionNeedsLabelEnrichment(option: SwapTokenOption): boolean {
   if (option.group === 'core') return false
   return (

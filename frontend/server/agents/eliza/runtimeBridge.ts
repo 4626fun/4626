@@ -3,6 +3,7 @@ import type { IAgentRuntime, Memory, Plugin } from '@elizaos/core'
 
 import { getDb } from '../../_lib/db/postgres.js'
 import { ensureAgentMemorySchema } from '../../_lib/db/schemaBootstrap.js'
+import { shouldSampleEvent } from '../../_lib/infra/telemetrySampling.js'
 import { buildRuntimeSessionContext } from '../../_lib/auth/session.js'
 import { logger } from '../../_lib/infra/logger.js'
 import { getGroveChainId, resolveLensUri, tryUploadImmutableJson } from '../../_lib/lens/lensGrove.js'
@@ -1090,15 +1091,18 @@ async function upsertEpisodicSummary(params: {
   if (rows.length === 0) return null
   const summary = buildEpisodicSummary(rows)
   if (!summary.trim()) return null
-  await params.db.sql`
-    INSERT INTO episodic_summaries (conversation_id, summary, last_updated, version)
-    VALUES (${params.conversationId}, ${summary}, NOW(), 1)
-    ON CONFLICT (conversation_id)
-    DO UPDATE SET
-      summary = EXCLUDED.summary,
-      last_updated = NOW(),
-      version = episodic_summaries.version + 1;
-  `
+
+  if (shouldSampleEvent('episodic_summaries', params.conversationId)) {
+    await params.db.sql`
+      INSERT INTO episodic_summaries (conversation_id, summary, last_updated, version)
+      VALUES (${params.conversationId}, ${summary}, NOW(), 1)
+      ON CONFLICT (conversation_id)
+      DO UPDATE SET
+        summary = EXCLUDED.summary,
+        last_updated = NOW(),
+        version = episodic_summaries.version + 1;
+    `
+  }
   return summary
 }
 
@@ -1169,14 +1173,17 @@ async function upsertMemorySnapshot(params: {
     recentDecisions: params.recentAssistantMessages.slice(-3).map((entry) => truncateForSummary(entry, 220)),
     generatedAt: new Date().toISOString(),
   }
-  await params.db.sql`
-    INSERT INTO memory_snapshots (conversation_id, snapshot_json, updated_at)
-    VALUES (${params.conversationId}, ${JSON.stringify(snapshot)}::jsonb, NOW())
-    ON CONFLICT (conversation_id)
-    DO UPDATE SET
-      snapshot_json = EXCLUDED.snapshot_json,
-      updated_at = NOW();
-  `
+
+  if (shouldSampleEvent('memory_snapshots', params.conversationId)) {
+    await params.db.sql`
+      INSERT INTO memory_snapshots (conversation_id, snapshot_json, updated_at)
+      VALUES (${params.conversationId}, ${JSON.stringify(snapshot)}::jsonb, NOW())
+      ON CONFLICT (conversation_id)
+      DO UPDATE SET
+        snapshot_json = EXCLUDED.snapshot_json,
+        updated_at = NOW();
+    `
+  }
 }
 
 async function maybeAppendGroveManifestChunk(params: {

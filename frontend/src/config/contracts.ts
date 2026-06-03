@@ -114,6 +114,12 @@ export const CONTRACTS = {
     'VITE_ALFA_CREATOR_KEY_LP_FACTORY',
     BASE_DEFAULTS.alfaCreatorKeyLpFactory,
   )!,
+  impairmentClaims: envAddress('VITE_IMPAIRMENT_CLAIMS', BASE_DEFAULTS.impairmentClaims),
+  impairmentRecoveryEscrow: envAddress(
+    'VITE_IMPAIRMENT_RECOVERY_ESCROW',
+    BASE_DEFAULTS.impairmentRecoveryEscrow,
+  ),
+  impairmentGuardian: envAddress('VITE_IMPAIRMENT_GUARDIAN', BASE_DEFAULTS.impairmentGuardian),
 } as const
 
 // Example: AKITA Vault (first creator)

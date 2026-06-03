@@ -74,6 +74,20 @@ describe('GET/POST /api/v1/alfaclub/daily-brief', () => {
     expect(runAlfaClubDailyBriefMock).toHaveBeenCalledWith({ flags: FLAGS })
   })
 
+  it('honors ?forceSend=1 for cron-authenticated replays', async () => {
+    const req = createMockReq({
+      method: 'GET',
+      query: { forceSend: '1' },
+      headers: { 'x-cron-secret': 'test-cron-secret' },
+    })
+    const res = createMockRes()
+    await dailyBriefHandler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(runAlfaClubDailyBriefMock).toHaveBeenCalledWith({
+      flags: { ...FLAGS, forceSend: true },
+    })
+  })
+
   it('returns 202 for non-fatal no-snapshot skips', async () => {
     runAlfaClubDailyBriefMock.mockResolvedValueOnce({
       ok: false,

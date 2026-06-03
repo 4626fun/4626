@@ -116,7 +116,28 @@ describe('schema ensure concurrency guards', () => {
     expect(concurrentDb.sql).toHaveBeenCalledTimes(expectedSqlCalls)
   })
 
-  it('dedupes concurrent telegram trading schema bootstrap work', async () => {
+  it('dedupes concurrent telegram trading schema bootstrap work (canonical)', async () => {
+    const singleDb = createDb()
+    const { ensureTelegramTradingSchema: ensureTelegramTradingSchemaSingle } = await import('../db/schemaBootstrap.ts')
+    await ensureTelegramTradingSchemaSingle(singleDb as any)
+    const expectedSqlCalls = singleDb.sql.mock.calls.length
+
+    vi.resetModules()
+    vi.clearAllMocks()
+
+    const concurrentDb = createDb()
+    const { ensureTelegramTradingSchema } = await import('../db/schemaBootstrap.ts')
+    await Promise.all([
+      ensureTelegramTradingSchema(concurrentDb as any),
+      ensureTelegramTradingSchema(concurrentDb as any),
+      ensureTelegramTradingSchema(concurrentDb as any),
+    ])
+
+    expect(concurrentDb.sql).toHaveBeenCalledTimes(expectedSqlCalls)
+  })
+
+  it('dedupes concurrent telegram trading schema bootstrap work via legacy wrapper', async () => {
+    // Retained to ensure the thin adapter in telegramTrading.ts still works
     const singleDb = createDb()
     const { ensureTelegramTradingSchema: ensureTelegramTradingSchemaSingle } = await import('../messaging/telegramTrading.ts')
     await ensureTelegramTradingSchemaSingle(singleDb as any)
@@ -134,5 +155,66 @@ describe('schema ensure concurrency guards', () => {
     ])
 
     expect(concurrentDb.sql).toHaveBeenCalledTimes(expectedSqlCalls)
+  })
+})
+
+describe('withEnsureOnce (centralized helper)', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.clearAllMocks()
+  })
+
+  it('runs the wrapped function only once for repeated calls', async () => {
+    const { withEnsureOnce } = await import('../db/schemaBootstrap.js')
+    const fn = vi.fn(async () => {})
+
+    await withEnsureOnce('test-once-1', fn)
+    await withEnsureOnce('test-once-1', fn)
+    await withEnsureOnce('test-once-1', fn)
+
+    expect(fn).toHaveBeenCalledTimes(1)
+  })
+
+  it('coalesces concurrent calls to a single execution', async () => {
+    const { withEnsureOnce } = await import('../db/schemaBootstrap.js')
+    let resolveFn: () => void
+    const fnPromise = new Promise<void>((r) => { resolveFn = r })
+    const fn = vi.fn(async () => { await fnPromise })
+
+    const p1 = withEnsureOnce('test-concurrent-1', fn)
+    const p2 = withEnsureOnce('test-concurrent-1', fn)
+    const p3 = withEnsureOnce('test-concurrent-1', fn)
+
+    resolveFn!()
+    await Promise.all([p1, p2, p3])
+
+    // Core guarantee: the wrapped fn executed exactly once despite concurrent callers
+    expect(fn).toHaveBeenCalledTimes(1)
+  })
+
+  it('resets state after error so subsequent calls can retry', async () => {
+    const { withEnsureOnce } = await import('../db/schemaBootstrap.js')
+    const fn = vi.fn()
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce(undefined)
+
+    await expect(withEnsureOnce('test-error-1', fn)).rejects.toThrow('boom')
+    await withEnsureOnce('test-error-1', fn) // should succeed on retry
+
+    expect(fn).toHaveBeenCalledTimes(2)
+  })
+
+  it('different names are independent', async () => {
+    const { withEnsureOnce } = await import('../db/schemaBootstrap.js')
+    const fnA = vi.fn(async () => {})
+    const fnB = vi.fn(async () => {})
+
+    await withEnsureOnce('name-a', fnA)
+    await withEnsureOnce('name-b', fnB)
+    await withEnsureOnce('name-a', fnA)
+    await withEnsureOnce('name-b', fnB)
+
+    expect(fnA).toHaveBeenCalledTimes(1)
+    expect(fnB).toHaveBeenCalledTimes(1)
   })
 })

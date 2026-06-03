@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { buildAccountsMePayload } from './accountsIdentity'
+import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy'
 
 describe('buildAccountsMePayload', () => {
   it('includes approved app access status from the linked profile', async () => {
@@ -629,7 +630,7 @@ describe('buildAccountsMePayload', () => {
   })
 
   it('classifies the Base App probe CSW as none-yet before sub-account or owner install', async () => {
-    const CANONICAL_CSW = '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'
+    const CANONICAL_CSW = CANONICAL_CSW_ADDRESS
     const EMBEDDED_EOA = '0x00000000000000000000000000000000000000cc'
 
     const db = {

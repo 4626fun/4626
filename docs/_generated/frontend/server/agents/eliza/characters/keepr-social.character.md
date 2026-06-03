@@ -30,7 +30,7 @@ Defined in: [server/agents/eliza/characters/keepr-social.character.ts:3](https:/
 
 ##### id
 
-> **id**: `"0xab6d5c10b03300326cd7fab7267ae192842967b5"` = `TARGET_CANONICAL_CSW_ADDRESS`
+> **id**: `"0xab6d5c10b03300326cd7fab7267ae192842967b5"` = `CANONICAL_CSW_ADDRESS`
 
 ##### name
 

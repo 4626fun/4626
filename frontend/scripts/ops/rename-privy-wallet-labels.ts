@@ -131,7 +131,11 @@ async function planChanges(): Promise<PlannedChange[]> {
   const ownerId = getArg('--owner-id', process.env.PRIVY_WALLET_OWNER_ID?.trim() || DEFAULT_OWNER_ID)!
   const policyId = getArg('--policy-id', process.env.PRIVY_WALLET_POLICY_ID?.trim() || DEFAULT_POLICY_ID)!
   const agentWalletId = getArg('--agent-wallet-id', DEFAULT_AGENT_WALLET_ID)!
-  const xmtpWalletId = getArg('--xmtp-wallet-id', process.env.XMTP_AGENT_PRIVY_WALLET_ID?.trim() || DEFAULT_XMTP_WALLET_ID)!
+  const xmtpWalletId = getArg(
+    '--xmtp-wallet-id',
+    process.env.CANONICAL_CSW_PRIVY_WALLET_ID?.trim() ||
+      DEFAULT_XMTP_WALLET_ID,
+  )!
 
   const planned: PlannedChange[] = []
 

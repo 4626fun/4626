@@ -27,16 +27,24 @@ const DEPLOY_PHASE3_ABI = [
           { name: 'owner', type: 'address' },
           { name: 'vault', type: 'address' },
           { name: 'version', type: 'string' },
+          { name: 'initialSqrtPriceX96', type: 'uint160' },
+          { name: 'charmVaultName', type: 'string' },
+          { name: 'charmVaultSymbol', type: 'string' },
+          { name: 'ajnaVaultName', type: 'string' },
+          { name: 'ajnaVaultSymbol', type: 'string' },
           { name: 'charmWeightBps', type: 'uint256' },
           { name: 'ajnaWeightBps', type: 'uint256' },
           { name: 'solanaWeightBps', type: 'uint256' },
-          { name: 'enableAutoAllocate', type: 'bool' },
-          { name: 'initialSqrtPriceX96', type: 'uint160' },
           { name: 'ajnaBufferRatioBps', type: 'uint256' },
-          { name: 'ajnaMinBucketIndex', type: 'int256' },
+          { name: 'ajnaMinBucketIndex', type: 'uint256' },
           { name: 'ajnaKeeper', type: 'address' },
-          { name: 'ajnaVaultName', type: 'string' },
-          { name: 'ajnaVaultSymbol', type: 'string' },
+          { name: 'solanaKeeper', type: 'address' },
+          { name: 'solanaMaxNavAge', type: 'uint64' },
+          { name: 'solanaMaxNavDeltaBpsPerUpdate', type: 'uint16' },
+          { name: 'solanaMinBaseLiquidityBps', type: 'uint16' },
+          { name: 'solanaBridgeAddress', type: 'address' },
+          { name: 'enableAutoAllocate', type: 'bool' },
+          { name: 'expectedCharmProtocolFeePips', type: 'uint24' },
         ],
       },
       {
@@ -48,6 +56,7 @@ const DEPLOY_PHASE3_ABI = [
           { name: 'ajnaVaultAuth', type: 'bytes32' },
           { name: 'ajnaVault', type: 'bytes32' },
           { name: 'erc4626StrategyAdapter', type: 'bytes32' },
+          { name: 'solanaStrategy', type: 'bytes32' },
         ],
       },
     ],
@@ -175,7 +184,10 @@ export async function ensurePhase3VaultStrategyRegistrationOnFork(params: {
         abi: [PHASE3_STRATEGIES_DEPLOYED_EVENT],
         data: log.data,
         topics: log.topics as [Hex, ...Hex[]] | [],
-      })
+      }) as {
+        eventName: string
+        args: { charmStrategy: Address; ajnaStrategy: Address }
+      }
       if (parsed.eventName !== 'Phase3StrategiesDeployed') continue
       charmStrategy = getAddress(parsed.args.charmStrategy as Address)
       ajnaStrategy = getAddress(parsed.args.ajnaStrategy as Address)

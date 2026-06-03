@@ -16,6 +16,10 @@ export default [
       // own directives that trip "unused eslint-disable" warnings — we
       // must not modify vendor sources.
       'public/immersive/vendor/**',
+      // Generated immersive bundles include plugin-specific directives/rules
+      // from upstream build pipelines and are not source-authored in this repo.
+      'public/immersive/vault-hero/**',
+      'public/immersive/vault.js',
     ],
   },
   {

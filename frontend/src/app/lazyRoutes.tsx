@@ -5,6 +5,17 @@ import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { SmartWalletsRouteProvider as SmartWalletsRouteProviderComponent } from '@/lib/privy/SmartWalletsRouteProvider'
 import { Swap as SwapPage } from '../pages/Swap'
 
+function isDynamicImportLoadError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error ?? '')
+  return (
+    msg.includes('Failed to fetch dynamically imported module') ||
+    msg.includes('Importing a module script failed') ||
+    msg.includes('error loading dynamically imported module')
+  )
+}
+
+const DEPLOY_VAULT_IMPORT_RELOAD_KEY = 'cv:deploy-vault:import-reload'
+
 export function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof TModule>(
   loader: () => Promise<TModule>,
   exportName: TKey,
@@ -12,6 +23,37 @@ export function lazyNamed<TModule extends Record<string, unknown>, TKey extends 
   return lazy(async () => {
     const mod = await loader()
     return { default: mod[exportName] as ComponentType<any> }
+  })
+}
+
+export function lazyNamedWithImportRecovery<TModule extends Record<string, unknown>, TKey extends keyof TModule>(
+  loader: () => Promise<TModule>,
+  exportName: TKey,
+  options?: { reloadOnceKey?: string },
+) {
+  return lazy(async () => {
+    try {
+      const mod = await loader()
+      if (options?.reloadOnceKey && typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem(options.reloadOnceKey)
+      }
+      return { default: mod[exportName] as ComponentType<any> }
+    } catch (error) {
+      const reloadKey = options?.reloadOnceKey
+      if (
+        import.meta.env.DEV &&
+        reloadKey &&
+        typeof window !== 'undefined' &&
+        typeof sessionStorage !== 'undefined' &&
+        isDynamicImportLoadError(error) &&
+        !sessionStorage.getItem(reloadKey)
+      ) {
+        sessionStorage.setItem(reloadKey, '1')
+        window.location.reload()
+        await new Promise(() => {})
+      }
+      throw error
+    }
   })
 }
 
@@ -107,7 +149,13 @@ export const CompleteAuction = lazyNamed(() => import('../pages/auction/Complete
 export const AuctionBid = lazyNamed(() => import('../pages/auction/AuctionBid'), 'AuctionBid')
 export const Deploy = lazyNamed(() => import('../pages/deploy/Deploy'), 'Deploy')
 export const DeployCoin = lazyNamed(() => import('../pages/deploy/DeployCoin'), 'DeployCoin')
-export const DeployVault = lazyNamed(() => import('../pages/deploy/DeployVault'), 'DeployVault')
+// Mega-module: after Vite/esbuild restart (common on WSL deploy dry-run), a rejected lazy
+// import promise traps /deploy/vault behind RootErrorBoundary until a hard reload.
+export const DeployVault = lazyNamedWithImportRecovery(
+  () => import('../pages/deploy/DeployVault'),
+  'DeployVault',
+  { reloadOnceKey: DEPLOY_VAULT_IMPORT_RELOAD_KEY },
+)
 export const Leaderboard = lazyNamed(() => import('../pages/Leaderboard'), 'Leaderboard')
 export const CoinManage = lazyNamed(() => import('../pages/CoinManage'), 'CoinManage')
 export const CreatorEarnings = lazyNamed(() => import('../pages/CreatorEarnings'), 'CreatorEarnings')
@@ -199,5 +247,9 @@ export const AddOwnerBaseApp = lazyNamed(
 export const MetaballOsProbe = lazyNamed(
   () => import('../pages/dev/MetaballOsProbe'),
   'MetaballOsProbe',
+)
+export const TacticalTokenMap = lazyNamed(
+  () => import('../pages/dev/TacticalTokenMap'),
+  'TacticalTokenMap',
 )
 export const AmoeQuickTasks = lazyNamed(() => import('../pages/AmoeQuickTasks'), 'AmoeQuickTasks')

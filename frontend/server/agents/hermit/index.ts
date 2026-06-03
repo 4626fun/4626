@@ -1,9 +1,9 @@
 /**
  * Hermit AlfaClub runtime.
  *
- * Long-lived Railway process for the creative AlfaClub / Pinata lane. This is
+ * Long-lived Railway process for the creative AlfaClub / Hermit lane. This is
  * intentionally separate from the Keepr XMTP runtime so Hermit restarts,
- * Pinata failures, and chat polling do not affect critical Keepr automation.
+ * Hermit creative runtime failures, and chat polling do not affect critical Keepr automation.
  *
  * RAILWAY HEALTHCHECK NOTE:
  * The absolute earliest listener lives in `bootstrap.ts`. It binds a minimal
@@ -47,8 +47,8 @@ try {
   const hasAlfaClubJwt = !!(process.env.ALFACLUB_CHAT_JWT ?? '').trim()
   const hasAlfaClubPrivyAccess = !!(process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN ?? '').trim()
   const hasAlfaClubPrivyRefresh = !!(process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN ?? '').trim()
-  const hasPinataEndpoint = !!(process.env.HERMIT_PINATA_CHAT_ENDPOINT ?? '').trim()
-  const hasPinataBearer = !!(process.env.HERMIT_PINATA_BEARER_TOKEN ?? '').trim()
+  const hasHermitEndpoint = !!(process.env.HERMIT_AGENT_CHAT_ENDPOINT ?? '').trim()
+  const hasHermitBearer = !!(process.env.HERMIT_AGENT_BEARER_TOKEN ?? '').trim()
   const hasRoom = !!(process.env.ALFACLUB_CHAT_ROOM_ID ?? '').trim()
   const hasHermitCommandRooms = !!(process.env.ALFACLUB_HERMIT_COMMAND_ROOMS ?? '').trim()
   const hasAnyRoomTargeting = hasRoom || hasHermitCommandRooms
@@ -75,8 +75,8 @@ try {
   console.error('[hermit][early] DATABASE_URL (Supabase) / POSTGRES_URL (legacy) :', hasDb ? 'present' : 'MISSING (critical for alfaclub stores)')
   console.error('[hermit][early] ALFACLUB_CHAT_JWT             :', hasAlfaClubJwt ? 'present' : 'missing')
   console.error('[hermit][early] ALFACLUB_CHAT_PRIVY_* triplet :', hasAlfaClubPrivyAccess && hasAlfaClubPrivyRefresh ? 'present' : 'incomplete/missing')
-  console.error('[hermit][early] HERMIT_PINATA_CHAT_ENDPOINT   :', hasPinataEndpoint ? 'present' : 'missing (creative /gmeow etc. will be degraded)')
-  console.error('[hermit][early] HERMIT_PINATA_BEARER_TOKEN    :', hasPinataBearer ? 'present' : 'missing')
+  console.error('[hermit][early] HERMIT_AGENT_CHAT_ENDPOINT    :', hasHermitEndpoint ? 'present' : 'missing (creative /gmeow etc. will be degraded)')
+  console.error('[hermit][early] HERMIT_AGENT_BEARER_TOKEN     :', hasHermitBearer ? 'present' : 'missing')
   console.error('[hermit][early] ALFACLUB_CHAT_ROOM_ID         :', (process.env.ALFACLUB_CHAT_ROOM_ID ?? '').trim() || 'not set')
   console.error('[hermit][early] ALFACLUB_HERMIT_COMMAND_ROOMS :', (process.env.ALFACLUB_HERMIT_COMMAND_ROOMS ?? '').trim() || 'not set')
   console.error('[hermit][early] ALFACLUB_CHAT_BRIDGE_ENABLED  :', (process.env.ALFACLUB_CHAT_BRIDGE_ENABLED ?? '').trim() || 'not set')
@@ -99,8 +99,8 @@ try {
     hasDb,
     hasAlfaClubJwt,
     hasAlfaClubPrivyBootstrap: hasAlfaClubPrivyAccess && hasAlfaClubPrivyRefresh,
-    hasPinataEndpoint,
-    hasPinataBearer,
+    hasHermitEndpoint,
+    hasHermitBearer,
     hasAnyRoomTargeting,
     criticalIssues,
   }
@@ -270,9 +270,9 @@ function startHealthServer(): void {
 function startRuntime(): void {
   logger.info('[hermit] starting AlfaClub runtime', {
     roomId: process.env.ALFACLUB_CHAT_ROOM_ID ?? null,
-    pinataConfigured: Boolean(
-      (process.env.HERMIT_PINATA_CHAT_ENDPOINT ?? '').trim() &&
-        (process.env.HERMIT_PINATA_BEARER_TOKEN ?? '').trim(),
+    hermitConfigured: Boolean(
+      (process.env.HERMIT_AGENT_CHAT_ENDPOINT ?? '').trim() &&
+        (process.env.HERMIT_AGENT_BEARER_TOKEN ?? '').trim(),
     ),
   })
 
@@ -389,7 +389,7 @@ process.on('SIGINT', () => shutdown('SIGINT'))
 process.on('SIGTERM', () => shutdown('SIGTERM'))
 
 // Hermit is a long-lived chat bridge. Background failures (Supabase pooler
-// TLS timeouts, transient Pinata/Privy errors, etc.) must never tear down the
+// TLS timeouts, transient Hermit/Privy errors, etc.) must never tear down the
 // process — Railway will restart us in a tight loop and the bot goes dark.
 // Surface them as warnings and let the per-feature retry/circuit-breaker
 // logic recover on the next tick.

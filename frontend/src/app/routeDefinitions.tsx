@@ -26,6 +26,7 @@ import {
   CreatorEarnings,
   CreatorStrategyFeatures,
   MetaballOsProbe,
+  TacticalTokenMap,
   Deploy,
   DeployCoin,
   DeployVault,
@@ -82,6 +83,7 @@ export const MARKETING_ONLY_ROUTES: PathRouteDef[] = [
   { path: '/cca', element: <DistributeCcaLaunch /> },
   { path: '/status', element: <Status /> },
   { path: '/dev/metaball-os', element: <MetaballOsProbe /> },
+  { path: '/dev/tactical-map', element: <TacticalTokenMap /> },
 ]
 
 /**

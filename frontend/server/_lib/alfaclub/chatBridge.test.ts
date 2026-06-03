@@ -6,6 +6,7 @@ const {
   requestImmediatePrivyRefreshMock,
   upsertAlfaClubIngestMessagesMock,
   executeDeterministicCommandMock,
+  repliedCommandLedgerMock,
 } = vi.hoisted(() => ({
   loggerMock: {
     info: vi.fn(),
@@ -16,6 +17,17 @@ const {
   requestImmediatePrivyRefreshMock: vi.fn(),
   upsertAlfaClubIngestMessagesMock: vi.fn(async () => [] as Array<{ messageId: string }>),
   executeDeterministicCommandMock: vi.fn(async () => ({ responseText: '' })),
+  repliedCommandLedgerMock: new Set<string>(),
+}))
+
+vi.mock('./commandReplyLedger.js', () => ({
+  filterUnrepliedCommandMessageIds: vi.fn(
+    async ({ messageIds }: { roomId: string; messageIds: string[] }) =>
+      new Set(messageIds.filter((id) => !repliedCommandLedgerMock.has(id))),
+  ),
+  recordCommandReply: vi.fn(async ({ messageId }: { roomId: string; messageId: string }) => {
+    repliedCommandLedgerMock.add(messageId)
+  }),
 }))
 
 vi.mock('../infra/logger.js', () => ({
@@ -177,6 +189,7 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     upsertAlfaClubIngestMessagesMock.mockResolvedValue([])
     executeDeterministicCommandMock.mockReset()
     executeDeterministicCommandMock.mockResolvedValue({ responseText: '' })
+    repliedCommandLedgerMock.clear()
     FakeWebSocket.instances = []
     ;(globalThis as { WebSocket?: unknown }).WebSocket = FakeWebSocket
     _resetBridgeAuthHealthForTests()
@@ -260,6 +273,50 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     expect(FakeWebSocket.instances).toHaveLength(0)
     expect(readBridgeAuthHealthSnapshot().suppressedSocketAttempts).toBe(2)
     expect(_getBridgeAuthStateForTests().lastBadJwt).toBe('jwt-current')
+  })
+
+  it('reuses one websocket when ingesting all rooms across poll room rotation', () => {
+    const flags = makeFlags({
+      wsIngestAllRoomsEnabled: true,
+      roomId: '1659',
+      hermitCommandRoomIds: ['1043'],
+    })
+
+    _ensureLiveCommandSocketForTests({
+      websocketUrl: flags.websocketUrl,
+      roomId: '1659',
+      jwt: 'jwt-a',
+      flags,
+    })
+    expect(FakeWebSocket.instances).toHaveLength(1)
+
+    _ensureLiveCommandSocketForTests({
+      websocketUrl: flags.websocketUrl,
+      roomId: '1043',
+      jwt: 'jwt-a',
+      flags,
+    })
+    expect(FakeWebSocket.instances).toHaveLength(1)
+  })
+
+  it('reconnects websocket when poll room changes without ingest-all mode', () => {
+    const flags = makeFlags({ wsIngestAllRoomsEnabled: false })
+
+    _ensureLiveCommandSocketForTests({
+      websocketUrl: flags.websocketUrl,
+      roomId: '1043',
+      jwt: 'jwt-a',
+      flags,
+    })
+    expect(FakeWebSocket.instances).toHaveLength(1)
+
+    _ensureLiveCommandSocketForTests({
+      websocketUrl: flags.websocketUrl,
+      roomId: '1659',
+      jwt: 'jwt-a',
+      flags,
+    })
+    expect(FakeWebSocket.instances.length).toBeGreaterThanOrEqual(2)
   })
 
   it('backs off websocket reconnects after consecutive ws_error events', () => {
@@ -581,6 +638,22 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     expect(commands[0]?.text).toBe('/alfa status')
   })
 
+  it('accepts /halp commands for help-family routing', () => {
+    const commands = collectAlfaClubCommandMessages({
+      messages: [
+        {
+          id: 'm-halp',
+          date: Date.now(),
+          sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+          text: '/halp',
+        },
+      ],
+      seenMessageIds: new Set<string>(),
+    })
+    expect(commands).toHaveLength(1)
+    expect(commands[0]?.text).toBe('/halp')
+  })
+
   it('cron mode does not re-run /gmeow when ingest upsert is an update (not a new row)', async () => {
     const nowMs = Date.now()
     mockHistoryMessages([
@@ -606,6 +679,27 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     expect(first.processed).toBe(1)
     expect(second.processed).toBe(0)
     expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('command reply ledger skips commands that were already answered', async () => {
+    const nowMs = Date.now()
+    repliedCommandLedgerMock.add('m-alfa-once')
+    mockHistoryMessages([
+      {
+        id: 'm-alfa-once',
+        date: nowMs - 10_000,
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: '/alfa',
+      },
+    ])
+    upsertAlfaClubIngestMessagesMock.mockResolvedValueOnce([{ messageId: 'm-alfa-once' }])
+
+    const result = await _runAlfaClubChatBridgeTickForTests(makeFlags(), {
+      seedHistoryOnlyOnFirstTick: false,
+    })
+
+    expect(result.processed).toBe(0)
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
   })
 
   it('processes recent slash commands on first seed tick', async () => {

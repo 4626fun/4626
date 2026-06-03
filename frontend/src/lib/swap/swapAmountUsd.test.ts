@@ -15,10 +15,10 @@ describe('formatSwapUsd', () => {
 })
 
 describe('deriveSwapUsdEstimates', () => {
-  it('does not mirror sell USD onto buy when output amount is zero', () => {
+  it('does not mirror sell USD onto buy when output token price is unknown', () => {
     const result = deriveSwapUsdEstimates({
       amountInUnits: '88.92',
-      estimatedOut: '0',
+      estimatedOut: '1200',
       tokenIn: CONTRACTS.usdc,
       tokenOut: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
       prices: { ethUsd: 0, tokenUsdByAddress: new Map() },

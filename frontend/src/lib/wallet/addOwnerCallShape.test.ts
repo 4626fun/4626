@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { getAddress } from 'viem'
 
 import {
   assertAddOwnerSelfCallShape,
@@ -13,8 +14,9 @@ import {
   ENTRY_POINT_V06_BASE,
   RELAY_DEPOSITORY_BASE,
 } from '@/lib/wallet/cswOwnerAbi'
+import { CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
 
-const CSW = '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF' as const
+const CSW = getAddress(CANONICAL_CSW_ADDRESS)
 const EMBEDDED = '0xb2aad65a5402714bf428a66731ae62ba5c45cac0' as const
 
 function validAddOwnerData(owner: string = EMBEDDED): `0x${string}` {

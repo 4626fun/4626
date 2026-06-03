@@ -74,6 +74,10 @@
       "schedule": "*/10 * * * *"
     },
     {
+      "path": "/api/v1/alfaclub/position-alerts",
+      "schedule": "1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51,53,55,57,59 * * * *"
+    },
+    {
       "path": "/api/v1/lottery/amoe/retry-cron",
       "schedule": "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
     },
@@ -497,6 +501,26 @@
     {
       "src": "/api/v1/token/([a-fA-F0-9x]+)/logo\\.(png|svg)",
       "dest": "/api/token/image?address=$1&format=$2&size=64"
+    },
+    {
+      "src": "/api/telegram/webhook",
+      "has": [
+        {
+          "type": "host",
+          "value": "hermit.4626.fun"
+        }
+      ],
+      "dest": "/api/telegram/hermit-webhook"
+    },
+    {
+      "src": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "hermit.4626.fun"
+        }
+      ],
+      "dest": "/api/telegram/hermit-webhook"
     },
     {
       "src": "/api/(.*)",

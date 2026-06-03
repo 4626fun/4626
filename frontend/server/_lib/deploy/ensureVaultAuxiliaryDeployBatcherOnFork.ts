@@ -1,18 +1,14 @@
-import { execSync } from 'node:child_process'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-
 import { encodeFunctionData, getAddress, type Address, type Hex } from 'viem'
 
 import { BASE_DEFAULTS } from '../../../src/config/contracts.defaults.js'
 import { resolveAlignedPhase1DeployDeps } from '../../../src/lib/deploy/phase1ModuleDeploy.js'
 import { resolveProtocolTreasuryAddress } from '../wallet/protocolTreasurySafe.js'
 import type { ForkImpersonationMode } from './ensureBatcherRegistryAuthorization.js'
-
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
-
-const ANVIL_DEPLOYER_KEY =
-  '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as const
+import {
+  ANVIL_DEFAULT_DEPLOYER_PRIVATE_KEY,
+  deployContractViaForgeCreate,
+  scanDeployerCreateAddresses,
+} from './forgeCreateOnFork.js'
 
 /** Uniswap V3 swap router used by deploy UI auxiliary batcher calls. */
 const DEFAULT_SWAP_ROUTER = getAddress('0x2626664c2603336E57B271c5C0b26F421741e481')
@@ -90,6 +86,7 @@ type ReadContractClient = {
     args?: readonly unknown[]
   }) => Promise<unknown>
   getBytecode: (args: { address: Address }) => Promise<Hex | undefined>
+  getTransactionCount: (args: { address: Address }) => Promise<number>
 }
 
 type SendTransactionClient = {
@@ -105,21 +102,21 @@ type SendTransactionClient = {
 export type DryRunCall = {
   to: Address
   data: Hex
-  value?: bigint
+  value?: bigint | number | string
 }
 
-export function remapAuxiliaryDeployBatcherCalls(
-  calls: DryRunCall[],
+export function remapAuxiliaryDeployBatcherCalls<T extends DryRunCall>(
+  calls: T[],
   from: Address,
   to: Address,
-): DryRunCall[] {
+): T[] {
   const fromLower = getAddress(from).toLowerCase()
   const toAddress = getAddress(to)
   let rewrote = false
   const remapped = calls.map((call) => {
     if (getAddress(call.to).toLowerCase() !== fromLower) return call
     rewrote = true
-    return { ...call, to: toAddress }
+    return { ...call, to: toAddress } as T
   })
   return rewrote ? remapped : calls
 }
@@ -196,6 +193,27 @@ async function readAuxiliaryBatcherWiring(params: {
   }
 }
 
+async function findAlignedAuxiliaryBatcherFromForkDeploys(params: {
+  publicClient: ReadContractClient
+  batcher: Address
+}): Promise<Address | null> {
+  const candidates = await scanDeployerCreateAddresses({
+    publicClient: params.publicClient,
+    deployerPrivateKey: ANVIL_DEFAULT_DEPLOYER_PRIVATE_KEY,
+  })
+  for (const candidate of candidates) {
+    const wiring = await readAuxiliaryBatcherWiring({
+      publicClient: params.publicClient,
+      batcher: params.batcher,
+      configuredAuxiliaryBatcher: candidate,
+    })
+    if (wiring.aligned) {
+      return candidate
+    }
+  }
+  return null
+}
+
 function deployVaultAuxiliaryDeployBatcherViaForge(params: {
   rpcUrl: string
   create2Deployer: Address
@@ -204,45 +222,18 @@ function deployVaultAuxiliaryDeployBatcherViaForge(params: {
   protocolTreasury: Address
   swapRouter: Address
 }): Address {
-  const command = [
-    'forge',
-    'create',
-    'contracts/helpers/batchers/VaultAuxiliaryDeployBatcher.sol:VaultAuxiliaryDeployBatcher',
-    '--rpc-url',
-    params.rpcUrl,
-    '--private-key',
-    ANVIL_DEPLOYER_KEY,
-    '--legacy',
-    '--broadcast',
-    '--constructor-args',
-    params.create2Deployer,
-    params.bytecodeStore,
-    params.deploymentBatcher,
-    params.protocolTreasury,
-    params.swapRouter,
-  ]
-  let output = ''
-  try {
-    output = execSync(command.join(' '), {
-      cwd: REPO_ROOT,
-      encoding: 'utf8',
-      maxBuffer: 16 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-  } catch (error) {
-    const err = error as { stdout?: string; stderr?: string; message?: string }
-    const combined = `${err.stdout ?? ''}\n${err.stderr ?? ''}`.trim()
-    throw new Error(
-      combined.length > 0
-        ? `forge create VaultAuxiliaryDeployBatcher failed:\n${combined.slice(-4000)}`
-        : (err.message ?? 'forge create failed'),
-    )
-  }
-  const match = output.match(/Deployed to:\s*(0x[a-fA-F0-9]{40})/)
-  if (!match?.[1]) {
-    throw new Error(`forge create did not report Deployed to address. Output tail:\n${output.slice(-2000)}`)
-  }
-  return getAddress(match[1] as Address)
+  return deployContractViaForgeCreate({
+    rpcUrl: params.rpcUrl,
+    contractPath: 'contracts/helpers/batchers/VaultAuxiliaryDeployBatcher.sol:VaultAuxiliaryDeployBatcher',
+    contractLabel: 'VaultAuxiliaryDeployBatcher',
+    constructorArgs: [
+      params.create2Deployer,
+      params.bytecodeStore,
+      params.deploymentBatcher,
+      params.protocolTreasury,
+      params.swapRouter,
+    ],
+  })
 }
 
 async function ensureAuxiliaryBatcherCreate2AuthorizationOnFork(params: {
@@ -390,14 +381,20 @@ export async function ensureVaultAuxiliaryDeployBatcherOnFork(params: {
     params: ['0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', params.ownerBalanceHex ?? '0x56bc75e2d63100000'],
   })
 
-  const deployedAuxiliary = deployVaultAuxiliaryDeployBatcherViaForge({
-    rpcUrl: params.rpcUrl,
-    create2Deployer: wiring.create2Deployer,
-    bytecodeStore: wiring.bytecodeStore,
-    deploymentBatcher: batcher,
-    protocolTreasury,
-    swapRouter: wiring.swapRouter,
+  const reusedAuxiliary = await findAlignedAuxiliaryBatcherFromForkDeploys({
+    publicClient: params.publicClient,
+    batcher,
   })
+  const deployedAuxiliary =
+    reusedAuxiliary ??
+    deployVaultAuxiliaryDeployBatcherViaForge({
+      rpcUrl: params.rpcUrl,
+      create2Deployer: wiring.create2Deployer,
+      bytecodeStore: wiring.bytecodeStore,
+      deploymentBatcher: batcher,
+      protocolTreasury,
+      swapRouter: wiring.swapRouter,
+    })
 
   const auth = await ensureAuxiliaryBatcherCreate2AuthorizationOnFork({
     publicClient: params.publicClient,

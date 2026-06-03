@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildPreflightSimulationRejectionError,
+  isSwapPreflightSimulationRetryable,
   buildUserOpGasEstimateFailureError,
   extractUserOpReceiptTxHash,
   isBundlerStubSignatureSimulationArtifact,
@@ -36,8 +37,8 @@ describe('extractUserOpReceiptTxHash', () => {
 
 describe('isEchoedBundlerUserOpCallData', () => {
   it('detects execute and executeBatch echoed payloads', () => {
-    const longExecute = `0xb61d27f6${'ab'.repeat(120)}`
-    const longBatch = `0x34fcd5be${'cd'.repeat(120)}`
+    const longExecute = `0xb61d27f6${'ab'.repeat(120)}` as `0x${string}`
+    const longBatch = `0x34fcd5be${'cd'.repeat(120)}` as `0x${string}`
     expect(isEchoedBundlerUserOpCallData(longExecute)).toBe(true)
     expect(isEchoedBundlerUserOpCallData(longBatch)).toBe(true)
     expect(isEchoedBundlerUserOpCallData('0x2c4029e9')).toBe(false)
@@ -201,7 +202,8 @@ describe('buildUserOpGasEstimateFailureError', () => {
       new Error('Execution reverted for an unknown reason.'),
       '0x6fF5693b99212Da76ad316178A184AB56D299b43',
     )
-    expect(err.message).toContain('Zora swap would revert')
+    expect(err.message).toContain('stale')
+    expect(err.message).toContain('slippage')
   })
 })
 
@@ -233,12 +235,12 @@ describe('mapUserOpExecutionFailureMessage', () => {
       { firstCallTo: '0x6fF5693b99212Da76ad316178A184AB56D299b43' },
     )
     expect(err).toBeInstanceOf(PreflightSimulationRejectionError)
-    expect(err?.message).toContain('Zora swap would revert')
+    expect(err?.message).toContain('would fail on-chain')
   })
 })
 
 describe('buildPreflightSimulationRejectionError', () => {
-  it('returns Zora-specific copy for Universal Router calls', () => {
+  it('returns generic swap copy for Universal Router ExecutionFailed without slippage hint', () => {
     const err = buildPreflightSimulationRejectionError({
       simResult: {
         directCallResult: {
@@ -249,9 +251,24 @@ describe('buildPreflightSimulationRejectionError', () => {
       firstCallTo: '0x6fF5693b99212Da76ad316178A184AB56D299b43',
     })
     expect(err).toBeInstanceOf(PreflightSimulationRejectionError)
-    expect(err.message).toContain('Zora swap would revert')
-    expect(err.message).toContain('Permit2')
+    expect(err.message).toContain('would fail on-chain')
     expect(isPreflightSimulationRejection(err)).toBe(true)
+    expect(isSwapPreflightSimulationRetryable(err)).toBe(true)
+  })
+
+  it('returns slippage-specific copy when inner revert indicates minOut failure', () => {
+    const err = buildPreflightSimulationRejectionError({
+      simResult: {
+        directCallResult: {
+          errorName: 'ExecutionFailed(uint256,bytes)',
+          revertData:
+            '0x2c4029e900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000486aa621000000000000000000000000000000000000000000000000000000000',
+        },
+      },
+      firstCallTo: '0x6fF5693b99212Da76ad316178A184AB56D299b43',
+    })
+    expect(err.message).toContain('Slippage tolerance is too tight')
+    expect(isSwapPreflightSimulationRetryable(err)).toBe(true)
   })
 
   it('returns Permit2 signature copy when inner revert is InvalidContractSignature', () => {
@@ -266,5 +283,21 @@ describe('buildPreflightSimulationRejectionError', () => {
       firstCallTo: '0x6fF5693b99212Da76ad316178A184AB56D299b43',
     })
     expect(err.message).toContain('Permit2 rejected the smart-wallet signature')
+  })
+
+  it('returns Permit2 InvalidNonce copy when inner revert is 0x756688fe', () => {
+    const err = buildPreflightSimulationRejectionError({
+      simResult: {
+        directCallResult: {
+          errorName: 'ExecutionFailed(uint256,bytes)',
+          revertData:
+            '0x2c4029e900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000756688fe00000000000000000000000000000000000000000000000000000000',
+        },
+      },
+      firstCallTo: '0x6fF5693b99212Da76ad316178A184AB56D299b43',
+    })
+    expect(err.message).toContain('Permit2 authorization is stale')
+    expect(err.message).not.toContain('slippage')
+    expect(isSwapPreflightSimulationRetryable(err)).toBe(true)
   })
 })

@@ -14,6 +14,13 @@
 
 import { isDbConfigured } from '../../frontend/server/_lib/db/postgres.js'
 import { hasDedicatedMount, findMountedAncestorPath } from '../../frontend/server/_lib/messaging/xmtpDbDirectory.js'
+import {
+  hasCanonicalCswRuntimeConfig,
+  listRetiredCanonicalCswEnvKeys,
+  readCanonicalCswAddressEnv,
+  readCanonicalCswPrivyWalletIdEnv,
+} from '../../frontend/server/_lib/wallet/canonicalCswEnv.js'
+import { isKeeprRailwayAlfaClubSplit } from '../../frontend/server/_lib/alfaclub/keeprAlfaClubSplit.js'
 import path from 'node:path'
 
 const RED = '\x1b[31m'
@@ -38,9 +45,10 @@ const RUNNING_ON_RAILWAY = Object.keys(process.env).some(k => k.startsWith('RAIL
 const hasDb = isDbConfigured()
 const hasEncKey = !!(process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()
 const hasPrivateKey = !!(process.env.XMTP_AGENT_PRIVATE_KEY ?? '').trim()
-const hasCswAddress = !!(process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim()
-const hasCswPrivyWallet = !!(process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim()
-const hasCswConfig = hasCswAddress && hasCswPrivyWallet
+const hasCswAddress = !!readCanonicalCswAddressEnv()
+const hasCswPrivyWallet = !!readCanonicalCswPrivyWalletIdEnv()
+const hasCswConfig = hasCanonicalCswRuntimeConfig()
+const hasSingleAgentCsw = hasCswAddress && hasCswPrivyWallet
 
 const multiAgentConfigured = hasDb && hasEncKey
 
@@ -57,7 +65,13 @@ if (RUNNING_ON_RAILWAY) {
 
 console.log('\n--- Database & Encryption ---')
 check('DATABASE_URL (Supabase preferred) or POSTGRES_URL (legacy)', hasDb)
-check('XMTP_AGENT_KEY_ENCRYPTION_KEY present (for multi-agent)', hasEncKey || !hasDb)
+check(
+  'XMTP_AGENT_KEY_ENCRYPTION_KEY present (multi-agent only)',
+  hasEncKey || !hasDb || hasSingleAgentCsw,
+)
+if (hasSingleAgentCsw && !hasEncKey) {
+  console.log('   Single-agent CSW mode — encryption key not required')
+}
 
 console.log('\n--- XMTP Storage (Critical on Railway) ---')
 const xmptDbDir = process.env.XMTP_DB_DIRECTORY || '/data/xmtp'
@@ -75,8 +89,16 @@ if (RUNNING_ON_RAILWAY) {
 }
 
 console.log('\n--- Agent Identity (Recommended: CSW + Privy Server Wallet) ---')
-check('XMTP_AGENT_CSW_ADDRESS present', hasCswAddress)
-check('XMTP_AGENT_PRIVY_WALLET_ID present (the signer for the CSW)', hasCswPrivyWallet)
+const retiredCanonicalCswEnv = listRetiredCanonicalCswEnvKeys()
+check(
+  'No retired XMTP_AGENT_CSW_* / VITE_AGENT_XMTP_* env keys',
+  retiredCanonicalCswEnv.length === 0,
+)
+if (retiredCanonicalCswEnv.length > 0) {
+  console.log(`   Remove ignored legacy keys and use CANONICAL_CSW_*: ${retiredCanonicalCswEnv.join(', ')}`)
+}
+check('CANONICAL_CSW_ADDRESS present', hasCswAddress)
+check('CANONICAL_CSW_PRIVY_WALLET_ID present (the signer for the CSW)', hasCswPrivyWallet)
 
 if (hasCswAddress && !hasCswPrivyWallet) {
   console.log('   Missing PRIVY_WALLET_ID for the agent\'s CSW')
@@ -86,7 +108,19 @@ console.log('\n--- Privy Server Auth (required for CSW signing) ---')
 const hasPrivyApp = !!(process.env.PRIVY_APP_ID && process.env.PRIVY_APP_SECRET)
 const hasPrivyWalletAuth = !!(process.env.PRIVY_WALLET_AUTHORIZATION_KEY && process.env.PRIVY_WALLET_OWNER_ID)
 check('PRIVY_APP_ID + PRIVY_APP_SECRET', hasPrivyApp)
-check('PRIVY_WALLET_AUTHORIZATION_KEY + PRIVY_WALLET_OWNER_ID', hasPrivyWalletAuth)
+check('PRIVY_WALLET_AUTHORIZATION_KEY + PRIVY_WALLET_OWNER_ID', hasPrivyWalletAuth || hasSingleAgentCsw)
+if (hasSingleAgentCsw && !(hasPrivyApp && hasPrivyWalletAuth)) {
+  console.log('   Optional for single-agent CSW — Keepr signs via CANONICAL_CSW_PRIVY_WALLET_ID')
+}
+
+console.log('\n--- AlfaClub split (Keepr vs Hermit) ---')
+if (isKeeprRailwayAlfaClubSplit()) {
+  console.log(`${GREEN}✓${RESET} AlfaClub in-process bridge skipped on Railway Keepr (separate Hermit/Vercel bot)`)
+} else if (RUNNING_ON_RAILWAY) {
+  console.log(`${YELLOW}?${RESET} ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY=1 — in-process bridge allowed on this Railway service`)
+} else {
+  console.log(`${GREEN}✓${RESET} Not Railway — AlfaClub boot follows ALFACLUB_CHAT_BRIDGE_ENABLED`)
+}
 
 console.log('\n--- Summary ---')
 const criticalErrors = []
@@ -97,7 +131,9 @@ if (RUNNING_ON_RAILWAY) {
 }
 
 if (!hasDb) criticalErrors.push('DATABASE_URL (Supabase) / POSTGRES_URL (legacy) is required')
-if (!hasEncKey && hasDb) criticalErrors.push('XMTP_AGENT_KEY_ENCRYPTION_KEY is required for multi-agent')
+if (!hasEncKey && hasDb && !hasSingleAgentCsw && !hasPrivateKey) {
+  criticalErrors.push('XMTP_AGENT_KEY_ENCRYPTION_KEY is required for multi-agent (or configure single-agent CSW / XMTP_AGENT_PRIVATE_KEY)')
+}
 
 if (RUNNING_ON_RAILWAY && !hasDedicatedMount(xmptDbDir)) {
   criticalErrors.push(`Dedicated volume required at ${xmptDbDir}`)

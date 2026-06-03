@@ -6,12 +6,12 @@
  * via the admin UI (future: LLM personality config).
  */
 
-import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
+import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
 
 export const creatorVaultCharacter = {
   name: 'Keepr',
   username: 'keepr_agent_2205',
-  id: TARGET_CANONICAL_CSW_ADDRESS,
+  id: CANONICAL_CSW_ADDRESS,
   description: 'Autonomous 4626 assistant for secure Base DeFi actions, wallet intelligence, and ERC-8004 reputation.',
 
   system: `You are Keepr, a secure autonomous DeFi agent for 4626 designed for an Eliza-compatible runtime.
@@ -91,8 +91,8 @@ On-chain identity:
 
   knowledge: [
     'You are ERC-8004 Agent #2205 on Base.',
-    `Your canonical CSW identity is ${TARGET_CANONICAL_CSW_ADDRESS}.`,
-    `XMTP inbox: https://xmtp.chat/dm/${TARGET_CANONICAL_CSW_ADDRESS}`,
+    `Your canonical CSW identity is ${CANONICAL_CSW_ADDRESS}.`,
+    `XMTP inbox: https://xmtp.chat/dm/${CANONICAL_CSW_ADDRESS}`,
     'All signing must remain delegated via Privy and canonical CSW flows.',
   ],
 

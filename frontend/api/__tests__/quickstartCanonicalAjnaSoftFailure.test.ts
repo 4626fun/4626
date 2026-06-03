@@ -64,6 +64,29 @@ vi.mock('../../server/_lib/infra/logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 
+vi.mock('@4626/server-core', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    readRequestPrincipalAddress: vi.fn(() => CREATOR_ADDRESS),
+    resolveAuthorizedRequestPrincipal: vi.fn(async () => ({
+      source: 'session',
+      authSource: 'session',
+      address: CREATOR_ADDRESS,
+      profileId: 1,
+      canonicalSmartWalletAddress: CREATOR_ADDRESS,
+      activeOwnerWalletAddress: CREATOR_ADDRESS,
+      signerRole: 'canonical_smart_wallet',
+    })),
+    getDb: getDbMock,
+    isDbConfigured: isDbConfiguredMock,
+    checkRateLimit: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+    getClientIp: vi.fn(() => '127.0.0.1'),
+    rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
+    RATE_LIMITS: { creatorQuickstart: { limit: 50, windowMs: 60_000 } },
+  }
+})
+
 function createDb() {
   return {
     sql: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {

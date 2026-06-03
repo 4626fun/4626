@@ -179,6 +179,36 @@ export async function getClearinghouseState(
   return result
 }
 
+/** Compact position summary for `/help` and `/halp` in Hermit command rooms. */
+export function formatHyperliquidPositionHelpBlock(
+  state: HyperliquidClearinghouseState | null,
+  walletAddress?: string | null,
+): string {
+  const walletLabel = walletAddress
+    ? `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}`
+    : 'your wallet'
+  const lines: string[] = [`**Your position** (${walletLabel})`]
+
+  const firstPos = state?.assetPositions?.[0]
+  if (!firstPos) {
+    lines.push('- No open Hyperliquid position for this wallet.')
+    return lines.join('\n')
+  }
+
+  const side = (firstPos.side ?? 'flat').toUpperCase()
+  const size = firstPos.positionValue != null ? `$${Number(firstPos.positionValue).toFixed(0)}` : '?'
+  const pnl =
+    firstPos.unrealizedPnl != null
+      ? `${firstPos.unrealizedPnl >= 0 ? '+' : ''}$${Number(firstPos.unrealizedPnl).toFixed(0)} PnL`
+      : null
+  const liq =
+    firstPos.liquidationPx != null ? `LIQ @ $${Number(firstPos.liquidationPx).toFixed(2)}` : null
+  lines.push(
+    `- ${side} ${firstPos.coin ?? 'HL'} ${size}${pnl ? ` · ${pnl}` : ''}${liq ? ` · ${liq}` : ''}`,
+  )
+  return lines.join('\n')
+}
+
 export async function getUserFills30d(
   address: string,
   now: Date = new Date(),

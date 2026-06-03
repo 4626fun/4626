@@ -15,7 +15,7 @@ const { dbSqlMock, getDbMock, runInTransactionMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('@4626/server-core', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('../../@4626/server-core')
+  const actual = await vi.importActual<Record<string, unknown>>('@4626/server-core')
   return {
     ...actual,
     getDb: getDbMock,
@@ -23,6 +23,10 @@ vi.mock('@4626/server-core', async () => {
     runInTransaction: runInTransactionMock,
   }
 })
+
+vi.mock('../../server/_lib/infra/telemetrySampling.js', () => ({
+  shouldSampleEvent: () => true,
+}))
 
 import {
   beginOperationExecution,

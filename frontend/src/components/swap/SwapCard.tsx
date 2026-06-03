@@ -7,6 +7,7 @@ import { ChainSelector } from '@/components/trade/ChainSelector'
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import type { SupportedChainId } from '@/config/chains'
+import type { SwapRouteLeg } from '@/lib/swap/swapQuoteDetails'
 import type { TokenDisplay } from '@/lib/uniswap/swapUtils'
 
 type SwapCardProps = {
@@ -33,6 +34,7 @@ type SwapCardProps = {
   tokenInAddress: string
   tokenOutAddress: string
   routeSummary: string | null
+  routeLegs?: SwapRouteLeg[]
   gasEstimateLabel: string | null
   priceImpactLabel: string | null
   lpFeeUsd?: string | null
@@ -41,6 +43,8 @@ type SwapCardProps = {
   walletChainId?: number | null
   onSelectChain: (chainId: SupportedChainId) => void
   slippagePct: string
+  slippageIsAuto?: boolean
+  onSetSlippageAuto?: () => void
   onOpenTokenSelector: (side: 'input' | 'output') => void
   onAmountChange: (value: string) => void
   onQuickPercent: (pct: number, tokenBalance?: string | null) => void
@@ -50,7 +54,8 @@ type SwapCardProps = {
   onConfirmUnverified: () => void
   executionMode: 'canonical' | 'eoa'
   fallbackActive: boolean
-  swapProviderLabel: 'Uniswap' | 'CDP'
+  swapProviderLabel: 'Uniswap' | 'CDP' | 'Zora'
+  quoteAggregatorLabel?: 'Uniswap' | 'CDP' | 'Zora'
   needsUnverifiedConfirmation: boolean
   unverifiedTokenLabel?: string | null
   onResetUnverified: () => void
@@ -179,14 +184,27 @@ export function SwapCard(props: SwapCardProps) {
 
       <SwapDetails
         routeSummary={props.routeSummary}
+        routeLegs={props.routeLegs}
+        amountIn={props.amountInUnits}
+        tokenInSymbol={props.tokenInSymbol}
+        amountOut={props.estimatedOut}
+        tokenOutSymbol={props.tokenOutSymbol}
+        tokenInAddress={props.tokenInAddress}
+        tokenOutAddress={props.tokenOutAddress}
+        tokenInLogoUrl={props.tokenInDisplay.logoUrl}
+        tokenOutLogoUrl={props.tokenOutDisplay.logoUrl}
         slippagePct={props.slippagePct}
+        slippageIsAuto={props.slippageIsAuto}
+        onSetSlippageAuto={props.onSetSlippageAuto}
         onSetSlippagePct={props.onSetSlippagePct}
-        aggregator={props.routeSummary ? props.swapProviderLabel : undefined}
+        aggregator={props.quoteAggregatorLabel ?? props.swapProviderLabel}
         gasEstimateLabel={props.gasEstimateLabel}
         priceImpactLabel={props.priceImpactLabel}
         lpFeeUsd={props.lpFeeUsd ?? null}
         protocolFeeUsd={props.protocolFeeUsd ?? null}
         quoteUpdatedAt={props.quoteUpdatedAt ?? null}
+        sponsoredExecution={props.executionMode === 'canonical'}
+        showUniswapBranding={showUniswapBranding}
       />
     </div>
   )

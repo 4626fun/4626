@@ -14,6 +14,11 @@ const tryUploadMock = vi.fn()
 const getCachedWalletIntelligenceMock = vi.fn()
 const cacheWalletIntelligenceMock = vi.fn()
 const guardMock = vi.fn()
+const buildWalletIntelligenceMock = vi.fn()
+const checkRateLimitMock = vi.fn()
+const getClientIpMock = vi.fn()
+const rateLimitKeyMock = vi.fn()
+const readBoundedJsonObjectBodyMock = vi.fn()
 
 vi.mock('../../server/_lib/lens/funderTrace.js', () => ({
   traceFundersMultiChain: traceFundersMock,
@@ -48,26 +53,26 @@ vi.mock('../../server/_lib/wallet/walletIntelligenceCache.js', () => ({
   cacheWalletIntelligence: cacheWalletIntelligenceMock,
 }))
 
-vi.mock('../../server/_lib/agent/agentApiGuard.js', () => ({
-  guardAgentApiRequest: guardMock,
-  AGENT_RATE_LIMITS: {
-    read: { windowMs: 60_000, maxRequests: 120 },
-    logs: { windowMs: 60_000, maxRequests: 30 },
-    build: { windowMs: 60_000, maxRequests: 60 },
-    write: { windowMs: 60_000, maxRequests: 30 },
-  },
-}))
-
-vi.mock('../../server/_lib/agent/agentAudit.js', () => ({
-  logAgentApiRequest: vi.fn(),
-}))
-
-vi.mock('../../server/auth/_shared.js', () => ({
-  handleOptions: vi.fn(() => false),
-  readBoundedJsonObjectBody: vi.fn(async (req: any) => req.body ?? null),
-  setCors: vi.fn(),
-  setNoStore: vi.fn(),
-}))
+vi.mock('@4626/server-core', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    handleOptions: vi.fn(() => false),
+    setCors: vi.fn(),
+    setNoStore: vi.fn(),
+    guardAgentApiRequest: guardMock,
+    getClientIp: getClientIpMock,
+    RATE_LIMITS: {
+      agentsRead: { limit: 120, windowMs: 60_000 },
+    },
+    checkRateLimit: checkRateLimitMock,
+    rateLimitKey: rateLimitKeyMock,
+    readBoundedJsonObjectBody: readBoundedJsonObjectBodyMock,
+    buildWalletIntelligence: buildWalletIntelligenceMock,
+    getCachedWalletIntelligence: getCachedWalletIntelligenceMock,
+    cacheWalletIntelligence: cacheWalletIntelligenceMock,
+  }
+})
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -110,6 +115,10 @@ function mockRes(): any {
 
 function setupDefaults() {
   guardMock.mockResolvedValue({ ok: true, ip: '127.0.0.1' })
+  getClientIpMock.mockReturnValue('127.0.0.1')
+  checkRateLimitMock.mockReturnValue({ allowed: true, resetAt: Date.now() + 60_000 })
+  rateLimitKeyMock.mockImplementation((...parts: string[]) => parts.join(':'))
+  readBoundedJsonObjectBodyMock.mockImplementation(async (req: any) => req.body ?? null)
   resolveCanonicalMock.mockResolvedValue(null) // No CSW resolution
   getCachedWalletIntelligenceMock.mockResolvedValue(null)
   cacheWalletIntelligenceMock.mockResolvedValue(undefined)
@@ -163,6 +172,87 @@ function setupDefaults() {
       storageKey: 'test-key',
       statusUrl: null,
     },
+  })
+
+  buildWalletIntelligenceMock.mockImplementation(async (address: string) => {
+    const [funderTrace, labels, ensProfile, portfolio, lensProfile] = await Promise.all([
+      traceFundersMock(address),
+      getWalletLabelsBatchMock(),
+      getEnsProfileMock(address),
+      getWalletPortfolioMock(address),
+      resolveLensMock(address),
+    ])
+
+    const nodes: any[] = [{ id: `wallet:${address.toLowerCase()}`, type: 'wallet', label: address.toLowerCase(), data: { address: address.toLowerCase() } }]
+    const edges: any[] = []
+
+    for (const hop of funderTrace?.chain ?? []) {
+      const funder = String(hop.funderAddress).toLowerCase()
+      nodes.push({
+        id: `funder:${funder}`,
+        type: 'funder',
+        label: funder,
+        data: { address: funder, hop: hop.hop ?? 1 },
+      })
+      edges.push({ id: `edge:${funder}`, source: `funder:${funder}`, target: `wallet:${address.toLowerCase()}`, type: 'funded' })
+    }
+
+    for (const [entityAddress, label] of Object.entries(labels ?? {})) {
+      const l = label as any
+      nodes.push({
+        id: `entity-label:${entityAddress.toLowerCase()}`,
+        type: 'entity-label',
+        label: l.labels?.[0]?.name ?? 'Unknown',
+        data: {
+          entityName: l.labels?.[0]?.name ?? 'Unknown',
+          category: l.labels?.[0]?.category ?? 'unknown',
+          address: entityAddress.toLowerCase(),
+        },
+      })
+    }
+
+    if (portfolio) {
+      nodes.push({
+        id: 'portfolio',
+        type: 'portfolio',
+        label: 'Portfolio',
+        data: { totalUsdValue: portfolio.totalUsdValue ?? null },
+      })
+    }
+
+    if (ensProfile?.name) {
+      nodes.push({
+        id: 'ens-name',
+        type: 'ens-name',
+        label: ensProfile.name,
+        data: { name: ensProfile.name },
+      })
+    }
+
+    if (lensProfile?.handle) {
+      nodes.push({
+        id: 'lens-account',
+        type: 'lens-account',
+        label: `@${lensProfile.handle}`,
+        data: { handle: lensProfile.handle },
+      })
+    }
+
+    return {
+      target: address.toLowerCase(),
+      canonicalWallet: null,
+      nodes,
+      edges,
+      sources: {
+        funderTrace,
+        labels: labels ?? {},
+        ens: ensProfile ?? null,
+        portfolio: portfolio ?? null,
+        lens: lensProfile ?? null,
+      },
+      source: 'wallet-intelligence.v1',
+      generatedAt: new Date().toISOString(),
+    }
   })
 }
 

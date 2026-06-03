@@ -33,7 +33,7 @@ const isHermitUserAllowedMock = vi.fn(() => true)
 const executeHermitCommandMock = vi.fn(
   async (_params: HermitCallShape): Promise<HermitExecutionResult> => ({
     kind: 'hermit',
-    provider: 'pinata',
+    provider: 'hermit',
     reply: 'ok',
   }),
 )
@@ -122,7 +122,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     executeHermitCommandMock.mockReset()
     executeHermitCommandMock.mockResolvedValue({
       kind: 'hermit',
-      provider: 'pinata',
+      provider: 'hermit',
       reply: 'ok',
     })
   })
@@ -178,7 +178,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     })
     executeHermitCommandMock.mockResolvedValueOnce({
       kind: 'gmeow',
-      provider: 'pinata',
+      provider: 'hermit',
       reply: 'cat laugh alpha unlocked.\nhttps://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
       meme: {
         id: 'catlaugh-1',
@@ -234,7 +234,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     })
     executeHermitCommandMock.mockResolvedValueOnce({
       kind: 'gmeow',
-      provider: 'pinata',
+      provider: 'hermit',
       reply: 'cat laugh alpha unlocked.\nhttps://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
       meme: {
         id: 'catlaugh-1',
@@ -280,7 +280,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     })
     executeHermitCommandMock.mockResolvedValueOnce({
       kind: 'gmeow',
-      provider: 'pinata',
+      provider: 'hermit',
       reply: 'cat laugh alpha unlocked.\nhttps://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
       meme: {
         id: 'catlaugh-1',

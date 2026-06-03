@@ -65,9 +65,19 @@ describe('Hermit lane: architecture boundary', () => {
     // pinning the only callers we expect. The boundary lives at the
     // import site — execute.ts uses `await import(...)` which is still
     // a static string the tester can detect, so the path appears below.
-    const skillRouter = readSource('skillRouter.ts')
-    const types = readSource('types.ts')
-    expect(skillRouter).not.toContain("from '../alfaclub/")
-    expect(types).not.toContain("from '../alfaclub/")
+    const skillRouter = stripLineComments(stripBlockComments(readSource('skillRouter.ts')))
+    const types = stripLineComments(stripBlockComments(readSource('types.ts')))
+    const forbidden = [
+      'alfaclub/userPreferenceStore',
+      'alfaclub/chatTokenStore',
+      'alfaclub/privyTokenRefresher',
+      'alfaclub/feedbackRelayer',
+      'alfaclub/chatBridge',
+      'alfaclub/chatIngestStore',
+    ]
+    for (const target of forbidden) {
+      expect(skillRouter).not.toContain(target)
+      expect(types).not.toContain(target)
+    }
   })
 })

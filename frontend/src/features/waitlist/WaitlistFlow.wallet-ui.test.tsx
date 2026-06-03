@@ -210,12 +210,16 @@ function render(ui: React.ReactElement) {
 
 async function continueWaitlist() {
   await act(async () => {
-    fireEvent.click(await screen.findByRole('button', { name: /^continue$/i }))
+    const primaryCta =
+      screen.queryByRole('button', { name: /continue with email/i }) ??
+      screen.queryByRole('button', { name: /use existing account/i }) ??
+      (await screen.findByRole('button', { name: /continue|use existing account/i }))
+    fireEvent.click(primaryCta)
   })
 }
 
 async function continueIntoWaitlistSetup() {
-  const continueButton = screen.queryByRole('button', { name: /^continue$/i })
+  const continueButton = screen.queryByRole('button', { name: /continue with email/i })
   if (continueButton) {
     await continueWaitlist()
   }
@@ -324,7 +328,7 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     await continueIntoWaitlistSetup()
     expect(screen.queryByRole('heading', { name: /^waitlist$/i })).toBeNull()
-    expect(screen.queryByRole('button', { name: /^continue$/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /continue with email/i })).toBeNull()
     expect(screen.queryByText(/climb the waitlist/i)).toBeNull()
   })
 
@@ -394,7 +398,7 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     await continueIntoWaitlistSetup()
     expect(screen.queryByRole('heading', { name: /^waitlist$/i })).toBeNull()
-    expect(screen.queryByRole('button', { name: /^continue$/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /continue with email/i })).toBeNull()
   })
 
   it('shows a single setup title after entering the waitlist setup workspace', async () => {
@@ -571,7 +575,7 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('button', { name: /^continue$/i }, { timeout: 5_000 })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: /continue with email/i }, { timeout: 5_000 })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /use existing account/i })).toBeNull()
 
     await continueWaitlist()
@@ -652,10 +656,9 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     await continueWaitlist()
 
-    expect(await screen.findByRole('button', { name: /^continue$/i }, { timeout: 6_000 })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /use existing account/i })).toBeNull()
+    expect(await screen.findByRole('button', { name: /use existing account/i }, { timeout: 6_000 })).toBeTruthy()
     expect(
-      await screen.findByText(/this email is already on 4626/i, undefined, { timeout: 5_000 }),
+      await screen.findByText(/already has a 4626 account/i, undefined, { timeout: 5_000 }),
     ).toBeTruthy()
     expect(locationAssign).not.toHaveBeenCalled()
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
@@ -862,7 +865,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     )
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /^continue$/i }))
+      fireEvent.click(screen.getByRole('button', { name: /continue with email/i }))
     })
 
     mockPrivyAuthenticated = true
@@ -1029,7 +1032,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     expect(mockPrivyLogout).toHaveBeenCalledTimes(1)
     expect(mockLogin).toHaveBeenCalledTimes(2)
     expect(screen.queryByText(/sign-in session is still finalizing/i)).toBeNull()
-    expect(screen.getByRole('button', { name: /^continue$/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /continue with email/i })).toBeTruthy()
   })
 
   it('avoids bootstrap bursts while auth=true and token is still null', async () => {
@@ -1190,9 +1193,9 @@ describe('WaitlistFlow simplified completion UI', () => {
       expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     }, { timeout: 6_000 })
 
-    expect(await screen.findByRole('button', { name: /^continue$/i }, { timeout: 5_000 })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: /use existing account/i }, { timeout: 5_000 })).toBeTruthy()
     expect(
-      await screen.findByText(/this email is already on 4626/i, undefined, { timeout: 5_000 }),
+      await screen.findByText(/already has a 4626 account/i, undefined, { timeout: 5_000 }),
     ).toBeTruthy()
 
     // Allow async follow-ups to settle, then verify calls stay bounded (no ongoing spam loop).
@@ -1309,7 +1312,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     )
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /^continue$/i }))
+      fireEvent.click(screen.getByRole('button', { name: /continue with email/i }))
     })
 
     clearWaitlistAuthPending()
@@ -1424,7 +1427,7 @@ describe('WaitlistFlow simplified completion UI', () => {
       })
 
       expect(screen.getByText(/sign-in timed out/i)).toBeTruthy()
-      expect(screen.getByRole('button', { name: /^continue$/i })).toBeTruthy()
+      expect(screen.getByRole('button', { name: /continue with email/i })).toBeTruthy()
       expect(bootstrapCalls).toBe(0)
     } finally {
       vi.useRealTimers()

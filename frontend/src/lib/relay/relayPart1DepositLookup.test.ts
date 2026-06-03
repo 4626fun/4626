@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { encodeFunctionData } from 'viem'
+import { encodeFunctionData, getAddress } from 'viem'
 
 import {
   decodeDepositoryDepositNativeOrderId,
@@ -9,6 +9,7 @@ import {
   persistRelayPart1DepositTx,
 } from '@/lib/relay/relayPart1DepositLookup'
 import { RELAY_DEPOSITORY_ABI } from '@/lib/wallet/cswOwnerAbi'
+import { CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
 
 describe('relayPart1DepositLookup', () => {
   it('decodes depositNative order id from calldata', () => {
@@ -16,11 +17,11 @@ describe('relayPart1DepositLookup', () => {
     const data = encodeFunctionData({
       abi: RELAY_DEPOSITORY_ABI,
       functionName: 'depositNative',
-      args: ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF', orderId],
+      args: [getAddress(CANONICAL_CSW_ADDRESS), orderId],
     })
     const decoded = decodeDepositoryDepositNativeOrderId(data)
     expect(decoded?.orderId.toLowerCase()).toBe(orderId.toLowerCase())
-    expect(decoded?.depositor.toLowerCase()).toBe('0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef')
+    expect(decoded?.depositor.toLowerCase()).toBe(CANONICAL_CSW_ADDRESS.toLowerCase())
   })
 
   it('pins live NativeDeposit log topic', () => {

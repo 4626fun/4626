@@ -13,6 +13,7 @@ import {
   STRICT_IMMUTABLE_AGENT_URI_SUMMARY,
 } from '../../../src/lib/agent/erc8004AgentUriPolicy.js'
 import { getErc8004PublicOrigin } from '../../../server/_lib/infra/origin.js'
+import { resolveServerAgentInboxAddress } from '../../../server/_lib/wallet/canonicalCswEnv.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -42,16 +43,8 @@ function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
 
-function resolveAgentAddress(): `0x${string}` | null {
-  const candidates = [
-    (process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim(),
-    (process.env.XMTP_AGENT_ADDRESS ?? '').trim(),
-    (process.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim(),
-  ]
-  for (const raw of candidates) {
-    if (isAddressLike(raw)) return raw.toLowerCase() as `0x${string}`
-  }
-  return null
+function resolveAgentAddress(): `0x${string}` {
+  return resolveServerAgentInboxAddress()
 }
 
 function parseSupportedTrust(raw: string | undefined): string[] {
@@ -93,7 +86,7 @@ function getErc8004Meta(req: VercelRequest): {
  * GET /api/agents
  *
  * Directory-compatible agent listing endpoint (XMTP Agent Directory shape).
- * If XMTP_AGENT_ADDRESS is configured, returns a single 4626 agent entry.
+ * Returns the canonical CSW inbox via resolveServerAgentInboxAddress().
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setPublicCors(res)

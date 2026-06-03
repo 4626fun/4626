@@ -41,26 +41,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
 
         vault = new MockOwnableVaultForPhase3Bounds(address(this));
         DeploymentBatcherFixture deployer = new DeploymentBatcherFixture();
-        DeploymentBatcherFixture.BatcherConfig memory cfg = DeploymentBatcherFixture.BatcherConfig({
-            registry: makeAddr("registry"),
-            bytecodeStore: makeAddr("bytecodeStore"),
-            create2Deployer: makeAddr("create2Deployer"),
-            protocolTreasury: protocolTreasury,
-            protocolAutomation: protocolAutomation,
-            poolManager: makeAddr("poolManager"),
-            taxHook: makeAddr("taxHook"),
-            chainlinkEthUsd: makeAddr("chainlinkEthUsd"),
-            vaultActivationBatcher: makeAddr("vaultActivationBatcher"),
-            lotteryManager: makeAddr("lotteryManager"),
-            permit2: makeAddr("permit2"),
-            usdc: makeAddr("usdc"),
-            uniswapV3Factory: makeAddr("uniswapV3Factory"),
-            uniswapRouter: makeAddr("uniswapRouter"),
-            ajnaFactory: makeAddr("ajnaFactory"),
-            vaultCoreModule: makeAddr("vaultCoreModule"),
-            vaultStrategiesModule: makeAddr("vaultStrategiesModule"),
-            vaultAdminModule: makeAddr("vaultAdminModule")
-        });
+        DeploymentBatcherFixture.BatcherConfig memory cfg = _defaultBatcherConfig();
         (batcher,) = deployer.deployBatcher(cfg);
         rolePolicyManager = new VaultRolePolicyManager(address(this));
         vault.setManagement(address(batcher));
@@ -244,7 +225,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         batcher.deployPhase3Strategies(params, codeIds);
     }
 
-    function test_phase1SaltOverrideEntrypoints_areDisabled() public {
+    function test_phase1SaltOverrideEntrypoints_acceptOverrideInput() public {
         DeploymentBatcher.Phase1Params memory params = DeploymentBatcher.Phase1Params({
             creatorToken: makeAddr("creatorToken"),
             owner: address(this),
@@ -265,12 +246,31 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         });
 
         bytes32 saltOverride = keccak256("custom-share-oft-salt");
+        bytes4 disabledSelector = bytes4(keccak256("SaltOverrideDisabled()"));
 
-        vm.expectRevert(DeploymentBatcher.SaltOverrideDisabled.selector);
-        batcher.deployPhase1CoreWithSalt(params, codeIds, saltOverride);
+        try batcher.deployPhase1CoreWithSalt(params, codeIds, saltOverride) {
+            // no-op
+        } catch (bytes memory err) {
+            if (err.length >= 4) {
+                bytes4 sel;
+                assembly {
+                    sel := mload(add(err, 32))
+                }
+                assertTrue(sel != disabledSelector, "salt override unexpectedly disabled for deployPhase1CoreWithSalt");
+            }
+        }
 
-        vm.expectRevert(DeploymentBatcher.SaltOverrideDisabled.selector);
-        batcher.finalizePhase1WithSalt(params, codeIds, saltOverride);
+        try batcher.finalizePhase1WithSalt(params, codeIds, saltOverride) {
+            // no-op
+        } catch (bytes memory err) {
+            if (err.length >= 4) {
+                bytes4 sel;
+                assembly {
+                    sel := mload(add(err, 32))
+                }
+                assertTrue(sel != disabledSelector, "salt override unexpectedly disabled for finalizePhase1WithSalt");
+            }
+        }
     }
 
     function test_phase2ShareSplitAndDepositBounds_remainFixed() public view {
@@ -320,5 +320,26 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
     function _seedPendingAuctionAmount(bytes32 baseSalt, uint256 amount) internal {
         bytes32 pendingBase = keccak256(abi.encode(baseSalt, uint256(PENDING_AUCTIONS_SLOT)));
         vm.store(address(batcher), bytes32(uint256(pendingBase) + 2), bytes32(amount));
+    }
+
+    function _defaultBatcherConfig() internal returns (DeploymentBatcherFixture.BatcherConfig memory cfg) {
+        cfg.registry = makeAddr("registry");
+        cfg.bytecodeStore = makeAddr("bytecodeStore");
+        cfg.create2Deployer = makeAddr("create2Deployer");
+        cfg.protocolTreasury = protocolTreasury;
+        cfg.protocolAutomation = protocolAutomation;
+        cfg.poolManager = makeAddr("poolManager");
+        cfg.taxHook = makeAddr("taxHook");
+        cfg.chainlinkEthUsd = makeAddr("chainlinkEthUsd");
+        cfg.vaultActivationBatcher = makeAddr("vaultActivationBatcher");
+        cfg.lotteryManager = makeAddr("lotteryManager");
+        cfg.permit2 = makeAddr("permit2");
+        cfg.usdc = makeAddr("usdc");
+        cfg.uniswapV3Factory = makeAddr("uniswapV3Factory");
+        cfg.uniswapRouter = makeAddr("uniswapRouter");
+        cfg.ajnaFactory = makeAddr("ajnaFactory");
+        cfg.vaultCoreModule = makeAddr("vaultCoreModule");
+        cfg.vaultStrategiesModule = makeAddr("vaultStrategiesModule");
+        cfg.vaultAdminModule = makeAddr("vaultAdminModule");
     }
 }

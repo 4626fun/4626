@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * End-to-end Hermit creative probe (Pinata HTTP → gateway fallback).
+ * End-to-end Hermit creative probe (HTTP).
  *
  *   pnpm -C frontend exec tsx scripts/ops/probe-pinata-hermit.ts
  */
@@ -36,19 +36,19 @@ loadEnvFile(resolve(FRONTEND_ROOT, '.env.local'))
 loadEnvFile(resolve(FRONTEND_ROOT, '.env'))
 
 async function main(): Promise<void> {
-  const endpoint = String(process.env.HERMIT_PINATA_CHAT_ENDPOINT ?? '').trim()
-  const bearer = String(process.env.HERMIT_PINATA_BEARER_TOKEN ?? '').trim()
+  const endpoint = String(process.env.HERMIT_AGENT_CHAT_ENDPOINT ?? '').trim()
+  const bearer = String(process.env.HERMIT_AGENT_BEARER_TOKEN ?? '').trim()
 
   if (!endpoint || !bearer) {
-    console.error('❌ HERMIT_PINATA_CHAT_ENDPOINT and HERMIT_PINATA_BEARER_TOKEN must be set')
+    console.error('❌ HERMIT_AGENT_CHAT_ENDPOINT and HERMIT_AGENT_BEARER_TOKEN must be set')
     process.exit(2)
   }
 
   try {
     const host = new URL(endpoint).hostname
-    console.log(`Pinata Hermit probe → ${host}`)
+    console.log(`Hermit probe → ${host}`)
   } catch {
-    console.log('Pinata Hermit probe → configured endpoint')
+    console.log('Hermit probe → configured endpoint')
   }
 
   const started = Date.now()

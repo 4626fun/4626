@@ -29,6 +29,7 @@ import { inferWaitlistEoaOwnerRoutingHint } from '@/lib/wallet/userExecutionTrac
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { useWaitlistSigningStepComplete } from '@/features/waitlist/useWaitlistSigningStepComplete'
 import { WaitlistModernParentOwnerInstall } from './WaitlistModernParentOwnerInstall'
+import { WaitlistAccountStatusCard } from '@/features/waitlist/WaitlistAccountStatusCard'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { readWaitlistSetupIntent } from '@/lib/auth/waitlistEntry'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
@@ -348,7 +349,7 @@ export function AccountSetupWorkspaceView(props: {
 
     if (allDone) {
       return (
-        <div className="mx-auto w-full max-w-[640px] space-y-5">
+        <div className="w-full space-y-4">
           {error ? (
             <div role="alert" aria-live="assertive" className="rounded-xl border border-rose-500/20 bg-rose-500/[0.08] px-4 py-3 text-sm text-rose-300">
               <div>{error}</div>
@@ -365,70 +366,15 @@ export function AccountSetupWorkspaceView(props: {
             </div>
           ) : null}
 
-          <div className="space-y-2">
-            <h2 className="text-2xl font-semibold tracking-tight text-white">You&apos;re live</h2>
-            <p className="text-sm text-zinc-500">Your account is activated and ready.</p>
-            <div className="flex flex-wrap items-center gap-2 text-[11px]">
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-emerald-200">
-                <CheckCircle2 className="h-3 w-3" />
-                Step 1 complete
-              </span>
-              <span
-                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 ${
-                  signingStepComplete
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                    : 'border-white/10 bg-white/[0.03] text-zinc-400'
-                }`}
-              >
-                <CheckCircle2 className="h-3 w-3" />
-                {signingStepComplete ? 'Step 2 complete' : 'Step 2 optional'}
-              </span>
-            </div>
-          </div>
-
-          <div className="space-y-2 pt-1">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-2">
-                <div className="inline-flex items-center gap-2 text-[11px] text-zinc-400">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-zinc-500" />
-                  {signingStepComplete ? 'Zora linked · Signing enabled' : 'Zora linked · Signing optional'}
-                </div>
-                {(normalizedZoraHandle || canonicalCswAddress) ? (
-                  <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-zinc-500">
-                    {normalizedZoraHandle && zoraProfileUrl ? (
-                      <a
-                        href={zoraProfileUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="shrink-0 hover:text-zinc-300 transition-colors"
-                      >
-                        {normalizedZoraHandle}
-                      </a>
-                    ) : null}
-                    {normalizedZoraHandle && canonicalCswAddress ? <span className="text-zinc-700">·</span> : null}
-                    {canonicalCswAddress ? (
-                      <button
-                        type="button"
-                        onClick={() => copyAddress(canonicalCswAddress)}
-                        title={canonicalCswAddress}
-                        className="shrink-0 font-mono text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
-                      >
-                        {shortAddr(canonicalCswAddress)}
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                disabled={busyProvider === 'email'}
-                onClick={() => void onSwitchAccount()}
-                className="shrink-0 text-xs font-medium text-zinc-500 transition-colors hover:text-zinc-300 disabled:opacity-50"
-              >
-                {busyProvider === 'email' ? 'Resetting…' : 'Reset'}
-              </button>
-            </div>
-          </div>
+          <WaitlistAccountStatusCard
+            zoraHandle={normalizedZoraHandle}
+            zoraProfileUrl={zoraProfileUrl}
+            canonicalCswAddress={canonicalCswAddress}
+            signingStepComplete={signingStepComplete}
+            resetBusy={busyProvider === 'email'}
+            onCopyAddress={copyAddress}
+            onReset={() => void onSwitchAccount()}
+          />
 
           {summaryActions ? <div className="space-y-4">{summaryActions}</div> : null}
 

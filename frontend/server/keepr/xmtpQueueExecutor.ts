@@ -35,6 +35,7 @@ import {
   resolvePrivyCoinbaseSmartWalletOwnerContext,
 } from '../_lib/wallet/privyCoinbaseSmartWallet.js'
 import { createPrivyScwSigner } from '../_lib/wallet/privyXmtpSigner.js'
+import { readCanonicalCswOwnerIndexEnv } from '../_lib/wallet/canonicalCswEnv.js'
 import { ensureKeeprSchema } from '../_lib/keepr/keeprSchema.js'
 import { isOfficialCharmVault, officialCharmVaultError } from '../_lib/deploy/charmVaults.js'
 import {
@@ -708,7 +709,7 @@ export async function executeKeeprAction(input: ExecuteKeeprActionInput): Promis
 
     let signer: any
     if (row.agentType === 'csw' && row.privyWalletId && row.cswAddress) {
-      const ownerIndexEnv = (process.env.XMTP_AGENT_CSW_OWNER_INDEX ?? '').trim()
+      const ownerIndexEnv = readCanonicalCswOwnerIndexEnv()
       const ownerIndexRaw = ownerIndexEnv ? Number(ownerIndexEnv) : Number.NaN
       const ownerIndex =
         Number.isFinite(ownerIndexRaw) && ownerIndexRaw >= 0

@@ -1,8 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const { ensureCreatorMetricsBaseSchemaMock, ensureFinalAdditiveColumnsMock } = vi.hoisted(() => ({
+  ensureCreatorMetricsBaseSchemaMock: vi.fn(async () => {}),
+  ensureFinalAdditiveColumnsMock: vi.fn(async () => {}),
+}))
+
+vi.mock('../db/schemaBootstrap.js', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('../db/schemaBootstrap.js')
+  return {
+    ...actual,
+    ensureCreatorMetricsBaseSchema: ensureCreatorMetricsBaseSchemaMock,
+    ensureFinalAdditiveColumns: ensureFinalAdditiveColumnsMock,
+  }
+})
+
 describe('ensureCreatorMetricsSchema', () => {
   beforeEach(() => {
     vi.resetModules()
+    ensureCreatorMetricsBaseSchemaMock.mockClear()
+    ensureFinalAdditiveColumnsMock.mockClear()
   })
 
   it('runs column migrations when base tables already exist', async () => {
@@ -24,9 +40,7 @@ describe('ensureCreatorMetricsSchema', () => {
     const { ensureCreatorMetricsSchema } = await import('./creatorMetricsSync.js')
     await ensureCreatorMetricsSchema({ sql } as any)
 
-    const alterCalls = sql.mock.calls.filter(([strings]) =>
-      String(strings.join('?')).includes('ADD COLUMN IF NOT EXISTS cached_creators_total'),
-    )
-    expect(alterCalls.length).toBe(1)
+    expect(ensureCreatorMetricsBaseSchemaMock).not.toHaveBeenCalled()
+    expect(ensureFinalAdditiveColumnsMock).toHaveBeenCalledTimes(2)
   })
 })

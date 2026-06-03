@@ -1,5 +1,7 @@
 import { logger } from '../infra/logger.js'
 import { getDb, getDbInitError, isDbConfigured } from '../db/postgres.js'
+import { ensureTelemetryCreativeLogsSchema } from '../db/schemaBootstrap.js'
+import { shouldSampleEvent } from '../infra/telemetrySampling.js'
 
 type TelegramLinkTelemetryInput = {
   event: string
@@ -150,6 +152,12 @@ export async function trackTelegramLinkEvent(input: TelegramLinkTelemetryInput):
   }
 
   logger.info('[telegram/link-telemetry] event', row)
+
+  // High-volume link telemetry funnel. Sample early so we avoid schema/backoff work on dropped events.
+  const sampleKey = row.telegramUserId || row.chatId || row.flowId || row.event
+  if (!shouldSampleEvent('telegram_link_telemetry_events', sampleKey)) {
+    return
+  }
 
   if (!shouldPersistTelegramLinkTelemetry()) return
   if (!isDbConfigured()) return

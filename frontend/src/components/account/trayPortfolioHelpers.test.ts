@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
+
 import {
   buildTrayAssetHoldings,
   buildTrayHoldings,
@@ -10,7 +12,7 @@ import {
   parseDebankToken,
 } from './trayPortfolioHelpers'
 
-const CSW = '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'
+const CSW = CANONICAL_CSW_ADDRESS
 
 describe('buildTrayWalletSources', () => {
   it('omits external EOA when it matches canonical CSW', () => {

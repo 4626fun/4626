@@ -52,14 +52,21 @@ COPY frontend/packages/server-core/tsconfig.json ./packages/server-core/tsconfig
 COPY frontend/packages/server-core/build.mjs ./packages/server-core/build.mjs
 COPY frontend/packages/server-core/src ./packages/server-core/src
 
+# server-core build.mjs re-exports compile server/_lib/*.ts siblings; those
+# sources (and their src/ imports) must exist before the deps-stage build.
+COPY frontend/server ./server
+COPY frontend/api/_handlers/token ./api/_handlers/token
+COPY frontend/src/config ./src/config
+COPY frontend/src/lib ./src/lib
+COPY frontend/src/wallet ./src/wallet
+
 # Install dependencies
 RUN pnpm install --frozen-lockfile --ignore-scripts \
     && pnpm rebuild
 
 # Build @4626/server-core so that dist/ is generated.
 # The package is imported by command families (e.g. alfaclub.ts) and many
-# server/_lib modules. tsx will look for the dist version when resolving
-# the package.json "main" field.
+# server/_lib modules. tsx resolves the package.json "main" field to dist/.
 RUN cd packages/server-core && node build.mjs
 
 # --------------------------------------------------------------------------
@@ -76,13 +83,14 @@ COPY --from=deps /app/package.json ./package.json
 # Copy the server-core workspace package
 COPY --from=deps /app/packages/server-core ./packages/server-core
 
-# Copy only what the Hermit runtime needs
-COPY frontend/server ./server
+# server tree includes build.mjs runtime siblings (e.g. renderPremiumTokenIcon.js)
+COPY --from=deps /app/server ./server
 COPY frontend/api ./api
 COPY frontend/src/config ./src/config
 COPY frontend/src/lib ./src/lib
 COPY frontend/src/wallet ./src/wallet
 COPY frontend/tsconfig.json frontend/tsconfig.node.json ./
+COPY frontend/shared ./shared
 
 # Health check port
 ENV PORT=8080

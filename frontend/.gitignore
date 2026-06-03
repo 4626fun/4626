@@ -43,3 +43,12 @@ xmtp-*.db3
 xmtp-*.db3-shm
 xmtp-*.db3-wal
 
+# Offline token icon renderer compare outputs
+tmp/
+
+# Accidental tsc emit beside TS sources (never commit)
+server/**/*.js
+server/**/*.js.map
+server/auth/**/*.js
+server/auth/**/*.js.map
+

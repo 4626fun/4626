@@ -169,7 +169,7 @@ describe('xmtp queue executor Ajna canonical automation', () => {
       BASE_RPC_URL: 'https://base-rpc.example',
       KPR_PRIVATE_KEY: undefined,
       CDP_PAYMASTER_URL: 'https://paymaster.example',
-      XMTP_AGENT_CSW_OWNER_INDEX: undefined,
+      CANONICAL_CSW_OWNER_INDEX: undefined,
     })
     mocks.AgentCreate.mockRejectedValue(new Error('Agent.create should not be called for strategy actions'))
     mocks.decryptPrivateKey.mockReturnValue(
@@ -607,7 +607,7 @@ describe('xmtp queue executor Ajna canonical automation', () => {
     expect(mocks.writeContract).not.toHaveBeenCalled()
   })
 
-  it('does not pass an ownerIndex hint when XMTP_AGENT_CSW_OWNER_INDEX is unset', async () => {
+  it('does not pass an ownerIndex hint when CANONICAL_CSW_OWNER_INDEX is unset', async () => {
     mocks.sql.mockResolvedValueOnce({
       rows: [
         {

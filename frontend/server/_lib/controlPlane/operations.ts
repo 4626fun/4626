@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import { getDb, isDbConfigured, runInTransaction } from '@4626/server-core'
+import { shouldSampleEvent } from '../infra/telemetrySampling.js'
 import { emitControlPlaneMetric } from './metrics.js'
 
 type Db = {
@@ -230,6 +231,10 @@ async function safeInsertEvent(params: {
   message: string
   data?: Record<string, unknown> | null
 }): Promise<void> {
+  // High-volume control plane event stream. Sample by operation for consistent traces.
+  if (!shouldSampleEvent('control_plane_events', params.operationId)) {
+    return
+  }
   const dataJson = JSON.stringify(redactSensitive(params.data ?? {}))
   await params.db.sql`
     INSERT INTO public.control_plane_events (
@@ -416,23 +421,26 @@ export async function createControlPlaneStage(input: CreateOperationStageInput):
   const stageStatus = input.status ?? 'requested'
   const inputJson = JSON.stringify(canonicalize(input.input ?? {}))
   try {
-    await db.sql`
-      INSERT INTO public.control_plane_stages (
-        stage_id,
-        operation_id,
-        stage_kind,
-        status,
-        attempt_count,
-        input_json
-      ) VALUES (
-        ${stageId},
-        ${input.operationId},
-        ${normalizeToken(input.stageKind, 'operation.stage')},
-        ${stageStatus},
-        0,
-        ${inputJson}::jsonb
-      );
-    `
+    // Control plane stages are high-volume during active operations.
+    if (shouldSampleEvent('control_plane_stages', input.operationId)) {
+      await db.sql`
+        INSERT INTO public.control_plane_stages (
+          stage_id,
+          operation_id,
+          stage_kind,
+          status,
+          attempt_count,
+          input_json
+        ) VALUES (
+          ${stageId},
+          ${input.operationId},
+          ${normalizeToken(input.stageKind, 'operation.stage')},
+          ${stageStatus},
+          0,
+          ${inputJson}::jsonb
+        );
+      `
+    }
     await safeInsertEvent({
       db,
       operationId: input.operationId,

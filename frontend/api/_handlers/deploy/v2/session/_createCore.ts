@@ -15,6 +15,7 @@ import {
 } from 'viem'
 import { base } from 'viem/chains'
 
+import { isShareOftSaltOverrideDisabledBatcher } from '../../../../../src/config/contracts.defaults.js'
 import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
 import {
   resolveAlignedPhase1DeployDeps,
@@ -183,13 +184,6 @@ const PHASE1_WITH_SALT_SELECTORS = new Set<string>([
   PHASE1_SELECTOR_FINALIZE_WITH_SALT,
 ])
 const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
-const KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
-  '0xe3f9490cfd6bd3d68010405d18bf772c167e7178',
-  '0xf941bb68e4f083f3f531cc598d5c08d0b8ffba7e',
-  // Active split Phase-1 batcher on Base mainnet also rejects non-zero
-  // ShareOFT salt overrides (SaltOverrideDisabled selector 0xe7fdf838).
-  '0x271ab2c53d79d52ddb14506a44133fe3fa395332',
-])
 const UNIVERSAL_CREATE2_FACTORY = '0x4e59b44847b379578588920ca78fbf26c0b4956c'
 const EXPECTED_VAULT_MODULE_STORAGE_VERSION = keccak256(encodePacked(['string'], ['CreatorOVaultModuleStorage.v2']))
 const EXPECTED_VAULT_CORE_MODULE_KIND = keccak256(encodePacked(['string'], ['CreatorOVaultModule.core']))
@@ -943,7 +937,7 @@ async function normalizePhase1SaltOverrideCalls(calls: Call[]): Promise<{ calls:
   })
   const saltDisabledTargets = new Set<string>()
   for (const targetLc of saltedTargets) {
-    if (KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS.has(targetLc)) {
+    if (isShareOftSaltOverrideDisabledBatcher(targetLc)) {
       saltDisabledTargets.add(targetLc)
       continue
     }

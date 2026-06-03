@@ -1,4 +1,3 @@
-import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,6 +11,7 @@ import {
 
 import { resolveProtocolTreasuryAddress } from '../wallet/protocolTreasurySafe.js'
 import type { ForkImpersonationMode } from './ensureBatcherRegistryAuthorization.js'
+import { deployContractViaForgeCreate } from './forgeCreateOnFork.js'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
 const PHASE3_HELPER_ARTIFACT_PATH = path.join(
@@ -20,8 +20,6 @@ const PHASE3_HELPER_ARTIFACT_PATH = path.join(
 )
 
 const ANVIL_DEPLOYER = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266' as const
-const ANVIL_DEPLOYER_KEY =
-  '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as const
 
 const BATCHER_ABI = [
   {
@@ -210,48 +208,21 @@ function deployPhase3HelperViaForge(params: {
   ajnaFactory: Address
   batcher: Address
 }): Address {
-  const command = [
-    'forge',
-    'create',
-    'contracts/helpers/batchers/DeploymentBatcher.sol:DeploymentBatcherPhase3Helper',
-    '--rpc-url',
-    params.rpcUrl,
-    '--private-key',
-    ANVIL_DEPLOYER_KEY,
-    '--legacy',
-    '--broadcast',
-    '--constructor-args',
-    params.create2Deployer,
-    params.protocolTreasury,
-    params.protocolAutomation,
-    params.usdc,
-    params.uniswapV3Factory,
-    params.uniswapRouter,
-    params.ajnaFactory,
-    params.batcher,
-  ]
-  let output = ''
-  try {
-    output = execSync(command.join(' '), {
-      cwd: REPO_ROOT,
-      encoding: 'utf8',
-      maxBuffer: 16 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-  } catch (error) {
-    const err = error as { stdout?: string; stderr?: string; message?: string }
-    const combined = `${err.stdout ?? ''}\n${err.stderr ?? ''}`.trim()
-    throw new Error(
-      combined.length > 0
-        ? `forge create DeploymentBatcherPhase3Helper failed:\n${combined.slice(-4000)}`
-        : (err.message ?? 'forge create failed'),
-    )
-  }
-  const match = output.match(/Deployed to:\s*(0x[a-fA-F0-9]{40})/)
-  if (!match?.[1]) {
-    throw new Error(`forge create did not report Deployed to address. Output tail:\n${output.slice(-2000)}`)
-  }
-  return getAddress(match[1] as Address)
+  return deployContractViaForgeCreate({
+    rpcUrl: params.rpcUrl,
+    contractPath: 'contracts/helpers/batchers/DeploymentBatcher.sol:DeploymentBatcherPhase3Helper',
+    contractLabel: 'DeploymentBatcherPhase3Helper',
+    constructorArgs: [
+      params.create2Deployer,
+      params.protocolTreasury,
+      params.protocolAutomation,
+      params.usdc,
+      params.uniswapV3Factory,
+      params.uniswapRouter,
+      params.ajnaFactory,
+      params.batcher,
+    ],
+  })
 }
 
 export async function readPhase3HelperBytecodeAligned(params: {

@@ -30,7 +30,12 @@ import {
 
 import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
 import { ensureBatcherRegistryAuthorizationOnFork } from '../../../../../server/_lib/deploy/ensureBatcherRegistryAuthorization.js'
+import { ensureCreatorOracleLaunchPricingOnFork } from '../../../../../server/_lib/deploy/ensureCreatorOracleLaunchPricingOnFork.js'
 import { ensurePhase3DryRunForkPrep } from '../../../../../server/_lib/deploy/ensurePhase3DryRunForkPrep.js'
+import {
+  AUCTION_ALREADY_PENDING_FOR_TOKEN_SELECTOR,
+  ensurePendingAuctionGateClearOnFork,
+} from '../../../../../server/_lib/deploy/ensurePendingAuctionGateClearOnFork.js'
 import { remapAuxiliaryDeployBatcherCalls } from '../../../../../server/_lib/deploy/ensureVaultAuxiliaryDeployBatcherOnFork.js'
 import {
   ensurePhase3VaultStrategyRegistrationOnFork,
@@ -101,8 +106,10 @@ const DEPLOY_FAILED_SELECTOR = '0xb4f54111'
 const NOT_AUTHORIZED_SELECTOR = '0xea8e4eb5'
 const UNAUTHORIZED_SELECTOR = '0x82b42900'
 const ERC20_INSUFFICIENT_BALANCE_SELECTOR = '0xe450d38c'
-const CCA_REQUIRED_RAISE_HINT_SELECTOR = '0x28e7b618'
+/** CCALaunchStrategy.LaunchOracleInvalidPrice(int256,int256) — not a raise hint. */
+const LAUNCH_ORACLE_INVALID_PRICE_SELECTOR = '0x28e7b618'
 const PHASE2_MISSING_SELECTOR = '0xf79c143b'
+const AUCTION_ALREADY_PENDING_SELECTOR = AUCTION_ALREADY_PENDING_FOR_TOKEN_SELECTOR
 const SELECTOR_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'
 const SELECTOR_DEPLOY_PHASE2_CORE = '0xf9344d88'
 const SELECTOR_PHASE1_DEPLOY = '0x3c51ca4e'
@@ -342,6 +349,12 @@ function formatDryRunError(error: unknown): string {
         'For local dry-runs, reset the fork or skip the already-completed deterministic phase before retrying.'
       )
     }
+    if (raw.toLowerCase().includes(AUCTION_ALREADY_PENDING_SELECTOR)) {
+      return (
+        'AuctionAlreadyPendingForToken: a prior dry-run already deferred an auction for this creator coin + owner on the fork. ' +
+        'Local dry-runs should clear the pending-auction gate before Phase 2 finalize; restart `pnpm -C frontend dev:deploy-dry-run` if this persists.'
+      )
+    }
     if (raw.toLowerCase().includes(NOT_AUTHORIZED_SELECTOR)) {
       return (
         'NotAuthorized(): CreatorRegistry rejected Phase 2 finalize because the DeploymentBatcher is not an authorized factory. ' +
@@ -406,27 +419,10 @@ function formatErc20InsufficientBalanceError(raw: string): string | null {
   }
 }
 
-function parseRaiseHintFromCustomError(raw: string): bigint | null {
-  const lower = raw.toLowerCase()
-  const selectorIndex = lower.indexOf(CCA_REQUIRED_RAISE_HINT_SELECTOR)
-  if (selectorIndex < 0) return null
-  const afterSelector = raw.slice(selectorIndex + CCA_REQUIRED_RAISE_HINT_SELECTOR.length)
-  const payloadMatch = afterSelector.match(/[0-9a-fA-F]{64,}/)
-  if (!payloadMatch) return null
-  try {
-    const payload = payloadMatch[0]!
-    const words = payload.match(/[0-9a-fA-F]{64}/g) ?? []
-    let hint: bigint | null = null
-    for (const word of words) {
-      const value = BigInt(`0x${word}`)
-      if (value > 0n && (hint === null || value > hint)) {
-        hint = value
-      }
-    }
-    return hint
-  } catch {
-    return null
-  }
+function parseRaiseHintFromCustomError(_raw: string): bigint | null {
+  // Legacy helper retained for phase4 retry scaffolding; 0x28e7b618 is
+  // LaunchOracleInvalidPrice, not a required-raise hint.
+  return null
 }
 
 function isLaunchDeferredAuctionCall(call: Call): boolean {
@@ -529,6 +525,14 @@ async function enableForkImpersonation(params: {
     400,
     `Deploy dry-run requires an Anvil or Hardhat fork RPC with impersonation enabled. ${formatDryRunError(lastError)}`,
   )
+}
+
+async function warpForkTimestampForPhase4Launch(params: {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+}): Promise<void> {
+  const now = Math.floor(Date.now() / 1000)
+  await params.request({ method: 'evm_setNextBlockTimestamp', params: [now] })
+  await params.request({ method: 'evm_mine', params: [] })
 }
 
 async function resetForkState(params: {
@@ -1850,8 +1854,14 @@ async function runDryRunPhase(params: {
   }) => Promise<Array<{ args?: Record<string, unknown> }>>
   getBlockNumber?: () => Promise<bigint | null>
   allowLocalForkPhase4InvariantSkip?: boolean
-}): Promise<{ phase: DryRunPhaseResult; failure?: DryRunFailure; lastSuccessfulTxHash?: Hex }> {
+}): Promise<{
+  phase: DryRunPhaseResult
+  failure?: DryRunFailure
+  lastSuccessfulTxHash?: Hex
+  deployPhase3StrategiesTxHash?: Hex
+}> {
   let lastSuccessfulTxHash: Hex | undefined
+  let deployPhase3StrategiesTxHash: Hex | undefined
   for (let callIndex = 0; callIndex < params.calls.length; callIndex += 1) {
     let call = params.calls[callIndex]!
     const to = getAddress(call.to)
@@ -1907,6 +1917,9 @@ async function runDryRunPhase(params: {
             throw new Error(revertDetail)
           }
           lastSuccessfulTxHash = hash
+          if (params.name === 'phase3' && isDeployPhase3StrategiesCall(call)) {
+            deployPhase3StrategiesTxHash = hash
+          }
           completed = true
           break
         } catch (sendError) {
@@ -1987,7 +2000,7 @@ async function runDryRunPhase(params: {
         params.allowLocalForkPhase4InvariantSkip === true &&
         params.name === 'phase4' &&
         isLaunchDeferredAuctionCall(call) &&
-        formatted.toLowerCase().includes(CCA_REQUIRED_RAISE_HINT_SELECTOR)
+        formatted.toLowerCase().includes(LAUNCH_ORACLE_INVALID_PRICE_SELECTOR)
       ) {
         console.warn('[deploy/v2/session/dry-run] phase4_launch_skipped_known_local_fork_invariant', {
           reason: formatted,
@@ -2024,6 +2037,7 @@ async function runDryRunPhase(params: {
       callCount: params.calls.length,
     },
     lastSuccessfulTxHash,
+    deployPhase3StrategiesTxHash,
   }
 }
 
@@ -2075,6 +2089,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!isLocalFork) {
       throw new DeploySessionRequestError(400, LOCAL_FORK_ONLY_ERROR)
     }
+    const strictPhase4Launch = process.env.DEPLOY_DRY_RUN_STRICT_PHASE4 === '1'
 
     const publicClient = createPublicClient({
       chain: base,
@@ -2167,6 +2182,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           console.warn('[deploy/v2/session/dry-run] creator_registry_batcher_authorized_on_fork', {
             batcher: phase1Batcher.toLowerCase(),
           })
+        }
+        const finalizeIdentity = extractFinalizePhase2Identity(phase2FinalizeCallsForPlan)
+        if (finalizeIdentity) {
+          const pendingGatePrep = await ensurePendingAuctionGateClearOnFork({
+            publicClient: publicClient as any,
+            forkRequest,
+            forkMode: forkMode.name,
+            batcher: phase1Batcher,
+            creatorToken: finalizeIdentity.creatorToken,
+            owner: finalizeIdentity.owner,
+          })
+          if (pendingGatePrep.cleared) {
+            console.warn('[deploy/v2/session/dry-run] pending_auction_gate_cleared_on_fork', {
+              batcher: phase1Batcher.toLowerCase(),
+              creatorToken: finalizeIdentity.creatorToken.toLowerCase(),
+              owner: finalizeIdentity.owner.toLowerCase(),
+            })
+          }
         }
       }
       if (phase1Batcher && phase3CallsForPlan.length > 0) {
@@ -2387,6 +2420,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             })
           }
           phaseCalls = raiseAlignedPhase4Calls
+          try {
+            await warpForkTimestampForPhase4Launch({ request: forkRequest })
+            console.warn('[deploy/v2/session/dry-run] phase4_fork_timestamp_warped_to_now', {
+              smartWallet: smartWallet.toLowerCase(),
+            })
+          } catch (warpError) {
+            console.warn('[deploy/v2/session/dry-run] phase4_fork_timestamp_warp_skipped', {
+              smartWallet: smartWallet.toLowerCase(),
+              message: formatDryRunError(warpError),
+            })
+          }
+          const phase2LaunchDeps = extractFinalizePhase2CoreAddresses(phase2FinalizeCallsForPlan)
+          const phase2Identity = extractFinalizePhase2Identity(phase2FinalizeCallsForPlan)
+          if (phase2LaunchDeps?.oracle) {
+            try {
+              const oracleSeed = await ensureCreatorOracleLaunchPricingOnFork({
+                oracle: phase2LaunchDeps.oracle,
+                creatorToken: phase2Identity?.creatorToken,
+                publicClient: publicClient as any,
+                walletClient: walletClient as any,
+                waitForTransactionReceipt: (args) => publicClient.waitForTransactionReceipt(args as any),
+                forkRequest,
+                forkMode,
+              })
+              if (oracleSeed.seeded) {
+                console.warn('[deploy/v2/session/dry-run] phase4_creator_oracle_price_seeded', {
+                  smartWallet: smartWallet.toLowerCase(),
+                  oracle: oracleSeed.oracle.toLowerCase(),
+                  creatorToken: phase2Identity?.creatorToken?.toLowerCase() ?? null,
+                  creatorPrice: oracleSeed.creatorPrice?.toString() ?? null,
+                  ethPrice: oracleSeed.ethPrice?.toString() ?? null,
+                  priceSource: oracleSeed.priceSource ?? null,
+                  priceSourceDetail: oracleSeed.priceSourceDetail ?? null,
+                })
+              }
+            } catch (oracleSeedError) {
+              console.warn('[deploy/v2/session/dry-run] phase4_creator_oracle_price_seed_failed', {
+                smartWallet: smartWallet.toLowerCase(),
+                oracle: phase2LaunchDeps.oracle.toLowerCase(),
+                message: formatDryRunError(oracleSeedError),
+              })
+            }
+          }
         }
         const phaseStartBlock =
           typeof (publicClient as any).getBlockNumber === 'function'
@@ -2414,7 +2490,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             typeof (publicClient as any).getBlockNumber === 'function'
               ? await publicClient.getBlockNumber().catch(() => null)
               : null,
-          allowLocalForkPhase4InvariantSkip: isLocalFork,
+          allowLocalForkPhase4InvariantSkip: isLocalFork && !strictPhase4Launch,
         })
         phases.push(result.phase)
         if (result.failure) {
@@ -2429,11 +2505,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (
           phaseEntry.name === 'phase3' &&
           result.phase.status === 'passed' &&
-          phase1Batcher &&
-          result.lastSuccessfulTxHash
+          phase1Batcher
         ) {
-          const phase3Call = phaseCalls.find(isDeployPhase3StrategiesCall) ?? phaseCalls[0]
-          if (phase3Call) {
+          const phase3DeployCall = phaseCalls.find(isDeployPhase3StrategiesCall)
+          const deployPhase3TxHash = result.deployPhase3StrategiesTxHash
+          if (phase3DeployCall && deployPhase3TxHash) {
             try {
               const strategyReg = await ensurePhase3VaultStrategyRegistrationOnFork({
                 publicClient: publicClient as any,
@@ -2443,8 +2519,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 forkRequest,
                 forkMode,
                 batcher: phase1Batcher,
-                phase3Call,
-                deployTxHash: result.lastSuccessfulTxHash,
+                phase3Call: phase3DeployCall,
+                deployTxHash: deployPhase3TxHash,
                 ownerBalanceHex: FORK_BALANCE_HEX,
               })
               if (strategyReg.ensured) {

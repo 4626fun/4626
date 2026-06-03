@@ -261,6 +261,7 @@ import {
   isDeployDryRunContext,
   isDeployDryRunDbDisabled,
 } from '../dev/localDevEnv.js'
+import { ensureCreatorAccessSchema as ensureCreatorAccessSchemaFromBootstrap } from './schemaBootstrap.js'
 
 function isLikelyConnectivityTimeout(err: unknown): boolean {
   const code = String((err as any)?.code ?? '').trim().toUpperCase()
@@ -703,6 +704,43 @@ export async function ensureCreatorAccessSchema(): Promise<void> {
   if (creatorAccessSchemaEnsured) return
   creatorAccessSchemaEnsured = true
 
-  // Condensed path
-  await ensureCreatorAccessSchema(db)
+  // Condensed path — delegate to central implementation in schemaBootstrap
+  await ensureCreatorAccessSchemaFromBootstrap(db)
 }
+
+/**
+ * Helper for tagging monitoring / chart queries so they are easy to identify
+ * in pg_stat_statements, Query Performance, and logs.
+ *
+ * Usage:
+ *   const chartDb = await withChartContext(db, 'ethos-leaderboard');
+ *   await chartDb.sql`SELECT ...`;
+ *
+ * Or for raw queries:
+ *   await setApplicationName(db, 'supabase-chart:ethos-distribution');
+ */
+export async function setApplicationName(db: DbPool, name: string): Promise<void> {
+  if (!db || !name) return;
+  try {
+    await db.sql`SET application_name = ${name}`;
+  } catch (e) {
+    // Non-fatal — tagging is best-effort for observability
+  }
+}
+
+export function withChartContext(db: DbPool, chartId: string): DbPool {
+  // Returns a thin wrapper that sets application_name before queries.
+  // In practice, call setApplicationName once per request/session for charts.
+  return {
+    ...db,
+    sql: async (strings, ...values) => {
+      await setApplicationName(db, `supabase-chart:${chartId}`);
+      return db.sql(strings, ...values);
+    },
+    query: db.query ? async (text, params) => {
+      await setApplicationName(db, `supabase-chart:${chartId}`);
+      return db.query!(text, params);
+    } : undefined,
+  };
+}
+

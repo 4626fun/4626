@@ -1,6 +1,9 @@
 import { formatUnits } from 'viem'
 
-const STABLE_SYMBOLS = new Set(['USDC', 'USDT', 'DAI', 'USDBC'])
+import {
+  formatUniswapSwapTradeAmount,
+  formatUniswapTokenBalanceAmount,
+} from '@/lib/swap/uniswapNumberFormat'
 
 export type SwapBalanceUnits = {
   raw: bigint
@@ -33,43 +36,17 @@ export function parseSwapDisplayNumber(raw: string | number): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-/**
- * Uniswap token-selector style balances: ~2 decimals for large holdings, up to 4–5 for
- * fractional amounts, stables pinned to cents when >= 1.
- */
-export function formatSwapTokenBalanceLabel(raw: string | number, symbol?: string): string {
-  const n = parseSwapDisplayNumber(raw)
+/** Wallet balance chip — Uniswap NumberType.TokenTx rules. */
+export function formatSwapTokenBalanceLabel(raw: string | number, _symbol?: string): string {
+  const normalized = String(raw ?? '')
+    .trim()
+    .replace(/,/g, '')
+  if (!normalized || normalized === '0' || normalized === '0.0') return '0'
+
+  const n = parseSwapDisplayNumber(normalized)
   if (n == null || n === 0) return '0'
 
-  const abs = Math.abs(n)
-  const stable = symbol ? STABLE_SYMBOLS.has(symbol.toUpperCase()) : false
-
-  if (stable) {
-    if (abs >= 1) {
-      return trimSwapAmountTrailingZeros(
-        abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-      )
-    }
-    return trimSwapAmountTrailingZeros(abs.toFixed(6))
-  }
-
-  if (abs >= 1_000) {
-    return trimSwapAmountTrailingZeros(
-      abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    )
-  }
-  if (abs >= 1) {
-    return trimSwapAmountTrailingZeros(
-      abs.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 4 }),
-    )
-  }
-  if (abs >= 0.00001) {
-    return trimSwapAmountTrailingZeros(abs.toFixed(5))
-  }
-  if (abs >= 0.000001) {
-    return trimSwapAmountTrailingZeros(abs.toFixed(6))
-  }
-  return trimSwapAmountTrailingZeros(abs.toPrecision(4))
+  return formatUniswapTokenBalanceAmount(Math.abs(n))
 }
 
 /** Uniswap token-selector USD line — always cents precision, comma grouped below $1M. */
@@ -86,8 +63,8 @@ export function formatSwapTokenUsdLabel(value: number | null | undefined): strin
   )}`
 }
 
-/** Uniswap-like quoted output formatting — not for in-progress sell-side typing. */
-export function formatSwapDisplayAmount(raw: string, symbol?: string): string {
+/** Read-only quote output — Uniswap NumberType.SwapTradeAmount rules. */
+export function formatSwapDisplayAmount(raw: string, _symbol?: string): string {
   const trimmed = String(raw ?? '').trim()
   if (!trimmed) return ''
 
@@ -100,23 +77,5 @@ export function formatSwapDisplayAmount(raw: string, symbol?: string): string {
   if (!Number.isFinite(n)) return trimmed
   if (n === 0) return '0'
 
-  const stable = symbol ? STABLE_SYMBOLS.has(symbol.toUpperCase()) : false
-
-  if (stable) {
-    if (n >= 1) return trimSwapAmountTrailingZeros(n.toFixed(2))
-    return trimSwapAmountTrailingZeros(n.toFixed(6))
-  }
-
-  if (n >= 1_000_000) {
-    return trimSwapAmountTrailingZeros(
-      n.toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 0 }),
-    )
-  }
-  if (n >= 1) {
-    return trimSwapAmountTrailingZeros(n.toFixed(6))
-  }
-  if (n >= 0.000001) {
-    return trimSwapAmountTrailingZeros(n.toPrecision(6))
-  }
-  return trimSwapAmountTrailingZeros(n.toExponential(4))
+  return formatUniswapSwapTradeAmount(Math.abs(n))
 }

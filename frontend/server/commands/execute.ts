@@ -354,7 +354,15 @@ async function resolveHermitRoomContext(params: {
       context.room1659Market = await resolveRoom1659MarketContext(params.senderWallet)
     } catch (e) {
       // Fail open — Hermit still works, just without market data
-      context.room1659Market = { hype: null, liquidation: null, userPosition: null, fetchedAt: new Date().toISOString(), ok: false, errorReason: 'load_failed' }
+      context.room1659Market = {
+        hyperliquidUser: '',
+        hype: null,
+        liquidation: null,
+        userPosition: null,
+        fetchedAt: new Date().toISOString(),
+        ok: false,
+        errorReason: 'load_failed',
+      }
     }
   }
 
@@ -388,7 +396,10 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
       return resolveVaultRole({ senderWallet: params.senderWallet, vault })
     }
 
-    const helpResult = executeHelpCommandFamily(raw, { chatId: params.chatId })
+    const helpResult = await executeHelpCommandFamily(raw, {
+      chatId: params.chatId,
+      senderWallet: params.senderWallet,
+    })
     if (helpResult) {
       return helpResult
     }

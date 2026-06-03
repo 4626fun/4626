@@ -62,7 +62,7 @@ export function ReferralShareBlock({
 
   return (
     <div className={`space-y-3 ${className}`}>
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400 flex items-center gap-1.5">
             <UserPlus className="w-3 h-3" /> Invite friends

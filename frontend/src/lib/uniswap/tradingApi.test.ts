@@ -105,6 +105,46 @@ describe('buildSwap', () => {
     ).rejects.toThrow('Invalid swap transaction: missing call data')
   })
 
+  it('forwards Permit2 payloads with decimal-string uint fields for Uniswap protobuf JSON', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: { swap: VALID_TX },
+      }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await buildSwap({
+      quote: { quoteId: 'q_permit_shape' },
+      permitData: {
+        domain: { name: 'Permit2', chainId: 8453, verifyingContract: '0x000000000022D473030F116dDEE9F6B43aC78BA3' },
+        values: {
+          details: {
+            token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+            amount: '1461501637330902918203684832716283019655932542975',
+            expiration: 1779463380,
+            nonce: 12,
+          },
+          spender: '0x2626664c2603336E57B271c5C0b26F421741e481',
+          sigDeadline: 1776873180,
+        },
+      },
+      signature: '0xabc',
+      includeGasInfo: false,
+      refreshGasPrice: false,
+      simulateTransaction: false,
+    })
+
+    const forwarded = JSON.parse(String((fetchMock as any).mock.calls[0]?.[1]?.body ?? '{}'))
+    const details = forwarded.permitData.values.details
+    expect(details.expiration).toBe('1779463380')
+    expect(details.nonce).toBe('12')
+    expect(details.amount).toBe('1461501637330902918203684832716283019655932542975')
+    expect(forwarded.permitData.values.sigDeadline).toBe('1776873180')
+  })
+
   it('strips stale Permit2 fields from swap requests when Permit2 is disabled', async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
@@ -343,6 +383,48 @@ describe('fetchTradeQuote', () => {
     }
   })
 
+  it('uses cdp->uniswap fallback in hybrid mode when cdp returns no route', async () => {
+    vi.stubEnv('VITE_SWAP_PROVIDER', 'hybrid')
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            toAmount: '0',
+            minToAmount: '0',
+            liquidityAvailable: false,
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: { ...quoteResponse('CLASSIC'), requestId: 'rq_hybrid_cdp_empty' },
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchTradeQuote({
+      ...quoteRequest('5300'),
+      useZoraTradeRoute: true,
+    })
+    expect(result.provider).toBe('uniswap')
+    expect(result.fallbackUsed).toBe(true)
+    expect(result.preferredProvider).toBe('cdp')
+
+    const calledUrls = fetchMock.mock.calls.map(([url]) => String(url))
+    expect(calledUrls[0]).toContain('/cdp/swap/price')
+    expect(calledUrls[1]).toContain('/uniswap/quote')
+    expect(calledUrls.some((url) => url.includes('/zora/tradeQuote'))).toBe(false)
+  })
+
   it('uses cdp->uniswap fallback in hybrid mode for retryable cdp errors', async () => {
     vi.stubEnv('VITE_SWAP_PROVIDER', 'hybrid')
     const fetchMock = vi
@@ -386,6 +468,86 @@ describe('fetchTradeQuote', () => {
     await expect(fetchTradeQuote(quoteRequest('5200'))).rejects.toThrow('not authenticated')
     const calledUrls = fetchMock.mock.calls.map(([url]) => String(url))
     expect(calledUrls).toEqual(['/__api/cdp/swap/price'])
+  })
+
+  it('tries uniswap before zora for creator pairs when uniswap has no route', async () => {
+    const originalWindow = (globalThis as any).window
+    ;(globalThis as any).window = { location: { origin: 'http://localhost:5174' } }
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: false, error: 'Not found' }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: false, error: 'No route for pair' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            call: {
+              target: '0x0000000000000000000000000000000000000001',
+              data: '0x1234',
+              value: '0',
+            },
+            quote: { amountOut: '999' },
+          },
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    try {
+      const result = await fetchTradeQuote({
+        ...quoteRequest('8800'),
+        useZoraTradeRoute: true,
+      })
+      expect(result.provider).toBe('zora')
+      expect(result.fallbackUsed).toBe(true)
+      expect(result.preferredProvider).toBe('uniswap')
+      const calledUrls = fetchMock.mock.calls.map(([url]) => String(url))
+      expect(calledUrls[0]).toContain('/uniswap/quote')
+      expect(calledUrls[1]).toContain('/uniswap/quote')
+      expect(calledUrls[2]).toContain('/zora/tradeQuote')
+    } finally {
+      if (originalWindow === undefined) {
+        delete (globalThis as any).window
+      } else {
+        ;(globalThis as any).window = originalWindow
+      }
+    }
+  })
+
+  it('returns uniswap quote for creator pairs when uniswap routes the pair', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: async () => ({
+        success: true,
+        data: { ...quoteResponse('CLASSIC'), requestId: 'rq_uniswap_creator' },
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchTradeQuote({
+      ...quoteRequest('8801'),
+      useZoraTradeRoute: true,
+    })
+    expect(result.provider).toBe('uniswap')
+    expect(result.fallbackUsed).toBeFalsy()
+    const calledUrls = fetchMock.mock.calls.map(([url]) => String(url))
+    expect(calledUrls.some((url) => url.includes('/uniswap/quote'))).toBe(true)
+    expect(calledUrls.some((url) => url.includes('/zora/tradeQuote'))).toBe(false)
   })
 })
 

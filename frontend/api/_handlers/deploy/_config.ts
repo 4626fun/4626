@@ -40,11 +40,23 @@ type DeployConfigResponse = {
   zoraToken: `0x${string}` | null
   payoutRouterZoraWethFee: number
   payoutRouterWethCreatorFee: number
+  impairmentClaims: `0x${string}` | null
+  impairmentRecoveryEscrow: `0x${string}` | null
+  impairmentGuardian: `0x${string}` | null
+  impairmentChallengeWindowSeconds: number | null
 }
 
 function envBool(key: string): boolean {
   const v = String(process.env[key] ?? '').trim().toLowerCase()
   return v === '1' || v === 'true' || v === 'yes'
+}
+
+function envPositiveInt(key: string): number | null {
+  const raw = String(process.env[key] ?? '').trim()
+  if (!raw) return null
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed <= 0) return null
+  return Math.floor(parsed)
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -91,6 +103,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     zoraToken: hexAddressOrNull(resolvePayoutRouterZoraToken(contracts.zora ?? null)),
     payoutRouterZoraWethFee: payoutRouterFees.zoraWethFee,
     payoutRouterWethCreatorFee: payoutRouterFees.wethCreatorFee,
+    impairmentClaims: hexAddressOrNull(contracts.impairmentClaims ?? null),
+    impairmentRecoveryEscrow: hexAddressOrNull(contracts.impairmentRecoveryEscrow ?? null),
+    impairmentGuardian: hexAddressOrNull(contracts.impairmentGuardian ?? null),
+    impairmentChallengeWindowSeconds: envPositiveInt('IMPAIRMENT_CHALLENGE_WINDOW_SECONDS'),
   }
 
   return res.status(200).json({ success: true, data } satisfies ApiEnvelope<DeployConfigResponse>)

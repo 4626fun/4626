@@ -14,6 +14,7 @@ import {
   TOKENLESS_FINALIZING_BOOTSTRAP_COOLDOWN_MS,
   getWalletProviderCollisionMessage,
   isSessionFinalizingError,
+  isTransientWaitlistNetworkError,
   isWalletProviderCollisionError,
   withTimeout,
 } from './waitlistBootstrapUtils'
@@ -242,7 +243,9 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
             return next
           }
         } catch (bootstrapError: unknown) {
-          if (!isSessionFinalizingError(bootstrapError)) throw bootstrapError
+          if (!isSessionFinalizingError(bootstrapError) && !isTransientWaitlistNetworkError(bootstrapError)) {
+            throw bootstrapError
+          }
         }
         const delayMs = retryDelaysMs[attempt]
         if (typeof delayMs === 'number' && Number.isFinite(delayMs) && delayMs > 0) {

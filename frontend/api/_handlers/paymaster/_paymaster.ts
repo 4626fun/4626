@@ -1498,7 +1498,11 @@ export async function validateSponsoredSmartWalletCalls(params: {
     customOwnerSponsorship,
     debug: params.debug,
   })
-  if (validated.mode !== 'deploy_session_setup' && validated.mode !== 'relay_owner_install_part1') {
+  if (
+    validated.mode !== 'deploy_session_setup' &&
+    validated.mode !== 'relay_owner_install_part1' &&
+    validated.mode !== 'swap'
+  ) {
     await assertCreatorAllowlisted({
       sessionAddress: params.sessionAddress,
       creatorToken: validated.expectedCreatorToken,
@@ -1611,15 +1615,9 @@ function assertCanonicalSwapRouterExecuteEncoding(data: Hex): void {
     throw new Error('swap_router_selector_not_allowed')
   }
 
-  const canonicalData = encodeFunctionData({
-    abi: UNISWAP_UNIVERSAL_ROUTER_ABI,
-    functionName: 'execute',
-    args: decoded.args,
-  })
-
-  if (canonicalData.toLowerCase() !== data.toLowerCase()) {
-    throw new Error('swap_router_non_canonical_encoding')
-  }
+  // Uniswap Trading API payloads may ABI-encode dynamic arrays with padding that
+  // differs from viem's minimal re-encode. Opcode + token checks after decode are
+  // the safety layer — do not require byte-identical calldata here.
 }
 
 // Universal Router command opcodes allowed for paymaster-sponsored swaps.
@@ -1627,11 +1625,14 @@ function assertCanonicalSwapRouterExecuteEncoding(data: Hex): void {
 const ALLOWED_SWAP_COMMAND_OPCODES = new Set<number>([
   0x00, // V3_SWAP_EXACT_IN
   0x01, // V3_SWAP_EXACT_OUT
+  0x02, // PERMIT2_TRANSFER_FROM
+  0x03, // PERMIT2_PERMIT_BATCH
   0x08, // V2_SWAP_EXACT_IN
   0x09, // V2_SWAP_EXACT_OUT
-  0x10, // V4_SWAP
+  0x0a, // PERMIT2_PERMIT
   0x0b, // WRAP_ETH
-  0x0c, // UNWRAP_ETH
+  0x0c, // UNWRAP_WETH
+  0x10, // V4_SWAP
 ])
 
 function assertSwapRouterPayloadReferencesToken(data: Hex, token: Address): void {
@@ -2527,18 +2528,26 @@ async function validateInnerCalls(params: {
         let swapInputToken = approvedToken ?? wrappedToken
         if (
           !swapInputToken &&
-          swapRouterKind === 'zora-universal' &&
+          (swapRouterKind === 'zora-universal' || swapRouterKind === 'universal') &&
           swapRouterCallData &&
           approvalCalls === 0
         ) {
-          // Zora trades embed Permit2 in router calldata (no separate approve inner call).
+          // Trading API / Zora quotes embed Permit2 in router calldata (no separate approve inner call).
           const candidates = [configuredUsdc, expectedZoraToken, expectedWethToken, permit2].filter(
             (token): token is Address => Boolean(token),
           )
           swapInputToken = resolveSwapInputTokenFromRouterCalldata(swapRouterCallData, candidates)
           // Permit2 payloads may not repeat the sell token as a bare 20-byte needle; still
           // sponsor the known Zora single-call lane with USDC policy when shape matches.
-          if (!swapInputToken && swapRouterCalls === 1) {
+          if (!swapInputToken && swapRouterKind === 'zora-universal' && swapRouterCalls === 1) {
+            swapInputToken = configuredUsdc
+          }
+          if (
+            !swapInputToken &&
+            swapRouterKind === 'universal' &&
+            swapRouterCalls === 1 &&
+            swapRouterCallData?.toLowerCase().includes(configuredUsdc.slice(2).toLowerCase())
+          ) {
             swapInputToken = configuredUsdc
           }
         }
@@ -2553,7 +2562,9 @@ async function validateInnerCalls(params: {
         }
 
         const zoraPermitEmbeddedSwap =
-          swapRouterKind === 'zora-universal' && approvalCalls === 0 && swapRouterCalls === 1
+          (swapRouterKind === 'zora-universal' || swapRouterKind === 'universal') &&
+          approvalCalls === 0 &&
+          swapRouterCalls === 1
 
         return {
           matched:

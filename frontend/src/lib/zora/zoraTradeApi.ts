@@ -3,8 +3,11 @@ import { getAddress, hashTypedData, isAddress, numberToHex, type Hex, type Publi
 import { base } from 'viem/chains'
 
 import {
-  extractExecutionFailedInnerSelector,
+  buildPreflightSimulationRejectionError,
   extractRevertInfo,
+  isPermit2InvalidNonceRevert,
+  isPreflightSimulationRejection,
+  isSwapPreflightSimulationRetryable,
 } from '@/lib/aa/coinbaseErc4337ErrorUtils'
 import { findCoinbaseSmartWalletOwnerIndex } from '@/lib/aa/coinbaseErc4337Owners'
 import { getProductionBaseReadClient } from '@/lib/base/productionBaseReadClient'
@@ -23,6 +26,11 @@ import {
 } from '@/lib/uniswap/tradingApi'
 import { coerceSwapTransactionValue } from '@/lib/uniswap/swapQuoteSanitize'
 import { NATIVE_TOKEN_ADDRESS } from '@/lib/uniswap/swapUtils'
+import {
+  PERMIT2_INVALID_NONCE_MESSAGE,
+  SWAP_PREPARE_STATUS,
+  ZORA_SWAP_SIMULATION_FAILED_MESSAGE,
+} from '@/lib/swap/swapStatusCopy'
 
 export type ZoraTradeQuotePermit = {
   signature: string
@@ -140,25 +148,25 @@ export function readZoraQuotedSlippagePct(quote: TradeQuoteResponse | null | und
 }
 
 /** Next slippage step after a bundler send failure when prepare-time simulation already passed. */
-export function pickNextZoraBundlerRetrySlippagePct(slippagePct: number): number {
+export function pickNextZoraBundlerRetrySlippagePct(slippagePct: number): number | null {
   const ladder = buildZoraSlippageEscalationLadder(Math.max(slippagePct, 5))
   for (const pct of ladder) {
     if (pct > slippagePct + 1e-9) return pct
   }
-  return Math.min(15, slippagePct + 5)
+  return null
 }
 
 /** Retry simulation with higher slippage when the router reverts (thin pools / stale minOut). */
 export function buildZoraSlippageEscalationLadder(slippagePct: number): number[] {
   const start = Number(slippagePct)
   const base = Number.isFinite(start) && start > 0 ? start : 0.5
-  const candidates = [base, 2, 5, 10, 15]
+  const candidates = [base, 2, 5, 10, 15, 20, 25, 30]
   const ladder: number[] = []
   for (const pct of candidates) {
     if (pct + 1e-9 < base) continue
     if (!ladder.some((v) => Math.abs(v - pct) < 1e-9)) ladder.push(pct)
   }
-  return ladder.slice(0, 4)
+  return ladder.slice(0, 6)
 }
 
 /** Production eth_call passed but CDP/bundler simulation reverted (common on thin creator pools). */
@@ -170,17 +178,31 @@ export function isZoraBundlerSimulationMismatchError(error: unknown): error is Z
   return error instanceof ZoraBundlerSimulationMismatchError
 }
 
-export function buildZoraBundlerSimulationMismatchError(): ZoraBundlerSimulationMismatchError {
+export function buildZoraBundlerSimulationMismatchError(cause?: unknown): ZoraBundlerSimulationMismatchError {
+  const revert = extractRevertInfo(cause)
+  if (
+    isPermit2InvalidNonceRevert({
+      revertData: revert.revertData,
+      errorMessage: revert.error,
+    })
+  ) {
+    return new ZoraBundlerSimulationMismatchError(
+      'The swap looked valid locally but the sponsored transaction simulation failed. ' +
+        PERMIT2_INVALID_NONCE_MESSAGE,
+    )
+  }
   return new ZoraBundlerSimulationMismatchError(
-    'The swap route passed a static read but the sponsored bundler simulation reverted. ' +
-      'On thin creator pools (e.g. AKITA), try 10–15% slippage, a smaller USDC size, refresh the quote, and re-sign Permit2. ' +
-      'If a prior swap is still pending, wait ~30s first.',
+    'The swap looked valid locally but the sponsored transaction simulation failed. ' +
+      ZORA_SWAP_SIMULATION_FAILED_MESSAGE,
   )
 }
 
 /** Bundler rejected a UserOp after local Zora eth_call passed — refresh quote and retry once. */
 export function isZoraBundlerSendRetryable(error: unknown): boolean {
   if (isZoraBundlerSimulationMismatchError(error)) return true
+  if (isPreflightSimulationRejection(error) && isSwapPreflightSimulationRetryable(error)) {
+    return true
+  }
   if (isZoraRouterSimulationRetryable(error)) return true
   const msg = String(error instanceof Error ? error.message : error).toLowerCase()
   if (
@@ -215,6 +237,7 @@ export function isZoraRouterSimulationRetryable(error: unknown): boolean {
     return false
   }
   return (
+    msg.includes('would fail on-chain') ||
     msg.includes('would revert') ||
     msg.includes('malformed or stale') ||
     msg.includes('0x2c4029e9') ||
@@ -277,48 +300,26 @@ export async function fetchZoraTradeQuoteFromApi(params: {
   return data
 }
 
+const UNIVERSAL_ROUTER_BASE = '0x6ff5693b99212da76ad316178a184ab56d299b43'
+
 /** Map a production `eth_call` failure from the Zora Universal Router into user-facing copy. */
 export function formatZoraRouterSimulationFailure(error: unknown): Error {
   const info = extractRevertInfo(error)
-  const revertData = info.revertData
-  const selector = revertData?.slice(0, 10).toLowerCase()
-
-  if (selector === '0x3b99b53d') {
-    return new Error(
-      'Swap route data from Zora is malformed or stale. Refresh the quote and try again.',
-    )
-  }
-
-  if (selector === '0xb0669cbc') {
-    return new Error(
-      'Permit2 rejected the smart-wallet signature. Refresh the quote, sign again when prompted, then retry.',
-    )
-  }
-
-  const innerSelector = extractExecutionFailedInnerSelector(revertData)
-  if (innerSelector === '0xb0669cbc') {
-    return new Error(
-      'Permit2 rejected the smart-wallet signature. Refresh the quote, sign again when prompted, then retry.',
-    )
-  }
-
-  const isExecutionFailed =
-    selector === '0x2c4029e9' ||
-    info.errorName === 'ExecutionFailed(uint256,bytes)' ||
-    String(info.error ?? '')
-      .toLowerCase()
-      .includes('executionfailed')
-
-  if (isExecutionFailed) {
-    return new Error(
-      'The Zora swap would revert on your smart wallet. This is usually a stale quote, tight slippage, or not enough pool liquidity for the size — not a USDC balance issue. Try a smaller amount, increase slippage, refresh the quote, then re-sign Permit2 if prompted.',
-    )
-  }
-
-  const detail = info.errorName ?? info.error ?? 'unknown revert'
-  return new Error(
-    `Zora swap would revert on-chain (${detail}). Refresh the quote and try again.`,
-  )
+  return buildPreflightSimulationRejectionError({
+    simResult: {
+      success: false,
+      error: info.error,
+      revertData: info.revertData,
+      errorName: info.errorName,
+      directCallResult: {
+        success: false,
+        error: info.error,
+        revertData: info.revertData,
+        errorName: info.errorName,
+      },
+    },
+    firstCallTo: UNIVERSAL_ROUTER_BASE,
+  })
 }
 
 function isInvalidEthCallSenderParameterError(error: unknown): boolean {
@@ -736,6 +737,8 @@ export async function executeZoraCswQuoteWithEscalation(params: {
   amountIn: string
   sender: string
   slippagePct: number
+  /** When set (auto slippage), simulation may escalate above `slippagePct` up to this cap. */
+  slippageEscalationCapPct?: number
   signerAddress: string
   executionAddress?: string | null
   walletClient: ZoraCswWalletClient
@@ -759,23 +762,33 @@ export async function executeZoraCswQuoteWithEscalation(params: {
     throw new Error('Permit2 signature is required for this Zora trade, but the owner signer is not available.')
   }
 
-  const startSlippage = readZoraQuotedSlippagePct(params.quote) ?? params.slippagePct
+  const startSlippage = Math.max(
+    params.slippagePct,
+    readZoraQuotedSlippagePct(params.quote) ?? 0,
+  )
   const isCswExecution = await isDeployedSmartWalletExecutionAddress(params.executionAddress)
+  const escalationCap =
+    params.slippageEscalationCapPct != null && Number.isFinite(params.slippageEscalationCapPct)
+      ? params.slippageEscalationCapPct
+      : params.slippagePct
   // Thin creator pools (e.g. AKITA) usually need ≥5% on CSW-sponsored paths; 0.5% often passes
   // stale pending eth_call but reverts on bundler simulation.
-  const ladder = buildZoraSlippageEscalationLadder(
+  const rawLadder = buildZoraSlippageEscalationLadder(
     isCswExecution ? Math.max(startSlippage, 5) : startSlippage,
   )
+  const ladder = rawLadder.filter((pct) => pct <= escalationCap + 1e-9)
+  const effectiveLadder =
+    ladder.length > 0
+      ? ladder
+      : [isCswExecution ? Math.max(params.slippagePct, 5) : params.slippagePct]
   const forceResignPermits = isCswExecution
 
   let lastError: unknown
-  for (let i = 0; i < ladder.length; i += 1) {
-    const slippagePct = ladder[i]
+  for (let i = 0; i < effectiveLadder.length; i += 1) {
+    const slippagePct = effectiveLadder[i]
     try {
       if (i > 0) {
-        params.onStatus?.(
-          `Swap simulation failed at ${ladder[i - 1]}% slippage. Increasing to ${slippagePct}% — confirm Permit2 again…`,
-        )
+        params.onStatus?.(SWAP_PREPARE_STATUS)
       }
 
       let baseQuote = params.quote
@@ -818,7 +831,7 @@ export async function executeZoraCswQuoteWithEscalation(params: {
       })
     } catch (error) {
       lastError = error
-      if (i >= ladder.length - 1 || !isZoraRouterSimulationRetryable(error)) {
+      if (i >= effectiveLadder.length - 1 || !isZoraRouterSimulationRetryable(error)) {
         throw error
       }
     }
@@ -838,6 +851,7 @@ export async function prepareZoraQuoteForExecute(params: {
   amountIn: string
   sender: string
   slippagePct: number
+  slippageEscalationCapPct?: number
   signerAddress: string
   executionAddress?: string | null
   walletClient: ZoraCswWalletClient

@@ -15,9 +15,8 @@ import {
   buildAlfaClubBriefContext,
   formatAlfaClubDailyBrief,
   formatAlfaClubLeaderboardChat,
+  listDailyBriefCommandRoomIds,
   readAlfaClubDailyBriefFlags,
-  resolveAlfaClubBridgeRoomId,
-  resolveDailyBriefRoomId,
   runAlfaClubDailyBrief,
 } from '../../_lib/alfaclub/dailyBrief.js'
 import {
@@ -1135,31 +1134,20 @@ export async function executeAlfaclubCommandFamily(params: {
     return { ok: true, response: formatAlfaClubDailyBrief(built.formatInput) }
   }
   if (parsed.sub === 'brief-post') {
-    const briefRoomId = resolveDailyBriefRoomId()
     const result = await runAlfaClubDailyBrief({
       flags: { ...readAlfaClubDailyBriefFlags(), forceSend: true },
     })
-    if (result.reason === 'brief_room_same_as_bridge') {
-      return {
-        ok: false,
-        response: [
-          'Daily digest is not posted into the command bridge room.',
-          'Set `ALFACLUB_DAILY_BRIEF_ROOM_ID` to a read-only room and keep',
-          '`ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE=1` on Vercel.',
-          `Bridge room: ${resolveAlfaClubBridgeRoomId()}.`,
-        ].join(' '),
-      }
-    }
     if (!result.ok || !result.sent) {
       const reason = result.reason ?? 'not_sent'
+      const rooms = listDailyBriefCommandRoomIds().join(', ')
       return {
         ok: false,
-        response: `Digest post failed (${reason}). Target room ${briefRoomId}.`,
+        response: `Digest post failed (${reason}). Command rooms: ${rooms}.`,
       }
     }
     return {
       ok: true,
-      response: `Daily digest posted to room **${briefRoomId}** (${result.lane ?? 'sent'}).`,
+      response: `Daily digest posted to rooms **${result.roomId}**.`,
     }
   }
   if (parsed.sub === 'creator') {

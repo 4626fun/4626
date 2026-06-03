@@ -131,7 +131,7 @@ async function fetchCreatorBatch(params: {
       p.creator_address,
       p.volume_24h_usd,
       p.twitter_username
-    FROM public.creator_ethos_projection p
+    FROM public.v_explore_creators p -- canonical single source for all Explore-style lists (see docs)
     WHERE p.twitter_username IS NOT NULL
       AND trim(p.twitter_username) <> ''
     ORDER BY p.creator_address ASC
@@ -303,7 +303,7 @@ async function hydrateProjectionTwitterBatch(params: {
 }): Promise<{ scanned: number; updated: number; cursorAfter: string | null }> {
   const candidates = await params.db.sql`
     SELECT p.creator_address
-    FROM public.creator_ethos_projection p
+    FROM public.v_explore_creators p -- canonical single source for all Explore-style lists (see docs)
     WHERE (p.twitter_username IS NULL OR trim(p.twitter_username) = '')
       AND (${params.afterAddress}::text IS NULL OR p.creator_address > ${params.afterAddress})
     ORDER BY p.creator_address ASC

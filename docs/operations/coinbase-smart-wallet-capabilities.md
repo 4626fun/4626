@@ -228,6 +228,8 @@ Observed profile shape:
 
 ## Message Signing
 
+> SDK capability snapshot (April 2026). Signer rows reference the **pre-migration** probe CSW; current 4626 canonical CSW is `CANONICAL_CSW_ADDRESS` (`0xAb6d5…967b5`).
+
 | Method | Observed result | 4626 usage notes |
 | --- | --- | --- |
 | `eth_sign` | Unsupported: `{ "code": 4200, "message": "The requested method is not supported by this Ethereum provider." }` | Do not use. |

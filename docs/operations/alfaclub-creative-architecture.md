@@ -127,62 +127,78 @@ the Vercel cron remains the writer.
 Recovery, drift symptoms, and operator playbook live in
 [`docs/operations/deployment/eliza-runtime.md` § "AlfaClub control path"](deployment/eliza-runtime.md).
 
-### 4. Pinata — Hermit creative agent
+### 4. Hermit creative brain — first-party `/api/hermit/draft` (AI Gateway)
 
-Hosts the Open Claw / Hermit agent that turns `/hermit`, `/meme`, `/gmeow`
-prompts into copy / memes. Reads workspace seeds from
-`/home/node/clawd/workspace/{SOUL,USER,MEMORY,SPANISH}.md`.
+> **Pinata OpenClaw is retired.** The creative brain is now a first-party
+> Vercel route, `POST /api/hermit/draft`
+> (`frontend/api/_handlers/hermit/_draft.ts`), which relays the prompt to a
+> model through the **Vercel AI Gateway** and returns the generated line. The
+> Pinata gateway WebSocket transport and `HERMIT_PINATA_*` env have been
+> removed from `skillRouter.ts`.
 
-The Vercel chat bridge calls Pinata over a single HTTP / WebSocket endpoint
-(`HERMIT_PINATA_CHAT_ENDPOINT` + `HERMIT_PINATA_BEARER_TOKEN`). This is the
-only AlfaClub-related path Pinata participates in.
+Turns `/hermit`, `/meme`, `/gmeow` prompts into copy / memes. The skill
+router (`server/_lib/hermit/skillRouter.ts`) owns persona, room context, and
+strict-JSON instructions inside the `prompt` it builds; the draft endpoint is
+a thin, stateless relay.
+
+The Vercel chat bridge and the Railway Hermit worker both call the brain over
+a single authenticated HTTP endpoint (`HERMIT_AGENT_CHAT_ENDPOINT` +
+`HERMIT_AGENT_BEARER_TOKEN`). The contract is `POST { prompt }` →
+`{ text }` — `runPinataDraftOverHttp` reads the top-level `text` (or
+`response` / `output` / `message`).
 
 Reply transport is separate from Hermit generation. AlfaClub bot tokens
-(`alfa_bot_...`) are send-only, so they replace the fragile websocket reply
-send path but do not replace the read-side `chat_jwt` used to poll room
-history and ingest commands.
+(`alfa_bot_...`) are send-only, so they handle the reply send path but do not
+replace the read-side `chat_jwt` used to poll room history and ingest
+commands.
 
-**Pinata must NOT** write any `alfaclub_runtime_secret` row, run the Privy
-refresher, or otherwise touch AlfaClub auth. The boundary is enforced both
-by code (the Hermit module never imports `chatTokenStore` /
+**The Hermit lane must NOT** write any `alfaclub_runtime_secret` row, run the
+Privy refresher, or otherwise touch AlfaClub auth. The boundary is enforced
+both by code (the Hermit module never imports `chatTokenStore` /
 `privyTokenRefresher`) and by tests
 (`frontend/server/_lib/hermit/architectureBoundary.test.ts`,
 `frontend/api/__tests__/alfaclubArchitectureInvariants.test.ts`).
 
-#### Pinata creative backend configuration
+#### Creative backend configuration
 
 | Env var | Required | Default | Purpose |
 | --- | --- | --- | --- |
-| `HERMIT_PINATA_CHAT_ENDPOINT` | Yes | — | Pinata Agent endpoint (HTTPS or WSS). |
-| `HERMIT_PINATA_BEARER_TOKEN`  | Yes | — | Bearer for the Pinata Agent. |
-| `HERMIT_PINATA_GATEWAY_BASE`  | No  | `https://4626.fun` | Public base for `/ipfs/<cid>` links served from saved memes. |
-| `HERMIT_PINATA_HTTP_TIMEOUT_MS` | No | `30000` | HTTP fallback timeout for the creative call. Clamped to `[1000, 120000]`. |
+| `HERMIT_AGENT_CHAT_ENDPOINT` | Yes | — | Creative brain endpoint. Point at `https://app.4626.fun/api/hermit/draft`. |
+| `HERMIT_AGENT_BEARER_TOKEN`  | Yes | — | Shared bearer the caller sends and the draft route verifies. The route fails closed (HTTP 503) when this is unset, so it can never generate unauthenticated. |
+| `AI_GATEWAY_API_KEY`         | On Vercel: no (OIDC); elsewhere: yes | — | AI Gateway auth for the draft route. Vercel deployments use OIDC automatically. |
+| `HERMIT_AGENT_MODEL`         | No  | `openai/gpt-4.1-mini` | Model routed through the AI Gateway (plain `provider/model` string). |
+| `HERMIT_AGENT_SYSTEM`        | No  | — | Optional system prompt. Leave unset — the router already embeds persona/context in the prompt. |
+| `HERMIT_AGENT_MAX_OUTPUT_TOKENS` | No | `400` | Max output tokens per draft. Clamped to `[32, 4000]`. |
+| `HERMIT_AGENT_DRAFT_TIMEOUT_MS` | No | `25000` | Server-side generation timeout. Clamped to `[5000, 60000]`. Keep below `HERMIT_AGENT_HTTP_TIMEOUT_MS`. |
+| `HERMIT_AGENT_HTTP_TIMEOUT_MS` | No | `30000` | Caller-side HTTP timeout for the creative call. Clamped to `[1000, 120000]`. |
+| `HERMIT_AGENT_GATEWAY_BASE`  | No  | `https://4626.fun` | Public base for `/ipfs/<cid>` links served from saved memes. |
 | `HERMIT_OWNER_ADDRESS`        | No  | — | Wallet allowed to save / delete Hermit memes. |
 | `HERMIT_ALLOWED_USERS`        | No  | — | Comma-separated wallet allowlist for `/hermit`, `/meme`, `/gmeow` on **non-AlfaClub** surfaces (direct HTTP at `/api/v1/chat/hermit`, Telegram). On the AlfaClub bridge (chatId `alfaclub:<room>`) the slash commands are open to any room user; this allowlist is not consulted there. Bare `gmeow` is independently sender-locked to Manito9v9 and ignores this allowlist. |
 | `HERMIT_ALLOWED_ROOM_IDS`     | No  | derived from owner's AlfaClub holdings | Explicit room allowlist override. |
 
 #### `/gmeow` latency policy (default optimized)
 
-| `HERMIT_GMEOW_PINATA_CAPTION` | Behaviour |
+| `HERMIT_GMEOW_HERMIT_CAPTION` | Behaviour |
 | --- | --- |
-| *(unset)* | **Local bundled GIF only** for bare `/gmeow`. Pinata runs only when the user adds text after the command (e.g. `/gmeow moon`). |
-| `always` / `1` | Pinata caption on every `/gmeow` when `HERMIT_PINATA_*` is set (legacy behaviour). |
+| *(unset)* | **Local bundled GIF only** for bare `/gmeow`. The Hermit agent runs only when the user adds text after the command (e.g. `/gmeow moon`). |
+| `always` / `1` | Hermit caption on every `/gmeow` when `HERMIT_AGENT_*` is set (legacy behaviour). |
 | `prompt` | Same as unset — explicit alias. |
-| `0` / `never` | Never call Pinata for `/gmeow`. |
-| `legacy` | Always call Pinata when configured (pre-optimization default). |
+| `0` / `never` | Never call the Hermit agent for `/gmeow`. |
+| `legacy` | Always call the Hermit agent when configured (pre-optimization default). |
 
-This keeps the hot path (spammy bare `/gmeow`) off OpenClaw while `/meme` and `/hermit` still use Pinata.
+This keeps the hot path (spammy bare `/gmeow`) off the model while `/meme` and `/hermit` still use the Hermit agent.
 
 Failure modes:
 
-- Pinata HTTP path 5xx or hangs → `runPinataDraft` returns `null`. `/hermit`
-  and `/meme` surface `Hermit Pinata path unavailable`. `/gmeow` falls back
+- Draft route 5xx or hangs → `runPinataDraft` returns `null`. `/hermit`
+  and `/meme` surface `Hermit agent path unavailable`. `/gmeow` falls back
   to the local bundled meme catalogue (`memeStore.ts`) — the user always
   gets a reply.
-- Pinata WS gateway disconnect / wrong protocol → same fallback path.
-- Pinata bearer token expired → `runPinataDraft` returns `null`. The
-  remediation is to rotate `HERMIT_PINATA_BEARER_TOKEN`. Hermit never tries
-  to "refresh" a Pinata token — there is no shared auth state for it.
+- Bearer mismatch / unset → the draft route returns 401 / 503 and the caller
+  treats the non-2xx as `null` (same fallback path). Remediation is to align
+  `HERMIT_AGENT_BEARER_TOKEN` on both the caller and the route.
+- AI Gateway auth/model error → the draft route returns 502; same fallback.
+  Check `AI_GATEWAY_API_KEY` (or Vercel OIDC) and `HERMIT_AGENT_MODEL`.
 
 #### `/meme` inline-image contract
 
@@ -290,16 +306,16 @@ AlfaClub auth.
 - Official Hermit command rooms for hermit4626:
   - **1043** (primary ops/creative surface)
   - **1659** (https://alfaclub.app/rooms/1659/)
-  - In either: `/bridge` or `/alfa status` for pipeline + JWT health; `/help` for command list.
-  - Flip Research digest lives at `alfaclub.app/room/2` (separate room).
+  - In **1043** or **1659**: `/bridge` or `/alfa status` for pipeline + JWT health; `/help` for command list.
+  - Daily digest cron posts to the bridge room unless `ALFACLUB_DAILY_BRIEF_ROOM_ID` points at a room the bot can reach (we do not use room 2 — no post access).
 - Local env checklist (no secrets printed):
   `pnpm -C frontend exec tsx scripts/ops/alfaclub-env-preflight.ts`
-- **Digest split (recommended):** set on Vercel:
-  `ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE=1`,
-  `ALFACLUB_DAILY_BRIEF_ROOM_ID=<read-only-room>`,
-  keep `ALFACLUB_CHAT_ROOM_ID=1043` for commands only.
-  Test: `/alfa brief post` from 1043 (posts to digest room).
-  Helper: `pnpm -C frontend exec tsx scripts/ops/alfaclub-digest-room-setup.ts --room=<id>`.
+- Full Hermit creative audit (tests + seeds + probe + manual room checklist):
+  `bash frontend/scripts/ops/audit-hermit-e2e.sh --strict`
+  Add `--production-env` to run preflight/probe against Vercel production vars.
+- **Digest (default):** leave `ALFACLUB_DAILY_BRIEF_ROOM_ID` unset so cron posts to
+  `ALFACLUB_CHAT_ROOM_ID` (1043). Only set a separate digest room when the bridge
+  account can post there.
 
 ### Before merging changes that touch hermit seeds
 

@@ -1,3 +1,5 @@
+import { ZORA_SWAP_SIMULATION_FAILED_MESSAGE } from '@/lib/swap/swapStatusCopy'
+
 export type UniswapErrorCode =
   | 'INSUFFICIENT_FUNDS'
   | 'INSUFFICIENT_GAS'
@@ -118,8 +120,7 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
   ) {
     return {
       code: 'SLIPPAGE_EXCEEDED',
-      message:
-        'The Zora swap would revert on your smart wallet. This is usually stale quote data, tight slippage, or insufficient pool liquidity — not a balance issue. Try a smaller amount, increase slippage, refresh the quote, then re-sign Permit2 if prompted.',
+      message: ZORA_SWAP_SIMULATION_FAILED_MESSAGE,
       retryable: true,
     }
   }
@@ -129,6 +130,19 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
       code: 'APPROVAL_REQUIRED',
       message:
         'Permit2 rejected the smart-wallet signature. Refresh the quote, sign again when prompted, then retry.',
+      retryable: true,
+    }
+  }
+
+  if (
+    msg.includes('756688fe') ||
+    msg.includes('invalidnonce') ||
+    msg.includes('permit2 authorization is stale')
+  ) {
+    return {
+      code: 'QUOTE_EXPIRED',
+      message:
+        'This swap\'s Permit2 authorization is stale (nonce already used). Refresh the quote and try again. If another swap is still confirming, wait ~30 seconds first.',
       retryable: true,
     }
   }
@@ -165,6 +179,28 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
     return {
       code: 'APPROVAL_REQUIRED',
       message: 'Token approval needed. Click Approve to continue.',
+      retryable: true,
+    }
+  }
+
+  // Paymaster proxy did not classify a Universal Router swap (deploy-only fallback).
+  if (
+    msg.includes('missing_primary_call') &&
+    msg.includes('6ff5693b99212da76ad316178a184ab56d299b43')
+  ) {
+    return {
+      code: 'QUOTE_EXPIRED',
+      message:
+        'Gas sponsorship rejected this swap route shape. Refresh the quote and try again; if it keeps failing, wait ~30s and retry once more.',
+      retryable: true,
+    }
+  }
+
+  if (msg.includes('swap_router_command_not_allowed') || msg.includes('swap_router_non_canonical_encoding')) {
+    return {
+      code: 'QUOTE_EXPIRED',
+      message:
+        'This swap route is not eligible for gas sponsorship yet. Refresh the quote and try again.',
       retryable: true,
     }
   }

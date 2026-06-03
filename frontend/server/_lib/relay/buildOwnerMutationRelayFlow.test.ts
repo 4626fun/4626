@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach, vi } from 'vitest'
-import { encodeFunctionData } from 'viem'
+import { encodeFunctionData, getAddress } from 'viem'
 
 import {
   resolveRelayQuoteRequestAmount,
@@ -9,11 +9,13 @@ import {
 } from './buildOwnerMutationRelayFlow.js'
 import { getRelayQuote } from './getQuote.js'
 import {
+  GOLDEN_RELAY_PART1_PROBE_CSW,
   MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI,
   RELAY_DEPOSITORY_ABI,
   RELAY_DEPOSITORY_BASE,
   RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
 } from '../../../src/lib/wallet/cswOwnerAbi.js'
+import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
 
 vi.mock('./getQuote.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./getQuote.js')>()
@@ -150,7 +152,7 @@ describe('validateSelectedOwnerMutationRelayUserCall', () => {
   })
 
   it('accepts golden-scale depository depositNative with bound order id and depositor', () => {
-    const depositor = '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF' as const
+    const depositor = GOLDEN_RELAY_PART1_PROBE_CSW
     const depositData = encodeFunctionData({
       abi: RELAY_DEPOSITORY_ABI,
       functionName: 'depositNative',
@@ -181,7 +183,7 @@ describe('validateSelectedOwnerMutationRelayUserCall', () => {
 
   it('rejects depository depositNative when depositor is not the funding CSW', () => {
     const wrongDepositor = '0x0000000000000000000000000000000000000001' as const
-    const fundingCsw = '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF' as const
+    const fundingCsw = getAddress(CANONICAL_CSW_ADDRESS) as `0x${string}`
     const depositData = encodeFunctionData({
       abi: RELAY_DEPOSITORY_ABI,
       functionName: 'depositNative',
@@ -272,7 +274,7 @@ describe('validateSelectedOwnerMutationRelayUserCall', () => {
 })
 
 describe('buildOwnerMutationRelayFlow deposit re-quote', () => {
-  const CSW = '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF' as const
+  const CSW = getAddress(CANONICAL_CSW_ADDRESS) as `0x${string}`
   const OWNER = '0xB2aaD65A5402714bf428a66731ae62BA5c45CAC0' as const
   const requestId = `0x${'aa'.repeat(32)}` as const
   afterEach(() => {

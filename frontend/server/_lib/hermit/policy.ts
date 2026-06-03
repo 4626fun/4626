@@ -111,7 +111,7 @@ export function _resetHermitRoomOwnerCacheForTests(): void {
 export function resolveHermitGatewayUrl(cid: string): string | null {
   const trimmedCid = cid.trim()
   if (!trimmedCid) return null
-  const base = asTrimmed(process.env.HERMIT_PINATA_GATEWAY_BASE)
+  const base = asTrimmed(process.env.HERMIT_AGENT_GATEWAY_BASE)
   if (!base) return null
   const normalizedBase = base.replace(/\/+$/, '')
   const pathPrefix = normalizedBase.endsWith('/ipfs') ? normalizedBase : `${normalizedBase}/ipfs`

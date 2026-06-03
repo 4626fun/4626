@@ -13,7 +13,35 @@ import {
   setNoStore,
 } from '@4626/server-core'
 import { normalizeChatAddress } from '../../../../server/_lib/chat/presence.js'
+import {
+  formatHermitRoomWelcome,
+  isHermitRoomWelcomeEnabled,
+  tryInsertHermitRoomWelcomeSent,
+} from '../../../../server/_lib/alfaclub/hermitRoomWelcome.js'
+import {
+  isHermitCommandRoom,
+  readAlfaClubChatBridgeFlags,
+  sendAlfaClubRoomText,
+} from '../../../../server/_lib/alfaclub/chatBridge.js'
 import { joinAlfaClubRoomAccess } from '../../../../server/_lib/alfaclub/roomAccessPolicy.js'
+
+async function maybeSendHermitRoomWelcomeOnJoin(params: {
+  roomId: string
+  walletAddress: string
+}): Promise<void> {
+  if (!isHermitRoomWelcomeEnabled()) return
+  if (!isHermitCommandRoom(params.roomId)) return
+  const claimed = await tryInsertHermitRoomWelcomeSent({
+    roomId: params.roomId,
+    senderAddress: params.walletAddress,
+  })
+  if (!claimed) return
+  await sendAlfaClubRoomText({
+    roomId: params.roomId,
+    text: formatHermitRoomWelcome({ roomId: params.roomId }),
+    flags: readAlfaClubChatBridgeFlags(),
+  })
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -52,6 +80,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const result = await joinAlfaClubRoomAccess({ roomId, walletAddress })
+    if (result.eligible) {
+      void maybeSendHermitRoomWelcomeOnJoin({ roomId, walletAddress }).catch(() => {
+        // Fail-open: join success must not depend on welcome delivery.
+      })
+    }
     return res.status(result.eligible ? 200 : 403).json({
       success: result.eligible,
       data: result,

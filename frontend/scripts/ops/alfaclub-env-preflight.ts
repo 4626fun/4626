@@ -56,11 +56,11 @@ function runChecks(): Check[] {
     note: 'Optional bootstrap; production should use DB alfaclub_runtime_secret only',
   })
 
-  const hermitPinata: Array<[string, string]> = [
-    ['HERMIT_PINATA_CHAT_ENDPOINT', 'Pinata OpenClaw agent HTTP base URL'],
-    ['HERMIT_PINATA_BEARER_TOKEN', 'Pinata agent bearer (rotate in Pinata UI)'],
+  const hermitAgent: Array<[string, string]> = [
+    ['HERMIT_AGENT_CHAT_ENDPOINT', 'Hermit creative endpoint URL'],
+    ['HERMIT_AGENT_BEARER_TOKEN', 'Hermit bearer token'],
   ]
-  for (const [key, note] of hermitPinata) {
+  for (const [key, note] of hermitAgent) {
     checks.push({ id: key, required: false, present: envPresent(key), note })
   }
 
@@ -71,13 +71,13 @@ function runChecks(): Check[] {
     note: 'AlfaClub uses media-first + optional X link; legacy X-first breaks room UX',
   })
 
-  const gmeowPinataMode = String(process.env.HERMIT_GMEOW_PINATA_CAPTION ?? '').trim().toLowerCase()
+  const gmeowPinataMode = String(process.env.HERMIT_GMEOW_HERMIT_CAPTION ?? '').trim().toLowerCase()
   checks.push({
-    id: 'HERMIT_GMEOW_PINATA_CAPTION',
+    id: 'HERMIT_GMEOW_HERMIT_CAPTION',
     required: false,
     present: !gmeowPinataMode || gmeowPinataMode === 'prompt' || gmeowPinataMode === 'args',
     note:
-      'Unset or prompt = bare /gmeow is local-only (fast). Use always only if you want Pinata on every /gmeow.',
+      'Unset or prompt = bare /gmeow is local-only (fast). Use always only if you want Hermit agent on every /gmeow.',
   })
 
   const bridgeRoom = String(process.env.ALFACLUB_CHAT_ROOM_ID ?? '1043').trim()

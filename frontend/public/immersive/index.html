@@ -44,7 +44,7 @@
       href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=9" />
+    <link rel="stylesheet" href="styles.css?v=942b97e6535f" />
 
     <!-- Three.js v0.183.0 is vendored locally under vendor/three/ so all
          module sources stay 'self' under the production CSP. The import
@@ -652,7 +652,23 @@
       </div>
     </div>
 
-    <script type="module" src="./vault.js"></script>
+    <!-- Obsidian vault: R3F island (default). ?hero=legacy → vanilla vault.js -->
+    <script type="module">
+      (async () => {
+        const immersive = '/immersive/';
+        const loadLegacy = () => import(`${immersive}vault.js?v=e92cf98c0fdb`);
+        if (new URLSearchParams(location.search).get('hero') === 'legacy') {
+          await loadLegacy();
+          return;
+        }
+        try {
+          await import(`${immersive}vault-hero/vault-hero.js?v=3a8071a1c284`);
+        } catch (err) {
+          console.warn('[vault-hero] R3F bundle failed, falling back to vault.js', err);
+          await loadLegacy();
+        }
+      })();
+    </script>
 
     <!-- Page-fold transition: when Launch App is clicked, the entire site
          folds away in 3D (skewed perspective + rotation) and reveals the

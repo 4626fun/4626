@@ -17,8 +17,10 @@ Result: `isValidSignature` fails on-chain and wallet preflight blocks transactio
 
 ## Repro (observed)
 
+> **Note:** Repro captured against pre-migration CSW `0x4beabd…04ef` (April 2026). Current canonical CSW is `CANONICAL_CSW_ADDRESS` (`0xAb6d5…967b5`); signature-path behavior applies to any CSW.
+
 - Environment: Coinbase Wallet Android in-app browser (Chrome WebView)
-- CSW: `0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef` on Base
+- CSW (historical repro): `0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef` on Base
 - Probe route: `/dev/toshi-probe`
 
 Observed behaviors in this session:

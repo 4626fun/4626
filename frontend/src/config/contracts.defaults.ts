@@ -52,6 +52,35 @@ export function isDeprecatedCreatorVaultBatcherAddress(value: string | null | un
   return DEPRECATED_CREATOR_VAULT_BATCHERS.has(trimmed.toLowerCase())
 }
 
+/** Historical split Phase-1 batcher that also rejects non-zero share vanity salt overrides. */
+export const PRE_V110_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('f941Bb68e4f083f3F531cc598d5C08d0b8FfbA7E')
+
+/**
+ * Split Phase-1 batchers that expose *WithSalt entrypoints but still reject
+ * non-zero `shareOftSaltOverride` with `SaltOverrideDisabled()`.
+ *
+ * Keep this list explicit and historical: do not key off the canonical
+ * `SPLIT_PHASE1_DEPLOYMENT_BATCHER` constant so a future salt-enabled cutover
+ * does not accidentally stay marked as disabled.
+ */
+export const SPLIT_PHASE1_SALT_DISABLED_BATCHER = addr('a99058f424FB3ACC639F59355C65C40149030651')
+const SHARE_OFT_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
+  PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V110_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V1110_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V1111_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V1112_PIPE_A_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  SPLIT_PHASE1_SALT_DISABLED_BATCHER.toLowerCase(),
+])
+
+export function isShareOftSaltOverrideDisabledBatcher(value: string | null | undefined): boolean {
+  if (value == null) return false
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return false
+  return SHARE_OFT_SALT_OVERRIDE_DISABLED_BATCHERS.has(trimmed.toLowerCase())
+}
+
 export function normalizeCreatorVaultBatcherAddress(
   value: string | null | undefined,
 ): ContractAddress | null | undefined {
@@ -139,6 +168,15 @@ export const BASE_DEFAULTS = {
   // an unconfigured environment fails loudly at the consumer rather than
   // routing writes to a stale or wrong address.
   alfaCreatorKeyLpFactory: addr('0000000000000000000000000000000000000000'),
+
+  // Impairment-v1 auxiliary defaults.
+  // Keep zero-by-default so unconfigured environments fail closed instead of
+  // accidentally wiring stale impairment endpoints into new deploys.
+  impairmentClaims: addr('0000000000000000000000000000000000000000'),
+  impairmentRecoveryEscrow: addr('0000000000000000000000000000000000000000'),
+  impairmentGuardian: addr('0000000000000000000000000000000000000000'),
+  // 1 day default in CreatorOVault constructor; runtime can override via env.
+  impairmentChallengeWindowSeconds: 86_400,
 } as const
 
 export const AKITA_DEFAULTS = {

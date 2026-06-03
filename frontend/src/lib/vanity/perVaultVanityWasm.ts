@@ -1,4 +1,15 @@
-const vanityWasmUrl = (import.meta.env.VITE_VANITY_WASM_URL as string | undefined)?.trim() || ''
+const DEFAULT_VANITY_WASM_PUBLIC_PATH = '/vanity/vanity_salt_grinder.wasm'
+
+export function resolvePerVaultVanityWasmUrl(): string | null {
+  const fromEnv = (import.meta.env.VITE_VANITY_WASM_URL as string | undefined)?.trim()
+  if (fromEnv) return fromEnv
+  // Served from frontend/public/vanity/ after `pnpm build:vanity-wasm`
+  return DEFAULT_VANITY_WASM_PUBLIC_PATH
+}
+
+export function isPerVaultVanityWasmConfigured(): boolean {
+  return resolvePerVaultVanityWasmUrl() != null
+}
 
 export type PerVaultVanitySearchInput = {
   create2Deployer: string
@@ -72,6 +83,7 @@ async function loadVanityWasm(): Promise<VanityWasmExports> {
 }
 
 async function instantiateVanityWasm(): Promise<VanityWasmExports> {
+  const vanityWasmUrl = resolvePerVaultVanityWasmUrl()
   if (!vanityWasmUrl) {
     throw new Error('Vanity WASM URL is not configured')
   }

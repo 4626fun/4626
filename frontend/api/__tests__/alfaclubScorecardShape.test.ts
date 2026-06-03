@@ -7,7 +7,7 @@ import {
   formatScorecardPostBody,
 } from '../../server/_lib/alfaclub/scorecard.ts'
 import type { RankedCreator } from '../../server/_lib/alfaclub/leaderboard.ts'
-import { TARGET_CANONICAL_CSW_ADDRESS } from '../../src/wallet/canonicalWalletPolicy.ts'
+import { CANONICAL_CSW_ADDRESS } from '../../src/wallet/canonicalWalletPolicy.ts'
 
 function makeRanked(): RankedCreator {
   return {
@@ -65,7 +65,7 @@ describe('scorecard — buildScorecard', () => {
 
   it('records the publisher identity as the canonical Keepr CSW + registry', () => {
     expect(built.scorecard.publisher.agentId).toBe(2205)
-    expect(built.scorecard.publisher.canonicalCsw).toBe(TARGET_CANONICAL_CSW_ADDRESS)
+    expect(built.scorecard.publisher.canonicalCsw).toBe(CANONICAL_CSW_ADDRESS)
     expect(built.scorecard.publisher.agentRegistry.startsWith('eip155:8453:')).toBe(true)
   })
 

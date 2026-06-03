@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { getAddress } from 'viem'
 
 import {
   resolveOwnerMutationPhase,
@@ -7,6 +8,9 @@ import {
   resolveRelayRequiredDepositWei,
   resolveRelaySubmitStepTwoStatus,
 } from '@/lib/relay/ownerMutationPreviewHelpers'
+import { CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
+
+const CSW = getAddress(CANONICAL_CSW_ADDRESS)
 
 describe('ownerMutationPreviewHelpers', () => {
   it('keeps step 1 blocked until relay quote and deposit preflight are actionable', () => {
@@ -174,11 +178,11 @@ describe('ownerMutationPreviewHelpers', () => {
   it('computes relay funding shortfall from deposit preflight', () => {
     expect(
       resolveRelayFundingShortfall({
-        txRequest: { to: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF' },
+        txRequest: { to: CSW },
         relay: { userCall: { value: '0x0' }, paymentDetails: null },
         preflight: {
           relayQuoteError:
-            'Funder native balance (1386794618158156 wei) is below Relay deposit (3013495263000000 wei). Fund 0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF and rebuild preview.',
+            `Funder native balance (1386794618158156 wei) is below Relay deposit (3013495263000000 wei). Fund ${CSW} and rebuild preview.`,
           relayDepositSimulation: {
             ok: false,
             depositWei: '3013495263000000',
@@ -188,7 +192,7 @@ describe('ownerMutationPreviewHelpers', () => {
         },
       }),
     ).toEqual({
-      funderAddress: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+      funderAddress: CSW,
       balanceWei: 1386794618158156n,
       depositWei: 3013495263000000n,
       gasBufferWei: 401799368400000n,

@@ -6,12 +6,20 @@ declare const process: { env: Record<string, string | undefined> }
 
 let schemaChecked = false
 let schemaCheckPromise: Promise<boolean> | null = null
+let warnedMissingUnifiedChartRefreshFn = false
 
 async function hasProjectionTable(db: Db): Promise<boolean> {
   const result = await db.sql`
     SELECT to_regclass('public.creator_ethos_projection') IS NOT NULL AS has_projection;
   `
   return Boolean(result.rows?.[0]?.has_projection)
+}
+
+async function hasFunction(db: Db, signature: string): Promise<boolean> {
+  const result = await db.sql`
+    SELECT to_regprocedure(${signature}) IS NOT NULL AS available;
+  `
+  return Boolean(result.rows?.[0]?.available)
 }
 
 export async function ensureCreatorEthosProjectionSchema(db: Db): Promise<boolean> {
@@ -587,6 +595,60 @@ export async function refreshCreatorEthosProjection(params: {
       score_updated_at = EXCLUDED.score_updated_at,
       refreshed_at = NOW();
   `
+
+  // Keep chart distribution tables fresh for the 137+ Ethos charts
+  try {
+    await params.db.sql`SELECT public.refresh_creator_ethos_distribution();`
+  } catch (e) {
+    // Non-fatal — the distribution is a nice-to-have for charts
+    console.warn('[creatorEthosProjection] failed to refresh distribution table', e)
+  }
+
+  // Snapshot for trend charts (daily + hourly)
+  try {
+    await params.db.sql`SELECT public.snapshot_creator_ethos_daily();`
+  } catch (e) {
+    console.warn('[creatorEthosProjection] failed to snapshot daily Ethos data', e)
+  }
+
+  try {
+    await params.db.sql`SELECT public.snapshot_creator_ethos_hourly();`
+  } catch (e) {
+    console.warn('[creatorEthosProjection] failed to snapshot hourly Ethos data', e)
+  }
+
+  // Ultra high-resolution 15-min snapshots (use with short retention)
+  try {
+    await params.db.sql`SELECT public.snapshot_creator_ethos_15min();`
+  } catch (e) {
+    console.warn('[creatorEthosProjection] failed to snapshot 15min Ethos data', e)
+  }
+
+  // Market cap bucket stats for segmented charts
+  try {
+    await params.db.sql`SELECT public.refresh_ethos_market_cap_buckets();`
+  } catch (e) {
+    console.warn('[creatorEthosProjection] failed to refresh market cap buckets', e)
+  }
+
+  // Refresh all interconnected chart materialized views (unified approach)
+  try {
+    const hasUnifiedChartRefreshFn = await hasFunction(
+      params.db,
+      'public.refresh_all_ethos_chart_views()',
+    )
+    if (hasUnifiedChartRefreshFn) {
+      await params.db.sql`SELECT public.refresh_all_ethos_chart_views();`
+      warnedMissingUnifiedChartRefreshFn = false
+    } else if (!warnedMissingUnifiedChartRefreshFn) {
+      warnedMissingUnifiedChartRefreshFn = true
+      console.warn(
+        '[creatorEthosProjection] skipping chart views refresh; function public.refresh_all_ethos_chart_views() is missing',
+      )
+    }
+  } catch (e) {
+    console.warn('[creatorEthosProjection] failed to refresh chart views', e)
+  }
 
   return {
     refreshedRows: Math.max(0, Number(result.rowCount ?? 0)),

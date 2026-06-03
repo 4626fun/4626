@@ -1,5 +1,7 @@
 import { randomBytes } from 'node:crypto'
-import { ensureTelegramTradingSchema } from '../db/schemaBootstrap.js'
+import { ensureTelegramTradingSchema as ensureTelegramTradingSchemaFromBootstrap } from '../db/schemaBootstrap.js'
+import { getTelemetrySampleRate, shouldSampleEvent } from '../infra/telemetrySampling.js'
+import { shouldSample } from '../infra/telemetrySampling.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -114,6 +116,11 @@ import {
   type TelegramUserLink,
 } from './telegramTradingHelpers.js'
 
+/**
+ * @deprecated These flags are retained only for backward compatibility with
+ * any external test spies. The real idempotency + concurrency safety now lives
+ * in schemaBootstrap.ts (withEnsureOnce).
+ */
 let telegramTradingSchemaEnsured = false
 let telegramTradingSchemaEnsurePromise: Promise<void> | null = null
 
@@ -543,6 +550,22 @@ export async function createTelegramActionToken(params: {
   const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString()
   const token = randomBytes(18).toString('base64url')
   const tokenHash = hashTelegramActionToken(token)
+
+  // High-volume short-lived action tokens (Telegram trading/automation).
+  // Always issue the token to the caller; only thin the durable row when sampling < 1.
+  const sampleKey = `${userId}:${actionType}`
+  if (!shouldSampleEvent('telegram_action_tokens', sampleKey)) {
+    // Token is still returned and usable — we simply skip persisting the row for volume control.
+    return { token, expiresAt }
+  }
+
+  // Optional observability: surface the effective rate for this table (new helper).
+  const effectiveRate = getTelemetrySampleRate('telegram_action_tokens')
+  if (effectiveRate < 1) {
+    // One-time style note; in hot paths this can be gated further or sent to structured logs.
+    // console.debug('[telemetry] sampling telegram_action_tokens', { rate: effectiveRate })
+  }
+
   await params.db.sql`
     INSERT INTO telegram_action_tokens (
       token_hash,
@@ -649,6 +672,11 @@ export async function logTelegramActionAudit(params: {
   const status = asTrimmed(params.status).toLowerCase() || 'unknown'
   if (!userId || !chatId || !canonical || !actionType) return
 
+  // Telegram action audit (trading/automation). Sample for volume control while preserving per-user traces.
+  if (!shouldSampleEvent('telegram_action_audit', `${userId}:${actionType}`)) {
+    return
+  }
+
   await params.db.sql`
     INSERT INTO telegram_action_audit (
       telegram_user_id,
@@ -701,6 +729,11 @@ export async function logTelegramFunnelEvent(params: {
       : normalizeTelegramUserId(params.telegramUserId)
   const chatId = asTrimmed(params.chatId ?? '') || null
   const actionType = asTrimmed(params.actionType ?? '').toLowerCase() || null
+
+  // High-volume funnel sampling (see audit-telemetry-optimization.ts)
+  const sampleKey = userId !== null ? String(userId) : chatId ?? eventName
+  if (!shouldSample(sampleKey)) return
+
   await params.db.sql`
     INSERT INTO telegram_funnel_events (
       telegram_user_id,
@@ -719,18 +752,21 @@ export async function logTelegramFunnelEvent(params: {
   `
 }
 
+/**
+ * Thin backward-compat adapter.
+ *
+ * The real implementation + idempotency + pgcrypto side-effect now lives in
+ * schemaBootstrap.ts (centralized withEnsureOnce).
+ *
+ * The local flags are retained only for any legacy test observers.
+ */
 export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
   if (telegramTradingSchemaEnsured) return
   if (telegramTradingSchemaEnsurePromise) return telegramTradingSchemaEnsurePromise
+
   telegramTradingSchemaEnsurePromise = (async () => {
     try {
-      // Condensed path — all major Telegram trading / linking / holder-room tables
-      // now live in supabase/migrations/20260528000000_telegram_trading_schema.sql
-      await ensureTelegramTradingSchema(db)
-
-      // One-time extension (safe to keep here)
-      await db.sql`CREATE EXTENSION IF NOT EXISTS pgcrypto;`
-
+      await ensureTelegramTradingSchemaFromBootstrap(db)
       telegramTradingSchemaEnsured = true
     } catch (error) {
       telegramTradingSchemaEnsured = false
@@ -739,6 +775,7 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
       telegramTradingSchemaEnsurePromise = null
     }
   })()
+
   return telegramTradingSchemaEnsurePromise
 }
 

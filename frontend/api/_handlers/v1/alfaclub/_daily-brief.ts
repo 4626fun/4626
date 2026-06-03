@@ -31,6 +31,14 @@ function readConfiguredCronSecret(): string {
   return (process.env.CRON_SECRET ?? '').trim()
 }
 
+function readForceSendQuery(req: VercelRequest): boolean {
+  const raw = req.query?.forceSend
+  const value = Array.isArray(raw) ? raw[0] : raw
+  if (typeof value !== 'string') return false
+  const normalized = value.trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes'
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store')
 
@@ -62,6 +70,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const flags = readAlfaClubDailyBriefFlags()
+  if (readForceSendQuery(req)) {
+    flags.forceSend = true
+  }
   try {
     const result = await runAlfaClubDailyBrief({ flags })
     const status = result.ok ? 200 : 202

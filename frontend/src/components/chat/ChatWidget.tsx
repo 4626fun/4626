@@ -31,6 +31,7 @@ import {
   resolveDmRecipient,
   type DmRecipientResolution,
 } from '@/lib/xmtp/socialIdentity'
+import { resolveClientAgentXmtpAddressLower } from '@/lib/xmtp/agentXmtpAddress'
 import { resolveDmRoute } from './dmRouting'
 import { ChatBar } from './ChatBar'
 import { ChatWindow } from './ChatWindow'
@@ -41,7 +42,7 @@ import { shouldAutoConnectMessaging } from './autoConnectPolicy'
 import { useChatActivation } from './useChatActivation'
 
 const MAX_OPEN_WINDOWS = 3
-const AGENT_XMTP_ADDRESS = String(import.meta.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim().toLowerCase()
+const CANONICAL_CSW_INBOX_ADDRESS = resolveClientAgentXmtpAddressLower()
 const AGENT_DISPLAY_NAME = String(import.meta.env.VITE_AGENT_DISPLAY_NAME ?? 'akita').trim() || 'akita'
 const XMTP_ENV_LABEL = String(import.meta.env.VITE_XMTP_ENV ?? 'production').trim().toLowerCase() || 'production'
 const DM_PREVIEW_LOOKUP_DEBOUNCE_MS = 450
@@ -150,10 +151,10 @@ function ChatWidgetInner() {
     if (!getChatCommandById(actionId)) return
     const maybePeer = String(searchParams.get('chatPeer') ?? '').trim().toLowerCase()
     const peerAddress =
-      /^0x[a-fA-F0-9]{40}$/.test(maybePeer) ? maybePeer : AGENT_XMTP_ADDRESS
+      /^0x[a-fA-F0-9]{40}$/.test(maybePeer) ? maybePeer : CANONICAL_CSW_INBOX_ADDRESS
     if (!/^0x[a-fA-F0-9]{40}$/.test(peerAddress)) return
     const maybeName = String(searchParams.get('chatName') ?? '').trim()
-    const peerName = maybeName || (peerAddress === AGENT_XMTP_ADDRESS
+    const peerName = maybeName || (peerAddress === CANONICAL_CSW_INBOX_ADDRESS
       ? AGENT_DISPLAY_NAME
       : `${peerAddress.slice(0, 6)}…${peerAddress.slice(-4)}`)
     setPendingDeepLinkIntent({
@@ -284,7 +285,7 @@ function ChatWidgetInner() {
       let targetPeerAddress = pendingDeepLinkIntent.peerAddress as `0x${string}`
       let dmResult = await startDm(targetPeerAddress)
       if (!dmResult.ok && dmResult.reason === 'self_recipient') {
-        const agentAddress = normalizeEvmAddress(AGENT_XMTP_ADDRESS)
+        const agentAddress = normalizeEvmAddress(CANONICAL_CSW_INBOX_ADDRESS)
         if (agentAddress && agentAddress !== targetPeerAddress) {
           targetPeerAddress = agentAddress
           dmResult = await startDm(agentAddress, { nameHint: AGENT_DISPLAY_NAME })
@@ -294,7 +295,7 @@ function ChatWidgetInner() {
       handleOpenChat({
         id: dmResult.conversationId,
         type: 'dm',
-        name: targetPeerAddress === AGENT_XMTP_ADDRESS
+        name: targetPeerAddress === CANONICAL_CSW_INBOX_ADDRESS
           ? AGENT_DISPLAY_NAME
           : pendingDeepLinkIntent.peerName,
         peerAddress: targetPeerAddress,
@@ -419,12 +420,12 @@ function ChatWidgetInner() {
     setNewDmNotice('')
     setNewDmLoading(true)
     try {
-      const agentAddress = normalizeEvmAddress(AGENT_XMTP_ADDRESS)
+      const agentAddress = normalizeEvmAddress(CANONICAL_CSW_INBOX_ADDRESS)
       const routeDecision = resolveDmRoute({
         recipient: resolved,
         identityAddress,
         connectedAddress: address,
-        agentAddress: AGENT_XMTP_ADDRESS,
+        agentAddress: CANONICAL_CSW_INBOX_ADDRESS,
         agentDisplayName: AGENT_DISPLAY_NAME,
       })
       let destination = routeDecision.recipient

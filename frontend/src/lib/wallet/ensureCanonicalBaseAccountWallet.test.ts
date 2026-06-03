@@ -4,8 +4,9 @@ import {
   isCanonicalBaseAccountWalletReady,
   normalizeWalletAddress,
 } from '@/lib/wallet/ensureCanonicalBaseAccountWallet'
+import { CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
 
-const CSW = '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'
+const CSW = CANONICAL_CSW_ADDRESS
 
 describe('ensureCanonicalBaseAccountWallet', () => {
   it('requires provider or privy wallet address to match canonical CSW', () => {

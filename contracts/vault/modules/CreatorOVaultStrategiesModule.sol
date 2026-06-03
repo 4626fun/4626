@@ -10,12 +10,16 @@ import {IStrategyValuation} from "../../interfaces/IStrategyValuation.sol";
 import {CreatorOVaultModuleBase} from "./CreatorOVaultModuleBase.sol";
 import {ICreatorOVaultModuleIdentity} from "./ICreatorOVaultModuleIdentity.sol";
 
+interface ICreatorORecoveryEscrowStrategyModule {
+    function notifyRecovery(address asset, uint256 epochId, uint256 amount) external;
+}
+
 /// @notice Strategy management + strategy interaction logic for CreatorOVault.
 /// @dev Must be invoked via delegatecall from CreatorOVault.
 contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaultModuleIdentity {
     using SafeERC20 for IERC20;
     bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.strategies");
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v2");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v3");
 
     // ---- constants (must match vault) ----
     uint256 internal constant MAX_BPS = 10_000;
@@ -105,6 +109,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
         if (strategyAsset != expected) revert StrategyAssetMismatch(expected, strategyAsset);
 
         activeStrategies[strategy] = true;
+        strategyImpaired[strategy] = false;
         strategyWeights[strategy] = weight;
         strategyList.push(strategy);
         totalStrategyWeight += weight;
@@ -152,6 +157,14 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
         _ejectStrategyFromList(strategy);
     }
 
+    function reinstateImpairedStrategy(address strategy, uint256 epochId) external onlyDelegateCall {
+        if (!_isStrategyListed(strategy)) revert StrategyNotActive();
+        if (!strategyImpaired[strategy]) revert StrategyNotActive();
+        if (impairmentEpochs[epochId].strategy != strategy) revert StrategyNotActive();
+        if (impairmentEpochs[epochId].status != ImpairmentEpochStatus.Resolved) revert StrategyNotActive();
+        strategyImpaired[strategy] = false;
+    }
+
     /// @notice Best-effort unwind + list/queue removal for valuation-disabled strategies (core module only).
     function __ejectDisabledStrategy(address strategy) external onlyDelegateCall {
         _ejectStrategyFromList(strategy);
@@ -172,14 +185,28 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
         uint256 currentDebt = strategyDebt[strategy];
         if (currentDebt > 0) {
             IERC20 coin = _creatorCoin();
+            uint256 beforeBal = coin.balanceOf(address(this));
             try IStrategy(strategy).withdraw(currentDebt) returns (uint256) {} catch {
                 try IStrategy(strategy).emergencyWithdraw() returns (uint256) {} catch {}
             }
-            coinBalance = coin.balanceOf(address(this));
+            uint256 afterBal = coin.balanceOf(address(this));
+            coinBalance = afterBal;
 
             totalDebt -= currentDebt;
             strategyDebt[strategy] = 0;
             emit DebtUpdated(strategy, currentDebt, 0);
+
+            if (strategyImpaired[strategy] && impairmentRecoveryEscrow != address(0) && afterBal > beforeBal) {
+                uint256 recovered = afterBal - beforeBal;
+                uint256 epochId = _findLatestEpochForStrategy(strategy);
+                if (epochId != 0) {
+                    coin.safeTransfer(impairmentRecoveryEscrow, recovered);
+                    ICreatorORecoveryEscrowStrategyModule(impairmentRecoveryEscrow).notifyRecovery(
+                        address(coin), epochId, recovered
+                    );
+                    coinBalance = coin.balanceOf(address(this));
+                }
+            }
         }
 
         uint256 length = strategyList.length;
@@ -329,6 +356,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
     }
 
     function _getStrategyAssetsSafe(address strategy) internal view returns (uint256 assets) {
+        if (strategyImpaired[strategy]) return 0;
         try IStrategy(strategy).getTotalAssets() returns (uint256 reportedAssets) {
             assets = reportedAssets;
         } catch {
@@ -353,7 +381,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
 
         for (uint256 i = 0; i < length && remaining > 0; i++) {
             address strategy = queue[i];
-            if (!activeStrategies[strategy]) continue;
+            if (!activeStrategies[strategy] || strategyImpaired[strategy]) continue;
 
             uint256 currentDebt = strategyDebt[strategy];
             uint256 strategyAssets = _getStrategyAssetsSafe(strategy);
@@ -480,7 +508,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
 
             for (uint256 i = 0; i < queueLength; i++) {
                 address strategy = queue[i];
-                if (!activeStrategies[strategy] || strategyWeights[strategy] == 0) continue;
+                if (!activeStrategies[strategy] || strategyImpaired[strategy] || strategyWeights[strategy] == 0) continue;
 
                 uint256 targetAssets = (deployableBase * strategyWeights[strategy]) / totalStrategyWeight;
                 uint256 actualAssets = _getStrategyAssetsSafe(strategy);
@@ -532,7 +560,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
         uint256 length = strategyList.length;
         for (uint256 i = 0; i < length; i++) {
             address strategy = strategyList[i];
-            if (!activeStrategies[strategy] || strategyWeights[strategy] == 0) continue;
+            if (!activeStrategies[strategy] || strategyImpaired[strategy] || strategyWeights[strategy] == 0) continue;
 
             uint256 targetAssets = (deployableBase * strategyWeights[strategy]) / totalStrategyWeight;
             uint256 actualAssets = _getStrategyAssetsSafe(strategy);
@@ -545,7 +573,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
 
         for (uint256 i = 0; i < length && deployable > 0; i++) {
             address strategy = strategyList[i];
-            if (!activeStrategies[strategy] || strategyWeights[strategy] == 0) continue;
+            if (!activeStrategies[strategy] || strategyImpaired[strategy] || strategyWeights[strategy] == 0) continue;
 
             uint256 targetAssets = (deployableBase * strategyWeights[strategy]) / totalStrategyWeight;
             uint256 actualAssets = _getStrategyAssetsSafe(strategy);
@@ -582,7 +610,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
         uint256 length = strategyList.length;
         for (uint256 i = 0; i < length; i++) {
             address strategy = strategyList[i];
-            if (activeStrategies[strategy]) {
+            if (activeStrategies[strategy] && !strategyImpaired[strategy]) {
                 total += _getStrategyAssetsSafe(strategy);
             }
         }
@@ -599,7 +627,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
         uint256 length = strategyList.length;
         for (uint256 i = 0; i < length; i++) {
             address strategy = strategyList[i];
-            if (!activeStrategies[strategy] || strategyWeights[strategy] == 0) continue;
+            if (!activeStrategies[strategy] || strategyImpaired[strategy] || strategyWeights[strategy] == 0) continue;
 
             uint256 amount = (deployable * strategyWeights[strategy]) / totalStrategyWeight;
             if (amount > coinBalance) amount = coinBalance;
@@ -659,7 +687,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
     }
 
     function buyDebt(address strategy, uint256 amount) external onlyDelegateCall {
-        if (!activeStrategies[strategy]) revert StrategyNotActive();
+        if (!activeStrategies[strategy] && !strategyImpaired[strategy]) revert StrategyNotActive();
 
         uint256 currentDebt = strategyDebt[strategy];
         if (currentDebt == 0) revert NothingToBuy();
@@ -680,6 +708,17 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
         uint256 newDebt = currentDebt - _amount;
         strategyDebt[strategy] = newDebt;
         totalDebt -= _amount;
+
+        if (strategyImpaired[strategy] && impairmentRecoveryEscrow != address(0)) {
+            uint256 epochId = _findLatestEpochForStrategy(strategy);
+            if (epochId != 0) {
+                _creatorCoin().safeTransfer(impairmentRecoveryEscrow, _amount);
+                ICreatorORecoveryEscrowStrategyModule(impairmentRecoveryEscrow).notifyRecovery(
+                    address(_creatorCoin()), epochId, _amount
+                );
+                coinBalance = _creatorCoin().balanceOf(address(this));
+            }
+        }
 
         emit DebtUpdated(strategy, currentDebt, newDebt);
         emit DebtPurchased(strategy, _amount, msg.sender);
@@ -709,5 +748,21 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
                 break;
             }
         }
+    }
+
+    function _findLatestEpochForStrategy(address strategy) internal view returns (uint256 epochId) {
+        uint256 maxEpoch = nextImpairmentEpochId;
+        while (maxEpoch > 1) {
+            unchecked {
+                --maxEpoch;
+            }
+            if (impairmentEpochs[maxEpoch].strategy == strategy) {
+                return maxEpoch;
+            }
+        }
+        if (activeImpairmentEpoch != 0 && impairmentEpochs[activeImpairmentEpoch].strategy == strategy) {
+            return activeImpairmentEpoch;
+        }
+        return 0;
     }
 }

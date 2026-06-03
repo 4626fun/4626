@@ -45,7 +45,7 @@ vi.mock('../../_lib/agent/teeAttestationGate.js', () => ({
   assertTeeAttestationOrThrow: (...args: unknown[]) => attestationGateMock(...args),
 }))
 
-vi.mock('../../_lib/wallet/commandIssuerContext.js', () => ({
+vi.mock('@4626/server-core', () => ({
   resolveCommandIssuerContextByAddress: (...args: unknown[]) => resolveContextMock(...args),
   isExecutionReady: (resolution: { status: string }) => resolution.status === 'ready',
 }))

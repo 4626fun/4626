@@ -1,5 +1,5 @@
 import { getDb } from '../db/postgres.js'
-import { ensureChatSchema } from './schema.js'
+import { ensureChatSchema } from '../db/schemaBootstrap.js'
 import { normalizeChatAddress } from './presence.js'
 
 export type ChatFriendState = 'accepted' | 'pending_incoming' | 'pending_outgoing'
@@ -19,7 +19,7 @@ export type ChatFriendsSnapshot = {
 export async function listChatFriendSnapshot(viewerAddress: `0x${string}`): Promise<ChatFriendsSnapshot> {
   const db = await getDb()
   if (!db) return { friends: [], incoming: [], outgoing: [] }
-  await ensureChatSchema()
+  await ensureChatSchema(db)
 
   const res = await db.sql`
     SELECT
@@ -70,7 +70,7 @@ export async function sendChatFriendRequest(params: {
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
   const db = await getDb()
   if (!db) return { ok: false, reason: 'db_not_configured' }
-  await ensureChatSchema()
+  await ensureChatSchema(db)
 
   if (params.viewerAddress === params.targetAddress) {
     return { ok: false, reason: 'self_request_not_allowed' }
@@ -128,7 +128,7 @@ export async function acceptChatFriendRequest(params: {
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
   const db = await getDb()
   if (!db) return { ok: false, reason: 'db_not_configured' }
-  await ensureChatSchema()
+  await ensureChatSchema(db)
 
   const result = await db.sql`
     UPDATE chat_friend_requests
@@ -155,7 +155,7 @@ export async function declineChatFriendRequest(params: {
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
   const db = await getDb()
   if (!db) return { ok: false, reason: 'db_not_configured' }
-  await ensureChatSchema()
+  await ensureChatSchema(db)
 
   const result = await db.sql`
     UPDATE chat_friend_requests
@@ -182,7 +182,7 @@ export async function cancelOutgoingChatFriendRequest(params: {
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
   const db = await getDb()
   if (!db) return { ok: false, reason: 'db_not_configured' }
-  await ensureChatSchema()
+  await ensureChatSchema(db)
 
   await db.sql`
     DELETE FROM chat_friend_requests
@@ -199,7 +199,7 @@ export async function removeChatFriend(params: {
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
   const db = await getDb()
   if (!db) return { ok: false, reason: 'db_not_configured' }
-  await ensureChatSchema()
+  await ensureChatSchema(db)
 
   await db.sql`
     DELETE FROM chat_friend_requests

@@ -47,6 +47,35 @@ import {CreatorOVaultLiquidityLib} from "./libraries/CreatorOVaultLiquidityLib.s
 contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permit {
     using SafeERC20 for IERC20;
 
+    enum VaultMode {
+        Normal,
+        Suspect
+    }
+
+    enum ImpairmentEpochStatus {
+        None,
+        Tripped,
+        Finalized,
+        Resolved
+    }
+
+    struct ImpairmentEpoch {
+        ImpairmentEpochStatus status;
+        address strategy;
+        address recoveryAsset;
+        uint256 reasonCode;
+        uint256 tripBlock;
+        uint64 trippedAt;
+        uint64 finalizedAt;
+        uint64 resolvedAt;
+        uint256 totalSharesAtTrip;
+        uint256 totalClaimSupply;
+        uint256 excludedBookValue;
+        bytes32 snapshotRoot;
+        uint256 totalRecovered;
+        uint256 totalClaimed;
+    }
+
     // =================================
     // CONSTANTS
     // =================================
@@ -81,7 +110,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
 
     /// @notice Maximum strategies
     uint256 public constant MAX_STRATEGIES = 5;
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v2");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v3");
     bytes32 internal constant MODULE_KIND_CORE = keccak256("CreatorOVaultModule.core");
     bytes32 internal constant MODULE_KIND_STRATEGIES = keccak256("CreatorOVaultModule.strategies");
     bytes32 internal constant MODULE_KIND_ADMIN = keccak256("CreatorOVaultModule.admin");
@@ -364,6 +393,21 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     mapping(address => uint8) public strategyValuationMisses;
     mapping(address => uint256) public sharePermitNonces;
 
+    // v3 impairment side-pocket state (appended)
+    VaultMode public vaultMode;
+    uint256 public activeImpairmentEpoch;
+    uint256 public nextImpairmentEpochId;
+    uint64 public impairmentChallengeWindow;
+    mapping(uint256 => ImpairmentEpoch) public impairmentEpochs;
+    mapping(address => bool) public strategyImpaired;
+    mapping(uint256 => mapping(address => uint256)) public impairmentAmountClaimed;
+    mapping(uint256 => mapping(address => bool)) public impairmentClaimMinted;
+    mapping(uint256 => uint64) public impairmentRootUnlockTime;
+    mapping(uint256 => bool) public impairmentRootChallenged;
+    address public impairmentGuardian;
+    address public impairmentClaims;
+    address public impairmentRecoveryEscrow;
+
     // =================================
     // EVENTS
     // =================================
@@ -371,6 +415,27 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     event Reported(uint256 profit, uint256 loss, uint256 performanceFees, uint256 totalAssets);
     event ManagementFeeAccrued(uint256 feeAssets, uint256 feeShares, uint256 elapsedSeconds);
     event StrategyValuationAutoDisabled(address indexed strategy, uint8 consecutiveMisses);
+    event ImpairmentChallengeWindowUpdated(uint64 newWindow);
+    event ImpairmentTripped(
+        uint256 indexed epochId,
+        address indexed strategy,
+        uint256 indexed reasonCode,
+        uint256 tripBlock,
+        uint256 totalSharesAtTrip
+    );
+    event ImpairmentTripCleared(uint256 indexed epochId, address indexed strategy);
+    event ImpairmentRootProposed(uint256 indexed epochId, bytes32 indexed root, uint64 unlockTime);
+    event ImpairmentRootChallenged(uint256 indexed epochId, address indexed challenger, string reason);
+    event ImpairmentRootCleared(uint256 indexed epochId);
+    event ImpairmentRootFinalized(uint256 indexed epochId, bytes32 indexed root, uint256 totalClaimSupply);
+    event ImpairmentFinalized(
+        uint256 indexed epochId, address indexed strategy, bytes32 indexed root, uint256 excludedBookValue
+    );
+    event ImpairmentRecoveryNotified(uint256 indexed epochId, address indexed asset, uint256 amount);
+    event ImpairmentRecoveryClaimed(
+        uint256 indexed epochId, address indexed account, address indexed receiver, uint256 amount
+    );
+    event ImpairmentResolved(uint256 indexed epochId);
 
     event UpdateManagementFee(uint16 newManagementFee);
     event UpdateManagementFeeRecipient(address indexed newRecipient);
@@ -503,6 +568,24 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     error RiskConfigTooEarly(uint64 unlockTime);
     error InvalidRiskConfigKind(uint8 kind);
     error InvalidOperatorSignature();
+    error VaultNotNormal();
+    error VaultNotSuspect();
+    error NoActiveImpairment();
+    error ImpairmentAlreadyActive(uint256 epochId);
+    error InvalidImpairmentEpoch(uint256 epochId);
+    error InvalidImpairmentTransition(uint256 epochId);
+    error StrategyAlreadyImpaired(address strategy);
+    error StrategyNotImpaired(address strategy);
+    error InvalidImpairmentReason(uint256 reasonCode);
+    error ImpairmentRootNotReady(uint64 unlockTime);
+    error ImpairmentRootRequired(uint256 epochId);
+    error ImpairmentRootAlreadyFinalized(uint256 epochId);
+    error ImpairmentRootChallengedErr(uint256 epochId);
+    error ChallengeWindowNotConfigured();
+    error ClaimAlreadyMinted(uint256 epochId, address account);
+    error InvalidClaimProof(uint256 epochId, address account);
+    error NothingToClaim(uint256 epochId, address account);
+    error RecoveryEscrowNotConfigured();
 
     // Protocol rescue errors
     error RescueNotConfigured();
@@ -616,6 +699,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         lastDeployment = block.timestamp;
         lastReport = uint96(block.timestamp);
         lastProfitUnlockUpdate = uint96(block.timestamp);
+        vaultMode = VaultMode.Normal;
+        impairmentChallengeWindow = uint64(1 days);
     }
 
     // =================================
@@ -847,7 +932,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         // Add strategy holdings
         uint256 len = strategyList.length;
         for (uint256 i; i < len; i++) {
-            if (activeStrategies[strategyList[i]]) {
+            if (activeStrategies[strategyList[i]] && !strategyImpaired[strategyList[i]]) {
                 total += _getStrategyAssetsSafe(strategyList[i]);
             }
         }
@@ -888,7 +973,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         uint256 len = strategyList.length;
         for (uint256 i; i < len; i++) {
             address strategy = strategyList[i];
-            if (!activeStrategies[strategy]) continue;
+            if (!activeStrategies[strategy] || strategyImpaired[strategy]) continue;
 
             try IStrategyValuation(strategy).isValuationReady() returns (bool ok) {
                 if (!ok) return strategy;
@@ -1021,6 +1106,80 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         shares = abi.decode(ret, (uint256));
     }
 
+    // =================================
+    // IMPAIRMENT SIDE-POCKET (V1)
+    // =================================
+
+    function setImpairmentChallengeWindow(uint64 window) external onlyManagement {
+        _delegate(_coreModule);
+    }
+
+    function setImpairmentGuardian(address guardian) external onlyOwner {
+        _delegate(_adminModule);
+    }
+
+    function setImpairmentClaims(address claims) external onlyOwner {
+        _delegate(_adminModule);
+    }
+
+    function setImpairmentRecoveryEscrow(address escrow) external onlyOwner {
+        _delegate(_adminModule);
+    }
+
+    function tripImpairment(address strategy, uint256 reasonCode)
+        external
+        nonReentrant
+        onlyEmergencyAuthorized
+        returns (uint256 epochId)
+    {
+        bytes memory ret = _delegateAndReturn(_coreModule);
+        epochId = abi.decode(ret, (uint256));
+    }
+
+    function clearImpairmentTrip(uint256 epochId) external nonReentrant onlyEmergencyAuthorized {
+        _delegateAndReturn(_coreModule);
+    }
+
+    function proposeImpairmentRoot(uint256 epochId, bytes32 snapshotRoot, uint256 totalClaimSupply, address recoveryAsset)
+        external
+        nonReentrant
+        onlyManagement
+    {
+        _delegateAndReturn(_coreModule);
+    }
+
+    function challengeImpairmentRoot(uint256 epochId, string calldata reason) external nonReentrant onlyEmergencyAuthorized {
+        _delegateAndReturn(_coreModule);
+    }
+
+    function clearImpairmentRootAfterChallenge(uint256 epochId) external nonReentrant onlyManagement {
+        _delegateAndReturn(_coreModule);
+    }
+
+    function finalizeImpairment(uint256 epochId) external nonReentrant onlyManagement {
+        _delegateAndReturn(_coreModule);
+    }
+
+    function mintImpairmentClaim(uint256 epochId, address account, uint256 amount, bytes32[] calldata proof)
+        external
+        nonReentrant
+    {
+        _delegateAndReturn(_coreModule);
+    }
+
+    function notifyImpairmentRecovery(uint256 epochId, uint256 amount) external nonReentrant onlyKeepers {
+        _delegateAndReturn(_coreModule);
+    }
+
+    function claimImpairmentRecovery(uint256 epochId, address receiver, uint256 claimUnits)
+        external
+        nonReentrant
+        returns (uint256 amountOut)
+    {
+        bytes memory ret = _delegateAndReturn(_coreModule);
+        amountOut = abi.decode(ret, (uint256));
+    }
+
     /**
      * @notice Preview redeem (ERC-4626 override)
      * @dev FIX: S-C02 — cap preview at liquid assets minus queued withdrawals.
@@ -1040,6 +1199,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      * @notice Max deposit (standard ERC4626)
      */
     function maxDeposit(address receiver) public view override returns (uint256) {
+        if (vaultMode != VaultMode.Normal) return 0;
         if (paused || isShutdown) return 0;
         if (whitelistEnabled && !whitelist[receiver]) return 0;
         if (_firstStrategyValuationNotReady() != address(0)) return 0;
@@ -1059,6 +1219,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      * @notice Max mint (standard ERC4626)
      */
     function maxMint(address receiver) public view override returns (uint256) {
+        if (vaultMode != VaultMode.Normal) return 0;
         if (paused || isShutdown) return 0;
         if (whitelistEnabled && !whitelist[receiver]) return 0;
         if (_firstStrategyValuationNotReady() != address(0)) return 0;
@@ -1071,6 +1232,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      * @notice Max withdraw (standard ERC4626)
      */
     function maxWithdraw(address owner_) public view override returns (uint256) {
+        if (vaultMode != VaultMode.Normal) return 0;
         if (paused) return 0;
         uint256 userShares = balanceOf(owner_);
         if (userShares == 0) return 0;
@@ -1084,6 +1246,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      * @notice Max redeem (standard ERC4626)
      */
     function maxRedeem(address owner_) public view override returns (uint256) {
+        if (vaultMode != VaultMode.Normal) return 0;
         if (paused) return 0;
         uint256 userShares = balanceOf(owner_);
         if (userShares == 0) return 0;
@@ -1292,6 +1455,10 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
 
     // FIX: M-02 — force-remove a strategy that cannot return full debt (accepts loss)
     function forceRemoveStrategy(address strategy) external nonReentrant onlyManagement {
+        _delegateAndReturn(_strategiesModule);
+    }
+
+    function reinstateImpairedStrategy(address strategy, uint256 epochId) external nonReentrant onlyManagement {
         _delegateAndReturn(_strategiesModule);
     }
 

@@ -16,6 +16,7 @@ import { WaitlistGroupChatSurface } from './WaitlistGroupChatSurface'
 type WaitlistGroupChatPanelProps = {
   setupComplete: boolean
   signingReady: boolean
+  layout?: 'inline' | 'sidebar' | 'mobile'
 }
 
 export function WaitlistGroupChatPanel(props: WaitlistGroupChatPanelProps) {
@@ -25,7 +26,7 @@ export function WaitlistGroupChatPanel(props: WaitlistGroupChatPanelProps) {
 }
 
 function WaitlistGroupChatPanelInner(props: WaitlistGroupChatPanelProps) {
-  const { signingReady, setupComplete } = props
+  const { signingReady, setupComplete, layout = 'inline' } = props
   const statusQuery = useWaitlistXmtpStatus(setupComplete)
   const chatConfig = statusQuery.data
   const identityHintAddress = chatConfig?.xmtpMemberAddress ?? null
@@ -34,13 +35,14 @@ function WaitlistGroupChatPanelInner(props: WaitlistGroupChatPanelProps) {
     <AccountContextProvider>
       <XmtpChatProvider identityHintAddress={identityHintAddress} manualConnectOnly>
         {statusQuery.isLoading && !chatConfig ? (
-          <WaitlistChatSection>
+          <WaitlistChatSection layout={layout}>
             <LoadingInline labelOverride="Loading waitlist chat…" />
           </WaitlistChatSection>
         ) : (
           <WaitlistGroupChatPanelBody
             signingReady={signingReady}
             statusQuery={statusQuery}
+            layout={layout}
           />
         )}
       </XmtpChatProvider>
@@ -51,9 +53,11 @@ function WaitlistGroupChatPanelInner(props: WaitlistGroupChatPanelProps) {
 function WaitlistGroupChatPanelBody({
   signingReady,
   statusQuery,
+  layout,
 }: {
   signingReady: boolean
   statusQuery: ReturnType<typeof useWaitlistXmtpStatus>
+  layout: 'inline' | 'sidebar' | 'mobile'
 }) {
   const { status: xmtpStatus } = useXmtp()
   const messagingReady = xmtpStatus === 'connected'
@@ -74,13 +78,13 @@ function WaitlistGroupChatPanelBody({
   })
 
   return (
-    <WaitlistChatSection>
+    <WaitlistChatSection layout={layout}>
       <header className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <MessageSquare className="h-4 w-4 shrink-0 text-brand-primary" aria-hidden="true" />
           <div className="min-w-0">
             <h3 className="truncate text-sm font-medium text-zinc-200">{groupName}</h3>
-            <p className="text-[11px] text-zinc-500">Group chat for waitlist members</p>
+            <p className="text-[11px] text-zinc-500">Chat with other waitlist members</p>
           </div>
         </div>
         <WaitlistJoinBadge joinStatus={join.status} chatReady={chatReady && signingReady} />
@@ -176,9 +180,22 @@ function WaitlistGroupChatPanelContent(props: {
   )
 }
 
-function WaitlistChatSection({ children }: { children: React.ReactNode }) {
+function WaitlistChatSection({
+  children,
+  layout = 'inline',
+}: {
+  children: React.ReactNode
+  layout?: 'inline' | 'sidebar' | 'mobile'
+}) {
+  const shellClass =
+    layout === 'sidebar'
+      ? 'flex h-full min-h-[320px] flex-col space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 lg:min-h-[min(72vh,640px)]'
+      : layout === 'mobile'
+        ? 'flex min-h-[280px] flex-col space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 max-h-[min(55vh,480px)]'
+        : 'space-y-3 pt-1'
+
   return (
-    <section aria-label="Waitlist group chat" className="space-y-3 pt-1">
+    <section aria-label="Waitlist group chat" className={shellClass}>
       {children}
     </section>
   )

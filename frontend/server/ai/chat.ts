@@ -48,10 +48,77 @@ const LLM_COOLDOWN_MS = Math.floor(parsePositiveNumber(
   (globalThis as any).process?.env?.ELIZA_LLM_COOLDOWN_MS, 10_000))
 const LLM_COOLDOWN_CACHE_LIMIT = Math.floor(parsePositiveNumber(
   (globalThis as any).process?.env?.ELIZA_LLM_COOLDOWN_CACHE_LIMIT, 2_000))
+const AKITAI_PINATA_HTTP_TIMEOUT_MS = Math.floor(parsePositiveNumber(
+  (globalThis as any).process?.env?.AKITAI_PINATA_HTTP_TIMEOUT_MS, 30_000))
 
 const groupCooldowns = new Map<string, number>()
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 const SENTINEL_ADDRESS_PATTERN = /^0x0{38}[a-f0-9]{2}$/
+
+function readAkitaiPinataConfig(): { endpoint: string; bearer: string } | null {
+  const endpoint = String((globalThis as any).process?.env?.AKITAI_PINATA_CHAT_ENDPOINT ?? '').trim()
+  const bearer = String((globalThis as any).process?.env?.AKITAI_PINATA_BEARER_TOKEN ?? '').trim()
+  if (!endpoint || !bearer) return null
+  return { endpoint, bearer }
+}
+
+function buildAkitaiPinataPrompt(params: {
+  systemPrompt: string
+  vaultContext: string
+  userText: string
+}): string {
+  const blocks = [
+    '[system]',
+    params.systemPrompt.trim(),
+    '[/system]',
+    params.vaultContext.trim() ? `[context]\n${params.vaultContext.trim()}\n[/context]` : '',
+    `[user]\n${params.userText.trim()}\n[/user]`,
+    'Respond as Akitai in concise plain text.',
+  ].filter(Boolean)
+  return blocks.join('\n\n')
+}
+
+async function generateAkitaiPinataResponse(params: {
+  endpoint: string
+  bearer: string
+  systemPrompt: string
+  vaultContext: string
+  userText: string
+  correlationId: string
+}): Promise<string | null> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), AKITAI_PINATA_HTTP_TIMEOUT_MS)
+  try {
+    const res = await fetch(params.endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${params.bearer}`,
+        'Content-Type': 'application/json',
+        'x-correlation-id': params.correlationId,
+      },
+      body: JSON.stringify({
+        prompt: buildAkitaiPinataPrompt({
+          systemPrompt: params.systemPrompt,
+          vaultContext: params.vaultContext,
+          userText: params.userText,
+        }),
+      }),
+      signal: controller.signal,
+    })
+    if (!res.ok) return null
+    const body = (await res.json()) as Record<string, unknown>
+    const text =
+      String(body.text ?? '').trim() ||
+      String(body.response ?? '').trim() ||
+      String(body.output ?? '').trim() ||
+      String(body.message ?? '').trim()
+    return text || null
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timeout)
+  }
+}
 
 function isUnauthenticatedSenderWallet(address: string): boolean {
   const normalized = String(address ?? '').trim().toLowerCase()
@@ -707,18 +774,39 @@ export async function generateLlmResponse(params: {
       const combinedVaultContext = [vaultContext.trim(), truthBlock].filter(Boolean).join('\n\n')
 
       const identityHint = `[${params.senderWallet.slice(0, 6)}...${params.senderWallet.slice(-4)}]`
-      const result = await llmService.generateResponse({
-        agentKey: params.groupId,
-        userMessage: `${identityHint}: ${userText}`,
-        systemPrompt,
-        vaultContext: combinedVaultContext.trim(),
-        correlationId,
-        preferredModel: characterConfig.preferredModel,
-      })
-      if (!result.text?.trim()) {
-        return { ok: false, response: '', handledByRuntime: true }
+      const pinataConfig = readAkitaiPinataConfig()
+      if (pinataConfig) {
+        const pinataText = await generateAkitaiPinataResponse({
+          endpoint: pinataConfig.endpoint,
+          bearer: pinataConfig.bearer,
+          systemPrompt,
+          vaultContext: combinedVaultContext.trim(),
+          userText: `${identityHint}: ${userText}`,
+          correlationId,
+        })
+        if (pinataText?.trim()) {
+          finalText = pinataText.trim()
+        } else {
+          return {
+            ok: false,
+            response: 'Akitai Pinata lane is unavailable. Please retry shortly.',
+            handledByRuntime: true,
+          }
+        }
+      } else {
+        const result = await llmService.generateResponse({
+          agentKey: params.groupId,
+          userMessage: `${identityHint}: ${userText}`,
+          systemPrompt,
+          vaultContext: combinedVaultContext.trim(),
+          correlationId,
+          preferredModel: characterConfig.preferredModel,
+        })
+        if (!result.text?.trim()) {
+          return { ok: false, response: '', handledByRuntime: true }
+        }
+        finalText = result.text.trim()
       }
-      finalText = result.text.trim()
     } catch (error) {
       const agentError = toAgentError(error, 'UPSTREAM_ERROR', 'LLM generation failed')
       if (agentError.code === 'BUDGET_EXCEEDED') {

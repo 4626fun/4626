@@ -4,6 +4,7 @@ import { applyEnv } from '../../../api/__tests__/helpers'
 import {
   _hermitPromptBuildersForTests,
   executeHermitCommand,
+  pinataEndpointSupportsHttpDraft,
   shouldPreferPinataHttpDraft,
   shouldRequestPinataGmeowCaption,
 } from './skillRouter'
@@ -25,8 +26,8 @@ describe('executeHermitCommand', () => {
 
   it('uses pinata provider for /hermit and returns text', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -38,7 +39,7 @@ describe('executeHermitCommand', () => {
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })
 
-    expect(result.provider).toBe('pinata')
+    expect(result.provider).toBe('hermit')
     expect(result.kind).toBe('hermit')
     expect(result.reply).toBe('Hermit from Pinata')
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -46,8 +47,8 @@ describe('executeHermitCommand', () => {
 
   it('rejects /hermit when pinata path is not configured', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: undefined,
-      HERMIT_PINATA_BEARER_TOKEN: undefined,
+      HERMIT_AGENT_CHAT_ENDPOINT: undefined,
+      HERMIT_AGENT_BEARER_TOKEN: undefined,
     })
 
     await expect(
@@ -55,7 +56,7 @@ describe('executeHermitCommand', () => {
         commandText: '/hermit gm',
         senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       }),
-    ).rejects.toThrow('Hermit Pinata path unavailable')
+    ).rejects.toThrow('Hermit agent path unavailable')
   })
 
   it('returns usage context for /hermit without calling pinata', async () => {
@@ -80,6 +81,69 @@ describe('executeHermitCommand', () => {
     expect(result.kind).toBe('hermit')
     expect(result.provider).toBe('local')
     expect(result.reply).toContain('Hermit drafts room-ready copy.')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('supports /arena status in room 1659 when enabled', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+    })
+    const result = await executeHermitCommand({
+      commandText: '/arena status',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('Arena status:')
+    expect(result.reply).toContain('enabled=true')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects /arena commands outside allowed rooms', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+    })
+    const result = await executeHermitCommand({
+      commandText: '/arena status',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1043',
+    })
+    expect(result.reply).toContain('only enabled in approved rooms')
+  })
+
+  it('enforces HIP-3 xyz prefix on /arena trade', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_TRADING_ENABLED: '1',
+      ARENA_DRY_RUN: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+    })
+    const result = await executeHermitCommand({
+      commandText: '/arena trade open foo:bar long 1000 2',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+    expect(result.reply).toContain('xyz: prefix')
+  })
+
+  it('keeps /arena execution in dry-run by default', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_TRADING_ENABLED: '1',
+      ARENA_DRY_RUN: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+    })
+    const result = await executeHermitCommand({
+      commandText: '/arena trade open xyz:GOLD long 5000 3',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+    expect(result.reply).toContain('Open submitted for xyz:GOLD.')
+    expect(result.reply).toContain('[dry-run]')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -118,8 +182,8 @@ describe('executeHermitCommand', () => {
 
   it('uses pinata for bare /gmeow when pinata is configured (creative default)', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -132,15 +196,15 @@ describe('executeHermitCommand', () => {
     })
 
     expect(result.kind).toBe('gmeow')
-    expect(result.provider).toBe('pinata')
+    expect(result.provider).toBe('hermit')
     expect(result.reply).toContain('fresh cave energy.')
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('uses pinata for /gmeow when user supplies a prompt (default policy)', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -152,16 +216,16 @@ describe('executeHermitCommand', () => {
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })
 
-    expect(result.provider).toBe('pinata')
+    expect(result.provider).toBe('hermit')
     expect(result.reply).toContain('custom cat line.')
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('uses pinata provider for /gmeow when HERMIT_GMEOW_PINATA_CAPTION=always', async () => {
+  it('uses hermit provider for /gmeow when HERMIT_GMEOW_HERMIT_CAPTION=always', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
-      HERMIT_GMEOW_PINATA_CAPTION: 'always',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
+      HERMIT_GMEOW_HERMIT_CAPTION: 'always',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -174,16 +238,16 @@ describe('executeHermitCommand', () => {
     })
 
     expect(result.kind).toBe('gmeow')
-    expect(result.provider).toBe('pinata')
+    expect(result.provider).toBe('hermit')
     expect(result.reply).toContain('cat laugh alpha unlocked.')
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('uses HTTP draft (not gateway) for AlfaClub bridge /gmeow to avoid channel echo', async () => {
+  it('uses HTTP draft (not gateway) for AlfaClub bridge /gmeow on non-Pinata draft endpoints', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://x7lmjaxx.agents.pinata.cloud',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
-      HERMIT_GMEOW_PINATA_CAPTION: 'always',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://draft.example/v1/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
+      HERMIT_GMEOW_HERMIT_CAPTION: 'always',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -197,14 +261,16 @@ describe('executeHermitCommand', () => {
     })
 
     expect(result.kind).toBe('gmeow')
-    expect(result.provider).toBe('pinata')
+    expect(result.provider).toBe('hermit')
     expect(result.reply).toContain('bridge-safe cat laugh.')
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://x7lmjaxx.agents.pinata.cloud')
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://draft.example/v1/chat')
   })
 
-  it('shouldPreferPinataHttpDraft defaults to HTTP for bridge-runner', () => {
-    restoreEnv = applyEnv({ HERMIT_PINATA_BRIDGE_HTTP_ONLY: undefined })
+  it('shouldPreferPinataHttpDraft defaults to HTTP for bridge-runner on generic endpoints', () => {
+    restoreEnv = applyEnv({
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+    })
     expect(
       shouldPreferPinataHttpDraft({
         sourceIdentity: 'alfaclub-bridge-runner',
@@ -213,8 +279,25 @@ describe('executeHermitCommand', () => {
     ).toBe(true)
   })
 
-  it('shouldPreferPinataHttpDraft allows gateway when HERMIT_PINATA_BRIDGE_HTTP_ONLY=0', () => {
-    restoreEnv = applyEnv({ HERMIT_PINATA_BRIDGE_HTTP_ONLY: '0' })
+  it('shouldPreferPinataHttpDraft stays HTTP-only for hosted endpoints', () => {
+    restoreEnv = applyEnv({
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+    })
+    expect(
+      shouldPreferPinataHttpDraft({
+        sourceIdentity: 'alfaclub-bridge-runner',
+        prompt: 'casual meme caption only',
+      }),
+    ).toBe(true)
+  })
+
+  it('pinataEndpointSupportsHttpDraft accepts hosted HTTPS endpoints', () => {
+    expect(pinataEndpointSupportsHttpDraft('https://x7lmjaxx.agents.pinata.cloud')).toBe(true)
+    expect(pinataEndpointSupportsHttpDraft('https://pinata.example/chat')).toBe(true)
+  })
+
+  it('shouldPreferPinataHttpDraft is false when endpoint is unset', () => {
+    restoreEnv = applyEnv({})
     expect(
       shouldPreferPinataHttpDraft({
         sourceIdentity: 'alfaclub-bridge-runner',
@@ -226,20 +309,20 @@ describe('executeHermitCommand', () => {
   it('shouldRequestPinataGmeowCaption respects env modes', () => {
     expect(shouldRequestPinataGmeowCaption('')).toBe(true)
     expect(shouldRequestPinataGmeowCaption('moon')).toBe(true)
-    restoreEnv = applyEnv({ HERMIT_GMEOW_PINATA_CAPTION: '0' })
+    restoreEnv = applyEnv({ HERMIT_GMEOW_HERMIT_CAPTION: '0' })
     expect(shouldRequestPinataGmeowCaption('')).toBe(false)
-    restoreEnv = applyEnv({ HERMIT_GMEOW_PINATA_CAPTION: 'local' })
+    restoreEnv = applyEnv({ HERMIT_GMEOW_HERMIT_CAPTION: 'local' })
     expect(shouldRequestPinataGmeowCaption('moon')).toBe(false)
-    restoreEnv = applyEnv({ HERMIT_GMEOW_PINATA_CAPTION: 'prompt' })
+    restoreEnv = applyEnv({ HERMIT_GMEOW_HERMIT_CAPTION: 'prompt' })
     expect(shouldRequestPinataGmeowCaption('')).toBe(false)
     expect(shouldRequestPinataGmeowCaption('moon')).toBe(true)
   })
 
   it('/gmeow falls back to local caption when pinata returns provider auth error text', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
-      HERMIT_GMEOW_PINATA_CAPTION: 'always',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
+      HERMIT_GMEOW_HERMIT_CAPTION: 'always',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -262,9 +345,9 @@ describe('executeHermitCommand', () => {
 
   it('/gmeow falls back to local caption when pinata throws', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
-      HERMIT_GMEOW_PINATA_CAPTION: 'always',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
+      HERMIT_GMEOW_HERMIT_CAPTION: 'always',
     })
     fetchMock.mockRejectedValueOnce(new Error('socket hang up'))
 
@@ -281,9 +364,9 @@ describe('executeHermitCommand', () => {
 
   it('/gmeow still replies when explicit dialect persistence fails', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
-      HERMIT_GMEOW_PINATA_CAPTION: 'always',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
+      HERMIT_GMEOW_HERMIT_CAPTION: 'always',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -309,8 +392,8 @@ describe('executeHermitCommand', () => {
 
   it('uses /meme for the Pinata image prompt path', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -322,15 +405,15 @@ describe('executeHermitCommand', () => {
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })
 
-    expect(result.provider).toBe('pinata')
+    expect(result.provider).toBe('hermit')
     expect(result.kind).toBe('meme')
     expect(result.imagePrompt).toBe('Akita cat meme prompt')
   })
 
   it('formats structured JSON from pinata for /hermit', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -357,8 +440,8 @@ describe('executeHermitCommand', () => {
 
   it('formats structured JSON from pinata for /meme', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -384,8 +467,8 @@ describe('executeHermitCommand', () => {
 
   it('rejects /meme when pinata path is not configured', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: undefined,
-      HERMIT_PINATA_BEARER_TOKEN: undefined,
+      HERMIT_AGENT_CHAT_ENDPOINT: undefined,
+      HERMIT_AGENT_BEARER_TOKEN: undefined,
     })
 
     await expect(
@@ -428,8 +511,8 @@ describe('executeHermitCommand', () => {
 
     it('passes Spanish JSON values straight through for /hermit', async () => {
       restoreEnv = applyEnv({
-        HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-        HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+        HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+        HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
       })
       fetchMock.mockResolvedValueOnce({
         ok: true,
@@ -449,7 +532,7 @@ describe('executeHermitCommand', () => {
       })
 
       expect(result.kind).toBe('hermit')
-      expect(result.provider).toBe('pinata')
+      expect(result.provider).toBe('hermit')
       expect(result.reply).toContain('El vault acaba de despegar.')
       expect(result.reply).toContain('CTA: Reclama tu drop.')
       expect(result.reply).toContain('#4626 #AlfaClub')
@@ -458,8 +541,8 @@ describe('executeHermitCommand', () => {
 
     it('passes Spanish JSON values straight through for /meme', async () => {
       restoreEnv = applyEnv({
-        HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-        HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+        HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+        HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
       })
       fetchMock.mockResolvedValueOnce({
         ok: true,
@@ -485,8 +568,8 @@ describe('executeHermitCommand', () => {
 
     it('keeps English behaviour unchanged when the user writes English', async () => {
       restoreEnv = applyEnv({
-        HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-        HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+        HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+        HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
       })
       fetchMock.mockResolvedValueOnce({
         ok: true,
@@ -727,8 +810,8 @@ describe('executeHermitCommand', () => {
 
     it('passes Argentine-flagged JSON values straight through end-to-end', async () => {
       restoreEnv = applyEnv({
-        HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-        HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+        HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+        HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
       })
       fetchMock.mockResolvedValueOnce({
         ok: true,
@@ -748,7 +831,7 @@ describe('executeHermitCommand', () => {
       })
 
       expect(result.kind).toBe('hermit')
-      expect(result.provider).toBe('pinata')
+      expect(result.provider).toBe('hermit')
       expect(result.reply).toContain('El vault ya despegó, dale.')
       expect(result.reply).toContain('CTA: Reclamá tu drop.')
       expect(result.reply).not.toContain('```')
@@ -758,9 +841,9 @@ describe('executeHermitCommand', () => {
   describe('Pinata HTTP fallback timeout', () => {
     it('passes an AbortSignal when calling the Pinata HTTP endpoint', async () => {
       restoreEnv = applyEnv({
-        HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-        HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
-        HERMIT_PINATA_HTTP_TIMEOUT_MS: '5000',
+        HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+        HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
+        HERMIT_AGENT_HTTP_TIMEOUT_MS: '5000',
       })
       fetchMock.mockResolvedValueOnce({
         ok: true,
@@ -779,8 +862,8 @@ describe('executeHermitCommand', () => {
 
     it('falls back gracefully when the HTTP endpoint throws (network/timeout)', async () => {
       restoreEnv = applyEnv({
-        HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-        HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+        HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+        HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
       })
       fetchMock.mockRejectedValueOnce(new Error('network down'))
 
@@ -789,13 +872,13 @@ describe('executeHermitCommand', () => {
           commandText: '/hermit copy gm',
           senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         }),
-      ).rejects.toThrow('Hermit Pinata path unavailable')
+      ).rejects.toThrow('Hermit agent path unavailable')
     })
 
     it('/gmeow degrades to local meme when the HTTP endpoint throws', async () => {
       restoreEnv = applyEnv({
-        HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-        HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+        HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+        HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
       })
       fetchMock.mockRejectedValueOnce(new Error('network down'))
 

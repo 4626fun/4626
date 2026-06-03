@@ -24,6 +24,7 @@ export interface TooltipProps {
   openDelay?: number
   closeDelay?: number
   hasInteractiveContent?: boolean
+  contentClassName?: string
 }
 
 const SIDE_MAP = {
@@ -40,6 +41,7 @@ export function Tooltip({
   openDelay,
   closeDelay,
   hasInteractiveContent,
+  contentClassName,
 }: TooltipProps) {
   return (
     <TooltipPrimitive.Root delayDuration={openDelay} disableHoverableContent={!hasInteractiveContent}>
@@ -49,12 +51,13 @@ export function Tooltip({
           side={SIDE_MAP[placement]}
           sideOffset={6}
           className={cn(
-            'z-50 max-w-xs rounded-lg border border-white/10 bg-vault-card-raised px-3 py-2 text-xs text-vault-text shadow-lg',
+            'z-50 max-w-xs rounded-lg border border-vault-borderStrong bg-vault-cardRaised px-3 py-2 text-xs text-vault-text shadow-xl',
+            contentClassName,
           )}
           {...(closeDelay != null ? { hideWhenDetached: true } : {})}
         >
           {content}
-          <TooltipPrimitive.Arrow className="fill-vault-card-raised" />
+          <TooltipPrimitive.Arrow className="fill-vault-cardRaised" />
         </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>
     </TooltipPrimitive.Root>

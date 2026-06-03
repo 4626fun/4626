@@ -18,7 +18,7 @@ interface IVaultShareBurnStreamQueuer {
 contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModuleIdentity {
     using SafeERC20 for IERC20;
     bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.admin");
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v2");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v3");
 
     // ---- constants (must match vault) ----
     uint256 internal constant MAX_BPS = 10_000;
@@ -71,6 +71,9 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
     event RiskConfigExecuted(uint8 kind, address indexed target, uint256 value);
     event RiskConfigCancelled(uint8 kind);
     event UpdateValuationMissThreshold(uint8 newThreshold);
+    event ImpairmentGuardianUpdated(address indexed guardian);
+    event ImpairmentClaimsUpdated(address indexed claims);
+    event ImpairmentRecoveryEscrowUpdated(address indexed escrow);
 
     // ---- errors (must match vault selectors) ----
     error ZeroAddress();
@@ -92,6 +95,7 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
     error NoPendingRiskConfig();
     error RiskConfigTooEarly(uint64 unlockTime);
     error InvalidRiskConfigKind(uint8 kind);
+    error InvalidImpairmentConfig(address provided);
 
     // =================================
     // EMERGENCY CONTROLS
@@ -359,6 +363,24 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
         if (threshold > MAX_VALUATION_MISS_THRESHOLD) revert InvalidAmount();
         valuationMissThreshold = threshold;
         emit UpdateValuationMissThreshold(threshold);
+    }
+
+    function setImpairmentGuardian(address guardian) external onlyDelegateCall {
+        if (guardian == address(0)) revert InvalidImpairmentConfig(guardian);
+        impairmentGuardian = guardian;
+        emit ImpairmentGuardianUpdated(guardian);
+    }
+
+    function setImpairmentClaims(address claims) external onlyDelegateCall {
+        if (claims == address(0)) revert InvalidImpairmentConfig(claims);
+        impairmentClaims = claims;
+        emit ImpairmentClaimsUpdated(claims);
+    }
+
+    function setImpairmentRecoveryEscrow(address escrow) external onlyDelegateCall {
+        if (escrow == address(0)) revert InvalidImpairmentConfig(escrow);
+        impairmentRecoveryEscrow = escrow;
+        emit ImpairmentRecoveryEscrowUpdated(escrow);
     }
 
     function _scheduleRiskChange(uint8 kind, address target, uint256 value) internal {

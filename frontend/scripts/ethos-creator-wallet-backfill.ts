@@ -119,7 +119,7 @@ async function readProjectionSummary(db: Db): Promise<{
       COUNT(*)::bigint AS total,
       COUNT(*) FILTER (WHERE ethos_score IS NOT NULL)::bigint AS scored,
       COUNT(*) FILTER (WHERE ethos_score_source = 'wallet_cached')::bigint AS wallet_cached
-    FROM public.creator_ethos_projection;
+    FROM public.v_explore_creators -- unified view for Explore-style data (see docs);
   `
   const row = result.rows?.[0] ?? {}
   return {

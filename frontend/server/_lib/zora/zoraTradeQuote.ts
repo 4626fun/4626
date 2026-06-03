@@ -1,5 +1,7 @@
 import { getAddress, isAddress, type Address } from 'viem'
 
+import { readCanonicalCswAddressEnv } from '../wallet/canonicalCswEnv.js'
+
 const BASE_CHAIN_ID = 8453
 const ZORA_QUOTE_URL = 'https://api-sdk.zora.engineering/quote'
 const NATIVE_TOKEN_ADDRESS = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
@@ -42,7 +44,7 @@ export function getZoraPlatformReferrerAddress(): Address | undefined {
   const explicit = (process.env.ZORA_PLATFORM_REFERRER_ADDRESS ?? '').trim()
   if (explicit && isAddress(explicit)) return getAddress(explicit) as Address
 
-  const csw = (process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim()
+  const csw = readCanonicalCswAddressEnv()
   if (csw && isAddress(csw)) return getAddress(csw) as Address
 
   return undefined

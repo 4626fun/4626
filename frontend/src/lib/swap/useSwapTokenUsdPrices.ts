@@ -1,8 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
+import type { Address } from 'viem'
 
+import { fetchZoraCoin } from '@/lib/zora/client'
+import { resolveZoraCoinUsdPrice } from '@/lib/zora/coinUsdPrice'
 import { collectSwapTokenPriceLookups, type SwapUsdPriceContext } from '@/lib/swap/swapAmountUsd'
 
 const DEFILLAMA_PRICE_BASE = 'https://coins.llama.fi/prices/current'
+const BASE_CHAIN_ID = 8453
 
 async function fetchEthUsdPrice(): Promise<number> {
   try {
@@ -46,6 +50,25 @@ async function fetchBaseTokenUsdPrices(contractAddresses: string[]): Promise<Map
   return out
 }
 
+async function fetchZoraFallbackUsdPrices(contractAddresses: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  const uniq = Array.from(
+    new Set(contractAddresses.map((a) => a.toLowerCase()).filter((a) => /^0x[a-f0-9]{40}$/.test(a))),
+  )
+  await Promise.all(
+    uniq.map(async (address) => {
+      try {
+        const coin = await fetchZoraCoin(address as Address, BASE_CHAIN_ID)
+        const price = resolveZoraCoinUsdPrice(coin)
+        if (price != null && price > 0) out.set(address, price)
+      } catch {
+        // ignore per-token failures
+      }
+    }),
+  )
+  return out
+}
+
 export function useSwapTokenUsdPrices(tokenIn: string, tokenOut: string): {
   prices: SwapUsdPriceContext
   isLoading: boolean
@@ -61,6 +84,13 @@ export function useSwapTokenUsdPrices(tokenIn: string, tokenOut: string): {
         fetchEthUsdPrice(),
         fetchBaseTokenUsdPrices(tokenLookups),
       ])
+      const missing = tokenLookups.filter((address) => !tokenUsdByAddress.has(address.toLowerCase()))
+      if (missing.length > 0) {
+        const zoraPrices = await fetchZoraFallbackUsdPrices(missing)
+        for (const [address, price] of zoraPrices) {
+          tokenUsdByAddress.set(address, price)
+        }
+      }
       return { ethUsd, tokenUsdByAddress }
     },
   })

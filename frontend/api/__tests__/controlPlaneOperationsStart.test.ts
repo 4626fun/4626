@@ -11,7 +11,7 @@ const { dbSqlMock, getDbMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('@4626/server-core', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('../../@4626/server-core')
+  const actual = await vi.importActual<Record<string, unknown>>('@4626/server-core')
   return {
     ...actual,
     getDb: getDbMock,
@@ -19,6 +19,10 @@ vi.mock('@4626/server-core', async () => {
     runInTransaction: vi.fn(async (fn: (db: unknown) => Promise<unknown>) => fn(await getDbMock())),
   }
 })
+
+vi.mock('../../server/_lib/infra/telemetrySampling.js', () => ({
+  shouldSampleEvent: () => true,
+}))
 
 import { startControlPlaneOperation } from '../../server/_lib/controlPlane/operations.js'
 

@@ -68,6 +68,86 @@ These have substantial code even with current 0-row estimates (rows are transien
 
 The audit script (`frontend/scripts/audit-dead-tables.ts`) was expanded during this analysis with additional 0-row candidates from the live DB snapshot (May 2026). It excludes migrations and test files when counting "live" code references.
 
+## Telemetry / High-Maintenance Low-Value Optimization (New Pass)
+
+Created `frontend/scripts/audit-telemetry-optimization.ts` specifically for the many audit/event/snapshot tables.
+
+**Top optimization candidates** (low code surface area relative to maintenance cost) — historical at start of pass:
+
+- `query_temp_io_snapshots` (95% potential) — **dropped** via 20260705000000 (confirmed complete orphan)
+- `memory_snapshots`
+- `telegram_funnel_events`
+- `workspace_monitoring_snapshots`
+- `episodic_summaries`
+- `workspace_audit_logs`
+- `workspace_activity_events`
+- `alfaclub_metrics_snapshot`
+- `chat_presence_sessions`
+- `keepr_logs`
+- `agent_api_logs`
+- `agent_control_audit_events`
+- `telegram_action_audit`
+
+**Concrete recommendations**:
+1. Add time-based retention (pg_cron job or in-app cleanup) for the top 10 — e.g. keep 30-90 days max for most telemetry.
+2. Sample high-frequency events (especially chat and telegram funnel events) instead of storing every single one.
+3. Consider moving pure telemetry/audit tables to a dedicated `analytics` schema (or even out of Supabase into S3 + Athena/ClickHouse) to reduce production DB load and cost.
+4. Review all `v_looker_*` and similar BI views — several may be candidates for deprecation or less frequent materialization if Looker usage is limited.
+
+These tables are the biggest remaining source of "room for optimization" after the dead-code cleanup. They accumulate data with relatively low business leverage per row.
+
+### Implemented in this pass
+
+- New script `frontend/scripts/audit-telemetry-optimization.ts` now auto-suggests retention windows + recommended sampling rates.
+- Migration `20260612000000_extend_telemetry_retention.sql` extends the existing daily `cleanup_log_retention` cron job.
+- Created `frontend/server/_lib/infra/telemetrySampling.ts` (deterministic hash-based sampler controlled by `TELEMETRY_SAMPLE_RATE`).
+- Wired sampling into the two highest-volume paths:
+  - `telegram_funnel_events` (in `telegramTrading.ts`)
+  - `chat_command_center_events` (in `chatCommandCenterTelemetry.ts`)
+
+**Extended wiring + actual cleanup (this slice)**:
+- Dropped `query_temp_io_snapshots` (highest analyzer potential, confirmed complete orphan: no writers, no CREATE, no types anywhere in the tree). New migrations: table drop + retention function cleanup.
+- `index_usage_snapshots` investigated in depth:
+  - Real intentional Phase 6 tooling (March 2026): `capture_index_usage_snapshot()`, `index_drop_candidates()`, `index_drop_migration_draft()`.
+  - No automated callers in app code or kpr/ (only the schema + types + legacy hardening).
+  - Usage is manual / on-demand only. The "auto-generate index drop drafts" workflow appears cold.
+  - Not a drop candidate (has historical value), but good candidate for future analytics schema carve-out or deprecation of the drop-draft functions.
+- Added `getTelemetrySampleRate(tableName?)` helper for observability of per-table rates.
+- Wired sampling for `telegram_action_tokens` (high-volume short-lived Telegram action tokens in telegramTrading.ts) using the new observable helper. Token issuance to callers remains 100%; only the durable row is sampled.
+- Enhanced sampler with table-aware `shouldSampleEvent(tableName, key)` + per-table env override support (`TELEMETRY_SAMPLE_RATE_<table>`).
+- Wired deterministic sampling (early returns before INSERT) into:
+  - `chat_presence_sessions` (presence.ts — heartbeats)
+  - `telegram_link_telemetry_events` (telegramLinkTelemetry.ts)
+  - All 4 workspace tables: `workspace_monitoring_snapshots`, `workspace_alert_events`, `workspace_activity_events`, `workspace_audit_logs` (repository.ts, keyed by vault)
+  - `agent_api_logs` (agentAudit.ts)
+  - `agent_control_audit_events` (agentControl/audit.ts)
+  - `keepr_logs` (keeprRegistry.ts — two write sites)
+  - `telegram_action_audit` (telegramTrading.ts)
+  - `episodic_summaries` + `memory_snapshots` (runtimeBridge.ts, keyed by conversation_id)
+  - `control_plane_events` + `control_plane_stages` (controlPlane/operations.ts — safeInsertEvent + create stage path)
+  - `keepr_workflow_checkpoints` (controlPlane/executors/executeOperatorAction.ts)
+  - `alfaclub_metrics_snapshot` (alfaclub/publicationLedger.ts — per-creator in the batch writer)
+
+Run the improved script anytime:
+```bash
+pnpm -C frontend exec tsx scripts/audit-telemetry-optimization.ts
+```
+
+### Recommended Next Steps (Prioritized Backlog)
+
+1. ~~Roll out sampling more broadly~~ (chat_presence_sessions, telegram_* telemetry, keepr_* (logs + checkpoints), agent_*_audit/logs, workspace_*, episodic/memory, control_plane_* (events + stages), alfaclub_metrics_snapshot — **done**).
+2. **query_temp_io_snapshots** — **dropped**.
+   - Exhaustive search (code, kpr/, all migrations, legacy, types, scripts): zero writers, zero CREATE TABLE, zero TypeScript definition.
+   - Only footprint was a DELETE inside the 2026-06-12 retention job + the analyzer itself.
+   - Created migration `20260705000000_drop_orphan_query_temp_io_snapshots.sql`.
+   - This was the single highest "optimization potential" item from the analyzer. Removing it directly reduces the table count and maintenance surface.
+3. Add per-table rate envs + tune the noisiest (presence, funnels, control plane, keepr workflows) in production via `TELEMETRY_SAMPLE_RATE_*`.
+4. Move the top remaining pure telemetry tables (`memory_snapshots`, `episodic_summaries`, workspace snapshots, control_plane_*, keepr checkpoints, etc.) to an `analytics` schema or external store (S3 + query engine).
+5. Dedicated Looker view hygiene pass (many `v_looker_*` have near-zero server usage).
+6. Re-run retention migration + analyzer after new high-volume tables appear.
+
+These changes (retention + sampling) together are the highest-ROI optimization available after the schema condensation work. Expected impact: significant reduction in storage growth, vacuum cost, and index bloat on the hottest tables.
+
 Run it anytime with:
 ```bash
 pnpm -C frontend exec tsx scripts/audit-dead-tables.ts

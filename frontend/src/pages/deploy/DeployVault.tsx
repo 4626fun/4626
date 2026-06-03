@@ -12,12 +12,26 @@ import {
   normalizeAddressLike,
   normalizeBytes32,
   normalizeDeploymentVersion,
+  buildSaltDisabledShareSuffixInfoNotice,
+  buildShareOftVanityUserWarning,
   normalizeHexSuffix,
   parsePositiveTokenAmount,
+  resolveDeploymentVersionSearchMaxTries,
+  resolveDeploymentVersionSearchTargets,
+  needsCombinedSaltDisabledVanitySearch,
+  type DeploymentVanityVersionSearchOutcome,
   parseUint8,
   parseUniswapV3Fee,
   sameAddress,
 } from './deployVaultHelpers'
+import {
+  deriveDeployBaseSalt,
+  deriveShareOftSaltFromVersion,
+  findDeploymentVersionForVanityTargets,
+  predictCreate2AddressFromInitCode,
+  saltForDeployLabel,
+} from '@/lib/deploy/perVaultVanityVersionSearch'
+import { fetchServerCombinedVanityVersion } from '@/lib/deploy/fetchServerCombinedVanityVersion'
 import {
   debugSignatureReady,
   ensureSignatureHex,
@@ -58,9 +72,11 @@ import { LaunchCoinCard } from '@/features/waitlist/LaunchCoinCard'
 import { CONTRACTS } from '@/config/contracts'
 import { wagmiConfig } from '@/config/wagmi'
 import {
+  BASE_DEFAULTS,
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
   SPLIT_PHASE1_PHASE3_HELPER,
   isDeprecatedCreatorVaultBatcherAddress,
+  isShareOftSaltOverrideDisabledBatcher,
   normalizeCreatorVaultBatcherAddress,
 } from '@/config/contracts.defaults'
 import { deploymentBatcherNotConfiguredMessage } from '@/lib/deploy/deploymentBatcherConfigError'
@@ -113,7 +129,6 @@ import {
   derivePayoutRouterSalt,
   deriveVaultShareBurnStreamSalt,
 } from '@/lib/deploy/create2Salts'
-import { findPerVaultVanityVersionWithWasm } from '@/lib/vanity/perVaultVanityWasm'
 import {
   type DeploySessionStatusData,
 } from '@/lib/deploy/sessionClient'
@@ -191,11 +206,6 @@ const BATCHER_PHASE1_FINALIZE_SELECTOR = 'a98ec9d8'
 const BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR = '3bc09a8b'
 const BATCHER_PHASE2_FINALIZE_WITH_PERMIT2_SELECTOR = '0ecf9382'
 const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
-const KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
-  '0x004684670d284ef607e1b2424fcf8ccbda8ef828',
-  '0xe3f9490cfd6bd3d68010405d18bf772c167e7178',
-  '0xf941bb68e4f083f3f531cc598d5c08d0b8ffba7e',
-])
 // The phased deployment batcher v4+ exposes these immutables as getters. We use this as a
 // compatibility gate to avoid legacy batchers that deploy module-uninitialized vaults.
 const BATCHER_VAULT_CORE_MODULE_SELECTOR = '22c40b75'
@@ -457,6 +467,10 @@ type DeployRuntimeConfigResponse = {
   zoraToken: Address | null
   payoutRouterZoraWethFee: number
   payoutRouterWethCreatorFee: number
+  impairmentClaims: Address | null
+  impairmentRecoveryEscrow: Address | null
+  impairmentGuardian: Address | null
+  impairmentChallengeWindowSeconds: number | null
 }
 
 type RolePolicyRuleLabel = 'any' | 'must_equal_owner' | 'must_be_allowlisted' | 'unknown'
@@ -803,18 +817,6 @@ function encodeUniswapCcaLinearSteps(durationBlocks: bigint): Hex {
   return concatHex(steps)
 }
 
-function deriveBaseSalt(params: { creatorToken: Address; owner: Address; chainId: number; version: string }): Hex {
-  const { creatorToken, owner, chainId, version } = params
-  return keccak256(
-    encodePacked(['address', 'address', 'uint256', 'string'], [
-      creatorToken,
-      owner,
-      BigInt(chainId),
-      `4626:deploy:${version}`,
-    ]),
-  )
-}
-
 // L-16: Map known revert reasons / extension conflicts to user-friendly
 // messages. Raw error.message is never rendered in production because it
 // may leak internal contract storage slot names, addresses, or logic
@@ -937,165 +939,24 @@ export function DeployVault() {
   )
 }
 
+function deriveBaseSalt(params: { creatorToken: Address; owner: Address; chainId: number; version: string }): Hex {
+  return deriveDeployBaseSalt(params)
+}
+
 function saltFor(baseSalt: Hex, label: string): Hex {
-  return keccak256(encodePacked(['bytes32', 'string'], [baseSalt, label]))
+  return saltForDeployLabel(baseSalt, label)
 }
 
 function deriveShareOftSalt(params: { owner: Address; shareSymbol: string; version: string }): Hex {
-  const base = keccak256(encodePacked(['address', 'string'], [params.owner, params.shareSymbol.toLowerCase()]))
-  return keccak256(encodePacked(['bytes32', 'string'], [base, `CreatorShareOFT:${params.version}`]))
+  return deriveShareOftSaltFromVersion(params)
+}
+
+function predictCreate2Address(params: { create2Deployer: Address; salt: Hex; initCode: Hex }): Address {
+  return predictCreate2AddressFromInitCode(params)
 }
 
 function deriveOftBootstrapSalt(): Hex {
   return keccak256(encodePacked(['string'], ['4626:OFTBootstrapRegistry:v1']))
-}
-
-async function findDeploymentVersionForVanityTargets(params: {
-  create2Deployer: Address
-  creatorToken: Address
-  owner: Address
-  chainId: number
-  baseVersion: string
-  vaultPrefix?: string | null
-  shareSuffix?: string | null
-  maxTries: number
-  vaultInitCode: Hex
-  shareOftInitCode: Hex
-  shareSymbol: string
-  isAddressDeployed?: (addr: Address) => Promise<boolean>
-  yieldEvery?: number
-}): Promise<string | null> {
-  const vaultPrefix = normalizeHexSuffix(params.vaultPrefix ?? null)
-  const shareSuffix = normalizeHexSuffix(params.shareSuffix ?? null)
-  if (!vaultPrefix && !shareSuffix) return null
-  const maxTries = Math.max(1, Math.floor(params.maxTries))
-
-  if (typeof WebAssembly !== 'undefined' && typeof fetch === 'function') {
-    let startAttempt = 0
-    try {
-      while (startAttempt < maxTries) {
-        const result = await findPerVaultVanityVersionWithWasm({
-          create2Deployer: params.create2Deployer,
-          creatorToken: params.creatorToken,
-          owner: params.owner,
-          chainId: params.chainId,
-          baseVersion: params.baseVersion,
-          vaultPrefix,
-          shareSuffix,
-          startAttempt,
-          maxAttempts: maxTries - startAttempt,
-          vaultInitCodeHash: vaultPrefix ? keccak256(params.vaultInitCode) : null,
-          shareOftInitCodeHash: shareSuffix ? keccak256(params.shareOftInitCode) : null,
-          shareSymbol: shareSuffix ? params.shareSymbol : null,
-        })
-        const toCheck: Address[] = []
-        for (const value of [result.vaultAddress, result.shareOftAddress]) {
-          if (value && isAddress(value)) toCheck.push(getAddress(value))
-        }
-        if (params.isAddressDeployed && toCheck.length > 0) {
-          const deployedStates = await Promise.all(toCheck.map((addr) => params.isAddressDeployed!(addr)))
-          if (deployedStates.some(Boolean)) {
-            startAttempt = result.attempt + 1
-            continue
-          }
-        }
-        return result.version
-      }
-      return null
-    } catch (err) {
-      logger.warn('[DeployVault] Rust WASM vanity search failed; falling back to TypeScript mirror', {
-        error: err instanceof Error ? err.message : String(err ?? ''),
-      })
-    }
-  }
-
-  return findDeploymentVersionForVanityTargetsInTypescript({
-    ...params,
-    vaultPrefix,
-    shareSuffix,
-    maxTries,
-  })
-}
-
-async function findDeploymentVersionForVanityTargetsInTypescript(params: {
-  create2Deployer: Address
-  creatorToken: Address
-  owner: Address
-  chainId: number
-  baseVersion: string
-  vaultPrefix?: string | null
-  shareSuffix?: string | null
-  maxTries: number
-  vaultInitCode: Hex
-  shareOftInitCode: Hex
-  shareSymbol: string
-  isAddressDeployed?: (addr: Address) => Promise<boolean>
-  yieldEvery?: number
-}): Promise<string | null> {
-  const vaultPrefix = normalizeHexSuffix(params.vaultPrefix ?? null)
-  const shareSuffix = normalizeHexSuffix(params.shareSuffix ?? null)
-  if (!vaultPrefix && !shareSuffix) return null
-  const maxTries = Math.max(1, Math.floor(params.maxTries))
-  const yieldEvery = Math.max(256, Math.floor(params.yieldEvery ?? 4096))
-
-  for (let i = 0; i < maxTries; i += 1) {
-    if (i > 0 && i % yieldEvery === 0) {
-      // Yield periodically so large vanity scans do not freeze the UI thread.
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    }
-    const candidateVersion = i === 0 ? params.baseVersion : `${params.baseVersion}-v${i.toString(36)}`
-    const baseSalt = deriveBaseSalt({
-      creatorToken: params.creatorToken,
-      owner: params.owner,
-      chainId: params.chainId,
-      version: candidateVersion,
-    })
-
-    let vaultAddress: Address | null = null
-    if (vaultPrefix) {
-      const vaultSalt = saltFor(baseSalt, 'vault')
-      vaultAddress = predictCreate2Address({
-        create2Deployer: params.create2Deployer,
-        salt: vaultSalt,
-        initCode: params.vaultInitCode,
-      })
-      if (vaultAddress.slice(2, 2 + vaultPrefix.length).toLowerCase() !== vaultPrefix) continue
-    }
-
-    let shareAddress: Address | null = null
-    if (shareSuffix) {
-      const shareSalt = deriveShareOftSalt({
-        owner: params.owner,
-        shareSymbol: params.shareSymbol,
-        version: candidateVersion,
-      })
-      shareAddress = predictCreate2Address({
-        create2Deployer: params.create2Deployer,
-        salt: shareSalt,
-        initCode: params.shareOftInitCode,
-      })
-      if (!shareAddress.toLowerCase().endsWith(shareSuffix)) continue
-    }
-
-    if (params.isAddressDeployed) {
-      const toCheck = [vaultAddress, shareAddress].filter((v): v is Address => Boolean(v))
-      if (toCheck.length > 0) {
-        try {
-          const deployedStates = await Promise.all(toCheck.map((addr) => params.isAddressDeployed!(addr)))
-          if (deployedStates.some(Boolean)) continue
-        } catch {
-          // ignore deployed-check failures; allow candidate version
-        }
-      }
-    }
-    return candidateVersion
-  }
-  return null
-}
-
-function predictCreate2Address(params: { create2Deployer: Address; salt: Hex; initCode: Hex }): Address {
-  const bytecodeHash = keccak256(params.initCode)
-  return getCreate2Address({ from: params.create2Deployer, salt: params.salt, bytecodeHash })
 }
 
 async function fetchAdminAuth(): Promise<AdminAuthResponse> {
@@ -1441,6 +1302,13 @@ const CHARM_FACTORY_ABI = [
 const CREATOR_VAULT_ADMIN_ABI = [
   {
     type: 'function',
+    name: 'management',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
     name: 'burnStream',
     stateMutability: 'view',
     inputs: [],
@@ -1485,6 +1353,86 @@ const CREATOR_VAULT_ADMIN_ABI = [
     name: 'deployToStrategies',
     stateMutability: 'nonpayable',
     inputs: [],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'impairmentGuardian',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'impairmentClaims',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'impairmentRecoveryEscrow',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'impairmentChallengeWindow',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint64' }],
+  },
+  {
+    type: 'function',
+    name: 'setImpairmentGuardian',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'guardian', type: 'address' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setImpairmentClaims',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'claims', type: 'address' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setImpairmentRecoveryEscrow',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'escrow', type: 'address' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setImpairmentChallengeWindow',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'window', type: 'uint64' }],
+    outputs: [],
+  },
+] as const
+
+const IMPAIRMENT_AUX_OWNED_ABI = [
+  {
+    type: 'function',
+    name: 'owner',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'vault',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'setVault',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'vault_', type: 'address' }],
     outputs: [],
   },
 ] as const
@@ -2680,7 +2628,11 @@ function DeployVaultBatcher({
     }
   }, [legacyDeploySessionStorageKey])
   const shareOftVanityCacheRef = useRef<{ key: string; salt: Hex } | null>(null)
-  const vaultVanityVersionCacheRef = useRef<{ key: string; version: string } | null>(null)
+  const vaultVanityVersionCacheRef = useRef<{
+    key: string
+    version: string
+    outcome?: DeploymentVanityVersionSearchOutcome
+  } | null>(null)
   const shareOftVanitySkipLogKeyRef = useRef<string | null>(null)
   const creatorCoinOwnerUnresolvedLogKeyRef = useRef<string | null>(null)
   const ensurePaymasterSession = useCallback(async () => {
@@ -3552,7 +3504,7 @@ function DeployVaultBatcher({
       const batcherBytecodeLower = (batcherBytecode ?? '0x').toLowerCase()
       const batcherAddressLower = String(batcherAddress ?? '').toLowerCase()
       const saltOverridesDisabledByBatcher =
-        KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS.has(batcherAddressLower) ||
+        isShareOftSaltOverrideDisabledBatcher(batcherAddressLower) ||
         batcherBytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR)
       const supportsLegacyPhase1WithSaltSelector = (() => {
         if (!batcherBytecode || batcherBytecode === '0x') return false
@@ -3600,12 +3552,13 @@ function DeployVaultBatcher({
 
       let deploymentVersionUsed = deploymentVersion
       let vanityVersionSearchWarning: string | null = null
-      // Apply deployment-version search for deterministic vanity when possible.
-      // When Phase-1 salt overrides are unavailable, also attempt share-suffix matching
-      // via version search (with share suffix taking priority over vault prefix fallback).
-      const useVersionSearchForShareSuffix = Boolean(shareOftVanitySuffix) && !supportsPhase1WithSalt
-      const versionSearchVaultPrefix = vaultVanityPrefix ?? null
-      const versionSearchShareSuffix = useVersionSearchForShareSuffix ? shareOftVanitySuffix : null
+      let vanityVersionSearchOutcome: DeploymentVanityVersionSearchOutcome = 'not_applicable'
+      const { vaultPrefix: versionSearchVaultPrefix, shareSuffix: versionSearchShareSuffix } =
+        resolveDeploymentVersionSearchTargets({
+          vaultVanityPrefix: vaultVanityPrefix ?? null,
+          shareOftVanitySuffix: shareOftVanitySuffix ?? null,
+          supportsPhase1WithSalt,
+        })
       const usingDefaultVaultVanityTarget = versionSearchVaultPrefix === DEFAULT_VAULT_VANITY_PREFIX
       const usingDefaultShareVanityTarget =
         !versionSearchShareSuffix || versionSearchShareSuffix === DEFAULT_SHARE_OFT_VANITY_SUFFIX
@@ -3624,18 +3577,25 @@ function DeployVaultBatcher({
           versionSearchShareSuffix ?? '',
           String(vaultVanityMaxTries),
           String(shareOftVanityMaxTries),
-          '0',
+          supportsPhase1WithSalt ? 'salt' : 'version',
         ].join(':')
         const cached = vaultVanityVersionCacheRef.current
         if (cached?.key === vanityTargetsKey) {
           deploymentVersionUsed = cached.version
+          vanityVersionSearchOutcome = cached.outcome ?? 'not_applicable'
         } else {
-          const versionSearchMaxTries =
-            versionSearchVaultPrefix && versionSearchShareSuffix
-              ? Math.min(10_000, vaultVanityMaxTries, shareOftVanityMaxTries)
-              : versionSearchVaultPrefix
-                ? vaultVanityMaxTries
-                : shareOftVanityMaxTries
+          const versionSearchMaxTries = resolveDeploymentVersionSearchMaxTries({
+            hasVaultPrefix: Boolean(versionSearchVaultPrefix),
+            hasShareSuffix: Boolean(versionSearchShareSuffix),
+            supportsPhase1WithSalt,
+            vaultVanityMaxTries,
+            shareOftVanityMaxTries,
+          })
+          const combinedSaltDisabledSearch = needsCombinedSaltDisabledVanitySearch({
+            supportsPhase1WithSalt,
+            vaultPrefix: versionSearchVaultPrefix,
+            shareSuffix: versionSearchShareSuffix,
+          })
           let foundVersion = await findDeploymentVersionForVanityTargets({
             create2Deployer,
             creatorToken,
@@ -3653,59 +3613,76 @@ function DeployVaultBatcher({
               return !!bc && bc !== '0x'
             },
           })
-          // If both targets are requested and a combined hit wasn't found,
-          // prioritize deterministic share suffix for deploy correctness/UX.
-          if (!foundVersion && versionSearchVaultPrefix && versionSearchShareSuffix) {
-            foundVersion = await findDeploymentVersionForVanityTargets({
-              create2Deployer,
-              creatorToken,
-              owner,
-              chainId: base.id,
-              baseVersion: deploymentVersion,
-              vaultPrefix: null,
-              shareSuffix: versionSearchShareSuffix,
-              maxTries: shareOftVanityMaxTries,
-              vaultInitCode,
-              shareOftInitCode,
-              shareSymbol,
-              isAddressDeployed: async (addr) => {
-                const bc = await publicClient!.getBytecode({ address: addr })
-                return !!bc && bc !== '0x'
-              },
-            })
-            if (foundVersion) {
-              vanityVersionSearchWarning =
-                `Could not satisfy vault prefix 0x${versionSearchVaultPrefix} with share suffix ${versionSearchShareSuffix} in the same version search window. ` +
-                `Prioritizing share suffix ${versionSearchShareSuffix} for this deploy.`
+          if (!foundVersion && combinedSaltDisabledSearch && versionSearchVaultPrefix && versionSearchShareSuffix) {
+            try {
+              logger.info('[DeployVault] combined_vanity_server_search_start', {
+                vaultPrefix: versionSearchVaultPrefix,
+                shareSuffix: versionSearchShareSuffix,
+                clientAttempts: versionSearchMaxTries,
+              })
+              foundVersion = await fetchServerCombinedVanityVersion({
+                create2Deployer,
+                creatorToken,
+                owner,
+                chainId: base.id,
+                baseVersion: deploymentVersion,
+                vaultPrefix: versionSearchVaultPrefix,
+                shareSuffix: versionSearchShareSuffix,
+                startAttempt: versionSearchMaxTries,
+                vaultInitCode,
+                shareOftInitCode,
+                shareSymbol,
+              })
+            } catch (serverSearchError) {
+              logger.warn('[DeployVault] combined_vanity_server_search_failed', {
+                error: serverSearchError instanceof Error ? serverSearchError.message : String(serverSearchError ?? ''),
+              })
+            }
+          }
+          if (foundVersion) {
+            if (versionSearchVaultPrefix && versionSearchShareSuffix) {
+              vanityVersionSearchOutcome = 'combined_match'
+            } else if (versionSearchVaultPrefix) {
+              vanityVersionSearchOutcome = 'vault_only_match'
+            } else if (versionSearchShareSuffix) {
+              vanityVersionSearchOutcome = 'share_only_match'
+            } else {
+              vanityVersionSearchOutcome = 'combined_match'
             }
           }
           if (!foundVersion) {
             if (versionSearchVaultPrefix && versionSearchShareSuffix) {
               if (!usingDefaultVaultVanityTarget || !usingDefaultShareVanityTarget) {
+                vanityVersionSearchOutcome = 'missed_custom'
                 throw new Error(
                   `Unable to find a deployment version matching vault prefix "0x${versionSearchVaultPrefix}" and share suffix "${versionSearchShareSuffix}" ` +
                     `in ${versionSearchMaxTries.toLocaleString()} tries (share-only fallback also failed after ${shareOftVanityMaxTries.toLocaleString()} tries).`,
                 )
               }
+              vanityVersionSearchOutcome = 'missed_defaults'
               vanityVersionSearchWarning =
                 `Default vanity targets (0x${versionSearchVaultPrefix} / ${versionSearchShareSuffix}) were not found in the current search window. ` +
                 'Continuing with deterministic deployment addresses.'
             } else if (versionSearchShareSuffix) {
               if (!usingDefaultShareVanityTarget) {
+                vanityVersionSearchOutcome = 'missed_custom'
                 throw new Error(
                   `Unable to find ShareOFT vanity suffix "${versionSearchShareSuffix}" in ${shareOftVanityMaxTries.toLocaleString()} deployment-version tries.`,
                 )
               }
+              vanityVersionSearchOutcome = 'missed_defaults'
               vanityVersionSearchWarning =
                 `Default share suffix "${versionSearchShareSuffix}" was not found in the current search window. ` +
                 'Continuing with deterministic deployment addresses.'
             } else if (versionSearchVaultPrefix) {
               if (!usingDefaultVaultVanityTarget) {
+                vanityVersionSearchOutcome = 'missed_custom'
                 throw new Error(
                   `Unable to find vault vanity prefix "0x${versionSearchVaultPrefix}" in ${vaultVanityMaxTries.toLocaleString()} deployment-version tries. ` +
                     'Increase VITE_VAULT_VANITY_MAX_TRIES and retry.',
                 )
               }
+              vanityVersionSearchOutcome = 'missed_defaults'
               vanityVersionSearchWarning =
                 `Default vault prefix "0x${versionSearchVaultPrefix}" was not found in the current search window. ` +
                 'Continuing with deterministic deployment addresses.'
@@ -3713,7 +3690,11 @@ function DeployVaultBatcher({
           }
           if (foundVersion) {
             deploymentVersionUsed = foundVersion
-            vaultVanityVersionCacheRef.current = { key: vanityTargetsKey, version: foundVersion }
+            vaultVanityVersionCacheRef.current = {
+              key: vanityTargetsKey,
+              version: foundVersion,
+              outcome: vanityVersionSearchOutcome,
+            }
           }
         }
       }
@@ -3727,19 +3708,28 @@ function DeployVaultBatcher({
 
       const shareOftVanityUnsupportedByBatcher = !supportsPhase1WithSalt && Boolean(shareOftVanitySuffix)
       const batcherDisplay = batcherAddress ? shortAddress(batcherAddress) : 'unknown'
-      let shareOftVanityWarning: string | null = null
-      if (shareOftVanityUnsupportedByBatcher) {
-        if (shareVanityIsCustom) {
-          const blockingMessage =
-            `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides. ` +
-            `Custom share token vanity suffix "${shareOftVanitySuffix}" is blocked for this deploy.`
-          logger.warn('[DeployVault] share_oft_vanity_suffix_blocked', {
-            batcher: batcherAddress,
-            suffix: shareOftVanitySuffix,
-            reason: 'phase1_salt_overrides_not_supported',
-          })
-          throw new Error(blockingMessage)
-        }
+      let shareOftVanityWarning: string | null = buildShareOftVanityUserWarning({
+        shareOftVanitySuffix,
+        vaultVanityPrefix: versionSearchVaultPrefix,
+        saltOverrideDisabled: shareOftVanityUnsupportedByBatcher,
+        versionSearchOutcome: vanityVersionSearchOutcome,
+      })
+      if (shareOftVanityUnsupportedByBatcher && shareVanityIsCustom) {
+        const blockingMessage =
+          `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides. ` +
+          `Custom share token vanity suffix "${shareOftVanitySuffix}" is blocked for this deploy.`
+        logger.warn('[DeployVault] share_oft_vanity_suffix_blocked', {
+          batcher: batcherAddress,
+          suffix: shareOftVanitySuffix,
+          reason: 'phase1_salt_overrides_not_supported',
+        })
+        throw new Error(blockingMessage)
+      }
+      if (
+        shareOftVanityUnsupportedByBatcher &&
+        !shareVanityIsCustom &&
+        vanityVersionSearchOutcome === 'not_applicable'
+      ) {
         const skipLogKey = buildShareVanitySkipLogKey({
           batcher: batcherAddress,
           suffix: shareOftVanitySuffix,
@@ -3753,15 +3743,17 @@ function DeployVaultBatcher({
             reason: 'phase1_salt_overrides_not_supported',
           })
         }
-        shareOftVanityWarning =
-          `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides, so default share suffix ` +
-          `"${shareOftVanitySuffix}" is not guaranteed for this deploy.`
       }
-      if (vanityVersionSearchWarning) {
-        shareOftVanityWarning = shareOftVanityWarning
-          ? `${shareOftVanityWarning} ${vanityVersionSearchWarning}`
-          : vanityVersionSearchWarning
+      if (vanityVersionSearchWarning && !shareOftVanityWarning) {
+        shareOftVanityWarning = vanityVersionSearchWarning
       }
+      const shareOftVanityInfo = buildSaltDisabledShareSuffixInfoNotice({
+        versionSearchOutcome: vanityVersionSearchOutcome,
+        vaultVanityPrefix: versionSearchVaultPrefix,
+        shareOftVanitySuffix,
+        saltOverrideDisabled: shareOftVanityUnsupportedByBatcher,
+        deploymentVersionUsed,
+      })
 
       const derivedShareOftSalt = deriveShareOftSalt({ owner, shareSymbol, version: deploymentVersionUsed })
       let shareOftSaltOverrideUsed = shareOftSaltOverride
@@ -3976,6 +3968,7 @@ function DeployVaultBatcher({
         deploymentVersion: deploymentVersionUsed,
         shareOftSaltOverride: shareOftSaltOverrideUsed ?? null,
         shareOftVanityWarning,
+        shareOftVanityInfo,
         expected: {
           vault: vaultAddress,
           wrapper: wrapperAddress,
@@ -3997,6 +3990,7 @@ function DeployVaultBatcher({
   const expectedDeploymentVersion = expectedQuery.data?.deploymentVersion ?? deploymentVersion
   const expectedShareOftSaltOverride = expectedQuery.data?.shareOftSaltOverride ?? null
   const expectedShareOftVanityWarning = expectedQuery.data?.shareOftVanityWarning ?? null
+  const expectedShareOftVanityInfo = expectedQuery.data?.shareOftVanityInfo ?? null
   const expectedGauge = expected?.gaugeController ?? null
   const expectedBurnStream = expected?.burnStream ?? null
   const expectedPayoutRouter = expected?.payoutRouter ?? null
@@ -4721,6 +4715,26 @@ function DeployVaultBatcher({
         parseUniswapV3Fee(runtimeConfig?.payoutRouterZoraWethFee) ?? DEFAULT_PAYOUT_ROUTER_ZORA_WETH_FEE
       const payoutRouterWethCreatorFee =
         parseUniswapV3Fee(runtimeConfig?.payoutRouterWethCreatorFee) ?? DEFAULT_PAYOUT_ROUTER_WETH_CREATOR_FEE
+      const impairmentClaimsAddress = normalizeAddressLike(
+        runtimeConfig?.impairmentClaims ?? (CONTRACTS as any).impairmentClaims ?? null,
+      )
+      const impairmentRecoveryEscrowAddress = normalizeAddressLike(
+        runtimeConfig?.impairmentRecoveryEscrow ?? (CONTRACTS as any).impairmentRecoveryEscrow ?? null,
+      )
+      const impairmentGuardianAddress = normalizeAddressLike(
+        runtimeConfig?.impairmentGuardian ?? (CONTRACTS as any).impairmentGuardian ?? null,
+      )
+      const configuredImpairmentChallengeWindowSeconds = (() => {
+        const raw = runtimeConfig?.impairmentChallengeWindowSeconds
+        if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) return Math.floor(raw)
+        if (raw == null) return BASE_DEFAULTS.impairmentChallengeWindowSeconds
+        return null
+      })()
+      if (Boolean(impairmentClaimsAddress) !== Boolean(impairmentRecoveryEscrowAddress)) {
+        throw new Error(
+          'Impairment config is incomplete. Configure both impairment claims and recovery escrow addresses.',
+        )
+      }
       if (!publicClient) throw new Error('Network client not ready')
       const vaultAuxiliaryDeployBatcher = normalizeAddressLike(CONTRACTS.vaultAuxiliaryDeployBatcher)
       if (
@@ -5196,6 +5210,177 @@ function DeployVaultBatcher({
         }),
       } as const
 
+      const impairmentPhase3Calls: Array<{ target: Address; value: bigint; data: Hex }> = []
+      const currentVaultImpairmentConfig = await (async () => {
+        try {
+          const [management, guardian, claims, escrow, challengeWindow] = await Promise.all([
+            publicClient.readContract({
+              address: expected.vault,
+              abi: CREATOR_VAULT_ADMIN_ABI,
+              functionName: 'management',
+            }),
+            publicClient.readContract({
+              address: expected.vault,
+              abi: CREATOR_VAULT_ADMIN_ABI,
+              functionName: 'impairmentGuardian',
+            }),
+            publicClient.readContract({
+              address: expected.vault,
+              abi: CREATOR_VAULT_ADMIN_ABI,
+              functionName: 'impairmentClaims',
+            }),
+            publicClient.readContract({
+              address: expected.vault,
+              abi: CREATOR_VAULT_ADMIN_ABI,
+              functionName: 'impairmentRecoveryEscrow',
+            }),
+            publicClient.readContract({
+              address: expected.vault,
+              abi: CREATOR_VAULT_ADMIN_ABI,
+              functionName: 'impairmentChallengeWindow',
+            }),
+          ])
+          return {
+            management: normalizeAddressLike(management) ?? ZERO_ADDRESS,
+            guardian: normalizeAddressLike(guardian) ?? ZERO_ADDRESS,
+            claims: normalizeAddressLike(claims) ?? ZERO_ADDRESS,
+            escrow: normalizeAddressLike(escrow) ?? ZERO_ADDRESS,
+            challengeWindow:
+              typeof challengeWindow === 'bigint'
+                ? Number(challengeWindow)
+                : Number(challengeWindow ?? BASE_DEFAULTS.impairmentChallengeWindowSeconds),
+          }
+        } catch {
+          return {
+            management: ZERO_ADDRESS,
+            guardian: ZERO_ADDRESS,
+            claims: ZERO_ADDRESS,
+            escrow: ZERO_ADDRESS,
+            challengeWindow: BASE_DEFAULTS.impairmentChallengeWindowSeconds,
+          }
+        }
+      })()
+      if (
+        impairmentClaimsAddress &&
+        !sameAddress(currentVaultImpairmentConfig.claims, impairmentClaimsAddress)
+      ) {
+        impairmentPhase3Calls.push({
+          target: expected.vault,
+          value: 0n,
+          data: encodeFunctionData({
+            abi: CREATOR_VAULT_ADMIN_ABI,
+            functionName: 'setImpairmentClaims',
+            args: [impairmentClaimsAddress],
+          }),
+        })
+      }
+      if (
+        impairmentRecoveryEscrowAddress &&
+        !sameAddress(currentVaultImpairmentConfig.escrow, impairmentRecoveryEscrowAddress)
+      ) {
+        impairmentPhase3Calls.push({
+          target: expected.vault,
+          value: 0n,
+          data: encodeFunctionData({
+            abi: CREATOR_VAULT_ADMIN_ABI,
+            functionName: 'setImpairmentRecoveryEscrow',
+            args: [impairmentRecoveryEscrowAddress],
+          }),
+        })
+      }
+      if (
+        impairmentGuardianAddress &&
+        !sameAddress(currentVaultImpairmentConfig.guardian, impairmentGuardianAddress)
+      ) {
+        impairmentPhase3Calls.push({
+          target: expected.vault,
+          value: 0n,
+          data: encodeFunctionData({
+            abi: CREATOR_VAULT_ADMIN_ABI,
+            functionName: 'setImpairmentGuardian',
+            args: [impairmentGuardianAddress],
+          }),
+        })
+      }
+      if (
+        configuredImpairmentChallengeWindowSeconds !== null &&
+        configuredImpairmentChallengeWindowSeconds > 0 &&
+        currentVaultImpairmentConfig.challengeWindow !== configuredImpairmentChallengeWindowSeconds
+      ) {
+        const challengeWindowCallData = encodeFunctionData({
+          abi: CREATOR_VAULT_ADMIN_ABI,
+          functionName: 'setImpairmentChallengeWindow',
+          args: [BigInt(configuredImpairmentChallengeWindowSeconds)],
+        })
+        const canSetChallengeWindow = await (async () => {
+          try {
+            await publicClient.call({
+              to: expected.vault,
+              data: challengeWindowCallData,
+              account: owner,
+            })
+            return true
+          } catch {
+            return false
+          }
+        })()
+        if (!canSetChallengeWindow) {
+          throw new Error(
+            `Cannot set impairment challenge window from ${shortAddress(owner)}. ` +
+              `Current management is ${shortAddress(currentVaultImpairmentConfig.management)}.`,
+          )
+        }
+        impairmentPhase3Calls.push({
+          target: expected.vault,
+          value: 0n,
+          data: challengeWindowCallData,
+        })
+      }
+      const ensureImpairmentAuxVaultLinkCall = async (label: 'claims' | 'escrow', target: Address) => {
+        let currentOwner = ZERO_ADDRESS
+        let linkedVault = ZERO_ADDRESS
+        try {
+          const [ownerRead, vaultRead] = await Promise.all([
+            publicClient.readContract({
+              address: target,
+              abi: IMPAIRMENT_AUX_OWNED_ABI,
+              functionName: 'owner',
+            }),
+            publicClient.readContract({
+              address: target,
+              abi: IMPAIRMENT_AUX_OWNED_ABI,
+              functionName: 'vault',
+            }),
+          ])
+          currentOwner = normalizeAddressLike(ownerRead) ?? ZERO_ADDRESS
+          linkedVault = normalizeAddressLike(vaultRead) ?? ZERO_ADDRESS
+        } catch {
+          throw new Error(`Cannot read impairment ${label} ownership/vault state at ${target}.`)
+        }
+        if (sameAddress(linkedVault, expected.vault)) return
+        if (!sameAddress(currentOwner, owner)) {
+          throw new Error(
+            `Impairment ${label} contract owner is ${shortAddress(currentOwner)} but deploy owner is ${shortAddress(owner)}. ` +
+              `Transfer ownership or update runtime impairment contract addresses before deploy.`,
+          )
+        }
+        impairmentPhase3Calls.push({
+          target,
+          value: 0n,
+          data: encodeFunctionData({
+            abi: IMPAIRMENT_AUX_OWNED_ABI,
+            functionName: 'setVault',
+            args: [expected.vault],
+          }),
+        })
+      }
+      if (impairmentClaimsAddress) {
+        await ensureImpairmentAuxVaultLinkCall('claims', impairmentClaimsAddress)
+      }
+      if (impairmentRecoveryEscrowAddress) {
+        await ensureImpairmentAuxVaultLinkCall('escrow', impairmentRecoveryEscrowAddress)
+      }
+
       const vaultDeployToStrategiesCall = {
         target: expected.vault,
         value: 0n,
@@ -5363,7 +5548,7 @@ function DeployVaultBatcher({
       }
       const batcherAddressLower = String(batcherAddress ?? '').toLowerCase()
       const splitPhase1SaltOverrideDisabled = (
-        KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS.has(batcherAddressLower) ||
+        isShareOftSaltOverrideDisabledBatcher(batcherAddressLower) ||
         batcherBytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR)
       )
       const supportsLegacyPhase1WithSalt = (() => {
@@ -6101,6 +6286,8 @@ function DeployVaultBatcher({
             getAddress(expectedCreate2Deployer).toLowerCase(),
             getAddress(expected.vault).toLowerCase(),
             getAddress(expectedPayoutRouter).toLowerCase(),
+            ...(impairmentClaimsAddress ? [getAddress(impairmentClaimsAddress).toLowerCase()] : []),
+            ...(impairmentRecoveryEscrowAddress ? [getAddress(impairmentRecoveryEscrowAddress).toLowerCase()] : []),
           ])
           for (const c of calls) {
             const to = getAddress(c.target).toLowerCase()
@@ -6133,6 +6320,7 @@ function DeployVaultBatcher({
           vaultSetMinimumIdleCall,
           // Apply 30/30/30 from the 90% deployable bucket; keep 10% idle.
           vaultDeployToStrategiesCall,
+          ...impairmentPhase3Calls,
           ...phase2Create2Calls,
           ...phase2ConfigCalls,
         ]
@@ -7165,7 +7353,7 @@ function DeployVaultBatcher({
       : null
   const vanityDefaultNotice =
     !vanityCustomPaidNotice && (vaultVanityPrefix || shareOftVanitySuffix)
-      ? `Default vanity targets: vault 0x${DEFAULT_VAULT_VANITY_PREFIX}, share ${DEFAULT_SHARE_OFT_VANITY_SUFFIX} (best-effort).`
+      ? `Default vanity: vault prefix 0x${DEFAULT_VAULT_VANITY_PREFIX} (priority on greenfield batchers); share suffix ${DEFAULT_SHARE_OFT_VANITY_SUFFIX} when salt overrides are available (best-effort).`
       : null
 
   const disabledReason =
@@ -7334,6 +7522,9 @@ function DeployVaultBatcher({
       ) : null}
       {vanityDefaultNotice ? (
         <div className="text-[11px] text-zinc-600">{vanityDefaultNotice}</div>
+      ) : null}
+      {expectedShareOftVanityInfo ? (
+        <div className="text-[11px] text-zinc-500">{expectedShareOftVanityInfo}</div>
       ) : null}
       {expectedShareOftVanityWarning ? (
         <div className="text-[11px] text-amber-300/80">{expectedShareOftVanityWarning}</div>

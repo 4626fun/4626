@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getAddress } from 'viem'
 
+import { PreflightSimulationRejectionError } from '@/lib/aa/coinbaseErc4337ErrorUtils'
 import {
   buildSwapFromZoraQuote,
   buildZoraSlippageEscalationLadder,
@@ -25,6 +26,12 @@ describe('pickNextZoraBundlerRetrySlippagePct', () => {
     expect(pickNextZoraBundlerRetrySlippagePct(5)).toBe(10)
     expect(pickNextZoraBundlerRetrySlippagePct(7)).toBe(10)
     expect(pickNextZoraBundlerRetrySlippagePct(10)).toBe(15)
+    expect(pickNextZoraBundlerRetrySlippagePct(15)).toBe(20)
+  })
+
+  it('returns null when no higher ladder step exists', () => {
+    expect(pickNextZoraBundlerRetrySlippagePct(25)).toBe(30)
+    expect(pickNextZoraBundlerRetrySlippagePct(30)).toBeNull()
   })
 })
 
@@ -180,20 +187,21 @@ describe('zoraTradeApi', () => {
     expect(zoraPermitNonceDrifted(2, 2)).toBe(false)
   })
 
-  it('maps ExecutionFailed router simulation to slippage/liquidity guidance', () => {
+  it('maps ExecutionFailed router simulation to swap guidance', () => {
     const err = formatZoraRouterSimulationFailure({
       cause: {
         data: '0x2c4029e9000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000060',
       },
     })
-    expect(err.message).toContain('not a USDC balance issue')
+    expect(err.message).toContain('would fail on-chain')
     expect(err.message).toContain('slippage')
   })
 
   it('builds slippage escalation ladder from user setting upward', () => {
-    expect(buildZoraSlippageEscalationLadder(0.5)).toEqual([0.5, 2, 5, 10])
-    expect(buildZoraSlippageEscalationLadder(3)).toEqual([3, 5, 10, 15])
-    expect(buildZoraSlippageEscalationLadder(12)).toEqual([12, 15])
+    expect(buildZoraSlippageEscalationLadder(0.5)).toEqual([0.5, 2, 5, 10, 15, 20])
+    expect(buildZoraSlippageEscalationLadder(3)).toEqual([3, 5, 10, 15, 20, 25])
+    expect(buildZoraSlippageEscalationLadder(12)).toEqual([12, 15, 20, 25, 30])
+    expect(buildZoraSlippageEscalationLadder(25)).toEqual([25, 30])
   })
 
   it('reads quoted slippage percent from refreshed Zora payload', () => {
@@ -216,13 +224,29 @@ describe('zoraTradeApi', () => {
     expect(isZoraBundlerSendRetryable(buildZoraBundlerSimulationMismatchError())).toBe(true)
     expect(isZoraBundlerSimulationMismatchError(buildZoraBundlerSimulationMismatchError())).toBe(true)
     expect(isZoraBundlerSendRetryable(new Error('invalid signature'))).toBe(false)
+    expect(
+      isZoraBundlerSendRetryable(
+        new PreflightSimulationRejectionError(
+          'This swap would fail on-chain — usually because the quote is stale, slippage is too tight',
+        ),
+      ),
+    ).toBe(true)
+  })
+
+  it('maps bundler mismatch with Permit2 InvalidNonce to stale-authorization copy', () => {
+    const err = buildZoraBundlerSimulationMismatchError({
+      message:
+        'Execution reverted for an unknown reason. Details: execution reverted: 0x756688fe',
+      data: '0x756688fe',
+    })
+    expect(err.message).toContain('Permit2 authorization is stale')
   })
 
   it('classifies router simulation failures as slippage-retryable', () => {
     expect(
       isZoraRouterSimulationRetryable(
         new Error(
-          'The Zora swap would revert on your smart wallet. This is usually a stale quote, tight slippage, or not enough pool liquidity',
+          'This swap would fail on-chain — usually because the quote is stale, slippage is too tight, or the pool cannot fill this size',
         ),
       ),
     ).toBe(true)

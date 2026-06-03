@@ -71,15 +71,13 @@ const SAMPLE_PROOF_BLOB: AmoeReplayProofBlob = {
 }
 
 /**
- * Schema bootstrap runs EIGHT DDL statements:
- *   1. CREATE TABLE IF NOT EXISTS amoe_zk_submissions
- *   2. ALTER TABLE … ADD COLUMN IF NOT EXISTS retry_started_at        (forward-compat)
- *   3. ALTER TABLE … ADD COLUMN IF NOT EXISTS twitter_credit_nullifier_hex  (PR 5b forward-compat)
- *   4-8. five CREATE INDEX statements
+ * Schema bootstrap is delegated to `ensureAmoeSchema()` in `schemaBootstrap`.
+ * Unit tests mock only the store-facing SQL calls, so there are no local
+ * bootstrap statements to offset in this file.
  */
-const SCHEMA_BOOTSTRAP_STMT_COUNT = 8
-/** Index of the first non-bootstrap statement in `calls`. */
-const FIRST_OP_IDX = SCHEMA_BOOTSTRAP_STMT_COUNT // i.e. 7
+const SCHEMA_BOOTSTRAP_STMT_COUNT = 0
+/** Index of the first statement under test in `calls`. */
+const FIRST_OP_IDX = SCHEMA_BOOTSTRAP_STMT_COUNT
 
 interface SqlCall {
   strings: TemplateStringsArray
@@ -112,9 +110,7 @@ function makeDbMock(): {
     db: { sql: sql as unknown as ReturnType<typeof vi.fn> },
     calls,
     pushResult: (r) => queue.push(r),
-    pushSchemaBootstrapNoops: () => {
-      for (let i = 0; i < SCHEMA_BOOTSTRAP_STMT_COUNT; i++) queue.push({ rows: [] })
-    },
+    pushSchemaBootstrapNoops: () => {},
     pushDefaultRows: (rows) => queue.push({ rows }),
   }
 }

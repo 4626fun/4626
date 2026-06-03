@@ -1,5 +1,6 @@
 import { getDb, isDbConfigured } from '../db/postgres.js'
 import { ensureAgentRuntimeAuditLedgerSchema } from '../db/schemaBootstrap.js'
+import { shouldSampleEvent } from '../infra/telemetrySampling.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
@@ -38,6 +39,12 @@ export async function logAgentApiRequest(params: {
 
   const ipHash = hashIp(params.ip)
   const ua = (params.userAgent ?? '').slice(0, 400)
+
+  // Agent API audit log is high-volume. Sample by (endpoint, ip) for debuggable per-client traces.
+  const sampleKey = `${params.endpoint}:${ipHash ?? 'no-ip'}`
+  if (!shouldSampleEvent('agent_api_logs', sampleKey)) {
+    return
+  }
 
   try {
     await (db as any).sql`

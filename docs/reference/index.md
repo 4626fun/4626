@@ -20,3 +20,4 @@ Quick reference documentation.
 | **[Glossary](/reference/glossary)** | Key terms and definitions |
 | **[Diagram Style Guide](/reference/diagram-style-guide)** | Documentation standards |
 | **[ERC-4337 Debugging](/reference/erc4337-debugging)** | Account abstraction debugging |
+| **[Impairment v1 Disclosures](/reference/impairment-v1-disclosures)** | User/integrator trust-boundary statements and v1 side-pocket caveats |

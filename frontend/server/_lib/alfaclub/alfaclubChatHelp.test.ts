@@ -5,7 +5,7 @@ import {
   isAlfaClubOpsRoomId,
   resolveAlfaClubHelpText,
 } from './alfaclubChatHelp.js'
-import { formatHermitCommandRoomHelp } from './hermitAlfaClubHelp.js'
+import { formatHermitCommandRoomHelp } from '../hermit/hermitAlfaClubHelp.js'
 
 describe('alfaclubChatHelp', () => {
   afterEach(() => {

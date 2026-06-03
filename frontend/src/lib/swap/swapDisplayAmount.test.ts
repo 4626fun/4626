@@ -16,7 +16,7 @@ describe('amountUnitsFromBalancePercent', () => {
 
   it('never exceeds raw units at fractional percentages', () => {
     const balance = { raw: 1_000_001n, decimals: 6 }
-    expect(amountUnitsFromBalancePercent(balance, 33)).toBe('0.330000')
+    expect(amountUnitsFromBalancePercent(balance, 33)).toBe('0.33')
   })
 })
 
@@ -37,22 +37,26 @@ describe('formatSwapDisplayAmount', () => {
 })
 
 describe('formatSwapTokenBalanceLabel', () => {
-  it('caps large creator-coin balances like Uniswap', () => {
+  it('comma-groups large balances to cents (654,538.89 style)', () => {
     expect(formatSwapTokenBalanceLabel('654538.89230025562217', 'akita')).toBe('654,538.89')
+    expect(formatSwapTokenBalanceLabel('103654538.896', 'akita')).toBe('103,654,538.9')
     expect(formatSwapTokenBalanceLabel('10312658.93179696315806', 'b20')).toBe('10,312,658.93')
+    expect(formatSwapTokenBalanceLabel('103300000', 'akita')).toBe('103,300,000')
+    expect(formatSwapTokenBalanceLabel('103300000.78', 'akita')).toBe('103,300,000.78')
   })
 
-  it('uses four decimals for mid-sized holdings', () => {
+  it('keeps significant digits for mid-sized holdings (Uniswap TokenTx)', () => {
     expect(formatSwapTokenBalanceLabel('5.4729', 'SOL')).toBe('5.4729')
   })
 
-  it('uses five decimals for fractional ETH-sized amounts', () => {
+  it('keeps extra precision for tiny fractional amounts', () => {
     expect(formatSwapTokenBalanceLabel('0.00688', 'ETH')).toBe('0.00688')
     expect(formatSwapTokenBalanceLabel('0.00007', 'ETH')).toBe('0.00007')
   })
 
   it('pins stables to cents when >= 1', () => {
     expect(formatSwapTokenBalanceLabel('2940.34', 'USDC')).toBe('2,940.34')
+    expect(formatSwapTokenBalanceLabel('2940.3499', 'USDC')).toBe('2,940.35')
   })
 })
 

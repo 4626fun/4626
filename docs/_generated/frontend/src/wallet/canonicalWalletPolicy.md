@@ -110,9 +110,9 @@ Defined in: [src/wallet/canonicalWalletPolicy.ts:89](https://github.com/wenakita
 
 ***
 
-### isTargetCanonicalCsw()
+### isCanonicalCsw()
 
-> **isTargetCanonicalCsw**(`value`): `boolean`
+> **isCanonicalCsw**(`value`): `boolean`
 
 Defined in: [src/wallet/canonicalWalletPolicy.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L40)
 

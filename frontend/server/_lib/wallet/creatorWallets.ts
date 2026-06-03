@@ -1,4 +1,4 @@
-import { ensureWalletOnchainOpsAuditSchema } from './schemaBootstrap.js'
+import { ensureWalletOnchainOpsAuditSchema } from '../db/schemaBootstrap.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 

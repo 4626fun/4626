@@ -25,12 +25,16 @@ import {
   formatZoraRouterSimulationFailure,
   isZoraBundlerSimulationMismatchError,
 } from '@/lib/zora/zoraTradeApi'
+import {
+  PERMIT2_INVALID_NONCE_MESSAGE,
+  ZORA_SWAP_SIMULATION_FAILED_MESSAGE,
+} from '@/lib/swap/swapStatusCopy'
 import { logger } from '@/lib/observability/logger'
 import { trackEvent } from '@/lib/analytics/analytics'
 import { DATA_SUFFIX } from '@/lib/base/baseBuilderCodes'
 import {
-  TARGET_CANONICAL_CSW_ADDRESS,
-  isAllowedAgentCswExecutionSigner,
+  CANONICAL_CSW_ADDRESS,
+  isAllowedCanonicalCswExecutionSigner,
 } from '@/wallet/canonicalWalletPolicy'
 import { applyBuilderDataSuffixToCalls } from './coinbaseErc4337BuilderSuffix'
 import {
@@ -61,6 +65,7 @@ import {
   isExpectedUserOpTimeoutError,
   isImmediateUserOpRetrySuppressedError,
   isLikelyVerificationGasLimitError,
+  isPermit2InvalidNonceError,
   buildPreflightSimulationRejectionError,
   extractExecutionFailedInnerSelector,
   mapUserOpExecutionFailureMessage,
@@ -76,7 +81,9 @@ import {
 import {
   fetchCoinbaseSmartWalletOwners,
   findCoinbaseSmartWalletOwnerIndex,
+  readContractWithRpcRetry,
   resetOwnerIndexCacheForTests,
+  resolveOwnersReadClient,
 } from './coinbaseErc4337Owners'
 import { writePersistedCswOwnerIndex } from './cswOwnerIndexPersistence'
 import { recordUserOpTelemetry, type UserOpTelemetrySample } from './coinbaseErc4337Telemetry'
@@ -414,7 +421,7 @@ async function assertBundlerUserOpGasEstimate(params: {
         calls.some(isSwapRouterHeavyCall) &&
         estimateExecutionFailed
       ) {
-        throw buildZoraBundlerSimulationMismatchError()
+        throw buildZoraBundlerSimulationMismatchError(estimateError)
       }
       if (
         shouldAdvisorySkipBundlerGasEstimate({
@@ -1062,21 +1069,52 @@ export async function simulateSmartWalletCalls(params: {
   // First, try to simulate the direct target call (as if smart wallet is msg.sender)
   // This bypasses the smart wallet's authorization checks and tests just the target contract
   let directCallResult: { success: boolean; error?: string; revertData?: Hex; errorName?: string } | undefined
-  if (calls.length === 1 && calls[0]?.data && typeof client?.call === 'function') {
-    const call = calls[0]!
-    // Match bundler/UserOp simulation timing — `latest` can pass while paymaster estimate reverts.
-    const blockNumber = 'pending'
-    try {
-      await client.call({
-        to: call.to,
-        data: call.data,
-        value: call.value ?? 0n,
-        account: smartWallet,
-        blockNumber,
-      })
+  if (calls.length > 0 && typeof client?.call === 'function') {
+    if (calls.length === 1) {
+      const call = calls[0]!
+      // Match Zora prepare-time eth_call (`latest`). `pending` can diverge and false-fail after a passing quote refresh.
+      const blockNumber = isZoraUniversalRouterTarget(call.to) ? 'latest' : 'pending'
+      try {
+        await client.call({
+          to: call.to,
+          data: call.data,
+          value: call.value ?? 0n,
+          account: smartWallet,
+          blockNumber,
+        })
+        directCallResult = { success: true }
+      } catch (e: unknown) {
+        directCallResult = { success: false, ...extractRevertInfo(e) }
+      }
+    } else {
+      for (let index = 0; index < calls.length; index += 1) {
+        const call = calls[index]!
+        const blockNumber = isZoraUniversalRouterTarget(call.to) ? 'latest' : 'pending'
+        try {
+          await client.call({
+            to: call.to,
+            data: call.data,
+            value: call.value ?? 0n,
+            account: smartWallet,
+            blockNumber,
+          })
+        } catch (e: unknown) {
+          const legFailure = { success: false as const, ...extractRevertInfo(e) }
+          directCallResult = legFailure
+          return {
+            success: false,
+            error:
+              index > 0
+                ? legFailure.error ??
+                  'Swap leg would revert before prior calls land on-chain. Submit approval first, wait for confirmation, then retry the swap.'
+                : legFailure.error,
+            revertData: legFailure.revertData,
+            errorName: legFailure.errorName,
+            directCallResult: legFailure,
+          }
+        }
+      }
       directCallResult = { success: true }
-    } catch (e: unknown) {
-      directCallResult = { success: false, ...extractRevertInfo(e) }
     }
   }
 
@@ -1090,7 +1128,7 @@ export async function simulateSmartWalletCalls(params: {
       success: false,
       error:
         directCallResult.error ??
-        'Zora swap would revert on your smart wallet. Increase slippage, try a smaller size, and refresh the quote.',
+        ZORA_SWAP_SIMULATION_FAILED_MESSAGE,
       revertData: directCallResult.revertData,
       errorName: directCallResult.errorName,
       directCallResult,
@@ -1191,6 +1229,9 @@ export async function simulateSmartWalletCalls(params: {
     // unless the underlying router call already succeeded.
     if (unauthorizedExecute) {
       if (calls.length === 1 && isZoraUniversalRouterTarget(calls[0]?.to)) {
+        if (directCallResult?.success) {
+          return { success: true, directCallResult }
+        }
         return {
           success: false,
           error:
@@ -1207,6 +1248,23 @@ export async function simulateSmartWalletCalls(params: {
           error:
             directCallResult?.error ??
             'Underlying swap call simulation did not complete. Refresh the quote and try again.',
+          revertData: directCallResult?.revertData,
+          errorName: directCallResult?.errorName,
+          directCallResult,
+        }
+      }
+      if (calls.length > 1) {
+        if (directCallResult?.success) {
+          return {
+            success: true,
+            directCallResult,
+          }
+        }
+        return {
+          success: false,
+          error:
+            directCallResult?.error ??
+            'Batch swap simulation did not complete. Refresh the quote and try again.',
           revertData: directCallResult?.revertData,
           errorName: directCallResult?.errorName,
           directCallResult,
@@ -1380,6 +1438,8 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   allowEoaSignMessageFallback?: boolean
   verificationGasLimits?: bigint[]
   skipPreflightSimulation?: boolean
+  /** Zora prepare path already ran production eth_call on this exact router calldata. */
+  zoraRouterValidatedBeforeSend?: boolean
   skipPaymaster?: boolean
   retryOnInvalidSignature?: boolean
   retryOnPrefund?: boolean
@@ -1422,6 +1482,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     allowEoaSignMessageFallback = true,
     verificationGasLimits: verificationGasLimitsOverride,
     skipPreflightSimulation,
+    zoraRouterValidatedBeforeSend = false,
     skipPaymaster = false,
     retryOnInvalidSignature = true,
     retryOnPrefund = true,
@@ -1433,18 +1494,15 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     waitForOnChainReceipt = true,
   } = params
 
-  // Hard safety gate for the agent / project canonical CSW.
-  // Only the currently active automation + admin execution owners are permitted
-  // to sign UserOps against it. The historical embedded EOA is intentionally
-  // excluded from execution even if it passes broader legacy identity checks.
-  if (getAddress(smartWallet) === getAddress(TARGET_CANONICAL_CSW_ADDRESS)) {
-    if (!isAllowedAgentCswExecutionSigner(ownerAddress)) {
+  // Execution allowlist for CANONICAL_CSW_ADDRESS (canonical parent CSW).
+  if (getAddress(smartWallet) === getAddress(CANONICAL_CSW_ADDRESS)) {
+    if (!isAllowedCanonicalCswExecutionSigner(ownerAddress)) {
       const msg =
-        'Unauthorized signer for agent canonical CSW. Only active automation owners may execute canonical4337 actions on the agent wallet. Historical embedded EOAs are no longer permitted for execution.'
-      logger.error('[ERC-4337] Agent CSW execution signer rejected', {
+        'Unauthorized signer for canonical CSW. Connect a wallet that is an on-chain owner of your smart wallet, or finish 4626 signing setup in account settings.'
+      logger.error('[ERC-4337] Canonical CSW execution signer rejected', {
         smartWallet,
         ownerAddress,
-        reason: 'historical-or-unauthorized-owner',
+        reason: 'unauthorized-canonical-csw-owner',
       })
       throw new Error(msg)
     }
@@ -1502,8 +1560,8 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   }
 
   // Pre-flight simulation: fail fast when the underlying call would revert on-chain.
-  let preflightDirectCallSucceeded = false
-  if (!skipPreflightSimulation) {
+  let preflightDirectCallSucceeded = zoraRouterValidatedBeforeSend
+  if (!skipPreflightSimulation && !zoraRouterValidatedBeforeSend) {
     try {
       const preflightClient =
         attributedCalls.length === 1 && isZoraUniversalRouterTarget(attributedCalls[0]?.to)
@@ -1536,7 +1594,10 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       }
       preflightDirectCallSucceeded =
         simResult.directCallResult?.success === true ||
-        (attributedCalls.length > 1 && simResult.success)
+        (attributedCalls.length > 1 && simResult.success) ||
+        (simResult.success &&
+          attributedCalls.length === 1 &&
+          isZoraUniversalRouterTarget(attributedCalls[0]?.to))
       if (AA_DEBUG) {
         logger.debug('[ERC-4337] Pre-flight simulation passed', {
           smartWallet,
@@ -1573,8 +1634,9 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       // Self-auth Base App signs personal_sign [hash, csw]. The CSW address is never an
       // ownerAtIndex entry — scanning all slots (starting with WebAuthn owner[0]) is slow
       // and can RPC-timeout before we reach the session-key owner slot.
-      const countRaw = (await withTimeout(
-        publicClient.readContract({
+      const ownerReadClient = resolveOwnersReadClient(publicClient)
+      const countRaw = (await readContractWithRpcRetry('ownerCount read', () =>
+        ownerReadClient.readContract({
           address: smartWallet,
           abi: [{
             type: 'function' as const,
@@ -1585,8 +1647,6 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
           }],
           functionName: 'ownerCount',
         }),
-        RPC_READ_TIMEOUT_MS,
-        'ownerCount read',
       )) as bigint
       ownerCount = Number(countRaw)
       if (AA_DEBUG) {
@@ -2178,7 +2238,10 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     }
   }
   const swapRouterCallGasLimit = inferSwapRouterCallGasLimit(attributedCalls)
-  if (attributedCalls.some((call) => isZoraUniversalRouterTarget(call.to))) {
+  if (
+    !zoraRouterValidatedBeforeSend &&
+    attributedCalls.some((call) => isZoraUniversalRouterTarget(call.to))
+  ) {
     for (const call of attributedCalls) {
       if (!isZoraUniversalRouterTarget(call.to) || !call.data) continue
       await assertZoraRouterCallExecutesFromCsw({
@@ -2659,7 +2722,12 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
           firstCallTo: zoraCall.to,
         })
         if (mappedBundler) throw mappedBundler
-        throw buildZoraBundlerSimulationMismatchError()
+        if (isPermit2InvalidNonceError(lastError)) {
+          throw new Error(
+            `The swap looked valid locally but the sponsored transaction simulation failed. ${PERMIT2_INVALID_NONCE_MESSAGE}`,
+          )
+        }
+        throw buildZoraBundlerSimulationMismatchError(lastError)
       }
       const formatted = formatZoraRouterSimulationFailure(lastError)
       if (formatted.message.toLowerCase().includes('would revert')) {

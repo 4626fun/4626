@@ -36,7 +36,7 @@ Normalize what we persist in `profiles.csw_address`.
 
 Allowed-owner EOAs (for example `0x6c0ea…`, slot 0 of the project CSW) must
 never be stored as the CSW itself. When the profile signer is an allowed
-owner, map to `TARGET_CANONICAL_CSW_ADDRESS` instead.
+owner, map to `CANONICAL_CSW_ADDRESS` instead.
 
 #### Parameters
 

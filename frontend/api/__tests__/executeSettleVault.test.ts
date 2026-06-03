@@ -12,7 +12,7 @@ const { dbSqlMock, getDbMock, ensureKeeprSchemaMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('@4626/server-core', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('../../@4626/server-core')
+  const actual = await vi.importActual<Record<string, unknown>>('@4626/server-core')
   return {
     ...actual,
     getDb: getDbMock,

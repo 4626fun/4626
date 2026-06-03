@@ -29,11 +29,8 @@ vi.mock('@4626/server-core', () => ({
   getDb: mocks.getDb,
   isDbConfigured: mocks.isDbConfigured,
   resolveAuthorizedRequestPrincipal: mocks.resolveAuthorizedRequestPrincipal,
-  RATE_LIMITS: { adminAction: { windowMs: 60_000, maxRequests: 30 } },
-}))
-
-vi.mock('../../../server/_lib/wallet/commandIssuerContext.js', () => ({
   resolveCommandIssuerContextByProfileId: mocks.resolveCommandIssuerContextByProfileId,
+  RATE_LIMITS: { adminAction: { windowMs: 60_000, maxRequests: 30 } },
 }))
 
 vi.mock('../../../server/_lib/wallet/privyWalletApi.js', () => ({

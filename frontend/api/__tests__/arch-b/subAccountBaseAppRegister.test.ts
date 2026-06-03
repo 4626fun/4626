@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => {
       if (!db) return null
       return fn(db)
     }),
+    envBigInt: vi.fn((_key: string, fallback: bigint) => fallback),
   }
   return bag
 })
@@ -46,6 +47,7 @@ vi.mock('@4626/server-core', () => ({
   readBoundedJsonObjectBody: mocks.readBoundedJsonObjectBody,
   getDb: mocks.getDb,
   runInTransaction: mocks.runInTransaction,
+  envBigInt: mocks.envBigInt,
   isDbConfigured: mocks.isDbConfigured,
   getClientIp: mocks.getClientIp,
   checkRateLimit: mocks.checkRateLimit,

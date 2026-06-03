@@ -172,10 +172,14 @@ async function loadCreatorEthosProjectionPage(params: {
             cep.market_cap_usd DESC NULLS LAST,
             cep.creator_address ASC
         ) AS identity_rank
-      FROM public.creator_ethos_projection cep
+      FROM public.v_explore_creators cep
       LEFT JOIN creator_coins cc
         ON lower(cc.coin_address) = lower(cep.coin_address)
         AND cc.chain_id = 8453
+      -- IMPORTANT: All Explore/Creators sorting (by market cap, ethos, volume, etc.)
+      -- must come from this single interconnected view (or the projection table directly).
+      -- Different user sort selections are implemented purely via ORDER BY on the same rows.
+      -- See docs/operations/ethos-chart-unified-design-note.md and v_explore_creators.
       WHERE (
         ${params.ethosMin}::numeric IS NULL
         OR (cep.ethos_score IS NOT NULL AND cep.ethos_score >= ${params.ethosMin})

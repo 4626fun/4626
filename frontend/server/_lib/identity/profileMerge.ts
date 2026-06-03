@@ -7,8 +7,6 @@
  * verified email is the canonical 4626 identity).
  *
  * Append-only where possible, idempotent at every step:
-
-import { ensureMigrationApplied } from './schemaBootstrap.js'
  *
  *   1. Validate: `to` has verified email, neither side is already merged,
  *      `from.id !== to.id`.
@@ -33,6 +31,8 @@ import { ensureMigrationApplied } from './schemaBootstrap.js'
  * This module performs no admin-auth checks — callers (the admin HTTP
  * handler or the CLI) are responsible for that.
  */
+
+import { ensureMigrationApplied } from '../db/schemaBootstrap.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 

@@ -184,6 +184,7 @@ export async function finishRestoredXmtpClient(input: {
   setupConversations: () => Promise<void>
   registerWithFallback: () => Promise<void>
   isLocalStateInvalidError: (message: string) => boolean
+  isRegistered?: () => Promise<boolean>
 }): Promise<FinishRestoredXmtpClientResult> {
   let setupCalls = 0
   let registerCalls = 0
@@ -205,22 +206,25 @@ export async function finishRestoredXmtpClient(input: {
     }
 
     if (isUninitialized) {
-      try {
-        registerCalls += 1
-        await input.registerWithFallback()
-        await runSetup()
-        return { ok: true, setupCalls, registerCalls }
-      } catch (registerErr) {
-        const regMsg = registerErr instanceof Error ? registerErr.message : String(registerErr)
-        return {
-          ok: false,
-          kind: 'register_failed',
-          message: regMsg,
-          stillUninitialized: regMsg.toLowerCase().includes('uninitialized'),
-          setupCalls,
-          registerCalls,
+      const alreadyRegistered = input.isRegistered ? await input.isRegistered() : false
+      if (!alreadyRegistered) {
+        try {
+          registerCalls += 1
+          await input.registerWithFallback()
+        } catch (registerErr) {
+          const regMsg = registerErr instanceof Error ? registerErr.message : String(registerErr)
+          return {
+            ok: false,
+            kind: 'register_failed',
+            message: regMsg,
+            stillUninitialized: regMsg.toLowerCase().includes('uninitialized'),
+            setupCalls,
+            registerCalls,
+          }
         }
       }
+      await runSetup()
+      return { ok: true, setupCalls, registerCalls }
     }
 
     try {

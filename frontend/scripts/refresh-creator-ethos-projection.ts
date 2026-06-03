@@ -22,14 +22,14 @@ async function main(): Promise<void> {
   const limit = readLimit()
   const before = await db.sql`
     SELECT COUNT(*) FILTER (WHERE ethos_score IS NOT NULL) AS scored, COUNT(*) AS total
-    FROM public.creator_ethos_projection;
+    FROM public.creator_ethos_projection; -- source of truth for v_explore_creators and all charts
   `
   console.info('[refresh-creator-ethos-projection] start', { limit, before: before.rows?.[0] })
 
   const result = await refreshCreatorEthosProjection({ db, limit })
   const after = await db.sql`
     SELECT COUNT(*) FILTER (WHERE ethos_score IS NOT NULL) AS scored, COUNT(*) AS total
-    FROM public.creator_ethos_projection;
+    FROM public.creator_ethos_projection; -- source of truth for v_explore_creators and all charts
   `
   console.info('[refresh-creator-ethos-projection] done', { result, after: after.rows?.[0] })
 }

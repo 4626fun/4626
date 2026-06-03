@@ -10,6 +10,11 @@ const { getDbMock, ensureWaitlistSchemaMock, upsertProfileByWalletMock } = vi.ho
   upsertProfileByWalletMock: vi.fn(async () => {}),
 }))
 
+const { checkRateLimitMock, checkDurableRateLimitMock } = vi.hoisted(() => ({
+  checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+  checkDurableRateLimitMock: vi.fn(async () => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+}))
+
 const { createPublicClientMock, httpMock } = vi.hoisted(() => ({
   createPublicClientMock: vi.fn(() => {
     const testOwner = '0x2681c2ca956015724567c969bdc23207ec0cc0e6'
@@ -43,6 +48,16 @@ vi.mock('../../server/_lib/onboarding/waitlistSchema.js', () => ({
 vi.mock('../../server/_lib/identity/profileSync.js', () => ({
   upsertProfileByWallet: upsertProfileByWalletMock,
 }))
+
+vi.mock('@4626/server-core', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    getDb: getDbMock,
+    checkRateLimit: checkRateLimitMock,
+    checkDurableRateLimit: checkDurableRateLimitMock,
+  }
+})
 
 vi.mock('viem', async () => {
   const actual = await vi.importActual<any>('viem')
@@ -448,8 +463,8 @@ describe('siwe auth hardening', () => {
 
     await verifyHandler(req, res)
 
-    expect(res.statusCode).toBe(429)
-    expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(res.statusCode).toBe(503)
+    expect(res.body?.error).toBe('Auth service unavailable')
   })
 
   it('persists canonical CSW when SIWE owner verification proves ownership', async () => {

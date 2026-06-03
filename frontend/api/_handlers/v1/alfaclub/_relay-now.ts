@@ -8,7 +8,7 @@
  *
  * Note: this endpoint runs in the Vercel process. For it to actually
  * submit (non-dry-run), the Privy env vars must be configured on Vercel
- * too (`XMTP_AGENT_PRIVY_WALLET_ID`, `PRIVY_APP_ID`, `PRIVY_APP_SECRET`,
+ * too (`CANONICAL_CSW_PRIVY_WALLET_ID`, `PRIVY_APP_ID`, `PRIVY_APP_SECRET`,
  * `PRIVY_WALLET_AUTHORIZATION_KEY`, `CDP_PAYMASTER_URL`). By default we
  * expect the relayer to live on Railway and this endpoint to be used
  * primarily in `dryRun: true` mode from the admin UI.

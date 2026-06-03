@@ -3,8 +3,10 @@ import { createHash } from 'node:crypto'
 import { getDb } from '../db/postgres.js'
 import { ensureAlfaclubDailyBriefSchema } from '../db/schemaBootstrap.js'
 import { listAllCreators } from './creators.js'
-import { getBasenameName } from '../identity/basenameResolver.js'
-import { getEnsName } from '../identity/ensResolver.js'
+import {
+  readCreatorLabels,
+  type CreatorLabelMap,
+} from './creatorDisplayLabels.js'
 import {
   getLatestSnapshotTs,
   getSnapshotAt,
@@ -71,7 +73,6 @@ type SnapshotDelta = {
   isNew: boolean
 }
 
-type CreatorLabelMap = Map<string, string>
 
 export type AlfaClubDailyBriefResult = {
   ok: boolean
@@ -89,15 +90,113 @@ export function resolveAlfaClubBridgeRoomId(): string {
   return normalizeRoomId(process.env.ALFACLUB_CHAT_ROOM_ID) ?? DEFAULT_ROOM_ID
 }
 
-export function resolveDailyBriefRoomId(): string {
-  const explicit = normalizeRoomId(process.env.ALFACLUB_DAILY_BRIEF_ROOM_ID)
-  if (explicit) return explicit
-  return resolveAlfaClubBridgeRoomId()
+export function resolveExplicitDailyBriefRoomId(): string | null {
+  return normalizeRoomId(process.env.ALFACLUB_DAILY_BRIEF_ROOM_ID)
 }
 
-/** When true, cron/manual post skips if digest room equals the command bridge room. */
+export function resolveDailyBriefRoomId(): string {
+  return resolveExplicitDailyBriefRoomId() ?? listDailyBriefCommandRoomIds()[0] ?? resolveAlfaClubBridgeRoomId()
+}
+
+/** Rooms that receive the scheduled daily digest (explicit brief room, else all command rooms). */
+export function listDailyBriefPostRoomIds(
+  bridgeFlags: Pick<
+    ReturnType<typeof readAlfaClubChatBridgeFlags>,
+    'roomId' | 'hermitCommandRoomIds'
+  > = readAlfaClubChatBridgeFlags(),
+): string[] {
+  const explicit = resolveExplicitDailyBriefRoomId()
+  if (explicit) return [explicit]
+  return listDailyBriefCommandRoomIds(bridgeFlags)
+}
+
+/** Command rooms the bot operates in (`ALFACLUB_HERMIT_COMMAND_ROOMS`, else bridge room). */
+export function listDailyBriefCommandRoomIds(
+  bridgeFlags: Pick<
+    ReturnType<typeof readAlfaClubChatBridgeFlags>,
+    'roomId' | 'hermitCommandRoomIds'
+  > = readAlfaClubChatBridgeFlags(),
+): string[] {
+  const seen = new Set<string>()
+  const ordered: string[] = []
+  const push = (raw: string | null | undefined) => {
+    const id = normalizeRoomId(raw)
+    if (!id || seen.has(id)) return
+    seen.add(id)
+    ordered.push(id)
+  }
+  if (bridgeFlags.hermitCommandRoomIds.length > 0) {
+    for (const id of bridgeFlags.hermitCommandRoomIds) push(id)
+  } else {
+    push(bridgeFlags.roomId ?? resolveAlfaClubBridgeRoomId())
+  }
+  if (ordered.length > 0) return ordered
+  return [DEFAULT_ROOM_ID]
+}
+
+/** @deprecated Use listDailyBriefPostRoomIds */
+export const listDailyBriefPostRoomCandidates = listDailyBriefPostRoomIds
+
+export type DailyBriefPostedRoom = {
+  roomId: string
+  lane: string
+  messageText: string
+}
+
+export async function sendDailyBriefToCommandRooms(params: {
+  text: string
+  flags?: ReturnType<typeof readAlfaClubChatBridgeFlags>
+}): Promise<{ posted: DailyBriefPostedRoom[]; commandRoomIds: string[] }> {
+  const flags = params.flags ?? readAlfaClubChatBridgeFlags()
+  const commandRoomIds = listDailyBriefPostRoomIds(flags)
+  const posted: DailyBriefPostedRoom[] = []
+  let lastError: unknown = null
+
+  for (const roomId of commandRoomIds) {
+    let messageText = params.text
+    const opsFooter = formatAlfaClubBriefOpsRoomFooter(roomId)
+    if (opsFooter) {
+      messageText = `${messageText}\n\n${opsFooter}`
+    }
+    try {
+      const send = await sendAlfaClubRoomText({ text: messageText, roomId, flags })
+      posted.push({ roomId, lane: send.lane, messageText })
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  if (posted.length === 0) {
+    const message =
+      lastError instanceof Error ? lastError.message.slice(0, 120) : 'daily_brief_no_reachable_room'
+    throw new Error(message)
+  }
+
+  return { posted, commandRoomIds }
+}
+
+/** @deprecated Prefer sendDailyBriefToCommandRooms */
+export async function sendDailyBriefToReachableRoom(params: {
+  text: string
+  flags?: ReturnType<typeof readAlfaClubChatBridgeFlags>
+}): Promise<{ roomId: string; lane: string; candidates: string[]; messageText: string }> {
+  const result = await sendDailyBriefToCommandRooms(params)
+  const first = result.posted[0]
+  return {
+    roomId: first.roomId,
+    lane: first.lane,
+    candidates: result.commandRoomIds,
+    messageText: first.messageText,
+  }
+}
+
+/** @deprecated Separate digest room is retired — digest posts to command rooms only. */
 export function readAlfaClubDailyBriefSeparateFromBridge(): boolean {
-  return parseBool(process.env.ALFACLUB_DAILY_BRIEF_SEPARATE_FROM_BRIDGE ?? '0')
+  return false
+}
+
+export function hasExplicitDailyBriefRoomId(): boolean {
+  return resolveExplicitDailyBriefRoomId() !== null
 }
 
 export function isDailyBriefRoomSameAsBridgeRoom(briefRoomId: string): boolean {
@@ -138,7 +237,7 @@ function parsePositiveInt(raw: string | undefined, fallback: number, max: number
   return Math.min(parsed, max)
 }
 
-function normalizeRoomId(raw: string | undefined): string | null {
+function normalizeRoomId(raw: string | null | undefined): string | null {
   const value = (raw ?? '').trim()
   return /^\d+$/.test(value) ? value : null
 }
@@ -184,6 +283,22 @@ async function hasDailyBriefDispatch(key: string): Promise<boolean> {
       SELECT 1
       FROM alfaclub.daily_brief_dispatch
       WHERE dispatch_key = ${key}
+      LIMIT 1;
+    `
+    return (result.rows?.length ?? 0) > 0
+  } catch {
+    return false
+  }
+}
+
+async function hasDailyBriefDispatchForSnapshot(snapshotTs: string): Promise<boolean> {
+  const db = await getDb()
+  if (!db) return false
+  try {
+    const result = await db.sql`
+      SELECT 1
+      FROM alfaclub.daily_brief_dispatch
+      WHERE snapshot_ts = ${snapshotTs}
       LIMIT 1;
     `
     return (result.rows?.length ?? 0) > 0
@@ -260,54 +375,6 @@ function appendCreatorRoomLink(
 ): string {
   const link = formatCreatorRoomLink(address, roomIds)
   return link ? `${line} ${link}` : line
-}
-
-function normalizeUsername(raw: string): string {
-  const trimmed = raw.trim().replace(/^@+/, '')
-  return trimmed ? `@${trimmed}` : ''
-}
-
-async function readCreatorLabels(addresses: string[]): Promise<CreatorLabelMap> {
-  const labels: CreatorLabelMap = new Map()
-  const normalized = [...new Set(addresses.map((value) => value.toLowerCase()))]
-  if (normalized.length === 0) return labels
-  const db = await getDb()
-  if (!db) return labels
-  try {
-    const result = await db.sql`
-      SELECT DISTINCT ON (LOWER(sender_address))
-        LOWER(sender_address) AS sender_address,
-        username
-      FROM alfaclub.chat_ingest
-      WHERE LOWER(sender_address) = ANY(${normalized})
-        AND username IS NOT NULL
-        AND LENGTH(TRIM(username)) > 0
-      ORDER BY LOWER(sender_address), COALESCE(message_date, ingested_at) DESC, ingested_at DESC;
-    `
-    const rows = (result.rows ?? []) as Array<{ sender_address: string; username: string | null }>
-    for (const row of rows) {
-      const username = typeof row.username === 'string' ? normalizeUsername(row.username) : ''
-      if (username) labels.set(String(row.sender_address).toLowerCase(), username)
-    }
-  } catch {
-    // Best-effort enrichment; fallback labels keep the brief resilient.
-  }
-
-  const unresolved = normalized.filter((address) => !labels.has(address))
-  if (unresolved.length > 0) {
-    await Promise.all(
-      unresolved.map(async (address) => {
-        const basename = await getBasenameName(address).catch(() => null)
-        if (basename) {
-          labels.set(address, basename)
-          return
-        }
-        const ens = await getEnsName(address).catch(() => null)
-        if (ens) labels.set(address, ens)
-      }),
-    )
-  }
-  return labels
 }
 
 function creatorIdentity(row: MetricsSnapshotRow, labels: CreatorLabelMap): string {
@@ -398,10 +465,11 @@ export function formatIndexedScopeLine(params: {
 }): string {
   const base = `${params.creatorsTracked.toLocaleString('en-US')} FriendKey creators indexed · ${params.rankedCount.toLocaleString('en-US')} scored this snapshot`
   const tail = `${params.newCreators} new vs prior · ${params.activeCreators24h} active (24h)`
-  if (params.rankedCount > 0 && params.rankedCount < params.creatorsTracked) {
-    return `${base} (partial leaderboard — not every indexed creator is rescored each run) · ${tail}`
-  }
-  return `${base} · ${tail}`
+  const partial =
+    params.rankedCount > 0 && params.rankedCount < params.creatorsTracked
+      ? ' (partial leaderboard — not every indexed creator is rescored each run)'
+      : ''
+  return `${base}${partial} · ${tail}. Score is a 0–1 composite (staking depth, key supply, recent activity).`
 }
 
 function formatBriefSnapshotDate(iso: string): string {
@@ -445,7 +513,7 @@ function formatCompactRankLine(
 ): string {
   const stake = formatRatioPct(stakeRatio(row))
   const roomUrl = formatCreatorRoomLink(row.creatorAddress, roomIds)
-  const core = `${row.rank}. ${creatorIdentity(row, labels)} — ${formatScore(row.score)} · ${stake} staked · supply ${formatSupplyCount(row.totalSupply)}`
+  const core = `${row.rank}. ${creatorIdentity(row, labels)} — score ${formatScore(row.score)} · ${stake} of keys staked · ${formatSupplyCount(row.totalSupply)} keys`
   return roomUrl ? `${core}\n   ${roomUrl}` : core
 }
 
@@ -501,11 +569,11 @@ function buildCompactMoveLines(params: {
   for (const delta of scoreMovers) {
     const scorePart =
       delta.scoreDelta === null
-        ? 'new'
-        : `${delta.scoreDelta > 0 ? '+' : ''}${delta.scoreDelta.toFixed(3)}`
+        ? 'new to board'
+        : `score ${delta.scoreDelta > 0 ? '+' : ''}${delta.scoreDelta.toFixed(3)}`
     lines.push(
       appendCreatorRoomLink(
-        `• #${delta.current.rank} ${creatorIdentity(delta.current, params.labels)} — ${formatRankDelta(delta.rankDelta)} · score ${scorePart}`,
+        `• ${creatorIdentity(delta.current, params.labels)} — ${formatRankDelta(delta.rankDelta)} · ${scorePart}`,
         delta.current.creatorAddress,
         params.roomIds,
       ),
@@ -515,8 +583,45 @@ function buildCompactMoveLines(params: {
   return lines.slice(0, MAX_MOVE_LINES)
 }
 
+function buildCompactLeadSummary(params: {
+  currentRows: MetricsSnapshotRow[]
+  previousRows: MetricsSnapshotRow[]
+  topRows: number
+  labels: CreatorLabelMap
+  entrantCount: number
+  exitCount: number
+  newCreators: number
+}): string {
+  const leader = params.currentRows[0]
+  if (!leader) return 'No ranked creators in this snapshot yet.'
+
+  const previousLeader = params.previousRows[0]
+  const leaderLabel = creatorIdentity(leader, params.labels)
+  const parts: string[] = [`${leaderLabel} leads at score ${formatScore(leader.score)}`]
+
+  if (previousLeader && previousLeader.creatorAddress !== leader.creatorAddress) {
+    parts.push(
+      `replacing ${creatorIdentity(previousLeader, params.labels)} from the prior snapshot`,
+    )
+  }
+
+  if (params.entrantCount > 0 || params.exitCount > 0) {
+    const churn: string[] = []
+    if (params.entrantCount > 0) churn.push(`${params.entrantCount} new in top ${params.topRows}`)
+    if (params.exitCount > 0) churn.push(`${params.exitCount} dropped out`)
+    parts.push(churn.join(', '))
+  } else if (params.newCreators > 0) {
+    parts.push(`${params.newCreators} newly tracked creators joined the index`)
+  } else {
+    parts.push('top ranks held steady')
+  }
+
+  return parts.join(' · ') + '.'
+}
+
 function buildCompactNarrative(params: {
   deltas: SnapshotDelta[]
+  labels: CreatorLabelMap
   newCreators: number
   activeCreators24h: number
   publications24h: number
@@ -524,20 +629,31 @@ function buildCompactNarrative(params: {
   exitCount: number
 }): string {
   const parts: string[] = []
-  if (params.newCreators > 0) parts.push(`${params.newCreators} new tracked`)
-  if (params.publications24h > 0) parts.push(`${params.publications24h} pubs (24h)`)
-  if (params.activeCreators24h > 0) parts.push(`${params.activeCreators24h} active (24h)`)
-  if (params.entrantCount > 0) parts.push(`${params.entrantCount} entered top ranks`)
-  if (params.exitCount > 0) parts.push(`${params.exitCount} fell out of top ranks`)
+  if (params.publications24h > 0) {
+    parts.push(`${params.publications24h} publication${params.publications24h === 1 ? '' : 's'} in the last 24h`)
+  }
+  if (params.activeCreators24h > 0 && params.publications24h === 0) {
+    parts.push(`${params.activeCreators24h} creator${params.activeCreators24h === 1 ? '' : 's'} published recently`)
+  }
 
   const biggestMover = [...params.deltas]
     .filter((delta) => delta.scoreDelta !== null && Math.abs(delta.scoreDelta) >= SCORE_MOVE_EPSILON)
     .sort((a, b) => Math.abs(b.scoreDelta ?? 0) - Math.abs(a.scoreDelta ?? 0))[0]
 
-  const lead = parts.length > 0 ? parts.join(' · ') + '.' : 'Leaderboard stable vs prior snapshot.'
-  if (!biggestMover) return lead
-  const mover = `${creatorLabel(biggestMover.current)} ${formatRankDelta(biggestMover.rankDelta)} (score ${formatScore(biggestMover.current.score)}).`
-  return `${lead} Biggest score move: ${mover}`
+  if (biggestMover) {
+    const delta = biggestMover.scoreDelta ?? 0
+    parts.push(
+      `Largest score swing: ${creatorIdentity(biggestMover.current, params.labels)} (${delta > 0 ? '+' : ''}${delta.toFixed(3)}, ${formatRankDelta(biggestMover.rankDelta)})`,
+    )
+  }
+
+  if (parts.length === 0) {
+    return params.newCreators > 0
+      ? `${params.newCreators} new creators indexed since the last snapshot; ranks otherwise stable.`
+      : 'Ranks and scores are broadly unchanged vs the prior snapshot.'
+  }
+
+  return parts.join(' · ') + '.'
 }
 
 function buildCompactBriefText(params: {
@@ -586,6 +702,18 @@ function buildCompactBriefText(params: {
       activeCreators24h,
     }),
   )
+  lines.push('')
+  lines.push(
+    buildCompactLeadSummary({
+      currentRows: params.currentRows,
+      previousRows: params.previousRows,
+      topRows: params.topRows,
+      labels: params.labels,
+      entrantCount,
+      exitCount,
+      newCreators,
+    }),
+  )
 
   const majorParts = params.marketRows
     .slice(0, params.majorRows)
@@ -617,6 +745,7 @@ function buildCompactBriefText(params: {
 
   const narrative = buildCompactNarrative({
     deltas,
+    labels: params.labels,
     newCreators,
     activeCreators24h,
     publications24h: pubs24h.length,
@@ -920,11 +1049,16 @@ export async function buildAlfaClubBriefContext(params?: {
     return { ok: false, reason: 'empty_snapshot', snapshotTs }
   }
 
-  const labels = await readCreatorLabels(currentRows.map((row) => row.creatorAddress))
-  const tokenIdByAddress = new Map<string, string>()
+  const labelHintMap = new Map<string, string>()
   for (const row of [...currentRows, ...previousRows]) {
-    tokenIdByAddress.set(row.creatorAddress.toLowerCase(), row.tokenId.toString())
+    labelHintMap.set(row.creatorAddress.toLowerCase(), row.tokenId.toString())
   }
+  const labelHints = [...labelHintMap.entries()].map(([address, tokenId]) => ({
+    address,
+    tokenId,
+  }))
+  const labels = await readCreatorLabels(labelHints)
+  const tokenIdByAddress = labelHintMap
   const roomLinkHints = [...tokenIdByAddress.entries()].map(([address, tokenId]) => ({
     address,
     tokenId,
@@ -988,22 +1122,6 @@ export async function runAlfaClubDailyBrief(params: {
   flags?: DailyBriefFlags
 } = {}): Promise<AlfaClubDailyBriefResult> {
   const flags = params.flags ?? readAlfaClubDailyBriefFlags()
-  if (
-    readAlfaClubDailyBriefSeparateFromBridge() &&
-    isDailyBriefRoomSameAsBridgeRoom(flags.roomId)
-  ) {
-    return {
-      ok: false,
-      reason: 'brief_room_same_as_bridge',
-      snapshotTs: null,
-      previousSnapshotTs: null,
-      sent: false,
-      skippedDuplicate: false,
-      roomId: flags.roomId,
-      lane: null,
-      messageText: null,
-    }
-  }
   if (!flags.enabled) {
     return {
       ok: false,
@@ -1036,8 +1154,7 @@ export async function runAlfaClubDailyBrief(params: {
 
   const timestamps = await listRecentSnapshotTimestamps(2)
   const previousSnapshotTs = timestamps.find((ts) => ts !== snapshotTs) ?? null
-  const key = dispatchKey({ snapshotTs, roomId: flags.roomId })
-  if (!flags.forceSend && (await hasDailyBriefDispatch(key))) {
+  if (!flags.forceSend && (await hasDailyBriefDispatchForSnapshot(snapshotTs))) {
     return {
       ok: true,
       snapshotTs,
@@ -1078,30 +1195,42 @@ export async function runAlfaClubDailyBrief(params: {
   }
 
   let messageText = formatAlfaClubDailyBrief(built.formatInput)
-  const opsFooter = formatAlfaClubBriefOpsRoomFooter(flags.roomId)
-  if (opsFooter) {
-    messageText = `${messageText}\n\n${opsFooter}`
-  }
-  const send = await sendAlfaClubRoomText({
-    text: messageText,
-    roomId: flags.roomId,
-    flags: readAlfaClubChatBridgeFlags(),
-  })
-  await recordDailyBriefDispatch({
-    key,
-    snapshotTs,
-    previousSnapshotTs,
-    roomId: flags.roomId,
-    messageText,
-  })
-  return {
-    ok: true,
-    snapshotTs,
-    previousSnapshotTs,
-    sent: true,
-    skippedDuplicate: false,
-    roomId: flags.roomId,
-    lane: send.lane,
-    messageText,
+  try {
+    const send = await sendDailyBriefToCommandRooms({ text: messageText })
+    messageText = send.posted[0]?.messageText ?? messageText
+    for (const post of send.posted) {
+      await recordDailyBriefDispatch({
+        key: dispatchKey({ snapshotTs, roomId: post.roomId }),
+        snapshotTs,
+        previousSnapshotTs,
+        roomId: post.roomId,
+        messageText: post.messageText,
+      })
+    }
+    const roomId = send.posted.map((post) => post.roomId).join(', ')
+    const lane = send.posted.map((post) => post.lane).join(', ')
+    return {
+      ok: true,
+      snapshotTs,
+      previousSnapshotTs,
+      sent: true,
+      skippedDuplicate: false,
+      roomId,
+      lane,
+      messageText,
+    }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message.slice(0, 120) : 'send_failed'
+    return {
+      ok: false,
+      reason,
+      snapshotTs,
+      previousSnapshotTs,
+      sent: false,
+      skippedDuplicate: false,
+      roomId: flags.roomId,
+      lane: null,
+      messageText,
+    }
   }
 }

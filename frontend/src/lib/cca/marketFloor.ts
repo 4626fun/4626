@@ -656,3 +656,38 @@ export async function computeMarketFloorQuote(params: {
   }
 }
 
+/** Creator USD price in 1e18 units from the deploy market-floor ETH quote and oracle ETH/USD. */
+export function creatorUsdPrice1e18FromEthFloor(params: {
+  weiPerToken: bigint
+  ethUsdPrice1e18: bigint
+}): bigint {
+  const { weiPerToken, ethUsdPrice1e18 } = params
+  if (weiPerToken <= 0n || ethUsdPrice1e18 <= 0n) return 0n
+  return (weiPerToken * ethUsdPrice1e18) / 10n ** 18n
+}
+
+export async function resolveCreatorUsdPrice1e18FromMarketFloor(params: {
+  publicClient: ReadonlyPublicClient
+  creatorCoin: Address
+  ethUsdPrice1e18: bigint
+  twapDurationSec?: number
+  zoraEthTwapDurationSec?: number
+  discountBps?: number
+}): Promise<{ creatorUsdPrice1e18: bigint; weiPerToken: bigint; quote: MarketFloorQuote }> {
+  const quote = await computeMarketFloorQuote({
+    publicClient: params.publicClient,
+    creatorCoin: params.creatorCoin,
+    twapDurationSec: params.twapDurationSec,
+    zoraEthTwapDurationSec: params.zoraEthTwapDurationSec,
+    discountBps: params.discountBps,
+  })
+  const creatorUsdPrice1e18 = creatorUsdPrice1e18FromEthFloor({
+    weiPerToken: quote.weiPerToken,
+    ethUsdPrice1e18: params.ethUsdPrice1e18,
+  })
+  if (creatorUsdPrice1e18 <= 0n) {
+    throw new Error('Market floor resolved to non-positive creator USD price')
+  }
+  return { creatorUsdPrice1e18, weiPerToken: quote.weiPerToken, quote }
+}
+

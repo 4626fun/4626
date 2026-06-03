@@ -489,14 +489,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         heroCutoutArtworkUrl,
         heroCutoutSourceBytes,
       })
+      const hasTrustedHeroCutout =
+        !!heroCutoutSourceBytes &&
+        heroCutoutSourceBytes.length > 0 &&
+        !heroCutoutLoadPolicy.heroCutoutLoadFailed
       const iconPng = await renderDeterministicTokenIcon({
         size,
         sourceBytes,
         heroCutoutSourceBytes,
         suppressBreakout: heroCutoutLoadPolicy.suppressBreakout,
+        allowHeroCutoutBreakoutForNonPixelArt: hasTrustedHeroCutout,
         symbol: renderedSymbol,
         signatureText: renderedSignature,
-        renderPreset,
+        renderPreset: hasTrustedHeroCutout ? 'hero' : renderPreset,
       })
       const b64 = Buffer.from(iconPng).toString('base64')
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><image href="data:image/png;base64,${b64}" width="${size}" height="${size}" preserveAspectRatio="none"/></svg>`
@@ -602,7 +607,7 @@ interface FramedSvgParams {
 }
 
 const SOURCE_CACHE_V = 4
-const FRAME_STYLE_V = 172
+const FRAME_STYLE_V = 174
 const FRAME_VIEWBOX_SIZE = 256
 const FRAME_INSET_RATIO = 38 / FRAME_VIEWBOX_SIZE
 const FRAME_RADIUS_RATIO = 30 / 184
@@ -2370,6 +2375,7 @@ async function renderDeterministicTokenIcon(params: {
   sourceBytes: Uint8Array | null
   heroCutoutSourceBytes?: Uint8Array | null
   suppressBreakout?: boolean
+  allowHeroCutoutBreakoutForNonPixelArt?: boolean
   symbol: string
   signatureText?: string
   renderPreset?: 'standard' | 'hero' | 'pixel'
@@ -2380,6 +2386,7 @@ async function renderDeterministicTokenIcon(params: {
       sourceImage: params.sourceBytes ?? undefined,
       heroCutoutSourceImage: params.heroCutoutSourceBytes ?? undefined,
       suppressBreakout: params.suppressBreakout,
+      allowHeroCutoutBreakoutForNonPixelArt: params.allowHeroCutoutBreakoutForNonPixelArt,
       symbol: params.symbol,
       signatureText: params.signatureText ?? params.symbol,
       renderPreset: params.renderPreset,
@@ -2568,14 +2575,19 @@ async function getOrCreatePng(params: {
     heroCutoutArtworkUrl: params.heroCutoutUpstreamUrl ?? null,
     heroCutoutSourceBytes,
   })
+  const hasTrustedHeroCutout =
+    !!heroCutoutSourceBytes &&
+    heroCutoutSourceBytes.length > 0 &&
+    !heroCutoutLoadPolicy.heroCutoutLoadFailed
   const pngBytes = await renderDeterministicTokenIcon({
     size: params.size,
     sourceBytes,
     heroCutoutSourceBytes,
     suppressBreakout: heroCutoutLoadPolicy.suppressBreakout,
+    allowHeroCutoutBreakoutForNonPixelArt: hasTrustedHeroCutout,
     symbol: params.symbol,
     signatureText: params.signatureText ?? params.symbol,
-    renderPreset: params.renderPreset,
+    renderPreset: hasTrustedHeroCutout ? 'hero' : params.renderPreset,
   })
 
   // Avoid caching contained fallback output when a hero cutout URL exists

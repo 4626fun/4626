@@ -1,9 +1,9 @@
-import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../../src/wallet/canonicalWalletPolicy.js'
+import { CANONICAL_CSW_ADDRESS } from '../../../../src/wallet/canonicalWalletPolicy.js'
 
 export const keeprSocialCharacter = {
   name: 'Keepr-Social',
   username: 'keepr_social_2205',
-  id: TARGET_CANONICAL_CSW_ADDRESS,
+  id: CANONICAL_CSW_ADDRESS,
   description: 'Social and reputation specialist for Keepr swarm routing.',
 
   bio: [

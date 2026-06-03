@@ -1,7 +1,10 @@
 # --------------------------------------------------------------------------
 # Railway deployment config — Hermit AlfaClub/Pinata Creative Agent
-# (for 4626-alfaclub-bridge / hermit.4626.fun service)
+# (4626-hermit-agent / 4626-alfaclub-bridge Railway service)
 # --------------------------------------------------------------------------
+# Custom domain hermit.4626.fun is owned by Vercel for Telegram webhook ingress
+# (see TELEGRAM_TO_ALFACLUB_INGRESS_HOST + HERMIT_TELEGRAM_WEBHOOK_URL). Railway
+# health stays on *.up.railway.app — do not attach hermit.4626.fun here.
 # EXACT UI SETTINGS TO COPY (for your 4626-alfaclub-bridge service):
 #
 # Build
@@ -29,8 +32,9 @@
 #
 # You should also have the usual ones:
 #   ALFACLUB_CHAT_JWT (or the Privy triplet)
-#   HERMIT_PINATA_CHAT_ENDPOINT + HERMIT_PINATA_BEARER_TOKEN
-#   ALFACLUB_HERMIT_COMMAND_ROOMS=1659 (or similar)
+#   HERMIT_AGENT_CHAT_ENDPOINT + HERMIT_AGENT_BEARER_TOKEN
+#   ALFACLUB_CHAT_ROOM_ID=1043 (primary / legacy single-room paths)
+#   ALFACLUB_HERMIT_COMMAND_ROOMS=1043,1659 (both Hermit command rooms)
 #
 # Config-as-code
 #   - Railway Config File: railway.hermit.toml
@@ -52,6 +56,7 @@ watchPatterns = [
   "/frontend/tsconfig.json",
   "/frontend/tsconfig.node.json",
   "/patches/**",
+  "/frontend/shared/**",
   "/railway.hermit.toml",
 ]
 

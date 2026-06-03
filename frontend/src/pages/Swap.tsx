@@ -53,10 +53,17 @@ import {
   searchZoraCreatorCoinsForSwap,
   zoraCoinsToSwapTokenOptions,
 } from '@/lib/swap/zoraTokenSearch'
-import { enrichSwapTokenOption, swapTokenOptionNeedsLabelEnrichment } from '@/lib/swap/swapTokenLabels'
+import {
+  enrichSwapTokenOption,
+  resolveSwapTokenVerified,
+  swapTokenOptionNeedsLabelEnrichment,
+} from '@/lib/swap/swapTokenLabels'
 import { fetchWalletZoraHoldingsBundle } from '@/lib/zora/walletHoldings'
-import { deriveSwapUsdEstimates } from '@/lib/swap/swapAmountUsd'
-import { amountUnitsFromBalancePercent } from '@/lib/swap/swapDisplayAmount'
+import { deriveSwapUsdEstimates, isNativeEthToken, isUsdStablecoinToken } from '@/lib/swap/swapAmountUsd'
+import { formatSlippagePctForDisplay } from '@/lib/swap/swapAutoSlippage'
+import { extractSwapQuoteDetails } from '@/lib/swap/swapQuoteDetails'
+import { amountUnitsFromBalancePercent, formatSwapTokenBalanceLabel } from '@/lib/swap/swapDisplayAmount'
+import { ZORA_TOKEN_LOGO_URL } from '@/lib/tokens/tokenLogo'
 import { useSwapAssetBalance } from '@/lib/swap/useSwapAssetBalance'
 import { useSwapTokenUsdPrices } from '@/lib/swap/useSwapTokenUsdPrices'
 import { isBaseAccountWallet, useSwapSubAccountRuntime } from '@/lib/swap/useSwapSubAccountRuntime'
@@ -64,7 +71,6 @@ import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { resolveEffectiveExecutionTrack, deriveAccountChromeExecution, shouldUseBaseAppSubAccountPath, isZoraLinkedFromAccountSignals } from '@/lib/wallet/userExecutionTrack'
 import { resolveEmbeddedOwnerOnCanonicalCsw } from '@/lib/wallet/cswOwnerRead'
-import { pickQuote } from '@/lib/uniswap/tradingApi'
 import { type WalletMode } from '@/lib/uniswap/walletMode'
 import {
   evaluateCanonicalSignerGate,
@@ -134,8 +140,8 @@ const CORE_TOKENS: TokenOption[] = [
     name: 'Zora',
     address: CONTRACTS.zora,
     group: 'core',
-    logoUrl: uniswapBaseLogo(CONTRACTS.zora),
-    logoUrls: tokenLogoFallbacks(CONTRACTS.zora),
+    logoUrl: ZORA_TOKEN_LOGO_URL,
+    logoUrls: [ZORA_TOKEN_LOGO_URL],
   },
 ]
 
@@ -228,8 +234,6 @@ async function fetchSwapCreatorCoinOptions(params: {
   const sliced = merged.slice(0, params.limit)
   return enrichDiscoveredSwapTokenOptions(sliced)
 }
-
-type QuoteShape = Record<string, unknown>
 
 let warnedSwapPrivyHookFailure = false
 let canonicalSessionAutoRefreshAttemptedGlobal = false
@@ -359,11 +363,9 @@ function pickPrivyEmbeddedEoaAddressFromUser(user: any): Address | null {
 
 function fmtBalFromAmount(amount: string | null | undefined, symbol: string): string | undefined {
   if (amount == null || amount === '') return undefined
-  const n = parseFloat(amount)
-  if (!Number.isFinite(n)) return undefined
-  if (n === 0) return `0 ${symbol}`
-  if (n < 0.0001) return `<0.0001 ${symbol}`
-  return `${parseFloat(n.toPrecision(4))} ${symbol}`
+  const formatted = formatSwapTokenBalanceLabel(amount, symbol)
+  if (!formatted || formatted === '0') return `0 ${symbol}`
+  return `${formatted} ${symbol}`
 }
 
 function parsePositiveAmountToUnits(value: string, decimals: number): bigint | null {
@@ -376,12 +378,6 @@ function parsePositiveAmountToUnits(value: string, decimals: number): bigint | n
   } catch {
     return null
   }
-}
-
-function formatPercent(value: unknown): string | null {
-  const n = typeof value === 'number' ? value : Number(value)
-  if (!Number.isFinite(n)) return null
-  return `${n.toFixed(2)}%`
 }
 
 // ─── Liquidity position card ────────────────────────────────────────────────
@@ -555,6 +551,8 @@ export function Swap() {
     setTokenOut,
     amountInUnits,
     setAmountInUnits,
+    slippageAuto,
+    setSlippageAuto,
     slippagePct,
     setSlippagePct,
     activePanel,
@@ -1457,8 +1455,7 @@ export function Swap() {
       const resolved = enriched ?? option
       return {
         ...resolved,
-        // Never auto-trust URL-injected creator/share tokens; only core defaults to verified.
-        verified: resolved.verified ?? (resolved.group === 'core'),
+        verified: resolveSwapTokenVerified(resolved),
         sectionTag:
           resolved.group === 'creator' ? 'creator' : resolved.group === 'share' ? 'content' : undefined,
       }
@@ -1573,6 +1570,7 @@ export function Swap() {
   // ─── Swap execution ───────────────────────────────────────────────────────
   const {
     estimatedOut,
+    effectiveSlippagePct,
     quote,
     busy,
     status,
@@ -1618,6 +1616,7 @@ export function Swap() {
     tokenOut,
     amountInUnits,
     parsedSlippage,
+    slippageAuto,
     parsedDeadlineMinutes,
     preferZoraTradeRoute,
     chainId: swapChainId,
@@ -1662,6 +1661,31 @@ export function Swap() {
         prices: swapUsdPrices,
       }),
     [amountInUnits, buyAmountDisplay, tokenIn, tokenOut, swapUsdPrices],
+  )
+
+  const tokenOutUsdPrice = useMemo(() => {
+    const normalized = tokenOut.trim().toLowerCase()
+    if (isUsdStablecoinToken(tokenOut)) return 1
+    if (isNativeEthToken(tokenOut)) return swapUsdPrices.ethUsd > 0 ? swapUsdPrices.ethUsd : null
+    return swapUsdPrices.tokenUsdByAddress.get(normalized) ?? null
+  }, [swapUsdPrices.ethUsd, swapUsdPrices.tokenUsdByAddress, tokenOut])
+
+  const swapQuoteDetails = useMemo(
+    () =>
+      extractSwapQuoteDetails({
+        quote,
+        ethUsd: swapUsdPrices.ethUsd,
+        tokenOutDecimals: tokenOutBalanceQuery.data?.decimals ?? 18,
+        tokenOutUsd: tokenOutUsdPrice,
+        sponsoredExecution: executionMode === 'canonical',
+      }),
+    [
+      quote,
+      swapUsdPrices.ethUsd,
+      tokenOutBalanceQuery.data?.decimals,
+      tokenOutUsdPrice,
+      executionMode,
+    ],
   )
 
   const tokenOutBalanceLabel = useMemo(() => {
@@ -1738,62 +1762,6 @@ export function Swap() {
     refreshAuthSession,
   ])
 
-  const selectedQuote = useMemo<QuoteShape | null>(() => {
-    if (!quote) return null
-    const candidate = pickQuote(quote) ?? quote
-    return candidate as QuoteShape
-  }, [quote])
-
-  const routeSummary = useMemo(() => {
-    const routeCandidate =
-      selectedQuote?.route ?? selectedQuote?.routeString ?? selectedQuote?.routing ?? quote?.routing
-    if (routeCandidate === null || routeCandidate === undefined) return null
-    const text = String(routeCandidate).trim()
-    return text || null
-  }, [selectedQuote, quote])
-
-  const priceImpactLabel = useMemo(() => {
-    const priceImpactCandidate =
-      selectedQuote?.priceImpact ??
-      selectedQuote?.priceImpactPercent ??
-      quote?.priceImpact ??
-      quote?.priceImpactPercent
-    return formatPercent(priceImpactCandidate)
-  }, [selectedQuote, quote])
-
-  const gasEstimateLabel = useMemo(() => {
-    const gasCandidate =
-      selectedQuote?.gasFeeUSD ??
-      selectedQuote?.gasEstimateUSD ??
-      quote?.gasFeeUSD ??
-      quote?.gasEstimateUSD
-    if (typeof gasCandidate === 'string' && gasCandidate.trim()) return gasCandidate
-    const numeric = typeof gasCandidate === 'number' ? gasCandidate : Number(gasCandidate)
-    if (!Number.isFinite(numeric)) return null
-    return `$${numeric.toFixed(2)}`
-  }, [selectedQuote, quote])
-
-  const lpFeeUsd = useMemo(() => {
-    const candidate = selectedQuote?.lpFee
-    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
-      return `$${candidate.toFixed(2)}`
-    }
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate.trim()
-    }
-    return null
-  }, [selectedQuote])
-
-  const protocolFeeUsd = useMemo(() => {
-    const candidate = selectedQuote?.protocolFee
-    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
-      return `$${candidate.toFixed(2)}`
-    }
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate.trim()
-    }
-    return null
-  }, [selectedQuote])
 
   const handleSwitchTokens = useCallback(() => {
     switchTokens()
@@ -1874,6 +1842,8 @@ export function Swap() {
   const busyRef = useRef(busy)
   busyRef.current = busy
 
+  const autoQuoteSlippagePct = slippageAuto ? effectiveSlippagePct : parsedSlippage
+
   // Debounced auto-quote: only fires when actual swap inputs change.
   useEffect(() => {
     // Quotes are read-only and only need a session plus execution address.
@@ -1892,7 +1862,8 @@ export function Swap() {
     tokenIn,
     tokenOut,
     amountInUnits,
-    parsedSlippage,
+    autoQuoteSlippagePct,
+    slippageAuto,
     executionAddress,
     quoteReady,
     quoteCooldownActive,
@@ -1900,6 +1871,10 @@ export function Swap() {
     txState,
     handleQuote,
   ])
+
+  const slippageDisplayPct = slippageAuto
+    ? formatSlippagePctForDisplay(effectiveSlippagePct)
+    : slippagePct
 
   // One-click flow: after review/build, immediately execute without an extra in-app confirm modal.
   useEffect(() => {
@@ -2095,15 +2070,19 @@ export function Swap() {
                         }
                         quoteUpdatedAt={quoteUpdatedAt ? new Date(quoteUpdatedAt).toLocaleTimeString() : null}
                         approvalRequired={approvalRequired}
-                        routeSummary={routeSummary}
-                        gasEstimateLabel={gasEstimateLabel}
-                        priceImpactLabel={priceImpactLabel}
-                        lpFeeUsd={lpFeeUsd}
-                        protocolFeeUsd={protocolFeeUsd}
+                        routeSummary={swapQuoteDetails.routeSummary}
+                        routeLegs={swapQuoteDetails.routeLegs}
+                        gasEstimateLabel={swapQuoteDetails.gasEstimateLabel}
+                        priceImpactLabel={swapQuoteDetails.priceImpactLabel}
+                        lpFeeUsd={swapQuoteDetails.lpFeeUsd}
+                        protocolFeeUsd={swapQuoteDetails.protocolFeeUsd}
+                        quoteAggregatorLabel={swapQuoteDetails.aggregatorLabel}
                         selectedChainId={swapChainId}
                         walletChainId={walletChainId}
                         onSelectChain={handleSelectSwapChain}
-                        slippagePct={slippagePct}
+                        slippagePct={slippageDisplayPct}
+                        slippageIsAuto={slippageAuto}
+                        onSetSlippageAuto={setSlippageAuto}
                         onOpenTokenSelector={openTokenSelector}
                         onAmountChange={setAmountInUnits}
                         onQuickPercent={(pct) => {

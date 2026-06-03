@@ -39,24 +39,35 @@ export function RouteVisualization(props: {
   const isSameChain = nodes.length === 3 && nodes[0]!.label === nodes[2]!.label
 
   if (props.compact) {
+    const pathLabels =
+      props.routeSummary && (props.routeSummary.includes('→') || props.routeSummary.includes('->'))
+        ? props.routeSummary
+            .split(/\s*(?:→|->)\s*/)
+            .map((part) => part.trim())
+            .filter(Boolean)
+        : nodes.map((node) => node.label)
+
     return (
-      <div className={`inline-flex items-center gap-1 ${props.className ?? ''}`}>
-        <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-zinc-300 border border-white/8">
-          {nodes[0]!.label}
-        </span>
-        <svg width="16" height="6" viewBox="0 0 16 6" fill="none" aria-hidden>
-          <path d="M0 3 L12 3 M10 1 L14 3 L10 5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600" />
-        </svg>
-        {isSameChain ? (
-          <span className="flex items-center gap-0.5 text-[10px] text-zinc-500">
-            <Zap className="h-2.5 w-2.5" />
-            Smart routed
+      <div className={`inline-flex flex-wrap items-center gap-1 ${props.className ?? ''}`}>
+        {pathLabels.map((label, index) => (
+          <span key={`${label}-${index}`} className="flex items-center gap-1">
+            {index > 0 ? (
+              <svg width="16" height="6" viewBox="0 0 16 6" fill="none" aria-hidden>
+                <path
+                  d="M0 3 L12 3 M10 1 L14 3 L10 5"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-zinc-600"
+                />
+              </svg>
+            ) : null}
+            <span className="rounded-full border border-white/8 bg-white/5 px-2 py-0.5 text-[10px] text-zinc-300">
+              {label}
+            </span>
           </span>
-        ) : (
-          <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-zinc-300 border border-white/8">
-            {nodes[nodes.length - 1]!.label}
-          </span>
-        )}
+        ))}
       </div>
     )
   }

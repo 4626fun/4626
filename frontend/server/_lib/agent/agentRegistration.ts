@@ -10,7 +10,8 @@ import {
   ERC8004_DOMAIN_VERIFICATION_PATH,
   STRICT_IMMUTABLE_AGENT_URI_SUMMARY,
 } from '../../../src/lib/agent/erc8004AgentUriPolicy.js'
-import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
+import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
+import { readCanonicalCswAddressEnv } from '../wallet/canonicalCswEnv.js'
 
 export type RegistrationService = {
   name: string
@@ -37,7 +38,7 @@ const REGISTRATION_TYPE = 'https://eips.ethereum.org/EIPS/eip-8004#registration-
 const SUPPORTED_ENDPOINT_PREFIXES = ['https://', 'http://', 'ipfs://', 'ar://', 'data:'] as const
 export { AGENT_REGISTRATION_WELL_KNOWN_PATH, ERC8004_DOMAIN_VERIFICATION_PATH }
 export const STRICT_IMMUTABLE_AGENT_URI_HINT = STRICT_IMMUTABLE_AGENT_URI_SUMMARY
-const CANONICAL_AGENT_WALLET_CAIP10 = `eip155:8453:${TARGET_CANONICAL_CSW_ADDRESS}` as const
+const CANONICAL_AGENT_WALLET_CAIP10 = `eip155:8453:${CANONICAL_CSW_ADDRESS}` as const
 
 const BRAND_ASSET_VERSION = Number(siteConfig.brandAssetVersion ?? 3)
 const BASE_APP_ICON_URL = `https://4626.fun/assets/base-app-icon-1024.png?v=${BRAND_ASSET_VERSION}`
@@ -51,9 +52,9 @@ const fallbackRegistration: RegistrationFile = {
     { name: 'web', endpoint: 'https://4626.fun' },
     {
       name: 'XMTP',
-      endpoint: `https://xmtp.chat/dm/${TARGET_CANONICAL_CSW_ADDRESS}`,
+      endpoint: `https://xmtp.chat/dm/${CANONICAL_CSW_ADDRESS}`,
       version: 'production',
-      address: TARGET_CANONICAL_CSW_ADDRESS,
+      address: CANONICAL_CSW_ADDRESS,
       description: 'XMTP messaging endpoint — DM or group chat with the agent. Identity is a Coinbase Smart Wallet on Base (chain 8453).',
     },
     {
@@ -329,9 +330,9 @@ export function buildAgentRegistration(origin: string): {
   // ---------------------------------------------------------------------------
   // Dynamic XMTP / agentWallet injection
   // ---------------------------------------------------------------------------
-  // If XMTP_AGENT_CSW_ADDRESS is set, ensure the XMTP and agentWallet services
+  // If CANONICAL_CSW_ADDRESS is set, ensure the XMTP and agentWallet services
   // reflect the actual CSW address rather than a hardcoded value.
-  const cswAddress = (process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim()
+  const cswAddress = readCanonicalCswAddressEnv()
   const xmtpEnv = (process.env.XMTP_ENV ?? 'production').trim()
 
   if (cswAddress && isAddressLike(cswAddress)) {
