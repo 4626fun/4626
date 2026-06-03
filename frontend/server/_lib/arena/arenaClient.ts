@@ -384,10 +384,22 @@ export async function runArenaCreateAgent(config = readArenaConfig(), ownerAddre
   // initialized with a valid access+refresh pair, acp commands auto-refresh the short-lived
   // access token using the refresh_token and update local storage. You only need to re-rotate
   // the envs when the refresh_token itself expires. No extra "refresh thing" in our code for now.
-  const acpAccess = process.env.ACP_ACCESS_TOKEN
-  const acpRefresh = process.env.ACP_REFRESH_TOKEN
-  const acpOwner = process.env.ACP_OWNER_WALLET
-  if (acpAccess && acpRefresh && acpOwner) {
+  const acpAccess = String(process.env.ACP_ACCESS_TOKEN ?? '').trim()
+  const acpRefresh = String(process.env.ACP_REFRESH_TOKEN ?? '').trim()
+  const acpOwner = String(process.env.ACP_OWNER_WALLET ?? '').trim()
+  const hasAnyAcpRotationEnv = Boolean(acpAccess || acpRefresh || acpOwner)
+  const hasAllAcpRotationEnv = Boolean(acpAccess && acpRefresh && acpOwner)
+  if (hasAnyAcpRotationEnv && !hasAllAcpRotationEnv) {
+    const missing: string[] = []
+    if (!acpAccess) missing.push('ACP_ACCESS_TOKEN')
+    if (!acpRefresh) missing.push('ACP_REFRESH_TOKEN')
+    if (!acpOwner) missing.push('ACP_OWNER_WALLET')
+    return fail(
+      `ACP session rotation env is partially configured. Missing: ${missing.join(', ')}. Refusing to continue with agent create.`,
+    )
+  }
+
+  if (hasAllAcpRotationEnv) {
     const configureArgs = [
       'configure',
       '--token', acpAccess,
@@ -395,11 +407,19 @@ export async function runArenaCreateAgent(config = readArenaConfig(), ownerAddre
       '--wallet', acpOwner,
     ]
     const configureCommand = buildAcpCommand(config, configureArgs)
-    await runCommand(configureCommand, config)
+    const configureRun = await runCommand(configureCommand, config)
     auditLog('acp_session_rotation', {
+      ok: configureRun.ok,
       owner: acpOwner,
       dryRun: config.dryRun,
     })
+    if (!configureRun.ok) {
+      return {
+        ok: false,
+        message: 'acp configure failed; refusing to run agent create under a potentially stale ACP session.',
+        run: configureRun,
+      }
+    }
   }
 
   // Note: buildAcpCommand + buildArenaCommandEnv will inject any currently resolved

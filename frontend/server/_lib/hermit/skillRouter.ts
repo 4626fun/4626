@@ -2326,7 +2326,7 @@ export async function executeHermitCommand(
               saved ? 'Mapping saved.' : 'Mapping write may have failed (check logs).',
               `steps: ${stepResults.join(' ')}`,
               'Verify with: /arena identity show  |  /arena status',
-              'Note: the agent was created under the runtime ACP session (owner = ACP_OWNER_WALLET). For full Virtuals dashboard ownership under your Alfa EOA, create/claim via web UI at app.virtuals.io while connected as that wallet.',
+              'Note: the agent was created under the active runtime ACP session (owner resolves to ACP_OWNER_WALLET when ACP_* rotation vars are set). For full Virtuals dashboard ownership under your Alfa EOA, create/claim via web UI at app.virtuals.io while connected as that wallet.',
             ].filter(Boolean).join('\n'),
           }
         }
@@ -2334,8 +2334,8 @@ export async function executeHermitCommand(
         // Create failed or no parsable ids
         const out = sanitizeOutputForReply(cr.run?.stdout || cr.run?.stderr)
         const guidance = isDefault
-          ? 'To switch the room default: create on web connected as your Alfa wallet (recommended for dashboard ownership), then /arena register default <id> <wallet>, or run /arena register default (no args) again. (The no-args create uses the bot ACP session.)'
-          : 'Create/claim at app.virtuals.io/acp/new while connected as your room sender wallet (for ownership match), then /arena register <id> <wallet>. (The no-args create path uses the bot runtime ACP session for a functional arena agent.)'
+          ? 'To switch the room default: create on web connected as your Alfa wallet (recommended for dashboard ownership), then /arena register default <id> <wallet>, or run /arena register default (no args) again. (No-args create uses the runtime ACP session currently active on the service.)'
+          : 'Create/claim at app.virtuals.io/acp/new while connected as your room sender wallet (for ownership match), then /arena register <id> <wallet>. (No-args create uses the runtime ACP session currently active on the service.)'
         return {
           kind: 'hermit',
           provider: 'local',
