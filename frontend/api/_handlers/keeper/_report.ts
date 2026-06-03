@@ -26,6 +26,15 @@ const VAULT_ABI = [
   { type: 'function', name: 'report', inputs: [], outputs: [{ type: 'uint256' }, { type: 'uint256' }], stateMutability: 'nonpayable' },
 ] as const
 
+function isKnownKeeperReportGasRejection(error: unknown): boolean {
+  const message = String(error instanceof Error ? error.message : error).toLowerCase()
+  return (
+    message.includes('gas required exceeds allowance (0)') ||
+    message.includes('insufficient funds for gas') ||
+    message.includes('estimate gas execution reverted')
+  )
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -82,6 +91,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<{ txHash: string; status: string }>)
   } catch (err) {
     console.error('[keeper/report] Error:', err)
+    if (isKnownKeeperReportGasRejection(err)) {
+      return res.status(200).json({
+        success: false,
+        error: 'keeper_report_gas_rejected',
+        data: {
+          status: 'skipped',
+          reason: 'gas_rejected',
+        },
+      } satisfies ApiEnvelope<{ status: string; reason: string }>)
+    }
     return res.status(500).json({
       success: false,
       error: err instanceof Error ? err.message : 'Unknown error',

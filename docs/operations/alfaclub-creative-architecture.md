@@ -237,14 +237,13 @@ Provider URL contract:
 - Never invent a URL: if the provider has no real image to surface,
   omit the field (or set it to `null`).
 
-When a valid attachment is produced, AlfaClub's room renders it
+When a valid attachment is produced, AlfaClub's room can render it
 inline. For AlfaClub bridge replies (`chatId = alfaclub:<roomId>`),
-the bridge sends **caption + attachment first**, then a **second
-message** with the X status URL when `HERMIT_ALFACLUB_X_LINK_AFTER_MEDIA`
-is enabled (default). Raw image URLs are stripped from the primary
-reply text so the client does not show a bare hyperlink instead of
-the inline GIF. Non-AlfaClub surfaces may still use
-`HERMIT_GMEOW_POST_TO_X_FIRST` (tweet URL only, no inline attachment).
+the default runtime now posts to X first and returns the tweet URL
+in-room when `HERMIT_ALFACLUB_POST_X_FIRST` is enabled (default).
+Set `HERMIT_ALFACLUB_POST_X_FIRST=0` to keep direct inline media
+delivery in-room. Non-AlfaClub surfaces can still use
+`HERMIT_NON_ALFACLUB_POST_X_FIRST` (tweet URL only).
 
 ### 5. Hermit workspace seeds — manual sync
 

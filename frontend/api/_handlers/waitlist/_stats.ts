@@ -22,6 +22,12 @@ function emptyStats(): WaitlistStatsResponse {
   }
 }
 
+function shouldFailOpenForStats(): boolean {
+  // Keep dry-run behavior, and also avoid surfacing transient DB outages as 500s
+  // on public waitlist urgency telemetry.
+  return true
+}
+
 function shouldFailOpenForDryRun(): boolean {
   if (String(process.env.DEPLOY_DRY_RUN_PORT ?? '').trim()) return true
   const deploymentVersion = String(process.env.VITE_DEPLOYMENT_VERSION ?? '').toLowerCase()
@@ -58,7 +64,7 @@ export default async function handler(req: any, res: any) {
   try {
     const db = await getDb()
     if (!db) {
-      if (shouldFailOpenForDryRun()) {
+      if (shouldFailOpenForStats() || shouldFailOpenForDryRun()) {
         return res.status(200).json({ success: true, data: emptyStats() } satisfies ApiEnvelope<WaitlistStatsResponse>)
       }
       return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
@@ -84,7 +90,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<WaitlistStatsResponse>)
   } catch (error) {
-    if (shouldFailOpenForDryRun()) {
+    if (shouldFailOpenForStats() || shouldFailOpenForDryRun()) {
       return res.status(200).json({ success: true, data: emptyStats() } satisfies ApiEnvelope<WaitlistStatsResponse>)
     }
     const message = error instanceof Error && error.message ? error.message : 'waitlist_stats_failed'

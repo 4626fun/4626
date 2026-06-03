@@ -72,15 +72,15 @@ function isAlfaClubChatId(chatId: string | undefined): boolean {
   return parseAlfaClubRoomIdFromChatId(chatId) !== null
 }
 
-function isGmeowPostToXFirstEnabled(): boolean {
-  const raw = String(process.env.HERMIT_GMEOW_POST_TO_X_FIRST ?? '')
+function isHermitNonAlfaClubPostXFirstEnabled(): boolean {
+  const raw = String(process.env.HERMIT_NON_ALFACLUB_POST_X_FIRST ?? '')
     .trim()
     .toLowerCase()
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
 }
 
-function isHermitAlfaClubXLinkAfterMediaEnabled(): boolean {
-  const raw = String(process.env.HERMIT_ALFACLUB_X_LINK_AFTER_MEDIA ?? '1')
+function isHermitAlfaClubPostXFirstEnabled(): boolean {
+  const raw = String(process.env.HERMIT_ALFACLUB_POST_X_FIRST ?? '1')
     .trim()
     .toLowerCase()
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
@@ -537,7 +537,7 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
           if (!response) {
             response = result.meme?.caption?.trim() || 'Hermit meme drop'
           }
-          if (isHermitAlfaClubXLinkAfterMediaEnabled() && mediaUrl) {
+          if (isHermitAlfaClubPostXFirstEnabled() && mediaUrl) {
             const xPost = buildHermitXPostPayload({
               reply: result.reply,
               fallbackCaption: result.meme?.caption,
@@ -555,14 +555,20 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
                 typeof tweet.action?.tweetUrl === 'string'
                   ? tweet.action.tweetUrl
                   : extractTweetUrl(tweet.response)
-              if (tweetUrl) alfaclubFollowUpText = tweetUrl
+              if (tweetUrl) {
+                // User-requested mode: post to X first, then post only the tweet
+                // URL in AlfaClub so the room render path is driven by X.
+                response = tweetUrl
+                outboundAttachments = []
+                alfaclubFollowUpText = null
+              }
             } else {
               response = `${response}\n_(${formatHermitXCrossPostSkipMessage(tweet.response)}.)_`.trim()
             }
           }
         } else {
           const shouldPostToXFirst =
-            Boolean(mediaUrl) || (result.kind === 'gmeow' && isGmeowPostToXFirstEnabled())
+            Boolean(mediaUrl) || (result.kind === 'gmeow' && isHermitNonAlfaClubPostXFirstEnabled())
           if (shouldPostToXFirst) {
             const xPost = buildHermitXPostPayload({
               reply: result.reply,

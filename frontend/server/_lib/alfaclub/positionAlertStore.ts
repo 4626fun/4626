@@ -199,25 +199,32 @@ export async function disablePositionAlert(params: {
 }
 
 export async function listEnabledPositionAlerts(limit = 200): Promise<PositionAlertConfig[]> {
-  const db = await getDb()
-  if (!db) return []
-  await ensureAlfaclubPositionAlertSchema(db)
+  try {
+    const db = await getDb()
+    if (!db) return []
+    await ensureAlfaclubPositionAlertSchema(db)
 
-  const capped = Math.min(Math.max(1, limit), 500)
-  const result = await db.sql`
-    SELECT room_id, sender_address, enabled, telegram_enabled,
-           liquidation_warn_pct, target_pnl_usd, target_progress_pct,
-           last_liq_alert_at, last_target_alert_at, updated_at
-    FROM alfaclub.position_alert
-    WHERE enabled = TRUE
-      AND (
-        liquidation_warn_pct IS NOT NULL
-        OR target_pnl_usd IS NOT NULL
-      )
-    ORDER BY updated_at DESC
-    LIMIT ${capped};
-  `
-  return (result.rows as AlertRow[]).map(rowToConfig)
+    const capped = Math.min(Math.max(1, limit), 500)
+    const result = await db.sql`
+      SELECT room_id, sender_address, enabled, telegram_enabled,
+             liquidation_warn_pct, target_pnl_usd, target_progress_pct,
+             last_liq_alert_at, last_target_alert_at, updated_at
+      FROM alfaclub.position_alert
+      WHERE enabled = TRUE
+        AND (
+          liquidation_warn_pct IS NOT NULL
+          OR target_pnl_usd IS NOT NULL
+        )
+      ORDER BY updated_at DESC
+      LIMIT ${capped};
+    `
+    return (result.rows as AlertRow[]).map(rowToConfig)
+  } catch (error) {
+    logger.warn('position_alert.list_enabled_failed', {
+      message: error instanceof Error ? error.message : String(error),
+    })
+    return []
+  }
 }
 
 export async function markPositionAlertFired(params: {

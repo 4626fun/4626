@@ -21,7 +21,7 @@ abstract contract UserPositionInvariantBase is RebalanceTestHarness {
     mapping(address => uint256) public userDepositedAssets;
     mapping(address => uint256) public userSharesHeld;
 
-    address[3] public testUsers;
+    address[3] public users;
 
     // === Protection Mode ===
     // When true, handlers should restrict or block artificial adverse actions
@@ -29,9 +29,9 @@ abstract contract UserPositionInvariantBase is RebalanceTestHarness {
     bool public userProtectionMode = true;
 
     function setupTestUsers() public {
-        testUsers[0] = address(0x1001);
-        testUsers[1] = address(0x1002);
-        testUsers[2] = address(0x1003);
+        users[0] = address(0x1001);
+        users[1] = address(0x1002);
+        users[2] = address(0x1003);
     }
 
     function setUserProtectionMode(bool enabled) external {
@@ -42,7 +42,7 @@ abstract contract UserPositionInvariantBase is RebalanceTestHarness {
 
     function depositForUser(uint256 userIndex, uint256 amount) external virtual {
         userIndex = bound(userIndex, 0, 2);
-        address user = testUsers[userIndex];
+        address user = users[userIndex];
         amount = bound(amount, 1e18, 20_000_000e18);
 
         // Concrete handlers must implement the actual mint + approve + deposit
@@ -52,7 +52,7 @@ abstract contract UserPositionInvariantBase is RebalanceTestHarness {
 
     function withdrawForUser(uint256 userIndex, uint256 shareFractionBps) external virtual {
         userIndex = bound(userIndex, 0, 2);
-        address user = testUsers[userIndex];
+        address user = users[userIndex];
         uint256 shares = userSharesHeld[user];
         if (shares == 0) return;
 
@@ -75,7 +75,7 @@ abstract contract UserPositionInvariantBase is RebalanceTestHarness {
         if (!userProtectionMode) return false;
 
         for (uint256 i = 0; i < 3; i++) {
-            if (userSharesHeld[testUsers[i]] > 0) {
+            if (userSharesHeld[users[i]] > 0) {
                 return true;
             }
         }
@@ -93,7 +93,7 @@ abstract contract UserPositionInvariantBase is RebalanceTestHarness {
     /// @notice Returns true if any tracked test user currently holds shares in the vault.
     function hasAnyUserExposure() public view returns (bool) {
         for (uint256 i = 0; i < 3; i++) {
-            if (userSharesHeld[testUsers[i]] > 0) {
+            if (userSharesHeld[users[i]] > 0) {
                 return true;
             }
         }
@@ -103,7 +103,7 @@ abstract contract UserPositionInvariantBase is RebalanceTestHarness {
     /// @notice Returns the sum of all assets that tracked users have deposited (not current value).
     function totalUserDeposited() public view returns (uint256 total) {
         for (uint256 i = 0; i < 3; i++) {
-            total += userDepositedAssets[testUsers[i]];
+            total += userDepositedAssets[users[i]];
         }
     }
 
@@ -117,7 +117,7 @@ abstract contract UserPositionInvariantBase is RebalanceTestHarness {
     /// @notice Returns the sum of current mark-to-market values across all tracked users.
     function totalUserCurrentValue() public view returns (uint256 total) {
         for (uint256 i = 0; i < 3; i++) {
-            total += getUserCurrentValue(testUsers[i]);
+            total += getUserCurrentValue(users[i]);
         }
     }
 
@@ -145,7 +145,7 @@ abstract contract UserPositionInvariantBase is RebalanceTestHarness {
         bool anyExposed = false;
 
         for (uint256 i = 0; i < 3; i++) {
-            address user = testUsers[i];
+            address user = users[i];
             if (userIsExposed(user)) {
                 anyExposed = true;
                 uint256 rec = userRecoveryBps(user);
@@ -169,14 +169,14 @@ abstract contract UserPositionInvariantBase is RebalanceTestHarness {
     function getExposedUsers() public view returns (address[] memory) {
         uint256 count = 0;
         for (uint256 i = 0; i < 3; i++) {
-            if (userIsExposed(testUsers[i])) count++;
+            if (userIsExposed(users[i])) count++;
         }
 
         address[] memory exposed = new address[](count);
         uint256 idx = 0;
         for (uint256 i = 0; i < 3; i++) {
-            if (userIsExposed(testUsers[i])) {
-                exposed[idx] = testUsers[i];
+            if (userIsExposed(users[i])) {
+                exposed[idx] = users[i];
                 idx++;
             }
         }
@@ -191,7 +191,7 @@ abstract contract UserPositionInvariantBase is RebalanceTestHarness {
         worst = address(0);
 
         for (uint256 i = 0; i < 3; i++) {
-            address user = testUsers[i];
+            address user = users[i];
             if (userIsExposed(user)) {
                 uint256 rec = userRecoveryBps(user);
                 if (rec < lowest) {
@@ -211,7 +211,7 @@ abstract contract UserPositionInvariantBase is RebalanceTestHarness {
         uint256 count = 0;
 
         for (uint256 i = 0; i < 3; i++) {
-            address user = testUsers[i];
+            address user = users[i];
             if (userIsExposed(user)) {
                 sum += userRecoveryBps(user);
                 count++;
@@ -238,7 +238,7 @@ abstract contract UserPositionInvariantBase is RebalanceTestHarness {
         uint256 count = 0;
 
         for (uint256 i = 0; i < 3; i++) {
-            address user = testUsers[i];
+            address user = users[i];
             if (userIsExposed(user)) {
                 uint256 rec = userRecoveryBps(user);
                 if (rec < minBps) minBps = rec;

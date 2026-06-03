@@ -61,43 +61,24 @@ contract RealUserSafetyInvariantHandler is UserPositionInvariantBase {
         // vm.prank(user);
         // realVault.deposit(amount, user);
         //
-        // For now, this is a no-op placeholder.
+        // For now, this is a no-op placeholder. (Tracking updates happen in base when _ is called.)
     }
 
-    function _withdrawForUser(address user, uint256 amount) internal override {
+    function _withdrawForUser(address user, uint256 sharesToRedeem) internal override {
         // Real implementation:
         // vm.prank(user);
-        // realVault.redeem(amount, user, user);
+        // realVault.redeem(sharesToRedeem, user, user);
+        //
+        // Placeholder. The proportional depositedAssets shrink logic lives in the
+        // concrete handlers that actually track (see UserAccounting / Rebalance handlers).
     }
 
     // === Example high-signal invariants for the real backstop ===
-
-    /// @notice When Charm uses the real Ajna backstop while users have exposure,
-    ///         those users should not suffer disproportionate loss compared to
-    ///         users who stayed fully in idle.
-    function invariant_userValueAfterRealCharmBackstopUsage() external view {
-        // TODO: Implement once real strategies are wired.
-        // Rough shape:
-        // for each test user:
-        //   uint256 userValue = calculateCurrentValue(user);
-        //   uint256 deposited = userDepositedAssets[user];
-        //   assertGe(userValue, deposited * 9800 / 10000, "User lost >2% after backstop usage");
-    }
-
-    /// @notice Rebalancing while users have skin in the game must not cause
-    ///         unexpected value destruction for those users.
-    function invariant_noDisproportionateLossWhenRebalancingWhileUsersExposed() external view {
-        // TODO: track rebalance calls in the concrete handler if needed
-        // if (rebalanceCalls == 0) return;
-
-        for (uint256 i = 0; i < 3; i++) {
-            address user = testUsers[i];
-            if (userSharesHeld[user] == 0) continue;
-
-            // TODO: compare user mark-to-market before/after sequences of protected rebalances
-            // assertGe(currentUserValue, previousUserValue * 9950 / 10000);
-        }
-    }
+    // NOTE: Do not declare `invariant_*` functions directly on the Handler.
+    // They cause the fuzzer to attempt setup for them in a context with no
+    // registered target contracts/selectors, producing "No contracts to fuzz."
+    // Keep design sketches as comments or move real assertions to the
+    // *InvariantTest contract (which owns the setUp + target registration).
 }
 
 contract CreatorOVaultRealUserSafetyInvariantTest is UserPositionInvariantBase {
@@ -108,12 +89,14 @@ contract CreatorOVaultRealUserSafetyInvariantTest is UserPositionInvariantBase {
         handler.setupTestUsers();
         targetContract(address(handler));
 
-        // Focus on realistic flows + rebalancing under protection.
-        // Add selectors once the concrete handler implements rebalance() etc.
-        // bytes4[] memory selectors = new bytes4[](3);
-        // selectors[0] = handler.depositForUser.selector;
-        // selectors[1] = handler.withdrawForUser.selector;
-        // targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
+        // Provide explicit selectors (even though the current impls are no-ops / placeholders)
+        // so the invariant fuzzer has contracts to target and does not fail with
+        // "No contracts to fuzz." during setup. When real strategies are wired, expand this list
+        // and implement the _deposit/_withdraw + any rebalance/skew hooks.
+        bytes4[] memory selectors = new bytes4[](2);
+        selectors[0] = handler.depositForUser.selector;
+        selectors[1] = handler.withdrawForUser.selector;
+        targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
 
     // Basic sanity invariants that should hold with real strategies

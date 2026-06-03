@@ -172,9 +172,9 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     expect(typeof call.clearPreferences).toBe('function')
   })
 
-  it('on AlfaClub, /gmeow posts media first then returns X hyperlink as follow-up', async () => {
+  it('on AlfaClub, /gmeow posts to X first and returns tweet URL for room render', async () => {
     restoreEnv = applyEnv({
-      HERMIT_ALFACLUB_X_LINK_AFTER_MEDIA: '1',
+      HERMIT_ALFACLUB_POST_X_FIRST: '1',
     })
     executeHermitCommandMock.mockResolvedValueOnce({
       kind: 'gmeow',
@@ -211,26 +211,18 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
       }),
     )
     expect(result.ok).toBe(true)
-    expect(result.response).toBe('cat laugh alpha unlocked.')
-    expect(result.response).not.toContain('giphy.gif')
+    expect(result.response).toBe('https://x.com/i/web/status/1')
     expect(result.action).toEqual({
       action: 'hermit.command',
       kind: 'gmeow',
-      attachments: [
-        {
-          url: 'https://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
-          type: 'image',
-        },
-      ],
-      alfaclubFollowUpText: 'https://x.com/i/web/status/1',
       reactionEmoji: '😼',
     })
   })
 
-  it('when HERMIT_GMEOW_POST_TO_X_FIRST is enabled, /gmeow posts to X and returns tweet URL', async () => {
+  it('when HERMIT_NON_ALFACLUB_POST_X_FIRST is enabled, /gmeow posts to X and returns tweet URL', async () => {
     restoreEnv = applyEnv({
-      HERMIT_GMEOW_POST_TO_X_FIRST: '1',
-      HERMIT_ALFACLUB_X_LINK_AFTER_MEDIA: '0',
+      HERMIT_NON_ALFACLUB_POST_X_FIRST: '1',
+      HERMIT_ALFACLUB_POST_X_FIRST: '0',
     })
     executeHermitCommandMock.mockResolvedValueOnce({
       kind: 'gmeow',
@@ -276,7 +268,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
 
   it('when X post fails after AlfaClub media, it still returns the inline media reply', async () => {
     restoreEnv = applyEnv({
-      HERMIT_ALFACLUB_X_LINK_AFTER_MEDIA: '1',
+      HERMIT_ALFACLUB_POST_X_FIRST: '1',
     })
     executeHermitCommandMock.mockResolvedValueOnce({
       kind: 'gmeow',

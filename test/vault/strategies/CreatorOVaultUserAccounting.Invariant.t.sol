@@ -26,18 +26,21 @@ import {UserPositionInvariantBase} from "./UserPositionInvariantBase.sol";
 ///   - Only normal rebalancing + user deposit/withdraw flows are allowed.
 ///
 /// Achieved bounds in this protected mode (with current mock strategies + backstop simulation):
-///   - ~90-93% user value preservation is reasonably stable across long fuzz runs.
-///   - 95%+ is still flaky.
+///   - With the proportional cost-basis adjustment on partial withdraws (see _withdrawForUser),
+///     artificial "recovery drops" from users exiting part of their position are eliminated.
+///     Recovery % now reflects P/L on the capital still at risk in open positions.
+///   - ~88-93% user value preservation is reasonably stable across long fuzz runs on the mock.
+///   - 95%+ can still be flaky due to rounding + simplified rebalance/backstop simulation effects.
 ///   - 99% is aspirational and frequently fails even with skew fully disabled.
 ///
-/// Root cause of remaining movement:
-///   - The mock strategies (WeightedMockStrategy + SynergyCharmMockStrategy) use direct
-///     _setStrategyNav() mutation and a simplified backstop pull mechanism.
-///   - Even pure deposit → rebalance → withdraw sequences in the mock can cause
-///     noticeable NAV movement for users due to how the backstop and rebalancing
-///     interact in this artificial setup.
+/// Root cause of any remaining movement below ~95%:
+///   - The mock strategies (WeightedMockStrategy) use direct _setStrategyNav() mutation and
+///     a simplified (non-real) backstop pull mechanism in Synergy variant for other suites.
+///   - Rebalance + deposit/withdraw timing in the mock can cause small share-price drift vs
+///     pure 1:1 even with protection (no skews) enabled.
 ///
-/// This is NOT a flaw in the approach — it is expected behavior of the current mock harness.
+/// This is NOT a flaw in the production CreatorOVault — it is expected behavior/limitation of
+/// the current mock harness. See RebalanceTestHarness and the "real" safety suite for notes.
 ///
 /// Roadmap:
 ///   - When real CreatorCharmStrategy + AjnaERC4626Vault (with actual liquidity,
@@ -56,7 +59,7 @@ import {UserPositionInvariantBase} from "./UserPositionInvariantBase.sol";
 /// When you replace the mock strategies with the real contracts
 /// (CreatorCharmStrategy + AjnaERC4626Vault + real backstop), do the following:
 ///
-/// 1. **Keep the handler structure** (userDepositedAssets, userSharesHeld, testUsers,
+/// 1. **Keep the handler structure** (userDepositedAssets, userSharesHeld, users,
 ///    depositForUser, withdrawForUser). This pattern is highly reusable.
 ///
 /// 2. **Keep the protection mode logic** (`_shouldCompletelyBlockSkew` or equivalent).
@@ -152,7 +155,7 @@ contract UserAccountingInvariantHandler is UserPositionInvariantBase {
     function _shouldCompletelyBlockSkew() internal view returns (bool) {
         if (!userProtectionMode) return false;
         for (uint256 i = 0; i < 3; i++) {
-            if (userSharesHeld[testUsers[i]] > 0) {
+            if (userSharesHeld[users[i]] > 0) {
                 return true; // No skew allowed at all when users have open positions
             }
         }
@@ -177,10 +180,26 @@ contract UserAccountingInvariantHandler is UserPositionInvariantBase {
         userSharesHeld[user] += shares;
     }
 
-    function _withdrawForUser(address user, uint256 amount) internal override {
+    function _withdrawForUser(address user, uint256 sharesToRedeem) internal override {
+        uint256 sharesBefore = userSharesHeld[user];
+        if (sharesBefore == 0 || sharesToRedeem == 0) return;
+        if (sharesToRedeem > sharesBefore) sharesToRedeem = sharesBefore;
+
+        uint256 depositedBefore = userDepositedAssets[user];
+
         vm.prank(user);
-        ctx.vault.redeem(amount, user, user);
-        userSharesHeld[user] -= amount;
+        ctx.vault.redeem(sharesToRedeem, user, user);
+
+        uint256 remainingShares = sharesBefore - sharesToRedeem;
+        userSharesHeld[user] = remainingShares;
+
+        if (remainingShares == 0) {
+            userDepositedAssets[user] = 0;
+        } else {
+            // Reduce historical cost basis proportionally for the remaining open position.
+            // This ensures recovery % measures P/L on capital still at risk (not vs lifetime deposits).
+            userDepositedAssets[user] = (depositedBefore * remainingShares) / sharesBefore;
+        }
     }
 
     // --- Helpers ---
@@ -222,7 +241,7 @@ contract UserAccountingInvariantHandler is UserPositionInvariantBase {
         uint256 count = 0;
 
         for (uint256 i = 0; i < 3; i++) {
-            address user = testUsers[i];
+            address user = users[i];
             if (userIsExposed(user)) {
                 sum += userRecoveryBps(user);
                 count++;
@@ -263,7 +282,7 @@ contract CreatorOVaultUserAccountingInvariantTest is RebalanceTestHarness {
         if (!handler.hasAnyUserExposure()) return;
 
         for (uint256 i = 0; i < 3; i++) {
-            address user = handler.testUsers(i);
+            address user = handler.users(i);
             uint256 deposited = handler.userDepositedAssets(user);
             if (deposited == 0) continue;
 
@@ -285,7 +304,7 @@ contract CreatorOVaultUserAccountingInvariantTest is RebalanceTestHarness {
         if (handler.rebalanceCalls() == 0) return;
 
         for (uint256 i = 0; i < 3; i++) {
-            address user = handler.testUsers(i);
+            address user = handler.users(i);
             uint256 shares = handler.userSharesHeld(user);
             if (shares == 0) continue;
 

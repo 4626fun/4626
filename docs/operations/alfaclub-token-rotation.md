@@ -217,8 +217,8 @@ See [`alfaclub/infra/cloudflare-proxy/README.md`](../../alfaclub/infra/cloudflar
 ## What not to do
 
 - Do **not** enable `ALFACLUB_CHAT_BRIDGE_ENABLED` on Railway XMTP primary.
-- Do **not** set `HERMIT_GMEOW_POST_TO_X_FIRST=1` on production (breaks
-  media-first room UX).
+- Do **not** set `HERMIT_NON_ALFACLUB_POST_X_FIRST=1` on production unless you
+  explicitly want non-AlfaClub `/gmeow` replies to return tweet URLs.
 - Do **not** paste stale refresh tokens after a successful rotation (Privy
   refresh tokens are single-use).
 - Do **not** treat Pinata/Hermit env rotation as AlfaClub auth rotation.

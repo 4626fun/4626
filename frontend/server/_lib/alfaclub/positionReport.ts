@@ -431,6 +431,7 @@ function formatActionCta(conviction: ConvictionProfile, roomId?: string | null):
   ]
   if (roomId === '1659') {
     lines.splice(2, 0, '• Arena lane check: `/arena status`')
+    lines.splice(3, 0, '• Timeline chart: `https://app.4626.fun/positions`')
   }
   return lines
 }

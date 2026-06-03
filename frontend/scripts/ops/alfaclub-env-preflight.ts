@@ -65,10 +65,10 @@ function runChecks(): Check[] {
   }
 
   checks.push({
-    id: 'HERMIT_GMEOW_POST_TO_X_FIRST (must be off)',
+    id: 'HERMIT_NON_ALFACLUB_POST_X_FIRST (must be off)',
     required: true,
-    present: envUnsetOrOff('HERMIT_GMEOW_POST_TO_X_FIRST'),
-    note: 'AlfaClub uses media-first + optional X link; legacy X-first breaks room UX',
+    present: envUnsetOrOff('HERMIT_NON_ALFACLUB_POST_X_FIRST'),
+    note: 'Keep off unless you explicitly want non-AlfaClub /gmeow to return tweet URLs.',
   })
 
   const gmeowPinataMode = String(process.env.HERMIT_GMEOW_HERMIT_CAPTION ?? '').trim().toLowerCase()

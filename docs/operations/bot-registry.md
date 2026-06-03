@@ -75,8 +75,8 @@ Operational source of truth for bot identities, token ownership, and env-variabl
 - **Twitter/X lane**
   - Preferred: `HERMIT_TWITTER_API_KEY`, `HERMIT_TWITTER_API_SECRET`, `HERMIT_TWITTER_ACCESS_TOKEN`, `HERMIT_TWITTER_ACCESS_SECRET`
   - Compatibility fallback: `TWITTER_API_KEY`, `TWITTER_API_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_SECRET`
-  - AlfaClub media: `HERMIT_ALFACLUB_X_LINK_AFTER_MEDIA` (default on — inline image in room, then X URL follow-up)
-  - Legacy non-AlfaClub: `HERMIT_GMEOW_POST_TO_X_FIRST`
+  - AlfaClub media mode: `HERMIT_ALFACLUB_POST_X_FIRST` (default on — post to X first, then send tweet URL in-room)
+  - Non-AlfaClub X-first mode: `HERMIT_NON_ALFACLUB_POST_X_FIRST`
 
 ### Telegram room mapping (`@keepr4626bot`)
 

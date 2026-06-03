@@ -1288,217 +1288,233 @@ async function handleHermitAlertSubcommand(
   params: HermitExecutionParams,
   args: string,
 ): Promise<HermitExecutionResult> {
-  const parsed = parseHermitAlertCommandArgs(args)
-  if (parsed.action === 'invalid') {
-    return { kind: 'hermit', provider: 'local', reply: parsed.reason }
-  }
-
   const sender = params.senderAddress
-
-  if (parsed.action === 'off') {
-    await disableHyperliquidPositionAlert(sender)
-    return {
-      kind: 'hermit',
-      provider: 'local',
-      reply: 'Hyperliquid alerts disabled. Run `/position` anytime for a live HL snapshot.',
+  try {
+    const parsed = parseHermitAlertCommandArgs(args)
+    if (parsed.action === 'invalid') {
+      return { kind: 'hermit', provider: 'local', reply: parsed.reason }
     }
-  }
 
-  if (parsed.action === 'test') {
-    const botToken = readPositionAlertBotToken()
-    if (!botToken) {
+    if (parsed.action === 'off') {
+      await disableHyperliquidPositionAlert(sender)
       return {
         kind: 'hermit',
         provider: 'local',
-        reply:
-          'Telegram alert test failed: bot token is not configured on this runtime. Set `ALFACLUB_API_KEY` (and/or Telegram relay token) and retry.',
+        reply: 'Hyperliquid alerts disabled. Run `/position` anytime for a live HL snapshot.',
       }
     }
-    const chatId = await resolveTelegramChatIdForWallet(sender)
-    if (!chatId) {
-      return {
-        kind: 'hermit',
-        provider: 'local',
-        reply:
-          'Telegram alert test failed: no linked Telegram for this wallet. Link in the 4626 Telegram Mini App, then retry `/hermit alert test`.',
-      }
-    }
-    const sent = await sendTelegramAlertTestDm({
-      chatId,
-      senderAddress: sender,
-      botToken,
-    })
-    if (sent) {
-      return {
-        kind: 'hermit',
-        provider: 'local',
-        reply: `Telegram alert test sent ✅ (chat ${chatId}).`,
-      }
-    }
-    return {
-      kind: 'hermit',
-      provider: 'local',
-      reply:
-        'Telegram alert test failed during send. Check bot permissions/chat access, then retry `/hermit alert test`.',
-    }
-  }
 
-  if (parsed.action === 'status') {
-    const alert = await readHyperliquidPositionAlert(sender)
-    const telegramLinked = await resolveTelegramChatIdForWallet(sender)
-    const lines = ['🔔 **Hyperliquid alert settings**', '', ...formatPositionAlertStatusBlock(alert)]
-    if (telegramLinked) {
-      lines.push(`• Linked Telegram: **yes**`)
-    } else {
-      lines.push('• Linked Telegram: **no** — link your wallet in the 4626 Telegram Mini App first')
-    }
-    return { kind: 'hermit', provider: 'local', reply: lines.join('\n') }
-  }
-
-  if (parsed.action === 'default') {
-    const telegramLinked = await resolveTelegramChatIdForWallet(sender)
-    const saved = await enableDefaultHyperliquidPositionAlert(sender, {
-      telegramEnabled: telegramLinked ? true : false,
-    })
-    if (!saved) {
-      return {
-        kind: 'hermit',
-        provider: 'local',
-        reply: 'Could not save alert settings right now. Try again in a moment.',
+    if (parsed.action === 'test') {
+      const botToken = readPositionAlertBotToken()
+      if (!botToken) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply:
+            'Telegram alert test failed: bot token is not configured on this runtime. Set `ALFACLUB_API_KEY` (and/or Telegram relay token) and retry.',
+        }
       }
-    }
-    const lines = [
-      '✅ **Hyperliquid alerts on** (defaults)',
-      '',
-      ...describeHyperliquidAlertDefaults(),
-    ]
-    if (telegramLinked) {
-      lines.push('', 'Telegram DMs **enabled** for this wallet.')
-    } else {
-      lines.push(
-        '',
-        'Telegram not linked yet — link via 4626 Telegram Mini App, then run `/hermit alert` again.',
-      )
-    }
-    lines.push('', 'Live snapshot: `/position` · disable: `/hermit alert off`')
-    lines.push('Verify delivery now: `/hermit alert test`')
-    return { kind: 'hermit', provider: 'local', reply: lines.join('\n') }
-  }
-
-  if (parsed.action === 'telegram') {
-    if (parsed.enabled) {
       const chatId = await resolveTelegramChatIdForWallet(sender)
       if (!chatId) {
         return {
           kind: 'hermit',
           provider: 'local',
           reply:
-            'No linked Telegram for this wallet. Link via 4626 Telegram, then retry `/hermit alert telegram on`.',
+            'Telegram alert test failed: no linked Telegram for this wallet. Link in the 4626 Telegram Mini App, then retry `/hermit alert test`.',
+        }
+      }
+      const sent = await sendTelegramAlertTestDm({
+        chatId,
+        senderAddress: sender,
+        botToken,
+      })
+      if (sent) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: `Telegram alert test sent ✅ (chat ${chatId}).`,
+        }
+      }
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply:
+          'Telegram alert test failed during send. Check bot permissions/chat access, then retry `/hermit alert test`.',
+      }
+    }
+
+    if (parsed.action === 'status') {
+      const alert = await readHyperliquidPositionAlert(sender)
+      const telegramLinked = await resolveTelegramChatIdForWallet(sender)
+      const lines = ['🔔 **Hyperliquid alert settings**', '', ...formatPositionAlertStatusBlock(alert)]
+      if (telegramLinked) {
+        lines.push(`• Linked Telegram: **yes**`)
+      } else {
+        lines.push('• Linked Telegram: **no** — link your wallet in the 4626 Telegram Mini App first')
+      }
+      return { kind: 'hermit', provider: 'local', reply: lines.join('\n') }
+    }
+
+    if (parsed.action === 'default') {
+      const telegramLinked = await resolveTelegramChatIdForWallet(sender)
+      const saved = await enableDefaultHyperliquidPositionAlert(sender, {
+        telegramEnabled: telegramLinked ? true : false,
+      })
+      if (!saved) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Could not save alert settings right now. Try again in a moment.',
+        }
+      }
+      const lines = [
+        '✅ **Hyperliquid alerts on** (defaults)',
+        '',
+        ...describeHyperliquidAlertDefaults(),
+      ]
+      if (telegramLinked) {
+        lines.push('', 'Telegram DMs **enabled** for this wallet.')
+      } else {
+        lines.push(
+          '',
+          'Telegram not linked yet — link via 4626 Telegram Mini App, then run `/hermit alert` again.',
+        )
+      }
+      lines.push('', 'Live snapshot: `/position` · disable: `/hermit alert off`')
+      lines.push('Verify delivery now: `/hermit alert test`')
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: lines.join('\n'),
+      }
+    }
+
+    if (parsed.action === 'telegram') {
+      if (parsed.enabled) {
+        const chatId = await resolveTelegramChatIdForWallet(sender)
+        if (!chatId) {
+          return {
+            kind: 'hermit',
+            provider: 'local',
+            reply:
+              'No linked Telegram for this wallet. Link via 4626 Telegram, then retry `/hermit alert telegram on`.',
+          }
+        }
+        await upsertHyperliquidPositionAlert({
+          senderAddress: sender,
+          enabled: true,
+          telegramEnabled: true,
+        })
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: `Telegram DMs **on** for Hyperliquid alerts. Set thresholds with \`/hermit alert liq 10\` and/or \`/hermit alert target 5000\`.`,
         }
       }
       await upsertHyperliquidPositionAlert({
         senderAddress: sender,
-        enabled: true,
-        telegramEnabled: true,
+        telegramEnabled: false,
       })
       return {
         kind: 'hermit',
         provider: 'local',
-        reply: `Telegram DMs **on** for Hyperliquid alerts. Set thresholds with \`/hermit alert liq 10\` and/or \`/hermit alert target 5000\`.`,
+        reply: 'Telegram DMs off. `/position` still works in chat anytime.',
       }
     }
-    await upsertHyperliquidPositionAlert({
-      senderAddress: sender,
-      telegramEnabled: false,
-    })
-    return {
-      kind: 'hermit',
-      provider: 'local',
-      reply: 'Telegram DMs off. `/position` still works in chat anytime.',
-    }
-  }
 
-  const telegramLinked = await resolveTelegramChatIdForWallet(sender)
-  const autoTelegram = Boolean(telegramLinked)
+    const telegramLinked = await resolveTelegramChatIdForWallet(sender)
+    const autoTelegram = Boolean(telegramLinked)
 
-  if (parsed.action === 'liq') {
-    const saved = await upsertHyperliquidPositionAlert({
-      senderAddress: sender,
-      enabled: true,
-      liquidationWarnPct: parsed.pct,
-      ...(autoTelegram ? { telegramEnabled: true } : {}),
-    })
-    if (!saved) {
+    if (parsed.action === 'liq') {
+      const saved = await upsertHyperliquidPositionAlert({
+        senderAddress: sender,
+        enabled: true,
+        liquidationWarnPct: parsed.pct,
+        ...(autoTelegram ? { telegramEnabled: true } : {}),
+      })
+      if (!saved) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Could not save alert settings right now. Try again in a moment.',
+        }
+      }
       return {
         kind: 'hermit',
         provider: 'local',
-        reply: 'Could not save alert settings right now. Try again in a moment.',
+        reply: [
+          `Hyperliquid liquidation alert **on** — Telegram when **any open leg** is within **${parsed.pct}%** of liquidation.`,
+          autoTelegram
+            ? 'Telegram DMs enabled (wallet linked).'
+            : 'Link Telegram to 4626 to receive DMs, or run `/hermit alert telegram on` after linking.',
+          'Check live levels with `/position`.',
+        ].join('\n'),
       }
     }
-    return {
-      kind: 'hermit',
-      provider: 'local',
-      reply: [
-        `Hyperliquid liquidation alert **on** — Telegram when **any open leg** is within **${parsed.pct}%** of liquidation.`,
-        autoTelegram
-          ? 'Telegram DMs enabled (wallet linked).'
-          : 'Link Telegram to 4626 to receive DMs, or run `/hermit alert telegram on` after linking.',
-        'Check live levels with `/position`.',
-      ].join('\n'),
-    }
-  }
 
-  if (parsed.action === 'target') {
-    const saved = await upsertHyperliquidPositionAlert({
-      senderAddress: sender,
-      enabled: true,
-      targetPnlUsd: parsed.usd,
-      ...(autoTelegram ? { telegramEnabled: true } : {}),
-    })
-    if (!saved) {
+    if (parsed.action === 'target') {
+      const saved = await upsertHyperliquidPositionAlert({
+        senderAddress: sender,
+        enabled: true,
+        targetPnlUsd: parsed.usd,
+        ...(autoTelegram ? { telegramEnabled: true } : {}),
+      })
+      if (!saved) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Could not save alert settings right now. Try again in a moment.',
+        }
+      }
       return {
         kind: 'hermit',
         provider: 'local',
-        reply: 'Could not save alert settings right now. Try again in a moment.',
+        reply: [
+          `Hyperliquid target alert **on** — combined unrealized PnL **+$${parsed.usd.toLocaleString('en-US')}**.`,
+          'Default fire at 90% of target; override with `/hermit alert progress 80`.',
+          autoTelegram
+            ? 'Telegram DMs enabled (wallet linked).'
+            : 'Link Telegram to 4626 to receive DMs.',
+        ].join('\n'),
       }
     }
-    return {
-      kind: 'hermit',
-      provider: 'local',
-      reply: [
-        `Hyperliquid target alert **on** — combined unrealized PnL **+$${parsed.usd.toLocaleString('en-US')}**.`,
-        'Default fire at 90% of target; override with `/hermit alert progress 80`.',
-        autoTelegram
-          ? 'Telegram DMs enabled (wallet linked).'
-          : 'Link Telegram to 4626 to receive DMs.',
-      ].join('\n'),
-    }
-  }
 
-  if (parsed.action === 'progress') {
-    const saved = await upsertHyperliquidPositionAlert({
-      senderAddress: sender,
-      enabled: true,
-      targetProgressPct: parsed.pct,
-    })
-    if (!saved) {
+    if (parsed.action === 'progress') {
+      const saved = await upsertHyperliquidPositionAlert({
+        senderAddress: sender,
+        enabled: true,
+        targetProgressPct: parsed.pct,
+      })
+      if (!saved) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Could not save alert settings right now. Try again in a moment.',
+        }
+      }
       return {
         kind: 'hermit',
         provider: 'local',
-        reply: 'Could not save alert settings right now. Try again in a moment.',
+        reply: `Target alert will fire at **${parsed.pct}%** of your configured HL PnL target.`,
       }
     }
+
     return {
       kind: 'hermit',
       provider: 'local',
-      reply: `Target alert will fire at **${parsed.pct}%** of your configured HL PnL target.`,
+      reply: 'Unknown alert command. Try `/hermit alert status`.',
     }
-  }
-
-  return {
-    kind: 'hermit',
-    provider: 'local',
-    reply: 'Unknown alert command. Try `/hermit alert status`.',
+  } catch (error) {
+    logger.warn('[hermit] alert subcommand failed', {
+      senderAddress: sender,
+      message: error instanceof Error ? error.message : String(error),
+    })
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply:
+        'Hermit alert service is temporarily unavailable. Retry `/hermit alert status` in a moment.',
+    }
   }
 }
 

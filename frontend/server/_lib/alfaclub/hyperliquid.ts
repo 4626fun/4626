@@ -47,6 +47,24 @@ export type HyperliquidUserFill = {
   time: number
 }
 
+export type HyperliquidUserFillDetailed = HyperliquidUserFill & {
+  coin: string | null
+  px: number | null
+  sz: number | null
+  dir: string | null
+  side: 'long' | 'short' | null
+  startPosition: number | null
+}
+
+export type HyperliquidCandle = {
+  time: number
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number | null
+}
+
 export type HyperliquidSnapshot = {
   address: string
   accountValueUsd: number | null
@@ -213,8 +231,15 @@ export async function getUserFills30d(
   address: string,
   now: Date = new Date(),
 ): Promise<HyperliquidUserFill[] | null> {
-  const url = getInfoUrl()
   const startTimeMs = now.getTime() - THIRTY_DAYS_SECONDS * 1_000
+  return getUserFillsByTime(address, startTimeMs)
+}
+
+export async function getUserFillsByTime(
+  address: string,
+  startTimeMs: number,
+): Promise<HyperliquidUserFill[] | null> {
+  const url = getInfoUrl()
   const raw = await fetchJsonBounded(url, {
     type: 'userFillsByTime',
     user: address.toLowerCase(),
@@ -232,6 +257,96 @@ export async function getUserFills30d(
     const time = typeof timeRaw === 'number' ? timeRaw : Number(timeRaw ?? 0)
     if (!Number.isFinite(time)) continue
     out.push({ closedPnl: closed, fee, time })
+  }
+  return out
+}
+
+export async function getUserFillsByTimeDetailed(
+  address: string,
+  startTimeMs: number,
+): Promise<HyperliquidUserFillDetailed[] | null> {
+  const url = getInfoUrl()
+  const raw = await fetchJsonBounded(url, {
+    type: 'userFillsByTime',
+    user: address.toLowerCase(),
+    startTime: startTimeMs,
+  })
+  if (isErrorShape(raw)) return null
+  if (!Array.isArray(raw)) return null
+  const out: HyperliquidUserFillDetailed[] = []
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue
+    const fill = entry as Record<string, unknown>
+    const closed = parseFloatSafe(fill.closedPnl) ?? 0
+    const fee = parseFloatSafe(fill.fee) ?? 0
+    const timeRaw = fill.time
+    const time = typeof timeRaw === 'number' ? timeRaw : Number(timeRaw ?? 0)
+    if (!Number.isFinite(time)) continue
+
+    const dirRaw = typeof fill.dir === 'string' ? fill.dir.trim() : null
+    const loweredDir = (dirRaw ?? '').toLowerCase()
+    let side: 'long' | 'short' | null = null
+    if (loweredDir.includes('long') || loweredDir.includes('buy')) side = 'long'
+    if (loweredDir.includes('short') || loweredDir.includes('sell')) side = 'short'
+
+    out.push({
+      closedPnl: closed,
+      fee,
+      time,
+      coin: typeof fill.coin === 'string' ? fill.coin : null,
+      px: parseFloatSafe(fill.px),
+      sz: parseFloatSafe(fill.sz),
+      dir: dirRaw,
+      side,
+      startPosition: parseFloatSafe(fill.startPosition),
+    })
+  }
+  return out
+}
+
+export async function getCandleSnapshot(params: {
+  coin: string
+  interval: string
+  startTimeMs: number
+  endTimeMs: number
+}): Promise<HyperliquidCandle[] | null> {
+  const url = getInfoUrl()
+  const raw = await fetchJsonBounded(url, {
+    type: 'candleSnapshot',
+    req: {
+      coin: params.coin,
+      interval: params.interval,
+      startTime: params.startTimeMs,
+      endTime: params.endTimeMs,
+    },
+  })
+  if (isErrorShape(raw)) return null
+  if (!Array.isArray(raw)) return null
+  const out: HyperliquidCandle[] = []
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue
+    const candle = entry as Record<string, unknown>
+    const time =
+      typeof candle.t === 'number'
+        ? candle.t
+        : typeof candle.time === 'number'
+          ? candle.time
+          : Number(candle.T ?? 0)
+    if (!Number.isFinite(time)) continue
+
+    const open = parseFloatSafe(candle.o)
+    const high = parseFloatSafe(candle.h)
+    const low = parseFloatSafe(candle.l)
+    const close = parseFloatSafe(candle.c)
+    if (open == null || high == null || low == null || close == null) continue
+    out.push({
+      time,
+      open,
+      high,
+      low,
+      close,
+      volume: parseFloatSafe(candle.v),
+    })
   }
   return out
 }

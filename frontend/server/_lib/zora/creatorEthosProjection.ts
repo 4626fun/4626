@@ -7,6 +7,7 @@ declare const process: { env: Record<string, string | undefined> }
 let schemaChecked = false
 let schemaCheckPromise: Promise<boolean> | null = null
 let warnedMissingUnifiedChartRefreshFn = false
+let warnedMissingMarketCapBucketsRefreshFn = false
 
 async function hasProjectionTable(db: Db): Promise<boolean> {
   const result = await db.sql`
@@ -626,7 +627,19 @@ export async function refreshCreatorEthosProjection(params: {
 
   // Market cap bucket stats for segmented charts
   try {
-    await params.db.sql`SELECT public.refresh_ethos_market_cap_buckets();`
+    const hasMarketCapBucketRefreshFn = await hasFunction(
+      params.db,
+      'public.refresh_ethos_market_cap_buckets()',
+    )
+    if (hasMarketCapBucketRefreshFn) {
+      await params.db.sql`SELECT public.refresh_ethos_market_cap_buckets();`
+      warnedMissingMarketCapBucketsRefreshFn = false
+    } else if (!warnedMissingMarketCapBucketsRefreshFn) {
+      warnedMissingMarketCapBucketsRefreshFn = true
+      console.warn(
+        '[creatorEthosProjection] skipping market cap buckets refresh; function public.refresh_ethos_market_cap_buckets() is missing',
+      )
+    }
   } catch (e) {
     console.warn('[creatorEthosProjection] failed to refresh market cap buckets', e)
   }
