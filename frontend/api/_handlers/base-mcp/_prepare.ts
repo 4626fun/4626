@@ -3,6 +3,7 @@ import {
   type ApiEnvelope,
   handleOptions,
   readJsonBody,
+  requireBearerEnvAuth,
   setCors,
   setNoStore,
 } from '../../../packages/server-core/src/index.js'
@@ -16,6 +17,7 @@ import {
 import { resolveExecutionRoute, type ExecutionMode } from '../../../server/_lib/agents/base-mcp/executionRoute.js'
 import { baseMcpApprovalStore } from '../../../server/_lib/agents/base-mcp/store.js'
 import { loadBaseMcpRuntimeConfig } from '../../../server/_lib/agents/base-mcp/config.js'
+import { resolveBaseMcpAccountExecutionContext } from '../../../server/_lib/agents/base-mcp/accountResolver.js'
 
 const MAX_BODY_BYTES = 16_384
 
@@ -97,6 +99,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Base MCP is disabled' } satisfies ApiEnvelope<never>)
   }
 
+  if (
+    !requireBearerEnvAuth(req, res, {
+      envKey: 'BASE_MCP_AGENT_SECRET',
+      missingSecretError: 'Base MCP agent auth is not configured',
+      unauthorizedError: 'Base MCP agent auth required',
+    })
+  ) {
+    return
+  }
+
   const policyConfig = createDefaultBaseMcpPolicyConfig()
   policyConfig.allowedTokens = runtimeConfig.allowedTokens
   policyConfig.allowedChainIds = runtimeConfig.allowedChainIds
@@ -107,14 +119,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const requestedMode = payload.requestedMode ?? 'canonical'
-  const route = resolveRouteContext(requestedMode, runtimeConfig.canonicalSender, runtimeConfig.eoaSender)
+  const accountContext = await resolveBaseMcpAccountExecutionContext(payload.userId)
+  const route = accountContext
+    ? resolveRouteContext(requestedMode, accountContext.canonicalSender, accountContext.eoaSender)
+    : {
+        status: 'blocked' as const,
+        reasonCode: 'not_execution_ready' as const,
+        message: 'No execution-ready Base MCP account was found for the requested user.',
+      }
 
   if (route.status === 'blocked') {
     return res.status(200).json({ success: true, data: route } satisfies ApiEnvelope<PrepareResponseBlocked>)
   }
 
   const ttlSeconds = payload.action === 'prepareSwap' ? payload.quoteTtlSeconds : 300
-  const requestRecord = baseMcpApprovalStore.create(payload.clientRequestId, ttlSeconds)
+  const requestRecord = baseMcpApprovalStore.create({
+    clientRequestId: payload.clientRequestId,
+    ttlSeconds,
+    userId: payload.userId,
+    executionMode: route.executionMode,
+    sender: route.sender,
+  })
 
   return res.status(200).json({
     success: true,

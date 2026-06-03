@@ -51,8 +51,8 @@ Behavior:
 ### Day 3–4: Execution-track mapper
 
 Implement `frontend/server/_lib/agents/base-mcp/executionRoute.ts`:
-- inspect account state
-- resolve `executionMode` and sender lane
+- inspect account state for the requested user/profile
+- resolve `executionMode` and sender lane from that account state, never from process-wide sender defaults
 - return `blocked_not_execution_ready` when preconditions are not met for requested action
 
 ### Day 4–5: Approval-link adapter + status flow
@@ -61,6 +61,7 @@ Implement `frontend/server/_lib/agents/base-mcp/approvalFlow.ts`:
 - persist pending request metadata
 - generate approval URL payload
 - poll status transitions (`pending`, `approved`, `rejected`, `expired`)
+- require trusted webhook or wallet/user proof before accepting `approved` / `rejected` transitions
 - emit deterministic webhook/event for agent continuation
 
 ### Day 5: tests and prompt fixtures

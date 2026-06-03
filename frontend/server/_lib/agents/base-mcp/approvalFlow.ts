@@ -8,22 +8,34 @@ export interface ApprovalRequestRecord {
   createdAt: string
   expiresAt: string
   status: ApprovalStatus
+  userId: string
+  executionMode: 'canonical' | 'eoa'
+  sender: string
 }
 
 export class InMemoryApprovalStore {
   private readonly records = new Map<string, ApprovalRequestRecord>()
 
-  create(clientRequestId: string, ttlSeconds: number): ApprovalRequestRecord {
+  create(params: {
+    clientRequestId: string
+    ttlSeconds: number
+    userId: string
+    executionMode: 'canonical' | 'eoa'
+    sender: string
+  }): ApprovalRequestRecord {
     const requestId = crypto.randomUUID()
     const now = new Date()
-    const expires = new Date(now.getTime() + ttlSeconds * 1000)
+    const expires = new Date(now.getTime() + params.ttlSeconds * 1000)
     const record: ApprovalRequestRecord = {
       requestId,
-      clientRequestId,
+      clientRequestId: params.clientRequestId,
       approvalUrl: `https://wallet.base.org/requests/${requestId}`,
       createdAt: now.toISOString(),
       expiresAt: expires.toISOString(),
       status: 'pending',
+      userId: params.userId,
+      executionMode: params.executionMode,
+      sender: params.sender,
     }
     this.records.set(requestId, record)
     return record
@@ -45,7 +57,7 @@ export class InMemoryApprovalStore {
   setStatus(requestId: string, status: Exclude<ApprovalStatus, 'expired'>): ApprovalRequestRecord | null {
     const record = this.get(requestId)
     if (!record) return null
-    if (record.status === 'expired') return record
+    if (record.status !== 'pending') return record
 
     const next = { ...record, status }
     this.records.set(requestId, next)

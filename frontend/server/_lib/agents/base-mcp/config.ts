@@ -3,8 +3,6 @@ import { BASE_CHAIN_ID } from './schemas'
 export interface BaseMcpRuntimeConfig {
   enabled: boolean
   allowedTokens: Set<string>
-  canonicalSender: string | null
-  eoaSender: string | null
   allowedChainIds: number[]
 }
 
@@ -27,8 +25,6 @@ export function loadBaseMcpRuntimeConfig(): BaseMcpRuntimeConfig {
   return {
     enabled,
     allowedTokens,
-    canonicalSender: normalizeAddress(process.env.BASE_MCP_CANONICAL_SENDER ?? ''),
-    eoaSender: normalizeAddress(process.env.BASE_MCP_EOA_SENDER ?? ''),
     allowedChainIds: [BASE_CHAIN_ID],
   }
 }

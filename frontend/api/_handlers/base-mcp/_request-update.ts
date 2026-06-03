@@ -3,6 +3,7 @@ import {
   type ApiEnvelope,
   handleOptions,
   readJsonBody,
+  requireBearerEnvAuth,
   setCors,
   setNoStore,
 } from '../../../packages/server-core/src/index.js'
@@ -23,6 +24,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+
+  if (
+    !requireBearerEnvAuth(req, res, {
+      envKey: 'BASE_MCP_APPROVAL_WEBHOOK_SECRET',
+      missingSecretError: 'Base MCP approval webhook auth is not configured',
+      unauthorizedError: 'Base MCP approval webhook auth required',
+    })
+  ) {
+    return
   }
 
   const body = await readJsonBody<unknown>(req, { maxBytes: MAX_BODY_BYTES })
