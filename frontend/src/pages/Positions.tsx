@@ -1,79 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  ResponsiveContainer,
-  Scatter,
-  Tooltip,
-  XAxis,
-  YAxis,
-  ComposedChart,
-} from 'recharts'
 
-import { apiFetch } from '@/lib/api/apiBase'
+import { PositionsChartSurface } from '@/components/positions/PositionsChartSurface'
+import { PositionsEventInspector } from '@/components/positions/PositionsEventInspector'
+import { PositionsEventLegend } from '@/components/positions/PositionsEventLegend'
+import type { ChartOverlayEvent, TimelineResponse } from '@/components/positions/types'
 import { Button } from '@/components/ui/Button'
-
-type TimelineCandle = {
-  time: number
-  open: number
-  high: number
-  low: number
-  close: number
-}
-
-type TimelineTrade = {
-  id: string
-  time: number
-  coin: string | null
-  side: 'long' | 'short' | null
-  action: 'entry' | 'add' | 'reduce' | 'close' | 'flip' | 'unknown'
-  price: number | null
-  size: number | null
-  dir: string | null
-  closedPnl: number
-}
-
-type TimelineChat = {
-  id: string
-  messageId: string
-  senderAddress: string
-  senderLabel: string | null
-  text: string
-  time: number
-  isHost: boolean
-  isFirstFromSender: boolean
-  replyId: string | null
-  replyText: string | null
-  replySender: string | null
-  replySenderLabel: string | null
-}
-
-type TimelineResponse = {
-  roomId: string
-  symbol: string
-  hostAddress: string | null
-  generatedAt: string
-  candles: TimelineCandle[]
-  tradeEvents: TimelineTrade[]
-  chatEvents: TimelineChat[]
-}
-
-type ChartPoint = {
-  id: string
-  t: number
-  price: number
-  label: string
-  kind: 'trade' | 'host-chat' | 'chat'
-  chatId?: string
-  action?: string
-  text?: string
-  senderLabel?: string | null
-  senderAddress?: string
-  isFirstFromSender?: boolean
-}
+import { apiFetch } from '@/lib/api/apiBase'
 
 function formatTime(value: number): string {
   return new Date(value).toLocaleString([], {
@@ -84,22 +18,12 @@ function formatTime(value: number): string {
   })
 }
 
-async function fetchRoomTimeline(): Promise<TimelineResponse> {
-  const res = await apiFetch('/api/v1/alfaclub/room-timeline?roomId=1659&windowHours=168', {})
-  const json = (await res.json()) as { success?: boolean; data?: TimelineResponse; error?: string }
-  if (!res.ok || !json.success || !json.data) {
-    throw new Error(json.error || `HTTP ${res.status}`)
-  }
-  return json.data
-}
-
-function nearestCandlePrice(ts: number, candles: TimelineCandle[]): number {
-  if (candles.length === 0) return 0
-  const first = candles[0]
-  if (!first) return 0
-  let best = first
-  let bestDelta = Math.abs(first.time - ts)
-  for (const candle of candles.slice(1)) {
+function nearestCandleClose(ts: number, candles: TimelineResponse['candles']): number | null {
+  if (candles.length === 0) return null
+  let best = candles[0]!
+  let bestDelta = Math.abs(best.time - ts)
+  for (let i = 1; i < candles.length; i += 1) {
+    const candle = candles[i]!
     const delta = Math.abs(candle.time - ts)
     if (delta < bestDelta) {
       best = candle
@@ -109,59 +33,56 @@ function nearestCandlePrice(ts: number, candles: TimelineCandle[]): number {
   return best.close
 }
 
+async function fetchRoomTimelineBySymbol(
+  windowHours: number,
+  symbol: string | null,
+): Promise<TimelineResponse> {
+  const params = new URLSearchParams({
+    roomId: '1659',
+    windowHours: String(windowHours),
+  })
+  if (symbol && symbol.trim().length > 0) {
+    params.set('symbol', symbol.trim().toUpperCase())
+  }
+  const res = await apiFetch(`/api/v1/alfaclub/room-timeline?${params.toString()}`, {})
+  const json = (await res.json()) as { success?: boolean; data?: TimelineResponse; error?: string }
+  if (!res.ok || !json.success || !json.data) {
+    throw new Error(json.error || `HTTP ${res.status}`)
+  }
+  return json.data
+}
+
 export function Positions() {
-  const [chatScope, setChatScope] = useState<'host' | 'all' | 'sender'>('host')
+  const [chatScope, setChatScope] = useState<'host' | 'all' | 'sender'>('all')
   const [selectedSender, setSelectedSender] = useState<string | null>(null)
-  const [expandAllMessages, setExpandAllMessages] = useState(false)
-  const [pinnedChatId, setPinnedChatId] = useState<string | null>(null)
+  const [selectedMarket, setSelectedMarket] = useState<string>('all')
+  const [windowHours, setWindowHours] = useState<24 | 72 | 168>(168)
+  const [densityMode, setDensityMode] = useState<'all' | 'major'>('all')
+  const [showTrades, setShowTrades] = useState(true)
+  const [showHostMessages, setShowHostMessages] = useState(true)
+  const [showRoomMessages, setShowRoomMessages] = useState(true)
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
+  const [hoveredEventId, setHoveredEventId] = useState<string | null>(null)
+
+  const selectedSymbolForQuery = useMemo(() => {
+    if (selectedMarket === 'all') return null
+    const [symbol] = selectedMarket.split('/')
+    const normalized = (symbol ?? '').trim().toUpperCase()
+    return normalized || null
+  }, [selectedMarket])
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ['alfaclub-room-timeline', '1659'],
-    queryFn: fetchRoomTimeline,
+    queryKey: ['alfaclub-room-timeline', '1659', windowHours, selectedSymbolForQuery],
+    queryFn: () => fetchRoomTimelineBySymbol(windowHours, selectedSymbolForQuery),
     staleTime: 30_000,
   })
 
-  const candles = useMemo(() => data?.candles ?? [], [data?.candles])
-  const chartSeries = useMemo(
-    () =>
-      candles.map((candle) => ({
-        t: candle.time,
-        close: candle.close,
-      })),
-    [candles],
-  )
-
-  const tradeMarkers = useMemo<ChartPoint[]>(
-    () =>
-      (data?.tradeEvents ?? [])
-        .filter((event) => event.price != null)
-        .map((event) => ({
-          id: event.id,
-          t: event.time,
-          price: event.price ?? nearestCandlePrice(event.time, candles),
-          label: `${event.action.toUpperCase()} ${event.coin ?? 'HL'}`,
-          kind: 'trade',
-          action: event.action,
-        })),
-    [candles, data?.tradeEvents],
-  )
-
-  const allChatMarkers = useMemo<ChartPoint[]>(
-    () =>
-      (data?.chatEvents ?? []).map((event) => ({
-        id: event.id,
-        t: event.time,
-        price: nearestCandlePrice(event.time, candles),
-        label: event.isHost ? 'Host chat' : 'Chat',
-        kind: event.isHost ? 'host-chat' : 'chat',
-        chatId: event.id,
-        text: event.text,
-        senderLabel: event.senderLabel,
-        senderAddress: event.senderAddress,
-        isFirstFromSender: event.isFirstFromSender,
-      })),
-    [candles, data?.chatEvents],
-  )
+  useEffect(() => {
+    const available = new Set(['all', ...(data?.markets ?? [])])
+    if (!available.has(selectedMarket)) {
+      setSelectedMarket(data?.defaultMarket ?? 'all')
+    }
+  }, [data?.defaultMarket, data?.markets, selectedMarket])
 
   const senderOptions = useMemo(() => {
     const map = new Map<string, string>()
@@ -175,64 +96,196 @@ export function Positions() {
 
   const filteredChatEvents = useMemo(() => {
     const source = data?.chatEvents ?? []
-    if (chatScope === 'host') return source.filter((event) => event.isHost)
-    if (chatScope === 'sender' && selectedSender) {
-      return source.filter((event) => event.senderAddress === selectedSender)
+    const byScope =
+      chatScope === 'host'
+        ? source.filter((event) => event.isHost)
+        : chatScope === 'sender' && selectedSender
+          ? source.filter((event) => event.senderAddress === selectedSender)
+          : source
+    if (selectedMarket === 'all') return byScope
+    return byScope.filter((event) => event.market == null || event.market === selectedMarket)
+  }, [chatScope, data?.chatEvents, selectedMarket, selectedSender])
+
+  const filteredTradeEvents = useMemo(() => {
+    const source = data?.tradeEvents ?? []
+    if (selectedMarket === 'all') return source
+    return source.filter((event) => event.market === selectedMarket)
+  }, [data?.tradeEvents, selectedMarket])
+
+  const allOverlayEvents = useMemo<ChartOverlayEvent[]>(() => {
+    const candles = data?.candles ?? []
+    const trades = showTrades
+      ? filteredTradeEvents.map<ChartOverlayEvent>((event) => ({
+          id: event.id,
+          time: event.time,
+          market: event.market,
+          kind: 'trade',
+          action: event.action,
+          side: event.side,
+          price: event.price,
+        }))
+      : []
+    const chats = filteredChatEvents
+      .filter((event) => (event.isHost ? showHostMessages : showRoomMessages))
+      .map<ChartOverlayEvent>((event) => ({
+        id: event.id,
+        time: event.time,
+        market: event.market,
+        kind: event.isHost ? 'host-chat' : 'chat',
+        text: event.text,
+        senderLabel: event.senderLabel,
+        senderAddress: event.senderAddress,
+        isFirstFromSender: event.isFirstFromSender,
+        price: nearestCandleClose(event.time, candles),
+      }))
+    const merged = [...trades, ...chats].sort((a, b) => a.time - b.time)
+    if (densityMode === 'all') return merged
+    const major = merged
+      .filter(
+        (event) =>
+          event.kind === 'trade' || event.kind === 'host-chat' || Boolean(event.isFirstFromSender),
+      )
+      .sort((a, b) => a.time - b.time)
+    const bucketMs = 15 * 60 * 1000
+    const clustered: ChartOverlayEvent[] = []
+    const seen = new Set<string>()
+    for (const event of major) {
+      const bucket = Math.floor(event.time / bucketMs)
+      const key = `${event.market ?? 'global'}:${event.kind}:${event.action ?? 'none'}:${bucket}`
+      if (seen.has(key) && event.id !== selectedEventId) continue
+      clustered.push(event)
+      seen.add(key)
     }
-    return source
-  }, [chatScope, data?.chatEvents, selectedSender])
+    return clustered
+  }, [
+    data?.candles,
+    densityMode,
+    filteredChatEvents,
+    filteredTradeEvents,
+    showHostMessages,
+    showRoomMessages,
+    showTrades,
+    selectedEventId,
+  ])
 
-  const visibleChatMarkers = useMemo(() => {
-    const allowedIds = new Set(filteredChatEvents.map((event) => event.id))
-    return allChatMarkers.filter((event) => event.chatId && allowedIds.has(event.chatId))
-  }, [allChatMarkers, filteredChatEvents])
-
-  const pinnedChat = useMemo(
-    () => (data?.chatEvents ?? []).find((event) => event.id === pinnedChatId) ?? null,
-    [data?.chatEvents, pinnedChatId],
+  const selectedEventIndex = useMemo(
+    () => allOverlayEvents.findIndex((event) => event.id === selectedEventId),
+    [allOverlayEvents, selectedEventId],
   )
+  const selectedEvent =
+    selectedEventIndex >= 0 && selectedEventIndex < allOverlayEvents.length
+      ? allOverlayEvents[selectedEventIndex]
+      : null
 
-  const pinnedReplies = useMemo(() => {
-    if (!pinnedChat) return []
-    return (data?.chatEvents ?? []).filter((event) => event.replyId === pinnedChat.messageId)
-  }, [data?.chatEvents, pinnedChat])
+  const displayedEventRows = useMemo(() => allOverlayEvents.slice(-160), [allOverlayEvents])
 
-  const displayedChatRows = useMemo(() => {
-    if (expandAllMessages) return filteredChatEvents
-    return filteredChatEvents.slice(-120)
-  }, [expandAllMessages, filteredChatEvents])
+  const stepEvent = useCallback((delta: -1 | 1) => {
+    if (allOverlayEvents.length === 0) return
+    if (selectedEventIndex < 0) {
+      setSelectedEventId(allOverlayEvents[delta > 0 ? 0 : allOverlayEvents.length - 1]!.id)
+      return
+    }
+    const next = (selectedEventIndex + delta + allOverlayEvents.length) % allOverlayEvents.length
+    setSelectedEventId(allOverlayEvents[next]!.id)
+  }, [allOverlayEvents, selectedEventIndex])
 
-  const chatScopeLabel =
-    chatScope === 'host'
-      ? 'host-only'
-      : chatScope === 'sender' && selectedSender
-        ? `sender: ${selectedSender.slice(0, 6)}…${selectedSender.slice(-4)}`
-        : 'all'
-
-  const handleMarkerClick = (raw: unknown) => {
-    const payload = raw as ChartPoint | { payload?: ChartPoint } | null
-    const point = (payload && 'payload' in payload ? payload.payload : payload) as ChartPoint | null
-    if (!point || !point.chatId) return
-    setPinnedChatId(point.chatId)
-  }
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault()
+        stepEvent(-1)
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault()
+        stepEvent(1)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [stepEvent])
 
   return (
     <div className="relative pb-24 md:pb-0">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-52 bg-gradient-to-b from-sky-500/10 to-transparent" />
       <section className="cinematic-section">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
             className="mb-8"
           >
-            <span className="label">Room Timeline</span>
-            <h1 className="headline text-4xl sm:text-6xl mt-4">Hyperliquid + Chat Markers</h1>
+            <span className="label">Positions Timeline</span>
+            <h1 className="headline text-4xl sm:text-6xl mt-4">Room 1659 Intelligence Surface</h1>
             <p className="text-zinc-400 text-sm font-light mt-3">
-              Room 1659 chart with trade actions (entry/add/reduce/close), host/all chat markers, and
-              click-to-pin message threads.
+              Hyperliquid-style market chart with room 1659 trade lifecycle overlays and chat context.
             </p>
-            <div className="mt-4 flex flex-wrap gap-3">
+            <div className="mt-4 flex flex-wrap gap-2">
+              {[24, 72, 168].map((hours) => (
+                <Button
+                  key={hours}
+                  variant={windowHours === hours ? 'primary' : 'secondary'}
+                  size="sm"
+                  className="btn-compact rounded-full text-xs"
+                  onClick={() => setWindowHours(hours as 24 | 72 | 168)}
+                >
+                  {hours === 24 ? '24h' : hours === 72 ? '3d' : '7d'}
+                </Button>
+              ))}
+              <Button
+                variant={densityMode === 'major' ? 'primary' : 'secondary'}
+                size="sm"
+                className="btn-compact rounded-full text-xs"
+                onClick={() => setDensityMode((mode) => (mode === 'major' ? 'all' : 'major'))}
+              >
+                {densityMode === 'major' ? 'Major markers' : 'All markers'}
+              </Button>
+              <Button
+                variant={showTrades ? 'primary' : 'secondary'}
+                size="sm"
+                className="btn-compact rounded-full text-xs"
+                onClick={() => setShowTrades((value) => !value)}
+              >
+                Trades
+              </Button>
+              <Button
+                variant={showHostMessages ? 'primary' : 'secondary'}
+                size="sm"
+                className="btn-compact rounded-full text-xs"
+                onClick={() => setShowHostMessages((value) => !value)}
+              >
+                Host msgs
+              </Button>
+              <Button
+                variant={showRoomMessages ? 'primary' : 'secondary'}
+                size="sm"
+                className="btn-compact rounded-full text-xs"
+                onClick={() => setShowRoomMessages((value) => !value)}
+              >
+                Room msgs
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="btn-compact rounded-full text-xs"
+                onClick={() => void refetch()}
+                disabled={isFetching}
+              >
+                {isFetching ? 'Refreshing…' : 'Refresh'}
+              </Button>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <select
+                className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
+                value={selectedMarket}
+                onChange={(event) => setSelectedMarket(event.target.value)}
+              >
+                <option value="all">All markets</option>
+                {(data?.markets ?? []).map((market) => (
+                  <option key={market} value={market}>
+                    {market}
+                  </option>
+                ))}
+              </select>
               <Button
                 variant={chatScope === 'host' ? 'primary' : 'secondary'}
                 size="sm"
@@ -274,180 +327,80 @@ export function Positions() {
                   value={selectedSender ?? ''}
                   onChange={(event) => setSelectedSender(event.target.value || null)}
                 >
-                  {senderOptions.map((opt) => (
-                    <option key={opt.address} value={opt.address}>
-                      {opt.label}
+                  {senderOptions.map((option) => (
+                    <option key={option.address} value={option.address}>
+                      {option.label}
                     </option>
                   ))}
                 </select>
               )}
-              <Button
-                variant={expandAllMessages ? 'primary' : 'secondary'}
-                size="sm"
-                className="btn-compact rounded-full text-xs"
-                onClick={() => setExpandAllMessages((v) => !v)}
-              >
-                {expandAllMessages ? 'Collapse messages' : 'Expand all messages'}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="btn-compact rounded-full text-xs"
-                onClick={() => void refetch()}
-                disabled={isFetching}
-              >
-                {isFetching ? 'Refreshing…' : 'Refresh timeline'}
-              </Button>
             </div>
           </motion.div>
 
           <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4 sm:p-6">
             {isLoading ? (
-              <div className="text-sm text-zinc-400">Loading timeline…</div>
+              <div className="text-sm text-zinc-400">Loading room timeline…</div>
             ) : error ? (
               <div className="text-sm text-red-300">
                 Failed to load timeline: {error instanceof Error ? error.message : 'unknown error'}
               </div>
-            ) : chartSeries.length === 0 ? (
-              <div className="text-sm text-zinc-400">No candle data yet for this room timeline window.</div>
+            ) : (data?.candles.length ?? 0) === 0 ? (
+              <div className="text-sm text-zinc-400">No candle data available in this timeframe.</div>
             ) : (
-              <div className="h-[420px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={chartSeries} margin={{ top: 12, right: 20, left: 0, bottom: 24 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                    <XAxis
-                      dataKey="t"
-                      type="number"
-                      domain={['dataMin', 'dataMax']}
-                      tickFormatter={(value) => formatTime(Number(value))}
-                      stroke="#a1a1aa"
-                    />
-                    <YAxis
-                      type="number"
-                      domain={['auto', 'auto']}
-                      tickFormatter={(value) => `$${Number(value).toFixed(2)}`}
-                      stroke="#a1a1aa"
-                    />
-                    <Tooltip
-                      content={({ active, payload, label }) => {
-                        if (!active || !payload || payload.length === 0) return null
-                        const point = payload[0]?.payload as ChartPoint | { close?: number } | undefined
-                        return (
-                          <div className="rounded-md border border-white/10 bg-zinc-950/95 p-3 text-xs text-zinc-100 shadow-xl max-w-[320px]">
-                            <div className="font-medium">{formatTime(Number(label))}</div>
-                            {'close' in (point ?? {}) && (
-                              <div className="text-zinc-300 mt-1">Price: ${(point as { close: number }).close.toFixed(2)}</div>
-                            )}
-                            {point && 'kind' in point && (
-                              <>
-                                <div className="mt-1 text-zinc-200">
-                                  {point.kind === 'trade'
-                                    ? `Trade: ${point.action ?? 'unknown'}`
-                                    : point.kind === 'host-chat'
-                                      ? 'Host chat'
-                                      : 'Chat'}
-                                </div>
-                                {point.isFirstFromSender && (
-                                  <div className="mt-1 text-emerald-300">First message from this sender in window</div>
-                                )}
-                                {point.text && <div className="mt-1 text-zinc-300 whitespace-pre-wrap">{point.text}</div>}
-                                {point.senderLabel && (
-                                  <div className="mt-1 text-zinc-400">
-                                    by {point.senderLabel}
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        )
-                      }}
-                    />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="close"
-                      stroke="#60a5fa"
-                      strokeWidth={2}
-                      dot={false}
-                      name={`${data?.symbol ?? 'HYPE'} price`}
-                    />
-                    <Scatter data={tradeMarkers} dataKey="price" fill="#22c55e" name="Trade actions" />
-                    <Scatter
-                      data={visibleChatMarkers}
-                      dataKey="price"
-                      fill={chatScope === 'host' ? '#f59e0b' : '#a78bfa'}
-                      name={chatScope === 'host' ? 'Host chats' : 'Chat markers'}
-                      onClick={handleMarkerClick}
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
+              <div className="space-y-4">
+                <PositionsChartSurface
+                  candles={data?.candles ?? []}
+                  events={allOverlayEvents}
+                  selectedEventId={selectedEventId}
+                  onSelectEvent={setSelectedEventId}
+                  onHoverEvent={setHoveredEventId}
+                />
+                <PositionsEventLegend />
               </div>
             )}
           </div>
 
-          {pinnedChat && (
-            <div className="mt-6 rounded-2xl border border-indigo-500/30 bg-indigo-500/[0.08] p-4 sm:p-6">
-              <div className="flex items-center justify-between">
-                <div className="label">Pinned message thread</div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="btn-compact rounded-full text-xs"
-                  onClick={() => setPinnedChatId(null)}
-                >
-                  Clear pin
-                </Button>
+          <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,2fr),minmax(320px,1fr)]">
+            <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4 sm:p-5">
+              <div className="label">Timeline events ({displayedEventRows.length})</div>
+              <div className="mt-3 max-h-[360px] overflow-y-auto space-y-2">
+                {displayedEventRows.map((event) => (
+                  <button
+                    key={event.id}
+                    type="button"
+                    onClick={() => setSelectedEventId(event.id)}
+                    className={`w-full text-left rounded-md border p-2 text-xs transition ${
+                      selectedEventId === event.id
+                        ? 'border-sky-400/60 bg-sky-400/10'
+                        : hoveredEventId === event.id
+                          ? 'border-violet-400/60 bg-violet-400/10'
+                        : 'border-white/5 bg-white/[0.03] hover:border-sky-400/40'
+                    }`}
+                  >
+                    <div className="text-zinc-300">
+                      {formatTime(event.time)} · {event.market ?? 'all markets'}
+                    </div>
+                    <div className="mt-1 text-zinc-100">
+                      {event.kind === 'trade'
+                        ? `Trade ${event.action ?? 'unknown'}`
+                        : event.kind === 'host-chat'
+                          ? 'Host message'
+                          : 'Room message'}
+                    </div>
+                    {event.text && <div className="mt-1 text-zinc-300">{event.text.slice(0, 180)}</div>}
+                  </button>
+                ))}
               </div>
-              <div className="mt-3 rounded-md bg-white/[0.03] border border-white/5 p-3 text-xs">
-                <div className="text-zinc-300">
-                  {formatTime(pinnedChat.time)} · {pinnedChat.senderLabel || pinnedChat.senderAddress}
-                </div>
-                <div className="text-zinc-100 mt-1 whitespace-pre-wrap">{pinnedChat.text}</div>
-              </div>
-              {pinnedChat.replyText && (
-                <div className="mt-3 rounded-md bg-white/[0.02] border border-white/5 p-3 text-xs">
-                  <div className="text-zinc-400">In reply to</div>
-                  <div className="text-zinc-300 mt-1">
-                    {pinnedChat.replySenderLabel || pinnedChat.replySender || 'unknown'}
-                  </div>
-                  <div className="text-zinc-100 mt-1 whitespace-pre-wrap">{pinnedChat.replyText}</div>
-                </div>
-              )}
-              {pinnedReplies.length > 0 && (
-                <div className="mt-3">
-                  <div className="text-xs text-zinc-400">Replies ({pinnedReplies.length})</div>
-                  <div className="mt-2 space-y-2 max-h-[220px] overflow-y-auto">
-                    {pinnedReplies.map((reply) => (
-                      <div key={reply.id} className="rounded-md bg-white/[0.02] border border-white/5 p-2 text-xs">
-                        <div className="text-zinc-300">
-                          {formatTime(reply.time)} · {reply.senderLabel || reply.senderAddress}
-                        </div>
-                        <div className="text-zinc-100 mt-1 whitespace-pre-wrap">{reply.text}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
-          )}
-
-          <div className="mt-6 rounded-2xl border border-white/5 bg-white/[0.03] p-4 sm:p-6">
-            <div className="label">Chat events ({chatScopeLabel})</div>
-            <div className="mt-3 max-h-[280px] overflow-y-auto space-y-2">
-              {displayedChatRows.map((event) => (
-                <button
-                  key={event.id}
-                  type="button"
-                  onClick={() => setPinnedChatId(event.id)}
-                  className="w-full text-left rounded-md bg-white/[0.03] border border-white/5 p-2 text-xs hover:border-indigo-400/40"
-                >
-                  <div className="text-zinc-300">
-                    {formatTime(event.time)} · {event.senderLabel || event.senderAddress || 'unknown'}
-                    {event.isFirstFromSender && <span className="ml-2 text-emerald-300">first in window</span>}
-                  </div>
-                  <div className="text-zinc-100 mt-1 whitespace-pre-wrap">{event.text}</div>
-                </button>
-              ))}
+            <div className="lg:sticky lg:top-24 h-fit">
+              <PositionsEventInspector
+                event={selectedEvent ?? null}
+                index={Math.max(0, selectedEventIndex)}
+                total={allOverlayEvents.length}
+                onPrevious={() => stepEvent(-1)}
+                onNext={() => stepEvent(1)}
+                onClear={() => setSelectedEventId(null)}
+              />
             </div>
           </div>
         </div>

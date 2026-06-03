@@ -25,7 +25,7 @@ function formatHermitCreativeSection(): string[] {
     '• `/position` — Hyperliquid positions + alert setup',
     '• `/signal` — position-aware enter/exit bias from your live entries',
     '• `/market` — broader majors + AlfaClub market scope',
-    '• `/arena ...` — Virtuals Arena controls (room/flag gated)',
+    '• `/arena ...` (status|register|identity ...|join|activate|trade|...) — Virtuals Arena (Degenerate Claw) controls (room/flag gated; per-sender + room-default bindings; create path uses bot ACP session)',
     '• `/gmeow [vibe]` — GIF + one-liner',
     '• `/meme <prompt>` — meme / image concept',
     '• `/hermit copy|announce|quest|tone <text>` — room copy drafts',
@@ -38,7 +38,7 @@ function formatHermitCreativeSection(): string[] {
 function formatHermitCreativeSectionCompact(): string[] {
   return [
     '**Commands**',
-    '• `/position` · `/position chart` · `/position host markers` · `/position sender <addr|me>` · `/position marker latest|trade 1|host 1|<n>` · `/signal` · `/market` · `/arena status` · `/hermit alert` · `/gmeow` · `/meme` · `/alfa brief`',
+    '• `/position` · `/position chart` · `/position host markers` · `/position sender <addr|me>` · `/position marker latest|trade 1|host 1|<n>` · `/signal` · `/market` · `/arena status|register` · `/hermit alert` · `/gmeow` · `/meme` · `/alfa brief`',
   ]
 }
 

@@ -18,6 +18,7 @@ describe('appOnlyPaths', () => {
     expect(isAppOnlyPath('/activate-akita')).toBe(false)
     expect(isAppOnlyPath('/dashboard')).toBe(false)
     expect(isAppOnlyPath('/launch')).toBe(false)
+    expect(isAppOnlyPath('/positions')).toBe(false)
   })
 
   it('continues marking core app routes as app-only', () => {

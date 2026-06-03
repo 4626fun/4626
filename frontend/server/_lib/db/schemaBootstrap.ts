@@ -464,6 +464,13 @@ export async function ensureAlfaclubPositionAlertSchema(db: Db): Promise<void> {
   })
 }
 
+/** Room/user Arena identity mapping for per-room and per-user execution overrides. */
+export async function ensureAlfaclubArenaIdentityMappingSchema(db: Db): Promise<void> {
+  await withEnsureOnce('alfaclubArenaIdentityMapping', async () => {
+    await ensureMigrationApplied(db, '20260708000000_alfaclub_arena_identity_mappings.sql').catch(() => {})
+  })
+}
+
 /** Ethos chart snapshots + unified chart view refresh helpers. */
 export async function ensureEthosChartSupportSchema(db: Db): Promise<void> {
   await withEnsureOnce('ethosChartSupport', async () => {

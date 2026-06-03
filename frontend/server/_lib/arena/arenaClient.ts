@@ -4,7 +4,7 @@ import { promisify } from 'node:util'
 import { logger } from '../infra/logger.js'
 import { readArenaConfig, type ArenaConfig } from './arenaConfig.js'
 import { validateArenaPair } from './arenaPairPolicy.js'
-import type { ArenaOpResult, ArenaRunResult, ArenaTradeRequest } from './arenaTypes.js'
+import type { ArenaCreateResult, ArenaOpResult, ArenaRunResult, ArenaTradeRequest } from './arenaTypes.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -37,6 +37,7 @@ type BuiltCommand = {
   command: string
   args: string[]
   cwd: string
+  env?: Record<string, string>
 }
 
 function toArenaRunResult(params: {
@@ -96,6 +97,7 @@ async function runCommand(command: BuiltCommand, config: ArenaConfig): Promise<A
       cwd: command.cwd,
       timeout: config.commandTimeoutMs,
       maxBuffer: 4 * 1024 * 1024,
+      ...(command.env ? { env: { ...process.env, ...command.env } } : {}),
     })
     return toArenaRunResult({
       ...command,
@@ -128,6 +130,7 @@ function buildDgclawCommand(config: ArenaConfig, args: string[]): BuiltCommand {
     command: config.dgclawBin,
     args,
     cwd: config.dgclawDir ?? process.cwd(),
+    env: buildArenaCommandEnv(config),
   }
 }
 
@@ -136,11 +139,54 @@ function buildNodeScriptCommand(config: ArenaConfig, scriptRelPath: string, args
     command: config.nodeRunnerBin,
     args: ['ts-node', scriptRelPath, ...args],
     cwd: config.dgclawDir ?? process.cwd(),
+    env: buildArenaCommandEnv(config),
   }
+}
+
+function buildAcpCommand(config: ArenaConfig, args: string[]): BuiltCommand {
+  return {
+    command: config.acpBin,
+    args,
+    cwd: config.dgclawDir ?? process.cwd(),
+    env: buildArenaCommandEnv(config),
+  }
+}
+
+function buildArenaCommandEnv(config: ArenaConfig): Record<string, string> {
+  const env: Record<string, string> = {}
+  if (config.agentId) env.ARENA_AGENT_ID = config.agentId
+  if (config.agentWalletAddress) env.ARENA_AGENT_WALLET_ADDRESS = config.agentWalletAddress
+  if (config.hlApiWalletAddress) env.ARENA_HL_API_WALLET_ADDRESS = config.hlApiWalletAddress
+  return env
 }
 
 function parsePositiveNumber(input: number, fallback = 0): number {
   return Number.isFinite(input) && input > 0 ? input : fallback
+}
+
+export function parseAcpAgentCreateOutput(stdout: string): { agentId?: string; agentWalletAddress?: string; hlApiWalletAddress?: string } {
+  if (!stdout) return {}
+  const text = stdout.trim()
+  // Try JSON first (future-proof for structured scripts)
+  try {
+    const j = JSON.parse(text)
+    if (j && typeof j === 'object') {
+      const id = typeof j.agentId === 'string' ? j.agentId : (typeof j.id === 'string' ? j.id : undefined)
+      const w = typeof j.agentWalletAddress === 'string' ? j.agentWalletAddress : (typeof j.wallet === 'string' ? j.wallet : undefined)
+      const h = typeof j.hlApiWalletAddress === 'string' ? j.hlApiWalletAddress : (typeof j.hlWallet === 'string' ? j.hlWallet : undefined)
+      if (id || w) return { agentId: id, agentWalletAddress: w ? w.toLowerCase() : undefined, hlApiWalletAddress: h ? h.toLowerCase() : undefined }
+    }
+  } catch {
+    // not JSON, fall through to regex
+  }
+  // Common human/CLI output patterns from acp agent create and wrappers
+  const idMatch = text.match(/Agent ID[:\s]+([0-9a-fA-F-]{8,})|id[:\s]+([0-9a-fA-F-]{8,})/i)
+  const walletMatch = text.match(/Agent [Ww]allet[:\s]+(0x[0-9a-fA-F]{40})|[Ww]allet[:\s]+(0x[0-9a-fA-F]{40})/i)
+  const hlMatch = text.match(/HL API [Ww]allet[:\s]+(0x[0-9a-fA-F]{40})|hlApiWalletAddress[:\s]+(0x[0-9a-fA-F]{40})/i)
+  const agentId = (idMatch?.[1] || idMatch?.[2] || '').trim() || undefined
+  const agentWalletAddress = ((walletMatch?.[1] || walletMatch?.[2] || '').trim() || undefined)?.toLowerCase()
+  const hlApiWalletAddress = ((hlMatch?.[1] || hlMatch?.[2] || '').trim() || undefined)?.toLowerCase()
+  return { agentId, agentWalletAddress, hlApiWalletAddress }
 }
 
 export async function runArenaStatus(config = readArenaConfig()): Promise<ArenaOpResult> {
@@ -305,4 +351,63 @@ export async function runArenaTrade(request: ArenaTradeRequest, config = readAre
     message: run.ok ? `Open submitted for ${pairCheck.normalizedPair}.` : 'Open trade failed.',
     run,
   }
+}
+
+function ensureCreationEnabled(config: ArenaConfig): ArenaOpResult | null {
+  if (!config.creationEnabled) {
+    return fail('Arena agent creation is disabled. Set ARENA_CREATION_ENABLED=1 (or leave default true when ARENA_ENABLED=1).')
+  }
+  return null
+}
+
+export async function runArenaCreateAgent(config = readArenaConfig(), ownerAddress?: string): Promise<ArenaCreateResult> {
+  const baseValidation = ensureArenaEnabled(config)
+  if (baseValidation) return baseValidation
+  const creationValidation = ensureCreationEnabled(config)
+  if (creationValidation) return creationValidation
+  if (!config.acpBin) {
+    return fail('ARENA_ACP_BIN is not configured (needed for acp agent create).')
+  }
+
+  // Note: buildAcpCommand + buildArenaCommandEnv will inject any currently resolved
+  // ARENA_AGENT_ID / ARENA_AGENT_WALLET_ADDRESS etc. into the child env.
+  // If ownerAddress is passed, we append `--owner <address>` to the `acp agent create` args
+  // (best-effort; the official acp-cli "agent create" per Virtual-Protocol/acp-cli source
+  // only supports --name/--description/--image/--signer and does not declare --owner.
+  // Ownership/creator (userId on the Agent) is determined by the ACP auth session under
+  // which the CLI runs — see ACP_OWNER_WALLET + headless tokens from `acp configure`).
+  // The created agent always gets a fresh provisioned walletAddress used for on-chain
+  // identity + arena/HL signing. Full per-Alfa-EOA "owned by this wallet" dashboard
+  // association on Virtuals/ACP typically requires web create/claim at app.virtuals.io
+  // while the Alfa sender is the connected/auth'd identity for that ACP user.
+  const args = ['agent', 'create']
+  if (ownerAddress) {
+    args.push('--owner', ownerAddress)
+  }
+  const command = buildAcpCommand(config, args)
+  const run = await runCommand(command, config)
+  auditLog('create_agent', {
+    ok: run.ok,
+    dryRun: run.dryRun,
+    command: command.command,
+    args: command.args,
+  })
+
+  const parsed = parseAcpAgentCreateOutput(run.stdout || '')
+  const base: ArenaCreateResult = {
+    ok: run.ok,
+    message: run.ok
+      ? (run.dryRun ? 'Dry-run: would create agent via acp (no execution).' : 'Agent create submitted via acp.')
+      : 'acp agent create failed.',
+    run,
+  }
+  if (parsed.agentId) base.agentId = parsed.agentId
+  if (parsed.agentWalletAddress) base.agentWalletAddress = parsed.agentWalletAddress
+  if (parsed.hlApiWalletAddress) base.hlApiWalletAddress = parsed.hlApiWalletAddress
+  if (!run.ok && run.stdout) {
+    // Sanitize before attaching to result (may surface in logs or error details)
+    const sanitized = run.stdout.replace(/\/[^\s"]*dgclaw[^\s"]*/gi, '[dgclaw-path]').slice(0, 400)
+    ;(base as any).details = { ...(base.details || {}), stdoutPreview: sanitized }
+  }
+  return base
 }

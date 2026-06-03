@@ -12,6 +12,7 @@ const DEFAULT_MAX_TRADE_SIZE_USD = 100_000
 export type ArenaConfig = {
   enabled: boolean
   tradingEnabled: boolean
+  creationEnabled: boolean
   dryRun: boolean
   agentId: string | null
   agentWalletAddress: string | null
@@ -86,6 +87,7 @@ function normalizeAddressOrNull(value: string | null): string | null {
 export function readArenaConfig(): ArenaConfig {
   const enabled = readBool('ARENA_ENABLED', false)
   const tradingEnabled = readBool('ARENA_TRADING_ENABLED', false)
+  const creationEnabled = readBool('ARENA_CREATION_ENABLED', true)
   const dryRun = readBool('ARENA_DRY_RUN', true)
   const agentId = readOptionalString('ARENA_AGENT_ID') ?? DEFAULT_ARENA_AGENT_ID
   const agentWalletAddress =
@@ -110,6 +112,7 @@ export function readArenaConfig(): ArenaConfig {
   return {
     enabled,
     tradingEnabled,
+    creationEnabled,
     dryRun,
     agentId,
     agentWalletAddress,

@@ -449,6 +449,42 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     expect(executeHermitCommandMock).toHaveBeenCalledTimes(1)
   })
 
+  it('restricts /arena for non-allowlisted room members on AlfaClub bridge', async () => {
+    isHermitUserAllowedMock.mockReturnValue(false)
+    listUserPreferencesMock.mockResolvedValueOnce([])
+
+    const { executeCommand } = await import('./execute.ts')
+    const result = await executeCommand({
+      groupId: 'tg-room',
+      senderWallet: ALICE,
+      text: '/arena status',
+      chatId: 'alfaclub:12345',
+      userId: ALICE,
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.response).toContain('`/arena` is restricted to trusted operators')
+    expect(executeHermitCommandMock).not.toHaveBeenCalled()
+    isHermitUserAllowedMock.mockReturnValue(true)
+  })
+
+  it('still allows /arena for allowlisted users on AlfaClub bridge', async () => {
+    isHermitUserAllowedMock.mockReturnValue(true)
+    listUserPreferencesMock.mockResolvedValueOnce([])
+
+    const { executeCommand } = await import('./execute.ts')
+    const result = await executeCommand({
+      groupId: 'tg-room',
+      senderWallet: ALICE,
+      text: '/arena status',
+      chatId: 'alfaclub:12345',
+      userId: ALICE,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(executeHermitCommandMock).toHaveBeenCalledTimes(1)
+  })
+
   it('non-alfaclub surfaces still enforce HERMIT_ALLOWED_USERS', async () => {
     isHermitUserAllowedMock.mockReturnValue(false)
 

@@ -18,6 +18,7 @@ Use this exact sequence before enabling live Arena trading from room `1659`.
 
 ## 2) Setup flow (dry-run)
 
+- (Optional programmatic) Run: `/arena register <id> <wallet>` (after you create via web connected as your Alfa, or use no-args `/arena register` which creates under the bot ACP session) — binds your sender + runs the below in one shot.
 - Run: `/arena join`
 - Run: `/arena activate`
 - Run: `/arena add-api-wallet`
@@ -40,6 +41,7 @@ Temporarily set:
 
 Then run:
 
+- `/arena register` (or with ids) for bind+onboard rehearsal (see runbook for create vs ownership semantics from acp-cli source)
 - `/arena deposit 100`
 - `/arena trade open xyz:GOLD long 5000 2`
 - `/arena trade close xyz:GOLD`

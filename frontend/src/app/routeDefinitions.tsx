@@ -80,6 +80,7 @@ export function renderPathRoutes(
 export const MARKETING_ONLY_ROUTES: PathRouteDef[] = [
   { path: '/faq', element: <Faq /> },
   { path: '/faq/how-it-works', element: <FaqHowItWorks /> },
+  { path: '/positions', element: <Positions /> },
   { path: '/cca', element: <DistributeCcaLaunch /> },
   { path: '/status', element: <Status /> },
   { path: '/dev/metaball-os', element: <MetaballOsProbe /> },
@@ -163,7 +164,6 @@ export const EXPLORE_ROUTES: PathRouteDef[] = [
     path: '/explore/content/:chain/pool/:poolIdOrPoolKeyHash',
     element: <ExploreContentPoolAlias />,
   },
-  { path: '/positions', element: <Positions /> },
 ]
 
 export const APP_ACCEPTED_ROUTES: PathRouteDef[] = [

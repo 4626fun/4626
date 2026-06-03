@@ -422,6 +422,7 @@ Keeper bots in `kpr/` relay data between Solana and Base. Install: `cd kpr && np
 ## Learned Workspace Facts
 
 - Isolated feature work often uses `git worktree add` under `/.worktrees/` at the repo root; that directory is gitignored via `.gitignore`.
+- Continual-learning transcript indexing in this workspace is parent-transcript scoped: process only top-level `agent-transcripts/<uuid>/<uuid>.jsonl` files, exclude nested `subagents/*.jsonl`, and refresh mtimes incrementally from `.cursor/hooks/state/continual-learning-index.json`.
 - `frontend/src/config/wagmi.ts` sets `multiInjectedProviderDiscovery: false` on `createConfig` to avoid eager EIP-6963 multi-provider discovery that can trigger extension `requestProvider` races against non-writable `window.ethereum` getters when several wallets are installed. Keep targeted Rabby/MetaMask discovery explicit via manual EIP-6963 provider lookup, and keep `WagmiProvider` reconnection enabled so app/deploy route-boundary remounts restore an already-approved external EOA connection instead of appearing to disconnect it.
 - Perplexity-ready skill packages live under `docs/perplexity/perplexity-skills/` as one-folder-per-skill bundles with a `SKILL.md` entrypoint, and are commonly shared as `.zip` archives.
 - Feature flags are centralized in `frontend/src/lib/featureFlags.ts` using a typed `FeatureFlag<T>` registry (11 flags across 4 categories), with `FlagToolbarBridge` in Layout for Vercel Toolbar integration and `/api/flags/evaluate` + `/api/flags/discover` endpoints for Vercel Flags dashboard resolution.

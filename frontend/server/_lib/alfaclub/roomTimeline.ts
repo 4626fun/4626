@@ -1,6 +1,12 @@
 import { getDb } from '../db/postgres.js'
 import { ensureAlfaClubVigilanteSchema } from './schema.js'
 import {
+  ALFACLUB_API_COMMON_BROWSER_HEADERS,
+  readAlfaClubApiAuthFlags,
+  resolveAlfaClubApiCallBaseUrl,
+  resolveAlfaClubProxySecret,
+} from './apiAuth.js'
+import {
   getCandleSnapshot,
   getUserFillsByTimeDetailed,
   type HyperliquidCandle,
@@ -22,6 +28,7 @@ export type RoomTimelineChatEvent = {
   replyText: string | null
   replySender: string | null
   replySenderLabel: string | null
+  market: string | null
 }
 
 export type RoomTimelineTradeEvent = {
@@ -35,6 +42,7 @@ export type RoomTimelineTradeEvent = {
   dir: string | null
   closedPnl: number
   fee: number
+  market: string
 }
 
 export type RoomTimelineData = {
@@ -45,6 +53,8 @@ export type RoomTimelineData = {
   candles: HyperliquidCandle[]
   tradeEvents: RoomTimelineTradeEvent[]
   chatEvents: RoomTimelineChatEvent[]
+  markets: string[]
+  defaultMarket: string
 }
 
 type ChatRow = {
@@ -60,10 +70,32 @@ type ChatRow = {
   reply_username: string | null
 }
 
+type AlfaClubRoomMessage = Record<string, unknown>
+
 function toMs(iso: string | null): number | null {
   if (!iso) return null
   const ms = Date.parse(iso)
   return Number.isFinite(ms) ? ms : null
+}
+
+function normalizeMarket(coinOrSymbol: string): string {
+  return `${coinOrSymbol.trim().toUpperCase()}/USDC`
+}
+
+function normalizeMarketFromCoin(coin: string | null | undefined, fallbackSymbol: string): string {
+  const normalized = (coin ?? '').trim().toUpperCase()
+  return normalizeMarket(normalized || fallbackSymbol)
+}
+
+function inferChatMarket(text: string, symbols: Set<string>): string | null {
+  const normalizedText = text.toUpperCase()
+  for (const symbol of symbols) {
+    if (!symbol) continue
+    const token = symbol.toUpperCase()
+    const matcher = new RegExp(`\\b${token}\\b`)
+    if (matcher.test(normalizedText)) return normalizeMarket(token)
+  }
+  return null
 }
 
 function classifyFillAction(fill: HyperliquidUserFillDetailed): RoomTimelineTradeEvent['action'] {
@@ -118,12 +150,171 @@ async function resolveRoomHostAddress(params: {
   return null
 }
 
+function parseNumberCandidate(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const n = Number(value)
+    if (Number.isFinite(n)) return n
+  }
+  return 0
+}
+
+function resolveRoomMessageId(message: AlfaClubRoomMessage): string {
+  const candidates = [message.id, message.messageId, message.message_id, message.uuid]
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue
+    const trimmed = candidate.trim()
+    if (trimmed) return trimmed
+  }
+  return ''
+}
+
+function resolveRoomMessageSender(message: AlfaClubRoomMessage): string {
+  const nestedSender =
+    message.sender && typeof message.sender === 'object' && !Array.isArray(message.sender)
+      ? (message.sender as Record<string, unknown>)
+      : null
+  const candidates = [
+    message.senderAddress,
+    message.sender_address,
+    message.walletAddress,
+    message.wallet_address,
+    nestedSender?.walletAddress,
+    nestedSender?.wallet_address,
+    nestedSender?.id,
+  ]
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue
+    const trimmed = candidate.trim().toLowerCase()
+    if (trimmed) return trimmed
+  }
+  return ''
+}
+
+function resolveRoomMessageText(message: AlfaClubRoomMessage): string {
+  const candidates = [message.text, message.message, message.body, message.content]
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue
+    const trimmed = candidate.trim()
+    if (trimmed) return trimmed
+  }
+  return ''
+}
+
+function resolveRoomMessageDateMs(message: AlfaClubRoomMessage): number {
+  const candidates = [
+    message.date,
+    message.created_at,
+    message.createdAt,
+    message.timestamp,
+    message.sent_at,
+  ]
+  for (const candidate of candidates) {
+    const n = parseNumberCandidate(candidate)
+    if (n > 0) return n
+  }
+  return 0
+}
+
+async function readChatEventsViaReadApi(params: {
+  roomId: string
+  hostAddress: string | null
+  startTimeMs: number
+  limit: number
+  knownSymbols: Set<string>
+}): Promise<RoomTimelineChatEvent[] | null> {
+  const flags = readAlfaClubApiAuthFlags()
+  const readToken = flags.readBotToken || flags.botToken
+  if (!readToken) return null
+  const apiBaseUrl = resolveAlfaClubApiCallBaseUrl(flags)
+  const proxySecret = resolveAlfaClubProxySecret(flags)
+  const url = new URL(`/api/room/${encodeURIComponent(params.roomId)}/messages`, apiBaseUrl)
+  url.searchParams.set('limit', String(params.limit))
+  try {
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        ...ALFACLUB_API_COMMON_BROWSER_HEADERS,
+        Authorization: `Bearer ${readToken}`,
+        ...((proxySecret ?? '').trim() ? { 'x-proxy-secret': String(proxySecret).trim() } : {}),
+      },
+    })
+    if (!response.ok) return null
+    const body = (await response.json()) as { messages?: AlfaClubRoomMessage[] } | AlfaClubRoomMessage[]
+    const source = Array.isArray(body) ? body : Array.isArray(body.messages) ? body.messages : []
+    const ordered = source
+      .map((message) => ({
+        id: resolveRoomMessageId(message),
+        messageId: resolveRoomMessageId(message),
+        senderAddress: resolveRoomMessageSender(message),
+        senderLabel:
+          typeof message.username === 'string' && message.username.trim().length > 0
+            ? message.username.trim()
+            : null,
+        text: resolveRoomMessageText(message),
+        time: resolveRoomMessageDateMs(message),
+        replyId:
+          typeof message.reply_id === 'string' && message.reply_id.trim().length > 0
+            ? message.reply_id.trim()
+            : null,
+        replyText:
+          typeof message.reply_text === 'string' && message.reply_text.trim().length > 0
+            ? message.reply_text.trim()
+            : null,
+        replySender:
+          typeof message.reply_sender === 'string' && message.reply_sender.trim().length > 0
+            ? message.reply_sender.trim().toLowerCase()
+            : null,
+        replySenderLabel:
+          typeof message.reply_username === 'string' && message.reply_username.trim().length > 0
+            ? message.reply_username.trim()
+            : null,
+      }))
+      .filter(
+        (message) =>
+          message.id &&
+          message.senderAddress &&
+          message.text &&
+          Number.isFinite(message.time) &&
+          message.time > 0 &&
+          message.time >= params.startTimeMs,
+      )
+      .sort((a, b) => a.time - b.time)
+    const firstSeenBySender = new Set<string>()
+    return ordered.map((message) => {
+      const isFirstFromSender = !firstSeenBySender.has(message.senderAddress)
+      if (isFirstFromSender) firstSeenBySender.add(message.senderAddress)
+      return {
+        id: `${params.roomId}:${message.id}`,
+        messageId: message.messageId,
+        roomId: params.roomId,
+        senderAddress: message.senderAddress,
+        senderLabel: message.senderLabel,
+        text: message.text,
+        time: message.time,
+        isHost: Boolean(params.hostAddress && message.senderAddress === params.hostAddress),
+        isFirstFromSender,
+        replyId: message.replyId,
+        replyText: message.replyText,
+        replySender: message.replySender,
+        replySenderLabel: message.replySenderLabel,
+        market: inferChatMarket(message.text, params.knownSymbols),
+      }
+    })
+  } catch {
+    return null
+  }
+}
+
 async function readChatEvents(params: {
   roomId: string
   hostAddress: string | null
   startTimeMs: number
   limit: number
+  knownSymbols: Set<string>
 }): Promise<RoomTimelineChatEvent[]> {
+  const apiEvents = await readChatEventsViaReadApi(params)
+  if (apiEvents) return apiEvents
   const db = await getDb()
   if (!db) return []
   await ensureAlfaClubVigilanteSchema()
@@ -163,6 +354,7 @@ async function readChatEvents(params: {
           replyText: row.reply_text?.trim() || null,
           replySender: row.reply_sender?.trim().toLowerCase() || null,
           replySenderLabel: row.reply_username?.trim() || null,
+          market: inferChatMarket(text, params.knownSymbols),
         } satisfies RoomTimelineChatEvent
       })
       .filter((row): row is RoomTimelineChatEvent => Boolean(row))
@@ -171,7 +363,10 @@ async function readChatEvents(params: {
   }
 }
 
-function mapTradeEvents(fills: HyperliquidUserFillDetailed[] | null): RoomTimelineTradeEvent[] {
+function mapTradeEvents(
+  fills: HyperliquidUserFillDetailed[] | null,
+  fallbackSymbol: string,
+): RoomTimelineTradeEvent[] {
   if (!fills || fills.length === 0) return []
   return fills
     .map((fill) => ({
@@ -185,6 +380,7 @@ function mapTradeEvents(fills: HyperliquidUserFillDetailed[] | null): RoomTimeli
       dir: fill.dir,
       closedPnl: fill.closedPnl,
       fee: fill.fee,
+      market: normalizeMarketFromCoin(fill.coin, fallbackSymbol),
     }))
     .sort((a, b) => a.time - b.time)
 }
@@ -212,7 +408,7 @@ export async function buildRoomTimelineData(params: {
       ? resolveRoom1659HyperliquidUserForSnapshot(hostAddress ?? '0x0000000000000000000000000000000000000000')
       : hostAddress
 
-  const [candles, fills, chatEvents] = await Promise.all([
+  const [candles, fills] = await Promise.all([
     getCandleSnapshot({
       coin: symbol,
       interval,
@@ -220,8 +416,19 @@ export async function buildRoomTimelineData(params: {
       endTimeMs,
     }),
     hlAddress ? getUserFillsByTimeDetailed(hlAddress, startTimeMs) : Promise.resolve(null),
-    readChatEvents({ roomId, hostAddress, startTimeMs, limit: 500 }),
   ])
+  const tradeEvents = mapTradeEvents(fills, symbol)
+  const knownSymbols = new Set<string>([symbol, ...tradeEvents.map((event) => event.coin ?? '')])
+  const chatEvents = await readChatEvents({
+    roomId,
+    hostAddress,
+    startTimeMs,
+    limit: 500,
+    knownSymbols,
+  })
+  const markets = Array.from(
+    new Set<string>([normalizeMarket(symbol), ...tradeEvents.map((event) => event.market)]),
+  )
 
   return {
     roomId,
@@ -229,8 +436,10 @@ export async function buildRoomTimelineData(params: {
     hostAddress,
     generatedAt: new Date().toISOString(),
     candles: candles ?? [],
-    tradeEvents: mapTradeEvents(fills),
+    tradeEvents,
     chatEvents,
+    markets,
+    defaultMarket: normalizeMarket(symbol),
   }
 }
 

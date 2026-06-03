@@ -57,7 +57,7 @@ function formatHermitConciseCtaSection(params: {
   lines.push('• Refresh risk + PnL snapshot: **`/position`**')
 
   if (params.roomId === '1659') {
-    lines.push('• Check room execution lane: **`/arena status`**')
+    lines.push('• Check room execution lane: **`/arena status`** (or `/arena register` to create/bind an arena agent for this sender/room)')
   } else {
     lines.push('• Expand market context: **`/market`**')
   }
@@ -207,7 +207,7 @@ export function formatAlfaClubCommandHelp(): string {
     '  `/alfa chart [kind] [limit]` — room analytics chart (IPFS image)',
     '  `/alfa status` or `/bridge status` — pipeline + bridge auth health',
     '  `/alfa quote-key` · `/alfa buy-key` · `/alfa create-room` — onchain room keys',
-    '  `/arena status|assets|join|activate|add-api-wallet|deposit|trade` — Arena controls (1659 + flags)',
+    '  `/arena status|register|identity ...|join|activate|...` — Arena controls (1659 + flags; supports per-sender "mine" bindings)',
     '',
     '**Hermit** (ops room): `/gmeow` · `/meme` — GIF in chat first, then X link when posted.',
     '',

@@ -7,6 +7,7 @@ function mockConfig(overrides: Partial<ArenaConfig> = {}): ArenaConfig {
   return {
     enabled: true,
     tradingEnabled: true,
+    creationEnabled: true,
     dryRun: true,
     agentId: null,
     agentWalletAddress: null,

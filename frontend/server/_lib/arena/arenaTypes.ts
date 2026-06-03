@@ -6,6 +6,7 @@ export type ArenaCommandName =
   | 'add-api-wallet'
   | 'deposit'
   | 'trade'
+  | 'register'
 
 export type ArenaTradeAction = 'open' | 'close'
 export type ArenaTradeSide = 'long' | 'short'
@@ -53,4 +54,10 @@ export type ArenaOpResult = {
   message: string
   details?: Record<string, unknown>
   run?: ArenaRunResult
+}
+
+export type ArenaCreateResult = ArenaOpResult & {
+  agentId?: string
+  agentWalletAddress?: string
+  hlApiWalletAddress?: string
 }

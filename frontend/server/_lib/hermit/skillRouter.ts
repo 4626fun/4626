@@ -54,11 +54,17 @@ import {
   listArenaAssets,
   runArenaActivateUnifiedAccount,
   runArenaAddApiWallet,
+  runArenaCreateAgent,
   runArenaDepositUsdc,
   runArenaJoin,
   runArenaStatus,
   runArenaTrade,
 } from '../arena/arenaClient.js'
+import {
+  clearArenaIdentityMapping,
+  resolveArenaIdentityForContext,
+  upsertArenaIdentityMapping,
+} from '../arena/arenaIdentityMappingStore.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -143,6 +149,20 @@ function parseHermitDraftMode(args: string): { mode: HermitDraftMode; prompt: st
 
 type ParsedArenaCommand =
   | { kind: 'help' | 'status' | 'assets' | 'join' | 'activate' | 'add-api-wallet' }
+  | { kind: 'identity-show' }
+  | {
+      kind: 'identity-set'
+      target: 'default' | 'mine' | 'user'
+      senderAddress?: string
+      agentId: string
+      agentWalletAddress: string
+      hlApiWalletAddress?: string
+    }
+  | {
+      kind: 'identity-clear'
+      target: 'default' | 'mine' | 'user'
+      senderAddress?: string
+    }
   | { kind: 'deposit'; amountUsd: number }
   | {
       kind: 'trade'
@@ -151,6 +171,13 @@ type ParsedArenaCommand =
       side?: 'long' | 'short'
       sizeUsd?: number
       leverage?: number
+    }
+  | {
+      kind: 'register'
+      target?: 'default'
+      agentId?: string
+      agentWalletAddress?: string
+      hlApiWalletAddress?: string
     }
 
 function parseArenaCommandArgs(args: string): ParsedArenaCommand | null {
@@ -164,6 +191,59 @@ function parseArenaCommandArgs(args: string): ParsedArenaCommand | null {
   if (sub === 'join') return { kind: 'join' }
   if (sub === 'activate' || sub === 'activate-unified-account') return { kind: 'activate' }
   if (sub === 'add-api-wallet' || sub === 'api-wallet') return { kind: 'add-api-wallet' }
+
+  if (sub === 'identity') {
+    const action = (parts[1] ?? '').toLowerCase()
+    const target = (parts[2] ?? '').toLowerCase()
+    if (!action || action === 'show') return { kind: 'identity-show' }
+    if (action === 'set') {
+      if (target === 'default' || target === 'mine') {
+        const agentId = parts[3] ?? ''
+        const agentWalletAddress = parts[4] ?? ''
+        const hlApiWalletAddress = parts[5]
+        if (!agentId || !agentWalletAddress) return null
+        return {
+          kind: 'identity-set',
+          target,
+          agentId,
+          agentWalletAddress,
+          ...(hlApiWalletAddress ? { hlApiWalletAddress } : {}),
+        }
+      }
+      if (target === 'user') {
+        const senderAddress = parts[3] ?? ''
+        const agentId = parts[4] ?? ''
+        const agentWalletAddress = parts[5] ?? ''
+        const hlApiWalletAddress = parts[6]
+        if (!senderAddress || !agentId || !agentWalletAddress) return null
+        return {
+          kind: 'identity-set',
+          target,
+          senderAddress,
+          agentId,
+          agentWalletAddress,
+          ...(hlApiWalletAddress ? { hlApiWalletAddress } : {}),
+        }
+      }
+      return null
+    }
+    if (action === 'clear') {
+      if (target === 'default' || target === 'mine') {
+        return { kind: 'identity-clear', target }
+      }
+      if (target === 'user') {
+        const senderAddress = parts[3] ?? ''
+        if (!senderAddress) return null
+        return {
+          kind: 'identity-clear',
+          target,
+          senderAddress,
+        }
+      }
+      return null
+    }
+    return null
+  }
 
   if (sub === 'deposit') {
     const amountUsd = Number(parts[1] ?? '')
@@ -196,6 +276,38 @@ function parseArenaCommandArgs(args: string): ParsedArenaCommand | null {
       }
     }
   }
+
+  if (sub === 'register' || sub === 'create' || sub === 'create-agent') {
+    // /arena register [default] [agentId agentWallet [hlApi]]
+    // "default" targets the room-wide default (persisted in DB, overrides envs for the room)
+    // Without it, binds to the caller's sender ('mine').
+    // If ids supplied, bind + onboard. If omitted, drive acp create (for default: create then set as room default).
+    let idx = 1
+    let target: 'default' | undefined
+    if ((parts[1] || '').toLowerCase() === 'default') {
+      target = 'default'
+      idx = 2
+    }
+    const a1 = parts[idx]
+    const a2 = parts[idx + 1]
+    const a3 = parts[idx + 2]
+    if (a1 && a2) {
+      return {
+        kind: 'register',
+        target,
+        agentId: a1,
+        agentWalletAddress: a2,
+        ...(a3 ? { hlApiWalletAddress: a3 } : {}),
+      }
+    }
+    // no ids → drive create path
+    return {
+      kind: 'register',
+      target,
+      ...(parts[idx] ? { hlApiWalletAddress: parts[idx] } : {}),
+    }
+  }
+
   return null
 }
 
@@ -210,8 +322,19 @@ function formatArenaUsage(): string {
     '- `/arena deposit <usdc>`',
     '- `/arena trade open <pair> <long|short> <sizeUsd> <leverage>`',
     '- `/arena trade close <pair>`',
+    '- `/arena register`  (create path: runs acp agent create if enabled under the runtime ACP session; auto-binds + onboards the new agent for your sender or as room default)',
+    '- `/arena register <agentId> <agentWallet> [hlApiWallet]`  (supplied-ids: bind your sender + onboard)',
+    '- `/arena register default <agentId> <agentWallet> [hlApiWallet]`  (supplied-ids: set/change room default + onboard; use this to switch global for the room to one owned via your Alfa address)',
+    '- `/arena register default`  (create via server ACP session then set as room default + onboard)',
+    '- `/arena identity clear mine`  (remove your personal binding and fall back to room default)',
+    '- `/arena identity show`',
+    '- `/arena identity set default <agentId> <agentWallet> [hlApiWallet]`',
+    '- `/arena identity set mine <agentId> <agentWallet> [hlApiWallet]`',
+    '- `/arena identity set user <senderWallet> <agentId> <agentWallet> [hlApiWallet]`',
+    '- `/arena identity clear default|mine|user <senderWallet>`',
     '',
     'HIP-3 pairs must use `xyz:` (example: `xyz:GOLD`).',
+    'Create path (`/arena register` or `default`) runs under the bot\'s pre-configured ACP session (see ACP_OWNER_WALLET in acp-cli headless). Agent is functional for arena immediately (auto-bound + onboarded). For the agent to appear "owned by your Alfa EOA" in Virtuals ACP dashboard (userId match), create via web at app.virtuals.io/acp while connected as your Alfa sender, then supply ids with `/arena register [default] <id> <wallet>`.',
   ].join('\n')
 }
 
@@ -2054,12 +2177,250 @@ export async function executeHermitCommand(
       }
     }
 
-    const config = readArenaConfig()
+    const baseConfig = readArenaConfig()
+    const resolvedIdentity = await resolveArenaIdentityForContext({
+      roomId: params.roomId ?? null,
+      senderAddress: params.senderAddress,
+      baseConfig,
+    })
+    const config = {
+      ...baseConfig,
+      agentId: resolvedIdentity.agentId,
+      agentWalletAddress: resolvedIdentity.agentWalletAddress,
+      hlApiWalletAddress: resolvedIdentity.hlApiWalletAddress,
+    }
     if (parsed.kind === 'help') {
       return {
         kind: 'hermit',
         provider: 'local',
         reply: formatArenaUsage(),
+      }
+    }
+    if (parsed.kind === 'identity-show') {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [
+          'Arena identity resolution',
+          `- source: ${resolvedIdentity.source}`,
+          `- room: ${params.roomId ?? 'n/a'}`,
+          `- sender: ${params.senderAddress}`,
+          `- agentId: ${config.agentId ?? 'unset'}`,
+          `- arenaWallet: ${config.agentWalletAddress ?? 'unset'}`,
+          `- hlApiWallet: ${config.hlApiWalletAddress ?? 'unset'}`,
+        ].join('\n'),
+      }
+    }
+    if (parsed.kind === 'identity-set') {
+      const targetSenderAddress =
+        parsed.target === 'default'
+          ? '*'
+          : parsed.target === 'mine'
+            ? params.senderAddress
+            : parsed.senderAddress
+      const saved = await upsertArenaIdentityMapping({
+        roomId: params.roomId ?? '',
+        senderAddress: targetSenderAddress ?? '',
+        arenaAgentId: parsed.agentId,
+        arenaWalletAddress: parsed.agentWalletAddress,
+        ...(parsed.hlApiWalletAddress ? { hlApiWalletAddress: parsed.hlApiWalletAddress } : {}),
+        updatedBy: params.senderAddress,
+      })
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: saved
+          ? `Arena identity mapping saved for ${parsed.target}.`
+          : 'Could not save Arena identity mapping. Check args and retry.',
+      }
+    }
+    if (parsed.kind === 'identity-clear') {
+      const targetSenderAddress =
+        parsed.target === 'default'
+          ? '*'
+          : parsed.target === 'mine'
+            ? params.senderAddress
+            : parsed.senderAddress
+      const cleared = await clearArenaIdentityMapping({
+        roomId: params.roomId ?? '',
+        senderAddress: targetSenderAddress ?? '',
+      })
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: cleared
+          ? `Arena identity mapping cleared for ${parsed.target}.`
+          : 'Could not clear Arena identity mapping. Check args and retry.',
+      }
+    }
+    if (parsed.kind === 'register') {
+      const isDefault = parsed.target === 'default'
+      const targetSenderForBind = isDefault ? '*' : params.senderAddress
+      const isCreatePath = !parsed.agentId || !parsed.agentWalletAddress
+
+      function sanitizeOutputForReply(text: string | undefined | null): string {
+        let s = String(text || '').trim()
+        if (baseConfig.dgclawDir) {
+          const escaped = baseConfig.dgclawDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          s = s.replace(new RegExp(escaped, 'gi'), '[dgclaw-dir]')
+        }
+        s = s.replace(/\b(ARENA_[A-Z0-9_]+)=[^\s]+/g, '$1=[redacted]')
+        return s.slice(0, 400)
+      }
+
+      if (isCreatePath) {
+        // Create path (no ids supplied): drive `acp agent create` via the runtime's ACP session
+        // (pre-configured via acp configure / ACP_* tokens + ACP_OWNER_WALLET; see acp-cli source).
+        // On success (parsable Agent ID + wallet from stdout), auto-bind as 'mine' (sender) or '*'
+        // (room default) and run the full arena onboard (join/activate/add-api-wallet).
+        // The --owner <sender> is passed best-effort (official acp-cli create does not declare
+        // this flag; ownership on ACP is the session's user, not a create-time param).
+        // For an agent whose ACP owner/dashboard identity is specifically the Alfa sender EOA
+        // (not the bot session), the user should create via the web UI (app.virtuals.io) while
+        // authenticated/connected with that exact wallet, then supply the ids.
+        const cr = await runArenaCreateAgent(config, targetSenderForBind === '*' ? params.senderAddress : targetSenderForBind)
+
+        if (cr.agentId && cr.agentWalletAddress) {
+          const out = sanitizeOutputForReply(cr.run?.stdout)
+
+          // For both default and personal create: auto-bind the mapping + run onboarding.
+          // The mapping + activeConfig gives the bot control for arena cmds under that sender.
+          // The ACP creator of the agent is the runtime session (see audit + ACP_OWNER_WALLET).
+          const bindSender = isDefault ? '*' : targetSenderForBind
+
+          const saved = await upsertArenaIdentityMapping({
+            roomId: params.roomId ?? '',
+            senderAddress: bindSender,
+            arenaAgentId: cr.agentId,
+            arenaWalletAddress: cr.agentWalletAddress,
+            ...(cr.hlApiWalletAddress ? { hlApiWalletAddress: cr.hlApiWalletAddress } : {}),
+            updatedBy: params.senderAddress,
+          })
+
+          const activeConfig = {
+            ...config,
+            agentId: cr.agentId,
+            agentWalletAddress: cr.agentWalletAddress,
+            ...(cr.hlApiWalletAddress ? { hlApiWalletAddress: cr.hlApiWalletAddress } : {}),
+          }
+
+          const stepResults: string[] = []
+          const j = await runArenaJoin(activeConfig)
+          stepResults.push(`join=${j.ok ? 'ok' : 'fail'}${j.run?.dryRun ? '[dry]' : ''}`)
+          const a = await runArenaActivateUnifiedAccount(activeConfig)
+          stepResults.push(`activate=${a.ok ? 'ok' : 'fail'}${a.run?.dryRun ? '[dry]' : ''}`)
+          const api = await runArenaAddApiWallet(activeConfig)
+          stepResults.push(`add-api-wallet=${api.ok ? 'ok' : 'fail'}${api.run?.dryRun ? '[dry]' : ''}`)
+
+          const what = isDefault ? 'room default' : 'personal (\'mine\') identity for your sender'
+          return {
+            kind: 'hermit',
+            provider: 'local',
+            reply: [
+              cr.run?.dryRun
+                ? `Dry-run: created agent and would have bound as ${what} + onboarded.`
+                : `Created agent via acp and bound as ${what} + onboarded.`,
+              out ? `acp output (sanitized, truncated):\n${out}` : '',
+              `agentId=${cr.agentId} arenaWallet=${cr.agentWalletAddress}${cr.hlApiWalletAddress ? ` hl=${cr.hlApiWalletAddress}` : ''}`,
+              saved ? 'Mapping saved.' : 'Mapping write may have failed (check logs).',
+              `steps: ${stepResults.join(' ')}`,
+              'Verify with: /arena identity show  |  /arena status',
+              'Note: the agent was created under the runtime ACP session (owner = ACP_OWNER_WALLET). For full Virtuals dashboard ownership under your Alfa EOA, create/claim via web UI at app.virtuals.io while connected as that wallet.',
+            ].filter(Boolean).join('\n'),
+          }
+        }
+
+        // Create failed or no parsable ids
+        const out = sanitizeOutputForReply(cr.run?.stdout || cr.run?.stderr)
+        const guidance = isDefault
+          ? 'To switch the room default: create on web connected as your Alfa wallet (recommended for dashboard ownership), then /arena register default <id> <wallet>, or run /arena register default (no args) again. (The no-args create uses the bot ACP session.)'
+          : 'Create/claim at app.virtuals.io/acp/new while connected as your room sender wallet (for ownership match), then /arena register <id> <wallet>. (The no-args create path uses the bot runtime ACP session for a functional arena agent.)'
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: [
+            cr.message || 'Create failed or produced no parsable ids.',
+            out ? `acp output (sanitized, truncated):\n${out}` : '',
+            guidance,
+          ].filter(Boolean).join('\n'),
+        }
+      }
+
+      // Supplied-ids path (ids provided)
+      let agentId = parsed.agentId!
+      let agentWalletAddress = parsed.agentWalletAddress!
+      let hlApiWalletAddress = parsed.hlApiWalletAddress
+
+      // For personal only: short-circuit if already bound to these exact ids
+      if (!isDefault && resolvedIdentity &&
+          resolvedIdentity.agentId === agentId &&
+          resolvedIdentity.agentWalletAddress === agentWalletAddress) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: [
+            `Already bound for your sender (${targetSenderForBind}) to this agent.`,
+            `agentId: ${agentId}`,
+            `arenaWallet: ${agentWalletAddress}`,
+            'No re-bind or re-onboard performed. Use dedicated subcommands if needed.',
+          ].join('\n'),
+        }
+      }
+
+      // Validation
+      const looksLikeAgentId = /^[0-9a-fA-F-]{8,}$/.test(agentId)
+      const looksLikeWallet = /^0x[0-9a-fA-F]{40}$/.test(agentWalletAddress)
+      if (!looksLikeAgentId || !looksLikeWallet) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Invalid agentId or agentWallet format. Use the exact values from ACP create / web UI.',
+        }
+      }
+
+      // Bind (for default uses '*' sender)
+      const saved = await upsertArenaIdentityMapping({
+        roomId: params.roomId ?? '',
+        senderAddress: targetSenderForBind,
+        arenaAgentId: agentId,
+        arenaWalletAddress: agentWalletAddress,
+        ...(hlApiWalletAddress ? { hlApiWalletAddress } : {}),
+        updatedBy: params.senderAddress,
+      })
+
+      const activeConfig = {
+        ...config,
+        agentId,
+        agentWalletAddress,
+        ...(hlApiWalletAddress ? { hlApiWalletAddress } : {}),
+      }
+
+      // Run onboarding steps
+      const stepResults: string[] = []
+      const j = await runArenaJoin(activeConfig)
+      stepResults.push(`join=${j.ok ? 'ok' : 'fail'}${j.run?.dryRun ? '[dry]' : ''}`)
+      const a = await runArenaActivateUnifiedAccount(activeConfig)
+      stepResults.push(`activate=${a.ok ? 'ok' : 'fail'}${a.run?.dryRun ? '[dry]' : ''}`)
+      const api = await runArenaAddApiWallet(activeConfig)
+      stepResults.push(`add-api-wallet=${api.ok ? 'ok' : 'fail'}${api.run?.dryRun ? '[dry]' : ''}`)
+
+      const prefix = isDefault ? 'Arena room default register (supplied ids)' : 'Arena register (supplied ids)'
+      const identityLine = isDefault
+        ? (saved ? 'Room default mapping saved/updated.' : 'Room default mapping write may have failed (check logs).')
+        : (saved ? `Identity bound for 'mine' (sender ${targetSenderForBind}).` : `Identity bind failed (check DB/logs). sender=${targetSenderForBind}`)
+
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [
+          prefix + ':',
+          identityLine,
+          `steps: ${stepResults.join(' ')}`,
+          `agentId: ${agentId}`,
+          `arenaWallet: ${agentWalletAddress}`,
+          hlApiWalletAddress ? `hlApiWallet: ${hlApiWalletAddress}` : '',
+          'Verify: /arena identity show  |  /arena status  |  (use /arena deposit for funds; dry-run trade first if live)',
+        ].filter(Boolean).join('\n'),
       }
     }
     if (parsed.kind === 'status') {
@@ -2068,7 +2429,7 @@ export async function executeHermitCommand(
         kind: 'hermit',
         provider: 'local',
         reply: result.ok
-          ? `Arena status: enabled=${String(result.details?.enabled)} tradingEnabled=${String(result.details?.tradingEnabled)} dryRun=${String(result.details?.dryRun)}`
+          ? `Arena status: enabled=${String(result.details?.enabled)} tradingEnabled=${String(result.details?.tradingEnabled)} dryRun=${String(result.details?.dryRun)} identitySource=${resolvedIdentity.source}`
           : `Arena status unavailable: ${result.message}`,
       }
     }

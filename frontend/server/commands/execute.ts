@@ -468,11 +468,17 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
         }
         const hermitRole = await getRole(undefined)
         const isTrustedHermitRole = hermitRole === 'OWNER' || hermitRole === 'ADMIN'
-        if (alfaClubChat && hermitCommand === '/signal' && !senderIsAllowlisted && !isTrustedHermitRole) {
+        if (
+          alfaClubChat &&
+          (hermitCommand === '/signal' || hermitCommand === '/arena') &&
+          !senderIsAllowlisted &&
+          !isTrustedHermitRole
+        ) {
+          const restrictedCommand = hermitCommand === '/arena' ? '/arena' : '/signal'
           return {
             ok: false,
             response:
-              'Hermit `/signal` is restricted to trusted operators (OWNER/ADMIN or allowlisted user) in this room.',
+              `Hermit \`${restrictedCommand}\` is restricted to trusted operators (OWNER/ADMIN or allowlisted user) in this room.`,
           }
         }
         const alfaClubRoomId = parseAlfaClubRoomIdFromChatId(params.chatId)

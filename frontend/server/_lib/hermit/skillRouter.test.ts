@@ -235,6 +235,23 @@ describe('executeHermitCommand', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('supports /arena identity show with resolver fallback', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+    })
+    const result = await executeHermitCommand({
+      commandText: '/arena identity show',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('Arena identity resolution')
+    expect(result.reply).toContain('source:')
+  })
+
   it('rejects /arena commands outside allowed rooms', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
@@ -278,6 +295,86 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toContain('Open submitted for xyz:GOLD.')
     expect(result.reply).toContain('[dry-run]')
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('supports /arena register (supplied ids) + runs onboard sequence (dry); bind may be no-op in unit harness without DB', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+      ARENA_CREATION_ENABLED: '1',
+    })
+    const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
+    // Use ids that differ from the env defaults so we exercise the bind + sequence path
+    // (instead of the new already-bound short-circuit).
+    const result = await executeHermitCommand({
+      commandText: '/arena register 11111111-2222-3333-4444-555555555555 0x1111111111111111111111111111111111111111',
+      senderAddress: sender,
+      roomId: '1659',
+    })
+    expect(result.reply).toContain('Arena register (supplied ids)')
+    // In the unit test env (no real getDb) upsert returns false, so we get the 'failed' note but still execute the sequence + surface ids/sender
+    expect(result.reply).toContain('Identity bind failed')
+    expect(result.reply).toContain(sender)
+    expect(result.reply).toContain('join=')
+    expect(result.reply).toContain('activate=')
+    expect(result.reply).toContain('add-api-wallet=')
+    expect(result.reply).toContain('[dry]')
+    expect(result.reply).toContain('11111111')
+  })
+
+  it('supports /arena register (no ids) as create-only path: runs create, surfaces ids/guidance, does NOT auto-bind or onboard (dry)', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+      ARENA_CREATION_ENABLED: '1',
+    })
+    const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
+    const result = await executeHermitCommand({
+      commandText: '/arena register',
+      senderAddress: sender,
+      roomId: '1659',
+    })
+    // Create path must surface guidance to claim in web UI then re-invoke with explicit ids.
+    // It must NOT contain the onboarding steps or "Identity bound".
+    expect(result.reply.toLowerCase()).toContain('register')
+    expect(result.reply).toContain('app.virtuals.io/acp/new')
+    expect(result.reply.toLowerCase()).toContain('claim')
+    expect(result.reply).not.toContain('Identity bound')
+    expect(result.reply).not.toContain('join=')
+    expect(result.reply).not.toContain('add-api-wallet=')
+  })
+
+  it('rejects /arena register outside allowed rooms (same gate as other subs)', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+    })
+    const result = await executeHermitCommand({
+      commandText: '/arena register',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1043',
+    })
+    expect(result.reply).toContain('only enabled in approved rooms')
+  })
+
+  it('short-circuits /arena register (supplied ids) when ids already match resolved for sender (already-bound case)', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+    })
+    const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
+    // Use the exact default ids from arenaConfig so resolvedIdentity matches
+    const result = await executeHermitCommand({
+      commandText: '/arena register 019e82af-2e66-7645-af23-69e9f14351f4 0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
+      senderAddress: sender,
+      roomId: '1659',
+    })
+    expect(result.reply).toContain('Already bound for your sender')
+    expect(result.reply).not.toContain('Identity bind failed')
+    expect(result.reply).not.toContain('join=')
   })
 
   it('uses a rotating bundled meme for plain /gmeow', async () => {
