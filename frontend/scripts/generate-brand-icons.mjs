@@ -18,7 +18,6 @@ import process from 'node:process'
 import { promisify } from 'node:util'
 
 import sharp from 'sharp'
-import toIco from 'to-ico'
 
 const execFileAsync = promisify(execFile)
 
@@ -132,29 +131,23 @@ async function writeFaviconIco(outDir, opaquePath) {
     sizes.map((size) => sharp(opaquePath).resize(size, size, { fit: 'cover' }).png().toBuffer()),
   )
 
+  const png16 = path.join(outDir, 'assets/favicon-16x16.png')
+  const png32 = path.join(outDir, 'assets/favicon-32x32.png')
+  const png48 = path.join(outDir, 'assets/favicon-48x48.png')
+
   try {
-    const icoBuffer = await toIco(pngBuffers)
-    await fs.writeFile(icoPath, icoBuffer)
-  } catch (error) {
+    await execFileAsync('convert', [
+      png16,
+      png32,
+      png48,
+      '-define',
+      'icon:auto-resize=16,32,48',
+      icoPath,
+    ])
+  } catch (convertError) {
     // eslint-disable-next-line no-console
-    console.warn('to-ico failed; falling back to ImageMagick convert', error?.message ?? error)
-    const png16 = path.join(outDir, 'assets/favicon-16x16.png')
-    const png32 = path.join(outDir, 'assets/favicon-32x32.png')
-    const png48 = path.join(outDir, 'assets/favicon-48x48.png')
-    try {
-      await execFileAsync('convert', [
-        png16,
-        png32,
-        png48,
-        '-define',
-        'icon:auto-resize=16,32,48',
-        icoPath,
-      ])
-    } catch (convertError) {
-      // eslint-disable-next-line no-console
-      console.warn('ImageMagick convert unavailable; writing 32px PNG only', convertError?.message ?? convertError)
-      await fs.writeFile(icoPath, pngBuffers[1])
-    }
+    console.warn('ImageMagick convert unavailable; writing 32px PNG only', convertError?.message ?? convertError)
+    await fs.writeFile(icoPath, pngBuffers[1])
   }
 }
 

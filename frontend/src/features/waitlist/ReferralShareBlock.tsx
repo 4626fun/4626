@@ -110,7 +110,7 @@ export function ReferralShareBlock({
           className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-200 hover:border-white/20 hover:text-white transition-colors"
         >
           <SiFarcaster className="w-3 h-3" aria-hidden="true" />
-          Cast on Warpcast
+          Post on Farcaster
         </button>
         <button
           type="button"

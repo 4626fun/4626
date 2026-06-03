@@ -20,6 +20,7 @@ type MetricsResponse = {
     sampledCreators: number
     lastSyncStartedAt: string | null
     lastSyncFinishedAt: string | null
+    lastHotRefreshAt: string | null
     lastFullSyncAt: string | null
     syncError: string | null
     driftEstimateTotal: number | null
@@ -186,6 +187,7 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
         sampledCreators: 0,
         lastSyncStartedAt: null,
         lastSyncFinishedAt: null,
+        lastHotRefreshAt: null,
         lastFullSyncAt: null,
         syncError: 'database_not_configured',
         driftEstimateTotal: null,
@@ -221,6 +223,7 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       sampled_creators,
       last_sync_started_at,
       last_sync_finished_at,
+      last_hot_refresh_at,
       last_full_sync_at,
       drift_estimate_total,
       drift_pct,
@@ -283,6 +286,7 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
   const lastFullSyncAt = asIsoString(state.last_full_sync_at)
   const lastSyncFinishedAt = asIsoString(state.last_sync_finished_at)
   const lastSyncStartedAt = asIsoString(state.last_sync_started_at)
+  const lastHotRefreshAt = asIsoString(state.last_hot_refresh_at)
   const syncError = typeof state.sync_error === 'string' && state.sync_error.length > 0 ? state.sync_error : null
 
   // Canonical totals are considered exact only when backfill completed and no active/error sync.
@@ -337,9 +341,15 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       OR creator_metrics_daily_snapshots.updated_at < NOW() - make_interval(secs => ${SNAPSHOT_WRITE_MIN_INTERVAL_SECONDS});
   `
 
+  const freshnessTimestamp =
+    lastHotRefreshAt ??
+    lastSyncFinishedAt ??
+    (Number.isFinite(cachedTotalsAtMs) ? new Date(cachedTotalsAtMs).toISOString() : null) ??
+    new Date().toISOString()
+
   return {
     scope,
-    updatedAt: new Date().toISOString(),
+    updatedAt: freshnessTimestamp,
     exact,
     syncStatus,
     sync: {
@@ -348,6 +358,7 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       sampledCreators,
       lastSyncStartedAt,
       lastSyncFinishedAt,
+      lastHotRefreshAt,
       lastFullSyncAt,
       syncError,
       driftEstimateTotal: toNumber(state.drift_estimate_total),

@@ -14,12 +14,11 @@ import { CreatorEthosAvatar } from '@/components/explore/CreatorEthosAvatar'
 import { ExploreHeroImageReveal } from '@/components/explore/ExploreHeroImageReveal'
 import { EthosBlurOrbs, EthosHeroScoreWash, EthosPageAmbience } from '@/components/explore/EthosPageAmbience'
 import { useCreatorEthosPageTheme } from '@/components/explore/ethosPageTheme'
-import { CREATOR_PAGE_LIME, CreatorScrollBridge } from '@/components/explore/CreatorScrollBridge'
+import { CreatorScrollBridge } from '@/components/explore/CreatorScrollBridge'
 import { CreatorImmersiveStatsBeat } from '@/components/explore/CreatorImmersiveStatsBeat'
-import { CreatorContentTimeline } from '@/components/explore/CreatorContentTimeline'
+import { CreatorContentCylinderGallery3D } from '@/components/explore/CreatorContentCylinderGallery3D'
 import { CreatorVaultReserveBeat } from '@/components/explore/CreatorVaultReserveBeat'
 import { buildCreatorStats } from '@/components/explore/creatorStatsModel'
-import { InfiniteContentGallery3D } from '@/components/explore/InfiniteContentGallery3D'
 import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
 import { requestOpenChat } from '@/lib/chat/openChat'
 import { fetchZoraCoin } from '@/lib/zora/client'
@@ -39,6 +38,9 @@ import {
 } from '@/features/explore/exploreShared'
 
 const CONTENT_COINS_PAGE_SIZE = 20
+/** Corridor height (in vh) for the sticky-locked content-coins scene; the section stays
+ *  pinned for roughly this minus one viewport, so scrolling orbits the helix that long. */
+const SCENE_PIN_HEIGHT_VH = 320
 const UNISWAP_ICON_URL = '/protocols/uniswap.svg'
 /** Full-bleed hero — taller than one viewport on desktop so the intro portrait scene breathes before scroll. */
 const CREATOR_HERO_MIN_HEIGHT_CLASS = 'min-h-[calc(100svh-3.5rem)] md:min-h-[calc(140dvh-3.5rem)]'
@@ -495,12 +497,15 @@ export function ExploreCreatorDetail() {
   const [isContentSwapTrayOpen, setIsContentSwapTrayOpen] = useState(false)
   const [activeContentCoin, setActiveContentCoin] = useState<ZoraCoin | null>(null)
   const [sceneActiveCoin, setSceneActiveCoin] = useState<ZoraCoin | null>(null)
+  const [isMarketTrayOpen, setIsMarketTrayOpen] = useState(false)
+  const [marketTrayEverOpened, setMarketTrayEverOpened] = useState(false)
   const heroRef = useRef<HTMLDivElement | null>(null)
   const heroSectionRef = useRef<HTMLElement | null>(null)
   const statsBridgeRef = useRef<HTMLDivElement | null>(null)
   const sceneSectionRef = useRef<HTMLElement | null>(null)
-  const timelineSectionRef = useRef<HTMLDivElement | null>(null)
-  const timelineBodyRef = useRef<HTMLDivElement | null>(null)
+  const sceneWrapRef = useRef<HTMLDivElement | null>(null)
+  /** Accumulated scroll delta fed into the pinned helix while the scene is sticky-locked. */
+  const sceneScrollFeedRef = useRef(0)
 
   const tokenAddress = isAddress(tokenAddressRaw) ? getAddress(tokenAddressRaw) : null
 
@@ -539,17 +544,6 @@ export function ExploreCreatorDetail() {
     return createdCoins.filter((c) => c.coinType !== 'CREATOR')
   }, [createdCoins])
 
-  const timelineCoins = useMemo(
-    () =>
-      [...contentCoins]
-        .sort((a, b) => {
-          const aTs = a.createdAt ? new Date(a.createdAt).getTime() : 0
-          const bTs = b.createdAt ? new Date(b.createdAt).getTime() : 0
-          return bTs - aTs
-        })
-        .slice(0, 30),
-    [contentCoins]
-  )
   const totalContentPages = Math.max(1, Math.ceil(contentCoins.length / CONTENT_COINS_PAGE_SIZE))
   const contentPage = Math.min(Math.max(contentCoinsPage, 1), totalContentPages)
   const pagedContentCoins = useMemo(() => {
@@ -745,33 +739,11 @@ export function ExploreCreatorDetail() {
           gsap.set(heroSectionRef.current, { clearProps: 'opacity,visibility' })
         })
       }
-      if (timelineSectionRef.current && timelineBodyRef.current && allowParallax) {
-        const section = timelineSectionRef.current
-        const sectionBody = timelineBodyRef.current
-
-        gsap.set(sectionBody, { y: 28, autoAlpha: 0.82, willChange: 'transform,opacity' })
-        const introTween = gsap.to(sectionBody, {
-          y: 0,
-          autoAlpha: 1,
-          ease: 'power3.out',
-          scrollTrigger: {
-            trigger: section,
-            start: 'top 88%',
-            end: 'top 58%',
-            scrub: 0.9,
-          },
-        })
-        cleanups.push(() => {
-          introTween.scrollTrigger?.kill()
-          introTween.kill()
-          gsap.set(sectionBody, { clearProps: 'all' })
-        })
-      }
       return () => {
         cleanups.forEach((cleanup) => cleanup())
       }
     },
-    { dependencies: [allowParallax, timelineCoins.length, contentCoins.length] },
+    { dependencies: [allowParallax, contentCoins.length] },
   )
 
   useEffect(() => {
@@ -780,7 +752,7 @@ export function ExploreCreatorDetail() {
       ScrollTrigger.refresh()
     })
     return () => cancelAnimationFrame(frame)
-  }, [allowParallax, timelineCoins.length, contentCoins.length])
+  }, [allowParallax, contentCoins.length])
 
   useEffect(() => {
     if (!isContentTrayOpen) return
@@ -872,6 +844,39 @@ export function ExploreCreatorDetail() {
   const sceneCoins = useMemo(() => [...imageBasedSceneCoins, ...fallbackSceneCoins].slice(0, 7), [imageBasedSceneCoins, fallbackSceneCoins])
   const topVolumeContentCoins = useMemo(() => sceneCandidates.slice(0, 6), [sceneCandidates])
 
+  // Scroll-lock the content-coins scene on desktop: the section becomes sticky inside a
+  // tall corridor, and the scroll travelled while pinned is fed into the helix as orbit.
+  const scenePinned = allowImmersiveStatsScroll && imageBasedSceneCoins.length > 0
+  useEffect(() => {
+    if (!scenePinned || typeof window === 'undefined') return
+    const wrap = sceneWrapRef.current
+    if (!wrap) return
+    let last = 0
+    const sync = (self: ScrollTrigger) => {
+      last = self.scroll()
+    }
+    const trigger = ScrollTrigger.create({
+      trigger: wrap,
+      start: 'top top',
+      end: 'bottom bottom',
+      onEnter: sync,
+      onEnterBack: sync,
+      onRefresh: sync,
+      onUpdate: (self) => {
+        const cur = self.scroll()
+        const delta = cur - last
+        last = cur
+        // px → wheel-equivalent orbit delta (matches the canvas's deltaY * 0.01 feel).
+        sceneScrollFeedRef.current += delta * 0.014
+      },
+    })
+    const frame = requestAnimationFrame(() => ScrollTrigger.refresh())
+    return () => {
+      cancelAnimationFrame(frame)
+      trigger.kill()
+    }
+  }, [scenePinned])
+
   if (!chain || !isSupportedExploreChain(chain)) {
     return <Navigate replace to="/explore/creators" />
   }
@@ -902,10 +907,6 @@ export function ExploreCreatorDetail() {
   const closeContentTray = () => {
     setIsContentSwapTrayOpen(false)
     setIsContentTrayOpen(false)
-  }
-  const onSceneSectionWheelCapture = (event: React.WheelEvent<HTMLElement>) => {
-    // Keep wheel interactions scoped to the scene while hovered.
-    event.preventDefault()
   }
   const activeCoinMediaKind = activeContentCoin ? detectContentMediaKind(activeContentCoin) : null
   const activeCoinImage = activeContentCoin ? getContentCoinAssetUrl(activeContentCoin) : undefined
@@ -1096,10 +1097,17 @@ export function ExploreCreatorDetail() {
           }
         />
 
+        <div
+          ref={sceneWrapRef}
+          className="relative"
+          style={scenePinned ? { height: `${SCENE_PIN_HEIGHT_VH}vh` } : undefined}
+        >
         <section
           ref={sceneSectionRef}
-          className="relative flex flex-col min-h-[calc(100dvh-3.5rem)] overflow-hidden"
-          onWheelCapture={onSceneSectionWheelCapture}
+          className={cn(
+            'relative flex flex-col overflow-hidden',
+            scenePinned ? 'sticky top-0 h-screen' : 'min-h-[calc(100dvh-3.5rem)]',
+          )}
         >
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
           <div className="pointer-events-none absolute inset-0 bg-black/28" />
@@ -1124,16 +1132,13 @@ export function ExploreCreatorDetail() {
           <div className="relative flex-1 min-h-[52vh] sm:min-h-[58vh]">
             {imageBasedSceneCoins.length > 0 ? (
               <div className="absolute inset-0 z-10 overflow-hidden bg-black/45 backdrop-blur-[1px]">
-                <InfiniteContentGallery3D
+                <CreatorContentCylinderGallery3D
                   coins={imageBasedSceneCoins}
+                  getImage={getContentCoinAssetUrl}
                   onSelect={openContentTray}
                   onActiveCoinChange={setSceneActiveCoin}
-                  interactive
-                  cameraZ={7.2}
-                  cameraFov={46}
-                  planeScale={1.02}
-                  laneSpacing={2.7}
-                  className="absolute inset-0 min-h-0"
+                  externalScrollRef={scenePinned ? sceneScrollFeedRef : undefined}
+                  fill
                 />
                 <div className="pointer-events-none absolute inset-0 z-10 bg-linear-to-b from-black/12 via-transparent to-black/38" />
                 <div className="pointer-events-none absolute inset-0 z-10 bg-[radial-gradient(circle_at_18%_20%,rgba(56,189,248,0.22),transparent_38%),radial-gradient(circle_at_82%_72%,rgba(59,130,246,0.2),transparent_42%)]" />
@@ -1178,54 +1183,26 @@ export function ExploreCreatorDetail() {
               </div>
             )}
           </div>
+
+          {scenePinned ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/55 backdrop-blur px-3.5 py-1.5 text-[10px] font-mono uppercase tracking-[1.8px] text-zinc-300">
+                Scroll to orbit
+                <span className="h-1 w-1 rounded-full bg-white/40" aria-hidden />
+                Keep scrolling to continue
+                <span aria-hidden>↓</span>
+              </div>
+            </div>
+          ) : null}
         </section>
+        </div>
 
         <CreatorScrollBridge
-          tone="void-to-lime"
+          tone="void"
           animate={allowParallax}
           centerContent={<CreatorVaultReserveBeat />}
         />
         </div>
-
-        <div
-          ref={timelineSectionRef}
-          className="relative w-screen ml-[calc(50%-50vw)] isolate text-zinc-900 px-4 sm:px-6 py-14 sm:py-[4.5rem]"
-          style={{ backgroundColor: CREATOR_PAGE_LIME }}
-        >
-          <div ref={timelineBodyRef}>
-            <div className="px-2 sm:px-4 pb-8">
-              <div className="grid lg:grid-cols-12 gap-6 items-end">
-                <div className="lg:col-span-8">
-                  <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-700 mb-4">
-                    <span className="w-10 sm:w-12 h-px bg-black/35" />
-                    Content Timeline
-                  </span>
-                  <h3 className="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight leading-[0.9]">
-                    A trail of creator
-                    <br />
-                    content momentum.
-                  </h3>
-                </div>
-                <div className="lg:col-span-4 flex lg:justify-end">
-                  <div className="inline-flex items-center gap-3 border border-black/20 bg-white/65 px-4 py-2 text-[11px] font-mono uppercase tracking-[1.8px]">
-                    <span className="w-8 h-8 rounded-full bg-white border border-black/20 inline-flex items-center justify-center text-[10px]">
-                      ↓
-                    </span>
-                    Follow the publish trail
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <CreatorContentTimeline
-              coins={timelineCoins}
-              getImage={getContentCoinAssetUrl}
-              onSelect={openContentTray}
-            />
-          </div>
-        </div>
-
-        <CreatorScrollBridge tone="lime-to-void" animate={allowParallax} />
 
         {/* Main content */}
         <div>
@@ -1235,6 +1212,84 @@ export function ExploreCreatorDetail() {
             transition={{ duration: 0.4 }}
             className="space-y-8 sm:space-y-10"
           >
+            {/* Description */}
+            {coin?.description && (
+              <motion.section
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+                className="relative bg-transparent overflow-hidden"
+              >
+                <div className="pointer-events-none absolute inset-y-0 left-0 w-[2px] bg-linear-to-b from-cyan-300/80 via-white/60 to-fuchsia-300/80" />
+                <div className="px-6 sm:px-8 py-6 sm:py-7">
+                  <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-500 mb-3">
+                    <span className="w-10 sm:w-12 h-px bg-white/35" />
+                    Creator Statement
+                  </span>
+                  <h3 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white mb-4">About {displayName}</h3>
+                  <p className="text-sm sm:text-base text-zinc-300 leading-relaxed max-w-4xl">{coin.description}</p>
+                </div>
+              </motion.section>
+            )}
+          </motion.div>
+        </div>
+      </div>
+
+      {/* === Market tray: fixed top-sheet, reachable from any scroll position === */}
+      <button
+        type="button"
+        onClick={() => {
+          setMarketTrayEverOpened(true)
+          setIsMarketTrayOpen((open) => !open)
+        }}
+        aria-expanded={isMarketTrayOpen}
+        aria-controls="creator-market-tray"
+        className={cn(
+          'fixed left-1/2 -translate-x-1/2 top-[4.25rem] z-[122] inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-mono uppercase tracking-[1.8px] backdrop-blur transition-colors',
+          isMarketTrayOpen
+            ? 'border-white/20 bg-black/70 text-white'
+            : 'border-blue-400/30 bg-blue-500/15 text-blue-100 hover:bg-blue-500/25',
+        )}
+      >
+        <TrendingUp className="h-3.5 w-3.5" />
+        Market tape
+        <span className={cn('transition-transform', isMarketTrayOpen ? 'rotate-180' : '')} aria-hidden>
+          ▾
+        </span>
+      </button>
+
+      {isMarketTrayOpen ? (
+        <button
+          type="button"
+          aria-label="Close market tray"
+          onClick={() => setIsMarketTrayOpen(false)}
+          className="fixed inset-0 z-[120] bg-black/55 backdrop-blur-[1px]"
+        />
+      ) : null}
+
+      <div
+        id="creator-market-tray"
+        role="dialog"
+        aria-label="Market interface"
+        aria-hidden={!isMarketTrayOpen}
+        className={cn(
+          'fixed inset-x-0 top-14 z-[121] mx-auto w-full max-w-5xl px-3 sm:px-4 transition-all duration-300 ease-out',
+          isMarketTrayOpen ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-[110%] opacity-0',
+        )}
+      >
+        <div className="max-h-[86vh] overflow-y-auto overflow-x-hidden rounded-b-2xl border border-t-0 border-white/12 bg-[#070b10]/95 shadow-[0_40px_120px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+          <div className="sticky top-0 z-10 flex items-center justify-end gap-3 border-b border-white/8 bg-[#070b10]/90 backdrop-blur px-5 sm:px-7 py-3">
+            <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 h-1 w-10 rounded-full bg-white/20" aria-hidden />
+            <button
+              type="button"
+              onClick={() => setIsMarketTrayOpen(false)}
+              className="inline-flex items-center justify-center w-8 h-8 text-zinc-400 hover:text-white transition-colors"
+              aria-label="Close market tray"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="px-1 sm:px-2 pb-6 space-y-8 sm:space-y-10">
             <section className="relative bg-transparent overflow-hidden">
               <div className="pointer-events-none absolute inset-0 opacity-10">
                 {[...Array(5)].map((_, i) => (
@@ -1322,8 +1377,12 @@ export function ExploreCreatorDetail() {
                       <div className="h-[400px] flex items-center justify-center">
                         <LoadingInline intent="page" labelOverride="Loading..." />
                       </div>
-                    ) : (
+                    ) : marketTrayEverOpened ? (
                       <DexscreenerChart tokenAddress={tokenAddress} />
+                    ) : (
+                      <div className="h-[400px] flex items-center justify-center text-xs font-mono uppercase tracking-[1.8px] text-zinc-600">
+                        Open the market tray to load the live chart.
+                      </div>
                     )}
                   </div>
                 </section>
@@ -1533,27 +1592,7 @@ export function ExploreCreatorDetail() {
                 )}
               </section>
             )}
-
-            {/* Description */}
-            {coin?.description && (
-              <motion.section
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.2 }}
-                className="relative bg-transparent overflow-hidden"
-              >
-                <div className="pointer-events-none absolute inset-y-0 left-0 w-[2px] bg-linear-to-b from-cyan-300/80 via-white/60 to-fuchsia-300/80" />
-                <div className="px-6 sm:px-8 py-6 sm:py-7">
-                  <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-500 mb-3">
-                    <span className="w-10 sm:w-12 h-px bg-white/35" />
-                    Creator Statement
-                  </span>
-                  <h3 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white mb-4">About {displayName}</h3>
-                  <p className="text-sm sm:text-base text-zinc-300 leading-relaxed max-w-4xl">{coin.description}</p>
-                </div>
-              </motion.section>
-            )}
-          </motion.div>
+          </div>
         </div>
       </div>
       {isContentTrayOpen && activeContentCoin ? (

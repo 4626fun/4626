@@ -21,6 +21,7 @@ export type ExploreCreatorsMetrics = {
     sampledCreators: number
     lastSyncStartedAt: string | null
     lastSyncFinishedAt: string | null
+    lastHotRefreshAt: string | null
     lastFullSyncAt: string | null
     syncError: string | null
     driftEstimateTotal: number | null
@@ -98,18 +99,28 @@ export function buildExploreHeroStatusLine(input: {
 }): string {
   const { updatedAt, exact, syncStatus, creatorsTotal, syncMeta } = input
 
-  if (!updatedAt) return 'Indexed totals unavailable'
+  const freshnessAt = syncMeta?.lastHotRefreshAt ?? updatedAt
+  if (!freshnessAt) return 'Indexed totals unavailable'
 
-  const time = new Date(updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const time = new Date(freshnessAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const indexedLine =
     !exact && creatorsTotal != null
       ? syncMeta?.driftEstimateTotal && syncMeta.driftEstimateTotal > creatorsTotal
         ? `Indexed ${creatorsTotal.toLocaleString()} of ~${syncMeta.driftEstimateTotal.toLocaleString()} creators`
         : `Indexed ${creatorsTotal.toLocaleString()} creators`
       : null
+  const syncError = typeof syncMeta?.syncError === 'string' ? syncMeta.syncError : ''
+  const missingMetricsMatch = syncError.match(/missing_coin_metrics=(\d+)/i)
+  const missingMetrics = missingMetricsMatch ? Number(missingMetricsMatch[1]) : null
 
   if (syncStatus === 'error') {
     return indexedLine ?? `Metrics refresh error — showing last known values (${time})`
+  }
+
+  if (missingMetrics != null && Number.isFinite(missingMetrics) && missingMetrics > 0) {
+    const pendingLabel = missingMetrics.toLocaleString()
+    const base = indexedLine ?? 'Indexed totals'
+    return `${base} · 24h volume/fees lagging (${pendingLabel} coins pending) · refreshed ${time}`
   }
 
   if (!exact) {

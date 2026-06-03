@@ -192,75 +192,161 @@ function ProjectorPad() {
   )
 }
 
-// Holographic point-cloud projection. Inspired by TSL/WebGPU node-based
-// particle holograms (e.g. hologram-particles.vercel.app), recreated on this
-// project's WebGL R3F stack: the GLB surface is sampled into ~48k glowing
-// points that shimmer, run a vertical scan sweep, and disperse/reform on scan.
-const PARTICLE_COUNT = 48000
+// Holographic particle projection. Closely follows the technique used by the
+// reference TSL/WebGPU "hologram particles" effect (cortiz2894/hologram-particles)
+// — porting the parts that don't need WebGPU onto this project's WebGL R3F stack:
+//   • the GLB surface is sampled into thousands of instanced micro-spheres
+//     (not flat point sprites), so the form has real volume + perspective;
+//   • each instance is shaded with a two-light wrap-diffuse model (top white,
+//     bottom blue) mixed with the sphere's own normal for soft volume;
+//   • a fractal-noise field, gated by a slow moving mask, makes the surface
+//     shimmer / dissolve organically;
+//   • a fresnel rim term glows the silhouette like a true hologram;
+//   • the scan button still fires a vertical sweep + disperse/reform burst.
+const PARTICLE_COUNT = 30000
 const SCAN_DURATION_MS = 1700
 
-const HOLO_POINTS_VERT = /* glsl */ `
+// Ashima 3D simplex noise — used for the shimmer/dissolve displacement.
+const GLSL_SIMPLEX_NOISE = /* glsl */ `
+  vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}
+  vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
+  float snoise(vec3 v){
+    const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+    vec3 i  = floor(v + dot(v, C.yyy));
+    vec3 x0 = v - i + dot(i, C.xxx);
+    vec3 g = step(x0.yzx, x0.xyz);
+    vec3 l = 1.0 - g;
+    vec3 i1 = min(g.xyz, l.zxy);
+    vec3 i2 = max(g.xyz, l.zxy);
+    vec3 x1 = x0 - i1 + 1.0 * C.xxx;
+    vec3 x2 = x0 - i2 + 2.0 * C.xxx;
+    vec3 x3 = x0 - 1.0 + 3.0 * C.xxx;
+    i = mod(i, 289.0);
+    vec4 p = permute(permute(permute(
+              i.z + vec4(0.0, i1.z, i2.z, 1.0))
+            + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+            + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+    float n_ = 1.0/7.0;
+    vec3 ns = n_ * D.wyz - D.xzx;
+    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+    vec4 x_ = floor(j * ns.z);
+    vec4 y_ = floor(j - 7.0 * x_);
+    vec4 x = x_ * ns.x + ns.yyyy;
+    vec4 y = y_ * ns.x + ns.yyyy;
+    vec4 h = 1.0 - abs(x) - abs(y);
+    vec4 b0 = vec4(x.xy, y.xy);
+    vec4 b1 = vec4(x.zw, y.zw);
+    vec4 s0 = floor(b0)*2.0 + 1.0;
+    vec4 s1 = floor(b1)*2.0 + 1.0;
+    vec4 sh = -step(h, vec4(0.0));
+    vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
+    vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+    vec3 p0 = vec3(a0.xy, h.x);
+    vec3 p1 = vec3(a0.zw, h.y);
+    vec3 p2 = vec3(a1.xy, h.z);
+    vec3 p3 = vec3(a1.zw, h.w);
+    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+    p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+    m = m * m;
+    return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+  }
+`
+
+const HOLO_VERT = /* glsl */ `
   uniform float uTime;
-  uniform float uSize;
-  uniform float uPixelRatio;
-  uniform float uUnit;       // model local height (jitter/disperse scale)
+  uniform float uUnit;       // model local height (motion scale)
+  uniform float uSphereSize; // micro-sphere radius factor
   uniform float uDisperse;   // 0 assembled -> 1 fully scattered
   uniform float uScanY;      // current scan sweep height (local space)
-  attribute vec3 aNormal;
-  attribute vec3 aRand;
-  attribute float aSeed;
-  varying float vGlow;
-  varying float vSeed;
+  attribute vec3 instancePos;
+  attribute vec3 instanceNormal;
+  attribute vec3 instanceRand;
+  attribute float instanceSeed;
+  varying vec3 vColor;
+
+  ${GLSL_SIMPLEX_NOISE}
 
   void main() {
-    vSeed = aSeed;
-    vec3 pos = position;
+    float seed = instanceSeed;
+    float phase = seed * 6.2831853;
+    vec3 figure = instancePos;
 
-    // Idle shimmer: tiny breathing along the surface normal + lateral drift.
-    float flick = sin(uTime * 3.0 + aSeed * 50.0);
-    pos += aNormal * (0.012 * uUnit * flick);
-    pos.x += sin(uTime * 1.3 + aRand.x * 30.0) * 0.006 * uUnit;
-    pos.z += cos(uTime * 1.1 + aRand.z * 30.0) * 0.006 * uUnit;
+    // Gentle per-particle float (keeps the cloud alive).
+    figure += vec3(
+      cos(uTime * 1.3 + phase) * 0.6,
+      sin(uTime * 1.6 + phase),
+      sin(uTime * 1.1 + phase + 1.0) * 0.6
+    ) * (0.012 * uUnit);
 
-    // Continuous ambient drift: a slow, ever-present outward turbulence so the
-    // hologram feels alive even when no scan is running.
-    vec3 driftDir = normalize(aNormal + (aRand - 0.5));
-    float drift = (0.5 + 0.5 * sin(uTime * 0.7 + aSeed * 24.0));
-    pos += driftDir * drift * 0.03 * uUnit;
+    // Fractal-noise shimmer gated by a slow moving mask (the dissolve look).
+    float ns = 1.6 / uUnit;
+    float ms = 1.1 / uUnit;
+    vec3 mc = instancePos * ms + vec3(uTime * 0.04, uTime * 0.028, uTime * 0.052);
+    float mask = pow(clamp(snoise(mc) * 0.5 + 0.5, 0.0, 1.0), 1.5);
+    vec3 nc = instancePos * ns + vec3(uTime * 0.15, 0.0, uTime * 0.1);
+    vec3 nd = vec3(snoise(nc), snoise(nc + 31.4), snoise(nc + 74.2));
+    figure += nd * (0.06 * uUnit) * mask;
 
-    // Dispersion burst: scatter outward along normal + a random direction,
-    // staggered per particle so the cloud blows apart and reassembles.
-    float d = clamp(uDisperse - aSeed * 0.25, 0.0, 1.0);
-    vec3 dir = normalize(aNormal + (aRand - 0.5) * 1.4);
-    pos += dir * d * uUnit * (0.5 + aRand.y * 1.6);
+    // Ever-present ambient drift so it breathes even without a scan.
+    vec3 driftDir = normalize(instanceNormal + (instanceRand - 0.5));
+    figure += driftDir * (0.5 + 0.5 * sin(uTime * 0.7 + seed * 24.0)) * (0.018 * uUnit);
 
-    // Vertical scan band: particles near the sweep line flare bright.
-    float scan = smoothstep(0.12 * uUnit, 0.0, abs(position.y - uScanY));
+    // Disperse burst: scatter outward, staggered per particle, then reassemble.
+    float d = clamp(uDisperse - seed * 0.25, 0.0, 1.0);
+    figure += driftDir * d * uUnit * (0.5 + instanceRand.y * 1.6);
 
-    vGlow = 0.4 + flick * 0.28 + scan * 1.4;
+    // Place the micro-sphere geometry around the figure point.
+    vec3 local = figure + normal * (uSphereSize * uUnit);
+    vec4 world = modelMatrix * vec4(local, 1.0);
+    vec3 worldPos = world.xyz;
+    gl_Position = projectionMatrix * viewMatrix * world;
 
-    vec4 mv = modelViewMatrix * vec4(pos, 1.0);
-    gl_Position = projectionMatrix * mv;
-    float size = uSize * (0.45 + aRand.y * 0.85 + scan * 1.6);
-    gl_PointSize = clamp(size * uPixelRatio * (8.0 / -mv.z), 1.0, 9.0);
+    // World-space normals so lighting stays anchored as the model spins.
+    vec3 Nf = normalize(mat3(modelMatrix) * instanceNormal); // figure normal
+    vec3 Ns = normalize(mat3(modelMatrix) * normal);          // sphere normal
+    vec3 V = normalize(cameraPosition - worldPos);
+
+    // Two-light wrap diffuse (top white key, bottom blue fill) mixed with the
+    // sphere normal for soft per-bead volume — the reference's shading model.
+    const float wrap = 0.87;
+    const float vol = 0.79;
+    vec3 L1 = normalize(vec3(0.2, 1.0, 0.3));
+    vec3 L2 = normalize(vec3(-0.3, -1.0, -0.2));
+    float f1 = clamp((dot(Nf, L1) + wrap) / (1.0 + wrap), 0.0, 1.0);
+    float s1 = clamp((dot(Ns, L1) + wrap) / (1.0 + wrap), 0.0, 1.0);
+    float f2 = clamp((dot(Nf, L2) + wrap) / (1.0 + wrap), 0.0, 1.0);
+    float s2 = clamp((dot(Ns, L2) + wrap) / (1.0 + wrap), 0.0, 1.0);
+    vec3 lit = vec3(1.0) * mix(f1, f1 * s1, vol)
+             + vec3(0.27, 0.53, 1.0) * mix(f2, f2 * s2, vol) * 0.6;
+
+    vec3 base = vec3(0.52, 0.72, 0.95);
+    vec3 col = base * clamp(lit + 0.34, 0.0, 1.5);
+
+    // Fresnel rim glow on the silhouette (holographic edge).
+    float rim = pow(clamp(1.0 - max(dot(Nf, V), 0.0), 0.0, 1.0), 2.2);
+    col += vec3(0.45, 0.78, 1.0) * rim * 0.8;
+
+    // Scan band flare + disperse heat.
+    float scan = smoothstep(0.12 * uUnit, 0.0, abs(instancePos.y - uScanY));
+    col += vec3(0.6, 0.88, 1.0) * scan * 1.3;
+    col += vec3(0.5, 0.8, 1.0) * d * 0.6;
+
+    vColor = col;
   }
 `
-const HOLO_POINTS_FRAG = /* glsl */ `
-  uniform vec3 uColor;
-  uniform vec3 uColor2;
-  varying float vGlow;
-  varying float vSeed;
+const HOLO_FRAG = /* glsl */ `
+  varying vec3 vColor;
   void main() {
-    vec2 uv = gl_PointCoord - 0.5;
-    float r = length(uv);
-    if (r > 0.5) discard;
-    float soft = smoothstep(0.5, 0.0, r);
-    float core = smoothstep(0.16, 0.0, r);
-    vec3 col = mix(uColor, uColor2, vSeed);
-    float a = (soft * 0.45 + core * 0.95) * clamp(vGlow, 0.0, 2.0);
-    gl_FragColor = vec4(col * (0.4 + vGlow), a);
+    gl_FragColor = vec4(vColor, 1.0);
   }
 `
+
+function seededUnitFloat(seed: number) {
+  const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453
+  return x - Math.floor(x)
+}
 
 function HoloDog({ scanTick }: { scanTick: number }) {
   const spin = useRef<THREE.Group>(null)
@@ -268,30 +354,26 @@ function HoloDog({ scanTick }: { scanTick: number }) {
   const burstStart = useRef<number>(-1)
   const { scene } = useGLTF(SHIBA_MODEL_URL)
 
-  // Held in a ref (not useMemo) because the uniforms are mutated per-frame in
-  // useFrame; mutating a useMemo result trips react-hooks/immutability.
+  const material = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 },
+          uUnit: { value: 1 },
+          uSphereSize: { value: 0.006 },
+          uDisperse: { value: 0 },
+          uScanY: { value: 0 },
+        },
+        vertexShader: HOLO_VERT,
+        fragmentShader: HOLO_FRAG,
+        toneMapped: false,
+      }),
+    [],
+  )
   const materialRef = useRef<THREE.ShaderMaterial | null>(null)
-  const material = (materialRef.current ??= new THREE.ShaderMaterial({
-    uniforms: {
-      uTime: { value: 0 },
-      uSize: { value: 2.6 },
-      uPixelRatio: { value: Math.min(window.devicePixelRatio || 1, 2) },
-      uUnit: { value: 1 },
-      uDisperse: { value: 0 },
-      uScanY: { value: 0 },
-      uColor: { value: new THREE.Color('#3fb6ff') },
-      uColor2: { value: new THREE.Color('#cdf6ff') },
-    },
-    vertexShader: HOLO_POINTS_VERT,
-    fragmentShader: HOLO_POINTS_FRAG,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    toneMapped: false,
-  }))
 
-  // Sample the GLB surface into a glowing point cloud + normalize to pad height.
-  const { geometry, offset, scale, unit, minY, maxY } = useMemo(() => {
+  // Sample the GLB surface into instanced micro-spheres + normalize to pad height.
+  const { object, offset, scale, unit, minY, maxY } = useMemo(() => {
     const root = scene.clone(true)
     root.updateMatrixWorld(true)
     const meshes: THREE.Mesh[] = []
@@ -331,10 +413,11 @@ function HoloDog({ scanTick }: { scanTick: number }) {
         normals[o] = tmpN.x
         normals[o + 1] = tmpN.y
         normals[o + 2] = tmpN.z
-        rands[o] = Math.random()
-        rands[o + 1] = Math.random()
-        rands[o + 2] = Math.random()
-        seeds[ptr + k] = Math.random()
+        const baseSeed = ptr + k + 1
+        rands[o] = seededUnitFloat(baseSeed)
+        rands[o + 1] = seededUnitFloat(baseSeed + 100_003)
+        rands[o + 2] = seededUnitFloat(baseSeed + 200_003)
+        seeds[ptr + k] = seededUnitFloat(baseSeed + 300_007)
       }
       ptr += n
     })
@@ -351,25 +434,42 @@ function HoloDog({ scanTick }: { scanTick: number }) {
     const targetHeight = 2.2
     const s = targetHeight / (size.y || 1)
 
-    const geom = new THREE.BufferGeometry()
-    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    geom.setAttribute('aNormal', new THREE.BufferAttribute(normals, 3))
-    geom.setAttribute('aRand', new THREE.BufferAttribute(rands, 3))
-    geom.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1))
+    // A cheap low-poly sphere per particle; positioning happens in the shader
+    // via the instance attributes below.
+    const sphere = new THREE.IcosahedronGeometry(1, 0)
+    sphere.setAttribute('instancePos', new THREE.InstancedBufferAttribute(positions, 3))
+    sphere.setAttribute('instanceNormal', new THREE.InstancedBufferAttribute(normals, 3))
+    sphere.setAttribute('instanceRand', new THREE.InstancedBufferAttribute(rands, 3))
+    sphere.setAttribute('instanceSeed', new THREE.InstancedBufferAttribute(seeds, 1))
+
+    const mesh = new THREE.InstancedMesh(sphere, material, PARTICLE_COUNT)
+    mesh.frustumCulled = false
+    // Instance transforms are handled entirely in the vertex shader, but the
+    // matrices must be valid (identity) so the renderer doesn't collapse them.
+    const id = new THREE.Matrix4()
+    for (let k = 0; k < PARTICLE_COUNT; k++) mesh.setMatrixAt(k, id)
+    mesh.instanceMatrix.needsUpdate = true
 
     return {
-      geometry: geom,
+      object: mesh,
       scale: s,
       offset: [-center.x * s, -box.min.y * s, -center.z * s] as [number, number, number],
       unit: size.y || 1,
       minY: box.min.y,
       maxY: box.max.y,
     }
-  }, [scene])
+  }, [scene, material])
 
   useEffect(() => {
-    const m = materialRef.current
-    if (m) m.uniforms.uUnit!.value = unit
+    materialRef.current = material
+    return () => {
+      material.dispose()
+      materialRef.current = null
+    }
+  }, [material])
+
+  useEffect(() => {
+    materialRef.current!.uniforms.uUnit!.value = unit
   }, [unit])
 
   // Kick off a disperse/reform burst whenever the scan button fires.
@@ -379,6 +479,8 @@ function HoloDog({ scanTick }: { scanTick: number }) {
 
   useFrame((state) => {
     const t = state.clock.elapsedTime
+    const material = materialRef.current
+    if (!material) return
     material.uniforms.uTime!.value = t
 
     const range = maxY - minY || 1
@@ -405,7 +507,7 @@ function HoloDog({ scanTick }: { scanTick: number }) {
     <group ref={bob} position={[0, 0.12, 0]}>
       <group ref={spin}>
         <group scale={scale} position={offset}>
-          <points geometry={geometry} material={material} />
+          <primitive object={object} />
         </group>
       </group>
     </group>

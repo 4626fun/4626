@@ -54,6 +54,13 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
 
   const primaryColumnActions = (
     <div className="space-y-4">
+      <section
+        aria-label="Waitlist points actions"
+        className="rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-4"
+      >
+        <WaitlistUnlocksPanel score={initialAccount.score} email={initialAccount.email} />
+      </section>
+
       {canEnterNow ? (
         <section aria-label="App access" className="space-y-2">
           <Button
@@ -80,13 +87,6 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
           </p>
         </section>
       ) : null}
-
-      <section
-        aria-label="Waitlist progress and referrals"
-        className="rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-4"
-      >
-        <WaitlistUnlocksPanel score={initialAccount.score} email={initialAccount.email} />
-      </section>
     </div>
   )
 

@@ -10,7 +10,7 @@ overrides:
   '@offchainlabs/upgrade-executor>@openzeppelin/contracts': 4.9.6
   '@openzeppelin/contracts-4.7.3': npm:@openzeppelin/contracts@4.9.6
   '@openzeppelin/contracts-4.8.3': npm:@openzeppelin/contracts@4.9.6
-  axios: 1.15.0
+  axios: 1.16.0
   ajv@^6.0.0: 6.14.0
   ajv@^8.0.0: 8.18.0
   bn.js: 5.2.3
@@ -18,7 +18,7 @@ overrides:
   node-fetch: 2.7.0
   diff: 8.0.3
   minimatch: 10.2.3
-  qs: 6.14.2
+  qs: 6.15.2
   serialize-javascript: 7.0.5
   picomatch@2: 2.3.2
   picomatch@4: 4.0.4
@@ -27,10 +27,11 @@ overrides:
   path-to-regexp: 6.3.0
   follow-redirects: 1.16.0
   fast-uri: 3.1.2
-  tmp: 0.2.4
+  tmp: 0.2.6
   undici: 6.24.0
-  uuid: 10.0.0
-  jayson>uuid: 9.0.1
+  uuid: 11.1.1
+  jayson>uuid: 11.1.1
+  rpc-websockets>uuid: 11.1.1
   ws: 8.20.1
   yaml: 2.8.3
   svix>uuid: 10.0.0
@@ -2182,8 +2183,8 @@ packages:
     resolution: {integrity: sha512-MyqZCTGLDZ77u4k+jqg4UlrzPTPZ49NDlaekU6uuFaJLzPIN1woaRXCbGeqOfxwc3Y37ZROGAJ614Rdv7Olt+g==}
     engines: {node: '>=10'}
 
-  tmp@0.2.4:
-    resolution: {integrity: sha512-UdiSoX6ypifLmrfQ/XfiawN6hkjSBpCjhKxxZcWlUUmoXLaCKQU0bx4HF/tdDK2uzRuchf1txGvrWBzYREssoQ==}
+  tmp@0.2.6:
+    resolution: {integrity: sha512-5sJPdPjfI5Kx+qbrDesxkglRBxW//g7hCsqspEjwkewGvBMGIKMOTKzLt1hFVJzyadba3lDUN20O9qhvbQUSTA==}
     engines: {node: '>=14.14'}
 
   to-regex-range@5.0.1:
@@ -2278,12 +2279,8 @@ packages:
     resolution: {integrity: sha512-Z6czzLq4u8fPOyx7TU6X3dvUZVvoJmxSQ+IcrlmagKhilxlhZgxPK6C5Jqbkw1IDUmFTM+cz9QDnnLTwDz/2gQ==}
     engines: {node: '>=6.14.2'}
 
-  uuid@10.0.0:
-    resolution: {integrity: sha512-8XkAphELsDnEGrDxUOHB3RGvXz6TeuYSGEZBOjtTtPm2lwhGBjLgOzLHB63IUWfBpNucQjND6d3AOudO+H3RWQ==}
-    hasBin: true
-
-  uuid@9.0.1:
-    resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
+  uuid@11.1.1:
+    resolution: {integrity: sha512-vIYxrBCC/N/K+Js3qSN88go7kIfNPssr/hHCesKCQNAjmgvYS2oqr69kIufEG+O4+PfezOH4EbIeHCfFov8ZgQ==}
     hasBin: true
 
   v8-compile-cache-lib@3.0.1:
@@ -4256,7 +4253,7 @@ snapshots:
       isomorphic-ws: 4.0.1(ws@8.20.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))
       json-stringify-safe: 5.0.1
       stream-json: 1.9.1
-      uuid: 9.0.1
+      uuid: 11.1.1
       ws: 8.20.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)
     transitivePeerDependencies:
       - bufferutil
@@ -4553,7 +4550,7 @@ snapshots:
       rimraf: 2.7.1
       semver: 5.7.2
       slash: 2.0.0
-      tmp: 0.2.4
+      tmp: 0.2.6
       yaml: 2.8.3
 
   path-browserify@1.0.1: {}
@@ -4671,7 +4668,7 @@ snapshots:
       '@types/ws': 8.18.1
       buffer: 6.0.3
       eventemitter3: 5.0.4
-      uuid: 10.0.0
+      uuid: 11.1.1
       ws: 8.20.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)
     optionalDependencies:
       bufferutil: 4.1.0
@@ -4804,7 +4801,7 @@ snapshots:
     dependencies:
       convert-hrtime: 3.0.0
 
-  tmp@0.2.4: {}
+  tmp@0.2.6: {}
 
   to-regex-range@5.0.1:
     dependencies:
@@ -4898,9 +4895,7 @@ snapshots:
       node-gyp-build: 4.8.4
     optional: true
 
-  uuid@10.0.0: {}
-
-  uuid@9.0.1: {}
+  uuid@11.1.1: {}
 
   v8-compile-cache-lib@3.0.1: {}
 
