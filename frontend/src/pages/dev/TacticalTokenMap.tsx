@@ -28,6 +28,7 @@ const AKITA_TOKEN = '0x5b674196812451b7cec024fe9d22d2c0b172fa75'
 // Image-to-3D AKITA mesh generated from the token logo (Hunyuan3D-2.1, shape-only).
 const SHIBA_MODEL_URL = '/dev/akita-hunyuan.glb'
 useGLTF.preload(SHIBA_MODEL_URL)
+type ModelAssetStatus = 'checking' | 'ready' | 'missing'
 
 function shortAddr(a: string) {
   return a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a
@@ -514,13 +515,43 @@ function HoloDog({ scanTick }: { scanTick: number }) {
   )
 }
 
-function HoloProjection({ scanTick }: { scanTick: number }) {
+function MissingDogFallback() {
+  const ref = useRef<THREE.Group>(null)
+  useFrame((state) => {
+    if (!ref.current) return
+    ref.current.rotation.y = state.clock.elapsedTime * 0.35
+  })
+  return (
+    <group ref={ref} position={[0, 0.82, 0]}>
+      <mesh>
+        <icosahedronGeometry args={[0.68, 1]} />
+        <meshBasicMaterial color="#7fe6ff" wireframe transparent opacity={0.95} toneMapped={false} />
+      </mesh>
+      <mesh position={[0, -0.76, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.4, 0.52, 48]} />
+        <meshBasicMaterial color="#5cc7ff" transparent opacity={0.75} toneMapped={false} />
+      </mesh>
+    </group>
+  )
+}
+
+function HoloProjection({
+  scanTick,
+  modelAssetStatus,
+}: {
+  scanTick: number
+  modelAssetStatus: ModelAssetStatus
+}) {
   return (
     <group>
       <ProjectorPad />
-      <Suspense fallback={null}>
-        <HoloDog scanTick={scanTick} />
-      </Suspense>
+      {modelAssetStatus === 'ready' ? (
+        <Suspense fallback={null}>
+          <HoloDog scanTick={scanTick} />
+        </Suspense>
+      ) : (
+        <MissingDogFallback />
+      )}
     </group>
   )
 }
@@ -576,9 +607,11 @@ function Rig({ pointerRef }: { pointerRef: React.RefObject<{ x: number; y: numbe
 function Scene({
   scanTick,
   pointerRef,
+  modelAssetStatus,
 }: {
   scanTick: number
   pointerRef: React.RefObject<{ x: number; y: number }>
+  modelAssetStatus: ModelAssetStatus
 }) {
   return (
     <>
@@ -602,7 +635,7 @@ function Scene({
 
       <TerrainRing />
       <PerimeterRing />
-      <HoloProjection scanTick={scanTick} />
+      <HoloProjection scanTick={scanTick} modelAssetStatus={modelAssetStatus} />
       <ScanRing scanTick={scanTick} />
 
       <Rig pointerRef={pointerRef} />
@@ -628,6 +661,25 @@ export function TacticalTokenMap() {
   const pointerRef = useRef({ x: 0, y: 0 })
   const [scanTick, setScanTick] = useState(0)
   const [scanning, setScanning] = useState(false)
+  const [modelAssetStatus, setModelAssetStatus] = useState<ModelAssetStatus>('checking')
+
+  useEffect(() => {
+    let cancelled = false
+    async function checkModelAsset() {
+      try {
+        const headRes = await fetch(SHIBA_MODEL_URL, { method: 'HEAD', cache: 'no-store' })
+        if (!cancelled) {
+          setModelAssetStatus(headRes.ok ? 'ready' : 'missing')
+        }
+      } catch {
+        if (!cancelled) setModelAssetStatus('missing')
+      }
+    }
+    void checkModelAsset()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const nodes = useMemo(
     () => [
@@ -668,7 +720,7 @@ export function TacticalTokenMap() {
         dpr={[1, 2]}
         camera={{ position: [0, 7, 12.5], fov: 36, near: 0.1, far: 100 }}
       >
-        <Scene scanTick={scanTick} pointerRef={pointerRef} />
+        <Scene scanTick={scanTick} pointerRef={pointerRef} modelAssetStatus={modelAssetStatus} />
       </Canvas>
 
       {/* CRT scanlines + vignette overlay */}
@@ -742,7 +794,15 @@ export function TacticalTokenMap() {
 
       {/* Bottom-right info */}
       <div className="pointer-events-none absolute bottom-7 right-7 text-right text-[11px] text-[rgba(120,170,240,0.6)]">
-        ⓘ INFO
+        {modelAssetStatus === 'missing' ? (
+          <div className="rounded border border-[rgba(255,130,90,0.7)] bg-[rgba(90,20,12,0.45)] px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-[rgba(255,170,140,0.95)]">
+            Model missing: /dev/akita-hunyuan.glb
+          </div>
+        ) : modelAssetStatus === 'checking' ? (
+          'Checking model…'
+        ) : (
+          'ⓘ INFO'
+        )}
       </div>
     </div>
   )

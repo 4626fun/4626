@@ -38,7 +38,7 @@ function formatHermitCreativeSection(): string[] {
 function formatHermitCreativeSectionCompact(): string[] {
   return [
     '**Commands**',
-    '• `/position` · `/signal` · `/market` · `/arena status` · `/hermit alert` · `/gmeow` · `/meme` · `/alfa brief`',
+    '• `/position` · `/position chart` · `/position marker <n>` · `/signal` · `/market` · `/arena status` · `/hermit alert` · `/gmeow` · `/meme` · `/alfa brief`',
   ]
 }
 

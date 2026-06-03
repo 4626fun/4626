@@ -10,12 +10,18 @@ import { resolveRoom1659HyperliquidUserForSnapshot } from './room1659Market.js'
 
 export type RoomTimelineChatEvent = {
   id: string
+  messageId: string
   roomId: string
   senderAddress: string
   senderLabel: string | null
   text: string
   time: number
   isHost: boolean
+  isFirstFromSender: boolean
+  replyId: string | null
+  replyText: string | null
+  replySender: string | null
+  replySenderLabel: string | null
 }
 
 export type RoomTimelineTradeEvent = {
@@ -48,6 +54,10 @@ type ChatRow = {
   message_text: string
   username: string | null
   message_date: string | null
+  reply_id: string | null
+  reply_text: string | null
+  reply_sender: string | null
+  reply_username: string | null
 }
 
 function toMs(iso: string | null): number | null {
@@ -119,7 +129,8 @@ async function readChatEvents(params: {
   await ensureAlfaClubVigilanteSchema()
   try {
     const result = await db.sql`
-      SELECT room_id, message_id, sender_address, message_text, username, message_date
+      SELECT room_id, message_id, sender_address, message_text, username, message_date,
+             reply_id, reply_text, reply_sender, reply_username
       FROM alfaclub.chat_ingest
       WHERE room_id = ${params.roomId}
         AND message_date IS NOT NULL
@@ -128,6 +139,7 @@ async function readChatEvents(params: {
       LIMIT ${params.limit};
     `
     const rows = (result.rows ?? []) as ChatRow[]
+    const firstSeenBySender = new Set<string>()
     return rows
       .map((row) => {
         const time = toMs(row.message_date)
@@ -135,14 +147,22 @@ async function readChatEvents(params: {
         const sender = String(row.sender_address ?? '').trim().toLowerCase()
         const text = String(row.message_text ?? '').trim()
         if (!sender || !text) return null
+        const isFirstFromSender = !firstSeenBySender.has(sender)
+        if (isFirstFromSender) firstSeenBySender.add(sender)
         return {
           id: `${row.room_id}:${row.message_id}`,
+          messageId: row.message_id,
           roomId: row.room_id,
           senderAddress: sender,
           senderLabel: row.username?.trim() || null,
           text,
           time,
           isHost: Boolean(params.hostAddress && sender === params.hostAddress),
+          isFirstFromSender,
+          replyId: row.reply_id?.trim() || null,
+          replyText: row.reply_text?.trim() || null,
+          replySender: row.reply_sender?.trim().toLowerCase() || null,
+          replySenderLabel: row.reply_username?.trim() || null,
         } satisfies RoomTimelineChatEvent
       })
       .filter((row): row is RoomTimelineChatEvent => Boolean(row))

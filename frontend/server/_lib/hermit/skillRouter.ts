@@ -39,6 +39,7 @@ import {
   buildHyperliquidPositionReport,
   formatPositionAlertStatusBlock,
 } from '../alfaclub/positionReport.js'
+import { buildRoomTimelineData, type RoomTimelineChatEvent } from '../alfaclub/roomTimeline.js'
 import {
   disableHyperliquidPositionAlert,
   describeHyperliquidAlertDefaults,
@@ -819,6 +820,9 @@ function buildHermitHelpReply(roomId?: string | null): string {
     '- `/hermit quest <reward/task>` — quest or reward drop copy',
     '- `/hermit tone <message>` — rewrite your message with sharper social tone',
     '- `/position` — your HL snapshot + proactive risk brief',
+    '- `/position chart` — timeline chart link + marker counts',
+    '- `/position markers all` — expanded trade/chat marker list',
+    '- `/position marker <n>` — inspect one marker with full context',
     '- `/signal` — position-aware enter/exit bias from your live entries',
     '- `/market` — broader majors + AlfaClub market scope',
     '',
@@ -1541,6 +1545,222 @@ async function buildPositionCommandReply(params: HermitExecutionParams): Promise
   })
 }
 
+type PositionMarkerEvent =
+  | {
+      markerIndex: number
+      time: number
+      kind: 'trade'
+      summary: string
+      trade: {
+        action: string
+        coin: string | null
+        side: 'long' | 'short' | null
+        price: number | null
+        size: number | null
+        dir: string | null
+        closedPnl: number
+        fee: number
+      }
+    }
+  | {
+      markerIndex: number
+      time: number
+      kind: 'chat'
+      summary: string
+      chat: RoomTimelineChatEvent
+    }
+
+function formatMarkerTime(ms: number): string {
+  return new Date(ms).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function toMarkerSummary(event: PositionMarkerEvent): string {
+  if (event.kind === 'trade') {
+    const action = event.trade.action.toUpperCase()
+    const coin = event.trade.coin ?? 'HL'
+    const price = event.trade.price != null ? `$${event.trade.price.toFixed(2)}` : 'price ?'
+    const size = event.trade.size != null ? `${event.trade.size.toFixed(4)} size` : 'size ?'
+    return `[${event.markerIndex}] ${formatMarkerTime(event.time)} · TRADE ${action} ${coin} · ${price} · ${size}`
+  }
+
+  const who =
+    event.chat.senderLabel?.trim() ||
+    `${event.chat.senderAddress.slice(0, 6)}…${event.chat.senderAddress.slice(-4)}`
+  const hostTag = event.chat.isHost ? 'host' : 'chat'
+  const firstTag = event.chat.isFirstFromSender ? ' · first message' : ''
+  const text = event.chat.text.replace(/\s+/g, ' ').slice(0, 120)
+  return `[${event.markerIndex}] ${formatMarkerTime(event.time)} · ${hostTag}${firstTag} · ${who} · "${text}${event.chat.text.length > 120 ? '…' : ''}"`
+}
+
+async function buildPositionMarkerEvents(params: HermitExecutionParams): Promise<PositionMarkerEvent[]> {
+  if (!params.roomId) return []
+  const timeline = await buildRoomTimelineData({
+    roomId: params.roomId,
+    windowHours: 24 * 7,
+  })
+  const merged: Array<Omit<PositionMarkerEvent, 'markerIndex'>> = [
+    ...timeline.tradeEvents.map((trade) => ({
+      kind: 'trade' as const,
+      time: trade.time,
+      summary: '',
+      trade: {
+        action: trade.action,
+        coin: trade.coin,
+        side: trade.side,
+        price: trade.price,
+        size: trade.size,
+        dir: trade.dir,
+        closedPnl: trade.closedPnl,
+        fee: trade.fee,
+      },
+    })),
+    ...timeline.chatEvents.map((chat) => ({
+      kind: 'chat' as const,
+      time: chat.time,
+      summary: '',
+      chat,
+    })),
+  ]
+
+  merged.sort((a, b) => a.time - b.time)
+  const events = merged.map((event, idx) => ({
+    ...event,
+    markerIndex: idx + 1,
+  }))
+  return events.map((event) => ({
+    ...event,
+    summary: toMarkerSummary(event),
+  }))
+}
+
+function positionSubcommandUsage(): string {
+  return [
+    'Position timeline commands:',
+    '- `/position` — live Hyperliquid snapshot + risk brief',
+    '- `/position chart` — timeline chart link + marker counts',
+    '- `/position markers all` — expanded numbered marker feed (trade + chat)',
+    '- `/position marker <n>` — inspect one marker with thread/trade context',
+  ].join('\n')
+}
+
+async function buildPositionChartCommandReply(params: HermitExecutionParams): Promise<string> {
+  if (!params.roomId) {
+    return 'Timeline chart mode is available in AlfaClub room contexts only.'
+  }
+  const events = await buildPositionMarkerEvents(params)
+  const trades = events.filter((event) => event.kind === 'trade').length
+  const chats = events.filter((event) => event.kind === 'chat').length
+  const hostChats = events.filter((event) => event.kind === 'chat' && event.chat.isHost).length
+  return [
+    '📈 **Position timeline chart**',
+    `Room ${params.roomId} · markers: ${events.length} total (${trades} trades, ${chats} chats, ${hostChats} host chats)`,
+    'Open: https://app.4626.fun/positions',
+    '',
+    'In chat:',
+    '- `/position markers all` for the full indexed list',
+    '- `/position marker <n>` to inspect one marker',
+  ].join('\n')
+}
+
+async function buildPositionMarkersAllReply(params: HermitExecutionParams): Promise<string> {
+  if (!params.roomId) {
+    return 'Marker feed is available in AlfaClub room contexts only.'
+  }
+  const events = await buildPositionMarkerEvents(params)
+  if (events.length === 0) {
+    return 'No timeline markers found in this window yet. Retry after new fills or chat activity.'
+  }
+  const maxRows = 80
+  const slice = events.slice(-maxRows)
+  return [
+    `🧭 **Timeline markers** (latest ${slice.length} of ${events.length})`,
+    ...slice.map((event) => event.summary),
+    '',
+    'Inspect one marker: `/position marker <n>`',
+  ].join('\n')
+}
+
+async function buildPositionMarkerDetailReply(
+  params: HermitExecutionParams,
+  markerIndex: number,
+): Promise<string> {
+  if (!params.roomId) {
+    return 'Marker detail is available in AlfaClub room contexts only.'
+  }
+  const events = await buildPositionMarkerEvents(params)
+  const target = events.find((event) => event.markerIndex === markerIndex)
+  if (!target) {
+    return `Marker #${markerIndex} not found. Use \`/position markers all\` for valid indexes.`
+  }
+
+  if (target.kind === 'trade') {
+    const side = target.trade.side?.toUpperCase() ?? 'UNKNOWN'
+    const price = target.trade.price != null ? `$${target.trade.price.toFixed(2)}` : 'n/a'
+    const size = target.trade.size != null ? target.trade.size.toFixed(6) : 'n/a'
+    const pnl = `${target.trade.closedPnl >= 0 ? '+' : ''}${target.trade.closedPnl.toFixed(2)}`
+    const fee = target.trade.fee.toFixed(4)
+    return [
+      `🔎 **Marker #${target.markerIndex}** · trade`,
+      `${formatMarkerTime(target.time)} · ${target.trade.action.toUpperCase()} ${target.trade.coin ?? 'HL'} · ${side}`,
+      `price ${price} · size ${size} · closedPnL ${pnl} · fee ${fee}`,
+      target.trade.dir ? `dir: ${target.trade.dir}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  const chat = target.chat
+  const who =
+    chat.senderLabel?.trim() || `${chat.senderAddress.slice(0, 6)}…${chat.senderAddress.slice(-4)}`
+  const replies = events
+    .filter((event): event is Extract<PositionMarkerEvent, { kind: 'chat' }> => event.kind === 'chat')
+    .filter((event) => event.chat.replyId != null && event.chat.replyId === chat.messageId)
+    .slice(0, 8)
+  return [
+    `💬 **Marker #${target.markerIndex}** · ${chat.isHost ? 'host chat' : 'chat'}`,
+    `${formatMarkerTime(chat.time)} · ${who}${chat.isFirstFromSender ? ' · first message' : ''}`,
+    '',
+    chat.text,
+    chat.replyText ? ['', `In reply to (${chat.replySenderLabel || chat.replySender || 'unknown'}):`, chat.replyText] : [],
+    replies.length > 0
+      ? [
+          '',
+          `Replies (${replies.length} shown):`,
+          ...replies.map((reply) => {
+            const replyWho =
+              reply.chat.senderLabel?.trim() ||
+              `${reply.chat.senderAddress.slice(0, 6)}…${reply.chat.senderAddress.slice(-4)}`
+            return `- ${formatMarkerTime(reply.chat.time)} · ${replyWho}: ${reply.chat.text.replace(/\s+/g, ' ').slice(0, 180)}${reply.chat.text.length > 180 ? '…' : ''}`
+          }),
+        ]
+      : [],
+  ]
+    .flat()
+    .join('\n')
+}
+
+type PositionSubcommand =
+  | { kind: 'default' }
+  | { kind: 'chart' }
+  | { kind: 'markers_all' }
+  | { kind: 'marker'; markerIndex: number }
+  | { kind: 'usage' }
+
+function parsePositionSubcommand(rawArgs: string): PositionSubcommand {
+  const args = rawArgs.trim()
+  if (!args) return { kind: 'default' }
+  if (/^chart$/i.test(args)) return { kind: 'chart' }
+  if (/^markers\s+all$/i.test(args)) return { kind: 'markers_all' }
+  const markerMatch = args.match(/^marker\s+(\d+)$/i)
+  if (markerMatch?.[1]) return { kind: 'marker', markerIndex: Number(markerMatch[1]) }
+  return { kind: 'usage' }
+}
+
 async function buildSignalCommandReply(params: HermitExecutionParams): Promise<string> {
   const hlWallet =
     params.roomId === '1659'
@@ -1780,6 +2000,35 @@ export async function executeHermitCommand(
   }
 
   if (command === '/position') {
+    const parsed = parsePositionSubcommand(args)
+    if (parsed.kind === 'chart') {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: await buildPositionChartCommandReply(params),
+      }
+    }
+    if (parsed.kind === 'markers_all') {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: await buildPositionMarkersAllReply(params),
+      }
+    }
+    if (parsed.kind === 'marker') {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: await buildPositionMarkerDetailReply(params, parsed.markerIndex),
+      }
+    }
+    if (parsed.kind === 'usage') {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: positionSubcommandUsage(),
+      }
+    }
     return {
       kind: 'hermit',
       provider: 'local',

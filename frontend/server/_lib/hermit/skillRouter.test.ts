@@ -108,6 +108,43 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toContain('Entry / Exit signal')
   })
 
+  it('supports /position chart timeline command in room contexts', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/position chart',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('Position timeline chart')
+    expect(result.reply).toContain('/position marker <n>')
+  })
+
+  it('supports /position markers all in room contexts', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/position markers all',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toMatch(/Timeline markers|No timeline markers found/)
+  })
+
+  it('supports /position marker <n> detail command in room contexts', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/position marker 1',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toMatch(/Marker #1|not found/)
+  })
+
   it('supports /arena status in room 1659 when enabled', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',

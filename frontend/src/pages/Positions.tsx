@@ -38,11 +38,17 @@ type TimelineTrade = {
 
 type TimelineChat = {
   id: string
+  messageId: string
   senderAddress: string
   senderLabel: string | null
   text: string
   time: number
   isHost: boolean
+  isFirstFromSender: boolean
+  replyId: string | null
+  replyText: string | null
+  replySender: string | null
+  replySenderLabel: string | null
 }
 
 type TimelineResponse = {
@@ -61,10 +67,12 @@ type ChartPoint = {
   price: number
   label: string
   kind: 'trade' | 'host-chat' | 'chat'
+  chatId?: string
   action?: string
   text?: string
   senderLabel?: string | null
   senderAddress?: string
+  isFirstFromSender?: boolean
 }
 
 function formatTime(value: number): string {
@@ -102,7 +110,11 @@ function nearestCandlePrice(ts: number, candles: TimelineCandle[]): number {
 }
 
 export function Positions() {
-  const [expandAllChats, setExpandAllChats] = useState(false)
+  const [chatScope, setChatScope] = useState<'host' | 'all' | 'sender'>('host')
+  const [selectedSender, setSelectedSender] = useState<string | null>(null)
+  const [expandAllMessages, setExpandAllMessages] = useState(false)
+  const [pinnedChatId, setPinnedChatId] = useState<string | null>(null)
+
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['alfaclub-room-timeline', '1659'],
     queryFn: fetchRoomTimeline,
@@ -144,9 +156,11 @@ export function Positions() {
           price: nearestCandlePrice(event.time, candles),
           label: 'Host chat',
           kind: 'host-chat',
+          chatId: event.id,
           text: event.text,
           senderLabel: event.senderLabel,
           senderAddress: event.senderAddress,
+          isFirstFromSender: event.isFirstFromSender,
         })),
     [candles, data?.chatEvents],
   )
@@ -159,14 +173,67 @@ export function Positions() {
         price: nearestCandlePrice(event.time, candles),
         label: event.isHost ? 'Host chat' : 'Chat',
         kind: event.isHost ? 'host-chat' : 'chat',
+        chatId: event.id,
         text: event.text,
         senderLabel: event.senderLabel,
         senderAddress: event.senderAddress,
+        isFirstFromSender: event.isFirstFromSender,
       })),
     [candles, data?.chatEvents],
   )
 
-  const visibleChatMarkers = expandAllChats ? allChatMarkers : hostChatMarkers
+  const senderOptions = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const event of data?.chatEvents ?? []) {
+      if (!map.has(event.senderAddress)) {
+        map.set(event.senderAddress, event.senderLabel || event.senderAddress)
+      }
+    }
+    return [...map.entries()].map(([address, label]) => ({ address, label }))
+  }, [data?.chatEvents])
+
+  const filteredChatEvents = useMemo(() => {
+    const source = data?.chatEvents ?? []
+    if (chatScope === 'host') return source.filter((event) => event.isHost)
+    if (chatScope === 'sender' && selectedSender) {
+      return source.filter((event) => event.senderAddress === selectedSender)
+    }
+    return source
+  }, [chatScope, data?.chatEvents, selectedSender])
+
+  const visibleChatMarkers = useMemo(() => {
+    const allowedIds = new Set(filteredChatEvents.map((event) => event.id))
+    return allChatMarkers.filter((event) => event.chatId && allowedIds.has(event.chatId))
+  }, [allChatMarkers, filteredChatEvents])
+
+  const pinnedChat = useMemo(
+    () => (data?.chatEvents ?? []).find((event) => event.id === pinnedChatId) ?? null,
+    [data?.chatEvents, pinnedChatId],
+  )
+
+  const pinnedReplies = useMemo(() => {
+    if (!pinnedChat) return []
+    return (data?.chatEvents ?? []).filter((event) => event.replyId === pinnedChat.messageId)
+  }, [data?.chatEvents, pinnedChat])
+
+  const displayedChatRows = useMemo(() => {
+    if (expandAllMessages) return filteredChatEvents
+    return filteredChatEvents.slice(-120)
+  }, [expandAllMessages, filteredChatEvents])
+
+  const chatScopeLabel =
+    chatScope === 'host'
+      ? 'host-only'
+      : chatScope === 'sender' && selectedSender
+        ? `sender: ${selectedSender.slice(0, 6)}…${selectedSender.slice(-4)}`
+        : 'all'
+
+  const handleMarkerClick = (raw: unknown) => {
+    const payload = raw as ChartPoint | { payload?: ChartPoint } | null
+    const point = (payload && 'payload' in payload ? payload.payload : payload) as ChartPoint | null
+    if (!point || !point.chatId) return
+    setPinnedChatId(point.chatId)
+  }
 
   return (
     <div className="relative pb-24 md:pb-0">
@@ -181,16 +248,65 @@ export function Positions() {
             <span className="label">Room Timeline</span>
             <h1 className="headline text-4xl sm:text-6xl mt-4">Hyperliquid + Chat Markers</h1>
             <p className="text-zinc-400 text-sm font-light mt-3">
-              Room 1659 chart with trade actions (entry/add/reduce/close) and chat markers you can hover.
+              Room 1659 chart with trade actions (entry/add/reduce/close), host/all chat markers, and
+              click-to-pin message threads.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <Button
-                variant={expandAllChats ? 'secondary' : 'primary'}
+                variant={chatScope === 'host' ? 'primary' : 'secondary'}
                 size="sm"
                 className="btn-compact rounded-full text-xs"
-                onClick={() => setExpandAllChats((v) => !v)}
+                onClick={() => {
+                  setChatScope('host')
+                  setSelectedSender(null)
+                }}
               >
-                {expandAllChats ? 'Show host chats only' : 'Expand all chats'}
+                Host chats
+              </Button>
+              <Button
+                variant={chatScope === 'all' ? 'primary' : 'secondary'}
+                size="sm"
+                className="btn-compact rounded-full text-xs"
+                onClick={() => {
+                  setChatScope('all')
+                  setSelectedSender(null)
+                }}
+              >
+                All chats
+              </Button>
+              <Button
+                variant={chatScope === 'sender' ? 'primary' : 'secondary'}
+                size="sm"
+                className="btn-compact rounded-full text-xs"
+                onClick={() => {
+                  setChatScope('sender')
+                  if (!selectedSender && senderOptions.length > 0) {
+                    setSelectedSender(senderOptions[0]!.address)
+                  }
+                }}
+              >
+                Sender filter
+              </Button>
+              {chatScope === 'sender' && (
+                <select
+                  className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
+                  value={selectedSender ?? ''}
+                  onChange={(event) => setSelectedSender(event.target.value || null)}
+                >
+                  {senderOptions.map((opt) => (
+                    <option key={opt.address} value={opt.address}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <Button
+                variant={expandAllMessages ? 'primary' : 'secondary'}
+                size="sm"
+                className="btn-compact rounded-full text-xs"
+                onClick={() => setExpandAllMessages((v) => !v)}
+              >
+                {expandAllMessages ? 'Collapse messages' : 'Expand all messages'}
               </Button>
               <Button
                 variant="secondary"
@@ -250,6 +366,9 @@ export function Positions() {
                                       ? 'Host chat'
                                       : 'Chat'}
                                 </div>
+                                {point.isFirstFromSender && (
+                                  <div className="mt-1 text-emerald-300">First message from this sender in window</div>
+                                )}
                                 {point.text && <div className="mt-1 text-zinc-300 whitespace-pre-wrap">{point.text}</div>}
                                 {point.senderLabel && (
                                   <div className="mt-1 text-zinc-400">
@@ -275,8 +394,9 @@ export function Positions() {
                     <Scatter
                       data={visibleChatMarkers}
                       dataKey="price"
-                      fill={expandAllChats ? '#a78bfa' : '#f59e0b'}
-                      name={expandAllChats ? 'All chats' : 'Host chats'}
+                      fill={chatScope === 'host' ? '#f59e0b' : '#a78bfa'}
+                      name={chatScope === 'host' ? 'Host chats' : 'Chat markers'}
+                      onClick={handleMarkerClick}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -284,16 +404,68 @@ export function Positions() {
             )}
           </div>
 
+          {pinnedChat && (
+            <div className="mt-6 rounded-2xl border border-indigo-500/30 bg-indigo-500/[0.08] p-4 sm:p-6">
+              <div className="flex items-center justify-between">
+                <div className="label">Pinned message thread</div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="btn-compact rounded-full text-xs"
+                  onClick={() => setPinnedChatId(null)}
+                >
+                  Clear pin
+                </Button>
+              </div>
+              <div className="mt-3 rounded-md bg-white/[0.03] border border-white/5 p-3 text-xs">
+                <div className="text-zinc-300">
+                  {formatTime(pinnedChat.time)} · {pinnedChat.senderLabel || pinnedChat.senderAddress}
+                </div>
+                <div className="text-zinc-100 mt-1 whitespace-pre-wrap">{pinnedChat.text}</div>
+              </div>
+              {pinnedChat.replyText && (
+                <div className="mt-3 rounded-md bg-white/[0.02] border border-white/5 p-3 text-xs">
+                  <div className="text-zinc-400">In reply to</div>
+                  <div className="text-zinc-300 mt-1">
+                    {pinnedChat.replySenderLabel || pinnedChat.replySender || 'unknown'}
+                  </div>
+                  <div className="text-zinc-100 mt-1 whitespace-pre-wrap">{pinnedChat.replyText}</div>
+                </div>
+              )}
+              {pinnedReplies.length > 0 && (
+                <div className="mt-3">
+                  <div className="text-xs text-zinc-400">Replies ({pinnedReplies.length})</div>
+                  <div className="mt-2 space-y-2 max-h-[220px] overflow-y-auto">
+                    {pinnedReplies.map((reply) => (
+                      <div key={reply.id} className="rounded-md bg-white/[0.02] border border-white/5 p-2 text-xs">
+                        <div className="text-zinc-300">
+                          {formatTime(reply.time)} · {reply.senderLabel || reply.senderAddress}
+                        </div>
+                        <div className="text-zinc-100 mt-1 whitespace-pre-wrap">{reply.text}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="mt-6 rounded-2xl border border-white/5 bg-white/[0.03] p-4 sm:p-6">
-            <div className="label">Chat events ({expandAllChats ? 'all' : 'host-only'})</div>
+            <div className="label">Chat events ({chatScopeLabel})</div>
             <div className="mt-3 max-h-[280px] overflow-y-auto space-y-2">
-              {(expandAllChats ? allChatMarkers : hostChatMarkers).slice(-120).map((event) => (
-                <div key={`${event.id ?? event.t}`} className="rounded-md bg-white/[0.03] border border-white/5 p-2 text-xs">
+              {displayedChatRows.map((event) => (
+                <button
+                  key={event.id}
+                  type="button"
+                  onClick={() => setPinnedChatId(event.id)}
+                  className="w-full text-left rounded-md bg-white/[0.03] border border-white/5 p-2 text-xs hover:border-indigo-400/40"
+                >
                   <div className="text-zinc-300">
-                    {formatTime(event.t)} · {event.senderLabel || event.senderAddress || 'unknown'}
+                    {formatTime(event.time)} · {event.senderLabel || event.senderAddress || 'unknown'}
+                    {event.isFirstFromSender && <span className="ml-2 text-emerald-300">first in window</span>}
                   </div>
                   <div className="text-zinc-100 mt-1 whitespace-pre-wrap">{event.text}</div>
-                </div>
+                </button>
               ))}
             </div>
           </div>
