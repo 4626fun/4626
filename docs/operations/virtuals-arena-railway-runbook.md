@@ -117,16 +117,61 @@ Ownership / "the wallet address on alfaclub becomes the agent on virtuals":
      - Delete `ARENA_AGENT_WALLET_ADDRESS` (was 0x3006...)
      - (and `ARENA_HL_API_WALLET_ADDRESS` if it was tied to the old agent)
      Redeploy. These are now only ultimate fallbacks; the DB row (source=db) wins for room 1659 default. (I also removed the old hardcoded defaults from source in arenaConfig.ts.)
-  5. (Advanced, for making the *chat no-args create path* also own under you) 
-     - Locally: `acp configure` while connected as 0x64c3... to obtain the tokens (access/refresh for your wallet).
-     - On the Railway service (same one as ARENA_DGCLAW_DIR): set 
-       ACP_ACCESS_TOKEN=... 
-       ACP_REFRESH_TOKEN=...
-       ACP_OWNER_WALLET=0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9
-     - Redeploy the service.
-     - The code now auto-detects these ACP_* envs in runArenaCreateAgent and runs headless `acp configure` first (to switch the local acp storage to your session), then does the agent create under your ACP identity (so the agent is owned by you on Virtuals dashboard).
-     - Then run `/arena register default` (no args) in chat.
-     - After success, unset the personal ACP_* (or set operator's back) and redeploy to rotate the runtime session off your tokens.
+  5. (Advanced, for making the *chat no-args create path* also own under you — using the tokens from the auth result you just got)
+
+     **On the Railway service (the one with ARENA_DGCLAW_DIR / the alfaclub-bridge/hermit service):**
+
+     Add or update these exact Variables (use the values from your latest Privy auth JSON response):
+
+    - Key: `ACP_ACCESS_TOKEN`
+      Value: `<from latest Privy auth response>`
+
+    - Key: `ACP_REFRESH_TOKEN`
+      Value: `<from latest Privy auth response>`
+
+     - Key: `ACP_OWNER_WALLET`
+       Value: `0x64c3Fb828bD2A8cDe9Cde14d0295D34916bb94e9`
+
+     Also ensure (if not already):
+     - `HERMIT_OWNER_ADDRESS=0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9`
+     - `HERMIT_ALLOWED_ROOM_IDS=1043,1659`
+
+     Save. Railway will auto-start a new deployment — wait for it to go green.
+
+     **In the 1659 room (posting as your 0x64c3... wallet):**
+
+     ```
+     /arena identity clear default
+     /arena register default
+     ```
+
+     (The no-args version will now trigger the auto `acp configure` + `agent create` under your session because the ACP_* envs are live.)
+
+     **Verify:**
+
+     ```
+     /arena identity show
+     /arena status
+     ```
+
+     You should see the new agent bound as room default, with `identitySource=room_default` (or similar from DB), not the old env_default.
+
+     **Rotate the session back (important):**
+
+     Remove the three `ACP_*` variables (or set them back to your normal operator values if you have a separate ACP session for the runtime).
+
+     Redeploy.
+
+     **Final cleanup (optional but recommended):**
+
+     Remove the old agent envs:
+     - Delete `ARENA_AGENT_ID`
+     - Delete `ARENA_AGENT_WALLET_ADDRESS`
+     - Delete `ARENA_HL_API_WALLET_ADDRESS` (if it was the old one)
+
+     Redeploy.
+
+     The DB mapping now fully owns the identity for the room.
 
 **Do we need a continuous "refresh thing" like Alfaclub's runtime JWT + chat-token-refresh?**
 
