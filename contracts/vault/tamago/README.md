@@ -26,12 +26,9 @@ contracts/vault/tamago/
 ├── generated/                  Solidity emitted from Verity by `tama build`
 │   ├── ERC20Deployer.sol
 │   ├── ERC20Iface.sol
-│   ├── ERC4626Deployer.sol     ← the formally-verified vault
-│   ├── ERC4626Iface.sol
-│   ├── ERC721{Deployer,Iface}.sol
-│   ├── FixedPointMathLib{Deployer,Iface}.sol
-│   ├── Ownable{Deployer,Iface}.sol
-│   └── WETH{Deployer,Iface}.sol
+│   ├── ERC4626Deployer.sol     ← the formally-verified vault (reference only)
+│   └── ERC4626Iface.sol
+│   (Only ERC20 + ERC4626 vendored for our parity/reference use case; full Tamago package includes ERC721/Ownable/WETH/FixedPoint etc.)
 ├── verity/
 │   ├── src/Tamago/Tokens/ERC4626.lean
 │   ├── src/Tamago/Utils/FixedPointMathLib.lean
@@ -105,16 +102,16 @@ tama init .
 tama install Bacon-labs/tamago
 tama build
 
-# 4. Re-vendor the generated Solidity into this repo
+# 4. Re-vendor the generated Solidity into this repo (only the ERC20/ERC4626 parts we use for parity/reference)
 REPO=/path/to/4626
-cp src/generated/verity/*.sol $REPO/contracts/vault/tamago/generated/
+cp src/generated/verity/ERC20*.sol src/generated/verity/ERC4626*.sol $REPO/contracts/vault/tamago/generated/
 cp test/verity/tokens/ERC4626.t.sol \
    $REPO/contracts/vault/tamago/test/TamagoERC4626Mirror.t.sol
 
-# 5. Re-fix the four import paths in TamagoERC4626Mirror.t.sol from
+# 5. Re-fix the import paths in TamagoERC4626Mirror.t.sol from
 #    "../../../src/generated/verity/X.sol"  →  "tamago/generated/X.sol"
 
-# 6. Re-vendor the Verity sources / specs / proofs (reference only)
+# 6. (Optional) Re-vendor the full Verity sources / specs / proofs under verity/ for reviewers (we keep the complete set for fidelity)
 ```
 
 If you also want to run Tamago's Lean proofs locally:
