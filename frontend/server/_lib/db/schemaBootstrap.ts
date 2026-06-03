@@ -32,7 +32,7 @@
  *   3. Update the duplication report
  */
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -40,10 +40,65 @@ type Db = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
 }
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
+const MIGRATIONS_RELATIVE = 'supabase/migrations'
 
-// Adjust this if the relative path from the compiled dist changes.
-const MIGRATIONS_ROOT = resolve(__dirname, '../../../../../supabase/migrations')
+/** Injected by `packages/server-core/build.mjs` when dist entries are bundled. */
+declare const __4626_SUPABASE_MIGRATIONS_ROOT__: string | undefined
+
+let migrationsRootCache: string | null = null
+
+/**
+ * Locate `supabase/migrations` without relying on `import.meta.url` depth.
+ * Bundled `@4626/server-core/dist/*.js` lives under `packages/server-core/dist/`,
+ * so a fixed `../../../../../supabase/migrations` offset resolves outside the repo.
+ */
+export function resolveSupabaseMigrationsRoot(): string {
+  if (migrationsRootCache) return migrationsRootCache
+
+  const envOverride = String(process.env.SUPABASE_MIGRATIONS_DIR ?? '').trim()
+  if (envOverride) {
+    migrationsRootCache = resolve(envOverride)
+    return migrationsRootCache
+  }
+
+  const injected =
+    typeof __4626_SUPABASE_MIGRATIONS_ROOT__ === 'string'
+      ? __4626_SUPABASE_MIGRATIONS_ROOT__.trim()
+      : ''
+  if (injected) {
+    const resolvedInjected = resolve(injected)
+    if (existsSync(resolvedInjected)) {
+      migrationsRootCache = resolvedInjected
+      return migrationsRootCache
+    }
+  }
+
+  const searchStarts = [process.cwd(), dirname(fileURLToPath(import.meta.url))]
+  const seen = new Set<string>()
+
+  for (const start of searchStarts) {
+    let dir = resolve(start)
+    for (let depth = 0; depth < 12; depth++) {
+      if (seen.has(dir)) break
+      seen.add(dir)
+
+      const candidate = resolve(dir, MIGRATIONS_RELATIVE)
+      if (existsSync(candidate)) {
+        migrationsRootCache = candidate
+        return migrationsRootCache
+      }
+
+      const parent = resolve(dir, '..')
+      if (parent === dir) break
+      dir = parent
+    }
+  }
+
+  throw new Error(
+    `[schemaBootstrap] Could not locate ${MIGRATIONS_RELATIVE}. ` +
+      'Set SUPABASE_MIGRATIONS_DIR or include supabase/migrations in the serverless bundle.',
+  )
+}
 
 const ensuredFiles = new Set<string>()
 
@@ -94,7 +149,7 @@ export async function withEnsureOnce(
 }
 
 function readMigration(filename: string): string {
-  const full = resolve(MIGRATIONS_ROOT, filename)
+  const full = resolve(resolveSupabaseMigrationsRoot(), filename)
   try {
     return readFileSync(full, 'utf8')
   } catch (e) {
