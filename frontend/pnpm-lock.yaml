@@ -41,6 +41,7 @@ overrides:
   elliptic: 6.6.1
   langsmith: 0.6.0
   serialize-javascript: 7.0.5
+  svix: 1.95.1
   svix>uuid: 10.0.0
   js-cookie: 3.0.7
   '@react-spring/web>react': ^19.2.4
@@ -6917,8 +6918,8 @@ packages:
     peerDependencies:
       react: '>=17.0'
 
-  svix@1.84.1:
-    resolution: {integrity: sha512-K8DPPSZaW/XqXiz1kEyzSHYgmGLnhB43nQCMeKjWGCUpLIpAMMM8kx3rVVOSm6Bo6EHyK1RQLPT4R06skM/MlQ==}
+  svix@1.95.1:
+    resolution: {integrity: sha512-Vtsbzsvs4lzXJneruB5HiZmV7dlhAjbo6dGid2Qxi9bv+LutLz7Yt3NORI4SYqRTNWPhVoFAA8TG/WXB+mIzNQ==}
 
   symbol-tree@3.2.4:
     resolution: {integrity: sha512-9QNk5KwDF+Bvz+PyObkmSYjI5ksVUYtjW7AU22r2NKcfLJcXp96hkDWU3+XndOsUb+AQ9QhfzfCT2O+CNWT5Tw==}
@@ -7332,11 +7333,6 @@ packages:
   utility-types@3.11.0:
     resolution: {integrity: sha512-6Z7Ma2aVEWisaL6TvBCy7P8rm2LQoPv6dJ7ecIaIixHcwfbJ0x7mWdbcwlIM5IGQxPZSFYeqRCqlOOeKoJYMkw==}
     engines: {node: '>= 4'}
-
-  uuid@10.0.0:
-    resolution: {integrity: sha512-8XkAphELsDnEGrDxUOHB3RGvXz6TeuYSGEZBOjtTtPm2lwhGBjLgOzLHB63IUWfBpNucQjND6d3AOudO+H3RWQ==}
-    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
-    hasBin: true
 
   uuid@11.1.1:
     resolution: {integrity: sha512-vIYxrBCC/N/K+Js3qSN88go7kIfNPssr/hHCesKCQNAjmgvYS2oqr69kIufEG+O4+PfezOH4EbIeHCfFov8ZgQ==}
@@ -9402,7 +9398,7 @@ snapshots:
       jose: 4.15.9
       node-fetch-native: 1.6.7
       redaxios: 0.5.1
-      svix: 1.84.1
+      svix: 1.95.1
       ts-case-convert: 2.1.0
       type-fest: 3.13.1
     optionalDependencies:
@@ -17057,10 +17053,9 @@ snapshots:
     dependencies:
       react: 19.2.4
 
-  svix@1.84.1:
+  svix@1.95.1:
     dependencies:
       standardwebhooks: 1.0.0
-      uuid: 10.0.0
 
   symbol-tree@3.2.4: {}
 
@@ -17422,8 +17417,6 @@ snapshots:
       which-typed-array: 1.1.20
 
   utility-types@3.11.0: {}
-
-  uuid@10.0.0: {}
 
   uuid@11.1.1: {}
 
