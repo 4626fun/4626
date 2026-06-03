@@ -16,7 +16,6 @@ export interface BaseMcpPolicyConfig {
   allowedChainIds: number[]
   allowedTokens: Set<string>
   blockedRecipients: Set<string>
-  maxNotionalBaseUnits: bigint
   tokenNotionalLimitsBaseUnits: Map<string, bigint>
   maxSlippageBps: number
 }
@@ -41,12 +40,19 @@ const BASE_WETH = '0x4200000000000000000000000000000000000006'
 
 const normalize = (address: string): string => address.toLowerCase()
 
-function maxAmountForToken(token: string, config: BaseMcpPolicyConfig): bigint {
-  return config.tokenNotionalLimitsBaseUnits.get(normalize(token)) ?? config.maxNotionalBaseUnits
-}
-
-function exceedsTokenLimit(token: string, amount: bigint, config: BaseMcpPolicyConfig): boolean {
-  return amount > maxAmountForToken(token, config)
+function tokenLimitDecision(token: string, amount: bigint, config: BaseMcpPolicyConfig): PolicyDecision | null {
+  const limit = config.tokenNotionalLimitsBaseUnits.get(normalize(token))
+  if (limit === undefined) {
+    return {
+      status: 'blocked',
+      reasonCode: 'policy_notional_too_high',
+      message: 'Token has no Base MCP notional limit configured.',
+    }
+  }
+  if (amount > limit) {
+    return { status: 'blocked', reasonCode: 'policy_notional_too_high', message: 'Amount exceeds policy token limit.' }
+  }
+  return null
 }
 
 export function createDefaultBaseMcpPolicyConfig(): BaseMcpPolicyConfig {
@@ -54,10 +60,8 @@ export function createDefaultBaseMcpPolicyConfig(): BaseMcpPolicyConfig {
     allowedChainIds: [BASE_CHAIN_ID],
     allowedTokens: new Set<string>(),
     blockedRecipients: new Set<string>(['0x0000000000000000000000000000000000000000']),
-    // Fallback for tokens without an explicit limit. Production allowlists should
-    // pair each token with a token-specific limit below so 6- and 18-decimal
-    // assets are never compared against the same base-unit ceiling.
-    maxNotionalBaseUnits: 10_000_000n,
+    // Every allowlisted value-moving token must have a token-specific cap so
+    // 6- and 18-decimal assets are never compared against one shared base-unit ceiling.
     tokenNotionalLimitsBaseUnits: new Map<string, bigint>([
       [BASE_USDC, 100_000_000n], // 100 USDC (6 decimals)
       [BASE_WETH, 50_000_000_000_000_000n], // 0.05 WETH (18 decimals)
@@ -75,9 +79,8 @@ export function evaluateSwapPolicy(input: SwapPolicyInput, config: BaseMcpPolicy
     return { status: 'blocked', reasonCode: 'policy_token_not_allowed', message: 'Swap token is not in the allowlist.' }
   }
 
-  if (exceedsTokenLimit(input.sellToken, input.sellAmount, config)) {
-    return { status: 'blocked', reasonCode: 'policy_notional_too_high', message: 'Swap amount exceeds policy token limit.' }
-  }
+  const notionalDecision = tokenLimitDecision(input.sellToken, input.sellAmount, config)
+  if (notionalDecision) return notionalDecision
 
   if (input.maxSlippageBps > config.maxSlippageBps) {
     return { status: 'blocked', reasonCode: 'policy_slippage_too_high', message: 'Requested slippage exceeds policy limit.' }
@@ -95,9 +98,8 @@ export function evaluateTransferPolicy(input: TransferPolicyInput, config: BaseM
     return { status: 'blocked', reasonCode: 'policy_token_not_allowed', message: 'Transfer token is not in the allowlist.' }
   }
 
-  if (exceedsTokenLimit(input.token, input.amount, config)) {
-    return { status: 'blocked', reasonCode: 'policy_notional_too_high', message: 'Transfer amount exceeds policy token limit.' }
-  }
+  const notionalDecision = tokenLimitDecision(input.token, input.amount, config)
+  if (notionalDecision) return notionalDecision
 
   if (config.blockedRecipients.has(normalize(input.recipient))) {
     return { status: 'blocked', reasonCode: 'policy_recipient_not_allowed', message: 'Recipient is blocked by policy.' }

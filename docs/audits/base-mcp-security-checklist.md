@@ -21,7 +21,7 @@ Use before enabling Base MCP flows beyond internal flag.
 
 - [ ] Chain allowlist enforced server-side.
 - [ ] Token allowlist enforced server-side.
-- [ ] Token-specific notional caps and slippage cap enforced server-side (`BASE_MCP_TOKEN_LIMITS_JSON` for token overrides).
+- [ ] Token-specific notional caps and slippage cap enforced server-side; every allowlisted value-moving token has a cap (`BASE_MCP_TOKEN_LIMITS_JSON` for token overrides).
 - [ ] Disallowed recipients blocked with typed reason codes.
 - [ ] Policy failure returns hard-fail blocked response (no silent fallback).
 

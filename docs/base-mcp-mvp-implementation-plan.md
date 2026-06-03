@@ -39,7 +39,7 @@ Implement server-side policy engine under `frontend/server/_lib/agents/base-mcp/
 Initial checks:
 - chain allowlist (Base-only for MVP)
 - token allowlist (stablecoins + core assets configured by env)
-- token-specific notional caps per action (avoid sharing one base-unit cap across 6- and 18-decimal assets)
+- required token-specific notional caps per action (never share one base-unit cap across 6- and 18-decimal assets)
 - slippage cap (swap)
 - recipient safety checks (transfer)
 - expiry / replay window guard

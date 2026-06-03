@@ -9,7 +9,6 @@ describe('base mcp policy', () => {
   it('allows a valid swap', () => {
     const config = createDefaultBaseMcpPolicyConfig()
     config.allowedTokens = new Set([USDC.toLowerCase(), WETH.toLowerCase()])
-    config.maxNotionalBaseUnits = 1_000_000_000n
     config.maxSlippageBps = 100
 
     const result = evaluateSwapPolicy(
@@ -79,4 +78,24 @@ describe('base mcp policy', () => {
     }
   })
 
+  it('blocks an allowlisted token without a token-specific notional limit', () => {
+    const config = createDefaultBaseMcpPolicyConfig()
+    const tokenWithoutLimit = '0x2222222222222222222222222222222222222222'
+    config.allowedTokens = new Set([tokenWithoutLimit.toLowerCase()])
+
+    const result = evaluateTransferPolicy(
+      {
+        chainId: BASE_CHAIN_ID,
+        token: tokenWithoutLimit,
+        amount: 1n,
+        recipient: '0x1111111111111111111111111111111111111111',
+      },
+      config,
+    )
+
+    expect(result.status).toBe('blocked')
+    if (result.status === 'blocked') {
+      expect(result.reasonCode).toBe('policy_notional_too_high')
+    }
+  })
 })

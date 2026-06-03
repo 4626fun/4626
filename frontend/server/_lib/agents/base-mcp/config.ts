@@ -14,7 +14,6 @@ const normalizeAddress = (value: string): string | null => {
   return candidate
 }
 
-
 function parseTokenNotionalLimits(): Map<string, bigint> {
   const raw = (process.env.BASE_MCP_TOKEN_LIMITS_JSON ?? '').trim()
   if (!raw) return new Map()
