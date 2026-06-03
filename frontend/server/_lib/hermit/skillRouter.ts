@@ -2430,7 +2430,7 @@ export async function executeHermitCommand(
         kind: 'hermit',
         provider: 'local',
         reply: result.ok
-          ? `Arena status: enabled=${String(result.details?.enabled)} tradingEnabled=${String(result.details?.tradingEnabled)} dryRun=${String(result.details?.dryRun)} identitySource=${resolvedIdentity.source}`
+          ? `Arena status: enabled=${String(result.details?.enabled)} tradingEnabled=${String(result.details?.tradingEnabled)} dryRun=${String(result.details?.dryRun)} identitySource=${resolvedIdentity.source} agentId=${resolvedIdentity.agentId ?? 'none'} arenaWallet=${resolvedIdentity.agentWalletAddress ?? 'none'}${resolvedIdentity.source === 'env_default' ? ' (no active DB mapping for room; run /arena register default or set via identity commands to bind a new one)' : ''}`
           : `Arena status unavailable: ${result.message}`,
       }
     }

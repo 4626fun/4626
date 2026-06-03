@@ -110,14 +110,37 @@ Ownership / "the wallet address on alfaclub becomes the agent on virtuals":
   3. In the 1659 room, post from your 0x64c3... wallet:
      - `/arena identity clear default` (clears old 019e82af... / 0x3006... binding)
      - `/arena register default <newAgentId> <newAgentWallet>` (binds as room default + runs join/activate/add-api-wallet)
-  4. Verify: `/arena identity show` and `/arena status`.
+  4. Verify: `/arena identity show` and `/arena status`. (Status output now includes the active agentId/arenaWallet and hints if identitySource=env_default, meaning no DB mapping row is active yet.)
 
   5. Cleanup: Once the DB mapping is live for your new agent (visible in identity show), remove the old envs from the Railway service:
      - Delete `ARENA_AGENT_ID` (was 019e82af...)
      - Delete `ARENA_AGENT_WALLET_ADDRESS` (was 0x3006...)
      - (and `ARENA_HL_API_WALLET_ADDRESS` if it was tied to the old agent)
      Redeploy. These are now only ultimate fallbacks; the DB row (source=db) wins for room 1659 default. (I also removed the old hardcoded defaults from source in arenaConfig.ts.)
-  5. (Advanced, for making the *chat create path* also own under you) After local configure, capture your ACP_ACCESS_TOKEN / ACP_REFRESH_TOKEN / set ACP_OWNER_WALLET=0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9 in the runtime env for the dgclaw/acp service. Restart. Then `/arena register default` (no args) will create under your session. Rotate tokens after.
+  5. (Advanced, for making the *chat no-args create path* also own under you) 
+     - Locally: `acp configure` while connected as 0x64c3... to obtain the tokens (access/refresh for your wallet).
+     - On the Railway service (same one as ARENA_DGCLAW_DIR): set 
+       ACP_ACCESS_TOKEN=... 
+       ACP_REFRESH_TOKEN=...
+       ACP_OWNER_WALLET=0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9
+     - Redeploy the service.
+     - The code now auto-detects these ACP_* envs in runArenaCreateAgent and runs headless `acp configure` first (to switch the local acp storage to your session), then does the agent create under your ACP identity (so the agent is owned by you on Virtuals dashboard).
+     - Then run `/arena register default` (no args) in chat.
+     - After success, unset the personal ACP_* (or set operator's back) and redeploy to rotate the runtime session off your tokens.
+
+**Do we need a continuous "refresh thing" like Alfaclub's runtime JWT + chat-token-refresh?**
+
+No — not for basic operation.
+
+The `acp` CLI itself has built-in refresh logic (see `resolveToken` + `refreshCliToken` in acp-cli source): once the container's ACP storage has been initialized with a valid access + refresh pair (via the initial headless configure), any future `acp` command will automatically detect an expired short-lived access token, use the refresh_token to fetch a fresh one from ACP/Privy, and update the local storage for that wallet.
+
+This is different from Alfaclub, where we manage a custom JWT entirely on our side and must keep it fresh for every outbound call to the external AlfaClub API (hence the runtime secret + dedicated refresh cron/endpoint that updates storage without a full redeploy).
+
+Here, auth is delegated to the acp binary, so the CLI handles access-token rotation internally on use.
+
+You only need to re-rotate (re-auth locally with your 0x64c3... wallet, update the three ACP_* envs, redeploy) when the *refresh_token* itself expires or is invalidated.
+
+For now this is sufficient (agent creation is infrequent). If you want fully automated long-term refresh without manual re-auth (e.g. a background job that calls the refresh and updates storage), we can add it later modeled after the Alfaclub one. Let me know.
 - The `--owner` we pass from the Alfa sender during create is best-effort/audited but not honored by the current official acp-cli for changing the creator userId.
 
 Examples:

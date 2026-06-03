@@ -234,6 +234,7 @@ describe('executeHermitCommand', () => {
     expect(result.provider).toBe('local')
     expect(result.reply).toContain('Arena status:')
     expect(result.reply).toContain('enabled=true')
+    expect(result.reply).toContain('agentId=')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

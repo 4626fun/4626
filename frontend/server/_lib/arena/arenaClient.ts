@@ -369,6 +369,39 @@ export async function runArenaCreateAgent(config = readArenaConfig(), ownerAddre
     return fail('ARENA_ACP_BIN is not configured (needed for acp agent create).')
   }
 
+  // Support for rotating the runtime ACP session so that `acp agent create` (the no-args
+  // /arena register default path) creates the agent under a specific ACP identity (e.g. the
+  // user's 0x64c3... for true ownership on the Virtuals/ACP dashboard).
+  // Set ACP_ACCESS_TOKEN, ACP_REFRESH_TOKEN, ACP_OWNER_WALLET on the service (values
+  // obtained from local `acp configure` while connected as the desired wallet), redeploy,
+  // then the create will first run headless `acp configure` to switch the local storage,
+  // then create under that session.
+  // After use, rotate the ACP_* envs back and redeploy to avoid leaving personal tokens.
+  //
+  // Note on refresh: Unlike Alfaclub (where we manage a custom JWT and need explicit
+  // runtime rotation via chat-token-refresh because every call needs a fresh JWT we control),
+  // the acp CLI has built-in refresh (resolveToken + refreshCliToken). Once storage is
+  // initialized with a valid access+refresh pair, acp commands auto-refresh the short-lived
+  // access token using the refresh_token and update local storage. You only need to re-rotate
+  // the envs when the refresh_token itself expires. No extra "refresh thing" in our code for now.
+  const acpAccess = process.env.ACP_ACCESS_TOKEN
+  const acpRefresh = process.env.ACP_REFRESH_TOKEN
+  const acpOwner = process.env.ACP_OWNER_WALLET
+  if (acpAccess && acpRefresh && acpOwner) {
+    const configureArgs = [
+      'configure',
+      '--token', acpAccess,
+      '--refresh-token', acpRefresh,
+      '--wallet', acpOwner,
+    ]
+    const configureCommand = buildAcpCommand(config, configureArgs)
+    await runCommand(configureCommand, config)
+    auditLog('acp_session_rotation', {
+      owner: acpOwner,
+      dryRun: config.dryRun,
+    })
+  }
+
   // Note: buildAcpCommand + buildArenaCommandEnv will inject any currently resolved
   // ARENA_AGENT_ID / ARENA_AGENT_WALLET_ADDRESS etc. into the child env.
   // If ownerAddress is passed, we append `--owner <address>` to the `acp agent create` args

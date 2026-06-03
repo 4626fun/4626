@@ -193,8 +193,9 @@ export function PositionsChartSurface(props: {
   const recomputeOverlaysRef = useRef<() => void>(() => {})
   const eventsRef = useRef<ChartOverlayEvent[]>(props.events)
   const candleStepRef = useRef(0)
-  // Sorted candle times (seconds) — used to snap arbitrary chat timestamps onto a real
-  // data point, because timeScale.timeToCoordinate() returns null for off-grid times.
+  // Sorted candle times (seconds) — used as the interpolation anchor for chat timestamps.
+  // timeScale.timeToCoordinate() returns null for off-grid times, so we resolve the nearest
+  // candle's coordinate and then offset by (exactTime - candleTime) × pxPerSecond.
   const candleTimesRef = useRef<UTCTimestamp[]>([])
 
   const [crosshairInfo, setCrosshairInfo] = useState<{ time: number; price: number | null } | null>(null)
@@ -322,36 +323,67 @@ export function PositionsChartSurface(props: {
       return
     }
     const timeScale = chart.timeScale()
-    const step = candleStepRef.current
-    const bucketOf = (timeMs: number) => (step > 0 ? Math.round(timeMs / step) : timeMs)
-    const buckets = new Map<string, ChartOverlayEvent[]>()
-    for (const event of eventsRef.current) {
-      if ((event.kind !== 'chat' && event.kind !== 'host-chat') || event.price == null) continue
-      const key = `${event.kind === 'host-chat' ? 'h' : 'r'}:${bucketOf(event.time)}`
-      const arr = buckets.get(key)
-      if (arr) arr.push(event)
-      else buckets.set(key, [event])
-    }
     const candleTimes = candleTimesRef.current
+
+    // Pixels-per-second derived from the live bar spacing, so each message can be placed at
+    // its EXACT timestamp (interpolated off the nearest candle) instead of snapping to the
+    // candle. This separates messages that are only seconds apart once the chart is zoomed
+    // in enough for them to fit; when zoomed out they naturally re-cluster (see below).
+    const barSpacing = timeScale.options().barSpacing ?? 0
+    const stepSec = candleStepRef.current > 0 ? candleStepRef.current / 1000 : 0
+    const pxPerSecond = stepSec > 0 && barSpacing > 0 ? barSpacing / stepSec : 0
+
+    const exactXForEvent = (event: ChartOverlayEvent): number | null => {
+      const eventSec = toChartTime(event.time) as number
+      const snapped = snapToNearestCandleTime(eventSec, candleTimes)
+      if (snapped == null) return null
+      const xSnap = timeScale.timeToCoordinate(snapped)
+      if (xSnap == null) return null
+      const deltaSec = eventSec - (snapped as number)
+      return xSnap + deltaSec * pxPerSecond
+    }
+
+    // Only collapse avatars that would physically overlap (within ~one avatar width).
+    const CLUSTER_PX = 18
     const next: AvatarOverlay[] = []
-    for (const group of buckets.values()) {
-      group.sort((a, b) => a.time - b.time)
-      const primary = group[group.length - 1]!
-      const snapped = snapToNearestCandleTime(toChartTime(primary.time), candleTimes)
-      if (snapped == null) continue
-      const x = timeScale.timeToCoordinate(snapped)
-      const baseY = series.priceToCoordinate(primary.price as number)
-      if (x == null || baseY == null) continue
-      const isHost = primary.kind === 'host-chat'
-      next.push({
-        id: `chat-${primary.id}`,
-        event: primary,
-        group,
-        count: group.length,
-        x,
-        y: isHost ? baseY - eventSpreadRef.current : baseY + eventSpreadRef.current,
-        isHost,
-      })
+    for (const lane of ['h', 'r'] as const) {
+      const isHost = lane === 'h'
+      const items: { event: ChartOverlayEvent; x: number }[] = []
+      for (const event of eventsRef.current) {
+        const laneMatch = isHost ? event.kind === 'host-chat' : event.kind === 'chat'
+        if (!laneMatch || event.price == null) continue
+        const x = exactXForEvent(event)
+        if (x == null) continue
+        items.push({ event, x })
+      }
+      items.sort((a, b) => a.x - b.x)
+
+      let i = 0
+      while (i < items.length) {
+        const anchorX = items[i]!.x
+        const cluster = [items[i]!]
+        let j = i + 1
+        while (j < items.length && items[j]!.x - anchorX <= CLUSTER_PX) {
+          cluster.push(items[j]!)
+          j += 1
+        }
+        const group = cluster.map((c) => c.event).sort((a, b) => a.time - b.time)
+        const primary = group[group.length - 1]!
+        const baseY = series.priceToCoordinate(primary.price as number)
+        if (baseY != null) {
+          const primaryX = cluster.find((c) => c.event.id === primary.id)?.x ?? anchorX
+          next.push({
+            id: `chat-${primary.id}`,
+            event: primary,
+            group,
+            count: group.length,
+            x: primaryX,
+            y: isHost ? baseY - eventSpreadRef.current : baseY + eventSpreadRef.current,
+            isHost,
+          })
+        }
+        i = j
+      }
     }
     setChatAvatars(next)
   }
