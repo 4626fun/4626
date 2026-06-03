@@ -335,6 +335,7 @@ function formatArenaUsage(): string {
     '',
     'HIP-3 pairs must use `xyz:` (example: `xyz:GOLD`).',
     'Create path (`/arena register` or `default`) runs under the bot\'s pre-configured ACP session (see ACP_OWNER_WALLET in acp-cli headless). Agent is functional for arena immediately (auto-bound + onboarded). For the agent to appear "owned by your Alfa EOA" in Virtuals ACP dashboard (userId match), create via web at app.virtuals.io/acp while connected as your Alfa sender, then supply ids with `/arena register [default] <id> <wallet>`.',
+    'IMPORTANT: In AlfaClub rooms, /arena commands are gated (see execute.ts). Add your sender wallet (e.g. 0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9 for 1659) to HERMIT_ALLOWED_USERS env, or set HERMIT_OWNER_ADDRESS to your wallet, and restart the service before running clears/registers from that wallet. Owner address bypasses the allowlist for /arena.',
   ].join('\n')
 }
 

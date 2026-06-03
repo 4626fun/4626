@@ -25,7 +25,7 @@ function formatHermitCreativeSection(): string[] {
     '• `/position` — Hyperliquid positions + alert setup',
     '• `/signal` — position-aware enter/exit bias from your live entries',
     '• `/market` — broader majors + AlfaClub market scope',
-    '• `/arena ...` (status|register|identity ...|join|activate|trade|...) — Virtuals Arena (Degenerate Claw) controls (room/flag gated; per-sender + room-default bindings; create path uses bot ACP session)',
+    '• `/arena ...` (status|register|identity ...|join|activate|trade|...) — Virtuals Arena (Degenerate Claw) controls (room/flag gated; per-sender + room-default bindings; create path uses bot ACP session; /arena requires allowlist or HERMIT_OWNER_ADDRESS in AlfaClub rooms)',
     '• `/gmeow [vibe]` — GIF + one-liner',
     '• `/meme <prompt>` — meme / image concept',
     '• `/hermit copy|announce|quest|tone <text>` — room copy drafts',

@@ -3,8 +3,6 @@ import { logger } from '../infra/logger.js'
 declare const process: { env: Record<string, string | undefined> }
 
 const DEFAULT_ALLOWED_ROOM_IDS = ['1659']
-const DEFAULT_ARENA_AGENT_ID = '019e82af-2e66-7645-af23-69e9f14351f4'
-const DEFAULT_ARENA_AGENT_WALLET_ADDRESS = '0x30068c6bccf43e9eb5cdb68fb978f32f744d870c'
 const DEFAULT_COMMAND_TIMEOUT_MS = 60_000
 const DEFAULT_MAX_USDC_DEPOSIT = 50_000
 const DEFAULT_MAX_TRADE_SIZE_USD = 100_000
@@ -89,10 +87,8 @@ export function readArenaConfig(): ArenaConfig {
   const tradingEnabled = readBool('ARENA_TRADING_ENABLED', false)
   const creationEnabled = readBool('ARENA_CREATION_ENABLED', true)
   const dryRun = readBool('ARENA_DRY_RUN', true)
-  const agentId = readOptionalString('ARENA_AGENT_ID') ?? DEFAULT_ARENA_AGENT_ID
-  const agentWalletAddress =
-    normalizeAddressOrNull(readOptionalString('ARENA_AGENT_WALLET_ADDRESS')) ??
-    DEFAULT_ARENA_AGENT_WALLET_ADDRESS
+  const agentId = readOptionalString('ARENA_AGENT_ID')
+  const agentWalletAddress = normalizeAddressOrNull(readOptionalString('ARENA_AGENT_WALLET_ADDRESS'))
   const hlApiWalletAddress = normalizeAddressOrNull(readOptionalString('ARENA_HL_API_WALLET_ADDRESS'))
   const commandTimeoutMs = readPositiveInt('ARENA_COMMAND_TIMEOUT_MS', DEFAULT_COMMAND_TIMEOUT_MS)
   const maxUsdcDeposit = readPositiveNumber('ARENA_MAX_USDC_DEPOSIT', DEFAULT_MAX_USDC_DEPOSIT)

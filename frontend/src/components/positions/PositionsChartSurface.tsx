@@ -3,6 +3,7 @@ import {
   CandlestickSeries,
   ColorType,
   CrosshairMode,
+  HistogramSeries,
   LineStyle,
   type MouseEventParams,
   type IChartApi,
@@ -140,18 +141,27 @@ function senderInitial(event: ChartOverlayEvent): string {
   return (event.senderLabel ?? event.senderAddress ?? '?').slice(0, 1).toUpperCase()
 }
 
-// Deterministic, attractive gradient derived from the sender identity, used as the avatar
-// backdrop so messages without a usable pfp (e.g. some Hermit bot posts) still render a
-// polished circular icon instead of a flat gray dot.
+// Curated, purple-free gradient palette for avatar fallbacks (messages without a usable
+// pfp, e.g. some Hermit bot posts). Deterministic per sender so the same user always reads
+// the same colour. No violet/purple hues by request.
+const AVATAR_GRADIENTS = [
+  'linear-gradient(135deg, #0ea5e9, #2563eb)', // sky → blue
+  'linear-gradient(135deg, #14b8a6, #0d9488)', // teal
+  'linear-gradient(135deg, #22c55e, #15803d)', // emerald
+  'linear-gradient(135deg, #f59e0b, #d97706)', // amber
+  'linear-gradient(135deg, #f43f5e, #be123c)', // rose
+  'linear-gradient(135deg, #06b6d4, #0891b2)', // cyan
+  'linear-gradient(135deg, #3b82f6, #1d4ed8)', // blue
+  'linear-gradient(135deg, #10b981, #0f766e)', // green → teal
+]
+
 function senderGradient(event: ChartOverlayEvent): string {
   const seed = (event.senderAddress ?? event.senderLabel ?? 'room').toLowerCase()
   let hash = 0
   for (let i = 0; i < seed.length; i += 1) {
     hash = (hash * 31 + seed.charCodeAt(i)) >>> 0
   }
-  const h1 = hash % 360
-  const h2 = (h1 + 48 + (hash % 60)) % 360
-  return `linear-gradient(135deg, hsl(${h1} 70% 52%), hsl(${h2} 72% 40%))`
+  return AVATAR_GRADIENTS[hash % AVATAR_GRADIENTS.length]!
 }
 
 type AvatarOverlay = {
@@ -170,10 +180,12 @@ export function PositionsChartSurface(props: {
   selectedEventId: string | null
   onSelectEvent: (id: string) => void
   onHoverEvent?: (id: string | null) => void
+  marketLabel?: string | null
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
+  const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const markersApiRef = useRef<ReturnType<typeof createSeriesMarkers<Time>> | null>(null)
   const eventByIdRef = useRef<Map<string, ChartOverlayEvent>>(new Map())
   const onSelectEventRef = useRef(props.onSelectEvent)
@@ -220,6 +232,17 @@ export function PositionsChartSurface(props: {
       })),
     [props.candles],
   )
+
+  // Volume histogram, tinted by candle direction. Only built when the feed carries volume.
+  const volumeData = useMemo(() => {
+    const hasVolume = props.candles.some((c) => typeof c.volume === 'number' && c.volume! > 0)
+    if (!hasVolume) return []
+    return props.candles.map((candle) => ({
+      time: toChartTime(candle.time),
+      value: typeof candle.volume === 'number' ? candle.volume : 0,
+      color: candle.close >= candle.open ? 'rgba(34,197,94,0.35)' : 'rgba(239,68,68,0.35)',
+    }))
+  }, [props.candles])
 
   // Median candle spacing (ms) — used to collapse events that land on the same candle.
   const candleStepMs = useMemo(() => {
@@ -343,18 +366,27 @@ export function PositionsChartSurface(props: {
         attributionLogo: true,
       },
       grid: {
-        vertLines: { color: 'rgba(255,255,255,0.06)' },
-        horzLines: { color: 'rgba(255,255,255,0.06)' },
+        vertLines: { visible: false },
+        horzLines: { color: 'rgba(255,255,255,0.045)' },
       },
-      rightPriceScale: { borderColor: 'rgba(255,255,255,0.12)' },
+      rightPriceScale: { borderColor: 'rgba(255,255,255,0.08)' },
       timeScale: {
-        borderColor: 'rgba(255,255,255,0.12)',
+        borderColor: 'rgba(255,255,255,0.08)',
         timeVisible: true,
         secondsVisible: false,
       },
       crosshair: {
-        vertLine: { color: 'rgba(96,165,250,0.5)' },
-        horzLine: { color: 'rgba(96,165,250,0.5)' },
+        mode: CrosshairMode.Magnet,
+        vertLine: {
+          color: 'rgba(96,165,250,0.45)',
+          style: LineStyle.Dashed,
+          labelBackgroundColor: '#1e3a5f',
+        },
+        horzLine: {
+          color: 'rgba(96,165,250,0.45)',
+          style: LineStyle.Dashed,
+          labelBackgroundColor: '#1e3a5f',
+        },
       },
       handleScroll: {
         mouseWheel: true,
@@ -377,6 +409,15 @@ export function PositionsChartSurface(props: {
       priceLineColor: '#60a5fa',
       lastValueVisible: true,
     })
+    // Volume histogram on its own overlay scale, pinned to the bottom ~16% of the pane.
+    const volumeSeries = chart.addSeries(HistogramSeries, {
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'volume',
+      lastValueVisible: false,
+      priceLineVisible: false,
+    })
+    volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } })
+
     const markersApi = createSeriesMarkers(candleSeries, [], { zOrder: 'top' })
 
     const handleClick = (param: { hoveredObjectId?: unknown }) => {
@@ -433,6 +474,7 @@ export function PositionsChartSurface(props: {
     setChartReady(true)
     chartRef.current = chart
     candleSeriesRef.current = candleSeries as ISeriesApi<'Candlestick'>
+    volumeSeriesRef.current = volumeSeries as ISeriesApi<'Histogram'>
     markersApiRef.current = markersApi
     return () => {
       chart.unsubscribeClick(handleClick as never)
@@ -442,6 +484,7 @@ export function PositionsChartSurface(props: {
       setChartReady(false)
       chartRef.current = null
       candleSeriesRef.current = null
+      volumeSeriesRef.current = null
       markersApiRef.current = null
     }
   }, [])
@@ -449,6 +492,7 @@ export function PositionsChartSurface(props: {
   useEffect(() => {
     if (!candleSeriesRef.current || !markersApiRef.current) return
     candleSeriesRef.current.setData(candleData)
+    volumeSeriesRef.current?.setData(volumeData)
     markersApiRef.current.setMarkers(markerData)
     candleTimesRef.current = candleData.map((candle) => candle.time)
     eventByIdRef.current = new Map(props.events.map((event) => [event.id, event]))
@@ -456,7 +500,7 @@ export function PositionsChartSurface(props: {
     // synchronously right after setData.
     const raf = requestAnimationFrame(() => recomputeOverlaysRef.current())
     return () => cancelAnimationFrame(raf)
-  }, [candleData, markerData, props.events, chartReady])
+  }, [candleData, volumeData, markerData, props.events, chartReady])
 
   useEffect(() => {
     if (!chartRef.current || candleData.length <= 2) return
@@ -491,6 +535,13 @@ export function PositionsChartSurface(props: {
     <div className="relative h-[72vh] min-h-[520px] w-full">
       <div ref={containerRef} className="h-full w-full" />
 
+      {/* Faint market watermark */}
+      {props.marketLabel && (
+        <div className="pointer-events-none absolute bottom-10 left-4 z-0 select-none text-4xl font-bold tracking-tight text-white/[0.045] sm:text-6xl">
+          {props.marketLabel}
+        </div>
+      )}
+
       {/* Visitor control: spacing between events and candles */}
       <div className="pointer-events-auto absolute right-14 top-3 z-30 flex items-center gap-2 rounded-md border border-white/10 bg-zinc-950/80 px-2.5 py-1.5 text-[11px] text-zinc-300 backdrop-blur-sm">
         <span className="text-zinc-500">Event spacing</span>
@@ -511,12 +562,12 @@ export function PositionsChartSurface(props: {
         <button
           key={avatar.id}
           type="button"
-          className={`absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full p-[2px] transition hover:scale-110 ${
+          className={`absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full p-[2px] shadow-[0_2px_10px_rgba(0,0,0,0.55)] transition-transform duration-150 hover:z-20 hover:scale-[1.6] ${
             avatar.event.id === props.selectedEventId
-              ? 'bg-zinc-100'
+              ? 'bg-zinc-100 ring-2 ring-zinc-100/40'
               : avatar.isHost
-                ? 'bg-sky-400/80'
-                : 'bg-violet-400/70'
+                ? 'bg-sky-400/90'
+                : 'bg-white/35'
           }`}
           style={{ left: `${avatar.x}px`, top: `${avatar.y}px` }}
           onMouseEnter={() => {
@@ -580,8 +631,11 @@ export function PositionsChartSurface(props: {
           {hoveredChat.count <= 1 ? (
             <>
               <div className="mb-2 flex items-center gap-2 text-xs">
-                <span className="relative block h-8 w-8 shrink-0 overflow-hidden rounded-full bg-zinc-800">
-                  <span className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-zinc-200">
+                <span
+                  className="relative block h-8 w-8 shrink-0 overflow-hidden rounded-full"
+                  style={{ background: senderGradient(hoveredChat.event) }}
+                >
+                  <span className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-white/90">
                     {senderInitial(hoveredChat.event)}
                   </span>
                   {hoveredChat.event.senderAvatarUrl && (

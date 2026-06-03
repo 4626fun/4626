@@ -5,8 +5,8 @@ import { useQuery } from '@tanstack/react-query'
 import { PositionsChartSurface } from '@/components/positions/PositionsChartSurface'
 import { PositionsEventInspector } from '@/components/positions/PositionsEventInspector'
 import { PositionsEventLegend } from '@/components/positions/PositionsEventLegend'
-import { PositionsMarketRail } from '@/components/positions/PositionsMarketRail'
 import { PositionsMarketSignal } from '@/components/positions/PositionsMarketSignal'
+import { PositionsRoomBook } from '@/components/positions/PositionsRoomBook'
 import type { ChartOverlayEvent, TimelineResponse } from '@/components/positions/types'
 import { Button } from '@/components/ui/Button'
 import { apiFetch } from '@/lib/api/apiBase'
@@ -101,20 +101,55 @@ function inferExitReason(event: Pick<ChartOverlayEvent, 'action' | 'dir'>): stri
 
 // Finer candles when zoomed in, coarser for long windows — keeps us under Hyperliquid's
 // ~5000-candle snapshot cap while reducing how many messages collide on a single candle.
-function intervalForWindow(windowHours: number): string {
+type IntervalChoice = 'auto' | '1m' | '5m' | '15m' | '1h'
+
+function autoIntervalForWindow(windowHours: number): string {
   if (windowHours <= 24) return '5m'
   if (windowHours <= 72) return '15m'
   return '1h'
 }
 
+// Hyperliquid's candleSnapshot caps at ~5000 points, so finer intervals are only offered
+// on shorter windows. Anything past the cap falls back to the auto interval.
+function maxCandlesForInterval(interval: string): number {
+  switch (interval) {
+    case '1m':
+      return 1
+    case '5m':
+      return 5
+    case '15m':
+      return 15
+    case '1h':
+      return 60
+    default:
+      return 60
+  }
+}
+
+function resolveInterval(choice: IntervalChoice, windowHours: number): string {
+  if (choice === 'auto') return autoIntervalForWindow(windowHours)
+  const minutes = maxCandlesForInterval(choice)
+  const candleCount = (windowHours * 60) / minutes
+  // Guard against blowing past Hyperliquid's snapshot cap; degrade gracefully to auto.
+  if (candleCount > 5000) return autoIntervalForWindow(windowHours)
+  return choice
+}
+
+function isIntervalAllowed(choice: IntervalChoice, windowHours: number): boolean {
+  if (choice === 'auto') return true
+  const minutes = maxCandlesForInterval(choice)
+  return (windowHours * 60) / minutes <= 5000
+}
+
 async function fetchRoomTimelineBySymbol(
   windowHours: number,
   symbol: string | null,
+  interval: string,
 ): Promise<TimelineResponse> {
   const params = new URLSearchParams({
     roomId: '1659',
     windowHours: String(windowHours),
-    interval: intervalForWindow(windowHours),
+    interval,
   })
   if (symbol && symbol.trim().length > 0) {
     params.set('symbol', symbol.trim().toUpperCase())
@@ -132,6 +167,7 @@ export function Positions() {
   const [selectedSender, setSelectedSender] = useState<string | null>(null)
   const [selectedMarket, setSelectedMarket] = useState<string>('')
   const [windowHours, setWindowHours] = useState<24 | 72 | 168>(168)
+  const [intervalChoice, setIntervalChoice] = useState<IntervalChoice>('auto')
   const [densityMode, setDensityMode] = useState<'all' | 'major'>('all')
   const [showTrades, setShowTrades] = useState(true)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
@@ -143,9 +179,14 @@ export function Positions() {
     return normalized || null
   }, [selectedMarket])
 
+  const effectiveInterval = useMemo(
+    () => resolveInterval(intervalChoice, windowHours),
+    [intervalChoice, windowHours],
+  )
+
   const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ['alfaclub-room-timeline', '1659', windowHours, selectedSymbolForQuery],
-    queryFn: () => fetchRoomTimelineBySymbol(windowHours, selectedSymbolForQuery),
+    queryKey: ['alfaclub-room-timeline', '1659', windowHours, selectedSymbolForQuery, effectiveInterval],
+    queryFn: () => fetchRoomTimelineBySymbol(windowHours, selectedSymbolForQuery, effectiveInterval),
     staleTime: 30_000,
   })
 
@@ -350,6 +391,18 @@ export function Positions() {
               </select>
               <select
                 className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
+                value={intervalChoice}
+                onChange={(event) => setIntervalChoice(event.target.value as IntervalChoice)}
+                title="Candle interval — finer intervals spread same-candle messages apart"
+              >
+                <option value="auto">Auto ({autoIntervalForWindow(windowHours)})</option>
+                {isIntervalAllowed('1m', windowHours) && <option value="1m">1m</option>}
+                {isIntervalAllowed('5m', windowHours) && <option value="5m">5m</option>}
+                {isIntervalAllowed('15m', windowHours) && <option value="15m">15m</option>}
+                <option value="1h">1h</option>
+              </select>
+              <select
+                className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
                 value={densityMode}
                 onChange={(event) => setDensityMode(event.target.value as 'all' | 'major')}
               >
@@ -411,7 +464,7 @@ export function Positions() {
 
           {data && !isLoading && !error && (data.marketSummaries?.length ?? 0) > 0 && (
             <div className="mb-3 space-y-3">
-              <PositionsMarketRail
+              <PositionsRoomBook
                 summaries={data.marketSummaries}
                 selectedMarket={effectiveMarket}
                 onSelect={setSelectedMarket}
@@ -443,6 +496,7 @@ export function Positions() {
                     selectedEventId={selectedEventId}
                     onSelectEvent={setSelectedEventId}
                     onHoverEvent={setHoveredEventId}
+                    marketLabel={effectiveMarket}
                   />
                   <PositionsEventLegend />
                 </div>

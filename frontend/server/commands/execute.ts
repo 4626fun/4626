@@ -8,7 +8,7 @@ import { executeCoinCommandFamily } from './families/coin.js'
 import { executeConversationalCommandFamily, looksLikeConversationalCommand } from './families/conversation.js'
 import { executeHelpCommandFamily } from './families/help.js'
 import { executeAlfaclubCommandFamily } from './families/alfaclub.js'
-import { isHermitUserAllowed } from '../_lib/hermit/policy.js'
+import { isHermitUserAllowed, isHermitOwner } from '../_lib/hermit/policy.js'
 import {
   checkHermitCommandCooldown,
   recordHermitCommandCooldown,
@@ -468,17 +468,19 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
         }
         const hermitRole = await getRole(undefined)
         const isTrustedHermitRole = hermitRole === 'OWNER' || hermitRole === 'ADMIN'
+        const isRoomOwner = isHermitOwner(params.senderWallet)
         if (
           alfaClubChat &&
           (hermitCommand === '/signal' || hermitCommand === '/arena') &&
           !senderIsAllowlisted &&
-          !isTrustedHermitRole
+          !isTrustedHermitRole &&
+          !isRoomOwner
         ) {
           const restrictedCommand = hermitCommand === '/arena' ? '/arena' : '/signal'
           return {
             ok: false,
             response:
-              `Hermit \`${restrictedCommand}\` is restricted to trusted operators (OWNER/ADMIN or allowlisted user) in this room.`,
+              `Hermit \`${restrictedCommand}\` is restricted to trusted operators (OWNER/ADMIN, allowlisted user, or HERMIT_OWNER_ADDRESS) in this room. To allow your wallet (e.g. 0x64c3... for 1659), set HERMIT_OWNER_ADDRESS or HERMIT_ALLOWED_USERS on the Railway alfaclub-bridge/hermit service and redeploy.`,
           }
         }
         const alfaClubRoomId = parseAlfaClubRoomIdFromChatId(params.chatId)

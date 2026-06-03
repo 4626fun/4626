@@ -4,6 +4,7 @@ export type TimelineCandle = {
   high: number
   low: number
   close: number
+  volume?: number | null
 }
 
 export type TimelineTrade = {

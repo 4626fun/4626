@@ -21,6 +21,7 @@ import {
 import { createPublicClient, createWalletClient, http, type Abi } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
+import { evaluateKeeperStrategyHealthGate } from '../../../server/_lib/keeper/strategyHealthGate.js'
 
 const VAULT_ABI = [
   { type: 'function', name: 'tend', inputs: [], outputs: [], stateMutability: 'nonpayable' },
@@ -117,6 +118,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const vaultAddress = typeof body?.vaultAddress === 'string' ? body.vaultAddress.trim() : ''
   if (!vaultAddress || !vaultAddress.startsWith('0x') || vaultAddress.length !== 42) {
     return res.status(400).json({ success: false, error: 'Invalid vaultAddress' } satisfies ApiEnvelope<never>)
+  }
+
+  const healthGate = await evaluateKeeperStrategyHealthGate(vaultAddress)
+  if (healthGate.blocked) {
+    return res.status(200).json({
+      success: false,
+      error: 'keeper_tend_strategy_health_blocked',
+      data: {
+        status: 'skipped',
+        reason: healthGate.reason ?? 'strategy_health_blocked',
+      },
+    } satisfies ApiEnvelope<{ status: string; reason: string }>)
   }
 
   const keeperPk = process.env.KPR_PRIVATE_KEY

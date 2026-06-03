@@ -430,7 +430,7 @@ function formatActionCta(conviction: ConvictionProfile, roomId?: string | null):
     '• Disable alerts: `/hermit alert off`',
   ]
   if (roomId === '1659') {
-    lines.splice(2, 0, '• Arena lane check: `/arena status` (or `/arena register` to create/bind+onboard an agent for arena)')
+    lines.splice(2, 0, '• Arena lane check: `/arena status` (or `/arena register` to create/bind+onboard an agent for arena). Requires HERMIT_OWNER or allowlist in AlfaClub rooms.')
     lines.splice(3, 0, '• Timeline chart: `https://app.4626.fun/positions`')
   }
   return lines

@@ -387,6 +387,15 @@ export async function ensureZoraCswGateSchema(db: Db): Promise<void> {
 }
 
 /**
+ * Keeper CRE attestation + strategy health tables.
+ */
+export async function ensureKeeperCreSchema(db: Db): Promise<void> {
+  await withEnsureOnce('keeperCre', async () => {
+    await ensureMigrationApplied(db, '20260611100000_keeper_cre_attestation_schema.sql').catch(() => {})
+  })
+}
+
+/**
  * Creator access allowlist and access request tables.
  */
 export async function ensureCreatorAccessSchema(db: Db): Promise<void> {

@@ -29,7 +29,7 @@ Expected: commands return success with `[dry-run]`.
 
 - Run: `/arena trade open foo:bar long 1000 2`
   - Expect rejection with `xyz:` guidance.
-- Run from a non-allowlisted room:
+- Run from a non-allowlisted room (on Railway: go to the alfaclub-bridge/hermit service Variables, add HERMIT_OWNER_ADDRESS=0x64c3... or HERMIT_ALLOWED_USERS, redeploy the service):
   - Expect `only enabled in approved rooms`.
 
 ## 4) Controlled trading rehearsal
@@ -41,7 +41,7 @@ Temporarily set:
 
 Then run:
 
-- `/arena register` (or with ids) for bind+onboard rehearsal (see runbook for create vs ownership semantics from acp-cli source)
+- `/arena register` (or with ids) for bind+onboard rehearsal (see runbook; /arena gated — use HERMIT_OWNER_ADDRESS or ALLOWED_USERS + restart for your Alfa 0x64c3... in 1659)
 - `/arena deposit 100`
 - `/arena trade open xyz:GOLD long 5000 2`
 - `/arena trade close xyz:GOLD`

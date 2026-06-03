@@ -30,6 +30,7 @@ type HermitCallShape = {
 }
 
 const isHermitUserAllowedMock = vi.fn(() => true)
+const isHermitOwnerMock = vi.fn(() => false)
 const executeHermitCommandMock = vi.fn(
   async (_params: HermitCallShape): Promise<HermitExecutionResult> => ({
     kind: 'hermit',
@@ -65,6 +66,7 @@ let restoreEnv: (() => void) | null = null
 
 vi.mock('../_lib/hermit/policy.js', () => ({
   isHermitUserAllowed: isHermitUserAllowedMock,
+  isHermitOwner: isHermitOwnerMock,
 }))
 
 vi.mock('../_lib/hermit/skillRouter.js', () => ({
@@ -100,6 +102,8 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     restoreEnv?.()
     restoreEnv = null
     vi.clearAllMocks()
+    isHermitOwnerMock.mockReset()
+    isHermitOwnerMock.mockReturnValue(false)
     readUserPreferenceMock.mockReset()
     upsertUserPreferenceMock.mockReset()
     upsertUserPreferenceMock.mockResolvedValue(true)
@@ -463,7 +467,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     })
 
     expect(result.ok).toBe(false)
-    expect(result.response).toContain('`/arena` is restricted to trusted operators')
+    expect(result.response).toContain('restricted to trusted operators')
     expect(executeHermitCommandMock).not.toHaveBeenCalled()
     isHermitUserAllowedMock.mockReturnValue(true)
   })
@@ -483,6 +487,25 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
 
     expect(result.ok).toBe(true)
     expect(executeHermitCommandMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows /arena for HERMIT_OWNER_ADDRESS even if not allowlisted on AlfaClub bridge', async () => {
+    isHermitUserAllowedMock.mockReturnValue(false)
+    isHermitOwnerMock.mockReturnValue(true)
+    listUserPreferencesMock.mockResolvedValueOnce([])
+
+    const { executeCommand } = await import('./execute.ts')
+    const result = await executeCommand({
+      groupId: 'tg-room',
+      senderWallet: ALICE,
+      text: '/arena status',
+      chatId: 'alfaclub:12345',
+      userId: ALICE,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(executeHermitCommandMock).toHaveBeenCalledTimes(1)
+    isHermitOwnerMock.mockReturnValue(false)
   })
 
   it('non-alfaclub surfaces still enforce HERMIT_ALLOWED_USERS', async () => {

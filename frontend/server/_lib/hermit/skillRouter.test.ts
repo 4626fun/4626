@@ -429,9 +429,11 @@ describe('executeHermitCommand', () => {
       ARENA_ENABLED: '1',
       ARENA_DGCLAW_DIR: '/tmp',
       ARENA_DRY_RUN: '1',
+      ARENA_AGENT_ID: '019e82af-2e66-7645-af23-69e9f14351f4',
+      ARENA_AGENT_WALLET_ADDRESS: '0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
     })
     const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
-    // Use the exact default ids from arenaConfig so resolvedIdentity matches
+    // Use explicit env ids (no longer hardcoded in config) so the already-bound short-circuit matches the resolved env fallback
     const result = await executeHermitCommand({
       commandText: '/arena register 019e82af-2e66-7645-af23-69e9f14351f4 0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
       senderAddress: sender,

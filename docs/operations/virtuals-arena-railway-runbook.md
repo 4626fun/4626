@@ -90,10 +90,34 @@ Ownership / "the wallet address on alfaclub becomes the agent on virtuals":
 
 - For *bot control + arena execution in the room*: yes — the per-sender or '*' mapping + activeConfig means `/arena trade` etc. from that chat sender (or room default) will use the bound agentId/wallet/hlApi for the acp calls and dgclaw scripts. The AlfaClub sender EOA is the "user" in the chat sense.
 - For *on-platform ACP/Virtuals ownership* (the agent's `userId`, appearance in the creator's ACP dashboard at app.virtuals.io/acp, management UIs, any tokenized rewards/claims that are account-scoped): this is determined by the ACP auth session at creation time (the `userId` on the Agent row). The bot's runtime session (ACP_OWNER_WALLET from its headless configure) "owns" agents created via the no-args `/arena register` path.
-- To have an agent whose ACP owner is specifically *your* Alfa EOA (0x64c3... in the 1659 example):
-  1. (Recommended for most users) Go to the Virtuals ACP web (app.virtuals.io/acp/new or equivalent "new agent"), authenticate/connect while using your Alfa EOA as the identity (SIWE or Virtuals login that links the wallet). Create the agent there. Note the Agent ID and its walletAddress (and optionally set up HL API wallet via their flows or acp).
-  2. Then in chat: `/arena register <thatId> <thatWallet>` (personal for you) or `/arena register default <id> <wallet>` (to make it the room default).
-  3. (Advanced) Run `acp configure` (or the split start/complete) on a workstation with *your* Alfa as the connected wallet to obtain ACP tokens, then provide the ACP_ACCESS_TOKEN/ACP_REFRESH_TOKEN/ACP_OWNER_WALLET=0xYourAlfa... to the operator. They can use those to (temporarily) make the bot runtime's session be you, then `/arena register default` (no args) will create under your identity. Tokens are single-session; rotate as needed. Not chat-self-service.
+- To have an agent whose ACP owner is specifically *your* Alfa EOA (0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9 for room 1659):
+  1. (Recommended for true ownership) On a workstation, run `acp configure` while connected as 0x64c3... (or use web at app.virtuals.io/acp/new — sign in with that wallet). Then `acp agent create --name "1659-Alfa-Arena" --description "..."`. Note the new Agent ID and its walletAddress.
+  2. First, authorize yourself (this is the part you asked about — the "deployment platform"):
+     - This refers to **Railway** (the hosting platform for the live "4626-alfaclub-bridge" / "hermit-agent" service that processes AlfaClub chat commands, Hermit, and /arena for rooms like 1659. It is the service where you previously set ARENA_ALLOWED_ROOM_IDS, ARENA_AGENT_ID, ARENA_DGCLAW_DIR, etc.).
+     - Log into https://railway.app
+     - Open your 4626 project.
+     - Find the service (it may be named "4626-alfaclub-bridge", "hermit-agent", "hermit", or any service that already shows ARENA_DGCLAW_DIR or HERMIT_ variables in its list — search your services for ones with ARENA_ vars).
+     - Click into that service → "Variables" tab (left sidebar).
+     - Click "+ New Variable".
+     - Key: `HERMIT_OWNER_ADDRESS`
+       Value: `0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9`
+     - (Also good:) Add `HERMIT_ALLOWED_USERS` with the same value (or comma-list if you have others).
+     - If you have an explicit `HERMIT_ALLOWED_ROOM_IDS` (currently perhaps only 1043), add 1659 to it: e.g. `1043,1659`. This ensures the room is explicitly allowed for Hermit commands. If left unset, it falls back to checking if the HERMIT_OWNER_ADDRESS holds the corresponding AlfaClub room key.
+     - Save the variable. Railway will automatically start a new deployment for the service (watch the "Deployments" tab for it to go green).
+     - If it doesn't auto-deploy, click the "Deploy" button at the top of the service page.
+     - This restarts the process that enforces the /arena gate (in execute.ts). Once the new deployment succeeds, commands from your 0x64c3... wallet in room 1659 will be allowed (owner bypass + allowlist).
+     - See the updated `.env.example` in the repo for the exact comments with your address.
+  3. In the 1659 room, post from your 0x64c3... wallet:
+     - `/arena identity clear default` (clears old 019e82af... / 0x3006... binding)
+     - `/arena register default <newAgentId> <newAgentWallet>` (binds as room default + runs join/activate/add-api-wallet)
+  4. Verify: `/arena identity show` and `/arena status`.
+
+  5. Cleanup: Once the DB mapping is live for your new agent (visible in identity show), remove the old envs from the Railway service:
+     - Delete `ARENA_AGENT_ID` (was 019e82af...)
+     - Delete `ARENA_AGENT_WALLET_ADDRESS` (was 0x3006...)
+     - (and `ARENA_HL_API_WALLET_ADDRESS` if it was tied to the old agent)
+     Redeploy. These are now only ultimate fallbacks; the DB row (source=db) wins for room 1659 default. (I also removed the old hardcoded defaults from source in arenaConfig.ts.)
+  5. (Advanced, for making the *chat create path* also own under you) After local configure, capture your ACP_ACCESS_TOKEN / ACP_REFRESH_TOKEN / set ACP_OWNER_WALLET=0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9 in the runtime env for the dgclaw/acp service. Restart. Then `/arena register default` (no args) will create under your session. Rotate tokens after.
 - The `--owner` we pass from the Alfa sender during create is best-effort/audited but not honored by the current official acp-cli for changing the creator userId.
 
 Examples:
