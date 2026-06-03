@@ -84,6 +84,18 @@ describe('executeHermitCommand', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('supports /market market-scope command', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/market',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toMatch(/Market scope|temporarily unavailable/)
+  })
+
   it('supports /arena status in room 1659 when enabled', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',

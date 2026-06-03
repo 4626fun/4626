@@ -28,6 +28,16 @@ describe('hermitXPostHelpers', () => {
     )
   })
 
+  it('formats oauth write-permission skip copy with account guidance', () => {
+    expect(
+      formatHermitXCrossPostSkipMessage(
+        'Twitter posting is authenticated, but this X app does not have OAuth 1.0a write permission.\n- account: @4626fun\n- oauth1 access-level: read',
+      ),
+    ).toBe(
+      'X cross-post skipped — wrong or read-only X app (@4626fun). Run `/x status` and verify `HERMIT_TWITTER_*` OAuth1 credentials.',
+    )
+  })
+
   it('truncates long captions for X', () => {
     const long = 'a'.repeat(300)
     expect(truncateWithEllipsis(long, 280).length).toBeLessThanOrEqual(280)

@@ -117,7 +117,7 @@ async function buildHermitComprehensiveHelpPayload(params: {
       [
         '⚠️ **Data source note**',
         '- One or more upstream sources were unavailable this cycle.',
-        '- Showing the best available snapshot; retry `/halp` in a moment for full enrichment.',
+        '- Showing the best available snapshot; retry `/position` in a moment for full enrichment.',
       ].join('\n'),
     )
   }
@@ -128,7 +128,7 @@ async function buildHermitComprehensiveHelpPayload(params: {
       const { resolveRoom1659MarketContext } = await import('./room1659Market.js')
       const snapshot = await resolveRoom1659MarketContext(params.senderWallet)
       if (!snapshot.ok) {
-        marketPulse.push('- Live room pulse unavailable this cycle.')
+        marketPulse.push('- Live room pulse unavailable this cycle; retry `/position` for a fresh read.')
       } else {
         if (snapshot.hype != null) marketPulse.push(`- Hype score: **${snapshot.hype}/100**`)
         if (snapshot.liquidation != null) {
@@ -150,7 +150,7 @@ async function buildHermitComprehensiveHelpPayload(params: {
         }
       }
     } catch {
-      marketPulse.push('- Live room pulse unavailable this cycle.')
+      marketPulse.push('- Live room pulse unavailable this cycle; retry `/position` for a fresh read.')
     }
     sections.push(marketPulse.join('\n'))
   }

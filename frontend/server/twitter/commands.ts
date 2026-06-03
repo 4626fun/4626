@@ -5,6 +5,7 @@ import type { Address } from 'viem'
 import { buildAlfaRoomChart } from '../_lib/alfaclub/roomCharts.js'
 import { logger } from '../_lib/infra/logger.js'
 import {
+  hasAnyHermitTwitterOauth1EnvConfigured,
   isHermitTwitterStrictModeEnabled,
   missingTwitterOauth1EnvKeys,
   readTwitterOauth1Credentials,
@@ -206,8 +207,10 @@ type TwitterVerifiedAccount = {
   canWrite: boolean | null
 }
 
-function readTwitterOauthConfig(): { ok: true; config: TwitterOauthConfig } | { ok: false; response: string } {
-  const strictHermitOnly = isHermitTwitterStrictModeEnabled()
+function readTwitterOauthConfig(options: {
+  strictHermitOnly?: boolean
+} = {}): { ok: true; config: TwitterOauthConfig } | { ok: false; response: string } {
+  const strictHermitOnly = options.strictHermitOnly ?? isHermitTwitterStrictModeEnabled()
   const config = readTwitterOauth1Credentials({ strictHermitOnly })
   const missing = missingTwitterOauth1EnvKeys(config, strictHermitOnly)
 
@@ -490,8 +493,9 @@ async function postTweet(params: {
   groupId: string
   senderWallet: Address
   media?: TweetMediaInput | null
+  strictHermitOnly?: boolean
 }): Promise<TwitterCommandResult> {
-  const cfg = readTwitterOauthConfig()
+  const cfg = readTwitterOauthConfig({ strictHermitOnly: params.strictHermitOnly })
   if (!cfg.ok) return cfg
 
   if (!canPostTweet(params.groupId)) {
@@ -610,7 +614,11 @@ export async function postTweetFromSystem(params: {
   senderWallet: Address
   media?: TweetMediaInput | null
 }): Promise<TwitterCommandResult> {
-  return postTweet(params)
+  const strictHermitOnly = isHermitTwitterStrictModeEnabled() || hasAnyHermitTwitterOauth1EnvConfigured()
+  return postTweet({
+    ...params,
+    strictHermitOnly,
+  })
 }
 
 function parseTwitterCommand(raw: string): { cmd: string; args: string[] } {

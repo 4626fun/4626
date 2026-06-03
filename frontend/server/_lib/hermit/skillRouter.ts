@@ -30,8 +30,10 @@ import { logger } from '../infra/logger.js'
 import { getClearinghouseState } from '../alfaclub/hyperliquid.js'
 import {
   formatRoom1659MarketForHermit,
+  resolveRoom1659MarketContext,
   resolveRoom1659HyperliquidUserForSnapshot,
 } from '../alfaclub/room1659Market.js'
+import { buildAlfaClubBriefContext } from '../alfaclub/dailyBrief.js'
 import {
   buildHyperliquidPositionReport,
   formatPositionAlertStatusBlock,
@@ -768,6 +770,8 @@ function buildHermitHelpReply(roomId?: string | null): string {
     '- `/hermit announce <news>` — announcement-style room update',
     '- `/hermit quest <reward/task>` — quest or reward drop copy',
     '- `/hermit tone <message>` — rewrite your message with sharper social tone',
+    '- `/position` — your HL snapshot + proactive risk brief',
+    '- `/market` — broader majors + AlfaClub market scope',
     '',
     'Examples:',
     '- `/hermit announce reward drop opens in 30 minutes`',
@@ -1419,11 +1423,90 @@ async function buildPositionCommandReply(params: HermitExecutionParams): Promise
       : params.senderAddress
   const hlState = await getClearinghouseState(hlWallet)
   const alert = await readHyperliquidPositionAlert(params.senderAddress)
+  const room1659Market =
+    params.roomId === '1659' ? await resolveRoom1659MarketContext(params.senderAddress) : null
+  const marketBrief = await buildMarketScopeSummary()
   return buildHyperliquidPositionReport({
     walletAddress: hlWallet,
     hlState,
     alert,
+    roomId: params.roomId ?? null,
+    room1659Market,
+    marketBrief,
   })
+}
+
+async function buildMarketScopeSummary(): Promise<{
+  snapshotTs: string | null
+  previousSnapshotTs: string | null
+  majors: Array<{ symbol: string; priceUsd: number | null; change24hPct: number | null }>
+  topCreators: Array<{ rank: number; label: string; score: number }>
+} | null> {
+  const brief = await buildAlfaClubBriefContext({
+    topRows: 3,
+    moverRows: 3,
+    majorRows: 6,
+    compact: true,
+    fetchMarkets: true,
+  })
+  if (!brief.ok) return null
+  const topCreators = brief.formatInput.currentRows.slice(0, 3).map((row) => {
+    const label =
+      brief.formatInput.labels.get(row.creatorAddress.toLowerCase()) ??
+      `${row.creatorAddress.slice(0, 6)}…${row.creatorAddress.slice(-4)}`
+    return {
+      rank: row.rank,
+      label: `${label} · #${row.tokenId.toString()}`,
+      score: row.score,
+    }
+  })
+  return {
+    snapshotTs: brief.snapshotTs,
+    previousSnapshotTs: brief.previousSnapshotTs,
+    majors: brief.formatInput.marketRows.slice(0, 6),
+    topCreators,
+  }
+}
+
+async function buildMarketCommandReply(): Promise<string> {
+  const summary = await buildMarketScopeSummary()
+  if (!summary) {
+    return 'Market scope is temporarily unavailable. Retry `/market` in a moment.'
+  }
+
+  const majorLine = summary.majors
+    .map((row) => {
+      const px =
+        row.priceUsd == null
+          ? 'n/a'
+          : row.priceUsd >= 1000
+            ? `$${row.priceUsd.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+            : `$${row.priceUsd.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+      const chg =
+        row.change24hPct == null
+          ? 'n/a'
+          : `${row.change24hPct > 0 ? '+' : ''}${row.change24hPct.toFixed(1)}%`
+      return `${row.symbol} ${px} (${chg})`
+    })
+    .join(' · ')
+
+  const topLine = summary.topCreators
+    .map((row) => `#${row.rank} ${row.label} (${row.score.toFixed(3)})`)
+    .join('\n')
+
+  return [
+    '🌐 **Market scope brief**',
+    summary.snapshotTs
+      ? `Snapshot: ${summary.snapshotTs}${summary.previousSnapshotTs ? ` vs ${summary.previousSnapshotTs}` : ''}`
+      : 'Snapshot: latest',
+    '',
+    `**Majors (24h)** ${majorLine || 'n/a'}`,
+    '',
+    '**Top AlfaClub creators (snapshot)**',
+    topLine || '- No ranked creators available in this snapshot.',
+    '',
+    'Proactive loop: run `/market` every 15–30m, then `/position` before sizing changes.',
+  ].join('\n')
 }
 
 const HERMIT_ONBOARDING_NUDGE =
@@ -1576,6 +1659,14 @@ export async function executeHermitCommand(
       kind: 'hermit',
       provider: 'local',
       reply: await buildPositionCommandReply(params),
+    }
+  }
+
+  if (command === '/market') {
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: await buildMarketCommandReply(),
     }
   }
 
@@ -1754,6 +1845,6 @@ export async function executeHermitCommand(
   }
 
   throw commandError(
-    'Unsupported Hermit command. Use /gmeow, /hermit [copy|announce|quest|tone], /meme, /position, or /arena.',
+    'Unsupported Hermit command. Use /gmeow, /hermit [copy|announce|quest|tone], /meme, /position, /market, or /arena.',
   )
 }

@@ -40,6 +40,15 @@ export type TwitterOauth1Credentials = {
   accessSecret: string
 }
 
+export function hasAnyHermitTwitterOauth1EnvConfigured(): boolean {
+  return (
+    String(process.env.HERMIT_TWITTER_API_KEY ?? '').trim().length > 0 &&
+    String(process.env.HERMIT_TWITTER_API_SECRET ?? '').trim().length > 0 &&
+    String(process.env.HERMIT_TWITTER_ACCESS_TOKEN ?? '').trim().length > 0 &&
+    String(process.env.HERMIT_TWITTER_ACCESS_SECRET ?? '').trim().length > 0
+  )
+}
+
 function oauth1KeysForField(
   field: keyof typeof TWITTER_OAUTH1_ENV_KEYS,
   strictHermitOnly: boolean,
