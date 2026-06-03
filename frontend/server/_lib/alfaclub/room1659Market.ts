@@ -26,6 +26,7 @@
 import { getClearinghouseState } from './hyperliquid.js'
 import { readAlfaClubChatBridgeFlags, buildAlfaClubApiHeaders } from './chatBridge.js'
 import { readAlfaClubChatToken } from './chatTokenStore.js'
+import { computeLiquidationProximityPct, estimateMarkPrice } from './positionProximity.js'
 import { createPublicClient, http, parseAbi, type Address } from 'viem'
 import { base } from 'viem/chains'
 import { ALFACLUB } from '../wallet/alfaclub.js'
@@ -140,6 +141,59 @@ export type Room1659MarketSnapshot = {
   errorReason?: string | null
 }
 
+type Room1659HlLeg = {
+  side?: 'long' | 'short' | null
+  entryPx?: number | null
+  positionValue?: number | null
+  unrealizedPnl?: number | null
+  liquidationPx?: number | null
+}
+
+function legLiqDistance(leg: Room1659HlLeg): number | null {
+  if (
+    !leg.side ||
+    leg.entryPx == null ||
+    leg.positionValue == null ||
+    leg.unrealizedPnl == null ||
+    leg.liquidationPx == null
+  ) {
+    return null
+  }
+  const mark = estimateMarkPrice({
+    entryPx: leg.entryPx,
+    positionValueUsd: leg.positionValue,
+    unrealizedPnlUsd: leg.unrealizedPnl,
+    side: leg.side,
+  })
+  if (mark == null) return null
+  return computeLiquidationProximityPct({
+    markPrice: mark,
+    liquidationPrice: leg.liquidationPx,
+    side: leg.side,
+  })
+}
+
+function pickPrimaryHyperliquidLeg(hlState: any): Room1659HlLeg | null {
+  const legs = Array.isArray(hlState?.assetPositions) ? (hlState.assetPositions as Room1659HlLeg[]) : []
+  if (legs.length === 0) return null
+  const ranked = legs
+    .map((leg) => ({
+      leg,
+      liqDist: legLiqDistance(leg),
+      pnlAbs: Math.abs(leg.unrealizedPnl ?? 0),
+      notional: leg.positionValue ?? 0,
+    }))
+    .sort((a, b) => {
+      const aRisk = a.liqDist ?? Number.POSITIVE_INFINITY
+      const bRisk = b.liqDist ?? Number.POSITIVE_INFINITY
+      if (aRisk !== bRisk) return aRisk - bRisk
+      if (a.pnlAbs !== b.pnlAbs) return b.pnlAbs - a.pnlAbs
+      if (a.notional !== b.notional) return b.notional - a.notional
+      return 0
+    })
+  return ranked[0]?.leg ?? null
+}
+
 /**
  * Resolve current market state for room 1659 for a specific user.
  *
@@ -212,8 +266,9 @@ export async function resolveRoom1659MarketContext(
     // Sophisticated hype: multi-factor (HL + spot + dexscreener + on-chain maturity)
     const hype = computeHypeFromHl(hlUserState, userSpotPositions, pnlHistory, dexData, onchainData);
 
-    // Liquidation from the richest HL data
-    const liquidation = hlUserState?.assetPositions?.[0]?.liquidationPx ?? null;
+    // Liquidation from the prioritized leg (risk-first, then pnl impact, then size)
+    const primaryLeg = pickPrimaryHyperliquidLeg(hlUserState)
+    const liquidation = primaryLeg?.liquidationPx ?? null;
 
     return {
       hyperliquidUser,
@@ -286,7 +341,7 @@ async function fetchAlfaClubSpot(path: string, init?: RequestInit) {
 function mapToPosition(spotPositions: any, hlState: any): Room1659MarketSnapshot['userPosition'] {
   if (!hlState) return null;
 
-  const firstPos = hlState.assetPositions?.[0];
+  const firstPos = pickPrimaryHyperliquidLeg(hlState);
   if (!firstPos) return null;
 
   return {

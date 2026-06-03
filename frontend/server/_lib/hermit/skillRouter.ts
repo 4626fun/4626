@@ -35,6 +35,7 @@ import {
 } from '../alfaclub/room1659Market.js'
 import { buildAlfaClubBriefContext } from '../alfaclub/dailyBrief.js'
 import {
+  buildHyperliquidEntrySignalReport,
   buildHyperliquidPositionReport,
   formatPositionAlertStatusBlock,
 } from '../alfaclub/positionReport.js'
@@ -771,6 +772,7 @@ function buildHermitHelpReply(roomId?: string | null): string {
     '- `/hermit quest <reward/task>` — quest or reward drop copy',
     '- `/hermit tone <message>` — rewrite your message with sharper social tone',
     '- `/position` — your HL snapshot + proactive risk brief',
+    '- `/signal` — position-aware enter/exit bias from your live entries',
     '- `/market` — broader majors + AlfaClub market scope',
     '',
     'Examples:',
@@ -1436,6 +1438,26 @@ async function buildPositionCommandReply(params: HermitExecutionParams): Promise
   })
 }
 
+async function buildSignalCommandReply(params: HermitExecutionParams): Promise<string> {
+  const hlWallet =
+    params.roomId === '1659'
+      ? resolveRoom1659HyperliquidUserForSnapshot(params.senderAddress)
+      : params.senderAddress
+  const [hlState, room1659Market, marketBrief] = await Promise.all([
+    getClearinghouseState(hlWallet),
+    params.roomId === '1659' ? resolveRoom1659MarketContext(params.senderAddress) : Promise.resolve(null),
+    buildMarketScopeSummary(),
+  ])
+
+  return buildHyperliquidEntrySignalReport({
+    walletAddress: hlWallet,
+    hlState,
+    roomId: params.roomId ?? null,
+    room1659Market,
+    marketBrief,
+  })
+}
+
 async function buildMarketScopeSummary(): Promise<{
   snapshotTs: string | null
   previousSnapshotTs: string | null
@@ -1670,6 +1692,14 @@ export async function executeHermitCommand(
     }
   }
 
+  if (command === '/signal') {
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: await buildSignalCommandReply(params),
+    }
+  }
+
   if (command === '/gmeow') {
     const vibeTag = args.trim() || undefined
     const meme = pickRandomHermitMeme(vibeTag)
@@ -1845,6 +1875,6 @@ export async function executeHermitCommand(
   }
 
   throw commandError(
-    'Unsupported Hermit command. Use /gmeow, /hermit [copy|announce|quest|tone], /meme, /position, /market, or /arena.',
+    'Unsupported Hermit command. Use /gmeow, /hermit [copy|announce|quest|tone], /meme, /position, /signal, /market, or /arena.',
   )
 }

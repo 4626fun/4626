@@ -96,6 +96,18 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toMatch(/Market scope|temporarily unavailable/)
   })
 
+  it('supports /signal position-aware command', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/signal',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('Entry / Exit signal')
+  })
+
   it('supports /arena status in room 1659 when enabled', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',

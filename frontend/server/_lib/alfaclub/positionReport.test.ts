@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { HyperliquidClearinghouseState } from './hyperliquid.js'
 import type { PositionAlertConfig } from './positionAlertStore.js'
-import { buildHyperliquidPositionReport } from './positionReport.js'
+import { buildHyperliquidEntrySignalReport, buildHyperliquidPositionReport } from './positionReport.js'
 
 function makeAlert(overrides: Partial<PositionAlertConfig> = {}): PositionAlertConfig {
   return {
@@ -147,5 +147,82 @@ describe('buildHyperliquidPositionReport', () => {
     expect(report).toContain('🌍 **Broader market scope**')
     expect(report).toContain('Majors: BTC')
     expect(report).toContain('Alfa leaders: #1 akita · #1')
+  })
+
+  it('builds position-aware entry signal report with live entry context', () => {
+    const signal = buildHyperliquidEntrySignalReport({
+      walletAddress: '0xebf94fa19db7d2e7905decd01dae4ea9eb4c1ff2',
+      hlState: {
+        accountValueUsd: 683,
+        totalNtlPosUsd: 43,
+        assetPositions: [
+          {
+            coin: 'BTC',
+            side: 'short',
+            entryPx: 67608,
+            positionValue: 43,
+            unrealizedPnl: 1,
+            liquidationPx: 73399.57,
+            leverage: 10,
+          },
+        ],
+      },
+      roomId: '1659',
+      room1659Market: {
+        ok: true,
+        hype: 31,
+        liquidation: 73399.57,
+      },
+      marketBrief: {
+        snapshotTs: '2026-06-03T00:00:00.000Z',
+        previousSnapshotTs: '2026-06-02T00:00:00.000Z',
+        majors: [{ symbol: 'BTC', priceUsd: 68000, change24hPct: 2.5 }],
+        topCreators: [{ rank: 1, label: 'akita · #1', score: 0.912 }],
+      },
+    })
+
+    expect(signal).toContain('Entry / Exit signal')
+    expect(signal).toContain('Your live entries')
+    expect(signal).toContain('entry')
+    expect(signal).toContain('Signal gates before new entry')
+    expect(signal).toContain('Signal confidence / freshness')
+    expect(signal).toContain('Market snapshot:')
+  })
+
+  it('orders multiple HL legs by risk first, then impact', () => {
+    const report = buildHyperliquidPositionReport({
+      walletAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      hlState: {
+        accountValueUsd: 1000,
+        totalNtlPosUsd: 400,
+        assetPositions: [
+          {
+            coin: 'ETH',
+            side: 'long',
+            entryPx: 3000,
+            positionValue: 200,
+            unrealizedPnl: 5,
+            liquidationPx: 1200,
+            leverage: 5,
+          },
+          {
+            coin: 'BTC',
+            side: 'short',
+            entryPx: 67000,
+            positionValue: 200,
+            unrealizedPnl: 2,
+            liquidationPx: 69000,
+            leverage: 8,
+          },
+        ],
+      },
+      alert: makeAlert(),
+    })
+
+    const btcIndex = report.indexOf('**BTC**')
+    const ethIndex = report.indexOf('**ETH**')
+    expect(btcIndex).toBeGreaterThanOrEqual(0)
+    expect(ethIndex).toBeGreaterThanOrEqual(0)
+    expect(btcIndex).toBeLessThan(ethIndex)
   })
 })

@@ -32,10 +32,17 @@ type ConvictionProfile = {
   score: number
   label: ConvictionLabel
 }
+type SignalConfidenceLabel = 'low' | 'medium' | 'high'
 type MarketStats = {
   longCount: number
   shortCount: number
   nearestLiqDist: number | null
+}
+type PrioritizedLeg = {
+  leg: HlLeg
+  liqDist: number | null
+  pnlAbs: number
+  notional: number
 }
 
 export function sumHyperliquidUnrealizedPnl(
@@ -116,12 +123,56 @@ function formatHlLegLine(pos: HlLeg): string[] {
   return lines
 }
 
+function computeLegLiqDistance(leg: HlLeg): number | null {
+  if (
+    !leg.side ||
+    leg.entryPx == null ||
+    leg.liquidationPx == null ||
+    leg.positionValue == null ||
+    leg.unrealizedPnl == null
+  ) {
+    return null
+  }
+  const mark = estimateMarkPrice({
+    entryPx: leg.entryPx,
+    positionValueUsd: leg.positionValue,
+    unrealizedPnlUsd: leg.unrealizedPnl,
+    side: leg.side,
+  })
+  if (mark == null) return null
+  return computeLiquidationProximityPct({
+    markPrice: mark,
+    liquidationPrice: leg.liquidationPx,
+    side: leg.side,
+  })
+}
+
+function prioritizeHyperliquidLegs(legs: HlLeg[]): HlLeg[] {
+  const ranked: PrioritizedLeg[] = legs.map((leg) => ({
+    leg,
+    liqDist: computeLegLiqDistance(leg),
+    pnlAbs: Math.abs(leg.unrealizedPnl ?? 0),
+    notional: leg.positionValue ?? 0,
+  }))
+
+  ranked.sort((a, b) => {
+    const aRisk = a.liqDist ?? Number.POSITIVE_INFINITY
+    const bRisk = b.liqDist ?? Number.POSITIVE_INFINITY
+    if (aRisk !== bRisk) return aRisk - bRisk
+    if (a.pnlAbs !== b.pnlAbs) return b.pnlAbs - a.pnlAbs
+    if (a.notional !== b.notional) return b.notional - a.notional
+    return 0
+  })
+
+  return ranked.map((entry) => entry.leg)
+}
+
 function formatHlPositionsSection(
   state: HyperliquidClearinghouseState | null,
   walletAddress: string,
 ): string[] {
   const walletLabel = `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}`
-  const legs = state?.assetPositions ?? []
+  const legs = prioritizeHyperliquidLegs(state?.assetPositions ?? [])
   const lines: string[] = [`**Hyperliquid positions** (${walletLabel})`]
 
   if (legs.length === 0) {
@@ -148,7 +199,7 @@ function formatHlPositionsSection(
 }
 
 function collectMarketStats(state: HyperliquidClearinghouseState | null): MarketStats {
-  const legs = state?.assetPositions ?? []
+  const legs = prioritizeHyperliquidLegs(state?.assetPositions ?? [])
   let longCount = 0
   let shortCount = 0
   let nearestLiqDist: number | null = null
@@ -312,6 +363,47 @@ function formatMarketScopeSection(marketBrief?: MarketScopeSummary | null): stri
   return lines
 }
 
+function formatSignalConfidenceFooter(params: {
+  state: HyperliquidClearinghouseState | null
+  roomId?: string | null
+  room1659Market?: Room1659MarketSummary | null
+  marketBrief?: MarketScopeSummary | null
+}): string[] {
+  const { state, roomId, room1659Market, marketBrief } = params
+  const legs = state?.assetPositions ?? []
+  let score = 80
+  if (!state) score -= 35
+  if (legs.length === 0) score -= 15
+  if (!marketBrief?.snapshotTs) score -= 20
+  const hasPartialLegData = legs.some(
+    (leg) =>
+      leg.side == null ||
+      leg.entryPx == null ||
+      leg.positionValue == null ||
+      leg.unrealizedPnl == null ||
+      leg.liquidationPx == null,
+  )
+  if (hasPartialLegData) score -= 10
+  if (roomId === '1659' && room1659Market?.ok === false) score -= 20
+
+  const clampedScore = Math.max(0, Math.min(100, Math.round(score)))
+  const confidenceLabel: SignalConfidenceLabel =
+    clampedScore < 45 ? 'low' : clampedScore < 75 ? 'medium' : 'high'
+
+  const lines = [
+    '🧪 **Signal confidence / freshness**',
+    `• Confidence: **${confidenceLabel}** (${clampedScore}/100)`,
+    `• Hyperliquid data: **${state ? 'live session' : 'unavailable'}**`,
+    `• Market snapshot: **${marketBrief?.snapshotTs ?? 'unavailable'}**`,
+  ]
+  if (roomId === '1659') {
+    lines.push(
+      `• Room 1659 pulse: **${room1659Market?.ok === false ? 'degraded' : room1659Market ? 'live' : 'not requested'}**`,
+    )
+  }
+  return lines
+}
+
 function formatOperatorPlaybook(): string[] {
   return [
     '✅ **How this prepares you** (operator playbook)',
@@ -392,6 +484,126 @@ export function buildHyperliquidPositionReport(params: {
   if (marketScopeSection.length > 0) lines.push('', ...marketScopeSection)
 
   lines.push('', ...formatOperatorPlaybook(), '', ...formatActionCta(conviction, roomId))
+
+  let text = lines.join('\n')
+  if (text.length > MAX_REPORT_CHARS) {
+    text = `${text.slice(0, MAX_REPORT_CHARS - 20).trimEnd()}\n…_(truncated)_`
+  }
+  return text
+}
+
+export function buildHyperliquidEntrySignalReport(params: {
+  walletAddress: string
+  hlState: HyperliquidClearinghouseState | null
+  roomId?: string | null
+  room1659Market?: Room1659MarketSummary | null
+  marketBrief?: MarketScopeSummary | null
+}): string {
+  const { walletAddress, hlState, roomId, room1659Market, marketBrief } = params
+  const legs = prioritizeHyperliquidLegs(hlState?.assetPositions ?? [])
+  const conviction = computeConvictionProfile({
+    state: hlState,
+    room1659Market,
+  })
+
+  const lines: string[] = [
+    '🎯 **Entry / Exit signal**',
+    `_Wallet ${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}_`,
+    `Conviction: **${conviction.score}/100** (${conviction.label})`,
+  ]
+
+  if (legs.length === 0) {
+    lines.push(
+      '',
+      'No open Hyperliquid legs found, so this is an **entry-only** signal.',
+      conviction.label === 'defensive'
+        ? 'Action: wait for cleaner structure; avoid forcing entries against momentum.'
+        : conviction.label === 'aggressive'
+          ? 'Action: momentum regime active; enter only with clear invalidation and >=2:1 R:R.'
+          : 'Action: neutral regime; only enter when trigger + risk gates align.',
+    )
+  } else {
+    lines.push('', '**Your live entries**')
+
+    let tightenedRisk = false
+    for (const leg of legs) {
+      const side = (leg.side ?? 'flat').toUpperCase()
+      const coin = leg.coin ?? 'HL'
+      const entry = leg.entryPx != null ? `$${Number(leg.entryPx).toFixed(2)}` : '?'
+      const size = leg.positionValue != null ? `$${Number(leg.positionValue).toFixed(0)}` : '?'
+      const lev = leg.leverage != null ? `${Number(leg.leverage).toFixed(1)}x` : '?'
+      const pnl =
+        leg.unrealizedPnl != null
+          ? `${leg.unrealizedPnl >= 0 ? '+' : ''}$${Number(leg.unrealizedPnl).toFixed(0)}`
+          : '?'
+      const mark =
+        leg.side && leg.entryPx != null && leg.positionValue != null && leg.unrealizedPnl != null
+          ? estimateMarkPrice({
+              entryPx: leg.entryPx,
+              positionValueUsd: leg.positionValue,
+              unrealizedPnlUsd: leg.unrealizedPnl,
+              side: leg.side,
+            })
+          : null
+      const liqDist =
+        leg.side && mark != null && leg.liquidationPx != null
+          ? computeLiquidationProximityPct({
+              markPrice: mark,
+              liquidationPrice: leg.liquidationPx,
+              side: leg.side,
+            })
+          : null
+
+      const action =
+        liqDist != null && liqDist <= 10
+          ? 'tight risk: reduce / hedge, no add'
+          : leg.unrealizedPnl != null && leg.unrealizedPnl > 0
+            ? 'in profit: scale / trail stop'
+            : 'hold only if setup still valid'
+
+      if (liqDist != null && liqDist <= 10) tightenedRisk = true
+
+      lines.push(
+        `- ${side} **${coin}** · entry ${entry} · mark ${mark != null ? `$${mark.toFixed(2)}` : '?'} · ${size} · ${lev} · PnL **${pnl}** · liq-dist **${formatPct(liqDist)}** -> ${action}`,
+      )
+    }
+
+    lines.push(
+      '',
+      tightenedRisk
+        ? '**Portfolio action:** defensive. One or more legs are close to liquidation; protect first, then reassess entries.'
+        : conviction.label === 'aggressive'
+          ? '**Portfolio action:** offensive-control. Keep winners, but only add on confirmed continuation.'
+          : '**Portfolio action:** balanced-control. Maintain structure-based stops and wait for high-quality adds.',
+    )
+  }
+
+  const marketScopeSection = formatMarketScopeSection(marketBrief)
+  if (marketScopeSection.length > 0) {
+    lines.push('', ...marketScopeSection)
+  }
+  if (roomId === '1659' && room1659Market?.hype != null) {
+    lines.push('', `Room 1659 pulse: hype **${room1659Market.hype}/100**.`)
+  }
+
+  lines.push(
+    '',
+    '**Signal gates before new entry**',
+    '• Regime filter: align with higher-timeframe trend.',
+    '• Trigger: pullback reclaim (long) / bounce reject (short).',
+    '• Risk gate: keep >=2:1 R:R and avoid entries with tight liq-distance.',
+    '',
+    'Next: `/position` for full telemetry · `/market` for broader scope.',
+  )
+  lines.push(
+    '',
+    ...formatSignalConfidenceFooter({
+      state: hlState,
+      roomId,
+      room1659Market,
+      marketBrief,
+    }),
+  )
 
   let text = lines.join('\n')
   if (text.length > MAX_REPORT_CHARS) {

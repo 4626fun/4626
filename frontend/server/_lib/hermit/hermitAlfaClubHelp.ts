@@ -23,6 +23,7 @@ function formatHermitCreativeSection(): string[] {
   return [
     '**Hermit — creative (read-only)**',
     '• `/position` — Hyperliquid positions + alert setup',
+    '• `/signal` — position-aware enter/exit bias from your live entries',
     '• `/market` — broader majors + AlfaClub market scope',
     '• `/arena ...` — Virtuals Arena controls (room/flag gated)',
     '• `/gmeow [vibe]` — GIF + one-liner',
@@ -36,7 +37,7 @@ function formatHermitCreativeSection(): string[] {
 function formatHermitCreativeSectionCompact(): string[] {
   return [
     '**Commands**',
-    '• `/position` · `/market` · `/arena status` · `/hermit alert` · `/gmeow` · `/meme` · `/alfa brief`',
+    '• `/position` · `/signal` · `/market` · `/arena status` · `/hermit alert` · `/gmeow` · `/meme` · `/alfa brief`',
   ]
 }
 

@@ -118,6 +118,13 @@ function isLikelyImageUrl(value: string): boolean {
   }
 }
 
+function parseLeadingCommandToken(text: string): string {
+  const trimmed = text.trim()
+  if (!trimmed) return ''
+  const firstSpace = trimmed.indexOf(' ')
+  return (firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace)).toLowerCase()
+}
+
 type HermitXPostPayload = {
   text: string
   media: { url: string } | null
@@ -453,10 +460,21 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
           senderWallet: params.senderWallet,
         })
       case 'hermit': {
-        if (!isAlfaClubChatId(params.chatId) && !isHermitUserAllowed(params.senderWallet)) {
+        const hermitCommand = parseLeadingCommandToken(raw)
+        const senderIsAllowlisted = isHermitUserAllowed(params.senderWallet)
+        const alfaClubChat = isAlfaClubChatId(params.chatId)
+        if (!alfaClubChat && !senderIsAllowlisted) {
           return { ok: false, response: 'Hermit access denied.' }
         }
-        const alfaClubChat = isAlfaClubChatId(params.chatId)
+        const hermitRole = await getRole(undefined)
+        const isTrustedHermitRole = hermitRole === 'OWNER' || hermitRole === 'ADMIN'
+        if (alfaClubChat && hermitCommand === '/signal' && !senderIsAllowlisted && !isTrustedHermitRole) {
+          return {
+            ok: false,
+            response:
+              'Hermit `/signal` is restricted to trusted operators (OWNER/ADMIN or allowlisted user) in this room.',
+          }
+        }
         const alfaClubRoomId = parseAlfaClubRoomIdFromChatId(params.chatId)
         const cooldownCommand = resolveHermitCooldownCommand(raw)
         if (alfaClubChat && alfaClubRoomId && cooldownCommand) {
