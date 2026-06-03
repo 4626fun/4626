@@ -221,6 +221,53 @@ function trimList(values: string[], max = 6): string[] {
     .slice(0, max)
 }
 
+const ALERT_TEST_DM_TIMEOUT_MS = 12_000
+
+function readPositionAlertBotToken(): string | null {
+  const candidates = [
+    process.env.ALFACLUB_API_KEY,
+    process.env.alfaclub_api_key,
+    process.env.ALFACLUB_BOT_TOKEN,
+  ]
+  for (const candidate of candidates) {
+    const value = asTrimmed(candidate)
+    if (value) return value
+  }
+  return null
+}
+
+async function sendTelegramAlertTestDm(params: {
+  chatId: string
+  senderAddress: string
+  botToken: string
+}): Promise<boolean> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), ALERT_TEST_DM_TIMEOUT_MS)
+  const text = [
+    '🧪 **Hermit alert test**',
+    `Wallet ${params.senderAddress.slice(0, 6)}…${params.senderAddress.slice(-4)}`,
+    'Telegram delivery is configured for this wallet.',
+    'You will now receive Hyperliquid alert DMs when your thresholds are triggered.',
+  ].join('\n')
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${params.botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: params.chatId,
+        text,
+        disable_web_page_preview: true,
+      }),
+      signal: controller.signal,
+    })
+    return response.ok
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 function parseLooseJsonObject(text: string): Record<string, unknown> | null {
   const raw = text.trim()
   if (!raw) return null
@@ -1257,6 +1304,45 @@ async function handleHermitAlertSubcommand(
     }
   }
 
+  if (parsed.action === 'test') {
+    const botToken = readPositionAlertBotToken()
+    if (!botToken) {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply:
+          'Telegram alert test failed: bot token is not configured on this runtime. Set `ALFACLUB_API_KEY` (and/or Telegram relay token) and retry.',
+      }
+    }
+    const chatId = await resolveTelegramChatIdForWallet(sender)
+    if (!chatId) {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply:
+          'Telegram alert test failed: no linked Telegram for this wallet. Link in the 4626 Telegram Mini App, then retry `/hermit alert test`.',
+      }
+    }
+    const sent = await sendTelegramAlertTestDm({
+      chatId,
+      senderAddress: sender,
+      botToken,
+    })
+    if (sent) {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: `Telegram alert test sent ✅ (chat ${chatId}).`,
+      }
+    }
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply:
+        'Telegram alert test failed during send. Check bot permissions/chat access, then retry `/hermit alert test`.',
+    }
+  }
+
   if (parsed.action === 'status') {
     const alert = await readHyperliquidPositionAlert(sender)
     const telegramLinked = await resolveTelegramChatIdForWallet(sender)
@@ -1295,6 +1381,7 @@ async function handleHermitAlertSubcommand(
       )
     }
     lines.push('', 'Live snapshot: `/position` · disable: `/hermit alert off`')
+    lines.push('Verify delivery now: `/hermit alert test`')
     return { kind: 'hermit', provider: 'local', reply: lines.join('\n') }
   }
 

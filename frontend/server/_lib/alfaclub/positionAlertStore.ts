@@ -251,6 +251,7 @@ export type ParsedAlertCommand =
   | { action: 'status' }
   | { action: 'default' }
   | { action: 'off' }
+  | { action: 'test' }
   | { action: 'telegram'; enabled: boolean }
   | { action: 'liq'; pct: number }
   | { action: 'target'; usd: number }
@@ -307,6 +308,7 @@ export function parseHermitAlertCommandArgs(args: string): ParsedAlertCommand {
   if (trimmed.toLowerCase() === 'status') return { action: 'status' }
   if (!trimmed || /^(on|enable|default|start)$/i.test(trimmed)) return { action: 'default' }
   if (/^(off|disable|stop)$/i.test(trimmed)) return { action: 'off' }
+  if (/^test$/i.test(trimmed)) return { action: 'test' }
 
   const parts = trimmed.split(/\s+/).filter(Boolean)
   const head = (parts[0] ?? '').toLowerCase()

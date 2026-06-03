@@ -38,6 +38,7 @@ describe('parseHermitAlertCommandArgs', () => {
     expect(parseHermitAlertCommandArgs('liq 10')).toEqual({ action: 'liq', pct: 10 })
     expect(parseHermitAlertCommandArgs('target 5000')).toEqual({ action: 'target', usd: 5000 })
     expect(parseHermitAlertCommandArgs('telegram on')).toEqual({ action: 'telegram', enabled: true })
+    expect(parseHermitAlertCommandArgs('test')).toEqual({ action: 'test' })
     expect(parseHermitAlertCommandArgs('off')).toEqual({ action: 'off' })
   })
 

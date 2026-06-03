@@ -30,6 +30,7 @@ function formatHermitCreativeSection(): string[] {
     '• `/meme <prompt>` — meme / image concept',
     '• `/hermit copy|announce|quest|tone <text>` — room copy drafts',
     '• `/hermit alert` — Hyperliquid Telegram alerts (defaults)',
+    '• `/hermit alert test` — send immediate Telegram test DM',
     '• `/hermit setup` · `/hermit help`',
   ]
 }
