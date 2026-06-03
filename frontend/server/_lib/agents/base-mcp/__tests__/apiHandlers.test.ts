@@ -43,6 +43,7 @@ describe('base mcp api handlers', () => {
     process.env.BASE_MCP_ALLOWED_TOKENS = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48,0x4200000000000000000000000000000000000006'
     process.env.BASE_MCP_AGENT_SECRET = 'test-agent-secret'
     process.env.BASE_MCP_APPROVAL_WEBHOOK_SECRET = 'test-approval-secret'
+    process.env.BASE_MCP_ALLOW_IN_MEMORY_APPROVAL_STORE = '1'
     process.env.BASE_MCP_ACCOUNT_SENDERS_JSON = JSON.stringify({
       u0: { canonicalSender: '0x1111111111111111111111111111111111111111' },
       u1: { canonicalSender: '0x1111111111111111111111111111111111111111' },

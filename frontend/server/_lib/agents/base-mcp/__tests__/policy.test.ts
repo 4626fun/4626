@@ -45,4 +45,38 @@ describe('base mcp policy', () => {
       expect(result.reasonCode).toBe('policy_recipient_not_allowed')
     }
   })
+
+  it('uses token-specific notional limits for 18-decimal WETH and 6-decimal USDC', () => {
+    const config = createDefaultBaseMcpPolicyConfig()
+    config.allowedTokens = new Set([USDC.toLowerCase(), WETH.toLowerCase()])
+
+    expect(
+      evaluateSwapPolicy(
+        {
+          chainId: BASE_CHAIN_ID,
+          sellToken: WETH,
+          buyToken: USDC,
+          sellAmount: 20_000_000_000_000_000n,
+          maxSlippageBps: 50,
+        },
+        config,
+      ),
+    ).toEqual({ status: 'ok' })
+
+    const result = evaluateTransferPolicy(
+      {
+        chainId: BASE_CHAIN_ID,
+        token: USDC,
+        amount: 100_000_001n,
+        recipient: '0x1111111111111111111111111111111111111111',
+      },
+      config,
+    )
+
+    expect(result.status).toBe('blocked')
+    if (result.status === 'blocked') {
+      expect(result.reasonCode).toBe('policy_notional_too_high')
+    }
+  })
+
 })

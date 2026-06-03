@@ -43,7 +43,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid request update payload' } satisfies ApiEnvelope<never>)
   }
 
-  const updated = baseMcpApprovalStore.setStatus(parsed.data.requestId, parsed.data.status)
+  let updated: Awaited<ReturnType<typeof baseMcpApprovalStore.setStatus>>
+  try {
+    updated = await baseMcpApprovalStore.setStatus(parsed.data.requestId, parsed.data.status)
+  } catch {
+    return res.status(503).json({ success: false, error: 'Base MCP approval store is unavailable' } satisfies ApiEnvelope<never>)
+  }
   if (!updated) {
     return res.status(404).json({ success: false, error: 'Request not found' } satisfies ApiEnvelope<never>)
   }

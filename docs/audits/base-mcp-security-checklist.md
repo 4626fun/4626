@@ -13,7 +13,7 @@ Use before enabling Base MCP flows beyond internal flag.
 
 - [ ] No private keys are stored or handled in MCP plugin/server paths.
 - [ ] Every value-moving action requires explicit user approval via approval link.
-- [ ] Approval links are expiry-bound and tied to request id.
+- [ ] Approval links are expiry-bound, tied to request id, and persisted in a durable store shared across API instances; in-memory approval storage is local/test-only (`BASE_MCP_ALLOW_IN_MEMORY_APPROVAL_STORE=1`).
 - [ ] Approval status updates require trusted webhook proof (`BASE_MCP_APPROVAL_WEBHOOK_SECRET`) or an equivalent wallet/user-auth proof.
 - [ ] Replay attempts fail deterministically.
 
@@ -21,7 +21,7 @@ Use before enabling Base MCP flows beyond internal flag.
 
 - [ ] Chain allowlist enforced server-side.
 - [ ] Token allowlist enforced server-side.
-- [ ] Notional cap and slippage cap enforced server-side.
+- [ ] Token-specific notional caps and slippage cap enforced server-side (`BASE_MCP_TOKEN_LIMITS_JSON` for token overrides).
 - [ ] Disallowed recipients blocked with typed reason codes.
 - [ ] Policy failure returns hard-fail blocked response (no silent fallback).
 

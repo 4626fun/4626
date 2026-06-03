@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { InMemoryApprovalStore } from '../approvalFlow'
 
 describe('base mcp approval flow store', () => {
-  it('creates request and updates status', () => {
+  it('creates request and updates status', async () => {
     const store = new InMemoryApprovalStore()
-    const created = store.create({
+    const created = await store.create({
       clientRequestId: 'req-1',
       ttlSeconds: 60,
       userId: 'u1',
@@ -15,13 +15,13 @@ describe('base mcp approval flow store', () => {
     expect(created.status).toBe('pending')
     expect(created.approvalUrl).toContain(created.requestId)
 
-    const approved = store.setStatus(created.requestId, 'approved')
+    const approved = await store.setStatus(created.requestId, 'approved')
     expect(approved?.status).toBe('approved')
   })
 
   it('expires requests after ttl', async () => {
     const store = new InMemoryApprovalStore()
-    const created = store.create({
+    const created = await store.create({
       clientRequestId: 'req-2',
       ttlSeconds: 1,
       userId: 'u2',
@@ -30,7 +30,7 @@ describe('base mcp approval flow store', () => {
     })
 
     await new Promise((resolve) => setTimeout(resolve, 1100))
-    const record = store.get(created.requestId)
+    const record = await store.get(created.requestId)
     expect(record?.status).toBe('expired')
   })
 })

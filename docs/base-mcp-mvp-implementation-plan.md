@@ -39,7 +39,7 @@ Implement server-side policy engine under `frontend/server/_lib/agents/base-mcp/
 Initial checks:
 - chain allowlist (Base-only for MVP)
 - token allowlist (stablecoins + core assets configured by env)
-- max notional per action
+- token-specific notional caps per action (avoid sharing one base-unit cap across 6- and 18-decimal assets)
 - slippage cap (swap)
 - recipient safety checks (transfer)
 - expiry / replay window guard
@@ -58,7 +58,7 @@ Implement `frontend/server/_lib/agents/base-mcp/executionRoute.ts`:
 ### Day 4–5: Approval-link adapter + status flow
 
 Implement `frontend/server/_lib/agents/base-mcp/approvalFlow.ts`:
-- persist pending request metadata
+- persist pending request metadata in a durable store shared across API instances
 - generate approval URL payload
 - poll status transitions (`pending`, `approved`, `rejected`, `expired`)
 - require trusted webhook or wallet/user proof before accepting `approved` / `rejected` transitions

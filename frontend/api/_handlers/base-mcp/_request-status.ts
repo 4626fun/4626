@@ -21,7 +21,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Missing requestId' } satisfies ApiEnvelope<never>)
   }
 
-  const record = baseMcpApprovalStore.get(requestId)
+  let record: Awaited<ReturnType<typeof baseMcpApprovalStore.get>>
+  try {
+    record = await baseMcpApprovalStore.get(requestId)
+  } catch {
+    return res.status(503).json({ success: false, error: 'Base MCP approval store is unavailable' } satisfies ApiEnvelope<never>)
+  }
   if (!record) {
     return res.status(404).json({ success: false, error: 'Request not found' } satisfies ApiEnvelope<never>)
   }

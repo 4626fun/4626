@@ -111,6 +111,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const policyConfig = createDefaultBaseMcpPolicyConfig()
   policyConfig.allowedTokens = runtimeConfig.allowedTokens
+  for (const [token, limit] of runtimeConfig.tokenNotionalLimitsBaseUnits) {
+    policyConfig.tokenNotionalLimitsBaseUnits.set(token, limit)
+  }
   policyConfig.allowedChainIds = runtimeConfig.allowedChainIds
   const policyDecision = evaluatePolicy(payload, policyConfig)
 
@@ -133,13 +136,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const ttlSeconds = payload.action === 'prepareSwap' ? payload.quoteTtlSeconds : 300
-  const requestRecord = baseMcpApprovalStore.create({
-    clientRequestId: payload.clientRequestId,
-    ttlSeconds,
-    userId: payload.userId,
-    executionMode: route.executionMode,
-    sender: route.sender,
-  })
+  let requestRecord: Awaited<ReturnType<typeof baseMcpApprovalStore.create>>
+  try {
+    requestRecord = await baseMcpApprovalStore.create({
+      clientRequestId: payload.clientRequestId,
+      ttlSeconds,
+      userId: payload.userId,
+      executionMode: route.executionMode,
+      sender: route.sender,
+    })
+  } catch {
+    return res.status(503).json({ success: false, error: 'Base MCP approval store is unavailable' } satisfies ApiEnvelope<never>)
+  }
 
   return res.status(200).json({
     success: true,

@@ -1,3 +1,3 @@
-import { InMemoryApprovalStore } from './approvalFlow'
+import { DurableApprovalStore } from './approvalFlow'
 
-export const baseMcpApprovalStore = new InMemoryApprovalStore()
+export const baseMcpApprovalStore = new DurableApprovalStore()
