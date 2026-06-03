@@ -196,8 +196,16 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
 
   const p = useRef(0) // eased sculpt progress
   const spinAngle = useRef(0)
+  const glowT = useRef(0) // eased hover glow (0 rest -> 1 hover)
 
   const topo = useMemo(() => topology(variant), [variant])
+
+  const FLOOR_Y = -1.0
+  // Flat square floats near card center casting a shadow below; the 3D
+  // octahedron rests its lower apex on the floor.
+  const isCoin = variant === 'coin'
+  const yOffset = isCoin ? -0.05 : FLOOR_Y + ETH_BOT * 1.1
+  const baseScale = isCoin ? 1.2 : 1.1
 
   const wireGeo = useMemo(() => {
     const g = new THREE.BufferGeometry()
@@ -249,7 +257,27 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
     // The coin is a flat 2D square facing the camera, so it stays unspun
     // (a Y-spin would turn it edge-on); only the 3D octahedron rotates.
     spinAngle.current += d * (0.12 + 0.55 * Math.max(0, (prog - REST) / (1 - REST)))
-    if (spin.current) spin.current.rotation.y = variant === 'coin' ? 0 : spinAngle.current
+    if (spin.current) {
+      spin.current.rotation.y = variant === 'coin' ? 0 : spinAngle.current
+      // Subtle hover lift/scale of the form itself for drama.
+      spin.current.scale.setScalar(baseScale * (1 + 0.06 * glowT.current))
+    }
+
+    // Brighten the dots / wires / faces as the cursor enters — the form
+    // "charges up" on hover.
+    glowT.current = THREE.MathUtils.damp(glowT.current, shared.hover.current ? 1 : 0, 6, d)
+    const g = glowT.current
+    if (dots.current) {
+      ;(dots.current.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.55 + 0.6 * g
+    }
+    if (wires.current) {
+      ;(wires.current.material as THREE.LineBasicMaterial).opacity = 0.55 + 0.4 * g
+    }
+    if (faces.current) {
+      const m = faces.current.material as THREE.MeshStandardMaterial
+      m.opacity = 0.26 + 0.18 * g
+      m.emissiveIntensity = 0.3 + 0.35 * g
+    }
 
     const tiers = tiersAt(variant, prog)
     const flat: THREE.Vector3[] = []
@@ -333,20 +361,14 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
     }
   })
 
-  const FLOOR_Y = -1.0
-  // Flat square floats near card center casting a shadow below; the 3D
-  // octahedron rests its lower apex on the floor.
-  const isCoin = variant === 'coin'
-  const yOffset = isCoin ? -0.05 : FLOOR_Y + ETH_BOT * 1.1
-  const scale = isCoin ? 1.2 : 1.1
   return (
     <group ref={tilt}>
       {/* invisible floor that only catches the soft contact shadow */}
       <mesh position={[0, FLOOR_Y - 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[9, 9]} />
-        <shadowMaterial transparent opacity={0.4} />
+        <shadowMaterial transparent opacity={0.45} />
       </mesh>
-      <group ref={spin} position={[0.15, yOffset, 0]} scale={scale}>
+      <group ref={spin} position={[0.15, yOffset, 0]} scale={baseScale}>
         <instancedMesh ref={dots} args={[undefined, undefined, topo.dotCount]} castShadow>
           <sphereGeometry args={[1, 14, 14]} />
           <meshStandardMaterial
@@ -423,11 +445,11 @@ function CardScene({ config, shared }: { config: CardConfig; shared: SharedRefs 
 // ---------------------------------------------------------------------------
 
 const CARD_SHELL =
-  'group relative block aspect-[16/10] overflow-hidden rounded-[20px] border border-white/[0.07] bg-gradient-to-b from-[#0b0f17] to-[#06080d] transition-[border-color,box-shadow,transform] duration-500 hover:-translate-y-0.5 hover:border-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/60'
+  'group relative block aspect-[16/10] overflow-hidden rounded-[22px] border border-white/[0.06] bg-gradient-to-b from-[#0a0e16] to-[#05070b] shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)] transition-[border-color,box-shadow,transform] duration-500 ease-out hover:-translate-y-1 hover:border-white/[0.14] hover:shadow-[0_50px_120px_-44px_rgba(0,0,0,0.95)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/60'
 
 function StandardChip({ standard }: { standard: string }) {
   return (
-    <span className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-300">
+    <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-300 backdrop-blur-sm">
       {standard}
     </span>
   )
@@ -443,28 +465,38 @@ function StandardChips({ standards }: { standards: string[] }) {
   )
 }
 
+function RequiresNote({ text, accent }: { text: string; accent: string }) {
+  return (
+    <p className="mt-2.5 flex items-center gap-2 text-[12px] leading-snug text-zinc-500">
+      <span aria-hidden className="inline-block h-1 w-1 shrink-0 rounded-full" style={{ background: accent }} />
+      {text}
+    </p>
+  )
+}
+
 function CardChrome({ config }: { config: CardConfig }) {
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between p-6 transition-opacity duration-500 group-hover:opacity-90 sm:p-7">
+    <div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between p-6 sm:p-7">
       {/* top-left: token standards */}
-      <StandardChips standards={config.standards} />
+      <div className="transition-opacity duration-500 group-hover:opacity-70">
+        <StandardChips standards={config.standards} />
+      </div>
 
       {/* bottom: title + description */}
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h2 className="text-4xl font-semibold leading-none tracking-tight text-white sm:text-[2.85rem]">
+          <h2 className="bg-gradient-to-b from-white to-zinc-400 bg-clip-text text-4xl font-semibold leading-none tracking-tight text-transparent drop-shadow-[0_2px_24px_rgba(0,0,0,0.55)] sm:text-[2.9rem]">
             {config.title}
           </h2>
-          <p className="mt-2.5 text-[13px] leading-snug text-zinc-400">{config.desc}</p>
-          {config.requires ? (
-            <p className="mt-1.5 text-[12px] leading-snug text-amber-200/70">{config.requires}</p>
-          ) : null}
+          <p className="mt-3 text-[13px] leading-snug text-zinc-400">{config.desc}</p>
+          {config.requires ? <RequiresNote text={config.requires} accent={config.accent} /> : null}
         </div>
         <span
           aria-hidden
-          className="mb-1 translate-x-1 whitespace-nowrap text-sm font-medium text-white/80 opacity-0 transition-all duration-300 group-hover:translate-x-0 group-hover:opacity-100"
+          className="mb-1 inline-flex translate-x-1.5 items-center gap-1.5 whitespace-nowrap rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-[12px] font-medium text-white/90 opacity-0 backdrop-blur-sm transition-all duration-400 ease-out group-hover:translate-x-0 group-hover:opacity-100"
         >
-          Enter →
+          Enter
+          <span className="transition-transform duration-300 group-hover:translate-x-0.5">→</span>
         </span>
       </div>
     </div>
@@ -479,15 +511,21 @@ function TraceCard({ config }: { config: CardConfig }) {
     const r = e.currentTarget.getBoundingClientRect()
     pointer.current.x = ((e.clientX - r.left) / r.width) * 2 - 1
     pointer.current.y = ((e.clientY - r.top) / r.height) * 2 - 1
+    // Drive the cursor-following spotlight via CSS vars.
+    e.currentTarget.style.setProperty('--mx', `${((e.clientX - r.left) / r.width) * 100}%`)
+    e.currentTarget.style.setProperty('--my', `${((e.clientY - r.top) / r.height) * 100}%`)
   }
 
-  const glow =
-    config.variant === 'coin' ? 'rgba(80,140,255,0.16)' : 'rgba(34,211,238,0.16)'
+  const isCoin = config.variant === 'coin'
+  // Dramatic stage glow behind the form + interactive cursor spotlight.
+  const stageGlow = isCoin ? 'rgba(60,120,255,0.18)' : 'rgba(34,211,238,0.18)'
+  const cursorGlow = isCoin ? 'rgba(120,170,255,0.20)' : 'rgba(120,235,250,0.20)'
 
   return (
     <Link
       to={config.to}
       className={CARD_SHELL}
+      style={{ ['--mx' as string]: '58%', ['--my' as string]: '40%' } as React.CSSProperties}
       onPointerEnter={() => {
         hover.current = true
       }}
@@ -499,18 +537,27 @@ function TraceCard({ config }: { config: CardConfig }) {
       }}
       aria-label={`${config.title} — ${config.desc}`}
     >
-      {/* inner hairline ring for depth */}
-      <div className="pointer-events-none absolute inset-0 z-30 rounded-[20px] ring-1 ring-inset ring-white/[0.06]" />
-      <CardScene config={config} shared={{ pointer, hover }} />
-      {/* accent sheen that fades in on hover */}
+      {/* dramatic stage spotlight behind the sculpt (painted under the canvas) */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-700 group-hover:opacity-100"
-        style={{
-          background: `radial-gradient(120% 90% at 72% 12%, ${glow}, rgba(7,10,16,0) 58%)`,
-        }}
+        className="pointer-events-none absolute inset-0 transition-opacity duration-700 group-hover:opacity-100"
+        style={{ background: `radial-gradient(62% 58% at 58% 38%, ${stageGlow}, transparent 70%)`, opacity: 0.65 }}
+      />
+      <CardScene config={config} shared={{ pointer, hover }} />
+      {/* interactive cursor-following spotlight */}
+      <div
+        className="pointer-events-none absolute inset-0 z-10 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+        style={{ background: `radial-gradient(280px circle at var(--mx) var(--my), ${cursorGlow}, transparent 68%)` }}
+      />
+      {/* cinematic edge vignette */}
+      <div
+        className="pointer-events-none absolute inset-0 z-10"
+        style={{ boxShadow: 'inset 0 0 90px 12px rgba(0,0,0,0.55)' }}
       />
       {/* legibility scrim under the title */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-[#06080d] via-[#06080d]/60 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-1/2 bg-gradient-to-t from-[#05070b] via-[#05070b]/55 to-transparent" />
+      {/* glassy top highlight + inner hairline ring */}
+      <div className="pointer-events-none absolute inset-x-5 top-0 z-30 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+      <div className="pointer-events-none absolute inset-0 z-30 rounded-[22px] ring-1 ring-inset ring-white/[0.06]" />
       <CardChrome config={config} />
     </Link>
   )
@@ -520,26 +567,31 @@ function StaticCard({ config }: { config: CardConfig }) {
   return (
     <Link
       to={config.to}
-      className="vault-surface vault-hover-lift relative flex aspect-[16/10] flex-col justify-end overflow-hidden rounded-[20px] border border-white/[0.07] p-6 sm:p-7"
+      className="vault-hover-lift relative flex aspect-[16/10] flex-col justify-end overflow-hidden rounded-[22px] border border-white/[0.06] bg-gradient-to-b from-[#0a0e16] to-[#05070b] p-6 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)] sm:p-7"
     >
       <div
-        className="pointer-events-none absolute inset-0 opacity-50"
+        className="pointer-events-none absolute inset-0 opacity-60"
         style={{
           background:
             config.variant === 'coin'
-              ? 'radial-gradient(120% 90% at 80% 0%, rgba(124,196,255,0.16), transparent 60%)'
-              : 'radial-gradient(120% 90% at 20% 0%, rgba(34,211,238,0.18), transparent 60%)',
+              ? 'radial-gradient(70% 60% at 64% 30%, rgba(60,120,255,0.18), transparent 68%)'
+              : 'radial-gradient(70% 60% at 64% 30%, rgba(34,211,238,0.18), transparent 68%)',
         }}
       />
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{ boxShadow: 'inset 0 0 90px 12px rgba(0,0,0,0.5)' }}
+      />
+      <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
       <div className="absolute left-6 top-6 z-10 sm:left-7 sm:top-7">
         <StandardChips standards={config.standards} />
       </div>
       <div className="relative z-10">
-        <h2 className="text-3xl font-semibold leading-none tracking-tight text-white sm:text-4xl">{config.title}</h2>
-        <p className="mt-2.5 text-[13px] leading-snug text-zinc-400">{config.desc}</p>
-        {config.requires ? (
-          <p className="mt-1.5 text-[12px] leading-snug text-amber-200/70">{config.requires}</p>
-        ) : null}
+        <h2 className="bg-gradient-to-b from-white to-zinc-400 bg-clip-text text-3xl font-semibold leading-none tracking-tight text-transparent sm:text-4xl">
+          {config.title}
+        </h2>
+        <p className="mt-3 text-[13px] leading-snug text-zinc-400">{config.desc}</p>
+        {config.requires ? <RequiresNote text={config.requires} accent={config.accent} /> : null}
       </div>
     </Link>
   )

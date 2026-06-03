@@ -40,6 +40,14 @@ export function readProfileRefreshRequestIntervalMs(): number {
   return Math.floor(n)
 }
 
+export function readProfileRefreshRequestTimeoutMs(): number {
+  const raw = String(process.env.PROFILE_REFRESH_REQUEST_TIMEOUT_MS ?? '').trim()
+  if (!raw) return 8_000
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return 8_000
+  return Math.min(Math.floor(n), 30_000)
+}
+
 export function readProfileRefreshWalletBudget(): number {
   const raw = String(process.env.PROFILE_REFRESH_WALLET_BUDGET ?? '').trim()
   if (!raw) return 25
@@ -54,6 +62,14 @@ export function readProfileRefreshWalletConcurrency(): number {
   const n = Number(raw)
   if (!Number.isFinite(n) || n <= 0) return 6
   return Math.min(Math.floor(n), 20)
+}
+
+export function readProfileRefreshTickBudgetMs(): number {
+  const raw = String(process.env.PROFILE_REFRESH_TICK_BUDGET_MS ?? '').trim()
+  if (!raw) return 52_000
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return 52_000
+  return Math.min(Math.floor(n), 58_000)
 }
 
 export function readProfileRefreshUpsertBatchSize(): number {

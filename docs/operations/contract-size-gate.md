@@ -3,20 +3,17 @@ title: Contract Size CI Gate
 sidebar_position: 20
 ---
 
-# Contract Size CI Gate (C-04 remediation)
+# Contract Size CI Gate
 
 ## Background
 
-Audit finding **C-04 (4626-292)** flagged `CCALaunchStrategy.sol` as
-being at risk of exceeding the **EIP-170 contract size limit of
-24,576 bytes** (24 KiB) for deployed runtime bytecode. Contracts
-larger than this cap cannot be deployed to Ethereum mainnet or any
-EIP-170-compliant L2 (including Base, which is the deploy target for
-this vault).
+The protocol has multiple contracts that have historically lived close to (or required splitting to stay under) the **EIP-170 contract size limit of 24,576 bytes** (24 KiB) for deployed runtime bytecode. Contracts larger than this cap cannot be deployed to Ethereum mainnet or any EIP-170-compliant L2 (including Base).
 
-If `CCALaunchStrategy` crosses 24 KiB, any new creator coin launch
-will revert at the `CREATE` opcode with `MaxCodeSizeExceeded`, making
-the entire launch path non-functional.
+The most persistent hot spot is `CreatorLotteryManager` (the largest production contract). As of the June 2026 x-ray contract audit pass it measured **24,528 bytes** (only **48 bytes** of headroom).
+
+See the full June 2026 pass summary for context: `docs/audits/x-ray/contract-audit-pass-2026-06.md` (SC-03 and CLM size section).
+
+(The original C-04 finding was about `CCALaunchStrategy`; that risk was addressed via earlier splits and the gate below. The active risk tracked in later audits and the x-ray pass is the lottery manager.)
 
 ## Current remediation scope
 
@@ -94,6 +91,22 @@ developers who want to inspect sizes without failing should run
 `forge build --sizes` directly in their checkout — `forge` returns
 the offending contract list before exiting with a non-zero code.
 
+## Current hot contract (June 2026 x-ray pass)
+
+As of the June 2026 x-ray contract audit pass (`docs/audits/x-ray/contract-audit-pass-2026-06.md`), the active size pressure is on `CreatorLotteryManager`:
+
+- Measured: 24,528 bytes
+- Headroom: 48 bytes under the 24,576 B EIP-170 cap
+
+A separate **warn-only** guard (`amoe/tools/ci/check_manager_size_warn.sh`, wired with `continue-on-error: true`) fires when size exceeds the warn threshold (currently 24,450 B, targeting ~126 B of lead time). It never blocks a merge.
+
+**PR policy (enforced by review, not CI):** Any PR that touches `CreatorLotteryManager.sol` (or its AdminModule) **must** contain a short "size budget review" note (in the description or a linked issue) that:
+- Estimates the byte impact of the change.
+- Confirms the post-change headroom.
+- Considers whether another module extraction is warranted before landing.
+
+This policy was strengthened after the June 2026 pass (see also the script header and the updated step comment in `test.yml`).
+
 ## Why no module split in Sprint 2
 
 The audit recommended a three-way split of `CCALaunchStrategy` into:
@@ -108,31 +121,20 @@ actual compiled size is comfortably under 24 KiB, we defer the split
 to avoid adding scope to the audit-remediation PR. The split will
 happen in Sprint 3 if the size gate fails in CI.
 
-## Manager warn-guard (added v1.10.1 safety-net)
+## Manager warn-guard (active safety-net)
 
 Alongside the EIP-170 hard gate, CI runs a **warn-only** size guard
-specifically for `CreatorLotteryManager.sol`. The script lives at
-`amoe/tools/ci/check_manager_size_warn.sh` and is invoked from the
-`build` job in `.github/workflows/test.yml` (with
-`continue-on-error: true`, so it never blocks a merge).
+specifically for `CreatorLotteryManager.sol` (the current highest-risk
+contract per the June 2026 x-ray pass).
 
-The warn threshold is **24,500 bytes** — exactly **76 bytes** below
-the EIP-170 cap. Rationale:
+- Script: `amoe/tools/ci/check_manager_size_warn.sh`
+- Wired in the `build` job in `.github/workflows/test.yml` with `continue-on-error: true`
+- Warn threshold: 24,450 B (targeting ~126 B of lead time as of the pass)
+- Current measured size (post-pass): 24,528 B (48 B headroom)
 
-- The manager has historically lived within ~10–100 bytes of the cap
-  (audit run 2026-04-25 / M-01 saw 24,512 B; the foundry `v1.7.0`
-  toolchain on main currently produces 24,568 B — only **8 bytes**
-  of margin).
-- The hard gate only triggers AFTER overflow, by which point a
-  deploy is already impossible without reverting or splitting the
-  offending PR.
-- 76 B of advance warning is enough to plan a module extraction
-  (the AdminModule pattern from PR #395 is precedent) before the
-  next deploy goes red.
+The warn-guard never blocks. It prints yellow `[WARN]` lines (including a reminder about the PR "size budget review" requirement) and exits 0. The hard gate (`forge build --sizes`) remains the sole enforcer of deployability.
 
-The warn-guard never blocks. It prints a yellow `[WARN]` line into
-the job log and exits 0. The hard gate (`forge build --sizes`)
-remains the sole enforcer.
+See the script header for full rationale, thresholds, and the PR policy.
 
 ## Manager AMOE selector-surface guard (added v1.10.1 safety-net)
 
@@ -169,5 +171,7 @@ any release that re-wires the AMOE router.
 
 - EIP-170: https://eips.ethereum.org/EIPS/eip-170
 - Forge `--sizes` flag: https://book.getfoundry.sh/forge/contract-sizes
-- Linear: 4626-292 (C-04)
-- Audit finding file: `findings/phase-2-contracts.md` — C-04
+- June 2026 x-ray contract audit pass: `docs/audits/x-ray/contract-audit-pass-2026-06.md` (especially CLM size / SC-03 findings and recommendations)
+- Historical: Linear 4626-292 (C-04), earlier audit notes on CCALaunchStrategy
+
+**Post-June 2026 pass note:** The active size risk and the strengthened "size budget review" PR policy are tracked in the x-ray pass summary and the updated warn-guard script. The hard gate + warn-guard + policy together form the current defence-in-depth.

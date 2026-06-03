@@ -7,6 +7,7 @@ import {
   readProfileRefreshListType,
   readProfileRefreshPageSize,
   readProfileRefreshRequestIntervalMs,
+  readProfileRefreshRequestTimeoutMs,
   readProfileRefreshTargetCount,
   readProfileRefreshUpsertBatchSize,
   ZORA_PROFILES_TABLE,
@@ -69,6 +70,20 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race<T>([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('request_timeout')), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 export function chunkProfileRows<T>(items: T[], batchSize: number): T[][] {
   const size = Math.max(1, Math.floor(batchSize))
   const chunks: T[][] = []
@@ -97,6 +112,7 @@ export async function scanTopProfilesFromExplore(
   const pageSize = readProfileRefreshPageSize()
   const listType = readProfileRefreshListType()
   const requestIntervalMs = readProfileRefreshRequestIntervalMs()
+  const requestTimeoutMs = readProfileRefreshRequestTimeoutMs()
   const upsertBatchSize = readProfileRefreshUpsertBatchSize()
 
   const sdk: any = await import('@zoralabs/coins-sdk')
@@ -129,7 +145,7 @@ export async function scanTopProfilesFromExplore(
     const count = Math.min(pageSize, targetCount - totalFetched)
     let response: any
     try {
-      response = await sdkFn({ count, after })
+      response = await withTimeout(sdkFn({ count, after }), requestTimeoutMs)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       throw new Error(`zora_explore_fetch_failed:${message}`)

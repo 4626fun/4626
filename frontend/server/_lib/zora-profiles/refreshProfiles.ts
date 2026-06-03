@@ -6,6 +6,7 @@ import { getSupabaseAdmin } from '../db/supabaseAdmin.js'
 import { enrichProfileWallets, type ProfileWalletEnrichResult } from './enrichProfileWallets.js'
 import {
   LAST_REFRESH_TICK_KEY,
+  readProfileRefreshTickBudgetMs,
   resolveZoraServerApiKey,
   ZORA_PROFILES_REFRESH_STATE_TABLE,
 } from './cronConfig.js'
@@ -69,6 +70,9 @@ export async function runZoraProfilesRefreshTick(): Promise<ProfileRefreshTickRe
   }
 
   const db = getSupabaseAdmin()
+  const tickBudgetMs = readProfileRefreshTickBudgetMs()
+  const startedAtMs = Date.now()
+  const remainingMs = () => Math.max(0, tickBudgetMs - (Date.now() - startedAtMs))
 
   let scan: ProfileScanResult | null = null
   let wallets: ProfileWalletEnrichResult | null = null
@@ -99,9 +103,33 @@ export async function runZoraProfilesRefreshTick(): Promise<ProfileRefreshTickRe
     }
   }
 
+  if (remainingMs() < 12_000) {
+    const completedAt = new Date().toISOString()
+    await writeLastTickState(db, {
+      phase: 'complete_scan_only',
+      completed_at: completedAt,
+      reason: 'tick_budget_exhausted_after_scan',
+      scan,
+      wallets: null,
+      csw_index_rows_updated: 0,
+      remaining_ms: remainingMs(),
+      tick_budget_ms: tickBudgetMs,
+    })
+    return {
+      ok: true,
+      tick: 'refreshed',
+      reason: 'tick_budget_exhausted_after_scan',
+      scan,
+      wallets: null,
+      cswIndexRowsUpdated: 0,
+    }
+  }
+
   try {
     wallets = await enrichProfileWallets(db as any, apiKey)
-    ;({ rowsUpdated: cswIndexRowsUpdated } = await reconcileZoraProfilesCswIndexFlag())
+    if (remainingMs() >= 3_000) {
+      ;({ rowsUpdated: cswIndexRowsUpdated } = await reconcileZoraProfilesCswIndexFlag())
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'profile_refresh_enrich_failed'
     try {

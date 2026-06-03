@@ -5,6 +5,7 @@
 import {
   readProfileRefreshWalletBudget,
   readProfileRefreshWalletConcurrency,
+  readProfileRefreshRequestTimeoutMs,
   ZORA_PROFILES_TABLE,
 } from './cronConfig.js'
 
@@ -46,6 +47,20 @@ function lowerOrNull(s: string | null | undefined): string | null {
   return t || null
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race<T>([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('request_timeout')), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 function extractFromLinkedWallets(profile: ZoraProfile): {
   smart_wallet_address: string | null
   privy_wallet_address: string | null
@@ -78,6 +93,7 @@ export async function enrichProfileWallets(
 ): Promise<ProfileWalletEnrichResult> {
   const budget = readProfileRefreshWalletBudget()
   const concurrency = readProfileRefreshWalletConcurrency()
+  const requestTimeoutMs = readProfileRefreshRequestTimeoutMs()
   if (budget === 0) {
     return { selected: 0, updated: 0, withSmartWallet: 0, failed: 0 }
   }
@@ -108,8 +124,11 @@ export async function enrichProfileWallets(
   for (const target of targets) {
     const task = (async () => {
       try {
-        const response = await sdk.getProfile({ identifier: target.handle })
-        const profile: ZoraProfile = response?.data?.profile ?? null
+        const response = await withTimeout<{ data?: { profile?: ZoraProfile } }>(
+          sdk.getProfile({ identifier: target.handle }),
+          requestTimeoutMs,
+        )
+        const profile: ZoraProfile | null = response?.data?.profile ?? null
         if (!profile) {
           failed += 1
           return

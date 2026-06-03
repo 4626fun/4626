@@ -147,10 +147,11 @@ a single authenticated HTTP endpoint (`HERMIT_AGENT_CHAT_ENDPOINT` +
 `{ text }` — `runPinataDraftOverHttp` reads the top-level `text` (or
 `response` / `output` / `message`).
 
-Reply transport is separate from Hermit generation. AlfaClub bot tokens
-(`alfa_bot_...`) are send-only, so they handle the reply send path but do not
-replace the read-side `chat_jwt` used to poll room history and ingest
-commands.
+Reply transport is separate from Hermit generation. AlfaClub now supports
+scope-specific bot tokens: `messages:send` for reply transport and
+`messages:read` for room-history polling. The bridge prefers
+`ALFACLUB_READ_BOT_TOKEN` for polling and still uses `chat_jwt` for websocket
+ingest / reaction lanes.
 
 **The Hermit lane must NOT** write any `alfaclub_runtime_secret` row, run the
 Privy refresher, or otherwise touch AlfaClub auth. The boundary is enforced

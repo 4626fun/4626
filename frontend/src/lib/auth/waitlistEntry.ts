@@ -36,17 +36,17 @@ export function normalizeWaitlistReferralCode(value: string | null | undefined):
   return normalized.length > 0 ? normalized : null
 }
 
-export function buildWaitlistReferralPath(referralCode: string): string {
+export function buildWaitlistReferralPath(referralCode: string | null | undefined): string {
   const normalized = normalizeWaitlistReferralCode(referralCode)
   return normalized ? `${WAITLIST_REFERRAL_PATH_PREFIX}/${normalized}` : CANONICAL_MARKETING_WAITLIST_PATH
 }
 
-export function buildWaitlistReferralUrl(baseUrl: string, referralCode: string): string {
+export function buildWaitlistReferralUrl(baseUrl: string, referralCode: string | null | undefined): string {
   const base = String(baseUrl ?? '').replace(/\/+$/, '')
   return `${base}${buildWaitlistReferralPath(referralCode)}`
 }
 
-export function getMarketingWaitlistReferralUrl(referralCode: string): string {
+export function getMarketingWaitlistReferralUrl(referralCode: string | null | undefined): string {
   return buildWaitlistReferralUrl(getWaitlistReferralBaseUrl(), referralCode)
 }
 

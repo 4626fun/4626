@@ -1,7 +1,8 @@
-import { Grid, useGLTF } from '@react-three/drei'
+import { Grid, OrbitControls, useGLTF } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing'
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { Component, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import * as THREE from 'three'
 import { MeshSurfaceSampler } from 'three/examples/jsm/math/MeshSurfaceSampler.js'
@@ -40,6 +41,19 @@ const MODEL_LIBRARY = [
 MODEL_LIBRARY.forEach((model) => useGLTF.preload(model.url))
 type ModelAssetStatus = 'checking' | 'ready' | 'missing'
 type TacticalModel = { id: string; label: string; url: string }
+type HologramRenderMode = 'classic' | 'volumetric'
+
+class HoloRenderErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false }
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+  override componentDidCatch() {}
+  override render() {
+    if (this.state.hasError) return null
+    return this.props.children
+  }
+}
 
 function shortAddr(a: string) {
   return a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a
@@ -215,7 +229,7 @@ function ProjectorPad() {
 //     shimmer / dissolve organically;
 //   • a fresnel rim term glows the silhouette like a true hologram;
 //   • the scan button still fires a vertical sweep + disperse/reform burst.
-const PARTICLE_COUNT = 12000
+const PARTICLE_COUNT = 1800
 const SCAN_DURATION_MS = 1700
 
 // Ashima 3D simplex noise — used for the shimmer/dissolve displacement.
@@ -372,12 +386,15 @@ function HoloDog({ scanTick, modelUrl }: { scanTick: number; modelUrl: string })
         uniforms: {
           uTime: { value: 0 },
           uUnit: { value: 1 },
-          uSphereSize: { value: 0.006 },
+          uSphereSize: { value: 0.013 },
           uDisperse: { value: 0 },
           uScanY: { value: 0 },
         },
         vertexShader: HOLO_VERT,
         fragmentShader: HOLO_FRAG,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
         toneMapped: false,
       }),
     [],
@@ -385,14 +402,27 @@ function HoloDog({ scanTick, modelUrl }: { scanTick: number; modelUrl: string })
   const materialRef = useRef<THREE.ShaderMaterial | null>(null)
 
   // Sample the GLB surface into instanced micro-spheres + normalize to pad height.
-  const { object, offset, scale, unit, minY, maxY } = useMemo(() => {
+  const { object, offset, scale, unit, minY, maxY, particleMeshReady } = useMemo(() => {
     const root = scene.clone(true)
     root.updateMatrixWorld(true)
     const meshes: THREE.Mesh[] = []
     root.traverse((child) => {
       const m = child as THREE.Mesh
-      if (m.isMesh && m.geometry) meshes.push(m)
+      const posAttr = m.geometry?.attributes?.position
+      if (m.isMesh && m.geometry && posAttr && posAttr.count > 0) meshes.push(m)
     })
+
+    if (meshes.length === 0) {
+      return {
+        object: null,
+        scale: 1,
+        offset: [0, 0, 0] as [number, number, number],
+        unit: 1,
+        minY: 0,
+        maxY: 1,
+        particleMeshReady: false,
+      }
+    }
 
     const positions = new Float32Array(PARTICLE_COUNT * 3)
     const normals = new Float32Array(PARTICLE_COUNT * 3)
@@ -412,7 +442,13 @@ function HoloDog({ scanTick, modelUrl }: { scanTick: number; modelUrl: string })
         i === meshes.length - 1
           ? PARTICLE_COUNT - ptr
           : Math.floor((PARTICLE_COUNT * weights[i]!) / totalW)
-      const sampler = new MeshSurfaceSampler(m).build()
+      let sampler: MeshSurfaceSampler | null = null
+      try {
+        sampler = new MeshSurfaceSampler(m).build()
+      } catch {
+        sampler = null
+      }
+      if (!sampler) return
       nMat.getNormalMatrix(m.matrixWorld)
       for (let k = 0; k < n; k++) {
         sampler.sample(tmpP, tmpN)
@@ -434,9 +470,59 @@ function HoloDog({ scanTick, modelUrl }: { scanTick: number; modelUrl: string })
       ptr += n
     })
 
+    // Fallback path: if surface sampling failed for every mesh, derive particles
+    // from mesh vertices directly so heavy mode still shows a particle silhouette.
+    if (ptr === 0) {
+      for (const m of meshes) {
+        const posAttr = m.geometry.attributes.position as THREE.BufferAttribute | undefined
+        if (!posAttr || posAttr.count <= 0) continue
+
+        const normalAttr = m.geometry.attributes.normal as THREE.BufferAttribute | undefined
+        const local = new THREE.Vector3()
+        const normal = new THREE.Vector3()
+        const fallbackNMat = new THREE.Matrix3().getNormalMatrix(m.matrixWorld)
+        const step = Math.max(1, Math.floor(posAttr.count / 600))
+
+        for (let vi = 0; vi < posAttr.count && ptr < PARTICLE_COUNT; vi += step) {
+          local.fromBufferAttribute(posAttr, vi).applyMatrix4(m.matrixWorld)
+          if (normalAttr && vi < normalAttr.count) {
+            normal.fromBufferAttribute(normalAttr, vi).applyMatrix3(fallbackNMat).normalize()
+          } else {
+            normal.set(0, 1, 0)
+          }
+
+          const o = ptr * 3
+          positions[o] = local.x
+          positions[o + 1] = local.y
+          positions[o + 2] = local.z
+          normals[o] = normal.x
+          normals[o + 1] = normal.y
+          normals[o + 2] = normal.z
+          const baseSeed = ptr + 1
+          rands[o] = seededUnitFloat(baseSeed)
+          rands[o + 1] = seededUnitFloat(baseSeed + 100_003)
+          rands[o + 2] = seededUnitFloat(baseSeed + 200_003)
+          seeds[ptr] = seededUnitFloat(baseSeed + 300_007)
+          ptr += 1
+        }
+      }
+    }
+
+    if (ptr === 0) {
+      return {
+        object: null,
+        scale: 1,
+        offset: [0, 0, 0] as [number, number, number],
+        unit: 1,
+        minY: 0,
+        maxY: 1,
+        particleMeshReady: false,
+      }
+    }
+
     const box = new THREE.Box3()
     const v = new THREE.Vector3()
-    for (let k = 0; k < PARTICLE_COUNT; k++) {
+    for (let k = 0; k < ptr; k++) {
       box.expandByPoint(v.set(positions[k * 3]!, positions[k * 3 + 1]!, positions[k * 3 + 2]!))
     }
     const size = new THREE.Vector3()
@@ -454,12 +540,12 @@ function HoloDog({ scanTick, modelUrl }: { scanTick: number; modelUrl: string })
     sphere.setAttribute('instanceRand', new THREE.InstancedBufferAttribute(rands, 3))
     sphere.setAttribute('instanceSeed', new THREE.InstancedBufferAttribute(seeds, 1))
 
-    const mesh = new THREE.InstancedMesh(sphere, material, PARTICLE_COUNT)
+    const mesh = new THREE.InstancedMesh(sphere, material, ptr)
     mesh.frustumCulled = false
     // Instance transforms are handled entirely in the vertex shader, but the
     // matrices must be valid (identity) so the renderer doesn't collapse them.
     const id = new THREE.Matrix4()
-    for (let k = 0; k < PARTICLE_COUNT; k++) mesh.setMatrixAt(k, id)
+    for (let k = 0; k < ptr; k++) mesh.setMatrixAt(k, id)
     mesh.instanceMatrix.needsUpdate = true
 
     return {
@@ -469,9 +555,13 @@ function HoloDog({ scanTick, modelUrl }: { scanTick: number; modelUrl: string })
       unit: size.y || 1,
       minY: box.min.y,
       maxY: box.max.y,
+      particleMeshReady: true,
     }
   }, [scene, material])
 
+  // All hooks must be called unconditionally (before any early return) to satisfy
+  // react-hooks/rules-of-hooks. The effects and frame are safe to run even on the
+  // fallback path; they guard internally where needed.
   useEffect(() => {
     materialRef.current = material
     return () => {
@@ -515,11 +605,89 @@ function HoloDog({ scanTick, modelUrl }: { scanTick: number; modelUrl: string })
     if (bob.current) bob.current.position.y = 0.12 + Math.sin(t * 1.3) * 0.04
   })
 
+  if (!particleMeshReady || !object) {
+    return <SimpleHoloModel modelUrl={modelUrl} />
+  }
+
   return (
     <group ref={bob} position={[0, 0.12, 0]}>
       <group ref={spin}>
         <group scale={scale} position={offset}>
           <primitive object={object} />
+        </group>
+      </group>
+    </group>
+  )
+}
+
+function SimpleHoloModel({ modelUrl }: { modelUrl: string }) {
+  const spin = useRef<THREE.Group>(null)
+  const bob = useRef<THREE.Group>(null)
+  const { scene } = useGLTF(modelUrl)
+
+  const { object, scale, offset, valid } = useMemo(() => {
+    try {
+      const clone = scene.clone(true)
+      clone.updateMatrixWorld(true)
+      const box = new THREE.Box3().setFromObject(clone)
+      const size = new THREE.Vector3()
+      const center = new THREE.Vector3()
+      box.getSize(size)
+      box.getCenter(center)
+      const validBounds =
+        Number.isFinite(size.x) && Number.isFinite(size.y) && Number.isFinite(size.z) && size.y > 0.0001
+      const targetHeight = 2.1
+      const fitScale = validBounds ? targetHeight / size.y : 1
+
+      clone.traverse((child) => {
+        const mesh = child as THREE.Mesh
+        if (!mesh.isMesh) return
+        mesh.material = new THREE.MeshBasicMaterial({
+          color: '#9be6ff',
+          wireframe: false,
+          transparent: true,
+          opacity: 0.42,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+          toneMapped: false,
+        })
+      })
+
+      return {
+        object: clone,
+        scale: fitScale,
+        offset: [-center.x * fitScale, -box.min.y * fitScale, -center.z * fitScale] as [number, number, number],
+        valid: true,
+      }
+    } catch {
+      return {
+        object: null,
+        scale: 1,
+        offset: [0, 0, 0] as [number, number, number],
+        valid: false,
+      }
+    }
+  }, [scene])
+
+  useFrame((state) => {
+    const t = state.clock.elapsedTime
+    if (spin.current) spin.current.rotation.y = Math.PI * 0.5 + t * 0.18
+    if (bob.current) bob.current.position.y = 0.12 + Math.sin(t * 1.3) * 0.04
+  })
+
+  return (
+    <group ref={bob} position={[0, 0.12, 0]}>
+      <group ref={spin}>
+        <group scale={scale} position={offset}>
+          {valid && object ? (
+            <primitive object={object} />
+          ) : (
+            <mesh position={[0, 0.9, 0]}>
+              <boxGeometry args={[0.85, 1.6, 0.85]} />
+              <meshBasicMaterial color="#9be6ff" transparent opacity={0.5} toneMapped={false} />
+            </mesh>
+          )}
+          <pointLight position={[0, 1.2, 0]} intensity={1.3} color="#8bd7ff" />
         </group>
       </group>
     </group>
@@ -552,22 +720,112 @@ function HoloFallback({ loading = false }: { loading?: boolean }) {
   )
 }
 
+function HeavyParticleAura() {
+  const points = useRef<THREE.Points>(null)
+  const halo = useRef<THREE.Mesh>(null)
+  const shell = useRef<THREE.Mesh>(null)
+  const geometry = useMemo(() => {
+    const count = 420
+    const out = new Float32Array(count * 3)
+    for (let i = 0; i < count; i += 1) {
+      // Deterministic / pure "random" using index (satisfies react-hooks/purity)
+      const s1 = ((i + 1) * 0.1031) % 1
+      const s2 = ((i + 1) * 0.0173) % 1
+      const s3 = ((i + 1) * 0.0037) % 1
+      const t = s1 * Math.PI * 2
+      const p = Math.acos(2 * s2 - 1)
+      const r = 0.65 + s3 * 0.85
+      out[i * 3] = Math.sin(p) * Math.cos(t) * r
+      out[i * 3 + 1] = Math.cos(p) * r + 0.95
+      out[i * 3 + 2] = Math.sin(p) * Math.sin(t) * r
+    }
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.BufferAttribute(out, 3))
+    return g
+  }, [])
+
+  useFrame((state) => {
+    if (!points.current) return
+    const t = state.clock.elapsedTime
+    points.current.rotation.y = t * 0.35
+    points.current.rotation.x = Math.sin(t * 0.5) * 0.08
+    if (halo.current) {
+      halo.current.rotation.x = -Math.PI / 2
+      halo.current.rotation.z = t * 0.55
+    }
+    if (shell.current) {
+      shell.current.rotation.y = t * 0.3
+      shell.current.scale.setScalar(1 + Math.sin(t * 1.2) * 0.06)
+    }
+  })
+
+  return (
+    <group>
+      <points ref={points} geometry={geometry}>
+        <pointsMaterial
+          size={3.5}
+          sizeAttenuation={false}
+          color="#9df0ff"
+          transparent
+          opacity={0.42}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </points>
+      <mesh ref={halo} position={[0, 0.12, 0]}>
+        <torusGeometry args={[1.15, 0.03, 8, 80]} />
+        <meshBasicMaterial
+          color="#7fe6ff"
+          transparent
+          opacity={0.35}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </mesh>
+      <mesh ref={shell} position={[0, 1.02, 0]}>
+        <icosahedronGeometry args={[0.95, 1]} />
+        <meshBasicMaterial
+          color="#74d7ff"
+          wireframe
+          transparent
+          opacity={0.15}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </mesh>
+    </group>
+  )
+}
+
 function HoloProjection({
   scanTick,
   modelUrl,
   modelAssetStatus,
+  renderMode,
 }: {
   scanTick: number
   modelUrl: string
   modelAssetStatus: ModelAssetStatus
+  renderMode: HologramRenderMode
 }) {
   return (
     <group>
       <ProjectorPad />
       {modelAssetStatus === 'ready' ? (
-        <Suspense fallback={<HoloFallback loading />}>
-          <HoloDog scanTick={scanTick} modelUrl={modelUrl} />
-        </Suspense>
+        renderMode === 'volumetric' ? (
+          <group>
+            <SimpleHoloModel modelUrl={modelUrl} />
+            <HeavyParticleAura />
+          </group>
+        ) : (
+          <HoloRenderErrorBoundary>
+            <Suspense fallback={<HoloFallback loading />}>
+              <HoloDog scanTick={scanTick} modelUrl={modelUrl} />
+            </Suspense>
+          </HoloRenderErrorBoundary>
+        )
       ) : (
         <HoloFallback loading={modelAssetStatus !== 'missing'} />
       )}
@@ -609,28 +867,51 @@ function ScanRing({ scanTick }: { scanTick: number }) {
   )
 }
 
-function Rig({ pointerRef }: { pointerRef: React.RefObject<{ x: number; y: number }> }) {
-  useFrame((state) => {
-    const t = state.clock.elapsedTime
-    const p = pointerRef.current
-    const a = Math.sin(t * 0.04) * 0.16 + p.x * 0.3
-    const r = 13.2
-    state.camera.position.x = Math.sin(a) * r
-    state.camera.position.z = Math.cos(a) * r
-    state.camera.position.y = THREE.MathUtils.lerp(state.camera.position.y, 7.0 - p.y * 0.8, 0.06)
-    state.camera.lookAt(0, 0.5, 0)
+function FocusOrbitControls({
+  focusTarget,
+  autoRotate,
+}: {
+  focusTarget: [number, number, number]
+  autoRotate: boolean
+}) {
+  const controlsRef = useRef<any>(null)
+  const targetVec = useRef(new THREE.Vector3(focusTarget[0], focusTarget[1], focusTarget[2]))
+  useFrame(() => {
+    const controls = controlsRef.current
+    if (!controls) return
+    targetVec.current.set(focusTarget[0], focusTarget[1], focusTarget[2])
+    controls.target.lerp(targetVec.current, 0.08)
+    controls.update()
   })
-  return null
+  return (
+    <OrbitControls
+      ref={controlsRef}
+      makeDefault
+      enablePan={false}
+      minDistance={8}
+      maxDistance={22}
+      minPolarAngle={Math.PI / 3.6}
+      maxPolarAngle={Math.PI / 2.02}
+      autoRotate={autoRotate}
+      autoRotateSpeed={0.55}
+    />
+  )
 }
 
 function Scene({
   scanTick,
-  pointerRef,
   selectedModels,
+  renderMode,
+  focusedIndex,
+  onFocusIndex,
+  autoRotate,
 }: {
   scanTick: number
-  pointerRef: React.RefObject<{ x: number; y: number }>
   selectedModels: Array<TacticalModel & { status: ModelAssetStatus }>
+  renderMode: HologramRenderMode
+  focusedIndex: number
+  onFocusIndex: (index: number) => void
+  autoRotate: boolean
 }) {
   const holoPositions = useMemo(() => {
     if (selectedModels.length <= 1) return [[0, 0, 0] as const]
@@ -640,6 +921,11 @@ function Scene({
       return [Math.cos(t) * radius, 0, Math.sin(t) * radius] as const
     })
   }, [selectedModels])
+  const safeFocusedIndex = focusedIndex >= 0 && focusedIndex < holoPositions.length ? focusedIndex : 0
+  const focusTarget = useMemo<[number, number, number]>(() => {
+    const p = holoPositions[safeFocusedIndex] ?? [0, 0, 0]
+    return [p[0], 0.85, p[2]]
+  }, [holoPositions, safeFocusedIndex])
 
   return (
     <>
@@ -664,17 +950,38 @@ function Scene({
       <TerrainRing />
       <PerimeterRing />
       {selectedModels.map((model, idx) => (
-        <group key={model.id} position={holoPositions[idx] ?? [0, 0, 0]}>
+        <group
+          key={model.id}
+          position={holoPositions[idx] ?? [0, 0, 0]}
+          onPointerDown={(event) => {
+            event.stopPropagation()
+            onFocusIndex(idx)
+          }}
+        >
+          {idx === safeFocusedIndex ? (
+            <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+              <torusGeometry args={[1.35, 0.018, 10, 96]} />
+              <meshBasicMaterial
+                color="#8fe8ff"
+                transparent
+                opacity={0.78}
+                blending={THREE.AdditiveBlending}
+                depthWrite={false}
+                toneMapped={false}
+              />
+            </mesh>
+          ) : null}
           <HoloProjection
             scanTick={scanTick}
             modelUrl={model.url}
             modelAssetStatus={model.status}
+            renderMode={renderMode === 'volumetric' && idx === safeFocusedIndex ? 'volumetric' : 'classic'}
           />
         </group>
       ))}
       <ScanRing scanTick={scanTick} />
 
-      <Rig pointerRef={pointerRef} />
+      <FocusOrbitControls focusTarget={focusTarget} autoRotate={autoRotate} />
 
       <EffectComposer>
         <Bloom intensity={0.7} luminanceThreshold={0.32} luminanceSmoothing={0.2} mipmapBlur />
@@ -698,15 +1005,17 @@ export function TacticalTokenMap() {
     .map((value) => value.trim())
     .filter(Boolean)
 
-  const pointerRef = useRef({ x: 0, y: 0 })
   const [scanTick, setScanTick] = useState(0)
   const [scanning, setScanning] = useState(false)
+  const [renderMode, setRenderMode] = useState<HologramRenderMode>('classic')
+  const [autoRotate, setAutoRotate] = useState(false)
+  const [focusedModelIndex, setFocusedModelIndex] = useState(0)
   const [modelCatalog, setModelCatalog] = useState<TacticalModel[]>(() => [...MODEL_LIBRARY])
   const [customModelUrl, setCustomModelUrl] = useState('')
   const [selectedModelIds, setSelectedModelIds] = useState<string[]>(() => {
     const chosen = requestedModels
       .map((request) => MODEL_LIBRARY.find((m) => m.id === request || m.url === request)?.id)
-      .filter((value): value is string => Boolean(value))
+      .filter((value): value is NonNullable<typeof value> => Boolean(value))
     return chosen.length > 0 ? chosen : ['akita-hunyuan']
   })
   const [modelStatuses, setModelStatuses] = useState<Record<string, ModelAssetStatus>>({})
@@ -715,6 +1024,13 @@ export function TacticalTokenMap() {
     () => modelCatalog.filter((model) => selectedModelIds.includes(model.id)),
     [modelCatalog, selectedModelIds],
   )
+
+  // Derive a clamped index instead of mutating state in an effect (avoids
+  // react-hooks/set-state-in-effect and cascading renders).
+  const focusedModelIndexSafe = useMemo(() => {
+    if (selectedModels.length === 0) return 0
+    return Math.min(focusedModelIndex, selectedModels.length - 1)
+  }, [focusedModelIndex, selectedModels.length])
 
   useEffect(() => {
     let cancelled = false
@@ -800,15 +1116,7 @@ export function TacticalTokenMap() {
   const anyModelChecking = selectedModels.some((model) => modelStatuses[model.id] === 'checking')
 
   return (
-    <div
-      className="relative h-[100dvh] w-full overflow-hidden bg-[#02040a] font-mono text-[rgba(170,210,255,0.92)] select-none"
-      onPointerMove={(e) => {
-        pointerRef.current = {
-          x: (e.clientX / Math.max(window.innerWidth, 1)) * 2 - 1,
-          y: (e.clientY / Math.max(window.innerHeight, 1)) * 2 - 1,
-        }
-      }}
-    >
+    <div className="relative h-[100dvh] w-full overflow-hidden bg-[#02040a] font-mono text-[rgba(170,210,255,0.92)] select-none">
       <PageMeta
         title="Tactical token map"
         description="Dev-only 3D target-acquisition surface with a holographic creator-coin logo"
@@ -823,7 +1131,10 @@ export function TacticalTokenMap() {
       >
         <Scene
           scanTick={scanTick}
-          pointerRef={pointerRef}
+          focusedIndex={focusedModelIndexSafe}
+          onFocusIndex={setFocusedModelIndex}
+          autoRotate={autoRotate}
+          renderMode={renderMode}
           selectedModels={selectedModels.map((model) => ({
             ...model,
             status: modelStatuses[model.id] ?? 'checking',
@@ -903,6 +1214,33 @@ export function TacticalTokenMap() {
             Add
           </button>
         </div>
+        <div className="mt-3 flex items-center justify-between border-t border-[rgba(95,170,255,0.25)] pt-2">
+          <span className="text-[9px] text-[rgba(140,190,235,0.82)]">Visual mode</span>
+          <button
+            type="button"
+            onClick={() => setRenderMode((prev) => (prev === 'classic' ? 'volumetric' : 'classic'))}
+            className="pointer-events-auto h-6 border border-[rgba(110,205,255,0.55)] bg-[rgba(25,76,138,0.42)] px-2 text-[9px] text-[rgba(185,235,255,0.96)] transition hover:border-[rgba(145,230,255,0.9)] hover:text-white"
+          >
+            {renderMode === 'classic' ? 'Classic Hologram' : 'Aura Hologram'}
+          </button>
+        </div>
+        <div className="mt-2 flex items-center justify-between">
+          <span className="text-[9px] normal-case tracking-normal text-[rgba(140,190,235,0.72)]">
+            Auto orbit camera
+          </span>
+          <button
+            type="button"
+            onClick={() => setAutoRotate((prev) => !prev)}
+            className="pointer-events-auto h-6 border border-[rgba(110,205,255,0.55)] bg-[rgba(25,76,138,0.42)] px-2 text-[9px] text-[rgba(185,235,255,0.96)] transition hover:border-[rgba(145,230,255,0.9)] hover:text-white"
+          >
+            {autoRotate ? 'On' : 'Off'}
+          </button>
+        </div>
+        {renderMode === 'volumetric' ? (
+          <div className="mt-1 text-[9px] normal-case tracking-normal text-[rgba(140,190,235,0.72)]">
+            Aura mode applies to the focused model. Click a model pad to change focus.
+          </div>
+        ) : null}
       </div>
 
       {/* Bottom-left node list */}

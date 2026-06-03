@@ -66,6 +66,13 @@ Standard commands are documented in `frontend/package.json` scripts:
 - `pnpm security:local` — optional sweep: `forge test`, frontend lint/typecheck/test, Semgrep on `frontend/api` + `frontend/server/_lib` (needs Docker). Script: `scripts/security-audit-local.sh`.
 - **Security CI:** `.github/workflows/security-scanning.yml` — gitleaks, pnpm audit summaries, **blocking** Semgrep on that API surface, Slither (report-only). PRs: `.github/workflows/dependency-review.yml` (high+ vulns, runtime **and** development scopes; enable Dependency graph per `docs/audits/github-supply-chain-setup.md`). Index: `docs/audits/README.md`.
 
+**June 2026 x-ray contract audit pass (full "for all" execution) + follow-ups completed:** 
+- Complete P0/P1 review of `review-todo.md` (DeploymentBatcher, CreatorOVault + modules, ShareOFT/Oracle/Lottery, Solana NAV, invariants, cross-contract).
+- P2 test gaps closed (new `test_partialPhase1Stuck_thenReset_allowsRetry` in `DeploymentBatcher.ThreeWaySplit.t.sol` + references to existing hostile withdraw/replay coverage).
+- Follow-ups executed and verified: CLM size warn-guard hardened (24,450 threshold + PR "size budget review" policy), SC hygiene guard added to `security-audit-local.sh` (CLM headroom + contracts canonical terminology), lint fixes in `TacticalTokenMap.tsx`, docs updated.
+- Re-run of `scripts/security-audit-local.sh` (post-fixes) exit 0; hygiene/lint/typecheck clean.
+See `docs/audits/x-ray/contract-audit-pass-2026-06.md`, updated `review-todo.md`, and `docs/operations/contract-size-gate.md`.
+
 ### Non-obvious caveats
 
 - **Git submodules are required** for Foundry compilation. Run `git submodule update --init --recursive` after cloning. The submodule tree is deep (Uniswap CCA/Liquidity Launcher pull in many transitive submodules) and takes ~2 minutes.
@@ -389,6 +396,7 @@ Keeper bots in `kpr/` relay data between Solana and Base. Install: `cd kpr && np
 - When stopping dev servers/processes in Cursor, say **"kill background jobs"** (or name specific processes) rather than **"kill all terminals"** — bulk-killing terminal PIDs can detach Cursor's PTY host and break the integrated terminal until dead tabs are closed and the window is reloaded.
 - When asked to restart local dev servers or complete local ops (kill old Vite/Anvil, run `pnpm -C frontend run dev:deploy-dry-run`, verify WASM/ports), execute those steps directly rather than only pasting commands.
 - For KPR deprecation work, prefer hard-cut sunset execution (remove references/docs/workflows) over compatibility shims unless explicitly requested.
+- For ad-hoc 3D model generation tasks (for example hologram GLBs), prefer the user's Hugging Face API/Space path over alternate providers unless they explicitly request a different provider.
 - For CSW owner-setup and deploy flows, prefer click-first Base App deep-link/prolink or parent-CSW Relay owner-install (`/waitlist?setup=owner-install`, `AddOwnerSigningPanel`) — not app sub-account owner targets. Avoid external-EOA fallback paths, and if canonical signing is unavailable, fail with explicit guidance rather than forcing long manual EOA signature sequences.
 - On Deploy UI surfaces, prefer a canonical always-visible stage timeline with plain-language phase labels/status and explicit disabled states, rather than hiding or ambiguously marking stages as "optional."
 - For bonding-curve visualizations, prefer green candlestick bodies for the bonding-curve spread with Sudoswap overlays, and keep direct chart interactions (mouse-wheel zoom around cursor plus click-drag horizontal panning).

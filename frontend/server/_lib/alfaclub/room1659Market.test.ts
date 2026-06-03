@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it, vi } from 'vitest'
 
 import { ALFACLUB } from '../wallet/alfaclub.js'
@@ -30,6 +34,15 @@ describe('room1659 market constants', () => {
     expect(resolveRoom1659HyperliquidPortfolioUser()).toBe(
       '0x2222222222222222222222222222222222222222',
     )
+  })
+})
+
+describe('room1659 market auth boundary', () => {
+  it('does not import chatBridge or chatTokenStore directly', () => {
+    const here = dirname(fileURLToPath(import.meta.url))
+    const source = readFileSync(resolve(here, 'room1659Market.ts'), 'utf8')
+    expect(source).not.toContain("from './chatBridge.js'")
+    expect(source).not.toContain("from './chatTokenStore.js'")
   })
 })
 

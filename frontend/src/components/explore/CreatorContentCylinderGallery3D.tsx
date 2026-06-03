@@ -40,7 +40,9 @@ type CreatorContentCylinderGallery3DProps = {
 }
 
 // --- Layout / motion tuning (embedded panel, not fullscreen) ---
-const MAX_ITEMS = 24
+// Safety ceiling so a creator with an enormous catalog can't spawn thousands of draw calls /
+// textures. Effectively "show them all" — the explore tab labels the set at 250.
+const MAX_ITEMS = 250
 const RADIUS = 4.2
 const PLANE_WIDTH = 2.6
 const PLANE_HEIGHT = 1.7
@@ -53,12 +55,13 @@ const CURVATURE = 1.5
 const CAMERA_FOV = 40
 const CAMERA_Z = RADIUS + 2.4
 
+// Scroll feel: lower = calmer / less sensitive to a given scroll input.
 const SCROLL_ADVANCE_SPEED = 0.16
-const SCROLL_ROTATE_FORCE = 1.6
-const AUTO_ROTATE_SPEED = 0.0016
-const MAX_ROTATION_SPEED = 0.14
-const ROTATION_SMOOTHING = 0.09
-const FRICTION = 0.9
+const SCROLL_ROTATE_FORCE = 0.85
+const AUTO_ROTATE_SPEED = 0.0014
+const MAX_ROTATION_SPEED = 0.1
+const ROTATION_SMOOTHING = 0.075
+const FRICTION = 0.92
 const SQUEEZE_MAX = 0.42
 const SQUEEZE_WIDTH = 7.5
 
@@ -617,7 +620,7 @@ export function CreatorContentCylinderGallery3D({
           event.stopPropagation()
           // In pinned mode the page-scroll driver is authoritative; avoid double-feeding.
           if (externalDriven) return
-          scrollRef.current.pendingDelta += event.deltaY * 0.01
+          scrollRef.current.pendingDelta += event.deltaY * 0.005
         }}
         onPointerDown={(event) => {
           scrollRef.current.dragging = true

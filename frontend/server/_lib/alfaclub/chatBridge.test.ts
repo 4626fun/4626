@@ -120,6 +120,7 @@ function makeFlags(overrides: Partial<AlfaClubChatBridgeFlags> = {}): AlfaClubCh
     hermitCommandRoomIds: [],
     jwt: 'jwt-current',
     ingestJwt: null,
+    readBotToken: null,
     botToken: null,
     apiBaseUrl: 'https://api.alfaclub.app',
     apiProxyUrl: null,
@@ -840,6 +841,35 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     )
 
     expect(historyRoomId).toBe('1659')
+  })
+
+  it('uses read bot token endpoint for room history when configured', async () => {
+    let calledUrl = ''
+    let authHeader = ''
+    globalThis.fetch = vi.fn(async (input, init) => {
+      calledUrl = String(input)
+      authHeader = String((init as RequestInit | undefined)?.headers
+        ? ((init as RequestInit).headers as Record<string, string>)['Authorization'] ?? ''
+        : '')
+      return new Response(JSON.stringify({ messages: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }) as unknown as typeof fetch
+
+    await _runAlfaClubChatBridgeTickForTests(
+      makeFlags({
+        roomId: '1659',
+        jwt: null,
+        readBotToken: 'alfa_bot_read_token',
+      }),
+      {
+        seedHistoryOnlyOnFirstTick: false,
+      },
+    )
+
+    expect(calledUrl).toContain('/api/room/1659/messages')
+    expect(authHeader).toBe('Bearer alfa_bot_read_token')
   })
 })
 

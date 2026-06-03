@@ -5,6 +5,8 @@ import { ensureAlfaclubPositionAlertSchema } from '../db/schemaBootstrap.js'
 declare const process: { env: Record<string, string | undefined> }
 let warnedMissingPositionAlertTable = false
 
+type PgLikeError = { code?: string; message?: string }
+
 /** Wallet-scoped Hyperliquid alerts — not tied to an AlfaClub room. */
 export const HL_POSITION_ALERT_SCOPE = 'hyperliquid'
 
@@ -82,6 +84,13 @@ async function hasPositionAlertTable(db: NonNullable<Awaited<ReturnType<typeof g
   } catch {
     return false
   }
+}
+
+function isMissingPositionAlertRelation(error: unknown): boolean {
+  const candidate = error as PgLikeError | null | undefined
+  if (!candidate) return false
+  if (candidate.code === '42P01') return true
+  return String(candidate.message ?? '').includes('alfaclub.position_alert')
 }
 
 export async function readHyperliquidPositionAlert(
@@ -249,6 +258,15 @@ export async function listEnabledPositionAlerts(limit = 200): Promise<PositionAl
     `
     return (result.rows as AlertRow[]).map(rowToConfig)
   } catch (error) {
+    if (isMissingPositionAlertRelation(error)) {
+      if (!warnedMissingPositionAlertTable) {
+        warnedMissingPositionAlertTable = true
+        logger.warn('position_alert.table_missing', {
+          message: 'alfaclub.position_alert is missing; returning empty alert set',
+        })
+      }
+      return []
+    }
     logger.warn('position_alert.list_enabled_failed', {
       message: error instanceof Error ? error.message : String(error),
     })

@@ -35,6 +35,14 @@ export function __resetZoraProfilesRefreshCronHooksForTest(): void {
   __testHooks = {}
 }
 
+function readHandlerTimeoutMs(): number {
+  const raw = String(process.env.PROFILE_REFRESH_HANDLER_TIMEOUT_MS ?? '').trim()
+  if (!raw) return 55_000
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed < 5_000) return 55_000
+  return Math.min(Math.floor(parsed), 58_000)
+}
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
@@ -72,7 +80,29 @@ export default async function handler(
     // Ensure admin client is constructible before work starts.
     getSupabaseAdmin()
   }
-  const result = await runTick()
+  const handlerTimeoutMs = readHandlerTimeoutMs()
+  const tickPromise = runTick()
+  tickPromise.catch((error) => {
+    console.warn('[zora-profiles-refresh-cron] late tick failure', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  })
+
+  const timeoutPromise = new Promise<{ ok: true; tick: 'skipped'; reason: 'handler_timeout'; timeoutMs: number }>(
+    (resolve) =>
+      setTimeout(
+        () =>
+          resolve({
+            ok: true,
+            tick: 'skipped',
+            reason: 'handler_timeout',
+            timeoutMs: handlerTimeoutMs,
+          }),
+        handlerTimeoutMs,
+      ),
+  )
+
+  const result = await Promise.race([tickPromise, timeoutPromise])
 
   if (!result.ok) {
     console.warn('[zora-profiles-refresh-cron] tick failed', { error: result.error })

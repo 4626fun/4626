@@ -27,11 +27,102 @@ const VAULT_ABI = [
 ] as const
 
 function isKnownKeeperReportGasRejection(error: unknown): boolean {
-  const message = String(error instanceof Error ? error.message : error).toLowerCase()
+  const visited = new Set<unknown>()
+  const stack: unknown[] = [error]
+  const text: string[] = []
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current || visited.has(current)) continue
+    visited.add(current)
+    if (typeof current === 'string') {
+      text.push(current)
+      continue
+    }
+    if (current instanceof Error) {
+      text.push(current.message)
+      stack.push((current as Error & { cause?: unknown }).cause)
+      continue
+    }
+    if (typeof current === 'object') {
+      const candidate = current as { message?: unknown; shortMessage?: unknown; details?: unknown; cause?: unknown }
+      text.push(String(candidate.message ?? ''))
+      text.push(String(candidate.shortMessage ?? ''))
+      text.push(String(candidate.details ?? ''))
+      stack.push(candidate.cause)
+    }
+  }
+  const message = text.join(' ').toLowerCase()
   return (
     message.includes('gas required exceeds allowance (0)') ||
     message.includes('insufficient funds for gas') ||
-    message.includes('estimate gas execution reverted')
+    message.includes('estimate gas execution reverted') ||
+    message.includes('insufficient funds') ||
+    message.includes('intrinsic gas too low')
+  )
+}
+
+function isKnownKeeperReportAuthorizationRejection(error: unknown): boolean {
+  const visited = new Set<unknown>()
+  const stack: unknown[] = [error]
+  const text: string[] = []
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current || visited.has(current)) continue
+    visited.add(current)
+    if (typeof current === 'string') {
+      text.push(current)
+      continue
+    }
+    if (current instanceof Error) {
+      text.push(current.message)
+      stack.push((current as Error & { cause?: unknown }).cause)
+      continue
+    }
+    if (typeof current === 'object') {
+      const candidate = current as { message?: unknown; shortMessage?: unknown; details?: unknown; cause?: unknown }
+      text.push(String(candidate.message ?? ''))
+      text.push(String(candidate.shortMessage ?? ''))
+      text.push(String(candidate.details ?? ''))
+      stack.push(candidate.cause)
+    }
+  }
+  const message = text.join(' ').toLowerCase()
+  return (
+    message.includes('0x82b42900') ||
+    message.includes('unauthorized()')
+  )
+}
+
+function isKnownKeeperReportValuationNotReady(error: unknown): boolean {
+  const visited = new Set<unknown>()
+  const stack: unknown[] = [error]
+  const text: string[] = []
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current || visited.has(current)) continue
+    visited.add(current)
+    if (typeof current === 'string') {
+      text.push(current)
+      continue
+    }
+    if (current instanceof Error) {
+      text.push(current.message)
+      stack.push((current as Error & { cause?: unknown }).cause)
+      continue
+    }
+    if (typeof current === 'object') {
+      const candidate = current as { message?: unknown; shortMessage?: unknown; details?: unknown; cause?: unknown }
+      text.push(String(candidate.message ?? ''))
+      text.push(String(candidate.shortMessage ?? ''))
+      text.push(String(candidate.details ?? ''))
+      stack.push(candidate.cause)
+    }
+  }
+  const message = text.join(' ').toLowerCase()
+  return (
+    message.includes('0xc61cfeb8') ||
+    message.includes('strategyvaluationnotready(address)') ||
+    message.includes('strategy valuation not ready')
   )
 }
 
@@ -71,6 +162,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const account = privateKeyToAccount(keeperPk as `0x${string}`)
     const publicClient = createPublicClient({ chain: base, transport: http(rpcUrl, { timeout: 30_000 }) }) as any
     const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl, { timeout: 30_000 }) })
+    const keeperBalanceWei = await publicClient.getBalance({ address: account.address })
+    if (keeperBalanceWei <= 0n) {
+      console.warn('[keeper/report] skipped: keeper wallet has zero native balance', {
+        keeper: account.address,
+        vaultAddress,
+      })
+      return res.status(200).json({
+        success: false,
+        error: 'keeper_report_wallet_unfunded',
+        data: {
+          status: 'skipped',
+          reason: 'wallet_unfunded',
+          keeper: account.address,
+          vaultAddress,
+        },
+      } satisfies ApiEnvelope<{ status: string; reason: string; keeper: string; vaultAddress: string }>)
+    }
 
     const txHash = await walletClient.writeContract({
       address: vaultAddress as `0x${string}`,
@@ -100,6 +208,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         data: {
           status: 'skipped',
           reason: 'gas_rejected',
+        },
+      } satisfies ApiEnvelope<{ status: string; reason: string }>)
+    }
+    if (isKnownKeeperReportAuthorizationRejection(err)) {
+      console.warn('[keeper/report] known authorization rejection', {
+        message: err instanceof Error ? err.message : String(err),
+      })
+      return res.status(200).json({
+        success: false,
+        error: 'keeper_report_unauthorized',
+        data: {
+          status: 'skipped',
+          reason: 'unauthorized',
+        },
+      } satisfies ApiEnvelope<{ status: string; reason: string }>)
+    }
+    if (isKnownKeeperReportValuationNotReady(err)) {
+      console.warn('[keeper/report] valuation not ready', {
+        message: err instanceof Error ? err.message : String(err),
+      })
+      return res.status(200).json({
+        success: false,
+        error: 'keeper_report_strategy_valuation_not_ready',
+        data: {
+          status: 'skipped',
+          reason: 'strategy_valuation_not_ready',
         },
       } satisfies ApiEnvelope<{ status: string; reason: string }>)
     }

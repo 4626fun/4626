@@ -63,15 +63,16 @@ jobs:
           forge build --skip test --sizes
         id: build
 
-      - name: CreatorLotteryManager size warn-guard (76B headroom)
+      - name: CreatorLotteryManager size warn-guard
         # Defence-in-depth on top of the EIP-170 hard gate above.
         # This step is WARN-ONLY: it never fails the build. It prints a
-        # heads-up when CreatorLotteryManager.sol crosses 24,500 bytes,
-        # giving 76 bytes of advance notice before the EIP-170 cap
-        # (24,576 B) makes the next deploy impossible. The hard gate
-        # remains the primary enforcer; this step exists to give
-        # engineers a chance to plan a module split BEFORE the cap is
-        # actually hit. See docs/operations/contract-size-gate.md.
+        # heads-up when CreatorLotteryManager.sol crosses the warn threshold
+        # (currently 24,450 B, targeting ~126 B lead time) before the
+        # EIP-170 cap (24,576 B) makes the next deploy impossible.
+        # The hard gate remains the primary enforcer.
+        # PR policy: changes touching this contract must include a
+        # "size budget review" note (see x-ray/contract-audit-pass-2026-06.md
+        # and the script header). See docs/operations/contract-size-gate.md.
         run: amoe/tools/ci/check_manager_size_warn.sh
         id: manager_size_warn
         continue-on-error: true

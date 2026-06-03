@@ -1572,6 +1572,11 @@ type PositionMarkerEvent =
       chat: RoomTimelineChatEvent
     }
 
+// Distributive Omit so the trade | chat discriminated union survives — a plain
+// `Omit<PositionMarkerEvent, 'markerIndex'>` collapses to the common keys only and drops
+// the branch-specific `trade` / `chat` payloads.
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
+
 function formatMarkerTime(ms: number): string {
   return new Date(ms).toLocaleString([], {
     month: 'short',
@@ -1605,7 +1610,7 @@ async function buildPositionMarkerEvents(params: HermitExecutionParams): Promise
     roomId: params.roomId,
     windowHours: 24 * 7,
   })
-  const merged: Array<Omit<PositionMarkerEvent, 'markerIndex'>> = [
+  const merged: Array<DistributiveOmit<PositionMarkerEvent, 'markerIndex'>> = [
     ...timeline.tradeEvents.map((trade) => ({
       kind: 'trade' as const,
       time: trade.time,
@@ -1630,14 +1635,17 @@ async function buildPositionMarkerEvents(params: HermitExecutionParams): Promise
   ]
 
   merged.sort((a, b) => a.time - b.time)
-  const events = merged.map((event, idx) => ({
-    ...event,
-    markerIndex: idx + 1,
-  }))
-  return events.map((event) => ({
-    ...event,
-    summary: toMarkerSummary(event),
-  }))
+  // Construct each branch explicitly so the discriminated union (trade | chat) survives the
+  // spread — spreading the union directly would widen it to a merged shape that no longer
+  // matches PositionMarkerEvent.
+  return merged.map((event, idx): PositionMarkerEvent => {
+    if (event.kind === 'trade') {
+      const withIndex = { ...event, markerIndex: idx + 1 }
+      return { ...withIndex, summary: toMarkerSummary(withIndex) }
+    }
+    const withIndex = { ...event, markerIndex: idx + 1 }
+    return { ...withIndex, summary: toMarkerSummary(withIndex) }
+  })
 }
 
 function positionSubcommandUsage(): string {

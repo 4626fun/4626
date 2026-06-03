@@ -95,6 +95,27 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         assertEq(clearedVault, address(0), "phase1 vault not cleared");
     }
 
+    // P2 coverage from x-ray/review-todo.md: targeted test for deploy phase retries
+    // and partial finalize scenarios. Demonstrates stuck partial state (coreDone
+    // but not finalized), reset by treasury, and that state is cleared allowing
+    // conceptual retry (re-seed or re-deployPhase1* with same salt context).
+    function test_partialPhase1Stuck_thenReset_allowsRetry() public {
+        bytes32 baseSalt = _seedPhase1StateWithFinalized(false); // coreDone=true, finalized=false
+
+        // confirm partial/stuck
+        (address preOft, address preVault,,,,,,,) = batcher.phase1SplitStates(baseSalt);
+        assertNotEq(preVault, address(0), "expected partial state with vault");
+
+        // reset (as treasury) to recover from stuck partial
+        vm.prank(protocolTreasury);
+        batcher.resetPhase1State(makeAddr("phase1CreatorTokenNonFinalized"), makeAddr("phase1OwnerNonFinalized"), "v1");
+
+        // state cleared -> retry path open (new phase1 deploy could re-use the (token,owner,version) context)
+        (address postOft, address postVault,,,,,,,) = batcher.phase1SplitStates(baseSalt);
+        assertEq(postOft, address(0), "post-reset oft bootstrap should be cleared for retry");
+        assertEq(postVault, address(0), "post-reset vault should be cleared for retry");
+    }
+
     function test_deployPhase2Core_revertsWhenConfiguredRolePolicyRejectsOwner() public {
         // Policy 7: management must be allowlisted; owner is not allowlisted.
         rolePolicyManager.setRolePolicy(

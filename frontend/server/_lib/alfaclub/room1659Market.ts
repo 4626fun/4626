@@ -24,8 +24,13 @@
  */
 
 import { getClearinghouseState } from './hyperliquid.js'
-import { readAlfaClubChatBridgeFlags, buildAlfaClubApiHeaders } from './chatBridge.js'
-import { readAlfaClubChatToken } from './chatTokenStore.js'
+import {
+  ALFACLUB_API_COMMON_BROWSER_HEADERS,
+  buildAlfaClubApiHeaders,
+  readAlfaClubApiAuthFlags,
+  resolveAlfaClubApiCallBaseUrl,
+  resolveAlfaClubProxySecret,
+} from './apiAuth.js'
 import { computeLiquidationProximityPct, estimateMarkPrice } from './positionProximity.js'
 import { createPublicClient, http, parseAbi, type Address } from 'viem'
 import { base } from 'viem/chains'
@@ -296,34 +301,41 @@ export async function resolveRoom1659MarketContext(
 // --- Helper stubs (to be implemented properly using existing AlfaClub patterns) ---
 
 async function fetchAlfaClubSpot(path: string, init?: RequestInit) {
-  const flags = readAlfaClubChatBridgeFlags();
-  const base = flags.apiBaseUrl || 'https://api.alfaclub.app';
+  const flags = readAlfaClubApiAuthFlags()
+  const apiBaseUrl = resolveAlfaClubApiCallBaseUrl(flags)
+  const fingerprintBaseUrl = flags.apiBaseUrl
+  const proxySecret = resolveAlfaClubProxySecret(flags)
+  const readBotToken = flags.readBotToken || flags.botToken
+  const jwt = flags.jwt
 
-  // Prefer live JWT from Supabase (the same one the bridge uses for room 1659)
-  const tokenRecord = await readAlfaClubChatToken().catch(() => null);
-  const jwt = tokenRecord?.jwt || flags.jwt;
-
-  if (!jwt && !flags.botToken) {
+  if (!jwt && !readBotToken) {
     throw new Error('no_alfaclub_auth_for_spot');
   }
 
-  // Use the full proxy + fingerprint logic for spot paths (they are protected like other /api endpoints)
-  const headers = jwt
+  // Room-1659 market context is Hermit-adjacent, so prefer read-scoped bot
+  // credentials over bridge runtime-secret state.
+  const authHeaders = readBotToken
+    ? {
+        ...ALFACLUB_API_COMMON_BROWSER_HEADERS,
+        Authorization: `Bearer ${readBotToken}`,
+        ...(proxySecret ? { 'x-proxy-secret': proxySecret } : {}),
+      }
+    : jwt
     ? buildAlfaClubApiHeaders({
         jwt,
-        fingerprintBaseUrl: base,
-        proxySecret: flags.apiProxySecret,
+        fingerprintBaseUrl,
+        proxySecret,
       })
-    : { Authorization: `Bearer ${flags.botToken}` };
+    : {}
 
-  const url = new URL(path, base).toString();
+  const url = new URL(path, apiBaseUrl).toString();
 
   const res = await fetch(url, {
     ...init,
     headers: {
       'accept': 'application/json',
       'user-agent': 'Mozilla/5.0 (compatible; Hermit4626/1.0)',
-      ...headers,
+      ...authHeaders,
       ...(init?.headers || {}),
     },
   });

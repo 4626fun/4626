@@ -199,7 +199,6 @@ function LayoutFrame(props: {
   const hideMobileNavForMarketingHost = hostMode === 'marketing'
   const hideMobileNav =
     isMobileChatOverlayActive ||
-    hideMobileNavForBaseApp ||
     hideMobileNavForMarketingHost ||
     isWaitlistSurface
 

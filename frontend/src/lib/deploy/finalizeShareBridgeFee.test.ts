@@ -320,7 +320,7 @@ describe('finalizeShareBridgeFee quote paths', () => {
         if (req.functionName === 'peers') {
           return effectivePeer
         }
-        return (createMockPublicClient({ registryPeer: effectivePeer }).readContract as ReturnType<typeof vi.fn>)(req)
+        return (createMockPublicClient({ registryPeer: effectivePeer }).readContract as unknown as (args: typeof req) => Promise<unknown>)(req)
       },
     )
     ;(client.getBytecode as ReturnType<typeof vi.fn>).mockResolvedValue('0x6001600055')
@@ -373,7 +373,7 @@ describe('finalizeShareBridgeFee quote paths', () => {
             return `0x${'ef'.repeat(32)}` as Hex
           }
         }
-        return (createMockPublicClient().readContract as ReturnType<typeof vi.fn>)(req)
+        return (createMockPublicClient().readContract as unknown as (args: typeof req) => Promise<unknown>)(req)
       },
     )
     const baseClient = createMockPublicClient()
@@ -387,7 +387,7 @@ describe('finalizeShareBridgeFee quote paths', () => {
           return `0x${'ef'.repeat(32)}` as Hex
         }
       }
-      return (baseClient.readContract as ReturnType<typeof vi.fn>)(req)
+      return (baseClient.readContract as unknown as (args: typeof req) => Promise<unknown>)(req)
     })
     client.getBytecode = baseClient.getBytecode
 

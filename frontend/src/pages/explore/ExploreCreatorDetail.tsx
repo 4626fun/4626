@@ -866,8 +866,8 @@ export function ExploreCreatorDetail() {
         const cur = self.scroll()
         const delta = cur - last
         last = cur
-        // px → wheel-equivalent orbit delta (matches the canvas's deltaY * 0.01 feel).
-        sceneScrollFeedRef.current += delta * 0.014
+        // px → orbit delta. Tuned low so the helix glides calmly rather than spinning fast.
+        sceneScrollFeedRef.current += delta * 0.0065
       },
     })
     const frame = requestAnimationFrame(() => ScrollTrigger.refresh())

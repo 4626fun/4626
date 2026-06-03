@@ -167,6 +167,21 @@ function splitStatements(sql: string): string[] {
   let inDollarQuote = false
   let dollarTag = ''
 
+  const normalizeStatement = (raw: string): string | null => {
+    const lines = raw.split(/\r?\n/)
+    while (lines.length > 0) {
+      const first = lines[0]?.trim() ?? ''
+      if (first === '' || first.startsWith('--')) {
+        lines.shift()
+        continue
+      }
+      break
+    }
+    const normalized = lines.join('\n').trim()
+    if (!normalized || normalized === ';') return null
+    return normalized
+  }
+
   const lines = sql.split(/\r?\n/)
   for (const line of lines) {
     const trimmed = line.trim()
@@ -185,8 +200,8 @@ function splitStatements(sql: string): string[] {
     current += line + '\n'
 
     if (!inDollarQuote && trimmed.endsWith(';')) {
-      const stmt = current.trim()
-      if (stmt && !stmt.startsWith('--') && stmt !== ';') {
+      const stmt = normalizeStatement(current)
+      if (stmt) {
         statements.push(stmt)
       }
       current = ''
@@ -194,8 +209,8 @@ function splitStatements(sql: string): string[] {
   }
 
   if (current.trim()) {
-    const stmt = current.trim()
-    if (stmt && !stmt.startsWith('--')) statements.push(stmt)
+    const stmt = normalizeStatement(current)
+    if (stmt) statements.push(stmt)
   }
 
   return statements.filter((s) => s.length > 0)
@@ -446,6 +461,14 @@ export async function ensureAlfaclubDailyBriefSchema(db: Db): Promise<void> {
 export async function ensureAlfaclubPositionAlertSchema(db: Db): Promise<void> {
   await withEnsureOnce('alfaclubPositionAlert', async () => {
     await ensureMigrationApplied(db, '20260707000000_alfaclub_position_alerts.sql').catch(() => {})
+  })
+}
+
+/** Ethos chart snapshots + unified chart view refresh helpers. */
+export async function ensureEthosChartSupportSchema(db: Db): Promise<void> {
+  await withEnsureOnce('ethosChartSupport', async () => {
+    await ensureMigrationApplied(db, '20260616000000_ethos_15min_snapshots.sql').catch(() => {})
+    await ensureMigrationApplied(db, '20260620000000_unified_ethos_chart_support.sql').catch(() => {})
   })
 }
 

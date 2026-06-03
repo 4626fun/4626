@@ -146,25 +146,6 @@ export function Positions() {
     [candles, data?.tradeEvents],
   )
 
-  const hostChatMarkers = useMemo<ChartPoint[]>(
-    () =>
-      (data?.chatEvents ?? [])
-        .filter((event) => event.isHost)
-        .map((event) => ({
-          id: event.id,
-          t: event.time,
-          price: nearestCandlePrice(event.time, candles),
-          label: 'Host chat',
-          kind: 'host-chat',
-          chatId: event.id,
-          text: event.text,
-          senderLabel: event.senderLabel,
-          senderAddress: event.senderAddress,
-          isFirstFromSender: event.isFirstFromSender,
-        })),
-    [candles, data?.chatEvents],
-  )
-
   const allChatMarkers = useMemo<ChartPoint[]>(
     () =>
       (data?.chatEvents ?? []).map((event) => ({

@@ -24,7 +24,7 @@ describe('buildHyperliquidPositionReport', () => {
   it('includes operator playbook and CTA sections', () => {
     const report = buildHyperliquidPositionReport({
       walletAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      hlState: { accountValueUsd: 1000, totalNtlPosUsd: 100, assetPositions: [] },
+      hlState: { accountValueUsd: 1000, totalNtlPosUsd: 100, totalRawUsdUsd: null, assetPositions: [] },
       alert: makeAlert(),
     })
 
@@ -42,6 +42,7 @@ describe('buildHyperliquidPositionReport', () => {
     const hlState: HyperliquidClearinghouseState = {
       accountValueUsd: 683,
       totalNtlPosUsd: 43,
+      totalRawUsdUsd: null,
       assetPositions: [
         {
           coin: 'BTC',
@@ -84,6 +85,7 @@ describe('buildHyperliquidPositionReport', () => {
       hlState: {
         accountValueUsd: 100,
         totalNtlPosUsd: 500,
+        totalRawUsdUsd: null,
         assetPositions: [
           {
             coin: 'ETH',
@@ -128,7 +130,7 @@ describe('buildHyperliquidPositionReport', () => {
   it('includes broader market scope when brief data is supplied', () => {
     const report = buildHyperliquidPositionReport({
       walletAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      hlState: { accountValueUsd: 1000, totalNtlPosUsd: 100, assetPositions: [] },
+      hlState: { accountValueUsd: 1000, totalNtlPosUsd: 100, totalRawUsdUsd: null, assetPositions: [] },
       alert: makeAlert(),
       marketBrief: {
         snapshotTs: '2026-06-03T00:00:00.000Z',
@@ -155,6 +157,7 @@ describe('buildHyperliquidPositionReport', () => {
       hlState: {
         accountValueUsd: 683,
         totalNtlPosUsd: 43,
+        totalRawUsdUsd: null,
         assetPositions: [
           {
             coin: 'BTC',
@@ -195,6 +198,7 @@ describe('buildHyperliquidPositionReport', () => {
       hlState: {
         accountValueUsd: 1000,
         totalNtlPosUsd: 400,
+        totalRawUsdUsd: null,
         assetPositions: [
           {
             coin: 'ETH',

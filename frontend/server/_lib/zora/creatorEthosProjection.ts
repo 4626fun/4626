@@ -1,3 +1,5 @@
+import { ensureEthosChartSupportSchema } from '../db/schemaBootstrap.js'
+
 type Db = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows?: any[]; rowCount?: number }>
 }
@@ -9,6 +11,8 @@ let schemaCheckPromise: Promise<boolean> | null = null
 let warnedMissingUnifiedChartRefreshFn = false
 let warnedMissingMarketCapBucketsRefreshFn = false
 let warnedMissing15MinSnapshotFn = false
+
+type PgLikeError = { code?: string; message?: string }
 
 async function hasProjectionTable(db: Db): Promise<boolean> {
   const result = await db.sql`
@@ -22,6 +26,13 @@ async function hasFunction(db: Db, signature: string): Promise<boolean> {
     SELECT to_regprocedure(${signature}) IS NOT NULL AS available;
   `
   return Boolean(result.rows?.[0]?.available)
+}
+
+function isMissingFunctionError(error: unknown, signature: string): boolean {
+  const candidate = error as PgLikeError | null | undefined
+  if (!candidate || candidate.code !== '42883') return false
+  const functionName = signature.replace(/^public\./, '').replace(/\(\)$/, '')
+  return String(candidate.message ?? '').includes(functionName)
 }
 
 export async function ensureCreatorEthosProjectionSchema(db: Db): Promise<boolean> {
@@ -218,6 +229,10 @@ export async function refreshCreatorEthosProjection(params: {
   /** @deprecated Ignored; all refreshes use the full projection/scoring path. */
   mode?: 'full' | 'fast'
 }): Promise<{ refreshedRows: number; appliedLimit: number; available: boolean }> {
+  // The two modules declare structurally-compatible ad-hoc `Db` shapes (this file allows an
+  // optional `rows`); cast to the helper's parameter type at the single call boundary.
+  await ensureEthosChartSupportSchema(params.db as Parameters<typeof ensureEthosChartSupportSchema>[0])
+
   const available = await ensureCreatorEthosProjectionSchema(params.db)
   if (!available) return { refreshedRows: 0, appliedLimit: 0, available: false }
 
@@ -635,7 +650,16 @@ export async function refreshCreatorEthosProjection(params: {
       )
     }
   } catch (e) {
-    console.warn('[creatorEthosProjection] failed to snapshot 15min Ethos data', e)
+    if (isMissingFunctionError(e, 'public.snapshot_creator_ethos_15min()')) {
+      if (!warnedMissing15MinSnapshotFn) {
+        warnedMissing15MinSnapshotFn = true
+        console.warn(
+          '[creatorEthosProjection] skipping 15min snapshot; function public.snapshot_creator_ethos_15min() is missing',
+        )
+      }
+    } else {
+      console.warn('[creatorEthosProjection] failed to snapshot 15min Ethos data', e)
+    }
   }
 
   // Market cap bucket stats for segmented charts
@@ -673,7 +697,16 @@ export async function refreshCreatorEthosProjection(params: {
       )
     }
   } catch (e) {
-    console.warn('[creatorEthosProjection] failed to refresh chart views', e)
+    if (isMissingFunctionError(e, 'public.refresh_all_ethos_chart_views()')) {
+      if (!warnedMissingUnifiedChartRefreshFn) {
+        warnedMissingUnifiedChartRefreshFn = true
+        console.warn(
+          '[creatorEthosProjection] skipping chart views refresh; function public.refresh_all_ethos_chart_views() is missing',
+        )
+      }
+    } else {
+      console.warn('[creatorEthosProjection] failed to refresh chart views', e)
+    }
   }
 
   return {

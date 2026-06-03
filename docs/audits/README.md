@@ -15,6 +15,8 @@ Security and trust artifacts for the public docs audience. These are **not** a s
 | [charm/](./charm/) | Charm V2 adversarial audit, executive brief, and master Q&A. |
 | [codex/](./codex/) | Codex security review records and archival finding exports. |
 | [4626/acceptances/M-38-M-39-foundry-halmos-invariant-evidence.md](./4626/acceptances/M-38-M-39-foundry-halmos-invariant-evidence.md) | Foundry invariant and Halmos symbolic-test evidence for M-38 / M-39 coverage-gap follow-up. |
+| [x-ray/](./x-ray/) | Internal x-ray security review framework. Live contract audit checklist in `review-todo.md`. |
+| [x-ray/contract-audit-pass-2026-06.md](./x-ray/contract-audit-pass-2026-06.md) | **June 2026 x-ray contract audit pass completed** ("for all" P0/P1 review + P2 tests + follow-ups). Full checklist execution, sizes/Slither/tests/invariants/Codex alignment. Follow-ups: hardened CLM size guard (with PR policy), SC hygiene in security-local (size + canonical terms), new deploy retry test, lint fixes, re-run verification (exit 0, clean). See updated `review-todo.md` (all [x]) and `docs/operations/contract-size-gate.md`. |
 | [token-image/](./token-image/) | Token-image renderer research and breakout analysis notes. |
 
 Internal process runbooks (supply-chain setup, advisories triage, production parity checklists) are intentionally kept in the internal docs lane.

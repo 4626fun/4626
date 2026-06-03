@@ -1762,6 +1762,7 @@ describe('runBridgeTick — Cloudflare challenge remediation', () => {
       hermitCommandRoomIds: [],
       jwt: 'command.jwt.value',
       ingestJwt: null,
+      readBotToken: null,
       botToken: null,
       apiBaseUrl: 'https://api.alfaclub.app',
       apiProxyUrl: null,

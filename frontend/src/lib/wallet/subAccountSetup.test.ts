@@ -1,4 +1,4 @@
-import { beforeEach, describe, it, expect, vi } from 'vitest'
+import { beforeEach, describe, it, expect, vi, type Mock } from 'vitest'
 
 import * as subAccountOwnerInstall from './subAccountOwnerInstall'
 import {
@@ -242,7 +242,7 @@ describe('setupSubAccount', () => {
     const params = createSetupParams({ provider: walletProvider }) as ReturnType<typeof createSetupParams> & {
       baseAccountSdk: {
         getProvider: () => typeof sdkProvider
-        subAccount: { create: ReturnType<typeof vi.fn>; setToOwnerAccount: ReturnType<typeof vi.fn> }
+        subAccount: { create: Mock; setToOwnerAccount: Mock }
       }
     }
     params.baseAccountSdk = {
@@ -306,7 +306,7 @@ describe('setupSubAccount', () => {
       },
     })
     const params = createSetupParams({ provider }) as ReturnType<typeof createSetupParams> & {
-      baseAccountSdk: { subAccount: { create: ReturnType<typeof vi.fn>; setToOwnerAccount: ReturnType<typeof vi.fn> } }
+      baseAccountSdk: { subAccount: { create: Mock; setToOwnerAccount: Mock } }
     }
     params.baseAccountSdk.subAccount.create = vi.fn().mockRejectedValue(new Error('User rejected'))
     const stages: SubAccountSetupStageEvent[] = []

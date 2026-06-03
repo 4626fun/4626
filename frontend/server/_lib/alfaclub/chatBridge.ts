@@ -56,12 +56,19 @@ import { readAlfaClubChatToken } from './chatTokenStore.js'
 import { requestImmediatePrivyRefresh } from './privyTokenRefresher.js'
 import { parseTelegramChatRef } from './telegramChatRef.js'
 import { isKeeprRailwayAlfaClubSplit } from './keeprAlfaClubSplit.js'
+import {
+  ALFACLUB_API_COMMON_BROWSER_HEADERS,
+  buildAlfaClubApiHeaders,
+  readAlfaClubApiAuthFlags,
+  resolveAlfaClubApiCallBaseUrl,
+  resolveAlfaClubProxySecret,
+} from './apiAuth.js'
 
 export { isKeeprRailwayAlfaClubSplit } from './keeprAlfaClubSplit.js'
+export { resolveAlfaClubApiCallBaseUrl, resolveAlfaClubOriginHeaders } from './apiAuth.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
-const DEFAULT_API_BASE_URL = 'https://api.alfaclub.app'
 const DEFAULT_WS_URL = 'wss://ws.alfaclub.app'
 const DEFAULT_POLL_INTERVAL_MS = 6_000
 const DEFAULT_HISTORY_LIMIT = 20
@@ -159,6 +166,7 @@ export type AlfaClubChatBridgeFlags = {
   hermitCommandRoomIds: string[]
   jwt: string | null
   ingestJwt: string | null
+  readBotToken: string | null
   botToken: string | null
   apiBaseUrl: string
   wsProxyHttpSendUrl?: string | null
@@ -244,6 +252,12 @@ type NormalizedHistoryMessage = {
   replyAttachments: AlfaClubMessageAttachment[]
 }
 
+type BotTokenRoomHistoryMessage = Record<string, unknown>
+
+type BotTokenRoomHistoryResponse = {
+  messages?: BotTokenRoomHistoryMessage[]
+}
+
 export type AlfaClubChatBridgeSkipReason =
   | 'kill_switch'
   | 'disabled'
@@ -325,72 +339,6 @@ function normalizeEnvScalar(raw: string | undefined): string {
   return value
 }
 
-function normalizeApiBaseUrl(raw: string | undefined): string {
-  const value = normalizeEnvScalar(raw) || DEFAULT_API_BASE_URL
-  try {
-    const url = new URL(value)
-    return `${url.origin}`
-  } catch {
-    return DEFAULT_API_BASE_URL
-  }
-}
-
-/**
- * Optional `ALFACLUB_CHAT_API_PROXY_URL` parser. Returns the proxy
- * origin if set and valid, `null` otherwise. HTTPS-only — refusing
- * to send the bot's `Authorization: Bearer <chat_jwt>` to a
- * cleartext relay is a hard rule.
- */
-function normalizeApiProxyUrl(raw: string | undefined): string | null {
-  const value = normalizeEnvScalar(raw)
-  if (!value) return null
-  try {
-    const url = new URL(value)
-    if (url.protocol !== 'https:') return null
-    return `${url.origin}`
-  } catch {
-    return null
-  }
-}
-
-function normalizeApiProxySecret(raw: string | undefined): string | null {
-  const value = normalizeEnvScalar(raw)
-  return value || null
-}
-
-function normalizeAlfaClubBotToken(raw: string | undefined): string | null {
-  const value = normalizeEnvScalar(raw)
-  return value || null
-}
-
-/**
- * Pick the URL the bridge should hit for an AlfaClub HTTP API call
- * (the *routing* URL — where the request is actually sent).
- *
- * If the operator has configured `ALFACLUB_CHAT_API_PROXY_URL`, use
- * it (proxy must implement the same paths and forward to AlfaClub
- * — see the doc comment on `AlfaClubChatBridgeFlags.apiProxyUrl`).
- * Otherwise fall back to `apiBaseUrl` (typically
- * `https://api.alfaclub.app`).
- *
- * NOTE: The routing URL is intentionally distinct from the
- * *fingerprint* base used to derive `Origin`/`Referer`/`Sec-Fetch-Site`
- * — see `resolveAlfaClubFingerprintBaseUrl`. With a proxy in front of
- * `https://api.alfaclub.app`, the request still represents itself as
- * coming from the alfaclub.app web client; the proxy forwards
- * unchanged, so the upstream Cloudflare WAF must see the same
- * browser-fingerprint headers it would on a direct call.
- *
- * Exported for tests. Production callers always pass the full
- * `flags` object.
- */
-export function resolveAlfaClubApiCallBaseUrl(flags: {
-  apiBaseUrl: string
-  apiProxyUrl: string | null
-}): string {
-  return flags.apiProxyUrl ?? flags.apiBaseUrl
-}
-
 /**
  * Pick the URL whose hostname determines the browser-fingerprint
  * triplet (`Origin`/`Referer`/`Sec-Fetch-Site`) for an AlfaClub HTTP
@@ -455,6 +403,7 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
     .filter((s) => /^\d+$/.test(s))
 
   const groupIdRaw = normalizeEnvScalar(process.env.ALFACLUB_CHAT_GROUP_ID)
+  const authFlags = readAlfaClubApiAuthFlags()
   const telegramRelayBotToken =
     normalizeEnvScalar(process.env.ALFACLUB_TELEGRAM_BOT_TOKEN) ||
     normalizeEnvScalar(process.env.TELEGRAM_BOT_TOKEN) ||
@@ -476,16 +425,13 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
     enabled: parseBool(process.env.ALFACLUB_CHAT_BRIDGE_ENABLED),
     roomId,
     hermitCommandRoomIds,
-    jwt: normalizeEnvScalar(process.env.ALFACLUB_CHAT_JWT) || null,
+    jwt: authFlags.jwt,
     ingestJwt: normalizeEnvScalar(process.env.ALFACLUB_CHAT_INGEST_JWT) || null,
-    botToken: normalizeAlfaClubBotToken(
-      process.env.ALFACLUB_API_KEY ??
-        process.env.alfaclub_api_key ??
-        process.env.ALFACLUB_BOT_TOKEN,
-    ),
-    apiBaseUrl: normalizeApiBaseUrl(process.env.ALFACLUB_CHAT_API_BASE_URL),
-    apiProxyUrl: normalizeApiProxyUrl(process.env.ALFACLUB_CHAT_API_PROXY_URL),
-    apiProxySecret: normalizeApiProxySecret(process.env.ALFACLUB_CHAT_API_PROXY_SECRET),
+    readBotToken: authFlags.readBotToken,
+    botToken: authFlags.botToken,
+    apiBaseUrl: authFlags.apiBaseUrl,
+    apiProxyUrl: authFlags.apiProxyUrl,
+    apiProxySecret: authFlags.apiProxySecret,
     websocketUrl: normalizeWsUrl(process.env.ALFACLUB_CHAT_WS_URL),
     wsProxyHttpSendUrl: normalizeEnvScalar(process.env.ALFACLUB_WS_PROXY_HTTP_SEND_URL) || null,
     wsProxySecret: normalizeEnvScalar(process.env.ALFACLUB_WS_PROXY_SECRET) || null,
@@ -987,162 +933,6 @@ function extractAlfaClubReactionEmoji(action: unknown): string | null {
   return emoji.length > 0 ? emoji : null
 }
 
-/**
- * AlfaClub's API origin (`api.alfaclub.app`) is fronted by Cloudflare,
- * which blocks "browser-signature-banned" non-browser User-Agents with
- * HTTP 403 (CF error 1010). Production evidence 2026-05-01: the
- * deployed bridge sent only `Authorization` + `Accept`, Cloudflare
- * rejected with 403, the 403 was funnelled through
- * `wsLiveFallbackEnabled` and surfaced as a clean `fetched:0` tick —
- * silently masking the failure for the operator.
- *
- * Origin-agnostic browser-like headers we ALWAYS send. These don't
- * cross-reference a specific host, so they're safe to attach to any
- * AlfaClub API target (production, staging proxy, localhost replay).
- * Nothing here is secret: stable Chromium UA + a standard Accept
- * triple + the universally-applicable Sec-Fetch-Mode/Dest pair the
- * alfaclub.app web client sends.
- */
-const ALFACLUB_API_COMMON_BROWSER_HEADERS: Record<string, string> = {
-  // Stable Chromium UA. Bumping it is fine; the only constraint is
-  // "not the default Node fetch UA", which Cloudflare's
-  // browser-integrity check rejects. The major version below
-  // matches the `sec-ch-ua` declarations to avoid an inconsistent
-  // browser fingerprint.
-  'User-Agent':
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  Accept: 'application/json, text/plain, */*',
-  'Accept-Language': 'en-US,en;q=0.9',
-  // Most production fetches transparently negotiate gzip/deflate;
-  // omitting the header lets Cloudflare downgrade to identity, which
-  // is itself a small fingerprint signal. Match the alfaclub.app
-  // web client's negotiated set.
-  'Accept-Encoding': 'gzip, deflate, br',
-  // Client-Hints `sec-ch-ua` triple. Cloudflare's bot-management
-  // checks read these for the Chromium-major and platform fields and
-  // flag inconsistency between UA + sec-ch-ua as a bot signal. Pin
-  // them to match the UA's Chrome/124 + macOS triple above.
-  'sec-ch-ua':
-    '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-  'sec-ch-ua-mobile': '?0',
-  'sec-ch-ua-platform': '"macOS"',
-  // `Sec-Fetch-Mode` and `Sec-Fetch-Dest` are origin-agnostic and
-  // describe the request *kind*, not a relationship to a specific
-  // page origin — they're safe to send to any host.
-  'Sec-Fetch-Mode': 'cors',
-  'Sec-Fetch-Dest': 'empty',
-}
-
-/**
- * Hosts whose `api.<x>` AlfaClub-family API the bridge knows about.
- * Bumping the list is OK; the production default is `alfaclub.app`.
- *
- * The pattern is: when the API base URL host is `api.<page>` for some
- * `<page>` in this set, the alfaclub.app web client sends:
- *   Origin: https://<page>
- *   Referer: https://<page>/
- *   Sec-Fetch-Site: same-site
- * That's the fingerprint Cloudflare checks for. Mirroring it stays in
- * the WAF allowlist.
- *
- * For anything outside the set (staging proxy, localhost replay,
- * unknown CDN), we omit Origin/Referer/Sec-Fetch-Site rather than
- * sending a contradictory `Origin: https://alfaclub.app` to a host
- * that has nothing to do with alfaclub.app — that fingerprint would
- * itself look fishy and could fail more aggressive WAFs / CORS
- * checks.
- */
-const ALFACLUB_KNOWN_PAGE_HOSTS: ReadonlySet<string> = new Set(['alfaclub.app'])
-
-type AlfaClubOriginHeaders = {
-  Origin?: string
-  Referer?: string
-  'Sec-Fetch-Site'?: string
-}
-
-/**
- * Resolve the origin/referer/Sec-Fetch-Site triplet for an AlfaClub
- * API request. Returns an empty object for hosts not on the known
- * AlfaClub-family list.
- */
-export function resolveAlfaClubOriginHeaders(apiBaseUrl: string): AlfaClubOriginHeaders {
-  let parsed: URL
-  try {
-    parsed = new URL(apiBaseUrl)
-  } catch {
-    return {}
-  }
-  const host = parsed.hostname.toLowerCase()
-  if (!host) return {}
-
-  // Strip a leading `api.` and check if what's left is a known
-  // AlfaClub page host. e.g. `api.alfaclub.app` → `alfaclub.app`.
-  const pageHost = host.startsWith('api.') ? host.slice('api.'.length) : host
-  if (!ALFACLUB_KNOWN_PAGE_HOSTS.has(pageHost)) return {}
-
-  // The web client always uses HTTPS for `alfaclub.app`. Pin it
-  // explicitly so a misconfigured `http://api.alfaclub.app` doesn't
-  // produce an `Origin: http://alfaclub.app` that the WAF might
-  // flag as a downgrade.
-  const origin = `https://${pageHost}`
-  return {
-    Origin: origin,
-    Referer: `${origin}/`,
-    // `same-site`: the API host (`api.alfaclub.app`) and the page
-    // host (`alfaclub.app`) share the registrable domain. If a
-    // future deploy ever routes the API through the page host
-    // itself, switch to `same-origin` — but that requires a code
-    // change, by design.
-    'Sec-Fetch-Site': 'same-site',
-  }
-}
-
-/**
- * Build the header bag for an authenticated AlfaClub API request.
- * Always returns a fresh object (callers must be free to add their
- * own per-request headers, e.g. `Content-Type` for POST bodies).
- *
- * The browser-fingerprint triplet (Origin/Referer/Sec-Fetch-Site) is
- * derived from `fingerprintBaseUrl`, which is INTENTIONALLY decoupled
- * from the routing URL the request is sent to:
- *
- *   - Direct call to the default AlfaClub API base
- *     (`https://api.alfaclub.app`): fingerprint base = same =
- *     emits `Origin: https://alfaclub.app` etc.
- *   - Direct call to a custom non-AlfaClub base (staging API,
- *     localhost replay): fingerprint base = same unknown host =
- *     omits Origin/Referer/Sec-Fetch-Site (we never emit a
- *     contradictory `Origin: https://alfaclub.app` to a host that
- *     has nothing to do with alfaclub.app).
- *   - Proxy routing
- *     (`ALFACLUB_CHAT_API_PROXY_URL=https://relay.example.com`)
- *     with the default upstream AlfaClub base: routing URL =
- *     proxy, fingerprint base = `https://api.alfaclub.app`. The
- *     proxy is documented to forward unchanged to
- *     `api.alfaclub.app`, so the upstream Cloudflare WAF must see
- *     the full browser fingerprint. Pre-fix, `buildAlfaClubApiHeaders`
- *     derived the triplet from the proxy origin (an unknown host),
- *     producing `{}` and weakening the fingerprint — defeating the
- *     point of the proxy escape hatch.
- *
- * The remaining headers (UA, Accept, Accept-Encoding, sec-ch-ua*,
- * Sec-Fetch-Mode, Sec-Fetch-Dest) are origin-agnostic and stay in
- * place regardless of routing/fingerprint base.
- */
-export function buildAlfaClubApiHeaders(params: {
-  jwt: string
-  fingerprintBaseUrl: string
-  proxySecret?: string | null
-}): Record<string, string> {
-  const proxySecret = (params.proxySecret ?? '').trim()
-  return {
-    ...ALFACLUB_API_COMMON_BROWSER_HEADERS,
-    ...resolveAlfaClubOriginHeaders(params.fingerprintBaseUrl),
-    Authorization: `Bearer ${params.jwt}`,
-    ...(proxySecret ? { 'x-proxy-secret': proxySecret } : {}),
-  }
-}
-
 /** Exposed for unit tests — common (origin-agnostic) headers. */
 export const _ALFACLUB_API_BROWSER_HEADERS_FOR_TESTS = ALFACLUB_API_COMMON_BROWSER_HEADERS
 
@@ -1239,12 +1029,8 @@ async function fetchRoomHistory(params: {
   /** URL the HTTP request is actually sent to (proxy or direct API base). */
   apiBaseUrl: string
   /**
-   * URL whose hostname determines the browser-fingerprint triplet
-   * (Origin/Referer/Sec-Fetch-Site). When `apiBaseUrl` is a proxy
-   * origin (set via `ALFACLUB_CHAT_API_PROXY_URL`), pass the
-   * upstream AlfaClub API base here so the WAF on the upstream still
-   * sees a full browser fingerprint. Defaults to `apiBaseUrl` for
-   * callers that don't know about the proxy split.
+   * URL whose hostname determines request fingerprint headers.
+   * The canonical fingerprint policy lives in `apiAuth.ts`.
    */
   fingerprintBaseUrl?: string
   /** Shared secret for the proxy gate. Omit on direct upstream calls. */
@@ -1289,6 +1075,134 @@ async function fetchRoomHistory(params: {
   }
   const body = (await response.json()) as AlfaClubRoomHistoryResponse
   return Array.isArray(body.messages) ? body.messages : []
+}
+
+function resolveBotHistoryMessageId(message: BotTokenRoomHistoryMessage): string {
+  const candidates = [message.id, message.messageId, message.message_id, message.uuid]
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue
+    const trimmed = candidate.trim()
+    if (trimmed) return trimmed
+  }
+  return ''
+}
+
+function resolveBotHistoryMessageDate(message: BotTokenRoomHistoryMessage): number {
+  const candidates = [
+    message.date,
+    message.created_at,
+    message.createdAt,
+    message.timestamp,
+    message.sent_at,
+  ]
+  for (const candidate of candidates) {
+    const numeric =
+      typeof candidate === 'number'
+        ? candidate
+        : typeof candidate === 'string'
+          ? Number(candidate)
+          : Number.NaN
+    if (Number.isFinite(numeric) && numeric > 0) return numeric
+  }
+  return 0
+}
+
+function resolveBotHistoryMessageSender(message: BotTokenRoomHistoryMessage): string {
+  const nestedSender =
+    message.sender && typeof message.sender === 'object' && !Array.isArray(message.sender)
+      ? (message.sender as Record<string, unknown>)
+      : null
+  const candidates = [
+    message.sender,
+    message.senderAddress,
+    message.sender_address,
+    message.walletAddress,
+    message.wallet_address,
+    nestedSender?.walletAddress,
+    nestedSender?.wallet_address,
+    nestedSender?.id,
+  ]
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue
+    const trimmed = candidate.trim().toLowerCase()
+    if (trimmed) return trimmed
+  }
+  return ''
+}
+
+function resolveBotHistoryMessageText(message: BotTokenRoomHistoryMessage): string {
+  const candidates = [message.text, message.message, message.body, message.content]
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue
+    return candidate
+  }
+  return ''
+}
+
+function mapBotHistoryMessageToBridgeMessage(
+  message: BotTokenRoomHistoryMessage,
+): AlfaClubRoomHistoryMessage | null {
+  const id = resolveBotHistoryMessageId(message)
+  const date = resolveBotHistoryMessageDate(message)
+  const sender = resolveBotHistoryMessageSender(message)
+  if (!id || !Number.isFinite(date) || date <= 0 || !sender) return null
+  return {
+    ...message,
+    id,
+    date,
+    sender,
+    text: resolveBotHistoryMessageText(message),
+  } as AlfaClubRoomHistoryMessage
+}
+
+async function fetchRoomHistoryViaReadBotToken(params: {
+  /** URL the HTTP request is actually sent to (proxy or direct API base). */
+  apiBaseUrl: string
+  /** Shared secret for the proxy gate. Omit on direct upstream calls. */
+  proxySecret?: string | null
+  roomId: string
+  readBotToken: string
+  limit: number
+  timeoutMs: number
+}): Promise<AlfaClubRoomHistoryMessage[]> {
+  // Keep read-token requests on the same browser-like envelope used by
+  // JWT lanes (shared constants in `apiAuth.ts`).
+  const url = new URL(`/api/room/${encodeURIComponent(params.roomId)}/messages`, params.apiBaseUrl)
+  url.searchParams.set('limit', String(params.limit))
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), params.timeoutMs)
+  let response: Response
+  try {
+    response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        ...ALFACLUB_API_COMMON_BROWSER_HEADERS,
+        Authorization: `Bearer ${params.readBotToken}`,
+        ...((params.proxySecret ?? '').trim()
+          ? { 'x-proxy-secret': String(params.proxySecret).trim() }
+          : {}),
+      },
+      signal: controller.signal,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`room_history_read_bot_failed:timeout:${message}`)
+  } finally {
+    clearTimeout(timeout)
+  }
+
+  if (!response.ok) {
+    const detail = await extractRoomHistoryErrorDetail(response)
+    const suffix = detail ? `:${detail}` : ''
+    throw new Error(`room_history_read_bot_failed:${response.status}${suffix}`)
+  }
+
+  const body = (await response.json()) as BotTokenRoomHistoryResponse
+  if (!Array.isArray(body.messages)) return []
+  return body.messages
+    .map((message) => mapBotHistoryMessageToBridgeMessage(message))
+    .filter((message): message is AlfaClubRoomHistoryMessage => Boolean(message))
 }
 
 async function markReadMessage(params: {
@@ -2273,10 +2187,6 @@ function resetSocketBackoff(): void {
 
 function noteSuppressedSocketAttempt(): void {
   recordBridgeSuppressedSocketAttempt()
-}
-
-function resolveAlfaClubProxySecret(flags: AlfaClubChatBridgeFlags): string | null {
-  return flags.apiProxyUrl ? flags.apiProxySecret : null
 }
 
 function flushAuthFailRollup(): void {
@@ -3454,7 +3364,7 @@ async function runBridgeTick(
   const explicitIngestJwt = (flags.ingestJwt ?? '').trim() || null
   const ingestJwt = explicitIngestJwt || commandJwt
 
-  if (!commandJwt) {
+  if (!commandJwt && !flags.readBotToken) {
     if (shouldConnectLiveWebSocket(options, flags, ingestJwt)) {
       ensureLiveCommandSocket({
         websocketUrl: flags.websocketUrl,
@@ -3473,79 +3383,103 @@ async function runBridgeTick(
       errors: [],
     }
   }
-  let jwt = commandJwt
-  let historyErrorJwt = commandJwt
+  let jwt = commandJwt ?? ''
+  let historyErrorJwt = commandJwt ?? ''
   let fetchedMessages: AlfaClubRoomHistoryMessage[] | null = null
   let historyError: unknown = null
-  try {
-    fetchedMessages = await fetchRoomHistory({
-      apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
-      fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(flags),
-      proxySecret: resolveAlfaClubProxySecret(flags),
-      roomId,
-      jwt,
-      limit: flags.historyLimit,
-      timeoutMs: flags.requestTimeoutMs,
-    })
-  } catch (error) {
-    const fallbackJwt = (flags.jwt ?? '').trim() || null
-    if (classifyHistoryError(error) === 'auth' && historyErrorJwt) {
-      const recovered = await retryRoomHistoryAfterAuthFailure({
-        flags,
+  if (flags.readBotToken) {
+    try {
+      fetchedMessages = await fetchRoomHistoryViaReadBotToken({
+        apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
+        proxySecret: resolveAlfaClubProxySecret(flags),
         roomId,
-        failedJwt: historyErrorJwt,
-        fallbackJwt,
+        readBotToken: flags.readBotToken,
+        limit: flags.historyLimit,
+        timeoutMs: flags.requestTimeoutMs,
       })
-      if (!recovered.historyError && recovered.fetchedMessages) {
-        fetchedMessages = recovered.fetchedMessages
-        jwt = recovered.jwt as string
-        historyErrorJwt = jwt
-        commandJwt = jwt
-        resolvedCommandJwt = recovered.resolvedCommandJwt
-        historyError = null
+    } catch (error) {
+      if (!jwt) {
+        historyError = error
       } else {
-        historyError = recovered.historyError ?? error
-        if (recovered.jwt) {
-          jwt = recovered.jwt
-          historyErrorJwt = recovered.jwt
-          commandJwt = recovered.jwt
-          resolvedCommandJwt = recovered.resolvedCommandJwt
-        }
-      }
-    } else {
-      historyError = error
-    }
-
-    const shouldRetryWithEnv =
-      historyError !== null &&
-      resolvedCommandJwt.source === 'db' &&
-      Boolean(fallbackJwt) &&
-      fallbackJwt !== resolvedCommandJwt.jwt &&
-      classifyHistoryError(historyError) === 'auth'
-    if (historyError === null) {
-      // Recovered via awaited Privy refresh above.
-    } else if (!shouldRetryWithEnv) {
-      // historyError already set from the initial failure or auth-recovery retry.
-    } else {
-      logger.warn('[alfaclub-chat] room_history_auth_failed:retry_env', {
-        roomId,
-        jwtSource: resolvedCommandJwt.source,
-        error: error instanceof Error ? error.message : String(error),
-      })
-      try {
-        historyErrorJwt = fallbackJwt as string
-        fetchedMessages = await fetchRoomHistory({
-          apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
-          fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(flags),
-          proxySecret: resolveAlfaClubProxySecret(flags),
+        logger.warn('[alfaclub-chat] read_bot_history_failed:fallback_jwt', {
           roomId,
-          jwt: fallbackJwt as string,
-          limit: flags.historyLimit,
-          timeoutMs: flags.requestTimeoutMs,
+          error: error instanceof Error ? error.message : String(error),
         })
-        jwt = fallbackJwt as string
-      } catch (fallbackError) {
-        historyError = fallbackError
+      }
+    }
+  }
+
+  if (!fetchedMessages && !historyError) {
+    try {
+      fetchedMessages = await fetchRoomHistory({
+        apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
+        fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(flags),
+        proxySecret: resolveAlfaClubProxySecret(flags),
+        roomId,
+        jwt,
+        limit: flags.historyLimit,
+        timeoutMs: flags.requestTimeoutMs,
+      })
+    } catch (error) {
+      const fallbackJwt = (flags.jwt ?? '').trim() || null
+      if (classifyHistoryError(error) === 'auth' && historyErrorJwt) {
+        const recovered = await retryRoomHistoryAfterAuthFailure({
+          flags,
+          roomId,
+          failedJwt: historyErrorJwt,
+          fallbackJwt,
+        })
+        if (!recovered.historyError && recovered.fetchedMessages) {
+          fetchedMessages = recovered.fetchedMessages
+          jwt = recovered.jwt as string
+          historyErrorJwt = jwt
+          commandJwt = jwt
+          resolvedCommandJwt = recovered.resolvedCommandJwt
+          historyError = null
+        } else {
+          historyError = recovered.historyError ?? error
+          if (recovered.jwt) {
+            jwt = recovered.jwt
+            historyErrorJwt = recovered.jwt
+            commandJwt = recovered.jwt
+            resolvedCommandJwt = recovered.resolvedCommandJwt
+          }
+        }
+      } else {
+        historyError = error
+      }
+
+      const shouldRetryWithEnv =
+        historyError !== null &&
+        resolvedCommandJwt.source === 'db' &&
+        Boolean(fallbackJwt) &&
+        fallbackJwt !== resolvedCommandJwt.jwt &&
+        classifyHistoryError(historyError) === 'auth'
+      if (historyError === null) {
+        // Recovered via awaited Privy refresh above.
+      } else if (!shouldRetryWithEnv) {
+        // historyError already set from the initial failure or auth-recovery retry.
+      } else {
+        logger.warn('[alfaclub-chat] room_history_auth_failed:retry_env', {
+          roomId,
+          jwtSource: resolvedCommandJwt.source,
+          error: error instanceof Error ? error.message : String(error),
+        })
+        try {
+          historyErrorJwt = fallbackJwt as string
+          fetchedMessages = await fetchRoomHistory({
+            apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
+            fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(flags),
+            proxySecret: resolveAlfaClubProxySecret(flags),
+            roomId,
+            jwt: fallbackJwt as string,
+            limit: flags.historyLimit,
+            timeoutMs: flags.requestTimeoutMs,
+          })
+          jwt = fallbackJwt as string
+        } catch (fallbackError) {
+          historyError = fallbackError
+        }
       }
     }
   }
