@@ -1,4 +1,6 @@
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { isAbsolute, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
 import { logger } from '../infra/logger.js'
@@ -38,6 +40,11 @@ type BuiltCommand = {
   args: string[]
   cwd: string
   env?: Record<string, string>
+}
+
+type DgclawCommandResolution = {
+  commandPath: string
+  workingDirectory: string
 }
 
 function toArenaRunResult(params: {
@@ -114,22 +121,55 @@ async function runCommand(command: BuiltCommand, config: ArenaConfig): Promise<A
       killed?: boolean
       signal?: string
     }
+    const message = err.message ?? 'command_failed'
+    const resolvedCommandPath = isAbsolute(command.command)
+      ? command.command
+      : resolve(command.cwd, command.command)
+    const errorMessage = message.includes('ENOENT')
+      ? `${message} (resolvedCommand=${resolvedCommandPath}; cwd=${command.cwd})`
+      : message
     return toArenaRunResult({
       ...command,
       stdout: String(err.stdout ?? ''),
       stderr: String(err.stderr ?? ''),
       code: Number.isInteger(err.code) ? err.code : null,
       timedOut: Boolean(err.killed && err.signal === 'SIGTERM'),
-      error: err.message ?? 'command_failed',
+      error: errorMessage,
     })
   }
 }
 
+function resolveDgclawCommand(config: ArenaConfig): DgclawCommandResolution {
+  const workingDirectory = config.dgclawDir ?? process.cwd()
+  const commandPath = isAbsolute(config.dgclawBin)
+    ? config.dgclawBin
+    : resolve(workingDirectory, config.dgclawBin)
+  return { commandPath, workingDirectory }
+}
+
+function ensureDgclawReady(config: ArenaConfig): ArenaOpResult | null {
+  if (config.dryRun) return null
+
+  const { commandPath, workingDirectory } = resolveDgclawCommand(config)
+  if (!existsSync(workingDirectory)) {
+    return fail(
+      `Arena command path misconfigured: ARENA_DGCLAW_DIR does not exist (${workingDirectory}).`,
+    )
+  }
+  if (!existsSync(commandPath)) {
+    return fail(
+      `Arena command path misconfigured: dgclaw binary not found (${commandPath}). Verify ARENA_DGCLAW_DIR/ARENA_DGCLAW_BIN.`,
+    )
+  }
+  return null
+}
+
 function buildDgclawCommand(config: ArenaConfig, args: string[]): BuiltCommand {
+  const { commandPath, workingDirectory } = resolveDgclawCommand(config)
   return {
-    command: config.dgclawBin,
+    command: commandPath,
     args,
-    cwd: config.dgclawDir ?? process.cwd(),
+    cwd: workingDirectory,
     env: buildArenaCommandEnv(config),
   }
 }
@@ -192,6 +232,7 @@ export function parseAcpAgentCreateOutput(stdout: string): { agentId?: string; a
 export async function runArenaStatus(config = readArenaConfig()): Promise<ArenaOpResult> {
   const baseValidation = ensureArenaEnabled(config)
   if (baseValidation) return baseValidation
+  const dgclawCommand = resolveDgclawCommand(config)
 
   return {
     ok: true,
@@ -205,6 +246,10 @@ export async function runArenaStatus(config = readArenaConfig()): Promise<ArenaO
       hlApiWalletAddress: config.hlApiWalletAddress,
       commandTimeoutMs: config.commandTimeoutMs,
       dgclawDir: config.dgclawDir,
+      dgclawBin: config.dgclawBin,
+      dgclawCommandPath: dgclawCommand.commandPath,
+      dgclawDirExists: existsSync(dgclawCommand.workingDirectory),
+      dgclawCommandExists: existsSync(dgclawCommand.commandPath),
       allowedRoomIds: config.allowedRoomIds,
       hip3PrefixRequired: config.hip3PrefixRequired,
       allowlistEnabled: Boolean(config.assetAllowlist),
@@ -233,6 +278,8 @@ export async function listArenaAssets(config = readArenaConfig()): Promise<Arena
 export async function runArenaJoin(config = readArenaConfig()): Promise<ArenaOpResult> {
   const baseValidation = ensureArenaEnabled(config)
   if (baseValidation) return baseValidation
+  const dgclawValidation = ensureDgclawReady(config)
+  if (dgclawValidation) return dgclawValidation
   const command = buildDgclawCommand(config, ['join'])
   const run = await runCommand(command, config)
   auditLog('join', { ok: run.ok, dryRun: run.dryRun })
@@ -246,6 +293,8 @@ export async function runArenaJoin(config = readArenaConfig()): Promise<ArenaOpR
 export async function runArenaActivateUnifiedAccount(config = readArenaConfig()): Promise<ArenaOpResult> {
   const baseValidation = ensureArenaEnabled(config)
   if (baseValidation) return baseValidation
+  const dgclawValidation = ensureDgclawReady(config)
+  if (dgclawValidation) return dgclawValidation
   const command = buildDgclawCommand(config, ['activate-unified-account'])
   const run = await runCommand(command, config)
   auditLog('activate_unified_account', { ok: run.ok, dryRun: run.dryRun })
@@ -259,6 +308,8 @@ export async function runArenaActivateUnifiedAccount(config = readArenaConfig())
 export async function runArenaAddApiWallet(config = readArenaConfig()): Promise<ArenaOpResult> {
   const baseValidation = ensureArenaEnabled(config)
   if (baseValidation) return baseValidation
+  const dgclawValidation = ensureDgclawReady(config)
+  if (dgclawValidation) return dgclawValidation
   const command = buildDgclawCommand(config, ['add-api-wallet'])
   const run = await runCommand(command, config)
   auditLog('add_api_wallet', { ok: run.ok, dryRun: run.dryRun })
