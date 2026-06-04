@@ -77,9 +77,59 @@ const hotProjectionFallbackState = {
   lastTriggeredAt: 0,
 }
 
+const hotProjectionTimeoutState = {
+  consecutiveTimeouts: 0,
+  skipUntilMs: 0,
+}
+
 function isEnabled(raw: string | undefined): boolean {
   const normalized = String(raw ?? '').trim().toLowerCase()
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
+
+function collectErrorText(error: unknown): string {
+  const visited = new Set<unknown>()
+  const stack: unknown[] = [error]
+  const text: string[] = []
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current || visited.has(current)) continue
+    visited.add(current)
+    if (typeof current === 'string') {
+      text.push(current)
+      continue
+    }
+    if (current instanceof Error) {
+      text.push(current.message)
+      stack.push((current as Error & { cause?: unknown }).cause)
+      continue
+    }
+    if (typeof current === 'object') {
+      const candidate = current as {
+        message?: unknown
+        shortMessage?: unknown
+        details?: unknown
+        code?: unknown
+        cause?: unknown
+      }
+      text.push(String(candidate.message ?? ''))
+      text.push(String(candidate.shortMessage ?? ''))
+      text.push(String(candidate.details ?? ''))
+      text.push(String(candidate.code ?? ''))
+      stack.push(candidate.cause)
+    }
+  }
+  return text.join(' ').toLowerCase()
+}
+
+function isStatementTimeoutError(error: unknown): boolean {
+  const message = collectErrorText(error)
+  return (
+    message.includes('statement timeout') ||
+    message.includes('canceling statement due to statement timeout') ||
+    message.includes('code 57014') ||
+    message.includes('57014')
+  )
 }
 
 function computeProjectionLagMeta(health: EthosProjectionHealth): ProjectionLagMeta {
@@ -328,13 +378,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         pageLimit: updatePageLimit,
         maxPages: updateMaxPages,
       })
-      const socialUserkeys =
-        socialSeedLimit > 0 && remainingMs() > 8_000
-          ? await collectTopCreatorSocialUserkeys({
-              db,
-              limit: socialSeedLimit,
-            })
-          : []
+      let socialUserkeys: string[] = []
+      if (socialSeedLimit > 0 && remainingMs() > 8_000) {
+        try {
+          socialUserkeys = await collectTopCreatorSocialUserkeys({
+            db,
+            limit: socialSeedLimit,
+          })
+        } catch (error) {
+          if (!isStatementTimeoutError(error)) throw error
+          console.warn('[ethos-canonical-sync-hot] social_seed_skipped_timeout', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }
       const socialSeedSync =
         socialUserkeys.length > 0 && remainingMs() > 5_000
           ? await syncEthosUserkeyScores({
@@ -344,14 +401,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             })
           : { attempted: 0, updated: 0, failed: 0, processedUserkeys: [] as string[] }
       const projectionMode = pickCreatorEthosProjectionRefreshMode('hot')
-      const creatorProjection =
-        remainingMs() > 10_000
-          ? await refreshCreatorEthosProjection({
-              db,
-              limit: projectionRefreshLimit,
-              mode: projectionMode,
-            })
-          : { refreshedRows: 0, appliedLimit: 0, available: false }
+      const projectionBackoffMin = readInt(process.env.ETHOS_HOT_PROJECTION_TIMEOUT_BACKOFF_MIN, 15, 1, 240)
+      const projectionBackoffMax = readInt(process.env.ETHOS_HOT_PROJECTION_TIMEOUT_BACKOFF_MAX_MIN, 120, 1, 720)
+      const projectionEligible = remainingMs() > 10_000
+      const projectionBackoffRemainingMs = Math.max(0, hotProjectionTimeoutState.skipUntilMs - Date.now())
+      const projectionBackoffActive = projectionBackoffRemainingMs > 0
+      let creatorProjection = { refreshedRows: 0, appliedLimit: 0, available: false }
+      if (projectionEligible && !projectionBackoffActive) {
+        try {
+          creatorProjection = await refreshCreatorEthosProjection({
+            db,
+            limit: projectionRefreshLimit,
+            mode: projectionMode,
+          })
+          hotProjectionTimeoutState.consecutiveTimeouts = 0
+          hotProjectionTimeoutState.skipUntilMs = 0
+        } catch (error) {
+          if (!isStatementTimeoutError(error)) throw error
+          hotProjectionTimeoutState.consecutiveTimeouts += 1
+          const backoffMin = Math.min(
+            projectionBackoffMax,
+            projectionBackoffMin * hotProjectionTimeoutState.consecutiveTimeouts,
+          )
+          hotProjectionTimeoutState.skipUntilMs = Date.now() + backoffMin * 60_000
+          console.warn('[ethos-canonical-sync-hot] projection_refresh_timeout_backoff', {
+            backoffMin,
+            consecutiveTimeouts: hotProjectionTimeoutState.consecutiveTimeouts,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      } else if (projectionBackoffActive) {
+        console.warn('[ethos-canonical-sync-hot] projection_refresh_backoff_active', {
+          remainingMs: projectionBackoffRemainingMs,
+        })
+      }
       const health = remainingMs() > 3_000 ? await readProjectionHealth(db) : null
       const lagMeta = emitProjectionLagIfNeeded({ health })
       if (remainingMs() > 15_000) {

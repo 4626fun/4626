@@ -226,7 +226,7 @@ export async function loadMergedCreatorEthosByAddresses(
 export async function refreshCreatorEthosProjection(params: {
   db: Db
   limit?: number
-  /** @deprecated Ignored; all refreshes use the full projection/scoring path. */
+  /** fast uses the same scorer but skips expensive chart-side refreshes. */
   mode?: 'full' | 'fast'
 }): Promise<{ refreshedRows: number; appliedLimit: number; available: boolean }> {
   // The two modules declare structurally-compatible ad-hoc `Db` shapes (this file allows an
@@ -261,9 +261,9 @@ export async function refreshCreatorEthosProjection(params: {
   )
   const volumeLimit = Math.max(500, appliedLimit - ethosPriorityLimit)
 
-  // `fast` uses the same multi-source scorer as `full` (CSW owners + social + caches).
-  // Callers choose refresh frequency via pickCreatorEthosProjectionRefreshMode().
-  const _projectionMode = params.mode ?? 'full'
+  // `fast` uses the same multi-source scorer as `full` (CSW owners + social + caches)
+  // but skips chart/snapshot maintenance to keep hot-lane pressure predictable.
+  const projectionMode = params.mode ?? 'full'
 
   const result = await params.db.sql`
     WITH ranked_creator_coins AS (
@@ -612,6 +612,14 @@ export async function refreshCreatorEthosProjection(params: {
       score_updated_at = EXCLUDED.score_updated_at,
       refreshed_at = NOW();
   `
+
+  if (projectionMode !== 'full') {
+    return {
+      refreshedRows: Math.max(0, Number(result.rowCount ?? 0)),
+      appliedLimit,
+      available: true,
+    }
+  }
 
   // Keep chart distribution tables fresh for the 137+ Ethos charts
   try {
