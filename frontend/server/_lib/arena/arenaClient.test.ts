@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { resolve } from 'node:path'
 
 import type { ArenaConfig } from './arenaConfig.js'
 import {
@@ -74,6 +77,8 @@ describe('arenaClient dgclaw command preflight', () => {
 
     expect(result.ok).toBe(true)
     expect(result.details?.dgclawCommandPath).toBe('/tmp/dgclaw.sh')
+    expect(result.details?.dgclawCommandSource).toBe('configured')
+    expect(Array.isArray(result.details?.dgclawCandidatePaths)).toBe(true)
     expect(result.details?.dgclawDirExists).toBe(true)
     expect(result.details?.dgclawCommandExists).toBe(false)
   })
@@ -89,6 +94,24 @@ describe('arenaClient dgclaw command preflight', () => {
 
     expect(result.ok).toBe(false)
     expect(result.message).toContain('dgclaw binary not found')
+  })
+
+  it('falls back to canonical dgclaw.sh in configured dir when bin override is stale', async () => {
+    const dgclawDir = mkdtempSync(resolve(tmpdir(), 'arena-dgclaw-'))
+    const dgclawPath = resolve(dgclawDir, 'dgclaw.sh')
+    writeFileSync(dgclawPath, '#!/usr/bin/env bash\nexit 0\n', 'utf8')
+    chmodSync(dgclawPath, 0o755)
+
+    const result = await runArenaJoin(
+      mockConfig({
+        dryRun: false,
+        dgclawDir,
+        dgclawBin: './stale-wrapper.sh',
+      }),
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.run?.command).toBe(dgclawPath)
   })
 })
 
