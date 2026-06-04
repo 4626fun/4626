@@ -24,6 +24,8 @@ import { base } from 'viem/chains'
 import { evaluateKeeperStrategyHealthGate } from '../../../server/_lib/keeper/strategyHealthGate.js'
 
 const VAULT_ABI = [
+  { type: 'error', name: 'Unauthorized', inputs: [] },
+  { type: 'error', name: 'StrategyValuationNotReady', inputs: [{ name: 'strategy', type: 'address' }] },
   { type: 'function', name: 'report', inputs: [], outputs: [{ type: 'uint256' }, { type: 'uint256' }], stateMutability: 'nonpayable' },
 ] as const
 
