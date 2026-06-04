@@ -169,22 +169,13 @@ function resolveDgclawCommand(config: ArenaConfig): DgclawCommandResolution {
   for (let index = 0; index < candidateWorkingDirectories.length; index += 1) {
     const workingDirectory = candidateWorkingDirectories[index]
     const source = index === 0 ? 'configured' : 'fallback'
-    const commandPathPrimary = resolve(workingDirectory, config.dgclawBin)
-    candidates.push({ commandPath: commandPathPrimary, workingDirectory, source })
-
-    const normalizedConfiguredBin = config.dgclawBin.replace(/\\/g, '/')
-    const includesCanonicalName = normalizedConfiguredBin.endsWith('/dgclaw.sh') || normalizedConfiguredBin === 'dgclaw.sh'
-    if (!includesCanonicalName) {
-      candidates.push({
-        commandPath: resolve(workingDirectory, 'dgclaw.sh'),
-        workingDirectory,
-        source,
-      })
-      candidates.push({
-        commandPath: resolve(workingDirectory, 'scripts/dgclaw.sh'),
-        workingDirectory,
-        source,
-      })
+    const candidatePathSet = new Set<string>([
+      resolve(workingDirectory, config.dgclawBin),
+      resolve(workingDirectory, 'dgclaw.sh'),
+      resolve(workingDirectory, 'scripts/dgclaw.sh'),
+    ])
+    for (const commandPath of candidatePathSet) {
+      candidates.push({ commandPath, workingDirectory, source })
     }
   }
 
