@@ -426,6 +426,87 @@ describe('executeHermitCommand', () => {
     upsertSpy.mockRestore()
   })
 
+  it('includes onboarding diagnostics when /arena register default steps fail', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '0',
+    })
+    const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
+    const agentId = '019e90fa-3c8c-7ba0-8547-bf6f81698c3d'
+    const agentWallet = '0x74ab91cd845ff0d2006404440af49c3bc8c1df96'
+
+    const upsertSpy = vi.spyOn(arenaStore, 'upsertArenaIdentityMapping').mockResolvedValue(true)
+    const joinSpy = vi.spyOn(arenaClient, 'runArenaJoin').mockResolvedValue({
+      ok: false,
+      message: 'Arena join failed.',
+      run: {
+        ok: false,
+        command: 'dgclaw',
+        args: ['join'],
+        cwd: '/tmp',
+        stdout: '',
+        stderr: 'join denied',
+        code: 1,
+        timedOut: false,
+        dryRun: false,
+        error: 'join_error',
+      },
+    })
+    const activateSpy = vi.spyOn(arenaClient, 'runArenaActivateUnifiedAccount').mockResolvedValue({
+      ok: false,
+      message: 'Unified account activation failed.',
+      run: {
+        ok: false,
+        command: 'dgclaw',
+        args: ['activate-unified-account'],
+        cwd: '/tmp',
+        stdout: '',
+        stderr: 'activate denied',
+        code: 1,
+        timedOut: false,
+        dryRun: false,
+        error: 'activate_error',
+      },
+    })
+    const addApiWalletSpy = vi.spyOn(arenaClient, 'runArenaAddApiWallet').mockResolvedValue({
+      ok: false,
+      message: 'API wallet setup failed.',
+      run: {
+        ok: false,
+        command: 'dgclaw',
+        args: ['add-api-wallet'],
+        cwd: '/tmp',
+        stdout: '',
+        stderr: 'wallet denied',
+        code: 1,
+        timedOut: false,
+        dryRun: false,
+        error: 'api_wallet_error',
+      },
+    })
+
+    const result = await executeHermitCommand({
+      commandText: `/arena register default ${agentId} ${agentWallet}`,
+      senderAddress: sender,
+      roomId: '1659',
+    })
+
+    expect(result.reply).toContain('steps: join=fail activate=fail add-api-wallet=fail')
+    expect(result.reply).toContain('onboarding diagnostics:')
+    expect(result.reply).toContain('- join: Arena join failed.')
+    expect(result.reply).toContain('join_error')
+    expect(result.reply).toContain('- activate: Unified account activation failed.')
+    expect(result.reply).toContain('activate_error')
+    expect(result.reply).toContain('- add-api-wallet: API wallet setup failed.')
+    expect(result.reply).toContain('api_wallet_error')
+
+    upsertSpy.mockRestore()
+    joinSpy.mockRestore()
+    activateSpy.mockRestore()
+    addApiWalletSpy.mockRestore()
+  })
+
   it('short-circuits /arena register (supplied ids) when ids already match resolved for sender (already-bound case)', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',

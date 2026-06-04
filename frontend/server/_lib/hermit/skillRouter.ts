@@ -2269,6 +2269,51 @@ export async function executeHermitCommand(
         return s.slice(0, 400)
       }
 
+      type ArenaOnboardStep = {
+        name: 'join' | 'activate' | 'add-api-wallet'
+        result: Awaited<ReturnType<typeof runArenaJoin>>
+      }
+
+      function summarizeArenaOnboardStep(step: ArenaOnboardStep): string {
+        return `${step.name}=${step.result.ok ? 'ok' : 'fail'}${step.result.run?.dryRun ? '[dry]' : ''}`
+      }
+
+      function describeArenaOnboardFailure(step: ArenaOnboardStep): string {
+        const message = sanitizeOutputForReply(
+          [
+            step.result.message,
+            step.result.run?.error ?? '',
+            step.result.run?.stderr ?? '',
+            step.result.run?.stdout ?? '',
+          ]
+            .map((part) => String(part).trim())
+            .filter(Boolean)
+            .join(' | '),
+        )
+        return message || 'unknown step failure'
+      }
+
+      async function runArenaOnboardSequence(activeConfig: typeof config): Promise<{
+        stepSummaries: string[]
+        failureLines: string[]
+      }> {
+        const steps: ArenaOnboardStep[] = [
+          { name: 'join', result: await runArenaJoin(activeConfig) },
+          { name: 'activate', result: await runArenaActivateUnifiedAccount(activeConfig) },
+          { name: 'add-api-wallet', result: await runArenaAddApiWallet(activeConfig) },
+        ]
+        const stepSummaries = steps.map(summarizeArenaOnboardStep)
+        const failedSteps = steps.filter((step) => !step.result.ok)
+        const failureLines =
+          failedSteps.length > 0
+            ? [
+                'onboarding diagnostics:',
+                ...failedSteps.map((step) => `- ${step.name}: ${describeArenaOnboardFailure(step)}`),
+              ]
+            : []
+        return { stepSummaries, failureLines }
+      }
+
       if (isCreatePath) {
         // Create path (no ids supplied): drive `acp agent create` via the runtime's ACP session
         // (pre-configured via acp configure / ACP_* tokens + ACP_OWNER_WALLET; see acp-cli source).
@@ -2305,13 +2350,7 @@ export async function executeHermitCommand(
             ...(cr.hlApiWalletAddress ? { hlApiWalletAddress: cr.hlApiWalletAddress } : {}),
           }
 
-          const stepResults: string[] = []
-          const j = await runArenaJoin(activeConfig)
-          stepResults.push(`join=${j.ok ? 'ok' : 'fail'}${j.run?.dryRun ? '[dry]' : ''}`)
-          const a = await runArenaActivateUnifiedAccount(activeConfig)
-          stepResults.push(`activate=${a.ok ? 'ok' : 'fail'}${a.run?.dryRun ? '[dry]' : ''}`)
-          const api = await runArenaAddApiWallet(activeConfig)
-          stepResults.push(`add-api-wallet=${api.ok ? 'ok' : 'fail'}${api.run?.dryRun ? '[dry]' : ''}`)
+          const { stepSummaries, failureLines } = await runArenaOnboardSequence(activeConfig)
 
           const what = isDefault ? 'room default' : 'personal (\'mine\') identity for your sender'
           return {
@@ -2324,7 +2363,8 @@ export async function executeHermitCommand(
               out ? `acp output (sanitized, truncated):\n${out}` : '',
               `agentId=${cr.agentId} arenaWallet=${cr.agentWalletAddress}${cr.hlApiWalletAddress ? ` hl=${cr.hlApiWalletAddress}` : ''}`,
               saved ? 'Mapping saved.' : 'Mapping write may have failed (check logs).',
-              `steps: ${stepResults.join(' ')}`,
+              `steps: ${stepSummaries.join(' ')}`,
+              ...failureLines,
               'Verify with: /arena identity show  |  /arena status',
               'Note: the agent was created under the active runtime ACP session (owner resolves to ACP_OWNER_WALLET when ACP_* rotation vars are set). For full Virtuals dashboard ownership under your Alfa EOA, create/claim via web UI at app.virtuals.io while connected as that wallet.',
             ].filter(Boolean).join('\n'),
@@ -2397,13 +2437,7 @@ export async function executeHermitCommand(
       }
 
       // Run onboarding steps
-      const stepResults: string[] = []
-      const j = await runArenaJoin(activeConfig)
-      stepResults.push(`join=${j.ok ? 'ok' : 'fail'}${j.run?.dryRun ? '[dry]' : ''}`)
-      const a = await runArenaActivateUnifiedAccount(activeConfig)
-      stepResults.push(`activate=${a.ok ? 'ok' : 'fail'}${a.run?.dryRun ? '[dry]' : ''}`)
-      const api = await runArenaAddApiWallet(activeConfig)
-      stepResults.push(`add-api-wallet=${api.ok ? 'ok' : 'fail'}${api.run?.dryRun ? '[dry]' : ''}`)
+      const { stepSummaries, failureLines } = await runArenaOnboardSequence(activeConfig)
 
       const prefix = isDefault ? 'Arena room default register (supplied ids)' : 'Arena register (supplied ids)'
       const identityLine = isDefault
@@ -2416,7 +2450,8 @@ export async function executeHermitCommand(
         reply: [
           prefix + ':',
           identityLine,
-          `steps: ${stepResults.join(' ')}`,
+          `steps: ${stepSummaries.join(' ')}`,
+          ...failureLines,
           `agentId: ${agentId}`,
           `arenaWallet: ${agentWalletAddress}`,
           hlApiWalletAddress ? `hlApiWallet: ${hlApiWalletAddress}` : '',
