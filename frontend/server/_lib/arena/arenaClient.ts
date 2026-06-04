@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { isAbsolute, resolve } from 'node:path'
+import { dirname, isAbsolute, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
 import { logger } from '../infra/logger.js'
@@ -45,7 +45,11 @@ type BuiltCommand = {
 type DgclawCommandResolution = {
   commandPath: string
   workingDirectory: string
+  source: 'configured' | 'fallback'
+  candidatePaths: string[]
 }
+
+const DGCLAW_FALLBACK_DIRS = ['/app/dgclaw-skill']
 
 function toArenaRunResult(params: {
   command: string
@@ -140,25 +144,86 @@ async function runCommand(command: BuiltCommand, config: ArenaConfig): Promise<A
 }
 
 function resolveDgclawCommand(config: ArenaConfig): DgclawCommandResolution {
-  const workingDirectory = config.dgclawDir ?? process.cwd()
-  const commandPath = isAbsolute(config.dgclawBin)
-    ? config.dgclawBin
-    : resolve(workingDirectory, config.dgclawBin)
-  return { commandPath, workingDirectory }
+  const candidatePaths: string[] = []
+  const configuredWorkingDirectory = config.dgclawDir ?? process.cwd()
+  const fallbackWorkingDirectories: string[] = []
+  for (const fallback of DGCLAW_FALLBACK_DIRS) {
+    if (!fallbackWorkingDirectories.includes(fallback) && fallback !== configuredWorkingDirectory) {
+      fallbackWorkingDirectories.push(fallback)
+    }
+  }
+
+  if (isAbsolute(config.dgclawBin)) {
+    const directResolution = {
+      commandPath: config.dgclawBin,
+      workingDirectory: config.dgclawDir ?? dirname(config.dgclawBin),
+      source: 'configured' as const,
+      candidatePaths: [config.dgclawBin],
+    }
+    if (existsSync(directResolution.commandPath)) return directResolution
+    return directResolution
+  }
+
+  const candidates: Array<{ commandPath: string; workingDirectory: string; source: 'configured' | 'fallback' }> = []
+  const candidateWorkingDirectories = [configuredWorkingDirectory, ...fallbackWorkingDirectories]
+  for (let index = 0; index < candidateWorkingDirectories.length; index += 1) {
+    const workingDirectory = candidateWorkingDirectories[index]
+    const source = index === 0 ? 'configured' : 'fallback'
+    const commandPathPrimary = resolve(workingDirectory, config.dgclawBin)
+    candidates.push({ commandPath: commandPathPrimary, workingDirectory, source })
+
+    const normalizedConfiguredBin = config.dgclawBin.replace(/\\/g, '/')
+    const includesCanonicalName = normalizedConfiguredBin.endsWith('/dgclaw.sh') || normalizedConfiguredBin === 'dgclaw.sh'
+    if (!includesCanonicalName) {
+      candidates.push({
+        commandPath: resolve(workingDirectory, 'dgclaw.sh'),
+        workingDirectory,
+        source,
+      })
+      candidates.push({
+        commandPath: resolve(workingDirectory, 'scripts/dgclaw.sh'),
+        workingDirectory,
+        source,
+      })
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (!candidatePaths.includes(candidate.commandPath)) {
+      candidatePaths.push(candidate.commandPath)
+    }
+    if (existsSync(candidate.commandPath)) {
+      return {
+        ...candidate,
+        candidatePaths,
+      }
+    }
+  }
+
+  const primaryCandidate = candidates[0] ?? {
+    commandPath: resolve(configuredWorkingDirectory, config.dgclawBin),
+    workingDirectory: configuredWorkingDirectory,
+    source: 'configured' as const,
+  }
+  return {
+    ...primaryCandidate,
+    candidatePaths: candidatePaths.length > 0 ? candidatePaths : [primaryCandidate.commandPath],
+  }
 }
 
 function ensureDgclawReady(config: ArenaConfig): ArenaOpResult | null {
   if (config.dryRun) return null
 
-  const { commandPath, workingDirectory } = resolveDgclawCommand(config)
+  const { commandPath, workingDirectory, candidatePaths } = resolveDgclawCommand(config)
   if (!existsSync(workingDirectory)) {
     return fail(
       `Arena command path misconfigured: ARENA_DGCLAW_DIR does not exist (${workingDirectory}).`,
     )
   }
   if (!existsSync(commandPath)) {
+    const attempts = candidatePaths.slice(0, 3).join(', ')
     return fail(
-      `Arena command path misconfigured: dgclaw binary not found (${commandPath}). Verify ARENA_DGCLAW_DIR/ARENA_DGCLAW_BIN.`,
+      `Arena command path misconfigured: dgclaw binary not found (${commandPath}). Tried: ${attempts}. Verify ARENA_DGCLAW_DIR/ARENA_DGCLAW_BIN.`,
     )
   }
   return null
@@ -248,6 +313,8 @@ export async function runArenaStatus(config = readArenaConfig()): Promise<ArenaO
       dgclawDir: config.dgclawDir,
       dgclawBin: config.dgclawBin,
       dgclawCommandPath: dgclawCommand.commandPath,
+      dgclawCommandSource: dgclawCommand.source,
+      dgclawCandidatePaths: dgclawCommand.candidatePaths,
       dgclawDirExists: existsSync(dgclawCommand.workingDirectory),
       dgclawCommandExists: existsSync(dgclawCommand.commandPath),
       allowedRoomIds: config.allowedRoomIds,
