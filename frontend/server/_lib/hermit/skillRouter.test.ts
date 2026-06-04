@@ -18,6 +18,7 @@ describe('executeHermitCommand', () => {
   beforeEach(() => {
     fetchMock = vi.fn()
     ;(globalThis as unknown as { fetch: typeof fetch }).fetch = fetchMock as unknown as typeof fetch
+    arenaStore.__resetArenaIdentityMappingsForTests()
   })
 
   afterEach(() => {
@@ -300,7 +301,7 @@ describe('executeHermitCommand', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('supports /arena register (supplied ids) + runs onboard sequence (dry); bind may be no-op in unit harness without DB', async () => {
+  it('supports /arena register (supplied ids) + runs onboard sequence (dry) with in-memory identity fallback when DB is unavailable', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_DGCLAW_DIR: '/tmp',
@@ -316,8 +317,8 @@ describe('executeHermitCommand', () => {
       roomId: '1659',
     })
     expect(result.reply).toContain('Arena register (supplied ids)')
-    // In the unit test env (no real getDb) upsert returns false, so we get the 'failed' note but still execute the sequence + surface ids/sender
-    expect(result.reply).toContain('Identity bind failed')
+    // In the unit test env (no real getDb), the in-memory fallback keeps bind semantics working.
+    expect(result.reply).toContain('Identity bound for \'mine\'')
     expect(result.reply).toContain(sender)
     expect(result.reply).toContain('join=')
     expect(result.reply).toContain('activate=')
