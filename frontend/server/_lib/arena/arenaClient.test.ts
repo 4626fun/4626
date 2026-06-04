@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { ArenaConfig } from './arenaConfig.js'
-import { parseAcpAgentCreateOutput, runArenaCreateAgent, runArenaTrade } from './arenaClient.js'
+import {
+  parseAcpAgentCreateOutput,
+  runArenaAddApiWallet,
+  runArenaCreateAgent,
+  runArenaJoin,
+  runArenaStatus,
+  runArenaTrade,
+} from './arenaClient.js'
 
 function mockConfig(overrides: Partial<ArenaConfig> = {}): ArenaConfig {
   return {
@@ -44,6 +51,44 @@ describe('arenaClient trade guardrails', () => {
     expect(result.ok).toBe(true)
     expect(result.run?.dryRun).toBe(true)
     expect(result.run?.command).toBe('npx')
+  })
+})
+
+describe('arenaClient dgclaw command preflight', () => {
+  it('fails with actionable message when dgclaw binary is missing in live mode', async () => {
+    const result = await runArenaJoin(
+      mockConfig({
+        dryRun: false,
+        dgclawDir: '/tmp',
+        dgclawBin: './definitely-missing-dgclaw.sh',
+      }),
+    )
+
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('dgclaw binary not found')
+    expect(result.message).toContain('ARENA_DGCLAW_DIR/ARENA_DGCLAW_BIN')
+  })
+
+  it('reports command resolution details in status output', async () => {
+    const result = await runArenaStatus(mockConfig({ dgclawDir: '/tmp', dgclawBin: './dgclaw.sh' }))
+
+    expect(result.ok).toBe(true)
+    expect(result.details?.dgclawCommandPath).toBe('/tmp/dgclaw.sh')
+    expect(result.details?.dgclawDirExists).toBe(true)
+    expect(result.details?.dgclawCommandExists).toBe(false)
+  })
+
+  it('returns command-path preflight failure for add-api-wallet when live and missing binary', async () => {
+    const result = await runArenaAddApiWallet(
+      mockConfig({
+        dryRun: false,
+        dgclawDir: '/tmp',
+        dgclawBin: './missing-add-wallet.sh',
+      }),
+    )
+
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('dgclaw binary not found')
   })
 })
 
