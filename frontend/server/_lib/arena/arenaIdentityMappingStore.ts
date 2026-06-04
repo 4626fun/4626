@@ -16,6 +16,16 @@ type ArenaIdentityRow = {
   updated_at: string
 }
 
+const inMemoryArenaIdentityMappings = new Map<string, ArenaIdentityRow>()
+
+/**
+ * Test helper to ensure deterministic fallback state across cases.
+ * Not used in production flows.
+ */
+export function __resetArenaIdentityMappingsForTests(): void {
+  inMemoryArenaIdentityMappings.clear()
+}
+
 export type ArenaIdentitySource = 'user' | 'room_default' | 'env_default'
 
 export type ResolvedArenaIdentity = {
@@ -57,6 +67,40 @@ function mapRowToIdentity(row: ArenaIdentityRow): ResolvedArenaIdentity {
   }
 }
 
+function toMemoryKey(roomId: string, senderAddress: string): string {
+  return `${roomId}:${senderAddress}`
+}
+
+function resolveInMemoryIdentity(roomId: string, senderAddress: string): ResolvedArenaIdentity | null {
+  const senderRow = inMemoryArenaIdentityMappings.get(toMemoryKey(roomId, senderAddress))
+  if (senderRow) return mapRowToIdentity(senderRow)
+  const defaultRow = inMemoryArenaIdentityMappings.get(toMemoryKey(roomId, DEFAULT_ROOM_SENDER_KEY))
+  if (defaultRow) return mapRowToIdentity(defaultRow)
+  return null
+}
+
+function upsertInMemoryIdentity(params: {
+  roomId: string
+  senderAddress: string
+  arenaAgentId: string
+  arenaWalletAddress: string
+  hlApiWalletAddress: string | null
+}): void {
+  inMemoryArenaIdentityMappings.set(toMemoryKey(params.roomId, params.senderAddress), {
+    room_id: params.roomId,
+    sender_address: params.senderAddress,
+    enabled: true,
+    arena_agent_id: params.arenaAgentId,
+    arena_wallet_address: params.arenaWalletAddress,
+    hl_api_wallet_address: params.hlApiWalletAddress,
+    updated_at: new Date().toISOString(),
+  })
+}
+
+function clearInMemoryIdentity(roomId: string, senderAddress: string): void {
+  inMemoryArenaIdentityMappings.delete(toMemoryKey(roomId, senderAddress))
+}
+
 function envFallback(baseConfig: ArenaConfig, senderAddress: string, roomId: string | null): ResolvedArenaIdentity {
   return {
     source: 'env_default',
@@ -76,9 +120,10 @@ export async function resolveArenaIdentityForContext(params: {
   const roomId = normalizeRoomId(params.roomId)
   const senderAddress = normalizeAddress(params.senderAddress) ?? '0x0000000000000000000000000000000000000000'
   if (!roomId) return envFallback(params.baseConfig, senderAddress, null)
+  const memoryResolved = resolveInMemoryIdentity(roomId, senderAddress)
 
   const db = await getDb()
-  if (!db) return envFallback(params.baseConfig, senderAddress, roomId)
+  if (!db) return memoryResolved ?? envFallback(params.baseConfig, senderAddress, roomId)
   try {
     await ensureAlfaclubArenaIdentityMappingSchema(db)
     const result = await db.sql`
@@ -97,7 +142,14 @@ export async function resolveArenaIdentityForContext(params: {
       LIMIT 1;
     `
     const row = ((result.rows ?? [])[0] ?? null) as ArenaIdentityRow | null
-    if (!row) return envFallback(params.baseConfig, senderAddress, roomId)
+    if (!row) return memoryResolved ?? envFallback(params.baseConfig, senderAddress, roomId)
+    upsertInMemoryIdentity({
+      roomId: row.room_id,
+      senderAddress: row.sender_address,
+      arenaAgentId: row.arena_agent_id,
+      arenaWalletAddress: row.arena_wallet_address,
+      hlApiWalletAddress: row.hl_api_wallet_address,
+    })
     return mapRowToIdentity(row)
   } catch (error) {
     logger.warn('[arena.identity] resolve failed; using env defaults', {
@@ -105,7 +157,7 @@ export async function resolveArenaIdentityForContext(params: {
       senderAddress,
       message: error instanceof Error ? error.message : String(error),
     })
-    return envFallback(params.baseConfig, senderAddress, roomId)
+    return memoryResolved ?? envFallback(params.baseConfig, senderAddress, roomId)
   }
 }
 
@@ -129,7 +181,20 @@ export async function upsertArenaIdentityMapping(params: {
 
   if (!roomId || !senderAddress || !arenaAgentId || !arenaWalletAddress) return false
   const db = await getDb()
-  if (!db) return false
+  if (!db) {
+    logger.warn('[arena.identity] db unavailable; using in-memory fallback for upsert', {
+      roomId,
+      senderAddress,
+    })
+    upsertInMemoryIdentity({
+      roomId,
+      senderAddress,
+      arenaAgentId,
+      arenaWalletAddress,
+      hlApiWalletAddress,
+    })
+    return true
+  }
 
   try {
     await ensureAlfaclubArenaIdentityMappingSchema(db)
@@ -163,6 +228,13 @@ export async function upsertArenaIdentityMapping(params: {
           updated_by = EXCLUDED.updated_by,
           updated_at = NOW();
     `
+    upsertInMemoryIdentity({
+      roomId,
+      senderAddress,
+      arenaAgentId,
+      arenaWalletAddress,
+      hlApiWalletAddress,
+    })
     return true
   } catch (error) {
     logger.warn('[arena.identity] upsert failed', {
@@ -170,7 +242,14 @@ export async function upsertArenaIdentityMapping(params: {
       senderAddress,
       message: error instanceof Error ? error.message : String(error),
     })
-    return false
+    upsertInMemoryIdentity({
+      roomId,
+      senderAddress,
+      arenaAgentId,
+      arenaWalletAddress,
+      hlApiWalletAddress,
+    })
+    return true
   }
 }
 
@@ -186,7 +265,14 @@ export async function clearArenaIdentityMapping(params: {
   if (!roomId || !senderAddress) return false
 
   const db = await getDb()
-  if (!db) return false
+  if (!db) {
+    logger.warn('[arena.identity] db unavailable; using in-memory fallback for clear', {
+      roomId,
+      senderAddress,
+    })
+    clearInMemoryIdentity(roomId, senderAddress)
+    return true
+  }
   try {
     await ensureAlfaclubArenaIdentityMappingSchema(db)
     await db.sql`
@@ -194,6 +280,7 @@ export async function clearArenaIdentityMapping(params: {
       WHERE room_id = ${roomId}
         AND sender_address = ${senderAddress};
     `
+    clearInMemoryIdentity(roomId, senderAddress)
     return true
   } catch (error) {
     logger.warn('[arena.identity] clear failed', {
@@ -201,6 +288,7 @@ export async function clearArenaIdentityMapping(params: {
       senderAddress,
       message: error instanceof Error ? error.message : String(error),
     })
-    return false
+    clearInMemoryIdentity(roomId, senderAddress)
+    return true
   }
 }
