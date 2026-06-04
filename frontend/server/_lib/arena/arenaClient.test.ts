@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 
@@ -112,6 +112,26 @@ describe('arenaClient dgclaw command preflight', () => {
 
     expect(result.ok).toBe(true)
     expect(result.run?.command).toBe(dgclawPath)
+  })
+
+  it('falls back to scripts/dgclaw.sh when canonical wrapper is missing', async () => {
+    const dgclawDir = mkdtempSync(resolve(tmpdir(), 'arena-dgclaw-scripts-'))
+    const scriptsDir = resolve(dgclawDir, 'scripts')
+    mkdirSync(scriptsDir)
+    const scriptPath = resolve(scriptsDir, 'dgclaw.sh')
+    writeFileSync(scriptPath, '#!/usr/bin/env bash\nexit 0\n', 'utf8')
+    chmodSync(scriptPath, 0o755)
+
+    const result = await runArenaJoin(
+      mockConfig({
+        dryRun: false,
+        dgclawDir,
+        dgclawBin: './dgclaw.sh',
+      }),
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.run?.command).toBe(scriptPath)
   })
 })
 
