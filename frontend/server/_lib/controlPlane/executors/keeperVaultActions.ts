@@ -27,6 +27,59 @@ export class KeeperVaultActionError extends Error {
   }
 }
 
+function collectErrorText(error: unknown): string {
+  const visited = new Set<unknown>()
+  const stack: unknown[] = [error]
+  const text: string[] = []
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current || visited.has(current)) continue
+    visited.add(current)
+    if (typeof current === 'string') {
+      text.push(current)
+      continue
+    }
+    if (current instanceof Error) {
+      text.push(current.message)
+      stack.push((current as Error & { cause?: unknown }).cause)
+      continue
+    }
+    if (typeof current === 'object') {
+      const candidate = current as { message?: unknown; shortMessage?: unknown; details?: unknown; cause?: unknown }
+      text.push(String(candidate.message ?? ''))
+      text.push(String(candidate.shortMessage ?? ''))
+      text.push(String(candidate.details ?? ''))
+      stack.push(candidate.cause)
+    }
+  }
+  return text.join(' ').toLowerCase()
+}
+
+function isKnownRebalanceGasRejection(error: unknown): boolean {
+  const message = collectErrorText(error)
+  return (
+    message.includes('gas required exceeds allowance (0)') ||
+    message.includes('insufficient funds for gas') ||
+    message.includes('estimate gas execution reverted') ||
+    message.includes('insufficient funds') ||
+    message.includes('intrinsic gas too low')
+  )
+}
+
+function isKnownRebalanceAuthorizationRejection(error: unknown): boolean {
+  const message = collectErrorText(error)
+  return message.includes('0x82b42900') || message.includes('unauthorized()')
+}
+
+function isKnownRebalanceNoStrategiesRejection(error: unknown): boolean {
+  const message = collectErrorText(error)
+  return message.includes('0x56de3055') || message.includes('nostrategies()')
+}
+
+function isAddressEqual(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
+}
+
 function getKeeperClients() {
   const keeperPk = process.env.KPR_PRIVATE_KEY
   if (!keeperPk) {
@@ -88,6 +141,37 @@ export async function executeVaultTend(vaultAddress: string): Promise<{ txHash: 
 }
 
 const VAULT_REBALANCE_ABI = [
+  { type: 'error', name: 'Unauthorized', inputs: [] },
+  { type: 'error', name: 'NoStrategies', inputs: [] },
+  { type: 'error', name: 'InvalidWeight', inputs: [] },
+  {
+    type: 'function',
+    name: 'keeper',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'management',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'owner',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'totalStrategyWeight',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+    stateMutability: 'view',
+  },
   {
     type: 'function',
     name: 'rebalanceStrategies',
@@ -103,22 +187,90 @@ export async function executeVaultRebalanceStrategies(
 ): Promise<{ txHash: string; status: string }> {
   const address = normalizeVaultAddress(vaultAddress)
   const { account, publicClient, walletClient } = getKeeperClients()
-  const txHash = await walletClient.writeContract({
-    address,
-    abi: VAULT_REBALANCE_ABI as unknown as Abi,
-    functionName: 'rebalanceStrategies',
-    args: [minDeviationBps],
-    chain: base,
-    account,
-  })
-  const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 })
-  if (receipt.status !== 'success') {
-    throw new KeeperVaultActionError('rebalanceStrategies() reverted', {
-      code: 'rebalance_strategies_reverted',
-      retryable: false,
-    })
+  try {
+    const [keeperAddress, managementAddress, ownerAddress, totalStrategyWeight] = await Promise.all([
+      publicClient.readContract({
+        address,
+        abi: VAULT_REBALANCE_ABI as unknown as Abi,
+        functionName: 'keeper',
+      }) as Promise<`0x${string}`>,
+      publicClient.readContract({
+        address,
+        abi: VAULT_REBALANCE_ABI as unknown as Abi,
+        functionName: 'management',
+      }) as Promise<`0x${string}`>,
+      publicClient.readContract({
+        address,
+        abi: VAULT_REBALANCE_ABI as unknown as Abi,
+        functionName: 'owner',
+      }) as Promise<`0x${string}`>,
+      publicClient.readContract({
+        address,
+        abi: VAULT_REBALANCE_ABI as unknown as Abi,
+        functionName: 'totalStrategyWeight',
+      }) as Promise<bigint>,
+    ])
+
+    if (totalStrategyWeight <= 0n) {
+      throw new KeeperVaultActionError('rebalanceStrategies skipped: no active strategy weight', {
+        code: 'rebalance_strategies_no_strategies',
+        retryable: false,
+      })
+    }
+
+    const caller = account.address.toLowerCase()
+    const authorized = [keeperAddress, managementAddress, ownerAddress].some((candidate) =>
+      isAddressEqual(candidate, caller),
+    )
+    if (!authorized) {
+      throw new KeeperVaultActionError('rebalanceStrategies skipped: keeper wallet is not authorized for vault', {
+        code: 'rebalance_strategies_unauthorized',
+        retryable: false,
+      })
+    }
+  } catch (error) {
+    if (error instanceof KeeperVaultActionError) throw error
   }
-  return { txHash, status: 'success' }
+
+  try {
+    const txHash = await walletClient.writeContract({
+      address,
+      abi: VAULT_REBALANCE_ABI as unknown as Abi,
+      functionName: 'rebalanceStrategies',
+      args: [minDeviationBps],
+      chain: base,
+      account,
+    })
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 })
+    if (receipt.status !== 'success') {
+      throw new KeeperVaultActionError('rebalanceStrategies() reverted', {
+        code: 'rebalance_strategies_reverted',
+        retryable: false,
+      })
+    }
+    return { txHash, status: 'success' }
+  } catch (error) {
+    if (error instanceof KeeperVaultActionError) throw error
+    if (isKnownRebalanceAuthorizationRejection(error)) {
+      throw new KeeperVaultActionError('rebalanceStrategies() unauthorized', {
+        code: 'rebalance_strategies_unauthorized',
+        retryable: false,
+      })
+    }
+    if (isKnownRebalanceNoStrategiesRejection(error)) {
+      throw new KeeperVaultActionError('rebalanceStrategies() skipped: no active strategies', {
+        code: 'rebalance_strategies_no_strategies',
+        retryable: false,
+      })
+    }
+    if (isKnownRebalanceGasRejection(error)) {
+      throw new KeeperVaultActionError('rebalanceStrategies() gas rejected', {
+        code: 'rebalance_strategies_gas_rejected',
+        retryable: false,
+      })
+    }
+    throw error
+  }
 }
 
 export async function executeVaultReport(vaultAddress: string): Promise<{ txHash: string; status: string }> {

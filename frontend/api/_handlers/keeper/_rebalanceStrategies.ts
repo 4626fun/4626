@@ -17,7 +17,11 @@ import {
   getClientIp,
   rateLimitKey,
 } from '@4626/server-core'
-import { executeVaultRebalanceStrategies } from '../../../server/_lib/controlPlane/executors/keeperVaultActions.js'
+import {
+  executeVaultRebalanceStrategies,
+  KeeperVaultActionError,
+} from '../../../server/_lib/controlPlane/executors/keeperVaultActions.js'
+import { evaluateKeeperStrategyHealthGate } from '../../../server/_lib/keeper/strategyHealthGate.js'
 import { parseMinDeviationBps } from '../../../server/_lib/keeper/strategyReallocEnv.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -50,6 +54,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const minDeviationBps = BigInt(parseMinDeviationBps(body?.minDeviationBps))
+  const healthGate = await evaluateKeeperStrategyHealthGate(vaultAddress)
+  if (healthGate.blocked) {
+    return res.status(200).json({
+      success: false,
+      error: 'keeper_rebalance_strategy_health_blocked',
+      data: {
+        status: 'skipped',
+        reason: healthGate.reason ?? 'strategy_health_blocked',
+      },
+    } satisfies ApiEnvelope<{ status: string; reason: string }>)
+  }
 
   try {
     const result = await executeVaultRebalanceStrategies(vaultAddress, minDeviationBps)
@@ -58,6 +73,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       data: result,
     } satisfies ApiEnvelope<{ txHash: string; status: string }>)
   } catch (err) {
+    if (err instanceof KeeperVaultActionError) {
+      if (err.code === 'rebalance_strategies_no_strategies') {
+        return res.status(200).json({
+          success: false,
+          error: 'keeper_rebalance_no_strategies',
+          data: {
+            status: 'skipped',
+            reason: 'no_strategies',
+          },
+        } satisfies ApiEnvelope<{ status: string; reason: string }>)
+      }
+      if (err.code === 'rebalance_strategies_unauthorized') {
+        return res.status(200).json({
+          success: false,
+          error: 'keeper_rebalance_unauthorized',
+          data: {
+            status: 'skipped',
+            reason: 'unauthorized',
+          },
+        } satisfies ApiEnvelope<{ status: string; reason: string }>)
+      }
+      if (err.code === 'rebalance_strategies_gas_rejected') {
+        return res.status(200).json({
+          success: false,
+          error: 'keeper_rebalance_gas_rejected',
+          data: {
+            status: 'skipped',
+            reason: 'gas_rejected',
+          },
+        } satisfies ApiEnvelope<{ status: string; reason: string }>)
+      }
+    }
     console.error('[keeper/rebalance-strategies] Error:', err)
     return res.status(500).json({
       success: false,
