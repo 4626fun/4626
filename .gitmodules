@@ -14,3 +14,9 @@
 	path = skills
 	url = https://github.com/pashov/skills.git
 	shallow = true
+[submodule "acp-cli"]
+	path = acp-cli
+	url = https://github.com/Virtual-Protocol/acp-cli.git
+[submodule "dgclaw-skill"]
+	path = dgclaw-skill
+	url = https://github.com/Virtual-Protocol/dgclaw-skill.git
