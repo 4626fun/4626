@@ -9,12 +9,25 @@ import {
 import { resolveHermitTelegramWebhookPublicUrl } from '../_handlers/telegram/webhook/hermitWebhookUrl.js'
 import { applyEnv, createMockReq, createMockRes } from './helpers.js'
 
-const { relayTelegramMessageToAlfaClubMock } = vi.hoisted(() => ({
+const { relayTelegramMessageToAlfaClubMock, ingestProliquidSignalFromTelegramMock } = vi.hoisted(() => ({
   relayTelegramMessageToAlfaClubMock: vi.fn(),
+  ingestProliquidSignalFromTelegramMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/alfaclub/telegramToAlfaclubRelay.js', () => ({
   relayTelegramMessageToAlfaClub: relayTelegramMessageToAlfaClubMock,
+}))
+
+vi.mock('../../server/_lib/alfaclub/proliquidSignals.js', () => ({
+  readProliquidSignalConfig: vi.fn(() => ({
+    enabled: true,
+    webhookSecret: 'proliquid-secret',
+    sources: [],
+    destinationRoomId: '1043',
+    textOnly: false,
+    scorerBatchLimit: 50,
+  })),
+  ingestProliquidSignalFromTelegram: ingestProliquidSignalFromTelegramMock,
 }))
 
 describe('telegram webhook ingress', () => {
@@ -143,5 +156,64 @@ describe('hermit.4626.fun webhook ingress', () => {
 
     expect(res.statusCode).toBe(401)
     expect(relayTelegramMessageToAlfaClubMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('proliquid webhook ingress', () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('accepts valid secret and stores assistive signal', async () => {
+    ingestProliquidSignalFromTelegramMock.mockResolvedValueOnce({
+      status: 'stored',
+      signalKind: 'whales',
+    })
+
+    const { default: handler } = await import('../_handlers/telegram/_proliquid-webhook.ts')
+    const req = createMockReq({
+      method: 'POST',
+      headers: {
+        'x-telegram-bot-api-secret-token': 'proliquid-secret',
+      },
+      body: {
+        update_id: 999,
+        message: {
+          message_id: 101,
+          text: 'BTC > 10M$',
+          chat: { id: -100123, username: 'proliquid_whales' },
+          from: { id: 42, username: 'signalbot' },
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.ingest?.status).toBe('stored')
+    expect(res.body?.data?.ingest?.signalKind).toBe('whales')
+    expect(ingestProliquidSignalFromTelegramMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects invalid secret', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_proliquid-webhook.ts')
+    const req = createMockReq({
+      method: 'POST',
+      headers: {
+        'x-telegram-bot-api-secret-token': 'wrong-secret',
+      },
+      body: {
+        update_id: 1000,
+        message: {
+          message_id: 12,
+          text: 'ETH > 350k$',
+          chat: { id: -100123, username: 'proliquid_liquidations' },
+          from: { id: 42, username: 'signalbot' },
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(401)
+    expect(ingestProliquidSignalFromTelegramMock).not.toHaveBeenCalled()
   })
 })

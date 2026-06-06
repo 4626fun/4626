@@ -85,6 +85,7 @@ const v1RouteLoaders: ApiRouteLoaders = {
   'alfaclub/chat-token-refresh': () => import('./v1/alfaclub/_chat-token-refresh.js'),
   'alfaclub/chat-auth-health': () => import('./v1/alfaclub/_chat-auth-health.js'),
   'alfaclub/chat-bridge-run': () => import('./v1/alfaclub/_chat-bridge-run.js'),
+  'alfaclub/proliquid-score-run': () => import('./v1/alfaclub/_proliquid-score-run.js'),
   'alfaclub/position-alerts': () => import('./v1/alfaclub/_position-alerts.js'),
   'alfaclub/room-timeline': () => import('./v1/alfaclub/_room-timeline.js'),
   'alfaclub/room-access/status': () => import('./v1/alfaclub/_room-access-status.js'),

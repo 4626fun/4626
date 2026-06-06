@@ -62,6 +62,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/v1/alfaclub/proliquid-score-run",
+      "schedule": "*/2 * * * *"
+    },
+    {
       "path": "/api/v1/alfaclub/radar",
       "schedule": "5 12 * * *"
     },

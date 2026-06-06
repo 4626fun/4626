@@ -1,4 +1,4 @@
-import { AKITA_DEFAULTS, BASE_DEFAULTS } from '@/config/contracts.defaults'
+import { AKITA_DEFAULTS, BASE_DEFAULTS } from '../../config/contracts.defaults'
 
 import {
   decodeFunctionData,

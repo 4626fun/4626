@@ -76,12 +76,28 @@ function isRawRebalanceRevert(error: unknown): boolean {
   return message.includes('rebalancestrategies') && message.includes('revert')
 }
 
+function emitRebalanceMetric(
+  vaultAddress: string,
+  status: 'success' | 'skipped' | 'error',
+  reason: string,
+  source: 'executor' | 'raw_fallback' | 'health_gate' | 'handler',
+) {
+  console.info('[keeper/rebalance-strategies] metric', {
+    metric: 'keeper.rebalance.status',
+    vaultAddress: vaultAddress.toLowerCase(),
+    status,
+    reason,
+    source,
+  })
+}
+
 function logRebalanceSkip(vaultAddress: string, reason: string, source: 'executor' | 'raw_fallback') {
   console.warn('[keeper/rebalance-strategies] skipped', {
     vaultAddress: vaultAddress.toLowerCase(),
     reason,
     source,
   })
+  emitRebalanceMetric(vaultAddress, 'skipped', reason, source)
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -116,6 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const minDeviationBps = BigInt(parseMinDeviationBps(body?.minDeviationBps))
   const healthGate = await evaluateKeeperStrategyHealthGate(vaultAddress)
   if (healthGate.blocked) {
+    emitRebalanceMetric(vaultAddress, 'skipped', healthGate.reason ?? 'strategy_health_blocked', 'health_gate')
     return res.status(200).json({
       success: false,
       error: 'keeper_rebalance_strategy_health_blocked',
@@ -128,6 +145,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const result = await executeVaultRebalanceStrategies(vaultAddress, minDeviationBps)
+    emitRebalanceMetric(vaultAddress, 'success', 'ok', 'executor')
     return res.status(200).json({
       success: true,
       data: result,
@@ -213,6 +231,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<{ status: string; reason: string }>)
     }
     console.error('[keeper/rebalance-strategies] Error:', err)
+    emitRebalanceMetric(vaultAddress, 'error', 'unknown_error', 'handler')
     return res.status(500).json({
       success: false,
       error: err instanceof Error ? err.message : 'Unknown error',

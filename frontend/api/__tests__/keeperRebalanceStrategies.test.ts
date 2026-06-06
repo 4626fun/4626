@@ -222,6 +222,7 @@ describe('/api/keeper/rebalance-strategies', () => {
 
   it('maps raw rebalance invalid-weight reverts to skip response', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
     const viemStyleError = new Error('ContractFunctionExecutionError: The contract function "rebalanceStrategies" reverted.')
     ;(viemStyleError as Error & { cause?: unknown }).cause = {
       shortMessage: 'The contract function "rebalanceStrategies" reverted.',
@@ -244,7 +245,18 @@ describe('/api/keeper/rebalance-strategies', () => {
         source: 'raw_fallback',
       }),
     )
+    expect(infoSpy).toHaveBeenCalledWith(
+      '[keeper/rebalance-strategies] metric',
+      expect.objectContaining({
+        metric: 'keeper.rebalance.status',
+        vaultAddress: VAULT.toLowerCase(),
+        status: 'skipped',
+        reason: 'invalid_weight',
+        source: 'raw_fallback',
+      }),
+    )
     warnSpy.mockRestore()
+    infoSpy.mockRestore()
   })
 
   it('surfaces executor failures as 500', async () => {

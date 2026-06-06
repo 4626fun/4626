@@ -125,9 +125,25 @@ export function getTokenLogo(token: TokenLogoSeed): TokenLogoLookup {
   const chainId = normalizeChainId(token.chainId)
   const address = normalizeAddress(token.address || '')
   const cacheKey = cacheKeyFor(token.address || '0x0000000000000000000000000000000000000000', chainId)
+  const knownTokenLogo = getKnownTokenLogo(token.address || '', chainId)
+  const knownCoreToken = Boolean(knownTokenLogo)
 
   loadCachedUrls()
   const cached = logoCache[cacheKey]
+  if (knownTokenLogo) {
+    // Known core token logos are canonical and should never be downgraded
+    // behind stale cached/registry urls.
+    if (cached !== knownTokenLogo) {
+      persistCachedUrl(cacheKey, knownTokenLogo)
+    }
+    return {
+      preferred: knownTokenLogo,
+      fallbackUrls: [],
+      cacheHit: true,
+      cacheKey,
+    }
+  }
+
   if (cached) {
     return {
       preferred: cached,
@@ -137,26 +153,13 @@ export function getTokenLogo(token: TokenLogoSeed): TokenLogoLookup {
     }
   }
 
-  const knownTokenLogo = getKnownTokenLogo(token.address || '', chainId)
-  const knownCoreToken = Boolean(knownTokenLogo)
   const shouldUseExternalRegistryFallbacks = token.group === 'core' || knownCoreToken
-  const skipPremiumRendererForKnownCore =
-    knownCoreToken && (token.group === 'core' || token.group === undefined)
-  const internalRendererFallback =
-    address && !skipPremiumRendererForKnownCore
-      ? token.group === 'creator'
-        ? canonicalTokenImageUrl(address, chainId, 'creator')
-        : token.group === 'share'
-          ? canonicalTokenImageUrl(address, chainId, 'share')
-          : canonicalTokenImageUrl(address, chainId)
-      : null
   const externalRegistryFallbacks = shouldUseExternalRegistryFallbacks && address ? tokenLogoFallbacksForChain(address, chainId) : []
 
   const groupedFallbacks = dedupe([
     token.logoUrl,
     ...(token.logoUrls ?? []),
     knownTokenLogo,
-    internalRendererFallback,
     ...externalRegistryFallbacks,
   ])
 

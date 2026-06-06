@@ -45,6 +45,11 @@ export const PAGE_META = {
     title: 'FAQ',
     description: 'Frequently asked questions about 4626 — vaults, creator coins, fees, and getting started.',
   },
+  arena: {
+    title: 'Arena Architecture',
+    description:
+      'Comprehensive architecture and deterministic strategy specification for the AlfaClub + Arena volatility harvesting engine.',
+  },
   telegramLink: {
     title: 'Telegram Link',
     description: TELEGRAM_LINK_DESCRIPTION,

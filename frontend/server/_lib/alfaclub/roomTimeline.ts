@@ -15,6 +15,7 @@ import {
   type HyperliquidUserFillDetailed,
 } from './hyperliquid.js'
 import { resolveRoom1659HyperliquidUserForSnapshot } from './room1659Market.js'
+import { readScoredProliquidSignalsForRoom } from './proliquidSignals.js'
 
 export type RoomTimelineChatEvent = {
   id: string
@@ -458,6 +459,42 @@ async function readChatEvents(params: {
   }
 }
 
+async function readProliquidSignalEvents(params: {
+  roomId: string
+  startTimeMs: number
+  knownSymbols: Set<string>
+}): Promise<RoomTimelineChatEvent[]> {
+  const rows = await readScoredProliquidSignalsForRoom({
+    roomId: params.roomId,
+    startTimeMs: params.startTimeMs,
+    limit: 200,
+  })
+  if (rows.length === 0) return []
+  return rows.map((row) => {
+    const time = Date.parse(row.scored_at ?? row.created_at ?? '') || Date.now()
+    const summary = row.score_summary?.trim() || `[ProLiquid][${row.signal_kind}]`
+    const body = row.normalized_text?.trim()
+    const text = body ? `${summary}\n${body}` : summary
+    return {
+      id: `proliquid:${row.source_chat_id}:${row.source_message_id}`,
+      messageId: `proliquid:${row.source_message_id}`,
+      roomId: params.roomId,
+      senderAddress: `proliquid:${row.source_chat_id}`.toLowerCase(),
+      senderLabel: 'ProLiquid',
+      senderAvatarUrl: null,
+      text,
+      time,
+      isHost: false,
+      isFirstFromSender: false,
+      replyId: null,
+      replyText: null,
+      replySender: null,
+      replySenderLabel: null,
+      market: inferChatMarket(text, params.knownSymbols),
+    } satisfies RoomTimelineChatEvent
+  })
+}
+
 function mapTradeEvents(
   fills: HyperliquidUserFillDetailed[] | null,
   fallbackSymbol: string,
@@ -588,17 +625,34 @@ export async function buildRoomTimelineData(params: {
     ...currentPositions.map((position) => position.coin),
   ])
 
-  const rawChatEvents = await readChatEvents({
-    roomId,
-    hostAddress,
-    startTimeMs,
-    limit: 500,
-    knownSymbols,
-  })
+  const [rawChatEvents, proliquidSignalEvents] = await Promise.all([
+    readChatEvents({
+      roomId,
+      hostAddress,
+      startTimeMs,
+      limit: 500,
+      knownSymbols,
+    }),
+    readProliquidSignalEvents({
+      roomId,
+      startTimeMs,
+      knownSymbols,
+    }),
+  ])
+  const firstSeenBySender = new Set<string>()
+  const chatEvents = [...rawChatEvents, ...proliquidSignalEvents]
+    .sort((a, b) => a.time - b.time)
+    .map((event) => {
+      const isFirstFromSender = !firstSeenBySender.has(event.senderAddress)
+      if (isFirstFromSender) firstSeenBySender.add(event.senderAddress)
+      return {
+        ...event,
+        isFirstFromSender,
+      }
+    })
   // Strict market attribution: a message belongs to the market it references, or is
   // room-wide (null) when it references none. Do NOT force unrelated chatter onto the
   // selected market — that would re-couple markets that should stay decoupled.
-  const chatEvents = rawChatEvents
   const roomWideMessageCount = chatEvents.filter((event) => event.market == null).length
 
   // Chart trade overlays stay scoped to the selected market (candles are per-coin).

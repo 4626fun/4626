@@ -2,7 +2,7 @@ import { getAddress, isAddress, type Address, type Hex } from 'viem'
 
 import type { ShareBridgeReadClient } from './shareBridgeReadClient'
 
-import { BASE_DEFAULTS } from '@/config/contracts.defaults'
+import { BASE_DEFAULTS } from '../../config/contracts.defaults'
 
 import {
   decodeFinalizePhase2Call,

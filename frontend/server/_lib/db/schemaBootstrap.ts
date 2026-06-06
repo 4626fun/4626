@@ -473,6 +473,13 @@ export async function ensureAlfaclubPositionAlertSchema(db: Db): Promise<void> {
   })
 }
 
+/** ProLiquid Telegram assistive signal ingest/scoring cache. */
+export async function ensureAlfaclubProliquidSignalSchema(db: Db): Promise<void> {
+  await withEnsureOnce('alfaclubProliquidSignal', async () => {
+    await ensureMigrationApplied(db, '20260606010000_alfaclub_proliquid_signal_ingest.sql').catch(() => {})
+  })
+}
+
 /** Room/user Arena identity mapping for per-room and per-user execution overrides. */
 export async function ensureAlfaclubArenaIdentityMappingSchema(db: Db): Promise<void> {
   await withEnsureOnce('alfaclubArenaIdentityMapping', async () => {

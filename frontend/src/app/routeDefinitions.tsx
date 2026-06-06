@@ -4,6 +4,7 @@ import { Navigate, Route } from 'react-router-dom'
 import {
   AccountsPage,
   AddOwnerBaseApp,
+  Arena,
   AmoeQuickTasks,
   AdminAgentSetup,
   AdminCreatorAccess,
@@ -78,6 +79,7 @@ export function renderPathRoutes(
 }
 
 export const MARKETING_ONLY_ROUTES: PathRouteDef[] = [
+  { path: '/arena', element: <Arena /> },
   { path: '/faq', element: <Faq /> },
   { path: '/faq/how-it-works', element: <FaqHowItWorks /> },
   { path: '/positions', element: <Positions /> },
