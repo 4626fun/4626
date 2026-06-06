@@ -8,6 +8,8 @@ Use this exact sequence before enabling live Arena trading from room `1659`.
 - `ARENA_TRADING_ENABLED=0`
 - `ARENA_DRY_RUN=1`
 - `ARENA_DGCLAW_DIR` points to the runtime directory containing `dgclaw.sh` and scripts.
+- `ACP_CLI_DIR` points to an `acp-cli` checkout (or the checkout exists as a sibling dir to `ARENA_DGCLAW_DIR`).
+- `DGCLAW_API_KEY` is set for non-join setup steps (`activate`, `add-api-wallet`).
 
 ## 1) Read-only readiness
 

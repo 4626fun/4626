@@ -260,6 +260,12 @@ function parsePositiveNumber(input: number, fallback = 0): number {
   return Number.isFinite(input) && input > 0 ? input : fallback
 }
 
+function normalizeAddress(value: string | null | undefined): string | null {
+  if (!value) return null
+  const trimmed = String(value).trim()
+  return /^0x[a-fA-F0-9]{40}$/.test(trimmed) ? trimmed.toLowerCase() : null
+}
+
 export function parseAcpAgentCreateOutput(stdout: string): { agentId?: string; agentWalletAddress?: string; hlApiWalletAddress?: string } {
   if (!stdout) return {}
   const text = stdout.trim()
@@ -495,7 +501,9 @@ export async function runArenaCreateAgent(config = readArenaConfig(), ownerAddre
   // the envs when the refresh_token itself expires. No extra "refresh thing" in our code for now.
   const acpAccess = String(process.env.ACP_ACCESS_TOKEN ?? '').trim()
   const acpRefresh = String(process.env.ACP_REFRESH_TOKEN ?? '').trim()
-  const acpOwner = String(process.env.ACP_OWNER_WALLET ?? '').trim()
+  const configuredAcpOwner = normalizeAddress(process.env.ACP_OWNER_WALLET)
+  const ownerAddressFallback = normalizeAddress(ownerAddress)
+  const acpOwner = configuredAcpOwner ?? ownerAddressFallback ?? ''
   const hasAnyAcpRotationEnv = Boolean(acpAccess || acpRefresh || acpOwner)
   const hasAllAcpRotationEnv = Boolean(acpAccess && acpRefresh && acpOwner)
   if (hasAnyAcpRotationEnv && !hasAllAcpRotationEnv) {
@@ -506,6 +514,12 @@ export async function runArenaCreateAgent(config = readArenaConfig(), ownerAddre
     return fail(
       `ACP session rotation env is partially configured. Missing: ${missing.join(', ')}. Refusing to continue with agent create.`,
     )
+  }
+
+  if (!configuredAcpOwner && ownerAddressFallback && acpAccess && acpRefresh) {
+    auditLog('acp_session_rotation_owner_fallback', {
+      ownerAddressFallback,
+    })
   }
 
   if (hasAllAcpRotationEnv) {

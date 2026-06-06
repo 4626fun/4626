@@ -174,6 +174,21 @@ describe('/api/keeper/rebalance-strategies', () => {
     expect(res.body?.data?.reason).toBe('gas_rejected')
   })
 
+  it('maps reverted executor errors to skip response', async () => {
+    executeVaultRebalanceStrategiesMock.mockRejectedValueOnce(
+      new KeeperVaultActionErrorMock('execution reverted', {
+        code: 'rebalance_strategies_reverted',
+        retryable: false,
+      }),
+    )
+
+    const res = await postBody({ vaultAddress: VAULT })
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.error).toBe('keeper_rebalance_reverted')
+    expect(res.body?.data?.status).toBe('skipped')
+    expect(res.body?.data?.reason).toBe('reverted')
+  })
+
   it('surfaces executor failures as 500', async () => {
     executeVaultRebalanceStrategiesMock.mockRejectedValueOnce(new Error('rebalance_strategies_reverted'))
 

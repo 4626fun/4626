@@ -76,6 +76,14 @@ function isKnownRebalanceNoStrategiesRejection(error: unknown): boolean {
   return message.includes('0x56de3055') || message.includes('nostrategies()')
 }
 
+function isKnownRebalanceExecutionRevert(error: unknown): boolean {
+  const message = collectErrorText(error)
+  return (
+    message.includes('contract function "rebalancestrategies" reverted') ||
+    message.includes('execution reverted')
+  )
+}
+
 function isAddressEqual(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase()
 }
@@ -251,6 +259,12 @@ export async function executeVaultRebalanceStrategies(
     return { txHash, status: 'success' }
   } catch (error) {
     if (error instanceof KeeperVaultActionError) throw error
+    if (isKnownRebalanceExecutionRevert(error)) {
+      throw new KeeperVaultActionError('rebalanceStrategies() reverted', {
+        code: 'rebalance_strategies_reverted',
+        retryable: false,
+      })
+    }
     if (isKnownRebalanceAuthorizationRejection(error)) {
       throw new KeeperVaultActionError('rebalanceStrategies() unauthorized', {
         code: 'rebalance_strategies_unauthorized',

@@ -182,6 +182,20 @@ describe('arenaClient create/register (acp path)', () => {
     expect(result.message).toContain('acp configure failed')
   })
 
+  it('uses ownerAddress fallback when ACP_OWNER_WALLET is unset', async () => {
+    process.env.ACP_ACCESS_TOKEN = 'token'
+    process.env.ACP_REFRESH_TOKEN = 'refresh'
+    delete process.env.ACP_OWNER_WALLET
+
+    const result = await runArenaCreateAgent(
+      mockConfig({ dryRun: true, creationEnabled: true }),
+      '0x64c3Fb828bD2A8cDe9Cde14d0295D34916bb94e9',
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.run?.dryRun).toBe(true)
+  })
+
   it('returns dry-run success (mock) and attempts parse when enabled', async () => {
     const result = await runArenaCreateAgent(mockConfig({ dryRun: true, creationEnabled: true }))
     expect(result.ok).toBe(true)

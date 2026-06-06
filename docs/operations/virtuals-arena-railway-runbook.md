@@ -19,6 +19,8 @@ This runbook covers the 4626 `Arena` control lane exposed through Hermit command
 
 - For manual/owned creation: Existing Virtuals/ACP agent created via app.virtuals.io/acp/new (or `acp agent create` under an ACP session whose ownerWallet is your Alfa EOA). Connect the *alfaclub sender wallet* during that web flow if you want the agent's ACP userId/dashboard ownership to match your chat identity. The no-args `/arena register` create path creates under the *bot runtime's* ACP session (see ACP_OWNER_WALLET).
 - `dgclaw-skill` (or equivalent scripts + `acp` CLI) available on the Railway runtime host. `ARENA_ACP_BIN` (usually "acp") must resolve.
+- `ACP_CLI_DIR` points to a local `acp-cli` checkout used by `dgclaw.sh join` (or ensure `acp-cli` exists as a sibling of `ARENA_DGCLAW_DIR`).
+- `DGCLAW_API_KEY` is configured in the runtime env (required by `activate-unified-account` and `add-api-wallet`).
 - `ARENA_CREATION_ENABLED=1` (default) to allow the create path of `/arena register`.
 - Env configured in `frontend/.env.example` Arena section:
   - `ARENA_ENABLED`

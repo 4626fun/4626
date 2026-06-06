@@ -104,6 +104,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           },
         } satisfies ApiEnvelope<{ status: string; reason: string }>)
       }
+      if (err.code === 'rebalance_strategies_reverted') {
+        return res.status(200).json({
+          success: false,
+          error: 'keeper_rebalance_reverted',
+          data: {
+            status: 'skipped',
+            reason: 'reverted',
+          },
+        } satisfies ApiEnvelope<{ status: string; reason: string }>)
+      }
     }
     console.error('[keeper/rebalance-strategies] Error:', err)
     return res.status(500).json({
