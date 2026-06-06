@@ -2279,9 +2279,11 @@ export async function executeHermitCommand(
       }
 
       function describeArenaOnboardFailure(step: ArenaOnboardStep): string {
+        const timeoutHint = step.result.run?.timedOut ? 'command timed out before completion' : ''
         const message = sanitizeOutputForReply(
           [
             step.result.message,
+            timeoutHint,
             step.result.run?.error ?? '',
             step.result.run?.stderr ?? '',
             step.result.run?.stdout ?? '',
@@ -2296,6 +2298,7 @@ export async function executeHermitCommand(
       async function runArenaOnboardSequence(activeConfig: typeof config): Promise<{
         stepSummaries: string[]
         failureLines: string[]
+        discoveredHlApiWalletAddress?: string
       }> {
         const steps: ArenaOnboardStep[] = [
           { name: 'join', result: await runArenaJoin(activeConfig) },
@@ -2311,7 +2314,12 @@ export async function executeHermitCommand(
                 ...failedSteps.map((step) => `- ${step.name}: ${describeArenaOnboardFailure(step)}`),
               ]
             : []
-        return { stepSummaries, failureLines }
+        const addApiWalletStep = steps.find((step) => step.name === 'add-api-wallet')
+        const discoveredHlApiWalletAddress =
+          typeof addApiWalletStep?.result?.details?.hlApiWalletAddress === 'string'
+            ? addApiWalletStep.result.details.hlApiWalletAddress.toLowerCase()
+            : undefined
+        return { stepSummaries, failureLines, discoveredHlApiWalletAddress }
       }
 
       if (isCreatePath) {
@@ -2350,7 +2358,20 @@ export async function executeHermitCommand(
             ...(cr.hlApiWalletAddress ? { hlApiWalletAddress: cr.hlApiWalletAddress } : {}),
           }
 
-          const { stepSummaries, failureLines } = await runArenaOnboardSequence(activeConfig)
+          const { stepSummaries, failureLines, discoveredHlApiWalletAddress } = await runArenaOnboardSequence(activeConfig)
+
+          let effectiveHlApiWalletAddress = cr.hlApiWalletAddress
+          if (discoveredHlApiWalletAddress && discoveredHlApiWalletAddress !== effectiveHlApiWalletAddress) {
+            effectiveHlApiWalletAddress = discoveredHlApiWalletAddress
+            await upsertArenaIdentityMapping({
+              roomId: params.roomId ?? '',
+              senderAddress: bindSender,
+              arenaAgentId: cr.agentId,
+              arenaWalletAddress: cr.agentWalletAddress,
+              hlApiWalletAddress: effectiveHlApiWalletAddress,
+              updatedBy: params.senderAddress,
+            })
+          }
 
           const what = isDefault ? 'room default' : 'personal (\'mine\') identity for your sender'
           return {
@@ -2361,7 +2382,7 @@ export async function executeHermitCommand(
                 ? `Dry-run: created agent and would have bound as ${what} + onboarded.`
                 : `Created agent via acp and bound as ${what} + onboarded.`,
               out ? `acp output (sanitized, truncated):\n${out}` : '',
-              `agentId=${cr.agentId} arenaWallet=${cr.agentWalletAddress}${cr.hlApiWalletAddress ? ` hl=${cr.hlApiWalletAddress}` : ''}`,
+              `agentId=${cr.agentId} arenaWallet=${cr.agentWalletAddress}${effectiveHlApiWalletAddress ? ` hl=${effectiveHlApiWalletAddress}` : ''}`,
               saved ? 'Mapping saved.' : 'Mapping write may have failed (check logs).',
               `steps: ${stepSummaries.join(' ')}`,
               ...failureLines,
@@ -2437,7 +2458,18 @@ export async function executeHermitCommand(
       }
 
       // Run onboarding steps
-      const { stepSummaries, failureLines } = await runArenaOnboardSequence(activeConfig)
+      const { stepSummaries, failureLines, discoveredHlApiWalletAddress } = await runArenaOnboardSequence(activeConfig)
+      if (discoveredHlApiWalletAddress && discoveredHlApiWalletAddress !== hlApiWalletAddress) {
+        hlApiWalletAddress = discoveredHlApiWalletAddress
+        await upsertArenaIdentityMapping({
+          roomId: params.roomId ?? '',
+          senderAddress: targetSenderForBind,
+          arenaAgentId: agentId,
+          arenaWalletAddress: agentWalletAddress,
+          hlApiWalletAddress,
+          updatedBy: params.senderAddress,
+        })
+      }
 
       const prefix = isDefault ? 'Arena room default register (supplied ids)' : 'Arena register (supplied ids)'
       const identityLine = isDefault

@@ -132,13 +132,17 @@ async function runCommand(command: BuiltCommand, config: ArenaConfig): Promise<A
     const errorMessage = message.includes('ENOENT')
       ? `${message} (resolvedCommand=${resolvedCommandPath}; cwd=${command.cwd})`
       : message
+    const timeoutMessage =
+      err.killed && err.signal === 'SIGTERM'
+        ? `command timed out after ${config.commandTimeoutMs}ms`
+        : undefined
     return toArenaRunResult({
       ...command,
       stdout: String(err.stdout ?? ''),
       stderr: String(err.stderr ?? ''),
       code: Number.isInteger(err.code) ? err.code : null,
       timedOut: Boolean(err.killed && err.signal === 'SIGTERM'),
-      error: errorMessage,
+      error: timeoutMessage ? `${errorMessage} (${timeoutMessage})` : errorMessage,
     })
   }
 }
@@ -381,10 +385,13 @@ export async function runArenaAddApiWallet(config = readArenaConfig()): Promise<
   if (dgclawValidation) return dgclawValidation
   const command = buildDgclawCommand(config, ['add-api-wallet'])
   const run = await runCommand(command, config)
+  const parsed = parseAcpAgentCreateOutput([run.stdout || '', run.stderr || ''].filter(Boolean).join('\n'))
+  const details = parsed.hlApiWalletAddress ? { hlApiWalletAddress: parsed.hlApiWalletAddress } : undefined
   auditLog('add_api_wallet', { ok: run.ok, dryRun: run.dryRun })
   return {
     ok: run.ok,
     message: run.ok ? 'API wallet setup completed.' : 'API wallet setup failed.',
+    ...(details ? { details } : {}),
     run,
   }
 }
