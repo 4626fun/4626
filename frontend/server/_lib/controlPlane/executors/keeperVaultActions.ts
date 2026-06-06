@@ -45,10 +45,21 @@ function collectErrorText(error: unknown): string {
       continue
     }
     if (typeof current === 'object') {
-      const candidate = current as { message?: unknown; shortMessage?: unknown; details?: unknown; cause?: unknown }
+      const candidate = current as {
+        message?: unknown
+        shortMessage?: unknown
+        details?: unknown
+        reason?: unknown
+        data?: unknown
+        functionName?: unknown
+        cause?: unknown
+      }
       text.push(String(candidate.message ?? ''))
       text.push(String(candidate.shortMessage ?? ''))
       text.push(String(candidate.details ?? ''))
+      text.push(String(candidate.reason ?? ''))
+      text.push(String(candidate.data ?? ''))
+      text.push(String(candidate.functionName ?? ''))
       stack.push(candidate.cause)
     }
   }
@@ -74,6 +85,11 @@ function isKnownRebalanceAuthorizationRejection(error: unknown): boolean {
 function isKnownRebalanceNoStrategiesRejection(error: unknown): boolean {
   const message = collectErrorText(error)
   return message.includes('0x56de3055') || message.includes('nostrategies()')
+}
+
+function isKnownRebalanceInvalidWeightRejection(error: unknown): boolean {
+  const message = collectErrorText(error)
+  return message.includes('0x585b9263') || message.includes('invalidweight()')
 }
 
 function isKnownRebalanceExecutionRevert(error: unknown): boolean {
@@ -274,6 +290,12 @@ export async function executeVaultRebalanceStrategies(
     if (isKnownRebalanceNoStrategiesRejection(error)) {
       throw new KeeperVaultActionError('rebalanceStrategies() skipped: no active strategies', {
         code: 'rebalance_strategies_no_strategies',
+        retryable: false,
+      })
+    }
+    if (isKnownRebalanceInvalidWeightRejection(error)) {
+      throw new KeeperVaultActionError('rebalanceStrategies() skipped: invalid strategy weight state', {
+        code: 'rebalance_strategies_invalid_weight',
         retryable: false,
       })
     }

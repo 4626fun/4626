@@ -189,6 +189,54 @@ describe('/api/keeper/rebalance-strategies', () => {
     expect(res.body?.data?.reason).toBe('reverted')
   })
 
+  it('maps invalid-weight executor errors to skip response', async () => {
+    executeVaultRebalanceStrategiesMock.mockRejectedValueOnce(
+      new KeeperVaultActionErrorMock('invalid strategy weight state', {
+        code: 'rebalance_strategies_invalid_weight',
+        retryable: false,
+      }),
+    )
+
+    const res = await postBody({ vaultAddress: VAULT })
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.error).toBe('keeper_rebalance_invalid_weight')
+    expect(res.body?.data?.status).toBe('skipped')
+    expect(res.body?.data?.reason).toBe('invalid_weight')
+  })
+
+  it('maps raw rebalance revert errors to skip response', async () => {
+    const viemStyleError = new Error('ContractFunctionExecutionError: The contract function "rebalanceStrategies" reverted.')
+    ;(viemStyleError as Error & { cause?: unknown }).cause = {
+      shortMessage: 'The contract function "rebalanceStrategies" reverted.',
+      reason: 'execution reverted',
+      functionName: 'rebalanceStrategies',
+    }
+    executeVaultRebalanceStrategiesMock.mockRejectedValueOnce(viemStyleError)
+
+    const res = await postBody({ vaultAddress: VAULT })
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.error).toBe('keeper_rebalance_reverted')
+    expect(res.body?.data?.status).toBe('skipped')
+    expect(res.body?.data?.reason).toBe('reverted')
+  })
+
+  it('maps raw rebalance invalid-weight reverts to skip response', async () => {
+    const viemStyleError = new Error('ContractFunctionExecutionError: The contract function "rebalanceStrategies" reverted.')
+    ;(viemStyleError as Error & { cause?: unknown }).cause = {
+      shortMessage: 'The contract function "rebalanceStrategies" reverted.',
+      reason: 'execution reverted',
+      functionName: 'rebalanceStrategies',
+      data: '0x585b9263',
+    }
+    executeVaultRebalanceStrategiesMock.mockRejectedValueOnce(viemStyleError)
+
+    const res = await postBody({ vaultAddress: VAULT })
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.error).toBe('keeper_rebalance_invalid_weight')
+    expect(res.body?.data?.status).toBe('skipped')
+    expect(res.body?.data?.reason).toBe('invalid_weight')
+  })
+
   it('surfaces executor failures as 500', async () => {
     executeVaultRebalanceStrategiesMock.mockRejectedValueOnce(new Error('rebalance_strategies_reverted'))
 

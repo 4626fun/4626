@@ -24,6 +24,58 @@ import {
 import { evaluateKeeperStrategyHealthGate } from '../../../server/_lib/keeper/strategyHealthGate.js'
 import { parseMinDeviationBps } from '../../../server/_lib/keeper/strategyReallocEnv.js'
 
+function collectErrorText(error: unknown): string {
+  const visited = new Set<unknown>()
+  const stack: unknown[] = [error]
+  const text: string[] = []
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current || visited.has(current)) continue
+    visited.add(current)
+    if (typeof current === 'string') {
+      text.push(current)
+      continue
+    }
+    if (current instanceof Error) {
+      text.push(current.message)
+      stack.push((current as Error & { cause?: unknown }).cause)
+      continue
+    }
+    if (typeof current === 'object') {
+      const candidate = current as {
+        message?: unknown
+        shortMessage?: unknown
+        details?: unknown
+        reason?: unknown
+        data?: unknown
+        functionName?: unknown
+        cause?: unknown
+      }
+      text.push(String(candidate.message ?? ''))
+      text.push(String(candidate.shortMessage ?? ''))
+      text.push(String(candidate.details ?? ''))
+      text.push(String(candidate.reason ?? ''))
+      text.push(String(candidate.data ?? ''))
+      text.push(String(candidate.functionName ?? ''))
+      stack.push(candidate.cause)
+    }
+  }
+  return text.join(' ').toLowerCase()
+}
+
+function isRawRebalanceInvalidWeight(error: unknown): boolean {
+  const message = collectErrorText(error)
+  return (
+    message.includes('rebalancestrategies') &&
+    (message.includes('0x585b9263') || message.includes('invalidweight()'))
+  )
+}
+
+function isRawRebalanceRevert(error: unknown): boolean {
+  const message = collectErrorText(error)
+  return message.includes('rebalancestrategies') && message.includes('revert')
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -114,6 +166,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           },
         } satisfies ApiEnvelope<{ status: string; reason: string }>)
       }
+      if (err.code === 'rebalance_strategies_invalid_weight') {
+        return res.status(200).json({
+          success: false,
+          error: 'keeper_rebalance_invalid_weight',
+          data: {
+            status: 'skipped',
+            reason: 'invalid_weight',
+          },
+        } satisfies ApiEnvelope<{ status: string; reason: string }>)
+      }
+    }
+    if (isRawRebalanceInvalidWeight(err)) {
+      return res.status(200).json({
+        success: false,
+        error: 'keeper_rebalance_invalid_weight',
+        data: {
+          status: 'skipped',
+          reason: 'invalid_weight',
+        },
+      } satisfies ApiEnvelope<{ status: string; reason: string }>)
+    }
+    if (isRawRebalanceRevert(err)) {
+      return res.status(200).json({
+        success: false,
+        error: 'keeper_rebalance_reverted',
+        data: {
+          status: 'skipped',
+          reason: 'reverted',
+        },
+      } satisfies ApiEnvelope<{ status: string; reason: string }>)
     }
     console.error('[keeper/rebalance-strategies] Error:', err)
     return res.status(500).json({
