@@ -128,8 +128,24 @@ export function PositionsEventInspector(props: {
               {event.market && <span className="text-zinc-400">{event.market}</span>}
             </div>
           ) : (
-            <div className="text-zinc-100">
-              {event.kind === 'host-chat' ? 'Host message' : 'Room message'}
+            <div className="flex items-center gap-2 text-zinc-100">
+              {event.senderAvatarUrl ? (
+                <span className="relative block h-6 w-6 shrink-0 overflow-hidden rounded-full ring-1 ring-white/10">
+                  <span className="absolute inset-0 bg-zinc-800" />
+                  <img
+                    src={event.senderAvatarUrl}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none'
+                    }}
+                  />
+                </span>
+              ) : null}
+              <span>
+                {event.kind === 'host-chat' ? 'Host message' : 'Room message'}
+                {event.senderLabel ? <span className="ml-1.5 text-xs text-zinc-400">· {event.senderLabel}</span> : null}
+              </span>
             </div>
           )}
           <div className="text-zinc-300">{formatTime(event.time)}</div>
@@ -165,11 +181,6 @@ export function PositionsEventInspector(props: {
                 </span>
               </div>
             )}
-          {event.senderLabel && (
-            <div className="text-zinc-300">
-              Sender: <span className="text-zinc-100">{event.senderLabel}</span>
-            </div>
-          )}
           {event.text && <div className="whitespace-pre-wrap text-zinc-200">{event.text}</div>}
           <div className="text-zinc-500">
             {props.index + 1} / {props.total}

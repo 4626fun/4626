@@ -30,6 +30,7 @@ export type TimelineChat = {
   text: string
   time: number
   isHost: boolean
+  isBot?: boolean
   isFirstFromSender: boolean
   replyId: string | null
   replyText: string | null
@@ -100,6 +101,7 @@ export type ChartOverlayEvent = {
   senderLabel?: string | null
   senderAvatarUrl?: string | null
   senderAddress?: string
+  isBot?: boolean
   isFirstFromSender?: boolean
   /** Reconstructed room/host position state valued at this event's timestamp. */
   contextAtTime?: PositionContextAtTime | null

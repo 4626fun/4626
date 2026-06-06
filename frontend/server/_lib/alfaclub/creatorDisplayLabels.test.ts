@@ -32,4 +32,12 @@ describe('pickCreatorDisplayLabel', () => {
       }),
     ).toBe('flip.base.eth')
   })
+
+  it('normalizes leading @ and whitespace', () => {
+    expect(
+      pickCreatorDisplayLabel({
+        chatUsername: '   @@Flip_Research  ',
+      }),
+    ).toBe('@Flip_Research')
+  })
 })

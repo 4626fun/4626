@@ -77,8 +77,8 @@ async function readChatUsernames(addresses: string[]): Promise<Map<string, strin
 
 async function readRoomSnapshotLabels(
   hints: CreatorLabelHint[],
-): Promise<Map<string, { twitterUsername: string | null; roomName: string | null }>> {
-  const out = new Map<string, { twitterUsername: string | null; roomName: string | null }>()
+): Promise<Map<string, { twitterUsername: string | null; roomName: string | null; roomSn: string | null }>> {
+  const out = new Map<string, { twitterUsername: string | null; roomName: string | null; roomSn: string | null }>()
   const addresses = [
     ...new Set(hints.map((hint) => hint.address.trim().toLowerCase()).filter(Boolean)),
   ]
@@ -95,6 +95,7 @@ async function readRoomSnapshotLabels(
       SELECT
         LOWER(creator_address) AS creator_address,
         room_id::text AS room_id,
+        sn,
         creator_twitter_username,
         room_name
       FROM public.alfaclub_rooms_snapshot
@@ -107,19 +108,22 @@ async function readRoomSnapshotLabels(
     const rows = (result.rows ?? []) as Array<{
       creator_address: string | null
       room_id: string | null
+      sn: string | null
       creator_twitter_username: string | null
       room_name: string | null
     }>
 
-    const byAddress = new Map<string, { twitterUsername: string | null; roomName: string | null }>()
-    const byTokenId = new Map<string, { twitterUsername: string | null; roomName: string | null }>()
+    const byAddress = new Map<string, { twitterUsername: string | null; roomName: string | null; roomSn: string | null }>()
+    const byTokenId = new Map<string, { twitterUsername: string | null; roomName: string | null; roomSn: string | null }>()
 
     for (const row of rows) {
       const address = typeof row.creator_address === 'string' ? row.creator_address.toLowerCase() : ''
       const roomId = typeof row.room_id === 'string' ? row.room_id.trim() : ''
+      const roomSn = typeof row.sn === 'string' ? row.sn.trim() : ''
       const entry = {
         twitterUsername: row.creator_twitter_username,
         roomName: row.room_name,
+        roomSn: roomSn.length > 0 && !/^\d+$/.test(roomSn) ? roomSn : null,
       }
       if (address) byAddress.set(address, entry)
       if (roomId) byTokenId.set(roomId, entry)
@@ -133,8 +137,9 @@ async function readRoomSnapshotLabels(
       const merged = {
         twitterUsername: fromAddress?.twitterUsername ?? fromToken?.twitterUsername ?? null,
         roomName: fromAddress?.roomName ?? fromToken?.roomName ?? null,
+        roomSn: fromAddress?.roomSn ?? fromToken?.roomSn ?? null,
       }
-      if (merged.twitterUsername || merged.roomName) out.set(address, merged)
+      if (merged.twitterUsername || merged.roomName || merged.roomSn) out.set(address, merged)
     }
   } catch {
     // Best-effort enrichment.
@@ -167,7 +172,7 @@ export async function readCreatorLabels(hints: CreatorLabelHint[]): Promise<Crea
     const label = pickCreatorDisplayLabel({
       chatUsername,
       twitterUsername: snapshot?.twitterUsername ?? null,
-      roomName: snapshot?.roomName ?? null,
+      roomName: snapshot?.roomName ?? snapshot?.roomSn ?? null,
     })
     if (label) labels.set(hint.address, label)
   }

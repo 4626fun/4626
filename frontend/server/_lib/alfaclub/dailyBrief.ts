@@ -482,6 +482,15 @@ function formatBriefSnapshotDate(iso: string): string {
   })
 }
 
+function buildSnapshotFreshnessLine(snapshotTs: string): string | null {
+  const parsed = Date.parse(snapshotTs)
+  if (!Number.isFinite(parsed)) return null
+  const ageMs = Date.now() - parsed
+  if (!Number.isFinite(ageMs) || ageMs < 36 * 60 * 60 * 1000) return null
+  const ageDays = Math.floor(ageMs / (24 * 60 * 60 * 1000))
+  return `Snapshot freshness: stale (${ageDays} day${ageDays === 1 ? '' : 's'} old).`
+}
+
 function formatUsdCompact(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return 'n/a'
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`
@@ -988,6 +997,8 @@ export function formatAlfaClubLeaderboardChat(
   const lines: string[] = []
   lines.push('**AlfaClub Leaderboard**')
   lines.push(`${snapLabel}${prevLabel ? ` vs ${prevLabel}` : ''}`)
+  const freshness = buildSnapshotFreshnessLine(input.snapshotTs)
+  if (freshness) lines.push(freshness)
   lines.push(
     formatIndexedScopeLine({
       creatorsTracked: input.creatorsTracked,

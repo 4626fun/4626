@@ -107,15 +107,6 @@ function getKnownTokenLogo(address: string, chainId: number): string | null {
   return normalizeUrl(knownTokenLogoSeedByChainAndAddress[key] || knownTokenLogoSeedByChainAndAddress[`${chainId}:${address}`])
 }
 
-function canonicalTokenImageUrl(
-  address: string,
-  chainId: number,
-  tokenKind?: 'creator' | 'share',
-): string {
-  const tokenKindSuffix = tokenKind ? `&tokenKind=${tokenKind}` : ''
-  return `/api/v1/token/${address.toLowerCase()}/image?chain=${chainId}&format=png&style=raw${tokenKindSuffix}`
-}
-
 /**
  * Build a deterministic logo list in priority order.
  * It includes curated metadata first, then curated fallbacks by chain.

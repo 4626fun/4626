@@ -83,6 +83,8 @@ export type HermitPreferenceClearer = () => Promise<boolean>
 export type HermitExecutionParams = {
   commandText: string
   senderAddress: `0x${string}`
+  /** Caller is trusted to mutate room-level strategy controls. */
+  isTrustedOperator?: boolean
   /**
    * Optional caller source identity (for routing guards), e.g.
    * `alfaclub-bridge-runner` or `openclaw-control-ui`.

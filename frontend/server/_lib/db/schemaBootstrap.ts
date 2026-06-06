@@ -487,6 +487,13 @@ export async function ensureAlfaclubArenaIdentityMappingSchema(db: Db): Promise<
   })
 }
 
+/** Room-level counter-trade automation schema + ledgers. */
+export async function ensureAlfaclubCounterTradeSchema(db: Db): Promise<void> {
+  await withEnsureOnce('alfaclubCounterTrade', async () => {
+    await ensureMigrationApplied(db, '20260709000000_alfaclub_counter_trade_engine.sql').catch(() => {})
+  })
+}
+
 /** Ethos chart snapshots + unified chart view refresh helpers. */
 export async function ensureEthosChartSupportSchema(db: Db): Promise<void> {
   await withEnsureOnce('ethosChartSupport', async () => {

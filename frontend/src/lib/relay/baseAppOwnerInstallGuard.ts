@@ -1,4 +1,4 @@
-import { BASE_APP_SUBSTITUTED_SIGNER_ERROR } from '@/lib/relay/submitRelayPart1SelfFunded'
+import { BASE_APP_SUBSTITUTED_SIGNER_ERROR } from '@/lib/relay/baseAppOwnerInstallErrors'
 import { externalBrowserUrlFor, isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 
 export const BASE_APP_SELF_AUTH_PART1_BLOCKED =

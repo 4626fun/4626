@@ -17,6 +17,10 @@ import {
 import { executeHermitCommand } from '../_lib/hermit/skillRouter.js'
 import { pickHermitReactionEmoji } from '../_lib/hermit/reactionEmoji.js'
 import {
+  isHermitOperatorOnlyCommand,
+  isTrustedHermitOperator,
+} from '../_lib/hermit/operatorPolicy.js'
+import {
   executeKeeprCommandFamily,
   formatAssistantOnlyBlocked,
 } from './families/keepr.js'
@@ -467,16 +471,23 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
           return { ok: false, response: 'Hermit access denied.' }
         }
         const hermitRole = await getRole(undefined)
-        const isTrustedHermitRole = hermitRole === 'OWNER' || hermitRole === 'ADMIN'
         const isRoomOwner = isHermitOwner(params.senderWallet)
+        const isTrustedOperator = isTrustedHermitOperator({
+          senderIsAllowlisted,
+          role: hermitRole,
+          isRoomOwner,
+        })
+        const operatorOnlyCommand = isHermitOperatorOnlyCommand(raw)
         if (
           alfaClubChat &&
-          (hermitCommand === '/signal' || hermitCommand === '/arena') &&
-          !senderIsAllowlisted &&
-          !isTrustedHermitRole &&
-          !isRoomOwner
+          operatorOnlyCommand &&
+          !isTrustedOperator
         ) {
-          const restrictedCommand = hermitCommand === '/arena' ? '/arena' : '/signal'
+          const restrictedCommand = hermitCommand === '/arena'
+            ? '/arena'
+            : hermitCommand === '/strategy'
+              ? '/strategy bias'
+              : '/signal'
           return {
             ok: false,
             response:
@@ -506,6 +517,7 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
         const result = await executeHermitCommand({
           commandText: raw,
           senderAddress: params.senderWallet as `0x${string}`,
+          isTrustedOperator,
           sourceIdentity: isAlfaClubChatId(params.chatId) ? 'alfaclub-bridge-runner' : null,
           ...(hermitRoomContext.roomId ? { roomId: hermitRoomContext.roomId } : {}),
           ...(hermitRoomContext.userPreferences

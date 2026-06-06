@@ -5,7 +5,7 @@ import {
   isBaseAppSelfAuthRelayPart1Blocked,
   mapBaseAppOwnerInstallSubmissionError,
 } from '@/lib/relay/baseAppOwnerInstallGuard'
-import { BASE_APP_SUBSTITUTED_SIGNER_ERROR } from '@/lib/relay/submitRelayPart1SelfFunded'
+import { BASE_APP_SUBSTITUTED_SIGNER_ERROR } from '@/lib/relay/baseAppOwnerInstallErrors'
 
 vi.mock('@/lib/wallet/inAppBrowser', () => ({
   isBaseAppInAppContext: vi.fn(() => true),

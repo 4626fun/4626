@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 
@@ -170,8 +170,13 @@ export function Positions() {
   const [intervalChoice, setIntervalChoice] = useState<IntervalChoice>('auto')
   const [densityMode, setDensityMode] = useState<'all' | 'major'>('all')
   const [showTrades, setShowTrades] = useState(true)
+  const [hideBots, setHideBots] = useState(true)
+  const [hideCommands, setHideCommands] = useState(true)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [hoveredEventId, setHoveredEventId] = useState<string | null>(null)
+
+  // Ref for the timeline list scroll container so we can bring the selected row into view.
+  const timelineListRef = useRef<HTMLDivElement | null>(null)
 
   const selectedSymbolForQuery = useMemo(() => {
     const [symbol] = selectedMarket.split('/')
@@ -199,29 +204,66 @@ export function Positions() {
     return data?.defaultMarket ?? selectedMarket
   }, [data?.defaultMarket, data?.markets, selectedMarket])
 
+  // Bot filter (Hermit etc.) is applied early so that sender options and downstream
+  // lists/chart only see human messages when the toggle is active.
+  const baseChatEvents = useMemo(() => {
+    let evs = data?.chatEvents ?? []
+    if (hideBots) {
+      // Hide bot messages. We primarily use the isBot flag (populated server-side from
+      // AlfaClub ingest/read API). As a robust fallback for Hermit4626 specifically, we
+      // also hide anything whose senderLabel contains "hermit" (e.g. "hermit4626", "Hermit").
+      // This ensures messages from the Hermit bot are hidden even if the isBot flag is
+      // missing on some payloads (historical data, certain read paths, etc.).
+      evs = evs.filter((e) => {
+        if (e.isBot === true) return false;
+        const label = (e.senderLabel || '').toLowerCase();
+        if (label.includes('hermit')) return false;
+        return true;
+      });
+    }
+    if (hideCommands) {
+      // Filter out bot command invocations (e.g. /hermit, /gmeow, /signal, etc.).
+      // These are typically the inputs that trigger Hermit rather than organic chat.
+      evs = evs.filter((e) => !(e.text || '').trim().startsWith('/'))
+    }
+    return evs
+  }, [data?.chatEvents, hideBots, hideCommands])
+
   const senderOptions = useMemo(() => {
     const map = new Map<string, string>()
-    for (const event of data?.chatEvents ?? []) {
+    for (const event of baseChatEvents) {
       if (!map.has(event.senderAddress)) {
         map.set(event.senderAddress, event.senderLabel || event.senderAddress)
       }
     }
     return [...map.entries()].map(([address, label]) => ({ address, label }))
-  }, [data?.chatEvents])
+  }, [baseChatEvents])
+
+  const isSelectedSenderVisible = useMemo(
+    () => (selectedSender ? baseChatEvents.some((event) => event.senderAddress === selectedSender) : false),
+    [baseChatEvents, selectedSender],
+  )
+
+  const effectiveChatScope = useMemo<'host' | 'all' | 'sender'>(() => {
+    if (chatScope !== 'sender') return chatScope
+    return selectedSender && isSelectedSenderVisible ? 'sender' : 'all'
+  }, [chatScope, isSelectedSenderVisible, selectedSender])
+
+  const effectiveSelectedSender = effectiveChatScope === 'sender' ? selectedSender : null
 
   const filteredChatEvents = useMemo(() => {
-    const source = data?.chatEvents ?? []
+    const source = baseChatEvents // already has bot filter applied
     const byScope =
-      chatScope === 'host'
+      effectiveChatScope === 'host'
         ? source.filter((event) => event.isHost)
-        : chatScope === 'sender' && selectedSender
-          ? source.filter((event) => event.senderAddress === selectedSender)
+        : effectiveChatScope === 'sender' && effectiveSelectedSender
+          ? source.filter((event) => event.senderAddress === effectiveSelectedSender)
           : source
     if (!effectiveMarket) return byScope
     // Market-specific messages stay decoupled; room-wide chatter (null market) is
     // general social signal and surfaces on every market.
     return byScope.filter((event) => event.market === effectiveMarket || event.market == null)
-  }, [chatScope, data?.chatEvents, effectiveMarket, selectedSender])
+  }, [effectiveChatScope, baseChatEvents, effectiveMarket, effectiveSelectedSender])
 
   const filteredTradeEvents = useMemo(() => {
     const source = data?.tradeEvents ?? []
@@ -274,6 +316,7 @@ export function Positions() {
         senderLabel: event.senderLabel,
         senderAvatarUrl: event.senderAvatarUrl,
         senderAddress: event.senderAddress,
+        isBot: event.isBot,
         isFirstFromSender: event.isFirstFromSender,
         price: markPrice,
         contextAtTime: resolvePositionContext(event.time, markPrice),
@@ -316,7 +359,12 @@ export function Positions() {
       ? allOverlayEvents[selectedEventIndex]
       : null
 
-  const displayedEventRows = useMemo(() => allOverlayEvents.slice(-160), [allOverlayEvents])
+  // For the side timeline list we want reverse-chronological order:
+  // most recent / current events at the top, older messages as the user scrolls down.
+  const timelineListEvents = useMemo(() => {
+    const recent = allOverlayEvents.slice(-160)
+    return [...recent].reverse()
+  }, [allOverlayEvents])
 
   const stepEvent = useCallback((delta: -1 | 1) => {
     if (allOverlayEvents.length === 0) return
@@ -341,6 +389,17 @@ export function Positions() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [stepEvent])
+
+  // When selection changes (via click, keyboard arrows, or inspector), scroll the
+  // corresponding row into view inside the timeline list (newest-first order).
+  useEffect(() => {
+    if (!selectedEventId || !timelineListRef.current) return
+    const container = timelineListRef.current
+    const row = container.querySelector(`[data-event-id="${selectedEventId}"]`) as HTMLElement | null
+    if (row) {
+      row.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, [selectedEventId])
 
   return (
     <div className="relative pb-24 md:pb-0">
@@ -411,7 +470,7 @@ export function Positions() {
               </select>
               <select
                 className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
-                value={chatScope}
+                value={effectiveChatScope}
                 onChange={(event) => {
                   const scope = event.target.value as 'host' | 'all' | 'sender'
                   setChatScope(scope)
@@ -426,10 +485,10 @@ export function Positions() {
                 <option value="host">Host only</option>
                 <option value="sender">Specific sender</option>
               </select>
-              {chatScope === 'sender' && (
+              {effectiveChatScope === 'sender' && (
                 <select
                   className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
-                  value={selectedSender ?? ''}
+                  value={effectiveSelectedSender ?? ''}
                   onChange={(event) => setSelectedSender(event.target.value || null)}
                 >
                   {senderOptions.map((option) => (
@@ -446,6 +505,24 @@ export function Positions() {
                 onClick={() => setShowTrades((value) => !value)}
               >
                 Trades
+              </Button>
+              <Button
+                variant={hideBots ? 'primary' : 'secondary'}
+                size="sm"
+                className="btn-compact rounded-full text-xs"
+                onClick={() => setHideBots((value) => !value)}
+                title={hideBots ? 'Hermit bot messages (isBot or sender label containing "hermit") are hidden (click to show)' : 'Click to hide Hermit4626 / other bot messages'}
+              >
+                Hermit bots
+              </Button>
+              <Button
+                variant={hideCommands ? 'primary' : 'secondary'}
+                size="sm"
+                className="btn-compact rounded-full text-xs"
+                onClick={() => setHideCommands((value) => !value)}
+                title={hideCommands ? 'Bot command messages (starting with /) are hidden (click to show)' : 'Click to hide bot commands (messages starting with / like /hermit)'}
+              >
+                Commands
               </Button>
               <Button
                 variant="secondary"
@@ -505,11 +582,15 @@ export function Positions() {
 
             <div className="flex flex-col gap-4 lg:sticky lg:top-6 self-start lg:h-[72vh] lg:min-h-[520px]">
               <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4 sm:p-5 flex flex-col min-h-0 lg:flex-1">
-              <div className="label shrink-0">Timeline events ({displayedEventRows.length})</div>
-              <div className="mt-3 max-h-[48vh] lg:max-h-none lg:flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 [scrollbar-gutter:stable]">
-                {displayedEventRows.map((event) => (
+              <div className="label shrink-0">Timeline events ({timelineListEvents.length})</div>
+              <div
+                ref={timelineListRef}
+                className="mt-3 max-h-[48vh] lg:max-h-none lg:flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 [scrollbar-gutter:stable]"
+              >
+                {timelineListEvents.map((event) => (
                   <button
                     key={event.id}
+                    data-event-id={event.id}
                     type="button"
                     onClick={() => setSelectedEventId(event.id)}
                     className={`w-full text-left rounded-lg border p-2.5 text-xs transition ${
@@ -520,8 +601,26 @@ export function Positions() {
                         : 'border-white/5 bg-white/[0.03] hover:border-sky-400/40 hover:bg-white/[0.05]'
                     }`}
                   >
-                    <div className="text-zinc-300">
-                      {formatTime(event.time)} · {event.market ?? 'all markets'}
+                    <div className="flex items-center gap-2 text-zinc-300">
+                      {event.kind !== 'trade' && event.senderAvatarUrl ? (
+                        <span className="relative block h-5 w-5 shrink-0 overflow-hidden rounded-full ring-1 ring-white/10">
+                          <span
+                            className="absolute inset-0"
+                            style={{ background: '#27272a' }}
+                          />
+                          <img
+                            src={event.senderAvatarUrl}
+                            alt=""
+                            className="absolute inset-0 h-full w-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none'
+                            }}
+                          />
+                        </span>
+                      ) : null}
+                      <span>
+                        {formatTime(event.time)} · {event.market ?? 'all markets'}
+                      </span>
                     </div>
                     <div className="mt-1 text-zinc-100">
                       {event.kind === 'trade'
@@ -529,6 +628,9 @@ export function Positions() {
                         : event.kind === 'host-chat'
                           ? 'Host message'
                           : 'Room message'}
+                      {event.kind !== 'trade' && event.senderLabel ? (
+                        <span className="ml-1.5 text-[10px] text-zinc-400">· {event.senderLabel}</span>
+                      ) : null}
                     </div>
                     {event.kind === 'trade' &&
                       (event.action === 'close' || event.action === 'liquidated') &&

@@ -16,7 +16,7 @@ import {
   resolveRelayPart1DepositTxHash,
 } from '@/lib/relay/resolveRelayPart1DepositTxHash'
 import { ENTRY_POINT_V06_BASE, CSW_OWNER_READ_ABI } from '@/lib/wallet/cswOwnerAbi'
-import { waitForCallsTxHash, _submitOwnerViaSendCalls } from '@/lib/wallet/cswSendCalls'
+import { waitForCallsTxHash } from '@/lib/wallet/cswSendCalls'
 import {
   buildSendPreparedCallsSignaturePayload,
   normalizePreparedCallValueToHex,
@@ -33,13 +33,18 @@ import {
   unwrapDoubleHexEncodedHash,
   type V06UserOpFields,
 } from '@/lib/wallet/onboardingWalletReplayable'
+import { BASE_APP_SUBSTITUTED_SIGNER_ERROR } from '@/lib/relay/baseAppOwnerInstallErrors'
 
 export type SelfAuthOwnerDiscovery = {
   ownerIndex: number | null
   ownerSignerAddress: `0x${string}` | null
   /** Base App session-key owner — uses inner_secp256k1 prepared-calls payload. */
   sessionKeyOwner: boolean
+  /** owner[0] is passkey and no user-facing EOA owners were detected. */
+  passkeyFirst: boolean
 }
+
+export { BASE_APP_SUBSTITUTED_SIGNER_ERROR } from '@/lib/relay/baseAppOwnerInstallErrors'
 
 /** Base App self-auth wraps personal_sign payloads with the CSW owner slot it used. */
 export function parseSelfAuthOwnerIndexFromSignature(signature: Hex): number | null {
@@ -69,8 +74,13 @@ function recordSelfAuthOwnerDiscovery(params: {
   ownerIndex: number | null
   ownerSignerAddress: `0x${string}` | null
   sessionKeyOwner?: boolean
+  passkeyFirst?: boolean
   appendEvent: (row: string) => void
 }): void {
+  if (params.passkeyFirst) {
+    params.discovery.passkeyFirst = true
+    params.appendEvent('relay_part1:discovered_passkey_first=1')
+  }
   if (params.sessionKeyOwner) {
     params.discovery.sessionKeyOwner = true
     params.appendEvent('relay_part1:discovered_session_key_owner=1')
@@ -333,7 +343,7 @@ function formatRelayPart1Error(error: unknown): string {
 function formatRelayBundlerRpcError(error: unknown): string {
   if (!(error instanceof Error)) return getWalletErrorMessage(error)
 
-  const record = error as Record<string, unknown>
+  const record = error as unknown as Record<string, unknown>
   const shortMessage = typeof record.shortMessage === 'string' ? record.shortMessage.trim() : ''
   if (shortMessage && shortMessage.toLowerCase() !== 'rpc request failed.') {
     return shortMessage
@@ -366,25 +376,6 @@ function isUserRejectedWalletAction(error: unknown): boolean {
     message.includes('request rejected') ||
     message.includes('action_rejected') ||
     message.includes('rejected the request')
-  )
-}
-
-function isRelayPart1UsdcPaymasterLandedError(error: unknown): boolean {
-  const message = formatRelayPart1Error(error).toLowerCase()
-  return message.includes('usdc paymaster')
-}
-
-/** Do not fall through to a second Part 1 lane — user already signed or wallet RPC is broken. */
-function isNonCascadeRelayPart1Error(error: unknown): boolean {
-  if (isUserRejectedWalletAction(error)) return true
-  if (isRelayPart1UsdcPaymasterLandedError(error)) return true
-  const message = formatRelayPart1Error(error).toLowerCase()
-  return (
-    message.includes('failed to fetch rpc request') ||
-    message.includes('failed to fetch') ||
-    message.includes('internal error was received') ||
-    message.includes('error generating message') ||
-    message.includes('error generating transaction')
   )
 }
 
@@ -558,11 +549,13 @@ async function signSelfAuthPreparedUserOpOnce(params: {
     params.ownerDiscovery.ownerIndex = merged.ownerIndex
     params.ownerDiscovery.ownerSignerAddress = merged.ownerSignerAddress
     params.ownerDiscovery.sessionKeyOwner = merged.sessionKeyOwner
+    params.ownerDiscovery.passkeyFirst = merged.passkeyFirst
     recordSelfAuthOwnerDiscovery({
       discovery: params.ownerDiscovery,
       ownerIndex: parsedOwnerIndex,
       ownerSignerAddress: preparedCallsSignerAddress,
       sessionKeyOwner,
+      passkeyFirst: params.ownerDiscovery.passkeyFirst,
       appendEvent: params.appendEvent,
     })
   }
@@ -978,71 +971,6 @@ export function buildSelfFundedRelayPrepareCapabilities(
   }
 }
 
-async function submitViaSendCallsSelfFunded(params: {
-  walletRequest: WalletRequest
-  fundingCsw: `0x${string}`
-  userCall: OwnerMutationEip5792Call
-  chainId: number
-  publicClient?: PublicClient
-  appendEvent: (row: string) => void
-}): Promise<`0x${string}`> {
-  params.appendEvent('relay_part1:lane=send_calls_self_funded')
-  await ensureSelfAuthWalletAuthorized({
-    walletRequest: params.walletRequest,
-    fundingCsw: params.fundingCsw,
-    appendEvent: params.appendEvent,
-  })
-  const { callBundleId } = await _submitOwnerViaSendCalls({
-    walletRequest: params.walletRequest,
-    csw: params.fundingCsw,
-    chainId: params.chainId,
-    calls: [
-      {
-        to: getAddress(params.userCall.to),
-        data: params.userCall.data,
-        value: BigInt(params.userCall.value),
-      },
-    ],
-    onTelemetry: (event) => {
-      try {
-        const detail = typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
-        params.appendEvent(`relay_part1.send_calls.${event.step}: ${detail.slice(0, 320)}`)
-      } catch {
-        params.appendEvent(`relay_part1.send_calls.${event.step}: <unloggable>`)
-      }
-    },
-  })
-
-  const resolution = await waitForCallsTxHash({
-    walletRequest: params.walletRequest,
-    callBundleId,
-    timeoutMs: 90_000,
-    intervalMs: 1_500,
-    onTelemetry: (event) => {
-      try {
-        const detail = typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
-        params.appendEvent(`relay_part1.send_calls_status.${event.step}: ${detail.slice(0, 320)}`)
-      } catch {
-        params.appendEvent(`relay_part1.send_calls_status.${event.step}: <unloggable>`)
-      }
-    },
-  })
-
-  await assertRelayPart1LandedSelfFunded({
-    resolution,
-    publicClient: params.publicClient,
-    fundingCsw: params.fundingCsw,
-    appendEvent: params.appendEvent,
-  })
-
-  const txHash = await resolveRelayPart1DepositTxHash({
-    resolution,
-    appendEvent: params.appendEvent,
-  })
-  params.appendEvent(`relay_part1:send_calls_tx=${txHash}`)
-  return txHash
-}
-
 async function submitViaPreparedCallsSelfFunded(params: {
   walletRequest: WalletRequest
   fundingCsw: `0x${string}`
@@ -1202,6 +1130,7 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
     ownerIndex: chainSeed.ownerIndex,
     ownerSignerAddress: chainSeed.ownerSignerAddress,
     sessionKeyOwner: chainSeed.sessionKeyOwner,
+    passkeyFirst: chainSeed.passkeyFirst,
   }
   if (chainSeed.sessionKeyOwner) {
     params.appendEvent('relay_part1:preflight_session_key_owner=1')

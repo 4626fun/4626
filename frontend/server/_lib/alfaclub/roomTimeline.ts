@@ -27,6 +27,7 @@ export type RoomTimelineChatEvent = {
   text: string
   time: number
   isHost: boolean
+  isBot: boolean
   isFirstFromSender: boolean
   replyId: string | null
   replyText: string | null
@@ -95,6 +96,7 @@ type ChatRow = {
   message_text: string
   username: string | null
   avatar_url: string | null
+  is_bot: boolean | null
   message_date: string | null
   reply_id: string | null
   reply_text: string | null
@@ -286,6 +288,29 @@ function resolveRoomMessageAvatar(message: AlfaClubRoomMessage): string | null {
   return null
 }
 
+function resolveRoomMessageIsBot(message: AlfaClubRoomMessage): boolean {
+  const nestedSender =
+    message.sender && typeof message.sender === 'object' && !Array.isArray(message.sender)
+      ? (message.sender as Record<string, unknown>)
+      : null
+  const candidates = [
+    message.isBot,
+    message.is_bot,
+    message.isbot,
+    nestedSender?.isBot,
+    nestedSender?.is_bot,
+  ]
+  for (const candidate of candidates) {
+    if (typeof candidate === 'boolean') return candidate
+    if (typeof candidate === 'string') {
+      const low = candidate.trim().toLowerCase()
+      if (low === 'true') return true
+      if (low === 'false') return false
+    }
+  }
+  return false
+}
+
 function resolveRoomMessageDateMs(message: AlfaClubRoomMessage): number {
   const candidates = [
     message.date,
@@ -337,6 +362,7 @@ async function readChatEventsViaReadApi(params: {
             ? message.username.trim()
             : null,
         senderAvatarUrl: resolveRoomMessageAvatar(message),
+        isBot: resolveRoomMessageIsBot(message),
         text: resolveRoomMessageText(message),
         time: resolveRoomMessageDateMs(message),
         replyId:
@@ -384,6 +410,7 @@ async function readChatEventsViaReadApi(params: {
         text: message.text,
         time: message.time,
         isHost: Boolean(effectiveHost && message.senderAddress === effectiveHost),
+        isBot: message.isBot ?? false,
         isFirstFromSender,
         replyId: message.replyId,
         replyText: message.replyText,
@@ -411,7 +438,7 @@ async function readChatEvents(params: {
   await ensureAlfaClubVigilanteSchema()
   try {
     const result = await db.sql`
-      SELECT room_id, message_id, sender_address, message_text, username, avatar_url, message_date,
+      SELECT room_id, message_id, sender_address, message_text, username, avatar_url, is_bot, message_date,
              reply_id, reply_text, reply_sender, reply_username
       FROM alfaclub.chat_ingest
       WHERE room_id = ${params.roomId}
@@ -445,6 +472,7 @@ async function readChatEvents(params: {
           text,
           time,
           isHost: Boolean(effectiveHost && sender === effectiveHost),
+          isBot: row.is_bot ?? false,
           isFirstFromSender,
           replyId: row.reply_id?.trim() || null,
           replyText: row.reply_text?.trim() || null,
@@ -485,6 +513,7 @@ async function readProliquidSignalEvents(params: {
       text,
       time,
       isHost: false,
+      isBot: false,
       isFirstFromSender: false,
       replyId: null,
       replyText: null,
@@ -492,6 +521,81 @@ async function readProliquidSignalEvents(params: {
       replySenderLabel: null,
       market: inferChatMarket(text, params.knownSymbols),
     } satisfies RoomTimelineChatEvent
+  })
+}
+
+async function enrichChatSenderProfiles(
+  events: RoomTimelineChatEvent[],
+): Promise<RoomTimelineChatEvent[]> {
+  if (events.length === 0) return events
+
+  const senders = Array.from(
+    new Set(events.map((e) => (e.senderAddress || '').trim().toLowerCase()).filter(Boolean)),
+  )
+  if (senders.length === 0) return events
+
+  const db = await getDb()
+  if (!db) return events
+
+  const avatarBySender = new Map<string, string>()
+  const labelBySender = new Map<string, string>()
+
+  try {
+    // Pull the best-known avatar_url + display_name for these wallets from the chat user directory.
+    // This is the canonical place 4626 uses for chat/XMTP participant profile pictures.
+    const res = await db.sql`
+      SELECT canonical_wallet, avatar_url, display_name
+      FROM chat_directory_profiles
+      WHERE canonical_wallet = ANY(${senders})
+    `
+    for (const row of (res.rows ?? []) as Array<{
+      canonical_wallet?: string
+      avatar_url?: string | null
+      display_name?: string | null
+    }>) {
+      const w = String(row.canonical_wallet || '').trim().toLowerCase()
+      if (!w) continue
+      const av = row.avatar_url ? String(row.avatar_url).trim() : ''
+      if (av) avatarBySender.set(w, av)
+      const dn = row.display_name ? String(row.display_name).trim() : ''
+      if (dn) labelBySender.set(w, dn)
+    }
+
+    // Secondary source: zora_profiles (many wallets that minted or appeared in Zora
+    // explore have avatar_image_url or basename_avatar populated by backfills).
+    const zres = await db.sql`
+      SELECT lower(wallet) AS w,
+             COALESCE(NULLIF(TRIM(avatar_image_url), ''), NULLIF(TRIM(basename_avatar), '')) AS av
+      FROM zora_profiles
+      WHERE lower(wallet) = ANY(${senders})
+    `
+    for (const row of (zres.rows ?? []) as Array<{ w?: string; av?: string | null }>) {
+      const w = String(row.w || '').trim().toLowerCase()
+      if (!w) continue
+      if (!avatarBySender.has(w)) {
+        const av = row.av ? String(row.av).trim() : ''
+        if (av) avatarBySender.set(w, av)
+      }
+    }
+  } catch {
+    // Non-fatal; fall back to whatever the ingest/read API already provided.
+  }
+
+  return events.map((ev) => {
+    const addr = (ev.senderAddress || '').trim().toLowerCase()
+    const existingAvatar = ev.senderAvatarUrl ? ev.senderAvatarUrl.trim() : ''
+    const existingLabel = ev.senderLabel ? ev.senderLabel.trim() : ''
+
+    const enrichedAvatar = existingAvatar || avatarBySender.get(addr) || null
+    const enrichedLabel = existingLabel || labelBySender.get(addr) || ev.senderLabel
+
+    if (!enrichedAvatar && !enrichedLabel) return ev
+
+    return {
+      ...ev,
+      senderAvatarUrl: enrichedAvatar,
+      senderLabel: enrichedLabel,
+    }
   })
 }
 
@@ -640,7 +744,7 @@ export async function buildRoomTimelineData(params: {
     }),
   ])
   const firstSeenBySender = new Set<string>()
-  const chatEvents = [...rawChatEvents, ...proliquidSignalEvents]
+  const rawMerged = [...rawChatEvents, ...proliquidSignalEvents]
     .sort((a, b) => a.time - b.time)
     .map((event) => {
       const isFirstFromSender = !firstSeenBySender.has(event.senderAddress)
@@ -650,6 +754,13 @@ export async function buildRoomTimelineData(params: {
         isFirstFromSender,
       }
     })
+
+  // Enrich chat events with profile pictures (and labels) from the chat directory when the
+  // per-message avatar captured at ingest/read time is missing. This ensures real user
+  // avatars render as markers on /positions even for historical messages or senders whose
+  // AlfaClub message payloads did not carry a pfp.
+  const chatEvents = await enrichChatSenderProfiles(rawMerged)
+
   // Strict market attribution: a message belongs to the market it references, or is
   // room-wide (null) when it references none. Do NOT force unrelated chatter onto the
   // selected market — that would re-couple markets that should stay decoupled.

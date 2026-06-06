@@ -26,6 +26,7 @@ function formatHermitCreativeSection(): string[] {
     '• `/signal` — position-aware enter/exit bias from your live entries',
     '• `/market` — broader majors + AlfaClub market scope',
     '• `/arena ...` (status|register|identity ...|join|activate|trade|...) — Virtuals Arena (Degenerate Claw) controls (room/flag gated; per-sender + room-default bindings; create path uses bot ACP session; /arena requires allowlist or HERMIT_OWNER_ADDRESS in AlfaClub rooms)',
+    '• `/strategy ...` (status|optin|pause|resume|bias) — room-level counter-trade lane with personal opt-in presets',
     '• `/gmeow [vibe]` — GIF + one-liner',
     '• `/meme <prompt>` — meme / image concept',
     '• `/hermit copy|announce|quest|tone <text>` — room copy drafts',
@@ -38,7 +39,7 @@ function formatHermitCreativeSection(): string[] {
 function formatHermitCreativeSectionCompact(): string[] {
   return [
     '**Commands**',
-    '• `/position` · `/position chart` · `/position host markers` · `/position sender <addr|me>` · `/position marker latest|trade 1|host 1|<n>` · `/signal` · `/market` · `/arena status|register` · `/hermit alert` · `/gmeow` · `/meme` · `/alfa brief`',
+    '• `/position` · `/position chart` · `/position host markers` · `/position sender <addr|me>` · `/position marker latest|trade 1|host 1|<n>` · `/signal` · `/market` · `/arena status|register` · `/strategy status|optin|pause|resume` · `/hermit alert` · `/gmeow` · `/meme` · `/alfa brief`',
   ]
 }
 

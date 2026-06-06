@@ -65,6 +65,19 @@ import {
   resolveArenaIdentityForContext,
   upsertArenaIdentityMapping,
 } from '../arena/arenaIdentityMappingStore.js'
+import {
+  readCounterTradeRuntimeConfig,
+  type CounterTradeBias,
+  type CounterTradePreset,
+} from '../alfaclub/counterTradeConfig.js'
+import {
+  pauseCounterTradeOptIn,
+  readCounterTradeUserOptIn,
+  readOrCreateCounterTradeRoomStrategy,
+  resumeCounterTradeOptIn,
+  setCounterTradeGlobalBias,
+  upsertCounterTradeOptIn,
+} from '../alfaclub/counterTradeStore.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -179,6 +192,11 @@ type ParsedArenaCommand =
       agentWalletAddress?: string
       hlApiWalletAddress?: string
     }
+
+type ParsedStrategyCommand =
+  | { kind: 'help' | 'status' | 'pause' | 'resume' }
+  | { kind: 'optin'; preset: CounterTradePreset }
+  | { kind: 'bias'; bias: CounterTradeBias }
 
 function parseArenaCommandArgs(args: string): ParsedArenaCommand | null {
   const trimmed = args.trim()
@@ -311,6 +329,27 @@ function parseArenaCommandArgs(args: string): ParsedArenaCommand | null {
   return null
 }
 
+function parseStrategyCommandArgs(args: string): ParsedStrategyCommand | null {
+  const trimmed = args.trim().toLowerCase()
+  if (!trimmed || trimmed === 'help') return { kind: 'help' }
+  if (trimmed === 'status') return { kind: 'status' }
+  if (trimmed === 'pause') return { kind: 'pause' }
+  if (trimmed === 'resume') return { kind: 'resume' }
+  if (trimmed.startsWith('optin')) {
+    const preset = (trimmed.split(/\s+/)[1] ?? '').trim()
+    if (preset === 'defensive' || preset === 'balanced' || preset === 'aggressive') {
+      return { kind: 'optin', preset }
+    }
+    return null
+  }
+  if (trimmed.startsWith('bias')) {
+    const bias = (trimmed.split(/\s+/)[1] ?? '').trim()
+    if (bias === 'bullish' || bias === 'bearish' || bias === 'neutral') return { kind: 'bias', bias }
+    return null
+  }
+  return null
+}
+
 function formatArenaUsage(): string {
   return [
     '**Arena controls (room-gated)**',
@@ -336,6 +375,17 @@ function formatArenaUsage(): string {
     'HIP-3 pairs must use `xyz:` (example: `xyz:GOLD`).',
     'Create path (`/arena register` or `default`) runs under the bot\'s pre-configured ACP session (see ACP_OWNER_WALLET in acp-cli headless). Agent is functional for arena immediately (auto-bound + onboarded). For the agent to appear "owned by your Alfa EOA" in Virtuals ACP dashboard (userId match), create via web at app.virtuals.io/acp while connected as your Alfa sender, then supply ids with `/arena register [default] <id> <wallet>`.',
     'IMPORTANT: In AlfaClub rooms, /arena commands are gated (see execute.ts). Add your sender wallet (e.g. 0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9 for 1659) to HERMIT_ALLOWED_USERS env, or set HERMIT_OWNER_ADDRESS to your wallet, and restart the service before running clears/registers from that wallet. Owner address bypasses the allowlist for /arena.',
+  ].join('\n')
+}
+
+function formatStrategyUsage(): string {
+  return [
+    '**Counter-trade strategy controls**',
+    '- `/strategy status`',
+    '- `/strategy optin <defensive|balanced|aggressive>`',
+    '- `/strategy pause`',
+    '- `/strategy resume`',
+    '- `/strategy bias <bullish|bearish|neutral>` (trusted operator)',
   ].join('\n')
 }
 
@@ -2161,6 +2211,174 @@ export async function executeHermitCommand(
   const { command, args } = splitCommandAndArgs(params.commandText)
   const userPreferences: HermitUserPreferences | null = params.userPreferences ?? null
 
+  if (command === '/strategy') {
+    const parsed = parseStrategyCommandArgs(args)
+    if (!parsed) {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [
+          'Invalid strategy command.',
+          formatStrategyUsage(),
+          'Preset must be one of: defensive, balanced, aggressive.',
+        ].join('\n\n'),
+      }
+    }
+
+    const runtime = readCounterTradeRuntimeConfig()
+    const roomId = params.roomId ?? runtime.roomId
+    if (!arenaCommandAllowedForRoom(roomId)) {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: 'Strategy automation is only enabled in approved rooms.',
+      }
+    }
+
+    if (parsed.kind === 'help') {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: formatStrategyUsage(),
+      }
+    }
+
+    const strategy = await readOrCreateCounterTradeRoomStrategy(roomId)
+    const userState = await readCounterTradeUserOptIn({
+      roomId,
+      senderAddress: params.senderAddress,
+    })
+
+    if (parsed.kind === 'status') {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [
+          '**Strategy status**',
+          `state: ${userState?.state ?? 'not_opted_in'}`,
+          `preset: ${userState?.preset ?? 'n/a'}`,
+          `globalBias: ${strategy?.globalBias ?? 'neutral'}`,
+          `enabled: ${String(strategy?.enabled ?? false)}`,
+          `killSwitch: ${String(strategy?.killSwitch ?? false)}`,
+          `lastActionAt: ${userState?.lastActionAt ?? 'none'}`,
+          ...(userState?.pauseReason ? [`pauseReason: ${userState.pauseReason}`] : []),
+        ].join('\n'),
+      }
+    }
+
+    if (parsed.kind === 'optin') {
+      const baseConfig = readArenaConfig()
+      const identity = await resolveArenaIdentityForContext({
+        roomId,
+        senderAddress: params.senderAddress,
+        baseConfig,
+      })
+      const hasMappedIdentity =
+        identity.source !== 'env_default' &&
+        Boolean(identity.agentId) &&
+        Boolean(identity.agentWalletAddress)
+      if (!hasMappedIdentity) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: [
+            'Unable to enable automation: no Arena identity mapping found for your account.',
+            'Run /arena register first, then retry.',
+          ].join('\n'),
+        }
+      }
+
+      const saved = await upsertCounterTradeOptIn({
+        roomId,
+        senderAddress: params.senderAddress,
+        preset: parsed.preset,
+      })
+      if (!saved) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: [
+            'Unable to enable automation: no Arena identity mapping found for your account.',
+            'Run /arena register first, then retry.',
+          ].join('\n'),
+        }
+      }
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [
+          'Automation enabled for your account.',
+          `Preset: ${saved.preset}. Mode: room-level strategy + personal risk controls.`,
+          'You can pause instantly with /strategy pause.',
+        ].join('\n'),
+      }
+    }
+
+    if (parsed.kind === 'pause') {
+      const paused = await pauseCounterTradeOptIn({
+        roomId,
+        senderAddress: params.senderAddress,
+        reason: 'user_paused',
+      })
+      if (!paused) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Automation is not enabled for your account.\nRun /strategy optin <preset> to start.',
+        }
+      }
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [
+          'Automation paused immediately for your account.',
+          'No new counter-trades will be opened until you resume.',
+        ].join('\n'),
+      }
+    }
+
+    if (parsed.kind === 'resume') {
+      const resumed = await resumeCounterTradeOptIn({
+        roomId,
+        senderAddress: params.senderAddress,
+      })
+      if (!resumed) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Automation is not enabled for your account.\nRun /strategy optin <preset> to start.',
+        }
+      }
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [`Automation resumed for your account.`, `Preset remains: ${resumed.preset}.`].join('\n'),
+      }
+    }
+
+    if (parsed.kind === 'bias') {
+      if (!params.isTrustedOperator) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply:
+            'Only trusted operators can change room bias. Ask an OWNER/ADMIN or allowlisted operator.',
+        }
+      }
+      const updated = await setCounterTradeGlobalBias({
+        roomId,
+        globalBias: parsed.bias,
+      })
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: updated
+          ? `Room strategy bias updated to ${updated.globalBias}.`
+          : 'Could not update room strategy bias.',
+      }
+    }
+  }
+
   if (command === '/arena') {
     const parsed = parseArenaCommandArgs(args)
     if (!parsed) {
@@ -2823,6 +3041,6 @@ export async function executeHermitCommand(
   }
 
   throw commandError(
-    'Unsupported Hermit command. Use /gmeow, /hermit [copy|announce|quest|tone], /meme, /position, /signal, /market, or /arena.',
+    'Unsupported Hermit command. Use /gmeow, /hermit [copy|announce|quest|tone], /meme, /position, /signal, /market, /strategy, or /arena.',
   )
 }

@@ -17,11 +17,13 @@ const deferAfterCommitStore = (() => {
     subscribe(listener: () => void) {
       listeners.add(listener)
       if (!committed) {
-        queueMicrotask(() => {
+        // Use a macrotask (not microtask) so wagmi Hydrate can finish its
+        // reconnect render pass before we mount hook consumers.
+        setTimeout(() => {
           if (committed) return
           committed = true
           for (const listener of listeners) listener()
-        })
+        }, 0)
       }
       return () => {
         listeners.delete(listener)

@@ -14,7 +14,6 @@ import type { Address } from 'viem'
 
 import { getDb } from '../db/postgres.js'
 import { ensureAlfaClubVigilanteSchema } from './schema.js'
-import { shouldSampleEvent } from '../infra/telemetrySampling.js'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -402,30 +401,28 @@ export async function insertMetricsSnapshot(rows: readonly MetricsSnapshotRow[])
   let inserted = 0
   for (const r of rows) {
     try {
-      // Alfaclub metrics snapshots are high-volume periodic scoring data.
-      // Sample per-creator for stable per-creator signal when rate < 1.
-      if (shouldSampleEvent('alfaclub_metrics_snapshot', r.creatorAddress)) {
-        await db.sql`
-          INSERT INTO alfaclub_metrics_snapshot (
-            snapshot_ts, creator_address, token_id,
-            total_supply, staked_supply,
-            pnl_30d_usd, hl_account_value,
-            score, rank
-          ) VALUES (
-            ${r.snapshotTs},
-            ${r.creatorAddress.toLowerCase()},
-            ${r.tokenId.toString()},
-            ${r.totalSupply.toString()},
-            ${r.stakedSupply.toString()},
-            ${r.pnl30dUsd},
-            ${r.hlAccountValueUsd},
-            ${r.score},
-            ${r.rank}
-          )
-          ON CONFLICT (snapshot_ts, creator_address) DO NOTHING;
-        `
-        inserted += 1
-      }
+      // Scoring snapshots are canonical product data (not telemetry).
+      // Never sample this table; dropping rows can freeze latest snapshot resolution.
+      await db.sql`
+        INSERT INTO alfaclub_metrics_snapshot (
+          snapshot_ts, creator_address, token_id,
+          total_supply, staked_supply,
+          pnl_30d_usd, hl_account_value,
+          score, rank
+        ) VALUES (
+          ${r.snapshotTs},
+          ${r.creatorAddress.toLowerCase()},
+          ${r.tokenId.toString()},
+          ${r.totalSupply.toString()},
+          ${r.stakedSupply.toString()},
+          ${r.pnl30dUsd},
+          ${r.hlAccountValueUsd},
+          ${r.score},
+          ${r.rank}
+        )
+        ON CONFLICT (snapshot_ts, creator_address) DO NOTHING;
+      `
+      inserted += 1
     } catch {
       // Best-effort.
     }
