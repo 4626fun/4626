@@ -8,11 +8,10 @@ This doc maps [relay-kit](https://github.com/relayprotocol/relay-kit), [relay-wa
 
 Related runbooks:
 
-- [Owner-install reference methods](/operations/owner-install-reference-methods) — **Method A/B/C index** + golden txs (primary vs reference lanes)
-- [Base App session-key Relay Part 1 recipe](/operations/base-app-session-key-relay-part1-recipe) — **Method B** (passkey-first Base App; reference, not sole success path)
 - [Relay-Sponsored Owner Mutation Flow](/operations/relay-sponsored-owner-mutation-flow) — two-wallet architecture
 - [Relay Vaults evaluation](/research/relay-vaults-evaluation) — **not** the same product as Settlement / relay-kit
-- [CSW Recovery Playbook](/operations/csw-recovery-playbook) — **Method C** passkey / prepared-calls recovery lane
+- [CSW Recovery Playbook](/operations/csw-recovery-playbook) — passkey / prepared-calls recovery lanes
+- [Base App session-key Relay Part 1 recipe](/operations/base-app-session-key-relay-part1-recipe) — passkey-first CSW observed lane + vendor questions
 
 ## Products (do not conflate)
 
@@ -27,8 +26,6 @@ Bridge/swap examples in the Privy sample (`EXACT_INPUT`, cross-chain ETH) are **
 ---
 
 ## Golden reference transactions (Base mainnet)
-
-> **Method A (primary).** For the full method index (including passkey-first Base App **Method B** and recovery **Method C**), see [Owner-install reference methods](/operations/owner-install-reference-methods).
 
 Successful **add embedded EOA owner** via Relay on block **45600637** (May 5, 2026). Part 1 and Part 2 landed in the same block.
 
@@ -53,8 +50,6 @@ Observed on Part 2 (CSW `0x4beabd0…`, probe `4626.base.eth`):
 - Event: `AddOwner` with new owner EOA at owner index 33
 - Paymaster: `0x0` on the destination UserOp (self-funded)
 
-**Method B Part 2 reference (historical, passkey-first CSW):** [0x801b9d4b…91503](https://basescan.org/tx/0x801b9d4b8f7470226c2f02d5252583f00d77da5cbb0b7dc8b73421ed8b491503) on the same probe CSW — passkey `owner[0]` validates via `getUserOpHashWithoutChainId` (`org.toshi`); inner call added session-key `0xCf8D17…0142` at index **2**. Use for Part 2 signing-shape reference only; waitlist success still requires `isOwnerAddress(privyEmbeddedEoa)`. [Tenderly trace](https://dashboard.tenderly.co/tx/0x801b9d4b8f7470226c2f02d5252583f00d77da5cbb0b7dc8b73421ed8b491503).
-
 4626 replicates Part 1 by:
 
 1. Server `/quote/v2` with `user = depositor` (CSW for self-auth), `recipient = mutation CSW`, wrapped `executeWithoutChainIdValidation(addOwnerAddress(embeddedEoa))`, **`originChainId = destinationChainId = 8453`**, `tradeType = EXACT_OUTPUT`.
@@ -62,8 +57,6 @@ Observed on Part 2 (CSW `0x4beabd0…`, probe `4626.base.eth`):
 3. Poll `/intents/status/v3` with `orderId ?? requestId`; verify on-chain `isOwnerAddress(embeddedEoa)`.
 
 Implementation: `buildOwnerMutationRelayFlow.ts`, `ownerMutationExecution.ts`, `submitRelayPart1SelfFunded.ts`.
-
-**Method D (direct addOwner):** External-browser evaluation via `executeAddOwnerViaSendCalls` may skip Relay when `VITE_DIRECT_CSW_ADD_OWNER_SEND_CALLS=1` and the wallet accepts a direct `addOwnerAddress` self-call. Base App WebView waitlist remains on this Relay guide until the Phase 0 gate in [Coinbase Smart Wallet Capabilities](/operations/coinbase-smart-wallet-capabilities) passes.
 
 ---
 

@@ -1,6 +1,6 @@
 import { getAddress, recoverAddress, type Hex } from 'viem'
 
-import { buildWalletSendCallsPayload } from '@/lib/wallet/walletSendCallsPayload'
+import { KNOWN_BASE_APP_SESSION_KEY_SIGNER } from '@/lib/wallet/cswSelfAuthOwnerDiscovery'
 import {
   classifyWebAuthnOwnerSignature,
   hexByteLength,
@@ -594,42 +594,12 @@ export async function _submitOwnerViaPreparedCallsAllowAnyOwner(params: {
     throw new Error('personal_sign did not return a valid signature.')
   }
   const wrappedSignature = parseCoinbaseSignatureWrapper(signature)
-  if (wrappedSignature?.ownerIndex === 3) {
-    throw new Error(
-      'This smart wallet still has a mistaken owner in slot 3 from an earlier attempt. Remove that owner in Accounts or Base App, then retry.',
-    )
-  }
-  let signerAddress: `0x${string}` = params.sender
-  try {
-    const guardOutcome = await preflightOwnerKeyMismatch({
-      walletRequest: params.walletRequest,
-      sender: params.sender,
-      hashToSign,
-      signature,
-      sessionKind: 'self_auth',
-    })
-    if (
-      (guardOutcome.kind === 'ok' || guardOutcome.kind === 'skipped_self_auth_session_key') &&
-      'parsedOwnerAddress' in guardOutcome &&
-      guardOutcome.parsedOwnerAddress
-    ) {
-      if ('parsedOwnerIndex' in guardOutcome && guardOutcome.parsedOwnerIndex === 3) {
-        throw new Error(
-          'This smart wallet still has a mistaken owner in slot 3 from an earlier attempt. Remove that owner in Accounts or Base App, then retry.',
-        )
-      }
-      signerAddress = guardOutcome.parsedOwnerAddress
-    }
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('mistaken owner in slot 3')) {
-      throw error
-    }
-    /* fail open — Base App passkey/session-key payloads use CSW sender address */
-  }
+  const signerAddress =
+    wrappedSignature?.ownerIndex === 2 ? KNOWN_BASE_APP_SESSION_KEY_SIGNER : params.sender
   const signaturePayload = buildSendPreparedCallsSignaturePayload({
     sender: params.sender,
     signature,
-    signerAddress,
+    signerAddress: signerAddress as `0x${string}`,
     mode: 'inner_secp256k1',
   })
 
@@ -670,6 +640,7 @@ export async function _submitOwnerViaWalletSendCalls(params: {
   canonicalCswAddress: string | null
   onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
 }): Promise<`0x${string}`> {
+  const chainIdHex = `0x${params.chainId.toString(16)}`
   const capabilities: Record<string, unknown> = {}
   if (params.paymasterUrl) {
     const normalizedPaymaster = String(params.paymasterUrl).trim()
@@ -692,13 +663,12 @@ export async function _submitOwnerViaWalletSendCalls(params: {
   })
 
   const sendCallsPayload = {
-    ...buildWalletSendCallsPayload({
-      from: params.sender,
-      chainId: params.chainId,
-      atomicRequired: true,
-      calls: [{ to: params.to, data: params.data, value: 0n }],
-    }),
-    ...(Object.keys(capabilities).length > 0 ? { capabilities } : {}),
+    version: '1.0',
+    from: params.sender,
+    chainId: chainIdHex,
+    atomicRequired: true,
+    calls: [{ to: params.to, data: params.data, value: '0x0' }],
+    capabilities,
   }
   let sendResult: unknown
   try {

@@ -3,15 +3,13 @@ import { Link } from 'react-router-dom'
 
 import { Button } from '@/components/ui/Button'
 import { AddOwnerActionPanel } from '@/features/accountSetup/addOwner/AddOwnerActionPanel'
-import { BaseAppOwnerInstallBanner } from '@/features/accountSetup/addOwner/BaseAppOwnerInstallBanner'
 import { useAddOwnerFlow } from '@/features/accountSetup/addOwner/useAddOwnerFlow'
 import type { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { getAppBaseUrl } from '@/lib/env/host'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 import { resolveOwnerMutationSignerContext } from '@/lib/relay/resolveOwnerMutationSignerContext'
-import { isBaseAppSelfAuthRelayPart1Blocked } from '@/lib/relay/baseAppOwnerInstallGuard'
-import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 
 type AccountSetupController = ReturnType<typeof useAccountSetupController>
 
@@ -39,7 +37,6 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     privyWallets,
     refreshCswOwners,
     requiresBaseAppForOwnerInstall,
-    submitOwnerInstallViaOnchainEoa,
     busyProvider,
   } = controller
 
@@ -74,10 +71,7 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     [canonicalCswAddress, ownerSignerAddress, privyEmbeddedEoaAddress],
   )
   const isSelfAuthSession = signerContext.isSelfAuthSession
-  const baseAppSelfAuthBlocked = isBaseAppSelfAuthRelayPart1Blocked({
-    isSelfAuthSession,
-    hasConnectedOnchainEoaOwner: Boolean(connectedOnchainEoaOwner),
-  })
+  const inBaseApp = isBaseAppInAppContext()
 
   const passkeyOnlyOwnerInstallBlocked =
     requiresBaseAppForOwnerInstall &&
@@ -95,9 +89,8 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     ownerSignerAddress,
     privyEmbeddedEoaAddress,
     privyExternalOwnerWallet: activeExternalOwnerWallet,
-    preferFundingCswSelfAuth: isBaseAppInAppContext() && !connectedOnchainEoaOwner,
-    connectedOnchainEoaOwner,
-    submitOwnerInstallViaOnchainEoa,
+    // Parent CSW self-auth: Base App wraps preview userCall as executeBatch → depositNative (May 5 golden).
+    preferFundingCswSelfAuth: true,
     enabled: inlineRelay && canRunAddOwnerFlow,
   })
 
@@ -134,7 +127,9 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     <div className={`space-y-3 ${className}`} data-testid="add-owner-signing-panel">
       <p className="text-xs leading-relaxed text-zinc-500">
         {inlineRelay
-          ? 'Add your Privy embedded signer as a CSW owner through Relay: build preview, review deposit, then submit.'
+          ? inBaseApp && isSelfAuthSession
+            ? 'Approve with your Base App passkey: build preview, confirm the Relay deposit, then wait for Part 2 to add your 4626 signer.'
+            : 'Add your Privy embedded signer as a CSW owner through Relay: build preview, review deposit, then submit.'
           : (
               <>
                 Owner install runs on <span className="font-mono text-zinc-300">/add-owner</span> as a two-step
@@ -157,8 +152,6 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
           first, connect your canonical smart wallet, then finish signing here.
         </div>
       ) : null}
-
-      {baseAppSelfAuthBlocked ? <BaseAppOwnerInstallBanner /> : null}
 
       {onchainEoaOwnerCandidates.length > 0 ? (
         <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-xs space-y-2">
