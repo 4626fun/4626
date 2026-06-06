@@ -344,7 +344,12 @@ export async function runArenaJoin(config = readArenaConfig()): Promise<ArenaOpR
   if (baseValidation) return baseValidation
   const dgclawValidation = ensureDgclawReady(config)
   if (dgclawValidation) return dgclawValidation
-  const command = buildDgclawCommand(config, ['join'])
+  // Pass the configured arena wallet to avoid relying on ACP local agent autodiscovery
+  // in Railway runtimes, where no active local ACP agent profile may be present.
+  const command = buildDgclawCommand(
+    config,
+    config.agentWalletAddress ? ['join', config.agentWalletAddress] : ['join'],
+  )
   const run = await runCommand(command, config)
   auditLog('join', { ok: run.ok, dryRun: run.dryRun })
   return {

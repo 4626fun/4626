@@ -76,6 +76,14 @@ function isRawRebalanceRevert(error: unknown): boolean {
   return message.includes('rebalancestrategies') && message.includes('revert')
 }
 
+function logRebalanceSkip(vaultAddress: string, reason: string, source: 'executor' | 'raw_fallback') {
+  console.warn('[keeper/rebalance-strategies] skipped', {
+    vaultAddress: vaultAddress.toLowerCase(),
+    reason,
+    source,
+  })
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -127,6 +135,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err) {
     if (err instanceof KeeperVaultActionError) {
       if (err.code === 'rebalance_strategies_no_strategies') {
+        logRebalanceSkip(vaultAddress, 'no_strategies', 'executor')
         return res.status(200).json({
           success: false,
           error: 'keeper_rebalance_no_strategies',
@@ -137,6 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } satisfies ApiEnvelope<{ status: string; reason: string }>)
       }
       if (err.code === 'rebalance_strategies_unauthorized') {
+        logRebalanceSkip(vaultAddress, 'unauthorized', 'executor')
         return res.status(200).json({
           success: false,
           error: 'keeper_rebalance_unauthorized',
@@ -147,6 +157,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } satisfies ApiEnvelope<{ status: string; reason: string }>)
       }
       if (err.code === 'rebalance_strategies_gas_rejected') {
+        logRebalanceSkip(vaultAddress, 'gas_rejected', 'executor')
         return res.status(200).json({
           success: false,
           error: 'keeper_rebalance_gas_rejected',
@@ -157,6 +168,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } satisfies ApiEnvelope<{ status: string; reason: string }>)
       }
       if (err.code === 'rebalance_strategies_reverted') {
+        logRebalanceSkip(vaultAddress, 'reverted', 'executor')
         return res.status(200).json({
           success: false,
           error: 'keeper_rebalance_reverted',
@@ -167,6 +179,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } satisfies ApiEnvelope<{ status: string; reason: string }>)
       }
       if (err.code === 'rebalance_strategies_invalid_weight') {
+        logRebalanceSkip(vaultAddress, 'invalid_weight', 'executor')
         return res.status(200).json({
           success: false,
           error: 'keeper_rebalance_invalid_weight',
@@ -178,6 +191,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
     if (isRawRebalanceInvalidWeight(err)) {
+      logRebalanceSkip(vaultAddress, 'invalid_weight', 'raw_fallback')
       return res.status(200).json({
         success: false,
         error: 'keeper_rebalance_invalid_weight',
@@ -188,6 +202,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<{ status: string; reason: string }>)
     }
     if (isRawRebalanceRevert(err)) {
+      logRebalanceSkip(vaultAddress, 'reverted', 'raw_fallback')
       return res.status(200).json({
         success: false,
         error: 'keeper_rebalance_reverted',
