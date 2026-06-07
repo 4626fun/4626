@@ -10,6 +10,7 @@ import {
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
   SPLIT_PHASE1_PHASE1_MODULE,
 } from '../../src/config/contracts.defaults.js'
+import { assertCreatorOvaultModuleStorageCompatible } from '../../src/lib/deploy/ovaultModuleIdentity.js'
 import { resolveAlignedPhase1DeployDeps } from '../../src/lib/deploy/phase1ModuleDeploy.js'
 import { resolveProtocolTreasuryAddress } from '../../server/_lib/wallet/protocolTreasurySafe.js'
 
@@ -72,22 +73,35 @@ async function main(): Promise<void> {
     return
   }
 
-  const alignedBefore = await resolveAlignedPhase1DeployDeps({ publicClient, batcherAddress: batcher })
-  if (alignedBefore.ok) {
-    process.stdout.write(
-      `ok: batcher ${batcher} phase1 store alignment already good on fork (${alignedBefore.create2Deployer})\n`,
-    )
-    return
-  }
-
   const currentPhase1 = (await publicClient.readContract({
     address: batcher,
     abi: PHASE1_MODULE_ABI,
     functionName: 'phase1Module',
   })) as string
 
+  const alignedBefore = await resolveAlignedPhase1DeployDeps({ publicClient, batcherAddress: batcher })
+  const moduleBefore = await assertCreatorOvaultModuleStorageCompatible({
+    publicClient,
+    batcherAddress: batcher,
+  })
+  const phase1AddressMatches =
+    isAddress(currentPhase1) && getAddress(currentPhase1) === targetPhase1
+  if (alignedBefore.ok && moduleBefore.ok && phase1AddressMatches) {
+    process.stdout.write(
+      `ok: batcher ${batcher} phase1 wiring already matches v1.13.0 v2 target on fork (${alignedBefore.create2Deployer})\n`,
+    )
+    return
+  }
+
+  const driftReasons: string[] = []
+  if (!alignedBefore.ok) driftReasons.push(`create2/store: ${alignedBefore.message}`)
+  if (!moduleBefore.ok) driftReasons.push(`module fingerprint: ${moduleBefore.message}`)
+  if (!phase1AddressMatches) {
+    driftReasons.push(`phase1Module=${currentPhase1} expected ${targetPhase1}`)
+  }
+
   process.stdout.write(
-    `fork drift: batcher.phase1Module=${currentPhase1} misaligned — applying setPhase1Module(${targetPhase1})\n`,
+    `fork drift (${driftReasons.join('; ')}) — applying setPhase1Module(${targetPhase1})\n`,
   )
 
   const protocolTreasury = resolveProtocolTreasuryAddress()
@@ -108,8 +122,15 @@ async function main(): Promise<void> {
   await publicClient.waitForTransactionReceipt({ hash: txHash as `0x${string}`, timeout: 60_000 })
 
   const alignedAfter = await resolveAlignedPhase1DeployDeps({ publicClient, batcherAddress: batcher })
+  const moduleAfter = await assertCreatorOvaultModuleStorageCompatible({
+    publicClient,
+    batcherAddress: batcher,
+  })
   if (!alignedAfter.ok) {
     throw new Error(`fork still misaligned after setPhase1Module: ${alignedAfter.message}`)
+  }
+  if (!moduleAfter.ok) {
+    throw new Error(`fork module fingerprint still mismatched after setPhase1Module: ${moduleAfter.message}`)
   }
 
   if (!isAddress(currentPhase1)) {

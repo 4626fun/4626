@@ -39,6 +39,8 @@ Deployed contract addresses for 4626.
 Notes:
 - Shared/global and split Phase-1 infra shell remain from v1.11.2-pipe-a; **v1.13.0** continues the CreatorOVault `CreatorOVaultModuleStorage.v2` module fingerprint on the live split Phase-1 stack.
 - `DeploymentBatcher` deploys as a slim shell; helpers and `DeploymentBatcherPhase1Module` wire post-deploy via protocol treasury Safe (`wireDeploymentHelpers` + `setPhase1Module`).
+- Greenfield Phase 1 reads **Phase1Module immutables** (`phase1Module()` → `0x19Bd8…`), not batcher-shell module getters (shell may still expose legacy `.current` modules).
+- Parked v3 impairment Phase1Module (`0xffbFf3…`) is **not** paired with v1.13.0 deploy bytecode — restore `0x19Bd8…` before greenfield deploy if rotated.
 - Pre-Pipe-A batcher `0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8` is deprecated — do not use for greenfield deploys.
 
 ### Per-Creator Deployments

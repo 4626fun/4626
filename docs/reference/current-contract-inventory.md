@@ -84,6 +84,14 @@ Live batcher child addresses that are read directly from `DeploymentBatcher` are
 
 Legacy pre-rotation Phase1Module (deprecated): `0xf3b20557ef8173510693A13EF71F884DB835E8c0`
 
+Parked v3 impairment Phase1Module (not active for v1.13.0 greenfield): `0xffbFf3E529e5A4dBFD9ea2e9C01B773D1B7fA1a0`
+
+Versioning verifier (repo defaults + live getters + store seed):
+
+```bash
+pnpm -C frontend exec tsx scripts/ops/verify-v1130-deploy-versioning.ts
+```
+
 ## Bytecode / CodeId Evidence
 
 Primary release manifest:

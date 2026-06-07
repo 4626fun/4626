@@ -5,6 +5,7 @@ import {
   CREATOR_OVAULT_MODULE_STORAGE_CURRENT,
   CREATOR_OVAULT_MODULE_STORAGE_LEGACY_CURRENT,
   CREATOR_OVAULT_MODULE_STORAGE_V2,
+  CREATOR_OVAULT_MODULE_STORAGE_V3,
   DEPLOY_CREATOR_OVAULT_MODULE_STORAGE_VERSION,
   assertCreatorOvaultModuleStorageCompatible,
 } from './ovaultModuleIdentity'
@@ -43,6 +44,22 @@ describe('ovaultModuleIdentity', () => {
     if (!result.ok) {
       expect(result.message).toMatch(/InvalidModuleAddress/i)
       expect(result.message).toMatch(/v2/i)
+    }
+  })
+
+  it('fails with impairment guidance when vault expects v2 but phase1 wires v3 modules', async () => {
+    const result = await assertCreatorOvaultModuleStorageCompatible({
+      publicClient: {
+        readContract: vi.fn(async () => CREATOR_OVAULT_MODULE_STORAGE_V3),
+      },
+      moduleAddress: CORE,
+      vaultExpects: CREATOR_OVAULT_MODULE_STORAGE_V2,
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.message).toMatch(/InvalidModuleAddress/i)
+      expect(result.message).toMatch(/setPhase1Module/i)
+      expect(result.message).toMatch(/v3 impairment/i)
     }
   })
 })

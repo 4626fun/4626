@@ -5,9 +5,12 @@ import { base } from 'viem/chains'
 
 import {
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
+  SPLIT_PHASE1_PHASE1_MODULE,
+  SPLIT_PHASE1_PHASE1_MODULE_V3_IMPAIRMENT,
   isDeprecatedCreatorVaultBatcherAddress,
 } from '../../src/config/contracts.defaults.js'
 import { deploymentBatcherNotConfiguredMessage } from '../../src/lib/deploy/deploymentBatcherConfigError.js'
+import { assertCreatorOvaultModuleStorageCompatible } from '../../src/lib/deploy/ovaultModuleIdentity.js'
 import {
   BASE_MAINNET_CREATOR_REGISTRY,
   readBatcherRegistryAuthorized,
@@ -271,11 +274,40 @@ async function main() {
   ])
 
   const runtimeTuple = runtime as { hubComposer: Address; solanaEid: number; enabled: boolean }
+  const phase1ModuleAddress = isAddress(String(phase1Module)) ? getAddress(String(phase1Module)) : null
+  const moduleStorage = phase1ModuleAddress
+    ? await assertCreatorOvaultModuleStorageCompatible({
+        publicClient: client,
+        batcherAddress: batcher,
+      })
+    : {
+        ok: false as const,
+        message: 'phase1Module address unreadable',
+        vaultExpects: '0x' as Hex,
+        moduleAddress: '0x0000000000000000000000000000000000000000' as Address,
+        moduleReports: '0x' as Hex,
+      }
+
   const checks: CheckResult[] = [
     {
       id: 'phase1_module',
-      ok: isAddress(String(phase1Module)),
+      ok: phase1ModuleAddress !== null,
       detail: String(phase1Module),
+    },
+    {
+      id: 'phase1_module_v1130_target',
+      ok: phase1ModuleAddress === getAddress(SPLIT_PHASE1_PHASE1_MODULE),
+      detail: `live=${phase1ModuleAddress ?? 'n/a'} expected=${SPLIT_PHASE1_PHASE1_MODULE}`,
+    },
+    {
+      id: 'phase1_module_not_v3_impairment',
+      ok: phase1ModuleAddress !== getAddress(SPLIT_PHASE1_PHASE1_MODULE_V3_IMPAIRMENT),
+      detail: `live=${phase1ModuleAddress ?? 'n/a'} parked_v3=${SPLIT_PHASE1_PHASE1_MODULE_V3_IMPAIRMENT}`,
+    },
+    {
+      id: 'phase1_module_storage_v2',
+      ok: moduleStorage.ok,
+      detail: moduleStorage.ok ? 'CreatorOVaultModuleStorage.v2' : moduleStorage.message,
     },
     {
       id: 'phase2_module',

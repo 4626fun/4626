@@ -12,6 +12,11 @@ export const CREATOR_OVAULT_MODULE_STORAGE_V2 = keccak256(
   encodePacked(['string'], ['CreatorOVaultModuleStorage.v2']),
 ) as Hex
 
+/** Impairment-side-pocket module stack (not yet paired with v1.13.0 deploy bytecode). */
+export const CREATOR_OVAULT_MODULE_STORAGE_V3 = keccak256(
+  encodePacked(['string'], ['CreatorOVaultModuleStorage.v3']),
+) as Hex
+
 /** Pre-v1.12.1 modules still on-chain for grandfathered vaults only. */
 export const CREATOR_OVAULT_MODULE_STORAGE_LEGACY_CURRENT = keccak256(
   encodePacked(['string'], ['CreatorOVaultModuleStorage.current']),
@@ -102,11 +107,17 @@ export async function assertCreatorOvaultModuleStorageCompatible(params: {
     const expectsV2 = vaultExpects.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V2.toLowerCase()
     const moduleIsLegacyCurrent =
       moduleReports.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_LEGACY_CURRENT.toLowerCase()
+    const moduleIsV3 =
+      moduleReports.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V3.toLowerCase()
     const hint =
-      expectsV2 && moduleIsLegacyCurrent
-        ? ' Deploy bytecode expects CreatorOVaultModuleStorage.v2 but the live batcher still wires .current modules. ' +
-          'Re-seed CreatorOVault creation bytecode with the .current fingerprint or deploy fresh v2 modules and rotate the batcher.'
-        : ' Re-seed deploy bytecode or rotate batcher/module wiring so vault and modules share one moduleStorageVersion fingerprint.'
+      expectsV2 && moduleIsV3
+        ? ' Deploy bytecode expects CreatorOVaultModuleStorage.v2 (v1.13.0) but the live batcher Phase1Module wires v3 impairment modules. ' +
+          'Protocol ops must call setPhase1Module with the v1.13.0 v2 Phase1Module, or cut over deploy bytecode + UniversalBytecodeStore seeding to v3 before greenfield deploy. ' +
+          'Hard-refresh the app so CREATE2 prediction reads Phase1Module immutables (not batcher-shell getters).'
+        : expectsV2 && moduleIsLegacyCurrent
+          ? ' Deploy bytecode expects CreatorOVaultModuleStorage.v2 but the live batcher still wires .current modules. ' +
+            'Re-seed CreatorOVault creation bytecode with the .current fingerprint or deploy fresh v2 modules and rotate the batcher.'
+          : ' Re-seed deploy bytecode or rotate batcher/module wiring so vault and modules share one moduleStorageVersion fingerprint.'
     return {
       ok: false,
       message:

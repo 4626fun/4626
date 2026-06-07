@@ -79,4 +79,8 @@ if [[ -n "$stale_adapter_hits" ]]; then
   exit 1
 fi
 
+if command -v pnpm >/dev/null 2>&1; then
+  pnpm -C "$ROOT_DIR/frontend" exec tsx scripts/ops/verify-v1130-deploy-versioning.ts >/dev/null
+fi
+
 echo "current split Phase-1 release target guard passed"

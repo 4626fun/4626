@@ -17,6 +17,7 @@ import { base } from 'viem/chains'
 
 import { isShareOftSaltOverrideDisabledBatcher } from '../../../../../src/config/contracts.defaults.js'
 import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
+import { CREATOR_OVAULT_MODULE_STORAGE_V3 } from '../../../../../src/lib/deploy/ovaultModuleIdentity.js'
 import {
   resolveAlignedPhase1DeployDeps,
   resolveBytecodeStoreForBatcher,
@@ -1315,10 +1316,16 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
         moduleKind.toLowerCase() !== moduleCheck.expectedKind.toLowerCase() ||
         moduleStorageVersion.toLowerCase() !== EXPECTED_VAULT_MODULE_STORAGE_VERSION.toLowerCase()
       ) {
+        const moduleIsV3 =
+          moduleStorageVersion.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V3.toLowerCase()
+        const v3Hint = moduleIsV3
+          ? ' Live batcher Phase1Module wires v3 impairment modules while deploy bytecode expects v2 (v1.13.0). ' +
+            'Restore the v1.13.0 v2 Phase1Module via setPhase1Module before greenfield deploy.'
+          : ''
         throw new DeploySessionRequestError(
           409,
           `phase1 precheck failed: batcher ${batcherAddress} ${moduleCheck.label} module ${moduleCheck.address} ` +
-            `is incompatible with current CreatorOVault module identity/version (InvalidModuleAddress).`,
+            `is incompatible with current CreatorOVault module identity/version (InvalidModuleAddress).${v3Hint}`,
         )
       }
     }

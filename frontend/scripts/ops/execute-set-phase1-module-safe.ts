@@ -4,8 +4,14 @@
  *
  * Usage:
  *   pnpm -C frontend exec tsx scripts/ops/execute-set-phase1-module-safe.ts \
- *     --phase1-module 0xcE369BE1D89634E7Ab3d6Dc0f943B2780BF2D889
+ *     --phase1-module 0x19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87
+ *
+ * Loads `frontend/.env` when present (SAFE_API_KEY is optional here; owner PK required to execute).
  */
+
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import Safe from '@safe-global/protocol-kit'
 import { OperationType } from '@safe-global/types-kit'
@@ -13,8 +19,33 @@ import { createPublicClient, encodeFunctionData, getAddress, http, isAddress, ty
 import { base } from 'viem/chains'
 import { privateKeyToAccount } from 'viem/accounts'
 
-import { SPLIT_PHASE1_DEPLOYMENT_BATCHER } from '../../src/config/contracts.defaults.js'
+import {
+  SPLIT_PHASE1_DEPLOYMENT_BATCHER,
+  SPLIT_PHASE1_PHASE1_MODULE,
+} from '../../src/config/contracts.defaults.js'
 import { resolveProtocolTreasuryAddress } from '../../server/_lib/wallet/protocolTreasurySafe.js'
+
+function loadFrontendEnvFile(): void {
+  const envPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../.env')
+  if (!existsSync(envPath)) return
+  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const eq = trimmed.indexOf('=')
+    if (eq === -1) continue
+    const key = trimmed.slice(0, eq).trim()
+    let value = trimmed.slice(eq + 1).trim()
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
+    if (process.env[key] === undefined) process.env[key] = value
+  }
+}
+
+loadFrontendEnvFile()
 
 declare const process: {
   argv: string[]
@@ -60,9 +91,9 @@ function rpcUrl(): string {
 }
 
 async function main(): Promise<void> {
-  const phase1Raw = getArg('--phase1-module')
+  const phase1Raw = getArg('--phase1-module') ?? SPLIT_PHASE1_PHASE1_MODULE
   if (!phase1Raw || !isAddress(phase1Raw)) {
-    throw new Error('--phase1-module <address> required')
+    throw new Error('--phase1-module <address> required (default: SPLIT_PHASE1_PHASE1_MODULE)')
   }
   const phase1Module = getAddress(phase1Raw)
   const batcher = getAddress(getArg('--batcher') ?? SPLIT_PHASE1_DEPLOYMENT_BATCHER)

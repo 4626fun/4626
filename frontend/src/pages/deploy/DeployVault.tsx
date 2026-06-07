@@ -2879,8 +2879,9 @@ function DeployVaultBatcher({
       return (
         'Phase 1 reverted: CreatorOVault rejected the batcher wired modules (InvalidModuleAddress / 0x5cfe78fe). ' +
         'Deploy bytecode and Phase1Module wiring must share the same moduleStorageVersion fingerprint (v1.13.0 uses CreatorOVaultModuleStorage.v2). ' +
+        'If the live batcher was rotated to v3 impairment modules, protocol ops must restore the v1.13.0 v2 Phase1Module via setPhase1Module before greenfield deploy. ' +
         'Hard-refresh the app so predicted CREATE2 addresses use the Phase1Module create2 deployer (not stale batcher-shell getters), ' +
-        'confirm UniversalBytecodeStore CreatorOVault bytecode is seeded for v1.13.0, bump deploymentVersion if retrying after a partial Phase 1, then retry.'
+        'confirm UniversalBytecodeStore CreatorOVault bytecode is seeded for v1.13.0, then bump deploymentVersion in the URL if retrying after a partial Phase 1 (e.g. ?deploymentVersion=v1.13.0-retry-1).'
       )
     }
     if (

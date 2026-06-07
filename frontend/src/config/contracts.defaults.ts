@@ -25,7 +25,10 @@ export const PRE_V1111_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('271Ab2C53D79d52dd
 export const PRE_V1112_PIPE_A_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8')
 /** v1.11.2-pipe-a epoch: slim shell + post-deploy helper wiring + payable finalize / ShareOFT peer. */
 export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('a99058f424FB3ACC639F59355C65C40149030651')
+/** v1.13.0 greenfield target: v2 modules + store-aligned create2 deployer. */
 export const SPLIT_PHASE1_PHASE1_MODULE = addr('19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87')
+/** Impairment rotation module (v3); not paired with v1.13.0 deploy bytecode until store cutover. */
+export const SPLIT_PHASE1_PHASE1_MODULE_V3_IMPAIRMENT = addr('ffbFf3E529e5A4dBFD9ea2e9C01B773D1B7fA1a0')
 export const SPLIT_PHASE1_PHASE2_MODULE = addr('67FD8A34E5b26F875a9513DFf37521A1ca92d80f')
 export const SPLIT_PHASE1_PHASE3_HELPER = addr('674a2D5EE33e184e2120B373a9AcB3fef640885c')
 export const SPLIT_PHASE1_UNIV4_HELPER = addr('F71a6236586077CD29C971443D2cce37B543DcBB')
@@ -60,17 +63,16 @@ export const PRE_V110_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('f941Bb68e4f083f3F5
  * non-zero `shareOftSaltOverride` with `SaltOverrideDisabled()`.
  *
  * Keep this list explicit and historical: do not key off the canonical
- * `SPLIT_PHASE1_DEPLOYMENT_BATCHER` constant so a future salt-enabled cutover
- * does not accidentally stay marked as disabled.
+ * `SPLIT_PHASE1_DEPLOYMENT_BATCHER` constant so future cutovers do not get
+ * accidentally pinned to stale disable-list behavior.
  */
-export const SPLIT_PHASE1_SALT_DISABLED_BATCHER = addr('a99058f424FB3ACC639F59355C65C40149030651')
+export const SPLIT_PHASE1_SALT_DISABLED_BATCHER = PRE_V110_SPLIT_PHASE1_DEPLOYMENT_BATCHER
 const SHARE_OFT_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
   PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V110_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V1110_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V1111_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V1112_PIPE_A_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
-  SPLIT_PHASE1_SALT_DISABLED_BATCHER.toLowerCase(),
 ])
 
 export function isShareOftSaltOverrideDisabledBatcher(value: string | null | undefined): boolean {
