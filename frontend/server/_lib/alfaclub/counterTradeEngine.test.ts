@@ -10,6 +10,8 @@ function makeRuntime(): CounterTradeRuntimeConfig {
   return {
     enabled: true,
     roomId: '1659',
+    chatPostEnabled: true,
+    chatPostRoomId: '1659',
     minUserNotionalUsd: 25,
     cooldownMs: 120_000,
     hourlyActionCap: 12,

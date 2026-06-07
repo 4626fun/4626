@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   recordCounterTradeAction: vi.fn(),
   registerCounterTradeEventIfNew: vi.fn(),
   resolveRoom1659HyperliquidUserForSnapshot: vi.fn(),
+  sendAlfaClubRoomText: vi.fn(),
 }))
 
 vi.mock('../arena/arenaConfig.js', () => ({
@@ -52,11 +53,17 @@ vi.mock('./room1659Market.js', () => ({
   resolveRoom1659HyperliquidUserForSnapshot: mocks.resolveRoom1659HyperliquidUserForSnapshot,
 }))
 
+vi.mock('./chatBridge.js', () => ({
+  sendAlfaClubRoomText: mocks.sendAlfaClubRoomText,
+}))
+
 import { runCounterTradeLoop } from './counterTradeRunner.js'
 
 const BASE_RUNTIME = {
   enabled: true,
   roomId: '1659',
+  chatPostEnabled: true,
+  chatPostRoomId: '1659',
   minUserNotionalUsd: 25,
   cooldownMs: 120_000,
   hourlyActionCap: 12,
@@ -144,6 +151,7 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     })
 
     mocks.runArenaTrade.mockResolvedValue({ ok: true, fill: { oid: 1234 } })
+    mocks.sendAlfaClubRoomText.mockResolvedValue({ lane: 'bot_token_without_reply_id' })
     mocks.recordCounterTradeAction.mockResolvedValue(undefined)
   })
 
@@ -162,6 +170,7 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
       expect.any(Number),
     )
     expect(mocks.recordCounterTradeAction).toHaveBeenCalled()
+    expect(mocks.sendAlfaClubRoomText).toHaveBeenCalledTimes(1)
     const statuses = mocks.recordCounterTradeAction.mock.calls.map((call) => call[0]?.status)
     expect(statuses).toContain('executed')
   })

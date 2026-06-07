@@ -2,7 +2,12 @@ import { logger } from '../infra/logger.js'
 import { readArenaConfig } from '../arena/arenaConfig.js'
 import { resolveArenaIdentityForContext } from '../arena/arenaIdentityMappingStore.js'
 import { runArenaTrade } from '../arena/arenaClient.js'
-import { getClearinghouseState, getUserFillsByTimeDetailed } from './hyperliquid.js'
+import { sendAlfaClubRoomText } from './chatBridge.js'
+import {
+  getClearinghouseState,
+  getUserFillsByTimeDetailed,
+  type HyperliquidUserFillDetailed,
+} from './hyperliquid.js'
 import { resolveRoom1659HyperliquidUserForSnapshot } from './room1659Market.js'
 import { readCounterTradeRuntimeConfig } from './counterTradeConfig.js'
 import {
@@ -68,6 +73,68 @@ export function resolveCounterTradeFillSourceWallet(params: {
     return resolveRoom1659HyperliquidUserForSnapshot(params.senderAddress)
   }
   return params.identityHlApiWalletAddress ?? params.senderAddress
+}
+
+function formatCounterTradeRoomPost(params: {
+  pair: string
+  userFill: HyperliquidUserFillDetailed
+  counterSide: 'long' | 'short'
+  counterLeverage: number
+  counterNotionalUsd: number
+}): string {
+  const openedAt = new Date(params.userFill.time).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  const userSide = params.userFill.side === 'short' ? 'short' : 'long'
+  const userLeverage = deriveUserLeverage(params.userFill) ?? null
+  const counterMarginUsd = params.counterNotionalUsd / Math.max(0.25, params.counterLeverage)
+  const markRaw = params.userFill.px
+  const mark = markRaw != null ? Number(markRaw) : null
+  const oppositeLabel = params.counterSide === 'long' ? 'Long' : 'Short'
+  const userLabel = userSide === 'long' ? 'Long' : 'Short'
+
+  return [
+    `⚡ Countered ${userLabel} → opened ${oppositeLabel} · ${openedAt}`,
+    '',
+    `${params.pair}/USDC ${params.counterLeverage}x`,
+    '',
+    `Mark ${mark != null && Number.isFinite(mark) ? `$${mark.toFixed(2)}` : 'n/a'}`,
+    `Margin/Size $${counterMarginUsd.toFixed(2)} / $${params.counterNotionalUsd.toFixed(2)}`,
+    '',
+    `User ${userLabel}${userLeverage != null ? ` ${userLeverage}x` : ''} · bot opened ${oppositeLabel}`,
+  ].join('\n')
+}
+
+async function postCounterTradeRoomUpdate(params: {
+  runtimeRoomId: string
+  postRoomId: string
+  pair: string
+  userFill: HyperliquidUserFillDetailed
+  counterSide: 'long' | 'short'
+  counterLeverage: number
+  counterNotionalUsd: number
+}): Promise<void> {
+  const message = formatCounterTradeRoomPost({
+    pair: params.pair,
+    userFill: params.userFill,
+    counterSide: params.counterSide,
+    counterLeverage: params.counterLeverage,
+    counterNotionalUsd: params.counterNotionalUsd,
+  })
+  const send = await sendAlfaClubRoomText({
+    roomId: params.postRoomId,
+    text: message,
+  })
+  logger.info('counter_trade.room_posted', {
+    roomId: params.runtimeRoomId,
+    postRoomId: params.postRoomId,
+    lane: send.lane,
+    pair: params.pair,
+    counterSide: params.counterSide,
+    counterLeverage: params.counterLeverage,
+    counterNotionalUsd: params.counterNotionalUsd,
+  })
 }
 
 export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
@@ -317,6 +384,27 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
             counterNotionalUsd,
             counterLeverage: decision.counterLeverage,
           })
+          if (runtime.chatPostEnabled) {
+            try {
+              await postCounterTradeRoomUpdate({
+                runtimeRoomId: runtime.roomId,
+                postRoomId: runtime.chatPostRoomId,
+                pair,
+                userFill: fill,
+                counterSide: decision.counterSide,
+                counterLeverage: decision.counterLeverage,
+                counterNotionalUsd,
+              })
+            } catch (postError) {
+              logger.warn('counter_trade.room_post_failed', {
+                roomId: runtime.roomId,
+                postRoomId: runtime.chatPostRoomId,
+                senderAddress: optIn.senderAddress,
+                pair,
+                message: postError instanceof Error ? postError.message : String(postError),
+              })
+            }
+          }
         } else {
           failed += 1
           await recordCounterTradeAction({

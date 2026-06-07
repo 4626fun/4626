@@ -9,6 +9,8 @@ export type CounterTradeSide = 'long' | 'short'
 export type CounterTradeRuntimeConfig = {
   enabled: boolean
   roomId: string
+  chatPostEnabled: boolean
+  chatPostRoomId: string
   minUserNotionalUsd: number
   cooldownMs: number
   hourlyActionCap: number
@@ -58,9 +60,12 @@ export function readCounterTradeRuntimeConfig(): CounterTradeRuntimeConfig {
     1,
     readPositiveNumber('ALFACLUB_COUNTER_TRADE_MIN_USER_NOTIONAL_USD', 1),
   )
+  const roomId = readRoomId()
   return {
     enabled: readBool('ALFACLUB_COUNTER_TRADE_ENABLED', false),
-    roomId: readRoomId(),
+    roomId,
+    chatPostEnabled: readBool('ALFACLUB_COUNTER_TRADE_CHAT_POST_ENABLED', true),
+    chatPostRoomId: String(process.env.ALFACLUB_COUNTER_TRADE_CHAT_POST_ROOM_ID ?? '').trim() || roomId,
     minUserNotionalUsd,
     cooldownMs: readPositiveInt('ALFACLUB_COUNTER_TRADE_COOLDOWN_MS', 120_000),
     hourlyActionCap: readPositiveInt('ALFACLUB_COUNTER_TRADE_HOURLY_ACTION_CAP', 12),
