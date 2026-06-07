@@ -31,6 +31,8 @@ broadcast/
 
 # KPR build artifacts
 *.wasm
+!frontend/public/vanity/vanity_salt_grinder.wasm
+!frontend/src/lib/vanity/vanity_salt_grinder.wasm
 !frontend/server/_lib/lottery/amoe-zk-assets/*.wasm
 !frontend/server/_lib/lottery/amoe-zk-assets/*.zkey
 .kpr/
