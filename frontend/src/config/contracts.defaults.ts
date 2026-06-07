@@ -104,7 +104,7 @@ export const BASE_DEFAULTS = {
   // zero so stale no-code factory addresses fail closed if a legacy caller uses it.
   payoutRouterFactory: addr('0000000000000000000000000000000000000000'),
 
-  // Base↔Solana bridge integration for current v1.11.1 stack.
+  // Base↔Solana bridge integration for current v1.13.0 target stack.
   solanaBridgeAdapter: addr('700b4BBAf965c013123bAd02a6562FBa487aC0f1'),
 
   // CREATE2 infra (canonical, chain-agnostic)

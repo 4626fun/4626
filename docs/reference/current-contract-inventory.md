@@ -5,13 +5,13 @@ sidebar_position: 5
 
 # Current Contract Inventory (Base)
 
-Generated on: 2026-05-28
-Scope: current live Base infra addresses plus the canonical `v1.12.1` greenfield deploy target for new per-creator vaults.
+Generated on: 2026-06-07
+Scope: current live Base infra addresses plus the canonical `v1.13.0` greenfield deploy target for new per-creator vaults.
 
 ## Sources
 
-1. Release packet: `docs/operations/deployment/releases/v1.12.1-bytecode-epoch.md`
-2. Bytecode / codeId manifest: `deployments/base/v1.12.1-bytecode-manifest.json`
+1. Release packet: `docs/operations/deployment/releases/v1.13.0-bytecode-epoch.md`
+2. Bytecode / codeId manifest: `deployments/base/v1.13.0-bytecode-manifest.json`
 3. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
 4. Live deployment snapshots: `deployments/base/contracts/**/*.json`
 5. Onchain `DeploymentBatcher` wiring checks against the current live Base deployment
@@ -88,7 +88,7 @@ Legacy pre-rotation Phase1Module (deprecated): `0xf3b20557ef8173510693A13EF71F88
 
 Primary release manifest:
 
-- `deployments/base/v1.12.1-bytecode-manifest.json`
+- `deployments/base/v1.13.0-bytecode-manifest.json`
 
 Historical reference manifests:
 
@@ -124,5 +124,5 @@ The active bytecode manifest must include all three entries.
    - `cast call 0x19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87 "vaultCoreModule()(address)"`
    - `cast call 0x19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87 "vaultStrategiesModule()(address)"`
    - `cast call 0x19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87 "vaultAdminModule()(address)"`
-5. Verify bytecode store seed: `pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts` with `BYTECODE_MANIFEST=../../deployments/base/v1.12.1-bytecode-manifest.json`.
+5. Verify bytecode store seed: `pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts` with `BYTECODE_MANIFEST=../../deployments/base/v1.13.0-bytecode-manifest.json`.
 6. After any future module rotation on the live batcher, ensure the new module code IDs are added to the active manifest and seeded into the UniversalBytecodeStore (see `docs/audits/general-audit-2026-05.md` for the hygiene note).

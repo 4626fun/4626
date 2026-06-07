@@ -24,7 +24,7 @@ utils_helper="0xD71C4910C7bB38FB1089Cca42b0883F1BFFfa28D"
 deprecated_batchers='0x56E8527Bf0824155e1556aED5740366f248B68ca|0x32403a647e73e04ae42b02bdd1ade9c88698fd0c|0xe3F9490CfD6bd3D68010405d18Bf772C167E7178|0xcDbEeB764df9878ebAFbf101cc818370f703bC4F|0x004684670d284EF607E1B2424fcf8ccBda8ef828|0x271Ab2C53D79d52ddB14506a44133Fe3FA395332|0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8'
 deprecated_solana_adapters='0x2414b595c4f18532A5836B6e2E6d536832c572e8|0x3a9dC0b2c11b348E4bD60D9605dc3D4Be9bB6cf5|0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00'
 
-rg -F 'Current Live Infrastructure (`v1.12.1` greenfield deploy target)' "$ADDRESSES_DOC" >/dev/null
+rg -F 'Current Live Infrastructure (`v1.13.0` greenfield deploy target)' "$ADDRESSES_DOC" >/dev/null
 rg -F "CreatorRegistry | \`$registry\`" "$ADDRESSES_DOC" >/dev/null
 rg -F "CreatorOVaultFactory | \`$factory\`" "$ADDRESSES_DOC" >/dev/null
 rg -F "VaultActivationBatcher | \`$activation_batcher\`" "$ADDRESSES_DOC" >/dev/null
@@ -38,7 +38,7 @@ rg -F "DeploymentBatcherPhase3Helper | \`$phase3_helper\`" "$ADDRESSES_DOC" >/de
 rg -F "DeploymentBatcherUniV4Helper | \`$univ4_helper\`" "$ADDRESSES_DOC" >/dev/null
 rg -F "DeploymentBatcherUtilsHelper | \`$utils_helper\`" "$ADDRESSES_DOC" >/dev/null
 
-rg -F 'Scope: current live Base infra addresses plus the canonical `v1.12.1` greenfield deploy target' "$INVENTORY_DOC" >/dev/null
+rg -F 'Scope: current live Base infra addresses plus the canonical `v1.13.0` greenfield deploy target' "$INVENTORY_DOC" >/dev/null
 rg -F "\`solanaBridgeAdapter\` | \`$solana_adapter\`" "$INVENTORY_DOC" >/dev/null
 rg -F "\`bytecodeStore\` | \`$bytecode_store\`" "$INVENTORY_DOC" >/dev/null
 rg -F "\`create2DeployerFromStore\` | \`$create2_from_store\`" "$INVENTORY_DOC" >/dev/null

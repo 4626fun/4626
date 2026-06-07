@@ -115,7 +115,7 @@ async function main(): Promise<void> {
 
   const versions = versionArg
     ? [versionArg]
-    : ['v1.11.1', 'v1.12.0', 'v1.2.3x', 'v1.2.3x-akita-redeploy', 'v1.7.1-dryrun']
+    : ['v1.13.0', 'v1.12.1', 'v1.12.0', 'v1.2.3x', 'v1.2.3x-akita-redeploy', 'v1.7.1-dryrun']
 
   const vaultNames = ['AKITA Vault', 'Akita Vault', 'akita vault', '4626 AKITA Vault', 'AKITA', 'akita']
   const vaultSymbols = ['vAKITA', 'VAKITA', 'akita', 'AKITA', 'vakita']

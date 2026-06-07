@@ -4,6 +4,7 @@ This page tracks notable production and deployment changes for 4626.
 
 ## Latest
 
+- [v1.13.0 bytecode epoch](/operations/deployment/releases/v1.13.0-bytecode-epoch) — release namespace bump + active manifest/guard updates for fresh Phase 1 retries
 - [v1.12.1 bytecode epoch](/operations/deployment/releases/v1.12.1-bytecode-epoch) — module v2 fingerprint + burn-stream queuer bridge + treasury payout-router setup
 - [v1.12.0 bytecode epoch](/operations/deployment/releases/v1.12.0-bytecode-epoch) — refresh store + Phase 3 helper; keep v1.11.2-pipe-a infra addresses
 - [v1.11.1 protocol contract readiness](/operations/deployment/releases/v1.11.1-protocol-contract-readiness) — prior full protocol contract surface

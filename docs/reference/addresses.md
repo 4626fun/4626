@@ -14,7 +14,7 @@ Deployed contract addresses for 4626.
 
 ## Base (Hub Chain)
 
-### Current Live Infrastructure (`v1.12.1` greenfield deploy target)
+### Current Live Infrastructure (`v1.13.0` greenfield deploy target)
 
 | Contract | Address |
 |----------|---------|
@@ -37,7 +37,7 @@ Deployed contract addresses for 4626.
 | DeploymentBatcherUtilsHelper | `0xD71C4910C7bB38FB1089Cca42b0883F1BFFfa28D` |
 
 Notes:
-- Shared/global and split Phase-1 infra shell remain from v1.11.2-pipe-a; **v1.12.1** rotated CreatorOVault modules to `CreatorOVaultModuleStorage.v2` and hot-swapped `DeploymentBatcherPhase1Module` via protocol treasury Safe (`setPhase1Module` tx `0x18a7c612…`).
+- Shared/global and split Phase-1 infra shell remain from v1.11.2-pipe-a; **v1.13.0** continues the CreatorOVault `CreatorOVaultModuleStorage.v2` module fingerprint on the live split Phase-1 stack.
 - `DeploymentBatcher` deploys as a slim shell; helpers and `DeploymentBatcherPhase1Module` wire post-deploy via protocol treasury Safe (`wireDeploymentHelpers` + `setPhase1Module`).
 - Pre-Pipe-A batcher `0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8` is deprecated — do not use for greenfield deploys.
 

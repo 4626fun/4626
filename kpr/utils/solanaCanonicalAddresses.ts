@@ -1,4 +1,4 @@
-/** Canonical mainnet addresses for Solana keeper workflows (v1.11.1 release target). */
+/** Canonical mainnet addresses for Solana keeper workflows (v1.13.0 release target). */
 
 import type { Address } from 'viem';
 

@@ -266,7 +266,7 @@ function resolveDeployMode(): DeployMode {
 // Rationale: reduce launch-manipulation surface area on brand new coins with thin/no trading history.
 const DEFAULT_MIN_COIN_AGE_DAYS = 7
 const MIN_COIN_AGE_LOCALSTORAGE_KEY = 'cv:deploy:minCoinAgeDays'
-const DEFAULT_DEPLOYMENT_VERSION = 'v1.11.1'
+const DEFAULT_DEPLOYMENT_VERSION = 'v1.13.0'
 
 function isDebugEnabled(): boolean {
   if (debugLogsFlag()) return true
@@ -2878,9 +2878,9 @@ function DeployVaultBatcher({
     if (lower.includes('0x5cfe78fe') || lower.includes('invalidmoduleaddress')) {
       return (
         'Phase 1 reverted: CreatorOVault rejected the batcher wired modules (InvalidModuleAddress / 0x5cfe78fe). ' +
-        'Deploy bytecode and Phase1Module wiring must share the same moduleStorageVersion fingerprint (v1.12.1 uses CreatorOVaultModuleStorage.v2). ' +
+        'Deploy bytecode and Phase1Module wiring must share the same moduleStorageVersion fingerprint (v1.13.0 uses CreatorOVaultModuleStorage.v2). ' +
         'Hard-refresh the app so predicted CREATE2 addresses use the Phase1Module create2 deployer (not stale batcher-shell getters), ' +
-        'confirm UniversalBytecodeStore CreatorOVault bytecode is seeded for v1.12.1, bump deploymentVersion if retrying after a partial Phase 1, then retry.'
+        'confirm UniversalBytecodeStore CreatorOVault bytecode is seeded for v1.13.0, bump deploymentVersion if retrying after a partial Phase 1, then retry.'
       )
     }
     if (
