@@ -9,6 +9,15 @@ import type { DeploymentVanityVersionSearchOutcome } from '@/pages/deploy/deploy
 
 export const PER_VAULT_VANITY_PRESEED_SCHEMA = 1
 
+const PRESEED_BASE_VERSION_RE = /^v\d+\.\d+\.\d+/
+
+/** Strip dry-run / vanity suffixes so preseed identity matches grounded release plans. */
+export function normalizePreseedBaseVersion(deploymentVersion: string): string {
+  const trimmed = deploymentVersion.trim()
+  const match = trimmed.match(PRESEED_BASE_VERSION_RE)
+  return match?.[0] ?? trimmed
+}
+
 export type PerVaultVanityPreseedBatcherMode = 'salt' | 'version'
 
 export type PerVaultVanityPreseedPlan = {
@@ -113,7 +122,7 @@ function matchesPreseedIdentity(
     normalizeAddress(plan.creatorToken) === normalizeAddress(params.creatorToken) &&
     normalizeAddress(plan.owner) === normalizeAddress(params.owner) &&
     normalizeAddress(plan.batcher) === normalizeAddress(params.batcherAddress) &&
-    plan.baseVersion === params.baseVersion &&
+    plan.baseVersion === normalizePreseedBaseVersion(params.baseVersion) &&
     plan.vaultName === params.vaultName &&
     plan.vaultSymbol === params.vaultSymbol &&
     plan.shareName === params.shareName &&

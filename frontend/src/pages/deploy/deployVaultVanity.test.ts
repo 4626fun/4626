@@ -93,7 +93,7 @@ describe('deploy vanity version search', () => {
         vaultVanityPrefix: '4626',
         shareOftVanitySuffix: '4626',
         saltOverrideDisabled: true,
-        deploymentVersionUsed: 'v1.13.0-dryrun-vwgs',
+        deploymentVersionUsed: 'v1.14.0-dryrun-vwgs',
       }),
     ).toContain('Could not find a deployment version matching vault prefix 0x4626 and share suffix 4626')
   })
