@@ -87,6 +87,31 @@ function persistCachedUrl(cacheKey: string, url: string): void {
   }
 }
 
+function isDisallowedGeneratedTokenImageUrl(value: string | null | undefined): boolean {
+  const normalized = normalizeUrl(value)
+  if (!normalized) return false
+  return (
+    normalized.includes('/api/v1/token/') && normalized.includes('/image') ||
+    normalized.includes('/api/token/image')
+  )
+}
+
+const DEXSCREENER_CHAIN_SLUG_BY_ID: Record<number, string> = {
+  1: 'ethereum',
+  10: 'optimism',
+  137: 'polygon',
+  42161: 'arbitrum',
+  8453: 'base',
+}
+
+function dexscreenerTokenLogoUrl(address: string, chainId: number): string | null {
+  const normalizedAddress = normalizeAddress(address)
+  if (!normalizedAddress) return null
+  const chainSlug = DEXSCREENER_CHAIN_SLUG_BY_ID[chainId]
+  if (!chainSlug) return null
+  return `https://dd.dexscreener.com/ds-data/tokens/${chainSlug}/${normalizedAddress}.png`
+}
+
 function dedupe(values: Array<string | null | undefined>): string[] {
   const seen = new Set<string>()
   const out: string[] = []
@@ -120,16 +145,25 @@ export function getTokenLogo(token: TokenLogoSeed): TokenLogoLookup {
   const knownCoreToken = Boolean(knownTokenLogo)
 
   loadCachedUrls()
-  const cached = logoCache[cacheKey]
+  const cachedRaw = logoCache[cacheKey]
+  const cached = isDisallowedGeneratedTokenImageUrl(cachedRaw) ? undefined : cachedRaw
   if (knownTokenLogo) {
     // Known core token logos are canonical and should never be downgraded
     // behind stale cached/registry urls.
+    const knownFallbacks = dedupe([
+      token.logoUrl,
+      ...(token.logoUrls ?? []),
+      dexscreenerTokenLogoUrl(token.address || '', chainId),
+      ...((address && (token.group === 'core' || knownCoreToken))
+        ? tokenLogoFallbacksForChain(address, chainId)
+        : []),
+    ]).filter((candidate) => candidate !== knownTokenLogo)
     if (cached !== knownTokenLogo) {
       persistCachedUrl(cacheKey, knownTokenLogo)
     }
     return {
       preferred: knownTokenLogo,
-      fallbackUrls: [],
+      fallbackUrls: knownFallbacks,
       cacheHit: true,
       cacheKey,
     }
@@ -146,11 +180,13 @@ export function getTokenLogo(token: TokenLogoSeed): TokenLogoLookup {
 
   const shouldUseExternalRegistryFallbacks = token.group === 'core' || knownCoreToken
   const externalRegistryFallbacks = shouldUseExternalRegistryFallbacks && address ? tokenLogoFallbacksForChain(address, chainId) : []
+  const dexscreenerFallback = dexscreenerTokenLogoUrl(token.address || '', chainId)
 
   const groupedFallbacks = dedupe([
     token.logoUrl,
     ...(token.logoUrls ?? []),
     knownTokenLogo,
+    dexscreenerFallback,
     ...externalRegistryFallbacks,
   ])
 

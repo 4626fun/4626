@@ -216,7 +216,7 @@ export function CcaAuctionPanel({
   const tokenImageSrc = useMemo(() => {
     if (auctionTokenImageUrl) return auctionTokenImageUrl
     if (auctionTokenAddress && isAddress(auctionTokenAddress)) {
-      return `/api/v1/token/${String(auctionTokenAddress).toLowerCase()}/image?chain=8453&format=png`
+      return `https://dd.dexscreener.com/ds-data/tokens/base/${String(auctionTokenAddress).toLowerCase()}.png`
     }
     return '/assets/logo-mark.svg'
   }, [auctionTokenAddress, auctionTokenImageUrl])

@@ -511,6 +511,13 @@ export function isSwapPreflightSimulationRetryable(error: unknown): boolean {
   if (isPermit2InvalidNonceError(error)) {
     return true
   }
+  const topLevelMsg = getErrorDiagnosticMessage(error).toLowerCase()
+  if (
+    topLevelMsg.includes('approve_only_not_allowed') ||
+    topLevelMsg.includes('approval transaction instead of a swap')
+  ) {
+    return true
+  }
   if (isPreflightSimulationRejection(error)) {
     const msg = error.message.toLowerCase()
     if (

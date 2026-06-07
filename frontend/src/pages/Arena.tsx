@@ -27,6 +27,11 @@ type BiasRule = {
   reducedOrSkipped: string
 }
 
+type ChecklistItem = {
+  label: string
+  state: 'done' | 'pending'
+}
+
 const stateFields: StrategyStateField[] = [
   { key: 'globalBias', desc: 'bullish | bearish | neutral' },
   { key: 'counterMode', desc: 'always_opposite (v1)' },
@@ -55,6 +60,14 @@ const biasRules: BiasRule[] = [
     priority: 'Symmetric opposite countering on both sides.',
     reducedOrSkipped: 'Use conservative baseline leverage and notional.',
   },
+]
+
+const acceptanceChecklist: ChecklistItem[] = [
+  { label: 'Deterministic input-to-decision flow documented', state: 'done' },
+  { label: 'Risk caps and kill-switch behavior explicitly defined', state: 'done' },
+  { label: 'Operator controls scaffold is read-only in v1', state: 'done' },
+  { label: 'Dry-run decision logging path validated before live execution', state: 'pending' },
+  { label: 'Gated execution rollout reviewed against runbook', state: 'pending' },
 ]
 
 const mermaidSpec = `flowchart LR
@@ -86,8 +99,8 @@ export function Arena() {
             <span className="label">Arena</span>
             <h1 className="headline text-3xl sm:text-5xl">AlfaClub + Arena Volatility Harvesting Engine</h1>
             <p className="text-sm text-zinc-400 font-light max-w-3xl">
-              Public architecture and strategy spec for the counter-trade engine. This page is implementation-focused and
-              intentionally deterministic: same input event stream, same state machine, same guarded output decisions.
+              Public architecture + deterministic strategy contract for the counter-trade engine. This page is
+              implementation-facing: identical event streams must produce identical state transitions and guarded outputs.
             </p>
           </motion.div>
 
@@ -100,12 +113,12 @@ export function Arena() {
               <FlowNode
                 icon={<Radar className="w-4 h-4 text-cyan-300" />}
                 title="Event Intake"
-                body="AlfaClub user fills + Hyperliquid reads + manual bias settings"
+                body="AlfaClub fill events + Hyperliquid market reads + operator bias input"
               />
               <FlowNode
                 icon={<Gauge className="w-4 h-4 text-cyan-300" />}
                 title="Counter Engine"
-                body="Opposite-side candidate generation with deterministic leverage policy"
+                body="Opposite-direction candidate generation with deterministic leverage and notional policy"
               />
               <FlowNode
                 icon={<ShieldCheck className="w-4 h-4 text-cyan-300" />}
@@ -115,7 +128,7 @@ export function Arena() {
               <FlowNode
                 icon={<Bot className="w-4 h-4 text-cyan-300" />}
                 title="Arena Executor"
-                body="arenaClient/dgclaw execution path + state updates + ops telemetry"
+                body="arenaClient/dgclaw submission lane + state persistence + ops telemetry emission"
               />
             </div>
           </div>
@@ -138,8 +151,8 @@ export function Arena() {
             <div className="label">Deterministic strategy specification</div>
             <h2 className="headline text-2xl sm:text-3xl">1) State model per instance</h2>
             <p className="text-sm text-zinc-500 max-w-3xl">
-              Instance key = <span className="font-mono text-zinc-300">room + market + identity</span>. The state store is the
-              decision anchor and idempotency checkpoint.
+              Instance key = <span className="font-mono text-zinc-300">room + market + identity</span>. State is the canonical
+              decision context and idempotency checkpoint.
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               {stateFields.map((field) => (
@@ -154,10 +167,10 @@ export function Arena() {
           <div className={`${shellToneCard} p-6 sm:p-8 space-y-5`}>
             <h2 className="headline text-2xl sm:text-3xl">2) Event trigger model</h2>
             <ul className="space-y-2 text-sm text-zinc-400">
-              <li>- On user LONG fill event, evaluate an opposite SHORT candidate.</li>
-              <li>- On user SHORT fill event, evaluate an opposite LONG candidate.</li>
-              <li>- Ignore events outside room and identity allowlists.</li>
-              <li>- Keep stream idempotent with <span className="font-mono text-zinc-200">lastProcessedTradeId</span>.</li>
+              <li>- User LONG fill -&gt; evaluate opposite SHORT candidate.</li>
+              <li>- User SHORT fill -&gt; evaluate opposite LONG candidate.</li>
+              <li>- Reject events outside configured room/identity allowlists.</li>
+              <li>- Enforce stream idempotency with <span className="font-mono text-zinc-200">lastProcessedTradeId</span>.</li>
             </ul>
           </div>
 
@@ -175,7 +188,7 @@ export function Arena() {
               </p>
             </div>
             <p className="text-sm text-zinc-500">
-              Bias modifies aggressiveness ceilings but never bypasses hard guardrails.
+              Bias tunes aggressiveness ceilings, but can never bypass hard risk limits.
             </p>
           </div>
 
@@ -189,6 +202,17 @@ export function Arena() {
                   <div className="text-xs text-zinc-600">{rule.reducedOrSkipped}</div>
                 </div>
               ))}
+            </div>
+            <div className="rounded-xl border border-zinc-900/60 bg-black/25 p-4">
+              <div className="text-xs text-zinc-500 uppercase tracking-wide mb-2">Deterministic decision shape</div>
+              <pre className="text-[11px] sm:text-xs text-zinc-300 overflow-x-auto">
+                <code>{`if (!allowlisted || killSwitch || now < cooldownUntil) skip
+candidate = opposite(userFill.side)
+candidateLeverage = userLeverage * leverageMultiplier
+finalLeverage = min(candidateLeverage, maxCounterLeverage, riskAdjustedLeverageCap)
+finalNotional = min(userNotional, maxCounterNotionalPerTrade, remainingDailyNotionalCap)
+submit if finalNotional > 0`}</code>
+              </pre>
             </div>
           </div>
 
@@ -215,7 +239,7 @@ export function Arena() {
               <div className="rounded-xl border border-zinc-900/60 bg-black/25 p-4">
                 <div className="text-sm text-zinc-100">State and telemetry path</div>
                 <p className="text-xs text-zinc-500 mt-2">
-                  Decision and execution outcomes persist to strategy state and emit ops events + room updates for observability.
+                  Decision + execution outcomes persist to strategy state and emit ops events and room updates for observability.
                 </p>
               </div>
             </div>
@@ -231,8 +255,8 @@ export function Arena() {
               <h2 className="headline text-2xl sm:text-3xl">Operator controls (v1 scaffold)</h2>
             </div>
             <p className="text-sm text-zinc-500 max-w-3xl">
-              Controls below are intentionally read-only placeholders for v1 page launch. Live mutation endpoints are out of scope in
-              this pass.
+              Controls below are read-only placeholders for v1. Writable control-plane endpoints remain intentionally out of
+              scope for this page pass.
             </p>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -256,7 +280,7 @@ export function Arena() {
               >
                 <div className="text-sm text-zinc-100">Execution runbook</div>
                 <p className="text-xs text-zinc-500 mt-2">
-                  Virtuals Arena Railway runbook, safety toggles, and operational checks.
+                  Runtime operations, safety toggles, and failure handling procedures.
                 </p>
               </a>
               <a
@@ -267,7 +291,7 @@ export function Arena() {
               >
                 <div className="text-sm text-zinc-100">Staging checklist</div>
                 <p className="text-xs text-zinc-500 mt-2">
-                  Pre-production readiness checklist before enabling live execution paths.
+                  Pre-production gate review before enabling any live execution lane.
                 </p>
               </a>
             </div>
@@ -291,6 +315,25 @@ export function Arena() {
                 subtitle="Gated execution"
                 desc="Enable constrained execution per room/identity allowlists with kill-switch and hard caps."
               />
+            </div>
+            <div className="pt-3">
+              <div className="text-xs text-zinc-500 uppercase tracking-wide mb-3">Acceptance checklist</div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {acceptanceChecklist.map((item) => (
+                  <div
+                    key={item.label}
+                    className="rounded-lg border border-zinc-900/60 bg-black/20 px-3 py-2 flex items-center gap-2"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`inline-flex h-2.5 w-2.5 rounded-full ${
+                        item.state === 'done' ? 'bg-emerald-400/90' : 'bg-zinc-600'
+                      }`}
+                    />
+                    <span className="text-xs text-zinc-400">{item.label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -333,7 +376,7 @@ function FlowNode({ icon, title, body }: { icon: ReactNode; title: string; body:
   )
 }
 
-function ControlStub({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+function ControlStub({ label, value, icon }: { label: string; value: string; icon?: ReactNode }) {
   return (
     <div className="rounded-xl border border-zinc-900/60 bg-black/25 p-4 space-y-2">
       <div className="text-xs text-zinc-500 uppercase tracking-wide">{label}</div>

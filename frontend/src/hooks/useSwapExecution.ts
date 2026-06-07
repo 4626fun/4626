@@ -93,6 +93,7 @@ const UNIVERSAL_ROUTER_BASE = '0x6ff5693b99212da76ad316178a184ab56d299b43'
 const HARD_FAILURE_COOLDOWN_MS = 15_000
 const CALIBUR_DELEGATION_ADDRESS = '0x000000009B1D0aF20D8C6d0A44e162d11F9b8f00' as const
 const WETH_DEPOSIT_SELECTOR = '0xd0e30db0'
+const ERC20_APPROVE_SELECTOR = '0x095ea7b3'
 
 type TxLifecycleState = 'idle' | 'review' | 'signing' | 'pending' | 'success' | 'error'
 
@@ -390,6 +391,14 @@ function hasApprovalTransaction(value: unknown): boolean {
   if (!approval || typeof approval !== 'object') return false
   const tx = approval as Record<string, unknown>
   return typeof tx.to === 'string' && tx.to.length > 0 && typeof tx.data === 'string' && tx.data.length > 0
+}
+
+function isApproveOnlyTransaction(tx: TransactionRequest | null | undefined): boolean {
+  if (!tx || typeof tx !== 'object') return false
+  if (!tx.to || typeof tx.to !== 'string') return false
+  const data = typeof tx.data === 'string' ? tx.data.toLowerCase() : ''
+  if (!data) return false
+  return data.startsWith(ERC20_APPROVE_SELECTOR)
 }
 
 /** Uniswap /swap simulateTransaction is skipped for canonical CSW — ERC-4337 preflight runs at send. */
@@ -2343,6 +2352,17 @@ export function useSwapExecution(params: {
       let activeQuoteForRetry = quote
       for (let sendAttempt = 0; sendAttempt < maxSendAttempts; sendAttempt += 1) {
         assertSwapSubmitEpochUnchanged(submitEpoch)
+        if (
+          params.executionMode === 'canonical' &&
+          quote != null &&
+          !isZoraProviderQuote(quote) &&
+          !isCdpProviderQuote(quote) &&
+          isApproveOnlyTransaction(activeSwapTx)
+        ) {
+          throw new Error(
+            'Swap quote returned an approval transaction instead of a swap payload. Refreshing quote and retrying.',
+          )
+        }
         try {
           const result = wrapTx
             ? await buildAndSendCalls({

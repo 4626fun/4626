@@ -92,6 +92,7 @@ const PAYMASTER_MAX_BODY_BYTES = 512_000
 
 const ENTRYPOINT_V06 = getAddress(`0x${'5ff137d4b0fdcd49dca30c7cf57e578a026d2789'}`)
 const BASE_CHAIN_ID = 8453
+const BASE_CHAIN_ID_HEX = `0x${BASE_CHAIN_ID.toString(16)}`
 const RELAY_DEPOSITORY_BASE = getAddress('0x4cd00e387622c35bddb9b4c962c136462338bc31')
 const RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR = '0x49290c1c'
 const ERC8004_IDENTITY_REGISTRY_DEFAULT = getAddress('0x8004A169FB4a3325136EB29fA0ceB6D2e539a432')
@@ -1880,11 +1881,71 @@ function parseChainId(chainIdRaw: unknown): number | null {
 function extractUserOpAndEntryPoint(method: string, params: unknown): { userOp: UserOperation; entryPoint: Address; chainId: number | null } | null {
   if (!Array.isArray(params) || params.length < 2) return null
   const userOp = (params[0] ?? {}) as UserOperation
-  const entryPointRaw = params[1]
-  const chainIdRaw = method === 'pm_getPaymasterStubData' || method === 'pm_getPaymasterData' ? params[2] : null
+  const isPaymasterMethod = method === 'pm_getPaymasterStubData' || method === 'pm_getPaymasterData'
+  const second = params[1]
+  const third = params[2]
+
+  let entryPointRaw: unknown = second
+  let chainIdRaw: unknown = isPaymasterMethod ? third : null
+
+  // Tolerate alternate ordering from some clients: [userOp, chainId, entryPoint, context?].
+  // Keep bundler methods strict to [userOp, entryPoint].
+  if (
+    isPaymasterMethod &&
+    (typeof second !== 'string' || !isAddress(second)) &&
+    typeof third === 'string' &&
+    isAddress(third)
+  ) {
+    entryPointRaw = third
+    chainIdRaw = second
+  }
+
+  // Tolerate clients that send only [userOp, entryPoint] for paymaster methods.
+  if (
+    isPaymasterMethod &&
+    (chainIdRaw == null || parseChainId(chainIdRaw) == null) &&
+    params.length >= 2 &&
+    typeof params[1] === 'string' &&
+    isAddress(params[1])
+  ) {
+    chainIdRaw = null
+  }
+
   const chainId = parseChainId(chainIdRaw)
   if (typeof entryPointRaw !== 'string' || !isAddress(entryPointRaw)) return null
   return { userOp, entryPoint: getAddress(entryPointRaw), chainId }
+}
+
+function normalizePaymasterRpcParams(method: string, params: unknown): unknown {
+  if (method !== 'pm_getPaymasterStubData' && method !== 'pm_getPaymasterData') return params
+  if (!Array.isArray(params)) return params
+  if (params.length < 2) return params
+
+  const normalized = [...params]
+  const chainIdRaw = normalized[2]
+  const parsedChainId = parseChainId(chainIdRaw)
+  if (typeof parsedChainId === 'number') return normalized
+
+  // Some clients omit chainId and pass context as the 3rd arg.
+  // CDP expects [userOp, entryPoint, chainId, context?], so normalize here.
+  if (normalized.length === 2) {
+    normalized.push(BASE_CHAIN_ID_HEX)
+    return normalized
+  }
+
+  if (chainIdRaw == null) {
+    normalized[2] = BASE_CHAIN_ID_HEX
+    return normalized
+  }
+
+  if (typeof chainIdRaw === 'object') {
+    normalized.splice(2, 0, BASE_CHAIN_ID_HEX)
+    return normalized
+  }
+
+  // Keep caller-provided arg in case it's context-like but still ensure a valid chain slot.
+  normalized.splice(2, 0, BASE_CHAIN_ID_HEX)
+  return normalized
 }
 
 async function readAllowedCoinbaseSmartWalletImplementations(client: Awaited<ReturnType<typeof getBaseClient>>): Promise<Set<Address>> {
@@ -3513,6 +3574,7 @@ async function handlePaymasterRequest(req: VercelRequest, res: VercelResponse) {
     if (!ALLOWED_METHODS.has(method)) {
       return res.status(200).json(jsonRpcError((r as any)?.id ?? null, -32601, `Method not allowed: ${method}`))
     }
+    r.params = normalizePaymasterRpcParams(method, r.params)
   }
 
   try {

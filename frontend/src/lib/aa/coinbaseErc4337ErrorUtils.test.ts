@@ -87,6 +87,16 @@ describe('isExecutionRevertedLikeError', () => {
   })
 })
 
+describe('isSwapPreflightSimulationRetryable', () => {
+  it('treats paymaster approve-only policy rejections as retryable', () => {
+    expect(
+      isSwapPreflightSimulationRetryable(
+        new Error('request denied - approve_only_not_allowed'),
+      ),
+    ).toBe(true)
+  })
+})
+
 describe('shouldAdvisorySkipBundlerGasEstimate', () => {
   const ZORA_ROUTER = '0x6fF5693b99212Da76ad316178A184AB56D299b43'
   const ZORA_FLOOR = 2_500_000n

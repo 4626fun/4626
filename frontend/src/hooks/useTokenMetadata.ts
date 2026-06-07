@@ -118,8 +118,8 @@ function ipfsToHttp(uri: string): string {
   return uri
 }
 
-function buildCanonicalTokenImageUrl(tokenAddress: `0x${string}`): string {
-  return `/api/v1/token/${tokenAddress.toLowerCase()}/image?chain=8453&format=png`
+function buildDexscreenerTokenImageUrl(tokenAddress: `0x${string}`): string {
+  return `https://dd.dexscreener.com/ds-data/tokens/base/${tokenAddress.toLowerCase()}.png`
 }
 
 export function selectMetadataSourceUri(params: { tokenURI?: unknown; contractURI?: unknown }): string | null {
@@ -174,9 +174,9 @@ export function useTokenMetadata(tokenAddress: `0x${string}` | undefined) {
 
       const metadataSource = selectMetadataSourceUri({ tokenURI, contractURI })
       if (!metadataSource) {
-        // Fall back to canonical token image endpoint while metadata is unavailable.
+        // Fall back to Dexscreener token image when metadata is unavailable.
         setMetadata(null)
-        setImageUrl(buildCanonicalTokenImageUrl(tokenAddress))
+        setImageUrl(buildDexscreenerTokenImageUrl(tokenAddress))
         setError(null)
         setIsLoading(false)
         return
@@ -235,7 +235,7 @@ export function useTokenMetadata(tokenAddress: `0x${string}` | undefined) {
         if (data.image) {
           setImageUrl(normalizeImageUrl(ipfsToHttp(data.image)))
         } else {
-          setImageUrl(buildCanonicalTokenImageUrl(tokenAddress))
+          setImageUrl(buildDexscreenerTokenImageUrl(tokenAddress))
         }
       } catch (err) {
         // If JSON parse fails, the URI might be a direct image link
@@ -246,7 +246,7 @@ export function useTokenMetadata(tokenAddress: `0x${string}` | undefined) {
           setMetadata({ image: directUrl })
           logger.debug('Using tokenURI directly as image', { directUrl })
         } else {
-          setImageUrl(buildCanonicalTokenImageUrl(tokenAddress))
+          setImageUrl(buildDexscreenerTokenImageUrl(tokenAddress))
           setMetadata(null)
         }
         setError(err instanceof Error ? err.message : 'Failed to load token metadata')

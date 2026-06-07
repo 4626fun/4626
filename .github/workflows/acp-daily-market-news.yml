@@ -1,0 +1,88 @@
+name: ACP Daily Market News
+
+on:
+  schedule:
+    # Morning comprehensive brief (Otto primary, Pulse fallback)
+    - cron: '0 7 * * *'
+    # Midday checkpoint (Pulse)
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: "Run slot (morning|checkpoint)"
+        required: false
+        default: "morning"
+      dry_run:
+        description: "Skip onchain create/fund actions"
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: acp-daily-market-news
+  cancel-in-progress: false
+
+jobs:
+  run:
+    name: Run ACP market-news slot
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: '20'
+
+      - name: Install ACP CLI
+        run: npm i -g @virtuals-protocol/acp-cli
+
+      - name: Resolve slot
+        id: resolve
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            SLOT="${{ inputs.slot }}"
+            DRY="${{ inputs.dry_run }}"
+          else
+            HOUR="$(date -u +%H)"
+            if [[ "$HOUR" == "07" ]]; then
+              SLOT="morning"
+            else
+              SLOT="checkpoint"
+            fi
+            DRY="false"
+          fi
+          echo "slot=$SLOT" >> "$GITHUB_OUTPUT"
+          echo "dry=$DRY" >> "$GITHUB_OUTPUT"
+
+      - name: Run ACP daily market-news runner
+        env:
+          ACP_ACCESS_TOKEN: ${{ secrets.ACP_ACCESS_TOKEN }}
+          ACP_REFRESH_TOKEN: ${{ secrets.ACP_REFRESH_TOKEN }}
+          ACP_OWNER_WALLET: ${{ secrets.ACP_OWNER_WALLET }}
+          ACP_CLIENT_AGENT_ID: ${{ secrets.ACP_CLIENT_AGENT_ID }}
+          ACP_CHAIN_ID: ${{ vars.ACP_CHAIN_ID }}
+          OTTO_PROVIDER: ${{ vars.ACP_OTTO_PROVIDER }}
+          OTTO_OFFERING: ${{ vars.ACP_OTTO_OFFERING }}
+          OTTO_REQUIREMENTS_JSON: ${{ vars.ACP_OTTO_REQUIREMENTS_JSON }}
+          OTTO_FUND_AMOUNT: ${{ vars.ACP_OTTO_FUND_AMOUNT }}
+          PULSE_PROVIDER: ${{ vars.ACP_PULSE_PROVIDER }}
+          PULSE_OFFERING: ${{ vars.ACP_PULSE_OFFERING }}
+          PULSE_REQUIREMENTS_JSON: ${{ vars.ACP_PULSE_REQUIREMENTS_JSON }}
+          PULSE_FUND_AMOUNT: ${{ vars.ACP_PULSE_FUND_AMOUNT }}
+          FUND_CHECK_TIMEOUT_SECONDS: ${{ vars.ACP_FUND_CHECK_TIMEOUT_SECONDS }}
+          FUND_CHECK_INTERVAL_SECONDS: ${{ vars.ACP_FUND_CHECK_INTERVAL_SECONDS }}
+        shell: bash
+        run: |
+          EXTRA_ARGS=()
+          if [[ "${{ steps.resolve.outputs.dry }}" == "true" ]]; then
+            EXTRA_ARGS+=(--dry-run)
+          fi
+          scripts/ops/acp-daily-market-news-runner.sh --slot "${{ steps.resolve.outputs.slot }}" "${EXTRA_ARGS[@]}"

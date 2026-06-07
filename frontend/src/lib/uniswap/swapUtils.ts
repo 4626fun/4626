@@ -107,9 +107,9 @@ export function getCoreTokensForChain(config: ChainTokenConfig): TokenOption[] {
   return tokens
 }
 
-export function shareTokenLogo(address: string, chainId = BASE_CHAIN_ID, size = 128): string {
-  const normalizedSize = Number.isFinite(size) ? Math.max(32, Math.min(1024, Math.trunc(size))) : 128
-  return `/api/token/image?address=${getAddress(address)}&chain=${chainId}&size=${normalizedSize}`
+export function shareTokenLogo(address: string, chainId = BASE_CHAIN_ID, _size = 128): string {
+  const chain = CHAIN_NAME_MAP[chainId] ?? 'base'
+  return `https://dd.dexscreener.com/ds-data/tokens/${chain}/${getAddress(address)}.png`
 }
 
 export function creatorCoinRawLogo(address: string, chainId = BASE_CHAIN_ID): string {
