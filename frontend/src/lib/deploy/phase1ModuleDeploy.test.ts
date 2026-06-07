@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { type Address } from 'viem'
 
 import {
-  CREATOR_OVAULT_MODULE_STORAGE_V2,
+  CREATOR_OVAULT_MODULE_STORAGE_V3,
   assertCreatorOvaultModuleStorageCompatible,
 } from './ovaultModuleIdentity'
 import {
@@ -115,7 +115,7 @@ describe('ovaultModuleIdentity batcher wiring', () => {
       readContract: vi.fn(async (args: { address: Address; functionName: string }) => {
         if (args.functionName === 'phase1Module') return PHASE1
         if (args.address === PHASE1 && args.functionName === 'vaultCoreModule') return CORE_V2
-        if (args.functionName === 'moduleStorageVersion') return CREATOR_OVAULT_MODULE_STORAGE_V2
+        if (args.functionName === 'moduleStorageVersion') return CREATOR_OVAULT_MODULE_STORAGE_V3
         throw new Error(`unexpected read ${args.functionName}@${args.address}`)
       }),
     }

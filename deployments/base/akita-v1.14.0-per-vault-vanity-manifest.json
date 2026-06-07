@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "chainId": 8453,
+  "plans": [
+    {
+      "id": "akita-v1.14.0-default",
+      "label": "AKITA default 4626/4626",
+      "create2Deployer": "0x4760216AFd59B843671E0FdFCe6498Ec8CFf38a7",
+      "creatorToken": "0x5b674196812451B7cEC024FE9d22D2c0b172fa75",
+      "owner": "0xAb6d5C10b03300326CD7fAb7267Ae192842967b5",
+      "batcher": "0xa99058f424FB3ACC639F59355C65C40149030651",
+      "baseVersion": "v1.14.0",
+      "vaultName": "AKITA Vault",
+      "vaultSymbol": "vAKITA",
+      "shareName": "AKITA Share",
+      "shareSymbol": "AKITA",
+      "vaultPrefix": "4626",
+      "shareSuffix": "4626",
+      "batcherMode": "salt",
+      "deploymentVersion": "v1.14.0-vqvt",
+      "versionSearchOutcome": "combined_match",
+      "shareOftSalt": "0xf03a6e8e57a0a03eeb597e4f217833623dddf4634d115dcba9e865f2a2c7eb4f",
+      "groundedAt": "2026-06-07T14:06:48.121Z",
+      "searchAttempts": 5034842
+    }
+  ]
+}

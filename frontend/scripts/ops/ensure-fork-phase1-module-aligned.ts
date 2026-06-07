@@ -88,7 +88,7 @@ async function main(): Promise<void> {
     isAddress(currentPhase1) && getAddress(currentPhase1) === targetPhase1
   if (alignedBefore.ok && moduleBefore.ok && phase1AddressMatches) {
     process.stdout.write(
-      `ok: batcher ${batcher} phase1 wiring already matches v1.13.0 v2 target on fork (${alignedBefore.create2Deployer})\n`,
+      `ok: batcher ${batcher} phase1 wiring already matches v1.14.0 v3 target on fork (${alignedBefore.create2Deployer})\n`,
     )
     return
   }

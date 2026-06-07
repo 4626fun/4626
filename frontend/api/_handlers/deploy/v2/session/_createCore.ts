@@ -17,7 +17,10 @@ import { base } from 'viem/chains'
 
 import { isShareOftSaltOverrideDisabledBatcher } from '../../../../../src/config/contracts.defaults.js'
 import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
-import { CREATOR_OVAULT_MODULE_STORAGE_V3 } from '../../../../../src/lib/deploy/ovaultModuleIdentity.js'
+import {
+  CREATOR_OVAULT_MODULE_STORAGE_V2,
+  CREATOR_OVAULT_MODULE_STORAGE_V3,
+} from '../../../../../src/lib/deploy/ovaultModuleIdentity.js'
 import {
   resolveAlignedPhase1DeployDeps,
   resolveBytecodeStoreForBatcher,
@@ -186,7 +189,7 @@ const PHASE1_WITH_SALT_SELECTORS = new Set<string>([
 ])
 const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
 const UNIVERSAL_CREATE2_FACTORY = '0x4e59b44847b379578588920ca78fbf26c0b4956c'
-const EXPECTED_VAULT_MODULE_STORAGE_VERSION = keccak256(encodePacked(['string'], ['CreatorOVaultModuleStorage.v2']))
+const EXPECTED_VAULT_MODULE_STORAGE_VERSION = keccak256(encodePacked(['string'], ['CreatorOVaultModuleStorage.v3']))
 const EXPECTED_VAULT_CORE_MODULE_KIND = keccak256(encodePacked(['string'], ['CreatorOVaultModule.core']))
 const EXPECTED_VAULT_STRATEGIES_MODULE_KIND = keccak256(encodePacked(['string'], ['CreatorOVaultModule.strategies']))
 const EXPECTED_VAULT_ADMIN_MODULE_KIND = keccak256(encodePacked(['string'], ['CreatorOVaultModule.admin']))
@@ -1316,16 +1319,16 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
         moduleKind.toLowerCase() !== moduleCheck.expectedKind.toLowerCase() ||
         moduleStorageVersion.toLowerCase() !== EXPECTED_VAULT_MODULE_STORAGE_VERSION.toLowerCase()
       ) {
-        const moduleIsV3 =
-          moduleStorageVersion.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V3.toLowerCase()
-        const v3Hint = moduleIsV3
-          ? ' Live batcher Phase1Module wires v3 impairment modules while deploy bytecode expects v2 (v1.13.0). ' +
-            'Restore the v1.13.0 v2 Phase1Module via setPhase1Module before greenfield deploy.'
+        const moduleIsV2 =
+          moduleStorageVersion.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V2.toLowerCase()
+        const v2Hint = moduleIsV2
+          ? ' Live batcher Phase1Module still wires v2 modules while deploy bytecode expects v3 (v1.14.0). ' +
+            'Rotate to the v1.14.0 v3 Phase1Module via setPhase1Module before greenfield deploy.'
           : ''
         throw new DeploySessionRequestError(
           409,
           `phase1 precheck failed: batcher ${batcherAddress} ${moduleCheck.label} module ${moduleCheck.address} ` +
-            `is incompatible with current CreatorOVault module identity/version (InvalidModuleAddress).${v3Hint}`,
+            `is incompatible with current CreatorOVault module identity/version (InvalidModuleAddress).${v2Hint}`,
         )
       }
     }

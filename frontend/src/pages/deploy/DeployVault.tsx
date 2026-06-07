@@ -7,19 +7,14 @@ import type { Address, Hex } from 'viem'
 import {
   ZERO_BYTES32,
   encodeUniswapV3Path,
-  findCreate2SaltForSuffix,
   normalizeAddressArray,
   normalizeAddressLike,
   normalizeBytes32,
   normalizeDeploymentVersion,
-  buildSaltDisabledShareSuffixInfoNotice,
-  buildShareOftVanityUserWarning,
   normalizeHexSuffix,
   parsePositiveTokenAmount,
-  resolveDeploymentVersionSearchMaxTries,
-  resolveDeploymentVersionSearchTargets,
-  needsCombinedSaltDisabledVanitySearch,
   type DeploymentVanityVersionSearchOutcome,
+  buildDeployVanityLoadingMessage,
   parseUint8,
   parseUniswapV3Fee,
   sameAddress,
@@ -27,11 +22,15 @@ import {
 import {
   deriveDeployBaseSalt,
   deriveShareOftSaltFromVersion,
-  findDeploymentVersionForVanityTargets,
   predictCreate2AddressFromInitCode,
   saltForDeployLabel,
 } from '@/lib/deploy/perVaultVanityVersionSearch'
-import { fetchServerCombinedVanityVersion } from '@/lib/deploy/fetchServerCombinedVanityVersion'
+import {
+  readCreatorVaultBatcherInfra,
+  type CreatorVaultBatcherInfra,
+} from '@/lib/deploy/creatorVaultBatcherInfra'
+import { resolveDeployExpectedAddresses } from '@/lib/deploy/resolveDeployExpectedAddresses'
+import { resolveDeployVanityPlan } from '@/lib/deploy/resolveDeployVanityPlan'
 import {
   debugSignatureReady,
   ensureSignatureHex,
@@ -60,7 +59,7 @@ import {
 } from 'viem'
 import { getWalletClient } from '@wagmi/core'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { coinABI } from '@zoralabs/protocol-deployments'
 import { ChevronDown, ExternalLink } from 'lucide-react'
 import { useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
@@ -266,7 +265,7 @@ function resolveDeployMode(): DeployMode {
 // Rationale: reduce launch-manipulation surface area on brand new coins with thin/no trading history.
 const DEFAULT_MIN_COIN_AGE_DAYS = 7
 const MIN_COIN_AGE_LOCALSTORAGE_KEY = 'cv:deploy:minCoinAgeDays'
-const DEFAULT_DEPLOYMENT_VERSION = 'v1.13.0'
+const DEFAULT_DEPLOYMENT_VERSION = 'v1.14.0'
 
 function isDebugEnabled(): boolean {
   if (debugLogsFlag()) return true
@@ -2878,10 +2877,10 @@ function DeployVaultBatcher({
     if (lower.includes('0x5cfe78fe') || lower.includes('invalidmoduleaddress')) {
       return (
         'Phase 1 reverted: CreatorOVault rejected the batcher wired modules (InvalidModuleAddress / 0x5cfe78fe). ' +
-        'Deploy bytecode and Phase1Module wiring must share the same moduleStorageVersion fingerprint (v1.13.0 uses CreatorOVaultModuleStorage.v2). ' +
-        'If the live batcher was rotated to v3 impairment modules, protocol ops must restore the v1.13.0 v2 Phase1Module via setPhase1Module before greenfield deploy. ' +
+        'Deploy bytecode and Phase1Module wiring must share the same moduleStorageVersion fingerprint (v1.14.0 uses CreatorOVaultModuleStorage.v3). ' +
+        'If the live batcher still wires v2 modules, protocol ops must rotate to the v1.14.0 v3 Phase1Module via setPhase1Module before greenfield deploy. ' +
         'Hard-refresh the app so predicted CREATE2 addresses use the Phase1Module create2 deployer (not stale batcher-shell getters), ' +
-        'confirm UniversalBytecodeStore CreatorOVault bytecode is seeded for v1.13.0, then bump deploymentVersion in the URL if retrying after a partial Phase 1 (e.g. ?deploymentVersion=v1.13.0-retry-1).'
+        'confirm UniversalBytecodeStore CreatorOVault bytecode is seeded for v1.14.0, then bump deploymentVersion in the URL if retrying after a partial Phase 1 (e.g. ?deploymentVersion=v1.14.0-retry-1).'
       )
     }
     if (
@@ -3419,10 +3418,33 @@ function DeployVaultBatcher({
     } as const
   }, [])
 
-  const expectedQuery = useQuery({
+  const batcherInfraQuery = useQuery({
+    queryKey: ['creatorVaultBatcher', 'infra', batcherAddress],
+    enabled: !!publicClient && !!batcherAddress,
+    staleTime: 300_000,
+    retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
+    retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
+    queryFn: async () => {
+      const result = await readCreatorVaultBatcherInfra({
+        publicClient: publicClient!,
+        batcherAddress: batcherAddress as Address,
+        fallbacks: {
+          create2Deployer: (CONTRACTS.universalCreate2DeployerFromStore ?? null) as Address | null,
+          bytecodeStore: (CONTRACTS.universalBytecodeStore ?? null) as Address | null,
+          protocolTreasury: (CONTRACTS.protocolTreasury ?? null) as Address | null,
+          registry: (CONTRACTS.registry ?? null) as Address | null,
+          chainlinkEthUsd: (CONTRACTS.chainlinkEthUsd ?? BASE_CHAINLINK_ETH_USD) as Address | null,
+        },
+      })
+      if (!result.ok) throw new Error(result.message)
+      return result.infra
+    },
+  })
+
+  const vanityPlanQuery = useQuery({
     queryKey: [
       'creatorVaultBatcher',
-      'expected',
+      'vanityPlan',
       batcherAddress,
       creatorToken,
       owner,
@@ -3437,566 +3459,101 @@ function DeployVaultBatcher({
       vaultVanityPrefix,
       vaultVanityMaxTries,
     ],
-    enabled: !!publicClient && !!batcherAddress && !!creatorToken && !!owner && !!shareSymbol && !!shareName && !!vaultName && !!vaultSymbol,
-    staleTime: 30_000,
+    enabled:
+      !!publicClient &&
+      !!batcherAddress &&
+      !!creatorToken &&
+      !!owner &&
+      !!shareSymbol &&
+      !!shareName &&
+      !!vaultName &&
+      !!vaultSymbol &&
+      batcherInfraQuery.isSuccess,
+    staleTime: 3_600_000,
+    gcTime: 3_600_000,
     retry: 0,
     queryFn: async () => {
-      const alignedDeps = await resolveAlignedPhase1DeployDeps({
+      const plan = await resolveDeployVanityPlan({
         publicClient: publicClient!,
         batcherAddress: batcherAddress as Address,
-        fallbacks: {
-          create2Deployer: (CONTRACTS.universalCreate2DeployerFromStore ?? null) as Address | null,
-          bytecodeStore: (CONTRACTS.universalBytecodeStore ?? null) as Address | null,
-        },
-      })
-      if (!alignedDeps.ok) {
-        throw new Error(alignedDeps.message)
-      }
-      const create2Deployer = alignedDeps.create2Deployer
-
-      let protocolTreasury: Address | null = null
-      try {
-        protocolTreasury = (await publicClient!.readContract({
-          address: batcherAddress as Address,
-          abi: CREATOR_VAULT_BATCHER_ABI,
-          functionName: 'protocolTreasury',
-        })) as Address
-      } catch {
-        protocolTreasury = null
-      }
-      if (!protocolTreasury || !isAddress(String(protocolTreasury))) {
-        const fallback = (CONTRACTS.protocolTreasury ?? null) as Address | null
-        protocolTreasury = fallback && isAddress(String(fallback)) ? fallback : null
-      }
-      if (!protocolTreasury) throw new Error('Protocol treasury not available')
-
-      let registryAddress: Address | null = null
-      try {
-        registryAddress = (await publicClient!.readContract({
-          address: batcherAddress as Address,
-          abi: CREATOR_VAULT_BATCHER_ABI,
-          functionName: 'registry',
-        })) as Address
-      } catch {
-        registryAddress = null
-      }
-      if (!registryAddress || !isAddress(String(registryAddress))) {
-        const fallback = (CONTRACTS.registry ?? null) as Address | null
-        registryAddress = fallback && isAddress(String(fallback)) ? fallback : null
-      }
-      if (!registryAddress) throw new Error('Registry not available')
-
-      let chainlinkEthUsd: Address | null = null
-      try {
-        chainlinkEthUsd = (await publicClient!.readContract({
-          address: batcherAddress as Address,
-          abi: CREATOR_VAULT_BATCHER_ABI,
-          functionName: 'chainlinkEthUsd',
-        })) as Address
-      } catch {
-        chainlinkEthUsd = null
-      }
-      if (!chainlinkEthUsd || !isAddress(String(chainlinkEthUsd))) {
-        const fallback = (CONTRACTS.chainlinkEthUsd ?? null) as Address | null
-        chainlinkEthUsd = fallback && isAddress(String(fallback)) ? fallback : null
-      }
-      if (!chainlinkEthUsd) throw new Error('Chainlink feed not available')
-
-      const tempOwner = batcherAddress as Address
-      const batcherBytecode =
-        (await publicClient!
-          .getBytecode({ address: batcherAddress as Address })
-          .catch(() => null)) ?? null
-      const batcherBytecodeLower = (batcherBytecode ?? '0x').toLowerCase()
-      const batcherAddressLower = String(batcherAddress ?? '').toLowerCase()
-      const saltOverridesDisabledByBatcher =
-        isShareOftSaltOverrideDisabledBatcher(batcherAddressLower) ||
-        batcherBytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR)
-      const supportsLegacyPhase1WithSaltSelector = (() => {
-        if (!batcherBytecode || batcherBytecode === '0x') return false
-        return !saltOverridesDisabledByBatcher && batcherBytecodeLower.includes(BATCHER_PHASE1_WITH_SALT_SELECTOR)
-      })()
-      const supportsSplitPhase1WithSaltSelectors = (() => {
-        if (!batcherBytecode || batcherBytecode === '0x') return false
-        return (
-          !saltOverridesDisabledByBatcher &&
-          batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR) &&
-          batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR)
-        )
-      })()
-      const supportsPhase1WithSalt = (() => {
-        return supportsLegacyPhase1WithSaltSelector || supportsSplitPhase1WithSaltSelectors
-      })()
-
-      // IMPORTANT: The onchain deployment batcher uses *lowercase* symbols for salts + oracle wiring,
-      // but uses *uppercase* symbols for ShareOFT metadata. We must mirror both to keep expected
-      // addresses deterministic (especially for ShareOFT + gauge + oracle predictions).
-      const shareSymbolLower = shareSymbol.toLowerCase()
-      const shareSymbolUpper = shareSymbol.toUpperCase()
-
-      const oftBootstrapSalt = deriveOftBootstrapSalt()
-      const oftBootstrapRegistry = predictCreate2Address({
-        create2Deployer,
-        salt: oftBootstrapSalt,
-        initCode: DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex,
-      })
-
-      const shareOftArgs = encodeAbiParameters(parseAbiParameters('string,string,address,address'), [
-        shareName,
-        shareSymbolUpper,
-        oftBootstrapRegistry,
-        tempOwner,
-      ])
-      const shareOftInitCode = concatHex([DEPLOY_BYTECODE.CreatorShareOFT as Hex, shareOftArgs])
-      const vaultArgs = encodeAbiParameters(parseAbiParameters('address,address,string,string'), [
+        batcherInfra: batcherInfraQuery.data!,
         creatorToken,
-        tempOwner,
+        owner,
+        chainId: base.id,
+        deploymentVersion,
+        shareOftSaltOverride,
         vaultName,
         vaultSymbol,
-      ])
-      const vaultInitCode = concatHex([DEPLOY_BYTECODE.CreatorOVault as Hex, vaultArgs])
-
-      let deploymentVersionUsed = deploymentVersion
-      let vanityVersionSearchWarning: string | null = null
-      let vanityVersionSearchOutcome: DeploymentVanityVersionSearchOutcome = 'not_applicable'
-      const { vaultPrefix: versionSearchVaultPrefix, shareSuffix: versionSearchShareSuffix } =
-        resolveDeploymentVersionSearchTargets({
-          vaultVanityPrefix: vaultVanityPrefix ?? null,
-          shareOftVanitySuffix: shareOftVanitySuffix ?? null,
-          supportsPhase1WithSalt,
-        })
-      const usingDefaultVaultVanityTarget = versionSearchVaultPrefix === DEFAULT_VAULT_VANITY_PREFIX
-      const usingDefaultShareVanityTarget =
-        !versionSearchShareSuffix || versionSearchShareSuffix === DEFAULT_SHARE_OFT_VANITY_SUFFIX
-      if (versionSearchVaultPrefix || versionSearchShareSuffix) {
-        const vanityTargetsKey = [
-          create2Deployer.toLowerCase(),
-          creatorToken.toLowerCase(),
-          owner.toLowerCase(),
-          String(base.id),
-          vaultName,
-          vaultSymbol,
-          shareName,
-          shareSymbol,
-          deploymentVersion,
-          versionSearchVaultPrefix ?? '',
-          versionSearchShareSuffix ?? '',
-          String(vaultVanityMaxTries),
-          String(shareOftVanityMaxTries),
-          supportsPhase1WithSalt ? 'salt' : 'version',
-        ].join(':')
-        const cached = vaultVanityVersionCacheRef.current
-        if (cached?.key === vanityTargetsKey) {
-          deploymentVersionUsed = cached.version
-          vanityVersionSearchOutcome = cached.outcome ?? 'not_applicable'
-        } else {
-          const versionSearchMaxTries = resolveDeploymentVersionSearchMaxTries({
-            hasVaultPrefix: Boolean(versionSearchVaultPrefix),
-            hasShareSuffix: Boolean(versionSearchShareSuffix),
-            supportsPhase1WithSalt,
-            vaultVanityMaxTries,
-            shareOftVanityMaxTries,
-          })
-          const combinedSaltDisabledSearch = needsCombinedSaltDisabledVanitySearch({
-            supportsPhase1WithSalt,
-            vaultPrefix: versionSearchVaultPrefix,
-            shareSuffix: versionSearchShareSuffix,
-          })
-          let foundVersion = await findDeploymentVersionForVanityTargets({
-            create2Deployer,
-            creatorToken,
-            owner,
-            chainId: base.id,
-            baseVersion: deploymentVersion,
-            vaultPrefix: versionSearchVaultPrefix,
-            shareSuffix: versionSearchShareSuffix,
-            maxTries: versionSearchMaxTries,
-            vaultInitCode,
-            shareOftInitCode,
-            shareSymbol,
-            isAddressDeployed: async (addr) => {
-              const bc = await publicClient!.getBytecode({ address: addr })
-              return !!bc && bc !== '0x'
-            },
-          })
-          if (!foundVersion && combinedSaltDisabledSearch && versionSearchVaultPrefix && versionSearchShareSuffix) {
-            try {
-              logger.info('[DeployVault] combined_vanity_server_search_start', {
-                vaultPrefix: versionSearchVaultPrefix,
-                shareSuffix: versionSearchShareSuffix,
-                clientAttempts: versionSearchMaxTries,
-              })
-              foundVersion = await fetchServerCombinedVanityVersion({
-                create2Deployer,
-                creatorToken,
-                owner,
-                chainId: base.id,
-                baseVersion: deploymentVersion,
-                vaultPrefix: versionSearchVaultPrefix,
-                shareSuffix: versionSearchShareSuffix,
-                startAttempt: versionSearchMaxTries,
-                vaultInitCode,
-                shareOftInitCode,
-                shareSymbol,
-              })
-            } catch (serverSearchError) {
-              logger.warn('[DeployVault] combined_vanity_server_search_failed', {
-                error: serverSearchError instanceof Error ? serverSearchError.message : String(serverSearchError ?? ''),
-              })
-            }
-          }
-          if (foundVersion) {
-            if (versionSearchVaultPrefix && versionSearchShareSuffix) {
-              vanityVersionSearchOutcome = 'combined_match'
-            } else if (versionSearchVaultPrefix) {
-              vanityVersionSearchOutcome = 'vault_only_match'
-            } else if (versionSearchShareSuffix) {
-              vanityVersionSearchOutcome = 'share_only_match'
-            } else {
-              vanityVersionSearchOutcome = 'combined_match'
-            }
-          }
-          if (!foundVersion) {
-            if (versionSearchVaultPrefix && versionSearchShareSuffix) {
-              if (!usingDefaultVaultVanityTarget || !usingDefaultShareVanityTarget) {
-                vanityVersionSearchOutcome = 'missed_custom'
-                throw new Error(
-                  `Unable to find a deployment version matching vault prefix "0x${versionSearchVaultPrefix}" and share suffix "${versionSearchShareSuffix}" ` +
-                    `in ${versionSearchMaxTries.toLocaleString()} tries (share-only fallback also failed after ${shareOftVanityMaxTries.toLocaleString()} tries).`,
-                )
-              }
-              vanityVersionSearchOutcome = 'missed_defaults'
-              vanityVersionSearchWarning =
-                `Default vanity targets (0x${versionSearchVaultPrefix} / ${versionSearchShareSuffix}) were not found in the current search window. ` +
-                'Continuing with deterministic deployment addresses.'
-            } else if (versionSearchShareSuffix) {
-              if (!usingDefaultShareVanityTarget) {
-                vanityVersionSearchOutcome = 'missed_custom'
-                throw new Error(
-                  `Unable to find ShareOFT vanity suffix "${versionSearchShareSuffix}" in ${shareOftVanityMaxTries.toLocaleString()} deployment-version tries.`,
-                )
-              }
-              vanityVersionSearchOutcome = 'missed_defaults'
-              vanityVersionSearchWarning =
-                `Default share suffix "${versionSearchShareSuffix}" was not found in the current search window. ` +
-                'Continuing with deterministic deployment addresses.'
-            } else if (versionSearchVaultPrefix) {
-              if (!usingDefaultVaultVanityTarget) {
-                vanityVersionSearchOutcome = 'missed_custom'
-                throw new Error(
-                  `Unable to find vault vanity prefix "0x${versionSearchVaultPrefix}" in ${vaultVanityMaxTries.toLocaleString()} deployment-version tries. ` +
-                    'Increase VITE_VAULT_VANITY_MAX_TRIES and retry.',
-                )
-              }
-              vanityVersionSearchOutcome = 'missed_defaults'
-              vanityVersionSearchWarning =
-                `Default vault prefix "0x${versionSearchVaultPrefix}" was not found in the current search window. ` +
-                'Continuing with deterministic deployment addresses.'
-            }
-          }
-          if (foundVersion) {
-            deploymentVersionUsed = foundVersion
-            vaultVanityVersionCacheRef.current = {
-              key: vanityTargetsKey,
-              version: foundVersion,
-              outcome: vanityVersionSearchOutcome,
-            }
-          }
-        }
-      }
-
-      const baseSalt = deriveBaseSalt({ creatorToken, owner, chainId: base.id, version: deploymentVersionUsed })
-      const vaultSalt = saltFor(baseSalt, 'vault')
-      const wrapperSalt = saltFor(baseSalt, 'wrapper')
-      const gaugeSalt = saltFor(baseSalt, 'gauge')
-      const ccaSalt = saltFor(baseSalt, 'cca')
-      const oracleSalt = saltFor(baseSalt, 'oracle')
-
-      const shareOftVanityUnsupportedByBatcher = !supportsPhase1WithSalt && Boolean(shareOftVanitySuffix)
-      const batcherDisplay = batcherAddress ? shortAddress(batcherAddress) : 'unknown'
-      let shareOftVanityWarning: string | null = buildShareOftVanityUserWarning({
-        shareOftVanitySuffix,
-        vaultVanityPrefix: versionSearchVaultPrefix,
-        saltOverrideDisabled: shareOftVanityUnsupportedByBatcher,
-        versionSearchOutcome: vanityVersionSearchOutcome,
-      })
-      if (shareOftVanityUnsupportedByBatcher && shareVanityIsCustom) {
-        const blockingMessage =
-          `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides. ` +
-          `Custom share token vanity suffix "${shareOftVanitySuffix}" is blocked for this deploy.`
-        logger.warn('[DeployVault] share_oft_vanity_suffix_blocked', {
-          batcher: batcherAddress,
-          suffix: shareOftVanitySuffix,
-          reason: 'phase1_salt_overrides_not_supported',
-        })
-        throw new Error(blockingMessage)
-      }
-      if (
-        shareOftVanityUnsupportedByBatcher &&
-        !shareVanityIsCustom &&
-        vanityVersionSearchOutcome === 'not_applicable'
-      ) {
-        const skipLogKey = buildShareVanitySkipLogKey({
-          batcher: batcherAddress,
-          suffix: shareOftVanitySuffix,
-          reason: 'phase1_salt_overrides_not_supported',
-        })
-        if (shouldEmitShareVanitySkipLog({ lastKey: shareOftVanitySkipLogKeyRef.current, nextKey: skipLogKey })) {
-          shareOftVanitySkipLogKeyRef.current = skipLogKey
-          logger.debug('[DeployVault] share_oft_vanity_suffix_skipped_default', {
-            batcher: batcherAddress,
-            suffix: shareOftVanitySuffix,
-            reason: 'phase1_salt_overrides_not_supported',
-          })
-        }
-      }
-      if (vanityVersionSearchWarning && !shareOftVanityWarning) {
-        shareOftVanityWarning = vanityVersionSearchWarning
-      }
-      const shareOftVanityInfo = buildSaltDisabledShareSuffixInfoNotice({
-        versionSearchOutcome: vanityVersionSearchOutcome,
-        vaultVanityPrefix: versionSearchVaultPrefix,
-        shareOftVanitySuffix,
-        saltOverrideDisabled: shareOftVanityUnsupportedByBatcher,
-        deploymentVersionUsed,
-      })
-
-      const derivedShareOftSalt = deriveShareOftSalt({ owner, shareSymbol, version: deploymentVersionUsed })
-      let shareOftSaltOverrideUsed = shareOftSaltOverride
-      if (shareOftSaltOverrideUsed && shareOftVanityUnsupportedByBatcher) {
-        logger.warn('[DeployVault] share_oft_salt_override_ignored', {
-          batcher: batcherAddress,
-          reason: 'phase1_salt_overrides_not_supported',
-          shareOftSaltOverride: shareOftSaltOverrideUsed,
-        })
-        shareOftSaltOverrideUsed = null
-        const overrideWarning =
-          `Ignoring ShareOFT salt override because active batcher ${batcherDisplay} does not support Phase-1 salt overrides.`
-        shareOftVanityWarning = shareOftVanityWarning
-          ? `${shareOftVanityWarning} ${overrideWarning}`
-          : overrideWarning
-      }
-      if (!shareOftSaltOverrideUsed && shareOftVanitySuffix && !shareOftVanityUnsupportedByBatcher) {
-        const initCodeHash = keccak256(shareOftInitCode)
-        const vanitySeed = keccak256(
-          encodePacked(['string', 'address', 'address', 'string'], [
-            'CreatorShareOFT:vanity',
-            creatorToken,
-            owner,
-            deploymentVersionUsed,
-          ]),
-        )
-        const vanityStart = BigInt(vanitySeed)
-        const vanityKey = [
-          create2Deployer.toLowerCase(),
-          initCodeHash.toLowerCase(),
-          shareOftVanitySuffix,
-          String(shareOftVanityMaxTries),
-          deploymentVersionUsed,
-          creatorToken.toLowerCase(),
-          owner.toLowerCase(),
-        ].join(':')
-        const cached = shareOftVanityCacheRef.current
-        if (cached?.key === vanityKey) {
-          shareOftSaltOverrideUsed = cached.salt
-        } else {
-          const found = await findCreate2SaltForSuffix({
-            create2Deployer,
-            initCode: shareOftInitCode,
-            suffix: shareOftVanitySuffix,
-            maxTries: shareOftVanityMaxTries,
-            startAt: vanityStart,
-            isAddressDeployed: async (addr) => {
-              const bc = await publicClient!.getBytecode({ address: addr })
-              return !!bc && bc !== '0x'
-            },
-          })
-          if (!found) {
-            throw new Error(
-              `Unable to find ShareOFT vanity suffix "${shareOftVanitySuffix}" in ${shareOftVanityMaxTries.toLocaleString()} tries. ` +
-                'Increase VITE_SHARE_OFT_VANITY_MAX_TRIES and retry.',
-            )
-          }
-          shareOftSaltOverrideUsed = found
-          shareOftVanityCacheRef.current = { key: vanityKey, salt: found }
-        }
-      }
-      const shareOftSalt = shareOftSaltOverrideUsed ?? derivedShareOftSalt
-      const shareOftAddress = predictCreate2Address({ create2Deployer, salt: shareOftSalt, initCode: shareOftInitCode })
-      const vaultAddress = predictCreate2Address({ create2Deployer, salt: vaultSalt, initCode: vaultInitCode })
-
-      const wrapperArgs = encodeAbiParameters(parseAbiParameters('address,address,address'), [creatorToken, vaultAddress, tempOwner])
-      const wrapperInitCode = concatHex([DEPLOY_BYTECODE.CreatorOVaultWrapper as Hex, wrapperArgs])
-      const wrapperAddress = predictCreate2Address({ create2Deployer, salt: wrapperSalt, initCode: wrapperInitCode })
-
-      // Must mirror DeploymentBatcherPhase2Module.deployPhase2Core exactly:
-      // gauge ctor args = (shareOFT, protocolTreasury, protocolTreasury, batcher).
-      // Using `owner` here predicts the wrong CREATE2 address and causes
-      // finalizePhase2 to revert with Phase2Missing().
-      const gaugeArgs = encodeAbiParameters(parseAbiParameters('address,address,address,address'), [
-        shareOftAddress,
-        protocolTreasury,
-        protocolTreasury,
-        tempOwner,
-      ])
-      const gaugeInitCode = concatHex([DEPLOY_BYTECODE.CreatorGaugeController as Hex, gaugeArgs])
-      const gaugeAddress = predictCreate2Address({ create2Deployer, salt: gaugeSalt, initCode: gaugeInitCode })
-
-      const ccaArgs = encodeAbiParameters(parseAbiParameters('address,address,address,address,address'), [
-        shareOftAddress,
-        ZERO_ADDRESS,
-        vaultAddress,
-        vaultAddress,
-        tempOwner,
-      ])
-      const ccaInitCode = concatHex([DEPLOY_BYTECODE.CCALaunchStrategy as Hex, ccaArgs])
-      const ccaAddress = predictCreate2Address({ create2Deployer, salt: ccaSalt, initCode: ccaInitCode })
-
-      const weth = getAddress((CONTRACTS.weth ?? BASE_WETH) as Address)
-      const burnStreamSalt = deriveVaultShareBurnStreamSalt({ creatorToken, owner })
-      const burnStreamArgs = encodeAbiParameters(parseAbiParameters('address'), [vaultAddress])
-      const burnStreamInitCode = concatHex([DEPLOY_BYTECODE.VaultShareBurnStream as Hex, burnStreamArgs])
-
-      const payoutRouterSalt = derivePayoutRouterSalt({ creatorToken, owner })
-      const creatorCoinPolicyControllerSalt = deriveCreatorCoinPolicyControllerSalt({ creatorToken, owner })
-
-      // IMPORTANT: burnStream + payoutRouter are deployed via UniversalCreate2DeployerFromStore in Phase 2.
-      // The paymaster computes expected addresses using `bytecodeStore.get(codeId)` + CREATE2.
-      // To avoid mismatches, compute these expected addresses the same way (fall back to local bytecode if needed).
-      let burnStreamAddress = predictCreate2Address({ create2Deployer, salt: burnStreamSalt, initCode: burnStreamInitCode })
-      let payoutRouterAddress = (() => {
-        const args = encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address,address'), [
-          creatorToken,
-          vaultAddress,
-          burnStreamAddress,
-          protocolTreasury,
-          getAddress(BASE_SWAP_ROUTER as Address),
-          weth,
-          ZERO_ADDRESS,
-        ])
-        const init = concatHex([DEPLOY_BYTECODE.PayoutRouter as Hex, args])
-        return predictCreate2Address({ create2Deployer, salt: payoutRouterSalt, initCode: init })
-      })()
-      let creatorCoinPolicyControllerAddress = (() => {
-        const args = encodeAbiParameters(parseAbiParameters('address,address,address'), [
-          creatorToken,
-          payoutRouterAddress,
-          protocolTreasury,
-        ])
-        const init = concatHex([DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex, args])
-        return predictCreate2Address({ create2Deployer, salt: creatorCoinPolicyControllerSalt, initCode: init })
-      })()
-
-      try {
-        const BYTECODE_STORE_GET_ABI = [
-          {
-            type: 'function',
-            name: 'get',
-            stateMutability: 'view',
-            inputs: [{ name: 'codeId', type: 'bytes32' }],
-            outputs: [{ name: 'creationCode', type: 'bytes' }],
-          },
-        ] as const
-
-        const bytecodeStore = await resolveBytecodeStoreForBatcher({
-          publicClient: publicClient!,
-          batcherAddress: batcherAddress as Address,
-          fallback: (CONTRACTS.universalBytecodeStore ?? null) as Address | null,
-        })
-
-        if (bytecodeStore) {
-          const [burnCreation, routerCreation, policyControllerCreation] = (await Promise.all([
-            publicClient!.readContract({
-              address: bytecodeStore,
-              abi: BYTECODE_STORE_GET_ABI,
-              functionName: 'get',
-              args: [vaultShareBurnStreamCodeId],
-            }),
-            publicClient!.readContract({
-              address: bytecodeStore,
-              abi: BYTECODE_STORE_GET_ABI,
-              functionName: 'get',
-              args: [payoutRouterCodeId],
-            }),
-            publicClient!.readContract({
-              address: bytecodeStore,
-              abi: BYTECODE_STORE_GET_ABI,
-              functionName: 'get',
-              args: [creatorCoinPolicyControllerCodeId],
-            }),
-          ])) as [Hex, Hex, Hex]
-
-          const burnInitHash = keccak256(concatHex([burnCreation as Hex, burnStreamArgs]))
-          burnStreamAddress = getCreate2Address({ from: create2Deployer, salt: burnStreamSalt, bytecodeHash: burnInitHash })
-
-          const routerArgsFixed = encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address,address'), [
-            creatorToken,
-            vaultAddress,
-            burnStreamAddress,
-            protocolTreasury,
-            getAddress(BASE_SWAP_ROUTER as Address),
-            weth,
-            ZERO_ADDRESS,
-          ])
-          const routerInitHash = keccak256(concatHex([routerCreation as Hex, routerArgsFixed]))
-          payoutRouterAddress = getCreate2Address({ from: create2Deployer, salt: payoutRouterSalt, bytecodeHash: routerInitHash })
-
-          const policyControllerArgsFixed = encodeAbiParameters(parseAbiParameters('address,address,address'), [
-            creatorToken,
-            payoutRouterAddress,
-            protocolTreasury,
-          ])
-          const policyControllerInitHash = keccak256(
-            concatHex([policyControllerCreation as Hex, policyControllerArgsFixed]),
-          )
-          creatorCoinPolicyControllerAddress = getCreate2Address({
-            from: create2Deployer,
-            salt: creatorCoinPolicyControllerSalt,
-            bytecodeHash: policyControllerInitHash,
-          })
-        }
-      } catch {
-        // Best-effort: fall back to local bytecode predictions
-      }
-
-      const oracleArgs = encodeAbiParameters(parseAbiParameters('address,address,string,address'), [
-        registryAddress,
-        chainlinkEthUsd,
-        shareSymbolLower,
-        tempOwner,
-      ])
-      const oracleInitCode = concatHex([DEPLOY_BYTECODE.CreatorOracle as Hex, oracleArgs])
-      const oracleAddress = predictCreate2Address({ create2Deployer, salt: oracleSalt, initCode: oracleInitCode })
-
-      return {
-        create2Deployer,
-        protocolTreasury,
-        deploymentVersion: deploymentVersionUsed,
-        shareOftSaltOverride: shareOftSaltOverrideUsed ?? null,
-        shareOftVanityWarning,
-        shareOftVanityInfo,
-        expected: {
-          vault: vaultAddress,
-          wrapper: wrapperAddress,
-          shareOFT: shareOftAddress,
-          gaugeController: gaugeAddress,
-          ccaStrategy: ccaAddress,
-          oracle: oracleAddress,
-          burnStream: burnStreamAddress,
-          payoutRouter: payoutRouterAddress,
-          creatorCoinPolicyController: creatorCoinPolicyControllerAddress,
+        shareName,
+        shareSymbol,
+        vaultVanityPrefix: vaultVanityPrefix ?? null,
+        shareOftVanitySuffix: shareOftVanitySuffix ?? null,
+        vaultVanityMaxTries,
+        shareOftVanityMaxTries,
+        shareVanityIsCustom,
+        cacheState: {
+          vaultVanityVersion: vaultVanityVersionCacheRef.current,
+          shareOftVanity: shareOftVanityCacheRef.current,
+          shareOftVanitySkipLogKey: shareOftVanitySkipLogKeyRef.current,
         },
-      }
+        shortAddress,
+      })
+      vaultVanityVersionCacheRef.current = plan.cacheState.vaultVanityVersion
+      shareOftVanityCacheRef.current = plan.cacheState.shareOftVanity
+      shareOftVanitySkipLogKeyRef.current = plan.cacheState.shareOftVanitySkipLogKey
+      return plan
     },
   })
 
-  const expected = expectedQuery.data?.expected ?? null
-  const expectedCreate2Deployer = expectedQuery.data?.create2Deployer ?? null
-  const expectedProtocolTreasury = normalizeAddressLike(expectedQuery.data?.protocolTreasury ?? CONTRACTS.protocolTreasury)
-  const expectedDeploymentVersion = expectedQuery.data?.deploymentVersion ?? deploymentVersion
-  const expectedShareOftSaltOverride = expectedQuery.data?.shareOftSaltOverride ?? null
-  const expectedShareOftVanityWarning = expectedQuery.data?.shareOftVanityWarning ?? null
-  const expectedShareOftVanityInfo = expectedQuery.data?.shareOftVanityInfo ?? null
+  const expectedAddressesQuery = useQuery({
+    queryKey: [
+      'creatorVaultBatcher',
+      'expectedAddresses',
+      batcherAddress,
+      creatorToken,
+      owner,
+      vanityPlanQuery.data?.deploymentVersionUsed,
+      vanityPlanQuery.data?.shareOftSaltOverrideUsed,
+      vanityPlanQuery.data?.vaultAddress,
+    ],
+    enabled: !!publicClient && !!batcherAddress && !!creatorToken && !!owner && vanityPlanQuery.isSuccess,
+    staleTime: 30_000,
+    retry: 0,
+    queryFn: async () =>
+      resolveDeployExpectedAddresses({
+        publicClient: publicClient!,
+        batcherAddress: batcherAddress as Address,
+        batcherInfra: batcherInfraQuery.data!,
+        creatorToken,
+        owner,
+        chainId: base.id,
+        vanityPlan: vanityPlanQuery.data!,
+        universalBytecodeStoreFallback: (CONTRACTS.universalBytecodeStore ?? null) as Address | null,
+        wethAddress: (CONTRACTS.weth ?? BASE_WETH) as Address,
+        vaultShareBurnStreamCodeId,
+        payoutRouterCodeId,
+        creatorCoinPolicyControllerCodeId,
+      }),
+  })
+
+  const batcherInfraQueryLoading = batcherInfraQuery.isLoading || batcherInfraQuery.isFetching
+  const vanityPlanQueryLoading = vanityPlanQuery.isLoading || vanityPlanQuery.isFetching
+  const expectedAddressesQueryLoading =
+    expectedAddressesQuery.isLoading || expectedAddressesQuery.isFetching
+  const expectedQueryLoading =
+    batcherInfraQueryLoading || vanityPlanQueryLoading || expectedAddressesQueryLoading
+  const expectedQueryIsError = vanityPlanQuery.isError || expectedAddressesQuery.isError
+  const expectedQueryError = vanityPlanQuery.error ?? expectedAddressesQuery.error
+
+  const expected = expectedAddressesQuery.data?.expected ?? null
+  const expectedCreate2Deployer = expectedAddressesQuery.data?.create2Deployer ?? null
+  const expectedProtocolTreasury = normalizeAddressLike(
+    expectedAddressesQuery.data?.protocolTreasury ?? CONTRACTS.protocolTreasury,
+  )
+  const expectedDeploymentVersion = vanityPlanQuery.data?.deploymentVersionUsed ?? deploymentVersion
+  const expectedShareOftSaltOverride = vanityPlanQuery.data?.shareOftSaltOverrideUsed ?? null
+  const expectedShareOftVanityWarning = vanityPlanQuery.data?.shareOftVanityWarning ?? null
+  const expectedShareOftVanityInfo = vanityPlanQuery.data?.shareOftVanityInfo ?? null
   const expectedGauge = expected?.gaugeController ?? null
   const expectedBurnStream = expected?.burnStream ?? null
   const expectedPayoutRouter = expected?.payoutRouter ?? null
@@ -5467,7 +5024,9 @@ function DeployVaultBatcher({
       // Base mainnet can no longer fit the full stack deploy (vault + wrapper + shareOFT + gauge + CCA + oracle + deposit + launch)
       // in a single transaction due to code-deposit gas limits. If the configured batcher supports the two-step ABI,
       // prefer it and bypass the legacy one-tx deploy flow below.
-      const batcherBytecode = await publicClient.getBytecode({ address: batcherAddress })
+      const batcherBytecode =
+        batcherInfraQuery.data?.batcherBytecode ??
+        (await publicClient.getBytecode({ address: batcherAddress }).catch(() => null))
       const isTwoStepBatcher = (() => {
         if (!batcherBytecode || batcherBytecode === '0x') return false
         const phase1Topic = keccak256(
@@ -7346,8 +6905,11 @@ function DeployVaultBatcher({
     }
   }
 
-  const expectedError = expectedQuery.isError
-    ? ((expectedQuery.error as any)?.message || 'Failed to compute deployment addresses.')
+  const batcherInfraError = batcherInfraQuery.isError
+    ? ((batcherInfraQuery.error as Error | undefined)?.message || 'Failed to read deployment batcher infrastructure.')
+    : null
+  const expectedError = expectedQueryIsError
+    ? ((expectedQueryError as any)?.message || 'Failed to compute deployment addresses.')
     : null
   const vanityCustomPaidNotice =
     vaultVanityIsCustom || shareVanityIsCustom
@@ -7367,7 +6929,16 @@ function DeployVaultBatcher({
       ? 'Deployment in progress…'
       : rolePolicyOverride.error
         ? rolePolicyOverride.error
-      : expectedQuery.isLoading
+      : batcherInfraQueryLoading
+        ? 'Reading deployment batcher infrastructure…'
+      : batcherInfraError
+        ? batcherInfraError
+      : vanityPlanQueryLoading
+        ? buildDeployVanityLoadingMessage({
+            vaultVanityPrefix: vaultVanityPrefix ?? null,
+            shareOftVanitySuffix: shareOftVanitySuffix ?? null,
+          })
+      : expectedAddressesQueryLoading
         ? 'Computing deployment addresses…'
         : !expected
           ? expectedError || 'Deployment addresses are not ready.'
@@ -7840,7 +7411,7 @@ function DeployVaultBatcher({
               <Button
                 type="button"
                 variant="secondary"
-                disabled={busy || exportBusy || dryRunBusy || expectedQuery.isLoading || !expected}
+                disabled={busy || exportBusy || dryRunBusy || expectedQueryLoading || !expected}
                 onClick={() => void exportPlan()}
               >
                 {exportBusy ? 'Preparing plan…' : 'Export Plan JSON'}
@@ -7849,7 +7420,7 @@ function DeployVaultBatcher({
                 <Button
                   type="button"
                   variant="secondary"
-                  disabled={busy || exportBusy || dryRunBusy || expectedQuery.isLoading || !expected}
+                  disabled={busy || exportBusy || dryRunBusy || expectedQueryLoading || !expected}
                   onClick={() => void runDryRun()}
                 >
                   {dryRunBusy ? 'Running dry-run…' : 'Run dry-run'}
@@ -8158,6 +7729,7 @@ function DeployVaultBatcher({
 }
 
 function DeployVaultMain() {
+  const queryClient = useQueryClient()
   const { address, isConnected, connector } = useAccount()
   const chainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
@@ -9404,9 +8976,14 @@ function DeployVaultMain() {
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
     queryFn: async () => {
       const batcher = creatorVaultBatcherAddress as Address
+      const cachedInfra = queryClient.getQueryData<CreatorVaultBatcherInfra>([
+        'creatorVaultBatcher',
+        'infra',
+        batcher,
+      ])
       let readClient = publicClient!
 
-      let batcherCode = await readClient.getBytecode({ address: batcher })
+      let batcherCode = cachedInfra?.batcherBytecode ?? (await readClient.getBytecode({ address: batcher }))
       if (!batcherCode || batcherCode === '0x') {
         const fallbackClient = createBaseFallbackClient()
         const fallbackCode = await fallbackClient.getBytecode({ address: batcher }).catch(() => null)
@@ -9422,19 +8999,26 @@ function DeployVaultMain() {
         )
       }
 
-      const alignedDeps = await resolveAlignedPhase1DeployDeps({
-        publicClient: readClient,
-        batcherAddress: batcher,
-        fallbacks: {
-          bytecodeStore: (CONTRACTS.universalBytecodeStore ?? null) as Address | null,
-          create2Deployer: (CONTRACTS.universalCreate2DeployerFromStore ?? null) as Address | null,
-        },
-      })
-      if (!alignedDeps.ok) {
-        throw new Error(alignedDeps.message)
+      let bytecodeStoreAddress: Address
+      let create2DeployerAddress: Address
+      if (cachedInfra) {
+        bytecodeStoreAddress = cachedInfra.bytecodeStore
+        create2DeployerAddress = cachedInfra.create2Deployer
+      } else {
+        const alignedDeps = await resolveAlignedPhase1DeployDeps({
+          publicClient: readClient,
+          batcherAddress: batcher,
+          fallbacks: {
+            bytecodeStore: (CONTRACTS.universalBytecodeStore ?? null) as Address | null,
+            create2Deployer: (CONTRACTS.universalCreate2DeployerFromStore ?? null) as Address | null,
+          },
+        })
+        if (!alignedDeps.ok) {
+          throw new Error(alignedDeps.message)
+        }
+        bytecodeStoreAddress = alignedDeps.bytecodeStore
+        create2DeployerAddress = alignedDeps.create2Deployer
       }
-      const bytecodeStoreAddress = alignedDeps.bytecodeStore
-      const create2DeployerAddress = alignedDeps.create2Deployer
 
       let deployerStore: Address | null = null
       try {

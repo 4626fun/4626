@@ -94,6 +94,8 @@
     "ops:verify-akita-prelaunch": "tsx scripts/ops/verify-akita-prelaunch-readiness.ts",
     "ops:verify-batcher-pipe-a": "tsx scripts/ops/verify-batcher-pipe-a-readiness.ts",
     "ops:verify-v1130-versioning": "tsx scripts/ops/verify-v1130-deploy-versioning.ts",
+    "ops:verify-v1140-versioning": "tsx scripts/ops/verify-v1140-deploy-versioning.ts",
+    "ops:probe-akita-v1140-greenfield": "tsx scripts/ops/probe-akita-v1140-greenfield.ts",
     "ops:trace-wrapper-address": "tsx scripts/ops/trace-wrapper-address.ts",
     "ops:grind-akita-vanity": "tsx scripts/ops/grind-akita-vanity.ts",
     "ops:query-akita-deploys": "tsx scripts/ops/query-akita-deploys.ts",

@@ -14,7 +14,7 @@ Deployed contract addresses for 4626.
 
 ## Base (Hub Chain)
 
-### Current Live Infrastructure (`v1.13.0` greenfield deploy target)
+### Current Live Infrastructure (`v1.14.0` greenfield deploy target)
 
 | Contract | Address |
 |----------|---------|
@@ -26,21 +26,21 @@ Deployed contract addresses for 4626.
 | SolanaBridgeAdapter | `0x700b4BBAf965c013123bAd02a6562FBa487aC0f1` |
 | UniversalBytecodeStoreV2 | `0x8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4` |
 | UniversalCreate2DeployerFromStore | `0x4760216AFd59B843671E0FdFCe6498Ec8CFf38a7` |
-| CreatorOVaultCoreModule | `0xfaebF89F739769A348B871289488fc1b99F53140` |
-| CreatorOVaultStrategiesModule | `0xbd2E73f420FD4665013586c0128f0dEC1438F007` |
-| CreatorOVaultAdminModule | `0x3AA2e85589EEb57cBB5BbA240E5404A51eC824a7` |
+| CreatorOVaultCoreModule | `0x72689fB2243ff247F3A59b431C2C9E95AeFE8A2B` |
+| CreatorOVaultStrategiesModule | `0xF1430f5E10B4C73De06de37ADa6bC77C51DA8157` |
+| CreatorOVaultAdminModule | `0x702DB3176493D79Ee47ac746AA9865113e667aD1` |
 | DeploymentBatcher | `0xa99058f424FB3ACC639F59355C65C40149030651` |
-| DeploymentBatcherPhase1Module | `0x19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87` |
+| DeploymentBatcherPhase1Module | `0xE83876c67E1E845A199f64fb33D76ADC62EAaB9D` |
 | DeploymentBatcherPhase2Module | `0x67FD8A34E5b26F875a9513DFf37521A1ca92d80f` |
 | DeploymentBatcherPhase3Helper | `0x674a2D5EE33e184e2120B373a9AcB3fef640885c` |
 | DeploymentBatcherUniV4Helper | `0xF71a6236586077CD29C971443D2cce37B543DcBB` |
 | DeploymentBatcherUtilsHelper | `0xD71C4910C7bB38FB1089Cca42b0883F1BFFfa28D` |
 
 Notes:
-- Shared/global and split Phase-1 infra shell remain from v1.11.2-pipe-a; **v1.13.0** continues the CreatorOVault `CreatorOVaultModuleStorage.v2` module fingerprint on the live split Phase-1 stack.
+- Shared/global and split Phase-1 infra shell remain from v1.11.2-pipe-a; **v1.14.0** pairs the CreatorOVault `CreatorOVaultModuleStorage.v3` impairment module stack with store-seeded deploy bytecode.
 - `DeploymentBatcher` deploys as a slim shell; helpers and `DeploymentBatcherPhase1Module` wire post-deploy via protocol treasury Safe (`wireDeploymentHelpers` + `setPhase1Module`).
-- Greenfield Phase 1 reads **Phase1Module immutables** (`phase1Module()` → `0x19Bd8…`), not batcher-shell module getters (shell may still expose legacy `.current` modules).
-- Parked v3 impairment Phase1Module (`0xffbFf3…`) is **not** paired with v1.13.0 deploy bytecode — restore `0x19Bd8…` before greenfield deploy if rotated.
+- Greenfield Phase 1 reads **Phase1Module immutables** (`phase1Module()` → `0xE838…`), not batcher-shell module getters (shell may still expose legacy `.current` modules).
+- Retired v1.13.0 v2 Phase1Module (`0x19Bd8…`) is for grandfathered vaults only — do not restore for new greenfield deploys after the v1.14.0 cutover.
 - Pre-Pipe-A batcher `0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8` is deprecated — do not use for greenfield deploys.
 
 ### Per-Creator Deployments

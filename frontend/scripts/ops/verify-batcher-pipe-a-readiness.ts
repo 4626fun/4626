@@ -6,7 +6,7 @@ import { base } from 'viem/chains'
 import {
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
   SPLIT_PHASE1_PHASE1_MODULE,
-  SPLIT_PHASE1_PHASE1_MODULE_V3_IMPAIRMENT,
+  SPLIT_PHASE1_PHASE1_MODULE_V2_LEGACY,
   isDeprecatedCreatorVaultBatcherAddress,
 } from '../../src/config/contracts.defaults.js'
 import { deploymentBatcherNotConfiguredMessage } from '../../src/lib/deploy/deploymentBatcherConfigError.js'
@@ -295,19 +295,19 @@ async function main() {
       detail: String(phase1Module),
     },
     {
-      id: 'phase1_module_v1130_target',
+      id: 'phase1_module_v1140_target',
       ok: phase1ModuleAddress === getAddress(SPLIT_PHASE1_PHASE1_MODULE),
       detail: `live=${phase1ModuleAddress ?? 'n/a'} expected=${SPLIT_PHASE1_PHASE1_MODULE}`,
     },
     {
-      id: 'phase1_module_not_v3_impairment',
-      ok: phase1ModuleAddress !== getAddress(SPLIT_PHASE1_PHASE1_MODULE_V3_IMPAIRMENT),
-      detail: `live=${phase1ModuleAddress ?? 'n/a'} parked_v3=${SPLIT_PHASE1_PHASE1_MODULE_V3_IMPAIRMENT}`,
+      id: 'phase1_module_not_v2_legacy',
+      ok: phase1ModuleAddress !== getAddress(SPLIT_PHASE1_PHASE1_MODULE_V2_LEGACY),
+      detail: `live=${phase1ModuleAddress ?? 'n/a'} retired_v2=${SPLIT_PHASE1_PHASE1_MODULE_V2_LEGACY}`,
     },
     {
-      id: 'phase1_module_storage_v2',
+      id: 'phase1_module_storage_v3',
       ok: moduleStorage.ok,
-      detail: moduleStorage.ok ? 'CreatorOVaultModuleStorage.v2' : moduleStorage.message,
+      detail: moduleStorage.ok ? 'CreatorOVaultModuleStorage.v3' : moduleStorage.message,
     },
     {
       id: 'phase2_module',

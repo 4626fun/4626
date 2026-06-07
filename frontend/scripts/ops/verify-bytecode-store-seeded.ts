@@ -4,9 +4,9 @@
  *
  * Usage:
  *   pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
- *   BYTECODE_MANIFEST=../../deployments/base/v1.13.0-bytecode-manifest.json pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
+ *   BYTECODE_MANIFEST=../../deployments/base/v1.14.0-bytecode-manifest.json pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
  */
-const DEFAULT_RELEASE = 'v1.13.0'
+const DEFAULT_RELEASE = 'v1.14.0'
 
 
 import { readFileSync } from 'node:fs'

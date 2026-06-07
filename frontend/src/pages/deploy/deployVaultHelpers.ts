@@ -4,6 +4,7 @@
 // flow and can be unit-tested independently.
 
 import {
+  encodePacked,
   getAddress,
   getCreate2Address,
   isAddress,
@@ -267,6 +268,10 @@ export async function findCreate2SaltForSuffix(params: {
   return findCreate2SaltForSuffixTypescript(params)
 }
 
+export const DEFAULT_SHARE_OFT_VANITY_MAX_TRIES = 1_000_000
+export const DEFAULT_VAULT_VANITY_PREFIX = '4626'
+export const DEFAULT_SHARE_OFT_VANITY_SUFFIX = '4626'
+
 /** Combined vault+share version search cap when Phase-1 salt overrides can satisfy share suffix separately. */
 export const COMBINED_VANITY_VERSION_SEARCH_CAP = 10_000
 
@@ -370,6 +375,39 @@ export function buildShareOftVanityUserWarning(params: {
   return null
 }
 
+export function deriveShareOftVanityStartAt(params: {
+  creatorToken: Address
+  owner: Address
+  deploymentVersion: string
+}): bigint {
+  const vanitySeed = keccak256(
+    encodePacked(['string', 'address', 'address', 'string'], [
+      'CreatorShareOFT:vanity',
+      params.creatorToken,
+      params.owner,
+      params.deploymentVersion,
+    ]),
+  )
+  return BigInt(vanitySeed)
+}
+
+/** Salt-enabled batchers can grind share suffix while vault version search runs (provisional base version). */
+export function shouldParallelizeShareSaltWithVersionSearch(params: {
+  supportsPhase1WithSalt: boolean
+  hasVaultPrefixTarget: boolean
+  hasShareSuffixTarget: boolean
+  shareOftVanityUnsupportedByBatcher: boolean
+  hasManualShareOftSaltOverride: boolean
+}): boolean {
+  return (
+    params.supportsPhase1WithSalt &&
+    params.hasVaultPrefixTarget &&
+    params.hasShareSuffixTarget &&
+    !params.shareOftVanityUnsupportedByBatcher &&
+    !params.hasManualShareOftSaltOverride
+  )
+}
+
 /** Informational copy when combined vault+share vanity search misses on salt-disabled batchers. */
 export function buildSaltDisabledShareSuffixInfoNotice(params: {
   versionSearchOutcome: DeploymentVanityVersionSearchOutcome
@@ -385,4 +423,15 @@ export function buildSaltDisabledShareSuffixInfoNotice(params: {
     `Could not find a deployment version matching vault prefix 0x${params.vaultVanityPrefix} and share suffix ${params.shareOftVanitySuffix} ` +
     'in the current search window. This batcher requires both patterns in the same version string; try again with a higher server search budget or run the offline vanity grinder.'
   )
+}
+
+export function buildDeployVanityLoadingMessage(params: {
+  vaultVanityPrefix: string | null
+  shareOftVanitySuffix: string | null
+}): string {
+  const hints: string[] = []
+  if (params.vaultVanityPrefix) hints.push(`vault prefix 0x${params.vaultVanityPrefix}`)
+  if (params.shareOftVanitySuffix) hints.push(`share suffix ${params.shareOftVanitySuffix}`)
+  if (hints.length === 0) return 'Grinding vanity addresses…'
+  return `Grinding vanity addresses (${hints.join(', ')})…`
 }

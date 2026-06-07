@@ -3,6 +3,7 @@ import {
   invokeVanityWasmSearch,
   type VanityWasmExports,
 } from '@/lib/vanity/vanityWasmRuntime'
+import { invokeVanityWasmInWorker, isVanityWasmWorkerEnabled } from '@/lib/vanity/vanityWasmWorkerClient'
 
 const DEFAULT_VANITY_WASM_PUBLIC_PATH = '/vanity/vanity_salt_grinder.wasm'
 
@@ -51,13 +52,27 @@ let wasmExportsPromise: Promise<VanityWasmExports> | null = null
 export async function findPerVaultVanityVersionWithWasm(
   input: PerVaultVanitySearchInput,
 ): Promise<PerVaultVanitySearchResult> {
-  const exports = await loadVanityWasm()
-  const output = invokeVanityWasmSearch(exports, 'per_vault_version_search', input)
+  const output = await invokeVanityWasmSearchOutput('per_vault_version_search', input)
   const parsed = JSON.parse(output) as VanityWasmEnvelope
   if (!parsed.ok) {
     throw new Error(parsed.error || 'Rust vanity search failed')
   }
   return parsed.result
+}
+
+async function invokeVanityWasmSearchOutput(
+  entrypoint: 'per_vault_version_search',
+  input: PerVaultVanitySearchInput,
+): Promise<string> {
+  if (isVanityWasmWorkerEnabled()) {
+    try {
+      return await invokeVanityWasmInWorker(entrypoint, input)
+    } catch {
+      // Fall back to main-thread WASM when the worker is unavailable.
+    }
+  }
+  const exports = await loadVanityWasm()
+  return invokeVanityWasmSearch(exports, entrypoint, input)
 }
 
 async function loadVanityWasm(): Promise<VanityWasmExports> {

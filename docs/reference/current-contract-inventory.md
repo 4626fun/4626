@@ -6,12 +6,12 @@ sidebar_position: 5
 # Current Contract Inventory (Base)
 
 Generated on: 2026-06-07
-Scope: current live Base infra addresses plus the canonical `v1.13.0` greenfield deploy target for new per-creator vaults.
+Scope: current live Base infra addresses plus the canonical `v1.14.0` greenfield deploy target for new per-creator vaults.
 
 ## Sources
 
-1. Release packet: `docs/operations/deployment/releases/v1.13.0-bytecode-epoch.md`
-2. Bytecode / codeId manifest: `deployments/base/v1.13.0-bytecode-manifest.json`
+1. Release packet: `docs/operations/deployment/releases/v1.14.0-bytecode-epoch.md`
+2. Bytecode / codeId manifest: `deployments/base/v1.14.0-bytecode-manifest.json`
 3. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
 4. Live deployment snapshots: `deployments/base/contracts/**/*.json`
 5. Onchain `DeploymentBatcher` wiring checks against the current live Base deployment
@@ -28,11 +28,11 @@ Scope: current live Base infra addresses plus the canonical `v1.13.0` greenfield
 | `solanaBridgeAdapter` | `0x700b4BBAf965c013123bAd02a6562FBa487aC0f1` |
 | `bytecodeStore` | `0x8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4` |
 | `create2DeployerFromStore` | `0x4760216AFd59B843671E0FdFCe6498Ec8CFf38a7` |
-| `creatorOVaultCoreModule` | `0xfaebF89F739769A348B871289488fc1b99F53140` |
-| `creatorOVaultStrategiesModule` | `0xbd2E73f420FD4665013586c0128f0dEC1438F007` |
-| `creatorOVaultAdminModule` | `0x3AA2e85589EEb57cBB5BbA240E5404A51eC824a7` |
+| `creatorOVaultCoreModule` | `0x72689fB2243ff247F3A59b431C2C9E95AeFE8A2B` |
+| `creatorOVaultStrategiesModule` | `0xF1430f5E10B4C73De06de37ADa6bC77C51DA8157` |
+| `creatorOVaultAdminModule` | `0x702DB3176493D79Ee47ac746AA9865113e667aD1` |
 | `deploymentBatcher` | `0xa99058f424FB3ACC639F59355C65C40149030651` |
-| `deploymentBatcherPhase1Module` | `0x19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87` |
+| `deploymentBatcherPhase1Module` | `0xE83876c67E1E845A199f64fb33D76ADC62EAaB9D` |
 | `deploymentBatcherPhase2Module` | `0x67FD8A34E5b26F875a9513DFf37521A1ca92d80f` |
 | `deploymentBatcherPhase3Helper` | `0x674a2D5EE33e184e2120B373a9AcB3fef640885c` |
 | `deploymentBatcherUniV4Helper` | `0xF71a6236586077CD29C971443D2cce37B543DcBB` |
@@ -76,7 +76,7 @@ Current snapshot set:
 
 Live batcher child addresses that are read directly from `DeploymentBatcher` are also recorded in the release packet:
 
-- `DeploymentBatcherPhase1Module=0x19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87`
+- `DeploymentBatcherPhase1Module=0xE83876c67E1E845A199f64fb33D76ADC62EAaB9D`
 - `DeploymentBatcherPhase2Module=0x67FD8A34E5b26F875a9513DFf37521A1ca92d80f`
 - `DeploymentBatcherPhase3Helper=0x674a2D5EE33e184e2120B373a9AcB3fef640885c`
 - `DeploymentBatcherUniV4Helper=0xF71a6236586077CD29C971443D2cce37B543DcBB`
@@ -84,19 +84,19 @@ Live batcher child addresses that are read directly from `DeploymentBatcher` are
 
 Legacy pre-rotation Phase1Module (deprecated): `0xf3b20557ef8173510693A13EF71F884DB835E8c0`
 
-Parked v3 impairment Phase1Module (not active for v1.13.0 greenfield): `0xffbFf3E529e5A4dBFD9ea2e9C01B773D1B7fA1a0`
+Retired v1.13.0 v2 Phase1Module (grandfathered vaults only): `0x19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87`
 
 Versioning verifier (repo defaults + live getters + store seed):
 
 ```bash
-pnpm -C frontend exec tsx scripts/ops/verify-v1130-deploy-versioning.ts
+pnpm -C frontend exec tsx scripts/ops/verify-v1140-deploy-versioning.ts
 ```
 
 ## Bytecode / CodeId Evidence
 
 Primary release manifest:
 
-- `deployments/base/v1.13.0-bytecode-manifest.json`
+- `deployments/base/v1.14.0-bytecode-manifest.json`
 
 Historical reference manifests:
 

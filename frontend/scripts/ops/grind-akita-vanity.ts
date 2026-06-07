@@ -9,7 +9,7 @@
  *   pnpm -C frontend ops:grind-akita-vanity -- --build
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -29,6 +29,7 @@ import {
 import { base } from 'viem/chains'
 
 import { SPLIT_PHASE1_DEPLOYMENT_BATCHER } from '../../src/config/contracts.defaults.js'
+import { parseCreatorVaultBatcherCapabilities } from '../../src/lib/deploy/creatorVaultBatcherInfra.js'
 import { DEPLOY_BYTECODE } from '../../src/deploy/bytecode.generated.js'
 import {
   deriveDeployBaseSalt,
@@ -37,6 +38,8 @@ import {
   saltForDeployLabel,
 } from '../../src/lib/deploy/perVaultVanityVersionSearch.js'
 import { resolveAlignedPhase1DeployDeps } from '../../src/lib/deploy/phase1ModuleDeploy.js'
+import { findCreate2SaltForSuffixOnServer } from '../../server/_lib/deploy/findCreate2SaltForSuffixServer.js'
+import { deriveShareOftVanityStartAt } from '../../src/pages/deploy/deployVaultHelpers.js'
 
 declare const process: {
   argv: string[]
@@ -52,7 +55,7 @@ const REPO_ROOT = resolve(FRONTEND_ROOT, '..')
 
 const DEFAULT_CREATOR = getAddress('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
 const DEFAULT_OWNER = getAddress('0xAb6d5C10b03300326cd7fab7267ae192842967b5')
-const DEFAULT_BASE_VERSION = 'v1.13.0'
+const DEFAULT_BASE_VERSION = 'v1.14.0'
 const DEFAULT_VAULT_PREFIX = '4626'
 const DEFAULT_SHARE_SUFFIX = '4626'
 const DEFAULT_CHUNK = 100_000_000
@@ -195,8 +198,8 @@ function runGrinderChunk(params: {
   creatorToken: Address
   owner: Address
   baseVersion: string
-  vaultPrefix: string
-  shareSuffix: string
+  vaultPrefix: string | null
+  shareSuffix: string | null
   shareSymbol: string
   vaultInitCodeHash: Hex
   shareOftInitCodeHash: Hex
@@ -215,21 +218,24 @@ function runGrinderChunk(params: {
     '8453',
     '--base-version',
     params.baseVersion,
-    '--vault-prefix',
-    params.vaultPrefix,
-    '--share-suffix',
-    params.shareSuffix,
-    '--share-symbol',
-    params.shareSymbol,
-    '--vault-init-code-hash',
-    params.vaultInitCodeHash,
-    '--share-oft-init-code-hash',
-    params.shareOftInitCodeHash,
     '--start-attempt',
     String(params.startAttempt),
     '--max-attempts',
     String(params.chunkAttempts),
   ]
+  if (params.vaultPrefix) {
+    args.push('--vault-prefix', params.vaultPrefix, '--vault-init-code-hash', params.vaultInitCodeHash)
+  }
+  if (params.shareSuffix) {
+    args.push(
+      '--share-suffix',
+      params.shareSuffix,
+      '--share-symbol',
+      params.shareSymbol,
+      '--share-oft-init-code-hash',
+      params.shareOftInitCodeHash,
+    )
+  }
 
   const result = spawnSync(params.binPath, args, { encoding: 'utf8', stdio: 'pipe' })
   const combined = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim()
@@ -244,6 +250,118 @@ function runGrinderChunk(params: {
   throw new Error(combined || `Grinder exited with status ${result.status ?? 'unknown'}`)
 }
 
+const DEPLOYMENTS_MANIFEST_PATH = resolve(
+  REPO_ROOT,
+  'deployments/base/akita-v1.14.0-per-vault-vanity-manifest.json',
+)
+const FRONTEND_MANIFEST_PATH = resolve(FRONTEND_ROOT, 'src/deploy/perVaultVanityPreseedManifest.json')
+
+type PreseedManifest = {
+  schema: number
+  chainId: number
+  plans: Array<Record<string, unknown>>
+}
+
+function readPreseedManifest(path: string): PreseedManifest {
+  if (!existsSync(path)) {
+    return { schema: 1, chainId: base.id, plans: [] }
+  }
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<PreseedManifest>
+    return {
+      schema: parsed.schema === 1 ? 1 : 1,
+      chainId: typeof parsed.chainId === 'number' ? parsed.chainId : base.id,
+      plans: Array.isArray(parsed.plans) ? parsed.plans : [],
+    }
+  } catch {
+    return { schema: 1, chainId: base.id, plans: [] }
+  }
+}
+
+function writePreseedManifest(params: {
+  plan: VanityPlan
+  grinder: GrinderResult
+  batcherMode: 'salt' | 'version'
+  vaultName: string
+  vaultSymbol: string
+  shareName: string
+  shareSymbol: string
+}): void {
+  const entry = {
+    id: `akita-${params.plan.baseVersion}-default`,
+    label: 'AKITA default 4626/4626',
+    create2Deployer: params.plan.create2Deployer,
+    creatorToken: params.plan.creatorToken,
+    owner: params.plan.owner,
+    batcher: params.plan.batcher,
+    baseVersion: params.plan.baseVersion,
+    vaultName: params.vaultName,
+    vaultSymbol: params.vaultSymbol,
+    shareName: params.shareName,
+    shareSymbol: params.shareSymbol,
+    vaultPrefix: params.plan.vaultPrefix,
+    shareSuffix: params.plan.shareSuffix,
+    batcherMode: params.batcherMode,
+    deploymentVersion: params.plan.deploymentVersion,
+    versionSearchOutcome: 'combined_match',
+    shareOftSalt: params.grinder.shareOftSalt ?? null,
+    groundedAt: new Date().toISOString(),
+    searchAttempts: params.grinder.attempts,
+  }
+
+  for (const manifestPath of [DEPLOYMENTS_MANIFEST_PATH, FRONTEND_MANIFEST_PATH]) {
+    const manifest = readPreseedManifest(manifestPath)
+    const withoutExisting = manifest.plans.filter((plan) => plan.id !== entry.id)
+    const next = {
+      schema: 1,
+      chainId: base.id,
+      plans: [...withoutExisting, entry],
+    }
+    writeFileSync(manifestPath, `${JSON.stringify(next, null, 2)}\n`)
+  }
+  process.stderr.write(
+    `Wrote preseed manifest entries to:\n- ${DEPLOYMENTS_MANIFEST_PATH}\n- ${FRONTEND_MANIFEST_PATH}\n`,
+  )
+}
+
+async function grindShareOftSalt(params: {
+  create2Deployer: Address
+  creatorToken: Address
+  owner: Address
+  shareOftInitCode: Hex
+  shareSuffix: string
+  deploymentVersion: string
+  maxAttempts: number
+}): Promise<{ salt: Hex; attempts: number; shareOFT: Address } | null> {
+  const initCodeHash = keccak256(params.shareOftInitCode)
+  let cursor = deriveShareOftVanityStartAt({
+    creatorToken: params.creatorToken,
+    owner: params.owner,
+    deploymentVersion: params.deploymentVersion,
+  })
+  let remaining = params.maxAttempts
+  let totalAttempts = 0
+
+  while (remaining > 0) {
+    const chunk = Math.min(remaining, 5_000_000)
+    const startAt = `0x${cursor.toString(16).padStart(64, '0')}` as Hex
+    const result = await findCreate2SaltForSuffixOnServer({
+      create2Deployer: params.create2Deployer,
+      initCodeHash,
+      startAt,
+      suffix: params.shareSuffix,
+      maxAttempts: chunk,
+    })
+    totalAttempts += chunk
+    remaining -= chunk
+    if (result) {
+      return { salt: result.salt, attempts: totalAttempts, shareOFT: result.predictedAddress }
+    }
+    cursor = (cursor + BigInt(chunk)) & ((1n << 256n) - 1n)
+  }
+  return null
+}
+
 function predictAddresses(params: {
   version: string
   create2Deployer: Address
@@ -253,6 +371,7 @@ function predictAddresses(params: {
   vaultInitCode: Hex
   shareOftInitCode: Hex
   shareSymbol: string
+  shareOftSalt?: Hex | null
 }): { vault: Address; wrapper: Address; shareOFT: Address; baseSalt: Hex } {
   const baseSalt = deriveDeployBaseSalt({
     creatorToken: params.creatorToken,
@@ -278,13 +397,16 @@ function predictAddresses(params: {
     salt: saltForDeployLabel(baseSalt, 'wrapper'),
     initCode: wrapperInitCode,
   })
-  const shareOFT = predictCreate2AddressFromInitCode({
-    create2Deployer: params.create2Deployer,
-    salt: deriveShareOftSaltFromVersion({
+  const shareSalt =
+    params.shareOftSalt ??
+    deriveShareOftSaltFromVersion({
       owner: params.owner,
       shareSymbol: params.shareSymbol,
       version: params.version,
-    }),
+    })
+  const shareOFT = predictCreate2AddressFromInitCode({
+    create2Deployer: params.create2Deployer,
+    salt: shareSalt,
     initCode: params.shareOftInitCode,
   })
   return { vault, wrapper, shareOFT, baseSalt }
@@ -370,31 +492,121 @@ async function main(): Promise<void> {
     buildGrinderBin(binPath)
   }
 
+  const batcherBytecode = await client.getBytecode({ address: batcher }).catch(() => null)
+  const supportsPhase1WithSalt = parseCreatorVaultBatcherCapabilities({
+    batcherAddress: batcher,
+    batcherBytecode,
+  }).supportsPhase1WithSalt
+  const batcherMode = supportsPhase1WithSalt ? 'salt' : 'version'
+
   let attemptCursor = startAttempt
   let chunksRun = 0
   let grinderResult: GrinderResult | null = null
+  let shareOftSalt: Hex | null = null
 
-  while (chunksRun < maxChunks) {
+  if (supportsPhase1WithSalt) {
     process.stderr.write(
-      `Grinding chunk ${chunksRun + 1}: startAttempt=${attemptCursor} maxAttempts=${chunkAttempts}\n`,
+      `Salt-enabled batcher: grinding vault prefix 0x${vaultPrefix} via deployment-version search, then share suffix ${shareSuffix} via salt override.\n`,
     )
-    grinderResult = runGrinderChunk({
-      binPath,
+    while (chunksRun < maxChunks) {
+      process.stderr.write(
+        `Vault version chunk ${chunksRun + 1}: startAttempt=${attemptCursor} maxAttempts=${chunkAttempts}\n`,
+      )
+      grinderResult = runGrinderChunk({
+        binPath,
+        create2Deployer,
+        creatorToken,
+        owner,
+        baseVersion,
+        vaultPrefix,
+        shareSuffix: null,
+        shareSymbol,
+        vaultInitCodeHash,
+        shareOftInitCodeHash,
+        startAttempt: attemptCursor,
+        chunkAttempts,
+      })
+      if (grinderResult) break
+      attemptCursor += chunkAttempts
+      chunksRun += 1
+    }
+    if (!grinderResult) {
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            ok: false,
+            message: 'No vault-prefix vanity version found in configured search window',
+            batcherMode,
+            lastStartAttempt: attemptCursor,
+            chunkAttempts,
+            chunksRun,
+            resumeCommand: `pnpm -C frontend ops:grind-akita-vanity -- --start-attempt ${attemptCursor}`,
+          },
+          null,
+          2,
+        )}\n`,
+      )
+      process.exit(1)
+    }
+
+    const shareSaltMax = parsePositiveInt(getArg('--share-salt-max', '20000000'), 20_000_000)
+    process.stderr.write(
+      `Vault version found (${grinderResult.version}); grinding share suffix ${shareSuffix} (max ${shareSaltMax} attempts)…\n`,
+    )
+    const shareSaltResult = await grindShareOftSalt({
       create2Deployer,
       creatorToken,
       owner,
-      baseVersion,
-      vaultPrefix,
+      shareOftInitCode,
       shareSuffix,
-      shareSymbol,
-      vaultInitCodeHash,
-      shareOftInitCodeHash,
-      startAttempt: attemptCursor,
-      chunkAttempts,
+      deploymentVersion: grinderResult.version,
+      maxAttempts: shareSaltMax,
     })
-    if (grinderResult) break
-    attemptCursor += chunkAttempts
-    chunksRun += 1
+    if (!shareSaltResult) {
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            ok: false,
+            message: `Found vault version ${grinderResult.version} but share suffix ${shareSuffix} salt grind missed`,
+            batcherMode,
+            deploymentVersion: grinderResult.version,
+            shareSaltMax,
+          },
+          null,
+          2,
+        )}\n`,
+      )
+      process.exit(1)
+    }
+    shareOftSalt = shareSaltResult.salt
+    grinderResult = {
+      ...grinderResult,
+      shareOftSalt: shareSaltResult.salt,
+      attempts: grinderResult.attempts + shareSaltResult.attempts,
+    }
+  } else {
+    while (chunksRun < maxChunks) {
+      process.stderr.write(
+        `Combined version chunk ${chunksRun + 1}: startAttempt=${attemptCursor} maxAttempts=${chunkAttempts}\n`,
+      )
+      grinderResult = runGrinderChunk({
+        binPath,
+        create2Deployer,
+        creatorToken,
+        owner,
+        baseVersion,
+        vaultPrefix,
+        shareSuffix,
+        shareSymbol,
+        vaultInitCodeHash,
+        shareOftInitCodeHash,
+        startAttempt: attemptCursor,
+        chunkAttempts,
+      })
+      if (grinderResult) break
+      attemptCursor += chunkAttempts
+      chunksRun += 1
+    }
   }
 
   if (!grinderResult) {
@@ -424,7 +636,16 @@ async function main(): Promise<void> {
     vaultInitCode,
     shareOftInitCode,
     shareSymbol,
+    shareOftSalt: shareOftSalt ?? grinderResult.shareOftSalt ?? null,
   })
+
+  const vaultOk = vault.toLowerCase().startsWith(`0x${vaultPrefix}`)
+  const shareOk = shareOFT.toLowerCase().endsWith(shareSuffix)
+  if (!vaultOk || !shareOk) {
+    throw new Error(
+      `Vanity validation failed: vault=${vault} (want 0x${vaultPrefix}*), share=${shareOFT} (want *${shareSuffix})`,
+    )
+  }
 
   const deployUrl = `https://app.4626.fun/deploy/vault?deploymentVersion=${encodeURIComponent(grinderResult.version)}`
   const plan: VanityPlan = {
@@ -454,6 +675,16 @@ async function main(): Promise<void> {
     wrapper: Boolean(await client.getBytecode({ address: wrapper })),
     shareOFT: Boolean(await client.getBytecode({ address: shareOFT })),
   }
+
+  writePreseedManifest({
+    plan,
+    grinder: grinderResult,
+    batcherMode,
+    vaultName,
+    vaultSymbol,
+    shareName,
+    shareSymbol,
+  })
 
   process.stdout.write(
     `${JSON.stringify(
