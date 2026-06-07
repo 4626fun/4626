@@ -78,13 +78,9 @@ describe('Swap chrome', () => {
         onSwitchTokens: vi.fn(),
         onReviewTrade: vi.fn(),
         onSetSlippagePct: vi.fn(),
-        onConfirmUnverified: vi.fn(),
         executionMode: 'eoa',
         fallbackActive: false,
         swapProviderLabel: 'Uniswap',
-        needsUnverifiedConfirmation: false,
-        unverifiedTokenLabel: null,
-        onResetUnverified: vi.fn(),
       }),
     )
 

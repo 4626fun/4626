@@ -31,6 +31,7 @@ import {
 export type SwapTokenOption = TokenOption & {
   sectionTag?: 'core' | 'creator' | 'content' | 'trend'
   verified?: boolean
+  isUserHolding?: boolean
 }
 
 type AddressMetadataCacheEntry = {
@@ -140,6 +141,8 @@ function formatSectionLabel(section: string): string {
       return 'Recent'
     case 'Curated top tokens':
       return 'Popular tokens'
+    case 'Your holdings':
+      return 'Your holdings'
     case 'Creator coins':
       return 'Creator coins'
     case 'Content coins':
@@ -324,17 +327,18 @@ export function TokenSelectorModal({
     if (!isAddressSearch || !trimmedQuery) {
       return {
         core: filtered.filter((o) => tokenSection(o) === 'core'),
-        creator: filtered.filter((o) => tokenSection(o) === 'creator'),
-        content: filtered.filter((o) => tokenSection(o) === 'content'),
+        creator: filtered.filter((o) => tokenSection(o) === 'creator' && !o.isUserHolding),
+        content: filtered.filter((o) => tokenSection(o) === 'content' && !o.isUserHolding),
         recent: recentTokenAddresses
           .map((recentAddress) => {
             const key = recentAddress.toLowerCase()
             return filtered.find((option) => option.address.toLowerCase() === key) ?? null
           })
           .filter((option): option is SwapTokenOption => option != null),
+        holdings: filtered.filter((o) => o.isUserHolding),
       }
     }
-    return { core: [], creator: [], content: [], recent: [] }
+    return { core: [], creator: [], content: [], recent: [], holdings: [] }
   }, [isAddressSearch, tokenOptions, trimmedQuery, recentTokenAddresses])
 
   useEffect(() => {
@@ -509,13 +513,25 @@ export function TokenSelectorModal({
       resolveTrendingTokens(tokenOptions).map((option) => option.address.toLowerCase()),
     )
 
+    // Dedicated "Your holdings" section first (Zora creator/content coins owned by the wallet, using the parent/main/zora CSW as balance owner).
+    // Push before Trending so it appears at the very top. We push directly (only skipping seen) so holdings
+    // that happen to be in the trending pinned list (e.g. AKITA on the user's Zora CSW) still get their own section.
+    matchedTokens.holdings.forEach((option) => {
+      const key = option.address.toLowerCase()
+      if (seen.has(key)) return
+      seen.add(key)
+      list.push({ option, section: 'Your holdings' })
+    })
+
     if (!trimmedQuery) {
-      resolveTrendingTokens(tokenOptions).forEach((option) => {
-        const key = option.address.toLowerCase()
-        if (seen.has(key)) return
-        seen.add(key)
-        list.push({ option, section: 'Trending' })
-      })
+      resolveTrendingTokens(tokenOptions)
+        .filter((option) => !option.isUserHolding) // keep user's Zora CSW holdings out of Trending so they can appear in the dedicated holdings section
+        .forEach((option) => {
+          const key = option.address.toLowerCase()
+          if (seen.has(key)) return
+          seen.add(key)
+          list.push({ option, section: 'Trending' })
+        })
     }
 
     const pushUnlessSeen = (option: SwapTokenOption, section: string) => {
@@ -531,6 +547,8 @@ export function TokenSelectorModal({
     matchedTokens.core.forEach((option) => {
       pushUnlessSeen(option, 'Curated top tokens')
     })
+    // Note: holdings are excluded from creator/content here because they are pulled into
+    // the dedicated section above (the split in matchedTokens already filters them out of these)
     matchedTokens.creator.forEach((option) => {
       pushUnlessSeen(option, 'Creator coins')
     })

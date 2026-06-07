@@ -36,6 +36,7 @@ function nearestCandleClose(ts: number, candles: TimelineResponse['candles']): n
 }
 
 type PositionFill = { time: number; side: 'long' | 'short' | null; size: number | null; price: number | null }
+type RawTradeEvent = TimelineResponse['tradeEvents'][number]
 
 /**
  * Reconstructs the running net position (signed size + average entry) from a market's
@@ -97,6 +98,74 @@ function inferExitReason(event: Pick<ChartOverlayEvent, 'action' | 'dir'>): stri
   const dir = (event.dir ?? '').toLowerCase()
   if (dir.includes('liquidat') || dir.includes('liq')) return 'Liquidation'
   return 'Manual Close'
+}
+
+/**
+ * Hyperliquid can split one logical order into many fills at the same millisecond.
+ * For timeline readability we collapse those micro-fills into one visual trade event,
+ * while retaining raw fills elsewhere for position reconstruction accuracy.
+ */
+function aggregateTradeEventsForDisplay(trades: RawTradeEvent[]): RawTradeEvent[] {
+  const buckets = new Map<
+    string,
+    {
+      sample: RawTradeEvent
+      sizeSum: number
+      feeSum: number
+      closedPnlSum: number
+      weightedPriceSum: number
+      weightedQtySum: number
+      count: number
+    }
+  >()
+  for (const trade of trades) {
+    const key = [
+      trade.market,
+      String(trade.time),
+      trade.action,
+      trade.side ?? 'none',
+      trade.dir ?? 'none',
+    ].join('|')
+    const qty = Math.abs(trade.size ?? 0)
+    const weightedPrice = (trade.price ?? 0) * qty
+    const existing = buckets.get(key)
+    if (!existing) {
+      buckets.set(key, {
+        sample: trade,
+        sizeSum: trade.size ?? 0,
+        feeSum: trade.fee ?? 0,
+        closedPnlSum: trade.closedPnl ?? 0,
+        weightedPriceSum: weightedPrice,
+        weightedQtySum: qty,
+        count: 1,
+      })
+      continue
+    }
+    existing.sizeSum += trade.size ?? 0
+    existing.feeSum += trade.fee ?? 0
+    existing.closedPnlSum += trade.closedPnl ?? 0
+    existing.weightedPriceSum += weightedPrice
+    existing.weightedQtySum += qty
+    existing.count += 1
+  }
+
+  return [...buckets.values()]
+    .map((bucket) => {
+      const averagePrice =
+        bucket.weightedQtySum > 0 ? bucket.weightedPriceSum / bucket.weightedQtySum : bucket.sample.price
+      return {
+        ...bucket.sample,
+        id:
+          bucket.count > 1
+            ? `agg:${bucket.sample.market}:${bucket.sample.time}:${bucket.sample.action}:${bucket.sample.side ?? 'none'}:${bucket.sample.dir ?? 'none'}`
+            : bucket.sample.id,
+        size: bucket.sizeSum,
+        fee: bucket.feeSum,
+        closedPnl: bucket.closedPnlSum,
+        price: averagePrice,
+      } satisfies RawTradeEvent
+    })
+    .sort((a, b) => a.time - b.time)
 }
 
 // Finer candles when zoomed in, coarser for long windows — keeps us under Hyperliquid's
@@ -277,6 +346,11 @@ export function Positions() {
     return source.filter((event) => event.market === effectiveMarket)
   }, [data?.tradeEvents, effectiveMarket])
 
+  const displayTradeEvents = useMemo(
+    () => aggregateTradeEventsForDisplay(filteredTradeEvents),
+    [filteredTradeEvents],
+  )
+
   // Hoisted resolver so we can use it both for per-event context and for sampling
   // historical position entry prices for the chart line.
   const positionContextResolver = useMemo(() => {
@@ -323,7 +397,7 @@ export function Positions() {
   const allOverlayEvents = useMemo<ChartOverlayEvent[]>(() => {
     const candles = data?.candles ?? []
     const trades = showTrades
-      ? filteredTradeEvents.map<ChartOverlayEvent>((event) => ({
+      ? displayTradeEvents.map<ChartOverlayEvent>((event) => ({
           id: event.id,
           time: event.time,
           market: event.market,
@@ -376,7 +450,7 @@ export function Positions() {
     data?.candles,
     densityMode,
     filteredChatEvents,
-    filteredTradeEvents,
+    displayTradeEvents,
     positionContextResolver,
     showTrades,
     selectedEventId,
