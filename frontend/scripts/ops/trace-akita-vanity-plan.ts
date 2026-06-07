@@ -23,6 +23,12 @@ import {
 } from '../../src/lib/deploy/perVaultVanityVersionSearch.js'
 import { findPerVaultVanityVersionOnServer } from '../../server/_lib/deploy/findPerVaultVanityVersionServer.js'
 import { resolveAlignedPhase1DeployDeps } from '../../src/lib/deploy/phase1ModuleDeploy.js'
+import {
+  toShareName,
+  toShareSymbol,
+  toVaultName,
+  toVaultSymbol,
+} from '../../src/lib/tokens/tokenSymbols.js'
 
 const CREATOR = getAddress('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
 const OWNER = getAddress('0xAb6d5C10b03300326cd7fab7267ae192842967b5')
@@ -39,8 +45,8 @@ async function main(): Promise<void> {
   const vaultArgs = encodeAbiParameters(parseAbiParameters('address,address,string,string'), [
     CREATOR,
     batcher,
-    'AKITA Vault',
-    'vAKITA',
+    toVaultName('AKITA'),
+    toVaultSymbol('AKITA'),
   ])
   const vaultInit = concatHex([DEPLOY_BYTECODE.CreatorOVault as Hex, vaultArgs])
   const oftSalt = keccak256(toHex('4626:OFTBootstrapRegistry:v1'))
@@ -50,8 +56,8 @@ async function main(): Promise<void> {
     initCode: DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex,
   })
   const shareArgs = encodeAbiParameters(parseAbiParameters('string,string,address,address'), [
-    'AKITA Share',
-    'AKITA',
+    toShareName('AKITA'),
+    toShareSymbol('AKITA'),
     oft,
     batcher,
   ])

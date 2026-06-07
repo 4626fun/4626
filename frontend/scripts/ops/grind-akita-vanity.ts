@@ -29,6 +29,12 @@ import {
 import { base } from 'viem/chains'
 
 import { SPLIT_PHASE1_DEPLOYMENT_BATCHER } from '../../src/config/contracts.defaults.js'
+import {
+  toShareName,
+  toShareSymbol,
+  toVaultName,
+  toVaultSymbol,
+} from '../../src/lib/tokens/tokenSymbols.js'
 import { parseCreatorVaultBatcherCapabilities } from '../../src/lib/deploy/creatorVaultBatcherInfra.js'
 import { DEPLOY_BYTECODE } from '../../src/deploy/bytecode.generated.js'
 import {
@@ -58,6 +64,11 @@ const DEFAULT_OWNER = getAddress('0xAb6d5C10b03300326cd7fab7267ae192842967b5')
 const DEFAULT_BASE_VERSION = 'v1.14.0'
 const DEFAULT_VAULT_PREFIX = '4626'
 const DEFAULT_SHARE_SUFFIX = '4626'
+const DEFAULT_UNDERLYING_SYMBOL = 'AKITA'
+const DEFAULT_VAULT_NAME = toVaultName(DEFAULT_UNDERLYING_SYMBOL)
+const DEFAULT_VAULT_SYMBOL = toVaultSymbol(DEFAULT_UNDERLYING_SYMBOL)
+const DEFAULT_SHARE_NAME = toShareName(DEFAULT_UNDERLYING_SYMBOL)
+const DEFAULT_SHARE_SYMBOL = toShareSymbol(DEFAULT_UNDERLYING_SYMBOL)
 const DEFAULT_CHUNK = 100_000_000
 
 type GrinderResult = {
@@ -428,10 +439,10 @@ async function main(): Promise<void> {
   const baseVersion = getArg('--base-version', DEFAULT_BASE_VERSION)
   const vaultPrefix = getArg('--vault-prefix', DEFAULT_VAULT_PREFIX).replace(/^0x/i, '').toLowerCase()
   const shareSuffix = getArg('--share-suffix', DEFAULT_SHARE_SUFFIX).replace(/^0x/i, '').toLowerCase()
-  const shareSymbol = getArg('--share-symbol', 'AKITA')
-  const vaultName = getArg('--vault-name', 'AKITA Vault')
-  const vaultSymbol = getArg('--vault-symbol', 'vAKITA')
-  const shareName = getArg('--share-name', 'AKITA Share')
+  const shareSymbol = getArg('--share-symbol', DEFAULT_SHARE_SYMBOL)
+  const vaultName = getArg('--vault-name', DEFAULT_VAULT_NAME)
+  const vaultSymbol = getArg('--vault-symbol', DEFAULT_VAULT_SYMBOL)
+  const shareName = getArg('--share-name', DEFAULT_SHARE_NAME)
   const shareSymbolUpper = shareSymbol.toUpperCase()
 
   const startAttempt = Math.max(0, parsePositiveInt(getArg('--start-attempt', '0'), 0))

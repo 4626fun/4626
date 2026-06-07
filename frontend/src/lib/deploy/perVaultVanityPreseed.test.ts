@@ -7,11 +7,22 @@ import {
   normalizePreseedBaseVersion,
   type PerVaultVanityPreseedManifest,
 } from './perVaultVanityPreseed'
+import {
+  toShareName,
+  toShareSymbol,
+  toVaultName,
+  toVaultSymbol,
+} from '../tokens/tokenSymbols'
 
 const CREATE2_DEPLOYER = getAddress('0x4760216AFd59B843671E0FdFCe6498Ec8CFf38a7')
 const CREATOR = getAddress('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
-const OWNER = getAddress('0xAb6d5C10b03300326cd7fab7267ae192842967b5')
+const OWNER = getAddress('0xAb6d5C10b03300326CD7fAb7267Ae192842967b5')
 const BATCHER = getAddress('0xa99058f424FB3ACC639F59355C65C40149030651')
+
+const AKITA_VAULT_NAME = toVaultName('AKITA')
+const AKITA_VAULT_SYMBOL = toVaultSymbol('AKITA')
+const AKITA_SHARE_NAME = toShareName('AKITA')
+const AKITA_SHARE_SYMBOL = toShareSymbol('AKITA')
 
 const testManifest: PerVaultVanityPreseedManifest = {
   schema: 1,
@@ -24,16 +35,16 @@ const testManifest: PerVaultVanityPreseedManifest = {
       owner: OWNER,
       batcher: BATCHER,
       baseVersion: 'v1.14.0',
-      vaultName: 'AKITA Vault',
-      vaultSymbol: 'vAKITA',
-      shareName: 'AKITA Share',
-      shareSymbol: 'AKITA',
+      vaultName: AKITA_VAULT_NAME,
+      vaultSymbol: AKITA_VAULT_SYMBOL,
+      shareName: AKITA_SHARE_NAME,
+      shareSymbol: AKITA_SHARE_SYMBOL,
       vaultPrefix: '4626',
       shareSuffix: '4626',
       batcherMode: 'salt',
-      deploymentVersion: 'v1.14.0-vqvt',
+      deploymentVersion: 'v1.14.0-v18wl',
       versionSearchOutcome: 'combined_match',
-      shareOftSalt: '0xf03a6e8e57a0a03eeb597e4f217833623dddf4634d115dcba9e865f2a2c7eb4f',
+      shareOftSalt: '0x2f09d91a137574114db95ba63ed3f1b9921c346b3db90f75b3c53adb5af60ba8',
     },
   ],
 }
@@ -44,10 +55,10 @@ const baseLookupParams = {
   owner: OWNER,
   batcherAddress: BATCHER,
   chainId: 8453,
-  vaultName: 'AKITA Vault',
-  vaultSymbol: 'vAKITA',
-  shareName: 'AKITA Share',
-  shareSymbol: 'AKITA',
+  vaultName: AKITA_VAULT_NAME,
+  vaultSymbol: AKITA_VAULT_SYMBOL,
+  shareName: AKITA_SHARE_NAME,
+  shareSymbol: AKITA_SHARE_SYMBOL,
   baseVersion: 'v1.14.0',
   vaultPrefix: '4626',
   shareSuffix: '4626',
@@ -57,7 +68,7 @@ const baseLookupParams = {
 describe('normalizePreseedBaseVersion', () => {
   it('strips dry-run and vanity suffixes', () => {
     expect(normalizePreseedBaseVersion('v1.14.0-dryrun')).toBe('v1.14.0')
-    expect(normalizePreseedBaseVersion('v1.14.0-vqvt')).toBe('v1.14.0')
+    expect(normalizePreseedBaseVersion('v1.14.0-v18wl')).toBe('v1.14.0')
     expect(normalizePreseedBaseVersion('v1.14.0-dryrun-vwgs')).toBe('v1.14.0')
   })
 
@@ -69,7 +80,7 @@ describe('normalizePreseedBaseVersion', () => {
 describe('perVaultVanityPreseed', () => {
   it('returns a grounded version plan when identity fields match', () => {
     expect(lookupPreseededVanityVersionPlan(baseLookupParams, testManifest)).toEqual({
-      deploymentVersion: 'v1.14.0-vqvt',
+      deploymentVersion: 'v1.14.0-v18wl',
       outcome: 'combined_match',
       planId: 'akita-v1.14.0-default',
     })
@@ -82,7 +93,7 @@ describe('perVaultVanityPreseed', () => {
         testManifest,
       ),
     ).toEqual({
-      deploymentVersion: 'v1.14.0-vqvt',
+      deploymentVersion: 'v1.14.0-v18wl',
       outcome: 'combined_match',
       planId: 'akita-v1.14.0-default',
     })
@@ -106,17 +117,17 @@ describe('perVaultVanityPreseed', () => {
           owner: OWNER,
           batcherAddress: BATCHER,
           chainId: 8453,
-          vaultName: 'AKITA Vault',
-          vaultSymbol: 'vAKITA',
-          shareName: 'AKITA Share',
-          shareSymbol: 'AKITA',
+          vaultName: AKITA_VAULT_NAME,
+          vaultSymbol: AKITA_VAULT_SYMBOL,
+          shareName: AKITA_SHARE_NAME,
+          shareSymbol: AKITA_SHARE_SYMBOL,
           baseVersion: 'v1.14.0-dryrun',
           shareOftVanitySuffix: '4626',
-          deploymentVersion: 'v1.14.0-vqvt',
+          deploymentVersion: 'v1.14.0-v18wl',
           supportsPhase1WithSalt: true,
         },
         testManifest,
       ),
-    ).toBe('0xf03a6e8e57a0a03eeb597e4f217833623dddf4634d115dcba9e865f2a2c7eb4f')
+    ).toBe('0x2f09d91a137574114db95ba63ed3f1b9921c346b3db90f75b3c53adb5af60ba8')
   })
 })

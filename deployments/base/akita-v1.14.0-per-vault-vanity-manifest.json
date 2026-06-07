@@ -10,18 +10,18 @@
       "owner": "0xAb6d5C10b03300326CD7fAb7267Ae192842967b5",
       "batcher": "0xa99058f424FB3ACC639F59355C65C40149030651",
       "baseVersion": "v1.14.0",
-      "vaultName": "AKITA Vault",
-      "vaultSymbol": "vAKITA",
-      "shareName": "AKITA Share",
-      "shareSymbol": "AKITA",
+      "vaultName": "Akita Vault Token",
+      "vaultSymbol": "▢AKITA",
+      "shareName": "Akita Share Token",
+      "shareSymbol": "■AKITA",
       "vaultPrefix": "4626",
       "shareSuffix": "4626",
       "batcherMode": "salt",
-      "deploymentVersion": "v1.14.0-vqvt",
+      "deploymentVersion": "v1.14.0-v18wl",
       "versionSearchOutcome": "combined_match",
-      "shareOftSalt": "0xf03a6e8e57a0a03eeb597e4f217833623dddf4634d115dcba9e865f2a2c7eb4f",
-      "groundedAt": "2026-06-07T14:06:48.121Z",
-      "searchAttempts": 5034842
+      "shareOftSalt": "0x2f09d91a137574114db95ba63ed3f1b9921c346b3db90f75b3c53adb5af60ba8",
+      "groundedAt": "2026-06-07T15:25:46.027Z",
+      "searchAttempts": 5058198
     }
   ]
 }
