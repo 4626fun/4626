@@ -679,10 +679,45 @@ export function TokenSelectorModal({
     setAddressLookupAttempt((attempt) => attempt + 1)
   }
 
-  const displaySections = useMemo(
-    () => rowSections.filter(({ rows: sectionRows }) => sectionRows.length > 0),
-    [rowSections],
-  )
+  // Regroup so that any creator/content tokens with positive balance on the current
+  // balanceOwnerAddress (the parent/main/zora csw) are collected into a dedicated
+  // "Your holdings" section at the top. This ensures the user sees their Zora CSW
+  // holdings + the actual balances from that CSW, even if the coins weren't explicitly
+  // injected via the Zora holdings API (they may be in the public/trending lists).
+  const displaySections = useMemo(() => {
+    const base = rowSections.filter(({ rows: sectionRows }) => sectionRows.length > 0);
+    if (!balanceByAddress || balanceByAddress.size === 0) return base;
+
+    const holdingsRows: TokenRow[] = [];
+    const other: { section: string; rows: TokenRow[] }[] = [];
+
+    for (const sec of base) {
+      if (sec.section === 'Your holdings') {
+        other.push(sec);
+        continue;
+      }
+      const pos: TokenRow[] = [];
+      const rem: TokenRow[] = [];
+      for (const r of sec.rows) {
+        const b = balanceByAddress.get(r.option.address.toLowerCase());
+        const hasPositive = b && parseFloat(b) > 0;
+        const isZoraCoin = r.option.sectionTag === 'creator' || r.option.sectionTag === 'content' ||
+                           r.option.group === 'creator' || r.option.group === 'share';
+        if (hasPositive && isZoraCoin) {
+          pos.push(r);
+        } else {
+          rem.push(r);
+        }
+      }
+      if (pos.length) holdingsRows.push(...pos);
+      if (rem.length) other.push({ section: sec.section, rows: rem });
+    }
+
+    const res: { section: string; rows: TokenRow[] }[] = [];
+    if (holdingsRows.length) res.push({ section: 'Your holdings', rows: holdingsRows });
+    res.push(...other);
+    return res;
+  }, [rowSections, balanceByAddress]);
 
   const listLoading = isSearchLoading && Boolean(trimmedQuery) && !isAddressSearchActive
 

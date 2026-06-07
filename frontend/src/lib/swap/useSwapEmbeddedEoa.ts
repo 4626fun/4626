@@ -155,9 +155,17 @@ export function useSwapEmbeddedEoa(params: {
   authAddress: Address | null
   canonicalAddress: Address | null
 }) {
+  const {
+    privyUser,
+    privyAuthenticated,
+    ensuredEmbeddedEoaAddress,
+    ensureEmbeddedWallet,
+    authAddress,
+    canonicalAddress,
+  } = params
   const { wallets: privyLiveWallets } = useWallets()
   const privyWallets = useMemo(() => {
-    const metadataWallets = extractPrivyWalletsFromUser(params.privyUser)
+    const metadataWallets = extractPrivyWalletsFromUser(privyUser)
     const liveByAddress = new Map<string, any>()
     for (const w of (privyLiveWallets ?? []) as any[]) {
       const addr = typeof w?.address === 'string' ? w.address.toLowerCase() : ''
@@ -179,14 +187,14 @@ export function useSwapEmbeddedEoa(params: {
       if (!seen.has(addr)) merged.push(w)
     }
     return merged
-  }, [privyLiveWallets, params.privyUser])
+  }, [privyLiveWallets, privyUser])
 
-  const privyEmbeddedEoaAddressFromUser = useMemo(() => pickPrivyEmbeddedEoaAddressFromUser(params.privyUser), [params.privyUser])
+  const privyEmbeddedEoaAddressFromUser = useMemo(() => pickPrivyEmbeddedEoaAddressFromUser(privyUser), [privyUser])
 
   const privyEmbeddedEoaWallet = useMemo(() => {
     const wallets = Array.isArray(privyWallets) ? (privyWallets as any[]) : []
     const fallbackAddresses = new Set(
-      [privyEmbeddedEoaAddressFromUser, params.ensuredEmbeddedEoaAddress, params.authAddress]
+      [privyEmbeddedEoaAddressFromUser, ensuredEmbeddedEoaAddress, authAddress]
         .filter((value): value is Address => Boolean(value))
         .map((value) => value.toLowerCase()),
     )
@@ -197,16 +205,16 @@ export function useSwapEmbeddedEoa(params: {
         )
         const address = normalizeAddressOrNull(wallet?.address)
         if (!address) return false
-        if (params.canonicalAddress && address.toLowerCase() === params.canonicalAddress.toLowerCase()) return false
+        if (canonicalAddress && address.toLowerCase() === canonicalAddress.toLowerCase()) return false
         const isEmbeddedType = walletType === 'privy' || walletType.includes('privy') || walletType.includes('embedded')
         if (isEmbeddedType) return true
         return fallbackAddresses.has(address.toLowerCase())
       }) ?? null
     )
   }, [
-    params.authAddress,
-    params.canonicalAddress,
-    params.ensuredEmbeddedEoaAddress,
+    authAddress,
+    canonicalAddress,
+    ensuredEmbeddedEoaAddress,
     privyEmbeddedEoaAddressFromUser,
     privyWallets,
   ])
@@ -215,19 +223,19 @@ export function useSwapEmbeddedEoa(params: {
     const candidates: Array<{ address: Address | null; source: string }> = [
       { address: normalizeAddressOrNull((privyEmbeddedEoaWallet as any)?.address), source: 'wallets' },
       { address: privyEmbeddedEoaAddressFromUser, source: 'privy-user' },
-      { address: params.ensuredEmbeddedEoaAddress, source: 'privy-embedded-hook' },
-      { address: normalizeAddressOrNull(params.authAddress), source: 'session-auth-address' },
+      { address: ensuredEmbeddedEoaAddress, source: 'privy-embedded-hook' },
+      { address: normalizeAddressOrNull(authAddress), source: 'session-auth-address' },
     ]
     for (const { address, source } of candidates) {
-      if (address && (!params.canonicalAddress || address.toLowerCase() !== params.canonicalAddress.toLowerCase())) {
+      if (address && (!canonicalAddress || address.toLowerCase() !== canonicalAddress.toLowerCase())) {
         return { address, source: source as any }
       }
     }
     return { address: null, source: null as any }
   }, [
-    params.authAddress,
-    params.canonicalAddress,
-    params.ensuredEmbeddedEoaAddress,
+    authAddress,
+    canonicalAddress,
+    ensuredEmbeddedEoaAddress,
     privyEmbeddedEoaAddressFromUser,
     privyEmbeddedEoaWallet,
   ])
@@ -309,15 +317,15 @@ export function useSwapEmbeddedEoa(params: {
   const embeddedWalletEnsureRef = useRef(false)
   useEffect(() => {
     if (embeddedWalletEnsureRef.current) return
-    if (params.privyAuthenticated !== true) return
+    if (privyAuthenticated !== true) return
     if (privyEmbeddedEoaWallet) return
-    if (!privyEmbeddedEoaAddress && !params.authAddress) return
+    if (!privyEmbeddedEoaAddress && !authAddress) return
     embeddedWalletEnsureRef.current = true
-    void params.ensureEmbeddedWallet()
+    void ensureEmbeddedWallet()
       .catch(() => {
         embeddedWalletEnsureRef.current = false
       })
-  }, [params.authAddress, params.ensureEmbeddedWallet, params.privyAuthenticated, privyEmbeddedEoaAddress, privyEmbeddedEoaWallet])
+  }, [authAddress, ensureEmbeddedWallet, privyAuthenticated, privyEmbeddedEoaAddress, privyEmbeddedEoaWallet])
 
   const privyEmbeddedCanonicalWalletClient = useMemo(() => {
     if (!privyEmbeddedEoaAddress) return null

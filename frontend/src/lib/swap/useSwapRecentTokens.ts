@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { isAddress } from 'viem'
 
 /**
@@ -7,25 +7,23 @@ import { isAddress } from 'viem'
  * Load is best-effort and runs once on mount.
  */
 export function useSwapRecentTokens() {
-  const [recentTokenAddresses, setRecentTokenAddresses] = useState<string[]>([])
-
-  // Load recent tokens from localStorage on mount (client only).
-  useEffect(() => {
-    if (typeof window === 'undefined') return
+  const [recentTokenAddresses, setRecentTokenAddresses] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return []
     try {
       const raw = window.localStorage.getItem('swap.recentTokens')
-      if (!raw) return
+      if (!raw) return []
       const parsed = JSON.parse(raw)
-      if (!Array.isArray(parsed)) return
+      if (!Array.isArray(parsed)) return []
       const normalized = parsed
         .map((value) => (typeof value === 'string' ? value.toLowerCase() : ''))
         .filter((value) => isAddress(value))
         .slice(0, 10)
-      setRecentTokenAddresses(Array.from(new Set(normalized)))
+      return Array.from(new Set(normalized))
     } catch {
       // Ignore storage / parse errors; recent list just starts empty.
+      return []
     }
-  }, [])
+  })
 
   const persistRecentToken = useCallback((tokenAddress: string) => {
     const normalized = tokenAddress.toLowerCase()
