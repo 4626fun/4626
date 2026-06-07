@@ -389,6 +389,102 @@ function formatStrategyUsage(): string {
   ].join('\n')
 }
 
+function sanitizeArenaOutputForReply(text: string | undefined | null, dgclawDir: string | null): string {
+  let s = String(text || '').trim()
+  if (dgclawDir) {
+    const escaped = dgclawDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    s = s.replace(new RegExp(escaped, 'gi'), '[dgclaw-dir]')
+  }
+  s = s.replace(/\b(ARENA_[A-Z0-9_]+)=[^\s]+/g, '$1=[redacted]')
+  return s.slice(0, 400)
+}
+
+async function autoProvisionArenaIdentityForStrategy(params: {
+  roomId: string
+  senderAddress: string
+  baseConfig: ReturnType<typeof readArenaConfig>
+}): Promise<{ ok: true; summary: string } | { ok: false; message: string }> {
+  const createResult = await runArenaCreateAgent(params.baseConfig, params.senderAddress)
+  if (!createResult.agentId || !createResult.agentWalletAddress) {
+    const out = sanitizeArenaOutputForReply(
+      createResult.run?.stdout || createResult.run?.stderr,
+      params.baseConfig.dgclawDir,
+    )
+    return {
+      ok: false,
+      message: [
+        'Unable to enable automation: auto-setup could not create an Arena identity.',
+        createResult.message || 'Create failed or produced no parsable ids.',
+        out ? `acp output (sanitized): ${out}` : '',
+        'Run /arena register first, then retry.',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    }
+  }
+
+  await upsertArenaIdentityMapping({
+    roomId: params.roomId,
+    senderAddress: params.senderAddress,
+    arenaAgentId: createResult.agentId,
+    arenaWalletAddress: createResult.agentWalletAddress,
+    ...(createResult.hlApiWalletAddress ? { hlApiWalletAddress: createResult.hlApiWalletAddress } : {}),
+    updatedBy: params.senderAddress,
+  })
+
+  const activeConfig = {
+    ...params.baseConfig,
+    agentId: createResult.agentId,
+    agentWalletAddress: createResult.agentWalletAddress,
+    ...(createResult.hlApiWalletAddress ? { hlApiWalletAddress: createResult.hlApiWalletAddress } : {}),
+  }
+  const steps = [
+    { name: 'join', result: await runArenaJoin(activeConfig) },
+    { name: 'activate', result: await runArenaActivateUnifiedAccount(activeConfig) },
+    { name: 'add-api-wallet', result: await runArenaAddApiWallet(activeConfig) },
+  ]
+  const summaries = steps.map((step) => `${step.name}=${step.result.ok ? 'ok' : 'fail'}${step.result.run?.dryRun ? '[dry]' : ''}`)
+  const failed = steps.filter((step) => !step.result.ok)
+
+  const discoveredHlApiWallet =
+    typeof steps[2]?.result?.details?.hlApiWalletAddress === 'string'
+      ? steps[2].result.details.hlApiWalletAddress.toLowerCase()
+      : undefined
+  if (discoveredHlApiWallet && discoveredHlApiWallet !== createResult.hlApiWalletAddress) {
+    await upsertArenaIdentityMapping({
+      roomId: params.roomId,
+      senderAddress: params.senderAddress,
+      arenaAgentId: createResult.agentId,
+      arenaWalletAddress: createResult.agentWalletAddress,
+      hlApiWalletAddress: discoveredHlApiWallet,
+      updatedBy: params.senderAddress,
+    })
+  }
+
+  if (failed.length > 0) {
+    return {
+      ok: false,
+      message: [
+        'Arena identity was created, but onboarding steps failed.',
+        `steps: ${summaries.join(' ')}`,
+        ...failed.map((step) => {
+          const detail = sanitizeArenaOutputForReply(
+            [step.result.message, step.result.run?.error, step.result.run?.stderr].filter(Boolean).join(' | '),
+            params.baseConfig.dgclawDir,
+          )
+          return `- ${step.name}: ${detail || 'unknown failure'}`
+        }),
+        'Run /arena register manually, then retry.',
+      ].join('\n'),
+    }
+  }
+
+  return {
+    ok: true,
+    summary: `Auto-provisioned Arena identity (${summaries.join(' ')}).`,
+  }
+}
+
 function trimList(values: string[], max = 6): string[] {
   return values
     .map((value) => value.trim())
@@ -396,7 +492,18 @@ function trimList(values: string[], max = 6): string[] {
     .slice(0, max)
 }
 
+const STRATEGY_STATUS_AUTOPROVISION_RETRY_MS = 10 * 60_000
+const strategyStatusAutoprovisionLastAttempt = new Map<string, number>()
 const ALERT_TEST_DM_TIMEOUT_MS = 12_000
+
+function shouldAttemptStrategyStatusAutoprovision(roomId: string, senderAddress: string): boolean {
+  const key = `${roomId}:${senderAddress.toLowerCase()}`
+  const now = Date.now()
+  const last = strategyStatusAutoprovisionLastAttempt.get(key) ?? 0
+  if (now - last < STRATEGY_STATUS_AUTOPROVISION_RETRY_MS) return false
+  strategyStatusAutoprovisionLastAttempt.set(key, now)
+  return true
+}
 
 function readPositionAlertBotToken(): string | null {
   const candidates = [
@@ -2250,6 +2357,40 @@ export async function executeHermitCommand(
     })
 
     if (parsed.kind === 'status') {
+      const statusNotes: string[] = []
+      const baseConfig = readArenaConfig()
+      if (baseConfig.enabled) {
+        const identity = await resolveArenaIdentityForContext({
+          roomId,
+          senderAddress: params.senderAddress,
+          baseConfig,
+        })
+        const hasMappedIdentity =
+          identity.source !== 'env_default' &&
+          Boolean(identity.agentId) &&
+          Boolean(identity.agentWalletAddress)
+        if (!hasMappedIdentity) {
+          if (shouldAttemptStrategyStatusAutoprovision(roomId, params.senderAddress)) {
+            const autoSetup = await autoProvisionArenaIdentityForStrategy({
+              roomId,
+              senderAddress: params.senderAddress,
+              baseConfig,
+            })
+            if (autoSetup.ok) {
+              statusNotes.push(`arenaSetup: ${autoSetup.summary}`)
+            } else {
+              statusNotes.push('arenaSetup: auto-provision failed (run /arena register manually).')
+            }
+          } else {
+            statusNotes.push('arenaSetup: retry window active, skipping auto-provision for now.')
+          }
+        } else {
+          statusNotes.push('arenaSetup: identity already mapped.')
+        }
+      } else {
+        statusNotes.push('arenaSetup: disabled (ARENA_ENABLED=0).')
+      }
+
       return {
         kind: 'hermit',
         provider: 'local',
@@ -2261,6 +2402,7 @@ export async function executeHermitCommand(
           `enabled: ${String(strategy?.enabled ?? false)}`,
           `killSwitch: ${String(strategy?.killSwitch ?? false)}`,
           `lastActionAt: ${userState?.lastActionAt ?? 'none'}`,
+          ...statusNotes,
           ...(userState?.pauseReason ? [`pauseReason: ${userState.pauseReason}`] : []),
         ].join('\n'),
       }
@@ -2268,23 +2410,46 @@ export async function executeHermitCommand(
 
     if (parsed.kind === 'optin') {
       const baseConfig = readArenaConfig()
-      const identity = await resolveArenaIdentityForContext({
+      let identity = await resolveArenaIdentityForContext({
         roomId,
         senderAddress: params.senderAddress,
         baseConfig,
       })
-      const hasMappedIdentity =
+      let hasMappedIdentity =
         identity.source !== 'env_default' &&
         Boolean(identity.agentId) &&
         Boolean(identity.agentWalletAddress)
       if (!hasMappedIdentity) {
-        return {
-          kind: 'hermit',
-          provider: 'local',
-          reply: [
-            'Unable to enable automation: no Arena identity mapping found for your account.',
-            'Run /arena register first, then retry.',
-          ].join('\n'),
+        const autoSetup = await autoProvisionArenaIdentityForStrategy({
+          roomId,
+          senderAddress: params.senderAddress,
+          baseConfig,
+        })
+        if (!autoSetup.ok) {
+          return {
+            kind: 'hermit',
+            provider: 'local',
+            reply: autoSetup.message,
+          }
+        }
+        identity = await resolveArenaIdentityForContext({
+          roomId,
+          senderAddress: params.senderAddress,
+          baseConfig,
+        })
+        hasMappedIdentity =
+          identity.source !== 'env_default' &&
+          Boolean(identity.agentId) &&
+          Boolean(identity.agentWalletAddress)
+        if (!hasMappedIdentity) {
+          return {
+            kind: 'hermit',
+            provider: 'local',
+            reply: [
+              'Auto-setup ran, but no Arena identity mapping was found for your account.',
+              'Run /arena register first, then retry.',
+            ].join('\n'),
+          }
         }
       }
 
@@ -2308,6 +2473,7 @@ export async function executeHermitCommand(
         provider: 'local',
         reply: [
           'Automation enabled for your account.',
+          'Arena setup is linked for your sender and should now appear on Virtuals Arena.',
           `Preset: ${saved.preset}. Mode: room-level strategy + personal risk controls.`,
           'You can pause instantly with /strategy pause.',
         ].join('\n'),

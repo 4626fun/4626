@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/api/apiBase'
 import { resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
+import { APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/env/host'
 
 export type CounterTradeBias = 'bullish' | 'bearish' | 'neutral'
 export type CounterTradeUserState = 'not_opted_in' | 'active' | 'paused'
@@ -49,6 +50,37 @@ export class CounterTradeStatusAuthError extends Error {
 }
 
 const COUNTER_TRADE_STATUS_ENDPOINT = '/api/v1/alfaclub/counter-trade-status'
+
+function normalizeOrigin(raw: string): string | null {
+  try {
+    return new URL(raw).origin
+  } catch {
+    return null
+  }
+}
+
+function isLocalOrigin(origin: string): boolean {
+  try {
+    const { hostname } = new URL(origin)
+    return hostname === 'localhost' || hostname === '127.0.0.1'
+  } catch {
+    return false
+  }
+}
+
+function getCounterTradeStatusApiBases(): string[] | undefined {
+  if (typeof window === 'undefined') return undefined
+  const currentOrigin = normalizeOrigin(window.location.origin)
+  if (!currentOrigin || isLocalOrigin(currentOrigin)) return undefined
+
+  const bases = new Set<string>()
+  for (const candidate of [currentOrigin, APP_ORIGIN, MARKETING_ORIGIN]) {
+    const origin = normalizeOrigin(candidate)
+    if (!origin) continue
+    bases.add(origin)
+  }
+  return bases.size > 0 ? [...bases] : undefined
+}
 
 export function isCounterTradeStatusAuthError(error: unknown): error is CounterTradeStatusAuthError {
   return error instanceof CounterTradeStatusAuthError
@@ -147,7 +179,7 @@ export async function fetchCounterTradeStatus(): Promise<CounterTradeStatusPaylo
   const response = await apiFetch(COUNTER_TRADE_STATUS_ENDPOINT, {
     method: 'GET',
     withCredentials: true,
-  })
+  }, getCounterTradeStatusApiBases())
   const payload = await response.json().catch(() => null)
 
   if (response.status === 401 || response.status === 403) {

@@ -10,6 +10,7 @@ import {
 } from './skillRouter'
 import * as arenaStore from '../arena/arenaIdentityMappingStore.js'
 import * as arenaClient from '../arena/arenaClient.js'
+import * as counterTradeStore from '../alfaclub/counterTradeStore.js'
 
 describe('executeHermitCommand', () => {
   let restoreEnv: (() => void) | null = null
@@ -1318,6 +1319,115 @@ describe('executeHermitCommand', () => {
       expect(result.provider).toBe('local')
       expect(result.meme?.tags).toContain('laugh')
       expect(result.reply).toContain('https://')
+    })
+  })
+
+  describe('strategy arena auto-setup', () => {
+    it('throttles repeated /strategy status auto-provision attempts after failure', async () => {
+      restoreEnv = applyEnv({
+        ARENA_ENABLED: '1',
+        ARENA_DGCLAW_DIR: '/tmp',
+        ARENA_DRY_RUN: '1',
+      })
+      const sender = '0x1111111111111111111111111111111111111111'
+      const createSpy = vi.spyOn(arenaClient, 'runArenaCreateAgent').mockResolvedValue({
+        ok: false,
+        message: 'create failed',
+        run: { stdout: 'boom' } as any,
+      } as any)
+
+      const first = await executeHermitCommand({
+        commandText: '/strategy status',
+        senderAddress: sender,
+        roomId: '1659',
+      })
+      const second = await executeHermitCommand({
+        commandText: '/strategy status',
+        senderAddress: sender,
+        roomId: '1659',
+      })
+
+      expect(first.reply).toContain('arenaSetup: auto-provision failed')
+      expect(second.reply).toContain('arenaSetup: retry window active')
+      expect(createSpy).toHaveBeenCalledTimes(1)
+    })
+
+    it('auto-provisions arena identity on /strategy status when missing', async () => {
+      restoreEnv = applyEnv({
+        ARENA_ENABLED: '1',
+        ARENA_DGCLAW_DIR: '/tmp',
+        ARENA_DRY_RUN: '1',
+      })
+      const sender = '0x2222222222222222222222222222222222222222'
+      vi.spyOn(arenaClient, 'runArenaCreateAgent').mockResolvedValue({
+        ok: true,
+        agentId: '019e82af-2e66-7645-af23-69e9f14351f4',
+        agentWalletAddress: '0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
+        run: { dryRun: true, stdout: 'created' } as any,
+      } as any)
+      vi.spyOn(arenaClient, 'runArenaJoin').mockResolvedValue({ ok: true, message: 'ok', run: { dryRun: true } as any } as any)
+      vi.spyOn(arenaClient, 'runArenaActivateUnifiedAccount').mockResolvedValue({
+        ok: true,
+        message: 'ok',
+        run: { dryRun: true } as any,
+      } as any)
+      vi.spyOn(arenaClient, 'runArenaAddApiWallet').mockResolvedValue({
+        ok: true,
+        message: 'ok',
+        details: { hlApiWalletAddress: '0x3333333333333333333333333333333333333333' },
+        run: { dryRun: true } as any,
+      } as any)
+
+      const result = await executeHermitCommand({
+        commandText: '/strategy status',
+        senderAddress: sender,
+        roomId: '1659',
+      })
+
+      expect(result.reply).toContain('**Strategy status**')
+      expect(result.reply).toContain('arenaSetup: Auto-provisioned Arena identity')
+    })
+
+    it('auto-provisions arena identity on /strategy optin when missing', async () => {
+      restoreEnv = applyEnv({
+        ARENA_ENABLED: '1',
+        ARENA_DGCLAW_DIR: '/tmp',
+        ARENA_DRY_RUN: '1',
+      })
+      const sender = '0x4444444444444444444444444444444444444444'
+      const createSpy = vi.spyOn(arenaClient, 'runArenaCreateAgent').mockResolvedValue({
+        ok: true,
+        agentId: '019e82af-2e66-7645-af23-69e9f14351f4',
+        agentWalletAddress: '0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
+        run: { dryRun: true, stdout: 'created' } as any,
+      } as any)
+      vi.spyOn(arenaClient, 'runArenaJoin').mockResolvedValue({ ok: true, message: 'ok', run: { dryRun: true } as any } as any)
+      vi.spyOn(arenaClient, 'runArenaActivateUnifiedAccount').mockResolvedValue({
+        ok: true,
+        message: 'ok',
+        run: { dryRun: true } as any,
+      } as any)
+      vi.spyOn(arenaClient, 'runArenaAddApiWallet').mockResolvedValue({ ok: true, message: 'ok', run: { dryRun: true } as any } as any)
+      vi.spyOn(counterTradeStore, 'upsertCounterTradeOptIn').mockResolvedValue({
+        roomId: '1659',
+        senderAddress: sender,
+        state: 'active',
+        preset: 'balanced',
+        pauseReason: null,
+        lastActionAt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      })
+
+      const result = await executeHermitCommand({
+        commandText: '/strategy optin balanced',
+        senderAddress: sender,
+        roomId: '1659',
+      })
+
+      expect(createSpy).toHaveBeenCalledTimes(1)
+      expect(result.reply).toContain('Automation enabled for your account.')
+      expect(result.reply).toContain('Arena setup is linked for your sender')
     })
   })
 })

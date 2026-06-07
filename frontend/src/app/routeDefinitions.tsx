@@ -5,6 +5,10 @@ import {
   AccountsPage,
   AddOwnerBaseApp,
   Arena,
+  ArenaChartPage,
+  ArenaGettingStartedPage,
+  ArenaIntroductionPage,
+  ArenaStatusPage,
   AmoeQuickTasks,
   AdminAgentSetup,
   AdminCreatorAccess,
@@ -79,7 +83,18 @@ export function renderPathRoutes(
 }
 
 export const MARKETING_ONLY_ROUTES: PathRouteDef[] = [
-  { path: '/arena', element: <Arena /> },
+  {
+    path: '/arena',
+    element: <Arena />,
+    children: [
+      { path: '', index: true, element: <Navigate to="/arena/introduction" replace /> },
+      { path: 'introduction', element: <ArenaIntroductionPage /> },
+      { path: 'getting-started', element: <ArenaGettingStartedPage /> },
+      { path: 'view-status', element: <ArenaStatusPage /> },
+      { path: 'view-chart', element: <ArenaChartPage /> },
+      { path: 'positions', element: <Positions /> },
+    ],
+  },
   { path: '/faq', element: <Faq /> },
   { path: '/faq/how-it-works', element: <FaqHowItWorks /> },
   { path: '/positions', element: <Positions /> },

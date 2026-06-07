@@ -36,6 +36,23 @@ export type CounterTradeRunResult = {
 
 declare const process: { env: Record<string, string | undefined> }
 
+function parseIsoMs(value: string | null | undefined): number | null {
+  if (!value) return null
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+export function computeCounterTradeCooldownRemainingMs(params: {
+  lastExecutedAtMs: number | null
+  cooldownMs: number
+  nowMs?: number
+}): number {
+  if (params.lastExecutedAtMs == null) return 0
+  const nowMs = params.nowMs ?? Date.now()
+  const elapsedMs = Math.max(0, nowMs - params.lastExecutedAtMs)
+  return Math.max(0, params.cooldownMs - elapsedMs)
+}
+
 function isEnabledByEnv(): boolean {
   const raw = String(process.env.ALFACLUB_COUNTER_TRADE_ENABLED ?? '').trim().toLowerCase()
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
@@ -112,6 +129,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
     const counterWalletState =
       identity.agentWalletAddress != null ? await getClearinghouseState(identity.agentWalletAddress) : null
     const sorted = [...fills].sort((a, b) => a.time - b.time).slice(-runtime.runLimitPerIdentity)
+    let lastExecutedAtMs = parseIsoMs(optIn.lastActionAt)
 
     for (const fill of sorted) {
       scannedEvents += 1
@@ -130,6 +148,27 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
       })
       if (!isNewEvent) continue
       newEvents += 1
+
+      const nowMs = Date.now()
+      const cooldownRemainingMs = computeCounterTradeCooldownRemainingMs({
+        lastExecutedAtMs,
+        cooldownMs: runtime.cooldownMs,
+        nowMs,
+      })
+      if (cooldownRemainingMs > 0) {
+        blocked += 1
+        await recordCounterTradeAction({
+          roomId: runtime.roomId,
+          senderAddress: optIn.senderAddress,
+          eventKey,
+          status: 'blocked',
+          reason: 'cooldown_active',
+          counterSide: null,
+          counterNotionalUsd: null,
+          counterLeverage: null,
+        })
+        continue
+      }
 
       const hourlyUsage = await readCounterTradeUsageWindow({
         roomId: runtime.roomId,
@@ -237,6 +276,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
 
       if (tradeResult.ok) {
         executed += 1
+        lastExecutedAtMs = nowMs
         await recordCounterTradeAction({
           roomId: runtime.roomId,
           senderAddress: optIn.senderAddress,

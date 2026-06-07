@@ -12,13 +12,22 @@ import {
   readCounterTradeUserOptIn,
   readOrCreateCounterTradeRoomStrategy,
 } from '../../../../server/_lib/alfaclub/counterTradeStore.js'
+import { getDb } from '../../../../server/_lib/db/postgres.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
-function setPublicCors(res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
+function setPublicCors(req: VercelRequest, res: VercelResponse) {
+  const originHeader = req.headers.origin
+  const requestOrigin =
+    typeof originHeader === 'string' && originHeader.trim().length > 0 ? originHeader.trim() : null
+  const allowedOrigins = new Set(['https://4626.fun', 'https://app.4626.fun'])
+  const allowOrigin = requestOrigin && allowedOrigins.has(requestOrigin) ? requestOrigin : 'https://4626.fun'
+
+  res.setHeader('Access-Control-Allow-Origin', allowOrigin)
+  res.setHeader('Access-Control-Allow-Credentials', 'true')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  res.setHeader('Vary', 'Origin')
 }
 
 function normalizeAddress(value: string | null | undefined): string | null {
@@ -31,8 +40,42 @@ function isEnabledByEnv(): boolean {
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
 }
 
+async function resolveProfileWalletCandidates(sessionAddress: string): Promise<string[]> {
+  const normalized = normalizeAddress(sessionAddress)
+  if (!normalized) return []
+  const db = await getDb()
+  if (!db) return []
+  try {
+    const result = await db.sql`
+      WITH matched AS (
+        SELECT p.id, p.merged_into_profile_id
+        FROM profile_wallets pw
+        JOIN profiles p ON p.id = pw.profile_id
+        WHERE LOWER(pw.address) = LOWER(${normalized})
+        LIMIT 1
+      ),
+      resolved AS (
+        SELECT p2.id AS profile_id
+        FROM matched m
+        JOIN profiles p2 ON p2.id = COALESCE(m.merged_into_profile_id, m.id)
+        WHERE p2.merged_into_profile_id IS NULL
+      )
+      SELECT DISTINCT LOWER(pw.address) AS address
+      FROM profile_wallets pw
+      JOIN resolved r ON r.profile_id = pw.profile_id
+      WHERE pw.chain_id = 8453
+      LIMIT 64;
+    `
+    return (result.rows ?? [])
+      .map((row) => normalizeAddress(String((row as { address?: string }).address ?? '')))
+      .filter((value): value is string => Boolean(value))
+  } catch {
+    return []
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  setPublicCors(res)
+  setPublicCors(req, res)
   res.setHeader('Cache-Control', 'no-store')
   if (req.method === 'OPTIONS') return res.status(204).end()
   if (req.method !== 'GET') {
@@ -57,11 +100,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const runtime = readCounterTradeRuntimeConfig()
   const roomId = runtime.roomId
-  const [strategy, optIn, recentActions] = await Promise.all([
+  const [strategy, profileAddresses] = await Promise.all([
     readOrCreateCounterTradeRoomStrategy(roomId),
-    readCounterTradeUserOptIn({ roomId, senderAddress: sessionAddress }),
-    listRecentCounterTradeActions({ roomId, senderAddress: sessionAddress, limit: 20 }),
+    resolveProfileWalletCandidates(sessionAddress),
   ])
+
+  const candidateAddresses = Array.from(new Set([sessionAddress, ...profileAddresses]))
+  const candidateStates = await Promise.all(
+    candidateAddresses.map(async (address) => {
+      const [optIn, recentActions] = await Promise.all([
+        readCounterTradeUserOptIn({ roomId, senderAddress: address }),
+        listRecentCounterTradeActions({ roomId, senderAddress: address, limit: 20 }),
+      ])
+      return { address, optIn, recentActions }
+    }),
+  )
+
+  const selected =
+    candidateStates.find((entry) => entry.optIn?.state === 'active') ??
+    candidateStates.find((entry) => entry.optIn?.state === 'paused') ??
+    candidateStates.find((entry) => entry.recentActions.length > 0) ??
+    candidateStates.find((entry) => entry.address === sessionAddress) ??
+    candidateStates[0] ??
+    { address: sessionAddress, optIn: null, recentActions: [] }
+
+  const optIn = selected.optIn
+  const recentActions = selected.recentActions
 
   return res.status(200).json({
     success: true,
@@ -70,7 +134,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       engineEnabled: runtime.enabled && isEnabledByEnv(),
       strategy,
       user: {
-        senderAddress: sessionAddress,
+        senderAddress: selected.address,
         state: optIn?.state ?? 'not_opted_in',
         preset: optIn?.preset ?? null,
         pauseReason: optIn?.pauseReason ?? null,
