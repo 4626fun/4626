@@ -95,6 +95,7 @@
     "ops:verify-batcher-pipe-a": "tsx scripts/ops/verify-batcher-pipe-a-readiness.ts",
     "ops:verify-v1130-versioning": "tsx scripts/ops/verify-v1130-deploy-versioning.ts",
     "ops:trace-wrapper-address": "tsx scripts/ops/trace-wrapper-address.ts",
+    "ops:grind-akita-vanity": "tsx scripts/ops/grind-akita-vanity.ts",
     "ops:query-akita-deploys": "tsx scripts/ops/query-akita-deploys.ts",
     "ops:smoke-deploy-path": "tsx scripts/ops/smoke-v1120-deploy-path.ts",
     "ops:smoke-solana-keepers": "tsx scripts/ops/smoke-solana-keepers.ts --production",

@@ -13,6 +13,9 @@ import {
   type Hex,
 } from 'viem'
 
+import { findCreate2SaltForSuffixWithWasm } from '@/lib/vanity/create2SaltSuffixWasm'
+import { isPerVaultVanityWasmConfigured } from '@/lib/vanity/perVaultVanityWasm'
+
 export const ZERO_BYTES32 = `0x${'00'.repeat(32)}`
 export const MAX_UINT256 = (1n << 256n) - 1n
 export const DEPLOYMENT_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
@@ -145,7 +148,7 @@ export function normalizeHexSuffix(value: unknown): string | null {
   return cleaned.toLowerCase()
 }
 
-export async function findCreate2SaltForSuffix(params: {
+async function findCreate2SaltForSuffixTypescript(params: {
   create2Deployer: Address
   initCode: Hex
   suffix: string
@@ -178,11 +181,90 @@ export async function findCreate2SaltForSuffix(params: {
       return salt
     }
     if (i > 0 && i % yieldEvery === 0) {
-      // Yield to keep UI responsive on slower devices.
       await new Promise((resolve) => setTimeout(resolve, 0))
     }
   }
   return null
+}
+
+async function findCreate2SaltForSuffixWithRust(params: {
+  create2Deployer: Address
+  initCode: Hex
+  suffix: string
+  maxTries: number
+  startAt?: bigint
+  isAddressDeployed?: (addr: Address) => Promise<boolean>
+}): Promise<Hex | null> {
+  if (typeof WebAssembly === 'undefined' || typeof fetch !== 'function' || !isPerVaultVanityWasmConfigured()) {
+    return null
+  }
+
+  const suffix = normalizeHexSuffix(params.suffix)
+  if (!suffix) return null
+
+  const bytecodeHash = keccak256(params.initCode)
+  const maxTries = Math.max(1, Math.floor(params.maxTries))
+  let cursor = typeof params.startAt === 'bigint' ? params.startAt : 0n
+  let remaining = maxTries
+
+  while (remaining > 0) {
+    const startAtHex = toHex(cursor & MAX_UINT256, { size: 32 }) as Hex
+    let result: Awaited<ReturnType<typeof findCreate2SaltForSuffixWithWasm>>
+    try {
+      result = await findCreate2SaltForSuffixWithWasm({
+        create2Deployer: params.create2Deployer,
+        initCodeHash: bytecodeHash,
+        startAt: startAtHex,
+        suffix,
+        maxAttempts: remaining,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error ?? '')
+      if (message.includes('failed to find suffix')) return null
+      throw error
+    }
+
+    if (!result) return null
+
+    if (params.isAddressDeployed) {
+      try {
+        const deployed = await params.isAddressDeployed(getAddress(result.predictedAddress))
+        if (deployed) {
+          cursor = (BigInt(result.salt) + 1n) & MAX_UINT256
+          remaining = Math.max(0, remaining - result.attempts)
+          continue
+        }
+      } catch {
+        // If we can't check, still allow this salt.
+      }
+    }
+
+    return result.salt as Hex
+  }
+
+  return null
+}
+
+export async function findCreate2SaltForSuffix(params: {
+  create2Deployer: Address
+  initCode: Hex
+  suffix: string
+  maxTries: number
+  yieldEvery?: number
+  startAt?: bigint
+  isAddressDeployed?: (addr: Address) => Promise<boolean>
+  preferWasm?: boolean
+}): Promise<Hex | null> {
+  const preferWasm = params.preferWasm !== false
+  if (preferWasm) {
+    try {
+      const wasmResult = await findCreate2SaltForSuffixWithRust(params)
+      if (wasmResult) return wasmResult
+    } catch {
+      // Fall back to the TypeScript mirror when WASM is unavailable or stale.
+    }
+  }
+  return findCreate2SaltForSuffixTypescript(params)
 }
 
 /** Combined vault+share version search cap when Phase-1 salt overrides can satisfy share suffix separately. */

@@ -8,19 +8,15 @@ import {
   findDeploymentVersionForVanityTargetsSync,
   type PerVaultVanityVersionSearchParams,
 } from '../../../src/lib/deploy/perVaultVanityVersionSearch.js'
+import {
+  instantiateVanityWasmFromBytes,
+  invokeVanityWasmSearch,
+  type VanityWasmExports,
+} from '../../../src/lib/vanity/vanityWasmRuntime.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
 const DEFAULT_SERVER_MAX_ATTEMPTS = 50_000_000
-
-type VanityWasmExports = {
-  memory: WebAssembly.Memory
-  vanity_alloc(len: number): number
-  vanity_dealloc(ptr: number, len: number): void
-  per_vault_version_search(ptr: number, len: number): number
-  vanity_output_ptr(): number
-  vanity_output_len(): number
-}
 
 type VanityWasmEnvelope =
   | { ok: true; result: { version: string; attempt: number } }
@@ -59,18 +55,7 @@ export async function findPerVaultVanityVersionOnServer(
       shareOftInitCodeHash: shareSuffix ? keccak256(params.shareOftInitCode) : null,
       shareSymbol: shareSuffix ? params.shareSymbol : null,
     }
-    const encoder = new TextEncoder()
-    const bytes = encoder.encode(JSON.stringify(input))
-    const ptr = wasm.vanity_alloc(bytes.length)
-    try {
-      new Uint8Array(wasm.memory.buffer, ptr, bytes.length).set(bytes)
-      wasm.per_vault_version_search(ptr, bytes.length)
-    } finally {
-      wasm.vanity_dealloc(ptr, bytes.length)
-    }
-    const outPtr = wasm.vanity_output_ptr()
-    const outLen = wasm.vanity_output_len()
-    const output = new TextDecoder().decode(new Uint8Array(wasm.memory.buffer, outPtr, outLen))
+    const output = invokeVanityWasmSearch(wasm, 'per_vault_version_search', input)
     const parsed = JSON.parse(output) as VanityWasmEnvelope
     if (!parsed.ok) {
       throw new Error(parsed.error || 'Rust vanity search failed')
@@ -98,6 +83,7 @@ function resolveVanityWasmPath(): string | null {
   const candidates = [
     path.resolve(moduleDir, '../../../public/vanity/vanity_salt_grinder.wasm'),
     path.resolve(moduleDir, '../../../../public/vanity/vanity_salt_grinder.wasm'),
+    path.resolve(moduleDir, '../../../src/lib/vanity/vanity_salt_grinder.wasm'),
   ]
   for (const candidate of candidates) {
     if (fs.existsSync(candidate)) return candidate
@@ -116,20 +102,5 @@ async function instantiateVanityWasmExports(): Promise<VanityWasmExports | null>
   const wasmPath = resolveVanityWasmPath()
   if (!wasmPath) return null
   const bytes = fs.readFileSync(wasmPath)
-  const imports = {
-    __wbindgen_placeholder__: {
-      __wbindgen_describe() {},
-      __wbg___wbindgen_throw_6b64449b9b9ed33c(ptr: number, len: number) {
-        throw new Error(`Rust vanity WASM threw at ${ptr}:${len}`)
-      },
-    },
-    __wbindgen_externref_xform__: {
-      __wbindgen_externref_table_set_null() {},
-      __wbindgen_externref_table_grow() {
-        return -1
-      },
-    },
-  }
-  const { instance } = await WebAssembly.instantiate(bytes, imports)
-  return instance.exports as unknown as VanityWasmExports
+  return instantiateVanityWasmFromBytes(bytes)
 }

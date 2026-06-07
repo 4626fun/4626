@@ -62,6 +62,30 @@ mod tests {
     }
 
     #[test]
+    fn finds_create2_salt_for_requested_suffix_linear() {
+        let deployer: Address = "0x4e59b44847b379578588920cA78FbF26c0B4956C"
+            .parse()
+            .expect("valid create2 factory");
+        let init_code_hash = H256::from(keccak256(b"demo-init-code"));
+        let start_at = H256::from(keccak256(b"demo-seed"));
+
+        let result = search::find_salt_for_suffix_linear(
+            deployer,
+            init_code_hash,
+            start_at,
+            "26",
+            100_000,
+        )
+        .expect("suffix should be found");
+
+        assert!(result
+            .predicted_address
+            .to_string()
+            .to_ascii_lowercase()
+            .ends_with("26"));
+    }
+
+    #[test]
     fn finds_create2_salt_for_requested_suffix() {
         let deployer: Address = "0x4e59b44847b379578588920cA78FbF26c0B4956C"
             .parse()
