@@ -51,14 +51,10 @@ type SwapCardProps = {
   onSwitchTokens: () => void
   onReviewTrade: () => void
   onSetSlippagePct: (pct: string) => void
-  onConfirmUnverified: () => void
   executionMode: 'canonical' | 'eoa'
   fallbackActive: boolean
   swapProviderLabel: 'Uniswap' | 'CDP' | 'Zora'
   quoteAggregatorLabel?: 'Uniswap' | 'CDP' | 'Zora'
-  needsUnverifiedConfirmation: boolean
-  unverifiedTokenLabel?: string | null
-  onResetUnverified: () => void
   primaryActionLabel?: string
   onPrimaryAction?: () => void
   forcePrimaryActionEnabled?: boolean
@@ -69,12 +65,8 @@ export function SwapCard(props: SwapCardProps) {
   const showUniswapBranding = props.swapProviderLabel === 'Uniswap'
   const primaryActionLabel =
     props.primaryActionLabel ??
-    (props.busy
-      ? 'Preparing…'
-      : props.needsUnverifiedConfirmation
-        ? 'Confirm unverified token to swap'
-        : 'Swap now')
-  const primaryAction = props.onPrimaryAction ?? (props.needsUnverifiedConfirmation ? props.onConfirmUnverified : props.onReviewTrade)
+    (props.busy ? 'Preparing…' : 'Swap now')
+  const primaryAction = props.onPrimaryAction ?? props.onReviewTrade
   const defaultPrimaryDisabled = !props.isReady || !props.isConnected || props.busy !== null
   const primaryDisabled = props.forcePrimaryActionEnabled ? props.busy !== null : defaultPrimaryDisabled
   return (
@@ -151,21 +143,6 @@ export function SwapCard(props: SwapCardProps) {
           inputAriaLabel="Amount to receive"
         />
       </div>
-
-      {props.unverifiedTokenLabel ? (
-        <Alert variant="warning" className="mt-3">
-          Unverified token selected: {props.unverifiedTokenLabel}. Confirm before you swap.
-          <div className="mt-2">
-            <button
-              type="button"
-              className="text-xs text-zinc-300 underline"
-              onClick={props.onResetUnverified}
-            >
-              Re-verify token selection
-            </button>
-          </div>
-        </Alert>
-      ) : null}
 
       <Button
         variant="primary"
