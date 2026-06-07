@@ -466,7 +466,7 @@ export function PositionsChartSurface(props: {
     // reconstructed position context at candle times. Segments naturally per open position.
     const entrySeries = chart.addSeries(LineSeries, {
       color: '#3b82f6',
-      lineWidth: 1.5,
+      lineWidth: 2,
       lineStyle: LineStyle.Dashed,
       lastValueVisible: false,
       priceLineVisible: false,
@@ -552,7 +552,12 @@ export function PositionsChartSurface(props: {
     candleTimesRef.current = candleData.map((candle) => candle.time)
     eventByIdRef.current = new Map(props.events.map((event) => [event.id, event]))
     // Historical entry line (the step line showing the position's avg entry over time)
-    entrySeriesRef.current?.setData(props.positionEntryData || [])
+    entrySeriesRef.current?.setData(
+      (props.positionEntryData ?? []).map((point) => ({
+        time: point.time as UTCTimestamp,
+        value: point.value,
+      })),
+    )
     // Update current position lines (entry + liq) whenever the loaded data / summary changes.
     const series = candleSeriesRef.current
     if (series) {

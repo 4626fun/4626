@@ -58,4 +58,7 @@ export const API_ENDPOINTS = {
   chat: {
     hermit: '/api/v1/chat/hermit',
   },
+  alfaclub: {
+    counterTradeStatus: '/api/v1/alfaclub/counter-trade-status',
+  },
 } as const

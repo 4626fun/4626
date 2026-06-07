@@ -5,6 +5,7 @@ import { Activity, RefreshCw, ShieldAlert, Flame, Radio, Send, Users } from 'luc
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { LoadingText } from '@/components/ui/LoadingState'
+import { useCounterTradeStatus } from '@/hooks/useCounterTradeStatus'
 
 type LeaderboardRow = {
   rank: number
@@ -274,6 +275,7 @@ function BadgePill({
 }
 
 export function AlfaClubVigilante() {
+  const counterTradeStatus = useCounterTradeStatus()
   const leaderboard = useQuery({
     queryKey: ['alfaclub-vigilante-leaderboard'],
     queryFn: fetchLeaderboard,
@@ -471,6 +473,54 @@ export function AlfaClubVigilante() {
           </button>
         </div>
       </header>
+
+      <section className="rounded-lg border border-zinc-800 bg-zinc-900/40">
+        <div className="flex items-center gap-2 border-b border-zinc-800 px-4 py-3">
+          <ShieldAlert className="h-4 w-4 text-blue-300" />
+          <div className="text-sm font-medium text-zinc-200">Counter-trade engine status</div>
+          <button
+            type="button"
+            onClick={() => counterTradeStatus.refetch()}
+            className="ml-auto inline-flex items-center gap-1 rounded-md bg-zinc-800/80 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
+          >
+            <RefreshCw className="h-3 w-3" />
+            Refresh
+          </button>
+        </div>
+        <div className="space-y-3 p-4">
+          {counterTradeStatus.isLoading ? (
+            <LoadingText labelOverride="Loading counter-trade status…" />
+          ) : counterTradeStatus.isAuthRequired ? (
+            <div className="text-sm text-amber-300">Sign in to view your counter-trade status.</div>
+          ) : counterTradeStatus.error ? (
+            <div className="text-sm text-rose-300">
+              Error: {(counterTradeStatus.error as Error).message}
+            </div>
+          ) : counterTradeStatus.data ? (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <BadgePill
+                  tone={counterTradeStatus.data.engineEnabled ? 'ok' : 'warn'}
+                  label={counterTradeStatus.data.engineEnabled ? 'Engine enabled' : 'Engine disabled'}
+                />
+                <BadgePill
+                  tone={counterTradeStatus.data.user.state === 'active' ? 'ok' : 'neutral'}
+                  label={`User state: ${counterTradeStatus.data.user.state}`}
+                />
+                <BadgePill
+                  tone={counterTradeStatus.data.strategy?.killSwitch ? 'warn' : 'neutral'}
+                  label={`Bias: ${counterTradeStatus.data.strategy?.globalBias ?? 'neutral'}`}
+                />
+              </div>
+              <pre className="max-h-64 overflow-auto rounded-md bg-zinc-950/80 p-3 text-[11px] text-zinc-300">
+{JSON.stringify(counterTradeStatus.data, null, 2)}
+              </pre>
+            </>
+          ) : (
+            <div className="text-sm text-zinc-400">No counter-trade status available.</div>
+          )}
+        </div>
+      </section>
 
       <section className="rounded-lg border border-zinc-800 bg-zinc-900/40">
         <div className="flex items-center gap-2 border-b border-zinc-800 px-4 py-3">

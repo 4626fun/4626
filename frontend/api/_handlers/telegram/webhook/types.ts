@@ -6,6 +6,7 @@ export type TelegramFrom = {
 
 export type TelegramChat = {
   id?: number | string
+  username?: string
 }
 
 export type TelegramSuccessfulPayment = {
@@ -37,6 +38,7 @@ export type TelegramChatShared = {
 
 export type TelegramMessage = {
   message_id?: number
+  date?: number
   text?: string
   caption?: string
   message_thread_id?: number

@@ -1,6 +1,5 @@
 import { apiFetch } from '@/lib/api/apiBase'
 import { resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
-import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 
 export type CounterTradeBias = 'bullish' | 'bearish' | 'neutral'
 export type CounterTradeUserState = 'not_opted_in' | 'active' | 'paused'
@@ -49,6 +48,8 @@ export class CounterTradeStatusAuthError extends Error {
   }
 }
 
+const COUNTER_TRADE_STATUS_ENDPOINT = '/api/v1/alfaclub/counter-trade-status'
+
 export function isCounterTradeStatusAuthError(error: unknown): error is CounterTradeStatusAuthError {
   return error instanceof CounterTradeStatusAuthError
 }
@@ -71,6 +72,12 @@ function isPreset(value: unknown): value is CounterTradePreset {
 
 function isActionStatus(value: unknown): value is CounterTradeActionStatus {
   return value === 'executed' || value === 'skipped' || value === 'blocked' || value === 'failed'
+}
+
+function isRecentActionRow(
+  row: Record<string, unknown>,
+): row is Record<string, unknown> & { status: CounterTradeActionStatus } {
+  return isActionStatus(row.status)
 }
 
 function parseStatusPayload(payload: unknown): CounterTradeStatusPayload {
@@ -112,13 +119,13 @@ function parseStatusPayload(payload: unknown): CounterTradeStatusPayload {
   const recentActions: CounterTradeRecentAction[] = Array.isArray(data.recentActions)
     ? data.recentActions
         .filter(isRecord)
-        .filter((row) => isActionStatus(row.status))
+        .filter(isRecentActionRow)
         .map((row) => ({
           id: typeof row.id === 'number' ? row.id : 0,
           roomId: typeof row.roomId === 'string' ? row.roomId : roomId,
           senderAddress: typeof row.senderAddress === 'string' ? row.senderAddress : user.senderAddress,
           eventKey: typeof row.eventKey === 'string' ? row.eventKey : '',
-          status: row.status,
+          status: row.status as CounterTradeActionStatus,
           reason: typeof row.reason === 'string' ? row.reason : '',
           counterSide: row.counterSide === 'long' || row.counterSide === 'short' ? row.counterSide : null,
           counterNotionalUsd: typeof row.counterNotionalUsd === 'number' ? row.counterNotionalUsd : null,
@@ -137,7 +144,7 @@ function parseStatusPayload(payload: unknown): CounterTradeStatusPayload {
 }
 
 export async function fetchCounterTradeStatus(): Promise<CounterTradeStatusPayload> {
-  const response = await apiFetch(API_ENDPOINTS.alfaclub.counterTradeStatus, {
+  const response = await apiFetch(COUNTER_TRADE_STATUS_ENDPOINT, {
     method: 'GET',
     withCredentials: true,
   })

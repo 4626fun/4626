@@ -671,7 +671,6 @@ export function Positions() {
                               : event.action === 'entry'
                                 ? 'Position Open'
                                 : `Trade ${event.action ?? 'unknown'}`}
-                          {event.groupCount && event.groupCount > 1 ? ` ×${event.groupCount}` : ''}
                         </>
                       ) : event.kind === 'host-chat' ? (
                         'Host message'
