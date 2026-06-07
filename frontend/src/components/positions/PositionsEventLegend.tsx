@@ -19,6 +19,8 @@ export function PositionsEventLegend() {
       </span>
       <span className="text-zinc-600">·</span>
       <span className="text-zinc-500">×N = collapsed on one candle</span>
+      <span className="text-zinc-600">·</span>
+      <span className="text-zinc-500">Blue dashed = entry line (per pos lifetime) · Red dashed = liq</span>
     </div>
   )
 }

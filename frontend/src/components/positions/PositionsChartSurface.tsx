@@ -4,6 +4,7 @@ import {
   ColorType,
   CrosshairMode,
   HistogramSeries,
+  LineSeries,
   LineStyle,
   type MouseEventParams,
   type IChartApi,
@@ -181,6 +182,9 @@ export function PositionsChartSurface(props: {
   onSelectEvent: (id: string) => void
   onHoverEvent?: (id: string | null) => void
   marketLabel?: string | null
+  currentEntryPrice?: number | null
+  currentLiqPrice?: number | null
+  positionEntryData?: Array<{ time: number; value: number }>
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<IChartApi | null>(null)
@@ -198,6 +202,11 @@ export function PositionsChartSurface(props: {
   // candle's coordinate and then offset by (exactTime - candleTime) × pxPerSecond.
   const candleTimesRef = useRef<UTCTimestamp[]>([])
 
+  // Refs for current position price lines so they can be updated when the summary changes.
+  const entryPriceLineRef = useRef<any>(null)
+  const liqPriceLineRef = useRef<any>(null)
+  const entrySeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+
   const [crosshairInfo, setCrosshairInfo] = useState<{ time: number; price: number | null } | null>(null)
   const [hoveredTrade, setHoveredTrade] = useState<{ event: ChartOverlayEvent; x: number; y: number } | null>(
     null,
@@ -213,7 +222,9 @@ export function PositionsChartSurface(props: {
   const [chatAvatars, setChatAvatars] = useState<AvatarOverlay[]>([])
   // Visitor-adjustable spacing between events and the candles (px offset for chat avatars,
   // and a proportional vertical price-scale margin so trade markers also clear the candles).
-  const [eventSpread, setEventSpread] = useState(34)
+  // Smaller default so the message PFPs (avatars) sit closer to the actual price level
+  // / candle where the chat message occurred, instead of being pushed far away.
+  const [eventSpread, setEventSpread] = useState(10)
   const eventSpreadRef = useRef(eventSpread)
   eventSpreadRef.current = eventSpread
   const hasFittedInitialRangeRef = useRef(false)
@@ -450,6 +461,18 @@ export function PositionsChartSurface(props: {
     })
     volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } })
 
+    // Historical entry price as a step/dashed line. This makes the position's average
+    // entry visible over time (steps when adds/reduces happen). Sampled from the
+    // reconstructed position context at candle times. Segments naturally per open position.
+    const entrySeries = chart.addSeries(LineSeries, {
+      color: '#3b82f6',
+      lineWidth: 1.5,
+      lineStyle: LineStyle.Dashed,
+      lastValueVisible: false,
+      priceLineVisible: false,
+    })
+    entrySeriesRef.current = entrySeries
+
     const markersApi = createSeriesMarkers(candleSeries, [], { zOrder: 'top' })
 
     const handleClick = (param: { hoveredObjectId?: unknown }) => {
@@ -528,11 +551,41 @@ export function PositionsChartSurface(props: {
     markersApiRef.current.setMarkers(markerData)
     candleTimesRef.current = candleData.map((candle) => candle.time)
     eventByIdRef.current = new Map(props.events.map((event) => [event.id, event]))
+    // Historical entry line (the step line showing the position's avg entry over time)
+    entrySeriesRef.current?.setData(props.positionEntryData || [])
+    // Update current position lines (entry + liq) whenever the loaded data / summary changes.
+    const series = candleSeriesRef.current
+    if (series) {
+      if (entryPriceLineRef.current) { try { series.removePriceLine(entryPriceLineRef.current) } catch {} ; entryPriceLineRef.current = null }
+      if (liqPriceLineRef.current) { try { series.removePriceLine(liqPriceLineRef.current) } catch {} ; liqPriceLineRef.current = null }
+      if (props.currentEntryPrice != null) {
+        entryPriceLineRef.current = series.createPriceLine({
+          price: props.currentEntryPrice,
+          color: '#60a5fa',
+          lineWidth: 1,
+          lineStyle: LineStyle.Dotted,
+          axisLabelVisible: true,
+          title: 'Entry',
+        })
+      }
+      if (props.currentLiqPrice != null) {
+        liqPriceLineRef.current = series.createPriceLine({
+          price: props.currentLiqPrice,
+          color: '#f87171',
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: 'Liq',
+        })
+      }
+    }
     // Reposition overlays after the chart paints — coordinate APIs are not valid
     // synchronously right after setData.
-    const raf = requestAnimationFrame(() => recomputeOverlaysRef.current())
+    const raf = requestAnimationFrame(() => {
+      recomputeOverlaysRef.current()
+    })
     return () => cancelAnimationFrame(raf)
-  }, [candleData, volumeData, markerData, props.events, chartReady])
+  }, [candleData, volumeData, markerData, props.events, chartReady, props.currentEntryPrice, props.currentLiqPrice, props.positionEntryData])
 
   useEffect(() => {
     if (!chartRef.current || candleData.length <= 2) return

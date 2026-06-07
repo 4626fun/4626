@@ -101,7 +101,7 @@ function inferExitReason(event: Pick<ChartOverlayEvent, 'action' | 'dir'>): stri
 
 // Finer candles when zoomed in, coarser for long windows — keeps us under Hyperliquid's
 // ~5000-candle snapshot cap while reducing how many messages collide on a single candle.
-type IntervalChoice = 'auto' | '1m' | '5m' | '15m' | '1h'
+type IntervalChoice = 'auto' | '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '4h'
 
 function autoIntervalForWindow(windowHours: number): string {
   if (windowHours <= 24) return '5m'
@@ -115,12 +115,18 @@ function maxCandlesForInterval(interval: string): number {
   switch (interval) {
     case '1m':
       return 1
+    case '3m':
+      return 2
     case '5m':
       return 5
     case '15m':
       return 15
+    case '30m':
+      return 10
     case '1h':
       return 60
+    case '4h':
+      return 15
     default:
       return 60
   }
@@ -167,7 +173,7 @@ export function Positions() {
   const [selectedSender, setSelectedSender] = useState<string | null>(null)
   const [selectedMarket, setSelectedMarket] = useState<string>('')
   const [windowHours, setWindowHours] = useState<24 | 72 | 168>(168)
-  const [intervalChoice, setIntervalChoice] = useState<IntervalChoice>('auto')
+  const [intervalChoice, setIntervalChoice] = useState<IntervalChoice>('5m')
   const [densityMode, setDensityMode] = useState<'all' | 'major'>('all')
   const [showTrades, setShowTrades] = useState(true)
   const [hideBots, setHideBots] = useState(true)
@@ -271,6 +277,39 @@ export function Positions() {
     return source.filter((event) => event.market === effectiveMarket)
   }, [data?.tradeEvents, effectiveMarket])
 
+  // Hoisted resolver so we can use it both for per-event context and for sampling
+  // historical position entry prices for the chart line.
+  const positionContextResolver = useMemo(() => {
+    return buildPositionContextResolver(
+      filteredTradeEvents.map((event) => ({
+        time: event.time,
+        side: event.side,
+        size: event.size,
+        price: event.price,
+      })),
+    )
+  }, [filteredTradeEvents])
+
+  // Historical step line data for the position's average entry price while the position
+  // was open. Sampled at every candle time using the reconstructed context. This makes
+  // position openings, adds, and the entry level visually traceable over time on the chart.
+  const positionEntryData = useMemo(() => {
+    const candles = data?.candles ?? []
+    if (!candles.length) return []
+    const points: Array<{ time: number; value: number }> = []
+    for (const c of candles) {
+      const ctx = positionContextResolver(c.time, c.close)
+      if (ctx.avgEntry != null && ctx.size > 0) {
+        // Convert ms timestamp to seconds (UTCTimestamp) for the chart series
+        points.push({
+          time: Math.floor(c.time / 1000),
+          value: ctx.avgEntry,
+        })
+      }
+    }
+    return points
+  }, [data?.candles, positionContextResolver])
+
   const selectedSummary = useMemo(() => {
     const summaries = data?.marketSummaries ?? []
     return summaries.find((summary) => summary.market === effectiveMarket) ?? summaries[0] ?? null
@@ -297,14 +336,6 @@ export function Positions() {
           dir: event.dir,
         }))
       : []
-    const resolvePositionContext = buildPositionContextResolver(
-      filteredTradeEvents.map((event) => ({
-        time: event.time,
-        side: event.side,
-        size: event.size,
-        price: event.price,
-      })),
-    )
     const chats = filteredChatEvents.map<ChartOverlayEvent>((event) => {
       const markPrice = nearestCandleClose(event.time, candles)
       return {
@@ -319,7 +350,7 @@ export function Positions() {
         isBot: event.isBot,
         isFirstFromSender: event.isFirstFromSender,
         price: markPrice,
-        contextAtTime: resolvePositionContext(event.time, markPrice),
+        contextAtTime: positionContextResolver(event.time, markPrice),
       }
     })
     const merged = [...trades, ...chats].sort((a, b) => a.time - b.time)
@@ -346,6 +377,7 @@ export function Positions() {
     densityMode,
     filteredChatEvents,
     filteredTradeEvents,
+    positionContextResolver,
     showTrades,
     selectedEventId,
   ])
@@ -417,6 +449,7 @@ export function Positions() {
             <p className="text-zinc-400 text-sm font-light mt-2">
               Per-market social signal and historical indicator — live and historical positions
               overlaid with the chatter that called them, mapped to the market they reference.
+              Blue dashed = entry line (per position lifetime) · Red dashed = liq. Volume shown on "Position Open" rows.
             </p>
             <a
               href="https://alfaclub.app/rooms/1659/"
@@ -456,9 +489,12 @@ export function Positions() {
               >
                 <option value="auto">Auto ({autoIntervalForWindow(windowHours)})</option>
                 {isIntervalAllowed('1m', windowHours) && <option value="1m">1m</option>}
+                {isIntervalAllowed('3m', windowHours) && <option value="3m">3m</option>}
                 {isIntervalAllowed('5m', windowHours) && <option value="5m">5m</option>}
                 {isIntervalAllowed('15m', windowHours) && <option value="15m">15m</option>}
-                <option value="1h">1h</option>
+                {isIntervalAllowed('30m', windowHours) && <option value="30m">30m</option>}
+                {isIntervalAllowed('1h', windowHours) && <option value="1h">1h</option>}
+                {isIntervalAllowed('4h', windowHours) && <option value="4h">4h</option>}
               </select>
               <select
                 className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
@@ -574,6 +610,9 @@ export function Positions() {
                     onSelectEvent={setSelectedEventId}
                     onHoverEvent={setHoveredEventId}
                     marketLabel={effectiveMarket}
+                    currentEntryPrice={selectedSummary?.currentPosition?.entryPrice ?? null}
+                    currentLiqPrice={selectedSummary?.currentPosition?.liquidationPrice ?? null}
+                    positionEntryData={positionEntryData}
                   />
                   <PositionsEventLegend />
                 </div>
@@ -587,9 +626,9 @@ export function Positions() {
                 ref={timelineListRef}
                 className="mt-3 max-h-[48vh] lg:max-h-none lg:flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 [scrollbar-gutter:stable]"
               >
-                {timelineListEvents.map((event) => (
+                {timelineListEvents.map((event, index) => (
                   <button
-                    key={event.id}
+                    key={`${event.id}-${index}`}
                     data-event-id={event.id}
                     type="button"
                     onClick={() => setSelectedEventId(event.id)}
@@ -623,11 +662,22 @@ export function Positions() {
                       </span>
                     </div>
                     <div className="mt-1 text-zinc-100">
-                      {event.kind === 'trade'
-                        ? `Trade ${event.action ?? 'unknown'}`
-                        : event.kind === 'host-chat'
-                          ? 'Host message'
-                          : 'Room message'}
+                      {event.kind === 'trade' ? (
+                        <>
+                          {event.action === 'liquidated'
+                            ? 'Liquidation'
+                            : event.action === 'close' && typeof event.closedPnl === 'number' && event.closedPnl > 0
+                              ? 'Take Profit'
+                              : event.action === 'entry'
+                                ? 'Position Open'
+                                : `Trade ${event.action ?? 'unknown'}`}
+                          {event.groupCount && event.groupCount > 1 ? ` ×${event.groupCount}` : ''}
+                        </>
+                      ) : event.kind === 'host-chat' ? (
+                        'Host message'
+                      ) : (
+                        'Room message'
+                      )}
                       {event.kind !== 'trade' && event.senderLabel ? (
                         <span className="ml-1.5 text-[10px] text-zinc-400">· {event.senderLabel}</span>
                       ) : null}

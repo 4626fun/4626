@@ -605,8 +605,10 @@ function mapTradeEvents(
 ): RoomTimelineTradeEvent[] {
   if (!fills || fills.length === 0) return []
   return fills
-    .map((fill) => ({
-      id: `fill:${fill.time}:${fill.coin ?? 'unknown'}`,
+    .map((fill, idx) => ({
+      // Include idx to guarantee uniqueness even when multiple fills share the exact same timestamp + coin
+      // (common for large orders that walk the book or multiple makers at one tick).
+      id: `fill:${fill.time}:${fill.coin ?? 'unknown'}:${idx}`,
       time: fill.time,
       coin: fill.coin,
       side: fill.side,

@@ -33,7 +33,6 @@ import {
   unwrapDoubleHexEncodedHash,
   type V06UserOpFields,
 } from '@/lib/wallet/onboardingWalletReplayable'
-import { BASE_APP_SUBSTITUTED_SIGNER_ERROR } from '@/lib/relay/baseAppOwnerInstallErrors'
 
 export type SelfAuthOwnerDiscovery = {
   ownerIndex: number | null

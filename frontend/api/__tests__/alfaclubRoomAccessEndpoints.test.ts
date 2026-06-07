@@ -20,6 +20,12 @@ const {
   readAlfaClubRoomAccessPolicyMock,
   readAlfaClubRoomAccessMembershipMock,
   recheckAlfaClubRoomAccessMembershipsMock,
+  isHermitCommandRoomMock,
+  readAlfaClubChatBridgeFlagsMock,
+  sendAlfaClubRoomTextMock,
+  formatHermitRoomWelcomeMock,
+  isHermitRoomWelcomeEnabledMock,
+  tryInsertHermitRoomWelcomeSentMock,
 } = vi.hoisted(() => ({
   handleOptionsMock: vi.fn(() => false),
   setCorsMock: vi.fn(),
@@ -38,6 +44,12 @@ const {
   readAlfaClubRoomAccessPolicyMock: vi.fn(),
   readAlfaClubRoomAccessMembershipMock: vi.fn(),
   recheckAlfaClubRoomAccessMembershipsMock: vi.fn(),
+  isHermitCommandRoomMock: vi.fn(),
+  readAlfaClubChatBridgeFlagsMock: vi.fn(),
+  sendAlfaClubRoomTextMock: vi.fn(),
+  formatHermitRoomWelcomeMock: vi.fn(),
+  isHermitRoomWelcomeEnabledMock: vi.fn(),
+  tryInsertHermitRoomWelcomeSentMock: vi.fn(),
 }))
 
 vi.mock('@4626/server-core', () => ({
@@ -64,6 +76,18 @@ vi.mock('../../server/_lib/alfaclub/roomAccessPolicy.js', () => ({
   readAlfaClubRoomAccessPolicy: readAlfaClubRoomAccessPolicyMock,
   readAlfaClubRoomAccessMembership: readAlfaClubRoomAccessMembershipMock,
   recheckAlfaClubRoomAccessMemberships: recheckAlfaClubRoomAccessMembershipsMock,
+}))
+
+vi.mock('../../server/_lib/alfaclub/chatBridge.js', () => ({
+  isHermitCommandRoom: isHermitCommandRoomMock,
+  readAlfaClubChatBridgeFlags: readAlfaClubChatBridgeFlagsMock,
+  sendAlfaClubRoomText: sendAlfaClubRoomTextMock,
+}))
+
+vi.mock('../../server/_lib/alfaclub/hermitRoomWelcome.js', () => ({
+  formatHermitRoomWelcome: formatHermitRoomWelcomeMock,
+  isHermitRoomWelcomeEnabled: isHermitRoomWelcomeEnabledMock,
+  tryInsertHermitRoomWelcomeSent: tryInsertHermitRoomWelcomeSentMock,
 }))
 
 import roomAccessPolicyHandler from '../_handlers/v1/alfaclub/_room-access-policy.ts'
@@ -109,6 +133,12 @@ describe('AlfaClub room-access endpoints', () => {
       removed: 1,
       stale: 0,
     })
+    isHermitCommandRoomMock.mockReturnValue(true)
+    readAlfaClubChatBridgeFlagsMock.mockReturnValue({})
+    sendAlfaClubRoomTextMock.mockResolvedValue(undefined)
+    formatHermitRoomWelcomeMock.mockReturnValue('Welcome')
+    isHermitRoomWelcomeEnabledMock.mockReturnValue(true)
+    tryInsertHermitRoomWelcomeSentMock.mockResolvedValue(true)
   })
 
   it('room-access/policy requires admin session', async () => {
@@ -186,6 +216,36 @@ describe('AlfaClub room-access endpoints', () => {
       roomId: '1043',
       walletAddress: '0x1234567890abcdef1234567890abcdef12345678',
     })
+  })
+
+  it('room-access/join sends welcome for eligible join once', async () => {
+    const req = createMockReq({ method: 'POST', query: { roomId: '1659' } })
+    const res = createMockRes()
+    await roomAccessJoinHandler(req as any, res as any)
+    await Promise.resolve()
+
+    expect(res.statusCode).toBe(200)
+    expect(tryInsertHermitRoomWelcomeSentMock).toHaveBeenCalledWith({
+      roomId: '1659',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+    expect(sendAlfaClubRoomTextMock).toHaveBeenCalledWith({
+      roomId: '1659',
+      text: 'Welcome',
+      flags: {},
+    })
+  })
+
+  it('room-access/join skips welcome when room is not a Hermit command room', async () => {
+    isHermitCommandRoomMock.mockReturnValueOnce(false)
+    const req = createMockReq({ method: 'POST', query: { roomId: '7777' } })
+    const res = createMockRes()
+    await roomAccessJoinHandler(req as any, res as any)
+    await Promise.resolve()
+
+    expect(res.statusCode).toBe(200)
+    expect(tryInsertHermitRoomWelcomeSentMock).not.toHaveBeenCalled()
+    expect(sendAlfaClubRoomTextMock).not.toHaveBeenCalled()
   })
 
   it('room-access/recheck requires keepr api key', async () => {

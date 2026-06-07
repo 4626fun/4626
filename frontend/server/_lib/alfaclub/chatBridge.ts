@@ -42,16 +42,11 @@ import {
   recordBridgeSocketBackoff,
   recordBridgeSuppressedSocketAttempt,
 } from './authHealthStore.js'
-import { upsertAlfaClubIngestMessages, type AlfaClubIngestMessage, type AlfaClubInsertedIngestMessage } from './chatIngestStore.js'
+import { upsertAlfaClubIngestMessages, type AlfaClubIngestMessage } from './chatIngestStore.js'
 import {
   filterUnrepliedCommandMessageIds,
   recordCommandReply,
 } from './commandReplyLedger.js'
-import {
-  collectHermitRoomWelcomeCandidates,
-  formatHermitRoomWelcome,
-  tryInsertHermitRoomWelcomeSent,
-} from './hermitRoomWelcome.js'
 import { readAlfaClubChatToken } from './chatTokenStore.js'
 import { requestImmediatePrivyRefresh } from './privyTokenRefresher.js'
 import { parseTelegramChatRef } from './telegramChatRef.js'
@@ -1921,91 +1916,6 @@ async function sendCommandReplyToRoom(params: {
   return lane === 'ws_proxy_http' ? 'ws_proxy_http_fallback' : 'websocket_fallback'
 }
 
-async function maybeSendHermitRoomWelcomes(params: {
-  flags: AlfaClubChatBridgeFlags
-  roomId: string
-  jwt: string
-  insertedMessages: AlfaClubInsertedIngestMessage[]
-}): Promise<number> {
-  if (!isHermitCommandRoom(params.roomId)) return 0
-  if (!canBridgeReplyInRoom(params.flags, params.roomId)) return 0
-
-  const candidates = collectHermitRoomWelcomeCandidates(
-    params.insertedMessages.map((row) => ({
-      roomId: params.roomId,
-      senderAddress: row.senderAddress,
-      messageId: row.messageId,
-      username: row.username ?? null,
-      isBot: row.isBot ?? null,
-    })),
-  )
-
-  let welcomed = 0
-  for (const candidate of candidates) {
-    if (candidate.senderAddress === CANONICAL_CSW_ADDRESS.toLowerCase()) continue
-    const claimed = await tryInsertHermitRoomWelcomeSent({
-      roomId: candidate.roomId,
-      senderAddress: candidate.senderAddress,
-    })
-    if (!claimed) continue
-
-    const text = formatHermitRoomWelcome({
-      roomId: candidate.roomId,
-      username: candidate.username,
-    })
-    try {
-      if (candidate.messageId) {
-        await sendAlfaClubCommandTextReply({
-          flags: params.flags,
-          roomId: params.roomId,
-          jwt: params.jwt,
-          text,
-          replyToMessageId: candidate.messageId,
-        })
-      } else if (params.flags.botToken) {
-        await sendRoomMessageViaBotTokenWithProxyFallback({
-          apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
-          directApiBaseUrl: params.flags.apiBaseUrl,
-          botToken: params.flags.botToken,
-          roomId: params.roomId,
-          text,
-          proxySecret: resolveAlfaClubProxySecret(params.flags),
-          idempotencyKey: buildBotMessageIdempotencyKey({
-            roomId: params.roomId,
-            messageId: `welcome-${candidate.senderAddress}`,
-          }),
-          timeoutMs: params.flags.sendTimeoutMs,
-        })
-      } else {
-        await sendRoomMessageViaWebSocket({
-          websocketUrl: params.flags.websocketUrl,
-          wsProxyHttpSendUrl: (params.flags as any).wsProxyHttpSendUrl,
-          wsProxySecret: (params.flags as any).wsProxySecret,
-          jwt: params.jwt,
-          roomId: params.roomId,
-          text,
-          timeoutMs: params.flags.sendTimeoutMs,
-        })
-      }
-      welcomed += 1
-      logger.info('[alfaclub-chat] room_welcome_sent', {
-        roomId: params.roomId,
-        sender: candidate.senderAddress,
-        replyToMessageId: candidate.messageId ?? null,
-      })
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error)
-      logger.warn('[alfaclub-chat] room_welcome_failed', {
-        roomId: params.roomId,
-        sender: candidate.senderAddress,
-        error: detail.slice(0, 180),
-      })
-    }
-  }
-
-  return welcomed
-}
-
 type BridgeState = {
   seeded: boolean
   seenMessageIds: Set<string>
@@ -2806,16 +2716,6 @@ async function ingestLiveMessages(
       rawPayloadText: message.rawPayloadText,
     })),
   )
-  if (context?.jwt && inserted.length > 0) {
-    void maybeSendHermitRoomWelcomes({
-      flags,
-      roomId: context.roomId,
-      jwt: context.jwt,
-      insertedMessages: inserted,
-    }).catch(() => {
-      // Fail-open: welcome must not block ingest or command processing.
-    })
-  }
   if (messages.length > 0) {
     const roomIds = Array.from(new Set(messages.map((message) => message.roomId))).slice(0, 10)
     logger.info('[alfaclub-chat] ws_messages_ingested', {
@@ -3634,14 +3534,6 @@ async function runBridgeTick(
       historyIngestRows,
     )
     newlyIngestedHistoryIds = new Set(inserted.map((row) => row.messageId))
-    if (inserted.length > 0) {
-      await maybeSendHermitRoomWelcomes({
-        flags,
-        roomId,
-        jwt,
-        insertedMessages: inserted,
-      })
-    }
   } catch {
     newlyIngestedHistoryIds = null
   }

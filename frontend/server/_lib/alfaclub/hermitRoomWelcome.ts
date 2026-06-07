@@ -3,14 +3,6 @@ import { ensureAlfaClubVigilanteSchema } from './schema.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
-export type HermitRoomWelcomeCandidate = {
-  roomId: string
-  senderAddress: string
-  messageId?: string | null
-  username?: string | null
-  isBot?: boolean | null
-}
-
 export function isHermitRoomWelcomeEnabled(): boolean {
   const raw = (process.env.HERMIT_ROOM_WELCOME_ENABLED ?? '1').trim().toLowerCase()
   return raw !== '0' && raw !== 'false' && raw !== 'off'
@@ -63,28 +55,4 @@ export function formatHermitRoomWelcome(params: {
     'Creative bot (read-only, no trades): try `/gmeow`, `/meme`, or `/hermit copy <idea>`.',
     'Send `/help` for the full command list.',
   ].join('\n')
-}
-
-export function collectHermitRoomWelcomeCandidates(
-  messages: HermitRoomWelcomeCandidate[],
-): HermitRoomWelcomeCandidate[] {
-  const seen = new Set<string>()
-  const out: HermitRoomWelcomeCandidate[] = []
-  for (const message of messages) {
-    const roomId = String(message.roomId ?? '').trim()
-    const senderAddress = normalizeWalletAddress(message.senderAddress)
-    if (!roomId || !senderAddress) continue
-    if (message.isBot === true) continue
-    const key = `${roomId}:${senderAddress}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push({
-      roomId,
-      senderAddress,
-      messageId: message.messageId ?? null,
-      username: message.username ?? null,
-      isBot: message.isBot ?? null,
-    })
-  }
-  return out
 }

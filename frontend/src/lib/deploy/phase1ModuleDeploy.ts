@@ -126,7 +126,10 @@ export async function resolvePhase1ModuleDeployField(params: {
       phase1ModuleAddress,
       functionName: params.functionName,
     })
+    // If a Phase1Module is configured, it is the source of truth for Phase-1 deploy immutables.
+    // Fallback to shell getters here can silently reintroduce stale CREATE2/store/module wiring.
     if (fromPhase1) return fromPhase1
+    return null
   }
   return readBatcherShellField({
     publicClient: params.publicClient,

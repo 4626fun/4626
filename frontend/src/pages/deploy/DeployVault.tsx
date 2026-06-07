@@ -164,6 +164,11 @@ const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 50_000_000n
 const MIN_FIRST_DEPOSIT = DEFAULT_MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
 const ZERO_ADDRESS = addr('0000000000000000000000000000000000000000')
+const normalizeConfiguredAddress = (value: unknown): Address | null => {
+  const normalized = normalizeAddressLike(value)
+  if (!normalized || sameAddress(normalized, ZERO_ADDRESS)) return null
+  return normalized
+}
 const BASE_PUBLIC_RPC_URL = 'https://mainnet.base.org'
 const BASE_SWAP_ROUTER = addr('2626664c2603336E57B271c5C0b26F421741e481')
 const BASE_WETH = addr('4200000000000000000000000000000000000006')
@@ -4715,13 +4720,13 @@ function DeployVaultBatcher({
         parseUniswapV3Fee(runtimeConfig?.payoutRouterZoraWethFee) ?? DEFAULT_PAYOUT_ROUTER_ZORA_WETH_FEE
       const payoutRouterWethCreatorFee =
         parseUniswapV3Fee(runtimeConfig?.payoutRouterWethCreatorFee) ?? DEFAULT_PAYOUT_ROUTER_WETH_CREATOR_FEE
-      const impairmentClaimsAddress = normalizeAddressLike(
+      const impairmentClaimsAddress = normalizeConfiguredAddress(
         runtimeConfig?.impairmentClaims ?? (CONTRACTS as any).impairmentClaims ?? null,
       )
-      const impairmentRecoveryEscrowAddress = normalizeAddressLike(
+      const impairmentRecoveryEscrowAddress = normalizeConfiguredAddress(
         runtimeConfig?.impairmentRecoveryEscrow ?? (CONTRACTS as any).impairmentRecoveryEscrow ?? null,
       )
-      const impairmentGuardianAddress = normalizeAddressLike(
+      const impairmentGuardianAddress = normalizeConfiguredAddress(
         runtimeConfig?.impairmentGuardian ?? (CONTRACTS as any).impairmentGuardian ?? null,
       )
       const configuredImpairmentChallengeWindowSeconds = (() => {

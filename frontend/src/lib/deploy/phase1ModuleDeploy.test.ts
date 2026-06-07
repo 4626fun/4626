@@ -88,6 +88,25 @@ describe('phase1ModuleDeploy', () => {
       expect(aligned.message).toMatch(/setPhase1Module/)
     }
   })
+
+  it('does not fall back to shell create2Deployer when phase1 module is present but unreadable', async () => {
+    const publicClient = {
+      readContract: vi.fn(async (args: { address: Address; functionName: string }) => {
+        if (args.functionName === 'phase1Module') return PHASE1
+        if (args.address === PHASE1 && args.functionName === 'create2Deployer') {
+          throw new Error('phase1 read failed')
+        }
+        if (args.address === BATCHER && args.functionName === 'create2Deployer') return LEGACY_CREATE2
+        throw new Error(`unexpected read ${args.functionName}@${args.address}`)
+      }),
+    }
+
+    const resolved = await resolveCreate2DeployerForBatcher({
+      publicClient,
+      batcherAddress: BATCHER,
+    })
+    expect(resolved).toBeNull()
+  })
 })
 
 describe('ovaultModuleIdentity batcher wiring', () => {
