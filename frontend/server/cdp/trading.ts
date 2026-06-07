@@ -42,11 +42,52 @@ function base64UrlEncode(value: string | Buffer): string {
 }
 
 function normalizePemKey(value: string): string {
-  const trimmed = value.trim()
-  if (!trimmed) return trimmed
-  if (trimmed.includes('-----BEGIN')) return trimmed
+  let normalized = String(value ?? '').trim()
+  if (!normalized) return normalized
+
+  // Common env pitfall: whole PEM wrapped in quotes.
+  if (
+    (normalized.startsWith('"') && normalized.endsWith('"')) ||
+    (normalized.startsWith("'") && normalized.endsWith("'"))
+  ) {
+    normalized = normalized.slice(1, -1).trim()
+  }
+
   // Support secrets where newlines are escaped.
-  return trimmed.replace(/\\n/g, '\n')
+  normalized = normalized.replace(/\\n/g, '\n')
+
+  // Some providers store the key as JSON payload:
+  // {"privateKey":"-----BEGIN ...-----\\n..."}
+  if (normalized.startsWith('{') && normalized.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(normalized) as Record<string, unknown>
+      const candidate =
+        (typeof parsed.privateKey === 'string' && parsed.privateKey) ||
+        (typeof parsed.key === 'string' && parsed.key) ||
+        (typeof parsed.secret === 'string' && parsed.secret) ||
+        ''
+      if (candidate) {
+        normalized = candidate.trim().replace(/\\n/g, '\n')
+      }
+    } catch {
+      // Keep original string and let parser throw below with a clearer message.
+    }
+  }
+
+  if (normalized.includes('-----BEGIN')) return normalized
+
+  // Fallback: key provided as base64-encoded PEM.
+  const compact = normalized.replace(/\s+/g, '')
+  if (/^[A-Za-z0-9+/=]+$/.test(compact) && compact.length % 4 === 0) {
+    try {
+      const decoded = Buffer.from(compact, 'base64').toString('utf8').trim()
+      if (decoded.includes('-----BEGIN')) return decoded
+    } catch {
+      // Ignore and return normalized below.
+    }
+  }
+
+  return normalized
 }
 
 function derToJoseSignature(der: Buffer, expectedLength = 64): Buffer {
@@ -100,7 +141,17 @@ async function buildCdpJwt(params: { keyId: string; keySecret: string; method: s
   const encodedPayload = base64UrlEncode(JSON.stringify(payload))
   const signingInput = `${encodedHeader}.${encodedPayload}`
 
-  const privateKey = createPrivateKey(normalizePemKey(params.keySecret))
+  let privateKey: ReturnType<typeof createPrivateKey>
+  try {
+    privateKey = createPrivateKey(normalizePemKey(params.keySecret))
+  } catch (error) {
+    throw new Error(
+      `Failed to parse CDP_API_KEY_SECRET as an EC private key (${toCleanErrorMessage(
+        error,
+        'invalid key format',
+      )}). Expected PEM with BEGIN/END lines or escaped newlines.`,
+    )
+  }
   const signer = createSign('SHA256')
   signer.update(signingInput)
   signer.end()

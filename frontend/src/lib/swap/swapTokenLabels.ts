@@ -3,7 +3,7 @@ import { base } from 'viem/chains'
 
 import type { SwapTokenOption } from '@/components/swap/TokenSelectorModal'
 import { fetchZoraCoin } from '@/lib/zora/client'
-import { BASE_CHAIN_ID, creatorCoinRawLogo, shortAddress } from '@/lib/uniswap/swapUtils'
+import { BASE_CHAIN_ID, shareTokenLogo, shortAddress } from '@/lib/uniswap/swapUtils'
 
 import type { ZoraCoin } from '@/lib/zora/types'
 
@@ -140,14 +140,14 @@ export async function resolveSwapTokenLabels(
         return {
           symbol: displaySymbol,
           name: displayName,
-          logoUrl: creatorCoinRawLogo(checksummed, chainId),
+          logoUrl: shareTokenLogo(checksummed, chainId),
         }
       }
       if (name && !isOpaqueInternalTokenLabel(name) && !isAddressLikeSwapSymbol(name, checksummed)) {
         return {
           symbol: name,
           name: 'Creator coin',
-          logoUrl: creatorCoinRawLogo(checksummed, chainId),
+          logoUrl: shareTokenLogo(checksummed, chainId),
         }
       }
     } catch {
@@ -156,7 +156,7 @@ export async function resolveSwapTokenLabels(
   }
 
   const short = shortAddress(checksummed)
-  return { symbol: short, name: 'Creator coin', logoUrl: creatorCoinRawLogo(checksummed, chainId) }
+  return { symbol: short, name: 'Creator coin', logoUrl: shareTokenLogo(checksummed, chainId) }
 }
 
 export async function enrichSwapTokenOption(option: SwapTokenOption): Promise<SwapTokenOption> {

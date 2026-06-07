@@ -531,6 +531,9 @@ export function isSwapPreflightSimulationRetryable(error: unknown): boolean {
       return false
     }
     return (
+      msg.includes('allowance is missing') ||
+      msg.includes('insufficient allowance') ||
+      msg.includes('exceeds allowance') ||
       msg.includes('slippage') ||
       msg.includes('would fail on-chain') ||
       msg.includes('would revert') ||
@@ -549,6 +552,9 @@ export function isSwapPreflightSimulationRetryable(error: unknown): boolean {
     return false
   }
   return (
+    msg.includes('allowance is missing') ||
+    msg.includes('insufficient allowance') ||
+    msg.includes('exceeds allowance') ||
     msg.includes('would fail on-chain') ||
     msg.includes('would revert') ||
     msg.includes('0x2c4029e9') ||
@@ -628,6 +634,7 @@ const KNOWN_INNER_REVERT_SELECTORS = [
   '8199f5f3',
   'b0669cbc',
   '3b99b53d',
+  '849eaf98',
   '756688fe',
   '7939f424',
   '86aa6210',
@@ -684,6 +691,7 @@ export function extractExecutionFailedInnerSelector(revertData?: Hex): string | 
     '0x8199f5f3',
     '0xb0669cbc',
     '0x3b99b53d',
+    '0x849eaf98',
     PERMIT2_INVALID_NONCE_SELECTOR,
   ]) {
     if (lower.includes(selector.slice(2))) return selector
@@ -719,8 +727,11 @@ export function buildPreflightSimulationRejectionError(params: {
   const innerSelector = extractExecutionFailedInnerSelector(direct?.revertData ?? params.simResult.revertData)
   const detail = direct?.error ?? params.simResult.error ?? 'Underlying call would revert'
   const detailLc = String(detail).toLowerCase()
+  const detailSignatureSelector =
+    detailLc.match(/signature:\s*(0x[0-9a-f]{8})/)?.[1] ?? null
+  const effectiveSelector = innerSelector ?? detailSignatureSelector
 
-  if (innerSelector === '0xb0669cbc') {
+  if (effectiveSelector === '0xb0669cbc') {
     return new PreflightSimulationRejectionError(
       'Permit2 rejected the smart-wallet signature. Refresh the quote, sign again when prompted, then retry the swap.',
     )
@@ -728,7 +739,7 @@ export function buildPreflightSimulationRejectionError(params: {
 
   if (
     isPermit2InvalidNonceRevert({
-      innerSelector,
+      innerSelector: effectiveSelector,
       revertData: direct?.revertData ?? params.simResult.revertData,
       errorMessage: detail,
     })
@@ -736,9 +747,9 @@ export function buildPreflightSimulationRejectionError(params: {
     return new PreflightSimulationRejectionError(PERMIT2_INVALID_NONCE_MESSAGE)
   }
 
-  const slippageInnerSelectors = new Set(['0x486aa621', '0x8199f5f3', '0x86aa6210'])
+  const slippageInnerSelectors = new Set(['0x486aa621', '0x8199f5f3', '0x86aa6210', '0x849eaf98'])
   const likelySlippageFailure =
-    (innerSelector != null && slippageInnerSelectors.has(innerSelector)) ||
+    (effectiveSelector != null && slippageInnerSelectors.has(effectiveSelector)) ||
     detailLc.includes('slippage') ||
     detailLc.includes('too little') ||
     detailLc.includes('toolittle') ||
@@ -748,12 +759,12 @@ export function buildPreflightSimulationRejectionError(params: {
 
   if (likelySlippageFailure) {
     return new PreflightSimulationRejectionError(
-      'Slippage tolerance is too tight for this pool. Auto mode will retry with higher slippage; you can also raise slippage manually and refresh the quote.',
+      'Slippage tolerance is too tight for this pool. If Auto mode is enabled, the app will retry with higher slippage; you can also raise slippage manually and refresh the quote.',
     )
   }
 
   const allowanceFailure =
-    innerSelector === '0x7939f424' ||
+    effectiveSelector === '0x7939f424' ||
     detailLc.includes('transfer_from_failed') ||
     detailLc.includes('transfer_from') ||
     detailLc.includes('insufficient allowance') ||
@@ -771,12 +782,23 @@ export function buildPreflightSimulationRejectionError(params: {
     revertData?.startsWith('0x2c4029e9') ||
     callTo === ZORA_UNIVERSAL_ROUTER_BASE
   ) {
-    if (innerSelector) {
+    if (effectiveSelector) {
       return new PreflightSimulationRejectionError(
-        `${ZORA_SWAP_SIMULATION_FAILED_MESSAGE} (revert ${innerSelector})`,
+        `${ZORA_SWAP_SIMULATION_FAILED_MESSAGE} (revert ${effectiveSelector})`,
       )
     }
-    return new PreflightSimulationRejectionError(ZORA_SWAP_SIMULATION_FAILED_MESSAGE)
+    const compactDetail = String(detail ?? '')
+      .replace(/\s+/g, ' ')
+      .trim()
+    const shouldAppendDetail =
+      compactDetail.length > 0 &&
+      !compactDetail.toLowerCase().includes('execution reverted') &&
+      !compactDetail.toLowerCase().includes('requested resource not available')
+    return new PreflightSimulationRejectionError(
+      shouldAppendDetail
+        ? `${ZORA_SWAP_SIMULATION_FAILED_MESSAGE} (${compactDetail.slice(0, 160)})`
+        : ZORA_SWAP_SIMULATION_FAILED_MESSAGE,
+    )
   }
   if (detailLc.includes('transfer_from_failed')) {
     return new PreflightSimulationRejectionError(

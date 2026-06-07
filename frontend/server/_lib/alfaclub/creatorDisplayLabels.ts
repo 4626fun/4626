@@ -93,17 +93,25 @@ async function readRoomSnapshotLabels(
   try {
     const result = await db.sql`
       SELECT
-        LOWER(creator_address) AS creator_address,
-        room_id::text AS room_id,
-        sn,
-        creator_twitter_username,
-        room_name
-      FROM public.alfaclub_rooms_snapshot
+        LOWER(s.creator_address) AS creator_address,
+        s.room_id::text AS room_id,
+        s.sn,
+        s.creator_twitter_username,
+        COALESCE(s.room_name, e.room_name) AS room_name
+      FROM public.alfaclub_rooms_snapshot s
+      LEFT JOIN LATERAL (
+        SELECT room_name
+        FROM public.alfaclub_explore_latest e2
+        WHERE e2.room_id = s.room_id::bigint
+          AND e2.room_name IS NOT NULL
+          AND LENGTH(TRIM(e2.room_name)) > 0
+        LIMIT 1
+      ) e ON TRUE
       WHERE (
-        LOWER(creator_address) = ANY(${addresses})
-        OR room_id::text = ANY(${tokenIds})
+        LOWER(s.creator_address) = ANY(${addresses})
+        OR s.room_id::text = ANY(${tokenIds})
       )
-        AND creator_address IS NOT NULL;
+        AND s.creator_address IS NOT NULL;
     `
     const rows = (result.rows ?? []) as Array<{
       creator_address: string | null

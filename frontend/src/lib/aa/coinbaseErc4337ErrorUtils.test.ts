@@ -95,6 +95,14 @@ describe('isSwapPreflightSimulationRetryable', () => {
       ),
     ).toBe(true)
   })
+
+  it('treats allowance-missing simulation failures as retryable', () => {
+    expect(
+      isSwapPreflightSimulationRetryable(
+        new PreflightSimulationRejectionError('Token allowance is missing for this swap.'),
+      ),
+    ).toBe(true)
+  })
 })
 
 describe('shouldAdvisorySkipBundlerGasEstimate', () => {

@@ -1087,34 +1087,31 @@ export async function simulateSmartWalletCalls(params: {
         directCallResult = { success: false, ...extractRevertInfo(e) }
       }
     } else {
-      for (let index = 0; index < calls.length; index += 1) {
-        const call = calls[index]!
-        const blockNumber = isZoraUniversalRouterTarget(call.to) ? 'latest' : 'pending'
-        try {
-          await client.call({
-            to: call.to,
-            data: call.data,
-            value: call.value ?? 0n,
-            account: smartWallet,
-            blockNumber,
-          })
-        } catch (e: unknown) {
-          const legFailure = { success: false as const, ...extractRevertInfo(e) }
-          directCallResult = legFailure
-          return {
-            success: false,
-            error:
-              index > 0
-                ? legFailure.error ??
-                  'Swap leg would revert before prior calls land on-chain. Submit approval first, wait for confirmation, then retry the swap.'
-                : legFailure.error,
-            revertData: legFailure.revertData,
-            errorName: legFailure.errorName,
-            directCallResult: legFailure,
-          }
+      // Multi-call flows (wrap -> approve -> swap) are stateful. Simulating each leg independently
+      // creates false negatives on later legs because prior state transitions are absent.
+      // Probe only the first preparatory leg here; rely on executeBatch simulation for the full sequence.
+      const firstLeg = calls[0]!
+      const blockNumber = isZoraUniversalRouterTarget(firstLeg.to) ? 'latest' : 'pending'
+      try {
+        await client.call({
+          to: firstLeg.to,
+          data: firstLeg.data,
+          value: firstLeg.value ?? 0n,
+          account: smartWallet,
+          blockNumber,
+        })
+        directCallResult = { success: true }
+      } catch (e: unknown) {
+        const legFailure = { success: false as const, ...extractRevertInfo(e) }
+        directCallResult = legFailure
+        return {
+          success: false,
+          error: legFailure.error,
+          revertData: legFailure.revertData,
+          errorName: legFailure.errorName,
+          directCallResult: legFailure,
         }
       }
-      directCallResult = { success: true }
     }
   }
 
@@ -2490,6 +2487,10 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       lc.includes('must be at least')
 
     try {
+      const conciseErrMsg = errMsg.replace(/\s*Request Arguments:[\s\S]*/i, '').trim()
+      const conciseErrorDetails = errorDetails
+        ? errorDetails.replace(/\s*Request Arguments:[\s\S]*/i, '').trim()
+        : null
       const logPayload = {
         smartWallet,
         ownerAddress,
@@ -2513,7 +2514,9 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       }
       if (!isExpectedTimeoutFailure || AA_DEBUG) {
         console.error(
-          `[ERC-4337] UserOp failed: ${errMsg}${errorDetails ? ` (${errorDetails})` : ''}`,
+          `[ERC-4337] UserOp failed: ${conciseErrMsg}${
+            conciseErrorDetails ? ` (${conciseErrorDetails})` : ''
+          }`,
           logPayload,
         )
       } else {

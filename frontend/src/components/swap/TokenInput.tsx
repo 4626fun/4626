@@ -127,6 +127,7 @@ export function TokenInput({
               }}
               symbol={token.symbol}
               size={24}
+              noFallback
             />
             <span className="max-w-[5.5rem] truncate text-[16px] font-semibold leading-none text-white">
               {tokenIdentityLoading ? (

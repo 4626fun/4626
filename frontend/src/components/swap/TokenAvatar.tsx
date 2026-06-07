@@ -67,6 +67,10 @@ export function TokenAvatar(props: {
   const current = candidates[resolvedIndex]
   const finalRingClass = props.ringClass ?? 'border-white/12'
 
+  if (props.noFallback && activeCursor.failed) {
+    return null
+  }
+
   function handleImageError() {
     if (resolvedIndex < candidates.length - 1) {
       setCursor((value) => {
@@ -104,8 +108,8 @@ export function TokenAvatar(props: {
     if (props.noFallback) return null
     return (
       <div
-        className={`grid place-items-center rounded-full border bg-vault-cardRaised text-[10px] font-semibold text-vault-text ${props.className ?? ''}`}
-        style={{ width: size, height: size, borderColor: 'rgb(var(--vault-border-strong) / 0.75)' }}
+        className={`grid place-items-center rounded-full border bg-[#121212] text-[10px] font-semibold text-zinc-400 ${props.className ?? ''}`}
+        style={{ width: size, height: size, borderColor: 'rgb(255 255 255 / 0.12)' }}
       >
         {props.withFallbackLabel ? initials(props.symbol) : ''}
       </div>
@@ -153,11 +157,11 @@ export function TokenAvatar(props: {
 
   return (
     <div
-      className={`grid place-items-center rounded-full bg-vault-cardRaised/70 ${props.className ?? ''}`}
+      className={`grid place-items-center rounded-full bg-[#121212]/90 ${props.className ?? ''}`}
       style={{
         width: size,
         height: size,
-        border: `1px solid rgb(var(--vault-border-strong) / 0.72)`,
+        border: `1px solid rgb(255 255 255 / 0.12)`,
         overflow: 'hidden',
       }}
     >
@@ -173,7 +177,7 @@ export function TokenAvatar(props: {
           style={{ borderColor: 'rgb(var(--vault-border-strong) / 0.72)' }}
         />
       ) : (
-        <span className="text-[10px] font-semibold text-vault-text">{initials(props.symbol)}</span>
+        <span className="text-[10px] font-semibold text-zinc-400">{initials(props.symbol)}</span>
       )}
     </div>
   )

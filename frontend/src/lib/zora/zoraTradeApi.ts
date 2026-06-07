@@ -788,7 +788,9 @@ export async function executeZoraCswQuoteWithEscalation(params: {
     const slippagePct = effectiveLadder[i]
     try {
       if (i > 0) {
-        params.onStatus?.(SWAP_PREPARE_STATUS)
+        params.onStatus?.(
+          `${SWAP_PREPARE_STATUS} Retrying with ${Number.isFinite(slippagePct) ? slippagePct : '?'}% slippage…`,
+        )
       }
 
       let baseQuote = params.quote
@@ -831,7 +833,21 @@ export async function executeZoraCswQuoteWithEscalation(params: {
       })
     } catch (error) {
       lastError = error
-      if (i >= effectiveLadder.length - 1 || !isZoraRouterSimulationRetryable(error)) {
+      const isRetryable = isZoraRouterSimulationRetryable(error)
+      const isLastAttempt = i >= effectiveLadder.length - 1
+      if (isLastAttempt && isRetryable) {
+        const maxTried = effectiveLadder[effectiveLadder.length - 1] ?? slippagePct ?? params.slippagePct
+        const detail = String(error instanceof Error ? error.message : error ?? '').trim()
+        const detailSuffix =
+          detail && !detail.toLowerCase().includes('slippage tolerance is too tight')
+            ? ` (${detail.slice(0, 180)})`
+            : ''
+        throw new Error(
+          `Slippage tolerance is still too tight after escalating up to ${maxTried}%. ` +
+            `Try a smaller amount, or set manual slippage near ${maxTried}% and retry.${detailSuffix}`,
+        )
+      }
+      if (isLastAttempt || !isRetryable) {
         throw error
       }
     }

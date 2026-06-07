@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { erc20Abi, formatUnits, getAddress, isAddress, parseUnits, type Hex } from 'viem'
+import { encodeFunctionData, erc20Abi, formatUnits, getAddress, isAddress, parseUnits, type Hex } from 'viem'
 import { debugLogsFlag } from '@/lib/flags/featureFlags'
 import { CONTRACTS } from '@/config/contracts'
 
@@ -94,6 +94,7 @@ const HARD_FAILURE_COOLDOWN_MS = 15_000
 const CALIBUR_DELEGATION_ADDRESS = '0x000000009B1D0aF20D8C6d0A44e162d11F9b8f00' as const
 const WETH_DEPOSIT_SELECTOR = '0xd0e30db0'
 const ERC20_APPROVE_SELECTOR = '0x095ea7b3'
+const MAX_UINT256 = (1n << 256n) - 1n
 
 type TxLifecycleState = 'idle' | 'review' | 'signing' | 'pending' | 'success' | 'error'
 
@@ -401,6 +402,38 @@ function isApproveOnlyTransaction(tx: TransactionRequest | null | undefined): bo
   return data.startsWith(ERC20_APPROVE_SELECTOR)
 }
 
+function isAllowanceMissingSwapError(error: unknown): boolean {
+  const text = String(error instanceof Error ? error.message : error ?? '').toLowerCase()
+  return (
+    text.includes('allowance is missing') ||
+    text.includes('insufficient allowance') ||
+    text.includes('exceeds allowance') ||
+    text.includes('transfer_from_failed') ||
+    text.includes('transfer_from')
+  )
+}
+
+function buildPermit2ApprovalTx(params: {
+  tokenAddress: string
+  from: string | null | undefined
+  chainId: number | string
+}): TransactionRequest | null {
+  if (!isAddress(params.tokenAddress)) return null
+  const numericChainId = Number(params.chainId)
+  if (!Number.isFinite(numericChainId) || numericChainId <= 0) return null
+  return {
+    to: getAddress(params.tokenAddress),
+    from: params.from ?? '',
+    data: encodeFunctionData({
+      abi: erc20Abi,
+      functionName: 'approve',
+      args: [getAddress(CONTRACTS.permit2), MAX_UINT256],
+    }),
+    value: '0',
+    chainId: numericChainId as TransactionRequest['chainId'],
+  } satisfies TransactionRequest
+}
+
 /** Uniswap /swap simulateTransaction is skipped for canonical CSW — ERC-4337 preflight runs at send. */
 export function shouldSimulateSwapBuild(params: {
   executionMode: 'canonical' | 'eoa'
@@ -504,10 +537,19 @@ function isCdpProviderQuote(value: TradeQuoteResponse | null | undefined): boole
 
 function toCanonicalPreflightCalls(params: {
   executionAddress: string
+  wrapTx?: TransactionRequest | null
   bundledApprovalTx?: TransactionRequest | null
   swapTx: TransactionRequest
 }): Array<{ to: `0x${string}`; value?: bigint; data?: Hex }> {
   const calls: Array<{ to: `0x${string}`; value?: bigint; data?: Hex }> = []
+  const wrap = params.wrapTx
+  if (wrap?.to && wrap?.data) {
+    calls.push({
+      to: getAddress(String(wrap.to)),
+      data: String(wrap.data) as Hex,
+      value: BigInt(typeof wrap.value === 'string' ? wrap.value : wrap.value ?? '0'),
+    })
+  }
   const approval = params.bundledApprovalTx
   if (approval?.to && approval?.data) {
     calls.push({
@@ -525,58 +567,6 @@ function toCanonicalPreflightCalls(params: {
   return calls
 }
 
-async function submitCanonicalApprovalBeforeSwap(params: {
-  approvalTx: TransactionRequest
-  sendContext: TxRouterContext
-  publicClient: {
-    waitForTransactionReceipt?: (args: { hash: `0x${string}`; timeout?: number }) => Promise<unknown>
-  } | null | undefined
-  onStatus: (status: string) => void
-  updateAttemptDebug: (attempt: SwapTxAttemptDebug) => void
-}): Promise<void> {
-  params.onStatus('Submitting token approval…')
-  const { routing, send } = await buildAndSendApproval({
-    context: params.sendContext,
-    approvalTx: params.approvalTx,
-  })
-  const debugHash = send.transactionHash ?? send.txHashes[0] ?? send.userOpHash ?? null
-  params.updateAttemptDebug({
-    stage: 'approval',
-    mode: routing.mode,
-    method: send.method,
-    sender: send.sender,
-    txHash: debugHash,
-    callsId: send.callsId,
-    callTargets: [params.approvalTx.to],
-    at: Date.now(),
-  })
-
-  const userOpHash = send.userOpHash ?? null
-  if (userOpHash && params.publicClient) {
-    const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-    const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-    const priorStatus = await waitForPriorPendingUserOp({
-      publicClient: params.publicClient as Parameters<typeof waitForPriorPendingUserOp>[0]['publicClient'],
-      bundlerUrl,
-      userOpHash: userOpHash as `0x${string}`,
-      onStatus: params.onStatus,
-    })
-    if (priorStatus === 'timeout') {
-      throw new Error('Token approval is still confirming on Base. Wait ~30 seconds, then try the swap again.')
-    }
-    if (priorStatus === 'failed') {
-      throw new Error('Token approval failed on-chain. Refresh the quote and try again.')
-    }
-  } else if (send.transactionHash && params.publicClient?.waitForTransactionReceipt) {
-    await params.publicClient
-      .waitForTransactionReceipt({ hash: send.transactionHash as `0x${string}`, timeout: 90_000 })
-      .catch(() => null)
-  }
-
-  params.onStatus('Approval confirmed. Preparing swap…')
-  invalidateTradeQuoteCache()
-}
-
 async function prepareCanonicalUniswapSwapForSend(params: {
   amount: string
   slippagePct: number
@@ -588,6 +578,7 @@ async function prepareCanonicalUniswapSwapForSend(params: {
   signPermitIfRequired: (quote: TradeQuoteResponse) => Promise<Record<string, unknown>>
   permit2DisabledForSwap: boolean
   executionAddress: string
+  preflightWrapTx?: TransactionRequest | null
   swapChainId: number | string
   parsedDeadlineMinutes: number
   bundledApprovalTx?: TransactionRequest | null
@@ -633,6 +624,7 @@ async function prepareCanonicalUniswapSwapForSend(params: {
     assertValidSwapTransaction(built.swap)
     const preflightCalls = toCanonicalPreflightCalls({
       executionAddress: params.executionAddress,
+      wrapTx: params.preflightWrapTx ?? null,
       bundledApprovalTx: params.bundledApprovalTx,
       swapTx: built.swap,
     })
@@ -667,7 +659,12 @@ async function prepareCanonicalUniswapSwapForSend(params: {
         }
       } catch (preflightError) {
         lastError = preflightError
-        if (attempt + 1 < maxAttempts && isPermit2InvalidNonceError(preflightError)) {
+        if (attempt + 1 < maxAttempts && isSwapPreflightSimulationRetryable(preflightError)) {
+          if (isPermit2InvalidNonceError(preflightError)) {
+            params.onStatus('Refreshing quote after stale Permit2 authorization…')
+          } else {
+            params.onStatus('Refreshing quote and approval after preflight rejection…')
+          }
           continue
         }
         throw preflightError
@@ -978,6 +975,7 @@ export function useSwapExecution(params: {
     params.executionMode === 'canonical' &&
     params.connectorId === 'privy-embedded' &&
     params.tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
+  const strictCanonicalWrappedEthLane = wrapNativeInputForSponsoredCanonical
   const effectiveTokenIn = wrapNativeInputForSponsoredCanonical ? CONTRACTS.weth : params.tokenIn
 
   useEffect(() => {
@@ -1319,7 +1317,14 @@ export function useSwapExecution(params: {
   const buildQuoteRequest = useCallback(
     (amount: string, slippageOverride?: number): TradeQuoteRequest => {
       const slippageTolerance = slippageOverride ?? effectiveParsedSlippage
-      const useUniswapAutoSlippage = Boolean(params.slippageAuto) && !params.preferZoraTradeRoute
+      const useUniswapAutoSlippage = strictCanonicalWrappedEthLane
+        ? Boolean(params.slippageAuto)
+        : Boolean(params.slippageAuto) && !params.preferZoraTradeRoute
+      const clientOptions = strictCanonicalWrappedEthLane
+        ? ({
+            useZoraTradeRoute: true,
+          } satisfies Pick<TradeQuoteRequest, 'useZoraTradeRoute'>)
+        : resolveTradeQuoteClientOptions({ preferZoraTradeRoute: params.preferZoraTradeRoute })
       return {
         tokenIn: effectiveTokenIn,
         tokenOut: params.tokenOut,
@@ -1334,7 +1339,7 @@ export function useSwapExecution(params: {
         routingPreference: 'BEST_PRICE',
         permitAmount: permit2DisabledForSwap ? undefined : 'EXACT',
         walletModeKey: params.executionMode,
-        ...resolveTradeQuoteClientOptions({ preferZoraTradeRoute: params.preferZoraTradeRoute }),
+        ...clientOptions,
       }
     },
     [
@@ -1347,6 +1352,7 @@ export function useSwapExecution(params: {
       permit2DisabledForSwap,
       params.executionMode,
       params.preferZoraTradeRoute,
+      strictCanonicalWrappedEthLane,
     ],
   )
 
@@ -1531,9 +1537,10 @@ export function useSwapExecution(params: {
       const data = await fetchTradeQuote(buildQuoteRequest(amount))
       if (runId !== quoteRunRef.current) return
       const isZoraQuote = isZoraProviderQuote(data)
-      const isCdpQuote = String((data as any).provider ?? '')
-        .trim()
-        .toLowerCase() === 'cdp'
+      const isCdpQuote = isCdpProviderQuote(data)
+      if (strictCanonicalWrappedEthLane && isCdpQuote) {
+        throw new Error('Canonical wrapped-ETH swaps are locked to Zora/Uniswap Permit2 routing. Refresh quote and retry.')
+      }
       if (!isZoraQuote && !isCdpQuote && !guardRoutingPolicy(data.routing)) return
       setQuote(data)
       setQuoteUpdatedAt(Date.now())
@@ -1576,6 +1583,7 @@ export function useSwapExecution(params: {
     registerQuoteHardFailure,
     resetQuoteFailureTracker,
     syncPermitRequirement,
+    strictCanonicalWrappedEthLane,
     swapSessionGate,
     swapCompletion,
     buildQuoteRequest,
@@ -1592,7 +1600,7 @@ export function useSwapExecution(params: {
       return
     }
     if (!isReady) return
-    if (isCdpProviderQuote(quote)) {
+    if (!strictCanonicalWrappedEthLane && isCdpProviderQuote(quote)) {
       setError('')
       setApprovalData({ approval: null, cancel: null })
       setStatus('No token approval required for CDP swap path')
@@ -1666,6 +1674,7 @@ export function useSwapExecution(params: {
     swapChainId,
     isReady,
     permit2DisabledForSwap,
+    strictCanonicalWrappedEthLane,
     getTokenDecimals,
     getErrorMessage,
     guardInputPolicy,
@@ -1794,6 +1803,9 @@ export function useSwapExecution(params: {
       if (runId !== quoteRunRef.current) return
       const isZoraQuote = isZoraProviderQuote(nextQuote)
       const isCdpQuote = isCdpProviderQuote(nextQuote)
+      if (strictCanonicalWrappedEthLane && isCdpQuote) {
+        throw new Error('Canonical wrapped-ETH swaps are locked to Zora/Uniswap Permit2 routing. Refresh quote and retry.')
+      }
       if (!isZoraQuote && !isCdpQuote && !guardRoutingPolicy(nextQuote.routing)) return
       const nextApproval =
         isZoraQuote ||
@@ -1911,6 +1923,7 @@ export function useSwapExecution(params: {
     quoteUpdatedAt,
     permit2DisabledForSwap,
     wrapNativeInputForSponsoredCanonical,
+    strictCanonicalWrappedEthLane,
     busy,
     txState,
   ])
@@ -2045,6 +2058,14 @@ export function useSwapExecution(params: {
       setStatus('No approval transaction required')
       return
     }
+    if (params.executionMode === 'canonical') {
+      const message =
+        'Standalone token approval is blocked for sponsored canonical swaps. Use Confirm Swap so approval and swap submit atomically.'
+      setError(message)
+      setStatus(message)
+      setTxState('error')
+      throw new Error(message)
+    }
     setBusy('executeApproval')
     setError('')
     try {
@@ -2126,7 +2147,6 @@ export function useSwapExecution(params: {
     setStatus('Signing and submitting swap…')
     try {
       let bundledApprovalTx = options?.approvalTx ?? null
-      let hadSeparateCanonicalApproval = false
       if (params.executionMode === 'canonical') {
         const sessionGuard = await resolveCanonicalSubmitSession(
           {
@@ -2177,17 +2197,6 @@ export function useSwapExecution(params: {
         await run7702DryRun({ silent: true }).catch(() => null)
       }
       let sendContext = buildRouterContext()
-      if (params.executionMode === 'canonical' && bundledApprovalTx) {
-        hadSeparateCanonicalApproval = true
-        await submitCanonicalApprovalBeforeSwap({
-          approvalTx: bundledApprovalTx,
-          sendContext,
-          publicClient: params.publicClient,
-          onStatus: setStatus,
-          updateAttemptDebug,
-        })
-        bundledApprovalTx = null
-      }
       const routePreview = detectTxSendMode(sendContext)
       if (swapDebugEnabled) {
         console.debug('[swap][send][swap]', {
@@ -2230,6 +2239,10 @@ export function useSwapExecution(params: {
         effectiveParsedSlippage,
         readZoraQuotedSlippagePct(quote) ?? 0,
       )
+      if (strictCanonicalWrappedEthLane && quote && isCdpProviderQuote(quote)) {
+        throw new Error('Canonical wrapped-ETH swaps are locked to Zora/Uniswap Permit2 routing. Refresh quote and retry.')
+      }
+
       if (quote && isZoraProviderQuote(quote)) {
         const amount = readQuoteInputAmount(quote)
         if (!amount) {
@@ -2262,9 +2275,21 @@ export function useSwapExecution(params: {
           }
         }
         setStatus(SWAP_PREPARE_STATUS)
+        // Mirror the CLI quote->confirm->buy pattern: refresh a submit-time quote so
+        // we do not send from a stale review payload.
+        const submitQuote = await fetchTradeQuote(buildQuoteRequest(amount, activeSlippagePct))
+        if (strictCanonicalWrappedEthLane && isCdpProviderQuote(submitQuote)) {
+          throw new Error('Canonical wrapped-ETH swaps are locked to Zora/Uniswap Permit2 routing. Refresh quote and retry.')
+        }
+        if (!isZoraProviderQuote(submitQuote)) {
+          throw new Error('Submit-time quote did not return Zora routing. Refresh quote and retry.')
+        }
+        setQuote(submitQuote)
+        setQuoteUpdatedAt(Date.now())
+        syncPermitRequirement(submitQuote)
         const zoraPrepareSlippagePct = Math.max(effectiveParsedSlippage, activeSlippagePct)
         const executableQuote = await prepareZoraQuoteForExecute({
-          quote,
+          quote: submitQuote,
           tokenIn: effectiveTokenIn,
           tokenOut: params.tokenOut,
           amountIn: amount,
@@ -2316,6 +2341,35 @@ export function useSwapExecution(params: {
         if (!params.executionAddress) {
           throw new Error('Execution address is required to submit this swap.')
         }
+        const submitApprovalData =
+          effectiveTokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
+            ? ({ approval: null, cancel: null } as Record<string, unknown>)
+            : ((await checkTradeApproval({
+                walletAddress: params.executionAddress,
+                token: effectiveTokenIn,
+                amount,
+                chainId: swapChainId,
+                tokenOut: params.tokenOut,
+                tokenOutChainId: swapChainId,
+                includeGasInfo: true,
+                permit2Disabled: permit2DisabledForSwap,
+              })) as Record<string, unknown>)
+        setApprovalData(submitApprovalData)
+        bundledApprovalTx = hasApprovalTransaction(submitApprovalData)
+          ? toExecutionTransaction((submitApprovalData as { approval?: Record<string, unknown> }).approval as Record<string, unknown>)
+          : null
+        if (wrapNativeInputForSponsoredCanonical) {
+          const forcedWethApprovalTx = buildPermit2ApprovalTx({
+            tokenAddress: effectiveTokenIn,
+            from: params.executionAddress ?? params.signerAddress ?? '',
+            chainId: swapChainId,
+          })
+          if (forcedWethApprovalTx) {
+            bundledApprovalTx = forcedWethApprovalTx
+            setApprovalData({ approval: forcedWethApprovalTx, cancel: null })
+            setStatus('Injecting WETH Permit2 approval for sponsored canonical swap…')
+          }
+        }
         const prepared = await prepareCanonicalUniswapSwapForSend({
           amount,
           slippagePct: activeSlippagePct,
@@ -2327,6 +2381,7 @@ export function useSwapExecution(params: {
           signPermitIfRequired,
           permit2DisabledForSwap,
           executionAddress: params.executionAddress,
+          preflightWrapTx: wrapTx,
           swapChainId,
           parsedDeadlineMinutes: params.parsedDeadlineMinutes,
           bundledApprovalTx: bundledApprovalTx,
@@ -2348,7 +2403,7 @@ export function useSwapExecution(params: {
         !isZoraProviderQuote(quote) &&
         !isCdpProviderQuote(quote)
       const maxSendAttempts =
-        quote && isZoraProviderQuote(quote) ? 4 : isUniswapCanonicalSubmit ? 4 : 1
+        quote && isZoraProviderQuote(quote) ? 6 : isUniswapCanonicalSubmit ? 6 : 1
       let activeQuoteForRetry = quote
       for (let sendAttempt = 0; sendAttempt < maxSendAttempts; sendAttempt += 1) {
         assertSwapSubmitEpochUnchanged(submitEpoch)
@@ -2386,7 +2441,7 @@ export function useSwapExecution(params: {
           if (canRefreshZora) {
             const amount = readQuoteInputAmount(activeQuoteForRetry)
             if (!amount || !params.executionAddress) throw sendError
-            const retrySlippagePct = resolveSwapSendRetrySlippagePct({
+            let retrySlippagePct = resolveSwapSendRetrySlippagePct({
               sendAttempt,
               maxSendAttempts,
               activeSlippagePct,
@@ -2397,7 +2452,26 @@ export function useSwapExecution(params: {
               sendError,
               isRetryable: isZoraBundlerSendRetryable,
             })
-            if (retrySlippagePct == null) throw sendError
+            if (
+              (retrySlippagePct == null || retrySlippagePct <= activeSlippagePct + 1e-9) &&
+              isZoraBundlerSendRetryable(sendError)
+            ) {
+              const forcedNext = pickNextZoraBundlerRetrySlippagePct(activeSlippagePct)
+              if (
+                forcedNext != null &&
+                forcedNext > activeSlippagePct + 1e-9 &&
+                forcedNext <= slippageEscalationCapPct + 1e-9
+              ) {
+                retrySlippagePct = forcedNext
+                setStatus(`Canonical retry escalating slippage to ${forcedNext}% for Zora fill reliability…`)
+              }
+            }
+            if (retrySlippagePct == null) {
+              throw new Error(
+                `Zora swap retries exhausted at ${activeSlippagePct}% slippage (cap ${slippageEscalationCapPct}%). ` +
+                  'Try a smaller amount, or raise manual slippage and retry.',
+              )
+            }
             if (!activeQuoteForRetry) throw sendError
             setStatus(SWAP_PREPARE_STATUS)
             sendContext = { ...sendContext, zoraRouterValidatedBeforeSend: false }
@@ -2449,7 +2523,7 @@ export function useSwapExecution(params: {
           if (canRefreshUniswap) {
             const amount = readQuoteInputAmount(activeQuoteForRetry)
             if (!amount || !params.executionAddress) throw sendError
-            const retrySlippagePct = resolveSwapSendRetrySlippagePct({
+            let retrySlippagePct = resolveSwapSendRetrySlippagePct({
               sendAttempt,
               maxSendAttempts,
               activeSlippagePct,
@@ -2460,7 +2534,64 @@ export function useSwapExecution(params: {
               sendError,
               isRetryable: isSwapPreflightSimulationRetryable,
             })
+            if (
+              (retrySlippagePct == null || retrySlippagePct <= activeSlippagePct + 1e-9) &&
+              isSwapPreflightSimulationRetryable(sendError)
+            ) {
+              const forcedNext = pickNextSwapSlippageEscalationPct(activeSlippagePct)
+              if (
+                forcedNext != null &&
+                forcedNext > activeSlippagePct + 1e-9 &&
+                forcedNext <= slippageEscalationCapPct + 1e-9
+              ) {
+                retrySlippagePct = forcedNext
+                setStatus(`Canonical retry escalating slippage to ${forcedNext}% for fill reliability…`)
+              }
+            }
             if (retrySlippagePct == null) throw sendError
+            const retryApprovalData =
+              effectiveTokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
+                ? ({ approval: null, cancel: null } as Record<string, unknown>)
+                : ((await checkTradeApproval({
+                    walletAddress: params.executionAddress,
+                    token: effectiveTokenIn,
+                    amount,
+                    chainId: swapChainId,
+                    tokenOut: params.tokenOut,
+                    tokenOutChainId: swapChainId,
+                    includeGasInfo: true,
+                    permit2Disabled: permit2DisabledForSwap,
+                  })) as Record<string, unknown>)
+            setApprovalData(retryApprovalData)
+            const retryApprovalTx = hasApprovalTransaction(retryApprovalData)
+              ? toExecutionTransaction((retryApprovalData as { approval?: Record<string, unknown> }).approval as Record<string, unknown>)
+              : null
+            const forcedWethApprovalTx = wrapNativeInputForSponsoredCanonical
+              ? buildPermit2ApprovalTx({
+                  tokenAddress: effectiveTokenIn,
+                  from: params.executionAddress ?? params.signerAddress ?? '',
+                  chainId: swapChainId,
+                })
+              : null
+            const shouldForcePermit2Approval =
+              !retryApprovalTx &&
+              !bundledApprovalTx &&
+              params.executionMode === 'canonical' &&
+              isAddress(effectiveTokenIn) &&
+              isAllowanceMissingSwapError(sendError)
+            const forcedApprovalTx = shouldForcePermit2Approval
+              ? buildPermit2ApprovalTx({
+                  tokenAddress: effectiveTokenIn,
+                  from: params.executionAddress ?? params.signerAddress ?? '',
+                  chainId: swapChainId,
+                })
+              : null
+            const finalForcedApprovalTx = forcedWethApprovalTx ?? forcedApprovalTx
+            if (finalForcedApprovalTx) {
+              setStatus('Allowance missing detected. Injecting Permit2 approval and retrying swap…')
+              setApprovalData({ approval: finalForcedApprovalTx, cancel: null })
+            }
+            bundledApprovalTx = finalForcedApprovalTx ?? retryApprovalTx
             const prepared = await prepareCanonicalUniswapSwapForSend({
               amount,
               slippagePct: retrySlippagePct,
@@ -2472,9 +2603,10 @@ export function useSwapExecution(params: {
               signPermitIfRequired,
               permit2DisabledForSwap,
               executionAddress: params.executionAddress,
+              preflightWrapTx: wrapTx,
               swapChainId,
               parsedDeadlineMinutes: params.parsedDeadlineMinutes,
-              bundledApprovalTx: null,
+              bundledApprovalTx: bundledApprovalTx,
               onStatus: setStatus,
             })
             activeSwapTx = prepared.swapTx
@@ -2486,6 +2618,20 @@ export function useSwapExecution(params: {
             activeSlippagePct = retrySlippagePct
             sendContext = { ...sendContext, zoraRouterValidatedBeforeSend: true }
             continue
+          }
+
+          const sendErrorMessage = String(
+            sendError instanceof Error ? sendError.message : sendError ?? '',
+          ).toLowerCase()
+          const zoraSlippageFailure =
+            activeQuoteForRetry &&
+            isZoraProviderQuote(activeQuoteForRetry) &&
+            sendErrorMessage.includes('slippage tolerance is too tight')
+          if (zoraSlippageFailure) {
+            throw new Error(
+              `Zora swap retries exhausted during slippage escalation (outer ${activeSlippagePct}%, cap ${slippageEscalationCapPct}%). ` +
+                'Try a smaller amount, or raise manual slippage and retry.',
+            )
           }
 
           throw sendError
@@ -2501,7 +2647,7 @@ export function useSwapExecution(params: {
       setTxState('success')
       setStatus(nextHash ? '' : 'Swap submitted. Confirming on Base…')
 
-      if (!hadSeparateCanonicalApproval && bundledApprovalTx) {
+      if (bundledApprovalTx) {
         const approvalHash = send.txHashes[0] ?? debugHash
         updateAttemptDebug({
           stage: 'approval',
@@ -2648,6 +2794,7 @@ export function useSwapExecution(params: {
     signPermitIfRequired,
     permit2DisabledForSwap,
     toExecutionTransaction,
+    strictCanonicalWrappedEthLane,
   ])
 
   const executeOrderNow = useCallback(async () => {

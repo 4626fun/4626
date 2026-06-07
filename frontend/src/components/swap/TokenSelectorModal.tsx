@@ -25,7 +25,7 @@ import { isOpaqueInternalTokenLabel } from '@/lib/swap/swapTokenLabels'
 import { AKITA_DEFAULTS } from '@/config/contracts.defaults'
 import {
   BASE_CHAIN_ID,
-  creatorCoinRawLogo,
+  shareTokenLogo,
   shortAddress,
   type TokenDisplay,
   type TokenOption,
@@ -64,7 +64,7 @@ const TRENDING_PINNED: Array<{ address: `0x${string}`; fallback: SwapTokenOption
       sectionTag: 'creator',
       verified: true,
       chainId: BASE_CHAIN_ID,
-      logoUrl: creatorCoinRawLogo(AKITA_DEFAULTS.token),
+      logoUrl: shareTokenLogo(AKITA_DEFAULTS.token, BASE_CHAIN_ID),
     },
   },
 ]
@@ -309,14 +309,8 @@ function TokenSelectorRow(props: {
           token={{ address: option.address, logoUrl: option.logoUrl, logoUrls: option.logoUrls }}
           symbol={option.symbol}
           size={40}
+          noFallback
         />
-        {chainLogoUrl ? (
-          <img
-            src={chainLogoUrl}
-            alt=""
-            className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-[5px] border border-[#131313] bg-[#131313] object-contain"
-          />
-        ) : null}
       </div>
 
       <div className="min-w-0 flex-1">
@@ -944,14 +938,8 @@ export function TokenSelectorModal({
                       token={{ address: option.address, logoUrl: option.logoUrl, logoUrls: option.logoUrls }}
                       symbol={option.symbol}
                       size={28}
+                      noFallback
                     />
-                    {chainMeta?.logoUrl ? (
-                      <img
-                        src={chainMeta.logoUrl}
-                        alt=""
-                        className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-[4px] border border-[#131313] bg-[#131313] object-contain"
-                      />
-                    ) : null}
                   </div>
                   <span className="text-[11px] font-semibold text-zinc-200">{option.symbol}</span>
                 </button>

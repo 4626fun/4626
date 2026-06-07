@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { erc20Abi, getAddress, isAddress } from 'viem'
+import { erc20Abi, isAddress } from 'viem'
 import { usePublicClient } from 'wagmi'
 
 import { useTokenImage } from '@/hooks/useTokenMetadata'
-import { creatorCoinRawLogo, resolveTokenDisplay, type TokenDisplay, type TokenOption } from '@/lib/uniswap/swapUtils'
+import { resolveTokenDisplay, type TokenDisplay, type TokenOption } from '@/lib/uniswap/swapUtils'
 
 export function useTokenIdentity(params: {
   address: string
@@ -22,12 +22,6 @@ export function useTokenIdentity(params: {
   const tokenImage = useTokenImage(
     shouldFetchImage ? (params.address as `0x${string}`) : undefined,
   )
-  const creatorCoinImageUrl = useMemo(() => {
-    if (params.option?.group !== 'creator') return null
-    if (!isAddress(params.address)) return null
-    return creatorCoinRawLogo(getAddress(params.address), 8453)
-  }, [params.address, params.option?.group])
-
   const tokenMetadataQuery = useQuery({
     queryKey: ['token-identity', params.address.toLowerCase()],
     enabled: shouldFetchOnchain,
@@ -58,9 +52,9 @@ export function useTokenIdentity(params: {
         option: params.option,
         address: params.address,
         onchain: tokenMetadataQuery.data ?? null,
-        imageUrl: creatorCoinImageUrl ?? tokenImage.imageUrl,
+        imageUrl: tokenImage.imageUrl,
       }),
-    [params.option, params.address, tokenMetadataQuery.data, tokenImage.imageUrl, creatorCoinImageUrl],
+    [params.option, params.address, tokenMetadataQuery.data, tokenImage.imageUrl],
   )
 
   return {

@@ -108,8 +108,9 @@ export function getCoreTokensForChain(config: ChainTokenConfig): TokenOption[] {
 }
 
 export function shareTokenLogo(address: string, chainId = BASE_CHAIN_ID, _size = 128): string {
-  const chain = CHAIN_NAME_MAP[chainId] ?? 'base'
-  return `https://dd.dexscreener.com/ds-data/tokens/${chain}/${getAddress(address)}.png`
+  void address
+  void chainId
+  return ''
 }
 
 export function creatorCoinRawLogo(address: string, chainId = BASE_CHAIN_ID): string {
@@ -285,12 +286,7 @@ export function resolveTokenDisplay(params: {
     : (preferOptionName ? optionName : onchainName || optionName || optionSymbol || shortAddress(params.address))
 
   const allowExternalRegistryFallbacks = isCore
-  const internalImageFallback =
-    isAddress(params.address) && params.option?.group === 'creator'
-      ? creatorCoinRawLogo(params.address, BASE_CHAIN_ID)
-      : isAddress(params.address)
-        ? shareTokenLogo(params.address, BASE_CHAIN_ID)
-        : null
+  const internalImageFallback = null
   const fallbackUrls =
     isAddress(params.address) && allowExternalRegistryFallbacks ? tokenLogoFallbacks(params.address) : []
   const logoCandidates = [
