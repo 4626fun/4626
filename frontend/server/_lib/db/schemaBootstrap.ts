@@ -300,6 +300,7 @@ export async function ensureAlfaclubSchema(db: Db): Promise<void> {
   await ensureMigrationApplied(db, '20260526020000_alfaclub_vigilante_core.sql').catch(() => {})
   await ensureMigrationApplied(db, '20260526030000_alfaclub_radar_and_cooldown.sql').catch(() => {})
   await ensureMigrationApplied(db, '20260602000000_alfaclub_room_welcome.sql').catch(() => {})
+  await ensureMigrationApplied(db, '20260710000000_alfaclub_room_label_cache.sql').catch(() => {})
   // All major Alfaclub tables should now be covered. New tables must be added as proper migrations first.
 }
 

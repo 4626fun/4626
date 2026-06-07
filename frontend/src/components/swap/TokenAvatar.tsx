@@ -1,6 +1,11 @@
 import { useMemo, useState } from 'react'
 
-import { getTokenLogo, markTokenLogoSuccess, type TokenLogoSeed } from '@/lib/tokens/tokenLogo'
+import {
+  getTokenLogo,
+  isBlockedTokenLogoUrl,
+  markTokenLogoSuccess,
+  type TokenLogoSeed,
+} from '@/lib/tokens/tokenLogo'
 
 function initials(label: string): string {
   const text = (label || '').trim()
@@ -46,6 +51,7 @@ export function TokenAvatar(props: {
     const seen = new Set<string>()
     const ordered = [props.imageUrl, tokenLogo.preferred, ...tokenLogo.fallbackUrls]
       .filter((value): value is string => Boolean(value))
+      .filter((value) => !isBlockedTokenLogoUrl(value))
       .filter((value) => {
         if (seen.has(value)) return false
         seen.add(value)

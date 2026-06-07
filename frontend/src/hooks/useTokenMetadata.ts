@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useReadContract } from 'wagmi'
 import { logger } from '@/lib/observability/logger'
+import { isBlockedTokenLogoUrl } from '@/lib/tokens/tokenLogo'
 
 // ABI for tokenURI function (common to CreatorCoin contracts)
 const tokenURIAbi = [
@@ -140,7 +141,7 @@ async function resolveDexscreenerTokenImageUrl(tokenAddress: `0x${string}`): Pro
     const pairs = Array.isArray(payload?.pairs) ? payload.pairs : []
     for (const pair of pairs) {
       const candidate = normalizeImageUrl(pair?.info?.imageUrl)
-      if (candidate) return candidate
+      if (candidate && !isBlockedTokenLogoUrl(candidate)) return candidate
     }
     return null
   } catch {

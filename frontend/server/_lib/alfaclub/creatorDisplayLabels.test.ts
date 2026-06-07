@@ -1,6 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import { pickCreatorDisplayLabel } from './creatorDisplayLabels.js'
+import {
+  pickCreatorDisplayLabel,
+  readCreatorLabels,
+} from './creatorDisplayLabels.js'
+import { readCachedCreatorLabels } from './roomLabelCache.js'
+
+vi.mock('./roomLabelCache.js', () => ({
+  readCachedCreatorLabels: vi.fn(async () => new Map()),
+}))
 
 describe('pickCreatorDisplayLabel', () => {
   it('prefers chat username, then twitter, then room name, then basename', () => {
@@ -39,5 +47,21 @@ describe('pickCreatorDisplayLabel', () => {
         chatUsername: '   @@Flip_Research  ',
       }),
     ).toBe('@Flip_Research')
+  })
+
+  it('uses cache labels before dynamic lookups', async () => {
+    vi.mocked(readCachedCreatorLabels).mockResolvedValueOnce(
+      new Map([['0xf39b0d1f2c31b3832ac0cb3ae4334c16272bd37e', 'Clean Slate Protocol']]),
+    )
+    const labels = await readCreatorLabels([
+      {
+        address: '0xf39b0d1f2c31b3832ac0cb3ae4334c16272bd37e',
+        tokenId: '50',
+      },
+    ])
+
+    expect(labels.get('0xf39b0d1f2c31b3832ac0cb3ae4334c16272bd37e')).toBe(
+      'Clean Slate Protocol',
+    )
   })
 })

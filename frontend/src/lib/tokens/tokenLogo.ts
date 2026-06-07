@@ -87,13 +87,17 @@ function persistCachedUrl(cacheKey: string, url: string): void {
   }
 }
 
-function isDisallowedGeneratedTokenImageUrl(value: string | null | undefined): boolean {
+export function isBlockedTokenLogoUrl(value: string | null | undefined): boolean {
   const normalized = normalizeUrl(value)
   if (!normalized) return false
+  const lc = normalized.toLowerCase()
   return (
-    normalized.includes('/api/v1/token/') && normalized.includes('/image') ||
-    normalized.includes('/api/token/image') ||
-    normalized.includes('dd.dexscreener.com/ds-data/tokens/')
+    (lc.includes('/api/v1/token/') && lc.includes('/image')) ||
+    lc.includes('/api/token/image') ||
+    lc.includes('dd.dexscreener.com/ds-data/tokens/') ||
+    lc.includes('/base/base-chain-light.svg') ||
+    lc.includes('/assets/logo-mark.svg') ||
+    lc.includes('api.dexscreener.com/token-placeholder/')
   )
 }
 
@@ -102,7 +106,7 @@ function dedupe(values: Array<string | null | undefined>): string[] {
   const out: string[] = []
   for (const value of values) {
     const raw = normalizeUrl(value)
-    if (!raw) continue
+    if (!raw || isBlockedTokenLogoUrl(raw)) continue
     const normalized = raw.trim()
     if (!seen.has(normalized)) {
       seen.add(normalized)
@@ -131,7 +135,7 @@ export function getTokenLogo(token: TokenLogoSeed): TokenLogoLookup {
 
   loadCachedUrls()
   const cachedRaw = logoCache[cacheKey]
-  const cached = isDisallowedGeneratedTokenImageUrl(cachedRaw) ? undefined : cachedRaw
+  const cached = isBlockedTokenLogoUrl(cachedRaw) ? undefined : cachedRaw
   if (knownTokenLogo) {
     // Known core token logos are canonical and should never be downgraded
     // behind stale cached/registry urls.

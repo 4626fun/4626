@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { type ReactNode, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -15,6 +15,7 @@ import {
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { Button } from '@/components/ui/Button'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
+import { useCounterTradeStatus } from '@/hooks/useCounterTradeStatus'
 
 type StrategyStateField = {
   key: string
@@ -84,6 +85,52 @@ const mermaidSpec = `flowchart LR
 const shellToneCard = 'glass-card ring-1 ring-white/5 shadow-[0_30px_80px_rgba(0,0,0,0.6)]'
 
 export function Arena() {
+  const counterTradeStatus = useCounterTradeStatus()
+  const counterTradeData = counterTradeStatus.data
+  const flowState = useMemo(() => {
+    if (!counterTradeData) return null
+    const data = counterTradeData
+    const strategy = data.strategy
+    const userActive = data.user.state === 'active'
+    const engineReady = data.engineEnabled && Boolean(strategy) && strategy?.killSwitch !== true
+    const hasActions = data.recentActions.length > 0
+    const steps = [
+      {
+        id: 'engine',
+        title: 'Engine ready',
+        done: engineReady,
+        stateLabel: engineReady ? 'Ready' : 'Needs operator action',
+        hint: engineReady ? `Bias: ${strategy?.globalBias ?? 'neutral'}` : 'Ask an operator to set the room strategy.',
+        action: '/strategy bias neutral',
+      },
+      {
+        id: 'user',
+        title: 'You are opted in',
+        done: userActive,
+        stateLabel: userActive ? 'Opted in' : 'Not opted in',
+        hint: `Preset: ${data.user.preset ?? '--'}`,
+        action: '/strategy optin defensive',
+      },
+      {
+        id: 'activity',
+        title: 'First action recorded',
+        done: hasActions,
+        stateLabel: hasActions ? 'Actions recorded' : 'Waiting for trigger',
+        hint: `Recent actions: ${data.recentActions.length}`,
+        action: '/strategy status',
+      },
+    ] as const
+
+    const firstIncomplete = steps.find((step) => !step.done)
+    const nextCommand = firstIncomplete?.action ?? '/strategy status'
+    const headline = firstIncomplete ? `Next: ${firstIncomplete.title}` : 'You are live'
+    const detail = firstIncomplete
+      ? `Complete ${firstIncomplete.title.toLowerCase()} to progress.`
+      : 'All setup steps are complete. Monitor actions below.'
+
+    return { engineReady, userActive, hasActions, nextCommand, headline, detail, steps }
+  }, [counterTradeData])
+
   return (
     <div className="relative">
       <PageMeta title={META.arena.title} description={META.arena.description} canonicalPath="/arena" />
@@ -141,6 +188,136 @@ export function Arena() {
             <pre className="rounded-xl bg-black/40 border border-zinc-900/70 p-4 text-[11px] sm:text-xs text-zinc-300 overflow-x-auto">
               <code>{mermaidSpec}</code>
             </pre>
+          </div>
+
+          <div className={`${shellToneCard} p-6 sm:p-8 space-y-4`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="label">Live counter-trade status</div>
+                <p className="mt-2 text-xs text-zinc-500">
+                  Runtime-backed status from <span className="font-mono text-zinc-300">/api/v1/alfaclub/counter-trade-status</span>.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => counterTradeStatus.refetch()}
+                className="rounded-full border border-zinc-800 px-3 py-1 text-[11px] text-zinc-500 hover:text-zinc-200"
+              >
+                Refresh
+              </button>
+            </div>
+
+            {counterTradeStatus.isLoading ? (
+              <div className="text-sm text-zinc-500">Loading status...</div>
+            ) : counterTradeStatus.isAuthRequired ? (
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
+                Sign in to view your personal strategy status and recent actions.
+              </div>
+            ) : counterTradeStatus.error ? (
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
+                {(counterTradeStatus.error as Error).message || 'Failed to load counter-trade status.'}
+              </div>
+            ) : counterTradeStatus.data ? (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-zinc-900/60 bg-black/25 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm text-zinc-100">{flowState?.headline ?? 'Status'}</div>
+                      <div className="mt-1 text-xs text-zinc-500">{flowState?.detail ?? 'Live runtime status available.'}</div>
+                    </div>
+                    <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs">
+                      <div className="text-zinc-500">Next command</div>
+                      <div className="mt-1 font-mono text-zinc-200">{flowState?.nextCommand ?? '/strategy status'}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-zinc-900/60 bg-black/25 p-4">
+                  <div className="mb-3 text-xs text-zinc-500 uppercase tracking-wide">Setup progress</div>
+                  <div className="flex items-center gap-2">
+                    {flowState?.steps.map((step, index) => (
+                      <div key={step.id} className="flex min-w-0 flex-1 items-center gap-2">
+                        <span
+                          className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] ${
+                            step.done
+                              ? 'border-emerald-400/60 bg-emerald-500/20 text-emerald-200'
+                              : 'border-zinc-700 bg-zinc-900/50 text-zinc-400'
+                          }`}
+                        >
+                          {step.done ? '✓' : index + 1}
+                        </span>
+                        <span className={`truncate text-xs ${step.done ? 'text-zinc-200' : 'text-zinc-500'}`}>{step.title}</span>
+                        {index < flowState.steps.length - 1 ? (
+                          <span className={`mx-1 h-px flex-1 ${step.done ? 'bg-emerald-500/40' : 'bg-zinc-800'}`} />
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  {flowState?.steps.map((step, index) => (
+                    <div key={step.id} className="rounded-xl border border-zinc-900/60 bg-black/25 p-4">
+                      <div className="flex items-center gap-2 text-xs text-zinc-500 uppercase tracking-wide">
+                        <span
+                          className={`inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] ${
+                            step.done
+                              ? 'border-emerald-400/60 bg-emerald-500/20 text-emerald-200'
+                              : 'border-amber-400/60 bg-amber-500/20 text-amber-100'
+                          }`}
+                        >
+                          {step.done ? '✓' : index + 1}
+                        </span>
+                        Step {index + 1}
+                      </div>
+                      <div className="mt-2 text-sm text-zinc-100">{step.title}</div>
+                      <div className={`mt-1 text-sm ${step.done ? 'text-emerald-300' : 'text-amber-300'}`}>{step.stateLabel}</div>
+                      <div className="mt-1 text-xs text-zinc-500">{step.hint}</div>
+                      {!step.done ? (
+                        <div className="mt-3 rounded-lg border border-zinc-800 bg-zinc-950/60 px-2 py-1.5 text-[11px]">
+                          <div className="text-zinc-500">Do this now</div>
+                          <div className="mt-1 font-mono text-zinc-200">{step.action}</div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded-xl border border-zinc-900/60 bg-black/25 p-4">
+                  <div className="text-xs text-zinc-500 uppercase tracking-wide mb-3">Recent actions</div>
+                  {counterTradeStatus.data.recentActions.length === 0 ? (
+                    <div className="text-sm text-zinc-500">No actions yet. Once Step 1 and Step 2 are ready, this list will populate after qualifying fills.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {counterTradeStatus.data.recentActions.slice(0, 5).map((action) => (
+                        <div key={action.id} className="rounded-lg border border-zinc-900/70 bg-black/30 px-3 py-2">
+                          <div className="flex items-center justify-between gap-3 text-xs">
+                            <span className="text-zinc-300">{action.status}</span>
+                            <span className="text-zinc-600">{new Date(action.createdAt).toLocaleString()}</span>
+                          </div>
+                          <div className="mt-1 text-xs text-zinc-500">
+                            {action.counterSide ? `${action.counterSide} @ ${action.counterLeverage ?? '--'}x` : 'No counter order'}
+                            {' · '}
+                            {action.counterNotionalUsd != null ? `$${action.counterNotionalUsd.toFixed(2)}` : '--'}
+                            {' · '}
+                            {action.reason}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-xs text-zinc-600">
+                  In-room controls: <span className="font-mono text-zinc-400">/strategy status</span>,{' '}
+                  <span className="font-mono text-zinc-400">/strategy optin defensive</span>,{' '}
+                  <span className="font-mono text-zinc-400">/strategy resume</span>,{' '}
+                  <span className="font-mono text-zinc-400">/strategy pause</span>.
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-zinc-500">Status unavailable.</div>
+            )}
           </div>
         </div>
       </section>

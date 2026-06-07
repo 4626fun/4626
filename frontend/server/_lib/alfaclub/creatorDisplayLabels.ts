@@ -1,6 +1,7 @@
 import { getDb } from '../db/postgres.js'
 import { getBasenameName } from '../identity/basenameResolver.js'
 import { getEnsName } from '../identity/ensResolver.js'
+import { readCachedCreatorLabels } from './roomLabelCache.js'
 
 export type CreatorLabelHint = {
   address: string
@@ -167,6 +168,13 @@ export async function readCreatorLabels(hints: CreatorLabelHint[]): Promise<Crea
     .filter((hint) => hint.address.length > 0)
 
   if (normalizedHints.length === 0) return labels
+
+  const cached = await readCachedCreatorLabels(normalizedHints)
+  if (cached.size > 0) {
+    for (const [address, label] of cached.entries()) {
+      if (!labels.has(address)) labels.set(address, label)
+    }
+  }
 
   const addresses = normalizedHints.map((hint) => hint.address)
   const [chatLabels, roomSnapshotLabels] = await Promise.all([

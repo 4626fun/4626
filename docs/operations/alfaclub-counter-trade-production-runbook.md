@@ -59,6 +59,12 @@ Use these as launch defaults unless explicit risk approval says otherwise:
 
 ## Preflight checks
 
+Quick path (recommended):
+
+```bash
+CRON_SECRET=... ./scripts/ops/counter-trade-smoke.sh --expect-disabled
+```
+
 ### 1) Schema presence
 
 Run in Supabase SQL editor:

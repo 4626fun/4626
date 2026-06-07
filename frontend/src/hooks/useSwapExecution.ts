@@ -255,8 +255,8 @@ export function deriveSwapExecutionReadiness(params: {
   const canonicalPolicyReady =
     params.executionMode !== 'canonical' ||
     (isCanonicalCsw(params.canonicalAddress ?? null) &&
-      (params.executionTrack === 'sub-account' ||
-        (isCanonicalCsw(params.executionAddress ?? null) && isAllowedCanonicalSigner(params.signerAddress ?? null))))
+      isCanonicalCsw(params.executionAddress ?? null) &&
+      isAllowedCanonicalSigner(params.signerAddress ?? null))
 
   if (params.cdpCanonicalOnlyMode && !canonicalPolicyReady) return false
   if (params.canonicalPolicyApplies && !canonicalPolicyReady) return false
@@ -1125,25 +1125,19 @@ export function useSwapExecution(params: {
     if (!isCanonicalCsw(params.canonicalAddress ?? null)) {
       throw new Error('Canonical CSW policy requires the configured canonical smart wallet identity.')
     }
-    const subAccountExecution = params.executionTrack === 'sub-account'
-    if (!subAccountExecution && !isCanonicalCsw(params.executionAddress ?? null)) {
+    if (!isCanonicalCsw(params.executionAddress ?? null)) {
       throw new Error('Canonical CSW policy blocked non-canonical execution address.')
     }
-    if (!subAccountExecution && !isAllowedCanonicalSigner(params.signerAddress ?? null)) {
+    if (!isAllowedCanonicalSigner(params.signerAddress ?? null)) {
       throw new Error('Canonical CSW policy requires an allowed owner signer.')
     }
-    if (
-      !subAccountExecution &&
-      params.signerType === 'SMART_WALLET' &&
-      !isCanonicalCsw(params.signerAddress ?? null)
-    ) {
+    if (params.signerType === 'SMART_WALLET' && !isCanonicalCsw(params.signerAddress ?? null)) {
       throw new Error('Canonical CSW policy blocked non-canonical smart-wallet signer usage.')
     }
   }, [
     cdpCanonicalOnlyMode,
     canonicalPolicyApplies,
     params.executionMode,
-    params.executionTrack,
     params.canonicalAddress,
     params.executionAddress,
     params.signerAddress,
@@ -2296,6 +2290,7 @@ export function useSwapExecution(params: {
           sender: params.executionAddress,
           slippagePct: zoraPrepareSlippagePct,
           slippageEscalationCapPct,
+          allowAmountDownshiftOnSlippage: true,
           signerAddress: params.signerAddress!,
           executionAddress: params.executionAddress,
           walletClient: params.walletClient as {
@@ -2483,6 +2478,7 @@ export function useSwapExecution(params: {
               sender: params.executionAddress,
               slippagePct: retrySlippagePct,
               slippageEscalationCapPct,
+              allowAmountDownshiftOnSlippage: true,
               signerAddress: params.signerAddress!,
               executionAddress: params.executionAddress,
               walletClient: params.walletClient as {

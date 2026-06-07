@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Droplets, Plus, RefreshCw } from 'lucide-react'
 import { getAddress, isAddress, parseUnits, toHex, type Address, type Hex } from 'viem'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAccount, useConnect, usePublicClient, useReconnect, useSwitchChain, useWalletClient } from 'wagmi'
 import {
   useActiveWallet,
-  useBaseAccountSdk,
   usePrivy,
   useWallets,
 } from '@privy-io/react-auth'
@@ -16,14 +14,14 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { SwapSettingsModal } from '@/components/trade/SwapSettingsModal'
 import { Alert } from '@/components/ui/Alert'
-import { Spinner } from '@/components/ui/Spinner'
 import { ExternalWalletOptions } from '@/components/account/ConnectButton'
-import { AmoeEntryCard, type AmoeSigningWalletClient } from '@/components/lottery/AmoeEntryCard'
+
 import { SwapCard } from '@/components/swap/SwapCard'
 import { SwapCompletionNotice } from '@/components/swap/SwapCompletionNotice'
 import { SwapConnectGate } from '@/components/swap/SwapConnectGate'
 import { SwapPageLayout } from '@/components/swap/SwapPageLayout'
 import { TokenSelectorModal, type SwapTokenOption } from '@/components/swap/TokenSelectorModal'
+import { LiquidityPanel } from '@/components/swap/LiquidityPanel'
 import { DEFAULT_CHAIN_ID, type SupportedChainId, getChainMeta } from '@/config/chains'
 import { CONTRACTS } from '@/config/contracts'
 import { useSwapExecution } from '@/hooks/useSwapExecution'
@@ -37,28 +35,19 @@ import { extractPrivyWalletsFromUser, useEnsurePrivyEmbeddedWallet } from '@/lib
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { apiFetch } from '@/lib/api/apiBase'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
-import {
-  claimLiquidityFees,
-  createPosition,
-  fetchLiquidityPositions,
-  quoteCreatePosition,
-  removeLiquidity,
-} from '@/lib/uniswap/liquidityApi'
+
 import { deriveSwapConnectGate, isConnectorAlreadyConnectedError } from '@/lib/swap/connectGate'
 import { resolveSwapBalanceOwner } from '@/lib/swap/resolveSwapBalanceOwner'
 import { isOpaqueInternalTokenLabel } from '@/lib/swap/swapTokenLabels'
 import {
   enrichDiscoveredSwapTokenOptions,
   normalizeSwapTokenSearchQuery,
-  searchZoraCreatorCoinsForSwap,
-  zoraCoinsToSwapTokenOptions,
 } from '@/lib/swap/zoraTokenSearch'
 import {
   enrichSwapTokenOption,
   resolveSwapTokenVerified,
   swapTokenOptionNeedsLabelEnrichment,
 } from '@/lib/swap/swapTokenLabels'
-import { fetchWalletZoraHoldingsBundle } from '@/lib/zora/walletHoldings'
 import { deriveSwapUsdEstimates, isNativeEthToken, isUsdStablecoinToken } from '@/lib/swap/swapAmountUsd'
 import { formatSlippagePctForDisplay } from '@/lib/swap/swapAutoSlippage'
 import { extractSwapQuoteDetails } from '@/lib/swap/swapQuoteDetails'
@@ -66,10 +55,12 @@ import { amountUnitsFromBalancePercent, formatSwapTokenBalanceLabel } from '@/li
 import { ZORA_TOKEN_LOGO_URL } from '@/lib/tokens/tokenLogo'
 import { useSwapAssetBalance } from '@/lib/swap/useSwapAssetBalance'
 import { useSwapTokenUsdPrices } from '@/lib/swap/useSwapTokenUsdPrices'
-import { isBaseAccountWallet, useSwapSubAccountRuntime } from '@/lib/swap/useSwapSubAccountRuntime'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
-import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
-import { resolveEffectiveExecutionTrack, deriveAccountChromeExecution, shouldUseBaseAppSubAccountPath, isZoraLinkedFromAccountSignals } from '@/lib/wallet/userExecutionTrack'
+import {
+  resolveEffectiveExecutionTrack,
+  deriveAccountChromeExecution,
+  type UserFrontendExecutionTrack,
+} from '@/lib/wallet/userExecutionTrack'
 import { resolveEmbeddedOwnerOnCanonicalCsw } from '@/lib/wallet/cswOwnerRead'
 import { type WalletMode } from '@/lib/uniswap/walletMode'
 import {
@@ -156,7 +147,10 @@ type ExploreSwapTokenResponse = {
 }
 
 const EMPTY_SWAP_TOKEN_OPTIONS: SwapTokenOption[] = []
-type UserExecutionTrack = 'sub-account' | 'legacy-owner-install' | 'migration-pending' | 'none-yet'
+// Re-exported/aliased for local use; server signals may still include legacy sub-account
+// values, but swap no longer branches on them (resolveEffectiveExecutionTrack normalizes to
+// 'legacy-owner-install' or 'none-yet' for the parent-CSW embedded owner path).
+type UserExecutionTrack = UserFrontendExecutionTrack
 
 function normalizeCreatorCoinLabel(value: unknown): string | null {
   if (typeof value !== 'string') return null
@@ -212,26 +206,8 @@ async function fetchSwapCreatorCoinOptions(params: {
   chainId: number
 }): Promise<SwapTokenOption[]> {
   const normalizedQuery = normalizeSwapTokenSearchQuery(params.query)
-  const [vaultOptions, zoraOptions] = await Promise.all([
-    fetchSwapVaultCreatorCoinOptions({ ...params, query: normalizedQuery }),
-    normalizedQuery
-      ? searchZoraCreatorCoinsForSwap(normalizedQuery).then((coins) =>
-          zoraCoinsToSwapTokenOptions(coins, params.chainId),
-        )
-      : Promise.resolve([] as SwapTokenOption[]),
-  ])
-
-  const merged: SwapTokenOption[] = []
-  const seen = new Set<string>()
-  const zoraByAddress = new Map(zoraOptions.map((option) => [option.address.toLowerCase(), option]))
-
-  for (const option of [...zoraOptions, ...vaultOptions]) {
-    const key = option.address.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    merged.push(zoraByAddress.get(key) ?? option)
-  }
-  const sliced = merged.slice(0, params.limit)
+  const vaultOptions = await fetchSwapVaultCreatorCoinOptions({ ...params, query: normalizedQuery })
+  const sliced = vaultOptions.slice(0, params.limit)
   return enrichDiscoveredSwapTokenOptions(sliced)
 }
 
@@ -293,27 +269,6 @@ function normalizeAddressOrNull(value: unknown): Address | null {
   const raw = typeof value === 'string' ? value.trim() : ''
   if (!raw || !isAddress(raw)) return null
   return getAddress(raw as Address)
-}
-
-function pickPrivyCrossAppEmbeddedEoaAddress(user: any): Address | null {
-  const linked = Array.isArray(user?.linkedAccounts)
-    ? (user.linkedAccounts as any[])
-    : Array.isArray(user?.linked_accounts)
-      ? (user.linked_accounts as any[])
-      : []
-  const crossAppAccounts = linked.filter((account) => normalizePrivyText(account?.type) === 'cross_app')
-  for (const account of crossAppAccounts) {
-    const embeddedWallets = Array.isArray((account as any)?.embedded_wallets)
-      ? ((account as any).embedded_wallets as any[])
-      : Array.isArray((account as any)?.embeddedWallets)
-        ? ((account as any).embeddedWallets as any[])
-        : []
-    for (const wallet of embeddedWallets) {
-      const address = normalizeAddressOrNull(wallet?.address)
-      if (address) return address
-    }
-  }
-  return null
 }
 
 function pickPrivyEmbeddedEoaAddressFromUser(user: any): Address | null {
@@ -380,84 +335,6 @@ function parsePositiveAmountToUnits(value: string, decimals: number): bigint | n
   }
 }
 
-// ─── Liquidity position card ────────────────────────────────────────────────
-
-type LpPosition = {
-  id?: string
-  tokenId?: string
-  token0Symbol?: string
-  token1Symbol?: string
-  feeTier?: number | string
-  tickLower?: number | string
-  tickUpper?: number | string
-  tokensOwed0?: string
-  tokensOwed1?: string
-  liquidity?: string
-}
-
-function LpPositionCard(props: {
-  position: LpPosition
-  busy: string | null
-  onClaim: (id: string) => void
-  onRemove: (id: string) => void
-}) {
-  const { position } = props
-  const posId = String(position.id ?? position.tokenId ?? '')
-  const pair = [position.token0Symbol, position.token1Symbol].filter(Boolean).join(' / ') || 'Unknown pair'
-  const feeTier = position.feeTier ? `${(Number(position.feeTier) / 10000).toFixed(2)}%` : '--'
-  const range =
-    position.tickLower !== undefined && position.tickUpper !== undefined
-      ? `${position.tickLower} → ${position.tickUpper}`
-      : '--'
-  const fees = [position.tokensOwed0, position.tokensOwed1].filter(Boolean).join(' / ') || '--'
-
-  return (
-    <div className="rounded-2xl border border-white/8 bg-vault-card/50 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold text-white">{pair}</div>
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            <span className="rounded-full border border-white/10 bg-white/4 px-2 py-0.5 text-[10px] text-zinc-500">
-              Fee {feeTier}
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/4 px-2 py-0.5 text-[10px] text-zinc-500">
-              Range {range}
-            </span>
-          </div>
-        </div>
-        {posId && (
-          <span className="rounded-full border border-white/8 bg-white/4 px-2 py-0.5 app-meta-value text-zinc-600 shrink-0">
-            #{posId.slice(-6)}
-          </span>
-        )}
-      </div>
-      <div className="app-meta-value mt-2 text-zinc-500">
-        Unclaimed fees: <span className="text-zinc-400">{fees}</span>
-      </div>
-      {posId && (
-        <div className="mt-3 flex gap-2">
-          <button
-            type="button"
-            onClick={() => props.onClaim(posId)}
-            disabled={props.busy !== null}
-            className="flex-1 rounded-xl border border-emerald-400/25 bg-emerald-500/8 py-1.5 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/15 disabled:opacity-50"
-          >
-            Claim fees
-          </button>
-          <button
-            type="button"
-            onClick={() => props.onRemove(posId)}
-            disabled={props.busy !== null}
-            className="flex-1 rounded-xl border border-rose-400/25 bg-rose-500/8 py-1.5 text-xs font-medium text-rose-300 transition hover:bg-rose-500/15 disabled:opacity-50"
-          >
-            Remove
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ─── Main page ──────────────────────────────────────────────────────────────
 
 export function Swap() {
@@ -481,11 +358,9 @@ export function Swap() {
   const walletRecoveryAttemptKeyRef = useRef('')
   const accountMe = useAccountMe()
   const { embeddedEoaAddress: ensuredEmbeddedEoaAddress, ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
-  const { baseAccountSdk } = useBaseAccountSdk()
   // `extractPrivyWalletsFromUser` returns ADDRESS-ONLY metadata parsed from
   // `privy.user` (`linkedAccounts` / `user.wallets`). Those records do NOT
-  // carry provider methods like `getEthereumProvider` — so the earlier
-  // `embedded-wallet-cannot-sign` gate was unreachable by design.
+  // carry provider methods like `getEthereumProvider`.
   //
   // Privy's live `useWallets()` hook returns the same wallets but WITH
   // provider-access methods attached. Merge the two sources with live
@@ -500,8 +375,7 @@ export function Swap() {
       if (addr) liveByAddress.set(addr, w)
     }
     // Prefer the live wallet object (with provider methods) when addresses
-    // match; otherwise keep the metadata record so legacy linkedAccount
-    // discovery still works for cross-app EOAs.
+    // match; otherwise keep the metadata record.
     const merged: any[] = []
     const seen = new Set<string>()
     for (const w of metadataWallets) {
@@ -520,10 +394,6 @@ export function Swap() {
     }
     return merged
   }, [privyLiveWallets, privyUser])
-  const baseAccountWallet = useMemo(
-    () => (Array.isArray(privyWallets) ? (privyWallets as any[]).find(isBaseAccountWallet) ?? null : null),
-    [privyWallets],
-  )
   const auth = useSiweAuth()
   const {
     authAddress,
@@ -573,9 +443,6 @@ export function Swap() {
   const [tokenSelectorQuery, setTokenSelectorQuery] = useState('')
   const [recentTokenAddresses, setRecentTokenAddresses] = useState<string[]>([])
   const [extraTokenOptions, setExtraTokenOptions] = useState<SwapTokenOption[]>([])
-  const [unverifiedSelectionMode, setUnverifiedSelectionMode] = useState(false)
-  const [unverifiedTokenLabel, setUnverifiedTokenLabel] = useState<string | null>(null)
-  const [useAmoePointsForEntry, setUseAmoePointsForEntry] = useState(false)
   const [debouncedTokenSelectorQuery] = useDebounceValue(tokenSelectorQuery, 250)
   const normalizedTokenSelectorQuery = debouncedTokenSelectorQuery.trim().toLowerCase()
   const discoveredCreatorTokenOptionsQuery = useQuery({
@@ -592,18 +459,6 @@ export function Swap() {
   })
   const discoveredCreatorTokenOptions =
     discoveredCreatorTokenOptionsQuery.data ?? EMPTY_SWAP_TOKEN_OPTIONS
-
-  // ─── LP state ─────────────────────────────────────────────────────────────
-  const [lpBusy, setLpBusy] = useState<string | null>(null)
-  const [lpMode, setLpMode] = useState<'simple' | 'advanced'>('simple')
-  const [lpFeeTier, setLpFeeTier] = useState<string>('3000')
-  const [lpAmountA, setLpAmountA] = useState<string>('1')
-  const [lpAmountB, setLpAmountB] = useState<string>('1')
-  const [lpLowerTick, setLpLowerTick] = useState<string>('')
-  const [lpUpperTick, setLpUpperTick] = useState<string>('')
-  const [lpPositionId, setLpPositionId] = useState<string>('')
-  const [lpStatus, setLpStatus] = useState<string>('')
-  const [lpError, setLpError] = useState<string>('')
   const requestedTokenParam = (searchParams.get('token') ?? '').trim()
   const requestedShareTokenParam = (searchParams.get('share') ?? searchParams.get('shareToken') ?? '').trim()
   const normalizedRequestedToken = isAddress(requestedTokenParam)
@@ -663,17 +518,13 @@ export function Swap() {
   const signerAddress = accountContext.signerAddress ?? null
   const accountSignals = accountMe.me?.accountSignals ?? null
   const executionTrack = (accountSignals?.executionTrack ?? null) as UserExecutionTrack | null
-  const baseSubAccountAddress = normalizeAddressOrNull(
-    accountSignals?.baseSubAccount?.address ?? accountMe.me?.baseSubAccount ?? null,
-  )
 
-  const privyCrossAppEmbeddedEoaAddress = useMemo(() => pickPrivyCrossAppEmbeddedEoaAddress(privyUser), [privyUser])
   const privyEmbeddedEoaAddressFromUser = useMemo(() => pickPrivyEmbeddedEoaAddressFromUser(privyUser), [privyUser])
 
   const privyEmbeddedEoaWallet = useMemo(() => {
     const wallets = Array.isArray(privyWallets) ? (privyWallets as any[]) : []
     const fallbackAddresses = new Set(
-      [privyCrossAppEmbeddedEoaAddress, privyEmbeddedEoaAddressFromUser, ensuredEmbeddedEoaAddress, authAddress]
+      [privyEmbeddedEoaAddressFromUser, ensuredEmbeddedEoaAddress, authAddress]
         .filter((value): value is Address => Boolean(value))
         .map((value) => value.toLowerCase()),
     )
@@ -694,7 +545,6 @@ export function Swap() {
     authAddress,
     canonicalAddress,
     ensuredEmbeddedEoaAddress,
-    privyCrossAppEmbeddedEoaAddress,
     privyEmbeddedEoaAddressFromUser,
     privyWallets,
   ])
@@ -705,16 +555,6 @@ export function Swap() {
       return {
         address: fromWallet,
         source: 'wallets' as const,
-      }
-    }
-
-    if (
-      privyCrossAppEmbeddedEoaAddress &&
-      (!canonicalAddress || privyCrossAppEmbeddedEoaAddress.toLowerCase() !== canonicalAddress.toLowerCase())
-    ) {
-      return {
-        address: privyCrossAppEmbeddedEoaAddress,
-        source: 'cross-app-linked-account' as const,
       }
     }
 
@@ -758,7 +598,6 @@ export function Swap() {
     canonicalAddress,
     ensuredEmbeddedEoaAddress,
     privyAuthenticated,
-    privyCrossAppEmbeddedEoaAddress,
     privyEmbeddedEoaAddressFromUser,
     privyEmbeddedEoaWallet,
   ])
@@ -913,46 +752,25 @@ export function Swap() {
     privyEmbeddedEoaCanOperateCanonicalQuery.data,
     accountMe.loading,
   ])
-  const subAccountTrack =
-    effectiveExecutionTrack === 'sub-account' || effectiveExecutionTrack === 'migration-pending'
-  const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
-  const shouldOfferBaseAppSubAccountSetup = useMemo(
-    () =>
-      shouldUseBaseAppSubAccountPath({
-        subAccountFlowEnabled,
-        parentEmbeddedOwnerOnChain: privyEmbeddedEoaCanOperateCanonicalQuery.data === true,
-        accountSignals: accountSignals ?? undefined,
-        zoraLinked: isZoraLinkedFromAccountSignals(accountSignals ?? undefined),
-      }),
-    [accountSignals, privyEmbeddedEoaCanOperateCanonicalQuery.data, subAccountFlowEnabled],
-  )
   const swapExecutionChrome = useMemo(
     () =>
       deriveAccountChromeExecution({
         executionTrack: executionTrack ?? undefined,
         parentEmbeddedOwnerOnChain: privyEmbeddedEoaCanOperateCanonicalQuery.data === true,
         privyEmbeddedEoaIsOwnerOfCanonicalCsw: accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw,
-        subAccountFlowEnabled,
         canonicalCswAddress: canonicalAddress,
-        baseSubAccount: accountSignals?.baseSubAccount,
       }),
     [
       executionTrack,
       accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw,
-      accountSignals?.baseSubAccount,
       privyEmbeddedEoaCanOperateCanonicalQuery.data,
-      subAccountFlowEnabled,
       canonicalAddress,
     ],
   )
-  const subAccountRuntime = useSwapSubAccountRuntime({
-    enabled: accountContext.activeAccountType === 'SMART_WALLET' && subAccountTrack,
-    canonicalAddress,
-    baseSubAccountAddress,
-    baseAccountWallet,
-    embeddedWallet: privyEmbeddedEoaWallet,
-    baseAccountSdk,
-  })
+
+  // Sub-account ("subwallet") and Zora cross-app (Privy linked EOA signer) paths removed.
+  // Swap canonical execution is now parent CSW + its Privy embedded EOA owner only
+  // (after the one-time "Enable 4626 signing" / legacy-owner-install flow).
 
   const privyEmbeddedCanonicalWalletClient = useMemo(() => {
     if (!privyEmbeddedEoaAddress) return null
@@ -1046,8 +864,6 @@ export function Swap() {
         executionMode,
         executionTrack: effectiveExecutionTrack,
         canonicalAddress,
-        baseSubAccountAddress,
-        subAccountProviderReady: subAccountRuntime.ready,
         clientStatus: privyClientStatus,
         authStatus: canonicalAuthStatus,
         embeddedWalletDetected: Boolean(privyEmbeddedEoaAddress),
@@ -1059,8 +875,6 @@ export function Swap() {
       effectiveExecutionTrack,
       executionMode,
       canonicalAddress,
-      baseSubAccountAddress,
-      subAccountRuntime.ready,
       privyClientStatus,
       canonicalAuthStatus,
       privyEmbeddedEoaAddress,
@@ -1068,90 +882,51 @@ export function Swap() {
       canonicalOwnerCheckStatus,
     ],
   )
-  const useSubAccountCanonicalSigner =
-    executionMode === 'canonical' &&
-    subAccountTrack &&
-    subAccountRuntime.ready &&
-    canonicalSignerGate.code === 'ok'
-  const usePrivyEmbeddedCanonicalSigner =
-    executionMode === 'canonical' && !useSubAccountCanonicalSigner && canonicalSignerGate.ready
+  const usePrivyEmbeddedCanonicalSigner = executionMode === 'canonical' && canonicalSignerGate.ready
   const canonicalSignerAddress =
-    executionMode === 'canonical'
-      ? useSubAccountCanonicalSigner || usePrivyEmbeddedCanonicalSigner
-        ? privyEmbeddedEoaAddress
-        : null
-      : signerAddress
+    executionMode === 'canonical' && usePrivyEmbeddedCanonicalSigner ? privyEmbeddedEoaAddress : null
   const canonicalSignerWalletClient =
-    executionMode === 'canonical'
-      ? useSubAccountCanonicalSigner
-        ? subAccountRuntime.provider
-        : usePrivyEmbeddedCanonicalSigner
-          ? (privyEmbeddedCanonicalWalletClient as any)
-          : null
-      : walletClient
+    executionMode === 'canonical' && usePrivyEmbeddedCanonicalSigner
+      ? (privyEmbeddedCanonicalWalletClient as any)
+      : null
   const executionSignerAddress = executionMode === 'canonical' ? canonicalSignerAddress : signerAddress
   const executionWalletClient = executionMode === 'canonical' ? canonicalSignerWalletClient : walletClient
   const executionSignerType =
-    executionMode === 'canonical'
-      ? useSubAccountCanonicalSigner || usePrivyEmbeddedCanonicalSigner
-        ? 'EOA'
-        : 'UNKNOWN'
-      : accountContext.signerType
+    executionMode === 'canonical' && usePrivyEmbeddedCanonicalSigner ? 'EOA' : accountContext.signerType
   const executionCapabilities = useMemo(
     () =>
       executionMode === 'canonical'
         ? ({
             paymasterService: false,
-            atomicStatus: useSubAccountCanonicalSigner ? 'supported' : 'unknown',
-            supports5792: useSubAccountCanonicalSigner,
+            atomicStatus: 'unknown',
+            supports5792: false,
           } as const)
         : accountContext.capabilities,
-    [executionMode, accountContext.capabilities, useSubAccountCanonicalSigner],
+    [executionMode, accountContext.capabilities],
   )
   const executionConnectorId =
     executionMode === 'canonical'
-      ? useSubAccountCanonicalSigner
-        ? 'base-sub-account'
-        : usePrivyEmbeddedCanonicalSigner
-          ? 'privy-embedded'
-          : 'privy-embedded-required'
+      ? usePrivyEmbeddedCanonicalSigner
+        ? 'privy-embedded'
+        : 'privy-embedded-required'
       : (connector?.id ?? null)
   const executionConnectorName =
     executionMode === 'canonical'
-      ? useSubAccountCanonicalSigner
-        ? 'Base Account Sub-Account'
-        : usePrivyEmbeddedCanonicalSigner
-          ? 'Privy Embedded EOA'
-          : 'Privy Embedded EOA (required)'
+      ? usePrivyEmbeddedCanonicalSigner
+        ? 'Privy Embedded EOA'
+        : 'Privy Embedded EOA (required)'
       : (connector?.name ?? null)
-  const executionAddress =
-    executionMode === 'canonical'
-      ? useSubAccountCanonicalSigner
-        ? baseSubAccountAddress
-        : canonicalAddress
-      : (accountContext.activeAccount ?? null)
-  const routerExecutionTrack =
-    executionMode === 'canonical' && useSubAccountCanonicalSigner
-      ? effectiveExecutionTrack
-      : executionMode === 'canonical' && usePrivyEmbeddedCanonicalSigner
-        ? 'legacy-owner-install'
-        : effectiveExecutionTrack
+  const executionAddress = executionMode === 'canonical' ? canonicalAddress : (accountContext.activeAccount ?? null)
+  const routerExecutionTrack = executionMode === 'canonical' && usePrivyEmbeddedCanonicalSigner
+    ? 'legacy-owner-install'
+    : effectiveExecutionTrack
   const executionReady = Boolean(
     executionAddress &&
       executionWalletClient &&
       publicClient &&
       (executionMode !== 'canonical' || canonicalSignerGate.ready),
   )
-  const swapAmoeSigningClient = useMemo<AmoeSigningWalletClient | null>(() => {
-    if (!executionWalletClient || typeof executionWalletClient.signMessage !== 'function') return null
-    return {
-      signMessage: (args) => executionWalletClient.signMessage(args),
-    }
-  }, [executionWalletClient])
-  const swapAmoeWalletAddress = useMemo<Address | null>(() => {
-    if (executionMode !== 'eoa' || !executionSignerAddress) return null
-    return isAddress(executionSignerAddress) ? getAddress(executionSignerAddress) : null
-  }, [executionMode, executionSignerAddress])
+
   const canonicalSignerGuardError =
     executionMode === 'canonical' && !canonicalSignerGate.ready ? canonicalSignerGate.reason : null
   const canonicalSetupGateCodes = useMemo(
@@ -1159,9 +934,6 @@ export function Swap() {
       new Set([
         'execution-setup-required',
         'embedded-wallet-not-owner',
-        'base-sub-account-missing',
-        'base-sub-account-invalid',
-        'base-sub-account-provider-missing',
       ]),
     [],
   )
@@ -1174,29 +946,10 @@ export function Swap() {
       canonicalSignerGate.code === 'embedded-wallet-not-owner' &&
       effectiveExecutionTrack === 'legacy-owner-install'
     )
-  const canonicalSetupActionLabel =
-    canonicalSignerGate.code === 'base-sub-account-provider-missing'
-      ? 'Reconnect Base App'
-      : shouldOfferBaseAppSubAccountSetup
-        ? 'Connect Base App'
-        : 'Enable 4626 signing'
+  const canonicalSetupActionLabel = 'Enable 4626 signing'
   const handleEnableCanonicalSigning = useCallback(() => {
-    const needsSubAccountSetup =
-      shouldOfferBaseAppSubAccountSetup &&
-      (effectiveExecutionTrack === 'none-yet' ||
-        (subAccountTrack && !subAccountRuntime.ready && canonicalSignerGate.code !== 'ok'))
-    if (needsSubAccountSetup) {
-      window.location.assign(buildWaitlistSetupUrl('base-app'))
-      return
-    }
     window.location.assign(buildWaitlistSetupUrl('owner-install'))
-  }, [
-    canonicalSignerGate.code,
-    effectiveExecutionTrack,
-    shouldOfferBaseAppSubAccountSetup,
-    subAccountRuntime.ready,
-    subAccountTrack,
-  ])
+  }, [])
   const needsPrivyCanonicalAuth = useMemo(
     () =>
       executionMode === 'canonical' &&
@@ -1386,44 +1139,19 @@ export function Swap() {
   )
   const balanceReadsEnabled = Boolean(hasSession && sessionHydrated && balanceOwnerAddress)
 
-  const swapZoraHoldingsQuery = useQuery({
-    queryKey: ['swap', 'zora-holdings', balanceOwnerAddress?.toLowerCase() ?? null],
-    enabled:
-      swapChainId === BASE_CHAIN_ID && Boolean(balanceOwnerAddress && isAddress(balanceOwnerAddress)),
-    staleTime: 60_000,
-    queryFn: async () => fetchWalletZoraHoldingsBundle(balanceOwnerAddress as Address, { topTokenCount: 100 }),
-  })
-
-  const swapZoraHoldingOptions = useMemo(() => {
-    const bundle = swapZoraHoldingsQuery.data
-    if (!bundle) return []
-    return [...bundle.creator, ...bundle.content, ...bundle.trend]
-  }, [swapZoraHoldingsQuery.data])
-
-  const swapZoraHoldingBalances = useMemo(
-    () => swapZoraHoldingsQuery.data?.balances ?? {},
-    [swapZoraHoldingsQuery.data],
-  )
-
-  const swapZoraHoldingUsdValues = useMemo(
-    () => swapZoraHoldingsQuery.data?.usdValues ?? {},
-    [swapZoraHoldingsQuery.data],
-  )
-
   const allTokenOptions = useMemo<SwapTokenOption[]>(() => {
-    // Later entries win so Zora holdings / curated options override address-only stubs.
+    // Later entries win so curated options override address-only stubs.
     const merged = [
       ...extraTokenOptions,
       ...discoveredCreatorTokenOptions,
       ...tokenOptions,
-      ...swapZoraHoldingOptions,
     ]
     const byAddress = new Map<string, SwapTokenOption>()
     for (const option of merged) {
       byAddress.set(option.address.toLowerCase(), option)
     }
     return [...byAddress.values()]
-  }, [discoveredCreatorTokenOptions, extraTokenOptions, swapZoraHoldingOptions, tokenOptions])
+  }, [discoveredCreatorTokenOptions, extraTokenOptions, tokenOptions])
 
   const opaqueSwapTokenOptions = useMemo(
     () => allTokenOptions.filter((option) => swapTokenOptionNeedsLabelEnrichment(option)),
@@ -1489,24 +1217,6 @@ export function Swap() {
       return [...previous, { ...option }]
     })
   }, [])
-
-  useEffect(() => {
-    const inputUnverified = tokenInOption?.verified === false
-    const outputUnverified = tokenOutOption?.verified === false
-    if (!inputUnverified && !outputUnverified) {
-      setUnverifiedSelectionMode(false)
-      setUnverifiedTokenLabel(null)
-      return
-    }
-    const label = inputUnverified
-      ? tokenInDisplay.symbol
-      : outputUnverified
-        ? tokenOutDisplay.symbol
-        : null
-    if (!unverifiedSelectionMode) {
-      setUnverifiedTokenLabel(label)
-    }
-  }, [tokenInDisplay.symbol, tokenInOption?.verified, tokenOutDisplay.symbol, tokenOutOption?.verified, unverifiedSelectionMode])
 
   useEffect(() => {
     const address = tokenIn.toLowerCase()
@@ -1585,16 +1295,10 @@ export function Swap() {
     approvalRequired,
     fallbackActive,
     swapProviderLabel,
-    diagnosticsEnabled,
-    txDebug,
-    canary7702Eligible,
-    diagnosticsBusy,
-    diagnosticsResult,
     canonicalSubmitSession,
     handleQuote,
     handleReviewTrade,
     confirmAndExecute,
-    run7702DryRun,
     resetTradeState,
     swapCompletion,
     clearSwapCompletion,
@@ -1812,23 +1516,12 @@ export function Swap() {
       } else {
         setTokenOut(address)
       }
-      if (!option.verified) {
-        setUnverifiedTokenLabel(option.symbol)
-        setUnverifiedSelectionMode(true)
-      } else {
-        setUnverifiedSelectionMode(false)
-        setUnverifiedTokenLabel(null)
-      }
       persistRecentToken(address)
       setTokenSelectorOpen(false)
       resetTradeState()
     },
     [persistRecentToken, registerTokenForIdentity, resetTradeState, setTokenIn, setTokenOut, tokenSelectorSide],
   )
-
-  const confirmUnverifiedSelection = useCallback(() => {
-    setUnverifiedSelectionMode(false)
-  }, [])
 
   // Reset when execution address changes
   useEffect(() => {
@@ -1882,102 +1575,9 @@ export function Swap() {
     void confirmAndExecute()
   }, [confirmAndExecute, confirmIntent])
 
-  // ─── LP handlers ──────────────────────────────────────────────────────────
-  async function handleLpQuote() {
-    if (!canonicalAddress) return
-    setLpBusy('lpQuote'); setLpError(''); setLpStatus('')
-    try {
-      const t0 = tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS ? CONTRACTS.weth : tokenIn
-      const t1 = tokenOut.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS ? CONTRACTS.weth : tokenOut
-      await quoteCreatePosition({
-        chainId: BASE_CHAIN_ID,
-        walletAddress: canonicalAddress,
-        token0: t0, token1: t1,
-        amount0: lpAmountA, amount1: lpAmountB,
-        feeTier: Number(lpFeeTier),
-        lowerTick: lpMode === 'advanced' && lpLowerTick.trim() ? Number(lpLowerTick) : undefined,
-        upperTick: lpMode === 'advanced' && lpUpperTick.trim() ? Number(lpUpperTick) : undefined,
-      })
-      setLpStatus('Liquidity quote ready')
-    } catch (e: unknown) {
-      setLpError((e as Error)?.message || 'Unable to quote liquidity')
-    } finally { setLpBusy(null) }
-  }
-
-  async function handleCreatePosition() {
-    if (!canonicalAddress) return
-    setLpBusy('lpCreate'); setLpError(''); setLpStatus('')
-    try {
-      const t0 = tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS ? CONTRACTS.weth : tokenIn
-      const t1 = tokenOut.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS ? CONTRACTS.weth : tokenOut
-      const data = await createPosition({
-        chainId: BASE_CHAIN_ID,
-        walletAddress: canonicalAddress,
-        token0: t0, token1: t1,
-        amount0: lpAmountA, amount1: lpAmountB,
-        feeTier: Number(lpFeeTier),
-        lowerTick: lpMode === 'advanced' && lpLowerTick.trim() ? Number(lpLowerTick) : undefined,
-        upperTick: lpMode === 'advanced' && lpUpperTick.trim() ? Number(lpUpperTick) : undefined,
-      })
-      setLpStatus(`Position submitted${(data as Record<string, unknown>)?.requestId ? ` (#${(data as Record<string, unknown>).requestId})` : ''}`)
-    } catch (e: unknown) {
-      setLpError((e as Error)?.message || 'Unable to create position')
-    } finally { setLpBusy(null) }
-  }
-
-  async function handleClaimFees(posId?: string) {
-    const id = posId ?? lpPositionId.trim()
-    if (!canonicalAddress || !id) return
-    setLpBusy('lpClaim'); setLpError('')
-    try {
-      await claimLiquidityFees({ chainId: BASE_CHAIN_ID, walletAddress: canonicalAddress, positionId: id })
-      setLpStatus('Fee claim submitted')
-    } catch (e: unknown) {
-      setLpError((e as Error)?.message || 'Unable to claim fees')
-    } finally { setLpBusy(null) }
-  }
-
-  async function handleRemoveLiquidity(posId?: string) {
-    const id = posId ?? lpPositionId.trim()
-    if (!canonicalAddress || !id) return
-    setLpBusy('lpRemove'); setLpError('')
-    try {
-      await removeLiquidity({ chainId: BASE_CHAIN_ID, walletAddress: canonicalAddress, positionId: id })
-      setLpStatus('Remove liquidity submitted')
-    } catch (e: unknown) {
-      setLpError((e as Error)?.message || 'Unable to remove liquidity')
-    } finally { setLpBusy(null) }
-  }
-
-  // ─── LP positions query ───────────────────────────────────────────────────
-  const lpPositionsQuery = useQuery({
-    queryKey: ['uniswap', 'lp-positions', canonicalAddress],
-    enabled: Boolean(activePanel === 'liquidity' && canonicalAddress),
-    queryFn: async () => fetchLiquidityPositions(canonicalAddress!, BASE_CHAIN_ID),
-    refetchInterval:
-      activePanel === 'liquidity'
-        ? () => (typeof document !== 'undefined' && document.hidden ? false : 20_000)
-        : false,
-    staleTime: 10_000,
-    retry: 2,
-    retryDelay: (attempt) => Math.min(30_000, 1_000 * 2 ** attempt),
-    refetchOnWindowFocus: false,
-  })
-
-  const anyBusy = busy !== null || lpBusy !== null
   const screenshotReady = !tokenInIdentity.isLoading && !tokenOutIdentity.isLoading && tokenInSymbol.length > 0 && tokenOutSymbol.length > 0
 
   useScreenshotReady(screenshotReady)
-
-  const positions: LpPosition[] = useMemo(() => {
-    const data = lpPositionsQuery.data
-    if (!data) return []
-    if (Array.isArray((data as Record<string, unknown>)?.positions)) {
-      return (data as { positions: LpPosition[] }).positions
-    }
-    if (Array.isArray(data)) return data as LpPosition[]
-    return []
-  }, [lpPositionsQuery.data])
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <>
@@ -2008,44 +1608,20 @@ export function Swap() {
             ) : (
               <div style={{ perspective: 1200 }}>
                 <AnimatePresence mode="wait" initial={false}>
-                  {useAmoePointsForEntry ? (
-                    <motion.div
-                      key="amoe-entry"
-                      initial={{ rotateY: -90, opacity: 0, scale: 0.98 }}
-                      animate={{ rotateY: 0, opacity: 1, scale: 1 }}
-                      exit={{ rotateY: 90, opacity: 0, scale: 0.98 }}
-                      transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
-                      style={{ transformStyle: 'preserve-3d', backfaceVisibility: 'hidden' }}
-                      className="space-y-3"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setUseAmoePointsForEntry(false)}
-                        className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-left text-xs text-vault-subtext transition hover:bg-white/[0.07] hover:text-vault-text"
-                      >
-                        ← Back to swap
-                      </button>
-                      <AmoeEntryCard
-                        walletAddress={swapAmoeWalletAddress}
-                        creatorCoin={null}
-                        walletClientOverride={swapAmoeSigningClient}
-                      />
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="swap-card"
-                      initial={{ rotateY: 90, opacity: 0, scale: 0.98 }}
-                      animate={{ rotateY: 0, opacity: 1, scale: 1 }}
-                      exit={{ rotateY: -90, opacity: 0, scale: 0.98 }}
-                      transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
-                      style={{ transformStyle: 'preserve-3d', backfaceVisibility: 'hidden' }}
-                      className="space-y-3"
-                    >
-                      <SwapCard
-                        tokenInDisplay={tokenInDisplay}
-                        tokenOutDisplay={tokenOutDisplay}
-                        tokenInIdentityLoading={tokenInIdentity.isLoading}
-                        tokenOutIdentityLoading={tokenOutIdentity.isLoading}
+                  <motion.div
+                    key="swap-card"
+                    initial={{ rotateY: 90, opacity: 0, scale: 0.98 }}
+                    animate={{ rotateY: 0, opacity: 1, scale: 1 }}
+                    exit={{ rotateY: -90, opacity: 0, scale: 0.98 }}
+                    transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+                    style={{ transformStyle: 'preserve-3d', backfaceVisibility: 'hidden' }}
+                    className="space-y-3"
+                  >
+                    <SwapCard
+                      tokenInDisplay={tokenInDisplay}
+                      tokenOutDisplay={tokenOutDisplay}
+                      tokenInIdentityLoading={tokenInIdentity.isLoading}
+                      tokenOutIdentityLoading={tokenOutIdentity.isLoading}
                         amountInUnits={amountInUnits}
                         estimatedOut={buyAmountDisplay}
                         buyQuoteLoading={buyQuoteLoading}
@@ -2092,20 +1668,12 @@ export function Swap() {
                         }}
                         onSwitchTokens={handleSwitchTokens}
                         onReviewTrade={() => {
-                          if (unverifiedSelectionMode) return
                           void handleReviewTrade()
                         }}
                         onSetSlippagePct={setSlippagePct}
-                        onResetUnverified={() => {
-                          setUnverifiedSelectionMode(false)
-                          setUnverifiedTokenLabel(null)
-                        }}
-                        onConfirmUnverified={confirmUnverifiedSelection}
                         executionMode={executionMode}
                         fallbackActive={fallbackActive}
                         swapProviderLabel={swapProviderLabel}
-                        needsUnverifiedConfirmation={unverifiedSelectionMode}
-                        unverifiedTokenLabel={unverifiedTokenLabel}
                         primaryActionLabel={needsCanonicalSetupAction ? canonicalSetupActionLabel : undefined}
                         onPrimaryAction={
                           needsCanonicalSetupAction ? handleEnableCanonicalSigning : undefined
@@ -2120,55 +1688,21 @@ export function Swap() {
                               : null
                         }
                       />
-                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-vault-text transition hover:bg-white/[0.07]">
-                        <input
-                          type="checkbox"
-                          checked={useAmoePointsForEntry}
-                          onChange={(event) => setUseAmoePointsForEntry(event.target.checked)}
-                          className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent accent-brand-primary"
-                          aria-label="Use points for a free jackpot entry"
-                        />
-                        <span className="min-w-0 block font-medium">Use points for a free jackpot entry</span>
-                      </label>
                     </motion.div>
-                  )}
-                </AnimatePresence>
+                  </AnimatePresence>
               </div>
             )
           ) : (
             <LiquidityPanel
               tokenInSymbol={tokenInSymbol}
               tokenOutSymbol={tokenOutSymbol}
-              lpMode={lpMode}
-              lpFeeTier={lpFeeTier}
-              lpAmountA={lpAmountA}
-              lpAmountB={lpAmountB}
-              lpLowerTick={lpLowerTick}
-              lpUpperTick={lpUpperTick}
-              lpPositionId={lpPositionId}
-              lpStatus={lpStatus}
-              lpError={lpError}
-              lpBusy={lpBusy}
-              anyBusy={anyBusy}
               identityReady={identityReady}
-              positions={positions}
-              positionsLoading={lpPositionsQuery.isLoading}
-              positionsError={lpPositionsQuery.isError ? 'Failed to load positions.' : null}
-              onSetLpMode={setLpMode}
-              onSetLpFeeTier={setLpFeeTier}
-              onSetLpAmountA={setLpAmountA}
-              onSetLpAmountB={setLpAmountB}
-              onSetLpLowerTick={setLpLowerTick}
-              onSetLpUpperTick={setLpUpperTick}
-              onSetLpPositionId={setLpPositionId}
-              onLpQuote={handleLpQuote}
-              onCreatePosition={handleCreatePosition}
-              onClaimFees={handleClaimFees}
-              onRemoveLiquidity={handleRemoveLiquidity}
-              onRefreshPositions={() => void lpPositionsQuery.refetch()}
               activePanel={activePanel}
               onSetActivePanel={setActivePanel}
               onOpenSettings={() => setShowAdvanced(true)}
+              canonicalAddress={canonicalAddress}
+              tokenIn={tokenIn}
+              tokenOut={tokenOut}
             />
           )
         }
@@ -2269,118 +1803,9 @@ export function Swap() {
         </div>
       ) : null}
 
-      {activePanel === 'swap' && diagnosticsEnabled ? (
-        <div data-screenshot-hide="true" className="mx-auto mt-4 max-w-4xl vault-surface-muted rounded-xl p-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Internal 7702 Diagnostics</div>
-              <div className="text-xs text-zinc-500">
-                Canary eligible: <span className={canary7702Eligible ? 'text-emerald-300' : 'text-zinc-400'}>{canary7702Eligible ? 'yes' : 'no'}</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => void run7702DryRun()}
-              disabled={diagnosticsBusy || busy !== null}
-              className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-zinc-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {diagnosticsBusy ? 'Running…' : 'Run dry-run'}
-            </button>
-          </div>
-          {diagnosticsResult ? (
-            <pre className="mt-3 max-h-56 overflow-auto rounded-lg border border-white/10 bg-black/40 p-2 text-[11px] text-zinc-300">
-              {JSON.stringify(diagnosticsResult, null, 2)}
-            </pre>
-          ) : null}
-        </div>
-      ) : null}
 
-      {activePanel === 'swap' && txDebug.enabled ? (
-        <div
-          data-screenshot-hide="true"
-          className="mx-auto mt-4 max-w-4xl rounded-xl border border-cyan-400/28 bg-linear-to-b from-cyan-900/35 to-cyan-950/22 p-3 backdrop-blur-sm"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wider text-cyan-200">Swap Tx Router Debug</div>
-              <div className="text-xs text-cyan-100/80">
-                mode={txDebug.selectedSendMode ?? '--'} method={txDebug.lastMethod ?? '--'} smartWallet=
-                {txDebug.smartWalletDetected ? 'yes' : 'no'}
-              </div>
-            </div>
-            <div className="text-right text-[11px] text-cyan-100/80">
-              <div>connector: {txDebug.connectorName ?? '--'} ({txDebug.connectorId ?? '--'})</div>
-              <div>signerType: {txDebug.signerType ?? '--'}</div>
-            </div>
-          </div>
 
-          <div className="mt-3 grid grid-cols-1 gap-2 text-[11px] text-cyan-100/90 md:grid-cols-2">
-            <div className="rounded-lg border border-cyan-400/15 bg-black/30 p-2">
-              <div>selected: {txDebug.selectedAddress ?? '--'}</div>
-              <div>execution: {txDebug.executionAddress ?? '--'}</div>
-              <div>signer: {txDebug.signerAddress ?? '--'}</div>
-              <div>canonical: {txDebug.canonicalAddress ?? '--'}</div>
-              <div>balance owner: {balanceOwnerAddress ?? '--'}</div>
-              <div>token in: {tokenIn}</div>
-              <div>
-                token in bal:{' '}
-                {tokenInBalanceQuery.isSuccess
-                  ? `${tokenInBalanceQuery.data?.formatted ?? '--'} (${tokenInBalanceQuery.data?.raw?.toString() ?? '--'})`
-                  : tokenInBalanceQuery.isError
-                    ? 'error'
-                    : 'loading'}
-              </div>
-              <div>token out: {tokenOut}</div>
-              <div>
-                token out bal:{' '}
-                {tokenOutBalanceQuery.isSuccess
-                  ? `${tokenOutBalanceQuery.data?.formatted ?? '--'} (${tokenOutBalanceQuery.data?.raw?.toString() ?? '--'})`
-                  : tokenOutBalanceQuery.isError
-                    ? 'error'
-                    : 'loading'}
-              </div>
-            </div>
-            <div className="rounded-lg border border-cyan-400/15 bg-black/30 p-2">
-              <div>supports5792: {txDebug.capabilities.supports5792 ? 'yes' : 'no'}</div>
-              <div>paymasterService: {txDebug.capabilities.paymasterService ? 'yes' : 'no'}</div>
-              <div>atomicStatus: {txDebug.capabilities.atomicStatus}</div>
-              <div>canonicalSignerRequired: {txDebug.canonicalSigner.required ? 'yes' : 'no'}</div>
-              <div>canonicalSignerReady: {txDebug.canonicalSigner.ready ? 'yes' : 'no'}</div>
-              <div>canonicalSignerGate: {txDebug.canonicalSigner.code ?? '--'}</div>
-              <div>privyClientStatus: {txDebug.privy.clientStatus ?? '--'}</div>
-              <div>privyReady: {txDebug.privy.ready ? 'yes' : 'no'}</div>
-              <div>
-                privyAuthenticated:{' '}
-                {txDebug.privy.authenticated === null ? '--' : txDebug.privy.authenticated ? 'yes' : 'no'}
-              </div>
-              <div>embeddedWalletSource: {txDebug.privy.embeddedWalletSource ?? '--'}</div>
-              <div>embeddedWalletAddress: {txDebug.privy.embeddedWalletAddress ?? '--'}</div>
-              <div>allowanceWallet: {txDebug.allowanceCheck?.walletAddress ?? '--'}</div>
-            </div>
-          </div>
 
-          <div className="mt-2 rounded-lg border border-cyan-400/15 bg-black/30 p-2 text-[11px] text-cyan-100/90">
-            <div>approval sender: {txDebug.approvalAttempt?.sender ?? '--'}</div>
-            <div>swap sender: {txDebug.swapAttempt?.sender ?? '--'}</div>
-            <div>
-              sender match:{' '}
-              {txDebug.approvalAttempt?.sender && txDebug.swapAttempt?.sender
-                ? txDebug.approvalAttempt.sender.toLowerCase() === txDebug.swapAttempt.sender.toLowerCase()
-                  ? 'yes'
-                  : 'no'
-                : '--'}
-            </div>
-            <div className={txDebug.lastError ? 'text-rose-300' : 'text-cyan-100/90'}>
-              last error: {txDebug.lastError ?? '--'}
-            </div>
-            <div>canonical signer reason: {txDebug.canonicalSigner.reason ?? '--'}</div>
-          </div>
-
-          <pre className="mt-2 max-h-56 overflow-auto rounded-lg border border-cyan-400/15 bg-black/40 p-2 text-[11px] text-cyan-100/90">
-            {JSON.stringify(txDebug, null, 2)}
-          </pre>
-        </div>
-      ) : null}
 
       {chainMismatch ? (
         <div
@@ -2410,10 +1835,6 @@ export function Swap() {
         recentTokenAddresses={recentTokenAddresses}
         chainId={swapChainId}
         balanceOwnerAddress={balanceOwnerAddress ?? null}
-        zoraHoldingOptions={swapZoraHoldingOptions}
-        zoraHoldingBalances={swapZoraHoldingBalances}
-        zoraHoldingUsdValues={swapZoraHoldingUsdValues}
-        zoraHoldingsLoading={swapZoraHoldingsQuery.isLoading}
         isSearchLoading={
           discoveredCreatorTokenOptionsQuery.isFetching && Boolean(normalizedTokenSelectorQuery)
         }
@@ -2443,253 +1864,5 @@ export function Swap() {
       />
 
     </>
-  )
-}
-
-// ─── Liquidity panel component ──────────────────────────────────────────────
-
-function LiquidityPanel(props: {
-  tokenInSymbol: string
-  tokenOutSymbol: string
-  lpMode: 'simple' | 'advanced'
-  lpFeeTier: string
-  lpAmountA: string
-  lpAmountB: string
-  lpLowerTick: string
-  lpUpperTick: string
-  lpPositionId: string
-  lpStatus: string
-  lpError: string
-  lpBusy: string | null
-  anyBusy: boolean
-  identityReady: boolean
-  positions: LpPosition[]
-  positionsLoading: boolean
-  positionsError: string | null
-  activePanel: 'swap' | 'liquidity'
-  onSetLpMode: (m: 'simple' | 'advanced') => void
-  onSetLpFeeTier: (v: string) => void
-  onSetLpAmountA: (v: string) => void
-  onSetLpAmountB: (v: string) => void
-  onSetLpLowerTick: (v: string) => void
-  onSetLpUpperTick: (v: string) => void
-  onSetLpPositionId: (v: string) => void
-  onLpQuote: () => void
-  onCreatePosition: () => void
-  onClaimFees: (id?: string) => void
-  onRemoveLiquidity: (id?: string) => void
-  onRefreshPositions: () => void
-  onSetActivePanel: (panel: 'swap' | 'liquidity') => void
-  onOpenSettings: () => void
-}) {
-  return (
-    <div className="space-y-4">
-      <PageMeta title={META.swap.title} description={META.swap.description} canonicalPath="/swap" />
-      {/* ─── Execution bar (mirrors swap panel) ─── */}
-      <div className="flex items-center gap-2">
-        <div className="inline-flex rounded-full border border-white/12 bg-black/40 p-0.5 text-xs">
-          {(['swap', 'liquidity'] as const).map((panel) => (
-            <button
-              key={panel}
-              type="button"
-              onClick={() => props.onSetActivePanel(panel)}
-              className={`min-h-7 rounded-full px-3 py-1 transition-colors capitalize ${
-                props.activePanel === panel
-                  ? 'bg-white/15 text-white font-medium'
-                  : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              {panel}
-            </button>
-          ))}
-        </div>
-        <div className="flex-1" />
-        <button
-          type="button"
-          onClick={props.onOpenSettings}
-          className="rounded-full border border-white/12 bg-white/4 p-2 text-zinc-400 transition hover:bg-white/8 hover:text-zinc-200"
-          aria-label="Swap settings"
-        >
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
-            <circle cx="8" cy="8" r="2" /><path d="M8 2v1M8 13v1M2 8H1m13 0h1M4.05 4.05l-.71-.71m9.32 9.32-.71-.71M4.05 11.95l-.71.71m9.32-9.32-.71.71" />
-          </svg>
-        </button>
-      </div>
-
-      {/* ─── Add liquidity form ─── */}
-      <div className="rounded-2xl border border-white/8 bg-vault-card/50 p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-xs font-semibold text-white">Add position</span>
-          <button
-            type="button"
-            onClick={() => props.onSetLpMode(props.lpMode === 'simple' ? 'advanced' : 'simple')}
-            className="rounded-full border border-white/12 bg-white/4 px-3 py-1 text-[11px] text-zinc-400 transition hover:bg-white/8 hover:text-zinc-200"
-          >
-            {props.lpMode === 'simple' ? 'Simple' : 'Advanced'}
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="label mb-1 block">{props.tokenInSymbol} amount</label>
-            <input
-              className="min-h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-brand-primary/40"
-              value={props.lpAmountA}
-              onChange={(e) => props.onSetLpAmountA(e.target.value)}
-              placeholder="0.0"
-            />
-          </div>
-          <div>
-            <label className="label mb-1 block">{props.tokenOutSymbol} amount</label>
-            <input
-              className="min-h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-brand-primary/40"
-              value={props.lpAmountB}
-              onChange={(e) => props.onSetLpAmountB(e.target.value)}
-              placeholder="0.0"
-            />
-          </div>
-        </div>
-
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <div>
-            <label htmlFor="swap-lp-fee-tier" className="label mb-1 block">Fee tier</label>
-            <select
-              id="swap-lp-fee-tier"
-              value={props.lpFeeTier}
-              onChange={(e) => props.onSetLpFeeTier(e.target.value)}
-              className="min-h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none"
-            >
-              <option value="500">0.05%</option>
-              <option value="3000">0.30%</option>
-              <option value="10000">1.00%</option>
-            </select>
-          </div>
-          <div>
-            <label htmlFor="swap-lp-position-id" className="label mb-1 block">Position ID</label>
-            <input
-              id="swap-lp-position-id"
-              className="min-h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600"
-              value={props.lpPositionId}
-              onChange={(e) => props.onSetLpPositionId(e.target.value)}
-              placeholder="For claim / remove"
-            />
-          </div>
-        </div>
-
-        {props.lpMode === 'advanced' && (
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <input
-              className="min-h-10 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600"
-              value={props.lpLowerTick}
-              onChange={(e) => props.onSetLpLowerTick(e.target.value)}
-              placeholder="Lower tick"
-            />
-            <input
-              className="min-h-10 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600"
-              value={props.lpUpperTick}
-              onChange={(e) => props.onSetLpUpperTick(e.target.value)}
-              placeholder="Upper tick"
-            />
-          </div>
-        )}
-
-        {/* Action buttons */}
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={props.onLpQuote}
-            disabled={props.anyBusy || !props.identityReady}
-            className="rounded-xl border border-white/12 bg-white/4 py-2 text-sm text-zinc-300 transition hover:bg-white/8 disabled:opacity-50"
-          >
-            {props.lpBusy === 'lpQuote' ? 'Quoting…' : 'Get quote'}
-          </button>
-          <button
-            type="button"
-            onClick={props.onCreatePosition}
-            disabled={props.anyBusy || !props.identityReady}
-            className="flex items-center justify-center gap-1.5 rounded-xl bg-brand-primary py-2 text-sm font-semibold text-white shadow-[0_4px_20px_-8px_rgb(var(--brand-primary)/0.5)] transition hover:bg-brand-hover disabled:opacity-50"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {props.lpBusy === 'lpCreate' ? 'Adding…' : 'Add liquidity'}
-          </button>
-          <button
-            type="button"
-            onClick={() => props.onClaimFees()}
-            disabled={props.anyBusy || !props.identityReady || !props.lpPositionId.trim()}
-            className="rounded-xl border border-emerald-400/20 bg-emerald-500/8 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/15 disabled:opacity-50"
-          >
-            {props.lpBusy === 'lpClaim' ? 'Claiming…' : 'Claim fees'}
-          </button>
-          <button
-            type="button"
-            onClick={() => props.onRemoveLiquidity()}
-            disabled={props.anyBusy || !props.identityReady || !props.lpPositionId.trim()}
-            className="rounded-xl border border-rose-400/20 bg-rose-500/8 py-2 text-sm font-medium text-rose-300 transition hover:bg-rose-500/15 disabled:opacity-50"
-          >
-            {props.lpBusy === 'lpRemove' ? 'Removing…' : 'Remove'}
-          </button>
-        </div>
-
-        {props.lpStatus && (
-          <div className="mt-2"><Alert variant="success">{props.lpStatus}</Alert></div>
-        )}
-        {props.lpError && (
-          <div className="mt-2"><Alert variant="error">{props.lpError}</Alert></div>
-        )}
-      </div>
-
-      {/* ─── Positions ─── */}
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
-            <Droplets className="h-3.5 w-3.5" />
-            Your positions
-          </div>
-          <button
-            type="button"
-            onClick={props.onRefreshPositions}
-            disabled={props.positionsLoading}
-            className="rounded-full border border-white/10 p-1.5 text-zinc-500 transition hover:text-zinc-300 disabled:opacity-50"
-            aria-label="Refresh positions"
-          >
-            {props.positionsLoading ? <Spinner size="xs" /> : <RefreshCw className="h-3 w-3" />}
-          </button>
-        </div>
-
-        {props.positionsLoading && (
-          <div className="space-y-2">
-            {[1, 2].map((i) => (
-              <div key={i} className="h-24 animate-pulse rounded-2xl bg-white/4" />
-            ))}
-          </div>
-        )}
-
-        {props.positionsError && !props.positionsLoading && (
-          <Alert variant="error">{props.positionsError}</Alert>
-        )}
-
-        {!props.positionsLoading && !props.positionsError && props.positions.length === 0 && (
-          <div className="rounded-2xl border border-white/6 bg-white/3 px-4 py-6 text-center">
-            <Droplets className="mx-auto h-8 w-8 text-zinc-700 mb-2" aria-hidden="true" />
-            <div className="text-sm text-zinc-500">No active liquidity positions</div>
-            <div className="mt-1 text-xs text-zinc-600">Add liquidity above to start earning fees.</div>
-          </div>
-        )}
-
-        {!props.positionsLoading && props.positions.length > 0 && (
-          <div className="space-y-2">
-            {props.positions.map((pos, i) => (
-              <LpPositionCard
-                key={pos.id ?? pos.tokenId ?? i}
-                position={pos}
-                busy={props.lpBusy}
-                onClaim={props.onClaimFees}
-                onRemove={props.onRemoveLiquidity}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
   )
 }

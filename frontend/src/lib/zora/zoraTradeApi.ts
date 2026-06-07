@@ -739,6 +739,8 @@ export async function executeZoraCswQuoteWithEscalation(params: {
   slippagePct: number
   /** When set (auto slippage), simulation may escalate above `slippagePct` up to this cap. */
   slippageEscalationCapPct?: number
+  /** Submit-time only: after slippage ladder exhausts, retry with smaller input size. */
+  allowAmountDownshiftOnSlippage?: boolean
   signerAddress: string
   executionAddress?: string | null
   walletClient: ZoraCswWalletClient
@@ -783,72 +785,106 @@ export async function executeZoraCswQuoteWithEscalation(params: {
       : [isCswExecution ? Math.max(params.slippagePct, 5) : params.slippagePct]
   const forceResignPermits = isCswExecution
 
-  let lastError: unknown
-  for (let i = 0; i < effectiveLadder.length; i += 1) {
-    const slippagePct = effectiveLadder[i]
-    try {
-      if (i > 0) {
-        params.onStatus?.(
-          `${SWAP_PREPARE_STATUS} Retrying with ${Number.isFinite(slippagePct) ? slippagePct : '?'}% slippage…`,
-        )
-      }
+  const amountDownshiftBpsLadder =
+    params.allowAmountDownshiftOnSlippage && isCswExecution ? [10_000, 8_500, 7_000] : [10_000]
+  let originalAmountIn: bigint | null = null
+  try {
+    originalAmountIn = BigInt(params.amountIn)
+  } catch {
+    originalAmountIn = null
+  }
 
-      let baseQuote = params.quote
-      if (i > 0) {
-        const payload = await fetchZoraTradeQuoteFromApi({
+  let lastError: unknown
+  for (let amountIdx = 0; amountIdx < amountDownshiftBpsLadder.length; amountIdx += 1) {
+    const amountBps = amountDownshiftBpsLadder[amountIdx] ?? 10_000
+    const amountInForAttempt =
+      amountBps === 10_000 || originalAmountIn == null
+        ? params.amountIn
+        : (() => {
+            const downshifted = (originalAmountIn * BigInt(amountBps)) / 10_000n
+            return (downshifted > 0n ? downshifted : 1n).toString()
+          })()
+    const amountPctLabel = Math.round(amountBps / 100)
+
+    for (let i = 0; i < effectiveLadder.length; i += 1) {
+      const slippagePct = effectiveLadder[i]
+      try {
+        if (i > 0 || amountIdx > 0) {
+          const slippageLabel = Number.isFinite(slippagePct) ? slippagePct : '?'
+          const amountSuffix =
+            amountIdx > 0 ? ` and ${amountPctLabel}% amount` : ''
+          params.onStatus?.(
+            `${SWAP_PREPARE_STATUS} Retrying with ${slippageLabel}% slippage${amountSuffix}…`,
+          )
+        }
+
+        let baseQuote = params.quote
+        if (i > 0 || amountIdx > 0) {
+          const payload = await fetchZoraTradeQuoteFromApi({
+            tokenIn: params.tokenIn,
+            tokenOut: params.tokenOut,
+            amountIn: amountInForAttempt,
+            sender,
+            slippagePct: slippagePct ?? 0.5,
+          })
+          baseQuote = zoraTradeQuoteToResponse({
+            tokenIn: params.tokenIn,
+            tokenOut: params.tokenOut,
+            amountIn: amountInForAttempt,
+            payload,
+          })
+        }
+
+        const signatures = await signZoraQuotePermits({
+          quote: baseQuote,
+          signerAddress: params.signerAddress,
+          executionAddress: params.executionAddress,
+          forceResignPermits: forceResignPermits || i > 0 || amountIdx > 0,
+          walletClient: params.walletClient,
+          publicClient: params.publicClient,
+        })
+
+        if (signatures.length === 0) {
+          throw new Error('Zora trade is missing Permit2 authorization. Refresh the quote and try again.')
+        }
+
+        return await refreshZoraTradeQuoteWithSimulation({
           tokenIn: params.tokenIn,
           tokenOut: params.tokenOut,
-          amountIn: params.amountIn,
+          amountIn: amountInForAttempt,
           sender,
           slippagePct: slippagePct ?? 0.5,
+          signatures,
         })
-        baseQuote = zoraTradeQuoteToResponse({
-          tokenIn: params.tokenIn,
-          tokenOut: params.tokenOut,
-          amountIn: params.amountIn,
-          payload,
-        })
-      }
-
-      const signatures = await signZoraQuotePermits({
-        quote: baseQuote,
-        signerAddress: params.signerAddress,
-        executionAddress: params.executionAddress,
-        forceResignPermits: forceResignPermits || i > 0,
-        walletClient: params.walletClient,
-        publicClient: params.publicClient,
-      })
-
-      if (signatures.length === 0) {
-        throw new Error('Zora trade is missing Permit2 authorization. Refresh the quote and try again.')
-      }
-
-      return await refreshZoraTradeQuoteWithSimulation({
-        tokenIn: params.tokenIn,
-        tokenOut: params.tokenOut,
-        amountIn: params.amountIn,
-        sender,
-        slippagePct: slippagePct ?? 0.5,
-        signatures,
-      })
-    } catch (error) {
-      lastError = error
-      const isRetryable = isZoraRouterSimulationRetryable(error)
-      const isLastAttempt = i >= effectiveLadder.length - 1
-      if (isLastAttempt && isRetryable) {
-        const maxTried = effectiveLadder[effectiveLadder.length - 1] ?? slippagePct ?? params.slippagePct
-        const detail = String(error instanceof Error ? error.message : error ?? '').trim()
-        const detailSuffix =
-          detail && !detail.toLowerCase().includes('slippage tolerance is too tight')
-            ? ` (${detail.slice(0, 180)})`
-            : ''
-        throw new Error(
-          `Slippage tolerance is still too tight after escalating up to ${maxTried}%. ` +
-            `Try a smaller amount, or set manual slippage near ${maxTried}% and retry.${detailSuffix}`,
-        )
-      }
-      if (isLastAttempt || !isRetryable) {
-        throw error
+      } catch (error) {
+        lastError = error
+        const isRetryable = isZoraRouterSimulationRetryable(error)
+        const isLastSlippageAttempt = i >= effectiveLadder.length - 1
+        if (isLastSlippageAttempt && isRetryable) {
+          const canDownshiftAmount = amountIdx < amountDownshiftBpsLadder.length - 1
+          if (canDownshiftAmount) {
+            const nextAmountBps = amountDownshiftBpsLadder[amountIdx + 1] ?? amountBps
+            const nextAmountPctLabel = Math.round(nextAmountBps / 100)
+            params.onStatus?.(
+              `${SWAP_PREPARE_STATUS} Slippage exhausted. Retrying with ${nextAmountPctLabel}% amount…`,
+            )
+            break
+          }
+          const maxTried = effectiveLadder[effectiveLadder.length - 1] ?? slippagePct ?? params.slippagePct
+          const detail = String(error instanceof Error ? error.message : error ?? '').trim()
+          const detailSuffix =
+            detail && !detail.toLowerCase().includes('slippage tolerance is too tight')
+              ? ` (${detail.slice(0, 180)})`
+              : ''
+          throw new Error(
+            `Slippage tolerance is still too tight after escalating up to ${maxTried}% ` +
+              `and reducing size to ${amountPctLabel}% of input. ` +
+              `Try a smaller amount, or set manual slippage near ${maxTried}% and retry.${detailSuffix}`,
+          )
+        }
+        if (isLastSlippageAttempt || !isRetryable) {
+          throw error
+        }
       }
     }
   }
@@ -868,6 +904,7 @@ export async function prepareZoraQuoteForExecute(params: {
   sender: string
   slippagePct: number
   slippageEscalationCapPct?: number
+  allowAmountDownshiftOnSlippage?: boolean
   signerAddress: string
   executionAddress?: string | null
   walletClient: ZoraCswWalletClient

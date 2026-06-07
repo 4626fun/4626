@@ -233,13 +233,25 @@ fund_job() {
 
 run_primary_otto() {
   local job_id
-  job_id="$(create_job "$OTTO_PROVIDER" "$OTTO_OFFERING" "$OTTO_REQUIREMENTS_JSON")"
+  if ! job_id="$(create_job "$OTTO_PROVIDER" "$OTTO_OFFERING" "$OTTO_REQUIREMENTS_JSON")"; then
+    return 1
+  fi
+  if [[ -z "$job_id" ]]; then
+    log "create_job returned empty job id for Otto"
+    return 1
+  fi
   fund_job "$job_id" "$OTTO_FUND_AMOUNT"
 }
 
 run_fallback_pulse() {
   local job_id
-  job_id="$(create_job "$PULSE_PROVIDER" "$PULSE_OFFERING" "$PULSE_REQUIREMENTS_JSON")"
+  if ! job_id="$(create_job "$PULSE_PROVIDER" "$PULSE_OFFERING" "$PULSE_REQUIREMENTS_JSON")"; then
+    return 1
+  fi
+  if [[ -z "$job_id" ]]; then
+    log "create_job returned empty job id for Pulse"
+    return 1
+  fi
   fund_job "$job_id" "$PULSE_FUND_AMOUNT"
 }
 
