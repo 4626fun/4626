@@ -54,10 +54,14 @@ function readRoomId(): string {
 }
 
 export function readCounterTradeRuntimeConfig(): CounterTradeRuntimeConfig {
+  const minUserNotionalUsd = Math.max(
+    1,
+    readPositiveNumber('ALFACLUB_COUNTER_TRADE_MIN_USER_NOTIONAL_USD', 1),
+  )
   return {
     enabled: readBool('ALFACLUB_COUNTER_TRADE_ENABLED', false),
     roomId: readRoomId(),
-    minUserNotionalUsd: readPositiveNumber('ALFACLUB_COUNTER_TRADE_MIN_USER_NOTIONAL_USD', 25),
+    minUserNotionalUsd,
     cooldownMs: readPositiveInt('ALFACLUB_COUNTER_TRADE_COOLDOWN_MS', 120_000),
     hourlyActionCap: readPositiveInt('ALFACLUB_COUNTER_TRADE_HOURLY_ACTION_CAP', 12),
     dailyNotionalCapUsd: readPositiveNumber('ALFACLUB_COUNTER_TRADE_DAILY_NOTIONAL_CAP_USD', 7_500),
