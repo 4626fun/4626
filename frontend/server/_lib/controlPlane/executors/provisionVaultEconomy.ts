@@ -1,4 +1,4 @@
-import { getDb, isDbConfigured } from '@4626/server-core'
+import { getDb, isDbConfigured, runInTransaction } from '@4626/server-core'
 import { ensureDeploySessionsSchema, type DeploySessionRecord } from '../../deploy/deploySessions.js'
 import {
   buildKeeprConfig,
@@ -227,33 +227,56 @@ export async function provisionVaultEconomy(
     throw error
   }
 
-  const row = await upsertKeeprVault({
-    config,
-    actorWallet: input.requestedBy ?? creatorAddress,
-  })
-
   const profile = resolveStrategyProfile(input.strategyVariant)
-  let automationEnabled = false
-  try {
-    await upsertKeeprVaultAutomation({
-      vaultAddress,
-      profileId: profile.profileId,
-      canonicalCswAddress: creatorAddress,
-      authorizationSource: 'control-plane.provision',
-      automationEnabled: true,
-      automationScope: profile.automationScope,
-      metadata: {
-        operationId: input.operationId ?? null,
-        strategyVariant: profile.variant,
-      },
+  const writeResult = await runInTransaction(async (txDb) => {
+    await upsertKeeprVault({
+      config,
+      actorWallet: input.requestedBy ?? creatorAddress,
+      db: txDb as { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> },
     })
-    automationEnabled = true
-  } catch (error) {
-    warnings.push(`automation_enable_failed:${error instanceof Error ? error.message : String(error)}`)
-  }
 
-  const existing = await getKeeprVaultByVaultAddress(vaultAddress)
-  const configHash = existing?.configHash ?? computeConfigHash(config)
+    let automationEnabled = false
+    let automationWarning: string | null = null
+    try {
+      await upsertKeeprVaultAutomation({
+        vaultAddress,
+        profileId: profile.profileId,
+        canonicalCswAddress: creatorAddress,
+        authorizationSource: 'control-plane.provision',
+        automationEnabled: true,
+        automationScope: profile.automationScope,
+        metadata: {
+          operationId: input.operationId ?? null,
+          strategyVariant: profile.variant,
+        },
+        db: txDb as { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> },
+      })
+      automationEnabled = true
+    } catch (error) {
+      automationWarning = `automation_enable_failed:${error instanceof Error ? error.message : String(error)}`
+    }
+
+    const existing = await getKeeprVaultByVaultAddress(
+      vaultAddress,
+      txDb as { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> },
+    )
+    return {
+      automationEnabled,
+      automationWarning,
+      configHash: existing?.configHash ?? computeConfigHash(config),
+    }
+  })
+  if (!writeResult) {
+    throw new ProvisionVaultEconomyError('database_unavailable', {
+      code: 'database_unavailable',
+      retryable: true,
+    })
+  }
+  if (writeResult.automationWarning) {
+    warnings.push(writeResult.automationWarning)
+  }
+  const automationEnabled = writeResult.automationEnabled
+  const configHash = writeResult.configHash
 
   try {
     const creatorToken =

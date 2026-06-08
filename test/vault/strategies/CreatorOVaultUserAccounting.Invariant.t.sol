@@ -281,6 +281,10 @@ contract CreatorOVaultUserAccountingInvariantTest is RebalanceTestHarness {
     function invariant_userLosesVeryLittleInRealisticScenarios() external view {
         if (!handler.hasAnyUserExposure()) return;
 
+        // Tighter non-stress profile: if users are exposed, every exposed user
+        // should stay above a 90% recovery floor in this protected suite.
+        assertTrue(handler.allUsersAboveBps(9000), "Some exposed user dropped below 90% recovery");
+
         for (uint256 i = 0; i < 3; i++) {
             address user = handler.users(i);
             uint256 deposited = handler.userDepositedAssets(user);
@@ -292,7 +296,7 @@ contract CreatorOVaultUserAccountingInvariantTest is RebalanceTestHarness {
             // Note: Even pure deposit + withdraw (no skew, no rebalance) can cause movement in this mock
             // due to the simplified backstop simulation. This is a limitation of the current test harness.
             // See top-level "CURRENT CALIBRATION STATUS & KNOWN LIMITATIONS" section.
-            assertGe(recovery, 8500, "User recovered less than 85% in protected realistic flow");
+            assertGe(recovery, 9000, "User recovered less than 90% in protected realistic flow");
 
             // --- Aspirational 99% version (uncomment when moving to real strategies) ---
             // assertGe(recovery, 9900, "User recovered less than 99% in protected realistic flow");
@@ -351,8 +355,8 @@ contract CreatorOVaultUserAccountingInvariantTest is RebalanceTestHarness {
         uint256 totalDeposited = handler.totalUserDeposited();
         uint256 totalCurrent = handler.totalUserCurrentValue();
 
-        // Very loose bound for the mock harness.
-        assertGe(totalCurrent, totalDeposited / 2, "Aggregate user value collapsed");
+        // Protected suite should keep aggregate user value near principal.
+        assertGe(totalCurrent, (totalDeposited * 9) / 10, "Aggregate user value dropped below 90%");
     }
 
     /// @dev No exposed user should have a catastrophically bad recovery (demonstrates `getExposedUsers()`).
@@ -362,7 +366,7 @@ contract CreatorOVaultUserAccountingInvariantTest is RebalanceTestHarness {
 
         for (uint256 i = 0; i < exposed.length; i++) {
             uint256 rec = handler.userRecoveryBps(exposed[i]);
-            assertGe(rec, 5000, "Some user recovered less than 50%");
+            assertGe(rec, 9000, "Some exposed user recovered less than 90%");
         }
     }
 }

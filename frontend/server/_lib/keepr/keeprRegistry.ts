@@ -4,6 +4,10 @@ import { ensureKeeprSchema } from './keeprSchema.js'
 import { getDb } from '../db/postgres.js'
 import { shouldSampleEvent } from '../infra/telemetrySampling.js'
 
+type DbLike = {
+  sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
+}
+
 export type KeeprConfigV1 = {
   version: number
   chainId: number
@@ -151,8 +155,12 @@ function deriveTelegramChatId(groupId: string): string | null {
   return null
 }
 
-export async function upsertKeeprVault(params: { config: KeeprConfigV1; actorWallet?: string | null }): Promise<KeeprVaultRow> {
-  const db = await getDb()
+export async function upsertKeeprVault(params: {
+  config: KeeprConfigV1
+  actorWallet?: string | null
+  db?: DbLike
+}): Promise<KeeprVaultRow> {
+  const db = params.db ?? (await getDb())
   if (!db) throw new Error('db_not_configured')
   await ensureKeeprSchema()
 
@@ -251,13 +259,16 @@ export async function upsertKeeprVault(params: { config: KeeprConfigV1; actorWal
     `
   }
 
-  const row = await getKeeprVaultByVaultAddress(vaultAddress as `0x${string}`)
+  const row = await getKeeprVaultByVaultAddress(vaultAddress as `0x${string}`, db)
   if (!row) throw new Error('keepr_vault_upsert_failed')
   return row
 }
 
-export async function getKeeprVaultByVaultAddress(vaultAddress: `0x${string}`): Promise<KeeprVaultRow | null> {
-  const db = await getDb()
+export async function getKeeprVaultByVaultAddress(
+  vaultAddress: `0x${string}`,
+  dbOverride?: DbLike,
+): Promise<KeeprVaultRow | null> {
+  const db = dbOverride ?? (await getDb())
   if (!db) return null
   await ensureKeeprSchema()
   const res = await db.sql`SELECT * FROM keepr_vaults WHERE vault_address = ${String(vaultAddress).toLowerCase()} LIMIT 1;`

@@ -2,6 +2,9 @@ import { ensureKeeprSchema } from './keeprSchema.js'
 import { getDb } from '../db/postgres.js'
 
 type JsonMap = Record<string, unknown>
+type DbLike = {
+  sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
+}
 
 export type KeeprVaultAutomationRow = {
   vaultAddress: `0x${string}`
@@ -115,8 +118,9 @@ export async function upsertKeeprVaultAutomation(params: {
   lastOwnerCheckAt?: Date | string | null
   revokedAt?: Date | string | null
   metadata?: JsonMap | null
+  db?: DbLike
 }): Promise<KeeprVaultAutomationRow> {
-  const db = await getDb()
+  const db = params.db ?? (await getDb())
   if (!db) throw new Error('db_not_configured')
   await ensureKeeprSchema()
 
@@ -179,15 +183,16 @@ export async function upsertKeeprVaultAutomation(params: {
       updated_at = NOW();
   `
 
-  const row = await getKeeprVaultAutomationByVaultAddress(vaultAddress)
+  const row = await getKeeprVaultAutomationByVaultAddress(vaultAddress, db)
   if (!row) throw new Error('keepr_vault_automation_upsert_failed')
   return row
 }
 
 export async function getKeeprVaultAutomationByVaultAddress(
   vaultAddress: `0x${string}`,
+  dbOverride?: DbLike,
 ): Promise<KeeprVaultAutomationRow | null> {
-  const db = await getDb()
+  const db = dbOverride ?? (await getDb())
   if (!db) return null
   await ensureKeeprSchema()
 

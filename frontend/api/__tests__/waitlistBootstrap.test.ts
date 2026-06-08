@@ -15,6 +15,7 @@ const {
   assertNoEmailPrivyCollisionMock,
   assertNoWalletPrivyCollisionMock,
   classifyLinkedAccountsMock,
+  awardWaitlistPointsMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(),
@@ -27,6 +28,7 @@ const {
   assertNoEmailPrivyCollisionMock: vi.fn(),
   assertNoWalletPrivyCollisionMock: vi.fn(),
   classifyLinkedAccountsMock: vi.fn(),
+  awardWaitlistPointsMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/db/postgres.js', () => ({
@@ -58,6 +60,11 @@ vi.mock('../../server/_lib/identity/identityRecovery.js', () => ({
 
 vi.mock('../../server/_lib/infra/privyUserLoad.js', () => ({
   loadPrivyUserWithVerifiedEmailRetry: vi.fn(async ({ initialUser }: { initialUser: unknown }) => initialUser),
+}))
+
+vi.mock('../../server/_lib/onboarding/waitlistPoints.js', () => ({
+  awardWaitlistPoints: awardWaitlistPointsMock,
+  WAITLIST_POINTS: { signup: 100 },
 }))
 
 function defaultAccountSignals(overrides: Record<string, unknown> = {}) {
@@ -107,6 +114,7 @@ describe('POST /api/waitlist/bootstrap', () => {
       accountSignals: defaultAccountSignals(),
       score: { points: 0, tier: 0 },
     })
+    awardWaitlistPointsMock.mockResolvedValue(true)
   })
 
   it('prefers the authenticated Privy email over the submitted body email', async () => {
@@ -563,5 +571,60 @@ describe('POST /api/waitlist/bootstrap', () => {
 
     expect(res.statusCode).toBe(401)
     expect(res.body?.error).toBe('Session email mismatch. Please sign in again.')
+  })
+
+  it('rolls back bootstrap transaction when referral persistence throws after account/profile upsert', async () => {
+    const txCalls: string[] = []
+    getDbMock.mockResolvedValue({
+      query: vi.fn(async (sql: string) => {
+        txCalls.push(sql)
+        return { rows: [] }
+      }),
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('from profiles') && text.includes('where privy_user_id =')) {
+          return {
+            rows: [
+              {
+                id: 42,
+                referral_code: null,
+                email: 'user@example.com',
+                primary_wallet: null,
+                embedded_wallet: null,
+                csw_address: null,
+              },
+            ],
+          }
+        }
+        if (text.includes('from account_zora_signals')) {
+          return { rows: [] }
+        }
+        if (text.includes('update profiles') && text.includes('set referral_code =')) {
+          return { rows: [{ referral_code: 'USEREXAMPLE' }] }
+        }
+        if (text.includes('from profiles') && text.includes('where referral_code =')) {
+          return { rows: [{ id: 777 }] }
+        }
+        if (text.includes('insert into referral_conversions')) {
+          throw new Error('forced_referral_conversion_failure')
+        }
+        return { rows: [] }
+      }),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+      body: { email: 'user@example.com', referralCode: 'REF777' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(500)
+    expect(String(res.body?.error ?? '')).toContain('forced_referral_conversion_failure')
+    expect(txCalls).toContain('BEGIN')
+    expect(txCalls).toContain('ROLLBACK')
+    expect(txCalls).not.toContain('COMMIT')
   })
 })
