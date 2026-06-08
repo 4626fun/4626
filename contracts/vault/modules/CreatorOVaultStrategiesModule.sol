@@ -43,6 +43,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
     event UnrealisedLossAssessed(address indexed strategy, uint256 lossAmount);
     event AutoAllocated(address indexed strategy, uint256 amount);
     event StrategiesRebalanced(uint256 totalWithdrawn, uint256 totalRedeployed);
+    event ImpairedStrategyReinstated(address indexed strategy, uint256 indexed epochId);
 
     // ---- errors (must match vault selectors) ----
     error ZeroAddress();
@@ -54,6 +55,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
     error StrategyAssetMismatch(address expected, address actual);
     error NoStrategies();
     error NothingToBuy();
+    error VaultNotNormal();
     error TransferAmountMismatch(uint256 expected, uint256 actual);
     error StrategyWithdrawShortfall(uint256 expected, uint256 actual);
 
@@ -163,6 +165,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
         if (impairmentEpochs[epochId].strategy != strategy) revert StrategyNotActive();
         if (impairmentEpochs[epochId].status != ImpairmentEpochStatus.Resolved) revert StrategyNotActive();
         strategyImpaired[strategy] = false;
+        emit ImpairedStrategyReinstated(strategy, epochId);
     }
 
     /// @notice Best-effort unwind + list/queue removal for valuation-disabled strategies (core module only).
@@ -470,6 +473,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
     // =================================
 
     function tend() external onlyDelegateCall {
+        if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
         uint256 idleBalance = _syncCoinBalance();
         if (idleBalance > deploymentThreshold && totalStrategyWeight > 0) {
             _deployToStrategies();
@@ -477,10 +481,12 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
     }
 
     function deployToStrategies() external onlyDelegateCall {
+        if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
         _deployToStrategies();
     }
 
     function forceDeployToStrategies() external onlyDelegateCall {
+        if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
         if (totalStrategyWeight == 0) revert NoStrategies();
         _deployToStrategies();
     }
@@ -489,6 +495,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
     /// @dev Cross-strategy moves always route vault idle — strategies never transfer directly.
     /// @param minDeviationBps Minimum overweight drift (bps of target) before withdrawing excess.
     function rebalanceStrategies(uint256 minDeviationBps) external onlyDelegateCall {
+        if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
         if (totalStrategyWeight == 0) revert NoStrategies();
         if (minDeviationBps > MAX_BPS) revert InvalidWeight();
 

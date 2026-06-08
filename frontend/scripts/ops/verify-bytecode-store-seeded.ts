@@ -19,6 +19,7 @@ import { BASE_DEFAULTS } from '../../src/config/contracts.defaults.js'
 import { DEPLOY_BYTECODE } from '../../src/deploy/bytecode.generated.js'
 
 declare const process: {
+  argv: string[]
   env: Record<string, string | undefined>
   exit: (code?: number) => never
   stdout: { write: (chunk: string) => void }
@@ -84,6 +85,32 @@ type Manifest = {
   contracts: Record<string, { codeId: string; creationBytecodeBytes: number }>
 }
 
+type OutputMode = 'text' | 'json' | 'markdown'
+
+function hasFlag(flag: string): boolean {
+  return process.argv.includes(flag)
+}
+
+function resolveOutputMode(): OutputMode {
+  const json = hasFlag('--json')
+  const markdown = hasFlag('--markdown')
+  if (json && markdown) throw new Error('Choose only one output format: --json or --markdown')
+  if (json) return 'json'
+  if (markdown) return 'markdown'
+  return 'text'
+}
+
+function usage(): void {
+  process.stdout.write(`Usage:
+  pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts [options]
+
+Options:
+  --json                Machine-readable output
+  --markdown            Markdown summary + JSON payload
+  --help                Show this help
+`)
+}
+
 function loadManifest(path: string): Manifest {
   return JSON.parse(readFileSync(path, 'utf8')) as Manifest
 }
@@ -105,11 +132,17 @@ function manifestPath(): string {
 }
 
 async function main(): Promise<void> {
+  if (hasFlag('--help')) {
+    usage()
+    return
+  }
+  const outputMode = resolveOutputMode()
   const manifest = loadManifest(manifestPath())
   const store = storeAddress()
   const client = createPublicClient({ chain: base, transport: http(rpcUrl()) })
 
   const failures: string[] = []
+  const checks: Array<{ id: string; ok: boolean; detail: string }> = []
 
   for (const key of FRONTEND_DEPLOY_KEYS) {
     const bytecode = DEPLOY_BYTECODE[key as keyof typeof DEPLOY_BYTECODE] as Hex
@@ -123,6 +156,17 @@ async function main(): Promise<void> {
       failures.push(
         `${key}: manifest codeId ${manifestEntry.codeId} != keccak(DEPLOY_BYTECODE) ${derived}`,
       )
+      checks.push({
+        id: `manifest_codeid_match_${key}`,
+        ok: false,
+        detail: `manifest=${manifestEntry.codeId} derived=${derived}`,
+      })
+    } else {
+      checks.push({
+        id: `manifest_codeid_match_${key}`,
+        ok: true,
+        detail: `manifest=${manifestEntry.codeId}`,
+      })
     }
   }
 
@@ -141,24 +185,62 @@ async function main(): Promise<void> {
 
     const ok = pointer !== '0x0000000000000000000000000000000000000000' && chunks > 0n && size > 0n
     const line = `${key}: pointer=${pointer} chunks=${chunks} size=${size} expectedBytes=${entry.creationBytecodeBytes}`
-    process.stdout.write(`${ok ? 'OK' : 'MISSING'} ${line}\n`)
+    checks.push({ id: `store_seeded_${key}`, ok, detail: line })
     if (!ok) failures.push(`${key}: not seeded on store ${store}`)
     else if (Number(size) !== entry.creationBytecodeBytes) {
       failures.push(`${key}: on-chain size ${size} != manifest ${entry.creationBytecodeBytes}`)
+      checks.push({
+        id: `store_size_match_${key}`,
+        ok: false,
+        detail: `onchain=${size} manifest=${entry.creationBytecodeBytes}`,
+      })
+    } else {
+      checks.push({
+        id: `store_size_match_${key}`,
+        ok: true,
+        detail: `onchain=${size}`,
+      })
     }
   }
 
-  process.stdout.write(`\nStore: ${store}\nManifest: ${manifest.release} (${manifestPath()})\n`)
+  const payload = {
+    ok: failures.length === 0,
+    store,
+    manifestRelease: manifest.release,
+    manifestPath: manifestPath(),
+    checks,
+    failures,
+  }
+
+  if (outputMode === 'json') {
+    process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`)
+  } else if (outputMode === 'markdown') {
+    process.stdout.write(`## Bytecode Store Seed Verification\n\n`)
+    process.stdout.write(`- Status: \`${payload.ok ? 'pass' : 'fail'}\`\n`)
+    process.stdout.write(`- Store: \`${store}\`\n`)
+    process.stdout.write(`- Manifest: \`${manifest.release}\`\n\n`)
+    if (failures.length > 0) {
+      process.stdout.write(`### Failures\n\n`)
+      for (const failure of failures) process.stdout.write(`- ${failure}\n`)
+      process.stdout.write('\n')
+    }
+    process.stdout.write(`\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\`\n`)
+  } else {
+    for (const check of checks) {
+      process.stdout.write(`${check.ok ? 'OK' : 'FAIL'} ${check.id}: ${check.detail}\n`)
+    }
+    process.stdout.write(`\nStore: ${store}\nManifest: ${manifest.release} (${manifestPath()})\n`)
+  }
 
   if (failures.length > 0) {
-    process.stderr.write('\nFailures:\n')
-    for (const f of failures) process.stderr.write(`- ${f}\n`)
     process.exit(1)
   }
 
-  process.stdout.write(
-    `All required ${manifest.release || DEFAULT_RELEASE} codeIds are seeded and DEPLOY_BYTECODE matches manifest.\n`,
-  )
+  if (outputMode === 'text') {
+    process.stdout.write(
+      `All required ${manifest.release || DEFAULT_RELEASE} codeIds are seeded and DEPLOY_BYTECODE matches manifest.\n`,
+    )
+  }
 }
 
 main().catch((err: unknown) => {

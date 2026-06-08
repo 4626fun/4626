@@ -20,6 +20,11 @@ This rollout does not introduce a separate secure-agent service. The control pla
 - [`frontend/server/_lib/agentControl/remoteAi.ts`](../../frontend/server/_lib/agentControl/remoteAi.ts)
 - [`frontend/server/_lib/agentControl/telegramTradeControl.ts`](../../frontend/server/_lib/agentControl/telegramTradeControl.ts)
 
+For mutable write surfaces and periodic drift checks, use:
+
+- [Mutable Surface Inventory](./mutable-surface-inventory.md)
+- [Historical Risk Review Checklist](./historical-risk-review.md)
+
 ## Repo-Verified Map
 
 ### User-facing approval surfaces

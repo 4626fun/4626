@@ -5,7 +5,7 @@ pragma solidity ^0.8.20;
 /// @dev MUST match CreatorOVault's storage layout exactly (including OZ bases).
 /// FIX: I-02 — Layout integrity is verified at deploy time via `setModulesOnce()` which checks
 /// `moduleStorageVersion()`. Upgrades MUST bump MODULE_STORAGE_VERSION if layout changes.
-/// Consider adopting ERC-7201 namespaced storage for structural collision immunity.
+/// Storage-hardening roadmap: `docs/research/ovault-storage-namespacing-rfc.md`.
 abstract contract CreatorOVaultModuleStorage {
     enum VaultMode {
         Normal,

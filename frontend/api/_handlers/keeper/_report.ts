@@ -125,6 +125,7 @@ function isKnownKeeperReportValuationNotReady(error: unknown): boolean {
   return (
     message.includes('0xc61cfeb8') ||
     message.includes('strategyvaluationnotready(address)') ||
+    message.includes('strategyvaluationnotready(address strategy)') ||
     message.includes('strategy valuation not ready')
   )
 }

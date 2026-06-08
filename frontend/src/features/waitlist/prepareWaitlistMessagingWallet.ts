@@ -90,18 +90,74 @@ async function resolveEmbeddedProvider(wallet: Record<string, unknown>): Promise
   return null
 }
 
+/**
+ * Wraps a Privy embedded provider for the narrow waitlist messaging use case.
+ * The synthetic `injected` connector we create for XMTP on /waitlist only needs
+ * basic eth_ signing. We intercept `wallet_*` methods (wallet_getCapabilities,
+ * wallet_requestPermissions, etc.) here so they never escape to a raw HTTP
+ * transport (e.g. Alchemy). Callers in AccountContextProvider, wagmi connect
+ * flows, and capability probes already have catch paths that treat these as
+ * "no special capabilities".
+ *
+ * We also stub event methods (on/removeListener/etc.) because the underlying
+ * embedded provider may only expose a minimal { request } object (not a full
+ * EIP-1193 provider). wagmi's `injected` connector (and some internal watchers)
+ * will call `provider.on(...)` during connect/activation, which would otherwise
+ * throw "provider.on is not a function". For this manualConnectOnly messaging
+ * path we don't need real event subscriptions.
+ */
+function wrapWaitlistMessagingProvider(
+  real: { request: (args: unknown) => Promise<unknown> }
+) {
+  // Build so that event methods can return the provider (for any code that
+  // chains .on().on() etc.). This prevents "provider.on is not a function"
+  // when wagmi's injected connector (or other watchers) calls into the
+  // synthetic provider returned by our target.provider() factory during
+  // connectAsync for the waitlist messaging embedded EOA.
+  let safe: any
+  safe = {
+    request: async (args: any) => {
+      const method = typeof args?.method === 'string' ? args.method : ''
+      if (method === 'wallet_getCapabilities') {
+        // Empty response → parseCapabilities yields the safe "unknown/no caps" defaults.
+        return {}
+      }
+      if (method === 'wallet_requestPermissions') {
+        // Returning empty array satisfies many connector activation / permission probes.
+        return []
+      }
+      if (method.startsWith('wallet_')) {
+        // Any other wallet_ method in this embedded-only messaging context:
+        // reject with a clear message. Existing catch blocks in probes will fall back.
+        throw new Error(`wallet method ${method} not supported for waitlist messaging connector`)
+      }
+      return real.request(args)
+    },
+    // No-op EIP-1193-ish event methods. We don't need real subscriptions
+    // for the manualConnectOnly waitlist XMTP messaging path.
+    on: () => safe,
+    removeListener: () => safe,
+    addListener: () => safe,
+    off: () => safe,
+    emit: () => safe,
+    removeAllListeners: () => safe,
+  }
+  return safe
+}
+
 async function connectEmbeddedWaitlistProvider(
   input: Pick<PrepareWaitlistMessagingWalletInput, 'connectAsync' | 'wagmiConfig'>,
   provider: { request: (args: unknown) => Promise<unknown> },
   embeddedAddress: string | null,
 ): Promise<PrepareWaitlistMessagingWalletResult> {
+  const safeProvider = wrapWaitlistMessagingProvider(provider)
   try {
     await input.connectAsync({
       connector: injected({
         target: {
           id: WAITLIST_EMBEDDED_CONNECTOR_ID,
           name: 'Privy Embedded',
-          provider: () => provider as any,
+          provider: () => safeProvider as any,
         },
       }),
     })
@@ -188,9 +244,17 @@ export async function prepareWaitlistMessagingWallet(
     }
   }
 
-  const embeddedConnect = await connectEmbeddedWaitlistProvider(input, provider, embeddedAddress)
-  if (embeddedConnect.ok) return embeddedConnect
-
+  // Prefer the regular Privy connector (after we called setActiveWallet(embedded) above).
+  // This avoids creating a synthetic `injected` connector (with custom target.provider)
+  // which tends to wake up wallet extension content scripts (evmAsk.js, injected.js,
+  // requestProvider.js etc). Those scripts then throw "injected is not defined",
+  // "Cannot set property ethereum ... which has only a getter", and trigger the
+  // provider.on errors we saw (both in our code and inside the extensions' own
+  // inject logic).
+  //
+  // The privy connector is a first-class one that already knows how to talk to
+  // Privy wallets (including the embedded EOA). After setActiveWallet the active
+  // one should be our embedded; waitFor will verify the address matches.
   const privyConnector = input.connectors.find((connector) => {
     const id = connector.id.toLowerCase()
     const name = connector.name.toLowerCase()
@@ -202,7 +266,7 @@ export async function prepareWaitlistMessagingWallet(
       await input.connectAsync({ connector: privyConnector })
     } catch (error) {
       if (!isConnectorAlreadyConnectedError(error)) {
-        return embeddedConnect
+        // fall through to synthetic
       }
     }
 
@@ -212,6 +276,15 @@ export async function prepareWaitlistMessagingWallet(
     })
     if (settled) return { ok: true }
   }
+
+  // Only if the normal Privy path didn't land on the exact embedded EOA we want
+  // (can happen if Privy has several wallets in the session and the connector
+  // picks a different one), fall back to the synthetic injected that directly
+  // wires the embedded provider we resolved. The wrapper on it prevents the
+  // "provider.on is not a function" and wallet_* leaks, and stubs the event
+  // methods.
+  const embeddedConnect = await connectEmbeddedWaitlistProvider(input, provider, embeddedAddress)
+  if (embeddedConnect.ok) return embeddedConnect
 
   return embeddedConnect
 }

@@ -119,6 +119,13 @@ export function formatTrustZoneError(zone: KeeprTrustZone): string {
   return `Unauthorized trust zone: ${zone}`
 }
 
+export function formatTrustZoneMismatchError(
+  requested: KeeprTrustZone,
+  resolved: KeeprTrustZone,
+): string {
+  return `Requested trust zone mismatch: requested=${requested} resolved=${resolved}`
+}
+
 export function formatTrustZoneDisabledError(zone: KeeprTrustZone): string {
   return `Trust zone disabled: ${zone}`
 }
@@ -134,4 +141,18 @@ export function isKeeprTrustZoneWriteEnabled(
 
 export function sanitizeZoneHeaderValue(value: unknown): string {
   return toTrimmed(value)
+}
+
+export function validateRequestedKeeprTrustZone({
+  requestedHeaderValue,
+  actionType,
+}: {
+  requestedHeaderValue: string | string[] | undefined
+  actionType: string | null | undefined
+}): { requested: KeeprTrustZone; resolved: KeeprTrustZone } | null {
+  const requested = readRequestedKeeprTrustZone(requestedHeaderValue)
+  if (!requested) return null
+  const resolved = resolveKeeprTrustZone(actionType)
+  if (requested === resolved) return null
+  return { requested, resolved }
 }

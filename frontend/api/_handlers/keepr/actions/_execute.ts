@@ -15,12 +15,15 @@ import {
 } from '@4626/server-core'
 import { executeKeeprAction } from '../../../../server/keepr/xmtpQueueExecutor.js'
 import {
+  KPR_TRUST_ZONE_HEADER,
   KPR_TRUST_ZONE_KEY_HEADER,
+  formatTrustZoneMismatchError,
   formatTrustZoneDisabledError,
   resolveKeeprEffectiveActionType,
   getKeeprTrustZoneEnvKey,
   isKeeprTrustZoneWriteEnabled,
   resolveKeeprTrustZone,
+  validateRequestedKeeprTrustZone,
 } from '../../../../server/_lib/agentControl/trustZones.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -94,6 +97,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const effectiveActionType = resolveKeeprEffectiveActionType(actionType, action) ?? actionType
   const trustZone = resolveKeeprTrustZone(effectiveActionType)
+  const trustZoneMismatch = validateRequestedKeeprTrustZone({
+    requestedHeaderValue: req.headers[KPR_TRUST_ZONE_HEADER],
+    actionType: effectiveActionType,
+  })
+  if (trustZoneMismatch) {
+    return res.status(400).json({
+      success: false,
+      error: formatTrustZoneMismatchError(trustZoneMismatch.requested, trustZoneMismatch.resolved),
+    } satisfies ApiEnvelope<never>)
+  }
   const trustZoneEnvKey = getKeeprTrustZoneEnvKey(trustZone)
   const trustZoneSecret = String(process.env[trustZoneEnvKey] ?? '').trim()
   if (trustZoneSecret) {

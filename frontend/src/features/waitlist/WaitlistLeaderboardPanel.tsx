@@ -45,11 +45,11 @@ export function WaitlistLeaderboardPanel(props: WaitlistLeaderboardPanelProps) {
       <aside
         aria-label="Waitlist leaderboard"
         className={cn(
-          'hidden lg:flex lg:min-h-0 lg:flex-col lg:sticky lg:top-6 lg:max-h-[calc(100vh-2rem)]',
+          'hidden xl:flex xl:min-h-0 xl:flex-col xl:sticky xl:top-4 xl:max-h-[calc(100vh-1.5rem)]',
           className,
         )}
       >
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02]">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-none border-y border-r border-white/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
           {body}
         </div>
       </aside>
@@ -67,9 +67,7 @@ export function WaitlistLeaderboardPanel(props: WaitlistLeaderboardPanelProps) {
         <div>
           <h2 className="text-sm font-medium text-zinc-200">Leaderboard</h2>
           <p className="mt-0.5 text-[11px] text-zinc-500">
-            {query.data
-              ? `${query.data.totalCount.toLocaleString()} on waitlist`
-              : 'Top waitlist earners'}
+            {query.data ? `${query.data.totalCount.toLocaleString()} on waitlist` : 'Top builders this round'}
           </p>
         </div>
         <ChevronDown
@@ -101,7 +99,7 @@ function WaitlistLeaderboardPanelBody(props: {
         <header className="shrink-0 border-b border-white/[0.06] px-4 py-3.5">
           <h2 className="text-sm font-medium text-zinc-200">Leaderboard</h2>
           <p className="mt-0.5 text-[11px] text-zinc-500">
-            {totalCount > 0 ? `${totalCount.toLocaleString()} on waitlist` : 'Top waitlist earners'}
+            {totalCount > 0 ? `${totalCount.toLocaleString()} on waitlist` : 'Top builders this round'}
           </p>
         </header>
       ) : null}
@@ -188,8 +186,8 @@ function LeaderboardCompactRow(props: { row: LeaderboardEntry; isMe: boolean }) 
         showBaseAppBadge={row.showBaseAppBadge}
         walletProvider={row.walletProvider}
       />
-      <span className="text-right text-xs font-semibold tabular-nums text-zinc-100">
-        {formatWholeNumber(row.pointsTotal)}
+      <span className="text-right text-[11px] font-semibold tabular-nums text-zinc-100">
+        {formatWholeNumber(row.pointsTotal)} pts
       </span>
     </div>
   )

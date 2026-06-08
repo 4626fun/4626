@@ -139,8 +139,19 @@ type CheckResult = {
   detail: string
 }
 
+type OutputMode = 'text' | 'json' | 'markdown'
+
 function hasFlag(flag: string): boolean {
   return process.argv.includes(flag)
+}
+
+function resolveOutputMode(): OutputMode {
+  const json = hasFlag('--json')
+  const markdown = hasFlag('--markdown')
+  if (json && markdown) throw new Error('Choose only one output format: --json or --markdown')
+  if (json) return 'json'
+  if (markdown) return 'markdown'
+  return 'text'
 }
 
 function getArg(name: string, fallback = ''): string {
@@ -159,6 +170,7 @@ Options:
   --batcher <address>   DeploymentBatcher (default: SPLIT_PHASE1_DEPLOYMENT_BATCHER / env)
   --rpc <url>           Base RPC (default: BASE_RPC_URL)
   --json                Machine-readable output only
+  --markdown            Markdown summary + JSON payload
   --shell-only          Exit 0 when batcher shell is wired (peer may still be unset)
   --help                Show this help
 `)
@@ -244,6 +256,7 @@ async function main() {
     usage()
     return
   }
+  const outputMode = resolveOutputMode()
 
   const batcher = normalizeAddress(
     getArg(
@@ -370,8 +383,18 @@ async function main() {
     checks,
   }
 
-  if (hasFlag('--json')) {
+  if (outputMode === 'json') {
     process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`)
+  } else if (outputMode === 'markdown') {
+    process.stdout.write(`## Pipe A Batcher Readiness\n\n`)
+    process.stdout.write(`- Batcher: \`${batcher}\`\n`)
+    process.stdout.write(`- Readiness mode: \`${shellOnly ? 'shell-only' : 'full'}\`\n`)
+    process.stdout.write(`- Status: \`${shellOnly ? (shellReady ? 'pass' : 'fail') : ready ? 'pass' : 'fail'}\`\n\n`)
+    process.stdout.write(`### Checks\n\n`)
+    for (const check of checks) {
+      process.stdout.write(`- [${check.ok ? 'x' : ' '}] \`${check.id}\` — ${check.detail}\n`)
+    }
+    process.stdout.write(`\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\`\n`)
   } else {
     process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`)
     process.stdout.write(

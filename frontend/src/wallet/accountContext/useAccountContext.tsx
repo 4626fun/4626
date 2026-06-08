@@ -6,6 +6,7 @@ import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { pickCanonicalSmartWalletAddress } from '@/hooks/canonicalWalletUtils'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { WAITLIST_ME_QUERY_KEY, fetchWaitlistMe } from '@/lib/waitlist/waitlistMeQuery'
+import { WAITLIST_EMBEDDED_CONNECTOR_ID } from '@/lib/xmtp/waitForMessagingWallet'
 import { probeWalletCapabilities } from './getCapabilities'
 import { detectSignerType } from './detectSignerType'
 import { checkEoaOwnershipOfCsw } from './ownership'
@@ -49,7 +50,7 @@ function normalizeAddress(value: string | undefined): `0x${string}` | undefined 
 }
 
 export function AccountContextProvider(props: { children: ReactNode }) {
-  const { address: connectedAddress, chainId } = useAccount()
+  const { address: connectedAddress, chainId, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
   const auth = useSiweAuth()
@@ -67,7 +68,15 @@ export function AccountContextProvider(props: { children: ReactNode }) {
 
   const capabilitiesQuery = useQuery({
     queryKey: ['account-context', 'capabilities', signerAddress, chainIdHex],
-    enabled: Boolean(walletClient && signerAddress && chainIdHex),
+    // On the waitlist group chat path we mount a synthetic injected connector
+    // around the Privy embedded EOA (only for XMTP identity/signing). That
+    // connector intentionally does not support (and must not leak to RPC)
+    // wallet_getCapabilities / wallet_requestPermissions etc. Skip the probe
+    // entirely when it is active; the rest of the app treats missing caps as
+    // the safe "unknown" defaults.
+    enabled:
+      Boolean(walletClient && signerAddress && chainIdHex) &&
+      connector?.id !== WAITLIST_EMBEDDED_CONNECTOR_ID,
     queryFn: async () =>
       probeWalletCapabilities({
         walletClient,

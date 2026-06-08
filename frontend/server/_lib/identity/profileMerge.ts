@@ -33,6 +33,7 @@
  */
 
 import { ensureMigrationApplied } from '../db/schemaBootstrap.js'
+import { runInTransaction } from '../db/postgres.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
@@ -477,4 +478,19 @@ export async function executeProfileMerge(
     cswPropagated,
     fromTombstoned,
   }
+}
+
+/**
+ * Execute profile merge with an explicit DB transaction boundary.
+ *
+ * Uses the shared postgres `runInTransaction` helper so all merge writes
+ * run on one client connection (`BEGIN`/`COMMIT`) instead of pool-level
+ * best-effort sequencing.
+ */
+export async function executeProfileMergeInTransaction(plan: ProfileMergePlan): Promise<ProfileMergeResult> {
+  const result = await runInTransaction((txDb) => executeProfileMerge(txDb as Db, plan))
+  if (!result) {
+    throw new Error('Database unavailable')
+  }
+  return result
 }

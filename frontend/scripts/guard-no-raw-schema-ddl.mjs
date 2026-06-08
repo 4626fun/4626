@@ -11,6 +11,7 @@
 
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import { reportGuard } from './guard-utils.mjs'
 
 const ROOT = new URL('..', import.meta.url).pathname
 const SERVER_DIR = join(ROOT, 'server')
@@ -40,7 +41,7 @@ function walk(dir) {
   return files
 }
 
-let violations = 0
+const violations = []
 const files = walk(SERVER_DIR)
 
 for (const file of files) {
@@ -52,18 +53,23 @@ for (const file of files) {
         continue
       }
       const rel = relative(ROOT, file)
-      console.error(`[guard:schema] Raw DDL pattern found in ${rel}`)
-      violations++
+      violations.push({
+        rule: 'raw-ddl',
+        file: rel,
+        specifier: re.source,
+      })
       break
     }
   }
 }
 
-if (violations > 0) {
-  console.error(`\n[guard:schema] Found ${violations} file(s) with raw DDL.`)
-  console.error('All new tables/columns must be added via supabase/migrations/ first.')
-  console.error('Runtime bootstrap must delegate through schemaBootstrap.ts.')
-  process.exit(1)
-}
-
-console.log('[guard:schema] OK — no raw DDL strings in server production code.')
+const exitCode = reportGuard({
+  guard: 'No raw DDL strings in server production code',
+  violations,
+  checks: ['All production DDL is delegated through schemaBootstrap and migrations'],
+  remediation: [
+    'Add tables/columns via supabase/migrations/ first.',
+    'Delegate runtime bootstrap through schemaBootstrap.ts.',
+  ],
+})
+process.exit(exitCode)

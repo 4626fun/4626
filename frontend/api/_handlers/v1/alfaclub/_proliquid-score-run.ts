@@ -66,7 +66,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const result = await runProliquidSignalScoring()
-    const status = result.ok ? 200 : result.reason === 'disabled' ? 503 : 202
+    // Disabled is an intentional operator state and should not page as an outage.
+    const status = result.ok || result.reason === 'disabled' ? 200 : 202
     return res.status(status).json({
       success: result.ok,
       reason: result.reason ?? null,

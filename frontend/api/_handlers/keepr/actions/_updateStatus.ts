@@ -8,6 +8,7 @@ import {
   setCors,
   setNoStore,
   getDb,
+  runInTransaction,
   readBoundedJsonObjectBody,
   checkRateLimit,
   getClientIp,
@@ -42,20 +43,20 @@ type UpdateResponse = {
   updated: boolean
 }
 
+type SqlDb = NonNullable<Awaited<ReturnType<typeof getDb>>>
+
 const VALID_STATUSES = new Set(['executing', 'executed', 'failed', 'retry'])
 const MAX_ATTEMPTS = 5
 const UPDATE_STATUS_MAX_BODY_BYTES = 16_384
 
 async function syncJoinRequestStatus(params: {
-  db: Awaited<ReturnType<typeof getDb>>
+  db: SqlDb
   actionId: number
   status: 'executed' | 'failed' | 'retry'
   errorMessage: string | null
   retryDelaySeconds: number
 }) {
   const { db, actionId, status, errorMessage, retryDelaySeconds } = params
-  if (!db) return
-
   if (status === 'executed') {
     await db.sql`
       UPDATE keepr_join_requests
@@ -203,25 +204,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (status === 'executed') {
-      const result = await db.sql`
-        UPDATE keepr_actions
-        SET
-          status = 'executed',
-          executed_at = NOW(),
-          updated_at = NOW()
-        WHERE id = ${id}
-          AND status = 'executing'
-        RETURNING id;
-      `
-      const updated = (result.rows?.length ?? 0) > 0
+      const txResult = await runInTransaction(async (txDb) => {
+        const result = await txDb.sql`
+          UPDATE keepr_actions
+          SET
+            status = 'executed',
+            executed_at = NOW(),
+            updated_at = NOW()
+          WHERE id = ${id}
+            AND status = 'executing'
+          RETURNING id;
+        `
+        const updated = (result.rows?.length ?? 0) > 0
+        if (updated) {
+          await syncJoinRequestStatus({
+            db: txDb,
+            actionId: id,
+            status: 'executed',
+            errorMessage,
+            retryDelaySeconds: retryDelay,
+          })
+        }
+        return { updated }
+      })
+      if (!txResult) {
+        return res.status(500).json({ success: false, error: 'Database not configured' } satisfies ApiEnvelope<never>)
+      }
+      const { updated } = txResult
       if (updated) {
-        await syncJoinRequestStatus({
-          db,
-          actionId: id,
-          status: 'executed',
-          errorMessage,
-          retryDelaySeconds: retryDelay,
-        })
         await normalizeKeeprActionStatusForWorkspace({
           actionId: id,
           status: 'executed',
@@ -235,25 +245,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (status === 'failed') {
-      const result = await db.sql`
-        UPDATE keepr_actions
-        SET
-          status = 'failed',
-          last_error = ${errorMessage},
-          updated_at = NOW()
-        WHERE id = ${id}
-          AND status = 'executing'
-        RETURNING id;
-      `
-      const updated = (result.rows?.length ?? 0) > 0
+      const txResult = await runInTransaction(async (txDb) => {
+        const result = await txDb.sql`
+          UPDATE keepr_actions
+          SET
+            status = 'failed',
+            last_error = ${errorMessage},
+            updated_at = NOW()
+          WHERE id = ${id}
+            AND status = 'executing'
+          RETURNING id;
+        `
+        const updated = (result.rows?.length ?? 0) > 0
+        if (updated) {
+          await syncJoinRequestStatus({
+            db: txDb,
+            actionId: id,
+            status: 'failed',
+            errorMessage,
+            retryDelaySeconds: retryDelay,
+          })
+        }
+        return { updated }
+      })
+      if (!txResult) {
+        return res.status(500).json({ success: false, error: 'Database not configured' } satisfies ApiEnvelope<never>)
+      }
+      const { updated } = txResult
       if (updated) {
-        await syncJoinRequestStatus({
-          db,
-          actionId: id,
-          status: 'failed',
-          errorMessage,
-          retryDelaySeconds: retryDelay,
-        })
         await normalizeKeeprActionStatusForWorkspace({
           actionId: id,
           status: 'failed',
@@ -268,57 +287,79 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (status === 'retry') {
       // Only retry if under max attempts
-      const checkResult = await db.sql`
-        SELECT attempt_count FROM keepr_actions WHERE id = ${id} LIMIT 1;
-      `
-      const currentAttempts = Number(checkResult.rows?.[0]?.attempt_count ?? 0)
+      const txResult = await runInTransaction(async (txDb) => {
+        const checkResult = await txDb.sql`
+          SELECT attempt_count FROM keepr_actions WHERE id = ${id} LIMIT 1;
+        `
+        const currentAttempts = Number(checkResult.rows?.[0]?.attempt_count ?? 0)
 
-      if (currentAttempts >= MAX_ATTEMPTS) {
-        // Exceeded max retries — mark as failed
-        await db.sql`
+        if (currentAttempts >= MAX_ATTEMPTS) {
+          // Exceeded max retries — mark as failed and keep join-request state aligned.
+          const failResult = await txDb.sql`
+            UPDATE keepr_actions
+            SET
+              status = 'failed',
+              last_error = ${errorMessage ?? 'Max retries exceeded'},
+              updated_at = NOW()
+            WHERE id = ${id}
+            RETURNING id;
+          `
+          const failedUpdated = (failResult.rows?.length ?? 0) > 0
+          if (failedUpdated) {
+            await syncJoinRequestStatus({
+              db: txDb,
+              actionId: id,
+              status: 'failed',
+              errorMessage: errorMessage ?? 'Max retries exceeded',
+              retryDelaySeconds: retryDelay,
+            })
+          }
+          return {
+            updated: failedUpdated,
+            effectiveStatus: 'failed' as const,
+          }
+        }
+
+        const result = await txDb.sql`
           UPDATE keepr_actions
           SET
-            status = 'failed',
-            last_error = ${errorMessage ?? 'Max retries exceeded'},
+            status = 'retry',
+            last_error = ${errorMessage},
+            next_attempt_at = NOW() + (${retryDelay} || ' seconds')::interval,
             updated_at = NOW()
           WHERE id = ${id}
+            AND status = 'executing'
           RETURNING id;
         `
-        return res.status(200).json({
-          success: true,
-          data: { id, status: 'failed', trustZone, updated: true },
-        } satisfies ApiEnvelope<UpdateResponse>)
+        const updated = (result.rows?.length ?? 0) > 0
+        if (updated) {
+          await syncJoinRequestStatus({
+            db: txDb,
+            actionId: id,
+            status: 'retry',
+            errorMessage,
+            retryDelaySeconds: retryDelay,
+          })
+        }
+        return {
+          updated,
+          effectiveStatus: 'retry' as const,
+        }
+      })
+      if (!txResult) {
+        return res.status(500).json({ success: false, error: 'Database not configured' } satisfies ApiEnvelope<never>)
       }
-
-      const result = await db.sql`
-        UPDATE keepr_actions
-        SET
-          status = 'retry',
-          last_error = ${errorMessage},
-          next_attempt_at = NOW() + (${retryDelay} || ' seconds')::interval,
-          updated_at = NOW()
-        WHERE id = ${id}
-          AND status = 'executing'
-        RETURNING id;
-      `
-      const updated = (result.rows?.length ?? 0) > 0
+      const { updated, effectiveStatus } = txResult
       if (updated) {
-        await syncJoinRequestStatus({
-          db,
-          actionId: id,
-          status: 'retry',
-          errorMessage,
-          retryDelaySeconds: retryDelay,
-        })
         await normalizeKeeprActionStatusForWorkspace({
           actionId: id,
-          status: 'retry',
+          status: effectiveStatus,
           errorMessage,
         }).catch(() => undefined)
       }
       return res.status(200).json({
         success: true,
-        data: { id, status, trustZone, updated },
+        data: { id, status: effectiveStatus, trustZone, updated },
       } satisfies ApiEnvelope<UpdateResponse>)
     }
 

@@ -114,6 +114,9 @@ jobs:
       - name: Guard canonical CSW env and legacy address regressions
         run: pnpm --dir frontend guard:canonical-csw
 
+      - name: Guard output contract stability (guards + ops scripts)
+        run: pnpm --dir frontend guard:output-contract
+
       - name: Frontend ESLint
         run: pnpm --dir frontend lint
 

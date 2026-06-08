@@ -412,7 +412,7 @@ export function WaitlistFlow(props: {
 
   const wrapClass =
     step === 'done'
-      ? 'mx-auto w-full max-w-[90rem] px-3 py-5 sm:px-4 sm:py-8'
+      ? 'mx-auto w-full max-w-none px-0 py-5 sm:py-8'
       : 'mx-auto w-full max-w-5xl px-4 py-6 sm:py-8'
   const activeReferralCode = useMemo(() => readStoredWaitlistReferralCode(), [])
   const enterAppUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl()), [])

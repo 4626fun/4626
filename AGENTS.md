@@ -37,6 +37,11 @@ Do not preserve legacy routes, aliases, or compatibility shims just for backward
 
 These are repo-level guardrails for internal automation, deploy orchestration, and Telegram identity flows.
 
+Canonical maintainer references:
+
+- `docs/security/mutable-surface-inventory.md` — authoritative write-surface map (auth model, guardrails, rollback posture).
+- `docs/security/historical-risk-review.md` — quarterly historical-drift checklist for env/authority/schema/runbook drift.
+
 - **Deploy status and preflight paths must be read-only.** They may gather config, build payloads, and report readiness, but they must not provision infrastructure, register tokens, or perform onchain mutation as a side effect.
 - **Internal Solana mutation paths must require machine auth.** Do not fall back to ambient user sessions, cookies, wallet auth headers, or admin login state for route provisioning, token registration, or other mutating Solana setup.
 - **Telegram Mini App link completion must require fresh Mini App session proof.** Shared secrets or server-side toggles must not bypass Telegram session verification for public Telegram-launched linking flows.

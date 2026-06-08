@@ -273,8 +273,14 @@ async function findCswOwnerIndex(
     [{ type: 'address' }],
     [signerAddress as `0x${string}`],
   ).toLowerCase()
-  const hints = [10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-  for (const i of hints) {
+  // Scan a wide range. CSW owner slots can be sparse (high indices are normal
+  // after multiple addOwnerAddress calls, e.g. owner at slot 25+ or higher).
+  // ownerAtIndex reverts for out-of-range indices (often with custom errors like
+  // ResolverError or similar), so we catch per-probe.
+  // 256 is more than enough for any realistic wallet; the result is cached per
+  // (csw, signer) pair.
+  const MAX_SCAN = 256
+  for (let i = 0; i < MAX_SCAN; i++) {
     try {
       const raw = (await pub.readContract({
         address: cswAddress as `0x${string}`,
@@ -284,7 +290,8 @@ async function findCswOwnerIndex(
       })) as string
       if (raw.toLowerCase() === target) return i
     } catch {
-      // ownerAtIndex reverts when index is out of bounds
+      // ownerAtIndex reverts when index is out of bounds (or other transient).
+      // Continue scanning; we do not early-exit because slots can be sparse.
     }
   }
   return null

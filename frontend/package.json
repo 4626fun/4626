@@ -42,6 +42,7 @@
     "generate:brand-assets:static": "pnpm generate:social-preview && pnpm generate:brand-icons",
     "report:footprint": "node scripts/report-footprint.mjs",
     "guard:generated-output": "node scripts/check-generated-output.mjs",
+    "guard:output-contract": "node scripts/check-guard-output-contract.mjs && node scripts/check-ops-output-contract.mjs",
     "guard:runtime-boundaries": "node scripts/check-runtime-boundaries.mjs",
     "guard:arch-b-subaccount-alignment": "node scripts/check-arch-b-subaccount-alignment.mjs",
     "guard:test-file-placement": "node scripts/check-test-file-placement.mjs",

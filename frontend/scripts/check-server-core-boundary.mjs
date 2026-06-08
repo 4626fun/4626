@@ -2,6 +2,7 @@
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { reportGuard } from './guard-utils.mjs'
 
 const repoRoot = path.resolve(process.cwd())
 const apiRoot = path.join(repoRoot, 'api')
@@ -97,23 +98,22 @@ async function main() {
     }
   }
 
-  if (violations.length === 0) {
-    console.log('ok: API runtime files respect server-core boundary')
-    return
-  }
-
-  console.error('error: direct imports to server-core-owned modules found in API runtime files:')
-  for (const violation of violations) {
-    console.error(`- ${violation.file}: ${violation.specifier}`)
-  }
-  console.error(
-    'use packages/server-core/src/index.js for shared auth/session/contracts/logging/db/rate-limit/request-principal primitives',
-  )
-  process.exitCode = 1
+  const exitCode = reportGuard({
+    guard: 'API runtime files respect server-core boundary',
+    violations,
+    checks: ['API runtime files do not directly import server-core-owned primitives'],
+    remediation: [
+      'Use packages/server-core/src/index.js for shared auth/session/contracts/logging/db/rate-limit/request-principal primitives.',
+    ],
+  })
+  process.exit(exitCode)
 }
 
 main().catch((error) => {
-  console.error(`error: ${String(error?.message ?? error)}`)
-  process.exit(1)
+  const exitCode = reportGuard({
+    guard: 'API runtime files respect server-core boundary',
+    fatalError: String(error?.message ?? error),
+  })
+  process.exit(exitCode)
 })
 

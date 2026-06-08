@@ -339,6 +339,33 @@ describe('keepr/actions/enqueue', () => {
     }
   })
 
+  it('rejects explicit trust-zone header mismatches', async () => {
+    const req = createMockReq({
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer test-keepr-key',
+        'x-keepr-trust-zone': 'financial_execution',
+      },
+      body: {
+        vaultAddress: '0x00000000000000000000000000000000000000bb',
+        groupId: 'group-zone',
+        actionType: 'xmtp.group.add_member',
+        action: {
+          action: 'xmtp.group.add_member',
+          wallet: '0x00000000000000000000000000000000000000aa',
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.success).toBe(false)
+    expect(String(res.body?.error ?? '')).toContain('Requested trust zone mismatch')
+    expect(enqueueKeeprActionMock).not.toHaveBeenCalled()
+  })
+
   it('derives trust zone from the effective action payload, not only the raw actionType field', async () => {
     const restoreZoneEnv = applyEnv({
       KPR_ZONE_KEY_FINANCIAL_EXECUTION: 'zone-financial-secret',

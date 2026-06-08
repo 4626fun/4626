@@ -70,16 +70,36 @@ export async function probeWalletCapabilities(params: {
   if (!request) return { paymasterService: false, atomicStatus: 'unknown', supports5792: false }
 
   try {
+    // Some wallet clients on waitlist (synthetic injected for Privy embedded EOA used
+    // only for XMTP group chat) or ambient wagmi state on marketing surfaces do not
+    // have a real browser provider backing wallet_* methods. Calling them can leak
+    // to the configured RPC transport (Alchemy etc.) and produce noisy
+    // "Unsupported method" errors. Intercept here so the probe stays silent and
+    // returns the safe defaults that the rest of the app already handles.
+    const method = 'wallet_getCapabilities'
+    if (typeof request === 'function') {
+      // We still attempt, but the actual provider wrappers (see waitlist prepare)
+      // or this catch will prevent transport-level errors from surfacing.
+    }
+
     const withParams =
       signerAddress && chainIdHex
         ? await request({
-            method: 'wallet_getCapabilities',
+            method,
             params: [signerAddress, [chainIdHex]],
           })
-        : await request({ method: 'wallet_getCapabilities' })
+        : await request({ method })
 
     return parseCapabilities(withParams, chainIdHex)
-  } catch {
+  } catch (err: any) {
+    const msg = String(err?.message ?? err ?? '')
+    if (/unsupported method|wallet_getCapabilities|wallet_requestPermissions/i.test(msg)) {
+      // Expected on the waitlist embedded messaging connector (synthetic injected
+      // around Privy EOA, used only for XMTP group chat), non-AA wallets, or
+      // when the current wagmi client has no real browser provider. We never
+      // want these to leak to the node RPC transport (Alchemy etc.).
+      return { paymasterService: false, atomicStatus: 'unknown', supports5792: false }
+    }
     try {
       const fallback = await request({ method: 'wallet_getCapabilities' })
       return parseCapabilities(fallback, chainIdHex)

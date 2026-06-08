@@ -1,30 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Copy, UserPlus } from 'lucide-react'
-import { RiTelegram2Fill } from 'react-icons/ri'
-import { SiFarcaster, SiX } from 'react-icons/si'
 
 import { getMarketingWaitlistReferralUrl } from '@/lib/auth/waitlistEntry'
-import {
-  buildTelegramIntent,
-  buildTwitterIntent,
-  buildWarpcastIntent,
-} from '@/components/share/ShareVaultButton'
 
 type ReferralShareBlockProps = {
   referralCode: string | null
   qualifiedCount?: number
   pendingCount?: number
   className?: string
-}
-
-const SHARE_TEXT = 'Join me on 4626 — creator vaults, shared upside. Use my link:'
-
-function openWindow(href: string) {
-  try {
-    window.open(href, '_blank', 'noopener,noreferrer')
-  } catch {
-    // ignore popup blockers
-  }
 }
 
 export function ReferralShareBlock({
@@ -97,28 +80,14 @@ export function ReferralShareBlock({
           {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           {copied ? 'Copied' : 'Copy invite link'}
         </button>
-        <button
-          type="button"
-          onClick={() => openWindow(buildTwitterIntent(shareUrl, SHARE_TEXT))}
-          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-200 hover:border-white/20 hover:text-white transition-colors"
+        <a
+          href={shareUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-zinc-200 transition-colors hover:bg-white/[0.08]"
         >
-          <SiX className="w-3 h-3" aria-hidden="true" /> Share on X
-        </button>
-        <button
-          type="button"
-          onClick={() => openWindow(buildWarpcastIntent(shareUrl, SHARE_TEXT))}
-          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-200 hover:border-white/20 hover:text-white transition-colors"
-        >
-          <SiFarcaster className="w-3 h-3" aria-hidden="true" />
-          Post on Farcaster
-        </button>
-        <button
-          type="button"
-          onClick={() => openWindow(buildTelegramIntent(shareUrl, SHARE_TEXT))}
-          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-200 hover:border-white/20 hover:text-white transition-colors"
-        >
-          <RiTelegram2Fill className="w-3 h-3" aria-hidden="true" /> Telegram
-        </button>
+          Open invite page
+        </a>
       </div>
     </div>
   )

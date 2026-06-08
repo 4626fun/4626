@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  formatTrustZoneMismatchError,
   getKeeprTrustZoneKillSwitchEnvKey,
   isKeeprTrustZoneWriteEnabled,
   resolveKeeprEffectiveActionType,
   resolveKeeprTrustZone,
+  validateRequestedKeeprTrustZone,
 } from '../trustZones.js'
 
 describe('agent control trust zone helpers', () => {
@@ -34,5 +36,26 @@ describe('agent control trust zone helpers', () => {
         KPR_ZONE_DISABLE_FINANCIAL_EXECUTION: 'true',
       }),
     ).toBe(false)
+  })
+
+  it('validates requested trust zone header against resolved action zone', () => {
+    expect(
+      validateRequestedKeeprTrustZone({
+        requestedHeaderValue: 'financial_execution',
+        actionType: 'strategy.ajna.rebucket',
+      }),
+    ).toBeNull()
+
+    const mismatch = validateRequestedKeeprTrustZone({
+      requestedHeaderValue: 'market_maintenance',
+      actionType: 'strategy.ajna.rebucket',
+    })
+    expect(mismatch).toEqual({
+      requested: 'market_maintenance',
+      resolved: 'financial_execution',
+    })
+    expect(formatTrustZoneMismatchError(mismatch!.requested, mismatch!.resolved)).toContain(
+      'requested=market_maintenance resolved=financial_execution',
+    )
   })
 })

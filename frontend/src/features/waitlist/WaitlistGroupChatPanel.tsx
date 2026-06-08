@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { MessageSquare } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
@@ -62,10 +63,14 @@ function WaitlistGroupChatPanelBody({
   const { status: xmtpStatus } = useXmtp()
   const messagingReady = xmtpStatus === 'connected'
   const chatConfig = statusQuery.data
-  const chatReady = chatConfig?.chatReady ?? false
+  const serverChatReady = chatConfig?.chatReady ?? false
+  // Allow the auto join POST effect when the local signing step is complete even if
+  // the current status snapshot has not yet reported chatReady (the POST itself will
+  // re-validate eligibility server-side and may execute or defer the group add).
+  const joinChatReady = serverChatReady || signingReady
   const join = useWaitlistChatJoin({
     xmtpMemberAddress: chatConfig?.xmtpMemberAddress,
-    chatReady,
+    chatReady: joinChatReady,
     enabled: signingReady,
     messagingReady,
     serverJoinActionStatus: chatConfig?.joinAction?.status ?? null,
@@ -77,6 +82,16 @@ function WaitlistGroupChatPanelBody({
     joinBlockedReason: chatConfig?.joinBlockedReason,
   })
 
+  // When the local signing step reports complete (owner installed / track ready),
+  // proactively refetch status so the server-side eligibility (fresh isCswOwner read)
+  // and xmtpMemberAddress / chatReady catch up quickly. This unblocks the connect UI
+  // and group sync without requiring a manual page refresh.
+  useEffect(() => {
+    if (signingReady) {
+      void statusQuery.refetch().catch(() => undefined)
+    }
+  }, [signingReady, statusQuery])
+
   return (
     <WaitlistChatSection layout={layout}>
       <header className="flex items-start justify-between gap-3">
@@ -87,7 +102,7 @@ function WaitlistGroupChatPanelBody({
             <p className="text-[11px] text-zinc-500">Chat with other waitlist members</p>
           </div>
         </div>
-        <WaitlistJoinBadge joinStatus={join.status} chatReady={chatReady && signingReady} />
+        <WaitlistJoinBadge joinStatus={join.status} chatReady={serverChatReady && signingReady} />
       </header>
 
       <WaitlistGroupChatPanelContent
@@ -97,7 +112,7 @@ function WaitlistGroupChatPanelBody({
         blockedMessage={blockedMessage}
         join={join}
         groupName={groupName}
-        chatReady={chatReady}
+        chatReady={serverChatReady}
       />
     </WaitlistChatSection>
   )
@@ -114,6 +129,11 @@ function WaitlistGroupChatPanelContent(props: {
 }) {
   const { signingReady, statusQuery, chatConfig, blockedMessage, join, groupName, chatReady } = props
 
+  // Gate the "finish signing" message on the local signing step (from the setup UI).
+  // Once the user has completed the owner-install step locally, allow the messaging
+  // connect UI even if this particular status snapshot has not yet reflected chatReady
+  // (small lag on the server's isCswOwner read or profile signals). The connect flow +
+  // join POST will re-check eligibility and the status will be re-fetched.
   if (!signingReady) {
     return <p className="text-xs text-zinc-400">{blockedMessage}</p>
   }
@@ -152,9 +172,17 @@ function WaitlistGroupChatPanelContent(props: {
       </div>
     )
   }
-  if (!chatReady) {
+
+  // Allow the connect surface when the local signing step reports ready (or server says chatReady).
+  // This lets users tap "Connect & join" promptly after the owner install step completes,
+  // even if the status snapshot is one read behind.
+  const allowConnectSurface = chatReady || signingReady
+
+  if (!allowConnectSurface) {
     return <p className="text-xs text-zinc-400">{blockedMessage}</p>
   }
+
+  const surfaceChatReady = allowConnectSurface
 
   return (
     <div className="space-y-2">
@@ -174,7 +202,7 @@ function WaitlistGroupChatPanelContent(props: {
         joinActionError={chatConfig.joinAction?.lastError ?? null}
         xmtpMemberAddress={chatConfig.xmtpMemberAddress}
         retryJoin={join.retryJoin}
-        chatReady={chatReady}
+        chatReady={surfaceChatReady}
       />
     </div>
   )
@@ -189,7 +217,7 @@ function WaitlistChatSection({
 }) {
   const shellClass =
     layout === 'sidebar'
-      ? 'flex h-full min-h-[320px] flex-col space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 lg:min-h-[min(72vh,640px)]'
+      ? 'flex h-full min-h-[320px] flex-col space-y-3 rounded-none border-y border-l border-white/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.012))] p-4 lg:min-h-[min(72vh,640px)] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
       : layout === 'mobile'
         ? 'flex min-h-[280px] flex-col space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 max-h-[min(55vh,480px)]'
         : 'space-y-3 pt-1'

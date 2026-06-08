@@ -7212,11 +7212,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const webhookConfig = getTelegramWebhookConfig()
   const botToken = webhookConfig.botToken
   if (!botToken) {
+    if (!shouldRelayTelegramToAlfaclubOnCanonicalWebhook()) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          ok: true,
+          ignored: true,
+        },
+      } satisfies ApiEnvelope<TelegramWebhookOk>)
+    }
     return res.status(503).json({ success: false, error: 'Telegram bot is not configured' } satisfies ApiEnvelope<never>)
   }
 
   const configuredSecret = webhookConfig.webhookSecret
   if (!configuredSecret) {
+    if (!shouldRelayTelegramToAlfaclubOnCanonicalWebhook()) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          ok: true,
+          ignored: true,
+        },
+      } satisfies ApiEnvelope<TelegramWebhookOk>)
+    }
     return res.status(503).json({
       success: false,
       error: 'Telegram webhook secret is not configured',

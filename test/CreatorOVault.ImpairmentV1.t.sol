@@ -145,6 +145,15 @@ contract CreatorOVaultImpairmentV1Test is Test {
         assertEq(vault.maxMint(alice), 0);
         assertEq(vault.maxWithdraw(alice), 0);
         assertEq(vault.maxRedeem(alice), 0);
+
+        vm.expectRevert();
+        vault.deployToStrategies();
+
+        vm.expectRevert();
+        vault.tend();
+
+        vm.expectRevert();
+        vault.rebalanceStrategies(500);
     }
 
     function test_finalize_allowsCleanBook_resume_and_claim_flow() public {

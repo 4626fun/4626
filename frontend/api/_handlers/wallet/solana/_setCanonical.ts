@@ -7,6 +7,7 @@ import {
   setCors,
   setNoStore,
   getDb,
+  runInTransaction,
   readRequestPrincipalAddress,
   resolveAuthorizedRequestPrincipal,
   checkRateLimit,
@@ -113,28 +114,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  await db.sql`
-    UPDATE profile_wallets
-    SET is_canonical_solana_wallet = false, updated_at = NOW()
-    WHERE profile_id = ${profileId}
-      AND is_canonical_solana_wallet = true;
-  `
-  await db.sql`
-    UPDATE profile_wallets
-    SET is_canonical_solana_wallet = true,
-        is_operational_solana_wallet = false,
-        verified_at = COALESCE(verified_at, NOW()),
-        updated_at = NOW()
-    WHERE profile_id = ${profileId}
-      AND address = ${requestedWallet};
-  `
-  await db.sql`
-    UPDATE profiles
-    SET canonical_solana_wallet = ${requestedWallet},
-        solana_wallet = ${requestedWallet},
-        updated_at = NOW()
-    WHERE id = ${profileId};
-  `
+  await runInTransaction(async (txDb) => {
+    await txDb.sql`
+      UPDATE profile_wallets
+      SET is_canonical_solana_wallet = false, updated_at = NOW()
+      WHERE profile_id = ${profileId}
+        AND is_canonical_solana_wallet = true;
+    `
+    await txDb.sql`
+      UPDATE profile_wallets
+      SET is_canonical_solana_wallet = true,
+          is_operational_solana_wallet = false,
+          verified_at = COALESCE(verified_at, NOW()),
+          updated_at = NOW()
+      WHERE profile_id = ${profileId}
+        AND address = ${requestedWallet};
+    `
+    await txDb.sql`
+      UPDATE profiles
+      SET canonical_solana_wallet = ${requestedWallet},
+          solana_wallet = ${requestedWallet},
+          updated_at = NOW()
+      WHERE id = ${profileId};
+    `
+  })
 
   const operationalResult = await db.sql`
     SELECT address

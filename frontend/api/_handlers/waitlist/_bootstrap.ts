@@ -42,6 +42,10 @@ import { loadPrivyUserWithVerifiedEmailRetry } from '../../../server/_lib/infra/
 import { extractPrivyVerifiedEmail } from '../../../server/_lib/infra/trust.js'
 
 type BootstrapBody = { email?: string; referralCode?: string }
+type BootstrapDb = {
+  sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
+  query?: (sql: string, params?: unknown[]) => Promise<unknown>
+}
 type WaitlistBootstrapResponse =
   | {
       requiresPrivyAuth: true
@@ -100,6 +104,27 @@ function readPrivyToken(req: VercelRequest): string | null {
     return token || null
   }
   return null
+}
+
+async function runBootstrapTransaction<T>(
+  db: BootstrapDb,
+  action: (txDb: BootstrapDb) => Promise<T>,
+): Promise<T> {
+  const query = typeof db.query === 'function' ? db.query.bind(db) : null
+  if (!query) return action(db)
+  await query('BEGIN')
+  try {
+    const result = await action(db)
+    await query('COMMIT')
+    return result
+  } catch (error) {
+    try {
+      await query('ROLLBACK')
+    } catch {
+      // ignore rollback failures; preserve root cause from action
+    }
+    throw error
+  }
 }
 
 async function upsertBootstrapProfile(params: {
@@ -612,62 +637,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         privyUser: resolvedPrivyUser as any,
         bootstrapEmailHint,
         action: () =>
-          upsertAccount({
-            db: db as any,
-            privyUserId: context.privyUserId,
-            email: resolvedEmail,
-            emailVerified: true,
+          runBootstrapTransaction(db as BootstrapDb, async (txDb) => {
+            await upsertAccount({
+              db: txDb as any,
+              privyUserId: context.privyUserId,
+              email: resolvedEmail,
+              emailVerified: true,
+            })
+            await upsertBootstrapProfile({
+              db: txDb,
+              email: resolvedEmail,
+              privyUserId: context.privyUserId,
+            })
+
+            const bootstrapProfile = await readBootstrapProfile({
+              db: txDb,
+              privyUserId: context.privyUserId,
+            })
+            if (!bootstrapProfile.signupId) return
+
+            await ensureBootstrapReferralCode({
+              db: txDb,
+              signupId: bootstrapProfile.signupId,
+              referralCode: bootstrapProfile.referralCode,
+              email: bootstrapProfile.email,
+              primaryWallet: bootstrapProfile.primaryWallet,
+              embeddedWallet: bootstrapProfile.embeddedWallet,
+              cswAddress: bootstrapProfile.cswAddress,
+              zoraHandle: bootstrapProfile.zoraHandle,
+            })
+            if (referralCode) {
+              await applyBootstrapReferral({
+                db: txDb,
+                signupId: bootstrapProfile.signupId,
+                referralCode,
+                ipHash,
+                uaHash,
+              })
+            }
+
+            // Mint the baseline `waitlist_signup` award. Idempotent via the
+            // `points_unique_source_full` index on (signup_id, source, source_id):
+            // after the first successful write, repeat calls hit ON CONFLICT
+            // DO NOTHING and return false. Never blocks bootstrap on failure.
+            try {
+              await awardWaitlistPoints({
+                db: txDb as any,
+                signupId: bootstrapProfile.signupId,
+                source: 'waitlist_signup',
+                sourceId: 'signup',
+                amount: WAITLIST_POINTS.signup,
+              })
+            } catch (err) {
+              console.warn('waitlist_bootstrap.signup_award_failed', {
+                signupId: bootstrapProfile.signupId,
+                message: err instanceof Error ? err.message : String(err),
+              })
+            }
           }),
       })
-      await upsertBootstrapProfile({
-        db: db as any,
-        email: resolvedEmail,
-        privyUserId: context.privyUserId,
-      })
-
-      const bootstrapProfile = await readBootstrapProfile({
-        db: db as any,
-        privyUserId: context.privyUserId,
-      })
-      if (bootstrapProfile.signupId) {
-        await ensureBootstrapReferralCode({
-          db: db as any,
-          signupId: bootstrapProfile.signupId,
-          referralCode: bootstrapProfile.referralCode,
-          email: bootstrapProfile.email,
-          primaryWallet: bootstrapProfile.primaryWallet,
-          embeddedWallet: bootstrapProfile.embeddedWallet,
-          cswAddress: bootstrapProfile.cswAddress,
-          zoraHandle: bootstrapProfile.zoraHandle,
-        })
-        if (referralCode) {
-          await applyBootstrapReferral({
-            db: db as any,
-            signupId: bootstrapProfile.signupId,
-            referralCode,
-            ipHash,
-            uaHash,
-          })
-        }
-        // Mint the baseline `waitlist_signup` award. Idempotent via the
-        // `points_unique_source_full` index on (signup_id, source, source_id):
-        // after the first successful write, repeat calls hit ON CONFLICT
-        // DO NOTHING and return false. Never blocks bootstrap on failure.
-        try {
-          await awardWaitlistPoints({
-            db: db as any,
-            signupId: bootstrapProfile.signupId,
-            source: 'waitlist_signup',
-            sourceId: 'signup',
-            amount: WAITLIST_POINTS.signup,
-          })
-        } catch (err) {
-          console.warn('waitlist_bootstrap.signup_award_failed', {
-            signupId: bootstrapProfile.signupId,
-            message: err instanceof Error ? err.message : String(err),
-          })
-        }
-      }
     }
 
     const me = await buildAccountsMePayload({

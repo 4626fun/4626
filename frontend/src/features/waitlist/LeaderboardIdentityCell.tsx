@@ -80,14 +80,20 @@ export function LeaderboardIdentityCell({
   const basename = useBasenameForAddress(csw)
 
   const cswShortLabel = csw ? formatShortAddress(csw) : null
-  const zoraHandle =
-    labelHint && showZoraBadge ? `@${labelHint.replace(/^@/, '')}` : labelHint
+  const zoraHandle = labelHint && showZoraBadge ? `@${labelHint.replace(/^@/, '')}` : null
+  const basenameOrEns = basename.displayName ?? null
+  const baseName = basenameOrEns?.toLowerCase().endsWith('.base.eth') ? basenameOrEns : null
+  const ensName =
+    basenameOrEns && !baseName && basenameOrEns.toLowerCase().endsWith('.eth') ? basenameOrEns : null
   const primaryLabel =
-    basename.displayName ?? zoraHandle ?? cswShortLabel ?? (csw ? null : display)
+    zoraHandle ?? baseName ?? ensName ?? cswShortLabel ?? (csw ? null : display)
   const resolvedLabel = primaryLabel ?? cswShortLabel ?? display
-  const showCswSubtitle = Boolean(
-    basename.displayName && cswShortLabel && basename.displayName !== cswShortLabel,
-  )
+  const secondaryIdentityLabel =
+    zoraHandle && (baseName ?? ensName)
+      ? (baseName ?? ensName)
+      : basename.displayName && cswShortLabel && basename.displayName !== cswShortLabel
+        ? cswShortLabel
+        : null
   const title = cswAddress ?? resolvedLabel
   const resolvedAvatar = basename.avatar ?? avatarUrl ?? null
   const monospaceLabel = isHexLabel(resolvedLabel)
@@ -155,16 +161,16 @@ export function LeaderboardIdentityCell({
         <div className={stacked ? 'min-w-0 w-full text-sm truncate' : 'min-w-0 text-[13px] sm:text-sm truncate'}>
           {labelNode}
         </div>
-        {showCswSubtitle ? (
+        {secondaryIdentityLabel ? (
           <div
             className={
               stacked
-                ? 'mt-1 font-mono text-[10px] text-zinc-400 truncate max-w-full'
-                : 'mt-0.5 font-mono text-[10px] sm:text-[11px] text-zinc-400 truncate'
+                ? `mt-1 ${secondaryIdentityLabel.startsWith('0x') ? 'font-mono' : 'font-medium'} text-[10px] text-zinc-400 truncate max-w-full`
+                : `mt-0.5 ${secondaryIdentityLabel.startsWith('0x') ? 'font-mono' : 'font-medium'} text-[10px] sm:text-[11px] text-zinc-400 truncate`
             }
             title={cswAddress ?? undefined}
           >
-            {cswShortLabel}
+            {secondaryIdentityLabel}
           </div>
         ) : null}
       </div>

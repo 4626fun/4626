@@ -15,6 +15,7 @@ import {
 
 export type Db = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[]; rowCount?: number }>
+  query?: (text: string, params?: any[]) => Promise<{ rows: any[]; rowCount?: number }>
 }
 
 type ExistingProfile = { id: number; email: string | null }
@@ -32,6 +33,23 @@ export type SyncUserWalletsResult = {
 
 function normalizeLower(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
+}
+
+async function withDbTransaction<T>(db: Db, fn: (txDb: Db) => Promise<T>): Promise<T> {
+  // Some test mocks expose only tagged-sql helpers; in that case we preserve
+  // current behavior while production db handles can execute atomic tx blocks.
+  if (typeof db.query !== 'function') {
+    return fn(db)
+  }
+  await db.query('BEGIN')
+  try {
+    const result = await fn(db)
+    await db.query('COMMIT')
+    return result
+  } catch (error) {
+    await db.query('ROLLBACK').catch(() => undefined)
+    throw error
+  }
 }
 
 function normalizeAddress(value: unknown): string | null {
@@ -945,79 +963,83 @@ export async function syncUserWallets(db: Db, privyUser: PrivyUserLike): Promise
   const effectiveClassification = applyCanonicalCswPolicyToClassification(
     applyPersistedIdentity({ classification, persisted: persistedWithZora }),
   )
-  const profileId = await insertOrUpdateProfile({
-    db,
-    existing,
-    privyUserId,
-    email,
-    privyUser,
-    classification: effectiveClassification,
-  })
+  const profileId = await withDbTransaction(db, async (txDb) => {
+    const resolvedProfileId = await insertOrUpdateProfile({
+      db: txDb,
+      existing,
+      privyUserId,
+      email,
+      privyUser,
+      classification: effectiveClassification,
+    })
 
-  await clearRoleFlags(db, profileId, effectiveClassification)
+    await clearRoleFlags(txDb, resolvedProfileId, effectiveClassification)
 
-  const canonicalAddress = effectiveClassification.canonicalSmartWallet?.address ?? null
-  const canonicalSolanaAddress = effectiveClassification.canonicalSolanaWallet?.address ?? null
-  const operationalSolanaAddress = effectiveClassification.operationalSolanaWallet?.address ?? null
-  const embeddedAddress = effectiveClassification.embeddedEoa?.address ?? null
-  const primaryAddress = effectiveClassification.primaryWalletAddress ?? null
+    const canonicalAddress = effectiveClassification.canonicalSmartWallet?.address ?? null
+    const canonicalSolanaAddress = effectiveClassification.canonicalSolanaWallet?.address ?? null
+    const operationalSolanaAddress = effectiveClassification.operationalSolanaWallet?.address ?? null
+    const embeddedAddress = effectiveClassification.embeddedEoa?.address ?? null
+    const primaryAddress = effectiveClassification.primaryWalletAddress ?? null
 
-  for (const wallet of effectiveClassification.allWallets) {
-    await db.sql`
-      INSERT INTO wallets (address, chain, wallet_type, provider)
-      VALUES (${wallet.address}, ${wallet.chain}, ${wallet.walletType}, ${wallet.provider})
-      ON CONFLICT (address) DO UPDATE
-      SET
-        chain = COALESCE(EXCLUDED.chain, wallets.chain),
-        wallet_type = COALESCE(EXCLUDED.wallet_type, wallets.wallet_type),
-        provider = CASE
-          WHEN wallets.provider = 'unknown' THEN EXCLUDED.provider
-          ELSE wallets.provider
-        END;
-    `
+    for (const wallet of effectiveClassification.allWallets) {
+      await txDb.sql`
+        INSERT INTO wallets (address, chain, wallet_type, provider)
+        VALUES (${wallet.address}, ${wallet.chain}, ${wallet.walletType}, ${wallet.provider})
+        ON CONFLICT (address) DO UPDATE
+        SET
+          chain = COALESCE(EXCLUDED.chain, wallets.chain),
+          wallet_type = COALESCE(EXCLUDED.wallet_type, wallets.wallet_type),
+          provider = CASE
+            WHEN wallets.provider = 'unknown' THEN EXCLUDED.provider
+            ELSE wallets.provider
+          END;
+      `
 
-    const metadata = {
-      clientType: wallet.clientType,
-      syncedFrom: 'privy',
-      syncedAt: new Date().toISOString(),
+      const metadata = {
+        clientType: wallet.clientType,
+        syncedFrom: 'privy',
+        syncedAt: new Date().toISOString(),
+      }
+      await txDb.sql`
+        INSERT INTO profile_wallets (
+          profile_id,
+          address,
+          is_primary,
+          is_canonical_smart_wallet,
+          is_embedded_eoa,
+          is_canonical_solana_wallet,
+          is_operational_solana_wallet,
+          verified_at,
+          metadata,
+          updated_at
+        )
+        VALUES (
+          ${resolvedProfileId},
+          ${wallet.address},
+          ${Boolean(primaryAddress && normalizeLower(wallet.address) === normalizeLower(primaryAddress))},
+          ${Boolean(canonicalAddress && normalizeLower(wallet.address) === normalizeLower(canonicalAddress))},
+          ${Boolean(embeddedAddress && normalizeLower(wallet.address) === normalizeLower(embeddedAddress))},
+          ${Boolean(canonicalSolanaAddress && walletAddressEquals(wallet.address, canonicalSolanaAddress))},
+          ${Boolean(operationalSolanaAddress && walletAddressEquals(wallet.address, operationalSolanaAddress))},
+          NOW(),
+          ${metadata},
+          NOW()
+        )
+        ON CONFLICT (profile_id, address) DO UPDATE
+        SET
+          is_primary = EXCLUDED.is_primary,
+          is_canonical_smart_wallet = EXCLUDED.is_canonical_smart_wallet,
+          is_embedded_eoa = EXCLUDED.is_embedded_eoa,
+          is_canonical_solana_wallet = EXCLUDED.is_canonical_solana_wallet,
+          is_operational_solana_wallet = EXCLUDED.is_operational_solana_wallet,
+          verified_at = NOW(),
+          metadata = EXCLUDED.metadata,
+          updated_at = NOW();
+      `
     }
-    await db.sql`
-      INSERT INTO profile_wallets (
-        profile_id,
-        address,
-        is_primary,
-        is_canonical_smart_wallet,
-        is_embedded_eoa,
-        is_canonical_solana_wallet,
-        is_operational_solana_wallet,
-        verified_at,
-        metadata,
-        updated_at
-      )
-      VALUES (
-        ${profileId},
-        ${wallet.address},
-        ${Boolean(primaryAddress && normalizeLower(wallet.address) === normalizeLower(primaryAddress))},
-        ${Boolean(canonicalAddress && normalizeLower(wallet.address) === normalizeLower(canonicalAddress))},
-        ${Boolean(embeddedAddress && normalizeLower(wallet.address) === normalizeLower(embeddedAddress))},
-        ${Boolean(canonicalSolanaAddress && walletAddressEquals(wallet.address, canonicalSolanaAddress))},
-        ${Boolean(operationalSolanaAddress && walletAddressEquals(wallet.address, operationalSolanaAddress))},
-        NOW(),
-        ${metadata},
-        NOW()
-      )
-      ON CONFLICT (profile_id, address) DO UPDATE
-      SET
-        is_primary = EXCLUDED.is_primary,
-        is_canonical_smart_wallet = EXCLUDED.is_canonical_smart_wallet,
-        is_embedded_eoa = EXCLUDED.is_embedded_eoa,
-        is_canonical_solana_wallet = EXCLUDED.is_canonical_solana_wallet,
-        is_operational_solana_wallet = EXCLUDED.is_operational_solana_wallet,
-        verified_at = NOW(),
-        metadata = EXCLUDED.metadata,
-        updated_at = NOW();
-    `
-  }
+
+    return resolvedProfileId
+  })
 
   return {
     profileId,

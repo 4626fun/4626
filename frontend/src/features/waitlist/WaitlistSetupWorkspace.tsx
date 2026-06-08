@@ -50,7 +50,9 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
   const canEnterNow = canEnterApp
   const inBaseApp = useMemo(() => isBaseAppInAppContext(), [])
   const showWorkspaceHeader = waitlistJoined && !(inBaseApp && !signingStepComplete)
-  const showChatAside = setupComplete && (!inBaseApp || signingStepComplete)
+  // Chat room surface is available on waitlist once email verified (for desktop) or after wallet signing step (Base App).
+  // The panel internally gates interactive join on signingReady; this just mounts the teaser / connect UI.
+  const chatEnabled = waitlistJoined && (!inBaseApp || signingStepComplete)
 
   const primaryColumnActions = (
     <div className="space-y-4">
@@ -58,7 +60,13 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
         aria-label="Waitlist points actions"
         className="rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-4"
       >
-        <WaitlistUnlocksPanel score={initialAccount.score} email={initialAccount.email} />
+        <WaitlistUnlocksPanel
+          score={controller.me?.score ?? initialAccount.score}
+          email={controller.me?.email ?? initialAccount.email}
+          linkedMethods={controller.me?.linkedMethods ?? initialAccount.linkedMethods}
+          busyProvider={controller.busyProvider}
+          onLinkProvider={controller.onLinkProvider}
+        />
       </section>
 
       {canEnterNow ? (
@@ -90,12 +98,12 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
     </div>
   )
 
-  const gridClass = showChatAside
-    ? 'grid grid-cols-1 gap-5 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(260px,min(360px,32vw))] lg:items-start lg:gap-6'
-    : 'grid grid-cols-1 gap-5 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)] lg:items-start lg:gap-6'
+  const gridClass = chatEnabled
+    ? 'grid grid-cols-1 gap-5 xl:grid-cols-[minmax(250px,280px)_minmax(0,1fr)_minmax(290px,340px)] xl:items-start xl:gap-5'
+    : 'grid grid-cols-1 gap-5 xl:grid-cols-[minmax(250px,280px)_minmax(0,1fr)] xl:items-start xl:gap-5'
 
   return (
-    <div className="mx-auto w-full max-w-[90rem] space-y-5 px-0 sm:space-y-6">
+    <div className="mx-auto w-full max-w-none space-y-5 px-0 sm:space-y-6">
       {showWorkspaceHeader ? (
         <WaitlistWorkspaceHeader
           canEnterApp={canEnterApp}
@@ -129,10 +137,10 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
 
           <WaitlistLeaderboardPanel layout="mobile" />
 
-          {showChatAside ? (
+          {chatEnabled ? (
             <div className="lg:hidden">
               <WaitlistGroupChatPanel
-                setupComplete={setupComplete}
+                setupComplete={chatEnabled}
                 signingReady={signingStepComplete}
                 layout="mobile"
               />
@@ -140,10 +148,10 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
           ) : null}
         </div>
 
-        {showChatAside ? (
-          <aside className="hidden min-w-0 lg:block lg:sticky lg:top-6" aria-label="Waitlist group chat">
+        {chatEnabled ? (
+          <aside className="hidden min-w-0 xl:block xl:sticky xl:top-4" aria-label="Waitlist group chat">
             <WaitlistGroupChatPanel
-              setupComplete={setupComplete}
+              setupComplete={chatEnabled}
               signingReady={signingStepComplete}
               layout="sidebar"
             />
