@@ -52,6 +52,12 @@ export type CreatorVaultBatcherInfra = {
 
 type PublicClientLike = {
   getBytecode: (args: { address: Address }) => Promise<Hex | null | undefined>
+  readContract: (args: {
+    address: Address
+    abi: readonly unknown[]
+    functionName: string
+    args?: readonly unknown[]
+  }) => Promise<unknown>
   multicall: (args: {
     contracts: Array<{
       address: Address
@@ -59,7 +65,7 @@ type PublicClientLike = {
       functionName: 'protocolTreasury' | 'registry' | 'chainlinkEthUsd'
     }>
     allowFailure?: boolean
-  }) => Promise<Array<{ status: 'success' | 'failure'; result?: unknown }>>
+  }) => Promise<unknown[]>
 }
 
 function normalizeAddress(value: unknown): Address | null {
@@ -69,6 +75,14 @@ function normalizeAddress(value: unknown): Address | null {
   } catch {
     return null
   }
+}
+
+function readMulticallAddress(viewResults: unknown[] | null | undefined, index: number): Address | null {
+  const entry = viewResults?.[index]
+  if (!entry || typeof entry !== 'object') return null
+  const status = (entry as { status?: unknown }).status
+  if (status !== 'success') return null
+  return normalizeAddress((entry as { result?: unknown }).result)
 }
 
 export function parseCreatorVaultBatcherCapabilities(params: {
@@ -110,7 +124,8 @@ export async function readCreatorVaultBatcherInfra(params: {
 }): Promise<{ ok: true; infra: CreatorVaultBatcherInfra } | { ok: false; message: string }> {
   const [alignedDeps, batcherBytecode] = await Promise.all([
     resolveAlignedPhase1DeployDeps({
-      publicClient: params.publicClient as Parameters<typeof resolveAlignedPhase1DeployDeps>[0]['publicClient'],
+      publicClient:
+        params.publicClient as unknown as Parameters<typeof resolveAlignedPhase1DeployDeps>[0]['publicClient'],
       batcherAddress: params.batcherAddress,
       fallbacks: {
         create2Deployer: params.fallbacks.create2Deployer,
@@ -136,14 +151,11 @@ export async function readCreatorVaultBatcherInfra(params: {
     .catch(() => null)
 
   const protocolTreasury =
-    (viewResults?.[0]?.status === 'success' ? normalizeAddress(viewResults[0].result) : null) ??
-    params.fallbacks.protocolTreasury
+    readMulticallAddress(viewResults, 0) ?? params.fallbacks.protocolTreasury
   const registry =
-    (viewResults?.[1]?.status === 'success' ? normalizeAddress(viewResults[1].result) : null) ??
-    params.fallbacks.registry
+    readMulticallAddress(viewResults, 1) ?? params.fallbacks.registry
   const chainlinkEthUsd =
-    (viewResults?.[2]?.status === 'success' ? normalizeAddress(viewResults[2].result) : null) ??
-    params.fallbacks.chainlinkEthUsd
+    readMulticallAddress(viewResults, 2) ?? params.fallbacks.chainlinkEthUsd
 
   if (!protocolTreasury) return { ok: false, message: 'Protocol treasury not available' }
   if (!registry) return { ok: false, message: 'Registry not available' }
@@ -151,7 +163,8 @@ export async function readCreatorVaultBatcherInfra(params: {
 
   const bytecode = (batcherBytecode ?? null) as Hex | null
   const modulePreflight = await assertCreatorOvaultModuleStorageCompatible({
-    publicClient: params.publicClient,
+    publicClient:
+      params.publicClient as unknown as Parameters<typeof assertCreatorOvaultModuleStorageCompatible>[0]['publicClient'],
     batcherAddress: params.batcherAddress,
   })
   if (!modulePreflight.ok) {

@@ -26,7 +26,6 @@ import {
 import { resolveBytecodeStoreForBatcher } from '@/lib/deploy/phase1ModuleDeploy'
 
 const BASE_SWAP_ROUTER = '0x2626664c2603336E57B271c5C0b26F421741e481' as Address
-const BASE_WETH = '0x4200000000000000000000000000000000000006' as Address
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as Address
 
 export type DeployExpectedAddresses = {
@@ -88,7 +87,6 @@ export async function resolveDeployExpectedAddresses(
     shareOftSaltOverrideUsed,
     shareOftVanityWarning,
     shareOftVanityInfo,
-    vaultInitCode,
     shareOftInitCode,
     shareSymbolLower,
     vaultAddress,

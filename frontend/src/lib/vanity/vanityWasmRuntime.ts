@@ -27,7 +27,10 @@ export function createVanityWasmImports(): WebAssembly.Imports {
 
 export async function instantiateVanityWasmFromBytes(bytes: ArrayBuffer | Uint8Array): Promise<VanityWasmExports> {
   const buffer = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
-  const { instance } = await WebAssembly.instantiate(buffer, createVanityWasmImports())
+  const instantiated = await WebAssembly.instantiate(buffer, createVanityWasmImports())
+  const instance =
+    (instantiated as Partial<WebAssembly.WebAssemblyInstantiatedSource>).instance ??
+    (instantiated as WebAssembly.Instance)
   return instance.exports as unknown as VanityWasmExports
 }
 

@@ -32,6 +32,14 @@ Inventory of server-side multi-write mutation flows and whether they are protect
   - **Now wrapped** for the verified-email bootstrap write bundle (`upsertAccount` + profile upsert + referral code/attribution + baseline signup points) under one transaction boundary.
   - Uses a transaction-capable fallback helper (no-op transaction mode for lightweight test DB doubles).
   - Verified with waitlist bootstrap test suites.
+- `frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts`
+  - **Now wrapped** so keepr vault upsert + automation upsert + config-hash readback run inside one transaction boundary.
+  - Follow-on keepr helper updates now allow optional injected DB clients (`upsertKeeprVault`, `upsertKeeprVaultAutomation`, `getKeeprVaultByVaultAddress`).
+  - Verified with control-plane tests and typecheck.
+- `frontend/api/_handlers/creator/strategy/{_activate,_x402-activate,stripe/_checkout,stripe/_webhook}.ts`
+  - **Now wrapped** so activation row writes and payment-order/payment-event ledger writes run in a single transaction.
+  - Prevents partially persisted payment state (activation without payment order/event, or webhook finalize without ledger).
+  - Control-plane operation/stage queueing remains intentionally best-effort and non-transactional.
 
 ## Multi-write inventory (prioritized)
 
@@ -43,11 +51,8 @@ Inventory of server-side multi-write mutation flows and whether they are protect
 
 1. `frontend/server/_lib/controlPlane/executors/executeSettleVault.ts`
    - settlement marker and keeper provisioning consistency
-2. `frontend/server/_lib/controlPlane/executors/provisionVaultEconomy.ts`
-   - multiple keeper-related table writes
-   - requires follow-on plumbing so keepr registry/automation helpers can accept an injected transactional DB client (today they each open their own `getDb()` connection).
-3. creator strategy activation handlers under `frontend/api/_handlers/creator/strategy/*`
-   - activation/order/ledger/control-plane coherence
+2. creator strategy activation handlers under `frontend/api/_handlers/creator/strategy/*`
+   - follow-on: add explicit rollback-path tests for transaction failures in handler/unit suites
 
 ### Priority 3 (scoped/secondary)
 

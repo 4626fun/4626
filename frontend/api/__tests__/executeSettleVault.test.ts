@@ -44,6 +44,10 @@ describe('executeSettleVault', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    dbSqlMock.mockImplementation(async () => ({
+      rows: [],
+      rowCount: 0,
+    }))
   })
 
   it('rejects settledAt without settlementStage completed', () => {
@@ -56,6 +60,15 @@ describe('executeSettleVault', () => {
   })
 
   it('writes settlement fields to keepr_vaults', async () => {
+    dbSqlMock.mockImplementation(async (...args: any[]) => {
+      const first = args[0] as TemplateStringsArray | undefined
+      const text = String(first?.[0] ?? '')
+      if (text.includes('UPDATE keepr_vaults')) {
+        return { rows: [{ ok: 1 }], rowCount: 1 }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
     const settledAt = new Date().toISOString()
     const result = await executeSettleVault({
       vaultAddress: VAULT,
@@ -71,5 +84,18 @@ describe('executeSettleVault', () => {
       return String(first?.[0] ?? '')
     })
     expect(sqlTexts.some((text) => text.includes('UPDATE keepr_vaults'))).toBe(true)
+  })
+
+  it('fails closed when vault row is missing from keepr registry', async () => {
+    await expect(
+      executeSettleVault({
+        vaultAddress: VAULT,
+        settlementStage: 'completed',
+        settledAt: new Date().toISOString(),
+      }),
+    ).rejects.toMatchObject({
+      code: 'vault_not_found_in_keepr_registry',
+      statusCode: 404,
+    })
   })
 })

@@ -20,7 +20,6 @@ import {
 } from '@/lib/deploy/perVaultVanityPreseed'
 import {
   deriveDeployBaseSalt,
-  deriveShareOftSaltFromVersion,
   findDeploymentVersionForVanityTargets,
   predictCreate2AddressFromInitCode,
   saltForDeployLabel,
@@ -356,6 +355,21 @@ export async function resolveDeployVanityPlan(
         }
       }
       if (!foundVersion) {
+        if (versionSearchVaultPrefix && usingDefaultVaultVanityTarget) {
+          vanityVersionSearchOutcome = 'missed_defaults'
+          throw new Error(
+            `Unable to guarantee default vault vanity prefix "0x${versionSearchVaultPrefix}" in ${versionSearchMaxTries.toLocaleString()} deployment-version tries. ` +
+              'Increase VITE_VAULT_VANITY_MAX_TRIES or run the offline vanity grinder before deploy.',
+          )
+        }
+        if (versionSearchShareSuffix && usingDefaultShareVanityTarget) {
+          vanityVersionSearchOutcome = 'missed_defaults'
+          throw new Error(
+            `Unable to guarantee default ShareOFT vanity suffix "${versionSearchShareSuffix}" in ${versionSearchMaxTries.toLocaleString()} deployment-version tries. ` +
+              'Increase VITE_SHARE_OFT_VANITY_MAX_TRIES or run the offline vanity grinder before deploy.',
+          )
+        }
+
         if (versionSearchVaultPrefix && versionSearchShareSuffix) {
           if (!usingDefaultVaultVanityTarget || !usingDefaultShareVanityTarget) {
             vanityVersionSearchOutcome = 'missed_custom'

@@ -138,7 +138,7 @@ export async function executeSettleVault(input: {
     })
   }
 
-  await db.sql`
+  const updateResult = await db.sql`
     UPDATE keepr_vaults
     SET graduated_at = COALESCE(graduated_at, ${parsed.graduatedAt || null}::timestamptz),
         settled_at = COALESCE(settled_at, ${parsed.settledAt || null}::timestamptz),
@@ -149,8 +149,16 @@ export async function executeSettleVault(input: {
             ELSE NOW()
           END,
         updated_at = NOW()
-    WHERE LOWER(vault_address) = ${parsed.vaultAddress};
+    WHERE LOWER(vault_address) = ${parsed.vaultAddress}
+    RETURNING 1;
   `
+  if (!Array.isArray(updateResult.rows) || updateResult.rows.length === 0) {
+    throw new SettleVaultExecutionError({
+      statusCode: 404,
+      code: 'vault_not_found_in_keepr_registry',
+      message: 'Vault not found in keepr registry',
+    })
+  }
 
   let registryBootstrap: ExecuteSettleVaultResult['registryBootstrap']
   if (parsed.normalizedStage.toLowerCase() === 'completed' && parsed.settledAt) {

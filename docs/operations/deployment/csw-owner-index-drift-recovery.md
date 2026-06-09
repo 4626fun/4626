@@ -54,5 +54,5 @@ Escalate immediately if any of the following occurs:
 
 ## Related Docs
 
-- `docs/operations/canonical-csw-owner-approval.md`
+- `docs/operations/owner-install-reference-methods.md`
 - `docs/operations/deployment/launch/ship-checklist.md`

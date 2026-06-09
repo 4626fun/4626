@@ -4,7 +4,6 @@ import { getAddress, keccak256, type Hex } from 'viem'
 import {
   buildShareOftVanityCacheKey,
   buildVanityVersionCacheKey,
-  DEPLOY_VANITY_PLAN_STORAGE_KEY,
   readPersistedShareOftVanitySalt,
   readPersistedVanityVersionPlan,
   writePersistedShareOftVanitySalt,

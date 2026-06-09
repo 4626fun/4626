@@ -13,6 +13,7 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
+  runInTransaction,
 } from '@4626/server-core'
 import { getAddress, isAddress, type Address, type Hex } from 'viem'
 
@@ -219,76 +220,105 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  const insertResult = await insertPendingActivation(db as any, {
-    creatorToken,
-    featureKey: feature.key,
-    priceUsdcPaid: settlement.value,
-    paymentTxHash: settlement.txHash,
-    paymentFrom: settlement.from,
-    paymentTo: settlement.to,
-    paymentVerifiedAt: new Date(),
-    status: 'pending',
-    metadata: {
-      sessionAddress,
-      provisionerTag: feature.provisionerTag,
-      blockNumber: settlement.blockNumber.toString(),
-      paymentSource: 'x402_base',
-      x402Nonce: parsed.payment.payload.authorization.nonce,
-      catalogPriceUsdc: feature.priceUsdc.toString(),
-      effectivePriceUsdc: pricing.effectivePriceUsdc.toString(),
-      priceOverrideId: pricing.appliedOverrideId,
-      discountBps: pricing.discountBps,
-    },
-  })
+  const persistedActivation = await (async () => {
+    try {
+      return await runInTransaction(async (txDb) => {
+        const insertResult = await insertPendingActivation(txDb as any, {
+          creatorToken,
+          featureKey: feature.key,
+          priceUsdcPaid: settlement.value,
+          paymentTxHash: settlement.txHash,
+          paymentFrom: settlement.from,
+          paymentTo: settlement.to,
+          paymentVerifiedAt: new Date(),
+          status: 'pending',
+          metadata: {
+            sessionAddress,
+            provisionerTag: feature.provisionerTag,
+            blockNumber: settlement.blockNumber.toString(),
+            paymentSource: 'x402_base',
+            x402Nonce: parsed.payment.payload.authorization.nonce,
+            catalogPriceUsdc: feature.priceUsdc.toString(),
+            effectivePriceUsdc: pricing.effectivePriceUsdc.toString(),
+            priceOverrideId: pricing.appliedOverrideId,
+            discountBps: pricing.discountBps,
+          },
+        })
+        if (!insertResult.ok) return { ok: false as const, insertResult }
 
-  if (!insertResult.ok) {
+        await upsertPaymentOrder({
+          db: txDb as any,
+          orderId: `activation:${insertResult.row.id}`,
+          status: 'provisioning_queued',
+          amountAtomic: settlement.value,
+          currency: 'USDC',
+          metadata: {
+            provider: 'x402',
+            txHash: settlement.txHash,
+            creatorToken,
+            featureKey: feature.key,
+          },
+        })
+        await recordPaymentEvent({
+          db: txDb as any,
+          provider: 'x402',
+          providerEventId: settlement.txHash,
+          orderId: `activation:${insertResult.row.id}`,
+          eventType: 'x402.authorization_settled',
+          amountAtomic: settlement.value,
+          currency: 'USDC',
+          payload: {
+            creatorToken,
+            featureKey: feature.key,
+            treasury,
+            blockNumber: settlement.blockNumber.toString(),
+          },
+        })
+        return { ok: true as const, row: insertResult.row }
+      })
+    } catch (error) {
+      return {
+        ok: false as const,
+        reason: 'db_error' as const,
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  })()
+
+  if (!persistedActivation) {
+    return res
+      .status(503)
+      .json({ success: false, error: 'Activation persistence unavailable' } satisfies ApiEnvelope<never>)
+  }
+
+  if (!persistedActivation.ok && 'insertResult' in persistedActivation) {
     const statusByReason: Record<string, number> = {
       live_activation_exists: 409,
       payment_already_used: 409,
       db_error: 500,
     }
-    const status = statusByReason[insertResult.reason] ?? 500
+    const status = statusByReason[persistedActivation.insertResult.reason] ?? 500
     return res.status(status).json({
       success: false,
       error: 'activation_insert_failed',
-      reason: insertResult.reason,
-      message: insertResult.message,
+      reason: persistedActivation.insertResult.reason,
+      message: persistedActivation.insertResult.message,
     } satisfies ApiEnvelope<never>)
   }
 
+  if (!persistedActivation.ok) {
+    return res.status(500).json({
+      success: false,
+      error: `Activation persistence failed (${persistedActivation.reason}): ${persistedActivation.message}`,
+    } satisfies ApiEnvelope<never>)
+  }
+  const activationRow = persistedActivation.row
+
   let paymentControlPlane: RecordPaymentActivationQueuedResult | null = null
   try {
-    await upsertPaymentOrder({
-      db: db as any,
-      orderId: `activation:${insertResult.row.id}`,
-      status: 'provisioning_queued',
-      amountAtomic: settlement.value,
-      currency: 'USDC',
-      metadata: {
-        provider: 'x402',
-        txHash: settlement.txHash,
-        creatorToken,
-        featureKey: feature.key,
-      },
-    })
-    await recordPaymentEvent({
-      db: db as any,
-      provider: 'x402',
-      providerEventId: settlement.txHash,
-      orderId: `activation:${insertResult.row.id}`,
-      eventType: 'x402.authorization_settled',
-      amountAtomic: settlement.value,
-      currency: 'USDC',
-      payload: {
-        creatorToken,
-        featureKey: feature.key,
-        treasury,
-        blockNumber: settlement.blockNumber.toString(),
-      },
-    })
     paymentControlPlane = await recordPaymentActivationQueued({
-      orderId: `activation:${insertResult.row.id}`,
-      activationId: insertResult.row.id,
+      orderId: `activation:${activationRow.id}`,
+      activationId: activationRow.id,
       provider: 'x402',
       providerEventId: settlement.txHash,
       creatorToken,
@@ -300,9 +330,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       metadata: { txHash: settlement.txHash },
     })
   } catch (error) {
-    console.warn('[creator-strategy/x402] payment event ledger write failed', {
+    console.warn('[creator-strategy/x402] control-plane activation queue write failed', {
       txHash: settlement.txHash,
-      activationId: insertResult.row.id,
+      activationId: activationRow.id,
       error: error instanceof Error ? error.message : String(error),
     })
   }
@@ -313,7 +343,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const provision = await dispatchProvisioning({
       creatorToken,
       featureKey: feature.key,
-      activationId: insertResult.row.id,
+      activationId: activationRow.id,
       paymentSource: 'x402_base',
       paymentRef: settlement.txHash,
     })
@@ -343,7 +373,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   return res.status(200).json({
     success: true,
     data: {
-      activation: toActivationDto(insertResult.row),
+      activation: toActivationDto(activationRow),
       featureKey: feature.key,
       paymentSource: 'x402_base' as const,
       priceUsdc: feature.priceUsdc.toString(),

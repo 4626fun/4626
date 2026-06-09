@@ -21,7 +21,6 @@ import {
 } from './deployVaultHelpers'
 import {
   deriveDeployBaseSalt,
-  deriveShareOftSaltFromVersion,
   predictCreate2AddressFromInitCode,
   saltForDeployLabel,
 } from '@/lib/deploy/perVaultVanityVersionSearch'
@@ -49,7 +48,6 @@ import {
   erc20Abi,
   formatUnits,
   getAddress,
-  getCreate2Address,
   isAddress,
   http,
   keccak256,
@@ -91,7 +89,6 @@ import {
 } from '@/lib/deploy/phase1OnchainState'
 import {
   resolveAlignedPhase1DeployDeps,
-  resolveBytecodeStoreForBatcher,
 } from '@/lib/deploy/phase1ModuleDeploy'
 import { assertCreatorOvaultModuleStorageCompatible } from '@/lib/deploy/ovaultModuleIdentity'
 import { ShareBridgeFinalizeWiringPanel } from '@/components/deploy/ShareBridgeFinalizeWiringPanel'
@@ -124,21 +121,14 @@ import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { buildPermit2SignatureTransfer, createPermit2Deadline, createPermit2Nonce } from '@/lib/deploy/permit2'
 import {
-  deriveCreatorCoinPolicyControllerSalt,
-  derivePayoutRouterSalt,
-  deriveVaultShareBurnStreamSalt,
-} from '@/lib/deploy/create2Salts'
-import {
   type DeploySessionStatusData,
 } from '@/lib/deploy/sessionClient'
 import { useDeploySessionV2 } from '@/features/deploy-vault/useDeploySessionV2'
 import {
-  buildShareVanitySkipLogKey,
   deployTimelineProgressLabel,
   deriveDeployTimelineProgressState,
   isProviderCollisionErrorMessage,
   summarizeDeployTimelineProgress,
-  shouldEmitShareVanitySkipLog,
 } from './deployVaultSignals'
 import { 
   sendCoinbaseSmartWalletUserOperation, 
@@ -951,16 +941,8 @@ function saltFor(baseSalt: Hex, label: string): Hex {
   return saltForDeployLabel(baseSalt, label)
 }
 
-function deriveShareOftSalt(params: { owner: Address; shareSymbol: string; version: string }): Hex {
-  return deriveShareOftSaltFromVersion(params)
-}
-
 function predictCreate2Address(params: { create2Deployer: Address; salt: Hex; initCode: Hex }): Address {
   return predictCreate2AddressFromInitCode(params)
-}
-
-function deriveOftBootstrapSalt(): Hex {
-  return keccak256(encodePacked(['string'], ['4626:OFTBootstrapRegistry:v1']))
 }
 
 async function fetchAdminAuth(): Promise<AdminAuthResponse> {
@@ -2573,12 +2555,19 @@ function DeployVaultBatcher({
     const ow = String(owner ?? '').toLowerCase()
     return `cv:deploy:session:${ct}:${ow}`
   }, [creatorToken, owner])
+  const deploySessionBatcherAddress = useMemo(() => {
+    const normalizedOverride = normalizeDeploymentBatcherAddress(batcherOverride)
+    if (normalizedOverride) return normalizedOverride
+    const configured = CONTRACTS.creatorVaultBatcher ?? null
+    return normalizeDeploymentBatcherAddress(configured)
+  }, [batcherOverride])
   const deploySessionStorageKey = useMemo(() => {
     const ct = String(creatorToken ?? '').toLowerCase()
     const ow = String(owner ?? '').toLowerCase()
     const vv = String(deploymentVersion ?? '').trim().toLowerCase()
-    return `cv:deploy:session:${ct}:${ow}:${vv}`
-  }, [creatorToken, deploymentVersion, owner])
+    const bb = String(deploySessionBatcherAddress ?? '').toLowerCase()
+    return `cv:deploy:session:${ct}:${ow}:${vv}:${bb}`
+  }, [creatorToken, deploySessionBatcherAddress, deploymentVersion, owner])
   const persistDeploySession = useCallback(
     (sessionId: string) => {
       if (typeof window === 'undefined') return
@@ -2590,6 +2579,7 @@ function DeployVaultBatcher({
             creatorToken: String(creatorToken).toLowerCase(),
             owner: String(owner).toLowerCase(),
             version: String(deploymentVersion),
+            batcher: String(deploySessionBatcherAddress ?? '').toLowerCase(),
             createdAt: new Date().toISOString(),
           }),
         )
@@ -2597,7 +2587,7 @@ function DeployVaultBatcher({
         // ignore storage errors
       }
     },
-    [creatorToken, deploySessionStorageKey, deploymentVersion, owner],
+    [creatorToken, deploySessionBatcherAddress, deploySessionStorageKey, deploymentVersion, owner],
   )
   const clearDeploySession = useCallback(() => {
     if (typeof window === 'undefined') return
@@ -2616,12 +2606,15 @@ function DeployVaultBatcher({
       const parsed = JSON.parse(raw)
       const rawVersion = typeof parsed?.version === 'string' ? parsed.version.trim() : ''
       if (rawVersion && rawVersion !== deploymentVersion) return null
+      const rawBatcher = typeof parsed?.batcher === 'string' ? parsed.batcher.trim().toLowerCase() : ''
+      const expectedBatcher = String(deploySessionBatcherAddress ?? '').toLowerCase()
+      if (rawBatcher && expectedBatcher && rawBatcher !== expectedBatcher) return null
       const sessionId = typeof parsed?.sessionId === 'string' ? parsed.sessionId.trim() : ''
       return sessionId.length > 0 ? sessionId : null
     } catch {
       return null
     }
-  }, [deploySessionStorageKey, deploymentVersion])
+  }, [deploySessionBatcherAddress, deploySessionStorageKey, deploymentVersion])
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
@@ -4228,6 +4221,7 @@ function DeployVaultBatcher({
           clientValue: batcherAddress,
           runtimeValue: runtimeBatcher,
         })
+        clearDeploySession()
         setBatcherOverride(runtimeBatcher)
         setError(
           recovered
@@ -4251,6 +4245,7 @@ function DeployVaultBatcher({
           clientValue: clientRuntimeDeploymentVersion,
           runtimeValue: runtimeDeploymentVersion,
         })
+        clearDeploySession()
         setDeploymentVersionOverride(runtimeDeploymentVersion)
         setError(
           recovered
@@ -6921,7 +6916,7 @@ function DeployVaultBatcher({
       : null
   const vanityDefaultNotice =
     !vanityCustomPaidNotice && (vaultVanityPrefix || shareOftVanitySuffix)
-      ? `Default vanity: vault prefix 0x${DEFAULT_VAULT_VANITY_PREFIX} (priority on greenfield batchers); share suffix ${DEFAULT_SHARE_OFT_VANITY_SUFFIX} when salt overrides are available (best-effort).`
+      ? `Default vanity: vault prefix 0x${DEFAULT_VAULT_VANITY_PREFIX} and share suffix ${DEFAULT_SHARE_OFT_VANITY_SUFFIX} are now enforced (deploy fails closed if either target is not found).`
       : null
 
   const disabledReason =

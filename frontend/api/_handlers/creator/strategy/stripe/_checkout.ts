@@ -13,6 +13,7 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
+  runInTransaction,
 } from '@4626/server-core'
 import { getAddress, isAddress, type Address } from 'viem'
 
@@ -196,30 +197,64 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  const insertResult = await insertStripeCheckoutActivation(db as any, {
-    creatorToken,
-    featureKey: feature.key,
-    priceUsdcExpected: pricing.effectivePriceUsdc,
-    walletAddress: sessionAddress,
-    stripeCheckoutSessionId: session.sessionId,
-    metadata: {
-      sessionAddress,
-      provisionerTag: feature.provisionerTag,
-      paymentSource: 'stripe',
-      catalogPriceUsdc: feature.priceUsdc.toString(),
-      effectivePriceUsdc: pricing.effectivePriceUsdc.toString(),
-      priceOverrideId: pricing.appliedOverrideId,
-      discountBps: pricing.discountBps,
-      stripeUnitAmountCents: session.unitAmountCents,
-    },
-  })
+  const persistedCheckout = await (async () => {
+    try {
+      return await runInTransaction(async (txDb) => {
+        const insertResult = await insertStripeCheckoutActivation(txDb as any, {
+          creatorToken,
+          featureKey: feature.key,
+          priceUsdcExpected: pricing.effectivePriceUsdc,
+          walletAddress: sessionAddress,
+          stripeCheckoutSessionId: session.sessionId,
+          metadata: {
+            sessionAddress,
+            provisionerTag: feature.provisionerTag,
+            paymentSource: 'stripe',
+            catalogPriceUsdc: feature.priceUsdc.toString(),
+            effectivePriceUsdc: pricing.effectivePriceUsdc.toString(),
+            priceOverrideId: pricing.appliedOverrideId,
+            discountBps: pricing.discountBps,
+            stripeUnitAmountCents: session.unitAmountCents,
+          },
+        })
+        if (!insertResult.ok) return { ok: false as const, insertResult }
 
-  if (!insertResult.ok) {
+        await upsertPaymentOrder({
+          db: txDb as any,
+          orderId: `activation:${insertResult.row.id}`,
+          status: 'payment_pending',
+          amountAtomic: pricing.effectivePriceUsdc,
+          currency: 'USDC',
+          metadata: {
+            provider: 'stripe',
+            stripeSessionId: session.sessionId,
+            creatorToken,
+            featureKey: feature.key,
+          },
+        })
+        return { ok: true as const, row: insertResult.row }
+      })
+    } catch (error) {
+      return {
+        ok: false as const,
+        reason: 'db_error' as const,
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  })()
+
+  if (!persistedCheckout) {
+    return res
+      .status(503)
+      .json({ success: false, error: 'Checkout persistence unavailable' } satisfies ApiEnvelope<never>)
+  }
+
+  if (!persistedCheckout.ok && 'insertResult' in persistedCheckout) {
     // If the DB insert failed, we already paid to create a Stripe
     // session. Log it for operator reconciliation and return the error.
     console.error('[stripe-checkout] DB insert failed after creating Stripe session', {
-      reason: insertResult.reason,
-      message: insertResult.message,
+      reason: persistedCheckout.insertResult.reason,
+      message: persistedCheckout.insertResult.message,
       stripeSessionId: session.sessionId,
       creatorToken,
       featureKey: feature.key,
@@ -228,32 +263,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       live_activation_exists: 409,
       db_error: 500,
     }
-    const status = statusByReason[insertResult.reason] ?? 500
+    const status = statusByReason[persistedCheckout.insertResult.reason] ?? 500
     return res.status(status).json({
       success: false,
-      error: `Activation insert failed (${insertResult.reason}): ${insertResult.message}`,
+      error: `Activation insert failed (${persistedCheckout.insertResult.reason}): ${persistedCheckout.insertResult.message}`,
     } satisfies ApiEnvelope<never>)
   }
 
-  try {
-    await upsertPaymentOrder({
-      db: db as any,
-      orderId: `activation:${insertResult.row.id}`,
-      status: 'payment_pending',
-      amountAtomic: pricing.effectivePriceUsdc,
-      currency: 'USDC',
-      metadata: {
-        provider: 'stripe',
-        stripeSessionId: session.sessionId,
-        creatorToken,
-        featureKey: feature.key,
-      },
+  if (!persistedCheckout.ok) {
+    console.error('[stripe-checkout] transactional persistence failed after creating Stripe session', {
+      reason: persistedCheckout.reason,
+      message: persistedCheckout.message,
+      stripeSessionId: session.sessionId,
+      creatorToken,
+      featureKey: feature.key,
     })
-  } catch (error) {
-    console.warn('[stripe-checkout] payment order upsert failed', {
-      activationId: insertResult.row.id,
-      error: error instanceof Error ? error.message : String(error),
-    })
+    return res.status(500).json({
+      success: false,
+      error: `Checkout persistence failed (${persistedCheckout.reason}): ${persistedCheckout.message}`,
+    } satisfies ApiEnvelope<never>)
   }
 
   return res.status(200).json({

@@ -46,6 +46,8 @@
     "src/lib/deploy/**/*.ts",
     "src/lib/deploy/create2Salts.ts",
     "src/lib/deploy/deploymentBatcherConfigError.ts",
+    "src/lib/flags/**/*.ts",
+    "src/lib/observability/**/*.ts",
     "src/lib/uniswap/swapQuoteSanitize.ts",
     "src/lib/xmtp/xmtpInteractive.ts",
     "src/lib/api/**/*.ts",
@@ -65,7 +67,10 @@
     "src/lib/relay/goldenRelayPart1Shape.ts",
     "src/lib/wallet/cswOwnerMutationEncode.ts",
     "src/lib/wallet/cswOwnerAbi.ts",
-    "src/pages/deploy/deployVaultHelpers.ts"
+    "src/pages/deploy/deployVaultHelpers.ts",
+    "src/pages/deploy/deployVaultSignals.ts",
+    "src/pages/deploy/deployVaultVanityPersistence.ts",
+    "src/features/deploy-vault/deploySteps.ts"
   ],
   "exclude": [
     "src/**/*.test.ts",
