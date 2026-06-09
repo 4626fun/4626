@@ -17,7 +17,7 @@ import {
   readHermitTelegramBotToken,
   readHermitTelegramWebhookSecret,
 } from '../../api/_handlers/telegram/webhook/ingress.js'
-import { getTelegramWebhookInfo, setTelegramWebhook } from '../../server/_lib/messaging/telegramBotApi.js'
+import { getTelegramMe, getTelegramWebhookInfo, setTelegramWebhook } from '../../server/_lib/messaging/telegramBotApi.js'
 
 function readArg(name: string): string | null {
   const prefix = `--${name}=`
@@ -79,6 +79,28 @@ async function main(): Promise<void> {
 
   const probe = await probeWebhookUrl(targetUrl)
   console.log(`  HTTP GET probe : ${probe.ok ? 'ok' : 'FAIL'} (${probe.status}) ${probe.detail}`)
+
+  try {
+    const me = await getTelegramMe(botToken)
+    console.log(`  Bot identity   : @${me.username ?? '(unknown)'}`)
+    console.log(`  Group privacy  : ${me.can_read_all_group_messages ? 'OFF (bot sees all group messages)' : 'ON'}`)
+    if (!me.can_read_all_group_messages) {
+      console.warn(
+        [
+          '',
+          '  ⚠ Group Privacy is ENABLED for this bot. In the source supergroup it will',
+          '    only receive /commands, replies to its own messages, and @mentions —',
+          '    normal topic chatter will NOT reach the Telegram → AlfaClub relay.',
+          '    Fix: BotFather → /mybots → select the bot → Bot Settings → Group Privacy',
+          '    → Turn off (or promote the bot to admin in the source group), then',
+          '    re-send a non-reply message in the topic to verify relay.',
+          '',
+        ].join('\n'),
+      )
+    }
+  } catch (error) {
+    console.warn(`  getMe failed   : ${error instanceof Error ? error.message : String(error)}`)
+  }
 
   const info = await getTelegramWebhookInfo(botToken)
   const currentUrl = String(info.url ?? '').trim()
