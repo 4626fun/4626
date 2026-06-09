@@ -28,10 +28,12 @@ export type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 export { normalizeOwnerApprovalError } from './onboardingWalletErrors'
 export {
   _submitOwnerViaSelfBuiltUserOp,
+  computeReplayableUserOpHash,
   encodeExecuteWithoutChainIdValidation,
   preflightOwnerKeyMismatch,
   unwrapDoubleHexEncodedHash,
 } from './onboardingWalletReplayable'
+export type { V06UserOpFields } from './onboardingWalletReplayable'
 export {
   _submitOwnerViaPreparedCalls,
   _submitOwnerViaPreparedCallsAllowAnyOwner,

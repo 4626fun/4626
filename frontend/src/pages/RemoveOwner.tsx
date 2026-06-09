@@ -8,9 +8,18 @@ import { PageMeta } from '@/components/seo/PageMeta'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { detectInAppEnvironment, externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
 import { apiFetch } from '@/lib/api/apiBase'
-import { _submitOwnerViaSelfBuiltUserOp } from '@/lib/wallet/onboardingWallet'
+import {
+  _submitOwnerViaSelfBuiltUserOp,
+  computeReplayableUserOpHash,
+} from '@/lib/wallet/onboardingWallet'
 import { _submitOwnerViaFunderEoa } from '@/lib/wallet/relayFunderEoaSubmit'
 import { _submitOwnerViaSendCalls, waitForCallsTxHash } from '@/lib/wallet/cswSendCalls'
+import {
+  buildWebAuthnSignatureWrapper,
+  generateKeysCoinbasePasteSnippet,
+  parseKeysCoinbasePasteResponse,
+  verifyChallengeMatchesHash,
+} from '@/lib/wallet/keysCoinbasePasteFlow'
 
 // Relay Protocol's depository on Base. Reference tx where this CSW deposited:
 // https://basescan.org/tx/0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf
@@ -199,6 +208,46 @@ export function RemoveOwnerPage() {
   const [pageNotice, setPageNotice] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [eventLog, setEventLog] = useState<string[]>([])
+  // Raw-CSW-call mode: when on, the wallet_sendCalls dispatcher sends the
+  // raw mutation call (e.g. removeOwnerAtIndex) directly to the CSW instead
+  // of going through Relay. Initialized from ?raw=1 URL param so it works
+  // when deep-linked, but exposed as a checkbox so the user can toggle it
+  // in case the URL param gets stripped by navigation. State name is short
+  // so it doesn't collide with anything else in this 1300-line file.
+  const [rawMode, setRawMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      return new URLSearchParams(window.location.search).get('raw') === '1'
+    } catch {
+      return false
+    }
+  })
+  // ─────────────────────────────────────────────────────────────────────
+  // keys.coinbase.com paste-flow state machine
+  //
+  // Steps:
+  //   idle           — lane not engaged yet
+  //   hash_ready     — we computed the userOpHash and generated the JS snippet;
+  //                    user is signing at keys.coinbase.com in another tab
+  //   submitting     — user has pasted the WebAuthn response; we're building
+  //                    the SignatureWrapper and POSTing to /api/relay/execute
+  //   done           — broadcast complete (success or error captured in state)
+  // ─────────────────────────────────────────────────────────────────────
+  type PasteFlowState =
+    | { step: 'idle' }
+    | {
+        step: 'hash_ready'
+        userOpHash: `0x${string}`
+        snippet: string
+        pasteInput: string
+        pasteError: string | null
+      }
+    | {
+        step: 'submitting'
+        userOpHash: `0x${string}`
+      }
+    | { step: 'done' }
+  const [pasteFlow, setPasteFlow] = useState<PasteFlowState>({ step: 'idle' })
   const [lastErrorDetail, setLastErrorDetail] = useState<{
     revertReason: string | null
     revertData: string | null
@@ -344,6 +393,151 @@ export function RemoveOwnerPage() {
     setEventLog((prev) => [...prev, row].slice(-40))
   }
 
+  // ──────────────────────────────────────────────────────────────────
+  // keys.coinbase.com PASTE FLOW handlers
+  //
+  // startPasteFlow:
+  //   1. Build the inner UserOp (executeWithoutChainIdValidation +
+  //      removeOwnerAtIndex calldata) and compute the chain-id-agnostic
+  //      userOpHash via computeReplayableUserOpHash.
+  //   2. Generate a JS snippet that, when pasted at keys.coinbase.com,
+  //      triggers the on-device passkey to sign that exact hash.
+  //   3. Move state to hash_ready so the UI shows the snippet + paste box.
+  //
+  // submitPasteFlow:
+  //   1. Parse the pasted JSON (the WebAuthn response from
+  //      keys.coinbase.com).
+  //   2. Verify the challenge in the response matches our userOpHash.
+  //   3. Build a SignatureWrapper{ownerIndex: 0, WebAuthnAuth bytes}.
+  //   4. Call _submitOwnerViaSelfBuiltUserOp(preSignedSignature: …) which
+  //      encodes handleOps and POSTs to /api/relay/execute. Relay's
+  //      bundler broadcasts.
+  // ──────────────────────────────────────────────────────────────────
+  const startPasteFlow = async () => {
+    if (!preview || !canonicalCswAddress) {
+      setPageError('Preview not ready. Pick an owner to remove first.')
+      return
+    }
+    setBusy(true)
+    setPageError(null)
+    setPageNotice(null)
+    setTxHash(null)
+    try {
+      appendEvent('paste_flow:start')
+      appendEvent(`paste_flow:inner_selector=${preview.txRequest.data.slice(0, 10)}`)
+      const { hashToSign } = await computeReplayableUserOpHash({
+        chainId: base.id,
+        csw: canonicalCswAddress as `0x${string}`,
+        innerCallData: preview.txRequest.data,
+      })
+      appendEvent(`paste_flow:user_op_hash=${hashToSign}`)
+      const snippet = generateKeysCoinbasePasteSnippet(hashToSign)
+      setPasteFlow({
+        step: 'hash_ready',
+        userOpHash: hashToSign,
+        snippet,
+        pasteInput: '',
+        pasteError: null,
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err ?? '')
+      appendEvent(`paste_flow:start_error=${msg.slice(0, 200)}`)
+      setPageError(`Could not prepare the paste flow: ${msg}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const submitPasteFlow = async () => {
+    if (pasteFlow.step !== 'hash_ready') return
+    if (!preview || !canonicalCswAddress) return
+    setBusy(true)
+    setPageError(null)
+    setPageNotice(null)
+    setTxHash(null)
+    const { userOpHash, pasteInput } = pasteFlow
+    let response
+    try {
+      response = parseKeysCoinbasePasteResponse(pasteInput)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err ?? '')
+      setPasteFlow({
+        ...pasteFlow,
+        pasteError: msg,
+      })
+      appendEvent(`paste_flow:parse_error=${msg.slice(0, 200)}`)
+      setBusy(false)
+      return
+    }
+    appendEvent(
+      `paste_flow:parsed authData=${(response.authenticatorData.length - 2) / 2}B clientDataJSON=${response.clientDataJSON.length}c signature=${(response.signature.length - 2) / 2}B`,
+    )
+    const challengeMismatch = verifyChallengeMatchesHash(response, userOpHash)
+    if (challengeMismatch) {
+      setPasteFlow({
+        ...pasteFlow,
+        pasteError: challengeMismatch,
+      })
+      appendEvent(`paste_flow:challenge_mismatch=${challengeMismatch.slice(0, 200)}`)
+      setBusy(false)
+      return
+    }
+    let preSignedSignature: `0x${string}`
+    try {
+      preSignedSignature = buildWebAuthnSignatureWrapper(response, 0)
+      appendEvent(
+        `paste_flow:wrapper_built owner_index=0 wrapper_bytes=${(preSignedSignature.length - 2) / 2}`,
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err ?? '')
+      setPasteFlow({
+        ...pasteFlow,
+        pasteError: `Could not build SignatureWrapper: ${msg}`,
+      })
+      appendEvent(`paste_flow:wrapper_error=${msg.slice(0, 200)}`)
+      setBusy(false)
+      return
+    }
+    setPasteFlow({ step: 'submitting', userOpHash })
+    appendEvent('paste_flow:submitting')
+    try {
+      const result = await _submitOwnerViaSelfBuiltUserOp({
+        walletRequest: async () => {
+          // Never called in pre-signed mode — the short-circuit fires before
+          // the wallet-signing block. Provide a stub for type-safety.
+          throw new Error('walletRequest unexpectedly invoked in paste flow')
+        },
+        chainId: base.id,
+        csw: canonicalCswAddress as `0x${string}`,
+        innerCallData: preview.txRequest.data,
+        preSignedSignature,
+        onTelemetry: (event) => {
+          appendEvent(
+            `paste_flow.${event.step}: ${JSON.stringify(event.detail).slice(0, 240)}`,
+          )
+        },
+      })
+      setPasteFlow({ step: 'done' })
+      if (result.txHash) {
+        setTxHash(result.txHash)
+        setPageNotice(
+          `Owner removal broadcast via Relay (tx ${result.txHash.slice(0, 10)}\u2026). Watch the CSW's AA tx list on Basescan for the RemoveOwner / Unauthorized event.`,
+        )
+      } else {
+        setPageNotice(
+          'Relay accepted the handleOps but did not surface a tx hash in the response. Check the event log for the raw relayResponse and look up the CSW on Basescan.',
+        )
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err ?? '')
+      appendEvent(`paste_flow:submit_error=${msg.slice(0, 400)}`)
+      setPageError(`Submission failed: ${msg}`)
+      setPasteFlow({ step: 'done' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const fetchPreview = async (index: number) => {
     if (!canonicalCswAddress || !ownerSignerAddress) {
       setPageError('Connect a wallet that owns this CSW (or the CSW itself) first.')
@@ -466,9 +660,8 @@ export function RemoveOwnerPage() {
         // that hits the onlyEntryPoint guard. Either way it's a clean
         // signal we can read from the event log.
         // ─────────────────────────────────────────────────────────────────────
-        const rawModeEnabled =
-          typeof window !== 'undefined' &&
-          new URLSearchParams(window.location.search).get('raw') === '1'
+        const rawModeEnabled = rawMode
+        appendEvent(`csw_wallet_sendcalls:raw_mode_state=${rawModeEnabled ? 'ON' : 'OFF'}`)
 
         if (!rawModeEnabled && !preview.relay) {
           const reason =
@@ -1049,6 +1242,33 @@ export function RemoveOwnerPage() {
                           </span>
                         </div>
                       ) : null}
+                      {/* Raw-mode toggle. Sends the raw mutation call to the CSW via
+                          wallet_sendCalls instead of going through Relay. Provides a
+                          definitive test of whether Base App routes self-calls to the
+                          CSW with canSkipChainIdValidation selectors through its
+                          internal replayable-UserOp builder. */}
+                      <label
+                        className={`mt-2 flex items-start gap-2 cursor-pointer rounded-md border px-2.5 py-2 text-[11px] ${
+                          rawMode
+                            ? 'border-amber-500/50 bg-amber-500/10 text-amber-200'
+                            : 'border-white/10 bg-black/20 text-zinc-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={rawMode}
+                          onChange={(e) => setRawMode(e.target.checked)}
+                        />
+                        <span>
+                          <span className="font-mono">
+                            RAW MODE: {rawMode ? 'ON' : 'OFF'}
+                          </span>
+                          <span className="block text-zinc-400 mt-0.5">
+                            Bypass Relay. Send raw {preview.preflight.selectedFunction}(...) call directly to the CSW via wallet_sendCalls. Diagnostic only — the wallet either recognizes the self-call and routes it through its internal SDK, or it rejects/reverts so we know what's needed next.
+                          </span>
+                        </span>
+                      </label>
                     </div>
                   ) : null}
 
@@ -1155,6 +1375,162 @@ export function RemoveOwnerPage() {
                       )}
                     </p>
                   </div>
+
+                  {/* ───────────────────────────────────────────────────────────────
+                       keys.coinbase.com PASTE FLOW UI
+
+                       Three steps:
+                         1. "Prepare" button — builds the inner UserOp + hash,
+                            generates the JS snippet to paste at keys.coinbase.com
+                         2. User pastes snippet there, authenticates with passkey,
+                            copies the JSON response
+                         3. User pastes JSON back here and taps Submit — we build
+                            the SignatureWrapper and POST to /api/relay/execute
+                       ────────────────────────────────────────────────────────────── */}
+                  {preview ? (
+                    <div className="space-y-3 rounded-xl border border-indigo-400/30 bg-indigo-500/5 p-4">
+                      <div className="text-[11px] font-mono uppercase tracking-wider text-indigo-300">
+                        keys.coinbase.com paste lane · passkey signs userOpHash directly
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-zinc-300">
+                        The most reliable path we&apos;ve found. We build the replayable
+                        UserOp client-side (executeWithoutChainIdValidation → {' '}
+                        <code className="font-mono text-zinc-200">
+                          {preview.preflight.selectedFunction}
+                        </code>
+                        ), you sign the userOpHash with your passkey at{' '}
+                        <a
+                          href="https://keys.coinbase.com/settings"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-mono text-indigo-300 underline"
+                        >
+                          keys.coinbase.com
+                        </a>
+                        , and we POST the signed handleOps to{' '}
+                        <code className="font-mono text-zinc-200">/api/relay/execute</code>
+                        . Relay broadcasts. No deposit, no Relay quote, no funder EOA.
+                      </p>
+
+                      {pasteFlow.step === 'idle' ? (
+                        <button
+                          type="button"
+                          onClick={startPasteFlow}
+                          disabled={busy || !preview}
+                          className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/20 px-3 py-2 text-xs font-medium text-indigo-100 hover:bg-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {busy ? 'Preparing…' : `Prepare paste-flow signature for ${preview.preflight.selectedFunction}`}
+                        </button>
+                      ) : null}
+
+                      {pasteFlow.step === 'hash_ready' ? (
+                        <div className="space-y-3">
+                          <div>
+                            <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1">
+                              Step 1 · userOpHash to sign
+                            </div>
+                            <div className="font-mono text-[11px] text-zinc-200 break-all rounded-md border border-white/10 bg-black/40 p-2">
+                              {pasteFlow.userOpHash}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1 flex items-center justify-between">
+                              <span>Step 2 · paste this at keys.coinbase.com browser console</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void navigator.clipboard.writeText(pasteFlow.snippet)
+                                  appendEvent('paste_flow:snippet_copied')
+                                }}
+                                className="rounded border border-indigo-400/50 px-2 py-0.5 text-[10px] text-indigo-200 hover:bg-indigo-500/10"
+                              >
+                                Copy snippet
+                              </button>
+                            </div>
+                            <textarea
+                              readOnly
+                              value={pasteFlow.snippet}
+                              className="w-full h-32 font-mono text-[10px] text-zinc-300 rounded-md border border-white/10 bg-black/40 p-2"
+                            />
+                            <p className="text-[10px] leading-relaxed text-zinc-400 mt-1">
+                              Open{' '}
+                              <a
+                                href="https://keys.coinbase.com/settings"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-indigo-300 underline"
+                              >
+                                https://keys.coinbase.com/settings
+                              </a>{' '}
+                              in a regular browser tab (signed in with the wallet&apos;s passkey).
+                              Open DevTools (F12 / Cmd-Option-I), paste the snippet into the
+                              Console, press Enter, authenticate with the passkey when prompted,
+                              then copy the entire JSON line the snippet prints.
+                            </p>
+                          </div>
+
+                          <div>
+                            <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1">
+                              Step 3 · paste the JSON response below
+                            </div>
+                            <textarea
+                              value={pasteFlow.pasteInput}
+                              onChange={(e) =>
+                                setPasteFlow({
+                                  ...pasteFlow,
+                                  pasteInput: e.target.value,
+                                  pasteError: null,
+                                })
+                              }
+                              placeholder='{"authenticatorData":"0x…","clientDataJSON":"{\"type\":\"webauthn.get\",...}","signature":"0x…"}'
+                              className="w-full h-24 font-mono text-[10px] text-zinc-200 rounded-md border border-white/10 bg-black/40 p-2"
+                            />
+                            {pasteFlow.pasteError ? (
+                              <div className="mt-1 rounded border border-rose-500/30 bg-rose-500/10 p-2 text-[11px] text-rose-200">
+                                {pasteFlow.pasteError}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={submitPasteFlow}
+                              disabled={busy || pasteFlow.pasteInput.trim().length === 0}
+                              className="flex-1 rounded-lg border border-emerald-400/50 bg-emerald-500/20 px-3 py-2 text-xs font-medium text-emerald-100 hover:bg-emerald-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              {busy ? 'Submitting…' : 'Submit signed handleOps via Relay'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPasteFlow({ step: 'idle' })}
+                              disabled={busy}
+                              className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-zinc-300 hover:bg-black/50 disabled:opacity-40"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {pasteFlow.step === 'submitting' ? (
+                        <div className="rounded-md border border-indigo-400/30 bg-indigo-500/10 p-3 text-[11px] text-indigo-100">
+                          Submitting signed handleOps to /api/relay/execute… watch the event log below for progress.
+                        </div>
+                      ) : null}
+
+                      {pasteFlow.step === 'done' ? (
+                        <button
+                          type="button"
+                          onClick={() => setPasteFlow({ step: 'idle' })}
+                          className="text-[11px] text-indigo-300 underline"
+                        >
+                          Start a new paste-flow signature
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   {txHash ? (
                     <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-3 text-xs text-emerald-100 break-all">

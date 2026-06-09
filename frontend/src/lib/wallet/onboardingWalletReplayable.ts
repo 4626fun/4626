@@ -44,7 +44,7 @@ export type SelfBuiltUserOpLaneTelemetry = {
   detail: Record<string, unknown>
 }
 
-type V06UserOpFields = {
+export type V06UserOpFields = {
   sender: `0x${string}`
   nonce: bigint
   initCode: `0x${string}`
@@ -549,6 +549,57 @@ export function encodeExecuteWithoutChainIdValidation(
   })
 }
 
+/**
+ * Build the inner UserOp and return the chain-id-agnostic hash to sign
+ * WITHOUT submitting or interacting with the wallet. Used by the
+ * keys.coinbase.com paste flow so the page can:
+ *   1. Compute the exact hash the passkey must sign
+ *   2. Generate the snippet for that hash via keysCoinbasePasteFlow
+ *   3. Accept the user's pasted WebAuthn response
+ *   4. Pass it back to _submitOwnerViaSelfBuiltUserOp(..., preSignedSignature)
+ *
+ * Returns the same UserOp fields the full function would build, plus the
+ * hashToSign. This is a pure-read function: it queries the EntryPoint for
+ * the next replayable nonce, encodes the wrapped callData, and computes the
+ * userOpHash. No wallet RPC, no broadcast.
+ */
+export async function computeReplayableUserOpHash(params: {
+  chainId: number
+  csw: `0x${string}`
+  innerCallData: `0x${string}`
+  rpcUrl?: string
+}): Promise<{
+  userOp: V06UserOpFields
+  hashToSign: `0x${string}`
+  wrappedCallData: `0x${string}`
+  nonce: bigint
+}> {
+  const innerSelector = params.innerCallData.slice(0, 10).toLowerCase()
+  if (!REPLAYABLE_INNER_SELECTORS.has(innerSelector)) {
+    throw new Error(
+      `Inner selector ${innerSelector} is not in canSkipChainIdValidation. Cannot use the replayable lane.`,
+    )
+  }
+  const wrappedData = encodeExecuteWithoutChainIdValidation(params.innerCallData)
+  const rpcUrl = params.rpcUrl ?? 'https://mainnet.base.org'
+  const nonce = await readReplayableNonce(params.csw, rpcUrl)
+  const userOp: V06UserOpFields = {
+    sender: params.csw,
+    nonce,
+    initCode: '0x',
+    callData: wrappedData,
+    callGasLimit: 150_000n,
+    verificationGasLimit: 1_000_000n,
+    preVerificationGas: 0n,
+    maxFeePerGas: 0n,
+    maxPriorityFeePerGas: 0n,
+    paymasterAndData: '0x',
+    signature: '0x',
+  }
+  const hashToSign = getUserOpHashWithoutChainIdLocal(userOp, ENTRY_POINT_V06_ADDRESS)
+  return { userOp, hashToSign, wrappedCallData: wrappedData, nonce }
+}
+
 export async function _submitOwnerViaSelfBuiltUserOp(params: {
   walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
   chainId: number
@@ -568,6 +619,15 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
    * captured client-side and handed off to a different wallet session.
    */
   signOnly?: boolean
+  /**
+   * Pre-built SignatureWrapper bytes from an external signing path (e.g. the
+   * keys.coinbase.com paste flow in keysCoinbasePasteFlow.ts). When provided,
+   * the wallet-signing block is skipped entirely and this signature is used
+   * as-is in the UserOp. The caller is responsible for verifying it signs
+   * the correct hash (call computeReplayableUserOpHash first, generate the
+   * snippet for that exact hash, then pass the resulting SignatureWrapper here).
+   */
+  preSignedSignature?: `0x${string}`
   onTelemetry?: (event: SelfBuiltUserOpLaneTelemetry) => void
 }): Promise<{
   userOp: V06UserOpFields
@@ -638,6 +698,109 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
 
   const hashToSign = getUserOpHashWithoutChainIdLocal(userOp, ENTRY_POINT_V06_ADDRESS)
   emit({ step: 'compute_hash', detail: { hashToSign } })
+
+  // ───────────────────────────────────────────────────────────────────
+  // PRE-SIGNED SHORT-CIRCUIT
+  //
+  // When the caller provides preSignedSignature (typically from the
+  // keys.coinbase.com paste flow), skip the wallet-signing block entirely
+  // and splice the pre-built SignatureWrapper directly into the UserOp.
+  // ───────────────────────────────────────────────────────────────────
+  if (params.preSignedSignature) {
+    emit({
+      step: 'splice',
+      detail: {
+        source: 'pre_signed',
+        hashSigned: hashToSign,
+        signatureLengthBytes:
+          (params.preSignedSignature.length - 2) / 2,
+      },
+    })
+    const signedUserOp: V06UserOpFields = {
+      ...userOp,
+      signature: params.preSignedSignature,
+    }
+    const beneficiary = params.beneficiary ?? params.csw
+    const handleOpsCalldata = encodeHandleOpsV06(signedUserOp, beneficiary)
+    emit({
+      step: 'encode_handle_ops',
+      detail: {
+        entryPointAddress: ENTRY_POINT_V06_ADDRESS,
+        beneficiary,
+        handleOpsCalldata,
+        handleOpsLengthBytes: (handleOpsCalldata.length - 2) / 2,
+      },
+    })
+    const relayBody = {
+      chainId: params.chainId,
+      to: ENTRY_POINT_V06_ADDRESS,
+      data: handleOpsCalldata,
+      value: '0',
+      user: params.csw,
+    }
+    if (params.signOnly) {
+      emit({
+        step: 'success',
+        detail: {
+          signOnly: true,
+          handleOpsCalldata,
+          signature: params.preSignedSignature,
+          hashSigned: hashToSign,
+          source: 'pre_signed',
+        },
+      })
+      return {
+        userOp: signedUserOp,
+        hashSigned: hashToSign,
+        signature: params.preSignedSignature,
+        handleOpsCalldata,
+        relayQuoteResponse: null,
+        relayResponse: null,
+        txHash: null,
+      }
+    }
+    emit({ step: 'submit_relay', detail: { stage: 'request', relayBody } })
+    const fetchResult = await apiFetch('/api/relay/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(relayBody),
+    })
+    const rawText = await fetchResult.text().catch(() => '')
+    let parsed: unknown = null
+    try {
+      parsed = rawText ? JSON.parse(rawText) : null
+    } catch {
+      parsed = rawText
+    }
+    if (!fetchResult.ok) {
+      emit({
+        step: 'submit_relay',
+        detail: { stage: 'error', status: fetchResult.status, body: parsed ?? rawText },
+      })
+      throw new Error(
+        `Relay /execute/call rejected the handleOps: HTTP ${fetchResult.status} ${
+          typeof parsed === 'object' && parsed !== null
+            ? JSON.stringify(parsed)
+            : String(parsed ?? rawText).slice(0, 400)
+        }`,
+      )
+    }
+    const relayResponse = parsed
+    const txHash = extractRelayTxHash(relayResponse)
+    emit({
+      step: 'success',
+      detail: { signOnly: false, handleOpsCalldata, signature: params.preSignedSignature, hashSigned: hashToSign, source: 'pre_signed', relayResponse, txHash },
+    })
+    return {
+      userOp: signedUserOp,
+      hashSigned: hashToSign,
+      signature: params.preSignedSignature,
+      handleOpsCalldata,
+      relayQuoteResponse: null,
+      relayResponse,
+      txHash,
+    }
+  }
 
   const signAttempts: Array<{
     method: 'personal_sign' | 'eth_sign'
