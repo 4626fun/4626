@@ -118,6 +118,35 @@ export async function getTelegramWebhookInfo(botToken: string): Promise<Telegram
   return parsed.result
 }
 
+export type TelegramBotMe = {
+  id?: number
+  username?: string
+  /**
+   * False when BotFather Group Privacy is enabled — the bot then only receives
+   * /commands, replies to its own messages, and @mentions in groups, which
+   * breaks full-topic relays (e.g. Telegram → AlfaClub). Toggle via BotFather:
+   * /mybots → bot → Bot Settings → Group Privacy → Turn off.
+   */
+  can_read_all_group_messages?: boolean
+}
+
+export async function getTelegramMe(botToken: string): Promise<TelegramBotMe> {
+  const token = asTrimmed(botToken)
+  if (!token) {
+    throw new Error('telegram_bot_api_config_missing')
+  }
+  const response = await fetch(`https://api.telegram.org/bot${token}/getMe`)
+  const text = await response.text().catch(() => '')
+  if (!response.ok) {
+    throw new Error(`telegram_get_me_failed_${response.status}:${text.slice(0, 180)}`)
+  }
+  const parsed = JSON.parse(text) as { ok?: boolean; result?: TelegramBotMe; description?: string }
+  if (!parsed?.ok || !parsed.result) {
+    throw new Error(`telegram_get_me_rejected:${asTrimmed(parsed?.description).slice(0, 120)}`)
+  }
+  return parsed.result
+}
+
 export async function setTelegramWebhook(params: {
   botToken: string
   url: string

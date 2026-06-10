@@ -9,13 +9,33 @@ import {
 import { resolveHermitTelegramWebhookPublicUrl } from '../_handlers/telegram/webhook/hermitWebhookUrl.js'
 import { applyEnv, createMockReq, createMockRes } from './helpers.js'
 
-const { relayTelegramMessageToAlfaClubMock, ingestProliquidSignalFromTelegramMock } = vi.hoisted(() => ({
+const {
+  relayTelegramMessageToAlfaClubMock,
+  ingestProliquidSignalFromTelegramMock,
+  executeDeterministicCommandMock,
+  sendTelegramMessageMock,
+} = vi.hoisted(() => ({
   relayTelegramMessageToAlfaClubMock: vi.fn(),
   ingestProliquidSignalFromTelegramMock: vi.fn(),
+  executeDeterministicCommandMock: vi.fn(),
+  sendTelegramMessageMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/alfaclub/telegramToAlfaclubRelay.js', () => ({
   relayTelegramMessageToAlfaClub: relayTelegramMessageToAlfaClubMock,
+}))
+
+vi.mock('../../server/agents/core/executeDeterministicCommand.js', () => ({
+  executeDeterministicCommand: executeDeterministicCommandMock,
+}))
+
+vi.mock('../../server/_lib/alfaclub/chatBridge.js', () => ({
+  readAlfaClubChatBridgeFlags: vi.fn(() => ({ groupId: 'alfaclub-room-1659' })),
+}))
+
+vi.mock('../_handlers/telegram/webhook/telegramApi/messaging.js', () => ({
+  sendTelegramMessage: sendTelegramMessageMock,
+  deleteTelegramMessage: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/alfaclub/proliquidSignals.js', () => ({
@@ -122,6 +142,60 @@ describe('hermit.4626.fun webhook ingress', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body?.data?.alfaclubRelay?.roomId).toBe('1043')
     expect(relayTelegramMessageToAlfaClubMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('answers Hermit DMs through the deterministic command stack', async () => {
+    executeDeterministicCommandMock.mockResolvedValue({
+      ok: true,
+      responseText: 'HYPE position snapshot',
+      rawResponseText: 'HYPE position snapshot',
+    })
+    sendTelegramMessageMock.mockResolvedValue({ messageId: 11 })
+    restoreEnv = applyEnv({
+      TELEGRAM_TO_ALFACLUB_INGRESS_HOST: 'hermit.4626.fun',
+      ALFACLUB_TELEGRAM_WEBHOOK_SECRET: 'hermit-only-secret',
+      ALFACLUB_TELEGRAM_BOT_TOKEN: 'hermit-token',
+      TELEGRAM_TO_ALFACLUB_ROOM_ID: '1659',
+      TELEGRAM_TO_ALFACLUB_DM_ENABLED: undefined,
+      TELEGRAM_TO_ALFACLUB_DM_ROOM_ID: undefined,
+      TELEGRAM_TO_ALFACLUB_DM_USER_IDS: undefined,
+    })
+
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    const req = createMockReq({
+      method: 'POST',
+      headers: {
+        host: 'hermit.4626.fun',
+        'x-telegram-bot-api-secret-token': 'hermit-only-secret',
+      },
+      body: {
+        update_id: 100,
+        message: {
+          message_id: 8,
+          text: '/halp',
+          chat: { id: 424242 },
+          from: { id: 424242, username: 'akitav' },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.dm?.status).toBe('replied')
+    expect(res.body?.data?.dm?.roomId).toBe('1659')
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({ chatId: 'alfaclub:1659', text: '/halp' }),
+    )
+    expect(sendTelegramMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        botToken: 'hermit-token',
+        chatId: '424242',
+        text: 'HYPE position snapshot',
+      }),
+    )
+    expect(relayTelegramMessageToAlfaClubMock).not.toHaveBeenCalled()
   })
 
   it('rejects akitai webhook secret on hermit host', async () => {
