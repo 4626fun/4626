@@ -10,7 +10,7 @@ sidebar_position: 5
 ## Recent Hardening Notes
 
 - [4626 Agent Security Model](/security/agent-security-model)
-- [Payout Router + CreatorCoin Control Hardening (March 2026)](./payout-router-ownership-hardening-2026-03.md)
+- [Mutable Surface Inventory](./mutable-surface-inventory.md)
 - Canonical disclosure policy: [SECURITY.md](https://github.com/wenakita/4626/blob/main/SECURITY.md)
 
 For operational rollout posture (including deferred feature surfaces), see [Roadmap](/roadmap).

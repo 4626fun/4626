@@ -1,6 +1,7 @@
 import type { Address, Hex } from 'viem'
 import {
   encodeAbiParameters,
+  encodeFunctionData,
   getAddress,
   hashTypedData,
   http,
@@ -77,6 +78,7 @@ import {
   isPaymasterRoutingPolicyError,
   isPaymasterStakeError,
   isPaymasterUnavailableError,
+  isRpcRateLimitError,
 } from './coinbaseErc4337ErrorUtils'
 import {
   fetchCoinbaseSmartWalletOwners,
@@ -341,6 +343,254 @@ function inferSwapRouterCallGasLimit(
   return calls.length === 1 ? SWAP_ROUTER_CALL_GAS_LIMIT : SWAP_ROUTER_BATCH_CALL_GAS_LIMIT
 }
 
+const EXECUTE_BATCH_REPLAY_ABI = [
+  {
+    type: 'function',
+    name: 'executeBatch',
+    stateMutability: 'payable',
+    inputs: [
+      {
+        name: 'calls',
+        type: 'tuple[]',
+        components: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
+export type ExecuteBatchLegReplayResult = {
+  outcome: 'leg_failed' | 'all_passed' | 'indeterminate'
+  failingLegIndex: number | null
+  failingLegTo?: Address
+  error?: string
+  revertData?: Hex
+  errorName?: string
+  innerSelector?: string | null
+}
+
+type ReplayReadClient = { call: (args: Record<string, unknown>) => Promise<unknown> }
+
+/** Infra failures (rate limit, network, timeout) must not be attributed to a batch leg. */
+function isReplayInfraFailure(error: unknown, revertData?: Hex): boolean {
+  if (revertData) return false
+  if (isRpcRateLimitError(error)) return true
+  const lc = getErrorDiagnosticMessage(error).toLowerCase()
+  // No revert evidence at all — treat as indeterminate rather than blaming the leg.
+  return !lc.includes('revert')
+}
+
+/**
+ * Replay `executeBatch` self-calls against the production Base read client using
+ * progressively longer call prefixes ([wrap], [wrap, approve], [wrap, approve, swap])
+ * to identify which leg of a batched swap UserOp actually reverts. Self-calls pass
+ * the CSW owner check (`msg.sender == address(this)`), so this exercises the same
+ * execution path the EntryPoint takes after validation.
+ */
+export async function replayExecuteBatchPerLeg(params: {
+  smartWallet: Address
+  calls: Array<{ to: Address; value?: bigint; data?: Hex }>
+  readClient?: ReplayReadClient
+}): Promise<ExecuteBatchLegReplayResult> {
+  const { calls } = params
+  if (calls.length === 0) return { outcome: 'indeterminate', failingLegIndex: null }
+  // viem rejects mixed-case addresses with a non-EIP-55 checksum; normalize so the
+  // replay never aborts on checksum form.
+  let smartWallet: Address
+  try {
+    smartWallet = getAddress(String(params.smartWallet).toLowerCase())
+  } catch {
+    return { outcome: 'indeterminate', failingLegIndex: null }
+  }
+  let client: ReplayReadClient | null = null
+  try {
+    client = params.readClient ?? (getProductionBaseReadClient() as unknown as ReplayReadClient)
+  } catch {
+    client = null
+  }
+  if (!client || typeof client.call !== 'function') {
+    return { outcome: 'indeterminate', failingLegIndex: null }
+  }
+
+  const legResults = await Promise.all(
+    calls.map(async (_, index) => {
+      const prefix = calls.slice(0, index + 1)
+      const data = encodeFunctionData({
+        abi: EXECUTE_BATCH_REPLAY_ABI,
+        functionName: 'executeBatch',
+        args: [
+          prefix.map((call) => ({
+            target: getAddress(String(call.to).toLowerCase()),
+            value: call.value ?? 0n,
+            data: (call.data ?? '0x') as Hex,
+          })),
+        ],
+      })
+      try {
+        await client!.call({
+          to: smartWallet,
+          data,
+          account: smartWallet,
+          blockNumber: 'latest',
+        })
+        return { status: 'passed' as const }
+      } catch (error: unknown) {
+        const info = extractRevertInfo(error)
+        if (isReplayInfraFailure(error, info.revertData)) {
+          return { status: 'infra' as const, info }
+        }
+        return { status: 'reverted' as const, info }
+      }
+    }),
+  )
+
+  for (let index = 0; index < legResults.length; index += 1) {
+    const result = legResults[index]!
+    if (result.status === 'passed') continue
+    if (result.status === 'infra') {
+      return { outcome: 'indeterminate', failingLegIndex: null, error: result.info.error }
+    }
+    return {
+      outcome: 'leg_failed',
+      failingLegIndex: index,
+      failingLegTo: calls[index]!.to,
+      error: result.info.error,
+      revertData: result.info.revertData,
+      errorName: result.info.errorName,
+      innerSelector: extractExecutionFailedInnerSelector(result.info.revertData),
+    }
+  }
+  return { outcome: 'all_passed', failingLegIndex: null }
+}
+
+const SWAP_BATCH_BUNDLER_ONLY_REJECTION_MESSAGE =
+  'Your swap batch executes on Base right now, but the signed sponsored transaction was rejected during execution. ' +
+  'Refresh the quote and try again once. If a prior swap is still confirming, wait for it to confirm first.'
+
+/**
+ * On a swap-batch execution revert (estimate advisory-skip or signed send), replay the
+ * batch per-leg on production and map the decoded failing leg to user-facing error copy.
+ * Returns null when the replay is indeterminate (caller keeps its existing handling).
+ */
+async function resolveSwapBatchExecutionRevertError(params: {
+  smartWallet: Address
+  calls: Array<{ to: Address; value?: bigint; data?: Hex }>
+  phase: 'estimate' | 'send'
+  readClient?: ReplayReadClient
+}): Promise<Error | null> {
+  let replay: ExecuteBatchLegReplayResult
+  try {
+    replay = await replayExecuteBatchPerLeg({
+      smartWallet: params.smartWallet,
+      calls: params.calls,
+      readClient: params.readClient,
+    })
+  } catch {
+    return null
+  }
+  console.warn('[ERC-4337] executeBatch per-leg replay', {
+    phase: params.phase,
+    outcome: replay.outcome,
+    failingLegIndex: replay.failingLegIndex,
+    failingLegTo: replay.failingLegTo ?? null,
+    legCount: params.calls.length,
+    // Full untruncated revert payload — this is the real inner failure reason.
+    revertData: replay.revertData ?? null,
+    errorName: replay.errorName ?? null,
+    innerSelector: replay.innerSelector ?? null,
+    error: replay.error ?? null,
+  })
+  if (replay.outcome === 'leg_failed') {
+    return buildPreflightSimulationRejectionError({
+      simResult: {
+        success: false,
+        error: replay.error,
+        revertData: replay.revertData,
+        errorName: replay.errorName,
+        directCallResult: {
+          success: false,
+          error: replay.error,
+          revertData: replay.revertData,
+          errorName: replay.errorName,
+        },
+      },
+      firstCallTo: replay.failingLegTo,
+    })
+  }
+  if (replay.outcome === 'all_passed' && params.phase === 'send') {
+    return new Error(SWAP_BATCH_BUNDLER_ONLY_REJECTION_MESSAGE)
+  }
+  return null
+}
+
+/**
+ * Deterministic execution reverts cannot be fixed by a higher verificationGasLimit —
+ * that ladder only addresses validation-phase out-of-gas (AA40-style) failures.
+ */
+export function shouldAbortUserOpGasLadder(error: unknown): boolean {
+  if (isPreflightSimulationRejection(error)) return true
+  return isExecutionRevertedLikeError(error)
+}
+
+const UNSPONSORED_PRE_VERIFICATION_GAS_BUFFER = 150_000n
+
+/**
+ * Prefund feasibility for the unsponsored fallback lane: the wallet must cover the
+ * batched call value (e.g. the WETH wrap amount) plus the max gas cost itself.
+ * Unknown balance keeps the legacy permissive behavior instead of blocking blind.
+ */
+export function assessUnsponsoredPrefundFeasibility(params: {
+  walletBalanceWei: bigint | null
+  totalCallValueWei: bigint
+  estimatedMaxGasCostWei: bigint | null
+}): { feasible: boolean; requiredWei: bigint } {
+  const requiredWei = params.totalCallValueWei + (params.estimatedMaxGasCostWei ?? 0n)
+  if (typeof params.walletBalanceWei !== 'bigint') {
+    return { feasible: true, requiredWei }
+  }
+  return { feasible: params.walletBalanceWei >= requiredWei, requiredWei }
+}
+
+async function estimateUnsponsoredMaxGasCostWei(params: {
+  publicClient: unknown
+  verificationGasLimit: bigint
+  callGasLimit: bigint
+}): Promise<bigint | null> {
+  const client = params.publicClient as {
+    estimateFeesPerGas?: () => Promise<{ maxFeePerGas?: bigint | null }>
+    getGasPrice?: () => Promise<bigint>
+  }
+  let feePerGas: bigint | null = null
+  try {
+    if (typeof client?.estimateFeesPerGas === 'function') {
+      const fees = await client.estimateFeesPerGas()
+      if (typeof fees?.maxFeePerGas === 'bigint' && fees.maxFeePerGas > 0n) {
+        feePerGas = fees.maxFeePerGas
+      }
+    }
+  } catch {
+    // fall through to getGasPrice
+  }
+  if (feePerGas === null) {
+    try {
+      if (typeof client?.getGasPrice === 'function') {
+        const gasPrice = await client.getGasPrice()
+        if (typeof gasPrice === 'bigint' && gasPrice > 0n) feePerGas = gasPrice
+      }
+    } catch {
+      // gas price unknown — caller treats as null
+    }
+  }
+  if (feePerGas === null) return null
+  const totalGasUnits =
+    params.verificationGasLimit + params.callGasLimit + UNSPONSORED_PRE_VERIFICATION_GAS_BUFFER
+  return totalGasUnits * feePerGas
+}
+
 type BundlerUserOpGasEstimate = {
   callGasLimit?: bigint
 }
@@ -431,6 +681,21 @@ async function assertBundlerUserOpGasEstimate(params: {
           preflightDirectCallSucceeded: params.preflightDirectCallSucceeded,
         })
       ) {
+        // Before blindly skipping a swap-batch execution revert, replay the batch
+        // per-leg on production. A decoded failing leg fails fast with mapped copy
+        // instead of submitting a signed UserOp that will revert the same way.
+        if (
+          calls.length > 1 &&
+          calls.some(isSwapRouterHeavyCall) &&
+          isExecutionRevertedLikeError(estimateError)
+        ) {
+          const replayError = await resolveSwapBatchExecutionRevertError({
+            smartWallet: account.address as Address,
+            calls,
+            phase: 'estimate',
+          })
+          if (replayError) throw replayError
+        }
         const callGasLimit = resolveUserOpCallGasLimit({
           floorCallGasLimit: params.callGasLimit,
           bufferNumerator: ZORA_SEND_CALL_GAS_BUFFER_NUMERATOR,
@@ -1251,19 +1516,19 @@ export async function simulateSmartWalletCalls(params: {
         }
       }
       if (calls.length > 1) {
-        if (directCallResult?.success) {
-          return {
-            success: true,
-            directCallResult,
-          }
-        }
+        // The direct-call probe only covers the first preparatory leg (e.g. WETH.deposit);
+        // it can never validate the later approve/swap legs. An Unauthorized executeBatch
+        // simulation therefore leaves the batch UNVALIDATED — returning success here would
+        // grant the bundler-estimate advisory skip from a batch whose swap leg was never
+        // exercised and mask the real revert until the signed send fails.
         return {
           success: false,
-          error:
-            directCallResult?.error ??
-            'Batch swap simulation did not complete. Refresh the quote and try again.',
-          revertData: directCallResult?.revertData,
-          errorName: directCallResult?.errorName,
+          error: directCallResult?.success
+            ? 'Batch swap simulation could not validate the swap leg (executeBatch rejected). Refresh the quote and try again.'
+            : directCallResult?.error ??
+              'Batch swap simulation did not complete. Refresh the quote and try again.',
+          revertData: directCallResult?.success ? revertInfo.revertData : directCallResult?.revertData,
+          errorName: directCallResult?.success ? revertInfo.errorName : directCallResult?.errorName,
           directCallResult,
         }
       }
@@ -2393,6 +2658,9 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         return
       } catch (e: unknown) {
         lastError = e
+        // Deterministic execution reverts repeat identically at any verificationGasLimit —
+        // the ladder only helps validation OOG. Fail fast instead of re-submitting.
+        if (shouldAbortUserOpGasLadder(e)) break
         const hasNext = i + 1 < uniqueVerificationGasLimits.length
         if (!hasNext || !shouldRetryVerificationGas(e)) break
         if (AA_DEBUG) {
@@ -2413,6 +2681,11 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   }
 
   const shouldFallbackWithoutPaymaster = (error: unknown): boolean => {
+    // A deterministic execution revert on a swap call fails identically without
+    // sponsorship — removing the paymaster cannot fix the inner revert.
+    if (attributedCalls.some(isSwapRouterHeavyCall) && isExecutionRevertedLikeError(error)) {
+      return false
+    }
     const hasPrefundBalance = typeof smartWalletBalance === 'bigint' && smartWalletBalance > 0n
     // If the paymaster rejects (policy/availability), allow a non-sponsored fallback.
     // This is required for non-deploy flows (e.g. legacy withdrawals) that the paymaster denies.
@@ -2430,6 +2703,36 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   }
 
   if (usePaymaster && lastError && shouldFallbackWithoutPaymaster(lastError)) {
+    // Unsponsored sends prefund gas from the smart wallet itself, so the balance must
+    // cover the batched call value (e.g. WETH wrap amount) PLUS max gas. Submitting
+    // below that is a guaranteed revert on the wrap leg.
+    const totalCallValueWei = attributedCalls.reduce(
+      (acc, call) => acc + (typeof call.value === 'bigint' ? call.value : 0n),
+      0n,
+    )
+    const estimatedMaxGasCostWei = await estimateUnsponsoredMaxGasCostWei({
+      publicClient,
+      verificationGasLimit: uniqueVerificationGasLimits[0] ?? 400_000n,
+      callGasLimit: swapRouterCallGasLimit ?? 1_000_000n,
+    })
+    const prefund = assessUnsponsoredPrefundFeasibility({
+      walletBalanceWei: smartWalletBalance,
+      totalCallValueWei,
+      estimatedMaxGasCostWei,
+    })
+    if (!prefund.feasible) {
+      logger.warn('[ERC-4337] Skipping unsponsored fallback: balance cannot cover value + max gas', {
+        smartWallet,
+        balance: formatGasValue(smartWalletBalance),
+        totalCallValue: totalCallValueWei.toString(),
+        estimatedMaxGasCost: estimatedMaxGasCostWei?.toString() ?? null,
+        requiredWei: prefund.requiredWei.toString(),
+      })
+      throw new Error(
+        'Gas sponsorship was declined and your smart wallet balance cannot cover this swap plus gas without sponsorship. ' +
+          'Reduce the swap amount to keep gas headroom, or add ETH to the smart wallet.',
+      )
+    }
     attemptedWithoutPaymaster = true
     telemetryPaymasterMode = 'fallback_to_self_funded'
     const hasPrefundBalance = typeof smartWalletBalance === 'bigint' && smartWalletBalance > 0n
@@ -2637,6 +2940,22 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         retryWithLowGasContractSigner: false,
         ownerIndexOverride: ownerIndexOverride ?? undefined,
       })
+    }
+
+    // Swap-batch execution revert from a signed send: replay the batch per-leg on
+    // production to decode which leg fails and surface mapped copy instead of
+    // "Execution reverted for an unknown reason."
+    if (
+      attributedCalls.length > 1 &&
+      attributedCalls.some(isSwapRouterHeavyCall) &&
+      isExecutionRevertedLikeError(lastError)
+    ) {
+      const replayResolvedError = await resolveSwapBatchExecutionRevertError({
+        smartWallet,
+        calls: attributedCalls,
+        phase: 'send',
+      })
+      if (replayResolvedError) throw replayResolvedError
     }
 
     // Provide helpful error messages for common failures

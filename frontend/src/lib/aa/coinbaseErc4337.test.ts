@@ -2,15 +2,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodeAbiParameters } from 'viem'
 
 import {
+  assessUnsponsoredPrefundFeasibility,
   findCoinbaseSmartWalletOwnerIndex,
   pollUserOperationStatus,
+  replayExecuteBatchPerLeg,
   resetOwnerIndexCacheForTests,
   resolvePriorPendingUserOpForSubmit,
   sendCoinbaseSmartWalletUserOperation,
+  shouldAbortUserOpGasLadder,
   simulateSmartWalletCalls,
   verifyBundlerSupportsV06,
 } from './coinbaseErc4337'
-import { isImmediateUserOpRetrySuppressedError, isAccountNonceMismatchError } from './coinbaseErc4337ErrorUtils'
+import {
+  isImmediateUserOpRetrySuppressedError,
+  isAccountNonceMismatchError,
+  PreflightSimulationRejectionError,
+} from './coinbaseErc4337ErrorUtils'
 import { deriveEphemeralNonceKey, waitForEntryPointNonceAdvance } from './coinbaseErc4337'
 
 const SMART_WALLET = '0x1111111111111111111111111111111111111111'
@@ -165,7 +172,7 @@ describe('coinbaseErc4337 latency helpers', () => {
     expect(ownerAtIndexCalls).toHaveLength(4)
   })
 
-  it('treats Unauthorized executeBatch simulation as non-blocking', async () => {
+  it('fails multi-call preflight when executeBatch simulation is Unauthorized (batch never validated)', async () => {
     const simulateContract = vi.fn(async () => {
       const err = new Error('execution reverted') as Error & { data?: string }
       err.data = '0x82b42900'
@@ -185,7 +192,10 @@ describe('coinbaseErc4337 latency helpers', () => {
       ],
     })
 
-    expect(result.success).toBe(true)
+    // The first-leg-only probe cannot validate later approve/swap legs; an
+    // Unauthorized executeBatch simulation must not report a validated batch.
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('could not validate the swap leg')
     expect(simulateContract).toHaveBeenCalledTimes(1)
   })
 
@@ -362,6 +372,133 @@ describe('coinbaseErc4337 nonce mismatch helpers', () => {
     expect(key).toBeGreaterThan(0n)
     expect(key).not.toBe(8453n)
     expect(key).toBeLessThan(1n << 192n)
+  })
+
+  it('replayExecuteBatchPerLeg identifies the failing leg from prefix replays', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let invocation = 0
+    const call = vi.fn(async () => {
+      const prefixLength = ++invocation
+      if (prefixLength < 3) return undefined
+      const err = new Error('execution reverted') as Error & { data?: string }
+      err.data = '0x756688fe' // Permit2 InvalidNonce()
+      throw err
+    })
+
+    const result = await replayExecuteBatchPerLeg({
+      smartWallet: SMART_WALLET as `0x${string}`,
+      calls: [
+        { to: OWNER_ADDRESS as `0x${string}`, value: 100n, data: '0xd0e30db0' as `0x${string}` },
+        { to: OTHER_ADDRESS as `0x${string}`, data: '0x095ea7b3' as `0x${string}` },
+        { to: LOOKUP_ADDRESS as `0x${string}`, data: '0x3593564c' as `0x${string}` },
+      ],
+      readClient: { call },
+    })
+
+    expect(result.outcome).toBe('leg_failed')
+    expect(result.failingLegIndex).toBe(2)
+    expect(result.failingLegTo).toBe(LOOKUP_ADDRESS)
+    expect(result.revertData).toBe('0x756688fe')
+    expect(result.errorName).toBe('InvalidNonce()')
+    expect(call).toHaveBeenCalledTimes(3)
+    warnSpy.mockRestore()
+  })
+
+  it('replayExecuteBatchPerLeg reports all_passed when every prefix replay succeeds', async () => {
+    const call = vi.fn(async () => undefined)
+    const result = await replayExecuteBatchPerLeg({
+      smartWallet: SMART_WALLET as `0x${string}`,
+      calls: [
+        { to: OWNER_ADDRESS as `0x${string}`, data: '0xd0e30db0' as `0x${string}` },
+        { to: OTHER_ADDRESS as `0x${string}`, data: '0x3593564c' as `0x${string}` },
+      ],
+      readClient: { call },
+    })
+
+    expect(result).toEqual({ outcome: 'all_passed', failingLegIndex: null })
+    expect(call).toHaveBeenCalledTimes(2)
+  })
+
+  it('replayExecuteBatchPerLeg normalizes non-EIP-55 mixed-case addresses instead of aborting', async () => {
+    // Doc-form canonical CSW casing is not a valid EIP-55 checksum; viem would throw.
+    const MIXED_CASE_CSW = '0xAb6d5C10b03300326cd7fab7267ae192842967b5'
+    const call = vi.fn(async (_args: { to?: string; account?: string }) => undefined)
+    const result = await replayExecuteBatchPerLeg({
+      smartWallet: MIXED_CASE_CSW as `0x${string}`,
+      calls: [{ to: OWNER_ADDRESS as `0x${string}`, data: '0xd0e30db0' as `0x${string}` }],
+      readClient: { call: call as never },
+    })
+
+    expect(result.outcome).toBe('all_passed')
+    const args = call.mock.calls[0]?.[0]
+    expect(String(args?.to).toLowerCase()).toBe(MIXED_CASE_CSW.toLowerCase())
+    expect(String(args?.account).toLowerCase()).toBe(MIXED_CASE_CSW.toLowerCase())
+  })
+
+  it('replayExecuteBatchPerLeg treats infra failures as indeterminate, not a failing leg', async () => {
+    const call = vi.fn(async () => {
+      throw new Error('request timed out')
+    })
+    const result = await replayExecuteBatchPerLeg({
+      smartWallet: SMART_WALLET as `0x${string}`,
+      calls: [
+        { to: OWNER_ADDRESS as `0x${string}`, data: '0xd0e30db0' as `0x${string}` },
+        { to: OTHER_ADDRESS as `0x${string}`, data: '0x3593564c' as `0x${string}` },
+      ],
+      readClient: { call },
+    })
+
+    expect(result.outcome).toBe('indeterminate')
+    expect(result.failingLegIndex).toBeNull()
+  })
+
+  it('shouldAbortUserOpGasLadder stops on execution reverts but not validation gas errors', () => {
+    expect(shouldAbortUserOpGasLadder(new Error('Execution reverted for an unknown reason.'))).toBe(true)
+    expect(shouldAbortUserOpGasLadder(new Error('execution reverted'))).toBe(true)
+    expect(
+      shouldAbortUserOpGasLadder(new PreflightSimulationRejectionError('Slippage tolerance is too tight.')),
+    ).toBe(true)
+    expect(shouldAbortUserOpGasLadder(new Error('AA40 over verificationGasLimit'))).toBe(false)
+    expect(
+      shouldAbortUserOpGasLadder(new Error('signature verification used more gas than estimated')),
+    ).toBe(false)
+    expect(shouldAbortUserOpGasLadder(new Error('network error'))).toBe(false)
+  })
+
+  it('assessUnsponsoredPrefundFeasibility requires balance to cover call value plus max gas', () => {
+    expect(
+      assessUnsponsoredPrefundFeasibility({
+        walletBalanceWei: 50_000_000_000_000_000n, // 0.05 ETH
+        totalCallValueWei: 49_000_000_000_000_000n, // 0.049 ETH wrap
+        estimatedMaxGasCostWei: 2_000_000_000_000_000n, // 0.002 ETH gas
+      }),
+    ).toEqual({ feasible: false, requiredWei: 51_000_000_000_000_000n })
+
+    expect(
+      assessUnsponsoredPrefundFeasibility({
+        walletBalanceWei: 60_000_000_000_000_000n,
+        totalCallValueWei: 49_000_000_000_000_000n,
+        estimatedMaxGasCostWei: 2_000_000_000_000_000n,
+      }),
+    ).toEqual({ feasible: true, requiredWei: 51_000_000_000_000_000n })
+
+    // Unknown balance keeps the legacy permissive behavior.
+    expect(
+      assessUnsponsoredPrefundFeasibility({
+        walletBalanceWei: null,
+        totalCallValueWei: 49_000_000_000_000_000n,
+        estimatedMaxGasCostWei: 2_000_000_000_000_000n,
+      }).feasible,
+    ).toBe(true)
+
+    // Unknown gas cost still requires covering the call value itself.
+    expect(
+      assessUnsponsoredPrefundFeasibility({
+        walletBalanceWei: 10n,
+        totalCallValueWei: 100n,
+        estimatedMaxGasCostWei: null,
+      }).feasible,
+    ).toBe(false)
   })
 
   it('resolvePriorPendingUserOpForSubmit prefers session storage then confirming hash', () => {

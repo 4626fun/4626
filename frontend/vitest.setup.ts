@@ -7,3 +7,7 @@ if ((process.env.AUTH_SESSION_SECRET ?? '').trim().length < 32) {
 if ((process.env.AUTH_HANDOFF_SECRET ?? '').trim().length < 32) {
   process.env.AUTH_HANDOFF_SECRET = process.env.AUTH_SESSION_SECRET
 }
+
+if ((process.env.VITE_BASE_BUILDER_CODES ?? '').trim().length === 0) {
+  process.env.VITE_BASE_BUILDER_CODES = 'bc_b7k3p9da'
+}

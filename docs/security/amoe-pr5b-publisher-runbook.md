@@ -197,7 +197,7 @@ The `AMOE_SIGNUP_SALT` env var must already be provisioned (PR 5a prerequisite).
 
 > **See also Step 0.5 above:** `034_amoe_publisher_runs.sql` is one of nine unapplied migrations as of 2026-04-30, and it has a hard dependency on `032_amoe_zk_submissions.sql` (it adds an index over and a column to that table). The Step 0.5 audit is the canonical reference for the full apply order; this Step 1 only covers the publisher-cron-specific verification that ops must run after the publisher_runs migration lands.
 
-Run [`frontend/db/migrations/034_amoe_publisher_runs.sql`](../../frontend/db/migrations/034_amoe_publisher_runs.sql) on **both** databases:
+Run [`frontend/db/migrations-legacy/034_amoe_publisher_runs.sql`](../../frontend/db/migrations-legacy/034_amoe_publisher_runs.sql) on **both** databases:
 
 **Single source of truth: Supabase** (project qajpnuvqlcfseghnldkl). The prior dual "Vercel-Postgres + Supabase mirror" requirement has been retired. Apply only to the canonical Supabase database. The `frontend/db/` copy is only for runtime bootstrap in dev/preview.
 

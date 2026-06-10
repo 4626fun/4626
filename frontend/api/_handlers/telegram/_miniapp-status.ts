@@ -13,6 +13,7 @@ import {
 
 import { getTelegramWebhookConfig } from './webhook/config.js'
 import { verifyBotConfigSecret } from './webhook/services/access.js'
+import { asTrimmed } from './webhook/utils.js'
 
 type MiniAppStatusData = {
   ok: boolean
@@ -50,14 +51,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const config = getTelegramWebhookConfig()
-  const botTokenConfigured = config.botToken.trim().length > 0
+  const botTokenConfigured = Boolean(
+    asTrimmed(config.botToken).length > 0 || asTrimmed(process.env.ALFACLUB_TELEGRAM_BOT_TOKEN ?? '').length > 0,
+  )
   const miniAppSessionEnabled = config.miniAppSessionEnabled
 
   let code: MiniAppStatusData['code'] = 'OK'
   let hint: string | null = null
   if (!botTokenConfigured) {
     code = 'TELEGRAM_BOT_NOT_CONFIGURED'
-    hint = 'Set TELEGRAM_BOT_TOKEN on the server and redeploy.'
+    hint = 'Set TELEGRAM_BOT_TOKEN (or ALFACLUB_TELEGRAM_BOT_TOKEN) on the server and redeploy.'
   } else if (!miniAppSessionEnabled) {
     code = 'TELEGRAM_MINIAPP_SESSION_DISABLED'
     hint = 'Set TELEGRAM_MINIAPP_SESSION_ENABLED=true to allow Mini App session proof issuance.'

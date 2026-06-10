@@ -169,6 +169,6 @@ Stale status responses are explicit and include:
 
 ## Verification Companion
 
-- Use [`docs/operations/control-plane-verification.md`](docs/operations/control-plane-verification.md) for PR-level lifecycle proof checks and integration validation.
+- Use [`docs/operations/control-plane-verification.md`](./control-plane-verification.md) for PR-level lifecycle proof checks and integration validation.
 - Use [`docs/runbooks/control-plane-triage.md`](../runbooks/control-plane-triage.md) for stuck-operation and manual_review triage.
 

@@ -43,6 +43,18 @@ type MiniAppSessionErrorEnvelope = ApiEnvelope<never> & {
   hint?: string
 }
 
+function resolveMiniAppBotTokenCandidates(primaryToken: string): string[] {
+  const tokens = new Set<string>()
+  const push = (raw: string | null | undefined) => {
+    const parsed = asTrimmed(raw ?? '')
+    if (parsed) tokens.add(parsed)
+  }
+
+  push(primaryToken)
+  push(process.env.ALFACLUB_TELEGRAM_BOT_TOKEN)
+  return Array.from(tokens)
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -62,8 +74,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const config = getTelegramWebhookConfig()
-  const botToken = asTrimmed(config.botToken)
-  if (!botToken) {
+  const botTokens = resolveMiniAppBotTokenCandidates(config.botToken)
+  if (botTokens.length === 0) {
     await trackTelegramLinkEvent({
       event: 'telegram_link_miniapp_session_result',
       source: 'telegram-miniapp-session',
@@ -73,14 +85,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       payload: {
         reason: 'bot_not_configured',
         code: 'TELEGRAM_BOT_NOT_CONFIGURED',
-        hint: 'Set TELEGRAM_BOT_TOKEN on the server and redeploy.',
+        hint: 'Set TELEGRAM_BOT_TOKEN (or ALFACLUB_TELEGRAM_BOT_TOKEN) on the server and redeploy.',
       },
     })
     return res.status(503).json({
       success: false,
       error: 'Telegram bot is not configured',
       code: 'TELEGRAM_BOT_NOT_CONFIGURED',
-      hint: 'Set TELEGRAM_BOT_TOKEN on the server and redeploy.',
+      hint: 'Set TELEGRAM_BOT_TOKEN (or ALFACLUB_TELEGRAM_BOT_TOKEN) on the server and redeploy.',
     } satisfies MiniAppSessionErrorEnvelope)
   }
 
@@ -92,11 +104,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const initData = asTrimmed(body.initData ?? '')
   const flowId = asTrimmed(body.flowId ?? '')
-  const verified = verifyTelegramMiniAppInitData({
+  let verified = verifyTelegramMiniAppInitData({
     initData,
-    botToken,
+    botToken: botTokens[0]!,
     maxAgeSeconds: config.miniAppInitDataMaxAgeSeconds,
   })
+  if (!verified.ok && verified.reason === 'invalid_hash' && botTokens.length > 1) {
+    for (let index = 1; index < botTokens.length; index += 1) {
+      const candidate = botTokens[index]!
+      const attempt = verifyTelegramMiniAppInitData({
+        initData,
+        botToken: candidate,
+        maxAgeSeconds: config.miniAppInitDataMaxAgeSeconds,
+      })
+      if (attempt.ok) {
+        verified = attempt
+        break
+      }
+      if (attempt.reason !== 'invalid_hash') {
+        verified = attempt
+        break
+      }
+    }
+  }
   if (!verified.ok) {
     await trackTelegramLinkEvent({
       event: 'telegram_link_miniapp_session_result',

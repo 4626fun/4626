@@ -131,7 +131,7 @@ drift independently:
 ## 4. Schema — `command_issuer_execution_context`
 
 Verbatim column types and semantics from
-[`frontend/db/migrations/028_arch_b_sub_accounts.sql`](../frontend/db/migrations/028_arch_b_sub_accounts.sql).
+[`frontend/db/migrations-legacy/028_arch_b_sub_accounts.sql`](../frontend/db/migrations-legacy/028_arch_b_sub_accounts.sql).
 The migration file is the source of truth; if you find this table
 documented elsewhere with different types, that other doc is wrong:
 
@@ -363,7 +363,7 @@ Direct references used by this doc, kept here for one-click navigation:
 - [docs/4626-connection-methods.md](./4626-connection-methods.md)
 - [docs/zora-csw-indexer-cron-spec.md](./zora-csw-indexer-cron-spec.md)
 - [frontend/docs/account-auth-invariants.md](../frontend/docs/account-auth-invariants.md)
-- [frontend/db/migrations/028_arch_b_sub_accounts.sql](../frontend/db/migrations/028_arch_b_sub_accounts.sql)
+- [frontend/db/migrations-legacy/028_arch_b_sub_accounts.sql](../frontend/db/migrations-legacy/028_arch_b_sub_accounts.sql)
 - `frontend/src/pages/deploy/DeployVault.tsx` (lines 4910-4972, 5707-5740)
 - `frontend/api/_handlers/paymaster/_paymaster.ts` (lines 3285-3300)
 - `frontend/src/lib/wallet/subAccountSetup.ts`

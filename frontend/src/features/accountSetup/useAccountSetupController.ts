@@ -746,11 +746,48 @@ export function useAccountSetupController(params: {
       }
       await loadMe({ showSpinner: false })
     } catch (linkError: any) {
-      setErrorGuarded(typeof linkError?.message === 'string' ? linkError.message : `Failed to link ${provider}.`)
+      if (provider === 'zora_cross_app') {
+        if (isPrivyRedirectUrlNotAllowedError(linkError)) {
+          setErrorGuarded('Privy redirect URL is not allowed for this origin. Add this app URL in Privy settings and retry.')
+        } else if (
+          isUnauthorizedCrossAppLinkError(linkError) ||
+          Number(linkError?.status) === 401 ||
+          String(linkError?.message ?? '').toLowerCase().includes('oauth/init')
+        ) {
+          setErrorGuarded(
+            'Privy cross-app Zora auth is unavailable right now. Use Connect with Zora again, or refresh signals if you already linked.',
+          )
+        } else if (isRecoverableCrossAppAuthError(linkError)) {
+          // Generic cross-app auth copy can appear even when read-only signal resolution
+          // already has enough identity context (canonical CSW / creator coin / handle).
+          // Re-check resolve before surfacing a blocking auth error.
+          try {
+            const headers = await authHeaders()
+            const resolveRes = await apiFetch('/api/zora/resolve', {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({}),
+            })
+            const resolvePayload = (await resolveRes.json().catch(() => null)) as ApiEnvelope<ZoraResolveResponse> | null
+            if (resolveRes.ok && resolvePayload?.success && hasResolvedZoraSignals(resolvePayload.data)) {
+              setNoticeGuarded('Zora signals were detected after auth retry. Link completed.')
+              await loadMe({ showSpinner: false })
+              return
+            }
+          } catch {
+            // fall through to user guidance below
+          }
+          setErrorGuarded('Zora authentication failed. Open zora.co in this browser first, then tap Connect again.')
+        } else {
+          setErrorGuarded(typeof linkError?.message === 'string' ? linkError.message : 'Failed to link Zora.')
+        }
+      } else {
+        setErrorGuarded(typeof linkError?.message === 'string' ? linkError.message : `Failed to link ${provider}.`)
+      }
     } finally {
       setBusyProviderGuarded(null)
     }
-  }, [callLinkEndpoint, loadMe, performClientSideLink, privyAuthed])
+  }, [authHeaders, callLinkEndpoint, loadMe, performClientSideLink, privyAuthed])
 
   const onUnlinkProvider = useCallback(async (provider: string) => {
     const privyAuthedNow = Boolean(privyRef.current?.authenticated)

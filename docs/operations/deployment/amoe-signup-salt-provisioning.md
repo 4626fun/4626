@@ -15,7 +15,7 @@ the AMOE PLONK circuit.
 migration) ships to any environment with a real verifier wired in.
 **Related:**
 - [`docs/security/amoe-pr3-handler-swap-plan.md`](../../security/amoe-pr3-handler-swap-plan.md) — design + decision context
-- [`docs/security/amoe-relay-key-scope.md`](../../security/amoe-relay-key-scope.md) — sibling AMOE-scoped secret
+- [`docs/security/amoe-pr2-handoff.md`](../../security/amoe-pr2-handoff.md) — sibling AMOE secret-scope notes
 - [`docs/security/amoe-plonk-migration.md`](../../security/amoe-plonk-migration.md) — full §2 migration arc
 
 ---
@@ -72,7 +72,7 @@ ledger snapshot could:
 
 The salt collapses this attack from "rainbow-table the user table" to
 "breach the AMOE submit handler's runtime secrets." The relay key
-scope (see [`amoe-relay-key-scope.md`](../../security/amoe-relay-key-scope.md))
+scope (see [`amoe-pr2-handoff.md`](../../security/amoe-pr2-handoff.md))
 already documents that posture.
 
 ## 3. Generation ceremony

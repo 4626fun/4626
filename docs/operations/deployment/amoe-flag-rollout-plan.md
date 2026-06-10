@@ -157,7 +157,7 @@ All Production-scope. Set BEFORE flipping any enable flag.
 |---|---|---|
 | `LOTTERY_AMOE_ROUTER` | `ZK_SUBMIT`, `LEDGER_PUBLISHER` | Base mainnet address of the `LotteryAmoeRouter`. From the latest deployment manifest. |
 | `BASE_RPC_URL` | `LEDGER_PUBLISHER` | Mainnet RPC. Should already be set for other crons; double-check. |
-| `AMOE_LEDGER_PUBLISHER_PRIVATE_KEY` | `LEDGER_PUBLISHER` | EOA private key signing the `submitPointsBurnRoot` calls. **Must NOT be a re-used relayer key — see [`amoe-relay-key-scope.md`](../../security/amoe-relay-key-scope.md).** |
+| `AMOE_LEDGER_PUBLISHER_PRIVATE_KEY` | `LEDGER_PUBLISHER` | EOA private key signing the `submitPointsBurnRoot` calls. **Must NOT be a re-used relayer key — see [`amoe-pr2-handoff.md`](../../security/amoe-pr2-handoff.md).** |
 | `AMOE_LEDGER_PUBLISHER_SMART_WALLET` | `LEDGER_PUBLISHER` (Privy CSW path only) | Smart-wallet address; only set if using Privy CSW instead of the raw EOA. |
 | `AMOE_PUBLISHER_PUBLISHER_RUN_TTL_MS` | `LEDGER_PUBLISHER` | Default 60_000. Single-instance lock TTL. |
 | `AMOE_BURN_CREDITS_RATE_LIMIT_*` | `BURN_CREDITS` | Existing rate-limit knobs; verify defaults are sane. |

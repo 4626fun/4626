@@ -115,7 +115,7 @@ const wrappedData = encodeExecuteWithoutChainIdValidation(rawMutationCalldata)
 // rawMutationCalldata = addOwnerAddress(eoa) or removeOwnerAtIndex(i)
 ```
 
-Live implementation: [`useRemoveOwnerFlow.ts`](../../frontend/src/features/accountSetup/removeOwner/useRemoveOwnerFlow.ts) + [`useAddOwnerFlow.ts`](../../frontend/src/features/accountSetup/addOwner/useAddOwnerFlow.ts).
+Live implementation: [`removeOwnerExecution.ts`](../../frontend/src/lib/removeOwner/removeOwnerExecution.ts) + [`addOwnerExecution.ts`](../../frontend/src/lib/addOwner/addOwnerExecution.ts).
 
 ### 3. Fetch quote + execute
 
@@ -167,7 +167,7 @@ Coinbase in-app browser often **cannot** complete the funder lane reliably; reco
 
 | File | Role |
 |------|------|
-| [`useRemoveOwnerFlow.ts`](../../frontend/src/features/accountSetup/removeOwner/useRemoveOwnerFlow.ts) | Server preview + `executeRemoveOwnerViaRelay` |
+| [`removeOwnerExecution.ts`](../../frontend/src/lib/removeOwner/removeOwnerExecution.ts) | Server preview + `executeRemoveOwnerViaRelay` |
 | [`removeOwnerExecution.ts`](../../frontend/src/lib/removeOwner/removeOwnerExecution.ts) | Delegates to shared `executeOwnerMutationViaRelay` |
 | [`buildOwnerMutationRelayFlow.ts`](../../frontend/server/_lib/relay/buildOwnerMutationRelayFlow.ts) | Server `/quote/v2` with `explicitDeposit` + wrapped mutation |
 | [`getQuote.ts`](../../frontend/server/_lib/relay/getQuote.ts) | Shared Relay quote parser |
@@ -179,8 +179,8 @@ Coinbase in-app browser often **cannot** complete the funder lane reliably; reco
 
 | Surface | Lane | Relay? |
 |---------|------|--------|
-| [`/add-owner`](../../frontend/src/pages/AddOwner.tsx) | `useAddOwnerFlow` → server preview → `executeAddOwnerViaRelay` | Yes |
-| Waitlist sub-account (`SubAccountOwnerInstallPanel`, `WaitlistConnectBaseApp`) | Same `useAddOwnerFlow` with `targetCswAddress = subAccount` | Yes |
+| [`/add-owner`](../../frontend/src/pages/AddOwnerBaseApp.tsx) | Add-owner flow → server preview → `executeAddOwnerViaRelay` | Yes |
+| Waitlist sub-account (`SubAccountOwnerInstallPanel`, `WaitlistConnectBaseApp`) | Same add-owner flow with `targetCswAddress = subAccount` | Yes |
 | Legacy prepared calls | `prepare-add-privy-owner` + `sendPreparedOwnerTx` where still wired | No |
 | Legacy replayable | `onboardingWalletReplayable` → `/api/relay/execute` (handleOps) | Yes, **legacy** |
 
@@ -200,7 +200,7 @@ Coinbase in-app browser often **cannot** complete the funder lane reliably; reco
 
 **Do not** use as the default user-facing lane when server preview + deposit flow is available. Keep for diagnostics / dev probes only.
 
-Ops script for canonical deposit lane: [`scripts/relay-add-embedded-owner.ts`](../../frontend/scripts/relay-add-embedded-owner.ts).
+Ops helper for canonical deposit lane: [`addOwnerExecution.ts`](../../frontend/src/lib/addOwner/addOwnerExecution.ts).
 
 ---
 

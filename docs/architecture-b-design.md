@@ -2,7 +2,7 @@
 
 Status: draft · owner: wallet/runtime · follow-up to [PR #290](https://github.com/wenakita/4626/pull/290)
 
-> **Canonical reference:** [docs/ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md) is the canonical account-model doc. The schema in §4.1 below shows the *original* `command_issuer_execution_context` design; the as-shipped schema (including the sub-account columns added later) is in [`frontend/db/migrations/028_arch_b_sub_accounts.sql`](../frontend/db/migrations/028_arch_b_sub_accounts.sql) and is documented in ACCOUNT_MODEL.md §4.
+> **Canonical reference:** [docs/ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md) is the canonical account-model doc. The schema in §4.1 below shows the *original* `command_issuer_execution_context` design; the as-shipped schema (including the sub-account columns added later) is in [`frontend/db/migrations-legacy/028_arch_b_sub_accounts.sql`](../frontend/db/migrations-legacy/028_arch_b_sub_accounts.sql) and is documented in ACCOUNT_MODEL.md §4.
 
 ## 1. Problem Statement
 

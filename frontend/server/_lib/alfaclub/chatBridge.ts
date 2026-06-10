@@ -400,9 +400,7 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
   const groupIdRaw = normalizeEnvScalar(process.env.ALFACLUB_CHAT_GROUP_ID)
   const authFlags = readAlfaClubApiAuthFlags()
   const telegramRelayBotToken =
-    normalizeEnvScalar(process.env.ALFACLUB_TELEGRAM_BOT_TOKEN) ||
-    normalizeEnvScalar(process.env.TELEGRAM_BOT_TOKEN) ||
-    null
+    normalizeEnvScalar(process.env.ALFACLUB_TELEGRAM_BOT_TOKEN) || null
   const telegramRelayChatRef = parseTelegramChatRef(
     normalizeEnvScalar(process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID) ||
       normalizeEnvScalar(process.env.TELEGRAM_TARGET_CHAT_ID) ||

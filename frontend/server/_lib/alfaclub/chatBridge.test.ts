@@ -522,21 +522,19 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     expect(_getBridgeAuthStateForTests().lastBadJwt).toBeNull()
   })
 
-  it('normalizes t.me/c URLs and falls back to TELEGRAM_BOT_TOKEN', () => {
+  it('normalizes t.me/c URLs and requires ALFACLUB_TELEGRAM_BOT_TOKEN', () => {
     const previousRelayChat = process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID
     const previousRelayThread = process.env.ALFACLUB_TELEGRAM_RELAY_THREAD_ID
     const previousRelayBotToken = process.env.ALFACLUB_TELEGRAM_BOT_TOKEN
-    const previousTelegramBotToken = process.env.TELEGRAM_BOT_TOKEN
     try {
       process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID = 'https://t.me/c/3709479662/2'
       delete process.env.ALFACLUB_TELEGRAM_RELAY_THREAD_ID
-      delete process.env.ALFACLUB_TELEGRAM_BOT_TOKEN
-      process.env.TELEGRAM_BOT_TOKEN = 'fallback-token'
+      process.env.ALFACLUB_TELEGRAM_BOT_TOKEN = 'relay-token'
 
       const flags = readAlfaClubChatBridgeFlags()
       expect(flags.telegramRelayChatId).toBe('-1003709479662')
       expect(flags.telegramRelayThreadId).toBe(2)
-      expect(flags.telegramRelayBotToken).toBe('fallback-token')
+      expect(flags.telegramRelayBotToken).toBe('relay-token')
     } finally {
       if (typeof previousRelayChat === 'undefined') delete process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID
       else process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID = previousRelayChat
@@ -546,9 +544,6 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
 
       if (typeof previousRelayBotToken === 'undefined') delete process.env.ALFACLUB_TELEGRAM_BOT_TOKEN
       else process.env.ALFACLUB_TELEGRAM_BOT_TOKEN = previousRelayBotToken
-
-      if (typeof previousTelegramBotToken === 'undefined') delete process.env.TELEGRAM_BOT_TOKEN
-      else process.env.TELEGRAM_BOT_TOKEN = previousTelegramBotToken
     }
   })
 

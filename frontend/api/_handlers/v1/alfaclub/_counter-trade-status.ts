@@ -20,8 +20,8 @@ function setPublicCors(req: VercelRequest, res: VercelResponse) {
   const originHeader = req.headers.origin
   const requestOrigin =
     typeof originHeader === 'string' && originHeader.trim().length > 0 ? originHeader.trim() : null
-  const allowedOrigins = new Set(['https://4626.fun', 'https://app.4626.fun'])
-  const allowOrigin = requestOrigin && allowedOrigins.has(requestOrigin) ? requestOrigin : 'https://4626.fun'
+  const allowOrigin =
+    requestOrigin === 'https://app.4626.fun' ? 'https://app.4626.fun' : 'https://4626.fun'
 
   res.setHeader('Access-Control-Allow-Origin', allowOrigin)
   res.setHeader('Access-Control-Allow-Credentials', 'true')
