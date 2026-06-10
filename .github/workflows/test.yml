@@ -108,6 +108,9 @@ jobs:
       - name: Guard server-core boundary for API runtime
         run: pnpm --dir frontend guard:server-core-boundary
 
+      - name: Guard frontend boundaries (ui/features/api-to-src)
+        run: pnpm --dir frontend guard:frontend-boundaries
+
       - name: Guard no raw schema DDL (condensation regression prevention)
         run: pnpm --dir frontend guard:schema
 
@@ -143,6 +146,12 @@ jobs:
 
       - name: Frontend TypeScript
         run: pnpm --dir frontend typecheck
+
+      - name: Install kpr dependencies
+        run: pnpm --dir kpr install --frozen-lockfile
+
+      - name: KPR TypeScript (no-regression launch gate)
+        run: pnpm --dir kpr typecheck
 
       - name: Run frontend tests
         run: pnpm --dir frontend test -- --reporter=verbose --reporter=json --outputFile=test-results.json 2>&1 | tee test-output.txt

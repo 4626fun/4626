@@ -456,6 +456,33 @@ export function shouldSimulateSwapTransaction(
   return true
 }
 
+/**
+ * Busy phases during which the debounced auto-quote timer must not fire.
+ *
+ * FIX H-3: the timer previously only checked `busy === 'executeSwap'`, so an
+ * auto-quote could start mid-review/build/approval and clobber the quote the
+ * user was actively reviewing (each `handleQuote` resets review state).
+ */
+const AUTO_QUOTE_BLOCKED_BUSY_STATES = new Set<string>([
+  'quote',
+  'review',
+  'approval',
+  'buildSwap',
+  'executeApproval',
+  'executeSwap',
+  'executeOrder',
+])
+
+/** Pure predicate: should the debounced auto-quote timer start a new quote now? */
+export function shouldStartAutoQuote(params: {
+  busy: string | null
+  txState: string | null
+}): boolean {
+  if (params.busy && AUTO_QUOTE_BLOCKED_BUSY_STATES.has(params.busy)) return false
+  if (params.txState === 'signing' || params.txState === 'pending') return false
+  return true
+}
+
 export async function assertSwapSpendBalancePreflight(params: {
   publicClient: {
     getBalance: (args: { address: `0x${string}` }) => Promise<bigint>
@@ -1736,6 +1763,12 @@ export function useSwapExecution(params: {
     }
     if (busy === 'executeSwap' || txState === 'signing' || txState === 'pending') {
       setStatus('Swap already in progress. Wait for the current transaction to finish.')
+      return
+    }
+    // FIX H-3: a review/quote already in flight must not be restarted — the
+    // second run would clobber the in-progress quote/review state.
+    if (busy === 'quote' || busy === 'review') {
+      setStatus('Quote in progress. Wait for the current quote to finish.')
       return
     }
     if (!params.executionReady) {

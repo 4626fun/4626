@@ -21,6 +21,7 @@ interface ICreatorOVaultStrategiesModuleInternal {
 interface ICreatorOImpairmentClaims {
     function mintFromVault(address account, uint256 epochId, uint256 amount) external;
     function balanceOf(address account, uint256 id) external view returns (uint256);
+    function totalSupply(uint256 id) external view returns (uint256);
 }
 
 interface ICreatorORecoveryEscrow {
@@ -123,6 +124,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     error InvalidClaimProof(uint256 epochId, address account);
     error NothingToClaim(uint256 epochId, address account);
     error RecoveryEscrowNotConfigured();
+    error ClaimSupplyExceeded(uint256 epochId, uint256 totalClaimSupply, uint256 requested);
 
     // =================================
     // PROFIT UNLOCKING
@@ -889,6 +891,17 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
 
         epoch.status = ImpairmentEpochStatus.Resolved;
         epoch.resolvedAt = uint64(block.timestamp);
+        // FIX C-3: a false-alarm trip must lose its claim surface. Any root
+        // proposed during the trip becomes Resolved-state-claimable otherwise,
+        // letting snapshot holders mint claims against a healthy vault. Mirror
+        // clearImpairmentRootAfterChallenge: zero all root-derived fields so
+        // mintImpairmentClaim / notifyImpairmentRecovery hard-revert for this
+        // epoch. Legitimate post-finalize Resolved epochs keep their root.
+        epoch.snapshotRoot = bytes32(0);
+        epoch.totalClaimSupply = 0;
+        epoch.recoveryAsset = address(0);
+        impairmentRootUnlockTime[epochId] = 0;
+        impairmentRootChallenged[epochId] = false;
         strategyImpaired[epoch.strategy] = false;
         activeImpairmentEpoch = 0;
         vaultMode = VaultMode.Normal;
@@ -972,23 +985,48 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         if (epoch.status != ImpairmentEpochStatus.Finalized && epoch.status != ImpairmentEpochStatus.Resolved) {
             revert InvalidImpairmentTransition(epochId);
         }
+        // FIX C-3: epochs whose trip was cleared (false alarm) have their root
+        // zeroed and must never be claimable. Without this guard a zero root
+        // could even verify crafted proofs.
+        if (epoch.snapshotRoot == bytes32(0)) revert ImpairmentRootRequired(epochId);
         if (impairmentClaimMinted[epochId][account]) revert ClaimAlreadyMinted(epochId, account);
         bytes32 leaf = keccak256(abi.encode(epochId, account, amount));
         bool valid = MerkleProof.verify(proof, epoch.snapshotRoot, leaf);
         if (!valid) revert InvalidClaimProof(epochId, account);
         if (impairmentClaims == address(0)) revert RecoveryEscrowNotConfigured();
+        // FIX C-2: cap cumulative minted claims at the epoch's totalClaimSupply.
+        // claimImpairmentRecovery divides by totalClaimSupply assuming claims
+        // never exceed it; an over-stated root (leaves summing past the cap)
+        // would otherwise dilute honest holders / over-pay early claimers.
+        uint256 mintedSupply = ICreatorOImpairmentClaims(impairmentClaims).totalSupply(epochId);
+        if (mintedSupply + amount > epoch.totalClaimSupply) {
+            revert ClaimSupplyExceeded(epochId, epoch.totalClaimSupply, mintedSupply + amount);
+        }
 
         impairmentClaimMinted[epochId][account] = true;
         ICreatorOImpairmentClaims(impairmentClaims).mintFromVault(account, epochId, amount);
     }
 
     function notifyImpairmentRecovery(uint256 epochId, uint256 amount) external onlyDelegateCall {
+        // FIX H-1: zero-amount notify was a no-op state write + event spam.
+        if (amount == 0) revert InvalidAmount();
         ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
         if (epoch.status != ImpairmentEpochStatus.Finalized && epoch.status != ImpairmentEpochStatus.Resolved) {
             revert InvalidImpairmentTransition(epochId);
         }
+        // FIX C-3: cleared-trip epochs zero recoveryAsset; safeTransfer on
+        // address(0) would otherwise revert opaquely (or worse, a future
+        // refactor could route funds to a zero-asset escrow entry).
+        if (epoch.recoveryAsset == address(0)) revert ImpairmentRootRequired(epochId);
         if (impairmentRecoveryEscrow == address(0)) revert RecoveryEscrowNotConfigured();
-        IERC20(epoch.recoveryAsset).safeTransfer(impairmentRecoveryEscrow, amount);
+        if (epoch.recoveryAsset == address(_creatorCoin())) {
+            // FIX H-1: a raw safeTransfer of the creator coin desyncs the
+            // cached coinBalance used by totalAssets(), leaving the recovered
+            // amount double-counted (escrow + vault book) until the next sync.
+            _pushCreatorCoinExact(impairmentRecoveryEscrow, amount);
+        } else {
+            IERC20(epoch.recoveryAsset).safeTransfer(impairmentRecoveryEscrow, amount);
+        }
         ICreatorORecoveryEscrow(impairmentRecoveryEscrow).notifyRecovery(epoch.recoveryAsset, epochId, amount);
         epoch.totalRecovered += amount;
         emit ImpairmentRecoveryNotified(epochId, epoch.recoveryAsset, amount);

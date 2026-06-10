@@ -36,6 +36,8 @@ contract CreatorORecoveryEscrowTest is Test {
     function test_claimRecovery_onlyVault() public {
         token.mint(address(escrow), 10);
         vm.prank(vault);
+        escrow.notifyRecovery(address(token), 1, 10);
+        vm.prank(vault);
         escrow.claimRecovery(address(token), 1, alice, 7);
         assertEq(token.balanceOf(alice), 7);
         assertEq(escrow.claimedByEpochAsset(1, address(token)), 7);
@@ -44,6 +46,47 @@ contract CreatorORecoveryEscrowTest is Test {
     function test_revert_nonVaultNotify() public {
         vm.expectRevert(CreatorORecoveryEscrow.Unauthorized.selector);
         escrow.notifyRecovery(address(token), 1, 1);
+    }
+
+    /// FIX C-2: an epoch's claims must never exceed what was notified for
+    /// that epoch, even when the escrow holds funds for other epochs.
+    function test_claimRecovery_cannotDrainOtherEpochs() public {
+        // Fund the escrow for two epochs of the same asset.
+        token.mint(address(escrow), 20);
+        vm.prank(vault);
+        escrow.notifyRecovery(address(token), 1, 10);
+        vm.prank(vault);
+        escrow.notifyRecovery(address(token), 2, 10);
+
+        // Epoch 1 can claim exactly its notified amount.
+        vm.prank(vault);
+        escrow.claimRecovery(address(token), 1, alice, 10);
+        assertEq(token.balanceOf(alice), 10);
+
+        // One more wei from epoch 1 would dip into epoch 2's funds.
+        vm.prank(vault);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CreatorORecoveryEscrow.ClaimExceedsRecovered.selector, 1, address(token), 10, 11
+            )
+        );
+        escrow.claimRecovery(address(token), 1, alice, 1);
+
+        // Epoch 2's funds remain fully claimable.
+        vm.prank(vault);
+        escrow.claimRecovery(address(token), 2, alice, 10);
+        assertEq(token.balanceOf(alice), 20);
+    }
+
+    function test_claimRecovery_revertsWithoutNotify() public {
+        token.mint(address(escrow), 5);
+        vm.prank(vault);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CreatorORecoveryEscrow.ClaimExceedsRecovered.selector, 1, address(token), 0, 5
+            )
+        );
+        escrow.claimRecovery(address(token), 1, alice, 5);
     }
 }
 

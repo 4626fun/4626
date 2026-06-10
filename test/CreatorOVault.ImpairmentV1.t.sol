@@ -225,5 +225,119 @@ contract CreatorOVaultImpairmentV1Test is Test {
         vm.expectRevert();
         vault.mintImpairmentClaim(epochId, alice, aliceShares, new bytes32[](0));
     }
+
+    function _hashPair(bytes32 a, bytes32 b) internal pure returns (bytes32) {
+        return a < b ? keccak256(abi.encodePacked(a, b)) : keccak256(abi.encodePacked(b, a));
+    }
+
+    /// FIX C-2: a hostile/over-stated root whose leaves sum past
+    /// totalClaimSupply must not be able to mint claims beyond the cap.
+    function test_claimMint_overMint_reverts_pastTotalClaimSupply() public {
+        address bob = _pickEmptyCodeAddress("impairment-bob");
+        uint256 epochId = vault.tripImpairment(address(strat), 1);
+        uint256 aliceShares = vault.balanceOf(alice);
+
+        // Two leaves each claiming the FULL claim supply (sum = 2x cap).
+        bytes32 leafAlice = keccak256(abi.encode(epochId, alice, aliceShares));
+        bytes32 leafBob = keccak256(abi.encode(epochId, bob, aliceShares));
+        bytes32 root = _hashPair(leafAlice, leafBob);
+        vault.proposeImpairmentRoot(epochId, root, aliceShares, address(creatorCoin));
+        vm.warp(block.timestamp + 1 hours + 1);
+        vault.finalizeImpairment(epochId);
+
+        bytes32[] memory proofAlice = new bytes32[](1);
+        proofAlice[0] = leafBob;
+        vault.mintImpairmentClaim(epochId, alice, aliceShares, proofAlice);
+        assertEq(claims.totalSupply(epochId), aliceShares);
+
+        bytes32[] memory proofBob = new bytes32[](1);
+        proofBob[0] = leafAlice;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CreatorOVault.ClaimSupplyExceeded.selector, epochId, aliceShares, aliceShares * 2
+            )
+        );
+        vault.mintImpairmentClaim(epochId, bob, aliceShares, proofBob);
+        assertEq(claims.totalSupply(epochId), aliceShares);
+    }
+
+    /// FIX C-3: clearing a false-alarm trip must destroy the claim surface
+    /// created by any root proposed during the trip.
+    function test_clearTrip_zeroesRoot_and_blocksClaimSurface() public {
+        uint256 epochId = vault.tripImpairment(address(strat), 1);
+        uint256 aliceShares = vault.balanceOf(alice);
+        bytes32 leaf = keccak256(abi.encode(epochId, alice, aliceShares));
+        vault.proposeImpairmentRoot(epochId, leaf, aliceShares, address(creatorCoin));
+        assertGt(vault.impairmentRootUnlockTime(epochId), 0);
+
+        vault.clearImpairmentTrip(epochId);
+
+        (
+            CreatorOVault.ImpairmentEpochStatus status,
+            ,
+            address recoveryAsset,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            uint256 totalClaimSupply,
+            ,
+            bytes32 snapshotRoot,
+            ,
+        ) = vault.impairmentEpochs(epochId);
+        assertEq(uint8(status), 3); // Resolved
+        assertEq(snapshotRoot, bytes32(0));
+        assertEq(totalClaimSupply, 0);
+        assertEq(recoveryAsset, address(0));
+        assertEq(vault.impairmentRootUnlockTime(epochId), 0);
+        assertFalse(vault.impairmentRootChallenged(epochId));
+
+        vm.expectRevert(abi.encodeWithSelector(CreatorOVault.ImpairmentRootRequired.selector, epochId));
+        vault.mintImpairmentClaim(epochId, alice, aliceShares, new bytes32[](0));
+
+        vm.expectRevert(abi.encodeWithSelector(CreatorOVault.ImpairmentRootRequired.selector, epochId));
+        vault.notifyImpairmentRecovery(epochId, 1e18);
+    }
+
+    /// FIX H-1: zero-amount notify must revert instead of writing state/events.
+    function test_notifyRecovery_zeroAmount_reverts() public {
+        uint256 epochId = vault.tripImpairment(address(strat), 1);
+        uint256 aliceShares = vault.balanceOf(alice);
+        bytes32 leaf = keccak256(abi.encode(epochId, alice, aliceShares));
+        vault.proposeImpairmentRoot(epochId, leaf, aliceShares, address(creatorCoin));
+        vm.warp(block.timestamp + 1 hours + 1);
+        vault.finalizeImpairment(epochId);
+
+        vm.expectRevert(CreatorOVault.InvalidAmount.selector);
+        vault.notifyImpairmentRecovery(epochId, 0);
+    }
+
+    /// FIX H-1: when the recovery asset is the creator coin, notify must sync
+    /// the tracked coinBalance so totalAssets() drops by the escrowed amount
+    /// instead of double-counting it (vault book + escrow).
+    function test_notifyRecovery_creatorCoin_decrementsTotalAssets() public {
+        uint256 epochId = vault.tripImpairment(address(strat), 1);
+        uint256 aliceShares = vault.balanceOf(alice);
+        bytes32 leaf = keccak256(abi.encode(epochId, alice, aliceShares));
+        vault.proposeImpairmentRoot(epochId, leaf, aliceShares, address(creatorCoin));
+        vm.warp(block.timestamp + 1 hours + 1);
+        vault.finalizeImpairment(epochId);
+
+        uint256 totalAssetsBefore = vault.totalAssets();
+        uint256 escrowBefore = creatorCoin.balanceOf(address(escrow));
+        uint256 ppsBefore = vault.convertToAssets(1e18);
+        uint256 amount = 100e18;
+        assertGe(totalAssetsBefore, amount);
+
+        vault.notifyImpairmentRecovery(epochId, amount);
+
+        assertEq(creatorCoin.balanceOf(address(escrow)), escrowBefore + amount);
+        assertEq(vault.totalAssets(), totalAssetsBefore - amount);
+        // Share price reflects the outflow honestly — the escrowed amount is
+        // no longer double-counted in the vault book.
+        assertLt(vault.convertToAssets(1e18), ppsBefore);
+    }
 }
 

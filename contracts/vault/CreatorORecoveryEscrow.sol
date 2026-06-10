@@ -14,6 +14,7 @@ contract CreatorORecoveryEscrow is Ownable {
     mapping(uint256 => mapping(address => uint256)) public claimedByEpochAsset;
 
     error Unauthorized();
+    error ClaimExceedsRecovered(uint256 epochId, address asset, uint256 recovered, uint256 requested);
 
     constructor(address initialOwner) Ownable(initialOwner) {}
 
@@ -28,7 +29,13 @@ contract CreatorORecoveryEscrow is Ownable {
 
     function claimRecovery(address asset, uint256 epochId, address receiver, uint256 amount) external {
         if (msg.sender != vault) revert Unauthorized();
-        claimedByEpochAsset[epochId][asset] += amount;
+        // FIX C-2: epoch-scope the escrow balance. The escrow holds funds for
+        // many epochs of the same asset; without this cap a single epoch's
+        // claims could drain recoveries notified for other epochs.
+        uint256 claimed = claimedByEpochAsset[epochId][asset] + amount;
+        uint256 recovered = recoveredByEpochAsset[epochId][asset];
+        if (claimed > recovered) revert ClaimExceedsRecovered(epochId, asset, recovered, claimed);
+        claimedByEpochAsset[epochId][asset] = claimed;
         IERC20(asset).safeTransfer(receiver, amount);
     }
 }

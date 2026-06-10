@@ -3,6 +3,7 @@ import {
   RATE_LIMITS,
   checkRateLimit,
   getClientIp,
+  getDb,
   rateLimitKey,
   readSessionFromRequest,
 } from '@4626/server-core'
@@ -12,7 +13,6 @@ import {
   readCounterTradeUserOptIn,
   readOrCreateCounterTradeRoomStrategy,
 } from '../../../../server/_lib/alfaclub/counterTradeStore.js'
-import { getDb } from '../../../../server/_lib/db/postgres.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

@@ -215,10 +215,16 @@ jobs:
         run: docker pull semgrep/semgrep:latest
 
       - name: Scan API handlers and shared server lib
+        # Audit finding H-4 (2026-06): `| tee` swallowed semgrep's exit code
+        # under the default shell, and `semgrep scan` exits 0 on findings
+        # unless `--error` is passed — the "blocking" gate never blocked.
+        shell: bash
         run: |
+          set -euo pipefail
           docker run --rm -v "$GITHUB_WORKSPACE:/src" semgrep/semgrep:latest semgrep scan \
             --metrics=off \
             --timeout=5 \
+            --error \
             --config=p/typescript \
             --config=p/javascript \
             /src/frontend/api \

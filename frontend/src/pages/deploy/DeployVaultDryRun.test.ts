@@ -20,6 +20,15 @@ describe('DeployVault dry run wiring', () => {
     expect(pageSource).toContain('VITE_DEPLOY_DRY_RUN_REQUEST_TIMEOUT_MS')
   })
 
+  it('blocks deploy submission while a dry-run is in flight (H-2 regression)', () => {
+    const pageSource = fs.readFileSync(path.resolve(__dirname, './DeployVault.tsx'), 'utf8')
+
+    // submit() entry guard must include dryRunBusy alongside busy/exportBusy.
+    expect(pageSource).toContain('if (busy || exportBusy || dryRunBusy) return null')
+    // The 1-Click Deploy button must stay disabled during a dry-run.
+    expect(pageSource).toContain('disabled={disabled || exportBusy || dryRunBusy}')
+  })
+
   it('keeps canonical 2-strategy + idle-reserve defaults in deploy-session payload construction', () => {
     const pageSource = fs.readFileSync(path.resolve(__dirname, './DeployVault.tsx'), 'utf8')
 

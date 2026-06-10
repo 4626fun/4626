@@ -33,6 +33,17 @@ const ALLOWED_API_TO_SRC = new Set([
   'src/config/contracts.defaults',
   'src/deploy/bytecode.generated',
   'src/lib/uniswap/swapQuoteSanitize',
+  // Pure CREATE2 vanity-salt search shared by deploy UI and the
+  // deploy/vanity API handlers (no React/Vite deps).
+  'src/lib/deploy/perVaultVanityVersionSearch',
+  // Pure OVault module fingerprint policy shared by deploy-session create
+  // and the deploy page preflight.
+  'src/lib/deploy/ovaultModuleIdentity',
+  // Pure golden Relay Part 1 payload-shape policy shared by preview-add-owner
+  // and the client owner-install lane.
+  'src/lib/relay/goldenRelayPart1Shape',
+  // Pure CSW MultiOwnable ABI constants shared by owner preview handlers.
+  'src/lib/wallet/cswOwnerAbi',
 ])
 
 async function walk(dir) {

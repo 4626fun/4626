@@ -133,6 +133,36 @@ export async function hasLiveActivationForFeature(
   return false
 }
 
+/**
+ * True when the creator has ANY live (`pending` or `active`) row for the
+ * feature, regardless of whether the payment has been verified yet.
+ *
+ * This mirrors the `creator_strategy_features_one_live_per_feature` partial
+ * unique index exactly, so it can be used as a pre-flight check before an
+ * irreversible action (e.g. broadcasting an x402 USDC settlement): if this
+ * returns true, `insertPendingActivation` would fail with
+ * `live_activation_exists`. Unlike `hasLiveActivationForFeature` it does NOT
+ * require `payment_verified_at`, so it also catches in-flight unpaid Stripe
+ * checkout rows that would still block the insert.
+ */
+export async function hasAnyLiveActivationRow(
+  db: Db,
+  params: { creatorToken: Address; featureKey: string },
+): Promise<boolean> {
+  const creatorKey = params.creatorToken.toLowerCase()
+  const featureKey = String(params.featureKey ?? '')
+  if (!featureKey) return false
+  const result = await db.sql`
+    SELECT 1
+    FROM creator_strategy_features
+    WHERE creator_token = ${creatorKey}
+      AND feature_key = ${featureKey}
+      AND status IN ('pending', 'active')
+    LIMIT 1;
+  `
+  return Array.isArray(result.rows) && result.rows.length > 0
+}
+
 export type InsertActivationInput = {
   creatorToken: Address
   featureKey: string

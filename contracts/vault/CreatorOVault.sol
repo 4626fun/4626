@@ -586,6 +586,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     error InvalidClaimProof(uint256 epochId, address account);
     error NothingToClaim(uint256 epochId, address account);
     error RecoveryEscrowNotConfigured();
+    error ClaimSupplyExceeded(uint256 epochId, uint256 totalClaimSupply, uint256 requested);
 
     // Protocol rescue errors
     error RescueNotConfigured();

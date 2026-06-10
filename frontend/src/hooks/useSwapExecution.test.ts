@@ -9,6 +9,7 @@ import {
   shouldDisablePermit2ForSwap,
   shouldSimulateSwapBuild,
   shouldSimulateSwapTransaction,
+  shouldStartAutoQuote,
 } from './useSwapExecution'
 import { requiresCanonicalExecutionForSwapMode } from '@/lib/swap/providerConfig'
 
@@ -398,6 +399,35 @@ describe('shouldSimulateSwapBuild', () => {
         wrapsNativeEthForCanonical: false,
       }),
     ).toBe(false)
+  })
+})
+
+describe('shouldStartAutoQuote', () => {
+  it('blocks auto-quote during every in-flight quote/review/build/execute phase (H-3 regression)', () => {
+    for (const busy of [
+      'quote',
+      'review',
+      'approval',
+      'buildSwap',
+      'executeApproval',
+      'executeSwap',
+      'executeOrder',
+    ]) {
+      expect(shouldStartAutoQuote({ busy, txState: 'idle' })).toBe(false)
+    }
+  })
+
+  it('blocks auto-quote while a transaction is signing or pending', () => {
+    expect(shouldStartAutoQuote({ busy: null, txState: 'signing' })).toBe(false)
+    expect(shouldStartAutoQuote({ busy: null, txState: 'pending' })).toBe(false)
+  })
+
+  it('allows auto-quote when idle', () => {
+    expect(shouldStartAutoQuote({ busy: null, txState: 'idle' })).toBe(true)
+    expect(shouldStartAutoQuote({ busy: null, txState: null })).toBe(true)
+    expect(shouldStartAutoQuote({ busy: null, txState: 'review' })).toBe(true)
+    expect(shouldStartAutoQuote({ busy: null, txState: 'success' })).toBe(true)
+    expect(shouldStartAutoQuote({ busy: null, txState: 'error' })).toBe(true)
   })
 })
 

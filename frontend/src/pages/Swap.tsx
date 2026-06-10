@@ -24,7 +24,7 @@ import { useSwapTokenOptions } from '@/lib/swap/useSwapTokenOptions'
 import { useSwapRecentTokens } from '@/lib/swap/useSwapRecentTokens'
 import { DEFAULT_CHAIN_ID, type SupportedChainId, getChainMeta } from '@/config/chains'
 import { CONTRACTS } from '@/config/contracts'
-import { useSwapExecution } from '@/hooks/useSwapExecution'
+import { shouldStartAutoQuote, useSwapExecution } from '@/hooks/useSwapExecution'
 import { useSwapState } from '@/hooks/useSwapState'
 import { useTokenIdentity } from '@/hooks/useTokenIdentity'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
@@ -908,7 +908,10 @@ export function Swap() {
     if (txState === 'signing') return
     if (tokenInAmountExceedsBalance) return
     const timer = window.setTimeout(() => {
-      if (busyRef.current === 'executeSwap') return
+      // FIX H-3: never fire an auto-quote while any quote/review/build/execute
+      // phase is in flight — restarting handleQuote mid-review clobbers the
+      // quote the user is actively reviewing.
+      if (!shouldStartAutoQuote({ busy: busyRef.current, txState })) return
       void handleQuote()
     }, 450)
     return () => window.clearTimeout(timer)

@@ -23,6 +23,7 @@ import {
 } from '../../../../server/_lib/creatorStrategy/catalog.js'
 import { getAlacarteDeployPurchaseBlockedMessage } from '../../../../server/_lib/creatorStrategy/bundleEntitlements.js'
 import {
+  hasAnyLiveActivationRow,
   insertPendingActivation,
   toCreatorStrategyFeatureDto as toActivationDto,
 } from '../../../../server/_lib/creatorStrategy/activations.js'
@@ -54,6 +55,67 @@ const REQUEST_BODY_MAX_BYTES = 4_096
 type ActivateRequestBody = {
   creatorToken?: unknown
   featureKey?: unknown
+}
+
+/**
+ * Durably record a settled-on-chain x402 payment whose activation
+ * persistence failed. Runs OUTSIDE the (rolled back) activation
+ * transaction so the on-chain USDC move always has a DB trail for
+ * refund / manual-review ops. Idempotent via the payment_events
+ * `(provider, provider_event_id)` unique index. Never throws — a
+ * failure here must not mask the original error response.
+ */
+async function recordOrphanedX402Settlement(params: {
+  db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows?: any[] }> }
+  settlement: { txHash: Hex; value: bigint; from: Address; to: Address; blockNumber: bigint }
+  creatorToken: Address
+  featureKey: string
+  failureReason: string
+  failureMessage: string
+}): Promise<void> {
+  const orderId = `orphaned-x402:${params.settlement.txHash}`
+  try {
+    await upsertPaymentOrder({
+      db: params.db,
+      orderId,
+      status: 'manual_review',
+      amountAtomic: params.settlement.value,
+      currency: 'USDC',
+      metadata: {
+        provider: 'x402',
+        txHash: params.settlement.txHash,
+        creatorToken: params.creatorToken,
+        featureKey: params.featureKey,
+        orphanReason: params.failureReason,
+      },
+    })
+    await recordPaymentEvent({
+      db: params.db,
+      provider: 'x402',
+      providerEventId: params.settlement.txHash,
+      orderId,
+      eventType: 'x402.settlement_orphaned',
+      amountAtomic: params.settlement.value,
+      currency: 'USDC',
+      payload: {
+        creatorToken: params.creatorToken,
+        featureKey: params.featureKey,
+        from: params.settlement.from,
+        to: params.settlement.to,
+        blockNumber: params.settlement.blockNumber.toString(),
+        failureReason: params.failureReason,
+        failureMessage: params.failureMessage,
+      },
+    })
+  } catch (error) {
+    console.error('[creator-strategy/x402] failed to record orphaned settlement', {
+      txHash: params.settlement.txHash,
+      creatorToken: params.creatorToken,
+      featureKey: params.featureKey,
+      failureReason: params.failureReason,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 }
 
 /**
@@ -164,6 +226,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   })
   const pricing = applyPriceOverride(feature.priceUsdc, override)
   const treasury = resolveProtocolTreasuryForUsdcPayments()
+
+  // Entitlement pre-check BEFORE any irreversible action. The server (not
+  // the user) broadcasts the EIP-3009 settlement below, so settling first and
+  // letting `insertPendingActivation` 409 afterwards would move real USDC
+  // with no ledger row. Mirrors the `one_live_per_feature` unique index.
+  const alreadyLive = await hasAnyLiveActivationRow(db as any, {
+    creatorToken,
+    featureKey: feature.key,
+  })
+  if (alreadyLive) {
+    return res.status(409).json({
+      success: false,
+      error: 'activation_insert_failed',
+      reason: 'live_activation_exists',
+      message: 'A pending or active activation already exists for this creator and feature',
+    } satisfies ApiEnvelope<never>)
+  }
 
   const paymentHeader = req.headers['x-payment']
   const paymentHeaderStr = Array.isArray(paymentHeader) ? paymentHeader[0] : paymentHeader
@@ -286,12 +365,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   })()
 
   if (!persistedActivation) {
+    await recordOrphanedX402Settlement({
+      db: db as any,
+      settlement,
+      creatorToken,
+      featureKey: feature.key,
+      failureReason: 'persistence_unavailable',
+      failureMessage: 'runInTransaction returned null (no DB)',
+    })
     return res
       .status(503)
       .json({ success: false, error: 'Activation persistence unavailable' } satisfies ApiEnvelope<never>)
   }
 
   if (!persistedActivation.ok && 'insertResult' in persistedActivation) {
+    await recordOrphanedX402Settlement({
+      db: db as any,
+      settlement,
+      creatorToken,
+      featureKey: feature.key,
+      failureReason: persistedActivation.insertResult.reason,
+      failureMessage: persistedActivation.insertResult.message,
+    })
     const statusByReason: Record<string, number> = {
       live_activation_exists: 409,
       payment_already_used: 409,
@@ -307,6 +402,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (!persistedActivation.ok) {
+    await recordOrphanedX402Settlement({
+      db: db as any,
+      settlement,
+      creatorToken,
+      featureKey: feature.key,
+      failureReason: persistedActivation.reason,
+      failureMessage: persistedActivation.message,
+    })
     return res.status(500).json({
       success: false,
       error: `Activation persistence failed (${persistedActivation.reason}): ${persistedActivation.message}`,

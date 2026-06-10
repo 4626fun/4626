@@ -35,6 +35,30 @@ If your shares are held by another contract at `tripBlock` (for example a wrappe
 - Claims cannot mint before root finalization.
 - Finalization cannot occur before challenge-window unlock.
 
+## Claim and recovery caps (June 2026 audit remediation)
+
+These guards were added in the June 2026 audit pass (C-2 / C-3 / H-1) and are
+enforced on-chain by `CreatorOVaultCoreModule` and `CreatorORecoveryEscrow`:
+
+- **Mint cap (C-2).** Cumulative claims minted for an epoch can never exceed
+  the epoch's `totalClaimSupply`. A proposed root whose leaves sum past the
+  cap reverts with `ClaimSupplyExceeded` once the cap is reached, instead of
+  silently diluting honest claim holders.
+- **Epoch-scoped escrow accounting (C-2).** `CreatorORecoveryEscrow` rejects
+  any claim that would push `claimedByEpochAsset` past
+  `recoveredByEpochAsset` for that epoch/asset (`ClaimExceedsRecovered`).
+  One epoch's claims can never drain recoveries notified for another epoch.
+- **False-alarm trips destroy the claim surface (C-3).** `clearImpairmentTrip`
+  zeroes the epoch's `snapshotRoot`, `totalClaimSupply`, and `recoveryAsset`
+  and resets the challenge-window state. Cleared epochs can never mint claims
+  or receive recovery notifications (`ImpairmentRootRequired`). Legitimate
+  post-finalize `Resolved` epochs keep their root and stay claimable.
+- **Recovery notification guards (H-1).** `notifyImpairmentRecovery` reverts
+  on zero amounts, and when the recovery asset is the creator coin the
+  transfer goes through tracked-balance accounting so clean-book
+  `totalAssets()` immediately reflects the escrowed outflow (no double
+  counting between the vault book and the escrow).
+
 ## Release notes template text
 
 Use the following text in release communication:

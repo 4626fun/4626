@@ -503,6 +503,13 @@ export async function ensureEthosChartSupportSchema(db: Db): Promise<void> {
   })
 }
 
+/** Base MCP human-approval requests (durable approval flow store). */
+export async function ensureBaseMcpApprovalSchema(db: Db): Promise<void> {
+  await withEnsureOnce('baseMcpApproval', async () => {
+    await ensureMigrationApplied(db, '20260712000000_base_mcp_approval_requests.sql').catch(() => {})
+  })
+}
+
 /**
  * Final set of additive columns that were still being applied via raw
  * ALTERs in a handful of bootstrap helpers. One-time migration.

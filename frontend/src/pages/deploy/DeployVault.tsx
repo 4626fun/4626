@@ -4173,7 +4173,7 @@ function DeployVaultBatcher({
   const submit = async (opts?: { planOnly?: boolean; validateDepositBalance?: boolean }): Promise<DeployPlanExport | null> => {
     const planOnly = opts?.planOnly === true
     const validateDepositBalance = !planOnly || opts?.validateDepositBalance === true
-    if (busy || exportBusy) return null
+    if (busy || exportBusy || dryRunBusy) return null
 
     // Simple rate limit: avoid accidental double-submits after a quick reload/click.
     if (!planOnly && typeof window !== 'undefined') {
@@ -7643,7 +7643,7 @@ function DeployVaultBatcher({
             variant="primary"
             className="w-full rounded-lg"
             onClick={() => void submit()}
-            disabled={disabled || exportBusy}
+            disabled={disabled || exportBusy || dryRunBusy}
           >
             {busy ? 'Deploying…' : '1‑Click Deploy (Gas-Free)'}
           </Button>

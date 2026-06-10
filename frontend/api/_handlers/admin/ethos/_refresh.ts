@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-import { getDb } from '../../../../server/_lib/db/postgres.js';
-import { getSessionAddress, isAdminAddress } from '../../../../server/_lib/auth/session.js';
+import { getDb, getSessionAddress, isAdminAddress } from '@4626/server-core';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {

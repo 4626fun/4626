@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import type { ApprovalStatus } from './schemas'
 import { getDb, isDbConfigured, type DbPool } from '../../db/postgres.js'
+import { ensureBaseMcpApprovalSchema } from '../../db/schemaBootstrap.js'
 
 export interface ApprovalRequestRecord {
   requestId: string
@@ -112,24 +113,9 @@ export class DurableApprovalStore implements ApprovalStore {
 
   private async ensureSchema(db: DbPool): Promise<void> {
     if (this.schemaReady) return
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS base_mcp_approval_requests (
-        request_id TEXT PRIMARY KEY,
-        client_request_id TEXT NOT NULL,
-        approval_url TEXT NOT NULL,
-        user_id TEXT NOT NULL,
-        execution_mode TEXT NOT NULL CHECK (execution_mode IN ('canonical', 'eoa')),
-        sender TEXT NOT NULL,
-        status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected', 'expired')),
-        created_at TIMESTAMPTZ NOT NULL,
-        expires_at TIMESTAMPTZ NOT NULL,
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS base_mcp_approval_requests_status_expires_idx
-        ON base_mcp_approval_requests (status, expires_at);
-    `
+    // DDL lives in supabase/migrations/20260712000000_base_mcp_approval_requests.sql;
+    // runtime bootstrap delegates through schemaBootstrap (no raw DDL here).
+    await ensureBaseMcpApprovalSchema(db)
     this.schemaReady = true
   }
 
