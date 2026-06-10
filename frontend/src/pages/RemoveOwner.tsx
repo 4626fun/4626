@@ -11,6 +11,7 @@ import { apiFetch } from '@/lib/api/apiBase'
 import {
   _submitOwnerViaSelfBuiltUserOp,
   computeReplayableUserOpHash,
+  type V06UserOpFields,
 } from '@/lib/wallet/onboardingWalletReplayable'
 import { _submitOwnerViaFunderEoa } from '@/lib/wallet/relayFunderEoaSubmit'
 import { _submitOwnerViaSendCalls, waitForCallsTxHash } from '@/lib/wallet/cswSendCalls'
@@ -241,6 +242,16 @@ export function RemoveOwnerPage() {
         snippet: string
         pasteInput: string
         pasteError: string | null
+        /**
+         * The exact mutation calldata the userOpHash was computed over, frozen
+         * at prepare time. Submission uses this — never the live
+         * preview.txRequest.data — so a preview refresh / different owner-slot
+         * click between prepare and paste cannot silently desync the
+         * signature from the broadcast calldata.
+         */
+        innerCallData: `0x${string}`
+        /** The exact UserOp (incl. nonce) the passkey signature covers. */
+        userOp: V06UserOpFields
       }
     | {
         step: 'submitting'
@@ -424,11 +435,14 @@ export function RemoveOwnerPage() {
     setTxHash(null)
     try {
       appendEvent('paste_flow:start')
-      appendEvent(`paste_flow:inner_selector=${preview.txRequest.data.slice(0, 10)}`)
-      const { hashToSign } = await computeReplayableUserOpHash({
+      // Freeze the calldata at prepare time. The userOpHash, the snippet, and
+      // the eventual submission must all be over this exact byte string.
+      const innerCallData = preview.txRequest.data
+      appendEvent(`paste_flow:inner_selector=${innerCallData.slice(0, 10)}`)
+      const { hashToSign, userOp } = await computeReplayableUserOpHash({
         chainId: base.id,
         csw: canonicalCswAddress as `0x${string}`,
-        innerCallData: preview.txRequest.data,
+        innerCallData,
       })
       appendEvent(`paste_flow:user_op_hash=${hashToSign}`)
       const snippet = generateKeysCoinbasePasteSnippet(hashToSign)
@@ -438,6 +452,8 @@ export function RemoveOwnerPage() {
         snippet,
         pasteInput: '',
         pasteError: null,
+        innerCallData,
+        userOp,
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err ?? '')
@@ -450,12 +466,12 @@ export function RemoveOwnerPage() {
 
   const submitPasteFlow = async () => {
     if (pasteFlow.step !== 'hash_ready') return
-    if (!preview || !canonicalCswAddress) return
+    if (!canonicalCswAddress) return
     setBusy(true)
     setPageError(null)
     setPageNotice(null)
     setTxHash(null)
-    const { userOpHash, pasteInput } = pasteFlow
+    const { userOpHash, pasteInput, innerCallData, userOp } = pasteFlow
     let response
     try {
       response = parseKeysCoinbasePasteResponse(pasteInput)
@@ -509,8 +525,11 @@ export function RemoveOwnerPage() {
         },
         chainId: base.id,
         csw: canonicalCswAddress as `0x${string}`,
-        innerCallData: preview.txRequest.data,
+        // The calldata + UserOp frozen at prepare time — NOT the live preview,
+        // which may have been refetched for a different owner slot since.
+        innerCallData,
         preSignedSignature,
+        preBuiltUserOp: userOp,
         onTelemetry: (event) => {
           appendEvent(
             `paste_flow.${event.step}: ${JSON.stringify(event.detail).slice(0, 240)}`,
@@ -551,6 +570,10 @@ export function RemoveOwnerPage() {
     setPageNotice(null)
     setPreview(null)
     setTxHash(null)
+    // Any previously prepared paste-flow hash/snippet was computed over the
+    // old preview's calldata — invalidate it so a signature collected for a
+    // different owner slot can't be submitted against the new selection.
+    setPasteFlow({ step: 'idle' })
     try {
       const res = await apiFetch('/api/onboarding/preview-remove-owner', {
         method: 'POST',

@@ -17,7 +17,6 @@ import {
   getAddress,
   http,
   isAddress,
-  type Address,
   type Hex,
 } from 'viem'
 import { base } from 'viem/chains'
@@ -172,10 +171,10 @@ function resolveBaseRpcUrl(): string {
   return envUrl || 'https://mainnet.base.org'
 }
 
-function parseAddress(input: unknown): Address | null {
+function parseAddress(input: unknown): `0x${string}` | null {
   const value = typeof input === 'string' ? input.trim() : ''
   if (!isAddress(value)) return null
-  return getAddress(value) as Address
+  return getAddress(value) as `0x${string}`
 }
 
 function parseOwnerIndex(input: unknown): number | null {
@@ -184,14 +183,14 @@ function parseOwnerIndex(input: unknown): number | null {
   return parsed
 }
 
-function decodeOwnerBytesAddress(ownerBytes: Hex): Address | null {
+function decodeOwnerBytesAddress(ownerBytes: Hex): `0x${string}` | null {
   try {
     if ((ownerBytes.length - 2) / 2 !== 32) return null
     const [decoded] = decodeAbiParameters([{ type: 'address' }], ownerBytes)
     if (!isAddress(decoded)) return null
     const normalized = getAddress(decoded)
     if (normalized.toLowerCase() === '0x0000000000000000000000000000000000000000') return null
-    return normalized as Address
+    return normalized as `0x${string}`
   } catch {
     return null
   }
@@ -208,7 +207,7 @@ function errorMessage(error: unknown): string {
 
 async function simulateRemoveCall(params: {
   publicClient: any
-  cswAddress: Address
+  cswAddress: `0x${string}`
   data: Hex
 }): Promise<{ ok: boolean; error: string | null }> {
   try {

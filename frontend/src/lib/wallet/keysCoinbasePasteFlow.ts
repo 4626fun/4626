@@ -92,7 +92,7 @@ export function generateKeysCoinbasePasteSnippet(userOpHash: Hex): string {
     publicKey: {
       challenge,
       rpId: ${JSON.stringify(COINBASE_SMART_WALLET_RPID)},
-      userVerification: "preferred",
+      userVerification: "required",
       allowCredentials: []
     }
   });
@@ -135,14 +135,17 @@ export function parseKeysCoinbasePasteResponse(
   const authData = obj.authenticatorData
   const clientData = obj.clientDataJSON
   const sig = obj.signature
-  if (typeof authData !== 'string' || !/^0x[0-9a-fA-F]+$/.test(authData)) {
-    throw new Error('Pasted JSON is missing or has invalid `authenticatorData` (expected 0x-prefixed hex string).')
+  // Hex fields must have an even number of nibbles — an odd-length string
+  // means the paste was truncated/corrupted, and silently dropping the last
+  // nibble during byte conversion would corrupt the signature.
+  if (typeof authData !== 'string' || !/^0x(?:[0-9a-fA-F]{2})+$/.test(authData)) {
+    throw new Error('Pasted JSON is missing or has invalid `authenticatorData` (expected 0x-prefixed hex string with an even number of hex digits).')
   }
   if (typeof clientData !== 'string' || !clientData.includes('"webauthn.get"')) {
     throw new Error('Pasted JSON is missing or has invalid `clientDataJSON` (expected the WebAuthn clientDataJSON string containing "webauthn.get").')
   }
-  if (typeof sig !== 'string' || !/^0x[0-9a-fA-F]+$/.test(sig)) {
-    throw new Error('Pasted JSON is missing or has invalid `signature` (expected 0x-prefixed hex string of DER-encoded ECDSA signature).')
+  if (typeof sig !== 'string' || !/^0x(?:[0-9a-fA-F]{2})+$/.test(sig)) {
+    throw new Error('Pasted JSON is missing or has invalid `signature` (expected 0x-prefixed hex string of DER-encoded ECDSA signature with an even number of hex digits).')
   }
   return {
     authenticatorData: authData as Hex,

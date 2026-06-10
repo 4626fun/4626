@@ -703,8 +703,23 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
    * as-is in the UserOp. The caller is responsible for verifying it signs
    * the correct hash (call computeReplayableUserOpHash first, generate the
    * snippet for that exact hash, then pass the resulting SignatureWrapper here).
+   *
+   * Must be accompanied by `preBuiltUserOp` — the exact UserOp returned by
+   * computeReplayableUserOpHash whose hash the signature covers. Without it,
+   * this function would rebuild the UserOp at submit time (fresh nonce read),
+   * and a nonce/calldata drift between prepare and submit would silently
+   * invalidate the signature.
    */
   preSignedSignature?: `0x${string}`
+  /**
+   * The UserOp the pre-signed signature covers, from the same
+   * computeReplayableUserOpHash call that produced the signed hash. Used
+   * verbatim — no rebuild — so the broadcast UserOp is byte-identical to what
+   * the passkey signed. The current on-chain replayable nonce is re-read as a
+   * preflight and submission fails fast with a "re-prepare" error if it has
+   * advanced (the signature can no longer land).
+   */
+  preBuiltUserOp?: V06UserOpFields
   onTelemetry?: (event: SelfBuiltUserOpLaneTelemetry) => void
 }): Promise<{
   userOp: V06UserOpFields
@@ -748,28 +763,59 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
       )
     }
   }
-  const prepareResult = await prepareReplayableOwnerUserOpForExternalSignature({
-    csw: params.csw,
-    innerCallData: params.innerCallData,
-    rpcUrl: params.rpcUrl,
-    onTelemetry: params.onTelemetry,
-  })
-  const wrappedData = prepareResult.userOp.callData
-  emit({ step: 'wrap', detail: { innerSelector, innerCallData: params.innerCallData, addOwnerTarget, wrappedData } })
-  const requireWebAuthnOwnerSignature =
-    Boolean(params.requireWebAuthnOwnerSignature) ||
-    (params.sessionKind === 'self_auth' && innerSelector === ADD_OWNER_ADDRESS_SELECTOR)
-  const userOp: V06UserOpFields = prepareResult.userOp
-  const hashToSign = prepareResult.hashToSign
-
   // ───────────────────────────────────────────────────────────────────
   // PRE-SIGNED SHORT-CIRCUIT
   //
   // When the caller provides preSignedSignature (typically from the
   // keys.coinbase.com paste flow), skip the wallet-signing block entirely
-  // and splice the pre-built SignatureWrapper directly into the UserOp.
+  // and splice the pre-built SignatureWrapper into the EXACT UserOp the
+  // signature covers (preBuiltUserOp from computeReplayableUserOpHash).
+  // Rebuilding the UserOp here (fresh nonce read) would race: if the
+  // replayable nonce or preview calldata moved between prepare and submit,
+  // the signature would no longer match the broadcast op. Instead we use
+  // the prebuilt op verbatim and preflight that it is still submittable.
   // ───────────────────────────────────────────────────────────────────
   if (params.preSignedSignature) {
+    const preBuiltUserOp = params.preBuiltUserOp
+    if (!preBuiltUserOp) {
+      throw new Error(
+        'preSignedSignature requires preBuiltUserOp (the UserOp returned by computeReplayableUserOpHash that the signature covers). Re-prepare and retry.',
+      )
+    }
+    const expectedWrappedData = encodeExecuteWithoutChainIdValidation(params.innerCallData)
+    if (preBuiltUserOp.callData.toLowerCase() !== expectedWrappedData.toLowerCase()) {
+      emit({
+        step: 'error',
+        detail: {
+          stage: 'pre_signed_preflight',
+          reason: 'calldata_drift',
+          preBuiltCallData: preBuiltUserOp.callData,
+          expectedWrappedData,
+        },
+      })
+      throw new Error(
+        'The prepared UserOp no longer matches the current mutation calldata (the preview/target changed after the snippet was generated). Re-prepare the paste flow and sign again.',
+      )
+    }
+    const currentNonce = await readReplayableNonce(
+      params.csw,
+      params.rpcUrl ?? 'https://mainnet.base.org',
+    )
+    if (currentNonce !== preBuiltUserOp.nonce) {
+      emit({
+        step: 'error',
+        detail: {
+          stage: 'pre_signed_preflight',
+          reason: 'nonce_advanced',
+          signedNonce: `0x${preBuiltUserOp.nonce.toString(16)}`,
+          currentNonce: `0x${currentNonce.toString(16)}`,
+        },
+      })
+      throw new Error(
+        `The CSW's replayable nonce advanced after the signature was collected (signed 0x${preBuiltUserOp.nonce.toString(16)}, now 0x${currentNonce.toString(16)}). The signature can no longer land. Re-prepare the paste flow and sign again.`,
+      )
+    }
+    const hashToSign = getUserOpHashWithoutChainIdLocal(preBuiltUserOp, ENTRY_POINT_V06_ADDRESS)
     emit({
       step: 'splice',
       detail: {
@@ -780,7 +826,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
       },
     })
     const signedUserOp: V06UserOpFields = {
-      ...userOp,
+      ...preBuiltUserOp,
       signature: params.preSignedSignature,
     }
     const beneficiary = params.beneficiary ?? params.csw
@@ -864,6 +910,22 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
       txHash,
     }
   }
+
+  // Wallet-signing lane: build a fresh UserOp (fresh replayable nonce) and
+  // ask the connected wallet to sign its chain-id-agnostic hash.
+  const prepareResult = await prepareReplayableOwnerUserOpForExternalSignature({
+    csw: params.csw,
+    innerCallData: params.innerCallData,
+    rpcUrl: params.rpcUrl,
+    onTelemetry: params.onTelemetry,
+  })
+  const wrappedData = prepareResult.userOp.callData
+  emit({ step: 'wrap', detail: { innerSelector, innerCallData: params.innerCallData, addOwnerTarget, wrappedData } })
+  const requireWebAuthnOwnerSignature =
+    Boolean(params.requireWebAuthnOwnerSignature) ||
+    (params.sessionKind === 'self_auth' && innerSelector === ADD_OWNER_ADDRESS_SELECTOR)
+  const userOp: V06UserOpFields = prepareResult.userOp
+  const hashToSign = prepareResult.hashToSign
 
   const signAttempts: Array<{
     method: 'personal_sign' | 'eth_sign'
