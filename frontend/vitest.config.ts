@@ -26,12 +26,9 @@ export default defineConfig({
     },
     // The suite mixes native-image tests and route-heavy module loading; keeping
     // fork concurrency low avoids cross-file timeout flakiness under full runs.
+    // (Vitest 4: poolOptions.forks.{min,max}Forks moved to top-level workers.)
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        minForks: 1,
-        maxForks: 2,
-      },
-    },
+    minWorkers: 1,
+    maxWorkers: 2,
   },
 })

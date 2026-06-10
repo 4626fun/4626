@@ -107,7 +107,11 @@ describe('wallet endpoint hardening', () => {
   const originalProcessorSecret = process.env.SOLANA_SWEEP_PROCESSOR_SECRET
 
   beforeEach(() => {
-    vi.clearAllMocks()
+    // Vitest 4: clearAllMocks no longer drops queued mockReturnValueOnce stubs,
+    // so unconsumed once-stubs (e.g. from 401 tests whose handlers return
+    // before reaching the rate limiter) would leak into later tests. resetAllMocks
+    // clears those queues and restores the original hoisted implementations.
+    vi.resetAllMocks()
     checkRateLimitMock.mockReturnValue({ allowed: false, resetAt: Date.now() + 60_000 })
     readRequestPrincipalAddressMock.mockReturnValue('0x0000000000000000000000000000000000000001')
     readBoundedJsonObjectBodyMock.mockImplementation(async (req: any) => req.body ?? null)

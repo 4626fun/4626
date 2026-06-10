@@ -13,15 +13,15 @@ describe('token image handler import safety', () => {
     expect(source).not.toContain('from "viem/chains"')
   })
 
-  it('keeps ShareOFT contractURI + canonical image fallback wiring in metadata hook', async () => {
+  it('keeps ShareOFT contractURI + token image fallback wiring in metadata hook', async () => {
     const source = await readFile(
       resolve(process.cwd(), 'src/hooks/useTokenMetadata.ts'),
       'utf8',
     )
 
     expect(source).toContain("name: 'contractURI'")
-    expect(source).toContain('buildCanonicalTokenImageUrl')
-    expect(source).toContain('/api/v1/token/${tokenAddress.toLowerCase()}/image?chain=8453&format=png')
+    expect(source).toContain('resolveDexscreenerTokenImageUrl')
+    expect(source).toContain('https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(tokenAddress.toLowerCase())}')
     expect(source).toContain('refetchContractURI')
   })
 })

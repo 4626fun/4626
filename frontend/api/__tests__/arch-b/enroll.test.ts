@@ -130,9 +130,10 @@ describe('POST /api/arch-b/enroll', () => {
     mocks.checkRateLimit.mockReturnValue({ allowed: true, remaining: 29, resetAt: Date.now() + 60_000 })
     mocks.resolveAuthorizedRequestPrincipal.mockResolvedValue(AUTHORIZED_PRINCIPAL)
     mocks.isContractAddressByBytecode.mockResolvedValue(true)
-    PrivyClientMock.mockImplementation(() => ({
-      getUserById: mocks.PrivyClientGetUserById,
-    }))
+    // Vitest 4: mocks need a `function` (not arrow) implementation to support `new`.
+    PrivyClientMock.mockImplementation(function () {
+      return { getUserById: mocks.PrivyClientGetUserById }
+    })
     mocks.PrivyClientGetUserById.mockResolvedValue({ id: PRIVY_USER_ID })
     mocks.resolveOwnerWalletId.mockReturnValue({
       status: 'ready',

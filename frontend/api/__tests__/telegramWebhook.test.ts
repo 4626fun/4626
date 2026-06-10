@@ -260,7 +260,11 @@ describe('telegram webhook handler', () => {
   })
 
   beforeEach(() => {
-    vi.clearAllMocks()
+    // Vitest 4: `restoreMocks: true` no longer restores `vi.fn()` mocks (only
+    // `vi.spyOn` spies), so unconsumed mockResolvedValueOnce queues from earlier
+    // tests would leak into later ones. `vi.resetAllMocks()` clears queues and
+    // restores each mock's original `vi.fn(impl)` implementation (Vitest 3 parity).
+    vi.resetAllMocks()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true }) }))
     executeDeterministicCommandMock.mockResolvedValue({ ok: true, response: 'Command received.' })
     getDbMock.mockResolvedValue({ sql: vi.fn(async () => ({ rows: [] })) })

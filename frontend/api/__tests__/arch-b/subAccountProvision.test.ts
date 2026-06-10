@@ -192,9 +192,10 @@ function resetMocks() {
   })
   mocks.checkPrivyDelegation.mockResolvedValue({ present: true })
   mocks.isContractAddressByBytecode.mockResolvedValue(true)
-  PrivyClientMock.mockImplementation(() => ({
-    getUserById: mocks.PrivyClientGetUserById,
-  }))
+  // Vitest 4: mocks need a `function` (not arrow) implementation to support `new`.
+  PrivyClientMock.mockImplementation(function () {
+    return { getUserById: mocks.PrivyClientGetUserById }
+  })
   mocks.PrivyClientGetUserById.mockResolvedValue({ id: PRIVY_USER_ID })
   mocks.resolveOwnerWalletId.mockReturnValue({
     status: 'ready',

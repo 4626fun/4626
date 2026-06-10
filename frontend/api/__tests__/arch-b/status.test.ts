@@ -104,9 +104,10 @@ describe('GET /api/arch-b/status', () => {
       })),
     })
     mocks.resolveAuthorizedRequestPrincipal.mockResolvedValue(AUTHORIZED_PRINCIPAL)
-    PrivyClientMock.mockImplementation(() => ({
-      getUserById: mocks.PrivyClientGetUserById,
-    }))
+    // Vitest 4: mocks need a `function` (not arrow) implementation to support `new`.
+    PrivyClientMock.mockImplementation(function () {
+      return { getUserById: mocks.PrivyClientGetUserById }
+    })
     mocks.PrivyClientGetUserById.mockResolvedValue({ id: 'privy:u1' })
     mocks.resolveCommandIssuerContextByProfileId.mockResolvedValue({
       status: 'ready',

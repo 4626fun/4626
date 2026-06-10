@@ -558,9 +558,8 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toContain('Arena register (supplied ids):')
     expect(result.reply).toContain('Identity bound for \'mine\'')
     expect(result.reply).toContain(sender)
-    expect(result.reply).toContain('join=ok[dry]')
-    expect(result.reply).toContain('activate=ok[dry]')
-    expect(result.reply).toContain('add-api-wallet=ok[dry]')
+    // add-api-wallet is a successful no-op in dgclaw v2 (no run → no [dry] suffix)
+    expect(result.reply).toContain('steps: join=ok[dry] activate=ok[dry] add-api-wallet=ok')
     expect(result.reply).toContain(agentId)
     expect(result.reply).toContain(agentWallet)
 

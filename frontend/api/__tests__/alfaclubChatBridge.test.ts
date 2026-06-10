@@ -1359,12 +1359,16 @@ describe('fetchRoomHistory — sanitized 403/non-2xx error detail', () => {
 
 describe('Browser fingerprint headers — Chromium client-hints triple', () => {
   it('includes sec-ch-ua / sec-ch-ua-mobile / sec-ch-ua-platform consistent with the UA', () => {
-    expect(_ALFACLUB_API_BROWSER_HEADERS_FOR_TESTS['sec-ch-ua']).toMatch(/Chromium.*v="124"/)
+    expect(_ALFACLUB_API_BROWSER_HEADERS_FOR_TESTS['sec-ch-ua']).toMatch(/Chromium.*v="136"/)
     expect(_ALFACLUB_API_BROWSER_HEADERS_FOR_TESTS['sec-ch-ua-mobile']).toBe('?0')
-    expect(_ALFACLUB_API_BROWSER_HEADERS_FOR_TESTS['sec-ch-ua-platform']).toBe('"macOS"')
-    // UA must declare the same Chrome major (124) and macOS platform.
-    expect(_ALFACLUB_API_BROWSER_HEADERS_FOR_TESTS['User-Agent']).toContain('Chrome/124')
-    expect(_ALFACLUB_API_BROWSER_HEADERS_FOR_TESTS['User-Agent']).toContain('Mac OS X')
+    expect(_ALFACLUB_API_BROWSER_HEADERS_FOR_TESTS['sec-ch-ua-platform']).toBe('"Windows"')
+    // UA must declare the same Chrome major (136) and Windows platform.
+    expect(_ALFACLUB_API_BROWSER_HEADERS_FOR_TESTS['User-Agent']).toContain('Chrome/136')
+    expect(_ALFACLUB_API_BROWSER_HEADERS_FOR_TESTS['User-Agent']).toContain('Windows NT')
+    // Consistency guard: the sec-ch-ua major must always equal the UA's Chrome major.
+    const uaMajor = _ALFACLUB_API_BROWSER_HEADERS_FOR_TESTS['User-Agent'].match(/Chrome\/(\d+)/)?.[1]
+    expect(uaMajor).toBeTruthy()
+    expect(_ALFACLUB_API_BROWSER_HEADERS_FOR_TESTS['sec-ch-ua']).toContain(`"Chromium";v="${uaMajor}"`)
   })
 
   it('includes a stock Accept-Encoding negotiated set', () => {
@@ -1493,7 +1497,7 @@ describe('ALFACLUB_CHAT_API_PROXY_URL — optional escape hatch for Cloudflare-b
     expect(captured[0]?.headers.Referer).toBe('https://alfaclub.app/')
     expect(captured[0]?.headers['Sec-Fetch-Site']).toBe('same-site')
     expect(captured[0]?.headers['User-Agent']).toMatch(/Mozilla\/5\.0/)
-    expect(captured[0]?.headers['sec-ch-ua']).toMatch(/Chromium.*v="124"/)
+    expect(captured[0]?.headers['sec-ch-ua']).toMatch(/Chromium.*v="136"/)
   })
 })
 

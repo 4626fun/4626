@@ -46,10 +46,13 @@ const mockPoolQuery = vi.fn(async () => {
   err.code = 'XX000'
   throw err
 })
-const mockPoolCtor = vi.fn((..._args: any[]) => ({
-  query: mockPoolQuery,
-  end: mockPoolEnd,
-}))
+// Vitest 4 requires `function`/`class` implementations for mocks invoked with `new`.
+const mockPoolCtor = vi.fn(function (..._args: any[]) {
+  return {
+    query: mockPoolQuery,
+    end: mockPoolEnd,
+  }
+})
 
 vi.mock('pg', () => ({
   Pool: mockPoolCtor,

@@ -104,6 +104,14 @@ vi.mock('../../server/_lib/auth/requestPrincipal.js', () => ({
   resolveAuthorizedRequestPrincipal: resolveAuthorizedRequestPrincipalMock,
 }))
 
+// Vitest 4: the `restoreMocks: true` config option no longer resets `vi.fn()`
+// mocks (it only restores `vi.spyOn` spies), so per-test `mockReturnValue(...)`
+// overrides would otherwise leak across tests. Reset each mock back to the
+// original implementation provided in `vi.hoisted` before every test.
+beforeEach(() => {
+  vi.resetAllMocks()
+})
+
 describe('image generation route registration', () => {
   beforeEach(() => {
     vi.clearAllMocks()

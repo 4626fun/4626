@@ -27,6 +27,14 @@ vi.mock('../db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 
+// Schema bootstrap is a noop in unit tests so the cold-start migration's DDL
+// statements never consume queued mock results (SCHEMA_BOOTSTRAP_STMT_COUNT
+// below assumes bootstrap contributes zero statements).
+vi.mock('../db/schemaBootstrap.js', () => ({
+  ensureMigrationApplied: vi.fn(async () => {}),
+  ensureAmoeSchema: vi.fn(async () => {}),
+}))
+
 import {
   AMOE_SUBMISSION_TERMINAL_STATES,
   DEFAULT_AMOE_MAX_RETRIES,

@@ -217,7 +217,11 @@ function makeCall(to: string, data = '0x12345678') {
 
 describe('deploy session optimistic concurrency', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    // Vitest 4: `restoreMocks: true` no longer restores `vi.fn()` mocks (only
+    // `vi.spyOn` spies), so persistent mockResolvedValue/mockImplementation set
+    // in earlier tests would leak across tests. `vi.resetAllMocks()` restores
+    // every mock to its original `vi.fn(impl)` implementation (Vitest 3 parity).
+    vi.resetAllMocks()
     readSessionFromRequestMock.mockReturnValue({
       address: '0x0000000000000000000000000000000000000001',
     } as any)

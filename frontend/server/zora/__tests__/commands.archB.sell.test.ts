@@ -213,6 +213,10 @@ function callSell(overrides: { coin?: string; amount?: string; groupId?: string;
 describe('handleCoinCommand -- /coin sell via Architecture B', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Vitest 4: clearAllMocks no longer drops queued *Once implementations, so
+    // explicitly reset mocks that accumulate once-values to avoid cross-test leakage.
+    fetchMock.mockReset()
+    checkRouterTargetMock.mockReset()
 
     // Patch global fetch so getTradeQuoteWithReferrer is controlled.
     vi.stubGlobal('fetch', fetchMock)

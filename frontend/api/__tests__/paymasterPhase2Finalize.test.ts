@@ -129,6 +129,8 @@ vi.mock('../../src/deploy/bytecode.generated.js', () => ({
       VaultShareBurnStream: mockBytecode,
       CreatorCoinPolicyController: mockBytecode,
       CreatorCharmStrategy: mockBytecode,
+      CreatorOImpairmentClaims: mockBytecode,
+      CreatorORecoveryEscrow: mockBytecode,
       AjnaVaultAuth: mockBytecode,
       AjnaERC4626Vault: mockBytecode,
       ERC4626StrategyAdapter: mockBytecode,

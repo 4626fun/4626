@@ -20,7 +20,11 @@ vi.mock('../../server/_lib/wallet/canonicalCswDelegation.js', () => ({
 
 describe('POST /api/wallet/confirm-owner', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    // Vitest 4: the `restoreMocks: true` config option only restores `vi.spyOn`
+    // spies, so persistent per-test `mockReturnValue(...)` overrides (e.g. the
+    // Base setup flags in the 409 test) would leak into later tests. Reset all
+    // mocks back to their original hoisted implementations instead.
+    vi.resetAllMocks()
     getDbMock.mockResolvedValue({ sql: vi.fn(async () => ({ rows: [] })) })
   })
 
