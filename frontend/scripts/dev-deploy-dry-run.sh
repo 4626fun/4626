@@ -130,17 +130,13 @@ normalize_local_origin_port() {
   echo "$origin"
 }
 
-USE_LOCAL_BATCHER="${DEPLOY_DRY_RUN_USE_LOCAL_BATCHER:-1}"
-if [[ "$USE_LOCAL_BATCHER" == "1" ]]; then
-  if ! command -v forge >/dev/null 2>&1; then
-    echo "forge is required when DEPLOY_DRY_RUN_USE_LOCAL_BATCHER=1." >&2
-    exit 1
-  fi
-  if [[ ! -f "$LOCAL_BATCHER_HELPER" ]]; then
-    echo "Missing local batcher helper: $LOCAL_BATCHER_HELPER" >&2
-    exit 1
-  fi
-fi
+# Preserve explicit shell overrides so preset files do not clobber CLI intent.
+CLI_DEPLOY_DRY_RUN_USE_LOCAL_BATCHER="${DEPLOY_DRY_RUN_USE_LOCAL_BATCHER-__unset__}"
+CLI_DEPLOY_DRY_RUN_MUTATE_CANONICAL_FORK="${DEPLOY_DRY_RUN_MUTATE_CANONICAL_FORK-__unset__}"
+CLI_VITE_VAULT_VANITY_PREFIX="${VITE_VAULT_VANITY_PREFIX-__unset__}"
+CLI_VITE_VAULT_VANITY_MAX_TRIES="${VITE_VAULT_VANITY_MAX_TRIES-__unset__}"
+CLI_VITE_SHARE_OFT_VANITY_SUFFIX="${VITE_SHARE_OFT_VANITY_SUFFIX-__unset__}"
+CLI_VITE_SHARE_OFT_VANITY_MAX_TRIES="${VITE_SHARE_OFT_VANITY_MAX_TRIES-__unset__}"
 
 set -a
 # Load default frontend env as a fallback baseline for dry-run.
@@ -153,11 +149,42 @@ fi
 source "$PRESET_FILE"
 set +a
 
-# Dry-run defaults should not require a live Postgres connection.
-# This avoids local startup failures when frontend/.env carries an unreachable
-# DATABASE_URL from another workflow. Set DEPLOY_DRY_RUN_KEEP_DB_ENV=1 to opt
-# back into DB-backed routes during dry-run.
-export DEPLOY_DRY_RUN_KEEP_DB_ENV="${DEPLOY_DRY_RUN_KEEP_DB_ENV:-0}"
+# Re-apply explicit CLI overrides after sourcing env files.
+if [[ "$CLI_DEPLOY_DRY_RUN_USE_LOCAL_BATCHER" != "__unset__" ]]; then
+  export DEPLOY_DRY_RUN_USE_LOCAL_BATCHER="$CLI_DEPLOY_DRY_RUN_USE_LOCAL_BATCHER"
+fi
+if [[ "$CLI_DEPLOY_DRY_RUN_MUTATE_CANONICAL_FORK" != "__unset__" ]]; then
+  export DEPLOY_DRY_RUN_MUTATE_CANONICAL_FORK="$CLI_DEPLOY_DRY_RUN_MUTATE_CANONICAL_FORK"
+fi
+if [[ "$CLI_VITE_VAULT_VANITY_PREFIX" != "__unset__" ]]; then
+  export VITE_VAULT_VANITY_PREFIX="$CLI_VITE_VAULT_VANITY_PREFIX"
+fi
+if [[ "$CLI_VITE_VAULT_VANITY_MAX_TRIES" != "__unset__" ]]; then
+  export VITE_VAULT_VANITY_MAX_TRIES="$CLI_VITE_VAULT_VANITY_MAX_TRIES"
+fi
+if [[ "$CLI_VITE_SHARE_OFT_VANITY_SUFFIX" != "__unset__" ]]; then
+  export VITE_SHARE_OFT_VANITY_SUFFIX="$CLI_VITE_SHARE_OFT_VANITY_SUFFIX"
+fi
+if [[ "$CLI_VITE_SHARE_OFT_VANITY_MAX_TRIES" != "__unset__" ]]; then
+  export VITE_SHARE_OFT_VANITY_MAX_TRIES="$CLI_VITE_SHARE_OFT_VANITY_MAX_TRIES"
+fi
+
+USE_LOCAL_BATCHER="${DEPLOY_DRY_RUN_USE_LOCAL_BATCHER:-1}"
+if [[ "$USE_LOCAL_BATCHER" == "1" ]]; then
+  if ! command -v forge >/dev/null 2>&1; then
+    echo "forge is required when DEPLOY_DRY_RUN_USE_LOCAL_BATCHER=1." >&2
+    exit 1
+  fi
+  if [[ ! -f "$LOCAL_BATCHER_HELPER" ]]; then
+    echo "Missing local batcher helper: $LOCAL_BATCHER_HELPER" >&2
+    exit 1
+  fi
+fi
+
+# Keep DB-backed routes enabled by default so waitlist/account/chat flows behave
+# like production during local dry-run. Set DEPLOY_DRY_RUN_KEEP_DB_ENV=0 only
+# when you explicitly want a DB-less dry-run boot.
+export DEPLOY_DRY_RUN_KEEP_DB_ENV="${DEPLOY_DRY_RUN_KEEP_DB_ENV:-1}"
 if [[ "${DEPLOY_DRY_RUN_KEEP_DB_ENV}" != "1" ]]; then
   # Isolate the dry-run from any real DB (Supabase or legacy Vercel Postgres).
   unset DATABASE_URL
@@ -280,24 +307,29 @@ fi
 
 echo "Base fork ready. Logs: $ANVIL_LOG_FILE"
 if [[ "$USE_LOCAL_BATCHER" != "1" ]]; then
-  echo "Ensuring fork batcher Phase1Module matches live store-aligned wiring..."
-  (
-    cd "$FRONTEND_DIR"
-    DEPLOY_DRY_RUN_LOCAL_RPC_URL="$LOCAL_RPC_URL" \
-      pnpm exec tsx "scripts/ops/ensure-fork-phase1-module-aligned.ts"
-  ) || {
-    echo "Failed to align fork Phase1Module. Restart deploy dry-run or rerun ensure-fork-phase1-module-aligned.ts." >&2
-    exit 1
-  }
-  echo "Ensuring fork Phase3 helper matches local forge artifact..."
-  (
-    cd "$FRONTEND_DIR"
-    DEPLOY_DRY_RUN_LOCAL_RPC_URL="$LOCAL_RPC_URL" \
-      pnpm exec tsx "scripts/ops/ensure-fork-phase3-helper-aligned.ts"
-  ) || {
-    echo "Failed to align fork Phase3 helper. Run forge build at repo root, then retry." >&2
-    exit 1
-  }
+  MUTATE_CANONICAL_FORK="${DEPLOY_DRY_RUN_MUTATE_CANONICAL_FORK:-0}"
+  if [[ "$MUTATE_CANONICAL_FORK" == "1" ]]; then
+    echo "Ensuring fork batcher Phase1Module matches live store-aligned wiring..."
+    (
+      cd "$FRONTEND_DIR"
+      DEPLOY_DRY_RUN_LOCAL_RPC_URL="$LOCAL_RPC_URL" \
+        pnpm exec tsx "scripts/ops/ensure-fork-phase1-module-aligned.ts"
+    ) || {
+      echo "Failed to align fork Phase1Module. Restart deploy dry-run or rerun ensure-fork-phase1-module-aligned.ts." >&2
+      exit 1
+    }
+    echo "Ensuring fork Phase3 helper matches local forge artifact..."
+    (
+      cd "$FRONTEND_DIR"
+      DEPLOY_DRY_RUN_LOCAL_RPC_URL="$LOCAL_RPC_URL" \
+        pnpm exec tsx "scripts/ops/ensure-fork-phase3-helper-aligned.ts"
+    ) || {
+      echo "Failed to align fork Phase3 helper. Run forge build at repo root, then retry." >&2
+      exit 1
+    }
+  else
+    echo "Canonical fork mode: leaving live batcher/module wiring unchanged (DEPLOY_DRY_RUN_MUTATE_CANONICAL_FORK=0)."
+  fi
 fi
 if [[ "$USE_LOCAL_BATCHER" == "1" ]]; then
   echo "Deploying local DeploymentBatcher override onto the fork..."

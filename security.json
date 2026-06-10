@@ -1,0 +1,19 @@
+{
+  "name": "4626 Solana OFT Program",
+  "logo": "https://4626.fun/favicon.ico",
+  "description": "Solana OFT program for 4626 share-mesh and cross-chain token operations.",
+  "project_url": "https://4626.fun",
+  "contacts": [
+    "email:hello@4626.fun",
+    "twitter:@4626fun"
+  ],
+  "policy": "https://github.com/4626fun/SECURITY.md",
+  "acknowledgements": "https://github.com/4626fun/SECURITY.md",
+  "preferred_languages": [
+    "en"
+  ],
+  "source_code": "https://github.com/4626fun",
+  "source_release": "main",
+  "source_revision": "3acd638b82be02c2dba99ed2511c94ec42877492",
+  "version": "1.0.0"
+}

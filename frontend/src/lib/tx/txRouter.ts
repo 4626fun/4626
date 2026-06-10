@@ -315,6 +315,17 @@ function requiresSponsoredCanonical4337(context: TxRouterContext): boolean {
   return context.executionMode === 'canonical' && context.signerType === 'EOA' && isPrivyEmbeddedConnector(context)
 }
 
+function shouldAllowEmbeddedCanonicalDirectFallback(context: TxRouterContext): boolean {
+  if (!requiresSponsoredCanonical4337(context)) return false
+  const envFlag = String((import.meta.env as Record<string, string | undefined>).VITE_ALLOW_EMBEDDED_CANONICAL_DIRECT_FALLBACK ?? '')
+    .trim()
+    .toLowerCase()
+  if (envFlag === '1' || envFlag === 'true' || envFlag === 'yes' || envFlag === 'on') return true
+  if (typeof window === 'undefined') return false
+  const host = String(window.location?.hostname ?? '').trim().toLowerCase()
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1'
+}
+
 function embeddedCanonicalSponsorshipRequiredError(reason: string): Error {
   return new Error(
     `Paymaster sponsorship is required for embedded canonical execution, but it was unavailable: ${reason}. ` +
@@ -746,6 +757,23 @@ async function sendViaCanonical4337(params: {
   if (shouldBypassCanonical4337ForSwapRouterValue(calls)) {
     const reason = 'swap-router native-value call is not eligible for the current paymaster path'
     if (requiresSponsoredCanonical4337(context)) {
+      if (shouldAllowEmbeddedCanonicalDirectFallback(context)) {
+        context.debug?.({
+          event: 'send_fallback',
+          mode: decision.mode,
+          fallbackMode: 'canonicalDirect',
+          method: 'eth_sendUserOperation',
+          chainId: context.chainId,
+          sender,
+          callTargets: calls.map((call) => call.to),
+          error: `${reason}; embedded dev fallback enabled`,
+        })
+        return sendViaMode({
+          context,
+          decision: { ...decision, mode: 'canonicalDirect', fallbackMode: 'canonicalDirect' },
+          calls,
+        })
+      }
       context.debug?.({
         event: 'send_error',
         mode: decision.mode,
@@ -812,6 +840,23 @@ async function sendViaCanonical4337(params: {
     const shouldFallbackToCanonicalDirect = isCanonicalPaymasterPolicyFallbackError(error)
     if (shouldFallbackToCanonicalDirect) {
       if (requiresSponsoredCanonical4337(context)) {
+        if (shouldAllowEmbeddedCanonicalDirectFallback(context)) {
+          context.debug?.({
+            event: 'send_fallback',
+            mode: decision.mode,
+            fallbackMode: 'canonicalDirect',
+            method: 'eth_sendUserOperation',
+            chainId: context.chainId,
+            sender,
+            callTargets: calls.map((call) => call.to),
+            error: `${normalized.message}; embedded dev fallback enabled`,
+          })
+          return sendViaMode({
+            context,
+            decision: { ...decision, mode: 'canonicalDirect', fallbackMode: 'canonicalDirect' },
+            calls,
+          })
+        }
         context.debug?.({
           event: 'send_error',
           mode: decision.mode,

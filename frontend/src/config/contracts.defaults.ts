@@ -173,9 +173,14 @@ export const BASE_DEFAULTS = {
   // routing writes to a stale or wrong address.
   alfaCreatorKeyLpFactory: addr('0000000000000000000000000000000000000000'),
 
-  // Impairment-v1 auxiliary defaults.
-  // Keep zero-by-default so unconfigured environments fail closed instead of
-  // accidentally wiring stale impairment endpoints into new deploys.
+  // Impairment-v1 auxiliary contracts.
+  // Claims/escrow are PER-VAULT: each 1-click deploy derives a fresh pair via
+  // `buildImpairmentAuxPlan` (permissionless CREATE2), wires `setVault`, then
+  // transfers ownership to the protocol treasury. Shared defaults stay zero so
+  // no flow accidentally reuses a singleton pair across vaults. (A standalone
+  // historical pair from DeployImpairmentAuxContracts.s.sol exists at
+  // 0xfd1704ac… / 0x51d2a6a5… and can be selected via IMPAIRMENT_CLAIMS /
+  // IMPAIRMENT_RECOVERY_ESCROW env overrides for manual/legacy wiring only.)
   impairmentClaims: addr('0000000000000000000000000000000000000000'),
   impairmentRecoveryEscrow: addr('0000000000000000000000000000000000000000'),
   impairmentGuardian: addr('0000000000000000000000000000000000000000'),

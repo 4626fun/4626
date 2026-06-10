@@ -109,6 +109,11 @@ import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
 import { selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelection'
 import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
 import {
+  buildImpairmentAuxPlan,
+  PERMISSIONLESS_CREATE2_DEPLOYER,
+  type ImpairmentAuxContractPlan,
+} from '@/lib/deploy/impairmentAuxPlan'
+import {
   normalizeUnderlyingSymbol,
   toShareName,
   toShareSymbol,
@@ -128,7 +133,6 @@ import {
   deployTimelineProgressLabel,
   deriveDeployTimelineProgressState,
   isProviderCollisionErrorMessage,
-  summarizeDeployTimelineProgress,
 } from './deployVaultSignals'
 import { 
   sendCoinbaseSmartWalletUserOperation, 
@@ -586,6 +590,8 @@ type OvaultMeshStatus = {
   assetPeerSet: boolean
   sharePeerSet: boolean
   meshStep: string | null
+  meteoraAlphaVault: Hex | null
+  solanaProgramIds: Hex[]
 }
 
 function readOvaultMeshStatus(raw: unknown): OvaultMeshStatus | null {
@@ -597,9 +603,26 @@ function readOvaultMeshStatus(raw: unknown): OvaultMeshStatus | null {
     'redeemEligible' in value ||
     'assetPeerSet' in value ||
     'sharePeerSet' in value ||
-    'meshStep' in value
+    'meshStep' in value ||
+    'meteoraAlphaVault' in value ||
+    'solanaProgramIds' in value
   )
   if (!hasKnownField) return null
+  const meteoraAlphaVault =
+    typeof value.meteoraAlphaVault === 'string' &&
+    /^0x[0-9a-fA-F]{64}$/.test(value.meteoraAlphaVault) &&
+    value.meteoraAlphaVault !== `0x${'0'.repeat(64)}`
+      ? (value.meteoraAlphaVault as Hex)
+      : null
+  const solanaProgramIds = Array.isArray(value.solanaProgramIds)
+    ? Array.from(
+        new Set(
+          value.solanaProgramIds
+            .map((entry) => (typeof entry === 'string' && /^0x[0-9a-fA-F]{64}$/.test(entry) ? entry.toLowerCase() : null))
+            .filter((entry): entry is string => Boolean(entry)),
+        ),
+      ).map((entry) => entry as Hex)
+    : []
   return {
     existingMintCompatible: value.existingMintCompatible !== false,
     depositEligible: value.depositEligible !== false,
@@ -607,6 +630,8 @@ function readOvaultMeshStatus(raw: unknown): OvaultMeshStatus | null {
     assetPeerSet: value.assetPeerSet !== false,
     sharePeerSet: value.sharePeerSet !== false,
     meshStep: typeof value.meshStep === 'string' && value.meshStep.trim() ? value.meshStep.trim() : null,
+    meteoraAlphaVault,
+    solanaProgramIds,
   }
 }
 
@@ -617,14 +642,6 @@ const DRY_RUN_PHASE_NAMES = new Set<DeploySessionDryRunPhase['name']>([
   'phase3',
   'phase4',
 ])
-
-const DRY_RUN_PHASE_LABELS: Record<DeploySessionDryRunPhase['name'], string> = {
-  phase1: 'Phase 1 core/finalize',
-  phase2Core: 'Phase 2 core',
-  phase2Finalize: 'Phase 2 finalize',
-  phase3: 'Phase 3 strategies',
-  phase4: 'Phase 4 launch',
-}
 
 function normalizeDryRunResponse(data: unknown): DeploySessionDryRunResponse | null {
   if (!data || typeof data !== 'object') return null
@@ -756,6 +773,51 @@ async function isCoinbaseSmartWalletOwner(params: {
 }
 
 const shortAddress = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`
+const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+
+function hexToBytes(hex: string): Uint8Array | null {
+  const normalized = hex.startsWith('0x') ? hex.slice(2) : hex
+  if (!/^[0-9a-fA-F]+$/.test(normalized) || normalized.length % 2 !== 0) return null
+  const bytes = new Uint8Array(normalized.length / 2)
+  for (let i = 0; i < normalized.length; i += 2) {
+    const byte = Number.parseInt(normalized.slice(i, i + 2), 16)
+    if (!Number.isFinite(byte)) return null
+    bytes[i / 2] = byte
+  }
+  return bytes
+}
+
+function bytesToBase58(bytes: Uint8Array): string {
+  if (bytes.length === 0) return ''
+  let value = 0n
+  for (const b of bytes) value = value * 256n + BigInt(b)
+
+  let encoded = ''
+  while (value > 0n) {
+    const mod = Number(value % 58n)
+    encoded = BASE58_ALPHABET[mod] + encoded
+    value /= 58n
+  }
+
+  let leadingZeroes = 0
+  while (leadingZeroes < bytes.length && bytes[leadingZeroes] === 0) leadingZeroes += 1
+  const prefix = '1'.repeat(leadingZeroes)
+  return encoded ? prefix + encoded : prefix || '1'
+}
+
+function bytes32ToSolanaAddress(value: string | null | undefined): string | null {
+  if (!value) return null
+  const normalized = value.toLowerCase()
+  if (!/^0x[0-9a-f]{64}$/.test(normalized)) return null
+  if (normalized === `0x${'0'.repeat(64)}`) return null
+  const bytes = hexToBytes(normalized)
+  if (!bytes || bytes.length !== 32) return null
+  return bytesToBase58(bytes)
+}
+
+function solanaExplorerAddressUrl(address: string): string {
+  return `https://explorer.solana.com/address/${address}?cluster=mainnet-beta`
+}
 
 function formatEthPerTokenForUi(weiPerToken: bigint): string {
   if (weiPerToken <= 0n) return '0'
@@ -1198,6 +1260,29 @@ const BATCHER_PHASE3_CONFIG_ABI = [
   },
 ] as const
 
+const BATCHER_SHARED_INFRA_ABI = [
+  { type: 'function', name: 'phase1Module', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'phase2Module', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'phase3Helper', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'uniV4Helper', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'utilsHelper', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'create2Deployer', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'bytecodeStore', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'protocolTreasury', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'registry', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'chainlinkEthUsd', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'solanaBridgeAdapter', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'solanaDestination', stateMutability: 'view', inputs: [], outputs: [{ type: 'bytes32' }] },
+  { type: 'function', name: 'solanaShareOftPeer', stateMutability: 'view', inputs: [], outputs: [{ type: 'bytes32' }] },
+  {
+    type: 'function',
+    name: 'getOVaultRuntimeConfig',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'tuple', components: [{ name: 'hubComposer', type: 'address' }, { name: 'solanaEid', type: 'uint32' }, { name: 'enabled', type: 'bool' }] }],
+  },
+] as const
+
 const PHASE3_HELPER_VIEW_ABI = [
   {
     type: 'function',
@@ -1419,6 +1504,13 @@ const IMPAIRMENT_AUX_OWNED_ABI = [
     name: 'setVault',
     stateMutability: 'nonpayable',
     inputs: [{ name: 'vault_', type: 'address' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'transferOwnership',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'newOwner', type: 'address' }],
     outputs: [],
   },
 ] as const
@@ -2182,33 +2274,57 @@ function AddressRow({
   label,
   address,
   deployed,
+  forkOnly,
+  variant,
+  dryRunPassed,
 }: {
   label: string
   address: Address | null | undefined
   deployed?: boolean | null
+  forkOnly?: boolean
+  variant?: 'default' | 'shared'
+  /** When the dry run simulated this row's phase successfully, render a green check next to the status. */
+  dryRunPassed?: boolean
 }) {
   const a = address ? String(address) : ''
   const ok = a && a !== String(ZERO_ADDRESS)
   const href = ok ? `https://basescan.org/address/${a}` : null
+  const isShared = variant === 'shared'
+  const dryRunCheck = dryRunPassed ? (
+    <span className="text-emerald-300 ml-1" title="Dry run passed for this phase">
+      ✓
+    </span>
+  ) : null
   return (
-    <div className="flex items-center justify-between gap-4 text-[11px]">
-      <div className="text-zinc-500">{label}</div>
-      {ok && deployed === false ? (
-        <div className="font-mono text-zinc-400">
-          {shortAddress(a)} <span className="text-zinc-600">(pending)</span>
+    <div
+      className={`flex items-center justify-between gap-4 text-[11px] rounded px-2 py-1 ${
+        isShared ? 'bg-sky-500/8 border border-sky-400/20' : ''
+      }`}
+    >
+      <div className={isShared ? 'text-sky-200/90' : 'text-zinc-500'}>{label}</div>
+      {ok && forkOnly ? (
+        <div className="font-mono text-amber-300/90 break-all text-right">
+          {a} <span className="text-amber-200/70">(local fork)</span>
+          {dryRunCheck}
+        </div>
+      ) : ok && deployed === false ? (
+        <div className="font-mono text-zinc-400 break-all text-right">
+          {a} <span className="text-zinc-600">(pending)</span>
+          {dryRunCheck}
         </div>
       ) : ok && deployed === null ? (
-        <div className="font-mono text-zinc-500">
-          {shortAddress(a)} <span className="text-zinc-600">(checking…)</span>
+        <div className="font-mono text-zinc-500 break-all text-right">
+          {a} <span className="text-zinc-600">(checking…)</span>
+          {dryRunCheck}
         </div>
       ) : ok && href ? (
         <a
           href={href}
           target="_blank"
           rel="noreferrer"
-          className="font-mono text-zinc-200/90 hover:text-white transition-colors"
+          className="font-mono text-zinc-200/90 hover:text-white transition-colors break-all text-right"
         >
-          {shortAddress(a)}
+          {a}
         </a>
       ) : (
         <div className="font-mono text-zinc-600">—</div>
@@ -3278,6 +3394,18 @@ function DeployVaultBatcher({
     return q96ToCurrencyPerTokenBaseUnits(floorPriceQ96Aligned, 18)
   }, [floorPriceQ96Aligned])
 
+  const vaultTokenBadge = useMemo(() => {
+    const raw = String(depositSymbol ?? '').trim()
+    const normalized = raw.replace(/^[■▢$\s]+/, '').toUpperCase()
+    return `▢${normalized || 'ASSET'}`
+  }, [depositSymbol])
+
+  const shareTokenBadge = useMemo(() => {
+    const raw = String(shareSymbol ?? '').trim()
+    const normalized = raw.replace(/^[■▢$\s]+/, '').toUpperCase()
+    return `■${normalized || 'ASSET'}`
+  }, [shareSymbol])
+
   // ERC-4337 deploy requires the initial deposit to be owned by the smart wallet sender.
   const { data: smartWalletTokenBalance } = useReadContract({
     address: creatorToken as `0x${string}`,
@@ -3530,6 +3658,156 @@ function DeployVaultBatcher({
   })
 
   const batcherInfraQueryLoading = batcherInfraQuery.isLoading || batcherInfraQuery.isFetching
+  const batcherSharedInfraQuery = useQuery({
+    queryKey: ['creatorVaultBatcher', 'sharedInfra', batcherAddress],
+    enabled: !!publicClient && !!batcherAddress,
+    staleTime: 120_000,
+    retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
+    retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
+    queryFn: async () => {
+      const readAddress = async (functionName:
+        | 'phase1Module'
+        | 'phase2Module'
+        | 'phase3Helper'
+        | 'uniV4Helper'
+        | 'utilsHelper'
+        | 'create2Deployer'
+        | 'bytecodeStore'
+        | 'protocolTreasury'
+        | 'registry'
+        | 'chainlinkEthUsd'
+        | 'solanaBridgeAdapter') => {
+        const raw = await publicClient!
+          .readContract({
+            address: batcherAddress as Address,
+            abi: BATCHER_SHARED_INFRA_ABI,
+            functionName,
+          })
+          .catch(() => null)
+        return normalizeAddressLike(raw)
+      }
+
+      const [phase1Module, phase2Module, phase3Helper, uniV4Helper, utilsHelper, create2Deployer, bytecodeStore, protocolTreasury, registry, chainlinkEthUsd, solanaBridgeAdapter] =
+        await Promise.all([
+          readAddress('phase1Module'),
+          readAddress('phase2Module'),
+          readAddress('phase3Helper'),
+          readAddress('uniV4Helper'),
+          readAddress('utilsHelper'),
+          readAddress('create2Deployer'),
+          readAddress('bytecodeStore'),
+          readAddress('protocolTreasury'),
+          readAddress('registry'),
+          readAddress('chainlinkEthUsd'),
+          readAddress('solanaBridgeAdapter'),
+        ])
+
+      const [solanaDestinationRaw, solanaShareOftPeerRaw, ovaultRuntimeRaw] = await Promise.all([
+        publicClient!
+          .readContract({
+            address: batcherAddress as Address,
+            abi: BATCHER_SHARED_INFRA_ABI,
+            functionName: 'solanaDestination',
+          })
+          .catch(() => null),
+        publicClient!
+          .readContract({
+            address: batcherAddress as Address,
+            abi: BATCHER_SHARED_INFRA_ABI,
+            functionName: 'solanaShareOftPeer',
+          })
+          .catch(() => null),
+        publicClient!
+          .readContract({
+            address: batcherAddress as Address,
+            abi: BATCHER_SHARED_INFRA_ABI,
+            functionName: 'getOVaultRuntimeConfig',
+          })
+          .catch(() => null),
+      ])
+
+      const ovaultRuntime = ovaultRuntimeRaw as
+        | { hubComposer?: Address; solanaEid?: number | bigint; enabled?: boolean }
+        | readonly [Address, number | bigint, boolean]
+        | null
+      const ovaultRuntimeObject =
+        ovaultRuntime && !Array.isArray(ovaultRuntime)
+          ? (ovaultRuntime as { hubComposer?: Address; solanaEid?: number | bigint; enabled?: boolean })
+          : null
+      const ovaultHubComposer = normalizeAddressLike(
+        Array.isArray(ovaultRuntime) ? ovaultRuntime[0] : ovaultRuntimeObject?.hubComposer,
+      )
+      const ovaultRuntimeSolanaEidRaw = Array.isArray(ovaultRuntime)
+        ? ovaultRuntime[1]
+        : ovaultRuntimeObject?.solanaEid
+      const ovaultRuntimeEnabled = Boolean(
+        Array.isArray(ovaultRuntime) ? ovaultRuntime[2] : ovaultRuntimeObject?.enabled,
+      )
+      const ovaultRuntimeSolanaEid = Number(
+        typeof ovaultRuntimeSolanaEidRaw === 'bigint' ? ovaultRuntimeSolanaEidRaw : (ovaultRuntimeSolanaEidRaw ?? 0),
+      )
+      const solanaDestination = normalizeBytes32(solanaDestinationRaw)
+      const solanaShareOftPeer = normalizeBytes32(solanaShareOftPeerRaw)
+
+      const deployableContractAddresses = [
+        phase1Module,
+        phase2Module,
+        phase3Helper,
+        uniV4Helper,
+        utilsHelper,
+        create2Deployer,
+        bytecodeStore,
+        protocolTreasury,
+        registry,
+        chainlinkEthUsd,
+        solanaBridgeAdapter,
+        ovaultHubComposer,
+      ].filter(Boolean) as Address[]
+      const bytecodes = await Promise.all(
+        deployableContractAddresses.map((address) => publicClient!.getBytecode({ address }).catch(() => null)),
+      )
+      const deployedMap = new Map<string, boolean>()
+      deployableContractAddresses.forEach((address, index) => {
+        const code = bytecodes[index]
+        deployedMap.set(address.toLowerCase(), Boolean(code && code !== '0x'))
+      })
+      const isDeployed = (address: Address | null) =>
+        address ? (deployedMap.get(address.toLowerCase()) ?? null) : null
+
+      return {
+        phase1Module,
+        phase2Module,
+        phase3Helper,
+        uniV4Helper,
+        utilsHelper,
+        create2Deployer,
+        bytecodeStore,
+        protocolTreasury,
+        registry,
+        chainlinkEthUsd,
+        solanaBridgeAdapter,
+        ovaultHubComposer,
+        ovaultRuntimeEnabled,
+        ovaultRuntimeSolanaEid: Number.isFinite(ovaultRuntimeSolanaEid) ? ovaultRuntimeSolanaEid : 0,
+        solanaDestination,
+        solanaShareOftPeer,
+        deployed: {
+          phase1Module: isDeployed(phase1Module),
+          phase2Module: isDeployed(phase2Module),
+          phase3Helper: isDeployed(phase3Helper),
+          uniV4Helper: isDeployed(uniV4Helper),
+          utilsHelper: isDeployed(utilsHelper),
+          create2Deployer: isDeployed(create2Deployer),
+          bytecodeStore: isDeployed(bytecodeStore),
+          protocolTreasury: isDeployed(protocolTreasury),
+          registry: isDeployed(registry),
+          chainlinkEthUsd: isDeployed(chainlinkEthUsd),
+          solanaBridgeAdapter: isDeployed(solanaBridgeAdapter),
+          ovaultHubComposer: isDeployed(ovaultHubComposer),
+        },
+      }
+    },
+  })
   const vanityPlanQueryLoading = vanityPlanQuery.isLoading || vanityPlanQuery.isFetching
   const expectedAddressesQueryLoading =
     expectedAddressesQuery.isLoading || expectedAddressesQuery.isFetching
@@ -4063,6 +4341,110 @@ function DeployVaultBatcher({
   })
   const phase4AuctionDeployment = phase4AuctionAddress ? (phase4AuctionDeploymentQuery.data ?? null) : null
 
+  // Per-deploy impairment aux pair (claims + escrow). Each vault gets a fresh,
+  // deterministically derived pair deployed in Phase 3 with the creator as initial
+  // owner (so `setVault` works in-batch), then ownership transfers to the protocol
+  // treasury for emergency-safety custody.
+  const impairmentAuxPreviewPlan = useMemo(() => {
+    const vault = normalizeAddressLike(expected?.vault)
+    const initialOwner = normalizeAddressLike(owner)
+    if (!vault || !initialOwner) return null
+    return buildImpairmentAuxPlan({ vault, initialOwner })
+  }, [expected?.vault, owner])
+  const impairmentClaimsAddress = impairmentAuxPreviewPlan?.claims.address ?? null
+  const impairmentRecoveryEscrowAddress = impairmentAuxPreviewPlan?.escrow.address ?? null
+
+  const deploymentPlanAddressUniverse = useMemo(() => {
+    const candidates = [
+      batcherAddress,
+      expected?.vault,
+      expected?.wrapper,
+      expected?.shareOFT,
+      expected?.gaugeController,
+      expected?.ccaStrategy,
+      expected?.oracle,
+      expected?.burnStream,
+      expected?.payoutRouter,
+      expected?.creatorCoinPolicyController,
+      phase3Expected?.v3Pool,
+      phase3Expected?.charmVault,
+      phase3Expected?.creatorCharmStrategy,
+      phase3Expected?.ajnaPool,
+      phase3Expected?.ajnaVaultAuth,
+      phase3Expected?.ajnaVault,
+      phase3Expected?.erc4626StrategyAdapter,
+      phase4AuctionAddress,
+      batcherSharedInfraQuery.data?.ovaultHubComposer,
+      batcherSharedInfraQuery.data?.phase1Module,
+      batcherSharedInfraQuery.data?.phase2Module,
+      batcherSharedInfraQuery.data?.phase3Helper,
+      batcherSharedInfraQuery.data?.uniV4Helper,
+      batcherSharedInfraQuery.data?.utilsHelper,
+      batcherSharedInfraQuery.data?.solanaBridgeAdapter,
+      batcherSharedInfraQuery.data?.registry,
+      batcherSharedInfraQuery.data?.create2Deployer,
+      batcherSharedInfraQuery.data?.bytecodeStore,
+      batcherSharedInfraQuery.data?.protocolTreasury,
+      batcherSharedInfraQuery.data?.chainlinkEthUsd,
+      impairmentClaimsAddress,
+      impairmentRecoveryEscrowAddress,
+    ]
+      .map((value) => normalizeAddressLike(value))
+      .filter(Boolean) as Address[]
+    return Array.from(new Set(candidates.map((value) => value.toLowerCase())))
+  }, [
+    batcherAddress,
+    batcherSharedInfraQuery.data,
+    expected,
+    phase3Expected,
+    phase4AuctionAddress,
+    impairmentClaimsAddress,
+    impairmentRecoveryEscrowAddress,
+  ])
+
+  const mainnetAddressCodeQuery = useQuery({
+    queryKey: ['creatorVaultBatcher', 'deploymentPlanAddressUniverseMainnetCode', deploymentPlanAddressUniverse.join(',')],
+    enabled: deploymentPlanAddressUniverse.length > 0,
+    staleTime: 20_000,
+    retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
+    retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
+    queryFn: async () => {
+      const mainnetClient = createBaseFallbackClient()
+      const codes = await Promise.all(
+        deploymentPlanAddressUniverse.map((address) =>
+          mainnetClient
+            .getBytecode({ address: address as Address })
+            .then((code) => Boolean(code && code !== '0x'))
+            .catch(() => null),
+        ),
+      )
+      const result: Record<string, boolean | null> = {}
+      deploymentPlanAddressUniverse.forEach((address, index) => {
+        result[address] = codes[index] ?? null
+      })
+      return result
+    },
+  })
+
+  const isForkOnlyAddress = useCallback(
+    (address: Address | null | undefined, deployed?: boolean | null) => {
+      const normalized = normalizeAddressLike(address)
+      if (!normalized) return false
+      const mainnetCode = mainnetAddressCodeQuery.data?.[normalized.toLowerCase()]
+      if (mainnetCode !== false) return false
+      if (deployed === false) return false
+      return true
+    },
+    [mainnetAddressCodeQuery.data],
+  )
+
+  const impairmentClaimsDeployed = impairmentClaimsAddress
+    ? (mainnetAddressCodeQuery.data?.[impairmentClaimsAddress.toLowerCase()] ?? null)
+    : null
+  const impairmentRecoveryEscrowDeployed = impairmentRecoveryEscrowAddress
+    ? (mainnetAddressCodeQuery.data?.[impairmentRecoveryEscrowAddress.toLowerCase()] ?? null)
+    : null
+
   useEffect(() => {
     expectedRef.current = expected
   }, [expected])
@@ -4173,6 +4555,8 @@ function DeployVaultBatcher({
   const submit = async (opts?: { planOnly?: boolean; validateDepositBalance?: boolean }): Promise<DeployPlanExport | null> => {
     const planOnly = opts?.planOnly === true
     const validateDepositBalance = !planOnly || opts?.validateDepositBalance === true
+    // FIX H-2: dryRunBusy must block deploy — a live dry-run shares fork/env
+    // state and submitting mid-run can race stale deploy-session payloads.
     if (busy || exportBusy || dryRunBusy) return null
 
     // Simple rate limit: avoid accidental double-submits after a quick reload/click.
@@ -4273,12 +4657,6 @@ function DeployVaultBatcher({
         parseUniswapV3Fee(runtimeConfig?.payoutRouterZoraWethFee) ?? DEFAULT_PAYOUT_ROUTER_ZORA_WETH_FEE
       const payoutRouterWethCreatorFee =
         parseUniswapV3Fee(runtimeConfig?.payoutRouterWethCreatorFee) ?? DEFAULT_PAYOUT_ROUTER_WETH_CREATOR_FEE
-      const impairmentClaimsAddress = normalizeConfiguredAddress(
-        runtimeConfig?.impairmentClaims ?? (CONTRACTS as any).impairmentClaims ?? null,
-      )
-      const impairmentRecoveryEscrowAddress = normalizeConfiguredAddress(
-        runtimeConfig?.impairmentRecoveryEscrow ?? (CONTRACTS as any).impairmentRecoveryEscrow ?? null,
-      )
       const impairmentGuardianAddress = normalizeConfiguredAddress(
         runtimeConfig?.impairmentGuardian ?? (CONTRACTS as any).impairmentGuardian ?? null,
       )
@@ -4288,11 +4666,6 @@ function DeployVaultBatcher({
         if (raw == null) return BASE_DEFAULTS.impairmentChallengeWindowSeconds
         return null
       })()
-      if (Boolean(impairmentClaimsAddress) !== Boolean(impairmentRecoveryEscrowAddress)) {
-        throw new Error(
-          'Impairment config is incomplete. Configure both impairment claims and recovery escrow addresses.',
-        )
-      }
       if (!publicClient) throw new Error('Network client not ready')
       const vaultAuxiliaryDeployBatcher = normalizeAddressLike(CONTRACTS.vaultAuxiliaryDeployBatcher)
       if (
@@ -4819,34 +5192,6 @@ function DeployVaultBatcher({
         }
       })()
       if (
-        impairmentClaimsAddress &&
-        !sameAddress(currentVaultImpairmentConfig.claims, impairmentClaimsAddress)
-      ) {
-        impairmentPhase3Calls.push({
-          target: expected.vault,
-          value: 0n,
-          data: encodeFunctionData({
-            abi: CREATOR_VAULT_ADMIN_ABI,
-            functionName: 'setImpairmentClaims',
-            args: [impairmentClaimsAddress],
-          }),
-        })
-      }
-      if (
-        impairmentRecoveryEscrowAddress &&
-        !sameAddress(currentVaultImpairmentConfig.escrow, impairmentRecoveryEscrowAddress)
-      ) {
-        impairmentPhase3Calls.push({
-          target: expected.vault,
-          value: 0n,
-          data: encodeFunctionData({
-            abi: CREATOR_VAULT_ADMIN_ABI,
-            functionName: 'setImpairmentRecoveryEscrow',
-            args: [impairmentRecoveryEscrowAddress],
-          }),
-        })
-      }
-      if (
         impairmentGuardianAddress &&
         !sameAddress(currentVaultImpairmentConfig.guardian, impairmentGuardianAddress)
       ) {
@@ -4894,50 +5239,91 @@ function DeployVaultBatcher({
           data: challengeWindowCallData,
         })
       }
-      const ensureImpairmentAuxVaultLinkCall = async (label: 'claims' | 'escrow', target: Address) => {
-        let currentOwner = ZERO_ADDRESS
-        let linkedVault = ZERO_ADDRESS
-        try {
-          const [ownerRead, vaultRead] = await Promise.all([
-            publicClient.readContract({
-              address: target,
-              abi: IMPAIRMENT_AUX_OWNED_ABI,
-              functionName: 'owner',
-            }),
-            publicClient.readContract({
-              address: target,
-              abi: IMPAIRMENT_AUX_OWNED_ABI,
-              functionName: 'vault',
-            }),
-          ])
-          currentOwner = normalizeAddressLike(ownerRead) ?? ZERO_ADDRESS
-          linkedVault = normalizeAddressLike(vaultRead) ?? ZERO_ADDRESS
-        } catch {
-          throw new Error(`Cannot read impairment ${label} ownership/vault state at ${target}.`)
+      // Per-vault impairment aux pair: deploy fresh (permissionless CREATE2) with the
+      // deploy owner as initial owner, link `setVault` in-batch, wire the vault setters,
+      // then transfer ownership of both levers to the protocol treasury.
+      const impairmentAuxPlan = buildImpairmentAuxPlan({ vault: expected.vault, initialOwner: owner })
+      const readImpairmentAuxState = async (target: Address) => {
+        const code = await publicClient.getBytecode({ address: target }).catch(() => undefined)
+        const hasCode = Boolean(code && code !== '0x')
+        if (!hasCode) return { hasCode: false, owner: ZERO_ADDRESS, vault: ZERO_ADDRESS }
+        const [ownerRead, vaultRead] = await Promise.all([
+          publicClient.readContract({
+            address: target,
+            abi: IMPAIRMENT_AUX_OWNED_ABI,
+            functionName: 'owner',
+          }),
+          publicClient.readContract({
+            address: target,
+            abi: IMPAIRMENT_AUX_OWNED_ABI,
+            functionName: 'vault',
+          }),
+        ])
+        return {
+          hasCode: true,
+          owner: normalizeAddressLike(ownerRead) ?? ZERO_ADDRESS,
+          vault: normalizeAddressLike(vaultRead) ?? ZERO_ADDRESS,
         }
-        if (sameAddress(linkedVault, expected.vault)) return
-        if (!sameAddress(currentOwner, owner)) {
-          throw new Error(
-            `Impairment ${label} contract owner is ${shortAddress(currentOwner)} but deploy owner is ${shortAddress(owner)}. ` +
-              `Transfer ownership or update runtime impairment contract addresses before deploy.`,
-          )
+      }
+      const planImpairmentAuxLeg = async (
+        label: 'claims' | 'escrow',
+        leg: ImpairmentAuxContractPlan,
+        currentOnVault: Address,
+      ) => {
+        if (!sameAddress(currentOnVault, ZERO_ADDRESS)) {
+          // Vault already has this lever wired (re-run / legacy); leave it untouched.
+          return
+        }
+        const state = await readImpairmentAuxState(leg.address)
+        if (!state.hasCode) {
+          impairmentPhase3Calls.push({
+            target: PERMISSIONLESS_CREATE2_DEPLOYER,
+            value: 0n,
+            data: leg.deployCallData,
+          })
+        }
+        const vaultLinked = state.hasCode && sameAddress(state.vault, expected.vault)
+        if (!vaultLinked) {
+          if (state.hasCode && !sameAddress(state.owner, owner)) {
+            throw new Error(
+              `Impairment ${label} contract at ${shortAddress(leg.address)} is owned by ${shortAddress(state.owner)} ` +
+                `but is not linked to this vault. Bump the deployment version to derive a fresh pair.`,
+            )
+          }
+          impairmentPhase3Calls.push({
+            target: leg.address,
+            value: 0n,
+            data: encodeFunctionData({
+              abi: IMPAIRMENT_AUX_OWNED_ABI,
+              functionName: 'setVault',
+              args: [expected.vault],
+            }),
+          })
         }
         impairmentPhase3Calls.push({
-          target,
+          target: expected.vault,
           value: 0n,
           data: encodeFunctionData({
-            abi: IMPAIRMENT_AUX_OWNED_ABI,
-            functionName: 'setVault',
-            args: [expected.vault],
+            abi: CREATOR_VAULT_ADMIN_ABI,
+            functionName: label === 'claims' ? 'setImpairmentClaims' : 'setImpairmentRecoveryEscrow',
+            args: [leg.address],
           }),
         })
+        // Hand the emergency-safety levers to the protocol treasury once wiring is complete.
+        if (!(state.hasCode && sameAddress(state.owner, expectedProtocolTreasury))) {
+          impairmentPhase3Calls.push({
+            target: leg.address,
+            value: 0n,
+            data: encodeFunctionData({
+              abi: IMPAIRMENT_AUX_OWNED_ABI,
+              functionName: 'transferOwnership',
+              args: [expectedProtocolTreasury],
+            }),
+          })
+        }
       }
-      if (impairmentClaimsAddress) {
-        await ensureImpairmentAuxVaultLinkCall('claims', impairmentClaimsAddress)
-      }
-      if (impairmentRecoveryEscrowAddress) {
-        await ensureImpairmentAuxVaultLinkCall('escrow', impairmentRecoveryEscrowAddress)
-      }
+      await planImpairmentAuxLeg('claims', impairmentAuxPlan.claims, currentVaultImpairmentConfig.claims)
+      await planImpairmentAuxLeg('escrow', impairmentAuxPlan.escrow, currentVaultImpairmentConfig.escrow)
 
       const vaultDeployToStrategiesCall = {
         target: expected.vault,
@@ -5846,8 +6232,9 @@ function DeployVaultBatcher({
             getAddress(expectedCreate2Deployer).toLowerCase(),
             getAddress(expected.vault).toLowerCase(),
             getAddress(expectedPayoutRouter).toLowerCase(),
-            ...(impairmentClaimsAddress ? [getAddress(impairmentClaimsAddress).toLowerCase()] : []),
-            ...(impairmentRecoveryEscrowAddress ? [getAddress(impairmentRecoveryEscrowAddress).toLowerCase()] : []),
+            getAddress(PERMISSIONLESS_CREATE2_DEPLOYER).toLowerCase(),
+            getAddress(impairmentAuxPlan.claims.address).toLowerCase(),
+            getAddress(impairmentAuxPlan.escrow.address).toLowerCase(),
           ])
           for (const c of calls) {
             const to = getAddress(c.target).toLowerCase()
@@ -5907,7 +6294,7 @@ function DeployVaultBatcher({
           phase3Calls: serializeSessionCalls(phase3Calls),
           phase4Calls: serializeSessionCalls(phase4Calls),
           solanaOvault: {
-            // Force deploy-session OVault mesh preflight for Solana strategy wiring.
+            // Force deploy-session OVault mesh preflight for Solana Share Mesh lane wiring.
             enabled: DEFAULT_SOLANA_OVAULT_MESH_ENABLED,
             assetMintOrigin: 'existing',
           },
@@ -6231,8 +6618,8 @@ function DeployVaultBatcher({
                     'InvalidWeight()': 'Strategy weights must be valid (0-10000 bps).',
                     'V3PoolMissing()': 'Uniswap V3 pool creation failed.',
                     'MissingInitialSqrtPriceX96()': 'V3 pool needs initial price to be set.',
-                    'AuctionAlreadyPending()': 'A deferred auction already exists for this deployment.',
-                    'NoPendingAuction()': 'No deferred auction found to launch.',
+                    'AuctionAlreadyPending()': 'An auction already exists for this deployment.',
+                    'NoPendingAuction()': 'No auction found to launch.',
                   }
                   const helpText = errorMessages[simResult.errorName] ?? `Contract reverted with: ${simResult.errorName}`
                   throw new Error(`${logPhaseLabel} would revert: ${helpText}`)
@@ -6746,7 +7133,7 @@ function DeployVaultBatcher({
             const pendingShare = (pending?.shareOFT ?? pending?.[0] ?? ZERO_ADDRESS) as Address
             if (pendingAmount <= 0n || getAddress(pendingShare) !== getAddress(expected.shareOFT)) {
               throw new Error(
-                `No pending deferred auction for ${deploymentVersion} (share=${shortAddress(expected.shareOFT)}). ` +
+                `No pending auction for ${deploymentVersion} (share=${shortAddress(expected.shareOFT)}). ` +
                   'Phase 4 launch is blocked until phase2 finalize records pending auction state.',
               )
             }
@@ -6916,7 +7303,7 @@ function DeployVaultBatcher({
       : null
   const vanityDefaultNotice =
     !vanityCustomPaidNotice && (vaultVanityPrefix || shareOftVanitySuffix)
-      ? `Default vanity: vault prefix 0x${DEFAULT_VAULT_VANITY_PREFIX} and share suffix ${DEFAULT_SHARE_OFT_VANITY_SUFFIX} are now enforced (deploy fails closed if either target is not found).`
+      ? `Default vanity targets are enforced: vault prefix 0x${DEFAULT_VAULT_VANITY_PREFIX} and share suffix ${DEFAULT_SHARE_OFT_VANITY_SUFFIX}. Deploy fails closed if either target is not found in-budget.`
       : null
 
   const disabledReason =
@@ -6998,8 +7385,18 @@ function DeployVaultBatcher({
     if (busy) return 'border-blue-400/35 bg-blue-500/10 text-blue-200'
     return 'border-zinc-600 bg-zinc-800/70 text-zinc-200'
   }, [busy, phase])
+  const setupOwnerApprovalCompleted = useMemo(() => {
+    if (phase === 'done') return true
+    if (hasDeploySignerPath) return true
+    if (phase !== 'idle') return true
+    if (lastSessionStep.trim().length > 0) return true
+    if (Boolean(txId)) return true
+    if (Boolean(phaseTxs.tx1 || phaseTxs.tx2 || phaseTxs.tx3 || phaseTxs.tx4)) return true
+    return false
+  }, [hasDeploySignerPath, lastSessionStep, phase, phaseTxs.tx1, phaseTxs.tx2, phaseTxs.tx3, phaseTxs.tx4, txId])
   const timelineProgressState = useCallback(
     (stage: DeployTimelineStageId): 'disabled' | 'inProgress' | 'done' | 'pending' => {
+      if (stage === 'setupOwnerApproval' && setupOwnerApprovalCompleted && !busy) return 'done'
       return deriveDeployTimelineProgressState({
         stage,
         timelineCurrentStage,
@@ -7008,7 +7405,7 @@ function DeployVaultBatcher({
         stageIndexMap: DEPLOY_TIMELINE_STAGE_INDEX,
       })
     },
-    [isTimelineStageEnabled, phase, timelineCurrentStage],
+    [busy, isTimelineStageEnabled, phase, setupOwnerApprovalCompleted, timelineCurrentStage],
   )
   const timelineProgressText = useCallback(
     (stage: DeployTimelineStageId) => deployTimelineProgressLabel(timelineProgressState(stage)),
@@ -7034,33 +7431,35 @@ function DeployVaultBatcher({
     },
     [timelineProgressState],
   )
-  const timelineStageRowTone = useCallback(
-    (stage: DeployTimelineStageId) => {
-      const state = timelineProgressState(stage)
-      if (state === 'disabled') return 'border-white/6 bg-black/5'
-      if (state === 'inProgress') return 'border-blue-400/25 bg-blue-500/8'
-      if (state === 'done') return 'border-emerald-400/20 bg-emerald-500/6'
-      return 'border-white/8 bg-black/10'
-    },
-    [timelineProgressState],
-  )
-  const timelineCompletionSummary = useMemo(() => {
-    const { completedEnabledStageCount, enabledStageCount } = summarizeDeployTimelineProgress({
-      stages: DEPLOY_TIMELINE_STAGES,
-      isStageEnabled: isTimelineStageEnabled,
-      stateForStage: timelineProgressState,
-    })
-    return `${completedEnabledStageCount}/${enabledStageCount} enabled stages completed`
+  const phaseProgressSummary = useMemo(() => {
+    const phaseGroups: Array<{ id: 'phase1' | 'phase2' | 'phase3' | 'phase4'; stages: DeployTimelineStageId[] }> = [
+      { id: 'phase1', stages: ['phase1Core', 'phase1Finalize'] },
+      { id: 'phase2', stages: ['phase2Core', 'phase2Finalize', 'phase2bOvaultMesh'] },
+      { id: 'phase3', stages: ['phase3Strategies'] },
+      { id: 'phase4', stages: ['phase4Launch', 'cleanup'] },
+    ]
+    const completed = phaseGroups.reduce((count, group) => {
+      const enabledStages = group.stages.filter((stage) => isTimelineStageEnabled(stage))
+      if (enabledStages.length === 0) return count
+      const allDone = enabledStages.every((stage) => timelineProgressState(stage) === 'done')
+      return allDone ? count + 1 : count
+    }, 0)
+    const total = phaseGroups.length
+    return {
+      completed,
+      total,
+      remaining: Math.max(total - completed, 0),
+    }
   }, [isTimelineStageEnabled, timelineProgressState])
-  const timelinePendingCount = useMemo(() => {
-    const { pendingStageCount } = summarizeDeployTimelineProgress({
-      stages: DEPLOY_TIMELINE_STAGES,
-      isStageEnabled: isTimelineStageEnabled,
-      stateForStage: timelineProgressState,
-    })
-    return pendingStageCount
-  }, [isTimelineStageEnabled, timelineProgressState])
-  const timelineRemainingText = timelinePendingCount > 0 ? `${timelinePendingCount} remaining` : 'No stages remaining'
+  const timelineCompletionSummary = `${phaseProgressSummary.completed}/${phaseProgressSummary.total} phases completed`
+  const timelineRemainingText =
+    phaseProgressSummary.remaining > 0 ? `${phaseProgressSummary.remaining} remaining` : 'No phases remaining'
+  const solanaDestinationPubkey = bytes32ToSolanaAddress(batcherSharedInfraQuery.data?.solanaDestination)
+  const solanaShareOftPeerPubkey = bytes32ToSolanaAddress(batcherSharedInfraQuery.data?.solanaShareOftPeer)
+  const meteoraAlphaVaultPubkey = bytes32ToSolanaAddress(ovaultMeshStatus?.meteoraAlphaVault ?? null)
+  const solanaIxProgramPubkeys = (ovaultMeshStatus?.solanaProgramIds ?? [])
+    .map((value) => bytes32ToSolanaAddress(value))
+    .filter((value): value is string => Boolean(value))
   const renderStageDetailStatus = useCallback(
     (stage: DeployTimelineStageId) => {
       const state = timelineProgressState(stage)
@@ -7068,6 +7467,24 @@ function DeployVaultBatcher({
       return <div className="text-zinc-700">{deployTimelineProgressLabel(state)}</div>
     },
     [timelineProgressState],
+  )
+  const dryRunPhaseStatusByName = useMemo(() => {
+    const out = new Map<DeploySessionDryRunPhase['name'], DeploySessionDryRunPhase>()
+    for (const phase of dryRunResult?.phases ?? []) out.set(phase.name, phase)
+    return out
+  }, [dryRunResult])
+  const renderDryRunPhaseBadge = useCallback(
+    (name: DeploySessionDryRunPhase['name']) => {
+      const phase = dryRunPhaseStatusByName.get(name)
+      if (!phase || phase.status === 'skipped') return null
+      if (phase.status === 'passed') return <span className="text-emerald-300">✓</span>
+      return <span className="text-amber-300">✕</span>
+    },
+    [dryRunPhaseStatusByName],
+  )
+  const dryRunPhasePassed = useCallback(
+    (name: DeploySessionDryRunPhase['name']) => dryRunPhaseStatusByName.get(name)?.status === 'passed',
+    [dryRunPhaseStatusByName],
   )
 
   return (
@@ -7114,61 +7531,64 @@ function DeployVaultBatcher({
           <div className="text-[11px] text-zinc-600 mb-3">
             Contract addresses are deterministic on Base. BaseScan links appear once each contract is live.
           </div>
-          <div className="rounded-md border border-white/10 bg-white/4 px-4 py-3 mb-3 space-y-2 backdrop-blur-sm">
-            <div className="flex items-start justify-between gap-4 text-[11px]">
-              <div className="text-zinc-500">Workflow status</div>
-              <div className="text-right min-w-0">
-                <div
-                  className={`inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-[10px] font-medium mb-1 ${workflowStatusToneClass}`}
-                >
-                  {workflowStatus.label}
-                </div>
-                <div className="text-zinc-500 leading-relaxed break-words">{workflowStatus.detail}</div>
-              </div>
+          {mainnetAddressCodeQuery.data ? (
+            <div className="text-[10px] text-zinc-600 mb-2">
+              Local fork mode marks fork-only addresses as <span className="text-amber-200/80">local fork</span> and hides
+              BaseScan links for those rows.
             </div>
-            <div className="h-px bg-white/8" />
-            <div className="flex items-center justify-between gap-4 text-[11px]">
-              <div className="text-zinc-500">Initial deposit</div>
-              <div className="font-mono text-zinc-200/90">
-                {formatDeposit(minFirstDeposit)} {depositSymbol}
-              </div>
-            </div>
-            <AddressRow label="Active batcher" address={batcherAddress} />
-            <div className="flex items-center justify-between gap-4 text-[11px]">
-              <div className="text-zinc-500">Deploy mode</div>
-              <div className="font-mono text-zinc-200/90">{strictNoEoaEnforced ? 'no_eoa_strict' : 'default'}</div>
-            </div>
-          </div>
-
-          <div className="rounded-md border border-white/10 bg-white/4 px-4 py-3 mb-3 space-y-2 backdrop-blur-sm">
-            <div className="flex items-start justify-between gap-3">
-              <div className="text-[10px] font-medium text-zinc-500">Canonical stage timeline</div>
-              <div className="text-right text-[10px] leading-relaxed">
-                <div className="text-zinc-400">{timelineCompletionSummary}</div>
-                <div className="text-zinc-600">{timelineRemainingText}</div>
-              </div>
-            </div>
-            {DEPLOY_TIMELINE_STAGES.map((stage) => (
-              <div
-                key={stage.id}
-                className={`rounded-md border px-3 py-2 flex items-start justify-between gap-3 text-[11px] ${timelineStageRowTone(stage.id)}`}
-              >
-                <div className={timelineProgressTone(stage.id)}>
-                  <div className="font-medium">{stage.label}</div>
-                  <div className="text-[10px] text-zinc-600">{stage.description}</div>
-                </div>
-                <div className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${timelineProgressChipTone(stage.id)}`}>
-                  {timelineProgressText(stage.id)}
-                </div>
-              </div>
-            ))}
-          </div>
-
+          ) : null}
           <div className="rounded-md border border-white/10 bg-white/4 divide-y divide-white/8 backdrop-blur-sm">
+            <div className="px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="text-[10px] font-medium text-zinc-500">Canonical stage flow</div>
+                <div className="text-right text-[10px] leading-relaxed">
+                  <div className="text-zinc-400">{timelineCompletionSummary}</div>
+                  <div className="text-zinc-600">{timelineRemainingText}</div>
+                </div>
+              </div>
+              <div className="mt-2 rounded-md border border-white/8 bg-black/10 px-3 py-2">
+                <div className="flex items-center justify-between gap-3 text-[11px]">
+                  <div className={timelineProgressTone('setupOwnerApproval')}>Setup owner approval</div>
+                  <div
+                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${timelineProgressChipTone('setupOwnerApproval')}`}
+                  >
+                    {timelineProgressText('setupOwnerApproval')}
+                  </div>
+                </div>
+                <div className="h-px bg-white/8 my-2" />
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between gap-4 text-[11px]">
+                    <div className="text-zinc-500">Workflow status</div>
+                    <div className="text-right min-w-0">
+                      <div
+                        className={`inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-[10px] font-medium mb-1 ${workflowStatusToneClass}`}
+                      >
+                        {workflowStatus.label}
+                      </div>
+                      <div className="text-zinc-500 leading-relaxed break-words">{workflowStatus.detail}</div>
+                    </div>
+                  </div>
+                  <div className="h-px bg-white/8" />
+                  <div className="flex items-center justify-between gap-4 text-[11px]">
+                    <div className="text-zinc-500">Initial deposit</div>
+                    <div className="font-mono text-zinc-200/90">
+                      {formatDeposit(minFirstDeposit)} {depositSymbol}
+                    </div>
+                  </div>
+                  <AddressRow label="Active batcher" address={batcherAddress} forkOnly={isForkOnlyAddress(batcherAddress, true)} />
+                  <div className="flex items-center justify-between gap-4 text-[11px]">
+                    <div className="text-zinc-500">Deploy mode</div>
+                    <div className="font-mono text-zinc-200/90">{strictNoEoaEnforced ? 'no_eoa_strict' : 'default'}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div className="px-4 py-4">
-              <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 1</div>
               <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
-                <div className={timelineProgressTone('phase1Core')}>Deploy vault core (vault, wrapper, share token)</div>
+                <div className={`inline-flex items-center gap-2 ${timelineProgressTone('phase1Core')}`}>
+                  <span>Phase 1: Deploy vault core (vault, wrapper, share token)</span>
+                  {renderDryRunPhaseBadge('phase1')}
+                </div>
                 {href1 ? (
                   <a className="font-mono text-zinc-300 hover:text-white" href={href1} target="_blank" rel="noreferrer">
                     view tx
@@ -7177,21 +7597,84 @@ function DeployVaultBatcher({
                   renderStageDetailStatus('phase1Core')
                 )}
               </div>
-              <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
-                <div className={timelineProgressTone('phase1Finalize')}>Finalize phase-1 state</div>
-                {renderStageDetailStatus('phase1Finalize')}
+              <div className="text-[11px] text-zinc-500 mb-3">
+                Finalize phase-1 state = lock Phase 1 addresses/state so Phase 2 can continue deterministically (
+                {deployTimelineProgressLabel(timelineProgressState('phase1Finalize'))}).
+              </div>
+              <div className="rounded-md border border-white/10 bg-black/10 px-3 py-3 mb-3 space-y-2">
+                <div className="text-[10px] font-medium text-zinc-500">Shared infrastructure (Phase 1)</div>
+                <AddressRow
+                  label="Phase1 module"
+                  address={batcherSharedInfraQuery.data?.phase1Module ?? null}
+                  deployed={batcherSharedInfraQuery.data?.deployed.phase1Module ?? null}
+                  variant="shared"
+                  forkOnly={isForkOnlyAddress(
+                    batcherSharedInfraQuery.data?.phase1Module ?? null,
+                    batcherSharedInfraQuery.data?.deployed.phase1Module ?? null,
+                  )}
+                />
+                <AddressRow
+                  label="Create2 deployer"
+                  address={batcherSharedInfraQuery.data?.create2Deployer ?? null}
+                  deployed={batcherSharedInfraQuery.data?.deployed.create2Deployer ?? null}
+                  variant="shared"
+                  forkOnly={isForkOnlyAddress(
+                    batcherSharedInfraQuery.data?.create2Deployer ?? null,
+                    batcherSharedInfraQuery.data?.deployed.create2Deployer ?? null,
+                  )}
+                />
+                <AddressRow
+                  label="Bytecode store"
+                  address={batcherSharedInfraQuery.data?.bytecodeStore ?? null}
+                  deployed={batcherSharedInfraQuery.data?.deployed.bytecodeStore ?? null}
+                  variant="shared"
+                  forkOnly={isForkOnlyAddress(
+                    batcherSharedInfraQuery.data?.bytecodeStore ?? null,
+                    batcherSharedInfraQuery.data?.deployed.bytecodeStore ?? null,
+                  )}
+                />
+                <AddressRow
+                  label="Registry"
+                  address={batcherSharedInfraQuery.data?.registry ?? null}
+                  deployed={batcherSharedInfraQuery.data?.deployed.registry ?? null}
+                  variant="shared"
+                  forkOnly={isForkOnlyAddress(
+                    batcherSharedInfraQuery.data?.registry ?? null,
+                    batcherSharedInfraQuery.data?.deployed.registry ?? null,
+                  )}
+                />
               </div>
               <div className="space-y-2">
-                <AddressRow label="Vault" address={expected?.vault} deployed={expectedAddressDeployment?.vault ?? null} />
-                <AddressRow label="Wrapper" address={expected?.wrapper} deployed={expectedAddressDeployment?.wrapper ?? null} />
-                <AddressRow label="Share token" address={expected?.shareOFT} deployed={expectedAddressDeployment?.shareOFT ?? null} />
+                <AddressRow
+                  label={`Vault ${vaultTokenBadge}`}
+                  address={expected?.vault}
+                  deployed={expectedAddressDeployment?.vault ?? null}
+                  forkOnly={isForkOnlyAddress(expected?.vault, expectedAddressDeployment?.vault ?? null)}
+                  dryRunPassed={dryRunPhasePassed('phase1')}
+                />
+                <AddressRow
+                  label="Wrapper"
+                  address={expected?.wrapper}
+                  deployed={expectedAddressDeployment?.wrapper ?? null}
+                  forkOnly={isForkOnlyAddress(expected?.wrapper, expectedAddressDeployment?.wrapper ?? null)}
+                  dryRunPassed={dryRunPhasePassed('phase1')}
+                />
+                <AddressRow
+                  label={`Share token ${shareTokenBadge}`}
+                  address={expected?.shareOFT}
+                  deployed={expectedAddressDeployment?.shareOFT ?? null}
+                  forkOnly={isForkOnlyAddress(expected?.shareOFT, expectedAddressDeployment?.shareOFT ?? null)}
+                  dryRunPassed={dryRunPhasePassed('phase1')}
+                />
               </div>
             </div>
 
             <div className="px-4 py-4">
-              <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 2</div>
               <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
-                <div className={timelineProgressTone('phase2Core')}>Deploy gauge/CCA/oracle core</div>
+                <div className={`inline-flex items-center gap-2 ${timelineProgressTone('phase2Core')}`}>
+                  <span>Phase 2: Deploy gauge/CCA/oracle core</span>
+                  {renderDryRunPhaseBadge('phase2Core')}
+                </div>
                 {href2 ? (
                   <a className="font-mono text-zinc-300 hover:text-white" href={href2} target="_blank" rel="noreferrer">
                     view tx
@@ -7200,9 +7683,47 @@ function DeployVaultBatcher({
                   renderStageDetailStatus('phase2Core')
                 )}
               </div>
-              <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
-                <div className={timelineProgressTone('phase2Finalize')}>Finalize + configure payout and ownership routing</div>
-                {renderStageDetailStatus('phase2Finalize')}
+              <div className="text-[11px] text-zinc-500 mb-3">
+                Finalize Phase 2 = configure payout routing + ownership handoff (
+                {deployTimelineProgressLabel(timelineProgressState('phase2Finalize'))}).
+                {dryRunPhaseStatusByName.get('phase2Finalize')?.status === 'passed' ? (
+                  <span className="ml-2 text-emerald-300">✓</span>
+                ) : dryRunPhaseStatusByName.get('phase2Finalize')?.status === 'failed' ? (
+                  <span className="ml-2 text-amber-300">✕</span>
+                ) : null}
+              </div>
+              <div className="rounded-md border border-white/10 bg-black/10 px-3 py-3 mb-3 space-y-2">
+                <div className="text-[10px] font-medium text-zinc-500">Shared infrastructure (Phase 2)</div>
+                <AddressRow
+                  label="Phase2 module"
+                  address={batcherSharedInfraQuery.data?.phase2Module ?? null}
+                  deployed={batcherSharedInfraQuery.data?.deployed.phase2Module ?? null}
+                  variant="shared"
+                  forkOnly={isForkOnlyAddress(
+                    batcherSharedInfraQuery.data?.phase2Module ?? null,
+                    batcherSharedInfraQuery.data?.deployed.phase2Module ?? null,
+                  )}
+                />
+                <AddressRow
+                  label="Protocol treasury"
+                  address={batcherSharedInfraQuery.data?.protocolTreasury ?? null}
+                  deployed={batcherSharedInfraQuery.data?.deployed.protocolTreasury ?? null}
+                  variant="shared"
+                  forkOnly={isForkOnlyAddress(
+                    batcherSharedInfraQuery.data?.protocolTreasury ?? null,
+                    batcherSharedInfraQuery.data?.deployed.protocolTreasury ?? null,
+                  )}
+                />
+                <AddressRow
+                  label="Chainlink ETH/USD feed"
+                  address={batcherSharedInfraQuery.data?.chainlinkEthUsd ?? null}
+                  deployed={batcherSharedInfraQuery.data?.deployed.chainlinkEthUsd ?? null}
+                  variant="shared"
+                  forkOnly={isForkOnlyAddress(
+                    batcherSharedInfraQuery.data?.chainlinkEthUsd ?? null,
+                    batcherSharedInfraQuery.data?.deployed.chainlinkEthUsd ?? null,
+                  )}
+                />
               </div>
               <div className="mb-3">
                 <ShareBridgeFinalizeWiringPanel
@@ -7217,23 +7738,118 @@ function DeployVaultBatcher({
                 <div className={timelineProgressTone('phase2bOvaultMesh')}>OVault mesh preflight + peer wiring</div>
                 {renderStageDetailStatus('phase2bOvaultMesh')}
               </div>
+              <div className="text-[11px] text-zinc-500 mb-3">
+                Solana Share Mesh lane wiring belongs to Phase 2b, not the Phase 3 strategy set.
+              </div>
               {ovaultMeshEnabledForSession ? (
                 <div className="rounded-md border border-white/10 bg-black/10 px-3 py-3 mb-3 space-y-2">
                   <div className="text-[10px] font-medium text-zinc-500">Solana token lanes</div>
+                  <AddressRow
+                    label="OVaultHubComposer (runtime)"
+                    address={batcherSharedInfraQuery.data?.ovaultHubComposer ?? null}
+                    deployed={batcherSharedInfraQuery.data?.deployed.ovaultHubComposer ?? null}
+                    variant="shared"
+                    forkOnly={isForkOnlyAddress(
+                      batcherSharedInfraQuery.data?.ovaultHubComposer ?? null,
+                      batcherSharedInfraQuery.data?.deployed.ovaultHubComposer ?? null,
+                    )}
+                  />
+                  <AddressRow
+                    label="Solana bridge adapter"
+                    address={batcherSharedInfraQuery.data?.solanaBridgeAdapter ?? null}
+                    deployed={batcherSharedInfraQuery.data?.deployed.solanaBridgeAdapter ?? null}
+                    variant="shared"
+                    forkOnly={isForkOnlyAddress(
+                      batcherSharedInfraQuery.data?.solanaBridgeAdapter ?? null,
+                      batcherSharedInfraQuery.data?.deployed.solanaBridgeAdapter ?? null,
+                    )}
+                  />
                   <div className="flex items-center justify-between gap-4 text-[11px]">
-                    <div className="text-zinc-500">
-                      OVault compose asset lane <span className="text-zinc-600">(optional — not Pipe A)</span>
-                    </div>
+                    <div className="text-sky-200/90">OVault runtime (shared)</div>
                     <div className="font-mono text-zinc-200/90">
-                      {String(depositSymbol ?? '').trim() ? String(depositSymbol).trim().toLowerCase() : '$asset'}
+                      {batcherSharedInfraQuery.data?.ovaultRuntimeEnabled ? 'enabled' : 'disabled'} · eid{' '}
+                      {String(batcherSharedInfraQuery.data?.ovaultRuntimeSolanaEid ?? 0)}
                     </div>
                   </div>
                   <div className="flex items-center justify-between gap-4 text-[11px]">
-                    <div className="text-zinc-500">Share mesh tradable lane (LayerZero ShareOFT · Pipe A)</div>
-                    <div className="font-mono text-zinc-200/90">
-                      {String(shareSymbol ?? '').trim() ? String(shareSymbol).trim() : '■ASSET'}
+                    <div className="text-sky-200/90">Solana destination (shared)</div>
+                    <div className="text-right">
+                      {solanaDestinationPubkey ? (
+                        <a
+                          href={solanaExplorerAddressUrl(solanaDestinationPubkey)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-mono text-zinc-200/90 hover:text-white transition-colors break-all"
+                        >
+                          {solanaDestinationPubkey}
+                        </a>
+                      ) : (
+                        <div className="font-mono text-zinc-200/90 break-all">—</div>
+                      )}
+                      <div className="font-mono text-zinc-500 break-all">
+                        raw: {batcherSharedInfraQuery.data?.solanaDestination ?? '—'}
+                      </div>
                     </div>
                   </div>
+                  <div className="flex items-center justify-between gap-4 text-[11px]">
+                    <div className="text-sky-200/90">Share OFT peer (shared)</div>
+                    <div className="text-right">
+                      {solanaShareOftPeerPubkey ? (
+                        <a
+                          href={solanaExplorerAddressUrl(solanaShareOftPeerPubkey)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-mono text-zinc-200/90 hover:text-white transition-colors break-all"
+                        >
+                          {solanaShareOftPeerPubkey}
+                        </a>
+                      ) : (
+                        <div className="font-mono text-zinc-200/90 break-all">—</div>
+                      )}
+                      <div className="font-mono text-zinc-500 break-all">
+                        raw: {batcherSharedInfraQuery.data?.solanaShareOftPeer ?? '—'}
+                      </div>
+                    </div>
+                  </div>
+                  {meteoraAlphaVaultPubkey || solanaIxProgramPubkeys.length > 0 ? (
+                    <div className="rounded-md border border-sky-400/20 bg-sky-500/8 px-2 py-2 space-y-2">
+                      <div className="text-[10px] font-medium text-sky-200/90">Solana native routing payload</div>
+                      {meteoraAlphaVaultPubkey ? (
+                        <div className="flex items-center justify-between gap-3 text-[11px]">
+                          <div className="text-sky-200/80">Meteora Alpha Vault</div>
+                          <div className="text-right">
+                            <a
+                              href={solanaExplorerAddressUrl(meteoraAlphaVaultPubkey)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-mono text-zinc-200/90 hover:text-white transition-colors break-all"
+                            >
+                              {meteoraAlphaVaultPubkey}
+                            </a>
+                            <div className="font-mono text-zinc-500 break-all">
+                              raw: {ovaultMeshStatus?.meteoraAlphaVault ?? '—'}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                      {solanaIxProgramPubkeys.length > 0 ? (
+                        <div className="space-y-1">
+                          <div className="text-sky-200/80 text-[11px]">Solana ix program IDs</div>
+                          {solanaIxProgramPubkeys.map((programId) => (
+                            <a
+                              key={programId}
+                              href={solanaExplorerAddressUrl(programId)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block font-mono text-zinc-200/90 hover:text-white transition-colors break-all text-right"
+                            >
+                              {programId}
+                            </a>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {ovaultMeshStatus ? (
                     <>
                       <div className="h-px bg-white/10" />
@@ -7270,49 +7886,67 @@ function DeployVaultBatcher({
                   label="Gauge controller"
                   address={expected?.gaugeController}
                   deployed={expectedAddressDeployment?.gaugeController ?? null}
+                  forkOnly={isForkOnlyAddress(expected?.gaugeController, expectedAddressDeployment?.gaugeController ?? null)}
+                  dryRunPassed={dryRunPhasePassed('phase2Core')}
                 />
                 <AddressRow
                   label="CCA strategy"
                   address={expected?.ccaStrategy}
                   deployed={expectedAddressDeployment?.ccaStrategy ?? null}
+                  forkOnly={isForkOnlyAddress(expected?.ccaStrategy, expectedAddressDeployment?.ccaStrategy ?? null)}
+                  dryRunPassed={dryRunPhasePassed('phase2Core')}
                 />
                 <AddressRow
                   label="Oracle"
                   address={expected?.oracle}
                   deployed={expectedAddressDeployment?.oracle ?? null}
+                  forkOnly={isForkOnlyAddress(expected?.oracle, expectedAddressDeployment?.oracle ?? null)}
+                  dryRunPassed={dryRunPhasePassed('phase2Core')}
                 />
                 <AddressRow
                   label="Burn stream"
                   address={expected?.burnStream}
                   deployed={expectedAddressDeployment?.burnStream ?? null}
+                  forkOnly={isForkOnlyAddress(expected?.burnStream, expectedAddressDeployment?.burnStream ?? null)}
+                  dryRunPassed={dryRunPhasePassed('phase2Finalize')}
                 />
                 <AddressRow
                   label="Payout router"
                   address={expected?.payoutRouter}
                   deployed={expectedAddressDeployment?.payoutRouter ?? null}
+                  forkOnly={isForkOnlyAddress(expected?.payoutRouter, expectedAddressDeployment?.payoutRouter ?? null)}
+                  dryRunPassed={dryRunPhasePassed('phase2Finalize')}
                 />
                 <AddressRow
                   label="Creator coin policy controller"
                   address={expected?.creatorCoinPolicyController}
                   deployed={expectedAddressDeployment?.creatorCoinPolicyController ?? null}
+                  forkOnly={isForkOnlyAddress(
+                    expected?.creatorCoinPolicyController,
+                    expectedAddressDeployment?.creatorCoinPolicyController ?? null,
+                  )}
+                  dryRunPassed={dryRunPhasePassed('phase2Finalize')}
                 />
                 <AddressRow label="Creator coin payout recipient (external earnings)" address={currentPayoutRecipient} />
               </div>
               {payoutMismatch ? (
-                <div className="mt-2 text-[11px] text-amber-300/80">
-                  Creator coin payout recipient (creatorCoinPayoutRecipient lane) will update to{' '}
-                  <span className="font-mono text-amber-200">
+                <div className="mt-2 text-[11px] text-zinc-400">
+                  Next step in Phase 2 finalize: creator coin payout recipient (creatorCoinPayoutRecipient lane) will
+                  move to{' '}
+                  <span className="font-mono text-zinc-200">
                     {expectedPayoutRouter ? shortAddress(expectedPayoutRouter) : 'the configured payout router'}
-                  </span>{' '}
-                  during deploy (via PayoutRouter for PPS accretion). Continue only if this is intended.
+                  </span>
+                  . This is the normal routing path via PayoutRouter for PPS accretion.
                 </div>
               ) : null}
             </div>
 
             <div className="px-4 py-4">
-              <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 3</div>
               <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
-                <div className={timelineProgressTone('phase3Strategies')}>Deploy + register strategies (Charm, Ajna, Solana)</div>
+                <div className={`inline-flex items-center gap-2 ${timelineProgressTone('phase3Strategies')}`}>
+                  <span>Phase 3: Deploy + register strategies (Charm, Ajna)</span>
+                  {renderDryRunPhaseBadge('phase3')}
+                </div>
                 {href3 ? (
                   <a className="font-mono text-zinc-300 hover:text-white" href={href3} target="_blank" rel="noreferrer">
                     view tx
@@ -7321,42 +7955,134 @@ function DeployVaultBatcher({
                   renderStageDetailStatus('phase3Strategies')
                 )}
               </div>
+              <div className="rounded-md border border-white/10 bg-black/10 px-3 py-3 mb-3 space-y-2">
+                <div className="text-[10px] font-medium text-zinc-500">Shared infrastructure (Phase 3)</div>
+                <AddressRow
+                  label="Phase3 helper"
+                  address={batcherSharedInfraQuery.data?.phase3Helper ?? null}
+                  deployed={batcherSharedInfraQuery.data?.deployed.phase3Helper ?? null}
+                  variant="shared"
+                  forkOnly={isForkOnlyAddress(
+                    batcherSharedInfraQuery.data?.phase3Helper ?? null,
+                    batcherSharedInfraQuery.data?.deployed.phase3Helper ?? null,
+                  )}
+                />
+                <AddressRow
+                  label="UniV4 helper"
+                  address={batcherSharedInfraQuery.data?.uniV4Helper ?? null}
+                  deployed={batcherSharedInfraQuery.data?.deployed.uniV4Helper ?? null}
+                  variant="shared"
+                  forkOnly={isForkOnlyAddress(
+                    batcherSharedInfraQuery.data?.uniV4Helper ?? null,
+                    batcherSharedInfraQuery.data?.deployed.uniV4Helper ?? null,
+                  )}
+                />
+                <AddressRow
+                  label="Utils helper"
+                  address={batcherSharedInfraQuery.data?.utilsHelper ?? null}
+                  deployed={batcherSharedInfraQuery.data?.deployed.utilsHelper ?? null}
+                  variant="shared"
+                  forkOnly={isForkOnlyAddress(
+                    batcherSharedInfraQuery.data?.utilsHelper ?? null,
+                    batcherSharedInfraQuery.data?.deployed.utilsHelper ?? null,
+                  )}
+                />
+              </div>
+              <div className="rounded-md border border-sky-400/20 bg-sky-500/8 px-3 py-3 mt-3 mb-3 space-y-2">
+                <div className="text-[10px] font-medium text-sky-200/90">Emergency safety wiring (this deploy)</div>
+                <div className="text-[11px] text-sky-100/80 leading-relaxed">
+                  Every vault gets its own fresh `CreatorOImpairmentClaims` and `CreatorORecoveryEscrow` pair, deployed and
+                  linked to the vault below during Phase 3. Ownership of both then transfers to the protocol treasury so the
+                  protocol can monitor and operate these emergency-safety levers.
+                </div>
+                <AddressRow
+                  label="Impairment claims contract (this deploy)"
+                  address={impairmentClaimsAddress}
+                  deployed={impairmentClaimsDeployed}
+                  forkOnly={isForkOnlyAddress(impairmentClaimsAddress, impairmentClaimsDeployed)}
+                  dryRunPassed={dryRunPhasePassed('phase3')}
+                />
+                <AddressRow
+                  label="Recovery escrow contract (this deploy)"
+                  address={impairmentRecoveryEscrowAddress}
+                  deployed={impairmentRecoveryEscrowDeployed}
+                  forkOnly={isForkOnlyAddress(impairmentRecoveryEscrowAddress, impairmentRecoveryEscrowDeployed)}
+                  dryRunPassed={dryRunPhasePassed('phase3')}
+                />
+                <AddressRow
+                  label="Target vault for impairment hooks"
+                  address={expected?.vault}
+                  deployed={expectedAddressDeployment?.vault ?? null}
+                  variant="shared"
+                  forkOnly={isForkOnlyAddress(expected?.vault, expectedAddressDeployment?.vault ?? null)}
+                  dryRunPassed={dryRunPhasePassed('phase3')}
+                />
+                <AddressRow
+                  label="Post-deploy owner (protocol treasury)"
+                  address={expectedProtocolTreasury}
+                  deployed={null}
+                  variant="shared"
+                />
+              </div>
               <div className="space-y-2">
                 <AddressRow
                   label="Uniswap v3 pool (CREATOR/USDC)"
                   address={phase3Expected?.v3Pool}
                   deployed={phase3ExpectedAddressDeployment?.v3Pool ?? null}
+                  forkOnly={isForkOnlyAddress(phase3Expected?.v3Pool, phase3ExpectedAddressDeployment?.v3Pool ?? null)}
                 />
                 <AddressRow
                   label="Charm alpha vault"
                   address={phase3Expected?.charmVault}
                   deployed={phase3ExpectedAddressDeployment?.charmVault ?? null}
+                  forkOnly={isForkOnlyAddress(
+                    phase3Expected?.charmVault,
+                    phase3ExpectedAddressDeployment?.charmVault ?? null,
+                  )}
+                  dryRunPassed={dryRunPhasePassed('phase3')}
                 />
                 <AddressRow
                   label="CreatorCharmStrategy"
                   address={phase3Expected?.creatorCharmStrategy}
                   deployed={phase3ExpectedAddressDeployment?.creatorCharmStrategy ?? null}
+                  forkOnly={isForkOnlyAddress(
+                    phase3Expected?.creatorCharmStrategy,
+                    phase3ExpectedAddressDeployment?.creatorCharmStrategy ?? null,
+                  )}
+                  dryRunPassed={dryRunPhasePassed('phase3')}
                 />
-                <AddressRow label="Ajna pool" address={phase3Expected?.ajnaPool} deployed={phase3ExpectedAddressDeployment?.ajnaPool ?? null} />
+                <AddressRow
+                  label="Ajna pool"
+                  address={phase3Expected?.ajnaPool}
+                  deployed={phase3ExpectedAddressDeployment?.ajnaPool ?? null}
+                  forkOnly={isForkOnlyAddress(phase3Expected?.ajnaPool, phase3ExpectedAddressDeployment?.ajnaPool ?? null)}
+                />
                 <AddressRow
                   label="AjnaVaultAuth"
                   address={phase3Expected?.ajnaVaultAuth}
                   deployed={phase3ExpectedAddressDeployment?.ajnaVaultAuth ?? null}
+                  forkOnly={isForkOnlyAddress(
+                    phase3Expected?.ajnaVaultAuth,
+                    phase3ExpectedAddressDeployment?.ajnaVaultAuth ?? null,
+                  )}
+                  dryRunPassed={dryRunPhasePassed('phase3')}
                 />
                 <AddressRow
                   label="AjnaERC4626Vault"
                   address={phase3Expected?.ajnaVault}
                   deployed={phase3ExpectedAddressDeployment?.ajnaVault ?? null}
+                  forkOnly={isForkOnlyAddress(phase3Expected?.ajnaVault, phase3ExpectedAddressDeployment?.ajnaVault ?? null)}
+                  dryRunPassed={dryRunPhasePassed('phase3')}
                 />
                 <AddressRow
                   label="ERC4626StrategyAdapter"
                   address={phase3Expected?.erc4626StrategyAdapter}
                   deployed={phase3ExpectedAddressDeployment?.erc4626StrategyAdapter ?? null}
-                />
-                <AddressRow
-                  label="SolanaStrategy"
-                  address={phase3Expected?.solanaStrategy}
-                  deployed={phase3ExpectedAddressDeployment?.solanaStrategy ?? null}
+                  forkOnly={isForkOnlyAddress(
+                    phase3Expected?.erc4626StrategyAdapter,
+                    phase3ExpectedAddressDeployment?.erc4626StrategyAdapter ?? null,
+                  )}
+                  dryRunPassed={dryRunPhasePassed('phase3')}
                 />
               </div>
               <div className="mt-2 text-[11px] text-zinc-600">
@@ -7372,9 +8098,11 @@ function DeployVaultBatcher({
             </div>
 
             <div className="px-4 py-4">
-              <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 4</div>
               <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
-                <div className={timelineProgressTone('phase4Launch')}>Launch deferred auction</div>
+                <div className={`inline-flex items-center gap-2 ${timelineProgressTone('phase4Launch')}`}>
+                  <span>Phase 4: Launch Auction</span>
+                  {renderDryRunPhaseBadge('phase4')}
+                </div>
                 {href4 ? (
                   <a className="font-mono text-zinc-300 hover:text-white" href={href4} target="_blank" rel="noreferrer">
                     view tx
@@ -7384,7 +8112,13 @@ function DeployVaultBatcher({
                 )}
               </div>
               <div className="space-y-2">
-                <AddressRow label="Deferred auction" address={phase4AuctionAddress} deployed={phase4AuctionDeployment} />
+                <AddressRow
+                  label="Auction"
+                  address={phase4AuctionAddress}
+                  deployed={phase4AuctionDeployment}
+                  forkOnly={isForkOnlyAddress(phase4AuctionAddress, phase4AuctionDeployment)}
+                  dryRunPassed={dryRunPhasePassed('phase4')}
+                />
               </div>
               <div className="mt-2 text-[11px] text-zinc-600">
                 Auction address appears after Phase 4 writes CCA auction state.
@@ -7439,44 +8173,18 @@ function DeployVaultBatcher({
               ) : null}
             </div>
           ) : null}
+          {dryRunBusy ? <div className="mt-3 text-[11px] text-blue-300/90">Dry run running on local fork…</div> : null}
           {dryRunResult ? (
-            <div className="mt-3 rounded-lg border border-white/10 bg-white/4 p-3 space-y-2 backdrop-blur-sm">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-[10px] font-medium text-zinc-500">Dry run</div>
-                <div className={dryRunResult.ok ? 'text-[11px] text-green-400/80' : 'text-[11px] text-amber-300/80'}>
-                  {dryRunResult.ok ? `Pass on ${dryRunResult.forkMode} fork` : `Fail on ${dryRunResult.forkMode} fork`}
-                </div>
-              </div>
-              <div className="space-y-1 text-[11px]">
-                {(Array.isArray(dryRunResult.phases) ? dryRunResult.phases : []).map((phaseEntry) => (
-                  <div key={phaseEntry.name} className="flex items-center justify-between gap-3">
-                    <div className="text-zinc-400">{DRY_RUN_PHASE_LABELS[phaseEntry.name] ?? phaseEntry.name}</div>
-                    <div
-                      className={
-                        phaseEntry.status === 'passed'
-                          ? 'text-green-400/80'
-                          : phaseEntry.status === 'skipped'
-                            ? 'text-zinc-400'
-                            : 'text-amber-300/80'
-                      }
-                    >
-                      {phaseEntry.status === 'passed'
-                        ? `passed (${phaseEntry.callCount} call${phaseEntry.callCount === 1 ? '' : 's'})`
-                        : phaseEntry.status === 'skipped'
-                          ? `skipped (${phaseEntry.reason === 'known_local_fork_invariant' ? 'known local-fork invariant' : 'not executed'})`
-                          : `failed after ${phaseEntry.callCount} call${phaseEntry.callCount === 1 ? '' : 's'}`}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {dryRunResult.failure ? (
-                <div className="text-[11px] text-zinc-400 leading-relaxed">
-                  First failure: <span className="text-zinc-200">{dryRunResult.failure.phase}</span> call{' '}
-                  <span className="font-mono text-zinc-200">{dryRunResult.failure.callIndex + 1}</span> to{' '}
-                  <span className="font-mono text-zinc-200">{shortAddress(dryRunResult.failure.to)}</span>.
-                  <div className="mt-1 text-amber-300/80">{dryRunResult.failure.error}</div>
-                </div>
-              ) : null}
+            <div className={dryRunResult.ok ? 'mt-3 text-[11px] text-green-400/80' : 'mt-3 text-[11px] text-amber-300/80'}>
+              {dryRunResult.ok ? `Dry run passed on ${dryRunResult.forkMode} fork.` : `Dry run failed on ${dryRunResult.forkMode} fork.`}
+            </div>
+          ) : null}
+          {dryRunResult?.failure ? (
+            <div className="mt-1 text-[11px] text-zinc-400 leading-relaxed">
+              First failure: <span className="text-zinc-200">{dryRunResult.failure.phase}</span> call{' '}
+              <span className="font-mono text-zinc-200">{dryRunResult.failure.callIndex + 1}</span> to{' '}
+              <span className="font-mono text-zinc-200">{shortAddress(dryRunResult.failure.to)}</span>.
+              <div className="mt-1 text-amber-300/80">{dryRunResult.failure.error}</div>
             </div>
           ) : null}
         </div>
@@ -9734,7 +10442,7 @@ function DeployVaultMain() {
           ) : null}
           {pendingJustCompletedDeployment ? (
             <div className="rounded-lg border border-amber-500/25 bg-linear-to-b from-amber-500/16 to-amber-500/8 p-4 text-[12px] text-amber-200/90 backdrop-blur-sm">
-              Deployment is still finalizing on-chain. We now wait for the deferred auction (Phase 4) to be confirmed before
+              Deployment is still finalizing on-chain. We now wait for the auction (Phase 4) to be confirmed before
               marking this version complete.
             </div>
           ) : null}

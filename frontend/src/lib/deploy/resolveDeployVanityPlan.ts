@@ -19,6 +19,7 @@ import {
   lookupPreseededVanityVersionPlan,
 } from '@/lib/deploy/perVaultVanityPreseed'
 import {
+  deriveShareOftSaltFromVersion,
   deriveDeployBaseSalt,
   findDeploymentVersionForVanityTargets,
   predictCreate2AddressFromInitCode,
@@ -32,6 +33,7 @@ import {
   DEFAULT_VAULT_VANITY_PREFIX,
   deriveShareOftVanityStartAt,
   findCreate2SaltForSuffix,
+  normalizeHexSuffix,
   needsCombinedSaltDisabledVanitySearch,
   resolveDeploymentVersionSearchMaxTries,
   resolveDeploymentVersionSearchTargets,
@@ -167,6 +169,42 @@ export async function resolveDeployVanityPlan(
     !versionSearchShareSuffix || versionSearchShareSuffix === DEFAULT_SHARE_OFT_VANITY_SUFFIX
   let provisionalParallelShareSalt: Hex | null = null
   const cacheState = { ...params.cacheState }
+  let effectiveVersionSearchMaxTries = params.vaultVanityMaxTries
+  const versionSatisfiesSearchTargets = (candidateVersion: string): boolean => {
+    const candidateBaseSalt = deriveDeployBaseSalt({
+      creatorToken: params.creatorToken,
+      owner: params.owner,
+      chainId: params.chainId,
+      version: candidateVersion,
+    })
+    if (versionSearchVaultPrefix) {
+      const candidateVaultSalt = saltForDeployLabel(candidateBaseSalt, 'vault')
+      const candidateVaultAddress = predictCreate2AddressFromInitCode({
+        create2Deployer,
+        salt: candidateVaultSalt,
+        initCode: vaultInitCode,
+      })
+      if (!candidateVaultAddress.toLowerCase().startsWith(`0x${versionSearchVaultPrefix.toLowerCase()}`)) {
+        return false
+      }
+    }
+    if (versionSearchShareSuffix) {
+      const candidateShareSalt = deriveShareOftSaltFromVersion({
+        owner: params.owner,
+        shareSymbol: params.shareSymbol,
+        version: candidateVersion,
+      })
+      const candidateShareAddress = predictCreate2AddressFromInitCode({
+        create2Deployer,
+        salt: candidateShareSalt,
+        initCode: shareOftInitCode,
+      })
+      if (!candidateShareAddress.toLowerCase().endsWith(versionSearchShareSuffix.toLowerCase())) {
+        return false
+      }
+    }
+    return true
+  }
 
   if (versionSearchVaultPrefix || versionSearchShareSuffix) {
     const vanityTargetsKey = buildVanityVersionCacheKey({
@@ -198,8 +236,12 @@ export async function resolveDeployVanityPlan(
       }
     }
     if (cached?.key === vanityTargetsKey) {
-      deploymentVersionUsed = cached.version
-      vanityVersionSearchOutcome = cached.outcome ?? 'not_applicable'
+      if (versionSatisfiesSearchTargets(cached.version)) {
+        deploymentVersionUsed = cached.version
+        vanityVersionSearchOutcome = cached.outcome ?? 'not_applicable'
+      } else {
+        cacheState.vaultVanityVersion = null
+      }
     } else {
       const preseededVersion = lookupPreseededVanityVersionPlan({
         create2Deployer,
@@ -217,22 +259,30 @@ export async function resolveDeployVanityPlan(
         supportsPhase1WithSalt,
       })
       if (preseededVersion) {
-        deploymentVersionUsed = preseededVersion.deploymentVersion
-        vanityVersionSearchOutcome = preseededVersion.outcome
-        cacheState.vaultVanityVersion = {
-          key: vanityTargetsKey,
-          version: preseededVersion.deploymentVersion,
-          outcome: preseededVersion.outcome,
+        if (versionSatisfiesSearchTargets(preseededVersion.deploymentVersion)) {
+          deploymentVersionUsed = preseededVersion.deploymentVersion
+          vanityVersionSearchOutcome = preseededVersion.outcome
+          cacheState.vaultVanityVersion = {
+            key: vanityTargetsKey,
+            version: preseededVersion.deploymentVersion,
+            outcome: preseededVersion.outcome,
+          }
+          writePersistedVanityVersionPlan(vanityTargetsKey, {
+            version: preseededVersion.deploymentVersion,
+            outcome: preseededVersion.outcome,
+          })
+          logger.info('[DeployVault] vanity_version_preseed_hit', {
+            planId: preseededVersion.planId,
+            deploymentVersion: preseededVersion.deploymentVersion,
+            outcome: preseededVersion.outcome,
+          })
+        } else {
+          logger.warn('[DeployVault] vanity_version_preseed_stale', {
+            planId: preseededVersion.planId,
+            deploymentVersion: preseededVersion.deploymentVersion,
+            requiredVaultPrefix: versionSearchVaultPrefix,
+          })
         }
-        writePersistedVanityVersionPlan(vanityTargetsKey, {
-          version: preseededVersion.deploymentVersion,
-          outcome: preseededVersion.outcome,
-        })
-        logger.info('[DeployVault] vanity_version_preseed_hit', {
-          planId: preseededVersion.planId,
-          deploymentVersion: preseededVersion.deploymentVersion,
-          outcome: preseededVersion.outcome,
-        })
       } else {
       const versionSearchMaxTries = resolveDeploymentVersionSearchMaxTries({
         hasVaultPrefix: Boolean(versionSearchVaultPrefix),
@@ -241,6 +291,7 @@ export async function resolveDeployVanityPlan(
         vaultVanityMaxTries: params.vaultVanityMaxTries,
         shareOftVanityMaxTries: params.shareOftVanityMaxTries,
       })
+      effectiveVersionSearchMaxTries = versionSearchMaxTries
       const combinedSaltDisabledSearch = needsCombinedSaltDisabledVanitySearch({
         supportsPhase1WithSalt,
         vaultPrefix: versionSearchVaultPrefix,
@@ -335,6 +386,15 @@ export async function resolveDeployVanityPlan(
           serverCombinedVersionPromise,
         ])
         foundVersion = versionResult ?? serverVersion
+        if (foundVersion && !versionSatisfiesSearchTargets(foundVersion)) {
+          logger.warn('[DeployVault] vanity_version_candidate_rejected', {
+            source: versionResult ? 'client' : 'server',
+            deploymentVersion: foundVersion,
+            requiredVaultPrefix: versionSearchVaultPrefix,
+            requiredShareSuffix: versionSearchShareSuffix,
+          })
+          foundVersion = null
+        }
         provisionalParallelShareSalt = provisionalSalt
       } else {
         const [versionResult, serverVersion] = await Promise.all([
@@ -342,6 +402,15 @@ export async function resolveDeployVanityPlan(
           serverCombinedVersionPromise,
         ])
         foundVersion = versionResult ?? serverVersion
+        if (foundVersion && !versionSatisfiesSearchTargets(foundVersion)) {
+          logger.warn('[DeployVault] vanity_version_candidate_rejected', {
+            source: versionResult ? 'client' : 'server',
+            deploymentVersion: foundVersion,
+            requiredVaultPrefix: versionSearchVaultPrefix,
+            requiredShareSuffix: versionSearchShareSuffix,
+          })
+          foundVersion = null
+        }
       }
       if (foundVersion) {
         if (versionSearchVaultPrefix && versionSearchShareSuffix) {
@@ -355,56 +424,26 @@ export async function resolveDeployVanityPlan(
         }
       }
       if (!foundVersion) {
-        if (versionSearchVaultPrefix && usingDefaultVaultVanityTarget) {
-          vanityVersionSearchOutcome = 'missed_defaults'
-          throw new Error(
-            `Unable to guarantee default vault vanity prefix "0x${versionSearchVaultPrefix}" in ${versionSearchMaxTries.toLocaleString()} deployment-version tries. ` +
-              'Increase VITE_VAULT_VANITY_MAX_TRIES or run the offline vanity grinder before deploy.',
-          )
-        }
-        if (versionSearchShareSuffix && usingDefaultShareVanityTarget) {
-          vanityVersionSearchOutcome = 'missed_defaults'
-          throw new Error(
-            `Unable to guarantee default ShareOFT vanity suffix "${versionSearchShareSuffix}" in ${versionSearchMaxTries.toLocaleString()} deployment-version tries. ` +
-              'Increase VITE_SHARE_OFT_VANITY_MAX_TRIES or run the offline vanity grinder before deploy.',
-          )
-        }
-
         if (versionSearchVaultPrefix && versionSearchShareSuffix) {
-          if (!usingDefaultVaultVanityTarget || !usingDefaultShareVanityTarget) {
-            vanityVersionSearchOutcome = 'missed_custom'
-            throw new Error(
-              `Unable to find a deployment version matching vault prefix "0x${versionSearchVaultPrefix}" and share suffix "${versionSearchShareSuffix}" ` +
-                `in ${versionSearchMaxTries.toLocaleString()} tries (share-only fallback also failed after ${params.shareOftVanityMaxTries.toLocaleString()} tries).`,
-            )
-          }
-          vanityVersionSearchOutcome = 'missed_defaults'
-          vanityVersionSearchWarning =
-            `Default vanity targets (0x${versionSearchVaultPrefix} / ${versionSearchShareSuffix}) were not found in the current search window. ` +
-            'Continuing with deterministic deployment addresses.'
+          vanityVersionSearchOutcome =
+            usingDefaultVaultVanityTarget && usingDefaultShareVanityTarget
+              ? 'missed_defaults'
+              : 'missed_custom'
+          throw new Error(
+            `Unable to find a deployment version matching vault prefix "0x${versionSearchVaultPrefix}" and share suffix "${versionSearchShareSuffix}" ` +
+              `in ${versionSearchMaxTries.toLocaleString()} tries (share-only fallback also failed after ${params.shareOftVanityMaxTries.toLocaleString()} tries).`,
+          )
         } else if (versionSearchShareSuffix) {
-          if (!usingDefaultShareVanityTarget) {
-            vanityVersionSearchOutcome = 'missed_custom'
-            throw new Error(
-              `Unable to find ShareOFT vanity suffix "${versionSearchShareSuffix}" in ${params.shareOftVanityMaxTries.toLocaleString()} deployment-version tries.`,
-            )
-          }
-          vanityVersionSearchOutcome = 'missed_defaults'
-          vanityVersionSearchWarning =
-            `Default share suffix "${versionSearchShareSuffix}" was not found in the current search window. ` +
-            'Continuing with deterministic deployment addresses.'
+          vanityVersionSearchOutcome = usingDefaultShareVanityTarget ? 'missed_defaults' : 'missed_custom'
+          throw new Error(
+            `Unable to find ShareOFT vanity suffix "${versionSearchShareSuffix}" in ${params.shareOftVanityMaxTries.toLocaleString()} deployment-version tries.`,
+          )
         } else if (versionSearchVaultPrefix) {
-          if (!usingDefaultVaultVanityTarget) {
-            vanityVersionSearchOutcome = 'missed_custom'
-            throw new Error(
-              `Unable to find vault vanity prefix "0x${versionSearchVaultPrefix}" in ${params.vaultVanityMaxTries.toLocaleString()} deployment-version tries. ` +
-                'Increase VITE_VAULT_VANITY_MAX_TRIES and retry.',
-            )
-          }
-          vanityVersionSearchOutcome = 'missed_defaults'
-          vanityVersionSearchWarning =
-            `Default vault prefix "0x${versionSearchVaultPrefix}" was not found in the current search window. ` +
-            'Continuing with deterministic deployment addresses.'
+          vanityVersionSearchOutcome = usingDefaultVaultVanityTarget ? 'missed_defaults' : 'missed_custom'
+          throw new Error(
+            `Unable to find vault vanity prefix "0x${versionSearchVaultPrefix}" in ${params.vaultVanityMaxTries.toLocaleString()} deployment-version tries. ` +
+              'Increase VITE_VAULT_VANITY_MAX_TRIES and retry.',
+          )
         }
       }
       if (foundVersion) {
@@ -423,18 +462,22 @@ export async function resolveDeployVanityPlan(
     }
   }
 
-  const baseSalt = deriveDeployBaseSalt({
-    creatorToken: params.creatorToken,
-    owner: params.owner,
-    chainId: params.chainId,
-    version: deploymentVersionUsed,
-  })
-  const vaultSalt = saltForDeployLabel(baseSalt, 'vault')
-  const vaultAddress = predictCreate2AddressFromInitCode({
-    create2Deployer,
-    salt: vaultSalt,
-    initCode: vaultInitCode,
-  })
+  const deriveVaultAddressForVersion = (candidateVersion: string): Address => {
+    const candidateBaseSalt = deriveDeployBaseSalt({
+      creatorToken: params.creatorToken,
+      owner: params.owner,
+      chainId: params.chainId,
+      version: candidateVersion,
+    })
+    const candidateVaultSalt = saltForDeployLabel(candidateBaseSalt, 'vault')
+    return predictCreate2AddressFromInitCode({
+      create2Deployer,
+      salt: candidateVaultSalt,
+      initCode: vaultInitCode,
+    })
+  }
+
+  let vaultAddress = deriveVaultAddressForVersion(deploymentVersionUsed)
 
   const shareOftVanityUnsupportedByBatcher = !supportsPhase1WithSalt && Boolean(params.shareOftVanitySuffix)
   const batcherDisplay = params.shortAddress(params.batcherAddress)
@@ -618,6 +661,83 @@ export async function resolveDeployVanityPlan(
       cacheState.shareOftVanity = { key: vanityKey, salt: found }
       writePersistedShareOftVanitySalt(vanityKey, found)
       }
+    }
+  }
+
+  const requestedVaultPrefix = normalizeHexSuffix(params.vaultVanityPrefix)
+  if (requestedVaultPrefix && !vaultAddress.toLowerCase().startsWith(`0x${requestedVaultPrefix}`)) {
+    if (versionSearchVaultPrefix) {
+      const deterministicVersion = await findDeploymentVersionForVanityTargets({
+        create2Deployer,
+        creatorToken: params.creatorToken,
+        owner: params.owner,
+        chainId: params.chainId,
+        baseVersion: params.deploymentVersion,
+        vaultPrefix: versionSearchVaultPrefix,
+        shareSuffix: versionSearchShareSuffix,
+        maxTries: effectiveVersionSearchMaxTries,
+        vaultInitCode,
+        shareOftInitCode,
+        shareSymbol: params.shareSymbol,
+        isAddressDeployed: vanityAddressDeployedCheck,
+        preferWasm: false,
+      })
+      if (deterministicVersion && deterministicVersion !== deploymentVersionUsed) {
+        deploymentVersionUsed = deterministicVersion
+        vaultAddress = deriveVaultAddressForVersion(deploymentVersionUsed)
+        cacheState.vaultVanityVersion = {
+          key: buildVanityVersionCacheKey({
+            create2Deployer,
+            creatorToken: params.creatorToken,
+            owner: params.owner,
+            chainId: params.chainId,
+            vaultName: params.vaultName,
+            vaultSymbol: params.vaultSymbol,
+            shareName: params.shareName,
+            shareSymbol: params.shareSymbol,
+            baseVersion: params.deploymentVersion,
+            vaultPrefix: versionSearchVaultPrefix,
+            shareSuffix: versionSearchShareSuffix,
+            vaultVanityMaxTries: params.vaultVanityMaxTries,
+            shareOftVanityMaxTries: params.shareOftVanityMaxTries,
+            supportsPhase1WithSalt,
+          }),
+          version: deterministicVersion,
+          outcome: vanityVersionSearchOutcome,
+        }
+      }
+    }
+  }
+  if (requestedVaultPrefix && !vaultAddress.toLowerCase().startsWith(`0x${requestedVaultPrefix}`)) {
+    throw new Error(
+      `Resolved vault address ${vaultAddress} does not satisfy required vanity prefix 0x${requestedVaultPrefix}. ` +
+        'Retry with a higher search budget or run the offline vanity grinder.',
+    )
+  }
+
+  const requestedShareSuffix = normalizeHexSuffix(params.shareOftVanitySuffix)
+  if (requestedShareSuffix) {
+    const shareSuffixSatisfied = shareOftSaltOverrideUsed
+      ? predictCreate2AddressFromInitCode({
+          create2Deployer,
+          salt: shareOftSaltOverrideUsed,
+          initCode: shareOftInitCode,
+        })
+          .toLowerCase()
+          .endsWith(requestedShareSuffix)
+      : isShareSuffixSatisfiedByDeploymentVersion({
+          create2Deployer,
+          owner: params.owner,
+          shareSymbol: params.shareSymbol,
+          deploymentVersion: deploymentVersionUsed,
+          shareOftInitCode,
+          shareSuffix: requestedShareSuffix,
+        })
+    if (!shareSuffixSatisfied) {
+      throw new Error(
+        `Resolved ShareOFT vanity does not satisfy required suffix ${requestedShareSuffix}. ` +
+          'Retry with a higher search budget or run the offline vanity grinder.',
+      )
     }
   }
 

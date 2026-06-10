@@ -2215,6 +2215,7 @@ async function buildMarketScopeSummary(): Promise<{
     majorRows: 6,
     compact: true,
     fetchMarkets: true,
+    roomId: '1659',
   })
   if (!brief.ok) return null
   const topCreators = brief.formatInput.currentRows.slice(0, 3).map((row) => {

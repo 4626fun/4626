@@ -58,7 +58,7 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
     <div className="space-y-4">
       <section
         aria-label="Waitlist points actions"
-        className="rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-4"
+        className="px-0 py-0"
       >
         <WaitlistUnlocksPanel
           score={controller.me?.score ?? initialAccount.score}
@@ -66,6 +66,13 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
           linkedMethods={controller.me?.linkedMethods ?? initialAccount.linkedMethods}
           busyProvider={controller.busyProvider}
           onLinkProvider={controller.onLinkProvider}
+          zoraHandle={controller.me?.accountSignals?.zoraHandle ?? initialAccount.accountSignals?.zoraHandle ?? null}
+          canonicalCswAddress={
+            controller.me?.accountSignals?.canonicalCswAddress ??
+            initialAccount.accountSignals?.canonicalCswAddress ??
+            null
+          }
+          signingStepComplete={signingStepComplete}
         />
       </section>
 
@@ -99,11 +106,11 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
   )
 
   const gridClass = chatEnabled
-    ? 'grid grid-cols-1 gap-5 xl:grid-cols-[minmax(250px,280px)_minmax(0,1fr)_minmax(290px,340px)] xl:items-start xl:gap-5'
-    : 'grid grid-cols-1 gap-5 xl:grid-cols-[minmax(250px,280px)_minmax(0,1fr)] xl:items-start xl:gap-5'
+    ? 'grid grid-cols-1 gap-5 xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)_minmax(300px,360px)] xl:items-start xl:gap-6'
+    : 'grid grid-cols-1 gap-5 xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)] xl:items-start xl:gap-6'
 
   return (
-    <div className="mx-auto w-full max-w-none space-y-5 px-0 sm:space-y-6">
+    <div className="mx-auto w-full max-w-[1380px] space-y-5 px-3 sm:space-y-6 sm:px-4">
       {showWorkspaceHeader ? (
         <WaitlistWorkspaceHeader
           canEnterApp={canEnterApp}
@@ -116,7 +123,7 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
         <WaitlistLeaderboardPanel layout="rail" />
 
         <div className="min-w-0 space-y-5">
-          <div className="mx-auto w-full max-w-[640px] lg:max-w-none">
+          <div className="mx-auto w-full max-w-[860px] lg:max-w-none">
             <AccountSetupWorkspaceView
               context="waitlist"
               controller={controller}

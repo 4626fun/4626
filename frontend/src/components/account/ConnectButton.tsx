@@ -6,10 +6,9 @@ import { AccountTray } from '@/components/ui/AccountTray'
 import { Button } from '@/components/ui/Button'
 import { useQuery } from '@tanstack/react-query'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
-import { useIdentity } from '@/hooks/useIdentity'
 import { useCanonicalIdentity } from '@/hooks/useCanonicalIdentity'
 import { useAccountMe } from '@/hooks/useAccountMe'
-import { getAgentIdentity } from '@/components/chat/agentIdentity'
+import { useChatIdentity } from '@/components/chat/useChatIdentity'
 import {
   OPEN_ACCOUNT_TRAY_EVENT,
   type AccountTrayOpenDetail,
@@ -505,11 +504,9 @@ export function ConnectButton({
     showMenu,
     showOptions,
   })
-  const sharedIdentity = useIdentity(shouldResolveIdentity ? identityAddress : null)
-  const basename = shouldResolveIdentity ? sharedIdentity.basename : null
-  const basenameAvatar = shouldResolveIdentity ? sharedIdentity.basenameAvatar : null
-  const sharedAgentIdentity = shouldResolveIdentity ? getAgentIdentity(identityAddress) : null
-  const unifiedAvatar = sharedAgentIdentity?.avatar ?? sharedIdentity.avatar ?? basenameAvatar
+  const sharedIdentity = useChatIdentity(shouldResolveIdentity ? identityAddress : null)
+  const basename = shouldResolveIdentity && sharedIdentity.source !== 'address' ? sharedIdentity.displayName : null
+  const unifiedAvatar = shouldResolveIdentity ? sharedIdentity.avatar : null
   const toggleMenu = () => {
     setShowOptions(false)
     setShowMenu((current) => !current)

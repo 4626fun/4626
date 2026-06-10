@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { WagmiProvider, useAccount } from 'wagmi'
+import { getAccount, watchAccount } from '@wagmi/core'
+import { WagmiProvider } from 'wagmi'
 import { wagmiConfig } from '@/config/wagmi'
 import { useDeferUntilAfterCommit } from '@/hooks/useDeferUntilMounted'
 import { applyChainBrandTheme, resolveChainBrandTheme } from '@/theme/chainBrandTheme'
@@ -65,12 +66,26 @@ function DeferWagmiConsumers({ children }: { children: ReactNode }) {
 }
 
 function ChainBrandThemeSync() {
-  const { chainId, isConnected } = useAccount()
-
   useEffect(() => {
-    const theme = resolveChainBrandTheme(isConnected ? chainId : null)
-    applyChainBrandTheme(theme)
-  }, [chainId, isConnected])
+    const syncFromAccount = () => {
+      const account = getAccount(wagmiConfig)
+      const activeChainId = account.isConnected ? (account.chainId ?? null) : null
+      applyChainBrandTheme(resolveChainBrandTheme(activeChainId))
+    }
+
+    // Apply immediately on mount, then keep in sync with wallet/account changes.
+    syncFromAccount()
+    const unwatch = watchAccount(wagmiConfig, {
+      onChange(account) {
+        const activeChainId = account.isConnected ? (account.chainId ?? null) : null
+        applyChainBrandTheme(resolveChainBrandTheme(activeChainId))
+      },
+    })
+
+    return () => {
+      unwatch()
+    }
+  }, [])
 
   return null
 }

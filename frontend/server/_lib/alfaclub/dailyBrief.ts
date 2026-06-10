@@ -24,6 +24,13 @@ import {
   readAutoSyncRoomPoliciesEnabled,
   syncCreatorRoomPoliciesFromSnapshot,
 } from './roomPolicySync.js'
+import { readScoredProliquidSignalsForRoom } from './proliquidSignals.js'
+import { getClearinghouseState } from './hyperliquid.js'
+import {
+  ALFACLUB_API_COMMON_BROWSER_HEADERS,
+  readAlfaClubApiAuthFlags,
+} from './apiAuth.js'
+import { resolveRoom1659MarketContext, resolveRoom1659HyperliquidPortfolioUser } from './room1659Market.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -33,20 +40,13 @@ const DEFAULT_TOP_ROWS = 5
 const DEFAULT_MOVER_ROWS = 5
 const DEFAULT_MAJOR_ROWS = 6
 const DEFAULT_RECENT_PUBLICATIONS_LIMIT = 500
+const DEFAULT_HYPERCORE_SYMBOL_LIMIT = 8
+const DEFAULT_HYPERCORE_LOOKBACK_HOURS = 24
+const DEFAULT_PROLIQUID_LOOKBACK_HOURS = 24
+const DEFAULT_PROLIQUID_SAMPLE_LIMIT = 200
+const DEFAULT_HYPERLIQUID_INFO_URL = 'https://api.hyperliquid.xyz/info'
 const SCORE_MOVE_EPSILON = 0.005
 const MAX_MOVE_LINES = 6
-const MAJOR_TOKENS = [
-  { symbol: 'BTC', id: 'bitcoin' },
-  { symbol: 'ETH', id: 'ethereum' },
-  { symbol: 'BNB', id: 'binancecoin' },
-  { symbol: 'SOL', id: 'solana' },
-  { symbol: 'AVAX', id: 'avalanche-2' },
-  { symbol: 'XRP', id: 'ripple' },
-  { symbol: 'DOGE', id: 'dogecoin' },
-  { symbol: 'LINK', id: 'chainlink' },
-  { symbol: 'TON', id: 'the-open-network' },
-  { symbol: 'SUI', id: 'sui' },
-] as const
 
 type DailyBriefFlags = {
   enabled: boolean
@@ -57,6 +57,12 @@ type DailyBriefFlags = {
   compact: boolean
   forceSend: boolean
   marketTimeoutMs: number
+  hyperCoreEnabled: boolean
+  hyperCoreInfoUrl: string
+  hyperCoreSymbolLimit: number
+  hyperCoreLookbackHours: number
+  proliquidLookbackHours: number
+  proliquidSampleLimit: number
 }
 
 type MarketRow = {
@@ -64,6 +70,63 @@ type MarketRow = {
   priceUsd: number | null
   change24hPct: number | null
 }
+
+type HyperCoreAssetContext = {
+  symbol: string
+  priceUsd: number | null
+  change24hPct: number | null
+  fundingRate: number | null
+  openInterestUsd: number | null
+  volume24hUsd: number | null
+}
+
+type HyperCoreExecutionRow = {
+  symbol: string
+  spreadBps: number | null
+  topBidDepthUsd: number | null
+  topAskDepthUsd: number | null
+}
+
+type HyperCoreMarketBrief = {
+  watchlist: HyperCoreAssetContext[]
+  regimeLine: string
+  execution: HyperCoreExecutionRow[]
+  unavailableReason: string | null
+}
+
+type ProliquidSignalPressureSummary = {
+  scoredCount: number
+  highConfidenceCount: number
+  byKind: Array<{ kind: string; count: number }>
+  topSignals: Array<{ kind: string; confidence: string; scoreValue: number | null }>
+} | null
+
+type RoomEconomicsOpenPosition = {
+  coin: string
+  side: 'long' | 'short' | null
+  notionalUsd: number | null
+  entryPx: number | null
+  unrealizedPnlUsd: number | null
+  liquidationPx: number | null
+  leverage: number | null
+}
+
+type RoomEconomicsBrief = {
+  roomId: string
+  portfolioUser: string
+  accountValueUsd: number | null
+  withdrawableUsd: number | null
+  totalNotionalUsd: number | null
+  totalNotionalIncludingAkitaUsd: number | null
+  openPositions: RoomEconomicsOpenPosition[]
+  akitaAmount: number | null
+  akitaAvgBuyPriceUsd: number | null
+  akitaCostBasisUsd: number | null
+  akitaEstimatedValueUsd: number | null
+  combinedValueUsd: number | null
+  roomKeySupply: number | null
+  impliedPayoutPerKeyUsd: number | null
+} | null
 
 type SnapshotDelta = {
   current: MetricsSnapshotRow
@@ -204,6 +267,7 @@ export function isDailyBriefRoomSameAsBridgeRoom(briefRoomId: string): boolean {
 }
 
 export function readAlfaClubDailyBriefFlags(): DailyBriefFlags {
+  const infoUrl = (process.env.ALFACLUB_DAILY_BRIEF_HYPERCORE_INFO_URL ?? '').trim()
   return {
     enabled: parseBool(process.env.ALFACLUB_DAILY_BRIEF_ENABLED ?? '1'),
     roomId: resolveDailyBriefRoomId(),
@@ -212,7 +276,7 @@ export function readAlfaClubDailyBriefFlags(): DailyBriefFlags {
     majorRows: parsePositiveInt(
       process.env.ALFACLUB_DAILY_BRIEF_MAJOR_ROWS,
       DEFAULT_MAJOR_ROWS,
-      MAJOR_TOKENS.length,
+      20,
     ),
     compact: parseBool(process.env.ALFACLUB_DAILY_BRIEF_COMPACT ?? '1'),
     forceSend: parseBool(process.env.ALFACLUB_DAILY_BRIEF_FORCE_SEND),
@@ -220,6 +284,28 @@ export function readAlfaClubDailyBriefFlags(): DailyBriefFlags {
       process.env.ALFACLUB_DAILY_BRIEF_MARKET_TIMEOUT_MS,
       DEFAULT_MARKET_TIMEOUT_MS,
       30_000,
+    ),
+    hyperCoreEnabled: parseBool(process.env.ALFACLUB_DAILY_BRIEF_HYPERCORE_ENABLED ?? '1'),
+    hyperCoreInfoUrl: infoUrl.length > 0 ? infoUrl : DEFAULT_HYPERLIQUID_INFO_URL,
+    hyperCoreSymbolLimit: parsePositiveInt(
+      process.env.ALFACLUB_DAILY_BRIEF_HYPERCORE_SYMBOL_LIMIT,
+      DEFAULT_HYPERCORE_SYMBOL_LIMIT,
+      20,
+    ),
+    hyperCoreLookbackHours: parsePositiveInt(
+      process.env.ALFACLUB_DAILY_BRIEF_HYPERCORE_LOOKBACK_HOURS,
+      DEFAULT_HYPERCORE_LOOKBACK_HOURS,
+      168,
+    ),
+    proliquidLookbackHours: parsePositiveInt(
+      process.env.ALFACLUB_DAILY_BRIEF_PROLIQUID_LOOKBACK_HOURS,
+      DEFAULT_PROLIQUID_LOOKBACK_HOURS,
+      168,
+    ),
+    proliquidSampleLimit: parsePositiveInt(
+      process.env.ALFACLUB_DAILY_BRIEF_PROLIQUID_SAMPLE_LIMIT,
+      DEFAULT_PROLIQUID_SAMPLE_LIMIT,
+      500,
     ),
   }
 }
@@ -397,6 +483,17 @@ function formatUsd(value: number | null): string {
   return `$${value.toExponential(2)}`
 }
 
+function formatUsdReadable(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return 'n/a'
+  const sign = value < 0 ? '-' : ''
+  const abs = Math.abs(value)
+  if (abs >= 1000) return `${sign}$${abs.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+  if (abs >= 1) return `${sign}$${abs.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+  if (abs >= 0.01) return `${sign}$${abs.toLocaleString('en-US', { maximumFractionDigits: 4 })}`
+  if (abs >= 0.0001) return `${sign}$${abs.toLocaleString('en-US', { maximumFractionDigits: 6 })}`
+  return `${sign}$${abs.toLocaleString('en-US', { maximumFractionDigits: 8 })}`
+}
+
 function formatScore(value: number): string {
   return value.toFixed(3)
 }
@@ -428,32 +525,327 @@ function formatRatioDeltaPct(value: number | null): string {
   return `${sign}${pct.toFixed(1)}pp`
 }
 
-async function fetchMajorTokenPrices(timeoutMs: number): Promise<MarketRow[]> {
+function parseNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return null
+}
+
+async function postHyperliquidInfo(params: {
+  infoUrl: string
+  payload: Record<string, unknown>
+  timeoutMs: number
+}): Promise<unknown | null> {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  const timeout = setTimeout(() => controller.abort(), params.timeoutMs)
   try {
-    const url = new URL('https://api.coingecko.com/api/v3/simple/price')
-    url.searchParams.set('ids', MAJOR_TOKENS.map((token) => token.id).join(','))
-    url.searchParams.set('vs_currencies', 'usd')
-    url.searchParams.set('include_24hr_change', 'true')
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: { accept: 'application/json' },
+    const response = await fetch(params.infoUrl, {
+      method: 'POST',
+      headers: { accept: 'application/json', 'content-type': 'application/json' },
       signal: controller.signal,
+      body: JSON.stringify(params.payload),
     })
-    if (!response.ok) throw new Error(`market_fetch_failed:${response.status}`)
-    const body = (await response.json()) as Record<string, { usd?: number; usd_24h_change?: number }>
-    return MAJOR_TOKENS.map((token) => ({
-      symbol: token.symbol,
-      priceUsd: Number.isFinite(body?.[token.id]?.usd) ? Number(body[token.id]?.usd) : null,
-      change24hPct: Number.isFinite(body?.[token.id]?.usd_24h_change)
-        ? Number(body[token.id]?.usd_24h_change)
-        : null,
-    }))
+    if (!response.ok) return null
+    const body = (await response.json()) as unknown
+    return body
   } catch {
-    return MAJOR_TOKENS.map((token) => ({ symbol: token.symbol, priceUsd: null, change24hPct: null }))
+    return null
   } finally {
     clearTimeout(timeout)
+  }
+}
+
+function parseMetaAndAssetContexts(raw: unknown): HyperCoreAssetContext[] {
+  if (!Array.isArray(raw) || raw.length < 2) return []
+  const meta = raw[0] as { universe?: Array<{ name?: string }> } | null
+  const ctxs = Array.isArray(raw[1]) ? raw[1] : []
+  const universe = Array.isArray(meta?.universe) ? meta.universe : []
+  return universe
+    .map((asset, index) => {
+      const symbol = String(asset?.name ?? '').trim()
+      if (!symbol) return null
+      const ctx = (ctxs[index] ?? {}) as Record<string, unknown>
+      const markPx = parseNumber(ctx.markPx) ?? parseNumber(ctx.midPx)
+      const prevDayPx = parseNumber(ctx.prevDayPx)
+      const change24hPct =
+        markPx != null && prevDayPx != null && prevDayPx > 0
+          ? ((markPx - prevDayPx) / prevDayPx) * 100
+          : null
+      const volume24hUsd = parseNumber(ctx.dayNtlVlm) ?? parseNumber(ctx.dayBaseVlm)
+      const openInterestUsd = parseNumber(ctx.openInterest)
+      const fundingRate = parseNumber(ctx.funding)
+      return {
+        symbol,
+        priceUsd: markPx,
+        change24hPct,
+        fundingRate,
+        openInterestUsd,
+        volume24hUsd,
+      } satisfies HyperCoreAssetContext
+    })
+    .filter((row): row is HyperCoreAssetContext => Boolean(row))
+}
+
+function pickMarketRowsFromWatchlist(rows: HyperCoreAssetContext[], majorRows: number): MarketRow[] {
+  return rows.slice(0, majorRows).map((row) => ({
+    symbol: row.symbol,
+    priceUsd: row.priceUsd,
+    change24hPct: row.change24hPct,
+  }))
+}
+
+function buildHyperCoreRegimeLine(rows: HyperCoreAssetContext[]): string {
+  if (rows.length === 0) return 'Regime unavailable (no HyperCore context rows).'
+  const withChange = rows.filter((row) => row.change24hPct !== null)
+  const upCount = withChange.filter((row) => (row.change24hPct ?? 0) > 0).length
+  const breadthPct = withChange.length > 0 ? (upCount / withChange.length) * 100 : null
+  const avgFunding = rows
+    .map((row) => row.fundingRate)
+    .filter((value): value is number => value !== null && Number.isFinite(value))
+  const avgFundingRate =
+    avgFunding.length > 0 ? avgFunding.reduce((sum, value) => sum + value, 0) / avgFunding.length : null
+  const riskLabel =
+    breadthPct == null
+      ? 'mixed'
+      : breadthPct >= 60
+        ? 'risk-on'
+        : breadthPct <= 40
+          ? 'risk-off'
+          : 'range'
+  const breadthLabel = breadthPct == null ? 'n/a' : `${breadthPct.toFixed(0)}% up`
+  const fundingLabel =
+    avgFundingRate == null ? 'funding n/a' : `avg funding ${avgFundingRate >= 0 ? '+' : ''}${(avgFundingRate * 100).toFixed(3)}%`
+  return `Regime: ${riskLabel} · breadth ${breadthLabel} · ${fundingLabel}`
+}
+
+function parseL2ExecutionRow(symbol: string, raw: unknown): HyperCoreExecutionRow {
+  if (!raw || typeof raw !== 'object') {
+    return { symbol, spreadBps: null, topBidDepthUsd: null, topAskDepthUsd: null }
+  }
+  const levels = (raw as { levels?: unknown }).levels
+  if (!Array.isArray(levels) || levels.length < 2) {
+    return { symbol, spreadBps: null, topBidDepthUsd: null, topAskDepthUsd: null }
+  }
+  const bids = Array.isArray(levels[0]) ? levels[0] : []
+  const asks = Array.isArray(levels[1]) ? levels[1] : []
+  const bestBid = (bids[0] ?? {}) as Record<string, unknown>
+  const bestAsk = (asks[0] ?? {}) as Record<string, unknown>
+  const bidPx = parseNumber(bestBid.px)
+  const askPx = parseNumber(bestAsk.px)
+  const bidSz = parseNumber(bestBid.sz)
+  const askSz = parseNumber(bestAsk.sz)
+  const mid = bidPx != null && askPx != null ? (bidPx + askPx) / 2 : null
+  const spreadBps =
+    mid != null && bidPx != null && askPx != null && mid > 0
+      ? ((askPx - bidPx) / mid) * 10_000
+      : null
+  return {
+    symbol,
+    spreadBps,
+    topBidDepthUsd: bidPx != null && bidSz != null ? bidPx * bidSz : null,
+    topAskDepthUsd: askPx != null && askSz != null ? askPx * askSz : null,
+  }
+}
+
+async function buildHyperCoreMarketBrief(params: {
+  flags: DailyBriefFlags
+  majorRows: number
+}): Promise<{ marketRows: MarketRow[]; hyperCore: HyperCoreMarketBrief }> {
+  if (!params.flags.hyperCoreEnabled) {
+    return {
+      marketRows: [],
+      hyperCore: {
+        watchlist: [],
+        regimeLine: 'HyperCore brief disabled by ALFACLUB_DAILY_BRIEF_HYPERCORE_ENABLED.',
+        execution: [],
+        unavailableReason: 'disabled',
+      },
+    }
+  }
+
+  const metaCtxRaw = await postHyperliquidInfo({
+    infoUrl: params.flags.hyperCoreInfoUrl,
+    payload: { type: 'metaAndAssetCtxs' },
+    timeoutMs: params.flags.marketTimeoutMs,
+  })
+  const allMidsRaw = await postHyperliquidInfo({
+    infoUrl: params.flags.hyperCoreInfoUrl,
+    payload: { type: 'allMids' },
+    timeoutMs: params.flags.marketTimeoutMs,
+  })
+
+  const contextRows = parseMetaAndAssetContexts(metaCtxRaw)
+  const mids = allMidsRaw && typeof allMidsRaw === 'object' ? (allMidsRaw as Record<string, unknown>) : {}
+  for (const row of contextRows) {
+    if (row.priceUsd === null) {
+      row.priceUsd = parseNumber(mids[row.symbol])
+    }
+  }
+
+  const ranked = [...contextRows]
+    .map((row) => {
+      const momentum = Math.abs(row.change24hPct ?? 0)
+      const volumeScore =
+        row.volume24hUsd != null && row.volume24hUsd > 0 ? Math.log10(row.volume24hUsd + 1) : 0
+      const oiScore = row.openInterestUsd != null && row.openInterestUsd > 0 ? Math.log10(row.openInterestUsd + 1) : 0
+      return { row, score: momentum * 1.2 + volumeScore + oiScore * 0.6 }
+    })
+    .sort((a, b) => b.score - a.score)
+    .map((entry) => entry.row)
+
+  const watchlist = ranked.slice(0, Math.min(params.flags.hyperCoreSymbolLimit, params.majorRows))
+  const executionRaw = await Promise.all(
+    watchlist.map((row) =>
+      postHyperliquidInfo({
+        infoUrl: params.flags.hyperCoreInfoUrl,
+        payload: { type: 'l2Book', coin: row.symbol },
+        timeoutMs: params.flags.marketTimeoutMs,
+      }),
+    ),
+  )
+  const execution = watchlist.map((row, index) => parseL2ExecutionRow(row.symbol, executionRaw[index]))
+  const unavailableReason =
+    watchlist.length === 0 ? 'no_hypercore_rows' : null
+
+  return {
+    marketRows: pickMarketRowsFromWatchlist(watchlist, params.majorRows),
+    hyperCore: {
+      watchlist,
+      regimeLine: buildHyperCoreRegimeLine(contextRows),
+      execution,
+      unavailableReason,
+    },
+  }
+}
+
+async function buildProliquidSignalPressureSummary(params: {
+  roomId: string
+  lookbackHours: number
+  limit: number
+}): Promise<ProliquidSignalPressureSummary> {
+  const startTimeMs = Date.now() - params.lookbackHours * 60 * 60 * 1000
+  const rows = await readScoredProliquidSignalsForRoom({
+    roomId: params.roomId,
+    startTimeMs,
+    limit: params.limit,
+  })
+  if (rows.length === 0) return null
+  const byKindMap = new Map<string, number>()
+  let highConfidenceCount = 0
+  for (const row of rows) {
+    const kind = String(row.signal_kind ?? 'unknown')
+    byKindMap.set(kind, (byKindMap.get(kind) ?? 0) + 1)
+    if (String(row.score_confidence ?? '').toLowerCase() === 'high') highConfidenceCount += 1
+  }
+  const byKind = [...byKindMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([kind, count]) => ({ kind, count }))
+  const topSignals = [...rows]
+    .sort((a, b) => (b.score_value ?? 0) - (a.score_value ?? 0))
+    .slice(0, 3)
+    .map((row) => ({
+      kind: String(row.signal_kind ?? 'unknown'),
+      confidence: String(row.score_confidence ?? 'n/a'),
+      scoreValue: row.score_value,
+    }))
+  return {
+    scoredCount: rows.length,
+    highConfidenceCount,
+    byKind,
+    topSignals,
+  }
+}
+
+async function fetchRoomSpotPositions(roomId: string): Promise<Array<Record<string, unknown>>> {
+  const flags = readAlfaClubApiAuthFlags()
+  const token = flags.readBotToken || flags.botToken
+  if (!token) return []
+  const endpoint = new URL(`/api/spot/positions?roomId=${encodeURIComponent(roomId)}`, flags.apiBaseUrl)
+  try {
+    const response = await fetch(endpoint.toString(), {
+      headers: {
+        accept: 'application/json',
+        ...ALFACLUB_API_COMMON_BROWSER_HEADERS,
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    if (!response.ok) return []
+    const body = (await response.json()) as { positions?: Array<Record<string, unknown>> } | null
+    return Array.isArray(body?.positions) ? body.positions : []
+  } catch {
+    return []
+  }
+}
+
+async function buildRoomEconomicsBrief(params: { roomId: string }): Promise<RoomEconomicsBrief> {
+  if (params.roomId !== '1659') return null
+
+  const portfolioUser = resolveRoom1659HyperliquidPortfolioUser()
+  const [hlState, spotPositions, room1659Context] = await Promise.all([
+    getClearinghouseState(portfolioUser),
+    fetchRoomSpotPositions(params.roomId),
+    resolveRoom1659MarketContext(portfolioUser).catch(() => null),
+  ])
+
+  const openPositions: RoomEconomicsOpenPosition[] = Array.isArray(hlState?.assetPositions)
+    ? hlState.assetPositions.map((row) => ({
+        coin: String(row?.coin ?? '').trim() || 'unknown',
+        side:
+          row?.side === 'long' || row?.side === 'short'
+            ? row.side
+            : null,
+        notionalUsd: parseNumber(row?.positionValue),
+        entryPx: parseNumber(row?.entryPx),
+        unrealizedPnlUsd: parseNumber(row?.unrealizedPnl),
+        liquidationPx: parseNumber(row?.liquidationPx),
+        leverage: parseNumber(row?.leverage),
+      }))
+    : []
+
+  const akitaPosition = spotPositions.find((row) => {
+    const tokenAddress = String(row.tokenAddress ?? '').toLowerCase()
+    const symbol = String(row.tokenSymbol ?? '').toLowerCase()
+    return tokenAddress === '0x5b674196812451b7cec024fe9d22d2c0b172fa75' || symbol === 'akita'
+  })
+  const akitaAmount = parseNumber(akitaPosition?.amount)
+  const akitaAvgBuyPriceUsd = parseNumber(akitaPosition?.avgBuyPrice)
+  const akitaCostBasisUsd = parseNumber(akitaPosition?.totalInvested)
+  const akitaEstimatedValueUsd =
+    akitaAmount != null && akitaAvgBuyPriceUsd != null ? akitaAmount * akitaAvgBuyPriceUsd : null
+
+  const accountValueUsd = parseNumber(hlState?.accountValueUsd)
+  const withdrawableUsd = parseNumber(hlState?.withdrawableUsd)
+  const totalNotionalUsd = parseNumber(hlState?.totalNtlPosUsd)
+  const totalNotionalIncludingAkitaUsd =
+    totalNotionalUsd != null && akitaEstimatedValueUsd != null
+      ? totalNotionalUsd + akitaEstimatedValueUsd
+      : null
+  const combinedValueUsd =
+    accountValueUsd != null && akitaEstimatedValueUsd != null ? accountValueUsd + akitaEstimatedValueUsd : null
+  const roomKeySupply = parseNumber(room1659Context?.onchain?.totalSupply?.toString?.())
+  const impliedPayoutPerKeyUsd =
+    combinedValueUsd != null && roomKeySupply != null && roomKeySupply > 0
+      ? combinedValueUsd / roomKeySupply
+      : null
+
+  return {
+    roomId: params.roomId,
+    portfolioUser,
+    accountValueUsd,
+    withdrawableUsd,
+    totalNotionalUsd,
+    totalNotionalIncludingAkitaUsd,
+    openPositions,
+    akitaAmount,
+    akitaAvgBuyPriceUsd,
+    akitaCostBasisUsd,
+    akitaEstimatedValueUsd,
+    combinedValueUsd,
+    roomKeySupply,
+    impliedPayoutPerKeyUsd,
   }
 }
 
@@ -673,6 +1065,9 @@ function buildCompactBriefText(params: {
   creatorsTracked: number
   recentPublications: PublicationRecord[]
   marketRows: MarketRow[]
+  hyperCore: HyperCoreMarketBrief
+  proliquidSummary: ProliquidSignalPressureSummary
+  roomEconomics: RoomEconomicsBrief
   topRows: number
   majorRows: number
   labels: CreatorLabelMap
@@ -703,6 +1098,87 @@ function buildCompactBriefText(params: {
   const snapLabel = formatBriefSnapshotDate(params.snapshotTs)
   const prevLabel = params.previousSnapshotTs ? formatBriefSnapshotDate(params.previousSnapshotTs) : null
   lines.push(`**AlfaClub Daily** · ${snapLabel}${prevLabel ? ` vs ${prevLabel}` : ''}`)
+
+  // Keep market context contiguous and first so the brief reads top-down.
+  lines.push('')
+  lines.push('**HyperCore**')
+  lines.push(params.hyperCore.regimeLine)
+  if (params.hyperCore.watchlist.length > 0) {
+    const watchlistLine = params.hyperCore.watchlist
+      .slice(0, params.majorRows)
+      .map((row) => {
+        const oi = row.openInterestUsd == null ? 'OI n/a' : `OI ${formatUsdCompact(row.openInterestUsd)}`
+        const funding =
+          row.fundingRate == null
+            ? 'fund n/a'
+            : `fund ${row.fundingRate >= 0 ? '+' : ''}${(row.fundingRate * 100).toFixed(3)}%`
+        return `${row.symbol} ${formatUsdCompact(row.priceUsd)} (${formatPct(row.change24hPct)}) · ${oi} · ${funding}`
+      })
+      .join(' | ')
+    lines.push(`Watchlist: ${watchlistLine}`)
+  } else {
+    lines.push('Watchlist: unavailable.')
+  }
+  if (params.hyperCore.execution.length > 0) {
+    const executionLine = params.hyperCore.execution
+      .slice(0, 4)
+      .map((row) => {
+        const spread = row.spreadBps == null ? 'spread n/a' : `spread ${row.spreadBps.toFixed(1)}bps`
+        const depth =
+          row.topBidDepthUsd == null || row.topAskDepthUsd == null
+            ? 'depth n/a'
+            : `depth ${formatUsdCompact(Math.min(row.topBidDepthUsd, row.topAskDepthUsd))}`
+        return `${row.symbol} ${spread} · ${depth}`
+      })
+      .join(' | ')
+    lines.push(`Execution: ${executionLine}`)
+  }
+  if (params.proliquidSummary) {
+    const topKinds = params.proliquidSummary.byKind
+      .slice(0, 3)
+      .map((entry) => `${entry.kind}:${entry.count}`)
+      .join(', ')
+    const topSignals = params.proliquidSummary.topSignals
+      .map((signal) => `${signal.kind}/${signal.confidence}${signal.scoreValue != null ? `:${signal.scoreValue}` : ''}`)
+      .join(', ')
+    lines.push(
+      `Signal pressure (${params.proliquidSummary.scoredCount} scored, ${params.proliquidSummary.highConfidenceCount} high): ${topKinds || 'n/a'}${topSignals ? ` · top ${topSignals}` : ''}`,
+    )
+  } else {
+    lines.push('Signal pressure: no recent ProLiquid scored signals.')
+  }
+  if (params.roomEconomics) {
+    const room = params.roomEconomics
+    lines.push(`Room economics (${room.roomId}):`)
+    lines.push(
+      `- HL notional ${formatUsdReadable(room.totalNotionalUsd)} · All-in notional ${formatUsdReadable(room.totalNotionalIncludingAkitaUsd)}`,
+    )
+    lines.push(
+      `- Account ${formatUsdReadable(room.accountValueUsd)} · Withdrawable ${formatUsdReadable(room.withdrawableUsd)}`,
+    )
+    lines.push(
+      `- AKITA ${room.akitaAmount == null ? 'n/a' : room.akitaAmount.toLocaleString('en-US', { maximumFractionDigits: 2 })} @ ${formatUsdReadable(room.akitaAvgBuyPriceUsd)} · Est ${formatUsdReadable(room.akitaEstimatedValueUsd)} · Cost ${formatUsdReadable(room.akitaCostBasisUsd)}`,
+    )
+    lines.push(`- Combined est ${formatUsdReadable(room.combinedValueUsd)}`)
+    if (room.roomKeySupply != null) {
+      lines.push(
+        `- Key supply ${room.roomKeySupply.toLocaleString('en-US')} · Implied payout/key ${formatUsdReadable(room.impliedPayoutPerKeyUsd)}`,
+      )
+    }
+    if (room.openPositions.length > 0) {
+      lines.push('- Open positions:')
+      const openLines = room.openPositions
+        .slice(0, 3)
+        .map((position) => {
+          const side = position.side ? position.side.toUpperCase() : 'N/A'
+          return `  • ${position.coin} ${side} ${formatUsdReadable(position.notionalUsd)} (uPnL ${formatUsdReadable(position.unrealizedPnlUsd)})`
+        })
+      lines.push(...openLines)
+    }
+  }
+
+  lines.push('')
+  lines.push('**AlfaClub creator flow**')
   lines.push(
     formatIndexedScopeLine({
       creatorsTracked: params.creatorsTracked,
@@ -711,7 +1187,6 @@ function buildCompactBriefText(params: {
       activeCreators24h,
     }),
   )
-  lines.push('')
   lines.push(
     buildCompactLeadSummary({
       currentRows: params.currentRows,
@@ -723,15 +1198,6 @@ function buildCompactBriefText(params: {
       newCreators,
     }),
   )
-
-  const majorParts = params.marketRows
-    .slice(0, params.majorRows)
-    .map((row) => `${row.symbol} ${formatUsdCompact(row.priceUsd)} (${formatPct(row.change24hPct)})`)
-  if (majorParts.length > 0) {
-    lines.push('')
-    lines.push(`**Markets** ${majorParts.join(' · ')}`)
-  }
-
   lines.push('')
   lines.push(`**Top ${params.topRows}**`)
   for (const row of params.currentRows.slice(0, params.topRows)) {
@@ -807,6 +1273,9 @@ function buildLegacyBriefText(params: {
   creatorsTracked: number
   recentPublications: PublicationRecord[]
   marketRows: MarketRow[]
+  hyperCore: HyperCoreMarketBrief
+  proliquidSummary: ProliquidSignalPressureSummary
+  roomEconomics: RoomEconomicsBrief
   topRows: number
   moverRows: number
   labels: CreatorLabelMap
@@ -861,9 +1330,65 @@ function buildLegacyBriefText(params: {
   lines.push(`Snapshot: ${params.snapshotTs}`)
   if (params.previousSnapshotTs) lines.push(`Compared with: ${params.previousSnapshotTs}`)
   lines.push('')
-  lines.push('**Majors**')
-  for (const row of params.marketRows) {
-    lines.push(`- ${row.symbol} ${formatUsd(row.priceUsd)} (${formatPct(row.change24hPct)})`)
+  lines.push('**HyperCore market intelligence**')
+  lines.push(`- ${params.hyperCore.regimeLine}`)
+  if (params.hyperCore.watchlist.length > 0) {
+    lines.push('- Watchlist:')
+    for (const row of params.hyperCore.watchlist.slice(0, 6)) {
+      lines.push(
+        `  • ${row.symbol} ${formatUsd(row.priceUsd)} (${formatPct(row.change24hPct)}) · OI ${formatUsd(row.openInterestUsd)} · volume ${formatUsd(row.volume24hUsd)}`,
+      )
+    }
+  } else {
+    lines.push('- Watchlist unavailable.')
+  }
+  if (params.hyperCore.execution.length > 0) {
+    lines.push('- Execution quality:')
+    for (const row of params.hyperCore.execution.slice(0, 6)) {
+      lines.push(
+        `  • ${row.symbol} spread ${row.spreadBps == null ? 'n/a' : `${row.spreadBps.toFixed(1)}bps`} · bid depth ${formatUsd(row.topBidDepthUsd)} · ask depth ${formatUsd(row.topAskDepthUsd)}`,
+      )
+    }
+  }
+  if (params.proliquidSummary) {
+    const kinds = params.proliquidSummary.byKind
+      .slice(0, 4)
+      .map((entry) => `${entry.kind}:${entry.count}`)
+      .join(', ')
+    lines.push(
+      `- ProLiquid signal pressure: ${params.proliquidSummary.scoredCount} scored (${params.proliquidSummary.highConfidenceCount} high confidence) · ${kinds || 'n/a'}`,
+    )
+  } else {
+    lines.push('- ProLiquid signal pressure: no recent scored signals.')
+  }
+  if (params.roomEconomics) {
+    const room = params.roomEconomics
+    lines.push('- Room economics:')
+    lines.push(
+      `  • HL notional ${formatUsd(room.totalNotionalUsd)} · all-in notional ${formatUsd(room.totalNotionalIncludingAkitaUsd)}`,
+    )
+    lines.push(
+      `  • account ${formatUsd(room.accountValueUsd)} · withdrawable ${formatUsd(room.withdrawableUsd)}`,
+    )
+    lines.push(
+      `  • AKITA amount ${room.akitaAmount == null ? 'n/a' : room.akitaAmount.toLocaleString('en-US', { maximumFractionDigits: 4 })} @ avg ${formatUsd(room.akitaAvgBuyPriceUsd)} · est ${formatUsd(room.akitaEstimatedValueUsd)} · cost basis ${formatUsd(room.akitaCostBasisUsd)}`,
+    )
+    if (room.roomKeySupply != null) {
+      lines.push(
+        `  • implied distribution now: ${formatUsd(room.impliedPayoutPerKeyUsd)} per key (${room.roomKeySupply.toLocaleString('en-US')} keys, combined ${formatUsd(room.combinedValueUsd)})`,
+      )
+    } else {
+      lines.push(`  • combined estimate: ${formatUsd(room.combinedValueUsd)}`)
+    }
+    if (room.openPositions.length > 0) {
+      lines.push('  • Open positions:')
+      for (const position of room.openPositions.slice(0, 4)) {
+        const side = position.side ? position.side.toUpperCase() : 'N/A'
+        lines.push(
+          `    - ${position.coin} ${side} · size ${formatUsd(position.notionalUsd)} · entry ${formatUsd(position.entryPx)} · uPnL ${formatUsd(position.unrealizedPnlUsd)} · liq ${formatUsd(position.liquidationPx)}`,
+        )
+      }
+    }
   }
   lines.push('')
   lines.push('**AlfaClub pulse**')
@@ -973,6 +1498,9 @@ export type AlfaClubDailyBriefFormatInput = {
   creatorsTracked: number
   recentPublications: PublicationRecord[]
   marketRows: MarketRow[]
+  hyperCore?: HyperCoreMarketBrief
+  proliquidSummary?: ProliquidSignalPressureSummary
+  roomEconomics?: RoomEconomicsBrief
   topRows: number
   moverRows: number
   majorRows: number
@@ -1034,6 +1562,7 @@ export async function buildAlfaClubBriefContext(params?: {
   majorRows?: number
   fetchMarkets?: boolean
   compact?: boolean
+  roomId?: string | null
 }): Promise<AlfaClubBriefContextResult> {
   const flags = readAlfaClubDailyBriefFlags()
   const snapshotTs = await getLatestSnapshotTs()
@@ -1047,13 +1576,34 @@ export async function buildAlfaClubBriefContext(params?: {
   const moverRows = params?.moverRows ?? flags.moverRows
   const majorRows = params?.majorRows ?? flags.majorRows
   const fetchMarkets = params?.fetchMarkets !== false
+  const roomId = normalizeRoomId(params?.roomId ?? flags.roomId) ?? flags.roomId
 
-  const [currentRows, previousRows, creators, recentPublications, marketRows] = await Promise.all([
+  const hyperCoreResult = fetchMarkets
+    ? await buildHyperCoreMarketBrief({ flags, majorRows })
+    : {
+        marketRows: [] as MarketRow[],
+        hyperCore: {
+          watchlist: [] as HyperCoreAssetContext[],
+          regimeLine: 'HyperCore market section disabled for this surface.',
+          execution: [] as HyperCoreExecutionRow[],
+          unavailableReason: 'fetch_markets_disabled',
+        } satisfies HyperCoreMarketBrief,
+      }
+
+  const proliquidSummary = fetchMarkets
+    ? await buildProliquidSignalPressureSummary({
+        roomId,
+        lookbackHours: flags.proliquidLookbackHours,
+        limit: flags.proliquidSampleLimit,
+      })
+    : null
+  const roomEconomics = fetchMarkets ? await buildRoomEconomicsBrief({ roomId }) : null
+
+  const [currentRows, previousRows, creators, recentPublications] = await Promise.all([
     getSnapshotAt(snapshotTs),
     previousSnapshotTs ? getSnapshotAt(previousSnapshotTs) : Promise.resolve([]),
     listAllCreators(),
     listRecentPublications(null, DEFAULT_RECENT_PUBLICATIONS_LIMIT),
-    fetchMarkets ? fetchMajorTokenPrices(flags.marketTimeoutMs) : Promise.resolve([]),
   ])
 
   if (currentRows.length === 0) {
@@ -1087,7 +1637,10 @@ export async function buildAlfaClubBriefContext(params?: {
       previousRows,
       creatorsTracked: creators.length > 0 ? creators.length : currentRows.length,
       recentPublications,
-      marketRows,
+      marketRows: hyperCoreResult.marketRows,
+      hyperCore: hyperCoreResult.hyperCore,
+      proliquidSummary,
+      roomEconomics,
       topRows,
       moverRows,
       majorRows,
@@ -1099,6 +1652,23 @@ export async function buildAlfaClubBriefContext(params?: {
 }
 
 export function formatAlfaClubDailyBrief(input: AlfaClubDailyBriefFormatInput): string {
+  const hyperCore: HyperCoreMarketBrief =
+    input.hyperCore ??
+    {
+      watchlist: input.marketRows.map((row) => ({
+        symbol: row.symbol,
+        priceUsd: row.priceUsd,
+        change24hPct: row.change24hPct,
+        fundingRate: null,
+        openInterestUsd: null,
+        volume24hUsd: null,
+      })),
+      regimeLine: 'Regime unavailable (legacy market row input).',
+      execution: [],
+      unavailableReason: 'legacy_input',
+    }
+  const proliquidSummary = input.proliquidSummary ?? null
+  const roomEconomics = input.roomEconomics ?? null
   if (input.compact) {
     return buildCompactBriefText({
       snapshotTs: input.snapshotTs,
@@ -1108,6 +1678,9 @@ export function formatAlfaClubDailyBrief(input: AlfaClubDailyBriefFormatInput): 
       creatorsTracked: input.creatorsTracked,
       recentPublications: input.recentPublications,
       marketRows: input.marketRows,
+      hyperCore,
+      proliquidSummary,
+      roomEconomics,
       topRows: input.topRows,
       majorRows: input.majorRows,
       labels: input.labels,
@@ -1122,6 +1695,9 @@ export function formatAlfaClubDailyBrief(input: AlfaClubDailyBriefFormatInput): 
     creatorsTracked: input.creatorsTracked,
     recentPublications: input.recentPublications,
     marketRows: input.marketRows,
+    hyperCore,
+    proliquidSummary,
+    roomEconomics,
     topRows: input.topRows,
     moverRows: input.moverRows,
     labels: input.labels,
@@ -1190,6 +1766,7 @@ export async function runAlfaClubDailyBrief(params: {
     majorRows: flags.majorRows,
     compact: flags.compact,
     fetchMarkets: true,
+    roomId: flags.roomId,
   })
   if (!built.ok) {
     return {

@@ -1,12 +1,28 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { isUnauthorizedCrossAppLinkError, performZoraCrossAppAuth } from './zoraCrossApp'
+import {
+  isRecoverableCrossAppAuthError,
+  isUnauthorizedCrossAppLinkError,
+  performZoraCrossAppAuth,
+} from './zoraCrossApp'
 
 describe('isUnauthorizedCrossAppLinkError', () => {
   it('treats cross-app oauth 401s as recoverable unauthorized errors', () => {
     expect(isUnauthorizedCrossAppLinkError(new Error('POST /oauth/init cross_app 401 unauthorized'))).toBe(true)
     expect(isUnauthorizedCrossAppLinkError({ status: 403 })).toBe(true)
     expect(isUnauthorizedCrossAppLinkError(new Error('plain network error'))).toBe(false)
+  })
+})
+
+describe('isRecoverableCrossAppAuthError', () => {
+  it('treats generic Privy cross-app auth failures as recoverable', () => {
+    expect(isRecoverableCrossAppAuthError(new Error('Authentication failed'))).toBe(true)
+    expect(
+      isRecoverableCrossAppAuthError(
+        new Error('There was an issue connecting your Zora account. Please try again.'),
+      ),
+    ).toBe(true)
+    expect(isRecoverableCrossAppAuthError(new Error('plain network error'))).toBe(false)
   })
 })
 
@@ -33,6 +49,27 @@ describe('performZoraCrossAppAuth', () => {
   it('falls back to login when link fails with an unauthorized cross-app error', async () => {
     const linkCrossAppAccount = vi.fn(async () => {
       throw new Error('oauth/init cross_app 401 unauthorized')
+    })
+    const loginWithCrossAppAccount = vi.fn(async () => {})
+    const sanitizeRedirect = vi.fn(() => vi.fn())
+
+    await performZoraCrossAppAuth({
+      privyAuthed: true,
+      appId: 'zora-app-id',
+      linkCrossAppAccount,
+      loginWithCrossAppAccount,
+      sanitizeRedirect,
+      isRedirectUrlNotAllowedError: () => false,
+    })
+
+    expect(linkCrossAppAccount).toHaveBeenCalledTimes(1)
+    expect(loginWithCrossAppAccount).toHaveBeenCalledWith({ appId: 'zora-app-id' })
+    expect(sanitizeRedirect).toHaveBeenCalledTimes(2)
+  })
+
+  it('falls back to login when link fails with generic auth copy', async () => {
+    const linkCrossAppAccount = vi.fn(async () => {
+      throw new Error('There was an issue connecting your Zora account. Please try again.')
     })
     const loginWithCrossAppAccount = vi.fn(async () => {})
     const sanitizeRedirect = vi.fn(() => vi.fn())

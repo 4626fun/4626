@@ -24,6 +24,18 @@ export function isUnauthorizedCrossAppLinkError(error: unknown): boolean {
   return message.includes('401') || message.includes('unauthorized') || message.includes('not authorized')
 }
 
+export function isRecoverableCrossAppAuthError(error: unknown): boolean {
+  if (isUnauthorizedCrossAppLinkError(error)) return true
+  const message = String((error as any)?.message ?? '').trim().toLowerCase()
+  if (!message) return false
+  // Some Privy cross-app lanes return only this generic string.
+  return (
+    message.includes('authentication failed') ||
+    message.includes('issue connecting your zora account') ||
+    message.includes('issue connecting your account')
+  )
+}
+
 async function runWithSanitizedRedirect<T>(
   work: () => Promise<T>,
   sanitizeRedirect: () => (() => void) | null,
@@ -62,7 +74,7 @@ export async function performZoraCrossAppAuth(params: {
     } catch (linkError: unknown) {
       if (
         hasLogin &&
-        (isUnauthorizedCrossAppLinkError(linkError) || isRedirectUrlNotAllowedError(linkError))
+        (isRecoverableCrossAppAuthError(linkError) || isRedirectUrlNotAllowedError(linkError))
       ) {
         await runWithSanitizedRedirect(() => params.loginWithCrossAppAccount!({ appId: params.appId }), sanitizeRedirect)
         return
@@ -71,5 +83,24 @@ export async function performZoraCrossAppAuth(params: {
     }
   }
 
-  await runWithSanitizedRedirect(() => params.loginWithCrossAppAccount!({ appId: params.appId }), sanitizeRedirect)
+  try {
+    await runWithSanitizedRedirect(
+      () => params.loginWithCrossAppAccount!({ appId: params.appId }),
+      sanitizeRedirect,
+    )
+  } catch (loginError: unknown) {
+    // Some Privy environments surface a generic "Authentication failed" on one lane
+    // while the companion cross-app lane succeeds. Mirror the link->login fallback.
+    if (
+      hasLink &&
+      (isRecoverableCrossAppAuthError(loginError) || isRedirectUrlNotAllowedError(loginError))
+    ) {
+      await runWithSanitizedRedirect(
+        () => params.linkCrossAppAccount!({ appId: params.appId }),
+        sanitizeRedirect,
+      )
+      return
+    }
+    throw loginError
+  }
 }

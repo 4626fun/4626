@@ -251,6 +251,54 @@ async function enqueueFollowUpIfNeeded(job: KeeperJob, result: Record<string, un
   return followUp.id
 }
 
+function readSolanaMappingFollowUp(job: KeeperJob): {
+  creatorToken: string
+  shareOft: string
+  shareMeshMint: string
+  sourceSessionId: string | null
+} | null {
+  const path = typeof job.payload.path === 'string' ? job.payload.path.trim() : ''
+  if (path !== '/api/keeper/solana/reconcile') return null
+  const body =
+    job.payload.body && typeof job.payload.body === 'object' && !Array.isArray(job.payload.body)
+      ? (job.payload.body as Record<string, unknown>)
+      : null
+  const action = typeof body?.action === 'string' ? body.action.trim().toLowerCase() : ''
+  if (action !== 'sync_mapping') return null
+  const payload =
+    body?.payload && typeof body.payload === 'object' && !Array.isArray(body.payload)
+      ? (body.payload as Record<string, unknown>)
+      : null
+  const creatorToken = typeof payload?.creatorToken === 'string' ? payload.creatorToken.trim() : ''
+  const shareOft = typeof payload?.shareOft === 'string' ? payload.shareOft.trim() : ''
+  const shareMeshMint = typeof payload?.shareMeshMint === 'string' ? payload.shareMeshMint.trim() : ''
+  if (!creatorToken || !shareOft || !shareMeshMint) return null
+  const sourceSessionId = typeof payload?.sourceSessionId === 'string' ? payload.sourceSessionId.trim() : ''
+  return {
+    creatorToken,
+    shareOft,
+    shareMeshMint,
+    sourceSessionId: sourceSessionId || null,
+  }
+}
+
+async function enqueueSolanaMappingFollowUpIfNeeded(job: KeeperJob): Promise<number | undefined> {
+  const mapping = readSolanaMappingFollowUp(job)
+  if (!mapping) return undefined
+
+  const followUp = await enqueueKeeperJob({
+    kind: 'internal_api',
+    dedupeKey: `solana-sync-mapping:${mapping.shareOft.toLowerCase()}`,
+    source: 'keeper-solana-reconcile-follow-up',
+    payload: {
+      path: '/api/keeper/solana/sync-mapping',
+      body: mapping,
+    },
+    maxAttempts: 5,
+  })
+  return followUp.id
+}
+
 async function runOneJob(params: {
   baseUrl: string
   apiKey: string
@@ -336,6 +384,15 @@ async function runOneJob(params: {
       followUpJobId = await enqueueFollowUpIfNeeded(params.job, result)
     } catch (error) {
       console.warn('[keeper/jobs] follow-up enqueue failed after primary success', {
+        jobId: params.job.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+    try {
+      const mappingFollowUpId = await enqueueSolanaMappingFollowUpIfNeeded(params.job)
+      if (!followUpJobId && mappingFollowUpId) followUpJobId = mappingFollowUpId
+    } catch (error) {
+      console.warn('[keeper/jobs] solana mapping follow-up enqueue failed', {
         jobId: params.job.id,
         error: error instanceof Error ? error.message : String(error),
       })

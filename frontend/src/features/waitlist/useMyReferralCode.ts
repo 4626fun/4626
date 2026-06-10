@@ -11,6 +11,7 @@ import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 export type WaitlistPositionLite = {
   signupId: number
   referralCode: string | null
+  pointsTotal: number
   referrals: {
     qualifiedCount: number
     pendingCount: number
@@ -33,6 +34,10 @@ async function fetchWaitlistPositionByEmail(email: string): Promise<WaitlistPosi
   return {
     signupId: payload.signupId,
     referralCode: payload.referralCode ?? null,
+    pointsTotal:
+      typeof (payload as { points?: { total?: unknown } }).points?.total === 'number'
+        ? Math.max(0, Math.floor((payload as { points: { total: number } }).points.total))
+        : 0,
     referrals: payload.referrals,
   }
 }

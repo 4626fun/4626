@@ -2,7 +2,7 @@ import type { Address } from 'viem'
 import { isAddress } from 'viem'
 
 import { JazziconAvatar } from '@/components/account/JazziconAvatar'
-import { useBasenameForAddress } from '@/hooks/useBasenameForAddress'
+import { useChatIdentity } from '@/components/chat/useChatIdentity'
 
 import { LeaderboardAccountBadge } from './LeaderboardAccountBadge'
 import { resolveLeaderboardAccountKind } from './leaderboardAccountKind'
@@ -26,6 +26,10 @@ function formatShortAddress(address: string): string {
 
 function isHexLabel(label: string): boolean {
   return label.startsWith('0x')
+}
+
+function lc(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase()
 }
 
 function basescanUrl(address: string): string {
@@ -77,25 +81,29 @@ export function LeaderboardIdentityCell({
   layout = 'inline',
 }: LeaderboardIdentityCellProps) {
   const csw = cswAddress && isAddress(cswAddress) ? (cswAddress as Address) : null
-  const basename = useBasenameForAddress(csw)
+  const identity = useChatIdentity(csw, {
+    fallbackName: display,
+    fallbackAvatar: avatarUrl,
+  })
 
   const cswShortLabel = csw ? formatShortAddress(csw) : null
   const zoraHandle = labelHint && showZoraBadge ? `@${labelHint.replace(/^@/, '')}` : null
-  const basenameOrEns = basename.displayName ?? null
+  const zoraProfileName = identity.source === 'zora' ? identity.displayName : null
+  const basenameOrEns = identity.source !== 'address' ? identity.displayName : null
   const baseName = basenameOrEns?.toLowerCase().endsWith('.base.eth') ? basenameOrEns : null
   const ensName =
     basenameOrEns && !baseName && basenameOrEns.toLowerCase().endsWith('.eth') ? basenameOrEns : null
   const primaryLabel =
-    zoraHandle ?? baseName ?? ensName ?? cswShortLabel ?? (csw ? null : display)
+    zoraHandle ?? zoraProfileName ?? baseName ?? ensName ?? cswShortLabel ?? (csw ? null : display)
   const resolvedLabel = primaryLabel ?? cswShortLabel ?? display
   const secondaryIdentityLabel =
     zoraHandle && (baseName ?? ensName)
       ? (baseName ?? ensName)
-      : basename.displayName && cswShortLabel && basename.displayName !== cswShortLabel
+      : identity.secondary && cswShortLabel && lc(identity.secondary) !== lc(cswShortLabel)
         ? cswShortLabel
         : null
   const title = cswAddress ?? resolvedLabel
-  const resolvedAvatar = basename.avatar ?? avatarUrl ?? null
+  const resolvedAvatar = identity.avatar ?? avatarUrl ?? null
   const monospaceLabel = isHexLabel(resolvedLabel)
   const labelTextClass = monospaceLabel ? 'font-mono' : 'font-medium'
 

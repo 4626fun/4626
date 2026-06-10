@@ -12,6 +12,7 @@ import { executeSolanaWinnerRelay } from './actions/keepr-solana-winner-relay.ac
 import { executeSolanaPriceMonitor } from './actions/keepr-solana-price-monitor.action.js'
 import { executeSolanaGraduation } from './actions/keepr-solana-graduation.action.js'
 import { executeSolanaRebalance } from './actions/keepr-solana-rebalance.action.js'
+import { executeSolanaSyncMapping } from './actions/keepr-solana-sync-mapping.action.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 loadKeeperEnv()
@@ -30,6 +31,7 @@ export type SolanaOrchestratorAction =
   | 'price_monitor'
   | 'graduation'
   | 'rebalance'
+  | 'sync_mapping'
 
 export type ReconcileOutcome = {
   ok: boolean
@@ -90,6 +92,7 @@ export function normalizeSolanaOrchestratorAction(value: unknown): SolanaOrchest
     case 'price_monitor':
     case 'graduation':
     case 'rebalance':
+    case 'sync_mapping':
       return action
     default:
       return null
@@ -141,6 +144,9 @@ export async function executeSolanaOrchestratorAction(params: {
       break
     case 'rebalance':
       result = await executeSolanaRebalance()
+      break
+    case 'sync_mapping':
+      result = await executeSolanaSyncMapping(params.payload ?? {})
       break
     default:
       params.action satisfies never

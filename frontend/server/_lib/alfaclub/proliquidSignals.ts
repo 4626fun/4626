@@ -8,6 +8,7 @@ const DEFAULT_PROLIQUID_SOURCES = [
   'https://t.me/proliquid_liquidations',
   'https://t.me/proliquid_whales',
   'https://t.me/proliquid_copy_trading',
+  'https://t.me/proliquid_news',
 ]
 
 const PROLIQUID_BLOCKED_COMMAND_PREFIXES = [
@@ -21,7 +22,7 @@ const PROLIQUID_BLOCKED_COMMAND_PREFIXES = [
   '/gmeow',
 ]
 
-export type ProliquidSignalKind = 'liquidations' | 'whales' | 'copy_trading' | 'unknown'
+export type ProliquidSignalKind = 'liquidations' | 'whales' | 'copy_trading' | 'news' | 'unknown'
 export type ProliquidSignalConfidence = 'low' | 'medium' | 'high'
 
 export type ProliquidSignalSource = {
@@ -154,6 +155,7 @@ export function detectProliquidSignalKind(value: string): ProliquidSignalKind {
   if (input.includes('copy_trading') || input.includes('copy-trading') || input.includes('copy trading')) {
     return 'copy_trading'
   }
+  if (input.includes('news')) return 'news'
   return 'unknown'
 }
 
@@ -238,6 +240,7 @@ function scoreSignal(params: {
 
   const baseScore =
     params.signalKind === 'whales' ? 55 : params.signalKind === 'liquidations' ? 45 : params.signalKind === 'copy_trading' ? 35 : 25
+  const normalizedBase = params.signalKind === 'news' ? 30 : baseScore
   const amountScore =
     largestUsd == null
       ? 0
@@ -250,7 +253,7 @@ function scoreSignal(params: {
             : largestUsd >= 100_000
               ? 10
               : 4
-  const scoreValue = Math.min(100, baseScore + amountScore)
+  const scoreValue = Math.min(100, normalizedBase + amountScore)
   const confidence: ProliquidSignalConfidence =
     largestUsd == null ? 'medium' : largestUsd >= 500_000 ? 'high' : largestUsd >= 100_000 ? 'medium' : 'low'
 
@@ -261,6 +264,8 @@ function scoreSignal(params: {
         ? 'Whales'
         : params.signalKind === 'copy_trading'
           ? 'Copy trading'
+            : params.signalKind === 'news'
+              ? 'News'
           : 'Market'
   const amountLabel = largestUsd != null ? ` • ~$${Math.round(largestUsd).toLocaleString()}` : ''
   const summary = `[ProLiquid][${kindLabel}][${confidence}] score ${scoreValue}${amountLabel}`

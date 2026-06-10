@@ -118,6 +118,19 @@ const SELECTOR_PHASE1_FINALIZE = '0xa98ec9d8'
 const SELECTOR_PHASE1_DEPLOY_WITH_SALT = '0x297cb1e6'
 const SELECTOR_PHASE1_CORE_WITH_SALT = '0x4154f24e'
 const SELECTOR_PHASE1_FINALIZE_WITH_SALT = '0x3bc09a8b'
+const SELECTOR_PHASE1_MODULE_DELEGATE_CORE = '0xf546a15e'
+const SELECTOR_PHASE1_MODULE_CORE_PUBLIC = 'ca0bf86e'
+const SELECTOR_PHASE1_MODULE_FINALIZE_PUBLIC = '5916b6e4'
+
+const DRY_RUN_PHASE1_MODULE_ON_BATCHER_ABI = [
+  {
+    type: 'function',
+    name: 'phase1Module',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
 
 const DRY_RUN_DEPLOY_PHASE2_CORE_ABI = [
   {
@@ -1854,6 +1867,13 @@ async function runDryRunPhase(params: {
   }) => Promise<Array<{ args?: Record<string, unknown> }>>
   getBlockNumber?: () => Promise<bigint | null>
   allowLocalForkPhase4InvariantSkip?: boolean
+  diagnoseFailure?: (args: {
+    phase: DryRunPhaseName
+    call: Call
+    to: Address
+    callIndex: number
+    formattedError: string
+  }) => Promise<string | null>
 }): Promise<{
   phase: DryRunPhaseResult
   failure?: DryRunFailure
@@ -1996,14 +2016,27 @@ async function runDryRunPhase(params: {
       }
     } catch (error) {
       const formatted = formatDryRunError(error)
+      const diagnosed =
+        typeof params.diagnoseFailure === 'function'
+          ? await params
+              .diagnoseFailure({
+                phase: params.name,
+                call,
+                to,
+                callIndex,
+                formattedError: formatted,
+              })
+              .catch(() => null)
+          : null
+      const displayError = diagnosed ?? formatted
       if (
         params.allowLocalForkPhase4InvariantSkip === true &&
         params.name === 'phase4' &&
         isLaunchDeferredAuctionCall(call) &&
-        formatted.toLowerCase().includes(LAUNCH_ORACLE_INVALID_PRICE_SELECTOR)
+        displayError.toLowerCase().includes(LAUNCH_ORACLE_INVALID_PRICE_SELECTOR)
       ) {
         console.warn('[deploy/v2/session/dry-run] phase4_launch_skipped_known_local_fork_invariant', {
-          reason: formatted,
+          reason: displayError,
         })
         return {
           phase: {
@@ -2024,7 +2057,7 @@ async function runDryRunPhase(params: {
           phase: params.name,
           callIndex,
           to,
-          error: formatted,
+          error: displayError,
         },
       }
     }
@@ -2491,6 +2524,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               ? await publicClient.getBlockNumber().catch(() => null)
               : null,
           allowLocalForkPhase4InvariantSkip: isLocalFork && !strictPhase4Launch,
+          diagnoseFailure: async ({ phase, call, to, formattedError }) => {
+            if (phase !== 'phase1') return null
+            if (!isPhase1BatcherCall(call)) return null
+            const lowerError = formattedError.toLowerCase()
+            if (!lowerError.includes('execution reverted') && !lowerError.includes('simulation transaction reverted')) {
+              return null
+            }
+
+            const phase1Module = await publicClient
+              .readContract({
+                address: to,
+                abi: DRY_RUN_PHASE1_MODULE_ON_BATCHER_ABI,
+                functionName: 'phase1Module',
+              })
+              .catch(() => null)
+            if (!phase1Module || typeof phase1Module !== 'string') return null
+
+            const moduleAddress = getAddress(phase1Module as Address)
+            const moduleBytecode = await publicClient.getBytecode({ address: moduleAddress }).catch(() => null)
+            const moduleBytecodeLower = String(moduleBytecode ?? '').toLowerCase()
+            if (!moduleBytecodeLower || moduleBytecodeLower === '0x') return null
+
+            const hasDelegateSelector = moduleBytecodeLower.includes(SELECTOR_PHASE1_MODULE_DELEGATE_CORE.slice(2))
+            const hasPublicCoreSelector = moduleBytecodeLower.includes(SELECTOR_PHASE1_MODULE_CORE_PUBLIC)
+            const hasPublicFinalizeSelector = moduleBytecodeLower.includes(SELECTOR_PHASE1_MODULE_FINALIZE_PUBLIC)
+
+            if (!hasDelegateSelector && (hasPublicCoreSelector || hasPublicFinalizeSelector)) {
+              return (
+                `Phase 1 call-shape mismatch on batcher ${to}: this batcher delegates with internal selector ` +
+                `${SELECTOR_PHASE1_MODULE_DELEGATE_CORE}, but phase1Module ${moduleAddress} does not expose that selector ` +
+                `(it exposes public selectors like 0x${SELECTOR_PHASE1_MODULE_CORE_PUBLIC}/0x${SELECTOR_PHASE1_MODULE_FINALIZE_PUBLIC}). ` +
+                'Use local-batcher dry-run mode (DEPLOY_DRY_RUN_USE_LOCAL_BATCHER=1) or rotate the fork to a selector-compatible phase1Module before retrying.'
+              )
+            }
+
+            return null
+          },
         })
         phases.push(result.phase)
         if (result.failure) {

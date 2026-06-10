@@ -20,7 +20,8 @@ export function WaitlistWorkspaceHeader(props: WaitlistWorkspaceHeaderProps) {
       : 'Finish setup below to link your creator identity and wallet.'
 
   return (
-    <header className="mx-auto max-w-3xl space-y-1.5 text-center">
+    <header className="mx-auto max-w-4xl space-y-2 text-center">
+      <p className="text-[10px] uppercase tracking-[0.14em] text-brand-200/90">Waitlist Workspace</p>
       <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-[1.65rem]">{title}</h1>
       <p className="text-sm leading-relaxed text-zinc-400">{subtitle}</p>
     </header>

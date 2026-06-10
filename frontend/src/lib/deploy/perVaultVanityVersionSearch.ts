@@ -146,6 +146,37 @@ export async function findDeploymentVersionForVanityTargets(
   ) {
     let attemptCursor = startAttempt
     const endAttempt = startAttempt + maxTries
+    const candidateSatisfiesTargets = (candidateVersion: string): boolean => {
+      const candidateBaseSalt = deriveDeployBaseSalt({
+        creatorToken: params.creatorToken,
+        owner: params.owner,
+        chainId: params.chainId,
+        version: candidateVersion,
+      })
+      if (vaultPrefix) {
+        const candidateVaultSalt = saltForDeployLabel(candidateBaseSalt, 'vault')
+        const candidateVaultAddress = predictCreate2AddressFromInitCode({
+          create2Deployer: params.create2Deployer,
+          salt: candidateVaultSalt,
+          initCode: params.vaultInitCode,
+        })
+        if (candidateVaultAddress.slice(2, 2 + vaultPrefix.length).toLowerCase() !== vaultPrefix) return false
+      }
+      if (shareSuffix) {
+        const candidateShareSalt = deriveShareOftSaltFromVersion({
+          owner: params.owner,
+          shareSymbol: params.shareSymbol,
+          version: candidateVersion,
+        })
+        const candidateShareAddress = predictCreate2AddressFromInitCode({
+          create2Deployer: params.create2Deployer,
+          salt: candidateShareSalt,
+          initCode: params.shareOftInitCode,
+        })
+        if (!candidateShareAddress.toLowerCase().endsWith(shareSuffix)) return false
+      }
+      return true
+    }
     try {
       while (attemptCursor < endAttempt) {
         const chunkAttempts = endAttempt - attemptCursor
@@ -163,6 +194,12 @@ export async function findDeploymentVersionForVanityTargets(
           shareOftInitCodeHash: shareSuffix ? keccak256(params.shareOftInitCode) : null,
           shareSymbol: shareSuffix ? params.shareSymbol : null,
         })
+        // Guard against WASM false positives by validating the returned version deterministically
+        // before accepting it.
+        if (!candidateSatisfiesTargets(result.version)) {
+          attemptCursor = Math.max(attemptCursor + 1, result.attempt + 1)
+          continue
+        }
         const toCheck: Address[] = []
         for (const value of [result.vaultAddress, result.shareOftAddress]) {
           if (value && /^0x[a-fA-F0-9]{40}$/.test(value)) toCheck.push(value as Address)

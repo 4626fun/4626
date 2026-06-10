@@ -95,6 +95,8 @@ printf "  AjnaVaultAuth: '0x' + '%s',\n" "$(bytecode AjnaVaultAuth)" >>"$OUT_FIL
 printf "  AjnaERC4626Vault: '0x' + '%s',\n" "$(bytecode AjnaERC4626Vault)" >>"$OUT_FILE"
 printf "  ERC4626StrategyAdapter: '0x' + '%s',\n" "$(bytecode ERC4626StrategyAdapter)" >>"$OUT_FILE"
 printf "  SolanaStrategy: '0x' + '%s',\n" "$(bytecode SolanaStrategy)" >>"$OUT_FILE"
+printf "  CreatorOImpairmentClaims: '0x' + '%s',\n" "$(bytecode CreatorOImpairmentClaims)" >>"$OUT_FILE"
+printf "  CreatorORecoveryEscrow: '0x' + '%s',\n" "$(bytecode CreatorORecoveryEscrow)" >>"$OUT_FILE"
 
 cat >>"$OUT_FILE" <<'EOF'
 } as const;

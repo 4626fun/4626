@@ -13,6 +13,9 @@ type WaitlistDailyActionsHubProps = {
   linkedMethods: Record<string, string[]>
   busyProvider: string | null
   onLinkProvider?: (provider: string) => void | Promise<void>
+  zoraHandle?: string | null
+  canonicalCswAddress?: string | null
+  signingStepComplete?: boolean
   shareUrl: string
   telegramGroupUrl: string
   copiedPrompt: boolean
@@ -43,7 +46,7 @@ function openWindow(href: string) {
 
 function rewardPill(text: string) {
   return (
-    <span className="inline-flex items-center rounded-md border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-200">
+    <span className="inline-flex items-center text-[12px] font-semibold tracking-tight text-emerald-300">
       {text}
     </span>
   )
@@ -51,7 +54,7 @@ function rewardPill(text: string) {
 
 function mutedPill(text: string) {
   return (
-    <span className="inline-flex items-center rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium text-zinc-400">
+    <span className="inline-flex items-center text-[12px] font-medium text-zinc-400">
       {text}
     </span>
   )
@@ -59,42 +62,45 @@ function mutedPill(text: string) {
 
 function DailyCard(props: {
   title: string
-  subtitle?: string
   connectReward: string
   brandIcon?: ReactNode
   connected?: boolean
+  showConnectedAsCheck?: boolean
   collapsedHint?: string
   defaultOpen?: boolean
   children: ReactNode
 }) {
   const {
     title,
-    subtitle,
     connectReward,
     brandIcon,
     connected = true,
+    showConnectedAsCheck = true,
     collapsedHint,
     defaultOpen = false,
     children,
   } = props
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <article className="rounded-xl border border-white/[0.08] bg-black/30">
+    <article className="rounded-xl bg-black/30">
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between gap-3 border-b border-white/[0.06] px-3.5 py-3 text-left"
+        className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left"
         aria-expanded={open}
       >
-        <div className="min-w-0">
-          <p className="inline-flex items-center gap-2 text-sm font-medium text-zinc-100">
-            {brandIcon}
-            {title}
-          </p>
-          {subtitle ? <p className="mt-1 text-xs text-zinc-400">{subtitle}</p> : null}
-        </div>
+        <p className="inline-flex items-center gap-2 text-sm font-medium text-zinc-100">
+          {brandIcon}
+          {title}
+        </p>
         <div className="flex items-center gap-2">
-          {rewardPill(connectReward)}
+          {connected && showConnectedAsCheck ? (
+            <span className="inline-flex items-center text-[12px] font-semibold tracking-tight text-emerald-300">
+              <Check className="h-3.5 w-3.5" />
+            </span>
+          ) : (
+            rewardPill(connectReward)
+          )}
           <ChevronDown
             className={`h-4 w-4 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`}
             aria-hidden="true"
@@ -117,7 +123,7 @@ function StepRow(props: {
 }) {
   const { label, value } = props
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
+    <div className="flex items-center justify-between gap-3 rounded-lg bg-white/[0.02] px-2.5 py-2">
       <p className="text-xs text-zinc-300">{label}</p>
       <div className="shrink-0">{value}</div>
     </div>
@@ -132,10 +138,12 @@ function ConnectStepAction(props: {
   const { connected, busy, onClick } = props
   if (connected) {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-200">
-        <Check className="h-3 w-3" />
-        Linked
-      </span>
+      <div className="flex items-center justify-end rounded-lg bg-white/[0.02] px-2.5 py-2">
+        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-medium text-emerald-200">
+          <Check className="h-3 w-3" />
+          Connected
+        </span>
+      </div>
     )
   }
 
@@ -144,20 +152,100 @@ function ConnectStepAction(props: {
       type="button"
       disabled={busy || typeof onClick !== 'function'}
       onClick={() => onClick?.()}
-      className="inline-flex items-center gap-1.5 rounded-md border border-brand-primary/30 bg-brand-primary/10 px-2.5 py-1 text-[11px] font-medium text-brand-200 hover:bg-brand-primary/20 disabled:opacity-50"
+      className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-primary/15 px-2.5 py-2 text-[11px] font-medium text-brand-200 hover:bg-brand-primary/25 disabled:opacity-50"
     >
       <Link2 className="h-3 w-3" />
-      {busy ? '...' : 'Link'}
+      {busy ? '...' : 'Connect'}
     </button>
+  )
+}
+
+function ZoraDailyCard(props: {
+  linked: boolean
+  busy: boolean
+  zoraHandle: string | null
+  canonicalCswAddress: string | null
+  signingStepComplete: boolean
+  onLinkProvider?: (provider: string) => void | Promise<void>
+}) {
+  const { linked, busy, zoraHandle, canonicalCswAddress, signingStepComplete, onLinkProvider } = props
+  const normalizedHandle = zoraHandle
+    ? (zoraHandle.startsWith('@') ? zoraHandle : `@${zoraHandle}`)
+    : null
+  const zoraProfileUrl = normalizedHandle ? `https://zora.co/${normalizedHandle}` : null
+  const shortAddr = canonicalCswAddress
+    ? `${canonicalCswAddress.slice(0, 6)}…${canonicalCswAddress.slice(-4)}`
+    : null
+  return (
+    <DailyCard
+      title="Zora"
+      connectReward="+40"
+      brandIcon={<span className="text-xs font-semibold text-zinc-200">Z</span>}
+      connected={linked}
+      collapsedHint="Connect to unlock next cards."
+      defaultOpen
+    >
+      <ConnectStepAction
+        connected={linked}
+        busy={busy}
+        onClick={() => void onLinkProvider?.('zora_cross_app')}
+      />
+      {linked ? (
+        <>
+          <div className="rounded-lg bg-white/[0.02] px-2.5 py-2">
+            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              {rewardPill('Setup complete')}
+              <span
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
+                  signingStepComplete
+                    ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
+                    : 'border-white/10 bg-white/[0.03] text-zinc-400'
+                }`}
+              >
+                {signingStepComplete ? 'Signing enabled' : 'Signing optional'}
+              </span>
+            </div>
+            <p className="mt-2 text-xs text-zinc-300">
+              {signingStepComplete
+                ? 'Zora linked · ready for swaps and chat'
+                : 'Zora linked · enable signing for swaps and chat'}
+            </p>
+            {normalizedHandle || shortAddr ? (
+              <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-zinc-500">
+                {normalizedHandle && zoraProfileUrl ? (
+                  <a
+                    href={zoraProfileUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-zinc-400 transition-colors hover:text-zinc-200"
+                  >
+                    {normalizedHandle}
+                    <ExternalLink className="h-3 w-3 opacity-60" aria-hidden="true" />
+                  </a>
+                ) : null}
+                {normalizedHandle && shortAddr ? <span className="text-zinc-700">·</span> : null}
+                {shortAddr ? (
+                  <span className="font-mono text-[11px] text-zinc-500">
+                    {shortAddr}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+          <StepRow label="Reward" value={rewardPill('+40')} />
+        </>
+      ) : null}
+    </DailyCard>
   )
 }
 
 function TwitterDailyCard(props: {
   linked: boolean
+  zoraLinked: boolean
   busy: boolean
   onLinkProvider?: (provider: string) => void | Promise<void>
 }) {
-  const { linked, busy, onLinkProvider } = props
+  const { linked, zoraLinked, busy, onLinkProvider } = props
   const [tweetUrl, setTweetUrl] = useState('')
   const [checkinBusy, setCheckinBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
@@ -184,7 +272,7 @@ function TwitterDailyCard(props: {
         throw new Error(payload?.error || 'Could not verify this X check-in.')
       }
       setTweetUrl('')
-      setStatus(payload.data.awarded ? 'Verified. Daily reward claimed.' : 'Already claimed today.')
+      setStatus(payload.data.awarded ? 'Verified.' : 'Already claimed today.')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Could not verify this X check-in.'
       setError(message)
@@ -196,29 +284,23 @@ function TwitterDailyCard(props: {
   return (
     <DailyCard
       title="X"
-      subtitle="connect -> verify"
       connectReward="+16"
       brandIcon={<SiX className="h-3.5 w-3.5" />}
       connected={linked}
-      collapsedHint="Step 1 unlocks 2/3."
-      defaultOpen
+      showConnectedAsCheck
+      collapsedHint="Connect to unlock action and reward."
     >
-      <StepRow
-        label="1 Connect"
-        value={
-          <ConnectStepAction
-            connected={linked}
-            busy={busy}
-            onClick={() => void onLinkProvider?.('twitter')}
-          />
-        }
+      <ConnectStepAction
+        connected={linked}
+        busy={busy}
+        onClick={() => void onLinkProvider?.('twitter')}
       />
 
-      {linked ? (
+      {linked && zoraLinked ? (
         <>
           <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-xs text-zinc-300">2 Action</p>
+              <p className="text-xs text-zinc-300">Action</p>
               <a
                 href={buildTwitterIntent(
                   getMarketingBaseUrl(),
@@ -246,7 +328,7 @@ function TwitterDailyCard(props: {
                 type="button"
                 disabled={checkinBusy || tweetUrl.trim().length === 0}
                 onClick={() => void verifyCheckin()}
-                className="inline-flex items-center gap-1.5 rounded-md border border-brand-primary/30 bg-brand-primary/80 px-3 py-1.5 text-[11px] font-medium text-white shadow-[0_10px_24px_-14px_rgb(var(--brand-primary)/0.95)] hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded-md bg-brand-primary/80 px-3 py-1.5 text-[11px] font-medium text-white shadow-[0_10px_24px_-14px_rgb(var(--brand-primary)/0.95)] hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {checkinBusy ? '...' : 'Verify'}
               </button>
@@ -255,7 +337,7 @@ function TwitterDailyCard(props: {
             {error ? <p className="mt-2 text-[11px] text-rose-300">{error}</p> : null}
           </div>
 
-          <StepRow label="3 Reward" value={rewardPill('+6')} />
+          <StepRow label="Reward" value={rewardPill('+6')} />
         </>
       ) : null}
     </DailyCard>
@@ -264,48 +346,34 @@ function TwitterDailyCard(props: {
 
 function FarcasterDailyCard(props: {
   linked: boolean
-  busy: boolean
-  onLinkProvider?: (provider: string) => void | Promise<void>
   shareUrl: string
 }) {
-  const { linked, busy, onLinkProvider, shareUrl } = props
+  const { linked, shareUrl } = props
   return (
     <DailyCard
       title="Farcaster"
-      subtitle="connect -> post"
-      connectReward="+40"
+      connectReward="+0"
       brandIcon={<SiFarcaster className="h-3.5 w-3.5" />}
       connected={linked}
-      collapsedHint="Step 1 unlocks 2/3."
+      showConnectedAsCheck
+      collapsedHint="Link Zora above to unlock."
     >
-      <StepRow
-        label="1 Connect"
-        value={
-          <ConnectStepAction
-            connected={linked}
-            busy={busy}
-            onClick={() => void onLinkProvider?.('zora_cross_app')}
-          />
-        }
-      />
-
       {linked ? (
         <>
           <StepRow
-            label="2 Action"
+            label="Action"
             value={
               <button
                 type="button"
                 onClick={() => openWindow(buildWarpcastIntent(shareUrl, 'Join me on 4626:'))}
-                className="inline-flex items-center gap-1.5 rounded-md border border-brand-primary/30 bg-brand-primary/80 px-3 py-1.5 text-[11px] font-medium text-white shadow-[0_10px_24px_-14px_rgb(var(--brand-primary)/0.95)] hover:bg-brand-hover"
+                className="inline-flex items-center gap-1.5 rounded-md bg-brand-primary/80 px-3 py-1.5 text-[11px] font-medium text-white shadow-[0_10px_24px_-14px_rgb(var(--brand-primary)/0.95)] hover:bg-brand-hover"
               >
                 <SiFarcaster className="h-3 w-3" />
                 Post
               </button>
             }
           />
-
-          <StepRow label="3 Reward" value={mutedPill('Boost only')} />
+          <StepRow label="Reward" value={mutedPill('Boost')} />
         </>
       ) : null}
     </DailyCard>
@@ -324,28 +392,23 @@ function TelegramDailyCard(props: {
   return (
     <DailyCard
       title="Telegram"
-      subtitle="connect -> join"
       connectReward={`+${PROVIDER_POINTS.telegram}`}
       brandIcon={<RiTelegram2Fill className="h-3.5 w-3.5" />}
       connected={linked}
-      collapsedHint="Step 1 unlocks 2/3."
+      showConnectedAsCheck
+      collapsedHint="Connect to unlock action and reward."
     >
-      <StepRow
-        label="1 Connect"
-        value={
-          <ConnectStepAction
-            connected={linked}
-            busy={busy}
-            onClick={() => void onLinkProvider?.('telegram')}
-          />
-        }
+      <ConnectStepAction
+        connected={linked}
+        busy={busy}
+        onClick={() => void onLinkProvider?.('telegram')}
       />
 
       {linked ? (
         <>
-          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
+          <div className="rounded-lg bg-white/[0.02] px-2.5 py-2">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-xs text-zinc-300">2 Action</p>
+              <p className="text-xs text-zinc-300">Action</p>
               <button
                 type="button"
                 onClick={() => void onCopyTelegramPrompt()}
@@ -359,7 +422,7 @@ function TelegramDailyCard(props: {
               href={telegramGroupUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-md border border-brand-primary/30 bg-brand-primary/80 px-3 py-1.5 text-[11px] font-medium text-white shadow-[0_10px_24px_-14px_rgb(var(--brand-primary)/0.95)] hover:bg-brand-hover"
+              className="inline-flex items-center gap-1.5 rounded-md bg-brand-primary/80 px-3 py-1.5 text-[11px] font-medium text-white shadow-[0_10px_24px_-14px_rgb(var(--brand-primary)/0.95)] hover:bg-brand-hover"
             >
               <RiTelegram2Fill className="h-3 w-3" />
               Join
@@ -367,7 +430,7 @@ function TelegramDailyCard(props: {
             </a>
           </div>
 
-          <StepRow label="3 Reward" value={mutedPill('Boost only')} />
+          <StepRow label="Reward" value={mutedPill('Boost')} />
         </>
       ) : null}
     </DailyCard>
@@ -404,6 +467,9 @@ export function WaitlistDailyActionsHub(props: WaitlistDailyActionsHubProps) {
     linkedMethods,
     busyProvider,
     onLinkProvider,
+    zoraHandle = null,
+    canonicalCswAddress = null,
+    signingStepComplete = false,
     shareUrl,
     telegramGroupUrl,
     copiedPrompt,
@@ -414,20 +480,28 @@ export function WaitlistDailyActionsHub(props: WaitlistDailyActionsHubProps) {
   } = props
 
   const hasLinkedTwitter = Array.isArray(linkedMethods.twitter) && linkedMethods.twitter.length > 0
-  const hasLinkedFarcaster =
+  const hasLinkedZora =
     Array.isArray(linkedMethods.zora_cross_app) && linkedMethods.zora_cross_app.length > 0
   const hasLinkedTelegram =
     Array.isArray(linkedMethods.telegram) && linkedMethods.telegram.length > 0
 
   return (
     <div className="space-y-3">
-      <TwitterDailyCard linked={hasLinkedTwitter} busy={busyProvider === 'twitter'} onLinkProvider={onLinkProvider} />
-      <FarcasterDailyCard
-        linked={hasLinkedFarcaster}
+      <ZoraDailyCard
+        linked={hasLinkedZora}
         busy={busyProvider === 'zora_cross_app'}
+        zoraHandle={zoraHandle}
+        canonicalCswAddress={canonicalCswAddress}
+        signingStepComplete={signingStepComplete}
         onLinkProvider={onLinkProvider}
-        shareUrl={shareUrl}
       />
+      <TwitterDailyCard
+        linked={hasLinkedTwitter}
+        zoraLinked={hasLinkedZora}
+        busy={busyProvider === 'twitter'}
+        onLinkProvider={onLinkProvider}
+      />
+      <FarcasterDailyCard linked={hasLinkedZora} shareUrl={shareUrl} />
       <TelegramDailyCard
         linked={hasLinkedTelegram}
         busy={busyProvider === 'telegram'}

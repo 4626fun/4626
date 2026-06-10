@@ -128,6 +128,9 @@ function WaitlistGroupChatPanelContent(props: {
   chatReady: boolean
 }) {
   const { signingReady, statusQuery, chatConfig, blockedMessage, join, groupName, chatReady } = props
+  const hasCachedStatus = Boolean(chatConfig)
+  const hasStatusErrorWithoutFallback = statusQuery.isError && !hasCachedStatus
+  const hasStatusErrorWithFallback = statusQuery.isError && hasCachedStatus
 
   // Gate the "finish signing" message on the local signing step (from the setup UI).
   // Once the user has completed the owner-install step locally, allow the messaging
@@ -140,7 +143,7 @@ function WaitlistGroupChatPanelContent(props: {
   if (statusQuery.isLoading) {
     return <LoadingInline labelOverride="Loading waitlist chat…" />
   }
-  if (statusQuery.isError) {
+  if (hasStatusErrorWithoutFallback) {
     return (
       <div className="space-y-2">
         <p className="text-xs text-zinc-400">
@@ -160,19 +163,6 @@ function WaitlistGroupChatPanelContent(props: {
       </p>
     )
   }
-  if (chatConfig.joinBlockedReason === 'service_unavailable') {
-    return (
-      <div className="space-y-2">
-        <p className="text-xs text-zinc-400">
-          Waitlist chat status is temporarily unavailable. Retry loading status, then connect messaging.
-        </p>
-        <Button type="button" variant="secondary" size="sm" onClick={() => void statusQuery.refetch()}>
-          Retry status
-        </Button>
-      </div>
-    )
-  }
-
   // Allow the connect surface when the local signing step reports ready (or server says chatReady).
   // This lets users tap "Connect & join" promptly after the owner install step completes,
   // even if the status snapshot is one read behind.
@@ -186,6 +176,11 @@ function WaitlistGroupChatPanelContent(props: {
 
   return (
     <div className="space-y-2">
+      {hasStatusErrorWithFallback ? (
+        <p className="text-xs text-amber-200/90">
+          Waitlist chat status refresh failed. Showing the last known state while we retry.
+        </p>
+      ) : null}
       {chatConfig.configured && !chatConfig.vaultConfigured ? (
         <p className="text-xs text-amber-200/90">
           Automated group joins may fail until ops registers the waitlist Keepr vault. You can still connect

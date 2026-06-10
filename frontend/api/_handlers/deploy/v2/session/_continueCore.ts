@@ -16,6 +16,8 @@ import {
   checkRateLimit,
   RATE_LIMITS,
   rateLimitKey,
+  getDbForCron,
+  isDbConfigured,
 } from '@4626/server-core'
 
 
@@ -28,6 +30,8 @@ import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deplo
 import { ensureLaunchImageReady } from '../../../../../server/_lib/deploy/deployLaunchImage.js'
 import { verifyDeployPhase2Invariants } from '../../../../../server/_lib/deploy/deployPhase2Invariants.js'
 import { maybeAutoSetupPayoutRouterTreasury } from '../../../../../server/_lib/onchain/payoutRouterTreasurySetup.js'
+import { upsertSolanaShareMeshMapping } from '../../../../../server/_lib/onchain/solanaShareMeshMappings.js'
+import { enqueueKeeperJob } from '../../../../../server/_lib/keeperJobs/keeperJobs.js'
 import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
 import {
@@ -306,6 +310,7 @@ function parseBigIntLike(value: unknown): bigint | null {
 
 function extractFinalizePhase2Info(data: Hex): {
   creatorToken: Address | null
+  shareToken: Address | null
   depositAmount: bigint | null
   owner: Address | null
   vault: Address | null
@@ -318,6 +323,7 @@ function extractFinalizePhase2Info(data: Hex): {
       const decoded = decodeFunctionData({ abi, data })
       const params = (decoded.args?.[0] ?? null) as {
         creatorToken?: string
+        shareToken?: string
         depositAmount?: bigint | string | number
         owner?: string
         vault?: string
@@ -340,6 +346,7 @@ function extractFinalizePhase2Info(data: Hex): {
       }
       return {
         creatorToken,
+        shareToken: normalizeAddress(params?.shareToken),
         depositAmount: parseBigIntLike(params?.depositAmount),
         owner: normalizeAddress(params?.owner),
         vault: normalizeAddress(params?.vault),
@@ -630,6 +637,58 @@ async function ensureOvaultPreflight(params: {
     failures.push(`${routePath} request_failed: ${error instanceof Error ? error.message : String(error)}`)
   }
   throw new Error(`Solana preflight failed: ${failures.join(' | ')}`)
+}
+
+async function persistAndQueueSolanaShareMeshMapping(params: {
+  recId: string
+  phase2FinalizeCalls: Array<{ to: Address; value: bigint; data: Hex }>
+  solanaOvault: unknown
+}): Promise<void> {
+  const ovault = isPlainObject(params.solanaOvault) ? params.solanaOvault : {}
+  if (ovault.enabled !== true) return
+  const shareMeshMint =
+    typeof ovault.shareMeshMint === 'string' && ovault.shareMeshMint.trim()
+      ? ovault.shareMeshMint.trim()
+      : ''
+  if (!shareMeshMint) return
+
+  const finalizeEntry = findFinalizePhase2Entry(params.phase2FinalizeCalls)
+  if (!finalizeEntry) return
+  const creatorToken = finalizeEntry.info.creatorToken
+  const shareOft = finalizeEntry.info.shareToken
+  if (!creatorToken || !shareOft) return
+  if (!isDbConfigured()) return
+
+  const db = await getDbForCron()
+  if (!db) return
+
+  const mapping = await upsertSolanaShareMeshMapping({
+    db: db as any,
+    creatorToken,
+    shareOft,
+    shareMeshMint,
+    sourceSessionId: params.recId,
+  })
+  await enqueueKeeperJob({
+    kind: 'internal_api',
+    source: 'deploy-session-ovault-mesh',
+    dedupeKey: `solana-reconcile:solana-share-mesh-sync:shareoft:${mapping.shareOft.toLowerCase()}`,
+    payload: {
+      path: '/api/keeper/solana/reconcile',
+      body: {
+        workflow: 'solana-share-mesh-sync',
+        action: 'sync_mapping',
+        checkpointKey: `shareoft:${mapping.shareOft.toLowerCase()}`,
+        payload: {
+          creatorToken: mapping.creatorToken,
+          shareOft: mapping.shareOft,
+          shareMeshMint: mapping.shareMeshMint,
+          sourceSessionId: params.recId,
+        },
+      },
+    },
+    maxAttempts: 5,
+  })
 }
 
 function asOwnerBytes(owner: Address): Hex {
@@ -1186,6 +1245,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!markedConfirmed) {
         return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
       }
+      await persistAndQueueSolanaShareMeshMapping({
+        recId: rec.id,
+        phase2FinalizeCalls,
+        solanaOvault: payload.solanaOvault,
+      }).catch((error) => {
+        logger.warn('[deploy/v2/session/continue] failed to persist/queue solana share mesh mapping', {
+          sessionId: rec.id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
       return res.status(200).json({
         success: true,
         data: {

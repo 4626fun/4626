@@ -503,6 +503,13 @@ export async function ensureEthosChartSupportSchema(db: Db): Promise<void> {
   })
 }
 
+/** Solana share-mesh mapping persistence for orchestrator automation. */
+export async function ensureSolanaShareMeshMappingsSchema(db: Db): Promise<void> {
+  await withEnsureOnce('solanaShareMeshMappings', async () => {
+    await ensureMigrationApplied(db, '20260711000000_solana_share_mesh_mappings.sql').catch(() => {})
+  })
+}
+
 /** Base MCP human-approval requests (durable approval flow store). */
 export async function ensureBaseMcpApprovalSchema(db: Db): Promise<void> {
   await withEnsureOnce('baseMcpApproval', async () => {

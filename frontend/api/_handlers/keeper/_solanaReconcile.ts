@@ -74,6 +74,7 @@ function normalizeSolanaAction(raw: string): string {
 }
 
 function resolveStageKind(action: string): string {
+  if (action.includes('sync_mapping')) return 'solana.bridge_token_registration'
   if (action.includes('bridge') || action.includes('register')) return 'solana.bridge_token_registration'
   if (action.includes('meteora')) return 'solana.meteora_instruction_build'
   if (action.includes('alpha')) return 'solana.alpha_vault_create'
@@ -81,6 +82,20 @@ function resolveStageKind(action: string): string {
   if (action.includes('confirm')) return 'chain.confirmation_wait'
   if (action.includes('reconcile') || action.includes('checkpoint')) return 'reconcile.checkpoint'
   return 'solana.route_preflight'
+}
+
+function readKnownMappingPayload(payload: Record<string, unknown>): {
+  creatorToken: string
+  shareOft: string
+  shareMeshMint: string
+  sourceSessionId: string | null
+} | null {
+  const creatorToken = typeof payload.creatorToken === 'string' ? payload.creatorToken.trim() : ''
+  const shareOft = typeof payload.shareOft === 'string' ? payload.shareOft.trim() : ''
+  const shareMeshMint = typeof payload.shareMeshMint === 'string' ? payload.shareMeshMint.trim() : ''
+  if (!creatorToken || !shareOft || !shareMeshMint) return null
+  const sourceSessionId = typeof payload.sourceSessionId === 'string' ? payload.sourceSessionId.trim() : ''
+  return { creatorToken, shareOft, shareMeshMint, sourceSessionId: sourceSessionId || null }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -226,6 +241,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let upstreamResponse: unknown = null
 
     if (solanaOrchestratorUrl) {
+      const normalizedAction = action.replace(/-/g, '_')
+      const mappingPayload = normalizedAction === 'sync_mapping' ? readKnownMappingPayload(payload) : null
+      const upstreamPayload =
+        normalizedAction === 'sync_mapping' && mappingPayload
+          ? mappingPayload
+          : payload
       const upstream = await fetch(`${solanaOrchestratorUrl}/reconcile`, {
         method: 'POST',
         headers: {
@@ -236,9 +257,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         body: JSON.stringify({
           workflow,
-          action,
+          action: normalizedAction,
           checkpointKey,
-          payload,
+          payload: upstreamPayload,
         }),
         signal: AbortSignal.timeout(30_000),
       })

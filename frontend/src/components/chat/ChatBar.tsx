@@ -8,11 +8,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MessageSquare, ChevronDown, Plus, Search, Wifi, WifiOff, X } from 'lucide-react'
 import { useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
-import { useIdentity } from '@/hooks/useIdentity'
 import { getAgentIdentity } from './agentIdentity'
 import { useAccountContext } from '@/wallet/accountContext'
 import { LoadingInline } from '@/components/ui/LoadingState'
 import { EthosAvatarScoreForAddress } from './EthosScorePill'
+import { useChatIdentity } from './useChatIdentity'
 
 type Props = {
   expanded: boolean
@@ -85,9 +85,8 @@ function ConversationItem({
     convo.peerAddress ??
     (convo.peerInboxId && resolvedPeer?.inboxId === convo.peerInboxId ? resolvedPeer.address : null)
 
-  const identity = useIdentity(convo.type === 'dm' ? peerAddress : null)
+  const identity = useChatIdentity(convo.type === 'dm' ? peerAddress : null, { fallbackName: convo.name ?? null })
   const agentIdentity = convo.type === 'dm' ? getAgentIdentity(peerAddress) : null
-  const basenamePreferredName = identity.basenameDisplayName ?? identity.basename
   const identityDisplayName = identity.source !== 'address' ? identity.displayName : null
   const conversationNameLabel =
     convo.name && !/^0x[a-fA-F0-9]{4}(?:…|\.{3})[a-fA-F0-9]{4}$/i.test(convo.name.trim())
@@ -95,7 +94,7 @@ function ConversationItem({
       : null
   const displayName =
     convo.type === 'dm' && peerAddress
-      ? (agentIdentity?.name ?? basenamePreferredName ?? identityDisplayName ?? conversationNameLabel ?? convo.name)
+      ? (agentIdentity?.name ?? identityDisplayName ?? conversationNameLabel ?? convo.name)
       : convo.name
   const displaySecondary =
     convo.type === 'dm' && peerAddress
@@ -107,7 +106,6 @@ function ConversationItem({
   const subtitle = convo.lastMessageText
     ? (displaySecondary ? `${displaySecondary} · ${convo.lastMessageText}` : convo.lastMessageText)
     : (displaySecondary ?? 'No messages')
-  const lensBadge = convo.type === 'dm' && peerAddress && identity.lensHandle ? `Lens @${identity.lensHandle}` : null
 
   return (
     <button
@@ -141,11 +139,6 @@ function ConversationItem({
               {displayName}
             </span>
           </span>
-          {lensBadge && (
-            <span className="shrink-0 inline-flex items-center rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.08em] text-cyan-200">
-              {lensBadge}
-            </span>
-          )}
           <span className="shrink-0 text-[10px] text-zinc-500 group-hover:text-zinc-400">
             {formatTime(convo.lastMessageAt)}
           </span>

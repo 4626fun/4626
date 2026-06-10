@@ -91,6 +91,87 @@ const SET_PHASE1_MODULE_ABI = [
   },
 ] as const
 
+const SET_PHASE2_MODULE_ABI = [
+  {
+    type: 'function',
+    name: 'setPhase2Module',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: '_phase2Module', type: 'address' }],
+    outputs: [],
+  },
+] as const
+
+const OVAULT_RUNTIME_ABI = [
+  {
+    type: 'function',
+    name: 'getOVaultRuntimeConfig',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [
+      {
+        type: 'tuple',
+        components: [
+          { name: 'hubComposer', type: 'address' },
+          { name: 'solanaEid', type: 'uint32' },
+          { name: 'enabled', type: 'bool' },
+        ],
+      },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'setOVaultRuntimeConfig',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: '_hubComposer', type: 'address' },
+      { name: '_solanaEid', type: 'uint32' },
+      { name: '_enabled', type: 'bool' },
+    ],
+    outputs: [],
+  },
+] as const
+
+const SOLANA_CONFIG_ABI = [
+  {
+    type: 'function',
+    name: 'solanaBridgeAdapter',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'solanaDestination',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }],
+  },
+  {
+    type: 'function',
+    name: 'setSolanaConfig',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: '_adapter', type: 'address' },
+      { name: '_destination', type: 'bytes32' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'solanaShareOftPeer',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }],
+  },
+  {
+    type: 'function',
+    name: 'setSolanaShareOftPeer',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: '_peer', type: 'bytes32' }],
+    outputs: [],
+  },
+] as const
+
 const CREATE2_AUTH_ABI = [
   {
     type: 'function',
@@ -112,6 +193,33 @@ const CREATE2_AUTH_ABI = [
     stateMutability: 'nonpayable',
     inputs: [
       { name: 'deployer', type: 'address' },
+      { name: 'allowed', type: 'bool' },
+    ],
+    outputs: [],
+  },
+] as const
+
+const CREATOR_REGISTRY_AUTH_ABI = [
+  {
+    type: 'function',
+    name: 'owner',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'authorizedFactories',
+    stateMutability: 'view',
+    inputs: [{ name: 'factory', type: 'address' }],
+    outputs: [{ type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'setAuthorizedFactory',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'factory', type: 'address' },
       { name: 'allowed', type: 'bool' },
     ],
     outputs: [],
@@ -187,7 +295,7 @@ async function anvilRpc<T>(method: string, params: unknown[]): Promise<T> {
 }
 
 function runForgeCreate(contract: string, constructorArgs: readonly string[]): Address {
-  const forgeArgs = [
+  const baseForgePrefixArgs = [
     'create',
     contract,
     '--rpc-url',
@@ -195,11 +303,16 @@ function runForgeCreate(contract: string, constructorArgs: readonly string[]): A
     '--private-key',
     deployerPrivateKey,
     '--broadcast',
-    '--constructor-args',
-    ...constructorArgs,
   ]
+  const legacyGasPrice = (process.env.DEPLOY_DRY_RUN_LEGACY_GAS_PRICE ?? '2000000000').trim()
 
-  try {
+  const runCreate = (extraArgs: string[] = []): Address => {
+    const forgeArgs = [
+      ...baseForgePrefixArgs,
+      ...extraArgs,
+      '--constructor-args',
+      ...constructorArgs,
+    ]
     const stdout = execFileSync('forge', forgeArgs, {
       cwd: repoRoot,
       encoding: 'utf8',
@@ -214,10 +327,27 @@ function runForgeCreate(contract: string, constructorArgs: readonly string[]): A
       throw new Error(`Could not parse deployed address from forge output:\n${stdout}`)
     }
     return getAddress(match[1] as Address) as Address
+  }
+
+  try {
+    return runCreate()
   } catch (error) {
     if (error && typeof error === 'object' && 'stdout' in error) {
       const stdout = String((error as { stdout?: string | Buffer }).stdout ?? '')
       const stderr = String((error as { stderr?: string | Buffer }).stderr ?? '')
+      const combined = `${stdout}\n${stderr}`.toLowerCase()
+      if (combined.includes('max fee per gas less than block base fee')) {
+        try {
+          return runCreate(['--legacy', '--gas-price', legacyGasPrice])
+        } catch (legacyError) {
+          if (legacyError && typeof legacyError === 'object' && 'stdout' in legacyError) {
+            const legacyStdout = String((legacyError as { stdout?: string | Buffer }).stdout ?? '')
+            const legacyStderr = String((legacyError as { stderr?: string | Buffer }).stderr ?? '')
+            throw new Error(`forge create failed after EIP-1559 + legacy retry.\n${legacyStdout}\n${legacyStderr}`.trim())
+          }
+          throw legacyError
+        }
+      }
       throw new Error(`forge create failed.\n${stdout}\n${stderr}`.trim())
     }
     throw error
@@ -400,6 +530,254 @@ async function wireLocalPhase1Module(localBatcher: Address): Promise<Address> {
   return localPhase1Module
 }
 
+async function wireLocalPhase2Module(localBatcher: Address): Promise<Address> {
+  const sourceCreate2Deployer = await readAddressGetter(sourceBatcher, 'create2Deployer')
+  const sourceRegistry = await readAddressGetter(sourceBatcher, 'registry')
+  const sourceChainlinkEthUsd = await readAddressGetter(sourceBatcher, 'chainlinkEthUsd')
+  const sourcePoolManager = await readAddressGetter(sourceBatcher, 'poolManager')
+  const sourceTaxHook = await readAddressGetter(sourceBatcher, 'taxHook')
+  const sourceProtocolTreasury = await readAddressGetter(sourceBatcher, 'protocolTreasury')
+  const sourceLotteryManager = await readAddressGetter(sourceBatcher, 'lotteryManager')
+  const sourceVaultActivationBatcher = await readAddressGetter(sourceBatcher, 'vaultActivationBatcher')
+
+  const localPhase2Module = runForgeCreate(
+    'contracts/helpers/batchers/DeploymentBatcher.sol:DeploymentBatcherPhase2Module',
+    [
+      sourceCreate2Deployer,
+      sourceRegistry,
+      sourceChainlinkEthUsd,
+      sourcePoolManager,
+      sourceTaxHook,
+      sourceProtocolTreasury,
+      sourceLotteryManager,
+      sourceVaultActivationBatcher,
+      localBatcher,
+    ],
+  )
+
+  const wiredBatcher = await publicClient.readContract({
+    address: localPhase2Module,
+    abi: [{ type: 'function', name: 'batcher', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] }],
+    functionName: 'batcher',
+  })
+  if (getAddress(wiredBatcher as Address) !== localBatcher) {
+    throw new Error(`Local Phase2Module batcher mismatch: expected ${localBatcher}, got ${wiredBatcher}`)
+  }
+
+  const protocolTreasury = await readAddressGetter(localBatcher, 'protocolTreasury')
+  await anvilRpc('anvil_setBalance', [protocolTreasury, '0x56bc75e2d63100000'])
+  await anvilRpc<boolean>('anvil_impersonateAccount', [protocolTreasury])
+  const data = encodeFunctionData({
+    abi: SET_PHASE2_MODULE_ABI,
+    functionName: 'setPhase2Module',
+    args: [localPhase2Module],
+  })
+  const txHash = await anvilRpc<Hex>('eth_sendTransaction', [
+    {
+      from: protocolTreasury,
+      to: localBatcher,
+      data,
+      value: '0x0',
+    },
+  ])
+  await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60_000 })
+
+  const configuredPhase2 = await readAddressGetter(localBatcher, 'phase2Module')
+  if (getAddress(configuredPhase2) !== localPhase2Module) {
+    throw new Error(`setPhase2Module did not wire local batcher ${localBatcher}`)
+  }
+
+  return localPhase2Module
+}
+
+async function syncOvaultRuntimeConfig(localBatcher: Address): Promise<void> {
+  const sourceRuntimeRaw = await publicClient.readContract({
+    address: sourceBatcher,
+    abi: OVAULT_RUNTIME_ABI,
+    functionName: 'getOVaultRuntimeConfig',
+  })
+  const sourceRuntime =
+    sourceRuntimeRaw && typeof sourceRuntimeRaw === 'object'
+      ? (sourceRuntimeRaw as { hubComposer?: Address; solanaEid?: number | bigint; enabled?: boolean })
+      : null
+  if (!sourceRuntime) return
+
+  const hubComposerRaw = sourceRuntime.hubComposer
+  const hubComposer = isAddress(String(hubComposerRaw ?? ''))
+    ? (getAddress(hubComposerRaw as Address) as Address)
+    : ('0x0000000000000000000000000000000000000000' as Address)
+  const solanaEidRaw = sourceRuntime.solanaEid
+  const solanaEid = Number(typeof solanaEidRaw === 'bigint' ? solanaEidRaw : solanaEidRaw ?? 0)
+  const enabled = sourceRuntime.enabled === true
+
+  const localRuntimeRaw = await publicClient.readContract({
+    address: localBatcher,
+    abi: OVAULT_RUNTIME_ABI,
+    functionName: 'getOVaultRuntimeConfig',
+  })
+  const localRuntime =
+    localRuntimeRaw && typeof localRuntimeRaw === 'object'
+      ? (localRuntimeRaw as { hubComposer?: Address; solanaEid?: number | bigint; enabled?: boolean })
+      : null
+  const localHubComposerRaw = localRuntime?.hubComposer
+  const localHubComposer = isAddress(String(localHubComposerRaw ?? ''))
+    ? (getAddress(localHubComposerRaw as Address) as Address)
+    : ('0x0000000000000000000000000000000000000000' as Address)
+  const localSolanaEidRaw = localRuntime?.solanaEid
+  const localSolanaEid = Number(typeof localSolanaEidRaw === 'bigint' ? localSolanaEidRaw : localSolanaEidRaw ?? 0)
+  const localEnabled = localRuntime?.enabled === true
+  if (
+    localEnabled === enabled &&
+    localHubComposer.toLowerCase() === hubComposer.toLowerCase() &&
+    localSolanaEid === solanaEid
+  ) {
+    return
+  }
+
+  const protocolTreasury = await readAddressGetter(localBatcher, 'protocolTreasury')
+  await anvilRpc('anvil_setBalance', [protocolTreasury, '0x56bc75e2d63100000'])
+  await anvilRpc<boolean>('anvil_impersonateAccount', [protocolTreasury])
+  const data = encodeFunctionData({
+    abi: OVAULT_RUNTIME_ABI,
+    functionName: 'setOVaultRuntimeConfig',
+    args: [hubComposer, solanaEid, enabled],
+  })
+  const txHash = await anvilRpc<Hex>('eth_sendTransaction', [
+    {
+      from: protocolTreasury,
+      to: localBatcher,
+      data,
+      value: '0x0',
+    },
+  ])
+  await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60_000 })
+}
+
+async function syncSolanaConfig(localBatcher: Address): Promise<void> {
+  const sourceAdapterRaw = await publicClient.readContract({
+    address: sourceBatcher,
+    abi: SOLANA_CONFIG_ABI,
+    functionName: 'solanaBridgeAdapter',
+  })
+  const sourceDestinationRaw = await publicClient.readContract({
+    address: sourceBatcher,
+    abi: SOLANA_CONFIG_ABI,
+    functionName: 'solanaDestination',
+  })
+  const sourceSharePeerRaw = await publicClient.readContract({
+    address: sourceBatcher,
+    abi: SOLANA_CONFIG_ABI,
+    functionName: 'solanaShareOftPeer',
+  })
+  if (!isAddress(String(sourceAdapterRaw ?? ''))) return
+  const sourceAdapter = getAddress(sourceAdapterRaw as Address) as Address
+  const sourceDestination = sourceDestinationRaw as Hex
+  const sourceSharePeer = sourceSharePeerRaw as Hex
+
+  const localAdapterRaw = await publicClient.readContract({
+    address: localBatcher,
+    abi: SOLANA_CONFIG_ABI,
+    functionName: 'solanaBridgeAdapter',
+  })
+  const localDestinationRaw = await publicClient.readContract({
+    address: localBatcher,
+    abi: SOLANA_CONFIG_ABI,
+    functionName: 'solanaDestination',
+  })
+  const localSharePeerRaw = await publicClient.readContract({
+    address: localBatcher,
+    abi: SOLANA_CONFIG_ABI,
+    functionName: 'solanaShareOftPeer',
+  })
+  const localAdapter = isAddress(String(localAdapterRaw ?? ''))
+    ? (getAddress(localAdapterRaw as Address) as Address)
+    : ('0x0000000000000000000000000000000000000000' as Address)
+  const localDestination = localDestinationRaw as Hex
+  const localSharePeer = localSharePeerRaw as Hex
+  const solanaConfigMatches =
+    localAdapter.toLowerCase() === sourceAdapter.toLowerCase() &&
+    String(localDestination).toLowerCase() === String(sourceDestination).toLowerCase()
+  const sharePeerMatches = String(localSharePeer).toLowerCase() === String(sourceSharePeer).toLowerCase()
+  if (solanaConfigMatches && sharePeerMatches) {
+    return
+  }
+
+  const protocolTreasury = await readAddressGetter(localBatcher, 'protocolTreasury')
+  await anvilRpc('anvil_setBalance', [protocolTreasury, '0x56bc75e2d63100000'])
+  await anvilRpc<boolean>('anvil_impersonateAccount', [protocolTreasury])
+  if (!solanaConfigMatches) {
+    const data = encodeFunctionData({
+      abi: SOLANA_CONFIG_ABI,
+      functionName: 'setSolanaConfig',
+      args: [sourceAdapter, sourceDestination],
+    })
+    const txHash = await anvilRpc<Hex>('eth_sendTransaction', [
+      {
+        from: protocolTreasury,
+        to: localBatcher,
+        data,
+        value: '0x0',
+      },
+    ])
+    await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60_000 })
+  }
+
+  if (!sharePeerMatches) {
+    const peerData = encodeFunctionData({
+      abi: SOLANA_CONFIG_ABI,
+      functionName: 'setSolanaShareOftPeer',
+      args: [sourceSharePeer],
+    })
+    const peerTxHash = await anvilRpc<Hex>('eth_sendTransaction', [
+      {
+        from: protocolTreasury,
+        to: localBatcher,
+        data: peerData,
+        value: '0x0',
+      },
+    ])
+    await publicClient.waitForTransactionReceipt({ hash: peerTxHash, timeout: 60_000 })
+  }
+}
+
+async function ensureRegistryAuthorizedFactory(localBatcher: Address): Promise<void> {
+  const registryRaw = await readAddressGetter(sourceBatcher, 'registry')
+  if (!isAddress(String(registryRaw ?? ''))) return
+  const registry = getAddress(registryRaw as Address) as Address
+
+  const alreadyAuthorized = (await publicClient.readContract({
+    address: registry,
+    abi: CREATOR_REGISTRY_AUTH_ABI,
+    functionName: 'authorizedFactories',
+    args: [localBatcher],
+  })) as boolean
+  if (alreadyAuthorized) return
+
+  const registryOwner = getAddress(
+    (await publicClient.readContract({
+      address: registry,
+      abi: CREATOR_REGISTRY_AUTH_ABI,
+      functionName: 'owner',
+    })) as Address,
+  )
+  await anvilRpc('anvil_setBalance', [registryOwner, '0x56bc75e2d63100000'])
+  await anvilRpc<boolean>('anvil_impersonateAccount', [registryOwner])
+  const data = encodeFunctionData({
+    abi: CREATOR_REGISTRY_AUTH_ABI,
+    functionName: 'setAuthorizedFactory',
+    args: [localBatcher, true],
+  })
+  const txHash = await anvilRpc<Hex>('eth_sendTransaction', [
+    {
+      from: registryOwner,
+      to: registry,
+      data,
+      value: '0x0',
+    },
+  ])
+  await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60_000 })
+}
+
 async function main() {
   const constructorGetterNames = [
     'registry',
@@ -457,6 +835,10 @@ async function main() {
     constructorArgs,
   )
   await wireLocalPhase1Module(deployedBatcher)
+  await wireLocalPhase2Module(deployedBatcher)
+  await syncSolanaConfig(deployedBatcher)
+  await syncOvaultRuntimeConfig(deployedBatcher)
+  await ensureRegistryAuthorizedFactory(deployedBatcher)
   process.stdout.write(deployedBatcher)
 }
 

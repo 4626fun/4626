@@ -39,6 +39,11 @@ import {
   derivePayoutRouterSalt,
   deriveVaultShareBurnStreamSalt,
 } from '../../../shared/deploy/create2Salts.js'
+import {
+  buildImpairmentAuxPlan,
+  PERMISSIONLESS_CREATE2_DEPLOYER,
+  type ImpairmentAuxPlan,
+} from '../../../shared/deploy/impairmentAuxPlan.js'
 
 import { ensureCreatorWalletsSchema } from '../../../server/_lib/wallet/creatorWallets.js'
 import { getActiveDeploySessionForSender, getDeploySessionByTokenHash, hashDeployToken, signDeployToken } from '../../../server/_lib/deploy/deploySessions.js'
@@ -788,6 +793,11 @@ const SELECTOR_VAULT_SET_BURN_STREAM_AUTHORIZED_QUEUER = '0x7972e9ff' // setBurn
 const SELECTOR_VAULT_SET_WHITELIST = '0x53d6fd59' // setWhitelist(address,bool)
 const SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE = '0x8212fd43' // setMinimumTotalIdle(uint256)
 const SELECTOR_VAULT_DEPLOY_TO_STRATEGIES = '0x355aa867' // deployToStrategies()
+const SELECTOR_VAULT_SET_IMPAIRMENT_CLAIMS = '0x7ef7d697' // setImpairmentClaims(address)
+const SELECTOR_VAULT_SET_IMPAIRMENT_RECOVERY_ESCROW = '0xd4203b67' // setImpairmentRecoveryEscrow(address)
+const SELECTOR_VAULT_SET_IMPAIRMENT_GUARDIAN = '0xdfe3f8b1' // setImpairmentGuardian(address)
+const SELECTOR_VAULT_SET_IMPAIRMENT_CHALLENGE_WINDOW = '0x19cef454' // setImpairmentChallengeWindow(uint64)
+const SELECTOR_IMPAIRMENT_AUX_SET_VAULT = '0x6817031b' // setVault(address)
 const SELECTOR_ERC8004_REGISTER = '0xf2c298be' // register(string)
 const SELECTOR_ERC8004_SET_AGENT_URI = '0x0af28bd3' // setAgentURI(uint256,string)
 const SELECTOR_ERC8004_SET_AGENT_WALLET = '0x2d1ef5ae' // setAgentWallet(uint256,address,uint256,bytes)
@@ -2215,6 +2225,7 @@ async function validateInnerCalls(params: {
   let expectedBurnStream: Address | null = null
   let expectedPayoutRouter: Address | null = null
   let expectedCreatorCoinPolicyController: Address | null = null
+  let expectedImpairmentAux: ImpairmentAuxPlan | null = null
 
   for (const c of innerCalls) {
     const selector = getSelector(c.data)
@@ -3121,6 +3132,16 @@ async function validateInnerCalls(params: {
       ]),
     })
 
+    if (mode === 'deploy_phase3') {
+      // Per-vault impairment aux pair (claims + escrow). Deterministically derived from
+      // the expected vault + deploy owner; deployed via the permissionless CREATE2
+      // deployer, linked with setVault, then transferred to the protocol treasury.
+      expectedImpairmentAux = buildImpairmentAuxPlan({
+        vault: expectedVault,
+        initialOwner: params.sender,
+      })
+    }
+
     params.debug?.({
       deployer: create2DeployerFromStore,
       storeEnv: envStore,
@@ -3397,7 +3418,12 @@ async function validateInnerCalls(params: {
     if ((mode === 'deploy_phase2' || mode === 'deploy_phase3') && expectedVault && expectedBurnStream && expectedPayoutRouter && c.target === expectedVault) {
       const phase3RuntimeSelectorAllowed =
         mode === 'deploy_phase3' &&
-        (selector === SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE || selector === SELECTOR_VAULT_DEPLOY_TO_STRATEGIES)
+        (selector === SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE ||
+          selector === SELECTOR_VAULT_DEPLOY_TO_STRATEGIES ||
+          selector === SELECTOR_VAULT_SET_IMPAIRMENT_CLAIMS ||
+          selector === SELECTOR_VAULT_SET_IMPAIRMENT_RECOVERY_ESCROW ||
+          selector === SELECTOR_VAULT_SET_IMPAIRMENT_GUARDIAN ||
+          selector === SELECTOR_VAULT_SET_IMPAIRMENT_CHALLENGE_WINDOW)
       if (
         selector !== SELECTOR_VAULT_SET_BURN_STREAM &&
         selector !== SELECTOR_VAULT_SET_BURN_STREAM_AUTHORIZED_QUEUER &&
@@ -3435,8 +3461,54 @@ async function validateInnerCalls(params: {
         // Phase3 runtime idle tuning is allowed for the expected vault.
       } else if (selector === SELECTOR_VAULT_DEPLOY_TO_STRATEGIES) {
         // Phase3 runtime deployment is allowed for the expected vault.
+      } else if (selector === SELECTOR_VAULT_SET_IMPAIRMENT_CLAIMS) {
+        const claimsArg = decodeAddressArgFromCalldata(c.data, 0)
+        if (!expectedImpairmentAux || !claimsArg || claimsArg !== expectedImpairmentAux.claims.address) {
+          throw new Error('vault_impairment_claims_mismatch')
+        }
+      } else if (selector === SELECTOR_VAULT_SET_IMPAIRMENT_RECOVERY_ESCROW) {
+        const escrowArg = decodeAddressArgFromCalldata(c.data, 0)
+        if (!expectedImpairmentAux || !escrowArg || escrowArg !== expectedImpairmentAux.escrow.address) {
+          throw new Error('vault_impairment_escrow_mismatch')
+        }
+      } else if (selector === SELECTOR_VAULT_SET_IMPAIRMENT_GUARDIAN) {
+        const guardianArg = decodeAddressArgFromCalldata(c.data, 0)
+        if (!guardianArg) throw new Error('vault_impairment_guardian_invalid')
+      } else if (selector === SELECTOR_VAULT_SET_IMPAIRMENT_CHALLENGE_WINDOW) {
+        // Window bounds are enforced by the vault contract (management-gated setter).
       }
       continue
+    }
+
+    // Per-vault impairment aux pair (phase3 deploy flow): permissionless CREATE2 deploy
+    // of the exact expected claims/escrow initcode, then setVault + ownership handoff
+    // to the protocol treasury.
+    if (mode === 'deploy_phase3' && expectedImpairmentAux && c.target === PERMISSIONLESS_CREATE2_DEPLOYER) {
+      const data = String(c.data ?? '').toLowerCase()
+      const isClaimsDeploy = data === expectedImpairmentAux.claims.deployCallData.toLowerCase()
+      const isEscrowDeploy = data === expectedImpairmentAux.escrow.deployCallData.toLowerCase()
+      if (!isClaimsDeploy && !isEscrowDeploy) throw new Error('impairment_aux_deploy_calldata_mismatch')
+      if (c.value !== 0n) throw new Error('impairment_aux_deploy_value_not_allowed')
+      continue
+    }
+    if (
+      mode === 'deploy_phase3' &&
+      expectedImpairmentAux &&
+      (c.target === expectedImpairmentAux.claims.address || c.target === expectedImpairmentAux.escrow.address)
+    ) {
+      if (selector === SELECTOR_IMPAIRMENT_AUX_SET_VAULT) {
+        const vaultArg = decodeAddressArgFromCalldata(c.data, 0)
+        if (!vaultArg || !expectedVault || vaultArg !== expectedVault) throw new Error('impairment_aux_vault_mismatch')
+        continue
+      }
+      if (selector === SELECTOR_OWNABLE_TRANSFER_OWNERSHIP) {
+        const newOwner = decodeAddressArgFromCalldata(c.data, 0)
+        if (!newOwner || !expectedProtocolTreasury || newOwner !== expectedProtocolTreasury) {
+          throw new Error('impairment_aux_ownership_target_mismatch')
+        }
+        continue
+      }
+      throw new Error('impairment_aux_selector_not_allowed')
     }
 
     // Dynamic token calls: only allow calls to the same creatorToken used in the primary call.

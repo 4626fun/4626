@@ -92,19 +92,7 @@ export function ShareBridgeFinalizeWiringPanel({
   }
 
   if (wrapperDeployed === false) {
-    return (
-      <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-3 text-[10px] text-amber-300/90 space-y-1">
-        <p>
-          Pipe A finalize bridge waits for a deployed wrapper at{' '}
-          <span className="font-mono">{finalizeParams.wrapper}</span>.
-        </p>
-        <p>
-          Complete <strong>Phase 1 core</strong> via <strong>1‑Click Deploy</strong> (vault + wrapper + ShareOFT
-          CREATE2 deploy). Pipe A LZ fee quoting unlocks automatically once wrapper bytecode is on Base — you do
-          not need to finalize Phase 2 first.
-        </p>
-      </div>
-    )
+    return null
   }
 
   if (wiringQuery.isLoading || wiringQuery.isFetching) {

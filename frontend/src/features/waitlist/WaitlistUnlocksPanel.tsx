@@ -3,6 +3,7 @@ import { Sparkles } from 'lucide-react'
 
 import type { AccountScore } from '@/features/accountSetup/types'
 import { getMarketingWaitlistReferralUrl } from '@/lib/auth/waitlistEntry'
+import { resolvePublicPointsDisplay } from '@/lib/waitlist/canonicalAccountScore'
 import { WaitlistDailyActionsHub } from './WaitlistDailyActionsHub'
 import { useMyReferralCode } from './useMyReferralCode'
 
@@ -12,6 +13,9 @@ type WaitlistUnlocksPanelProps = {
   linkedMethods?: Record<string, string[]>
   busyProvider?: string | null
   onLinkProvider?: (provider: string) => void | Promise<void>
+  zoraHandle?: string | null
+  canonicalCswAddress?: string | null
+  signingStepComplete?: boolean
   className?: string
 }
 
@@ -25,6 +29,9 @@ export function WaitlistUnlocksPanel({
   linkedMethods = {},
   busyProvider = null,
   onLinkProvider,
+  zoraHandle = null,
+  canonicalCswAddress = null,
+  signingStepComplete = false,
   className = '',
 }: WaitlistUnlocksPanelProps) {
   const referral = useMyReferralCode(email)
@@ -43,32 +50,32 @@ export function WaitlistUnlocksPanel({
       // best-effort
     }
   }
+  const publicPoints = resolvePublicPointsDisplay({
+    score: score ?? null,
+    positionTotal: referral.data?.pointsTotal ?? null,
+  }).points
 
   return (
     <div className={`space-y-4 ${className}`}>
-      <section className="rounded-xl border border-brand-primary/20 bg-brand-primary/[0.08] px-3.5 py-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-brand-200">
-              <Sparkles className="h-3 w-3" aria-hidden="true" />
-              Daily
-            </p>
-            <p className="mt-1 text-xs text-zinc-300">Connect → action → reward.</p>
-          </div>
-          <div className="shrink-0 rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-right">
-            <p className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Current</p>
-            <p className="text-sm font-semibold text-white tabular-nums">
-              {(score?.points ?? 0).toLocaleString()} pts
-            </p>
-            <p className="text-[10px] text-zinc-400">Tier {score?.tier ?? 0}</p>
-          </div>
+      <div className="flex items-center justify-between gap-3 px-0.5">
+        <p className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-brand-200">
+          <Sparkles className="h-3 w-3" aria-hidden="true" />
+          Lottery Points
+        </p>
+        <div className="inline-flex items-center gap-2 rounded-full bg-black/30 px-2.5 py-1 text-[11px] text-zinc-300">
+          <span className="font-semibold tabular-nums text-white">
+            {publicPoints.toLocaleString()} pts
+          </span>
         </div>
-      </section>
+      </div>
 
       <WaitlistDailyActionsHub
         linkedMethods={linkedMethods}
         busyProvider={busyProvider}
         onLinkProvider={onLinkProvider}
+        zoraHandle={zoraHandle}
+        canonicalCswAddress={canonicalCswAddress}
+        signingStepComplete={signingStepComplete}
         shareUrl={shareUrl}
         telegramGroupUrl={TELEGRAM_GROUP_URL}
         copiedPrompt={copiedPrompt}

@@ -68,8 +68,11 @@ describe('formatAlfaClubDailyBrief', () => {
 
     expect(text).toContain('**AlfaClub Daily**')
     expect(text).toContain('May 26')
-    expect(text).toContain('**Markets**')
-    expect(text).toContain('BTC $75.6k')
+    expect(text).toContain('**HyperCore**')
+    expect(text).toContain('**AlfaClub creator flow**')
+    expect(text).toContain('Regime unavailable')
+    expect(text).toContain('Watchlist: BTC $75.6k')
+    expect(text).toContain('Signal pressure: no recent ProLiquid scored signals.')
     expect(text).toContain('@Flip_Research')
     expect(text).toContain('https://alfaclub.app/room/2')
     expect(text).not.toContain('/room/1043')
@@ -82,6 +85,7 @@ describe('formatAlfaClubDailyBrief', () => {
     expect(text).toContain('partial leaderboard')
     expect(text).toContain('leads at score')
     expect(text).toContain('score 0.148')
+    expect(text.indexOf('**HyperCore**')).toBeLessThan(text.indexOf('**AlfaClub creator flow**'))
   })
 
   it('ops room footer clarifies digest vs creator trading rooms', () => {
@@ -113,7 +117,7 @@ describe('formatAlfaClubDailyBrief', () => {
 
     expect(text).toContain('**AlfaClub Leaderboard**')
     expect(text).toContain('**Top 2**')
-    expect(text).not.toContain('**Markets**')
+    expect(text).not.toContain('**HyperCore**')
     expect(formatIndexedScopeLine({
       creatorsTracked: 1655,
       rankedCount: 2,
@@ -146,7 +150,7 @@ describe('formatAlfaClubDailyBrief', () => {
     })
 
     expect(text).toContain('**Daily AlfaClub Brief**')
-    expect(text).toContain('**Majors**')
+    expect(text).toContain('**HyperCore market intelligence**')
     expect(text).toContain('**AlfaClub pulse**')
   })
 })

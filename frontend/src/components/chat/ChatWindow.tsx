@@ -25,7 +25,6 @@ import {
 } from 'lucide-react'
 import { useAccount } from 'wagmi'
 import { useXmtp, type ChatMessage } from '@/lib/xmtp/provider'
-import { useIdentity } from '@/hooks/useIdentity'
 import { apiFetch } from '@/lib/api/apiBase'
 import { trackEvent } from '@/lib/analytics/analytics'
 import { fetchZoraProfile } from '@/lib/zora/client'
@@ -33,6 +32,7 @@ import { useAccountContext } from '@/wallet/accountContext'
 import { Spinner } from '@/components/ui/Spinner'
 import { getAgentIdentity } from './agentIdentity'
 import { EthosAvatarScoreForAddress } from './EthosScorePill'
+import { useChatIdentity } from './useChatIdentity'
 import {
   CHAT_COMMAND_CATEGORIES,
   type ChatCommandCategoryId,
@@ -138,7 +138,7 @@ type PreflightResult = {
 
 const DESKTOP_CHAT_WINDOW_WIDTH = 350
 const DESKTOP_CHAT_WINDOW_HEIGHT = 520
-const DESKTOP_CHAT_WINDOW_MINIMIZED_HEIGHT = 44
+const DESKTOP_CHAT_WINDOW_MINIMIZED_HEIGHT = 56
 
 function ChatHeaderAvatar({
   avatar,
@@ -250,7 +250,7 @@ function SenderLabel({ inboxId }: { inboxId: string }) {
     return () => { cancelled = true }
   }, [inboxId, resolveInboxAddress])
 
-  const { displayName } = useIdentity(address)
+  const { displayName } = useChatIdentity(address)
   return <span>{address ? displayName : `${inboxId.slice(0, 8)}…`}</span>
 }
 
@@ -342,14 +342,13 @@ export function ChatWindow({
     conversationType === 'dm'
       ? (peerAddress ?? (peerInboxId && resolvedPeer?.inboxId === peerInboxId ? resolvedPeer.address : null))
       : null
-  const dmIdentity = useIdentity(dmPeerAddress)
+  const dmIdentity = useChatIdentity(dmPeerAddress, { fallbackName: conversationName })
   const agentIdentity = getAgentIdentity(dmPeerAddress)
-  const basenamePreferredName = dmIdentity.basenameDisplayName ?? dmIdentity.basename
   const identityDisplayName = dmIdentity.source !== 'address' ? dmIdentity.displayName : null
   const conversationNameLabel = !isAddressDisplay(conversationName) ? conversationName : null
   const headerName =
     conversationType === 'dm' && dmPeerAddress
-      ? (agentIdentity?.name ?? basenamePreferredName ?? identityDisplayName ?? conversationNameLabel ?? 'XMTP contact')
+      ? (agentIdentity?.name ?? identityDisplayName ?? conversationNameLabel ?? 'XMTP contact')
       : conversationName
   const identitySecondary = conversationType === 'dm' && dmPeerAddress && !isDuplicateAddressLabel(dmIdentity.secondary, dmPeerAddress)
     ? dmIdentity.secondary
@@ -365,9 +364,6 @@ export function ChatWindow({
     ? (conversationImageUrl ?? agentIdentity?.avatar ?? dmIdentity.avatar ?? null)
     : (conversationImageUrl ?? null)
   const headerInitials = initials(headerName)
-  const lensBadge = conversationType === 'dm' && dmPeerAddress && dmIdentity.lensHandle
-    ? `Lens @${dmIdentity.lensHandle}`
-    : null
   const normalizedSenderWallet = useMemo(() => {
     const raw =
       (accountContext.activeAccountType === 'SMART_WALLET'
@@ -791,6 +787,7 @@ export function ChatWindow({
   const isInlineEmbedded = isEmbedded && embeddedChrome === 'inline'
   const isMobile = variant === 'mobile' || isEmbedded
   const isMobileShell = variant === 'mobile'
+  const isDesktopMinimized = !isMobile && minimized
   const showCommandCenter = conversationType === 'dm' && Boolean(agentIdentity)
   const showCommandCenterPanel = resolveCommandCenterVisibility({
     isMobile,
@@ -1286,11 +1283,6 @@ export function ChatWindow({
                   ) : null}
                 </div>
               )}
-              {lensBadge && (
-                <div className="text-[9px] text-cyan-200 truncate">
-                  {lensBadge}
-                </div>
-              )}
             </div>
           </div>
           <button
@@ -1305,18 +1297,30 @@ export function ChatWindow({
       ) : (
         <button
           type="button"
-          className="flex w-full items-center justify-between gap-2 px-3 py-2 bg-zinc-800/80 border-b border-white/10 cursor-pointer select-none shrink-0 text-left"
+          className={`flex w-full items-center justify-between gap-2 bg-zinc-800/80 border-b border-white/10 cursor-pointer select-none shrink-0 text-left ${
+            isDesktopMinimized ? 'px-3 py-2.5' : 'px-3 py-2'
+          }`}
           onClick={onMinimize}
           aria-label={`Minimize chat with ${headerName}`}
         >
           <div className="flex items-center gap-2 min-w-0">
-            <ChatHeaderAvatar
-              avatar={headerAvatar}
-              initialsValue={headerInitials}
-              addressValue={copyablePeerAddress}
-              interactive={Boolean(peerProfileHref)}
-              onOpenProfile={handleOpenPeerProfile}
-            />
+            {isDesktopMinimized ? (
+              <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-white/15 bg-white/10 text-[10px] font-semibold uppercase text-zinc-300">
+                {headerAvatar ? (
+                  <img src={headerAvatar} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  headerInitials
+                )}
+              </div>
+            ) : (
+              <ChatHeaderAvatar
+                avatar={headerAvatar}
+                initialsValue={headerInitials}
+                addressValue={copyablePeerAddress}
+                interactive={Boolean(peerProfileHref)}
+                onOpenProfile={handleOpenPeerProfile}
+              />
+            )}
             <div ref={headerMenuRef} className="relative min-w-0">
               <button
                 type="button"
@@ -1328,13 +1332,13 @@ export function ChatWindow({
                 aria-haspopup="menu"
                 aria-expanded={headerMenuOpen}
               >
-                <span className="block truncate text-sm font-medium text-zinc-200">{headerName}</span>
-                {headerSubline && (
+                <span className={`block truncate font-medium text-zinc-200 ${isDesktopMinimized ? 'text-[13px]' : 'text-sm'}`}>{headerName}</span>
+                {!isDesktopMinimized && headerSubline && (
                   <span className="block truncate text-[10px] text-zinc-500">{headerSubline}</span>
                 )}
               </button>
-              {headerMenu}
-              {copyablePeerAddress && (
+              {!isDesktopMinimized ? headerMenu : null}
+              {!isDesktopMinimized && copyablePeerAddress && (
                 <div className="mt-0.5 flex items-center gap-1.5">
                   <button
                     type="button"
@@ -1355,9 +1359,6 @@ export function ChatWindow({
                     <span className="text-[9px] text-emerald-300/90">Copied</span>
                   ) : null}
                 </div>
-              )}
-              {lensBadge && (
-                <div className="text-[9px] text-cyan-200 truncate">{lensBadge}</div>
               )}
             </div>
           </div>

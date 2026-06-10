@@ -11,7 +11,6 @@ import {
 } from 'react'
 import {
   CheckCircle2,
-  ChevronRight,
   ExternalLink,
 } from 'lucide-react'
 import { toast } from '@/components/ui/Toast'
@@ -20,7 +19,6 @@ import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { LoadingText } from '@/components/ui/LoadingState'
-import { LinkedIdentitiesSection } from '@/features/accountSetup/LinkedIdentitiesSection'
 import { AccountsManagementPanel } from '@/features/accountSetup/AccountsManagementPanel'
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
 import { shouldShowParentCswAddOwnerPanel, shouldShowBaseAppConnectPanel, shouldFocusWaitlistBaseAppConnect, resolveWaitlistAccordionOpenStep } from '@/features/waitlist/waitlistFlowState'
@@ -29,7 +27,6 @@ import { inferWaitlistEoaOwnerRoutingHint } from '@/lib/wallet/userExecutionTrac
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { useWaitlistSigningStepComplete } from '@/features/waitlist/useWaitlistSigningStepComplete'
 import { WaitlistModernParentOwnerInstall } from './WaitlistModernParentOwnerInstall'
-import { WaitlistAccountStatusCard } from '@/features/waitlist/WaitlistAccountStatusCard'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { readWaitlistSetupIntent } from '@/lib/auth/waitlistEntry'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
@@ -366,19 +363,7 @@ export function AccountSetupWorkspaceView(props: {
             </div>
           ) : null}
 
-          <WaitlistAccountStatusCard
-            zoraHandle={normalizedZoraHandle}
-            zoraProfileUrl={zoraProfileUrl}
-            canonicalCswAddress={canonicalCswAddress}
-            signingStepComplete={signingStepComplete}
-            resetBusy={busyProvider === 'email'}
-            onCopyAddress={copyAddress}
-            onReset={() => void onSwitchAccount()}
-          />
-
           {summaryActions ? <div className="space-y-4">{summaryActions}</div> : null}
-
-          <WaitlistAdvancedSection controller={controller} label="Account settings" />
 
           {waitlistFooter ? <div className="flex justify-center pt-1">{waitlistFooter}</div> : null}
         </div>
@@ -853,9 +838,6 @@ export function AccountSetupWorkspaceView(props: {
         {/* Optional post-activation delegation consent. Keep out of core setup flow. */}
         {allDone ? <ArchBEnrollmentCard hasCanonicalCsw={Boolean(canonicalCswAddress)} /> : null}
 
-        {/* Advanced — identities + co-owner management. Collapsed by default. */}
-        <WaitlistAdvancedSection controller={controller} />
-
         {/* Enter App / waitlist actions — approval-gated, not setup-gated */}
         {summaryActions ? (
           <div className="pt-1">{summaryActions}</div>
@@ -1319,47 +1301,3 @@ export function AccountSetupWorkspaceView(props: {
   )
 }
 
-/**
- * Collapsed "Advanced" disclosure inside the waitlist accordion.
- *
- * Consolidates the identity-linking grid and Rabby co-owner tools that
- * used to live at `/accounts` into the single `/waitlist` surface. Kept
- * minimal: one clean disclosure with two compact sub-sections; the
- * advanced owner input is further nested behind its own disclosure to
- * avoid surfacing destructive controls by default.
- */
-function WaitlistAdvancedSection({
-  controller,
-  label = 'Advanced',
-}: {
-  controller: AccountSetupWorkspaceController
-  label?: string
-}) {
-  const [open, setOpen] = useState(false)
-  const { canShowAdvanced } = controller
-
-  if (!canShowAdvanced) return null
-
-  return (
-    <div className="w-full">
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className="group flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[11.5px] uppercase tracking-[0.14em] text-zinc-500 transition-colors hover:text-zinc-300"
-        aria-expanded={open}
-      >
-        <span>{label}</span>
-        <ChevronRight
-          className={`h-3.5 w-3.5 transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
-          aria-hidden="true"
-        />
-      </button>
-
-      {open ? (
-        <div className="mt-2">
-          <LinkedIdentitiesSection controller={controller} />
-        </div>
-      ) : null}
-    </div>
-  )
-}

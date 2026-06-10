@@ -17,13 +17,13 @@ import { useAccount } from 'wagmi'
 import { apiFetch } from '@/lib/api/apiBase'
 import { BASE_XMTP_AGENTS, type BaseXmtpAgent } from '@/lib/chat/baseXmtpAgents'
 import { CHAT_TOGGLE_REQUEST_EVENT, requestNewDm, requestOpenChat } from '@/lib/chat/openChat'
-import { useIdentity } from '@/hooks/useIdentity'
 import { canMessageAddressOnCurrentEnv, useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
 import { getBasenameProfileByName, resolveBasenameAddress } from '@/lib/basename/basename-api'
 import { cn } from '@/lib/shared/utils'
 import { toast } from '@/components/ui/Toast'
 import { CANONICAL_CSW_ADDRESS, CANONICAL_CSW_ALLOWED_OWNER_EOAS } from '@/wallet/canonicalWalletPolicy'
 import { EthosAvatarScoreBadge, EthosAvatarScoreForAddress, getEthosScorePalette, useEthosScore } from './EthosScorePill'
+import { useChatIdentity } from './useChatIdentity'
 
 type AgentRow = {
   creatorAddress: string
@@ -365,7 +365,7 @@ function ConversationUserRow(props: {
 }) {
   const { conversation, onOpen, friendState = 'none', onFriendAction } = props
   const peerAddress = isAddress(conversation.peerAddress) ? conversation.peerAddress : null
-  const identity = useIdentity(peerAddress ?? undefined)
+  const identity = useChatIdentity(peerAddress ?? null, { fallbackName: conversation.name ?? null })
   const name = identity.displayName || conversation.name || (peerAddress ? shortAddress(peerAddress) : 'XMTP contact')
 
   return (
@@ -416,8 +416,8 @@ function PresenceUserRow(props: {
   onFriendAction?: (address: `0x${string}`, action: FriendAction) => void
 }) {
   const { user, onOpen, friendState = 'none', onFriendAction } = props
-  const identity = useIdentity(user.address)
-  const name = user.displayName || identity.displayName || shortAddress(user.address)
+  const identity = useChatIdentity(user.address, { fallbackName: user.displayName ?? null })
+  const name = identity.displayName || shortAddress(user.address)
 
   return (
     <RowShell
@@ -458,7 +458,6 @@ function BaseAgentRow({ agent, onOpen }: { agent: BaseXmtpAgent; onOpen?: () => 
   const [resolving, setResolving] = useState(false)
   const [failed, setFailed] = useState(false)
   const [resolvedAddress, setResolvedAddress] = useState<`0x${string}` | null>(agent.address ?? null)
-  const directIdentity = useIdentity(resolvedAddress ?? agent.address)
   const handleProfile = useQuery({
     queryKey: ['baseAgentHandleProfile', agent.handle],
     queryFn: async () => {
@@ -468,7 +467,15 @@ function BaseAgentRow({ agent, onOpen }: { agent: BaseXmtpAgent; onOpen?: () => 
     enabled: Boolean(agent.handle),
     staleTime: 10 * 60_000,
   })
-  const profileAvatar = handleProfile.data?.avatar ?? directIdentity.avatar ?? null
+  const directIdentity = useChatIdentity(resolvedAddress ?? agent.address, {
+    fallbackName: agent.name,
+    fallbackAvatar: handleProfile.data?.avatar ?? null,
+  })
+  const displayName =
+    directIdentity.source === 'address'
+      ? agent.name
+      : (directIdentity.displayName || agent.name)
+  const profileAvatar = directIdentity.avatar ?? handleProfile.data?.avatar ?? null
   const xmtpReachability = useQuery({
     queryKey: ['xmtpReachability', resolvedAddress],
     queryFn: async () => {
@@ -520,7 +527,7 @@ function BaseAgentRow({ agent, onOpen }: { agent: BaseXmtpAgent; onOpen?: () => 
       requestOpenChat({
         kind: 'dm',
         peerAddress: nextAddress,
-        nameHint: agent.name,
+        nameHint: displayName,
         imageUrl: profileAvatar,
       })
       onOpen?.()
@@ -533,7 +540,7 @@ function BaseAgentRow({ agent, onOpen }: { agent: BaseXmtpAgent; onOpen?: () => 
 
   return (
     <RowShell
-      label={`Open chat with ${agent.name}`}
+      label={`Open chat with ${displayName}`}
       disabled={resolving || (!agent.address && !agent.handle)}
       onClick={() => void openAgentChat()}
     >
@@ -546,7 +553,7 @@ function BaseAgentRow({ agent, onOpen }: { agent: BaseXmtpAgent; onOpen?: () => 
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <div className="truncate text-[12.5px] font-semibold text-zinc-100">{agent.name}</div>
+          <div className="truncate text-[12.5px] font-semibold text-zinc-100">{displayName}</div>
           <span className="shrink-0 rounded-full border border-brand-primary/20 bg-brand-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-blue-200">
             Base
           </span>
@@ -567,8 +574,8 @@ function CreatorAgentRow({ agent, onOpen }: { agent: AgentRow; onOpen?: () => vo
       ? agent.cswAddress
       : agent.creatorAddress
   const scoreAddress = canonical ? CANONICAL_4626_MAIN_ACCOUNT : identityAddress
-  const creatorIdentity = useIdentity(identityAddress)
-  const agentIdentity = useIdentity(agent.xmtpAgentAddress)
+  const creatorIdentity = useChatIdentity(identityAddress)
+  const agentIdentity = useChatIdentity(agent.xmtpAgentAddress)
   const agentAddress = isAddress(agent.xmtpAgentAddress) ? agent.xmtpAgentAddress : null
   const identityLabel = creatorIdentity.source !== 'address'
     ? creatorIdentity.displayName
@@ -1090,6 +1097,70 @@ export function ChatAvailabilityRail(props: { onExpandedChange?: (expanded: bool
             body="Recent chats still work. Peer presence will return when the directory API responds."
           />
         ) : null}
+        {showAllTab && (visibleBaseAgents.length > 0 || visibleAgents.length > 0 || agents.isLoading || agentsError) ? (
+          <RailSection
+            label="Agents"
+            hint={`${visibleBaseAgents.length + visibleAgents.length}${agents.isLoading ? '+' : ''}`}
+          >
+            {visibleBaseAgents.map((agent) => (
+              <BaseAgentRow key={agent.id} agent={agent} onOpen={collapseAfterOpenIfReady} />
+            ))}
+            {!agents.isLoading && !agentsError
+              ? visibleAgents.map((agent) => (
+                  <CreatorAgentRow key={agent.creatorAddress} agent={agent} onOpen={collapseAfterOpenIfReady} />
+                ))
+              : null}
+            {agents.isLoading ? <RailSkeletonRows /> : null}
+            {agentsError ? (
+              <div className="mx-1 rounded-2xl border border-white/10 bg-white/[0.025] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-500">
+                4626 agents are unavailable right now. Base agents still work.
+              </div>
+            ) : null}
+          </RailSection>
+        ) : null}
+        {showAllTab && !agents.isLoading && !agentsError && visibleAgents.length === 0 && visibleBaseAgents.length === 0 ? (
+          <RailEmptyState
+            icon={<Sparkles className="h-4 w-4" />}
+            title={query ? 'No matching agents' : 'No agents listed yet'}
+            body={
+              query
+                ? 'Clear search or try an agent name, handle, or wallet address.'
+                : 'Base and 4626 agents will appear here once they are listed.'
+            }
+          />
+        ) : null}
+        {showAllTab && nonFriendConversations.length > 0 ? (
+          <RailSection
+            label="Recent Conversations"
+            hint={`${nonFriendConversations.length}`}
+          >
+            {nonFriendConversations.map((conversation) => (
+              <ConversationUserRow
+                key={conversation.id}
+                conversation={conversation}
+                friendState={getFriendState(conversation.peerAddress)}
+                onFriendAction={runFriendAction}
+                onOpen={collapseAfterOpenIfReady}
+              />
+            ))}
+          </RailSection>
+        ) : null}
+        {showUnreadTab && unreadDmConversations.length > 0 ? (
+          <RailSection
+            label="Unread Conversations"
+            hint={`${unreadDmConversations.length}`}
+          >
+            {unreadDmConversations.map((conversation) => (
+              <ConversationUserRow
+                key={conversation.id}
+                conversation={conversation}
+                friendState={getFriendState(conversation.peerAddress)}
+                onFriendAction={runFriendAction}
+                onOpen={collapseAfterOpenIfReady}
+              />
+            ))}
+          </RailSection>
+        ) : null}
         {(showAllTab || showUnreadTab) && incomingRequestUsers.length > 0 ? (
           <RailSection label="Friend Requests" hint={`${incomingRequestUsers.length} incoming`}>
             {incomingRequestUsers.map((user) => (
@@ -1141,22 +1212,6 @@ export function ChatAvailabilityRail(props: { onExpandedChange?: (expanded: bool
             ))}
           </RailSection>
         ) : null}
-        {(showAllTab || showUnreadTab) && (showUnreadTab ? unreadDmConversations.length > 0 : nonFriendConversations.length > 0) ? (
-          <RailSection
-            label={showUnreadTab ? 'Unread Conversations' : 'Recent Conversations'}
-            hint={`${showUnreadTab ? unreadDmConversations.length : nonFriendConversations.length}`}
-          >
-            {(showUnreadTab ? unreadDmConversations : nonFriendConversations).map((conversation) => (
-              <ConversationUserRow
-                key={conversation.id}
-                conversation={conversation}
-                friendState={getFriendState(conversation.peerAddress)}
-                onFriendAction={runFriendAction}
-                onOpen={collapseAfterOpenIfReady}
-              />
-            ))}
-          </RailSection>
-        ) : null}
         {showUnreadTab && unreadGroupConversations.length > 0 ? (
           <RailSection label="Unread Groups" hint={`${unreadGroupConversations.length}`}>
             {unreadGroupConversations.map((conversation) => (
@@ -1195,38 +1250,6 @@ export function ChatAvailabilityRail(props: { onExpandedChange?: (expanded: bool
                 Go available
               </button>
             ) : null}
-          />
-        ) : null}
-        {showAllTab && (visibleBaseAgents.length > 0 || visibleAgents.length > 0 || agents.isLoading || agentsError) ? (
-          <RailSection
-            label="Agents"
-            hint={`${visibleBaseAgents.length + visibleAgents.length}${agents.isLoading ? '+' : ''}`}
-          >
-            {visibleBaseAgents.map((agent) => (
-              <BaseAgentRow key={agent.id} agent={agent} onOpen={collapseAfterOpenIfReady} />
-            ))}
-            {!agents.isLoading && !agentsError
-              ? visibleAgents.map((agent) => (
-                  <CreatorAgentRow key={agent.creatorAddress} agent={agent} onOpen={collapseAfterOpenIfReady} />
-                ))
-              : null}
-            {agents.isLoading ? <RailSkeletonRows /> : null}
-            {agentsError ? (
-              <div className="mx-1 rounded-2xl border border-white/10 bg-white/[0.025] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-500">
-                4626 agents are unavailable right now. Base agents still work.
-              </div>
-            ) : null}
-          </RailSection>
-        ) : null}
-        {showAllTab && !agents.isLoading && !agentsError && visibleAgents.length === 0 && visibleBaseAgents.length === 0 ? (
-          <RailEmptyState
-            icon={<Sparkles className="h-4 w-4" />}
-            title={query ? 'No matching agents' : 'No agents listed yet'}
-            body={
-              query
-                ? 'Clear search or try an agent name, handle, or wallet address.'
-                : 'Base and 4626 agents will appear here once they are listed.'
-            }
           />
         ) : null}
         {showUnreadTab && unreadDmConversations.length === 0 && unreadGroupConversations.length === 0 && incomingRequestUsers.length === 0 ? (

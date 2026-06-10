@@ -2700,15 +2700,20 @@ export function XmtpChatProvider({
   }, [address, walletClient, installationLimitInboxId, publicClient, connect, connector, xmtpModeOverride, resolveXmtpIdentityAddress])
 
   const resetLocalState = useCallback(async () => {
-    if (!address || !walletClient) throw new Error('Connect wallet first.')
+    const activeAddress = address ?? null
+    const activeWalletClient = walletClient ?? null
+    const canSignForReconnect = Boolean(activeAddress && activeWalletClient)
     if (resetLocalStateInFlightRef.current) {
-      throw new Error('Local XMTP reset already in progress. Please wait.')
+      // Ignore repeated button clicks while a reset is already running.
+      return
     }
     resetLocalStateInFlightRef.current = true
     connectInFlightRef.current = true
     try {
-      const targetIdentity = identityAddressRef.current ?? identityAddress ?? address
-      const storedMetaBeforeReset = readStoredInstallationMeta(XMTP_ENV, targetIdentity)
+      const targetIdentity = identityAddressRef.current ?? identityAddress ?? activeAddress
+      const storedMetaBeforeReset = targetIdentity
+        ? readStoredInstallationMeta(XMTP_ENV, targetIdentity)
+        : null
 
       setStatus('connecting')
       setError(null)
@@ -2748,11 +2753,16 @@ export function XmtpChatProvider({
       }
       xmtpDebug(`[xmtp] Reset local XMTP state, deleted ${deleted} OPFS file(s)`)
 
-      if (storedMetaBeforeReset?.inboxId && storedMetaBeforeReset.installationId) {
+      if (
+        activeAddress &&
+        activeWalletClient &&
+        storedMetaBeforeReset?.inboxId &&
+        storedMetaBeforeReset.installationId
+      ) {
         try {
-          const resolved = await resolveXmtpIdentityAddress(address, xmtpModeOverride)
+          const resolved = await resolveXmtpIdentityAddress(activeAddress, xmtpModeOverride)
           const xmtpIdentityAddress = resolved.identityAddress
-          const walletChainId = resolveXmtpChainId(walletClient.chain?.id)
+          const walletChainId = resolveXmtpChainId(activeWalletClient.chain?.id)
           const storedSignerType = readStoredSignerType(xmtpIdentityAddress)
           let hasContractCode: boolean | null = null
           if (publicClient) {
@@ -2772,7 +2782,7 @@ export function XmtpChatProvider({
             modeOverride: xmtpModeOverride ?? undefined,
           })
           const signMessageFn = async (message: string) => {
-            const s = await walletClient.signMessage({ message })
+            const s = await activeWalletClient.signMessage({ message })
             return hexToBytes(s)
           }
           const scwSigner: Signer = {
@@ -2838,10 +2848,19 @@ export function XmtpChatProvider({
       }
 
       // Only clear local installation/signer state after OPFS cleanup succeeds.
-      clearLocalInstallMarkers(targetIdentity)
+      if (targetIdentity) {
+        clearLocalInstallMarkers(targetIdentity)
+      }
 
       connectInFlightRef.current = false
-      await connect('user')
+      if (canSignForReconnect) {
+        await connect('user')
+      } else {
+        // Waitlist chat can request local reset before wagmi has a signer.
+        // Keep this non-fatal so the user can reconnect explicitly after reset.
+        setStatus('idle')
+        setError(null)
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to clear local XMTP state'
       const isOpfsLock = isOpfsAccessHandleError(msg)

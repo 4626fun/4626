@@ -10,12 +10,12 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { MessageSquare, Bot, ExternalLink, Users } from 'lucide-react'
 import { apiFetch } from '@/lib/api/apiBase'
-import { useIdentity } from '@/hooks/useIdentity'
 import { useXmtp } from '@/lib/xmtp/provider'
 import { requestOpenChat } from '@/lib/chat/openChat'
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { AgentVerificationCard } from '@/components/agents/AgentVerificationCard'
 import { LoadingInline } from '@/components/ui/LoadingState'
+import { useChatIdentity } from '@/components/chat/useChatIdentity'
 
 type AgentRow = {
   creatorAddress: string
@@ -37,8 +37,8 @@ function AgentCard({
   agent: AgentRow
   onMessage: (address: string) => void
 }) {
-  const creatorIdentity = useIdentity(agent.creatorAddress)
-  const agentIdentity = useIdentity(agent.xmtpAgentAddress)
+  const creatorIdentity = useChatIdentity(agent.creatorAddress)
+  const agentIdentity = useChatIdentity(agent.xmtpAgentAddress, { fallbackName: 'Creator agent' })
 
   return (
     <div className="group relative rounded-2xl border border-white/5 bg-white/2 hover:bg-white/4 transition-colors overflow-hidden">
@@ -58,13 +58,6 @@ function AgentCard({
             <div className="text-sm font-medium text-zinc-200 truncate">{creatorIdentity.displayName}</div>
             <div className="text-[10px] text-zinc-500 truncate">
               {creatorIdentity.secondary ?? `${agent.creatorAddress.slice(0, 6)}…${agent.creatorAddress.slice(-4)}`}
-            </div>
-            <div className="mt-1 flex items-center gap-1.5">
-              {creatorIdentity.lensHandle ? (
-                <span className="inline-flex items-center rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.08em] text-cyan-200">
-                  Lens @{creatorIdentity.lensHandle}
-                </span>
-              ) : null}
             </div>
           </div>
         </div>

@@ -1685,6 +1685,8 @@ async function ensureSolanaRouteReadyForPhase3(params: {
   assetPeerSet: boolean
   sharePeerSet: boolean
   meshStep: 'ovault_mesh_confirmed'
+  meteoraAlphaVault: Hex | null
+  solanaProgramIds: Hex[]
 }> {
   const defaultStatus = {
     existingMintCompatible: true,
@@ -1693,6 +1695,8 @@ async function ensureSolanaRouteReadyForPhase3(params: {
     assetPeerSet: true,
     sharePeerSet: true,
     meshStep: 'ovault_mesh_confirmed' as const,
+    meteoraAlphaVault: null as Hex | null,
+    solanaProgramIds: [] as Hex[],
   }
   const ovaultRequested = isOvaultRequestEnabled(params.solanaOvault)
   const finalizeEntry = findFinalizePhase2Entry(params.phase2FinalizeCalls)
@@ -1818,6 +1822,8 @@ async function ensureSolanaRouteReadyForPhase3(params: {
       assetPeerSet: boolean
       sharePeerSet: boolean
       meshStep: 'ovault_mesh_confirmed'
+      meteoraAlphaVault: Hex | null
+      solanaProgramIds: Hex[]
     } | null
   }> => {
     try {
@@ -1862,6 +1868,17 @@ async function ensureSolanaRouteReadyForPhase3(params: {
         const meteoraAlphaVault = data?.meteoraAlphaVault
         const hasMeteoraAlphaVault = isBytes32Hex(meteoraAlphaVault) && meteoraAlphaVault !== ZERO_BYTES32
         const hasSolanaIxs = Array.isArray(data?.solanaIxs) && data.solanaIxs.length > 0
+        const solanaProgramIds = Array.isArray(data?.solanaIxs)
+          ? Array.from(
+              new Set(
+                data.solanaIxs
+                  .map((ix: unknown) =>
+                    isPlainObject(ix) && isBytes32Hex(ix.programId) ? (ix.programId as Hex).toLowerCase() : null,
+                  )
+                  .filter((v: string | null): v is string => Boolean(v)),
+              ),
+            ).map((value) => value as Hex)
+          : []
         const requireInlineMeteoraPayload = shouldRequireInlineMeteoraPayload()
         if (
           !registered ||
@@ -1904,6 +1921,8 @@ async function ensureSolanaRouteReadyForPhase3(params: {
             assetPeerSet,
             sharePeerSet,
             meshStep: 'ovault_mesh_confirmed',
+            meteoraAlphaVault: hasMeteoraAlphaVault ? (meteoraAlphaVault as Hex) : null,
+            solanaProgramIds,
           },
         }
       }
@@ -2941,6 +2960,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const ovaultEnabled =
     isPlainObject(rec?.payload?.solanaOvault) && rec.payload.solanaOvault.enabled === true
   const ovaultRaw = isPlainObject(rec?.payload?.ovault) ? rec.payload.ovault : {}
+  const ovaultMeteoraAlphaVault =
+    isBytes32Hex(ovaultRaw.meteoraAlphaVault) && ovaultRaw.meteoraAlphaVault !== ZERO_BYTES32
+      ? (ovaultRaw.meteoraAlphaVault as Hex)
+      : null
+  const ovaultSolanaProgramIds = Array.isArray(ovaultRaw.solanaProgramIds)
+    ? Array.from(
+        new Set(
+          ovaultRaw.solanaProgramIds
+            .map((value: unknown) => (isBytes32Hex(value) ? (value as string).toLowerCase() : null))
+            .filter((value: string | null): value is string => Boolean(value)),
+        ),
+      ).map((value) => value as Hex)
+    : []
   const phase3AjnaAdminAlignment = readPhase3AjnaAdminAlignment(rec?.payload)
   const launchImage = readLaunchImageStatus(rec?.payload)
 
@@ -2987,6 +3019,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               typeof ovaultRaw.meshStep === 'string' && ovaultRaw.meshStep.trim()
                 ? ovaultRaw.meshStep.trim()
                 : null,
+            meteoraAlphaVault: ovaultMeteoraAlphaVault,
+            solanaProgramIds: ovaultSolanaProgramIds,
           }
         : null,
     },

@@ -44,17 +44,17 @@ export const DEPLOY_TIMELINE_STAGES: ReadonlyArray<DeployTimelineStage> = [
   {
     id: 'phase2bOvaultMesh',
     label: 'Phase 2b OVault mesh',
-    description: 'Run Solana OVault mesh preflight and peer wiring checks when mesh is enabled.',
+    description: 'Run Solana Share Mesh lane preflight and peer wiring checks when mesh is enabled.',
   },
   {
     id: 'phase3Strategies',
     label: 'Phase 3 strategies',
-    description: 'Deploy and register Charm, Ajna, and Solana strategy stack.',
+    description: 'Deploy and register Charm and Ajna strategy stack.',
   },
   {
     id: 'phase4Launch',
     label: 'Phase 4 launch',
-    description: 'Launch the deferred auction and finalize launch state.',
+    description: 'Launch the auction and finalize launch state.',
   },
   {
     id: 'cleanup',

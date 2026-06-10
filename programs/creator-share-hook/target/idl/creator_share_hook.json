@@ -79,161 +79,6 @@
       ]
     },
     {
-      "name": "relay_entries",
-      "docs": [
-        "Keeper-only: emit and clear PendingEntries for relay to Base.",
-        "Returns entries to the keeper for batch relay via SolanaBridgeAdapter."
-      ],
-      "discriminator": [
-        99,
-        52,
-        182,
-        187,
-        107,
-        100,
-        5,
-        39
-      ],
-      "accounts": [
-        {
-          "name": "keeper",
-          "docs": [
-            "The keeper authority (must match `creator_config.keeper_authority`)."
-          ],
-          "signer": true
-        },
-        {
-          "name": "creator_config",
-          "docs": [
-            "CreatorConfig PDA — used to verify keeper authority."
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114,
-                  95,
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "creator_mint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "creator_mint",
-          "docs": [
-            "The Token-2022 mint (used for PDA derivation)."
-          ]
-        },
-        {
-          "name": "pending_entries",
-          "docs": [
-            "PendingEntries PDA — zero-copy, mutable to record and clear relayed entries."
-          ],
-          "writable": true
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "settle_fees",
-      "docs": [
-        "Keeper-only: settle withheld fees via Token-2022 CPI.",
-        "Fees are collected to a designated account for bridging to Base."
-      ],
-      "discriminator": [
-        60,
-        221,
-        130,
-        229,
-        183,
-        234,
-        6,
-        159
-      ],
-      "accounts": [
-        {
-          "name": "keeper",
-          "docs": [
-            "The keeper authority (must match `creator_config.keeper_authority`)."
-          ],
-          "signer": true
-        },
-        {
-          "name": "creator_config",
-          "docs": [
-            "CreatorConfig PDA — used to verify keeper authority."
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114,
-                  95,
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "The Token-2022 mint with TransferFeeConfig extension."
-          ],
-          "writable": true
-        },
-        {
-          "name": "fee_vault",
-          "docs": [
-            "The destination token account to receive harvested fees.",
-            "Typically owned by the keeper or a fee collection wallet."
-          ],
-          "writable": true
-        },
-        {
-          "name": "token_program",
-          "docs": [
-            "Token-2022 program."
-          ],
-          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "initialize_creator",
       "docs": [
         "Initialize a new creator mint configuration.",
@@ -635,6 +480,107 @@
       ]
     },
     {
+      "name": "relay_entries",
+      "docs": [
+        "Keeper-only: emit and clear PendingEntries for relay to Base.",
+        "Returns entries to the keeper for batch relay via SolanaBridgeAdapter."
+      ],
+      "discriminator": [
+        99,
+        52,
+        182,
+        187,
+        107,
+        100,
+        5,
+        39
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "docs": [
+            "The keeper authority (must match `creator_config.keeper_authority`)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "creator_config",
+          "docs": [
+            "CreatorConfig PDA — used to verify keeper authority."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator_mint",
+          "docs": [
+            "The Token-2022 mint (used for PDA derivation)."
+          ]
+        },
+        {
+          "name": "pending_entries",
+          "docs": [
+            "PendingEntries PDA — zero-copy, mutable to emit + clear entries."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  105,
+                  101,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator_mint"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "remove_amm_program",
       "docs": [
         "Remove a known AMM program from the allowlist."
@@ -777,6 +723,88 @@
       ]
     },
     {
+      "name": "settle_fees",
+      "docs": [
+        "Keeper-only: settle withheld fees via Token-2022 CPI.",
+        "Fees are collected to a designated account for bridging to Base."
+      ],
+      "discriminator": [
+        60,
+        221,
+        130,
+        229,
+        183,
+        234,
+        6,
+        159
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "docs": [
+            "The keeper authority (must match `creator_config.keeper_authority`)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "creator_config",
+          "docs": [
+            "CreatorConfig PDA — used to verify keeper authority."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "The Token-2022 mint with TransferFeeConfig extension."
+          ],
+          "writable": true
+        },
+        {
+          "name": "fee_vault",
+          "docs": [
+            "The destination token account to receive harvested fees.",
+            "Typically owned by the keeper or a fee collection wallet."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token-2022 program."
+          ],
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "transfer_hook",
       "docs": [
         "Transfer Hook execute — named with Anchor discriminator.",
@@ -893,7 +921,35 @@
           "docs": [
             "PendingEntries PDA — zero-copy, writable to record buy entries."
           ],
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  105,
+                  101,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -906,7 +962,7 @@
     {
       "name": "update_config",
       "docs": [
-        "Update CreatorConfig parameters (fee_bps, settlement_threshold, etc.)."
+        "Update CreatorConfig parameters (fee_bps, fee settlement threshold, etc.)."
       ],
       "discriminator": [
         29,
@@ -1024,14 +1080,14 @@
     {
       "name": "EntriesRelayed",
       "discriminator": [
-        15,
-        188,
-        213,
-        167,
+        221,
         201,
-        74,
-        123,
-        80
+        247,
+        244,
+        210,
+        147,
+        97,
+        159
       ]
     },
     {
@@ -1050,14 +1106,14 @@
     {
       "name": "FeesSettled",
       "discriminator": [
-        236,
-        120,
-        206,
-        154,
-        209,
-        177,
-        19,
-        1
+        67,
+        117,
+        237,
+        13,
+        182,
+        185,
+        211,
+        44
       ]
     },
     {
@@ -1228,7 +1284,7 @@
           {
             "name": "settlement_threshold",
             "docs": [
-              "Minimum fee amount (in token smallest units) before `settle_fees`",
+              "Minimum fee amount (in token smallest units) before fee settlement",
               "will execute. Set to 0 to settle on every call."
             ],
             "type": "u64"
@@ -1391,7 +1447,7 @@
           {
             "name": "settlement_threshold",
             "docs": [
-              "Minimum withheld fee amount before settle_fees will execute."
+              "Minimum withheld fee amount before fee settlement will execute."
             ],
             "type": "u64"
           },
@@ -1518,7 +1574,7 @@
         "12KB buffer on the SBF stack. The runtime memory-maps the account data",
         "directly, keeping stack usage minimal.",
         "",
-        "The keeper relays this buffer periodically and delivers entries to Base.",
+        "The keeper relays this buffer periodically and forwards entries to Base.",
         "Overflow policy: drop-oldest (head advances, oldest overwritten)."
       ],
       "serialization": "bytemuck",
@@ -1640,7 +1696,7 @@
           {
             "name": "settlement_threshold",
             "docs": [
-              "New settlement_threshold (None = keep current)."
+              "New fee settlement threshold (None = keep current)."
             ],
             "type": {
               "option": "u64"
