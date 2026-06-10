@@ -67,6 +67,45 @@ If agent is still on legacy wallet:
 - `dgclaw.sh` subcommands are limited to `join`, `leaderboard*`, `forums`/`forum`/`posts`/`create-post`/`unreplied-posts`, `setup-cron`/`remove-cron`, `token-info`.
 - `/arena register [agentId agentWallet [hlApiWallet]]` — programmatic bind + onboard (drives `acp agent create` if ids omitted). Binds the *current sender* (alfaclub wallet) as 'mine'. See "Programmatic registration" below.
 
+## ACP signing persistence (Railway volume + startup bootstrap)
+
+Live (non-dry-run) trades are signed by the ACP agent wallet via acp-cli (`acp wallet sign-typed-data`). acp-cli keeps three pieces of state on the container filesystem, all under the process home dir:
+
+1. `~/.config/acp/config.json` — active wallet, agent ids, signer publicKey (`ACP_CONFIG_DIR` overrides the dir)
+2. cross-keychain token store — ACP access/refresh tokens (file backend on headless Linux)
+3. the P256 signer private key from `acp agent add-signer` — **cannot be regenerated headlessly**; the add-signer flow requires one-time human approval of a `signerUrl`
+
+Railway containers are ephemeral, so without a volume this state is wiped on every redeploy and signing breaks.
+
+### One-time setup
+
+1. **Attach a Railway volume** to the Hermit service (service → Settings → Volumes), mounted at e.g. `/data/acp-home`.
+2. **Set the service variable** `ARENA_ACP_HOME=/data/acp-home`. All arena child processes (and the startup bootstrap) run with `HOME` + `ACP_CONFIG_DIR` pinned to this dir, so tokens, config, and signer keys land on the volume.
+3. **Seed auth** (either path):
+   - set `ACP_ACCESS_TOKEN` / `ACP_REFRESH_TOKEN` / `ACP_OWNER_WALLET` service variables — the startup bootstrap runs headless `acp configure` automatically when the volume has no valid session, or
+   - SSH into the container and run `HOME=/data/acp-home ACP_CONFIG_DIR=/data/acp-home/.config/acp acp configure` manually once.
+4. **Register the signer (one-time, human in the loop):** on the container with the same `HOME`/`ACP_CONFIG_DIR` env, run
+   `acp agent add-signer --agent-id <ARENA_AGENT_ID> --policy restricted --no-wait --json`,
+   open the returned `signerUrl` as the agent owner to approve, then complete with
+   `acp agent signer-status --agent-id <id> --request-id <id> --public-key <key> --json`.
+   The P256 key + publicKey persist on the volume; this never needs repeating unless the volume is lost or the signer is revoked.
+
+### Startup bootstrap (automatic)
+
+`runAcpAuthBootstrap` (`frontend/server/_lib/arena/acpAuthBootstrap.ts`) runs at Hermit startup before the counter-trade ticker, when `ARENA_ENABLED=1` and `ARENA_DRY_RUN=0`:
+
+- probes `acp agent whoami --json`
+- seeds tokens via headless `acp configure` from the `ACP_*` env triplet when unauthenticated
+- ensures `ARENA_AGENT_ID` is the active agent (`acp agent use`)
+- reports signer readiness (publicKey in `config.json`) with operator guidance when missing
+
+The result is logged (`[arena] ACP auth bootstrap …`) and exposed on `/healthz` / `/readyz` as `acpAuthBootstrap`. The bootstrap is non-fatal — the runtime still starts, but live trades will fail until `authenticated` and `signerReady` are both true.
+
+Notes:
+
+- After the first successful refresh, the on-volume tokens are newer than the `ACP_*` env seed (refresh tokens rotate and are single-use). The env triplet is only a first-boot/recovery seed — re-rotate it if the volume is ever lost.
+- In dry-run mode the bootstrap is skipped (`arena_dry_run`) since no signing happens.
+
 ## HIP-3 Pair Policy
 
 Enforced in code (`arenaPairPolicy.ts`):

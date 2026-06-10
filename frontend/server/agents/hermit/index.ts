@@ -27,6 +27,11 @@ import {
   type CounterTradeTickerState,
   startCounterTradeTicker,
 } from '../../_lib/alfaclub/counterTradeTicker.js'
+import {
+  type AcpAuthBootstrapResult,
+  logAcpAuthBootstrapResult,
+  runAcpAuthBootstrap,
+} from '../../_lib/arena/acpAuthBootstrap.js'
 import { logger } from '../../_lib/infra/logger.js'
 import { isDbConfigured } from '../../_lib/db/postgres.js'
 import { readAlfaClubChatToken, readAlfaClubPrivyAccessToken } from '../../_lib/alfaclub/chatTokenStore.js'
@@ -133,6 +138,8 @@ type RuntimeState = {
   counterTradeTickerStarted: boolean
   counterTradeTickerReason: string | null
   counterTrade: CounterTradeTickerState | null
+  // ACP auth bootstrap result (signing readiness for live arena/counter-trades)
+  acpAuthBootstrap: AcpAuthBootstrapResult | null
 }
 
 type TickRollupState = {
@@ -162,6 +169,7 @@ const state: RuntimeState = {
   counterTradeTickerStarted: false,
   counterTradeTickerReason: null,
   counterTrade: null,
+  acpAuthBootstrap: null,
 }
 
 let stopBridge: (() => void) | null = null
@@ -284,7 +292,7 @@ function startHealthServer(): void {
   })
 }
 
-function startRuntime(): void {
+async function startRuntime(): Promise<void> {
   logger.info('[hermit] starting AlfaClub runtime', {
     roomId: process.env.ALFACLUB_CHAT_ROOM_ID ?? null,
     hermitConfigured: Boolean(
@@ -389,6 +397,18 @@ function startRuntime(): void {
     })
   }
 
+  // ACP auth bootstrap must run before the counter-trade ticker so live (non
+  // dry-run) trades have an authenticated acp-cli session + persistent signer
+  // state on ARENA_ACP_HOME. Non-fatal: failures are logged with operator
+  // guidance and the ticker still starts (trades fail loudly per-execution).
+  try {
+    const acpBootstrap = await runAcpAuthBootstrap()
+    state.acpAuthBootstrap = acpBootstrap
+    logAcpAuthBootstrapResult(acpBootstrap)
+  } catch (error) {
+    logger.warn('[arena] ACP auth bootstrap crashed', { error: asErrorMessage(error) })
+  }
+
   try {
     const counterTrade = startCounterTradeTicker()
     state.counterTradeTickerStarted = counterTrade.started
@@ -457,5 +477,8 @@ void closeEarlyHealthServer()
   })
   .finally(() => {
     startHealthServer()
-    startRuntime()
+    void startRuntime().catch((err) => {
+      state.lastError = err instanceof Error ? err.message : String(err)
+      logger.warn('[hermit] startRuntime failed', { error: state.lastError })
+    })
   })

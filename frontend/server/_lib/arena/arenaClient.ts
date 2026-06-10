@@ -4,6 +4,7 @@ import { dirname, isAbsolute, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
 import { logger } from '../infra/logger.js'
+import { resolveAcpStateEnv } from './acpAuthBootstrap.js'
 import { readArenaConfig, type ArenaConfig } from './arenaConfig.js'
 import { validateArenaPair } from './arenaPairPolicy.js'
 import type { ArenaCreateResult, ArenaOpResult, ArenaRunResult, ArenaTradeRequest } from './arenaTypes.js'
@@ -254,7 +255,9 @@ function buildAcpCommand(config: ArenaConfig, args: string[]): BuiltCommand {
 }
 
 function buildArenaCommandEnv(config: ArenaConfig): Record<string, string> {
-  const env: Record<string, string> = {}
+  // Pin acp-cli state (tokens, config.json, signer keystore) to the persistent
+  // ARENA_ACP_HOME dir so trade.ts signing survives Railway redeploys.
+  const env: Record<string, string> = { ...resolveAcpStateEnv() }
   if (config.agentId) env.ARENA_AGENT_ID = config.agentId
   if (config.agentWalletAddress) {
     env.ARENA_AGENT_WALLET_ADDRESS = config.agentWalletAddress
