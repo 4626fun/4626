@@ -346,7 +346,12 @@ jobs:
         with:
           node-version: '20'
           cache: 'pnpm'
-          cache-dependency-path: kpr/pnpm-lock.yaml
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            kpr/pnpm-lock.yaml
+
+      - name: Install root dependencies (Foundry remappings)
+        run: pnpm install --frozen-lockfile
 
       - name: Install KPR dependencies
         run: pnpm -C kpr install --frozen-lockfile
