@@ -1,5 +1,3 @@
-import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
-
 export type WaitlistEmailUi = {
   title: string
   subtitle: string
@@ -7,41 +5,25 @@ export type WaitlistEmailUi = {
   busyLabel: string
 }
 
-export type WaitlistDoneUi = {
-  title: string
-  subtitle: string
-  primaryLabel: string
-  secondaryLabel: string | null
-}
-
 export function canEnterAppFromAccountState(params: { appAccessStatus: string | null }): boolean {
   const status = String(params.appAccessStatus ?? '').trim().toLowerCase()
   return status === 'approved'
 }
 
-export function deriveWaitlistAuthUi(): WaitlistEmailUi {
-  return {
-    title: 'Waitlist',
-    subtitle: 'Secure sign-in to save your spot.',
-    ctaLabel: 'Continue',
-    busyLabel: 'Preparing your account...',
-  }
-}
-
-export function deriveWaitlistDoneUi(canEnterApp: boolean): WaitlistDoneUi {
-  if (canEnterApp) {
+export function deriveWaitlistAuthUi(options?: { recoveryRequired?: boolean }): WaitlistEmailUi {
+  if (options?.recoveryRequired) {
     return {
-      title: 'You are approved',
-      subtitle: 'Your setup is complete and access is live. Enter the app now, or open Accounts for advanced controls.',
-      primaryLabel: `${SHARE_SYMBOL_PREFIX} Enter App`,
-      secondaryLabel: 'Open Accounts',
+      title: 'Welcome back',
+      subtitle: 'This email already has a 4626 account. Sign in to join the waitlist with it.',
+      ctaLabel: 'Use existing account',
+      busyLabel: 'Signing in to your existing account…',
     }
   }
 
   return {
-    title: 'Setup complete',
-    subtitle: 'Your account is ready. App access is still pending. Open Accounts for advanced controls while approval catches up.',
-    primaryLabel: `${SHARE_SYMBOL_PREFIX} Open Accounts`,
-    secondaryLabel: null,
+    title: 'Waitlist',
+    subtitle: 'Step 1: sign in with email (Privy). Wallet setup is step 2.',
+    ctaLabel: 'Continue with email',
+    busyLabel: 'Finishing sign-in…',
   }
 }

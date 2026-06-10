@@ -62,7 +62,7 @@ vi.mock('@buildersgarden/siwa', () => ({
   verifySIWA: verifySIWAMock,
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   handleOptions: vi.fn(() => false),
   readJsonBody: readJsonBodyMock,
   setCors: vi.fn(),

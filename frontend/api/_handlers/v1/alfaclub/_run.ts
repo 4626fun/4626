@@ -17,7 +17,7 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { runVigilante, readVigilanteFlags } from '../../../../server/_lib/alfaclub/vigilante.js'
 

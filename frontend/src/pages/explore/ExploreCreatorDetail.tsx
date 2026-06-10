@@ -1,67 +1,53 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ExternalLink, ArrowLeft, Globe, Users, Coins, TrendingUp, Calendar, MessageSquare } from 'lucide-react'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { useGSAP } from '@gsap/react'
+import { ExternalLink, ArrowLeft, Coins, TrendingUp, MessageSquare, X } from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { getAddress, isAddress } from 'viem'
 import { useQuery } from '@tanstack/react-query'
 
-import { ExploreCopyButton, ExploreStatRow } from '@/components/explore/ExploreUiPrimitives'
-import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
-import { EthosAvatarScoreForUserkey, getEthosScorePalette, useEthosScoreForUserkey } from '@/components/chat/EthosScorePill'
-import { ShareVaultButton } from '@/components/share/ShareVaultButton'
+import { ExploreCopyButton } from '@/components/explore/ExploreUiPrimitives'
+import { CreatorEthosAvatar } from '@/components/explore/CreatorEthosAvatar'
+import { ExploreHeroImageReveal } from '@/components/explore/ExploreHeroImageReveal'
+import { EthosBlurOrbs, EthosHeroScoreWash, EthosPageAmbience } from '@/components/explore/EthosPageAmbience'
+import { useCreatorEthosPageTheme } from '@/components/explore/ethosPageTheme'
+import { CreatorScrollBridge } from '@/components/explore/CreatorScrollBridge'
+import { CreatorImmersiveStatsBeat } from '@/components/explore/CreatorImmersiveStatsBeat'
+import { CreatorContentCylinderGallery3D } from '@/components/explore/CreatorContentCylinderGallery3D'
+import { CreatorVaultReserveBeat } from '@/components/explore/CreatorVaultReserveBeat'
+import { buildCreatorStats } from '@/components/explore/creatorStatsModel'
 import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
+import { requestOpenChat } from '@/lib/chat/openChat'
 import { fetchZoraCoin } from '@/lib/zora/client'
 import { useZoraProfile, useZoraProfileCoins } from '@/lib/zora/hooks'
 import type { ZoraCoin, ZoraProfile } from '@/lib/zora/types'
-import { buildEthosSocialUserkeyFromZoraProfile } from '@/lib/ethos/zoraSocial'
 import { getPoolSwaps, getPoolsByToken } from '@/lib/uniswap/client'
 import type { UniswapPool, UniswapSwap } from '@/lib/uniswap/types'
+import { cn } from '@/lib/shared/utils'
 import {
-  formatDateLabel,
   formatShortAddress,
   formatTimestamp,
   formatTokenAmount,
   formatUsd,
   isSupportedExploreChain,
   parseNumber,
+  toDisplayAssetUrl,
 } from '@/features/explore/exploreShared'
 
 const CONTENT_COINS_PAGE_SIZE = 20
+/** Corridor height (in vh) for the sticky-locked content-coins scene; the section stays
+ *  pinned for roughly this minus one viewport, so scrolling orbits the helix that long. */
+const SCENE_PIN_HEIGHT_VH = 320
+const UNISWAP_ICON_URL = '/protocols/uniswap.svg'
+/** Full-bleed hero — taller than one viewport on desktop so the intro portrait scene breathes before scroll. */
+const CREATOR_HERO_MIN_HEIGHT_CLASS = 'min-h-[calc(100svh-3.5rem)] md:min-h-[calc(140dvh-3.5rem)]'
+gsap.registerPlugin(ScrollTrigger)
 
-function CreatorHeaderAvatar({
-  avatarUrl,
-  displayName,
-  ethosSocialUserkey,
-}: {
-  avatarUrl?: string | null
-  displayName: string
-  ethosSocialUserkey: string | null
-}) {
-  const ethosScore = useEthosScoreForUserkey(ethosSocialUserkey)
-  const scoreValue = ethosScore.data?.score
-  const hasPositiveScore = typeof scoreValue === 'number' && scoreValue > 0
-  const palette = getEthosScorePalette(scoreValue ?? null, ethosScore.data?.level ?? null)
-  const ringClass = hasPositiveScore
-    ? `${palette.borderClass} shadow-[0_0_0_1px_rgba(0,0,0,0.9)]`
-    : 'border-white/10'
-
-  return (
-    <div className="relative h-[68px] w-14 shrink-0 sm:h-[92px] sm:w-20">
-      {avatarUrl ? (
-        <img src={avatarUrl} alt={displayName} className={`h-14 w-14 rounded-xl border-2 object-cover sm:h-20 sm:w-20 sm:rounded-2xl ${ringClass}`} />
-      ) : (
-        <div className={`flex h-14 w-14 items-center justify-center rounded-xl border-2 bg-linear-to-br from-zinc-600 to-zinc-700 sm:h-20 sm:w-20 sm:rounded-2xl ${ringClass}`}>
-          <span className="text-lg sm:text-2xl font-medium text-zinc-300">{displayName.slice(0, 2).toUpperCase()}</span>
-        </div>
-      )}
-      <EthosAvatarScoreForUserkey
-        userkey={ethosSocialUserkey}
-        className="absolute bottom-1 left-1/2 -translate-x-1/2 scale-110 sm:bottom-2"
-      />
-    </div>
-  )
-}
+type ContentMediaKind = 'video' | 'text' | 'visual'
+const ZORA_TOKEN_LOGO_URL = '/brands/zora-token.svg'
 
 function formatNumber(value: string | number | undefined): string {
   if (!value) return '-'
@@ -75,6 +61,49 @@ function formatNumber(value: string | number | undefined): string {
 
 function shortAddress(addr: string): string {
   return formatShortAddress(addr, '')
+}
+
+function PremiumCursor({ enabled }: { enabled: boolean }) {
+  const cursorRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!enabled) return
+    const cursor = cursorRef.current
+    if (!cursor) return
+
+    let fadeTimeout: ReturnType<typeof setTimeout> | null = null
+    const moveHandler = (event: MouseEvent) => {
+      cursor.style.left = `${event.clientX}px`
+      cursor.style.top = `${event.clientY}px`
+      cursor.style.opacity = '1'
+      if (fadeTimeout) clearTimeout(fadeTimeout)
+      fadeTimeout = setTimeout(() => {
+        cursor.style.opacity = '0.28'
+      }, 1200)
+    }
+
+    document.addEventListener('mousemove', moveHandler, { passive: true })
+    return () => {
+      document.removeEventListener('mousemove', moveHandler)
+      if (fadeTimeout) clearTimeout(fadeTimeout)
+    }
+  }, [enabled])
+
+  if (!enabled) return null
+
+  return (
+    <div
+      ref={cursorRef}
+      className="fixed left-0 top-0 w-8 h-8 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-[120] transition-opacity duration-300 mix-blend-difference"
+      style={{
+        opacity: 0.28,
+        background: 'radial-gradient(circle, rgba(165,243,252,0.55) 0%, transparent 72%)',
+        border: '1px solid rgba(165,243,252,0.32)',
+        borderRadius: '9999px',
+      }}
+      aria-hidden
+    />
+  )
 }
 
 // Dexscreener Chart Embed Component
@@ -134,13 +163,18 @@ function TikTokIcon({ className }: { className?: string }) {
 }
 
 // Calculate total earnings from creatorEarnings array
-function calculateTotalEarnings(earnings: ZoraCoin['creatorEarnings']): string {
-  if (!earnings || !Array.isArray(earnings) || earnings.length === 0) return '$0.00'
+function calculateTotalEarningsValue(earnings: ZoraCoin['creatorEarnings']): number {
+  if (!earnings || !Array.isArray(earnings) || earnings.length === 0) return 0
   let total = 0
   for (const e of earnings) {
     const usd = parseFloat(e.amountUsd || '0')
     if (!isNaN(usd)) total += usd
   }
+  return total
+}
+
+function calculateTotalEarnings(earnings: ZoraCoin['creatorEarnings']): string {
+  const total = calculateTotalEarningsValue(earnings)
   if (total === 0) return '$0.00'
   if (total < 0.01) return `$${total.toFixed(4)}`
   if (total < 1) return `$${total.toFixed(3)}`
@@ -150,50 +184,135 @@ function calculateTotalEarnings(earnings: ZoraCoin['creatorEarnings']): string {
   return `$${total.toFixed(2)}`
 }
 
+const VIDEO_EXTENSION_REGEX = /\.(mp4|webm|mov|m4v|m3u8|mpd|ogv)(\?.*)?$/i
+
+function detectContentMediaKind(coin: ZoraCoin): ContentMediaKind {
+  const mime = String(coin.mediaContent?.mimeType || '').toLowerCase()
+  const originalUri = String(coin.mediaContent?.originalUri || '').toLowerCase()
+
+  if (mime.startsWith('video/') || VIDEO_EXTENSION_REGEX.test(originalUri)) return 'video'
+  if (
+    mime.startsWith('text/') ||
+    mime.includes('json') ||
+    mime.includes('markdown') ||
+    mime.includes('html') ||
+    (!coin.mediaContent?.previewImage?.small &&
+      !coin.mediaContent?.previewImage?.medium &&
+      Boolean((coin.description || '').trim()))
+  ) {
+    return 'text'
+  }
+  return 'visual'
+}
+
+function getContentCoinAssetUrl(coin: ZoraCoin): string | undefined {
+  return toDisplayAssetUrl(
+    coin.mediaContent?.previewImage?.medium ||
+      coin.mediaContent?.previewImage?.small ||
+      coin.mediaContent?.originalUri
+  )
+}
+
+function ActionAddressHint({
+  label,
+  address,
+  copyButtonProps,
+}: {
+  label: string
+  address: string
+  copyButtonProps: {
+    title: string
+    resetMs: number
+    copiedIconClassName: string
+  }
+}) {
+  return (
+    <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 -translate-x-1/2 opacity-0 translate-y-1 transition-all duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-focus-within:translate-y-0">
+      <div className="inline-flex items-center gap-2 rounded-md bg-black/90 px-2.5 py-1.5 text-[11px] font-mono text-zinc-200 shadow-[0_8px_20px_rgba(0,0,0,0.35)]">
+        <span className="uppercase tracking-[1.1px] text-zinc-400">{label}</span>
+        <span>{shortAddress(address)}</span>
+        <ExploreCopyButton text={address} className="p-1 hover:bg-white/10" {...copyButtonProps} />
+      </div>
+    </div>
+  )
+}
+
+function TokenGlyph({ logoUrl, symbol }: { logoUrl?: string | null; symbol: string }) {
+  if (logoUrl) {
+    return (
+      <span className="inline-flex w-5 h-5 rounded-full overflow-hidden border border-white/20 bg-black/40 shrink-0">
+        <img src={logoUrl} alt={symbol} className="w-full h-full object-cover" />
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex w-5 h-5 rounded-full items-center justify-center border border-white/20 bg-white/10 text-[10px] font-mono uppercase text-zinc-200 shrink-0">
+      {symbol.slice(0, 1)}
+    </span>
+  )
+}
+
+function resolveTokenLogo({
+  symbol,
+  tokenId,
+  creatorTokenId,
+  creatorTokenLogo,
+}: {
+  symbol: string
+  tokenId?: string
+  creatorTokenId?: string | null
+  creatorTokenLogo?: string | null
+}): string | null {
+  const normalizedSymbol = symbol.trim().toUpperCase()
+  const normalizedTokenId = tokenId?.toLowerCase() ?? ''
+  const normalizedCreator = creatorTokenId?.toLowerCase() ?? ''
+  if (normalizedTokenId && normalizedCreator && normalizedTokenId === normalizedCreator) {
+    return creatorTokenLogo ?? null
+  }
+  if (normalizedSymbol === 'ZORA') return ZORA_TOKEN_LOGO_URL
+  return null
+}
+
 // Content Coin Row Component - shows revenue instead of price
-function ContentCoinRow({ coin, rank }: { coin: ZoraCoin; rank: number }) {
+function ContentCoinRow({ coin, rank, onSelect }: { coin: ZoraCoin; rank: number; onSelect: (coin: ZoraCoin) => void }) {
   const avatarUrl = coin.mediaContent?.previewImage?.small
   const name = coin.name || coin.symbol || 'Untitled'
   const symbol = coin.symbol || '???'
-  const earnings = calculateTotalEarnings(coin.creatorEarnings)
   const totalVolume = formatNumber(coin.totalVolume)
-  const address = coin.address || ''
 
   return (
-    <Link
-      to={`/explore/content/base/${address}`}
-      className="flex items-center gap-2.5 sm:gap-4 px-3 py-3 sm:p-4 hover:bg-white/5 transition-colors rounded-xl active:scale-[0.99]"
+    <button
+      type="button"
+      onClick={() => onSelect(coin)}
+      className="group flex items-center gap-4 sm:gap-6 px-4 sm:px-6 py-4 sm:py-5 hover:bg-white/5 transition-all rounded-2xl active:scale-[0.995]"
     >
-      <span className="text-[11px] sm:text-xs text-zinc-600 w-5 sm:w-6 text-center shrink-0">{rank}</span>
+      <span className="text-xs sm:text-sm text-zinc-500 w-7 text-center tabular-nums shrink-0">#{rank}</span>
       
       {avatarUrl ? (
-        <img src={avatarUrl} alt={name} className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg object-cover shrink-0" />
+        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl overflow-hidden ring-1 ring-white/10 shrink-0">
+          <img src={avatarUrl} alt={name} className="w-full h-full object-cover" />
+        </div>
       ) : (
-        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-linear-to-br from-zinc-700 to-zinc-800 flex items-center justify-center shrink-0">
+        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-linear-to-br from-zinc-800 to-zinc-900 ring-1 ring-white/10 flex items-center justify-center shrink-0">
           <Coins className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-500" />
         </div>
       )}
       
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] sm:text-sm text-white font-medium truncate">{name}</div>
-        <div className="text-[10px] sm:text-xs text-zinc-500">{symbol}</div>
+        <div className="text-sm sm:text-base text-zinc-100 font-medium truncate group-hover:text-white transition-colors">{name}</div>
+        <div className="text-xs text-zinc-500 mt-1">{symbol}</div>
       </div>
       
-      <div className="text-right shrink-0">
-        <div className="text-[10px] sm:text-xs text-zinc-500">Earned</div>
-        <div className="text-[13px] sm:text-sm text-green-400 font-medium">{earnings}</div>
-      </div>
-      
-      <div className="text-right hidden sm:block shrink-0">
+      <div className="text-right hidden md:block shrink-0">
         <div className="text-xs text-zinc-500">Volume</div>
-        <div className="text-sm text-white">{totalVolume}</div>
+        <div className="text-sm text-zinc-200">{totalVolume}</div>
       </div>
-    </Link>
+    </button>
   )
 }
 
 // Social Links Component
-function SocialLinks({ profile }: { profile: ZoraProfile | null }) {
+function SocialLinks({ profile, compact = false }: { profile: ZoraProfile | null; compact?: boolean }) {
   if (!profile?.socialAccounts) return null
 
   const { twitter, instagram, tiktok } = profile.socialAccounts
@@ -230,6 +349,26 @@ function SocialLinks({ profile }: { profile: ZoraProfile | null }) {
 
   if (links.length === 0) return null
 
+  if (compact) {
+    return (
+      <div className="flex flex-nowrap items-center gap-x-3">
+        {links.map((link) => (
+          <a
+            key={link.name}
+            href={link.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
+          >
+            <span className="text-zinc-500">{link.icon}</span>
+            <span>{link.handle}</span>
+            <ExternalLink className="w-3 h-3 text-zinc-500" />
+          </a>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-2">
       {links.map((link) => (
@@ -238,10 +377,10 @@ function SocialLinks({ profile }: { profile: ZoraProfile | null }) {
           href={link.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/8 transition-colors group"
+          className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-white/[0.04] transition-colors group"
         >
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-white/8/90 border border-zinc-700/70 flex items-center justify-center text-zinc-200">
+            <div className="w-9 h-9 rounded-lg bg-white/[0.06] flex items-center justify-center text-zinc-300">
               <span className="scale-95">{link.icon}</span>
             </div>
             <div className="min-w-0">
@@ -260,7 +399,7 @@ function SocialLinks({ profile }: { profile: ZoraProfile | null }) {
   )
 }
 
-function ResourceLinks({ tokenAddress }: { tokenAddress: string }) {
+function ResourceLinks({ tokenAddress, compact = false }: { tokenAddress: string; compact?: boolean }) {
   const links = [
     {
       name: 'Zora',
@@ -270,14 +409,36 @@ function ResourceLinks({ tokenAddress }: { tokenAddress: string }) {
     {
       name: 'Dexscreener',
       href: `https://dexscreener.com/base/${tokenAddress}`,
-      iconUrl: 'https://green-decisive-crane-434.mypinata.cloud/ipfs/bafkreia3wpaw347dpdn5sewij3nsdpgzoa7i4n5toohojedrdvyvhx52le',
+      iconUrl: '/brands/dexscreener.ico',
     },
     {
       name: 'Basescan',
       href: `https://basescan.org/token/${tokenAddress}`,
-      iconUrl: 'https://green-decisive-crane-434.mypinata.cloud/ipfs/bafkreidse2dmc2h5myecpddbm53xwbn62yq4l4af7fnpi362prhk6f2hoi',
+      iconUrl: '/base/basescan-logo-symbol-light.svg',
     },
   ]
+
+  if (compact) {
+    return (
+      <div className="flex flex-nowrap items-center gap-x-3">
+        {links.map((link) => (
+          <a
+            key={link.name}
+            href={link.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
+          >
+            <span className="w-3.5 h-3.5 overflow-hidden shrink-0">
+              <img src={link.iconUrl} alt={link.name} className="w-full h-full object-contain" />
+            </span>
+            <span>{link.name}</span>
+            <ExternalLink className="w-3 h-3 text-zinc-500" />
+          </a>
+        ))}
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-2">
@@ -287,10 +448,10 @@ function ResourceLinks({ tokenAddress }: { tokenAddress: string }) {
           href={link.href}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/8 transition-colors group"
+          className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-white/[0.04] transition-colors group"
         >
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-white/8/90 border border-zinc-700/70 flex items-center justify-center p-1.5 overflow-hidden">
+            <div className="w-9 h-9 rounded-lg bg-white/[0.06] flex items-center justify-center p-1.5 overflow-hidden">
               <img src={link.iconUrl} alt={link.name} className="w-full h-full object-contain" />
             </div>
             <span className="text-sm text-white truncate">{link.name}</span>
@@ -302,12 +463,49 @@ function ResourceLinks({ tokenAddress }: { tokenAddress: string }) {
   )
 }
 
+function resolveCreatorSmartWalletAddress(
+  profile: ZoraProfile | null | undefined,
+  fallbackAddress?: string | null,
+): `0x${string}` | null {
+  for (const edge of profile?.linkedWallets?.edges ?? []) {
+    const walletType = String(edge?.node?.walletType ?? '').toUpperCase()
+    const address = edge?.node?.walletAddress
+    if (walletType === 'SMART_WALLET' && address && isAddress(address)) {
+      return getAddress(address)
+    }
+  }
+
+  const publicWallet = profile?.publicWallet?.walletAddress
+  if (publicWallet && isAddress(publicWallet)) return getAddress(publicWallet)
+
+  if (fallbackAddress && isAddress(fallbackAddress)) return getAddress(fallbackAddress)
+
+  return null
+}
+
 export function ExploreCreatorDetail() {
   const params = useParams()
   const chain = String(params.chain ?? '').trim()
   const tokenAddressRaw = String(params.tokenAddress ?? '').trim()
   const [activeTab, setActiveTab] = useState<'chart' | 'coins'>('chart')
   const [contentCoinsPage, setContentCoinsPage] = useState(1)
+  const [volumeWindow, setVolumeWindow] = useState<'24h' | 'all'>('24h')
+  const [allowParallax, setAllowParallax] = useState(false)
+  const [isMobileViewport, setIsMobileViewport] = useState(false)
+  const [showCursor, setShowCursor] = useState(false)
+  const [isContentTrayOpen, setIsContentTrayOpen] = useState(false)
+  const [isContentSwapTrayOpen, setIsContentSwapTrayOpen] = useState(false)
+  const [activeContentCoin, setActiveContentCoin] = useState<ZoraCoin | null>(null)
+  const [sceneActiveCoin, setSceneActiveCoin] = useState<ZoraCoin | null>(null)
+  const [isMarketTrayOpen, setIsMarketTrayOpen] = useState(false)
+  const [marketTrayEverOpened, setMarketTrayEverOpened] = useState(false)
+  const heroRef = useRef<HTMLDivElement | null>(null)
+  const heroSectionRef = useRef<HTMLElement | null>(null)
+  const statsBridgeRef = useRef<HTMLDivElement | null>(null)
+  const sceneSectionRef = useRef<HTMLElement | null>(null)
+  const sceneWrapRef = useRef<HTMLDivElement | null>(null)
+  /** Accumulated scroll delta fed into the pinned helix while the scene is sticky-locked. */
+  const sceneScrollFeedRef = useRef(0)
 
   const tokenAddress = isAddress(tokenAddressRaw) ? getAddress(tokenAddressRaw) : null
 
@@ -397,6 +595,59 @@ export function ExploreCreatorDetail() {
     staleTime: 30_000,
   })
 
+  const activeTrayCoinAddress = useMemo(() => {
+    const addr = activeContentCoin?.address
+    if (!addr || !isAddress(addr)) return null
+    return getAddress(addr)
+  }, [activeContentCoin?.address])
+
+  const { data: activeTrayPools = [] } = useQuery({
+    queryKey: ['uniswap', 'poolsByToken', 'contentTray', activeTrayCoinAddress],
+    queryFn: async () => {
+      if (!activeTrayCoinAddress) return []
+      return getPoolsByToken(activeTrayCoinAddress)
+    },
+    enabled: Boolean(activeTrayCoinAddress) && isContentTrayOpen,
+    staleTime: 60_000,
+  })
+
+  const activeTrayPrimaryPool = useMemo<UniswapPool | null>(() => {
+    if (!activeTrayPools || activeTrayPools.length === 0) return null
+    return [...activeTrayPools].sort((a, b) => parseNumber(b.totalValueLockedUSD) - parseNumber(a.totalValueLockedUSD))[0] ?? null
+  }, [activeTrayPools])
+
+  const { data: activeTraySwaps = [], isLoading: activeTraySwapsLoading } = useQuery({
+    queryKey: ['uniswap', 'poolSwaps', 'contentTray', activeTrayPrimaryPool?.id],
+    queryFn: async () => {
+      if (!activeTrayPrimaryPool?.id) return []
+      return getPoolSwaps(activeTrayPrimaryPool.id, 12)
+    },
+    enabled: Boolean(activeTrayPrimaryPool?.id) && isContentTrayOpen,
+    staleTime: 30_000,
+  })
+
+  const activeTrayBuyers = useMemo(() => {
+    const contentAddressLower = activeTrayCoinAddress?.toLowerCase() ?? ''
+    return (activeTraySwaps ?? [])
+      .map((swap: UniswapSwap) => {
+        const amount0 = parseNumber(swap.amount0)
+        const amount1 = parseNumber(swap.amount1)
+        const contentInToken0 = swap.token0.id.toLowerCase() === contentAddressLower
+        const contentAmount = contentInToken0 ? amount0 : amount1
+        const side = contentAmount < 0 ? 'Buy' : contentAmount > 0 ? 'Sell' : 'Swap'
+        return {
+          id: swap.id,
+          timestamp: parseNumber(swap.timestamp || swap.transaction?.timestamp || 0),
+          side,
+          amountUsd: parseNumber(swap.amountUSD),
+          wallet: swap.origin || swap.sender,
+          txHash: swap.transaction?.id ?? '',
+        }
+      })
+      .filter((row) => row.side === 'Buy')
+      .slice(0, 8)
+  }, [activeTraySwaps, activeTrayCoinAddress])
+
   const recentTransactions = useMemo(() => {
     const creatorCoinAddressLower = tokenAddress?.toLowerCase() ?? ''
     return (swaps ?? []).map((swap: UniswapSwap) => {
@@ -414,11 +665,217 @@ export function ExploreCreatorDetail() {
         otherAmount: creatorCoinInToken0 ? amount1 : amount0,
         creatorCoinSymbol: creatorCoinInToken0 ? (swap.token0.symbol || symbol) : (swap.token1.symbol || symbol),
         otherSymbol: creatorCoinInToken0 ? (swap.token1.symbol || 'TOKEN') : (swap.token0.symbol || 'TOKEN'),
+        creatorCoinTokenId: creatorCoinInToken0 ? swap.token0.id : swap.token1.id,
+        otherTokenId: creatorCoinInToken0 ? swap.token1.id : swap.token0.id,
         wallet: swap.origin || swap.sender,
         txHash: swap.transaction?.id ?? '',
       }
     })
   }, [swaps, tokenAddress, symbol])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const reducedMotionMq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const finePointerMq = window.matchMedia('(pointer: fine)')
+    const desktopMq = window.matchMedia('(min-width: 1024px)')
+    const mobileMq = window.matchMedia('(max-width: 767px)')
+
+    const updateMotionPrefs = () => {
+      const canAnimate = !reducedMotionMq.matches
+      setAllowParallax(canAnimate)
+      setIsMobileViewport(mobileMq.matches)
+      setShowCursor(canAnimate && finePointerMq.matches && desktopMq.matches)
+    }
+    updateMotionPrefs()
+
+    const listener = () => updateMotionPrefs()
+    reducedMotionMq.addEventListener('change', listener)
+    finePointerMq.addEventListener('change', listener)
+    desktopMq.addEventListener('change', listener)
+    mobileMq.addEventListener('change', listener)
+    return () => {
+      reducedMotionMq.removeEventListener('change', listener)
+      finePointerMq.removeEventListener('change', listener)
+      desktopMq.removeEventListener('change', listener)
+      mobileMq.removeEventListener('change', listener)
+    }
+  }, [])
+
+  const allowImmersiveStatsScroll = allowParallax && !isMobileViewport
+
+  useGSAP(
+    () => {
+      const cleanups: Array<() => void> = []
+      if (heroRef.current && allowParallax) {
+        const tween = gsap.to(heroRef.current, {
+          yPercent: -8,
+          ease: 'none',
+          scrollTrigger: {
+            trigger: heroRef.current,
+            start: 'top top',
+            end: 'bottom top',
+            scrub: 0.9,
+          },
+        })
+        cleanups.push(() => {
+          tween.scrollTrigger?.kill()
+          tween.kill()
+        })
+      }
+      if (heroSectionRef.current && allowParallax) {
+        const fadeTween = gsap.to(heroSectionRef.current, {
+          autoAlpha: 0.18,
+          ease: 'none',
+          scrollTrigger: {
+            trigger: heroSectionRef.current,
+            start: 'bottom top',
+            end: () => `+=${Math.round(window.innerHeight * 2.2)}`,
+            scrub: 0.85,
+          },
+        })
+        cleanups.push(() => {
+          fadeTween.scrollTrigger?.kill()
+          fadeTween.kill()
+          gsap.set(heroSectionRef.current, { clearProps: 'opacity,visibility' })
+        })
+      }
+      return () => {
+        cleanups.forEach((cleanup) => cleanup())
+      }
+    },
+    { dependencies: [allowParallax, contentCoins.length] },
+  )
+
+  useEffect(() => {
+    if (!allowParallax || typeof window === 'undefined') return
+    const frame = requestAnimationFrame(() => {
+      ScrollTrigger.refresh()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [allowParallax, contentCoins.length])
+
+  useEffect(() => {
+    if (!isContentTrayOpen) return
+    const onKeydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (isContentSwapTrayOpen) {
+          setIsContentSwapTrayOpen(false)
+          return
+        }
+        setIsContentSwapTrayOpen(false)
+        setIsContentTrayOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKeydown)
+    return () => window.removeEventListener('keydown', onKeydown)
+  }, [isContentTrayOpen, isContentSwapTrayOpen])
+
+  // Profile info
+  const profile = creatorProfile || (profileCoinsData as ZoraProfile | null)
+  const avatarUrl = profile?.avatar?.medium || profile?.avatar?.small || coin?.mediaContent?.previewImage?.medium || coin?.creatorProfile?.avatar?.previewImage?.medium
+  const displayName = profile?.displayName || coin?.name || 'Creator'
+  const handle = profile?.handle || coin?.creatorProfile?.handle
+  const bio = profile?.bio
+  const website = profile?.website
+  const totalCoinsCreated = createdCoins.length
+  const creatorChatAddress = resolveCreatorSmartWalletAddress(profile, creatorAddress || coin?.payoutRecipientAddress || null)
+
+  const { ethosUserkey, ethosScore, theme: ethosTheme, hasPositiveScore: ethosHasPositiveScore } = useCreatorEthosPageTheme({
+    profile: profile ?? creatorProfile ?? null,
+    creatorAddress: creatorAddress ?? null,
+    serverEthosScore: coin?.ethosScore,
+    serverEthosLevel: coin?.ethosLevel,
+  })
+  const ethosScoreValue = typeof ethosScore?.score === 'number' ? ethosScore.score : null
+
+  const creatorStats = useMemo(
+    () =>
+      buildCreatorStats({
+        volume24h: coin?.volume24h,
+        totalVolume: coin?.totalVolume,
+        marketCap: coin?.marketCap,
+        uniqueHolders: coin?.uniqueHolders ?? null,
+        ethosScore: ethosScoreValue,
+        ethosHasPositiveScore,
+        ethosAccentClass: ethosTheme.accentTextClass,
+        coinsCreated: totalCoinsCreated,
+        createdAt: coin?.createdAt,
+        volumeWindow,
+      }),
+    [
+      coin?.volume24h,
+      coin?.totalVolume,
+      coin?.marketCap,
+      coin?.uniqueHolders,
+      coin?.createdAt,
+      ethosScoreValue,
+      ethosHasPositiveScore,
+      ethosTheme.accentTextClass,
+      totalCoinsCreated,
+      volumeWindow,
+    ],
+  )
+
+  const heroCoin = coin ?? ({
+    address: tokenAddress ?? '',
+    creatorAddress: creatorAddress ?? undefined,
+    creatorProfile: profile?.handle ? { handle: profile.handle } : undefined,
+  } as ZoraCoin)
+  const copyButtonProps = {
+    title: 'Copy address',
+    resetMs: 2000,
+    copiedIconClassName: 'w-4 h-4 text-green-500',
+  } as const
+  const sceneCandidates = useMemo(
+    () => [...contentCoins].sort((a, b) => parseNumber(b.totalVolume) - parseNumber(a.totalVolume)),
+    [contentCoins]
+  )
+  const imageBasedSceneCoins = useMemo(
+    () =>
+      sceneCandidates.filter(
+        (candidate) => detectContentMediaKind(candidate) === 'visual' && Boolean(getContentCoinAssetUrl(candidate))
+      ),
+    [sceneCandidates]
+  )
+  const fallbackSceneCoins = useMemo(
+    () => sceneCandidates.filter((candidate) => !imageBasedSceneCoins.includes(candidate)),
+    [sceneCandidates, imageBasedSceneCoins]
+  )
+  const sceneCoins = useMemo(() => [...imageBasedSceneCoins, ...fallbackSceneCoins].slice(0, 7), [imageBasedSceneCoins, fallbackSceneCoins])
+  const topVolumeContentCoins = useMemo(() => sceneCandidates.slice(0, 6), [sceneCandidates])
+
+  // Scroll-lock the content-coins scene on desktop: the section becomes sticky inside a
+  // tall corridor, and the scroll travelled while pinned is fed into the helix as orbit.
+  const scenePinned = allowImmersiveStatsScroll && imageBasedSceneCoins.length > 0
+  useEffect(() => {
+    if (!scenePinned || typeof window === 'undefined') return
+    const wrap = sceneWrapRef.current
+    if (!wrap) return
+    let last = 0
+    const sync = (self: ScrollTrigger) => {
+      last = self.scroll()
+    }
+    const trigger = ScrollTrigger.create({
+      trigger: wrap,
+      start: 'top top',
+      end: 'bottom bottom',
+      onEnter: sync,
+      onEnterBack: sync,
+      onRefresh: sync,
+      onUpdate: (self) => {
+        const cur = self.scroll()
+        const delta = cur - last
+        last = cur
+        // px → orbit delta. Tuned low so the helix glides calmly rather than spinning fast.
+        sceneScrollFeedRef.current += delta * 0.0065
+      },
+    })
+    const frame = requestAnimationFrame(() => ScrollTrigger.refresh())
+    return () => {
+      cancelAnimationFrame(frame)
+      trigger.kill()
+    }
+  }, [scenePinned])
 
   if (!chain || !isSupportedExploreChain(chain)) {
     return <Navigate replace to="/explore/creators" />
@@ -428,302 +885,614 @@ export function ExploreCreatorDetail() {
     return <Navigate replace to="/explore/creators" />
   }
 
-  // Profile info
-  const profile = creatorProfile || (profileCoinsData as ZoraProfile | null)
-  const ethosSocialUserkey = buildEthosSocialUserkeyFromZoraProfile(profile)
-  const avatarUrl = profile?.avatar?.medium || profile?.avatar?.small || coin?.mediaContent?.previewImage?.medium || coin?.creatorProfile?.avatar?.previewImage?.medium
-  const displayName = profile?.displayName || coin?.name || 'Creator'
-  const handle = profile?.handle || coin?.creatorProfile?.handle
-  const bio = profile?.bio
-  const website = profile?.website
-  const marketCap = formatNumber(coin?.marketCap)
-  const volume24h = formatNumber(coin?.volume24h)
-  const totalVolume = formatNumber(coin?.totalVolume)
-  const holders = coin?.uniqueHolders ? coin.uniqueHolders.toLocaleString() : '-'
-  const createdAt = formatDateLabel(coin?.createdAt)
-  const totalCoinsCreated = createdCoins.length
-  const creatorChatPeer = profile?.publicWallet?.walletAddress || creatorAddress || coin?.payoutRecipientAddress || ''
-  const creatorChatHref =
-    creatorChatPeer && isAddress(creatorChatPeer)
-      ? `/?chatAction=help&chatPeer=${creatorChatPeer}&chatName=${encodeURIComponent(displayName)}`
-      : null
-  const copyButtonProps = {
-    title: 'Copy address',
-    resetMs: 2000,
-    copiedIconClassName: 'w-4 h-4 text-green-500',
-  } as const
-  const statRowStyleProps = {
-    labelClassName: 'text-sm text-zinc-400',
-    valueClassName: 'text-sm text-white font-medium',
-  } as const
-  const normalizedChain = chain.toLowerCase()
-  const socialPreviewPath = `/explore/creators/${normalizedChain}/${tokenAddress.toLowerCase()}`
-
+  const leadSceneCoin = imageBasedSceneCoins[0] ?? sceneCoins[0] ?? null
+  const leadSceneCoinImage = (leadSceneCoin ? getContentCoinAssetUrl(leadSceneCoin) : undefined) || avatarUrl || null
+  const creatorCoinKind = coin ? detectContentMediaKind(coin) : null
+  const creatorCoinImage =
+    coin && creatorCoinKind === 'visual'
+      ? getContentCoinAssetUrl(coin)
+      : undefined
+  const heroIconImage = creatorCoinImage || leadSceneCoinImage || avatarUrl || null
+  const creatorTokenLogo =
+    coin?.mediaContent?.previewImage?.small ||
+    coin?.mediaContent?.previewImage?.medium ||
+    leadSceneCoinImage ||
+    null
+  const heroBackgroundImage = creatorTokenLogo || leadSceneCoinImage || null
+  const openContentTray = (coin: ZoraCoin) => {
+    setActiveContentCoin(coin)
+    setIsContentSwapTrayOpen(false)
+    setIsContentTrayOpen(true)
+  }
+  const closeContentTray = () => {
+    setIsContentSwapTrayOpen(false)
+    setIsContentTrayOpen(false)
+  }
+  const activeCoinMediaKind = activeContentCoin ? detectContentMediaKind(activeContentCoin) : null
+  const activeCoinImage = activeContentCoin ? getContentCoinAssetUrl(activeContentCoin) : undefined
+  const activeCoinOriginal = activeContentCoin ? toDisplayAssetUrl(activeContentCoin.mediaContent?.originalUri) : undefined
+  const activeCoinAddress = activeContentCoin?.address || ''
+  const activeCoinDescription = (activeContentCoin?.description || '').trim()
+  const activeCoinEarningsUsd = activeContentCoin ? calculateTotalEarningsValue(activeContentCoin.creatorEarnings) : 0
+  const activeTraySymbol = activeContentCoin?.symbol || '???'
+  const compactActiveTraySymbol = activeTraySymbol.length > 18 ? `${activeTraySymbol.slice(0, 15)}…` : activeTraySymbol
+  const activeTraySwapUrl = activeTrayCoinAddress ? `/swap?token=${activeTrayCoinAddress}` : '/swap'
+  const activeTrayLiquidityUrl = activeTrayPrimaryPool?.id
+    ? `https://app.uniswap.org/explore/pools/base/${activeTrayPrimaryPool.id}`
+    : activeTrayCoinAddress
+      ? `https://app.uniswap.org/explore/tokens/base/${activeTrayCoinAddress}`
+      : 'https://app.uniswap.org'
   return (
-    <div className="relative min-h-screen bg-black">
+    <div className="relative min-h-0 w-full bg-transparent text-white">
+      <PremiumCursor enabled={showCursor} />
       <PageMeta
         title={displayName !== 'Creator' ? `${displayName} (${symbol})` : 'Creator Detail'}
         description={`Explore ${displayName}'s creator coin ${symbol} — view vault, trades, and activity on 4626.`}
         canonicalPath={`/explore/${chain}/${tokenAddressRaw}`}
       />
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
-        {/* Back navigation */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="mb-3 sm:mb-4"
+      <EthosPageAmbience theme={ethosTheme} />
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pb-0">
+        <div className="relative left-1/2 w-screen max-w-[100vw] -ml-[50vw]">
+        {/* Recreated hero scene */}
+        <section
+          ref={heroSectionRef}
+          className={cn('relative overflow-hidden bg-transparent', CREATOR_HERO_MIN_HEIGHT_CLASS)}
         >
-          <Link
-            to="/explore/creators"
-            className="inline-flex items-center gap-1.5 text-[13px] sm:text-sm text-zinc-400 hover:text-white transition-colors active:scale-[0.97]"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Creators
-          </Link>
-        </motion.div>
+          {heroBackgroundImage ? (
+            <ExploreHeroImageReveal
+              src={heroBackgroundImage}
+              alt={`${symbol} creator coin logo`}
+              overlays={
+                <>
+                  <div className="absolute inset-0 bg-gradient-to-r from-black/72 via-black/45 to-black/25" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/18 via-transparent to-black/58" />
+                  <EthosHeroScoreWash theme={ethosTheme} />
+                </>
+              }
+            />
+          ) : null}
+          <div className="absolute inset-0 opacity-15 pointer-events-none">
+            {[...Array(7)].map((_, i) => (
+              <div key={`hero-grid-h-${i}`} className="absolute h-px bg-white/30 left-0 right-0" style={{ top: `${12.5 * (i + 1)}%` }} />
+            ))}
+            {[...Array(11)].map((_, i) => (
+              <div key={`hero-grid-v-${i}`} className="absolute w-px bg-white/30 top-0 bottom-0" style={{ left: `${8.3 * (i + 1)}%` }} />
+            ))}
+          </div>
 
-        {/* Creator Profile Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 p-4 sm:p-6 mb-4 sm:mb-6"
-        >
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
-            {/* Avatar & Name */}
-            <div className="flex items-start gap-3 sm:gap-4">
-              <CreatorHeaderAvatar
-                avatarUrl={avatarUrl}
-                displayName={displayName}
-                ethosSocialUserkey={ethosSocialUserkey}
-              />
-              <div className="flex-1 min-w-0">
-                <h1 className="text-xl sm:text-2xl font-semibold text-white truncate">{displayName}</h1>
-                {handle && (
-                  <div className="text-zinc-400 text-[13px] sm:text-sm">@{handle}</div>
-                )}
-                {bio && (
-                  <p className="text-zinc-500 text-[13px] sm:text-sm mt-1.5 sm:mt-2 line-clamp-2">{bio}</p>
-                )}
-                {website && (
-                  <a
-                    href={website.startsWith('http') ? website : `https://${website}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-cyan-400 hover:text-cyan-300 text-[13px] sm:text-sm mt-1 inline-flex items-center gap-1"
-                  >
-                    <Globe className="w-3 h-3" />
-                    {website.replace(/^https?:\/\//, '')}
-                  </a>
-                )}
-              </div>
+          <div className="absolute inset-x-0 top-0 z-[2] h-32 sm:h-40 bg-gradient-to-b from-black/85 via-black/50 to-transparent pointer-events-none" />
+
+          <div className="absolute inset-x-0 top-0 z-30 flex items-start justify-between gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6 lg:px-8 pointer-events-none">
+            <div className="pointer-events-auto min-w-0">
+              <Link
+                to="/explore/creators"
+                className="inline-flex items-center gap-2 rounded-full bg-black/50 px-3 py-1.5 text-sm text-zinc-200 backdrop-blur-sm hover:text-white transition-all duration-200 group"
+              >
+                <ArrowLeft className="w-4 h-4 shrink-0 group-hover:-translate-x-0.5 transition-transform" />
+                <span className="hidden sm:inline">Back to Creators</span>
+                <span className="sm:hidden">Back</span>
+              </Link>
             </div>
 
-            {/* Quick Stats — 2x2 grid on mobile, inline on desktop */}
-            <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 sm:gap-6 sm:ml-auto">
-              <div className="text-center sm:text-center">
-                <div className="text-lg sm:text-2xl font-semibold text-white">{volume24h}</div>
-                <div className="text-[11px] sm:text-xs text-zinc-500">24H Volume</div>
-              </div>
-              <div className="text-center sm:text-center">
-                <div className="text-lg sm:text-2xl font-semibold text-white">{marketCap}</div>
-                <div className="text-[11px] sm:text-xs text-zinc-500">Market Cap</div>
-              </div>
-              <div className="text-center sm:text-center">
-                <div className="text-lg sm:text-2xl font-semibold text-white">{holders}</div>
-                <div className="text-[11px] sm:text-xs text-zinc-500">Holders</div>
-              </div>
-              <div className="text-center sm:text-center">
-                <div className="text-lg sm:text-2xl font-semibold text-white">{totalCoinsCreated}</div>
-                <div className="text-[11px] sm:text-xs text-zinc-500">Coins Created</div>
-              </div>
+            <div className="pointer-events-auto flex max-w-[min(68vw,20rem)] sm:max-w-none flex-nowrap items-center justify-end gap-x-3 overflow-x-auto scrollbar-hide text-right">
+              {website ? (
+                <a
+                  href={website.startsWith('http') ? website : `https://${website}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/40 px-2.5 py-1 text-sm text-zinc-300 backdrop-blur-sm hover:text-white transition-colors"
+                >
+                  <span className="max-w-[8rem] truncate sm:max-w-none">{website.replace(/^https?:\/\//, '')}</span>
+                  <ExternalLink className="w-3 h-3 shrink-0 text-zinc-500" />
+                </a>
+              ) : null}
+              <SocialLinks profile={profile} compact />
+              <ResourceLinks tokenAddress={tokenAddress} compact />
             </div>
           </div>
 
-          <div className="mt-4 sm:mt-5 pt-4 border-t border-white/8 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="rounded-lg sm:rounded-xl border border-white/8 bg-white/4 px-3 py-2.5">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-[11px] font-medium text-zinc-500">Creator Coin</div>
-                  <div className="text-xs sm:text-sm text-zinc-300 font-mono truncate">{shortAddress(tokenAddress)}</div>
-                </div>
-                <ExploreCopyButton
-                  text={tokenAddress}
-                  className="p-2 rounded-lg hover:bg-white/8 shrink-0"
-                  {...copyButtonProps}
-                />
-              </div>
-            </div>
+          <motion.div
+            ref={heroRef}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: heroBackgroundImage ? 0.38 : 0.1, ease: [0.16, 1, 0.3, 1] }}
+            className={cn(
+              'relative px-4 sm:px-8 lg:px-12 pt-16 sm:pt-20 pb-14 sm:pb-20 flex flex-col justify-end',
+              CREATOR_HERO_MIN_HEIGHT_CLASS,
+            )}
+          >
+            <div className="max-w-4xl">
+              <span
+                className={cn(
+                  'inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] mb-8',
+                  ethosTheme.isActive ? ethosTheme.accentTextClass : 'text-zinc-400',
+                )}
+              >
+                <span className="w-10 sm:w-12 h-px" style={ethosTheme.dividerStyle} />
+                {handle ? `@${handle}` : 'Creator'}
+                {ethosTheme.isActive ? (
+                  <span className={cn('normal-case tracking-normal text-[10px]', ethosTheme.accentStrongTextClass)}>
+                    · {ethosTheme.levelLabel}
+                  </span>
+                ) : null}
+              </span>
 
-            {creatorAddress ? (
-              <div className="rounded-lg sm:rounded-xl border border-white/8 bg-white/4 px-3 py-2.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-medium text-zinc-500">Creator Wallet</div>
-                    <div className="text-xs sm:text-sm text-zinc-300 font-mono truncate">{shortAddress(creatorAddress)}</div>
-                  </div>
-                  <ExploreCopyButton
-                    text={creatorAddress}
-                    className="p-2 rounded-lg hover:bg-white/8 shrink-0"
-                    {...copyButtonProps}
+              <div className="flex items-start gap-4 sm:gap-6">
+                <div className="mt-1 shrink-0">
+                  <CreatorEthosAvatar
+                    coin={heroCoin}
+                    imageUrl={heroIconImage}
+                    fallbackLabel={symbol}
+                    ethosUserkey={ethosUserkey}
+                    ethosScore={ethosScore}
+                    size="lg"
                   />
+                </div>
+                <h1 className="text-[clamp(1.85rem,7vw,7rem)] leading-[0.92] tracking-tight font-semibold text-white min-w-0">
+                  {displayName}
+                  <br />
+                  <span className={ethosTheme.isActive ? `${ethosTheme.accentTextClass} opacity-80` : 'text-white/35'}>
+                    creator economy.
+                  </span>
+                </h1>
+              </div>
+
+              {bio ? (
+                <p className="mt-8 text-base sm:text-lg text-zinc-300 leading-relaxed max-w-2xl">{bio}</p>
+              ) : null}
+
+              <div className="flex flex-wrap gap-3 mt-8">
+                <div className="group relative inline-flex">
+                  <Link
+                    to={`/swap?token=${tokenAddress}`}
+                    className="px-7 py-3 rounded-full bg-white text-black font-semibold text-sm sm:text-base hover:bg-white/90 transition-colors"
+                  >
+                    Buy {symbol}
+                  </Link>
+                  <ActionAddressHint label="Creator coin" address={tokenAddress} copyButtonProps={copyButtonProps} />
+                </div>
+                {creatorChatAddress ? (
+                  <div className="group relative inline-flex">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        requestOpenChat({
+                          kind: 'dm',
+                          peerAddress: creatorChatAddress,
+                          nameHint: displayName || undefined,
+                          imageUrl: avatarUrl || undefined,
+                        })
+                      }
+                      className={cn(
+                        'px-7 py-3 rounded-full border font-medium text-sm sm:text-base inline-flex items-center gap-2 transition-colors',
+                        ethosTheme.outlineCtaClass,
+                      )}
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      Message Creator
+                    </button>
+                    <ActionAddressHint label="Creator smart wallet" address={creatorChatAddress} copyButtonProps={copyButtonProps} />
+                  </div>
+                ) : null}
+              </div>
+
+            </div>
+          </motion.div>
+        </section>
+
+        <CreatorScrollBridge
+          ref={statsBridgeRef}
+          tone="void"
+          size="stats"
+          animate={allowImmersiveStatsScroll}
+          centerContent={
+            <CreatorImmersiveStatsBeat
+              stats={creatorStats}
+              animate={allowImmersiveStatsScroll}
+              isLoading={isLoading}
+              volumeWindow={volumeWindow}
+              onVolumeWindowChange={setVolumeWindow}
+              scrollTriggerRef={statsBridgeRef}
+            />
+          }
+        />
+
+        <div
+          ref={sceneWrapRef}
+          className="relative"
+          style={scenePinned ? { height: `${SCENE_PIN_HEIGHT_VH}vh` } : undefined}
+        >
+        <section
+          ref={sceneSectionRef}
+          className={cn(
+            'relative flex flex-col overflow-hidden',
+            scenePinned ? 'sticky top-0 h-screen' : 'min-h-[calc(100dvh-3.5rem)]',
+          )}
+        >
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+          <div className="pointer-events-none absolute inset-0 bg-black/28" />
+          <div className="pointer-events-none absolute inset-0 opacity-20 [background:linear-gradient(to_right,rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:90px_90px]" />
+          <EthosBlurOrbs theme={ethosTheme} />
+
+          <div className="relative z-30 px-4 sm:px-8 pt-6 sm:pt-8 pb-5 sm:pb-6 max-w-4xl pointer-events-none">
+            <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-500">
+              <span className="w-10 sm:w-12 h-px bg-white/30" />
+              Collections
+            </span>
+            <h2 className="mt-4 text-[clamp(2.5rem,8vw,5.5rem)] font-semibold tracking-tight leading-[0.9]">
+              Content
+              <span className="text-white/35"> coins.</span>
+            </h2>
+            <p className="mt-4 max-w-2xl text-sm sm:text-base leading-relaxed text-zinc-400">
+              A live collection built from {displayName}&apos;s highest-activity coins — ordered by volume, surfaced as a
+              visual scene.
+            </p>
+          </div>
+
+          <div className="relative flex-1 min-h-[52vh] sm:min-h-[58vh]">
+            {imageBasedSceneCoins.length > 0 ? (
+              <div className="absolute inset-0 z-10 overflow-hidden bg-black/45 backdrop-blur-[1px]">
+                <CreatorContentCylinderGallery3D
+                  coins={imageBasedSceneCoins}
+                  getImage={getContentCoinAssetUrl}
+                  onSelect={openContentTray}
+                  onActiveCoinChange={setSceneActiveCoin}
+                  externalScrollRef={scenePinned ? sceneScrollFeedRef : undefined}
+                  fill
+                />
+                <div className="pointer-events-none absolute inset-0 z-10 bg-linear-to-b from-black/12 via-transparent to-black/38" />
+                <div className="pointer-events-none absolute inset-0 z-10 bg-[radial-gradient(circle_at_18%_20%,rgba(56,189,248,0.22),transparent_38%),radial-gradient(circle_at_82%_72%,rgba(59,130,246,0.2),transparent_42%)]" />
+
+                <div className="absolute inset-x-3 bottom-20 sm:inset-x-auto sm:left-4 sm:bottom-4 z-20 sm:w-[min(92vw,420px)] border border-white/15 bg-black/65 backdrop-blur-md p-3 sm:p-4 pointer-events-auto">
+                  <div className="text-[10px] sm:text-[11px] font-mono uppercase tracking-[1.8px] text-zinc-400 mb-2">
+                    Top content volume
+                  </div>
+                  <div className="space-y-1.5">
+                    {topVolumeContentCoins.map((coin, index) => {
+                      const isActiveInScene =
+                        Boolean(sceneActiveCoin?.address) &&
+                        coin.address?.toLowerCase() === sceneActiveCoin?.address?.toLowerCase()
+                      return (
+                        <button
+                          key={coin.address || coin.id || `top-volume-${index}`}
+                          type="button"
+                          onClick={() => openContentTray(coin)}
+                          className={cn(
+                            'w-full flex items-center justify-between gap-2 sm:gap-3 min-w-0 text-left text-xs sm:text-sm transition-colors rounded-md px-2 py-1.5 -mx-2',
+                            isActiveInScene
+                              ? 'bg-cyan-400/15 text-white border-l-2 border-cyan-300'
+                              : 'text-zinc-200 hover:text-white hover:bg-white/5',
+                          )}
+                        >
+                          <span className="truncate min-w-0 flex-1">
+                            <span className={cn('font-mono mr-2', isActiveInScene ? 'text-cyan-200' : 'text-zinc-500')}>
+                              {String(index + 1).padStart(2, '0')}
+                            </span>
+                            {coin.name || coin.symbol || 'Untitled'}
+                          </span>
+                          <span className="font-mono text-zinc-300 shrink-0">{formatNumber(coin.totalVolume)}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
             ) : (
-              <div className="rounded-lg sm:rounded-xl border border-white/8 bg-white/4 px-3 py-2.5">
-                <div className="text-[11px] font-medium text-zinc-500">Creator Wallet</div>
-                <div className="text-xs sm:text-sm text-zinc-500">Unavailable</div>
+              <div className="absolute inset-0 flex items-center justify-center rounded-3xl bg-zinc-900/50 backdrop-blur p-10 text-center text-zinc-500">
+                No visual content coins available to render the scene yet.
               </div>
             )}
           </div>
-        </motion.div>
 
-        {/* Main content - Two column layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4 sm:gap-6">
-          {/* Left Column - Chart & Content Coins */}
+          {scenePinned ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/55 backdrop-blur px-3.5 py-1.5 text-[10px] font-mono uppercase tracking-[1.8px] text-zinc-300">
+                Scroll to orbit
+                <span className="h-1 w-1 rounded-full bg-white/40" aria-hidden />
+                Keep scrolling to continue
+                <span aria-hidden>↓</span>
+              </div>
+            </div>
+          ) : null}
+        </section>
+        </div>
+
+        <CreatorScrollBridge
+          tone="void"
+          animate={allowParallax}
+          centerContent={<CreatorVaultReserveBeat />}
+        />
+        </div>
+
+        {/* Main content */}
+        <div>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            className="space-y-4 sm:space-y-6"
+            className="space-y-8 sm:space-y-10"
           >
-            {/* Tab Navigation */}
-            <div className="flex items-center gap-1.5 sm:gap-2 border-b border-white/8 pb-2 overflow-x-auto scrollbar-hide">
-              <button
-                type="button"
-                onClick={() => setActiveTab('chart')}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[13px] sm:text-sm font-medium transition-colors whitespace-nowrap active:scale-[0.97] ${
-                  activeTab === 'chart'
-                    ? 'bg-white/8 text-white'
-                    : 'text-zinc-500 hover:text-white hover:bg-white/5'
-                }`}
+            {/* Description */}
+            {coin?.description && (
+              <motion.section
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+                className="relative bg-transparent overflow-hidden"
               >
-                <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 inline mr-1.5 sm:mr-2" />
-                Chart
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('coins')}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[13px] sm:text-sm font-medium transition-colors whitespace-nowrap active:scale-[0.97] ${
-                  activeTab === 'coins'
-                    ? 'bg-white/8 text-white'
-                    : 'text-zinc-500 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4 inline mr-1.5 sm:mr-2" />
-                Content ({contentCoins.length})
-              </button>
-            </div>
+                <div className="pointer-events-none absolute inset-y-0 left-0 w-[2px] bg-linear-to-b from-cyan-300/80 via-white/60 to-fuchsia-300/80" />
+                <div className="px-6 sm:px-8 py-6 sm:py-7">
+                  <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-500 mb-3">
+                    <span className="w-10 sm:w-12 h-px bg-white/35" />
+                    Creator Statement
+                  </span>
+                  <h3 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white mb-4">About {displayName}</h3>
+                  <p className="text-sm sm:text-base text-zinc-300 leading-relaxed max-w-4xl">{coin.description}</p>
+                </div>
+              </motion.section>
+            )}
+          </motion.div>
+        </div>
+      </div>
+
+      {/* === Market tray: fixed top-sheet, reachable from any scroll position === */}
+      <button
+        type="button"
+        onClick={() => {
+          setMarketTrayEverOpened(true)
+          setIsMarketTrayOpen((open) => !open)
+        }}
+        aria-expanded={isMarketTrayOpen}
+        aria-controls="creator-market-tray"
+        className={cn(
+          'fixed left-1/2 -translate-x-1/2 top-[4.25rem] z-[122] inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-mono uppercase tracking-[1.8px] backdrop-blur transition-colors',
+          isMarketTrayOpen
+            ? 'border-white/20 bg-black/70 text-white'
+            : 'border-blue-400/30 bg-blue-500/15 text-blue-100 hover:bg-blue-500/25',
+        )}
+      >
+        <TrendingUp className="h-3.5 w-3.5" />
+        Market tape
+        <span className={cn('transition-transform', isMarketTrayOpen ? 'rotate-180' : '')} aria-hidden>
+          ▾
+        </span>
+      </button>
+
+      {isMarketTrayOpen ? (
+        <button
+          type="button"
+          aria-label="Close market tray"
+          onClick={() => setIsMarketTrayOpen(false)}
+          className="fixed inset-0 z-[120] bg-black/55 backdrop-blur-[1px]"
+        />
+      ) : null}
+
+      <div
+        id="creator-market-tray"
+        role="dialog"
+        aria-label="Market interface"
+        aria-hidden={!isMarketTrayOpen}
+        className={cn(
+          'fixed inset-x-0 top-14 z-[121] mx-auto w-full max-w-5xl px-3 sm:px-4 transition-all duration-300 ease-out',
+          isMarketTrayOpen ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-[110%] opacity-0',
+        )}
+      >
+        <div className="max-h-[86vh] overflow-y-auto overflow-x-hidden rounded-b-2xl border border-t-0 border-white/12 bg-[#070b10]/95 shadow-[0_40px_120px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+          <div className="sticky top-0 z-10 flex items-center justify-end gap-3 border-b border-white/8 bg-[#070b10]/90 backdrop-blur px-5 sm:px-7 py-3">
+            <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 h-1 w-10 rounded-full bg-white/20" aria-hidden />
+            <button
+              type="button"
+              onClick={() => setIsMarketTrayOpen(false)}
+              className="inline-flex items-center justify-center w-8 h-8 text-zinc-400 hover:text-white transition-colors"
+              aria-label="Close market tray"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="px-1 sm:px-2 pb-6 space-y-8 sm:space-y-10">
+            <section className="relative bg-transparent overflow-hidden">
+              <div className="pointer-events-none absolute inset-0 opacity-10">
+                {[...Array(5)].map((_, i) => (
+                  <div key={`tabs-grid-h-${i}`} className="absolute h-px bg-white/40 left-0 right-0" style={{ top: `${16.6 * (i + 1)}%` }} />
+                ))}
+              </div>
+              <div className="px-5 sm:px-7 pt-5 sm:pt-6">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-500">
+                    <span className="w-10 sm:w-12 h-px bg-white/35" />
+                    Market Interface
+                  </span>
+                  <div className="text-[10px] sm:text-xs text-zinc-500 font-mono uppercase tracking-[2px]">
+                    {activeTab === 'chart' ? 'Chart mode' : 'Coin index mode'}
+                  </div>
+                </div>
+                <div className="flex overflow-x-auto scrollbar-hide gap-2 pb-4">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('chart')}
+                    className={`group inline-flex items-center gap-2 px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
+                      activeTab === 'chart'
+                        ? 'bg-white text-black'
+                        : 'bg-white/5 text-zinc-300 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    <TrendingUp className="w-4 h-4" />
+                    Price Chart
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('coins')}
+                    className={`group inline-flex items-center gap-2 px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
+                      activeTab === 'coins'
+                        ? 'bg-white text-black'
+                        : 'bg-white/5 text-zinc-300 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    <Coins className="w-4 h-4" />
+                    Content Coins ({contentCoins.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVolumeWindow((w) => (w === '24h' ? 'all' : '24h'))}
+                    className="ml-auto inline-flex items-center gap-2 px-4 sm:px-5 py-2.5 bg-white/5 text-zinc-300 hover:text-white hover:bg-white/10 text-xs sm:text-sm font-medium whitespace-nowrap transition-colors"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-300" />
+                    Volume: {volumeWindow === '24h' ? '24H' : 'ALL'}
+                  </button>
+                </div>
+              </div>
+            </section>
 
             {/* Chart Tab */}
             {activeTab === 'chart' && (
               <>
-                <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 overflow-hidden">
-                  <div className="px-3 py-3 sm:p-4 border-b border-white/8">
-                    <div className="flex items-center justify-between">
+                <section className="relative -mt-8 sm:-mt-10 bg-transparent overflow-hidden">
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-transparent to-fuchsia-500/10" />
+                  <div className="relative px-6 sm:px-8 pt-2 pb-6">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                       <div>
-                        <span className="text-white font-medium">{displayName}</span>
-                        <span className="text-zinc-500 ml-2">{symbol}</span>
+                        <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-500 mb-4">
+                          <span className="w-10 sm:w-12 h-px bg-white/35" />
+                          Price Discovery
+                        </span>
+                        <h3 className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight leading-[0.95]">
+                          {displayName}
+                          <br />
+                          <span className="text-white/35">{symbol} market tape.</span>
+                        </h3>
                       </div>
                       <a
                         href={`https://dexscreener.com/base/${tokenAddress}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-zinc-500 hover:text-white flex items-center gap-1"
+                        className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[2px] text-zinc-400 hover:text-white transition-colors"
                       >
-                        Open in Dexscreener
+                        Open Dexscreener
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     </div>
                   </div>
-                  {isLoading ? (
-                    <div className="h-[400px] flex items-center justify-center">
-                      <LoadingInline intent="page" labelOverride="Loading..." />
-                    </div>
-                  ) : (
-                    <DexscreenerChart tokenAddress={tokenAddress} />
-                  )}
-                </div>
+                  <div className="relative">
+                    {isLoading ? (
+                      <div className="h-[400px] flex items-center justify-center">
+                        <LoadingInline intent="page" labelOverride="Loading..." />
+                      </div>
+                    ) : marketTrayEverOpened ? (
+                      <DexscreenerChart tokenAddress={tokenAddress} />
+                    ) : (
+                      <div className="h-[400px] flex items-center justify-center text-xs font-mono uppercase tracking-[1.8px] text-zinc-600">
+                        Open the market tray to load the live chart.
+                      </div>
+                    )}
+                  </div>
+                </section>
 
-                <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-white/8 flex items-center justify-between">
+                <section className="-mt-8 sm:-mt-10 bg-transparent overflow-hidden">
+                  <div className="px-6 sm:px-8 pt-2 pb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                      <div className="text-sm text-white font-medium">Recent transactions</div>
-                      <div className="text-xs text-zinc-500">Latest swaps from the primary pool</div>
+                      <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-500 mb-3">
+                        <span className="w-10 sm:w-12 h-px bg-white/35" />
+                        Transactions
+                      </span>
+                      <div className="text-2xl sm:text-3xl font-semibold tracking-tight text-white">Recent Activity</div>
+                      <div className="text-xs sm:text-sm text-zinc-400 mt-2">Latest swaps from the highest-liquidity pool</div>
                     </div>
                     {primaryPool?.id ? (
                       <a
                         href={`https://app.uniswap.org/explore/pools/base/${primaryPool.id}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-zinc-400 hover:text-white"
+                        className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[2px] text-zinc-400 hover:text-white transition-colors"
                       >
-                        Pool
+                        View Pool
+                        <ExternalLink className="w-3 h-3" />
                       </a>
                     ) : null}
                   </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[640px] text-sm">
-                      <thead className="bg-vault-card/60/70">
-                        <tr className="text-left text-zinc-500 text-xs font-medium">
-                          <th className="px-4 py-3">Time</th>
-                          <th className="px-4 py-3">Type</th>
-                          <th className="px-4 py-3 text-right">USD</th>
-                          <th className="px-4 py-3 text-right">{symbol}</th>
-                          <th className="px-4 py-3 text-right">Pair</th>
-                          <th className="px-4 py-3 text-right">Wallet</th>
+                  <div className="overflow-x-auto scrollbar-hide -mx-1 px-1 sm:mx-0 sm:px-0">
+                    <table className="w-full min-w-[28rem] sm:min-w-[680px] text-sm">
+                      <thead>
+                        <tr className="text-left text-zinc-500 text-[11px] uppercase tracking-[1.5px] font-mono">
+                          <th className="px-3 sm:px-8 py-3 sm:py-5 font-normal">Time</th>
+                          <th className="px-3 sm:px-8 py-3 sm:py-5 font-normal">Type</th>
+                          <th className="px-3 sm:px-8 py-3 sm:py-5 text-right font-normal">USD</th>
+                          <th className="px-3 sm:px-8 py-3 sm:py-5 text-right font-normal">{symbol}</th>
+                          <th className="hidden md:table-cell px-3 sm:px-8 py-3 sm:py-5 text-right font-normal">Pair</th>
+                          <th className="hidden lg:table-cell px-3 sm:px-8 py-3 sm:py-5 text-right font-normal">Wallet</th>
                         </tr>
                       </thead>
                       <tbody>
                         {swapsLoading ? (
                           <tr>
-                            <td colSpan={6} className="px-4 py-8 text-center text-zinc-600">
+                            <td colSpan={6} className="px-3 sm:px-8 py-10 text-center text-zinc-600">
                               <LoadingText intent="processing" labelOverride="Loading swaps..." />
                             </td>
                           </tr>
                         ) : recentTransactions.length === 0 ? (
                           <tr>
-                            <td colSpan={6} className="px-4 py-8 text-center text-zinc-600">
+                            <td colSpan={6} className="px-3 sm:px-8 py-10 text-center text-zinc-600">
                               No swap data available for this creator coin yet.
                             </td>
                           </tr>
                         ) : (
                           recentTransactions.map((row) => (
-                            <tr key={row.id} className="border-t border-white/8/70">
-                              <td className="px-4 py-3 text-zinc-400">{formatTimestamp(row.timestamp)}</td>
-                              <td className="px-4 py-3">
+                            <tr key={row.id} className="hover:bg-white/[0.03] transition-colors">
+                              <td className="px-3 sm:px-8 py-3 sm:py-5 text-zinc-400 whitespace-nowrap text-xs sm:text-sm">{formatTimestamp(row.timestamp)}</td>
+                              <td className="px-3 sm:px-8 py-3 sm:py-5">
                                 <span
-                                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                                  className={`inline-flex px-2.5 py-1 text-[11px] font-medium font-mono uppercase tracking-[1px] ${
                                     row.side === 'Buy'
-                                      ? 'bg-emerald-500/15 text-emerald-300'
+                                      ? 'bg-emerald-500/10 text-emerald-300'
                                       : row.side === 'Sell'
-                                        ? 'bg-rose-500/15 text-rose-300'
-                                        : 'bg-zinc-600/25 text-zinc-300'
+                                        ? 'bg-rose-500/10 text-rose-300'
+                                        : 'bg-zinc-600/20 text-zinc-300'
                                   }`}
                                 >
                                   {row.side}
                                 </span>
                               </td>
-                              <td className="px-4 py-3 text-right text-white tabular-nums">{formatUsd(row.amountUsd)}</td>
-                              <td className="px-4 py-3 text-right text-zinc-300 tabular-nums">
-                                {formatTokenAmount(row.creatorCoinAmount)} {row.creatorCoinSymbol}
+                              <td className="px-3 sm:px-8 py-3 sm:py-5 text-right text-white tabular-nums whitespace-nowrap">{formatUsd(row.amountUsd)}</td>
+                              <td className="px-3 sm:px-8 py-3 sm:py-5 text-right text-zinc-300 tabular-nums whitespace-nowrap">
+                                <div className="inline-flex items-center justify-end gap-2">
+                                  <span>{formatTokenAmount(row.creatorCoinAmount)}</span>
+                                  <TokenGlyph
+                                    symbol={row.creatorCoinSymbol}
+                                    logoUrl={resolveTokenLogo({
+                                      symbol: row.creatorCoinSymbol,
+                                      tokenId: row.creatorCoinTokenId,
+                                      creatorTokenId: tokenAddress,
+                                      creatorTokenLogo,
+                                    })}
+                                  />
+                                </div>
                               </td>
-                              <td className="px-4 py-3 text-right text-zinc-300 tabular-nums">
-                                {formatTokenAmount(row.otherAmount)} {row.otherSymbol}
+                              <td className="hidden md:table-cell px-3 sm:px-8 py-3 sm:py-5 text-right text-zinc-300 tabular-nums">
+                                <div className="inline-flex items-center justify-end gap-2 w-full">
+                                  <span>{formatTokenAmount(row.otherAmount)}</span>
+                                  <TokenGlyph
+                                    symbol={row.otherSymbol}
+                                    logoUrl={resolveTokenLogo({
+                                      symbol: row.otherSymbol,
+                                      tokenId: row.otherTokenId,
+                                      creatorTokenId: tokenAddress,
+                                      creatorTokenLogo,
+                                    })}
+                                  />
+                                </div>
                               </td>
-                              <td className="px-4 py-3 text-right">
+                              <td className="hidden lg:table-cell px-3 sm:px-8 py-3 sm:py-5 text-right">
                                 {row.txHash ? (
                                   <a
                                     href={`https://basescan.org/tx/${row.txHash}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-zinc-300 hover:text-white"
+                                    className="text-zinc-300 hover:text-white font-mono text-xs"
                                   >
                                     {shortAddress(row.wallet)}
                                   </a>
                                 ) : (
-                                  <span className="text-zinc-400">{shortAddress(row.wallet)}</span>
+                                  <span className="text-zinc-400 font-mono text-xs">{shortAddress(row.wallet)}</span>
                                 )}
                               </td>
                             </tr>
@@ -732,67 +1501,75 @@ export function ExploreCreatorDetail() {
                       </tbody>
                     </table>
                   </div>
-                </div>
+                </section>
               </>
             )}
 
             {/* Content Coins Tab */}
             {activeTab === 'coins' && (
-              <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 overflow-hidden">
-                <div className="px-3 py-3 sm:p-4 border-b border-white/8">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <section className="bg-transparent overflow-hidden">
+                <div className="px-6 sm:px-8 py-6">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                      <h3 className="text-white font-medium">Content Coins by {displayName}</h3>
-                      <p className="text-xs text-zinc-500 mt-1">
-                        All content coins created by this creator on Zora
-                      </p>
+                      <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-500 mb-3">
+                        <span className="w-10 sm:w-12 h-px bg-white/35" />
+                        Content Index
+                      </span>
+                      <h3 className="text-3xl sm:text-4xl font-semibold tracking-tight leading-[0.95]">
+                        {displayName}&apos;s content
+                        <br />
+                        <span className="text-white/35">coin archive.</span>
+                      </h3>
                     </div>
-                    {contentCoins.length > CONTENT_COINS_PAGE_SIZE && (
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-                        <button
-                          type="button"
-                          onClick={() => setContentCoinsPage((p) => Math.max(1, p - 1))}
-                          disabled={contentPage <= 1}
-                          className="px-3 py-1.5 rounded-full border border-white/8 text-zinc-400 hover:text-white hover:border-zinc-700 disabled:opacity-40 disabled:hover:text-zinc-400"
-                        >
-                          Prev
-                        </button>
-                        <div className="flex items-center gap-1">
-                          {contentPageItems.map((item, idx) =>
-                            item === 'ellipsis' ? (
-                              <span key={`ellipsis-${idx}`} className="px-1 text-zinc-600">
-                                …
-                              </span>
-                            ) : (
-                              <button
-                                key={`page-${item}`}
-                                type="button"
-                                onClick={() => setContentCoinsPage(item)}
-                                className={`min-w-[28px] px-2 py-1 rounded-md border text-[11px] ${
-                                  item === contentPage
-                                    ? 'border-zinc-700 bg-white/8 text-white'
-                                    : 'border-white/8 text-zinc-400 hover:text-white hover:border-zinc-700'
-                                }`}
-                                aria-current={item === contentPage ? 'page' : undefined}
-                              >
-                                {item}
-                              </button>
-                            )
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setContentCoinsPage((p) => Math.min(totalContentPages, p + 1))}
-                          disabled={contentPage >= totalContentPages}
-                          className="px-3 py-1.5 rounded-full border border-white/8 text-zinc-400 hover:text-white hover:border-zinc-700 disabled:opacity-40 disabled:hover:text-zinc-400"
-                        >
-                          Next
-                        </button>
-                      </div>
-                    )}
+                    <div className="text-xs sm:text-sm text-zinc-400 max-w-sm sm:text-right">
+                      Ranked collection of all creator-minted content coins on Zora.
+                    </div>
                   </div>
+                  {contentCoins.length > CONTENT_COINS_PAGE_SIZE && (
+                    <div className="mt-5 pt-5 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                      <button
+                        type="button"
+                        onClick={() => setContentCoinsPage((p) => Math.max(1, p - 1))}
+                        disabled={contentPage <= 1}
+                        className="px-3 py-1.5 bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-40 disabled:hover:text-zinc-400"
+                      >
+                        Prev
+                      </button>
+                      <div className="flex items-center gap-1">
+                        {contentPageItems.map((item, idx) =>
+                          item === 'ellipsis' ? (
+                            <span key={`ellipsis-${idx}`} className="px-1 text-zinc-600">
+                              …
+                            </span>
+                          ) : (
+                            <button
+                              key={`page-${item}`}
+                              type="button"
+                              onClick={() => setContentCoinsPage(item)}
+                              className={`min-w-[30px] px-2 py-1 text-[11px] font-mono ${
+                                item === contentPage
+                                  ? 'bg-white text-black'
+                                  : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10'
+                              }`}
+                              aria-current={item === contentPage ? 'page' : undefined}
+                            >
+                              {item}
+                            </button>
+                          )
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setContentCoinsPage((p) => Math.min(totalContentPages, p + 1))}
+                        disabled={contentPage >= totalContentPages}
+                        className="px-3 py-1.5 bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-40 disabled:hover:text-zinc-400"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
                 </div>
-                
+
                 {profileCoinsLoading ? (
                   <div className="p-8 flex items-center justify-center">
                     <LoadingInline intent="processing" labelOverride="Loading..." />
@@ -802,159 +1579,292 @@ export function ExploreCreatorDetail() {
                     No content coins found for this creator.
                   </div>
                 ) : (
-                  <div className="divide-y divide-white/6">
+                  <div className="divide-y divide-white/10">
                     {pagedContentCoins.map((contentCoin, index) => (
-                      <ContentCoinRow 
-                        key={contentCoin.address || contentCoin.id || index} 
-                        coin={contentCoin} 
+                      <ContentCoinRow
+                        key={contentCoin.address || contentCoin.id || index}
+                        coin={contentCoin}
                         rank={(contentPage - 1) * CONTENT_COINS_PAGE_SIZE + index + 1}
+                        onSelect={openContentTray}
                       />
                     ))}
                   </div>
                 )}
-              </div>
+              </section>
             )}
-
-            {/* Description */}
-            {coin?.description && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.2 }}
-                className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 p-4 sm:p-6"
-              >
-                <h3 className="text-sm font-medium text-zinc-400 mb-3">About {displayName}</h3>
-                <p className="text-sm text-zinc-300 leading-relaxed">{coin.description}</p>
-              </motion.div>
-            )}
-          </motion.div>
-
-          {/* Right Column - Info Cards */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-            className="space-y-3 sm:space-y-4"
-          >
-            {/* Swap Card */}
-            <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 p-4 sm:p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  {avatarUrl ? (
-                    <img src={avatarUrl} alt={displayName} className="w-10 h-10 rounded-full object-cover" />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-linear-to-br from-zinc-600 to-zinc-700 flex items-center justify-center">
-                      <span className="text-sm font-medium text-zinc-300">{symbol.slice(0, 2)}</span>
-                    </div>
-                  )}
-                  <div>
-                    <div className="text-white font-medium">{displayName}</div>
-                    <div className="text-xs text-zinc-500">{symbol}</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <ExploreUnfurlDebugCopy path={socialPreviewPath} className="px-2.5 py-0.5" />
-                  <ExploreCopyButton
-                    text={tokenAddress}
-                    {...copyButtonProps}
-                  />
-                  <ShareVaultButton
-                    url={typeof window !== 'undefined' ? `${window.location.origin}${socialPreviewPath}` : undefined}
-                    text={`${displayName} ($${symbol}) on 4626`}
-                    label="Share"
-                  />
-                </div>
-              </div>
-
-              <Link
-                to={`/swap?token=${tokenAddress}`}
-                className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-[#FF007A] hover:bg-[#FF007A]/90 text-white font-semibold text-base transition-colors"
-              >
-                Buy Creator Coin
-              </Link>
-
-              {creatorChatHref ? (
-                <Link
-                  to={creatorChatHref}
-                  className="mt-3 w-full flex items-center justify-center gap-2 px-6 py-3 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/8 text-white font-medium text-sm transition-colors"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  Chat with Creator
-                </Link>
-              ) : (
-                <button
-                  type="button"
-                  disabled
-                  className="mt-3 w-full flex items-center justify-center gap-2 px-6 py-3 rounded-2xl border border-white/10 bg-white/5 text-zinc-500 font-medium text-sm cursor-not-allowed"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  Chat unavailable
-                </button>
-              )}
-            </div>
-
-            {/* Social + Links Card */}
-            <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 p-4 sm:p-5">
-              <h3 className="text-sm font-medium text-zinc-400 mb-3">Social &amp; Links</h3>
-              <div className="space-y-4">
-                <div>
-                  <div className="text-[11px] font-medium text-zinc-500 mb-2">Social</div>
-                  <SocialLinks profile={profile} />
-                  {!profile?.socialAccounts && (
-                    <div className="text-sm text-zinc-600">No social accounts linked.</div>
-                  )}
-                </div>
-                <div>
-                  <div className="text-[11px] font-medium text-zinc-500 mb-2">Links</div>
-                  <ResourceLinks tokenAddress={tokenAddress} />
-                </div>
-              </div>
-            </div>
-
-            {/* Stats Card */}
-            <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 p-4 sm:p-5">
-              <h3 className="text-sm font-medium text-zinc-400 mb-2">Creator Coin Stats</h3>
-              <ExploreStatRow
-                label="Market cap"
-                value={marketCap}
-                icon={<TrendingUp className="w-3 h-3" />}
-                {...statRowStyleProps}
-              />
-              <ExploreStatRow
-                label="24H volume"
-                value={volume24h}
-                icon={<TrendingUp className="w-3 h-3" />}
-                {...statRowStyleProps}
-              />
-              <ExploreStatRow
-                label="All-time volume"
-                value={totalVolume}
-                icon={<TrendingUp className="w-3 h-3" />}
-                {...statRowStyleProps}
-              />
-              <ExploreStatRow
-                label="Holders"
-                value={holders}
-                icon={<Users className="w-3 h-3" />}
-                {...statRowStyleProps}
-              />
-              <ExploreStatRow
-                label="Created"
-                value={createdAt}
-                icon={<Calendar className="w-3 h-3" />}
-                {...statRowStyleProps}
-              />
-              <ExploreStatRow
-                label="Content coins"
-                value={String(contentCoins.length)}
-                icon={<Coins className="w-3 h-3" />}
-                {...statRowStyleProps}
-              />
-            </div>
-
-          </motion.div>
+          </div>
         </div>
       </div>
+      {isContentTrayOpen && activeContentCoin ? (
+        <div className="fixed inset-0 z-[130]">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/55 backdrop-blur-[1px]"
+            onClick={closeContentTray}
+            aria-label="Close content coin panel"
+          />
+          <aside className="absolute left-0 top-0 h-full w-full max-w-[460px] bg-black/95 shadow-[22px_0_80px_rgba(0,0,0,0.65)] overflow-y-auto">
+            <div className="sticky top-0 z-10 bg-black/90 backdrop-blur px-5 sm:px-6 py-4 flex items-center justify-between">
+              <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-500">
+                <span className="w-10 h-px bg-white/35" />
+                Content Coin
+              </span>
+              <button
+                type="button"
+                onClick={closeContentTray}
+                className="inline-flex items-center justify-center w-8 h-8 text-zinc-400 hover:text-white transition-colors"
+                aria-label="Close panel"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 sm:p-6 space-y-5">
+              <div className="min-w-0">
+                <h3 className="text-2xl font-semibold tracking-tight text-white truncate">
+                  {activeContentCoin.name || activeContentCoin.symbol || 'Untitled'}
+                </h3>
+                <div className="text-sm text-zinc-400 mt-1">{activeContentCoin.symbol || '???'}</div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsContentSwapTrayOpen(true)}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-white text-black font-medium text-sm hover:bg-white/90 transition-colors"
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  Swap
+                </button>
+                <a
+                  href={activeTrayLiquidityUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-white/15 bg-white/5 text-white font-medium text-sm hover:bg-white/10 transition-colors"
+                >
+                  <img src={UNISWAP_ICON_URL} alt="Uniswap" className="h-4 w-4 object-contain" />
+                  Liquidity
+                </a>
+              </div>
+
+              <div className="bg-zinc-950/30 overflow-hidden rounded-xl">
+                {activeCoinMediaKind === 'video' && activeCoinOriginal ? (
+                  <video
+                    src={activeCoinOriginal}
+                    controls
+                    muted
+                    playsInline
+                    poster={activeCoinImage}
+                    className="w-full aspect-video bg-black"
+                  />
+                ) : activeCoinImage ? (
+                  <img
+                    src={activeCoinImage}
+                    alt={activeContentCoin.name || activeContentCoin.symbol || 'Content asset'}
+                    className="w-full aspect-video object-contain bg-black"
+                  />
+                ) : (
+                  <div className="w-full aspect-video bg-zinc-900 flex items-center justify-center text-zinc-500">
+                    No media preview
+                  </div>
+                )}
+                {activeCoinMediaKind === 'text' ? (
+                  <div className="p-4">
+                    <div className="text-[11px] font-mono uppercase tracking-[1.8px] text-zinc-500 mb-2">Text payload</div>
+                    <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                      {activeCoinDescription || 'Text coin detected via metadata. Open full detail for source context.'}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="space-y-3">
+                {activeCoinEarningsUsd > 0 ? (
+                  <div className="bg-blue-500/10 px-3 py-3 rounded-lg">
+                    <div className="text-[11px] font-mono uppercase tracking-[1.5px] text-zinc-500">Earned</div>
+                    <div className="text-base text-blue-200 mt-1">{calculateTotalEarnings(activeContentCoin.creatorEarnings)}</div>
+                  </div>
+                ) : null}
+                <div className="bg-zinc-950/20 px-3 py-3 rounded-lg">
+                  <div className="text-[11px] font-mono uppercase tracking-[1.5px] text-zinc-500">All-time volume</div>
+                  <div className="text-base text-white mt-1">{formatNumber(activeContentCoin.totalVolume)}</div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-white/10 overflow-hidden">
+                <div className="px-3 py-3 border-b border-white/10">
+                  <div className="text-[11px] font-mono uppercase tracking-[1.5px] text-zinc-500">Recent buyers</div>
+                  <div className="text-xs text-zinc-500 mt-1">Latest buy-side swaps from the primary pool</div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[320px] text-sm">
+                    <thead>
+                      <tr className="text-left text-zinc-500 text-[11px] uppercase tracking-[1.2px] font-mono">
+                        <th className="px-3 py-2 font-normal">Time</th>
+                        <th className="px-3 py-2 text-right font-normal">USD</th>
+                        <th className="px-3 py-2 text-right font-normal">Wallet</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeTraySwapsLoading ? (
+                        <tr>
+                          <td colSpan={3} className="px-3 py-6 text-center text-zinc-600">
+                            <LoadingText intent="processing" labelOverride="Loading buyers..." />
+                          </td>
+                        </tr>
+                      ) : activeTrayBuyers.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="px-3 py-6 text-center text-zinc-600">
+                            No recent buyers yet.
+                          </td>
+                        </tr>
+                      ) : (
+                        activeTrayBuyers.map((row) => (
+                          <tr key={row.id} className="border-t border-white/8">
+                            <td className="px-3 py-2.5 text-zinc-400">{formatTimestamp(row.timestamp)}</td>
+                            <td className="px-3 py-2.5 text-right text-white tabular-nums">{formatUsd(row.amountUsd)}</td>
+                            <td className="px-3 py-2.5 text-right">
+                              {row.txHash ? (
+                                <a
+                                  href={`https://basescan.org/tx/${row.txHash}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-zinc-300 hover:text-white font-mono text-xs"
+                                >
+                                  {shortAddress(row.wallet)}
+                                </a>
+                              ) : (
+                                <span className="text-zinc-400 font-mono text-xs">{shortAddress(row.wallet)}</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="bg-zinc-950/20 px-3 py-3 rounded-lg">
+                <div className="text-[11px] font-mono uppercase tracking-[1.5px] text-zinc-500 mb-1">Address</div>
+                <div className="inline-flex items-center gap-2 text-xs font-mono text-zinc-300">
+                  {shortAddress(activeCoinAddress)}
+                  <ExploreCopyButton text={activeCoinAddress} className="p-1 hover:bg-white/10" {...copyButtonProps} />
+                </div>
+              </div>
+
+              {activeCoinDescription ? (
+                <div className="bg-zinc-950/20 px-3 py-3 rounded-lg">
+                  <div className="text-[11px] font-mono uppercase tracking-[1.5px] text-zinc-500 mb-2">Description</div>
+                  <p className="text-sm text-zinc-300 leading-relaxed">{activeCoinDescription}</p>
+                </div>
+              ) : null}
+
+              {activeCoinAddress ? (
+                <Link
+                  to={`/explore/content/base/${activeCoinAddress}`}
+                  className="inline-flex items-center justify-center w-full px-4 py-3 text-white font-medium bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  Open Full Content Coin Page
+                </Link>
+              ) : null}
+            </div>
+          </aside>
+        </div>
+      ) : null}
+      {isContentTrayOpen && isContentSwapTrayOpen && activeTrayCoinAddress ? (
+        <div className="fixed inset-0 z-[145]">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/55 backdrop-blur-[1px]"
+            onClick={() => setIsContentSwapTrayOpen(false)}
+            aria-label="Close swap panel"
+          />
+          <aside className="absolute right-0 top-0 hidden h-full w-full max-w-[380px] border-l border-white/10 bg-black/95 p-5 sm:block">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium text-white">Swap {compactActiveTraySymbol}</div>
+              <button
+                type="button"
+                onClick={() => setIsContentSwapTrayOpen(false)}
+                className="inline-flex h-8 w-8 items-center justify-center text-zinc-400 hover:text-white"
+                aria-label="Close swap panel"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-2 text-sm">
+              <Link
+                to={activeTraySwapUrl}
+                className="inline-flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-zinc-200 hover:bg-white/10"
+                onClick={() => {
+                  setIsContentSwapTrayOpen(false)
+                  closeContentTray()
+                }}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Open in 4626 Swap
+                </span>
+                <ExternalLink className="h-4 w-4" />
+              </Link>
+              <a
+                href={`https://app.uniswap.org/explore/tokens/base/${activeTrayCoinAddress}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-zinc-200 hover:bg-white/10"
+                onClick={() => setIsContentSwapTrayOpen(false)}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <img src={UNISWAP_ICON_URL} alt="Uniswap" className="h-4 w-4 object-contain" />
+                  Open in Uniswap
+                </span>
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </div>
+          </aside>
+          <aside className="absolute bottom-0 left-0 right-0 rounded-t-2xl border-t border-white/10 bg-black/95 p-5 sm:hidden">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium text-white">Swap {compactActiveTraySymbol}</div>
+              <button
+                type="button"
+                onClick={() => setIsContentSwapTrayOpen(false)}
+                className="inline-flex h-8 w-8 items-center justify-center text-zinc-400 hover:text-white"
+                aria-label="Close swap panel"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-2 text-sm">
+              <Link
+                to={activeTraySwapUrl}
+                className="inline-flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-zinc-200 hover:bg-white/10"
+                onClick={() => {
+                  setIsContentSwapTrayOpen(false)
+                  closeContentTray()
+                }}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Open in 4626 Swap
+                </span>
+                <ExternalLink className="h-4 w-4" />
+              </Link>
+              <a
+                href={`https://app.uniswap.org/explore/tokens/base/${activeTrayCoinAddress}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-zinc-200 hover:bg-white/10"
+                onClick={() => setIsContentSwapTrayOpen(false)}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <img src={UNISWAP_ICON_URL} alt="Uniswap" className="h-4 w-4 object-contain" />
+                  Open in Uniswap
+                </span>
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </div>
+          </aside>
+        </div>
+      ) : null}
     </div>
   )
 }

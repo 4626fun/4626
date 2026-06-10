@@ -4,7 +4,14 @@ import { makeSessionToken } from '../../server/auth/_shared.ts'
 import handler from '../_handlers/wallet/_sync.ts'
 import { applyEnv, canonicalWalletSchemaReadyResult, createMockReq, createMockRes } from './helpers'
 
-const { getDbMock, ensureWaitlistSchemaMock, syncUserWalletsMock, getUserByIdMock } = vi.hoisted(() => ({
+const {
+  getDbMock,
+  ensureWaitlistSchemaMock,
+  syncUserWalletsMock,
+  getUserByIdMock,
+  readRequestPrincipalAddressMock,
+  resolveAuthorizedRequestPrincipalMock,
+} = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
   syncUserWalletsMock: vi.fn(async () => ({
@@ -13,6 +20,16 @@ const { getDbMock, ensureWaitlistSchemaMock, syncUserWalletsMock, getUserByIdMoc
     connectedWallets: [{ address: '0x00000000000000000000000000000000000000aa', walletType: 'smart_wallet', provider: 'coinbase_wallet' }],
   })),
   getUserByIdMock: vi.fn(async () => ({ id: 'did:privy:test-user', linkedAccounts: [] })),
+  readRequestPrincipalAddressMock: vi.fn(() => '0x00000000000000000000000000000000000000bb'),
+  resolveAuthorizedRequestPrincipalMock: vi.fn(async () => ({
+    source: 'session',
+    authSource: 'session',
+    address: '0x00000000000000000000000000000000000000bb',
+    profileId: 1,
+    canonicalSmartWalletAddress: '0x00000000000000000000000000000000000000aa',
+    activeOwnerWalletAddress: '0x00000000000000000000000000000000000000bb',
+    signerRole: 'active_owner_wallet',
+  })) as any,
 }))
 
 vi.mock('../../server/_lib/db/postgres.js', () => ({
@@ -27,6 +44,21 @@ vi.mock('../../server/_lib/onboarding/waitlistSchema.js', () => ({
 vi.mock('../../server/_lib/wallet/walletSync.js', () => ({
   syncUserWallets: syncUserWalletsMock,
 }))
+
+vi.mock('@4626/server-core', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    getDb: getDbMock,
+    readRequestPrincipalAddress: readRequestPrincipalAddressMock,
+    resolveAuthorizedRequestPrincipal: resolveAuthorizedRequestPrincipalMock,
+    syncUserWallets: syncUserWalletsMock,
+    checkRateLimit: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+    getClientIp: vi.fn(() => '127.0.0.1'),
+    rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
+    RATE_LIMITS: { cswLink: { limit: 50, windowMs: 60_000 } },
+  }
+})
 
 vi.mock('@privy-io/server-auth', () => ({
   PrivyClient: class {
@@ -49,6 +81,16 @@ describe('wallet sync endpoint', () => {
       PRIVY_APP_ID: 'test-privy-id',
       PRIVY_APP_SECRET: 'test-privy-secret',
     })
+    readRequestPrincipalAddressMock.mockReturnValue('0x00000000000000000000000000000000000000bb')
+    resolveAuthorizedRequestPrincipalMock.mockResolvedValue({
+      source: 'session',
+      authSource: 'session',
+      address: '0x00000000000000000000000000000000000000bb',
+      profileId: 1,
+      canonicalSmartWalletAddress: '0x00000000000000000000000000000000000000aa',
+      activeOwnerWalletAddress: '0x00000000000000000000000000000000000000bb',
+      signerRole: 'active_owner_wallet',
+    } as any)
   })
 
   afterEach(() => {
@@ -57,6 +99,7 @@ describe('wallet sync endpoint', () => {
   })
 
   it('returns 401 without session', async () => {
+    readRequestPrincipalAddressMock.mockReturnValue('')
     const req = createMockReq({ method: 'POST' })
     const res = createMockRes()
     await handler(req, res)
@@ -119,6 +162,7 @@ describe('wallet sync endpoint', () => {
       }),
     })
     const token = makeSessionToken({ address: '0x00000000000000000000000000000000000000bb' })
+    resolveAuthorizedRequestPrincipalMock.mockResolvedValueOnce(null)
     const req = createMockReq({
       method: 'POST',
       headers: { cookie: `cv_auth_session=${encodeURIComponent(token)}` },

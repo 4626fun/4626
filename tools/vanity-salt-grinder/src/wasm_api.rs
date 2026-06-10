@@ -2,10 +2,21 @@ use ethers_core::types::{Address, H256};
 use serde::Deserialize;
 
 use crate::per_vault::{find_per_vault_version, PerVaultVersionSearchConfig};
+use crate::search::find_salt_for_suffix_linear;
 
 static mut LAST_OUTPUT_PTR: *mut u8 = core::ptr::null_mut();
 static mut LAST_OUTPUT_LEN: usize = 0;
 static mut LAST_OUTPUT_CAP: usize = 0;
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Create2SaltSuffixInput {
+    create2_deployer: String,
+    init_code_hash: String,
+    start_at: String,
+    suffix: String,
+    max_attempts: u64,
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -49,6 +60,14 @@ pub unsafe extern "C" fn per_vault_version_search(input_ptr: *const u8, input_le
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn create2_salt_suffix_search(input_ptr: *const u8, input_len: usize) -> i32 {
+    let input = core::slice::from_raw_parts(input_ptr, input_len);
+    let result = run_create2_salt_suffix_search(input);
+    replace_last_output(result.into_bytes());
+    1
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn vanity_output_ptr() -> *const u8 {
     LAST_OUTPUT_PTR
 }
@@ -70,6 +89,48 @@ unsafe fn replace_last_output(mut next: Vec<u8>) {
     LAST_OUTPUT_LEN = next.len();
     LAST_OUTPUT_CAP = next.capacity();
     core::mem::forget(next);
+}
+
+fn run_create2_salt_suffix_search(input: &[u8]) -> String {
+    match run_create2_salt_suffix_search_inner(input) {
+        Ok(json) => json,
+        Err(message) => serde_json::json!({
+            "ok": false,
+            "error": message,
+        })
+        .to_string(),
+    }
+}
+
+fn run_create2_salt_suffix_search_inner(input: &[u8]) -> Result<String, String> {
+    let request: Create2SaltSuffixInput =
+        serde_json::from_slice(input).map_err(|err| format!("invalid input json: {err}"))?;
+    let deployer = parse_address(&request.create2_deployer, "create2Deployer")?;
+    let init_code_hash = parse_h256(&request.init_code_hash, "initCodeHash")?;
+    let start_at = parse_h256(&request.start_at, "startAt")?;
+    let suffix = request.suffix.trim().trim_start_matches("0x").to_ascii_lowercase();
+    if suffix.is_empty() {
+        return Err("suffix must be non-empty hex".to_string());
+    }
+
+    let result = find_salt_for_suffix_linear(
+        deployer,
+        init_code_hash,
+        start_at,
+        &suffix,
+        request.max_attempts.max(1),
+    )
+    .map_err(|err| err.to_string())?;
+
+    serde_json::to_string(&serde_json::json!({
+        "ok": true,
+        "result": {
+            "salt": format_h256(result.raw_salt),
+            "predictedAddress": format!("{:#x}", result.predicted_address),
+            "attempts": result.attempts,
+        },
+    }))
+    .map_err(|err| format!("failed to encode result: {err}"))
 }
 
 fn run_per_vault_version_search(input: &[u8]) -> String {
@@ -124,8 +185,15 @@ fn parse_optional_h256(value: Option<&str>, label: &str) -> Result<Option<H256>,
     let Some(value) = value else {
         return Ok(None);
     };
+    parse_h256(value, label).map(Some)
+}
+
+fn parse_h256(value: &str, label: &str) -> Result<H256, String> {
     value
         .parse()
-        .map(Some)
         .map_err(|_| format!("{label} must be a valid bytes32 hex string"))
+}
+
+fn format_h256(value: H256) -> String {
+    format!("{value:#x}")
 }

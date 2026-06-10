@@ -6,10 +6,8 @@ import { BrowserRouter } from 'react-router-dom'
 import { RootRouter } from './RootRouter'
 import { RootErrorBoundary } from './components/RootErrorBoundary'
 import { ThemeProvider } from '@/lib/ui/theme'
-import { ThemeProvider as CdsThemeProvider, MediaQueryProvider as CdsMediaQueryProvider } from '@coinbase/cds-web/system'
-import { PortalProvider as CdsPortalProvider } from '@coinbase/cds-web/overlays'
-import { CdsToastBridge } from '@/components/ui/Toast'
-import { theme4626 } from '@/theme/cds-theme'
+import { AppToaster } from '@/components/ui/Toast'
+import { TooltipProvider } from '@/components/ui/Tooltip'
 import { privyAnalyticsFlag } from '@/lib/flags/featureFlags'
 import { resolveDisallowedLoopbackRedirectUrl } from '@/lib/env/host'
 import {
@@ -19,8 +17,6 @@ import {
   isPrivyPasswordlessInitRequest,
   normalizeFetchMethod,
 } from '@/lib/privy/passwordlessFetchGuard'
-import '@coinbase/cds-icons/fonts/web/icon-font.css'
-import '@coinbase/cds-web/globalStyles'
 import '@4626/brand-kit/styles'
 import './index.css'
 import '@google/model-viewer' // registers <model-viewer>; bundled so devtools don't resolve CDN maps under webRoot
@@ -382,16 +378,12 @@ if (!redirectWwwToCanonicalApex() && !redirectDisallowedLoopbackPort()) {
           of a blank white page. */}
       <RootErrorBoundary>
         <ThemeProvider>
-          <CdsMediaQueryProvider>
-            <CdsThemeProvider theme={theme4626} activeColorScheme="dark">
-              <CdsPortalProvider>
-                <CdsToastBridge />
-                <BrowserRouter>
-                  <RootRouter />
-                </BrowserRouter>
-              </CdsPortalProvider>
-            </CdsThemeProvider>
-          </CdsMediaQueryProvider>
+          <TooltipProvider>
+            <AppToaster />
+            <BrowserRouter>
+              <RootRouter />
+            </BrowserRouter>
+          </TooltipProvider>
         </ThemeProvider>
       </RootErrorBoundary>
     </React.StrictMode>,

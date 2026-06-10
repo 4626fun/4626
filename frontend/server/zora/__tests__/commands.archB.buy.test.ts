@@ -32,7 +32,7 @@ const checkRouterTargetMock = vi.fn()
 const walletRpcMock = vi.fn()
 const fetchMock = vi.fn()
 
-vi.mock('../../_lib/wallet/commandIssuerContext.js', () => ({
+vi.mock('@4626/server-core', () => ({  // canonical import path
   resolveCommandIssuerContextByAddress: (...args: unknown[]) => resolveContextMock(...args),
   isExecutionReady: (resolution: { status: string }) => resolution.status === 'ready',
 }))

@@ -2,14 +2,12 @@
 // No React, no XMTP client instantiation, no module-level singleton state.
 // Safe for unit testing in isolation.
 
+import { ConsentEntityType, ConsentState } from '@xmtp/browser-sdk'
 import { getAddress, isAddress } from 'viem'
 
 // Re-declared locally to avoid a circular import with provider.tsx.
 // Keep in sync with provider.tsx exports.
 type ChatMessageContentType = 'text' | 'json' | 'code'
-type SendChatMessageOptions = {
-  replyToId?: string | null
-}
 
 // ---------------------------------------------------------------------------
 // Address + byte utilities
@@ -45,6 +43,12 @@ export type ParsedWireContent = {
   contentType: ChatMessageContentType
   richPreview?: string
   replyToId: string | null
+  actions?: {
+    promptId: string
+    description: string
+    buttons: Array<{ id: string; label: string; style?: 'primary' | 'secondary' | 'danger' }>
+  } | null
+  reactionEmoji?: string | null
 }
 
 const REPLY_PREFIX_RE = /^\[reply:([a-zA-Z0-9._:-]{1,160})\]\s*/i
@@ -103,19 +107,24 @@ export function parseWireContent(raw: string): ParsedWireContent {
     content,
     contentType: 'text',
     replyToId,
+    actions: null,
+    reactionEmoji: null,
   }
 }
 
+export type SendChatMessageOptions = {
+  replyToId?: string | null
+  /** Inbox id of the message being replied to (required for native XMTP replies). */
+  replyToSenderInboxId?: string | null
+}
+
+/** Legacy wire prefix — prefer native XMTP Reply when both clients support it. */
 export function encodeWireContent(text: string, options?: SendChatMessageOptions): string {
   const body = text.trim()
   const replyToId = options?.replyToId?.trim()
   if (!replyToId) return body
   return `[reply:${replyToId}] ${body}`
 }
-
-// ---------------------------------------------------------------------------
-// XMTP environment + error classifiers
-// ---------------------------------------------------------------------------
 
 export type XmtpEnvLabel = 'production' | 'dev' | 'local'
 
@@ -170,7 +179,50 @@ export function isScwSignatureValidationError(message: string): boolean {
 
 export function isOpfsAccessHandleError(message: string): boolean {
   const m = String(message || '').toLowerCase()
-  return m.includes('createsyncaccesshandle') || m.includes('nomodificationallowederror')
+  return (
+    m.includes('createsyncaccesshandle') ||
+    m.includes('nomodificationallowederror') ||
+    m.includes('failed to initialize opfs') ||
+    m.includes('active xmtp clients or opfs instances')
+  )
+}
+
+/** Local OPFS install no longer validates against the XMTP network inbox. */
+export function isLocalXmtpStateInvalidError(message: string): boolean {
+  const m = String(message || '')
+  return (
+    /InboxValidationFailed/i.test(m) ||
+    /synced \d+ messages?, \d+ failed \d+ succeeded/i.test(m)
+  )
+}
+
+/** Transient XMTP worker/network blips (common during dev HMR or welcome-stream retries). */
+export function isTransientXmtpStreamNetworkError(message: string): boolean {
+  const m = String(message || '').toLowerCase()
+  return (
+    m.includes('network error') ||
+    m.includes('subscribewelcomemessages') ||
+    m.includes('querywelcomemessages') ||
+    m.includes('failed to fetch') ||
+    m.includes('load failed') ||
+    m.includes('err_network') ||
+    m.includes('connection reset')
+  )
+}
+
+/** XMTP MLS API rate limits (QueryWelcomeMessages / welcome stream). */
+export function isXmtpRateLimitError(message: string): boolean {
+  const m = String(message || '').toLowerCase()
+  return (
+    m.includes('rate limit') ||
+    m.includes('resource has been exhausted') ||
+    m.includes('exceeds rate limit') ||
+    m.includes('querywelcomemessages')
+  )
+}
+
+export function isTransientXmtpStreamError(message: string): boolean {
+  return isTransientXmtpStreamNetworkError(message) || isXmtpRateLimitError(message)
 }
 
 // ---------------------------------------------------------------------------
@@ -261,4 +313,207 @@ export function buildNotRegisteredDmMessage(params: {
     return `Resolved canonical wallet ${truncateAddress(params.peerAddress)} is not registered on XMTP (${envLabel}). Original address ${truncateAddress(params.canonicalizedFromAddress)} maps here in 4626; make sure that canonical wallet has XMTP on the same environment.`
   }
   return `Address ${truncateAddress(params.peerAddress)} is not registered on XMTP (${envLabel}). Ask the recipient to open an XMTP-enabled app on the same environment, then retry.`
+}
+
+// ---------------------------------------------------------------------------
+// Conversation lookup (shared with waitlist group sync recovery)
+// ---------------------------------------------------------------------------
+
+export function conversationIdsEqual(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
+  return String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase()
+}
+
+export type ConversationLike = {
+  id: string
+  sync?: () => Promise<unknown>
+  consentState?: () => Promise<ConsentState>
+  updateConsentState?: (state: ConsentState) => Promise<unknown>
+}
+
+export type ListConversationsOptionsLike = {
+  consentStates?: ConsentState[]
+}
+
+export type ConversationsApiLike = {
+  sync: () => Promise<unknown>
+  syncAll?: (consentStates?: ConsentState[]) => Promise<unknown>
+  getConversationById: (id: string) => Promise<ConversationLike | null>
+  list: (options?: ListConversationsOptionsLike) => Promise<ConversationLike[]>
+  listGroups?: (options?: ListConversationsOptionsLike) => Promise<ConversationLike[]>
+}
+
+export type PreferencesApiLike = {
+  setConsentStates?: (
+    records: Array<{ entityType: ConsentEntityType; entity: string; state: ConsentState }>,
+  ) => Promise<unknown>
+}
+
+/** Consent states included when pulling server-side group memberships into a fresh browser install. */
+export const GROUP_MEMBERSHIP_CONSENT_SYNC_STATES = [
+  ConsentState.Unknown,
+  ConsentState.Allowed,
+] as const
+
+export function groupMembershipListOptions(): ListConversationsOptionsLike {
+  return { consentStates: [...GROUP_MEMBERSHIP_CONSENT_SYNC_STATES] }
+}
+
+export async function allowGroupConsentById(
+  preferencesApi: PreferencesApiLike | null | undefined,
+  groupId: string,
+): Promise<void> {
+  const normalizedId = groupId.trim()
+  if (!normalizedId || typeof preferencesApi?.setConsentStates !== 'function') return
+  try {
+    await preferencesApi.setConsentStates([
+      {
+        entityType: ConsentEntityType.GroupId,
+        entity: normalizedId,
+        state: ConsentState.Allowed,
+      },
+    ])
+  } catch {
+    // best effort
+  }
+}
+
+async function syncConversationIfSupported(convo: ConversationLike): Promise<void> {
+  if (typeof convo.sync === 'function') {
+    await convo.sync().catch(() => undefined)
+  }
+}
+
+export async function allowConversationIfUnknown(convo: ConversationLike): Promise<void> {
+  if (typeof convo.consentState !== 'function' || typeof convo.updateConsentState !== 'function') {
+    return
+  }
+  try {
+    const state = await convo.consentState()
+    if (state === ConsentState.Unknown) {
+      await convo.updateConsentState(ConsentState.Allowed)
+    }
+  } catch {
+    // best effort
+  }
+}
+
+export async function syncConversationsForGroupDiscovery(
+  conversationsApi: ConversationsApiLike,
+  options?: { force?: boolean; lightweight?: boolean },
+): Promise<void> {
+  const { coordinatedConversationSync } = await import('@/lib/xmtp/xmtpSyncCoordinator')
+  const result = await coordinatedConversationSync(conversationsApi, options)
+  if (result === 'skipped_cooldown' || result === 'skipped_in_flight') {
+    return
+  }
+}
+
+async function findConversationInLists(
+  conversationsApi: ConversationsApiLike,
+  normalizedId: string,
+): Promise<ConversationLike | null> {
+  const listOptions = groupMembershipListOptions()
+  const sources: Array<() => Promise<ConversationLike[]>> = [
+    () => conversationsApi.list(listOptions),
+    ...(typeof conversationsApi.listGroups === 'function'
+      ? [() => conversationsApi.listGroups!(listOptions)]
+      : []),
+  ]
+
+  for (const load of sources) {
+    try {
+      const convos = await load()
+      const match = convos.find((convo) => conversationIdsEqual(convo.id, normalizedId)) ?? null
+      if (match) return match
+    } catch {
+      // continue
+    }
+  }
+
+  return null
+}
+
+async function finalizeResolvedConversation(convo: ConversationLike): Promise<ConversationLike> {
+  await syncConversationIfSupported(convo)
+  await allowConversationIfUnknown(convo)
+  return convo
+}
+
+export async function resolveConversationById(
+  conversationsApi: ConversationsApiLike,
+  conversationId: string,
+  options?: { preferencesApi?: PreferencesApiLike | null; forceSync?: boolean },
+): Promise<ConversationLike | null> {
+  const normalizedId = conversationId.trim()
+  if (!normalizedId) return null
+
+  await allowGroupConsentById(options?.preferencesApi, normalizedId)
+
+  const tryGet = async (): Promise<ConversationLike | null> => {
+    try {
+      const convo = await conversationsApi.getConversationById(normalizedId)
+      if (!convo) return null
+      return finalizeResolvedConversation(convo)
+    } catch {
+      return null
+    }
+  }
+
+  const direct = await tryGet()
+  if (direct) return direct
+
+  await syncConversationsForGroupDiscovery(conversationsApi, {
+    force: options?.forceSync,
+    lightweight: !options?.forceSync,
+  })
+
+  const afterSync = await tryGet()
+  if (afterSync) return afterSync
+
+  const fromList = await findConversationInLists(conversationsApi, normalizedId)
+  if (fromList) {
+    return finalizeResolvedConversation(fromList)
+  }
+
+  return null
+}
+
+export async function resolveConversationByIdWithSyncRetries(
+  conversationsApi: ConversationsApiLike,
+  conversationId: string,
+  options?: {
+    rounds?: number
+    delayMs?: number
+    preferencesApi?: PreferencesApiLike | null
+    forceSync?: boolean
+  },
+): Promise<ConversationLike | null> {
+  const rounds = Math.max(1, options?.rounds ?? 3)
+  const delayMs = Math.max(0, options?.delayMs ?? 400)
+
+  for (let round = 0; round < rounds; round += 1) {
+    const resolved = await resolveConversationById(conversationsApi, conversationId, {
+      preferencesApi: options?.preferencesApi,
+      forceSync: options?.forceSync,
+    })
+    if (resolved) return resolved
+    if (round + 1 >= rounds) break
+    try {
+      await syncConversationsForGroupDiscovery(conversationsApi, {
+        force: options?.forceSync,
+        lightweight: !options?.forceSync,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (isXmtpRateLimitError(message)) break
+    }
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
+
+  return null
 }

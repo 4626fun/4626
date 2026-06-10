@@ -1,0 +1,629 @@
+# KPR Workflows — 4626
+
+KPR workflows that automate critical onchain operations for the 4626 protocol.
+
+**A single workflow manages every registered vault automatically.**
+
+## Files Using KPR
+
+Core KPR workflow files:
+- `kpr/kpr-workflows/project.yaml`
+- `kpr/kpr-workflows/keepr-action-queue/main.ts`
+- `kpr/kpr-workflows/keepr-action-queue/workflow.yaml`
+- `kpr/kpr-workflows/vault-keeper/main.ts`
+- `kpr/kpr-workflows/vault-keeper/workflow.yaml`
+- `kpr/kpr-workflows/cca-finalization/main.ts`
+- `kpr/kpr-workflows/cca-finalization/workflow.yaml`
+- `kpr/kpr-workflows/payout-integrity/main.ts`
+- `kpr/kpr-workflows/payout-integrity/workflow.yaml`
+
+KPR-to-app orchestration bridge files:
+- `frontend/api/_handlers/vaults/_activeProtected.ts`
+- `frontend/api/_handlers/keeper/_tend.ts`
+- `frontend/api/_handlers/keeper/_report.ts`
+- `frontend/api/_handlers/keeper/_sweep.ts`
+- `frontend/api/_handlers/keeper/_markSettled.ts`
+- `frontend/api/_handlers/keeper/_alert.ts`
+- `frontend/api/_handlers/keeper/_aiAssess.ts`
+- `frontend/api/_handlers/_routes.ts`
+- `frontend/server/agents/eliza/llm.ts`
+
+## Simulation-First Proof
+
+All commands below run from repo root and save logs under `kpr/tmp/evidence`.
+
+```bash
+# Create local evidence directory
+mkdir -p ../tmp/evidence
+
+# Terminal A: start local mock API bridge
+set -a && source .env && set +a
+node ../scripts/mock-kpr-api-server.mjs
+
+# Terminal B: DeFi + AI orchestration proof
+pnpm -C kpr run start -- payout-integrity \
+  | tee ../tmp/evidence/kpr-payout-integrity-local-simulation.log
+
+# Terminal B: Queue orchestration proof
+pnpm -C kpr run start -- keepr-action-queue \
+  | tee ../tmp/evidence/kpr-keepr-action-queue-local-simulation.log
+```
+
+Expected output highlights:
+- `payout-integrity`: `AI assessment: enabled=true verdict=critical confidence=0.93`
+- `payout-integrity`: `alertsSent: 2` with deterministic alerts in result payload
+- `keepr-action-queue`: `processed=0 succeeded=0 failed=0 retried=0 skipped=0`
+
+## What It Does
+
+Every 5 minutes, the unified `4626` workflow runs eight tasks in sequence:
+
+| Step | Task | What | Impact |
+|------|------|------|--------|
+| 1 | **Vault Keeper** | Deploy idle funds (`tend`), harvest yields (`report`) | Revenue |
+| 2 | **Payout Router Harvest** | Claim/convert external revenue into burn stream | Revenue |
+| 3 | **Ajna Bucket Manager** | Move Ajna liquidity buckets using oracle TWAP + local liquidity | Risk/Execution |
+| 4 | **Charm Rebalance Manager** | Trigger Charm vault `rebalance()` when price deviates by >= configured threshold | Risk/Execution |
+| 5 | **CCA Finalization** | Attempt canonical completion for graduated CCA auctions | Feature |
+| 6 | **Keepr Action Queue** | Process pending XMTP group ops + Neynar/Farcaster actions | Infrastructure |
+| 7 | **Bridge Integrity Monitor** | Monitor bridge signer overlap, route/scalar drift, and liveness freshness | Risk/Integrity |
+| 8 | **Vault Strategy Reallocator** | Cross-strategy Charm ↔ Ajna TVL convergence via `rebalanceStrategies()` (multi-pass) | Risk/Execution |
+
+An optional always-on listener complements cron for lower-latency strategy reactions:
+
+| Service | What | Mode |
+|---------|------|------|
+| **Strategy Signal Listener** | Subscribes to oracle v3Pool `Swap` events, evaluates Ajna/Charm thresholds, enqueues deduped strategy actions | Continuous (WebSocket) |
+
+Cron Ajna workflows stay enabled as fallback heartbeat and recovery path.
+Charm direct rebalance writes are disabled by default in favor of a single canonical lane:
+
+- producer: `strategy-signal-listener`
+- executor: `keepr-action-queue`
+
+Set `CHARM_REBALANCE_CANONICAL_MODE=direct` only when intentionally overriding to direct writer mode.
+
+## Problem This Solves
+
+4626 runs a multi-strategy, multi-chain protocol surface where value-critical operations span onchain state, external systems, and asynchronous workflows. Without deterministic orchestration, operators face:
+
+- missed or delayed actions (settlements, keeper actions, risk actions),
+- duplicated execution risk under retries and network instability,
+- inconsistent data assumptions across systems.
+
+This KPR layer solves that by making execution deterministic, auditable, and idempotent.
+
+## Why This Secures Value
+
+- **Reliable prices:** Chainlink Data Feeds and MVR reads provide accurate, reliable, non-manipulable reference inputs.
+- **Tamper-proof randomness:** Chainlink VRF 2.5 gives cryptographic proof randomness was generated from the request path.
+- **Verified offchain orchestration:** KPR executes offchain computation in deterministic workflow paths with capability-level guardrails.
+- **Operational safety:** idempotency keys, checkpoints, and replay-protection reduce duplicate writes and race-condition failures.
+
+## Core Product Strengths Used Here
+
+| Product | Strength | Where used |
+|---|---|---|
+| **KPR** | Verified offchain computation with deterministic trigger/capability orchestration | `kpr/kpr-workflows/**` |
+| **VRF 2.5** | Cryptographically verifiable randomness for fair lottery outcomes | `contracts/utilities/lottery/vrf/CreatorVRFConsumerV2_5.sol`, `contracts/utilities/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol` |
+
+## Roadmap
+
+- **Now:** deterministic KPR orchestration for indexing, data fetch, feed verification, decision checkpointing, and **cross-strategy vault reallocation** (`vault-strategy-reallocator` + keeper_jobs `rebalance` workflow).
+- **Next:** broaden low-latency event triggers and protocol guardrail workflows; expand keeper_jobs coverage for remaining split workflows (Ajna/Charm direct writers, Solana reconcile, payout-router fan-out).
+- **Later:** migrate more write paths to native KPR report receivers for end-to-end verifiable execution.
+
+Cross-strategy TVL moves are **shipped**, not roadmap. See `docs/operations/vault-strategy-reallocation.md` for queue order, planner math, automation surfaces, and regression gates.
+
+### Payout Integrity Monitor
+
+A dedicated KPR workflow runs every 30 minutes to verify the full fee pipeline:
+
+| Check | What | Severity |
+|-------|------|----------|
+| **creatorCoinPayoutRecipient** | Creator Coin `payoutRecipient()` matches configured lane mode (`payout_router` or `gauge`) | Critical |
+| **tradeFeeCollector** | ShareOFT `gaugeController()` matches expected collector (typically gauge) | Critical |
+| **Router Mode Wiring** | In `payout_router` mode, `PayoutRouter.burnStream()` must match expected burn stream and keeper should be configured | Critical/Warning |
+| **BPS Config** | `burnShareBps + lotteryShareBps + creatorShareBps + protocolShareBps == 10000` | Critical |
+| **Creator Treasury Guard** | If `creatorShareBps > 0`, `creatorTreasury` must be non-zero | Critical |
+| **Vault Wiring** | GaugeController's `vault()` matches registered vault | Critical |
+| **Burn Stream** | Active epoch not stale (>24h without `drip()`) | Warning |
+| **Gauge Balance** | GaugeController holds shares and `lastDistribution` is fresh | Warning |
+
+Alerts are sent to `POST /api/keeper/alert` and forwarded to the configured webhook.
+
+### Settlement Tracking
+
+Auction settlement is a one-time event (~7 days after deployment). The system tracks:
+
+- `graduated_at` — when `isGraduated()` first returns true
+- `settlement_stage` — current completion phase (`graduated_detected`, `awaiting_migration_block`, `awaiting_owner_hook_config`, `invariant_failed`, `completed`, ...)
+- `settled_at` — only after canonical completion (`sweepCurrency` + `migrate` + hook policy + invariant gate satisfied)
+
+Once settled, vaults are excluded from the `cca-finalization` workflow to avoid redundant reads. The on-chain `sweepCurrencyBlock` check remains a secondary guard.
+## Solana Workflows
+
+The Solana integration runs as separate workflows (cron-driven, independent from the unified 4626 runner):
+
+| Workflow | What | Schedule |
+|----------|------|----------|
+| **keepr-solana-relay-entries** | Relay PendingEntries PDAs to Base | 30s |
+| **keepr-solana-settle-fees** | Settle TransferFeeConfig fees to Base gauge | 5m |
+| **keepr-solana-winner-relay** | Relay Base winners to Solana WinnerRecord PDA | 1m |
+| **keepr-solana-graduation** | Close Alpha Vault when Base CCA graduates | 1m |
+| **keepr-solana-price-monitor** | Monitor DLMM price + recenter on deviation | 1m |
+| **bridge-integrity-monitor** | Monitor bridge route/scalar/liveness invariants from 4626 integration layer | 5m |
+
+Required env vars for Solana workflows (see `secrets.example.env`):
+- `SOLANA_RPC_URL`
+- `SOLANA_KEEPER_KEYPAIR` or `SOLANA_KEEPER_KEYPAIRS`
+- `SOLANA_KEEPER_PUBKEY`
+- `SOLANA_CREATOR_MINTS`
+- `SOLANA_SHARE_OFT_MAPPING`
+- `SOLANA_BRIDGE_ADAPTER`
+- `LOTTERY_MANAGER`
+
+Optional operational hardening for the winner relay:
+- `SOLANA_WINNER_RELAY_STATE_FILE` to persist Base event checkpoints across process restarts
+- `SOLANA_CREATOR_COIN_TO_MINT_MAPPING_FILE` for file-backed creatorCoin → Solana mint mappings
+- `SOLANA_TWIN_TO_PUBKEY_MAPPING_FILE` for file-backed Twin → Solana pubkey mappings
+
+## Solana Launch Scripts
+
+TypeScript launch helpers for DLMM + Alpha Vault:
+
+```bash
+# Create DLMM pool (requires DLMM_* env vars)
+npm run solana:create-dlmm-pool
+
+# Create Pro Rata Alpha Vault (requires ALPHA_VAULT_* env vars)
+npm run solana:create-alpha-vault
+```
+
+## Solana Authority Lifecycle
+
+Phase A/B/C authority actions (Token-2022 mint + program upgrade authority):
+
+```bash
+# Phase A: move mint authorities to multisig
+AUTHORITY_TYPES=mint_tokens,transfer_fee_config,withheld_withdraw,transfer_hook_program_id \
+NEW_AUTHORITY=MultisigPubkey \
+npm run solana:set-token-authority
+
+# Phase B: revoke hook reassignment authority
+AUTHORITY_TYPES=transfer_hook_program_id NEW_AUTHORITY=none \
+npm run solana:set-token-authority
+
+# Phase C: revoke program upgrade authority (optional)
+NEW_UPGRADE_AUTHORITY=none npm run solana:set-program-upgrade-authority
+```
+
+## Token Badge Applications
+
+Prepare application payloads for Meteora/Orca support:
+
+```bash
+BADGE_TARGET=meteora npm run solana:prepare-token-badge
+BADGE_TARGET=orca npm run solana:prepare-token-badge
+```
+
+The command prints two artifacts:
+- token metadata JSON payload (mint/name/symbol/uri/image/extensions)
+- a ready-to-submit token-list entry payload (`chainId`, `address`, `symbol`, `name`, `decimals`, `logoURI`, `extensions.metadata`)
+
+`logoURI` resolution order:
+1. if `CREATOR_TOKEN` is provided, default to
+   `https://<api-origin>/v1/token/<creator-token>/image?chain=<creator-chain>&style=raw&format=png`
+   (stable proxy pattern)
+2. otherwise use `TOKEN_IMAGE` / `TOKEN_IMAGE_URL` (explicit image)
+3. if both are set, proxy wins by default; set `TOKEN_IMAGE_EXPLICIT_OVERRIDE=1` to force explicit image
+
+For reliable wallet/aggregator icon display (Phantom/Backpack/Jupiter),
+complete all of the following:
+1. host a stable metadata URI (`TOKEN_METADATA_URI` or `TOKEN_URI`)
+2. use proxy fallback via `CREATOR_TOKEN` (or explicit image override when intentional)
+3. submit the generated token-list entry to the target indexer process where one exists (Jupiter, etc.)
+4. avoid changing metadata/image URLs after launch
+
+Meteora DLMM pool visibility is **on-chain** (pool + activation + LP) — not driven by this script.
+Meteora admin **`token_badge`** for Token-2022 hook mints is a separate Meteora ops process.
+
+## Solana Deployment Scripts
+
+Program + mint setup, PDA initialization, and supply bridging:
+
+```bash
+# Upgrade Anchor program (uses solana CLI)
+npm run solana:upgrade-program
+
+# Create Token-2022 mint (TransferFeeConfig + TransferHook)
+npm run solana:create-token-2022-mint
+
+# Initialize CreatorConfig + PendingEntries + WinnerRecord + ExtraAccountMetaList
+npm run solana:init-creator-pdas
+
+# Bridge initial supply to Solana
+npm run solana:bridge-supply
+```
+
+## Architecture
+
+### Legacy Runner (local `tsx runner.ts`)
+
+```
+cron (*/5 * * * *)
+    │
+    ▼
+┌──────────────────────┐
+│  4626.workflow.ts     │
+│  (unified entrypoint) │
+└──────────┬───────────┘
+           │
+    ┌──────┼──────────────────┐
+    ▼      ▼                  ▼
+ Vault   Auction           Keepr
+ Keeper  Settlement        Queue
+    │      │                  │
+    ▼      ▼                  ▼
+ Onchain  Onchain          HTTP API
+ (viem)   (viem)           (Vercel)
+    │      │                  │
+    └──────┴──────────────────┘
+           │
+    ┌──────┴──────┐
+    ▼             ▼
+ Registry API   Alerts
+ (vault list)   (webhook)
+```
+
+### KPR SDK Workflows
+
+```
+KPR runtime
+    │
+    ├── keepr-action-queue (every 30s)
+    │       └── HTTPClient → Vercel API
+    │
+    ├── vault-keeper (every 5m)
+    │       ├── EVMClient → read vault state (Base)
+    │       └── HTTPClient → POST /keeper/tend|report
+    │
+    ├── cca-finalization (hourly, unsettled vaults only)
+    │       ├── HTTPClient → GET /vaults/active?settled=false
+    │       ├── EVMClient → currentAuction, isGraduated, sweepCurrencyBlock
+    │       ├── HTTPClient → POST /keeper/sweep
+    │       └── HTTPClient → POST /keeper/mark-settled
+    │
+    └── payout-integrity (every 30m)
+            ├── HTTPClient → GET /vaults/active
+            ├── EVMClient → creatorCoinPayoutRecipient, tradeFeeCollector, BPS x4,
+            │                vault, lastDistribution, burnStream x3, balanceOf
+            └── HTTPClient → POST /keeper/alert (on failure)
+```
+
+The KPR stack now has two write models:
+
+- most workflows still use the existing **HTTP bridge pattern**, where on-chain
+  reads happen directly via `EVMClient` and writes are delegated to Vercel API
+  endpoints that execute transactions with the shared keeper wallet
+- canonical Ajna automation is different: opted-in vaults carry a per-vault
+  signer context, and Ajna writes execute from the creator's canonical Coinbase
+  Smart Wallet using that creator's Privy embedded EOA as the signer bridge
+
+There is **no** fallback from canonical Ajna execution to the shared protocol
+keeper wallet when the per-vault context is missing, revoked, or invalid.
+
+## Setup
+
+### 1. Create `.env`
+
+```bash
+cp secrets.example.env .env
+```
+
+Required:
+- `KPR_PRIVATE_KEY` — EOA private key for the keeper wallet
+- `BASE_RPC_URL` — Base mainnet RPC
+- `KPR_API_BASE_URL` — Your deployment (e.g. `https://4626.fun/api`)
+- `KPR_API_KEY` — API key for KPR-to-Vercel auth
+
+Optional (ERC-4337 smart wallet mode for shared/global keeper workflows):
+- `KPR_ERC4337_ENABLED=true`
+- `KPR_ERC4337_SMART_WALLET` — canonical smart wallet address (UserOp sender)
+- `KPR_ERC4337_BUNDLER_URL` — bundler endpoint (CDP or compatible)
+- `KPR_ERC4337_PAYMASTER_URL` — paymaster endpoint (optional)
+- `KPR_ERC4337_OWNER_PRIVATE_KEY` — EOA signer for UserOps (must be an onchain owner)
+- `KPR_ERC4337_VERSION` — Coinbase Smart Wallet version (`1` or `1.1`)
+- `KPR_ERC4337_PRIVY_WALLET_ID` — use Privy Wallet API for signing
+- `KPR_ERC4337_OWNER` — owner address (required for Privy signer)
+- Legacy aliases (`KPR_ERC4337_*`) remain accepted during migration.
+- `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_WALLET_AUTHORIZATION_KEY` — required for Privy signer
+
+Optional (alerting):
+- `KPR_ALERT_WEBHOOK_URL` — webhook URL for payout-integrity and settlement alerts
+
+Optional (Ajna bucket manager):
+- `AJNA_BUCKET_VAULT_ADDRESS` / `AJNA_BUCKET_ORACLE_ADDRESS` — explicit single-vault targeting for Ajna bucket workflow
+- `AJNA_BUCKET_CANONICAL_CSW_ADDRESS` / `AJNA_BUCKET_EMBEDDED_EOA_ADDRESS` / `AJNA_BUCKET_PRIVY_WALLET_ID` — explicit canonical sender context for manual/single-vault Ajna runs
+- `AJNA_BUCKET_CSW_VERSION` — optional Coinbase Smart Wallet version override for single-vault Ajna runs (`1` or `1.1`)
+- `AJNA_BUCKET_TWAP_DURATION`, `AJNA_BUCKET_TARGET_LTV_BPS`, `AJNA_BUCKET_PRICE_CHANGE_TRIGGER_BPS`
+- `AJNA_BUCKET_MOVE_THRESHOLD`, `AJNA_BUCKET_MAX_STEP`
+- `AJNA_BUCKET_MOVE_COOLDOWN_SECONDS`, `AJNA_BUCKET_LIQUIDITY_SEARCH_RADIUS`
+
+Canonical Ajna notes:
+- creator opt-in is per vault and currently scoped to `ajna_min_bucket_only`
+- sender is the creator's canonical CSW, not the protocol keeper wallet
+- signer bridge is the creator's Privy embedded EOA, not the XMTP server signer
+- new deploy-session launches on the auto-handoff batcher should already have `AjnaVaultAuth.admin = canonical CSW`
+- if canonical context cannot be proven, Ajna actions hard-stop with `canonical_sender_required:*`
+
+Optional (Charm rebalance manager):
+- `CHARM_REBALANCE_VAULT_ADDRESS` / `CHARM_REBALANCE_ORACLE_ADDRESS` — explicit single-vault targeting for Charm workflow
+- `CHARM_REBALANCE_TWAP_DURATION`, `CHARM_REBALANCE_PRICE_CHANGE_TRIGGER_BPS`
+- `CHARM_REBALANCE_CANONICAL_MODE` — `queue` (default, canonical) or `direct` (explicit override)
+
+Optional (strategy signal listener):
+- `BASE_WS_RPC_URL` — Base WebSocket RPC for `Swap` subscriptions
+- `STRATEGY_EVENT_DEBOUNCE_MS`, `STRATEGY_EVENT_COOLDOWN_SECONDS`, `STRATEGY_EVENT_MAX_ACTIONS_PER_HOUR`
+- `STRATEGY_EVENT_STATE_FILE`, `STRATEGY_EVENT_BACKFILL_CHUNK_BLOCKS`, `STRATEGY_EVENT_START_LOOKBACK_BLOCKS`, `STRATEGY_EVENT_BACKLOG_ALERT_BLOCKS`
+- `STRATEGY_EVENT_RECONNECT_DELAY_MS`, `STRATEGY_EVENT_RECONNECT_DELAY_MAX_MS`, `STRATEGY_EVENT_RECONNECT_BACKOFF_MULTIPLIER`
+### 2. Register Vaults
+
+Each vault is registered via `POST /api/keepr/vault/upsert`. Include contract addresses in `config_json`:
+
+```json
+{
+  "contracts": {
+    "ccaStrategy": "0x...",
+    "gaugeController": "0x...",
+    "burnStream": "0x..."
+  }
+}
+```
+
+- **Vault Keeper** processes every registered vault (only needs `vault_address`)
+- **Auction Settlement** only processes vaults with `contracts.ccaStrategy` that are not yet settled
+- **Payout Integrity** only processes vaults with `contracts.gaugeController`
+- **Keepr Queue** processes all pending actions regardless of vault
+
+### 3. Authorize the Keeper
+
+```bash
+# Per vault — authorize the keeper wallet
+cast send $VAULT --rpc-url $RPC "setKeeper(address)" $KEEPER_ADDRESS
+```
+
+If ERC-4337 is enabled, `KEEPER_ADDRESS` must be the smart wallet
+(`KPR_ERC4337_SMART_WALLET`). Otherwise, use the EOA derived from
+`KPR_PRIVATE_KEY`.
+
+Auction settlement is permissionless — no auth needed.
+
+Ajna exception: canonical Ajna automation does **not** use this shared keeper
+authorization. For opted-in vaults, `AjnaVaultAuth.admin()` must remain the
+creator's canonical CSW, and Ajna actions fail closed if that relationship no
+longer holds.
+
+Legacy vault migration:
+
+- if older vaults still have `AjnaVaultAuth.admin != canonical CSW`, run the Safe backfill script from the frontend workspace:
+  - `pnpm -C frontend exec tsx scripts/ops/ajna-admin-backfill-safe.ts --origin https://4626.fun --only-enabled`
+  - then re-run with `--propose --safe-address <SAFE> --safe-owner-pk <PK>` to submit `setAdmin(canonicalCsw)` proposals.
+- KPR Ajna workflows should remain fail-closed until this migration is complete for each mismatched vault.
+
+### 4. Fund the Keeper
+
+Send **0.1 ETH** to the keeper wallet on Base.
+
+This funds the shared keeper path for non-Ajna workflows. Canonical Ajna
+automation instead uses the creator's CSW/embedded-EOA path and does not
+fallback to the funded shared keeper.
+
+## Running
+
+```bash
+cd kpr
+npm install
+
+# Run everything
+npm start
+
+# Dry-run (simulates onchain writes)
+npm run dry-run
+
+# Run individual tasks
+npm run start:vault-keeper
+npm run start:ajna-bucket-manager
+npm run start:charm-rebalance-manager
+npm run start:cca-finalization
+npm run start:keepr-action-queue
+npm run start:strategy-signal-listener
+npm run start:bridge-integrity-monitor
+
+# Tests
+npm test
+```
+
+## Directory Structure
+
+```
+kpr/
+├── config.ts                           # ABIs, timing constants
+├── runner.ts                           # Local CLI runner
+├── package.json
+│
+├── kpr-workflows/                      # ← Official KPR SDK project
+│   ├── project.yaml                    # KPR project config (RPC, targets)
+│   ├── secrets.yaml                    # KPR secrets references
+│   ├── .env                            # Local simulation secrets
+│   ├── .gitignore                      # Excludes .wasm, .kpr/, .env
+│   ├── contracts/abi/                  # Shared ABI exports
+│   │   ├── Vault.ts
+│   │   ├── CCAStrategy.ts
+│   │   ├── GaugeController.ts
+│   │   ├── BurnStream.ts
+│   │   ├── CreatorCoin.ts
+│   │   ├── ERC20.ts
+│   │   └── index.ts
+│   ├── keepr-action-queue/             # HTTP-only queue processor
+│   │   ├── main.ts                     # KPR workflow (CronCapability + HTTPClient)
+│   │   ├── workflow.yaml
+│   │   ├── config.staging.json
+│   │   ├── config.production.json
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   ├── vault-keeper/                   # EVM reads + HTTP bridge writes
+│   │   ├── main.ts                     # KPR workflow (EVMClient + HTTPClient)
+│   │   ├── workflow.yaml
+│   │   ├── config.staging.json
+│   │   ├── config.production.json
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   ├── cca-finalization/               # Smart polling (hourly, DB-tracked)
+│   │   ├── main.ts                     # KPR workflow (EVMClient + HTTPClient)
+│   │   ├── workflow.yaml
+│   │   ├── config.staging.json
+│   │   ├── config.production.json
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   └── payout-integrity/              # Fee pipeline monitor (every 30m)
+│       ├── main.ts                     # KPR workflow (EVMClient + HTTPClient)
+│       ├── workflow.yaml
+│       ├── config.staging.json
+│       ├── config.production.json
+│       ├── package.json
+│       └── tsconfig.json
+│
+├── workflows/                          # Legacy runner workflows
+│   ├── 4626.workflow.ts                # Unified entrypoint (runs all 5)
+│   ├── vault-keeper.workflow.ts        # Standalone vault keeper
+│   ├── ajna-bucket-manager.workflow.ts # Standalone Ajna bucket manager
+│   ├── charm-rebalance-manager.workflow.ts # Standalone Charm rebalance manager
+│   ├── cca-finalization.workflow.ts    # Standalone CCA finalization
+│   ├── keepr-action-queue.workflow.ts
+│   └── strategy-signal-listener.workflow.ts # Always-on WS listener (event-driven queue enqueue)
+├── actions/
+│   ├── vault-keeper.action.ts          # tend/report logic (multi-vault)
+│   ├── cca-finalization.action.ts      # finalization logic (multi-vault, sweepCurrencyBlock guard)
+│   ├── keepr-action-queue.action.ts    # XMTP/Neynar queue processor
+│   └── strategy-signal-listener.action.ts # Swap event listener + trigger evaluation
+├── utils/
+│   ├── onchain.ts                      # viem clients, read/write/dry-run
+│   ├── registry.ts                     # Vault registry client
+│   ├── alerts.ts                       # Webhook alerting
+│   └── strategy-event-state.ts         # .state persistence (lastProcessedBlock/cooldowns/rate limit)
+├── tests/
+│   ├── vault-keeper.test.ts
+│   └── cca-finalization.test.ts
+└── secrets.example.env
+```
+
+### systemd Example (Strategy Event Listener)
+
+Use a dedicated unit so cron workflows remain independent:
+
+```ini
+[Unit]
+Description=4626 strategy signal listener
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=app4626
+Group=app4626
+WorkingDirectory=/opt/4626/kpr
+EnvironmentFile=/etc/4626/kpr.env
+ExecStart=/usr/bin/env pnpm --dir /opt/4626/kpr start:strategy-signal-listener
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+```
+
+## API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/vaults/active` | GET | Returns all registered vaults (supports `?settled=false` filter) |
+| `/api/keeper/tend` | POST | HTTP bridge — calls `tend()` on a vault |
+| `/api/keeper/report` | POST | HTTP bridge — calls `report()` on a vault |
+| `/api/keeper/sweep` | POST | HTTP bridge — canonical completion attempt (`sweepCurrency`, `migrate`, optional hook config, best-effort `sweepUnsoldTokens`) |
+| `/api/keeper/mark-settled` | POST | Records `graduated_at`, `settled_at`, and `settlement_stage` in DB |
+| `/api/keeper/alert` | POST | Receives alerts from KPR workflows, forwards to webhook |
+| `/api/keeper/aiAssess` | POST | AI advisory classification endpoint for payout-integrity (deterministic checks remain authoritative) |
+| `/api/keepr/actions/enqueue` | POST | Enqueues deduped strategy/XMTP actions |
+| `/api/keepr/actions/pending` | GET | Returns pending queue actions |
+| `/api/keepr/actions/updateStatus` | POST | Updates action status |
+
+All require `Authorization: Bearer $KPR_API_KEY`.
+
+## KPR SDK Workflows
+
+### Prerequisites
+
+1. **pnpm** installed
+2. **Bun** v1.0+ installed
+3. Local `.env` configured from `kpr/secrets.example.env`
+
+### Running KPR Workflows
+
+```bash
+# Install dependencies for a workflow
+cd kpr/kpr-workflows/keepr-action-queue && bun install
+
+# Simulate locally
+pnpm -C kpr run start -- keepr-action-queue
+pnpm -C kpr run start -- vault-keeper
+pnpm -C kpr run start -- cca-finalization
+pnpm -C kpr run start -- payout-integrity
+
+# Run workflow entrypoints
+pnpm -C kpr run start -- keepr-action-queue
+pnpm -C kpr run start -- payout-integrity
+```
+
+### KPR Secrets
+
+For local simulation, add these to `kpr/.env` and `kpr/kpr-workflows/.env` as needed.
+
+### KPR Quota Constraints
+
+| Resource | Limit | Impact |
+|----------|-------|--------|
+| EVM reads | ~11 per execution | vault-keeper: 1 vault per run; payout-integrity: 1 vault per run |
+| HTTP calls | 5 per execution | keepr-action-queue: 2 actions per run |
+| Cron interval | 30s minimum | keepr-action-queue uses 30s; cca-finalization uses 1h |
+| Concurrent capabilities | 3 | Sequential reads within each workflow |
+| Execution timeout | 5 minutes | All workflows complete well within this |
+
+### KPR Quota Budget
+
+**cca-finalization (hourly)**:
+- 1 HTTP (fetch unsettled vaults) + 3 EVM reads (currentAuction, isGraduated, sweepCurrencyBlock) + 1 HTTP (sweep) + 1 HTTP (mark-settled) = 3 HTTP + 3 EVM reads
+
+**payout-integrity (every 30 min, 1 vault per run)**:
+- 1 HTTP (fetch vaults) + ~15 EVM reads (creatorCoinPayoutRecipient, tradeFeeCollector, payoutRouter.burnStream, payoutRouter.keeper, BPS x4, creatorTreasury, vault, lastDistribution, burnStream x3, balanceOf) + 1 HTTP (alert if needed) = 2 HTTP + 15 EVM reads
+
+### HTTP Bridge Pattern
+
+Most KPR workflows cannot directly write to contracts (KPR uses a
+report-and-forwarder model). Instead, those workflows delegate writes to
+Vercel API endpoints:
+
+```
+KPR Workflow → HTTPClient.sendRequest(POST /keeper/tend) → Vercel API → viem writeContract → Base
+```
+
+The bridge endpoints authenticate with `KPR_API_KEY` and use the shared
+keeper wallet (`KPR_PRIVATE_KEY`) to submit transactions.
+
+Canonical Ajna automation is the current exception: Ajna bucket management can
+execute directly from KPR using the vault's stored canonical sender context, or
+enqueue canonical-only actions through the protected queue path. It does not
+reuse the XMTP server-signer flow and does not downgrade to the shared keeper.
+
+**Phase 4 (Future)**: Deploy `VaultKeeperReceiver` and `AuctionSettlementReceiver`
+Solidity contracts implementing `IReceiver.onReport()` to enable native KPR writes
+via `runtime.report()` + `evmClient.writeReport()`, removing the HTTP bridge.

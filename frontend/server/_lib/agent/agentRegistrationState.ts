@@ -1,4 +1,5 @@
 import { getDb, isDbConfigured } from '../db/postgres.js'
+import { ensureMigrationApplied } from '../db/schemaBootstrap.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../db/supabaseAdmin.js'
 
 type Db = {
@@ -22,51 +23,10 @@ export async function ensureAgentRegistrationStateSchema(): Promise<void> {
   const db = (await getDb()) as unknown as Db | null
   if (!db) return
   try {
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS agent_registration_state (
-        agent_key TEXT PRIMARY KEY,
-        payload_hash TEXT NOT NULL,
-        lens_uri TEXT NOT NULL,
-        gateway_url TEXT,
-        storage_key TEXT,
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    try {
-      await db.sql`ALTER TABLE agent_registration_state ADD COLUMN IF NOT EXISTS storage_key TEXT;`
-    } catch {
-      // Ignore if migration already applied or DDL is unavailable.
-    }
-    try {
-      await db.sql`ALTER TABLE agent_registration_state ENABLE ROW LEVEL SECURITY;`
-    } catch {
-      // Ignore if RLS cannot be enabled in this runtime.
-    }
-    try {
-      await db.sql`
-        DO $$
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1
-            FROM pg_policies
-            WHERE schemaname = 'public'
-              AND tablename = 'agent_registration_state'
-              AND policyname = 'agent_registration_state_deny_all'
-          ) THEN
-            CREATE POLICY agent_registration_state_deny_all
-              ON agent_registration_state
-              FOR ALL
-              TO public
-              USING (false)
-              WITH CHECK (false);
-          END IF;
-        END
-        $$;
-      `
-    } catch {
-      // Ignore if policy creation is unavailable in this runtime.
-    }
-    await db.sql`CREATE INDEX IF NOT EXISTS agent_registration_state_updated_idx ON agent_registration_state (updated_at DESC);`
+    // Authoritative migrations: 20260218152546_create_agent_registration_state.sql
+    // + 20260218155022_add_storage_key_to_agent_registration_state.sql
+    await ensureMigrationApplied(db as any, '20260218152546_create_agent_registration_state.sql').catch(() => {})
+    await ensureMigrationApplied(db as any, '20260218155022_add_storage_key_to_agent_registration_state.sql').catch(() => {})
     schemaEnsured = true
   } catch {
     schemaEnsured = false

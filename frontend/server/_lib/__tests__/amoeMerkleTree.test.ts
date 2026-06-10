@@ -9,7 +9,7 @@
 //        independent ways (helper + direct walk).
 //      * Single-leaf snapshot at index 0 with all-zero siblings exactly
 //        matches the canonical fixture's `allowlistRoot` (uses
-//        `circuits/amoe/build/input_v2.json` as oracle).
+//        `amoe/circuits/build/input_v2.json` as oracle).
 //      * Multi-leaf snapshot is order-sensitive: same leaves in
 //        different positions ⇒ different roots.
 //      * Bounds: too-many leaves throws; non-bigint leaves throw.
@@ -39,7 +39,7 @@ import {
 } from '../lottery/amoeMerkleTree.js'
 import { AmoeProofGenerationError } from '../lottery/proveAmoeEntryPlonk.js'
 
-// ---------- Canonical fixture values (from circuits/amoe/build/input_v2.json)
+// ---------- Canonical fixture values (from amoe/circuits/build/input_v2.json)
 // We hardcode them rather than reading the JSON to keep this test fast and
 // fully decoupled from the circuit build artifact. The witness suite
 // covers the read-from-JSON path.

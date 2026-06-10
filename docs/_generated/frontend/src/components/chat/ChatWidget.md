@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/chat/ChatWidget
+[4626-web](../../../index.md) / src/components/chat/ChatWidget
 
 # src/components/chat/ChatWidget
 
@@ -12,7 +12,7 @@
 
 > **ChatWidget**(`props`): `Element`
 
-Defined in: [src/components/chat/ChatWidget.tsx:665](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/ChatWidget.tsx#L665)
+Defined in: [src/components/chat/ChatWidget.tsx:698](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/ChatWidget.tsx#L698)
 
 Chat widget dock. The app layout owns the XMTP provider so directory pages,
 the availability rail, and the dock all share one client.

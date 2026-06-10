@@ -106,6 +106,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = INTERNAL_REGISTRATION_SECRET
+    delete process.env.DEPLOY_SOLANA_REQUIRE_INLINE_METEORA_PAYLOAD
     readDeployAuthMock.mockReturnValue({ address: '0x1111111111111111111111111111111111111111' })
     isAdminAddressMock.mockReturnValue(true)
     checkRateLimitMock.mockReturnValue({ allowed: true, resetAt: Date.now() + 60_000 })
@@ -169,7 +170,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -208,7 +209,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       readContract: vi.fn(async (args: any) => {
         switch (args.functionName) {
           case 'solanaBridgeAdapter':
-            return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
           case 'solanaDestination':
             return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
           case 'isRegistered':
@@ -244,7 +245,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       readContract: vi.fn(async (args: any) => {
         switch (args.functionName) {
           case 'solanaBridgeAdapter':
-            return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
           case 'solanaDestination':
             return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
           case 'isRegistered':
@@ -317,7 +318,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       readContract: vi.fn(async (args: any) => {
         switch (args.functionName) {
           case 'solanaBridgeAdapter':
-            return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
           case 'solanaDestination':
             return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
           case 'isRegistered':
@@ -361,7 +362,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       readContract: vi.fn(async (args: any) => {
         switch (args.functionName) {
           case 'solanaBridgeAdapter':
-            return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
           case 'solanaDestination':
             return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
           case 'isRegistered':
@@ -405,7 +406,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       readContract: vi.fn(async (args: any) => {
         switch (args.functionName) {
           case 'solanaBridgeAdapter':
-            return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
           case 'solanaDestination':
             return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
           case 'isRegistered':
@@ -467,7 +468,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -541,7 +542,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       readContract: vi.fn(async (args: any) => {
         switch (args.functionName) {
           case 'solanaBridgeAdapter':
-            return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
           case 'solanaDestination':
             return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
           case 'isRegistered':
@@ -590,7 +591,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -641,7 +642,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       readContract: vi.fn(async (args: any) => {
         switch (args.functionName) {
           case 'solanaBridgeAdapter':
-            return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
           case 'solanaDestination':
             return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
           case 'isRegistered':
@@ -692,7 +693,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -747,7 +748,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -813,7 +814,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -861,7 +862,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       readContract: vi.fn(async (args: any) => {
         switch (args.functionName) {
           case 'solanaBridgeAdapter':
-            return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
           case 'solanaDestination':
             return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
           case 'isRegistered':
@@ -873,7 +874,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         }
       }),
       getBytecode: vi.fn(async ({ address }: any) =>
-        String(address).toLowerCase() === '0x2414b595c4f18532a5836b6e2e6d536832c572e8' ? '0x1234' : '0x',
+        String(address).toLowerCase() === '0x700b4bbaf965c013123bad02a6562fba487ac0f1' ? '0x1234' : '0x',
       ),
     }
     createPublicClientMock.mockReturnValue(mockPublicClient as any)
@@ -903,7 +904,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -969,7 +970,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       const readContractMock = vi.fn(async (args: any) => {
         switch (args.functionName) {
           case 'solanaBridgeAdapter':
-            return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
           case 'solanaDestination':
             return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
           case 'isRegistered':
@@ -1064,7 +1065,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -1117,7 +1118,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -1174,7 +1175,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -1238,7 +1239,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -1322,7 +1323,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -1403,7 +1404,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -1471,7 +1472,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -1541,7 +1542,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -1623,7 +1624,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -1722,7 +1723,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':

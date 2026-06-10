@@ -11,7 +11,7 @@ This guide rolls out the secure agent control plane incrementally with backward-
 
 ## Backward Compatibility
 
-- Existing `KEEPR_API_KEY` authentication still works as baseline.
+- Existing `KPR_API_KEY` authentication still works as baseline.
 - Zone keys are **optional** until configured.
 - Existing `telegram_action_audit` behavior remains unchanged.
 - Existing execution handlers (`executeDeterministicCommand`, bid userOp path, keeper queue logic) are reused.
@@ -20,9 +20,9 @@ This guide rolls out the secure agent control plane incrementally with backward-
 
 ### Keeper trust-zone keys
 
-- `KEEPR_ZONE_KEY_FINANCIAL_EXECUTION`
-- `KEEPR_ZONE_KEY_MARKET_MAINTENANCE`
-- `KEEPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING`
+- `KPR_ZONE_KEY_FINANCIAL_EXECUTION`
+- `KPR_ZONE_KEY_MARKET_MAINTENANCE`
+- `KPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING`
 
 If a zone key is set, requests for that zone must include:
 
@@ -38,7 +38,7 @@ If unset, a deterministic repo fallback salt is used.
 
 ### 1) Deploy with zone keys unset
 
-Deploy code first with only `KEEPR_API_KEY` active.
+Deploy code first with only `KPR_API_KEY` active.
 
 Expected behavior:
 
@@ -84,7 +84,7 @@ Smoke-check:
 
 ## Operational Checklist
 
-- [ ] `KEEPR_API_KEY` present in API + workers
+- [ ] `KPR_API_KEY` present in API + workers
 - [ ] zone keys deployed only to intended trust-zone workers
 - [ ] `AGENT_REDACTION_SALT` set in secure env
 - [ ] control audit events observed in DB
@@ -98,8 +98,8 @@ Smoke-check:
 
 If zone enforcement causes disruption:
 
-1. unset `KEEPR_ZONE_KEY_*` vars in API runtime
-2. keep `KEEPR_API_KEY` unchanged
+1. unset `KPR_ZONE_KEY_*` vars in API runtime
+2. keep `KPR_API_KEY` unchanged
 3. redeploy API
 
 This returns keepers to baseline auth while preserving control/audit and redaction improvements.

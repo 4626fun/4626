@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/pages/admin/adminOpsHelpers
+[4626-web](../../../index.md) / src/pages/admin/adminOpsHelpers
 
 # src/pages/admin/adminOpsHelpers
 
@@ -134,7 +134,7 @@ Defined in: [src/pages/admin/adminOpsHelpers.ts:380](https://github.com/wenakita
 
 ##### hash?
 
-> `optional` **hash**: `` `0x${string}` ``
+> `optional` **hash**: `` `0x${string}` `` \| `null`
 
 Defined in: [src/pages/admin/adminOpsHelpers.ts:379](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/adminOpsHelpers.ts#L379)
 
@@ -388,7 +388,7 @@ Defined in: [src/pages/admin/adminOpsHelpers.ts:434](https://github.com/wenakita
 
 ### fetchLegacyPhase1Map()
 
-> **fetchLegacyPhase1Map**(`publicClient`, `owner?`): `Promise`\<`Map`\<`string`, \{ `shareOft`: `` `0x${string}` ``; `vault`: `` `0x${string}` ``; `wrapper`: `` `0x${string}` ``; \}\>\>
+> **fetchLegacyPhase1Map**(`publicClient`, `owner?`): `Promise`\<`Map`\<`string`, \{ `shareOft`: `string`; `vault`: `string`; `wrapper`: `string`; \}\>\>
 
 Defined in: [src/pages/admin/adminOpsHelpers.ts:546](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/adminOpsHelpers.ts#L546)
 
@@ -400,17 +400,17 @@ Defined in: [src/pages/admin/adminOpsHelpers.ts:546](https://github.com/wenakita
 
 ##### owner?
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
-`Promise`\<`Map`\<`string`, \{ `shareOft`: `` `0x${string}` ``; `vault`: `` `0x${string}` ``; `wrapper`: `` `0x${string}` ``; \}\>\>
+`Promise`\<`Map`\<`string`, \{ `shareOft`: `string`; `vault`: `string`; `wrapper`: `string`; \}\>\>
 
 ***
 
 ### fetchLegacyVesting()
 
-> **fetchLegacyVesting**(`publicClient`, `shareOft`, `beneficiary`): `Promise`\<`` `0x${string}` `` \| `null`\>
+> **fetchLegacyVesting**(`publicClient`, `shareOft`, `beneficiary`): `Promise`\<`string` \| `null`\>
 
 Defined in: [src/pages/admin/adminOpsHelpers.ts:523](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/adminOpsHelpers.ts#L523)
 
@@ -422,15 +422,15 @@ Defined in: [src/pages/admin/adminOpsHelpers.ts:523](https://github.com/wenakita
 
 ##### shareOft
 
-`` `0x${string}` ``
+`string`
 
 ##### beneficiary
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
-`Promise`\<`` `0x${string}` `` \| `null`\>
+`Promise`\<`string` \| `null`\>
 
 ***
 
@@ -596,7 +596,7 @@ Defined in: [src/pages/admin/adminOpsHelpers.ts:182](https://github.com/wenakita
 
 ### resolveShareOftFromVault()
 
-> **resolveShareOftFromVault**(`publicClient`, `vaultAddress`): `Promise`\<`` `0x${string}` `` \| `null`\>
+> **resolveShareOftFromVault**(`publicClient`, `vaultAddress`): `Promise`\<`string` \| `null`\>
 
 Defined in: [src/pages/admin/adminOpsHelpers.ts:581](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/adminOpsHelpers.ts#L581)
 
@@ -608,17 +608,17 @@ Defined in: [src/pages/admin/adminOpsHelpers.ts:581](https://github.com/wenakita
 
 ##### vaultAddress
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
-`Promise`\<`` `0x${string}` `` \| `null`\>
+`Promise`\<`string` \| `null`\>
 
 ***
 
 ### sendEmbeddedOwnerSmartWalletCall()
 
-> **sendEmbeddedOwnerSmartWalletCall**(`params`): `Promise`\<\{ `transactionHash`: `` `0x${string}` ``; `userOpHash`: `` `0x${string}` ``; \}\>
+> **sendEmbeddedOwnerSmartWalletCall**(`params`): `Promise`\<\{ `transactionHash`: `` `0x${string}` `` \| `null`; `userOpHash`: `` `0x${string}` ``; \}\>
 
 Defined in: [src/pages/admin/adminOpsHelpers.ts:626](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/adminOpsHelpers.ts#L626)
 
@@ -644,7 +644,7 @@ Defined in: [src/pages/admin/adminOpsHelpers.ts:626](https://github.com/wenakita
 
 ###### ownerAddress
 
-`` `0x${string}` ``
+`string`
 
 ###### publicClient
 
@@ -652,11 +652,11 @@ Defined in: [src/pages/admin/adminOpsHelpers.ts:626](https://github.com/wenakita
 
 ###### smartWallet
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
-`Promise`\<\{ `transactionHash`: `` `0x${string}` ``; `userOpHash`: `` `0x${string}` ``; \}\>
+`Promise`\<\{ `transactionHash`: `` `0x${string}` `` \| `null`; `userOpHash`: `` `0x${string}` ``; \}\>
 
 ***
 

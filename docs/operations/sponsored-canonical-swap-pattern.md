@@ -11,6 +11,16 @@ This is the known-good path for gas-sponsored canonical swaps when the browser s
 
 This path is first-class, not merely a fallback from sub-accounts. The sub-account is not involved unless a route explicitly opts into the sub-account provider and shows that sender in diagnostics.
 
+## Preflight
+
+Before executing a sponsored canonical swap, confirm:
+
+1. `executionMode` is canonical and `selectedSendMode` resolves to `canonical4337`.
+2. The Privy embedded EOA is an owner on the canonical CSW.
+3. Sell-token balance is present on the canonical CSW (not an external EOA snapshot).
+4. Route shape is wrap/approve/swap for native ETH sells (router native value remains `0`).
+5. Paymaster lane is available and not returning trust/policy denials.
+
 ## Working Shape
 
 The successful submit path is:
@@ -55,6 +65,16 @@ In that operation:
 - The CDP paymaster sponsors gas through EntryPoint.
 - Uniswap's swap proxy is approved to move WETH and routes into Universal Router / V4 Pool Manager.
 
+## Execute
+
+Submit exactly one `eth_sendUserOperation` containing:
+
+1. `WETH.deposit()`
+2. `WETH.approve(...)`
+3. Swap proxy `execute(...)`
+
+Do not switch to direct gas-send fallback for canonical sponsorship-denied flows.
+
 ## Debug Checklist
 
 A healthy debug panel should show:
@@ -74,3 +94,29 @@ last error=--
 If sponsorship fails with `missing_primary_call`, check that the paymaster allowlist recognizes the actual swap target and selector. For Uniswap Trading API routes, the target can be the swap proxy (`0x02E5...B2a9`) rather than the Universal Router directly.
 
 If sponsorship fails with a native-value router error, keep the route as WETH-backed: wrap with `WETH.deposit()` inside the UserOperation and send zero native value to the swap proxy/router.
+
+## Verify
+
+Post-submit verification:
+
+1. UserOperation hash resolves to a bundled transaction hash.
+2. Bundle tx shows canonical CSW as sender and token owner transitions.
+3. Swap completion notice includes a working Basescan link.
+4. Debug panel remains consistent with canonical sender/allowance wallet identity.
+
+Known-good output pattern:
+
+```text
+mode=canonical4337
+method=eth_sendUserOperation
+sender match=yes
+last error=--
+```
+
+## Rollback / Safe Abort
+
+If preflight or execute checks fail:
+
+1. Abort before submit (do not submit unsponsored canonical direct fallback).
+2. Keep user on canonical lane and surface explicit remediation (owner install, balance, paymaster availability).
+3. Retry only after preflight state changes (ownership, balance, or policy).

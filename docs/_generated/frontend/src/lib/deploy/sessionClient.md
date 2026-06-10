@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/deploy/sessionClient
+[4626-web](../../../index.md) / src/lib/deploy/sessionClient
 
 # src/lib/deploy/sessionClient
 
@@ -192,9 +192,17 @@ Defined in: [src/lib/deploy/sessionClient.ts:43](https://github.com/wenakita/462
 
 `number`
 
+###### parseTimeoutMs?
+
+`number`
+
 ###### postJson
 
 [`PostJsonWithTimeout`](#postjsonwithtimeout)
+
+###### requestTimeoutMs?
+
+`number`
 
 ###### shouldRetryAuth?
 
@@ -214,7 +222,7 @@ Defined in: [src/lib/deploy/sessionClient.ts:43](https://github.com/wenakita/462
 
 > **resumeAndPollDeploySession**(`params`): `Promise`\<[`DeploySessionStatusData`](#deploysessionstatusdata)\>
 
-Defined in: [src/lib/deploy/sessionClient.ts:74](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L74)
+Defined in: [src/lib/deploy/sessionClient.ts:78](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L78)
 
 #### Parameters
 

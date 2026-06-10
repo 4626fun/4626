@@ -11,8 +11,8 @@ import {
   RATE_LIMITS,
   checkRateLimit,
   rateLimitKey,
-} from '../../../../packages/server-core/src/index.js'
-import { isCreWriteCommandText } from '../../../../server/agent/eliza/plugins/cre/index.js'
+} from '@4626/server-core'
+import { isKeeperWriteCommandText } from '../../../../server/agents/eliza/plugins/keeperOps/index.js'
 import { isHermitUserAllowed } from '../../../../server/_lib/hermit/policy.js'
 import { executeHermitCommand } from '../../../../server/_lib/hermit/skillRouter.js'
 
@@ -84,7 +84,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  if (isCreWriteCommandText(command)) {
+  if (isKeeperWriteCommandText(command)) {
     return res.status(403).json({
       success: false,
       error: 'Hermit lane is read-only',

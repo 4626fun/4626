@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount, useSignMessage } from 'wagmi'
 import { base } from 'wagmi/chains'
+import { useLogin, usePrivy } from '@privy-io/react-auth'
+import {
+  usePrivyConnectWalletFromContext,
+  usePrivySetActiveWalletFromContext,
+} from '@/lib/privy/walletHooksContext'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
-import { useLogin, usePrivy } from '@privy-io/react-auth'
+import { BASE_ACCOUNT_WALLET_LOGIN_LIST } from '@/lib/privy/clientAppearance'
 
 type MeResponse = { address: string } | null
 type CswOwnershipAttestation = {
@@ -452,6 +457,8 @@ export function useSiweAuth() {
   const { signMessageAsync } = useSignMessage()
   const privyAny = useSafePrivyHook()
   const { login } = useSafeLoginHook()
+  const connectWallet = usePrivyConnectWalletFromContext()
+  const setActiveWallet = usePrivySetActiveWalletFromContext()
   const privyReady = Boolean(privyAny?.ready)
   const privyAuthenticated = Boolean(privyAny?.authenticated)
   const getPrivyAccessToken: (() => Promise<string | null>) | null =
@@ -755,8 +762,45 @@ export function useSiweAuth() {
 
   type SignInMethod = 'auto' | 'siwe' | 'privy'
 
-  const signIn = useCallback(async (opts?: { method?: SignInMethod; attestCswAddress?: string | null }): Promise<string | null> => {
+  const connectBaseAccountWalletForSignIn = useCallback(async (): Promise<boolean> => {
+    if (typeof connectWallet !== 'function') return false
+    try {
+      const result = await Promise.resolve(
+        connectWallet({
+          walletList: [...BASE_ACCOUNT_WALLET_LOGIN_LIST],
+          walletChainType: 'ethereum-only',
+          description: 'Sign in with your Coinbase Smart Wallet on Base.',
+        }),
+      ).catch((connectError: unknown) => {
+        const message = connectError instanceof Error ? connectError.message : String(connectError ?? '')
+        if (message.toLowerCase().includes('user') && message.toLowerCase().includes('reject')) return null
+        throw connectError
+      })
+
+      const selectedWallet =
+        result && typeof result === 'object' && 'wallet' in (result as Record<string, unknown>)
+          ? ((result as { wallet?: unknown }).wallet ?? null)
+          : (result ?? null)
+
+      if (selectedWallet && typeof setActiveWallet === 'function') {
+        await Promise.resolve(setActiveWallet(selectedWallet as Parameters<typeof setActiveWallet>[0])).catch(
+          () => null,
+        )
+      }
+
+      return Boolean(selectedWallet ?? result)
+    } catch {
+      return false
+    }
+  }, [connectWallet, setActiveWallet])
+
+  const signIn = useCallback(async (opts?: {
+    method?: SignInMethod
+    attestCswAddress?: string | null
+    preferBaseAccountWallet?: boolean
+  }): Promise<string | null> => {
     const method: SignInMethod = opts?.method ?? 'auto'
+    const preferBaseAccountWallet = opts?.preferBaseAccountWallet === true
     const attestCswAddressRaw = typeof opts?.attestCswAddress === 'string' ? opts.attestCswAddress.trim() : ''
     const attestCswAddress =
       /^0x[a-fA-F0-9]{40}$/.test(attestCswAddressRaw) ? attestCswAddressRaw : ''
@@ -766,6 +810,10 @@ export function useSiweAuth() {
       const allowPrivy = method === 'auto' || method === 'privy'
 
       if (allowPrivy) {
+        if (preferBaseAccountWallet && privyReady && typeof connectWallet === 'function') {
+          await connectBaseAccountWalletForSignIn()
+        }
+
         // Check if Privy already has a valid session before calling login().
         // The `authenticated` flag can lag behind the actual session state,
         // causing Privy to reject the login() call with "already logged in".
@@ -778,10 +826,19 @@ export function useSiweAuth() {
         }
 
         if (privyReady && !alreadyHasPrivySession && typeof login === 'function') {
+          const loginMethods = preferBaseAccountWallet
+            ? (['wallet'] as const)
+            : ([...PRIVY_INTERACTIVE_LOGIN_METHODS] as const)
           try {
-            await login({ loginMethods: [...PRIVY_INTERACTIVE_LOGIN_METHODS] })
+            await login({ loginMethods })
           } catch {
             // If Privy auth fails/cancels, fall back to SIWE below (only for method=auto).
+          }
+          if (getPrivyAccessToken) {
+            try {
+              const tokenAfterLogin = await getPrivyAccessToken()
+              if (tokenAfterLogin) alreadyHasPrivySession = true
+            } catch { /* ignore */ }
           }
         }
 
@@ -790,8 +847,8 @@ export function useSiweAuth() {
             // Privy auth state can lag for a short moment after login/cross-app return.
             // Retry a few times for explicit methods so we don't surface false "cancelled".
             const privyToken = await readPrivyAccessTokenWithRetry(getPrivyAccessToken, {
-              attempts: method === 'auto' ? 1 : 8,
-              delayMs: method === 'auto' ? 0 : 250,
+              attempts: method === 'auto' ? 1 : preferBaseAccountWallet ? 12 : 8,
+              delayMs: method === 'auto' ? 0 : preferBaseAccountWallet ? 250 : 250,
             })
             if (privyToken) {
               const addr = await signInWithPrivyToken(privyToken)
@@ -897,7 +954,18 @@ export function useSiweAuth() {
     } finally {
       setBusy(false)
     }
-  }, [address, getPrivyAccessToken, login, privyAuthenticated, privyReady, signInWithPrivyToken, signMessageAsync, supersedePendingRefresh])
+  }, [
+    address,
+    connectBaseAccountWalletForSignIn,
+    connectWallet,
+    getPrivyAccessToken,
+    login,
+    privyAuthenticated,
+    privyReady,
+    signInWithPrivyToken,
+    signMessageAsync,
+    supersedePendingRefresh,
+  ])
 
   const signOut = useCallback(async () => {
     setBusy(true)

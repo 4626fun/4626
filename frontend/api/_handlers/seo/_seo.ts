@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { handleOptions } from '../../../packages/server-core/src/index.js'
+import { handleOptions } from '@4626/server-core'
 import { getCanonicalOrigin } from '../../../server/_lib/infra/origin.js'
 
 type CanonicalRouteConfig = {

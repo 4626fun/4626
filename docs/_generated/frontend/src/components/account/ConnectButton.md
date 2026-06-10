@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/account/ConnectButton
+[4626-web](../../../index.md) / src/components/account/ConnectButton
 
 # src/components/account/ConnectButton
 
@@ -12,7 +12,7 @@
 
 > **ConnectButton**(`__namedParameters`): `Element`
 
-Defined in: [src/components/account/ConnectButton.tsx:235](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L235)
+Defined in: [src/components/account/ConnectButton.tsx:335](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L335)
 
 #### Parameters
 
@@ -32,7 +32,7 @@ Defined in: [src/components/account/ConnectButton.tsx:235](https://github.com/we
 
 > **deriveConnectButtonState**(`input`): `"hydrating"` \| `"connected-wallet"` \| `"session-restored"` \| `"signed-out"`
 
-Defined in: [src/components/account/ConnectButton.tsx:25](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L25)
+Defined in: [src/components/account/ConnectButton.tsx:59](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L59)
 
 #### Parameters
 
@@ -50,7 +50,7 @@ Defined in: [src/components/account/ConnectButton.tsx:25](https://github.com/wen
 
 > **deriveWalletIdentityPresentation**(`input`): `WalletIdentityPresentation`
 
-Defined in: [src/components/account/ConnectButton.tsx:141](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L141)
+Defined in: [src/components/account/ConnectButton.tsx:241](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L241)
 
 #### Parameters
 
@@ -64,11 +64,51 @@ Defined in: [src/components/account/ConnectButton.tsx:141](https://github.com/we
 
 ***
 
+### ExternalWalletOptions()
+
+> **ExternalWalletOptions**(`props`): `Element`
+
+Defined in: [src/components/account/ConnectButton.tsx:95](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L95)
+
+#### Parameters
+
+##### props
+
+###### authBusy
+
+`boolean`
+
+###### hasMultipleInjectedProviders
+
+`boolean`
+
+###### lockedEthereumProviderGlobal
+
+`boolean`
+
+###### onClose
+
+() => `void`
+
+###### shouldHideInjectedConnector
+
+`boolean`
+
+###### showPrivyDivider?
+
+`boolean`
+
+#### Returns
+
+`Element`
+
+***
+
 ### shouldAllowExternalWalletButtons()
 
 > **shouldAllowExternalWalletButtons**(`input`): `boolean`
 
-Defined in: [src/components/account/ConnectButton.tsx:42](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L42)
+Defined in: [src/components/account/ConnectButton.tsx:76](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L76)
 
 #### Parameters
 
@@ -86,7 +126,7 @@ Defined in: [src/components/account/ConnectButton.tsx:42](https://github.com/wen
 
 > **shouldResolveConnectIdentity**(`input`): `boolean`
 
-Defined in: [src/components/account/ConnectButton.tsx:55](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L55)
+Defined in: [src/components/account/ConnectButton.tsx:89](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L89)
 
 #### Parameters
 

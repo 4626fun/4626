@@ -9,14 +9,16 @@ returns a bundler `-32507` validation revert.
 
 ## TL;DR
 
-For the canonical CSW at `0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef` on Base, the
+For the canonical CSW at `0xAb6d5C10b03300326cd7fab7267ae192842967b5` on Base (migrated
+2026-04-23 from `0x4beabd…`; see `frontend/src/wallet/canonicalWalletPolicy.ts`), the
 Base App popup signs with a **per-session sub-account key that is not in the CSW's
 on-chain owner array**. ERC-1271 and bundler validation both correctly reject it.
 There is no client-side fix.
 
 The path forward is the **EOA-owner submission lane** — connect a wallet whose
-address is one of the on-chain owners (`0x5E1a0AFa913aD95aA3762b18Ea9AdD73d31313cf`
-or `0xCf8D17Ce01B73637ef936fe7c47bA7100b820142`) and sign the userOpHash with
+address is one of the on-chain EOA owners for `CANONICAL_CSW_ADDRESS` (live
+allowlist: `CANONICAL_CSW_ALLOWED_OWNER_EOAS` in
+`frontend/src/wallet/canonicalWalletPolicy.ts`) and sign the userOpHash with
 that key. See [the EOA-owner submission lane](#eoa-owner-submission-lane) below
 and the step-by-step verification doc at
 `docs/csw-eoa-owner-lane-verification.md`.
@@ -56,8 +58,8 @@ inside Base App, the popup returns a signature produced by a key that is
 **not in the CSW's on-chain owner array**. That key is part of the sub-account's
 session state, not the canonical wallet.
 
-For wallets where every owner is a passkey (owner[0] in our reference CSW
-`0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef`), this mismatch is invisible during
+For wallets where every owner is a passkey (owner[0] on the canonical CSW
+`0xAb6d5C10b03300326cd7fab7267ae192842967b5`), this mismatch is invisible during
 ERC-1271 checks because the popup routes signing back through a passkey
 credential that the CSW will accept. For mixed wallets that include EOA owners
 (indices 1, 2, …) the substitution surfaces as a bundler failure: the bundler
@@ -165,11 +167,10 @@ EOA owners. Implementation: `_submitOwnerViaPreparedCallsWithEoaOwner` in
 `frontend/src/lib/wallet/onboardingWallet.ts`, wired into
 `useAccountSetupController` as `submitOwnerInstallViaOnchainEoa`.
 
-For our reference CSW `0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef`, the
-on-chain EOA owners are:
-
-- `[1]` `0x5E1a0AFa913aD95aA3762b18Ea9AdD73d31313cf`
-- `[2]` `0xCf8D17Ce01B73637ef936fe7c47bA7100b820142`
+For the canonical CSW `0xAb6d5C10b03300326cd7fab7267ae192842967b5`
+(`CANONICAL_CSW_ADDRESS`), discover live EOA owners via `/dev/csw-signature-probe`
+(*load owner slots*) or read `CANONICAL_CSW_ALLOWED_OWNER_EOAS` in
+`frontend/src/wallet/canonicalWalletPolicy.ts` (slots drift — always verify on-chain).
 
 When to use:
 

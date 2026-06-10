@@ -30,8 +30,8 @@ import {
   rateLimitKey,
   readBoundedJsonObjectBody,
   resolveAuthorizedRequestPrincipal,
-} from '../../../packages/server-core/src/index.js'
-import { revokeCommandIssuerContext } from '../../../server/_lib/wallet/commandIssuerContext.js'
+} from '@4626/server-core'
+import { revokeCommandIssuerContext } from '@4626/server-core/identity'
 
 const REVOKE_BODY_MAX_BYTES = 8_192
 
@@ -83,12 +83,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { profileId } = principal
 
-  const outcome = await revokeCommandIssuerContext({ profileId, reason })
-  if (!outcome.ok) {
-    const statusCode = outcome.error === 'db_unavailable' ? 503 : 500
+  const ok = await revokeCommandIssuerContext(profileId, reason)
+  if (!ok) {
     return res
-      .status(statusCode)
-      .json({ success: false, error: outcome.error } satisfies ApiEnvelope<never>)
+      .status(500)
+      .json({ success: false, error: 'revoke_failed' } satisfies ApiEnvelope<never>)
   }
 
   return res.status(200).json({

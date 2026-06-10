@@ -1,6 +1,6 @@
 import { getKeeprVaultByGroupId } from '../_lib/keepr/keeprRegistry.js'
-import { resolveVaultAccessRoleFromVault } from '../agent/core/resolveVaultRole.js'
-import { toAgentError, toUserFacingAgentErrorMessage } from '../agent/eliza/_errors.js'
+import { resolveVaultAccessRoleFromVault } from '../agents/core/resolveVaultRole.js'
+import { toAgentError, toUserFacingAgentErrorMessage } from '../agents/eliza/_errors.js'
 import { getCommandFamily } from './registry.js'
 import { evaluateGroupAdminGate } from './telegramGroupAdminGate.js'
 import type { ExecuteCommandParams, KeeprCommandResult, KeeprRole } from './types.js'
@@ -8,8 +8,18 @@ import { executeCoinCommandFamily } from './families/coin.js'
 import { executeConversationalCommandFamily, looksLikeConversationalCommand } from './families/conversation.js'
 import { executeHelpCommandFamily } from './families/help.js'
 import { executeAlfaclubCommandFamily } from './families/alfaclub.js'
-import { isHermitUserAllowed } from '../_lib/hermit/policy.js'
+import { isHermitUserAllowed, isHermitOwner } from '../_lib/hermit/policy.js'
+import {
+  checkHermitCommandCooldown,
+  recordHermitCommandCooldown,
+  resolveHermitCooldownCommand,
+} from '../_lib/alfaclub/hermitCommandCooldown.js'
 import { executeHermitCommand } from '../_lib/hermit/skillRouter.js'
+import { pickHermitReactionEmoji } from '../_lib/hermit/reactionEmoji.js'
+import {
+  isHermitOperatorOnlyCommand,
+  isTrustedHermitOperator,
+} from '../_lib/hermit/operatorPolicy.js'
 import {
   executeKeeprCommandFamily,
   formatAssistantOnlyBlocked,
@@ -18,6 +28,7 @@ import { executeSendCommandFamily } from './families/send.js'
 import { executeTwitterCommandFamily } from './families/twitter.js'
 import { executeWhoisCommandFamily } from './families/whois.js'
 import { postTweetFromSystem } from '../twitter/commands.js'
+import { formatHermitXCrossPostSkipMessage, truncateWithEllipsis } from './hermitXPostHelpers.js'
 
 function resolveVaultRole(params: {
   senderWallet: ExecuteCommandParams['senderWallet']
@@ -65,27 +76,99 @@ function isAlfaClubChatId(chatId: string | undefined): boolean {
   return parseAlfaClubRoomIdFromChatId(chatId) !== null
 }
 
-function isGmeowPostToXFirstEnabled(): boolean {
-  const raw = String(process.env.HERMIT_GMEOW_POST_TO_X_FIRST ?? '')
+function isHermitNonAlfaClubPostXFirstEnabled(): boolean {
+  const raw = String(process.env.HERMIT_NON_ALFACLUB_POST_X_FIRST ?? '')
     .trim()
     .toLowerCase()
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}
+
+function isHermitAlfaClubPostXFirstEnabled(): boolean {
+  const raw = String(process.env.HERMIT_ALFACLUB_POST_X_FIRST ?? '1')
+    .trim()
+    .toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}
+
+function stripImageUrlsFromHermitReply(reply: string, mediaUrl: string | null): string {
+  const lines = reply
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => {
+      if (!isHttpUrl(line)) return true
+      if (mediaUrl && line === mediaUrl) return false
+      return !isLikelyImageUrl(line)
+    })
+  return lines.join('\n').trim()
 }
 
 function isHttpUrl(value: string): boolean {
   return /^https?:\/\/\S+$/i.test(value.trim())
 }
 
-function truncateWithEllipsis(value: string, maxLength: number): string {
-  if (value.length <= maxLength) return value
-  if (maxLength <= 1) return '…'
-  return `${value.slice(0, maxLength - 1).trimEnd()}…`
+function isLikelyImageUrl(value: string): boolean {
+  const trimmed = value.trim()
+  if (!isHttpUrl(trimmed)) return false
+  try {
+    const parsed = new URL(trimmed)
+    const path = parsed.pathname.toLowerCase()
+    if (/\.(gif|jpe?g|png|webp)$/.test(path)) return true
+    const filename = String(parsed.searchParams.get('filename') ?? '').toLowerCase()
+    if (/\.(gif|jpe?g|png|webp)$/.test(filename)) return true
+    return false
+  } catch {
+    return false
+  }
 }
 
-function buildGmeowTweetText(params: {
+function parseLeadingCommandToken(text: string): string {
+  const trimmed = text.trim()
+  if (!trimmed) return ''
+  const firstSpace = trimmed.indexOf(' ')
+  return (firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace)).toLowerCase()
+}
+
+type HermitXPostPayload = {
+  text: string
+  media: { url: string } | null
+}
+
+/** Native X media upload when possible; otherwise fall back to URL-in-text. */
+function buildHermitXPostPayload(params: {
   reply: string
-  memeCaption?: string
-  memeUrl?: string
+  fallbackCaption?: string
+  mediaUrl?: string | null
+  memeId?: string | null
+}): HermitXPostPayload {
+  const mediaUrl =
+    typeof params.mediaUrl === 'string' && isLikelyImageUrl(params.mediaUrl.trim())
+      ? params.mediaUrl.trim()
+      : null
+  if (mediaUrl) {
+    const caption =
+      stripImageUrlsFromHermitReply(params.reply, mediaUrl) ||
+      params.fallbackCaption?.trim() ||
+      'Hermit meme drop'
+    return {
+      text: truncateWithEllipsis(caption, 280),
+      media: { url: mediaUrl },
+    }
+  }
+  return {
+    text: buildHermitTweetText({
+      reply: params.reply,
+      fallbackCaption: params.fallbackCaption,
+      mediaUrl: undefined,
+    }),
+    media: null,
+  }
+}
+
+function buildHermitTweetText(params: {
+  reply: string
+  fallbackCaption?: string
+  mediaUrl?: string
 }): string {
   const lines = params.reply
     .split('\n')
@@ -93,9 +176,9 @@ function buildGmeowTweetText(params: {
     .filter(Boolean)
     .filter((line) => !line.startsWith('— Want me to remember your style?'))
 
-  const mediaUrl = params.memeUrl || lines.find((line) => isHttpUrl(line)) || ''
+  const mediaUrl = params.mediaUrl || lines.find((line) => isHttpUrl(line)) || ''
   const textLine =
-    lines.find((line) => !isHttpUrl(line)) || params.memeCaption || 'cat laugh from the Hermit cave.'
+    lines.find((line) => !isHttpUrl(line)) || params.fallbackCaption || 'Hermit meme drop'
 
   if (!mediaUrl) return truncateWithEllipsis(textLine, 280)
   const combined = `${textLine}\n${mediaUrl}`
@@ -105,12 +188,34 @@ function buildGmeowTweetText(params: {
   return `${truncateWithEllipsis(textLine, maxTextLength)}\n${mediaUrl}`
 }
 
+function pickFirstHermitMediaUrl(
+  attachments: Array<{ url?: string }> | undefined,
+): string | null {
+  if (!attachments || attachments.length === 0) return null
+  for (const attachment of attachments) {
+    const url = typeof attachment.url === 'string' ? attachment.url.trim() : ''
+    if (isLikelyImageUrl(url)) return url
+  }
+  return null
+}
+
+function pickFirstImageUrlFromReplyText(reply: string): string | null {
+  const lines = reply
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+  for (const line of lines) {
+    if (isLikelyImageUrl(line)) return line
+  }
+  return null
+}
+
 function extractTweetUrl(response: string): string | null {
   const match = response.match(/https:\/\/x\.com\/i\/web\/status\/\d+/i)
   return match?.[0] ?? null
 }
 
-type HermitRoomContext = {
+export type HermitRoomContext = {
   roomId: string | null
   userPreferences:
     | {
@@ -136,6 +241,9 @@ type HermitRoomContext = {
       >)
     | null
   clearPreferences: (() => Promise<boolean>) | null
+
+  // === Room 1659 Market Awareness (only populated for room 1659) ===
+  room1659Market?: import('../_lib/alfaclub/room1659Market.js').Room1659MarketSnapshot | null
 }
 
 /**
@@ -242,13 +350,34 @@ async function resolveHermitRoomContext(params: {
     }
   }
 
-  return {
+  const context: HermitRoomContext = {
     roomId,
     userPreferences: { spanishDialect, tone, onboardedAt },
     persistPreference,
     listPreferences,
     clearPreferences,
   }
+
+  // Room 1659 specific: attach live market context (hype, liquidation, user position)
+  if (roomId === '1659') {
+    try {
+      const { resolveRoom1659MarketContext } = await import('../_lib/alfaclub/room1659Market.js')
+      context.room1659Market = await resolveRoom1659MarketContext(params.senderWallet)
+    } catch (e) {
+      // Fail open — Hermit still works, just without market data
+      context.room1659Market = {
+        hyperliquidUser: '',
+        hype: null,
+        liquidation: null,
+        userPosition: null,
+        fetchedAt: new Date().toISOString(),
+        ok: false,
+        errorReason: 'load_failed',
+      }
+    }
+  }
+
+  return context
 }
 
 
@@ -278,7 +407,10 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
       return resolveVaultRole({ senderWallet: params.senderWallet, vault })
     }
 
-    const helpResult = executeHelpCommandFamily(raw)
+    const helpResult = await executeHelpCommandFamily(raw, {
+      chatId: params.chatId,
+      senderWallet: params.senderWallet,
+    })
     if (helpResult) {
       return helpResult
     }
@@ -332,8 +464,51 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
           senderWallet: params.senderWallet,
         })
       case 'hermit': {
-        if (!isAlfaClubChatId(params.chatId) && !isHermitUserAllowed(params.senderWallet)) {
+        const hermitCommand = parseLeadingCommandToken(raw)
+        const senderIsAllowlisted = isHermitUserAllowed(params.senderWallet)
+        const alfaClubChat = isAlfaClubChatId(params.chatId)
+        if (!alfaClubChat && !senderIsAllowlisted) {
           return { ok: false, response: 'Hermit access denied.' }
+        }
+        const hermitRole = await getRole(undefined)
+        const isRoomOwner = isHermitOwner(params.senderWallet)
+        const isTrustedOperator = isTrustedHermitOperator({
+          senderIsAllowlisted,
+          role: hermitRole,
+          isRoomOwner,
+        })
+        const operatorOnlyCommand = isHermitOperatorOnlyCommand(raw)
+        if (
+          alfaClubChat &&
+          operatorOnlyCommand &&
+          !isTrustedOperator
+        ) {
+          const restrictedCommand = hermitCommand === '/arena'
+            ? '/arena'
+            : hermitCommand === '/strategy'
+              ? '/strategy bias'
+              : '/signal'
+          return {
+            ok: false,
+            response:
+              `Hermit \`${restrictedCommand}\` is restricted to trusted operators (OWNER/ADMIN, allowlisted user, or HERMIT_OWNER_ADDRESS) in this room. To allow your wallet (e.g. 0x64c3... for 1659), set HERMIT_OWNER_ADDRESS or HERMIT_ALLOWED_USERS on the Railway alfaclub-bridge/hermit service and redeploy.`,
+          }
+        }
+        const alfaClubRoomId = parseAlfaClubRoomIdFromChatId(params.chatId)
+        const cooldownCommand = resolveHermitCooldownCommand(raw)
+        if (alfaClubChat && alfaClubRoomId && cooldownCommand) {
+          const cooldown = await checkHermitCommandCooldown({
+            roomId: alfaClubRoomId,
+            senderAddress: params.senderWallet,
+            command: cooldownCommand,
+          })
+          if (!cooldown.ok) {
+            const label = cooldownCommand === 'gmeow' ? '/gmeow' : '/meme'
+            return {
+              ok: false,
+              response: `Slow down — ${label} cooldown (${cooldown.retryAfterSec}s left in this room).`,
+            }
+          }
         }
         const hermitRoomContext = await resolveHermitRoomContext({
           chatId: params.chatId,
@@ -341,7 +516,9 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
         })
         const result = await executeHermitCommand({
           commandText: raw,
-          senderAddress: params.senderWallet,
+          senderAddress: params.senderWallet as `0x${string}`,
+          isTrustedOperator,
+          sourceIdentity: isAlfaClubChatId(params.chatId) ? 'alfaclub-bridge-runner' : null,
           ...(hermitRoomContext.roomId ? { roomId: hermitRoomContext.roomId } : {}),
           ...(hermitRoomContext.userPreferences
             ? { userPreferences: hermitRoomContext.userPreferences }
@@ -355,42 +532,109 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
           ...(hermitRoomContext.clearPreferences
             ? { clearPreferences: hermitRoomContext.clearPreferences }
             : {}),
+          // Room 1659 market data (hype, liquidation, user position)
+          ...(hermitRoomContext.room1659Market
+            ? { room1659Market: hermitRoomContext.room1659Market }
+            : {}),
         })
-        let response = result.reply
-        let suppressMediaAttachments = false
-        if (result.kind === 'gmeow' && isGmeowPostToXFirstEnabled()) {
-          const tweet = await postTweetFromSystem({
-            text: buildGmeowTweetText({
-              reply: result.reply,
-              memeCaption: result.meme?.caption,
-              memeUrl: result.meme?.url,
-            }),
-            groupId: params.groupId,
-            senderWallet: params.senderWallet,
+        if (alfaClubChat && alfaClubRoomId && cooldownCommand) {
+          await recordHermitCommandCooldown({
+            roomId: alfaClubRoomId,
+            senderAddress: params.senderWallet,
+            command: cooldownCommand,
           })
-          if (tweet.ok) {
-            const tweetUrl =
-              typeof tweet.action?.tweetUrl === 'string'
-                ? tweet.action.tweetUrl
-                : extractTweetUrl(tweet.response)
-            if (tweetUrl) {
-              response = `Posted on X:\n${tweetUrl}`
-              suppressMediaAttachments = true
+        }
+        const mediaUrl =
+          pickFirstHermitMediaUrl(result.mediaAttachments ?? []) ??
+          pickFirstImageUrlFromReplyText(result.reply)
+        const mediaAttachments = result.mediaAttachments ?? []
+        let response = result.reply
+        let alfaclubFollowUpText: string | null = null
+        let outboundAttachments = mediaAttachments
+
+        if (alfaClubChat && mediaAttachments.length > 0) {
+          response = stripImageUrlsFromHermitReply(response, mediaUrl)
+          if (!response) {
+            response = result.meme?.caption?.trim() || 'Hermit meme drop'
+          }
+          if (isHermitAlfaClubPostXFirstEnabled() && mediaUrl) {
+            const xPost = buildHermitXPostPayload({
+              reply: result.reply,
+              fallbackCaption: result.meme?.caption,
+              mediaUrl: mediaUrl ?? result.meme?.url,
+              memeId: result.meme?.id,
+            })
+            const tweet = await postTweetFromSystem({
+              text: xPost.text,
+              ...(xPost.media ? { media: xPost.media } : {}),
+              groupId: params.groupId,
+              senderWallet: params.senderWallet,
+            })
+            if (tweet.ok) {
+              const tweetUrl =
+                typeof tweet.action?.tweetUrl === 'string'
+                  ? tweet.action.tweetUrl
+                  : extractTweetUrl(tweet.response)
+              if (tweetUrl) {
+                // User-requested mode: post to X first, then post only the tweet
+                // URL in AlfaClub so the room render path is driven by X.
+                response = tweetUrl
+                outboundAttachments = []
+                alfaclubFollowUpText = null
+              }
+            } else {
+              response = `${response}\n_(${formatHermitXCrossPostSkipMessage(tweet.response)}.)_`.trim()
+            }
+          }
+        } else {
+          const shouldPostToXFirst =
+            Boolean(mediaUrl) || (result.kind === 'gmeow' && isHermitNonAlfaClubPostXFirstEnabled())
+          if (shouldPostToXFirst) {
+            const xPost = buildHermitXPostPayload({
+              reply: result.reply,
+              fallbackCaption: result.meme?.caption,
+              mediaUrl: mediaUrl ?? result.meme?.url,
+              memeId: result.meme?.id,
+            })
+            const tweet = await postTweetFromSystem({
+              text: xPost.text,
+              ...(xPost.media ? { media: xPost.media } : {}),
+              groupId: params.groupId,
+              senderWallet: params.senderWallet,
+            })
+            if (tweet.ok) {
+              const tweetUrl =
+                typeof tweet.action?.tweetUrl === 'string'
+                  ? tweet.action.tweetUrl
+                  : extractTweetUrl(tweet.response)
+              if (tweetUrl) {
+                response = `Posted on X:\n${tweetUrl}`
+                outboundAttachments = []
+              }
+            } else if (!tweet.ok) {
+              response = `${response}\n_(${formatHermitXCrossPostSkipMessage(tweet.response)}.)_`.trim()
             }
           }
         }
-        const mediaAttachments = suppressMediaAttachments
-          ? []
-          : (result.mediaAttachments ?? [])
+
+        const reactionEmoji = alfaClubChat
+          ? pickHermitReactionEmoji({
+              kind: result.kind,
+              tags: result.meme?.tags,
+            })
+          : null
+
         return {
           ok: true,
           response,
-          ...(mediaAttachments.length
+          ...(outboundAttachments.length || alfaclubFollowUpText || reactionEmoji
             ? {
                 action: {
                   action: 'hermit.command',
                   kind: result.kind,
-                  attachments: mediaAttachments,
+                  ...(outboundAttachments.length ? { attachments: outboundAttachments } : {}),
+                  ...(alfaclubFollowUpText ? { alfaclubFollowUpText } : {}),
+                  ...(reactionEmoji ? { reactionEmoji } : {}),
                 },
               }
             : {}),

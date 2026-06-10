@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/zora/cli/\_get
+[4626-web](../../../../index.md) / api/\_handlers/zora/cli/\_get
 
 # api/\_handlers/zora/cli/\_get
 

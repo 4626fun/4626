@@ -1,0 +1,5 @@
+/* AUTO-GENERATED from shared/site-config.json (backgroundColor) — run: pnpm sync:canvas-tokens */
+:root {
+  --trust-page-bg: #000000;
+  --trust-page-bg-rgb: 0 0 0;
+}

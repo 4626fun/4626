@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / server/keepr/sendCommand
+[4626-web](../../index.md) / server/keepr/sendCommand
 
 # server/keepr/sendCommand
 
@@ -28,7 +28,7 @@ Defined in: [server/keepr/sendCommand.ts:242](https://github.com/wenakita/4626/b
 
 ###### senderWallet
 
-`` `0x${string}` ``
+`string`
 
 ###### text
 

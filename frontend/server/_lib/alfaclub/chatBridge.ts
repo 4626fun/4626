@@ -19,18 +19,18 @@
  *
  * It does NOT own:
  *   - creative reply generation (`/hermit`, `/meme`, `/gmeow`) — those are
- *     delegated to the Hermit / Pinata creative lane (`hermit/skillRouter.ts`)
- *     via the deterministic executor's `hermit` family branch. The Pinata
+ *     delegated to the Hermit creative lane (`hermit/skillRouter.ts`)
+ *     via the deterministic executor's `hermit` family branch. The Hermit
  *     agent itself runs out-of-process; only its API endpoint + bearer
- *     are wired here through `HERMIT_PINATA_*` env.
+ *     are wired here through `HERMIT_AGENT_*` env.
  *   - Privy session-token rotation — that is the canonical Vercel cron at
  *     `/api/v1/alfaclub/chat-token-refresh`. The bridge reads the rotated
  *     `chat_jwt` row but does not write it.
  */
 
-import { executeDeterministicCommand } from '../../agent/core/executeDeterministicCommand.js'
 import { matchesAnyCommandFamily } from '../../commands/registry.js'
-import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
+import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
+import { extractTelegramRelayCommandText } from './telegramChatRef.js'
 import { logger } from '../infra/logger.js'
 import WebSocket from 'ws'
 import {
@@ -38,19 +38,36 @@ import {
   recordBridgeCfChallenge,
   recordBridgeCfChallengeRecovered,
   recordBridgeHistorySuccess,
+  recordBridgeProxyFallbackDirect,
   recordBridgeSocketBackoff,
   recordBridgeSuppressedSocketAttempt,
 } from './authHealthStore.js'
-import { upsertAlfaClubIngestMessages } from './chatIngestStore.js'
+import { upsertAlfaClubIngestMessages, type AlfaClubIngestMessage } from './chatIngestStore.js'
+import {
+  filterUnrepliedCommandMessageIds,
+  recordCommandReply,
+} from './commandReplyLedger.js'
 import { readAlfaClubChatToken } from './chatTokenStore.js'
 import { requestImmediatePrivyRefresh } from './privyTokenRefresher.js'
+import { parseTelegramChatRef } from './telegramChatRef.js'
+import { isKeeprRailwayAlfaClubSplit } from './keeprAlfaClubSplit.js'
+import {
+  ALFACLUB_API_COMMON_BROWSER_HEADERS,
+  buildAlfaClubApiHeaders,
+  readAlfaClubApiAuthFlags,
+  resolveAlfaClubApiCallBaseUrl,
+  resolveAlfaClubProxySecret,
+} from './apiAuth.js'
+
+export { isKeeprRailwayAlfaClubSplit } from './keeprAlfaClubSplit.js'
+export { resolveAlfaClubApiCallBaseUrl, resolveAlfaClubOriginHeaders } from './apiAuth.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
-const DEFAULT_API_BASE_URL = 'https://api.alfaclub.app'
 const DEFAULT_WS_URL = 'wss://ws.alfaclub.app'
 const DEFAULT_POLL_INTERVAL_MS = 6_000
 const DEFAULT_HISTORY_LIMIT = 20
+const DEFAULT_CRON_HISTORY_LIMIT = 12
 const DEFAULT_SEND_TIMEOUT_MS = 10_000
 const DEFAULT_HTTP_TIMEOUT_MS = 8_000
 const DEFAULT_WS_LIVE_FALLBACK_ENABLED = true
@@ -66,6 +83,8 @@ const SOCKET_BACKOFF_INITIAL_MS = 1_000
 const SOCKET_BACKOFF_CAP_MS = 60_000
 const LOG_ROLLUP_WINDOW_MS = 60_000
 const WS_CLOSE_CHURN_WINDOW_MS = 60_000
+const WS_BENIGN_ESCALATION_WINDOW_MS = 10 * 60_000
+const WS_BENIGN_ESCALATION_ROLLUP_WINDOWS = 5
 const WS_CLOSE_CHURN_THRESHOLD = 5
 const FIRST_TICK_RECENT_COMMAND_WINDOW_MS = 60_000
 
@@ -74,6 +93,23 @@ type AlfaClubRoomHistoryMessage = {
   date?: number
   sender?: string
   text?: string
+  username?: string
+  avatar?: string
+  isBot?: boolean
+  is_edited?: boolean
+  edit_deadline?: number
+  deleted_at?: number | string | null
+  deleted_by?: string | null
+  deleted_by_username?: string | null
+  reply_id?: string | null
+  reply_date?: number | null
+  reply_text?: string | null
+  reply_sender?: string | null
+  reply_username?: string | null
+  keys?: number | null
+  primary_tag?: string | null
+  primary_tag_variant?: string | null
+  reactions?: unknown
   attachments?: unknown
   reply_attachments?: unknown
 }
@@ -103,17 +139,38 @@ type AlfaClubOutboundFrame = {
   }
 }
 
+/** Best-effort WS reaction — AlfaClub has no public bot-token reaction API. */
+type AlfaClubReactionFrame = {
+  type: 'reaction'
+  value: {
+    room: string
+    message_id: string
+    emoji: string
+  }
+}
+
 export type AlfaClubChatBridgeFlags = {
   killSwitch: boolean
   enabled: boolean
   roomId: string | null
+  /**
+   * Rooms where hermit4626 creative commands and the core command surface are treated
+   * as first-class (polling priority, ops visibility, etc.).
+   * Populated from ALFACLUB_HERMIT_COMMAND_ROOMS (comma list) or legacy single ALFACLUB_CHAT_ROOM_ID.
+   */
+  hermitCommandRoomIds: string[]
   jwt: string | null
   ingestJwt: string | null
+  readBotToken: string | null
   botToken: string | null
   apiBaseUrl: string
+  wsProxyHttpSendUrl?: string | null
+  wsProxySecret?: string | null
   /**
    * Optional proxy origin for AlfaClub HTTP API calls
-   * (`/api/websocket/room_history_paginate` + `/api/websocket/update_read_msg`).
+   * (`/api/websocket/room_history_paginate` +
+   * `/api/websocket/update_read_msg` + optional
+   * `/api/room/:roomId/message` passthrough).
    *
    * Why this exists: AlfaClub's API origin is fronted by Cloudflare,
    * which has been observed to 403 (CF error 1010) requests from
@@ -132,9 +189,10 @@ export type AlfaClubChatBridgeFlags = {
    *     `Sec-Fetch-Site` headers) to `https://api.alfaclub.app`.
    *   - Return the upstream response unchanged (status, headers,
    *     JSON body).
-   *   - The proxy MUST NOT consume the AlfaClub command/reply path
-   *     (no posting back into the room). Vercel remains the
-   *     canonical command processor.
+   *   - Command replies still execute on Vercel. Proxies MAY
+   *     passthrough `/api/room/:roomId/message`; if not, the bridge
+   *     falls back to direct upstream sends when it sees
+   *     `path_not_allowed`.
    *
    * Routing-vs-fingerprint contract: even when this proxy is set,
    * the bridge keeps the upstream AlfaClub browser-fingerprint
@@ -173,7 +231,7 @@ export type AlfaClubChatBridgeFlags = {
 export type AlfaClubCommandMessage = {
   id: string
   date: number
-  sender: `0x${string}`
+  sender: string
   text: string
 }
 
@@ -184,13 +242,21 @@ type NormalizedHistoryMessage = {
   date: number
   sender: string
   text: string
+  isBot: boolean
   attachments: AlfaClubMessageAttachment[]
   replyAttachments: AlfaClubMessageAttachment[]
+}
+
+type BotTokenRoomHistoryMessage = Record<string, unknown>
+
+type BotTokenRoomHistoryResponse = {
+  messages?: BotTokenRoomHistoryMessage[]
 }
 
 export type AlfaClubChatBridgeSkipReason =
   | 'kill_switch'
   | 'disabled'
+  | 'railway_blocked'
   | 'env_missing'
   | 'already_running'
 
@@ -231,6 +297,10 @@ function parseBool(value: string | undefined): boolean {
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
 }
 
+function shouldBlockRailwayBridge(flags: Pick<AlfaClubChatBridgeFlags, 'enabled'>): boolean {
+  return flags.enabled && isKeeprRailwayAlfaClubSplit()
+}
+
 function parseBoolWithDefault(value: string | undefined, fallback: boolean): boolean {
   const raw = normalizeEnvScalar(value)
   if (!raw) return fallback
@@ -262,100 +332,6 @@ function normalizeEnvScalar(raw: string | undefined): string {
     return value.slice(1, -1).trim()
   }
   return value
-}
-
-function parseTelegramChatRef(value: string | null): {
-  chatId: string | null
-  inferredThreadId: number | null
-} {
-  const raw = String(value ?? '').trim()
-  if (!raw) return { chatId: null, inferredThreadId: null }
-
-  const privateRoomUrlMatch = /^https?:\/\/t\.me\/c\/(\d+)(?:\/(\d+))?\/?$/i.exec(raw)
-  if (privateRoomUrlMatch) {
-    const roomDigits = privateRoomUrlMatch[1]
-    return {
-      chatId: `-100${roomDigits}`,
-      inferredThreadId: parseOptionalPositiveInt(privateRoomUrlMatch[2], 2_000_000_000),
-    }
-  }
-
-  const publicChatUrlMatch = /^https?:\/\/t\.me\/([A-Za-z0-9_]{5,})(?:\/(\d+))?\/?$/i.exec(raw)
-  if (publicChatUrlMatch) {
-    const handle = publicChatUrlMatch[1]
-    return {
-      chatId: `@${handle}`,
-      inferredThreadId: parseOptionalPositiveInt(publicChatUrlMatch[2], 2_000_000_000),
-    }
-  }
-
-  return { chatId: raw, inferredThreadId: null }
-}
-
-function normalizeApiBaseUrl(raw: string | undefined): string {
-  const value = normalizeEnvScalar(raw) || DEFAULT_API_BASE_URL
-  try {
-    const url = new URL(value)
-    return `${url.origin}`
-  } catch {
-    return DEFAULT_API_BASE_URL
-  }
-}
-
-/**
- * Optional `ALFACLUB_CHAT_API_PROXY_URL` parser. Returns the proxy
- * origin if set and valid, `null` otherwise. HTTPS-only — refusing
- * to send the bot's `Authorization: Bearer <chat_jwt>` to a
- * cleartext relay is a hard rule.
- */
-function normalizeApiProxyUrl(raw: string | undefined): string | null {
-  const value = normalizeEnvScalar(raw)
-  if (!value) return null
-  try {
-    const url = new URL(value)
-    if (url.protocol !== 'https:') return null
-    return `${url.origin}`
-  } catch {
-    return null
-  }
-}
-
-function normalizeApiProxySecret(raw: string | undefined): string | null {
-  const value = normalizeEnvScalar(raw)
-  return value || null
-}
-
-function normalizeAlfaClubBotToken(raw: string | undefined): string | null {
-  const value = normalizeEnvScalar(raw)
-  return value || null
-}
-
-/**
- * Pick the URL the bridge should hit for an AlfaClub HTTP API call
- * (the *routing* URL — where the request is actually sent).
- *
- * If the operator has configured `ALFACLUB_CHAT_API_PROXY_URL`, use
- * it (proxy must implement the same paths and forward to AlfaClub
- * — see the doc comment on `AlfaClubChatBridgeFlags.apiProxyUrl`).
- * Otherwise fall back to `apiBaseUrl` (typically
- * `https://api.alfaclub.app`).
- *
- * NOTE: The routing URL is intentionally distinct from the
- * *fingerprint* base used to derive `Origin`/`Referer`/`Sec-Fetch-Site`
- * — see `resolveAlfaClubFingerprintBaseUrl`. With a proxy in front of
- * `https://api.alfaclub.app`, the request still represents itself as
- * coming from the alfaclub.app web client; the proxy forwards
- * unchanged, so the upstream Cloudflare WAF must see the same
- * browser-fingerprint headers it would on a direct call.
- *
- * Exported for tests. Production callers always pass the full
- * `flags` object.
- */
-export function resolveAlfaClubApiCallBaseUrl(flags: {
-  apiBaseUrl: string
-  apiProxyUrl: string | null
-}): string {
-  return flags.apiProxyUrl ?? flags.apiBaseUrl
 }
 
 /**
@@ -410,7 +386,19 @@ function isHexAddress(value: string): value is `0x${string}` {
 export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
   const roomIdRaw = normalizeEnvScalar(process.env.ALFACLUB_CHAT_ROOM_ID)
   const roomId = /^\d+$/.test(roomIdRaw) ? roomIdRaw : null
+
+  // Support multiple official Hermit command rooms (e.g. 1043 + the new 1659).
+  // Preferred: ALFACLUB_HERMIT_COMMAND_ROOMS="1043,1659"
+  // Fallback: the legacy single ALFACLUB_CHAT_ROOM_ID (for backward compat).
+  const hermitRoomsRaw =
+    normalizeEnvScalar(process.env.ALFACLUB_HERMIT_COMMAND_ROOMS) || roomIdRaw
+  const hermitCommandRoomIds = hermitRoomsRaw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => /^\d+$/.test(s))
+
   const groupIdRaw = normalizeEnvScalar(process.env.ALFACLUB_CHAT_GROUP_ID)
+  const authFlags = readAlfaClubApiAuthFlags()
   const telegramRelayBotToken =
     normalizeEnvScalar(process.env.ALFACLUB_TELEGRAM_BOT_TOKEN) ||
     normalizeEnvScalar(process.env.TELEGRAM_BOT_TOKEN) ||
@@ -431,17 +419,17 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
     killSwitch: parseBool(process.env.ALFACLUB_VIGILANTE_KILL_SWITCH),
     enabled: parseBool(process.env.ALFACLUB_CHAT_BRIDGE_ENABLED),
     roomId,
-    jwt: normalizeEnvScalar(process.env.ALFACLUB_CHAT_JWT) || null,
+    hermitCommandRoomIds,
+    jwt: authFlags.jwt,
     ingestJwt: normalizeEnvScalar(process.env.ALFACLUB_CHAT_INGEST_JWT) || null,
-    botToken: normalizeAlfaClubBotToken(
-      process.env.ALFACLUB_API_KEY ??
-        process.env.alfaclub_api_key ??
-        process.env.ALFACLUB_BOT_TOKEN,
-    ),
-    apiBaseUrl: normalizeApiBaseUrl(process.env.ALFACLUB_CHAT_API_BASE_URL),
-    apiProxyUrl: normalizeApiProxyUrl(process.env.ALFACLUB_CHAT_API_PROXY_URL),
-    apiProxySecret: normalizeApiProxySecret(process.env.ALFACLUB_CHAT_API_PROXY_SECRET),
+    readBotToken: authFlags.readBotToken,
+    botToken: authFlags.botToken,
+    apiBaseUrl: authFlags.apiBaseUrl,
+    apiProxyUrl: authFlags.apiProxyUrl,
+    apiProxySecret: authFlags.apiProxySecret,
     websocketUrl: normalizeWsUrl(process.env.ALFACLUB_CHAT_WS_URL),
+    wsProxyHttpSendUrl: normalizeEnvScalar(process.env.ALFACLUB_WS_PROXY_HTTP_SEND_URL) || null,
+    wsProxySecret: normalizeEnvScalar(process.env.ALFACLUB_WS_PROXY_SECRET) || null,
     groupId: groupIdRaw || `alfaclub-room-${roomId ?? 'unknown'}`,
     pollIntervalMs: parsePositiveInt(
       process.env.ALFACLUB_CHAT_POLL_INTERVAL_MS,
@@ -481,6 +469,79 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
   }
 }
 
+/** Vercel cron ticks cannot keep a live WS between invocations — skip by default. */
+export function readAlfaClubCronSkipLiveWebSocket(): boolean {
+  const raw = normalizeEnvScalar(process.env.ALFACLUB_BRIDGE_CRON_SKIP_WS).toLowerCase()
+  if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') return false
+  return true
+}
+
+/**
+ * Returns true if the given room is one of the official Hermit command surfaces
+ * for hermit4626 (creative commands + core bot surface).
+ */
+export function isHermitCommandRoom(roomId: string | null | undefined): boolean {
+  if (!roomId) return false
+  const flags = readAlfaClubChatBridgeFlags()
+  return flags.hermitCommandRoomIds.includes(roomId)
+}
+
+/** Rooms the Vercel/cron bridge polls each tick (primary + Hermit command surfaces). */
+export function resolveAlfaClubBridgePollRoomIds(
+  flags: Pick<AlfaClubChatBridgeFlags, 'roomId' | 'hermitCommandRoomIds'>,
+): string[] {
+  const ids = new Set<string>()
+  if (flags.roomId) ids.add(flags.roomId)
+  for (const roomId of flags.hermitCommandRoomIds) ids.add(roomId)
+  return [...ids]
+}
+
+export function canBridgeReplyInRoom(
+  flags: Pick<AlfaClubChatBridgeFlags, 'roomId' | 'hermitCommandRoomIds'>,
+  roomId: string,
+): boolean {
+  return resolveAlfaClubBridgePollRoomIds(flags).includes(roomId)
+}
+
+function aggregateBridgeTickResults(
+  results: AlfaClubChatBridgeTickResult[],
+  primaryRoomId: string,
+): AlfaClubChatBridgeTickResult {
+  if (results.length === 0) {
+    return {
+      seeded: false,
+      roomId: primaryRoomId,
+      fetched: 0,
+      unseen: 0,
+      processed: 0,
+      replied: 0,
+      errors: [],
+    }
+  }
+  return {
+    seeded: results.some((entry) => entry.seeded),
+    roomId: primaryRoomId,
+    fetched: results.reduce((sum, entry) => sum + entry.fetched, 0),
+    unseen: results.reduce((sum, entry) => sum + entry.unseen, 0),
+    processed: results.reduce((sum, entry) => sum + entry.processed, 0),
+    replied: results.reduce((sum, entry) => sum + entry.replied, 0),
+    errors: results.flatMap((entry) => entry.errors),
+  }
+}
+
+export function readAlfaClubChatBridgeFlagsForCronTick(): AlfaClubChatBridgeFlags {
+  const flags = readAlfaClubChatBridgeFlags()
+  const cronLimit = parsePositiveInt(
+    process.env.ALFACLUB_BRIDGE_CRON_HISTORY_LIMIT,
+    DEFAULT_CRON_HISTORY_LIMIT,
+    MAX_HISTORY_LIMIT,
+  )
+  return {
+    ...flags,
+    historyLimit: Math.min(flags.historyLimit, cronLimit),
+  }
+}
+
 export function buildAlfaClubOutboundFrame(params: {
   roomId: string
   text: string
@@ -498,6 +559,27 @@ export function buildAlfaClubOutboundFrame(params: {
   }
 }
 
+export function buildAlfaClubReactionFrame(params: {
+  roomId: string
+  messageId: string
+  emoji: string
+}): AlfaClubReactionFrame {
+  return {
+    type: 'reaction',
+    value: {
+      room: params.roomId,
+      message_id: params.messageId,
+      emoji: params.emoji.trim().slice(0, 16),
+    },
+  }
+}
+
+export function readAlfaClubBridgeReactionsEnabled(): boolean {
+  const raw = normalizeEnvScalar(process.env.ALFACLUB_BRIDGE_REACTIONS_ENABLED).toLowerCase()
+  if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') return false
+  return true
+}
+
 function normalizeHistoryMessage(message: AlfaClubRoomHistoryMessage): NormalizedHistoryMessage | null {
   const id = String(message.id ?? '').trim()
   if (!id) return null
@@ -510,6 +592,7 @@ function normalizeHistoryMessage(message: AlfaClubRoomHistoryMessage): Normalize
     date,
     sender,
     text,
+    isBot: message.isBot === true,
     attachments: normalizeAlfaClubAttachments(message.attachments),
     replyAttachments: normalizeAlfaClubAttachments(message.reply_attachments),
   }
@@ -522,7 +605,7 @@ function byChronologicalOrder(a: NormalizedHistoryMessage, b: NormalizedHistoryM
 
 function isAlfaClubSlashCommandText(text: string): boolean {
   if (!text.trimStart().startsWith('/')) return false
-  return matchesAnyCommandFamily(text, ['alfaclub', 'hermit'])
+  return matchesAnyCommandFamily(text, ['alfaclub', 'hermit', 'help'])
 }
 
 /**
@@ -536,9 +619,35 @@ const BARE_GMEOW_TRUSTED_SENDERS: ReadonlySet<string> = new Set([
   '0x8e521dfddc4a2bc6f30b5fb595263d0388af5fd5',
 ])
 
+const UNKNOWN_RELAY_SENDER_WALLET: `0x${string}` = '0x0000000000000000000000000000000000000000'
+
 function isBareGmeowFromTrustedSender(rawText: string, senderLower: string): boolean {
   if (!BARE_GMEOW_TRUSTED_SENDERS.has(senderLower)) return false
   return /^gmeow+\b/.test(rawText.trim().toLowerCase())
+}
+
+function isTelegramRelayedSlashCommand(rawText: string, extractedCommandText: string): boolean {
+  const command = String(extractedCommandText ?? '').trim()
+  if (!command.startsWith('/')) return false
+  const text = String(rawText ?? '').trim()
+  if (!text) return false
+  return (
+    /\(tg\s+(?:@[\w]+|tg:\d+)\)\s*$/i.test(text) ||
+    /^(?:\[[^\]]+\]\s+)?(?:@[\w]+|tg:\d+):\s+\/\S+/i.test(text)
+  )
+}
+
+/** Whether a history row could trigger the deterministic command executor. */
+export function isHistoryMessageCommandCandidate(message: AlfaClubRoomHistoryMessage): boolean {
+  const normalized = normalizeHistoryMessage(message)
+  if (!normalized || !normalized.text.trim()) return false
+  if (normalized.isBot) return false
+  const commandText = extractTelegramRelayCommandText(normalized.text)
+  const telegramRelayedCommand = isTelegramRelayedSlashCommand(normalized.text, commandText)
+  if (!isHexAddress(normalized.sender) && !telegramRelayedCommand) return false
+  if (normalized.sender === CANONICAL_CSW_ADDRESS.toLowerCase()) return false
+  const trustedBareGmeow = isBareGmeowFromTrustedSender(commandText, normalized.sender)
+  return trustedBareGmeow || isAlfaClubSlashCommandText(commandText)
 }
 
 /**
@@ -572,6 +681,10 @@ function shouldSuppressDeterministicReply(responseText: string): boolean {
   return SUPPRESSED_BRIDGE_REPLY_TEXTS.has(normalized)
 }
 
+function resolveCommandSenderWallet(sender: string): `0x${string}` {
+  return isHexAddress(sender) ? (sender as `0x${string}`) : UNKNOWN_RELAY_SENDER_WALLET
+}
+
 /** Exposed for unit tests. */
 export const _shouldSuppressDeterministicReplyForTests = shouldSuppressDeterministicReply
 
@@ -589,17 +702,20 @@ export function collectAlfaClubCommandMessages(params: {
   const commands: AlfaClubCommandMessage[] = []
   for (const entry of normalized) {
     if (params.seenMessageIds.has(entry.id)) continue
+    if (entry.isBot) continue
     if (!entry.text.trim()) continue
-    if (!isHexAddress(entry.sender)) continue
+    const commandText = extractTelegramRelayCommandText(entry.text)
+    const telegramRelayedCommand = isTelegramRelayedSlashCommand(entry.text, commandText)
+    if (!isHexAddress(entry.sender) && !telegramRelayedCommand) continue
     if (self && entry.sender === self) continue
-    if (entry.sender === TARGET_CANONICAL_CSW_ADDRESS.toLowerCase()) continue
-    const trustedBareGmeow = isBareGmeowFromTrustedSender(entry.text, entry.sender)
-    if (!trustedBareGmeow && !isAlfaClubSlashCommandText(entry.text)) continue
+    if (entry.sender === CANONICAL_CSW_ADDRESS.toLowerCase()) continue
+    const trustedBareGmeow = isBareGmeowFromTrustedSender(commandText, entry.sender)
+    if (!trustedBareGmeow && !isAlfaClubSlashCommandText(commandText)) continue
     commands.push({
       id: entry.id,
       date: entry.date,
       sender: entry.sender,
-      text: trustedBareGmeow ? '/gmeow' : entry.text.trim(),
+      text: trustedBareGmeow ? '/gmeow' : commandText.trim(),
     })
   }
   return commands
@@ -798,160 +914,18 @@ function extractAlfaClubActionAttachments(action: unknown): AlfaClubMessageAttac
   return normalizeAlfaClubAttachments(action.attachments)
 }
 
-/**
- * AlfaClub's API origin (`api.alfaclub.app`) is fronted by Cloudflare,
- * which blocks "browser-signature-banned" non-browser User-Agents with
- * HTTP 403 (CF error 1010). Production evidence 2026-05-01: the
- * deployed bridge sent only `Authorization` + `Accept`, Cloudflare
- * rejected with 403, the 403 was funnelled through
- * `wsLiveFallbackEnabled` and surfaced as a clean `fetched:0` tick —
- * silently masking the failure for the operator.
- *
- * Origin-agnostic browser-like headers we ALWAYS send. These don't
- * cross-reference a specific host, so they're safe to attach to any
- * AlfaClub API target (production, staging proxy, localhost replay).
- * Nothing here is secret: stable Chromium UA + a standard Accept
- * triple + the universally-applicable Sec-Fetch-Mode/Dest pair the
- * alfaclub.app web client sends.
- */
-const ALFACLUB_API_COMMON_BROWSER_HEADERS: Record<string, string> = {
-  // Stable Chromium UA. Bumping it is fine; the only constraint is
-  // "not the default Node fetch UA", which Cloudflare's
-  // browser-integrity check rejects. The major version below
-  // matches the `sec-ch-ua` declarations to avoid an inconsistent
-  // browser fingerprint.
-  'User-Agent':
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  Accept: 'application/json, text/plain, */*',
-  'Accept-Language': 'en-US,en;q=0.9',
-  // Most production fetches transparently negotiate gzip/deflate;
-  // omitting the header lets Cloudflare downgrade to identity, which
-  // is itself a small fingerprint signal. Match the alfaclub.app
-  // web client's negotiated set.
-  'Accept-Encoding': 'gzip, deflate, br',
-  // Client-Hints `sec-ch-ua` triple. Cloudflare's bot-management
-  // checks read these for the Chromium-major and platform fields and
-  // flag inconsistency between UA + sec-ch-ua as a bot signal. Pin
-  // them to match the UA's Chrome/124 + macOS triple above.
-  'sec-ch-ua':
-    '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-  'sec-ch-ua-mobile': '?0',
-  'sec-ch-ua-platform': '"macOS"',
-  // `Sec-Fetch-Mode` and `Sec-Fetch-Dest` are origin-agnostic and
-  // describe the request *kind*, not a relationship to a specific
-  // page origin — they're safe to send to any host.
-  'Sec-Fetch-Mode': 'cors',
-  'Sec-Fetch-Dest': 'empty',
+function extractAlfaClubFollowUpText(action: unknown): string | null {
+  if (!isJsonRecord(action)) return null
+  if (action.action !== 'hermit.command' && action.action !== 'help.followup') return null
+  const followUp = typeof action.alfaclubFollowUpText === 'string' ? action.alfaclubFollowUpText.trim() : ''
+  return followUp.length > 0 ? followUp : null
 }
 
-/**
- * Hosts whose `api.<x>` AlfaClub-family API the bridge knows about.
- * Bumping the list is OK; the production default is `alfaclub.app`.
- *
- * The pattern is: when the API base URL host is `api.<page>` for some
- * `<page>` in this set, the alfaclub.app web client sends:
- *   Origin: https://<page>
- *   Referer: https://<page>/
- *   Sec-Fetch-Site: same-site
- * That's the fingerprint Cloudflare checks for. Mirroring it stays in
- * the WAF allowlist.
- *
- * For anything outside the set (staging proxy, localhost replay,
- * unknown CDN), we omit Origin/Referer/Sec-Fetch-Site rather than
- * sending a contradictory `Origin: https://alfaclub.app` to a host
- * that has nothing to do with alfaclub.app — that fingerprint would
- * itself look fishy and could fail more aggressive WAFs / CORS
- * checks.
- */
-const ALFACLUB_KNOWN_PAGE_HOSTS: ReadonlySet<string> = new Set(['alfaclub.app'])
-
-type AlfaClubOriginHeaders = {
-  Origin?: string
-  Referer?: string
-  'Sec-Fetch-Site'?: string
-}
-
-/**
- * Resolve the origin/referer/Sec-Fetch-Site triplet for an AlfaClub
- * API request. Returns an empty object for hosts not on the known
- * AlfaClub-family list.
- */
-export function resolveAlfaClubOriginHeaders(apiBaseUrl: string): AlfaClubOriginHeaders {
-  let parsed: URL
-  try {
-    parsed = new URL(apiBaseUrl)
-  } catch {
-    return {}
-  }
-  const host = parsed.hostname.toLowerCase()
-  if (!host) return {}
-
-  // Strip a leading `api.` and check if what's left is a known
-  // AlfaClub page host. e.g. `api.alfaclub.app` → `alfaclub.app`.
-  const pageHost = host.startsWith('api.') ? host.slice('api.'.length) : host
-  if (!ALFACLUB_KNOWN_PAGE_HOSTS.has(pageHost)) return {}
-
-  // The web client always uses HTTPS for `alfaclub.app`. Pin it
-  // explicitly so a misconfigured `http://api.alfaclub.app` doesn't
-  // produce an `Origin: http://alfaclub.app` that the WAF might
-  // flag as a downgrade.
-  const origin = `https://${pageHost}`
-  return {
-    Origin: origin,
-    Referer: `${origin}/`,
-    // `same-site`: the API host (`api.alfaclub.app`) and the page
-    // host (`alfaclub.app`) share the registrable domain. If a
-    // future deploy ever routes the API through the page host
-    // itself, switch to `same-origin` — but that requires a code
-    // change, by design.
-    'Sec-Fetch-Site': 'same-site',
-  }
-}
-
-/**
- * Build the header bag for an authenticated AlfaClub API request.
- * Always returns a fresh object (callers must be free to add their
- * own per-request headers, e.g. `Content-Type` for POST bodies).
- *
- * The browser-fingerprint triplet (Origin/Referer/Sec-Fetch-Site) is
- * derived from `fingerprintBaseUrl`, which is INTENTIONALLY decoupled
- * from the routing URL the request is sent to:
- *
- *   - Direct call to the default AlfaClub API base
- *     (`https://api.alfaclub.app`): fingerprint base = same =
- *     emits `Origin: https://alfaclub.app` etc.
- *   - Direct call to a custom non-AlfaClub base (staging API,
- *     localhost replay): fingerprint base = same unknown host =
- *     omits Origin/Referer/Sec-Fetch-Site (we never emit a
- *     contradictory `Origin: https://alfaclub.app` to a host that
- *     has nothing to do with alfaclub.app).
- *   - Proxy routing
- *     (`ALFACLUB_CHAT_API_PROXY_URL=https://relay.example.com`)
- *     with the default upstream AlfaClub base: routing URL =
- *     proxy, fingerprint base = `https://api.alfaclub.app`. The
- *     proxy is documented to forward unchanged to
- *     `api.alfaclub.app`, so the upstream Cloudflare WAF must see
- *     the full browser fingerprint. Pre-fix, `buildAlfaClubApiHeaders`
- *     derived the triplet from the proxy origin (an unknown host),
- *     producing `{}` and weakening the fingerprint — defeating the
- *     point of the proxy escape hatch.
- *
- * The remaining headers (UA, Accept, Accept-Encoding, sec-ch-ua*,
- * Sec-Fetch-Mode, Sec-Fetch-Dest) are origin-agnostic and stay in
- * place regardless of routing/fingerprint base.
- */
-function buildAlfaClubApiHeaders(params: {
-  jwt: string
-  fingerprintBaseUrl: string
-  proxySecret?: string | null
-}): Record<string, string> {
-  const proxySecret = (params.proxySecret ?? '').trim()
-  return {
-    ...ALFACLUB_API_COMMON_BROWSER_HEADERS,
-    ...resolveAlfaClubOriginHeaders(params.fingerprintBaseUrl),
-    Authorization: `Bearer ${params.jwt}`,
-    ...(proxySecret ? { 'x-proxy-secret': proxySecret } : {}),
-  }
+function extractAlfaClubReactionEmoji(action: unknown): string | null {
+  if (!isJsonRecord(action)) return null
+  if (action.action !== 'hermit.command') return null
+  const emoji = typeof action.reactionEmoji === 'string' ? action.reactionEmoji.trim() : ''
+  return emoji.length > 0 ? emoji : null
 }
 
 /** Exposed for unit tests — common (origin-agnostic) headers. */
@@ -1050,12 +1024,8 @@ async function fetchRoomHistory(params: {
   /** URL the HTTP request is actually sent to (proxy or direct API base). */
   apiBaseUrl: string
   /**
-   * URL whose hostname determines the browser-fingerprint triplet
-   * (Origin/Referer/Sec-Fetch-Site). When `apiBaseUrl` is a proxy
-   * origin (set via `ALFACLUB_CHAT_API_PROXY_URL`), pass the
-   * upstream AlfaClub API base here so the WAF on the upstream still
-   * sees a full browser fingerprint. Defaults to `apiBaseUrl` for
-   * callers that don't know about the proxy split.
+   * URL whose hostname determines request fingerprint headers.
+   * The canonical fingerprint policy lives in `apiAuth.ts`.
    */
   fingerprintBaseUrl?: string
   /** Shared secret for the proxy gate. Omit on direct upstream calls. */
@@ -1100,6 +1070,134 @@ async function fetchRoomHistory(params: {
   }
   const body = (await response.json()) as AlfaClubRoomHistoryResponse
   return Array.isArray(body.messages) ? body.messages : []
+}
+
+function resolveBotHistoryMessageId(message: BotTokenRoomHistoryMessage): string {
+  const candidates = [message.id, message.messageId, message.message_id, message.uuid]
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue
+    const trimmed = candidate.trim()
+    if (trimmed) return trimmed
+  }
+  return ''
+}
+
+function resolveBotHistoryMessageDate(message: BotTokenRoomHistoryMessage): number {
+  const candidates = [
+    message.date,
+    message.created_at,
+    message.createdAt,
+    message.timestamp,
+    message.sent_at,
+  ]
+  for (const candidate of candidates) {
+    const numeric =
+      typeof candidate === 'number'
+        ? candidate
+        : typeof candidate === 'string'
+          ? Number(candidate)
+          : Number.NaN
+    if (Number.isFinite(numeric) && numeric > 0) return numeric
+  }
+  return 0
+}
+
+function resolveBotHistoryMessageSender(message: BotTokenRoomHistoryMessage): string {
+  const nestedSender =
+    message.sender && typeof message.sender === 'object' && !Array.isArray(message.sender)
+      ? (message.sender as Record<string, unknown>)
+      : null
+  const candidates = [
+    message.sender,
+    message.senderAddress,
+    message.sender_address,
+    message.walletAddress,
+    message.wallet_address,
+    nestedSender?.walletAddress,
+    nestedSender?.wallet_address,
+    nestedSender?.id,
+  ]
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue
+    const trimmed = candidate.trim().toLowerCase()
+    if (trimmed) return trimmed
+  }
+  return ''
+}
+
+function resolveBotHistoryMessageText(message: BotTokenRoomHistoryMessage): string {
+  const candidates = [message.text, message.message, message.body, message.content]
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue
+    return candidate
+  }
+  return ''
+}
+
+function mapBotHistoryMessageToBridgeMessage(
+  message: BotTokenRoomHistoryMessage,
+): AlfaClubRoomHistoryMessage | null {
+  const id = resolveBotHistoryMessageId(message)
+  const date = resolveBotHistoryMessageDate(message)
+  const sender = resolveBotHistoryMessageSender(message)
+  if (!id || !Number.isFinite(date) || date <= 0 || !sender) return null
+  return {
+    ...message,
+    id,
+    date,
+    sender,
+    text: resolveBotHistoryMessageText(message),
+  } as AlfaClubRoomHistoryMessage
+}
+
+async function fetchRoomHistoryViaReadBotToken(params: {
+  /** URL the HTTP request is actually sent to (proxy or direct API base). */
+  apiBaseUrl: string
+  /** Shared secret for the proxy gate. Omit on direct upstream calls. */
+  proxySecret?: string | null
+  roomId: string
+  readBotToken: string
+  limit: number
+  timeoutMs: number
+}): Promise<AlfaClubRoomHistoryMessage[]> {
+  // Keep read-token requests on the same browser-like envelope used by
+  // JWT lanes (shared constants in `apiAuth.ts`).
+  const url = new URL(`/api/room/${encodeURIComponent(params.roomId)}/messages`, params.apiBaseUrl)
+  url.searchParams.set('limit', String(params.limit))
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), params.timeoutMs)
+  let response: Response
+  try {
+    response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        ...ALFACLUB_API_COMMON_BROWSER_HEADERS,
+        Authorization: `Bearer ${params.readBotToken}`,
+        ...((params.proxySecret ?? '').trim()
+          ? { 'x-proxy-secret': String(params.proxySecret).trim() }
+          : {}),
+      },
+      signal: controller.signal,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`room_history_read_bot_failed:timeout:${message}`)
+  } finally {
+    clearTimeout(timeout)
+  }
+
+  if (!response.ok) {
+    const detail = await extractRoomHistoryErrorDetail(response)
+    const suffix = detail ? `:${detail}` : ''
+    throw new Error(`room_history_read_bot_failed:${response.status}${suffix}`)
+  }
+
+  const body = (await response.json()) as BotTokenRoomHistoryResponse
+  if (!Array.isArray(body.messages)) return []
+  return body.messages
+    .map((message) => mapBotHistoryMessageToBridgeMessage(message))
+    .filter((message): message is AlfaClubRoomHistoryMessage => Boolean(message))
 }
 
 async function markReadMessage(params: {
@@ -1298,15 +1396,208 @@ async function sendRoomMessageViaBotToken(params: {
   })
 }
 
+function isProxyPathNotAllowedError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const message = error.message
+  return (
+    (message.includes('bot_message_failed:404') || message.includes('jwt_message_failed:404')) &&
+    message.includes('"error":"path_not_allowed"')
+  )
+}
+
+function isBotMessageForbiddenError(error: unknown): boolean {
+  const message = (error instanceof Error ? error.message : String(error)).trim()
+  return (
+    message.includes('bot_message_failed:403') ||
+    (message.includes('bot_message_failed:404') && message.includes('"error":"forbidden"'))
+  )
+}
+
+function isJwtMessageAuthError(error: unknown): boolean {
+  const message = (error instanceof Error ? error.message : String(error)).trim()
+  return (
+    message.includes('jwt_message_failed:401') ||
+    message.includes('invalid or revoked token')
+  )
+}
+
+function shouldSkipRawWebSocketSend(flags: AlfaClubChatBridgeFlags): boolean {
+  if (flags.wsProxyHttpSendUrl) return false
+  return readAlfaClubCronSkipLiveWebSocket()
+}
+
+async function sendRoomMessageViaJwtHttp(params: {
+  apiBaseUrl: string
+  directApiBaseUrl: string
+  jwt: string
+  roomId: string
+  text: string
+  replyToMessageId?: string
+  proxySecret?: string | null
+  timeoutMs: number
+}): Promise<void> {
+  const url = new URL(`/api/room/${encodeURIComponent(params.roomId)}/message`, params.apiBaseUrl)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), params.timeoutMs)
+  let response: Response
+  try {
+    response = await fetch(url.toString(), {
+      method: 'POST',
+      headers: {
+        ...buildAlfaClubApiHeaders({
+          jwt: params.jwt,
+          fingerprintBaseUrl: params.directApiBaseUrl,
+          proxySecret: params.proxySecret,
+        }),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        body: truncateAlfaClubBotMessage(params.text),
+        ...(params.replyToMessageId ? { reply_id: params.replyToMessageId } : {}),
+      }),
+      signal: controller.signal,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`jwt_message_failed:timeout:${message}`)
+  } finally {
+    clearTimeout(timeout)
+  }
+  const bodyText = await response.text().catch(() => '')
+  if (!response.ok) {
+    const detail = redactForDiagnostics(bodyText.replace(/\s+/g, ' ').slice(0, 160))
+    throw new Error(`jwt_message_failed:${response.status}${detail ? `:${detail}` : ''}`)
+  }
+}
+
+async function sendRoomMessageViaJwtHttpWithProxyFallback(params: {
+  apiBaseUrl: string
+  directApiBaseUrl: string
+  jwt: string
+  roomId: string
+  text: string
+  replyToMessageId?: string
+  proxySecret?: string | null
+  timeoutMs: number
+}): Promise<void> {
+  try {
+    await sendRoomMessageViaJwtHttp(params)
+  } catch (error) {
+    const usingProxy = params.apiBaseUrl !== params.directApiBaseUrl
+    if (!usingProxy || !isProxyPathNotAllowedError(error)) {
+      throw error
+    }
+    logger.warn('[alfaclub-chat] jwt_reply_proxy_path_not_allowed:retry_direct', {
+      roomId: params.roomId,
+      apiBaseUrl: params.apiBaseUrl,
+      directApiBaseUrl: params.directApiBaseUrl,
+    })
+    recordBridgeProxyFallbackDirect()
+    await sendRoomMessageViaJwtHttp({
+      ...params,
+      apiBaseUrl: params.directApiBaseUrl,
+      proxySecret: null,
+    })
+  }
+}
+
+async function sendRoomMessageViaBotTokenWithProxyFallback(params: {
+  apiBaseUrl: string
+  directApiBaseUrl: string
+  botToken: string
+  roomId: string
+  text: string
+  replyToMessageId?: string
+  proxySecret?: string | null
+  idempotencyKey: string
+  timeoutMs: number
+}): Promise<BotSendResultSummary> {
+  try {
+    return await sendRoomMessageViaBotToken({
+      apiBaseUrl: params.apiBaseUrl,
+      botToken: params.botToken,
+      roomId: params.roomId,
+      text: params.text,
+      replyToMessageId: params.replyToMessageId,
+      proxySecret: params.proxySecret,
+      idempotencyKey: params.idempotencyKey,
+      timeoutMs: params.timeoutMs,
+    })
+  } catch (error) {
+    const usingProxy = params.apiBaseUrl !== params.directApiBaseUrl
+    if (!usingProxy || !isProxyPathNotAllowedError(error)) {
+      throw error
+    }
+    logger.warn('[alfaclub-chat] bot_reply_proxy_path_not_allowed:retry_direct', {
+      roomId: params.roomId,
+      apiBaseUrl: params.apiBaseUrl,
+      directApiBaseUrl: params.directApiBaseUrl,
+    })
+    recordBridgeProxyFallbackDirect()
+    return sendRoomMessageViaBotToken({
+      apiBaseUrl: params.directApiBaseUrl,
+      botToken: params.botToken,
+      roomId: params.roomId,
+      text: params.text,
+      replyToMessageId: params.replyToMessageId,
+      // Direct upstream call must not include proxy auth.
+      proxySecret: null,
+      idempotencyKey: params.idempotencyKey,
+      timeoutMs: params.timeoutMs,
+    })
+  }
+}
+
 async function sendRoomMessageViaWebSocket(params: {
   websocketUrl: string
+  wsProxyHttpSendUrl?: string | null
+  wsProxySecret?: string | null
   jwt: string
   roomId: string
   text: string
   attachments?: unknown
   replyToMessageId?: string
   timeoutMs: number
-}): Promise<void> {
+}): Promise<'ws_proxy_http' | 'websocket'> {
+  if (params.wsProxyHttpSendUrl) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), params.timeoutMs)
+    try {
+      const response = await fetch(params.wsProxyHttpSendUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...((params.wsProxySecret ?? '').trim()
+            ? { 'x-proxy-secret': String(params.wsProxySecret).trim() }
+            : {}),
+        },
+        body: JSON.stringify({
+          websocketUrl: params.websocketUrl,
+          jwt: params.jwt,
+          frame: buildAlfaClubOutboundFrame({
+            roomId: params.roomId,
+            text: params.text,
+            attachments: params.attachments,
+            replyToMessageId: params.replyToMessageId,
+          }),
+        }),
+        signal: controller.signal,
+      })
+      const bodyText = await response.text().catch(() => '')
+      if (!response.ok) {
+        const detail = redactForDiagnostics(bodyText.replace(/\s+/g, ' ').slice(0, 160))
+        throw new Error(`ws_proxy_send_failed:${response.status}${detail ? `:${detail}` : ''}`)
+      }
+      return 'ws_proxy_http'
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('ws_proxy_send_timeout')
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
   const WebSocketCtor = getBridgeWebSocketCtor()
   if (!WebSocketCtor) {
     throw new Error('ws_unavailable')
@@ -1324,7 +1615,7 @@ async function sendRoomMessageViaWebSocket(params: {
     }),
   )
 
-  await new Promise<void>((resolve, reject) => {
+  return await new Promise<'websocket'>((resolve, reject) => {
     let settled = false
     let opened = false
     const socket = new WebSocketCtor(wsUrl.toString())
@@ -1371,7 +1662,7 @@ async function sendRoomMessageViaWebSocket(params: {
         reject(new Error('ws_closed_before_open'))
         return
       }
-      resolve()
+      resolve('websocket')
     }
 
     const onError = (): void => {
@@ -1387,6 +1678,244 @@ async function sendRoomMessageViaWebSocket(params: {
   })
 }
 
+async function sendRoomReactionViaWebSocket(params: {
+  websocketUrl: string
+  wsProxyHttpSendUrl?: string | null
+  wsProxySecret?: string | null
+  jwt: string
+  roomId: string
+  messageId: string
+  emoji: string
+  timeoutMs: number
+}): Promise<void> {
+  const frame = buildAlfaClubReactionFrame({
+    roomId: params.roomId,
+    messageId: params.messageId,
+    emoji: params.emoji,
+  })
+
+  if (params.wsProxyHttpSendUrl) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), params.timeoutMs)
+    try {
+      const response = await fetch(params.wsProxyHttpSendUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...((params.wsProxySecret ?? '').trim()
+            ? { 'x-proxy-secret': String(params.wsProxySecret).trim() }
+            : {}),
+        },
+        body: JSON.stringify({
+          websocketUrl: params.websocketUrl,
+          jwt: params.jwt,
+          frame,
+        }),
+        signal: controller.signal,
+      })
+      if (!response.ok) {
+        throw new Error(`ws_proxy_reaction_failed:${response.status}`)
+      }
+      return
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
+  const WebSocketCtor = getBridgeWebSocketCtor()
+  if (!WebSocketCtor) throw new Error('ws_unavailable')
+
+  const wsUrl = new URL(params.websocketUrl)
+  wsUrl.searchParams.set('TOKEN', params.jwt)
+  wsUrl.searchParams.set('_k', '0')
+  const payload = JSON.stringify(frame)
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false
+    let opened = false
+    const socket = new WebSocketCtor(wsUrl.toString())
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      try {
+        socket.close()
+      } catch {}
+      reject(new Error('ws_reaction_timeout'))
+    }, params.timeoutMs)
+
+    const cleanup = (): void => {
+      clearTimeout(timer)
+      socket.removeEventListener('open', onOpen)
+      socket.removeEventListener('close', onClose)
+      socket.removeEventListener('error', onError)
+    }
+
+    const onOpen = (): void => {
+      opened = true
+      try {
+        socket.send(payload)
+      } catch (error) {
+        if (settled) return
+        settled = true
+        cleanup()
+        reject(error instanceof Error ? error : new Error(String(error)))
+        return
+      }
+      setTimeout(() => {
+        try {
+          socket.close()
+        } catch {}
+      }, DEFAULT_WS_CLOSE_DELAY_MS)
+    }
+
+    const onClose = (): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      if (!opened) {
+        reject(new Error('ws_reaction_closed_before_open'))
+        return
+      }
+      resolve()
+    }
+
+    const onError = (): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(new Error('ws_reaction_failed'))
+    }
+
+    socket.addEventListener('open', onOpen)
+    socket.addEventListener('close', onClose)
+    socket.addEventListener('error', onError)
+  })
+}
+
+async function reactToAlfaClubTriggerMessage(params: {
+  flags: AlfaClubChatBridgeFlags
+  jwt: string
+  roomId: string
+  messageId: string
+  emoji: string
+}): Promise<void> {
+  if (!readAlfaClubBridgeReactionsEnabled()) return
+  const emoji = params.emoji.trim()
+  if (!emoji) return
+  const jwt = params.jwt.trim()
+  if (!jwt) return
+
+  try {
+    await sendRoomReactionViaWebSocket({
+      websocketUrl: params.flags.websocketUrl,
+      wsProxyHttpSendUrl: (params.flags as any).wsProxyHttpSendUrl,
+      wsProxySecret: (params.flags as any).wsProxySecret,
+      jwt,
+      roomId: params.roomId,
+      messageId: params.messageId,
+      emoji,
+      timeoutMs: params.flags.sendTimeoutMs,
+    })
+    logger.info('[alfaclub-chat] command_reaction_sent', {
+      roomId: params.roomId,
+      messageId: params.messageId,
+      emoji,
+    })
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    logger.warn('[alfaclub-chat] command_reaction_failed', {
+      roomId: params.roomId,
+      messageId: params.messageId,
+      emoji,
+      error: detail.slice(0, 180),
+    })
+  }
+}
+
+async function sendCommandReplyToRoom(params: {
+  flags: AlfaClubChatBridgeFlags
+  jwt: string
+  roomId: string
+  text: string
+  attachments: AlfaClubMessageAttachment[]
+  replyToMessageId: string
+  commandMessageId: string
+}): Promise<string> {
+  const idempotencyKey = buildBotMessageIdempotencyKey({
+    roomId: params.roomId,
+    messageId: params.commandMessageId,
+  })
+  const hasAttachments = params.attachments.length > 0
+
+  if (hasAttachments) {
+    try {
+      const lane = await sendRoomMessageViaWebSocket({
+        websocketUrl: params.flags.websocketUrl,
+        wsProxyHttpSendUrl: (params.flags as any).wsProxyHttpSendUrl,
+        wsProxySecret: (params.flags as any).wsProxySecret,
+        jwt: params.jwt,
+        roomId: params.roomId,
+        text: params.text,
+        attachments: params.attachments,
+        replyToMessageId: params.replyToMessageId,
+        timeoutMs: params.flags.sendTimeoutMs,
+      })
+      return lane === 'ws_proxy_http' ? 'ws_proxy_http_with_reply_id' : 'websocket_with_reply_id'
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      logger.warn('[alfaclub-chat] ws_reply_with_attachments_failed', {
+        roomId: params.roomId,
+        messageId: params.commandMessageId,
+        error: detail.slice(0, 180),
+      })
+    }
+  }
+
+  if (params.flags.botToken) {
+    try {
+      const sendResult = await sendRoomMessageViaBotTokenWithProxyFallback({
+        apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
+        directApiBaseUrl: params.flags.apiBaseUrl,
+        botToken: params.flags.botToken,
+        roomId: params.roomId,
+        text: params.text,
+        replyToMessageId: params.replyToMessageId,
+        proxySecret: resolveAlfaClubProxySecret(params.flags),
+        idempotencyKey,
+        timeoutMs: params.flags.sendTimeoutMs,
+      })
+      if (!hasAttachments) {
+        return 'bot_token_with_reply_id'
+      }
+      logger.warn('[alfaclub-chat] bot_reply_text_only_attachments_dropped', {
+        roomId: params.roomId,
+        messageId: params.commandMessageId,
+        sendResult,
+      })
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      logger.warn('[alfaclub-chat] bot_reply_with_reply_id_failed', {
+        roomId: params.roomId,
+        messageId: params.commandMessageId,
+        error: detail.slice(0, 180),
+      })
+    }
+  }
+
+  const lane = await sendRoomMessageViaWebSocket({
+    websocketUrl: params.flags.websocketUrl,
+    wsProxyHttpSendUrl: (params.flags as any).wsProxyHttpSendUrl,
+    wsProxySecret: (params.flags as any).wsProxySecret,
+    jwt: params.jwt,
+    roomId: params.roomId,
+    text: params.text,
+    attachments: params.attachments,
+    replyToMessageId: params.replyToMessageId,
+    timeoutMs: params.flags.sendTimeoutMs,
+  })
+  return lane === 'ws_proxy_http' ? 'ws_proxy_http_fallback' : 'websocket_fallback'
+}
+
 type BridgeState = {
   seeded: boolean
   seenMessageIds: Set<string>
@@ -1394,6 +1923,7 @@ type BridgeState = {
   liveFallbackActive: boolean
   liveSocket: BridgeWebSocket | null
   liveSocketJwt: string | null
+  liveSocketWebsocketUrl: string | null
   liveSocketRoomId: string | null
 }
 
@@ -1406,6 +1936,7 @@ let bridgeState: BridgeState = {
   liveFallbackActive: false,
   liveSocket: null,
   liveSocketJwt: null,
+  liveSocketWebsocketUrl: null,
   liveSocketRoomId: null,
 }
 
@@ -1415,6 +1946,7 @@ const bridgeAuthState = {
   lastBadJwt: null as string | null,
   lastBadJwtAt: 0,
   lastBadJwtWarnAt: Number.NEGATIVE_INFINITY,
+  privyRefreshKickedThisTick: false,
   badJwtTtlMs: BAD_JWT_TTL_MS,
   socketBackoffMs: 0,
   socketBackoffUntil: 0,
@@ -1431,6 +1963,12 @@ const bridgeAuthState = {
   wsErrorFlushTimer: null as RollupTimer,
   wsErrorRoomId: null as string | null,
   wsErrorLastMessage: null as string | null,
+  wsErrorLastCode: null as string | null,
+  wsErrorLastErrno: null as string | null,
+  wsErrorLastHandshakeStatus: null as number | null,
+  wsErrorLastPhase: null as 'handshake' | 'connected' | 'unknown' | null,
+  wsErrorLastUpstream: null as string | null,
+  wsBenignWindowByRoom: new Map<string, number[]>(),
   wsCloseAtMs: [] as number[],
   wsCloseChurnLastLoggedAt: Number.NEGATIVE_INFINITY,
   cfChallengeRepeats: 0,
@@ -1441,6 +1979,14 @@ const bridgeAuthState = {
   cfChallengeLastCfRay: null as string | null,
   cfChallengeLastHtmlErrorCode: null as string | null,
   cfChallengeSustainedFlagged: false,
+}
+
+function recordBenignWsErrorWindow(params: { roomId: string; now: number }): { windowsInLast10m: number } {
+  const previous = bridgeAuthState.wsBenignWindowByRoom.get(params.roomId) ?? []
+  const recent = previous.filter((value) => params.now - value <= WS_BENIGN_ESCALATION_WINDOW_MS)
+  recent.push(params.now)
+  bridgeAuthState.wsBenignWindowByRoom.set(params.roomId, recent)
+  return { windowsInLast10m: recent.length }
 }
 
 function isFutureIsoTimestamp(value: string | null | undefined): boolean {
@@ -1551,10 +2097,6 @@ function resetSocketBackoff(): void {
 
 function noteSuppressedSocketAttempt(): void {
   recordBridgeSuppressedSocketAttempt()
-}
-
-function resolveAlfaClubProxySecret(flags: AlfaClubChatBridgeFlags): string | null {
-  return flags.apiProxyUrl ? flags.apiProxySecret : null
 }
 
 function flushAuthFailRollup(): void {
@@ -1724,13 +2266,24 @@ function flushWsErrorRollup(): void {
   const repeats = bridgeAuthState.wsErrorRepeats
   bridgeAuthState.wsErrorFlushTimer = null
   if (repeats > 1) {
-    logger.warn('[alfaclub-chat] ws_error:rollup', {
+    const benign = isBenignWsError({
+      message: bridgeAuthState.wsErrorLastMessage,
+      code: bridgeAuthState.wsErrorLastCode,
+      errno: bridgeAuthState.wsErrorLastErrno,
+    })
+    const emit = benign ? logger.info.bind(logger) : logger.warn.bind(logger)
+    emit('[alfaclub-chat] ws_error:rollup', {
       roomId: bridgeAuthState.wsErrorRoomId,
       repeats,
       windowStartedAt: bridgeAuthState.wsErrorFirstAt
         ? new Date(bridgeAuthState.wsErrorFirstAt).toISOString()
         : null,
       lastMessage: bridgeAuthState.wsErrorLastMessage,
+      code: bridgeAuthState.wsErrorLastCode,
+      errno: bridgeAuthState.wsErrorLastErrno,
+      handshakeStatus: bridgeAuthState.wsErrorLastHandshakeStatus,
+      phase: bridgeAuthState.wsErrorLastPhase,
+      upstream: bridgeAuthState.wsErrorLastUpstream,
     })
   }
   bridgeAuthState.wsErrorRepeats = 0
@@ -1738,11 +2291,35 @@ function flushWsErrorRollup(): void {
   bridgeAuthState.wsErrorLastLoggedAt = Number.NEGATIVE_INFINITY
   bridgeAuthState.wsErrorRoomId = null
   bridgeAuthState.wsErrorLastMessage = null
+  bridgeAuthState.wsErrorLastCode = null
+  bridgeAuthState.wsErrorLastErrno = null
+  bridgeAuthState.wsErrorLastHandshakeStatus = null
+  bridgeAuthState.wsErrorLastPhase = null
+  bridgeAuthState.wsErrorLastUpstream = null
 }
 
-function warnWsError(params: { roomId: string; message: string; now?: number }): void {
+function warnWsError(params: {
+  roomId: string
+  message: string
+  code?: string | null
+  errno?: string | null
+  syscall?: string | null
+  address?: string | null
+  port?: number | null
+  handshakeStatus?: number | null
+  phase?: 'handshake' | 'connected' | 'unknown'
+  upstream?: string | null
+  now?: number
+}): void {
   const now = params.now ?? Date.now()
   const truncated = params.message.slice(0, 180)
+  const normalizedCode = typeof params.code === 'string' ? params.code.trim() : ''
+  const normalizedErrno = typeof params.errno === 'string' ? params.errno.trim() : ''
+  const benign = isBenignWsError({
+    message: truncated,
+    code: normalizedCode || null,
+    errno: normalizedErrno || null,
+  })
 
   if (
     bridgeAuthState.wsErrorRepeats > 0 &&
@@ -1750,6 +2327,11 @@ function warnWsError(params: { roomId: string; message: string; now?: number }):
   ) {
     bridgeAuthState.wsErrorRepeats += 1
     bridgeAuthState.wsErrorLastMessage = truncated
+    bridgeAuthState.wsErrorLastCode = normalizedCode || null
+    bridgeAuthState.wsErrorLastErrno = normalizedErrno || null
+    bridgeAuthState.wsErrorLastHandshakeStatus = params.handshakeStatus ?? null
+    bridgeAuthState.wsErrorLastPhase = params.phase ?? 'unknown'
+    bridgeAuthState.wsErrorLastUpstream = params.upstream ?? null
     return
   }
 
@@ -1757,12 +2339,35 @@ function warnWsError(params: { roomId: string; message: string; now?: number }):
   bridgeAuthState.wsErrorRepeats = 1
   bridgeAuthState.wsErrorRoomId = params.roomId
   bridgeAuthState.wsErrorLastMessage = truncated
+  bridgeAuthState.wsErrorLastCode = normalizedCode || null
+  bridgeAuthState.wsErrorLastErrno = normalizedErrno || null
+  bridgeAuthState.wsErrorLastHandshakeStatus = params.handshakeStatus ?? null
+  bridgeAuthState.wsErrorLastPhase = params.phase ?? 'unknown'
+  bridgeAuthState.wsErrorLastUpstream = params.upstream ?? null
 
-  logger.warn('[alfaclub-chat] ws_error', {
+  const benignWindowStats = benign
+    ? recordBenignWsErrorWindow({ roomId: params.roomId, now })
+    : { windowsInLast10m: 0 }
+  const benignShouldEscalate = benign && benignWindowStats.windowsInLast10m >= WS_BENIGN_ESCALATION_ROLLUP_WINDOWS
+  // Benign ws handshake churn (non-101/network flap) is expected under
+  // upstream instability and should not page operators. Keep it at info
+  // level, but surface sustained windows via `benignEscalated` metadata.
+  const emit = benign ? logger.info.bind(logger) : logger.warn.bind(logger)
+  emit('[alfaclub-chat] ws_error', {
     roomId: params.roomId,
     repeats: 1,
     windowStartedAt: new Date(now).toISOString(),
     message: truncated,
+    code: normalizedCode || null,
+    errno: normalizedErrno || null,
+    syscall: params.syscall ?? null,
+    address: params.address ?? null,
+    port: params.port ?? null,
+    handshakeStatus: params.handshakeStatus ?? null,
+    phase: params.phase ?? 'unknown',
+    upstream: params.upstream ?? null,
+    benignEscalated: benignShouldEscalate,
+    benignWindowsInLast10m: benignWindowStats.windowsInLast10m,
   })
   bridgeAuthState.wsErrorLastLoggedAt = now
 
@@ -1774,6 +2379,125 @@ function warnWsError(params: { roomId: string; message: string; now?: number }):
     ;(timer as { unref: () => void }).unref()
   }
   bridgeAuthState.wsErrorFlushTimer = timer
+}
+
+function isBenignWsErrorMessage(message: string | null | undefined): boolean {
+  return isBenignWsError({ message })
+}
+
+function isBenignWsError(params: {
+  message?: string | null
+  code?: string | null
+  errno?: string | null
+}): boolean {
+  const normalized = String(params.message ?? '')
+    .trim()
+    .toLowerCase()
+  const code = String(params.code ?? '').trim().toUpperCase()
+  const errno = String(params.errno ?? '').trim().toUpperCase()
+  if (code === 'ECONNRESET' || code === 'EAI_AGAIN' || code === 'ETIMEDOUT') return true
+  if (errno === 'ECONNRESET' || errno === 'EAI_AGAIN' || errno === 'ETIMEDOUT') return true
+  if (!normalized) return false
+  return (
+    normalized.includes('received network error or non-101 status code') ||
+    normalized.includes('non-101') ||
+    normalized.includes('unexpected server response: 403') ||
+    normalized.includes('socket hang up') ||
+    normalized.includes('before secure tls connection was established') ||
+    normalized.includes('client network socket disconnected before secure tls') ||
+    normalized.includes('client network socket disconnected before secure tls connection was established')
+  )
+}
+
+function parseHandshakeStatusFromMessage(message: string): number | null {
+  const direct = /\bunexpected server response:\s*(\d{3})\b/i.exec(message)
+  if (direct) return Number(direct[1])
+  const htmlError = /\bhtml-error-code=(\d{3})\b/i.exec(message)
+  if (htmlError) return Number(htmlError[1])
+  return null
+}
+
+function extractWsErrorContext(event: unknown): {
+  message: string
+  code: string | null
+  errno: string | null
+  syscall: string | null
+  address: string | null
+  port: number | null
+  handshakeStatus: number | null
+} {
+  const root = event && typeof event === 'object' ? (event as Record<string, unknown>) : null
+  const nestedError =
+    root?.error && typeof root.error === 'object'
+      ? (root.error as Record<string, unknown>)
+      : null
+  const messageCandidate =
+    root?.message ??
+    nestedError?.message ??
+    (event instanceof Error ? event.message : null) ??
+    event
+  const message = String(messageCandidate ?? 'unknown')
+  const code =
+    typeof nestedError?.code === 'string'
+      ? nestedError.code
+      : typeof root?.code === 'string'
+        ? root.code
+        : null
+  const errno =
+    typeof nestedError?.errno === 'string'
+      ? nestedError.errno
+      : typeof root?.errno === 'string'
+        ? root.errno
+        : null
+  const syscall =
+    typeof nestedError?.syscall === 'string'
+      ? nestedError.syscall
+      : typeof root?.syscall === 'string'
+        ? root.syscall
+        : null
+  const address =
+    typeof nestedError?.address === 'string'
+      ? nestedError.address
+      : typeof root?.address === 'string'
+        ? root.address
+        : null
+  const port =
+    typeof nestedError?.port === 'number'
+      ? nestedError.port
+      : typeof root?.port === 'number'
+        ? root.port
+        : null
+  const handshakeStatus = typeof root?.status === 'number'
+    ? root.status
+    : typeof nestedError?.status === 'number'
+      ? nestedError.status
+      : parseHandshakeStatusFromMessage(message)
+  return { message, code, errno, syscall, address, port, handshakeStatus }
+}
+
+function isBenignWsCloseEvent(params: {
+  code: number | null
+  reason: string | null | undefined
+  now?: number
+}): boolean {
+  const code = params.code
+  const reason = String(params.reason ?? '')
+    .trim()
+    .toLowerCase()
+  const now = params.now ?? Date.now()
+
+  // Most noisy production closes come through as 1006 with an empty reason.
+  // Treat this as benign by default so warning channels stay actionable.
+  if (code === 1006 && !reason) return true
+
+  const likelyHandshakeClose =
+    (code === null || code === 1005 || code === 1006) &&
+    (!reason || reason.includes('non-101') || reason.includes('network error'))
+
+  if (!likelyHandshakeClose) return false
+  if (!isBenignWsErrorMessage(bridgeAuthState.wsErrorLastMessage)) return false
+  if (bridgeAuthState.wsErrorFirstAt <= 0) return false
+  return now - bridgeAuthState.wsErrorFirstAt <= LOG_ROLLUP_WINDOW_MS
 }
 
 function noteWsCloseEvent(params: {
@@ -1792,7 +2516,13 @@ function noteWsCloseEvent(params: {
   if (now - bridgeAuthState.wsCloseChurnLastLoggedAt <= LOG_ROLLUP_WINDOW_MS) return
 
   bridgeAuthState.wsCloseChurnLastLoggedAt = now
-  logger.warn('[alfaclub-chat] ws_close_churn', {
+  const benign = isBenignWsCloseEvent({
+    code: params.code,
+    reason: params.reason,
+    now,
+  })
+  const emit = benign ? logger.info.bind(logger) : logger.warn.bind(logger)
+  emit('[alfaclub-chat] ws_close_churn', {
     roomId: params.roomId,
     closesInWindow,
     windowMs: WS_CLOSE_CHURN_WINDOW_MS,
@@ -1867,7 +2597,21 @@ function closeLiveSocket(): void {
   }
   bridgeState.liveSocket = null
   bridgeState.liveSocketJwt = null
+  bridgeState.liveSocketWebsocketUrl = null
   bridgeState.liveSocketRoomId = null
+}
+
+function shouldReuseLiveCommandSocket(params: {
+  jwt: string
+  roomId: string
+  websocketUrl: string
+  flags: AlfaClubChatBridgeFlags
+}): boolean {
+  if (!bridgeState.liveSocket || bridgeState.liveSocketJwt !== params.jwt) return false
+  if (bridgeState.liveSocketWebsocketUrl !== params.websocketUrl) return false
+  // AlfaClub WS URL is JWT-scoped, not room-scoped — rotating poll rooms must not churn.
+  if (params.flags.wsIngestAllRoomsEnabled) return true
+  return bridgeState.liveSocketRoomId === params.roomId
 }
 
 function decodeWsEventData(data: unknown): string | null {
@@ -1949,6 +2693,7 @@ async function sendTelegramRelayMessage(params: {
 async function ingestLiveMessages(
   messages: AlfaClubLiveInboundMessage[],
   flags: AlfaClubChatBridgeFlags,
+  context?: { roomId: string; jwt: string },
 ): Promise<void> {
   if (messages.length === 0) return
   const inserted = await upsertAlfaClubIngestMessages(
@@ -1958,6 +2703,15 @@ async function ingestLiveMessages(
       senderAddress: message.sender,
       text: message.text,
       dateMs: message.date,
+      attachmentsJson: message.attachments,
+      replyAttachmentsJson: message.replyAttachments,
+      messagePayloadJson: message.rawPayloadText ? (() => {
+        try {
+          return JSON.parse(message.rawPayloadText)
+        } catch {
+          return null
+        }
+      })() : null,
       source: 'ws-live',
       rawPayloadText: message.rawPayloadText,
     })),
@@ -2038,11 +2792,7 @@ function ensureLiveCommandSocket(params: {
     return
   }
 
-  if (
-    bridgeState.liveSocket &&
-    bridgeState.liveSocketJwt === params.jwt &&
-    bridgeState.liveSocketRoomId === params.roomId
-  ) {
+  if (shouldReuseLiveCommandSocket(params)) {
     return
   }
 
@@ -2057,13 +2807,17 @@ function ensureLiveCommandSocket(params: {
   const wsUrl = new URL(params.websocketUrl)
   wsUrl.searchParams.set('TOKEN', params.jwt)
   wsUrl.searchParams.set('_k', '0')
+  const upstream = wsUrl.host || null
 
   const socket = new WebSocketCtor(wsUrl.toString())
   bridgeState.liveSocket = socket
   bridgeState.liveSocketJwt = params.jwt
+  bridgeState.liveSocketWebsocketUrl = params.websocketUrl
   bridgeState.liveSocketRoomId = params.roomId
+  let socketOpened = false
 
   const onOpen = (): void => {
+    socketOpened = true
     resetSocketBackoff()
     logger.info('[alfaclub-chat] ws_open', {
       roomId: params.roomId,
@@ -2095,12 +2849,18 @@ function ensureLiveCommandSocket(params: {
         roomIds: Array.from(new Set(inboundMessages.map((message) => message.roomId))).slice(0, 10),
       })
     }
-    void ingestLiveMessages(inboundMessages, params.flags).catch(() => {
+    void ingestLiveMessages(inboundMessages, params.flags, {
+      roomId: params.roomId,
+      jwt: params.jwt,
+    }).catch(() => {
       // Fail-open: ingest should never block chat command processing.
     })
     if (!bridgeState.liveFallbackActive) return
+    const pollRoomIds = params.flags.wsIngestAllRoomsEnabled
+      ? new Set(resolveAlfaClubBridgePollRoomIds(params.flags))
+      : new Set([params.roomId])
     const roomMessages = inboundMessages
-      .filter((message) => message.roomId === params.roomId)
+      .filter((message) => pollRoomIds.has(message.roomId))
       .map((message): AlfaClubRoomHistoryMessage => ({
         id: message.id,
         date: message.date,
@@ -2110,7 +2870,7 @@ function ensureLiveCommandSocket(params: {
     const commands = collectAlfaClubCommandMessages({
       messages: roomMessages,
       seenMessageIds: bridgeState.seenMessageIds,
-      selfAddress: TARGET_CANONICAL_CSW_ADDRESS,
+      selfAddress: CANONICAL_CSW_ADDRESS,
     })
     pushLiveCommands(commands)
   }
@@ -2119,7 +2879,12 @@ function ensureLiveCommandSocket(params: {
     applySocketBackoff()
     const closeCode = typeof event?.code === 'number' ? event.code : null
     const closeReason = typeof event?.reason === 'string' ? event.reason.slice(0, 120) : ''
-    logger.warn('[alfaclub-chat] ws_close', {
+    const benign = isBenignWsCloseEvent({
+      code: closeCode,
+      reason: closeReason,
+    })
+    const emit = benign ? logger.info.bind(logger) : logger.warn.bind(logger)
+    emit('[alfaclub-chat] ws_close', {
       roomId: params.roomId,
       code: closeCode,
       reason: closeReason,
@@ -2132,18 +2897,29 @@ function ensureLiveCommandSocket(params: {
     if (bridgeState.liveSocket !== socket) return
     bridgeState.liveSocket = null
     bridgeState.liveSocketJwt = null
+    bridgeState.liveSocketWebsocketUrl = null
     bridgeState.liveSocketRoomId = null
   }
 
   const onError = (event?: any): void => {
     applySocketBackoff()
+    const wsErrorContext = extractWsErrorContext(event)
     warnWsError({
       roomId: params.roomId,
-      message: String(event?.message ?? event?.error?.message ?? event ?? 'unknown').slice(0, 180),
+      message: wsErrorContext.message,
+      code: wsErrorContext.code,
+      errno: wsErrorContext.errno,
+      syscall: wsErrorContext.syscall,
+      address: wsErrorContext.address,
+      port: wsErrorContext.port,
+      handshakeStatus: wsErrorContext.handshakeStatus,
+      phase: socketOpened ? 'connected' : 'handshake',
+      upstream,
     })
     if (bridgeState.liveSocket !== socket) return
     bridgeState.liveSocket = null
     bridgeState.liveSocketJwt = null
+    bridgeState.liveSocketWebsocketUrl = null
     bridgeState.liveSocketRoomId = null
   }
 
@@ -2153,20 +2929,66 @@ function ensureLiveCommandSocket(params: {
   socket.addEventListener('error', onError)
 }
 
+async function sendAlfaClubCommandTextReply(params: {
+  flags: AlfaClubChatBridgeFlags
+  roomId: string
+  jwt: string
+  text: string
+  replyToMessageId: string
+}): Promise<void> {
+  if (params.flags.botToken) {
+    const idempotencyKey = buildBotMessageIdempotencyKey({
+      roomId: params.roomId,
+      messageId: `${params.replyToMessageId}:followup`,
+    })
+    await sendRoomMessageViaBotTokenWithProxyFallback({
+      apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
+      directApiBaseUrl: params.flags.apiBaseUrl,
+      botToken: params.flags.botToken,
+      roomId: params.roomId,
+      text: params.text,
+      replyToMessageId: params.replyToMessageId,
+      proxySecret: resolveAlfaClubProxySecret(params.flags),
+      idempotencyKey,
+      timeoutMs: params.flags.sendTimeoutMs,
+    })
+    return
+  }
+  await sendRoomMessageViaWebSocket({
+    websocketUrl: params.flags.websocketUrl,
+    wsProxyHttpSendUrl: (params.flags as any).wsProxyHttpSendUrl,
+    wsProxySecret: (params.flags as any).wsProxySecret,
+    jwt: params.jwt,
+    roomId: params.roomId,
+    text: params.text,
+    replyToMessageId: params.replyToMessageId,
+    timeoutMs: params.flags.sendTimeoutMs,
+  })
+}
+
 async function executeCommandBatch(params: {
   commands: AlfaClubCommandMessage[]
   flags: AlfaClubChatBridgeFlags
   roomId: string
   jwt: string
 }): Promise<{ processed: number; replied: number; errors: Array<{ messageId: string; error: string }> }> {
-  // Safety invariant: this bridge only posts replies into its configured room.
-  if (params.flags.roomId && params.roomId !== params.flags.roomId) {
+  // Safety invariant: only reply inside configured bridge/Hermit command rooms.
+  if (!canBridgeReplyInRoom(params.flags, params.roomId)) {
+    return { processed: 0, replied: 0, errors: [] }
+  }
+  const unrepliedIds = await filterUnrepliedCommandMessageIds({
+    roomId: params.roomId,
+    messageIds: params.commands.map((command) => command.id),
+  })
+  const commands = params.commands.filter((command) => unrepliedIds.has(command.id))
+  if (commands.length === 0) {
     return { processed: 0, replied: 0, errors: [] }
   }
   const errors: Array<{ messageId: string; error: string }> = []
   let replied = 0
+  let latestMarkReadDate = 0
 
-  for (const command of params.commands) {
+  for (const command of commands) {
     const commandHead = command.text.trim().split(/\s+/, 1)[0] ?? command.text.trim()
     logger.info('[alfaclub-chat] command_execute_start', {
       roomId: params.roomId,
@@ -2175,9 +2997,12 @@ async function executeCommandBatch(params: {
       command: commandHead,
     })
     try {
+      const { executeDeterministicCommand } = await import(
+        '../../agents/core/executeDeterministicCommand.js'
+      )
       const result = await executeDeterministicCommand({
         groupId: params.flags.groupId,
-        senderWallet: command.sender,
+        senderWallet: resolveCommandSenderWallet(command.sender),
         text: command.text,
         chatId: `alfaclub:${params.roomId}`,
         userId: command.sender,
@@ -2208,113 +3033,64 @@ async function executeCommandBatch(params: {
         continue
       }
       const attachments = extractAlfaClubActionAttachments(result.action)
-      if (params.flags.botToken) {
-        const idempotencyKey = buildBotMessageIdempotencyKey({
+      const reactionEmoji = extractAlfaClubReactionEmoji(result.action)
+      const lane = await sendCommandReplyToRoom({
+        flags: params.flags,
+        jwt: params.jwt,
+        roomId: params.roomId,
+        text: responseText,
+        attachments,
+        replyToMessageId: command.id,
+        commandMessageId: command.id,
+      })
+      logger.info('[alfaclub-chat] command_reply_sent', {
+        roomId: params.roomId,
+        messageId: command.id,
+        sender: command.sender,
+        lane,
+        hasAttachments: attachments.length > 0,
+      })
+      await recordCommandReply({
+        roomId: params.roomId,
+        messageId: command.id,
+        commandHead,
+      })
+      if (reactionEmoji) {
+        await reactToAlfaClubTriggerMessage({
+          flags: params.flags,
+          jwt: params.jwt,
           roomId: params.roomId,
           messageId: command.id,
+          emoji: reactionEmoji,
         })
-        let sent = false
+      }
+      replied += 1
+      const followUpText = extractAlfaClubFollowUpText(result.action)
+      if (followUpText) {
         try {
-          const sendResult = await sendRoomMessageViaBotToken({
-            apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
-            botToken: params.flags.botToken,
+          await sendAlfaClubCommandTextReply({
+            flags: params.flags,
             roomId: params.roomId,
-            text: responseText,
+            jwt: params.jwt,
+            text: followUpText,
             replyToMessageId: command.id,
-            proxySecret: resolveAlfaClubProxySecret(params.flags),
-            idempotencyKey,
-            timeoutMs: params.flags.sendTimeoutMs,
           })
-          sent = true
-          logger.info('[alfaclub-chat] command_reply_sent', {
+          logger.info('[alfaclub-chat] command_followup_sent', {
             roomId: params.roomId,
             messageId: command.id,
             sender: command.sender,
-            lane: 'bot_token_with_reply_id',
-            sendResult,
           })
-        } catch (error) {
-          const detail = error instanceof Error ? error.message : String(error)
-          logger.warn('[alfaclub-chat] bot_reply_with_reply_id_failed', {
+        } catch (followUpError) {
+          const detail =
+            followUpError instanceof Error ? followUpError.message : String(followUpError)
+          logger.warn('[alfaclub-chat] command_followup_failed', {
             roomId: params.roomId,
             messageId: command.id,
             error: detail.slice(0, 180),
           })
         }
-
-        if (!sent) {
-          try {
-            const sendResult = await sendRoomMessageViaBotToken({
-              apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
-              botToken: params.flags.botToken,
-              roomId: params.roomId,
-              text: responseText,
-              proxySecret: resolveAlfaClubProxySecret(params.flags),
-              idempotencyKey,
-              timeoutMs: params.flags.sendTimeoutMs,
-            })
-            sent = true
-            logger.info('[alfaclub-chat] command_reply_sent', {
-              roomId: params.roomId,
-              messageId: command.id,
-              sender: command.sender,
-              lane: 'bot_token_without_reply_id',
-              sendResult,
-            })
-          } catch (error) {
-            const detail = error instanceof Error ? error.message : String(error)
-            logger.warn('[alfaclub-chat] bot_reply_without_reply_id_failed', {
-              roomId: params.roomId,
-              messageId: command.id,
-              error: detail.slice(0, 180),
-            })
-          }
-        }
-
-        if (!sent) {
-          await sendRoomMessageViaWebSocket({
-            websocketUrl: params.flags.websocketUrl,
-            jwt: params.jwt,
-            roomId: params.roomId,
-            text: responseText,
-            attachments,
-            replyToMessageId: command.id,
-            timeoutMs: params.flags.sendTimeoutMs,
-          })
-          logger.info('[alfaclub-chat] command_reply_sent', {
-            roomId: params.roomId,
-            messageId: command.id,
-            sender: command.sender,
-            lane: 'websocket_fallback',
-          })
-        }
-      } else {
-        await sendRoomMessageViaWebSocket({
-          websocketUrl: params.flags.websocketUrl,
-          jwt: params.jwt,
-          roomId: params.roomId,
-          text: responseText,
-          attachments,
-          replyToMessageId: command.id,
-          timeoutMs: params.flags.sendTimeoutMs,
-        })
-        logger.info('[alfaclub-chat] command_reply_sent', {
-          roomId: params.roomId,
-          messageId: command.id,
-          sender: command.sender,
-          lane: 'websocket_primary',
-        })
       }
-      replied += 1
-      await markReadMessage({
-        apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
-        fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(params.flags),
-        proxySecret: resolveAlfaClubProxySecret(params.flags),
-        roomId: params.roomId,
-        jwt: params.jwt,
-        messageDate: command.date,
-        timeoutMs: params.flags.requestTimeoutMs,
-      })
+      latestMarkReadDate = Math.max(latestMarkReadDate, command.date)
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
       errors.push({
@@ -2331,8 +3107,28 @@ async function executeCommandBatch(params: {
     }
   }
 
+  if (latestMarkReadDate > 0) {
+    try {
+      await markReadMessage({
+        apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
+        fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(params.flags),
+        proxySecret: resolveAlfaClubProxySecret(params.flags),
+        roomId: params.roomId,
+        jwt: params.jwt,
+        messageDate: latestMarkReadDate,
+        timeoutMs: params.flags.requestTimeoutMs,
+      })
+    } catch (markReadError) {
+      const detail = markReadError instanceof Error ? markReadError.message : String(markReadError)
+      logger.warn('[alfaclub-chat] command_batch_mark_read_failed', {
+        roomId: params.roomId,
+        error: detail.slice(0, 180),
+      })
+    }
+  }
+
   return {
-    processed: params.commands.length,
+    processed: commands.length,
     replied,
     errors,
   }
@@ -2366,29 +3162,114 @@ function earlyTickResult(params: {
   }
 }
 
-type RunBridgeTickOptions = {
+export type RunBridgeTickOptions = {
   // Continuous in-process bridge mode seeds first and skips historical replay.
   // One-shot cron mode should process newly ingested commands immediately.
   seedHistoryOnlyOnFirstTick?: boolean
+  /** Serverless cron: skip WS connect (no cross-invocation session). Default on via readAlfaClubCronSkipLiveWebSocket(). */
+  skipLiveWebSocket?: boolean
+  /** Cron mode: upsert only slash-command candidates into chat_ingest (less DB write churn). */
+  ingestCommandCandidatesOnly?: boolean
+  /** When set, poll/execute against this room instead of flags.roomId only. */
+  pollRoomId?: string
+}
+
+function shouldConnectLiveWebSocket(
+  options: RunBridgeTickOptions,
+  flags: AlfaClubChatBridgeFlags,
+  ingestJwt: string | null,
+): boolean {
+  if (options.skipLiveWebSocket) return false
+  return Boolean(flags.wsIngestAllRoomsEnabled && ingestJwt)
+}
+
+async function kickPrivyRefreshOncePerTick(): Promise<void> {
+  if (bridgeAuthState.privyRefreshKickedThisTick) return
+  bridgeAuthState.privyRefreshKickedThisTick = true
+  await requestImmediatePrivyRefresh('bridge_auth_fail').catch(() => {})
+}
+
+async function retryRoomHistoryAfterAuthFailure(params: {
+  flags: AlfaClubChatBridgeFlags
+  roomId: string
+  failedJwt: string
+  fallbackJwt: string | null
+}): Promise<{
+  fetchedMessages: AlfaClubRoomHistoryMessage[] | null
+  jwt: string | null
+  resolvedCommandJwt: { jwt: string | null; source: BridgeJwtSource }
+  historyError: unknown | null
+}> {
+  rememberBadJwt(params.failedJwt)
+  await kickPrivyRefreshOncePerTick()
+  const recovered = await resolveBridgeJwtWithSource(params.fallbackJwt)
+  const jwt = recovered.jwt
+  if (!jwt) {
+    return {
+      fetchedMessages: null,
+      jwt: null,
+      resolvedCommandJwt: recovered,
+      historyError: new Error('room_history_failed:401'),
+    }
+  }
+
+  try {
+    const fetchedMessages = await fetchRoomHistory({
+      apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
+      fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(params.flags),
+      proxySecret: resolveAlfaClubProxySecret(params.flags),
+      roomId: params.roomId,
+      jwt,
+      limit: params.flags.historyLimit,
+      timeoutMs: params.flags.requestTimeoutMs,
+    })
+    clearBadJwt()
+    logger.info('[alfaclub-chat] room_history_recovered:after_privy_refresh', {
+      roomId: params.roomId,
+      jwtSource: recovered.source,
+    })
+    return {
+      fetchedMessages,
+      jwt,
+      resolvedCommandJwt: recovered,
+      historyError: null,
+    }
+  } catch (retryError) {
+    return {
+      fetchedMessages: null,
+      jwt,
+      resolvedCommandJwt: recovered,
+      historyError: retryError,
+    }
+  }
 }
 
 async function runBridgeTick(
   flags: AlfaClubChatBridgeFlags,
   options: RunBridgeTickOptions = {},
 ): Promise<AlfaClubChatBridgeTickResult> {
+  bridgeAuthState.privyRefreshKickedThisTick = false
   const seedHistoryOnlyOnFirstTick = options.seedHistoryOnlyOnFirstTick ?? true
-  const roomId = flags.roomId as string
-  const resolvedCommandJwt = await resolveBridgeJwtWithSource(flags.jwt)
-  const commandJwt = resolvedCommandJwt.jwt
+  const roomId = (options.pollRoomId ?? flags.roomId) as string
+  let resolvedCommandJwt = await resolveBridgeJwtWithSource(flags.jwt)
+  let commandJwt = resolvedCommandJwt.jwt
+  if (commandJwt && isKnownBadJwt(commandJwt)) {
+    await kickPrivyRefreshOncePerTick()
+    resolvedCommandJwt = await resolveBridgeJwtWithSource(flags.jwt)
+    commandJwt = resolvedCommandJwt.jwt
+    if (commandJwt && !isKnownBadJwt(commandJwt)) {
+      clearBadJwt()
+    }
+  }
   const explicitIngestJwt = (flags.ingestJwt ?? '').trim() || null
   const ingestJwt = explicitIngestJwt || commandJwt
 
-  if (!commandJwt) {
-    if (flags.wsIngestAllRoomsEnabled && ingestJwt) {
+  if (!commandJwt && !flags.readBotToken) {
+    if (shouldConnectLiveWebSocket(options, flags, ingestJwt)) {
       ensureLiveCommandSocket({
         websocketUrl: flags.websocketUrl,
         roomId,
-        jwt: ingestJwt,
+        jwt: ingestJwt as string,
         flags,
       })
     }
@@ -2402,49 +3283,103 @@ async function runBridgeTick(
       errors: [],
     }
   }
-  let jwt = commandJwt
-  let historyErrorJwt = commandJwt
+  let jwt = commandJwt ?? ''
+  let historyErrorJwt = commandJwt ?? ''
   let fetchedMessages: AlfaClubRoomHistoryMessage[] | null = null
   let historyError: unknown = null
-  try {
-    fetchedMessages = await fetchRoomHistory({
-      apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
-      fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(flags),
-      proxySecret: resolveAlfaClubProxySecret(flags),
-      roomId,
-      jwt,
-      limit: flags.historyLimit,
-      timeoutMs: flags.requestTimeoutMs,
-    })
-  } catch (error) {
-    const fallbackJwt = (flags.jwt ?? '').trim() || null
-    const shouldRetryWithEnv =
-      resolvedCommandJwt.source === 'db' &&
-      Boolean(fallbackJwt) &&
-      fallbackJwt !== resolvedCommandJwt.jwt &&
-      classifyHistoryError(error) === 'auth'
-    if (!shouldRetryWithEnv) {
-      historyError = error
-    } else {
-      logger.warn('[alfaclub-chat] room_history_auth_failed:retry_env', {
+  if (flags.readBotToken) {
+    try {
+      fetchedMessages = await fetchRoomHistoryViaReadBotToken({
+        apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
+        proxySecret: resolveAlfaClubProxySecret(flags),
         roomId,
-        jwtSource: resolvedCommandJwt.source,
-        error: error instanceof Error ? error.message : String(error),
+        readBotToken: flags.readBotToken,
+        limit: flags.historyLimit,
+        timeoutMs: flags.requestTimeoutMs,
       })
-      try {
-        historyErrorJwt = fallbackJwt as string
-        fetchedMessages = await fetchRoomHistory({
-          apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
-          fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(flags),
-          proxySecret: resolveAlfaClubProxySecret(flags),
+    } catch (error) {
+      if (!jwt) {
+        historyError = error
+      } else {
+        logger.warn('[alfaclub-chat] read_bot_history_failed:fallback_jwt', {
           roomId,
-          jwt: fallbackJwt as string,
-          limit: flags.historyLimit,
-          timeoutMs: flags.requestTimeoutMs,
+          error: error instanceof Error ? error.message : String(error),
         })
-        jwt = fallbackJwt as string
-      } catch (fallbackError) {
-        historyError = fallbackError
+      }
+    }
+  }
+
+  if (!fetchedMessages && !historyError) {
+    try {
+      fetchedMessages = await fetchRoomHistory({
+        apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
+        fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(flags),
+        proxySecret: resolveAlfaClubProxySecret(flags),
+        roomId,
+        jwt,
+        limit: flags.historyLimit,
+        timeoutMs: flags.requestTimeoutMs,
+      })
+    } catch (error) {
+      const fallbackJwt = (flags.jwt ?? '').trim() || null
+      if (classifyHistoryError(error) === 'auth' && historyErrorJwt) {
+        const recovered = await retryRoomHistoryAfterAuthFailure({
+          flags,
+          roomId,
+          failedJwt: historyErrorJwt,
+          fallbackJwt,
+        })
+        if (!recovered.historyError && recovered.fetchedMessages) {
+          fetchedMessages = recovered.fetchedMessages
+          jwt = recovered.jwt as string
+          historyErrorJwt = jwt
+          commandJwt = jwt
+          resolvedCommandJwt = recovered.resolvedCommandJwt
+          historyError = null
+        } else {
+          historyError = recovered.historyError ?? error
+          if (recovered.jwt) {
+            jwt = recovered.jwt
+            historyErrorJwt = recovered.jwt
+            commandJwt = recovered.jwt
+            resolvedCommandJwt = recovered.resolvedCommandJwt
+          }
+        }
+      } else {
+        historyError = error
+      }
+
+      const shouldRetryWithEnv =
+        historyError !== null &&
+        resolvedCommandJwt.source === 'db' &&
+        Boolean(fallbackJwt) &&
+        fallbackJwt !== resolvedCommandJwt.jwt &&
+        classifyHistoryError(historyError) === 'auth'
+      if (historyError === null) {
+        // Recovered via awaited Privy refresh above.
+      } else if (!shouldRetryWithEnv) {
+        // historyError already set from the initial failure or auth-recovery retry.
+      } else {
+        logger.warn('[alfaclub-chat] room_history_auth_failed:retry_env', {
+          roomId,
+          jwtSource: resolvedCommandJwt.source,
+          error: error instanceof Error ? error.message : String(error),
+        })
+        try {
+          historyErrorJwt = fallbackJwt as string
+          fetchedMessages = await fetchRoomHistory({
+            apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
+            fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(flags),
+            proxySecret: resolveAlfaClubProxySecret(flags),
+            roomId,
+            jwt: fallbackJwt as string,
+            limit: flags.historyLimit,
+            timeoutMs: flags.requestTimeoutMs,
+          })
+          jwt = fallbackJwt as string
+        } catch (fallbackError) {
+          historyError = fallbackError
+        }
       }
     }
   }
@@ -2480,7 +3415,7 @@ async function runBridgeTick(
     rememberBadJwt(historyErrorJwt, now)
     recordBridgeAuthFailure(new Date(now).toISOString())
     bridgeState.liveFallbackActive = true
-    void requestImmediatePrivyRefresh('bridge_auth_fail').catch(() => {})
+    await kickPrivyRefreshOncePerTick()
     warnRoomHistoryAuthFallback({
       roomId,
       jwtSource: resolvedCommandJwt.source,
@@ -2489,11 +3424,11 @@ async function runBridgeTick(
     })
 
     bridgeState.liveFallbackActive = true
-    if (ingestJwt) {
+    if (shouldConnectLiveWebSocket(options, flags, ingestJwt)) {
       ensureLiveCommandSocket({
         websocketUrl: flags.websocketUrl,
         roomId,
-        jwt: ingestJwt,
+        jwt: ingestJwt as string,
         flags,
       })
     }
@@ -2531,33 +3466,72 @@ async function runBridgeTick(
   // in-memory state surviving between serverless cold starts.
   let newlyIngestedHistoryIds: Set<string> | null = null
   try {
+    const ingestSourceMessages = options.ingestCommandCandidatesOnly
+      ? fetchedMessages.filter(isHistoryMessageCommandCandidate)
+      : fetchedMessages
+    const historyIngestRows: AlfaClubIngestMessage[] = ingestSourceMessages.flatMap((message) => {
+      const id = String(message.id ?? '').trim()
+      const sender = String(message.sender ?? '').trim().toLowerCase()
+      if (!id || !isHexAddress(sender)) return []
+      const date = Number(message.date)
+      const dateMs = Number.isFinite(date) && date > 0 ? Math.floor(date) : null
+      const editDeadlineRaw = Number(message.edit_deadline)
+      const editDeadlineMs = Number.isFinite(editDeadlineRaw) && editDeadlineRaw > 0
+        ? Math.floor(editDeadlineRaw)
+        : null
+      const replyDateRaw = Number(message.reply_date)
+      const replyDateMs = Number.isFinite(replyDateRaw) && replyDateRaw > 0
+        ? Math.floor(replyDateRaw)
+        : null
+      const deletedAtRaw = message.deleted_at
+      const deletedAtMs = (() => {
+        if (deletedAtRaw == null) return null
+        const asNumber = Number(deletedAtRaw)
+        if (Number.isFinite(asNumber) && asNumber > 0) return Math.floor(asNumber)
+        const parsed = Date.parse(String(deletedAtRaw))
+        return Number.isFinite(parsed) ? parsed : null
+      })()
+      const payloadJson = message as Record<string, unknown>
+      return [
+        {
+          roomId,
+          messageId: id,
+          senderAddress: sender,
+          text: String(message.text ?? ''),
+          dateMs,
+          username: typeof message.username === 'string' ? message.username : null,
+          avatarUrl: typeof message.avatar === 'string' ? message.avatar : null,
+          isBot: typeof message.isBot === 'boolean' ? message.isBot : null,
+          isEdited: typeof message.is_edited === 'boolean' ? message.is_edited : null,
+          editDeadlineMs,
+          deletedAtMs,
+          deletedBy: typeof message.deleted_by === 'string' ? message.deleted_by : null,
+          deletedByUsername: typeof message.deleted_by_username === 'string' ? message.deleted_by_username : null,
+          replyId: typeof message.reply_id === 'string' ? message.reply_id : null,
+          replyDateMs,
+          replyText: typeof message.reply_text === 'string' ? message.reply_text : null,
+          replySender: typeof message.reply_sender === 'string' ? message.reply_sender : null,
+          replyUsername: typeof message.reply_username === 'string' ? message.reply_username : null,
+          keysCount: typeof message.keys === 'number' ? Math.floor(message.keys) : null,
+          primaryTag: typeof message.primary_tag === 'string' ? message.primary_tag : null,
+          primaryTagVariant: typeof message.primary_tag_variant === 'string' ? message.primary_tag_variant : null,
+          attachmentsJson: message.attachments ?? null,
+          replyAttachmentsJson: message.reply_attachments ?? null,
+          reactionsJson: message.reactions ?? null,
+          messagePayloadJson: payloadJson,
+          source: 'history',
+          rawPayloadText: (() => {
+            try {
+              return JSON.stringify(message)
+            } catch {
+              return null
+            }
+          })(),
+        },
+      ]
+    })
     const inserted = await upsertAlfaClubIngestMessages(
-      fetchedMessages
-        .map((message) => {
-          const id = String(message.id ?? '').trim()
-          const sender = String(message.sender ?? '').trim().toLowerCase()
-          if (!id || !isHexAddress(sender)) return null
-          const date = Number(message.date)
-          const dateMs = Number.isFinite(date) && date > 0 ? Math.floor(date) : null
-          return {
-            roomId,
-            messageId: id,
-            senderAddress: sender,
-            text: String(message.text ?? ''),
-            dateMs,
-            source: 'history' as const,
-            rawPayloadText: null,
-          }
-        })
-        .filter((entry): entry is {
-          roomId: string
-          messageId: string
-          senderAddress: string
-          text: string
-          dateMs: number | null
-          source: 'history'
-          rawPayloadText: null
-        } => Boolean(entry)),
+      historyIngestRows,
     )
     newlyIngestedHistoryIds = new Set(inserted.map((row) => row.messageId))
   } catch {
@@ -2572,11 +3546,11 @@ async function runBridgeTick(
   }
   recordBridgeHistorySuccess()
 
-  if (flags.wsIngestAllRoomsEnabled && ingestJwt) {
+  if (shouldConnectLiveWebSocket(options, flags, ingestJwt)) {
     ensureLiveCommandSocket({
       websocketUrl: flags.websocketUrl,
       roomId,
-      jwt: ingestJwt,
+      jwt: ingestJwt as string,
       flags,
     })
   }
@@ -2615,7 +3589,7 @@ async function runBridgeTick(
       const recentCommands = collectAlfaClubCommandMessages({
         messages: recentMessages,
         seenMessageIds: new Set<string>(),
-        selfAddress: TARGET_CANONICAL_CSW_ADDRESS,
+        selfAddress: CANONICAL_CSW_ADDRESS,
       })
       const recentBatch =
         recentCommands.length > 0
@@ -2638,19 +3612,23 @@ async function runBridgeTick(
     }
   }
 
-  const commandSourceMessages =
-    !seedHistoryOnlyOnFirstTick &&
-    newlyIngestedHistoryIds !== null &&
-    newlyIngestedHistoryIds.size > 0
-      ? unseenMessages.filter((message) =>
-          newlyIngestedHistoryIds?.has(String(message.id ?? '').trim()),
+  // Long-running in-process bridge: `unseenMessages` + `bridgeState.seenMessageIds`
+  // prevent replay within the same process.
+  // Vercel cron (seedHistoryOnlyOnFirstTick=false): stateless — only execute
+  // slash commands for history rows that were *inserted* this tick (not every
+  // ON CONFLICT update), otherwise /gmeow is re-run every minute and spams chat.
+  const commandSourceMessages = seedHistoryOnlyOnFirstTick
+    ? unseenMessages
+    : newlyIngestedHistoryIds === null
+      ? []
+      : unseenMessages.filter((message) =>
+          newlyIngestedHistoryIds.has(String(message.id ?? '').trim()),
         )
-      : unseenMessages
 
   const commands = collectAlfaClubCommandMessages({
     messages: commandSourceMessages,
     seenMessageIds: new Set<string>(),
-    selfAddress: TARGET_CANONICAL_CSW_ADDRESS,
+    selfAddress: CANONICAL_CSW_ADDRESS,
   })
   if (commands.length > 0) {
     logger.info('[alfaclub-chat] command_batch_detected', {
@@ -2679,11 +3657,19 @@ async function runBridgeTick(
 }
 
 export async function runAlfaClubChatBridgeTickOnce(): Promise<RunAlfaClubChatBridgeTickOnceResult> {
-  const flags = readAlfaClubChatBridgeFlags()
+  const flags = readAlfaClubChatBridgeFlagsForCronTick()
   if (flags.killSwitch) {
     return {
       ok: false,
       reason: 'kill_switch',
+      intervalMs: flags.pollIntervalMs,
+      roomId: flags.roomId,
+    }
+  }
+  if (shouldBlockRailwayBridge(flags)) {
+    return {
+      ok: false,
+      reason: 'railway_blocked',
       intervalMs: flags.pollIntervalMs,
       roomId: flags.roomId,
     }
@@ -2696,7 +3682,8 @@ export async function runAlfaClubChatBridgeTickOnce(): Promise<RunAlfaClubChatBr
       roomId: flags.roomId,
     }
   }
-  if (!flags.roomId) {
+  const pollRoomIds = resolveAlfaClubBridgePollRoomIds(flags)
+  if (pollRoomIds.length === 0) {
     return {
       ok: false,
       reason: 'env_missing',
@@ -2705,11 +3692,26 @@ export async function runAlfaClubChatBridgeTickOnce(): Promise<RunAlfaClubChatBr
     }
   }
 
-  const data = await runBridgeTick(flags, { seedHistoryOnlyOnFirstTick: false })
+  const tickOptions: RunBridgeTickOptions = {
+    seedHistoryOnlyOnFirstTick: false,
+    skipLiveWebSocket: readAlfaClubCronSkipLiveWebSocket(),
+    ingestCommandCandidatesOnly: true,
+  }
+  const roomResults: AlfaClubChatBridgeTickResult[] = []
+  for (const pollRoomId of pollRoomIds) {
+    roomResults.push(
+      await runBridgeTick(flags, {
+        ...tickOptions,
+        pollRoomId,
+      }),
+    )
+  }
+  const primaryRoomId = flags.roomId ?? pollRoomIds[0] ?? ''
+  const data = aggregateBridgeTickResults(roomResults, primaryRoomId)
   return {
     ok: true,
     intervalMs: flags.pollIntervalMs,
-    roomId: flags.roomId,
+    roomId: primaryRoomId,
     data,
   }
 }
@@ -2747,6 +3749,19 @@ export function startAlfaClubChatBridge(opts?: {
       stop,
     }
   }
+  if (shouldBlockRailwayBridge(flags)) {
+    logger.warn('[alfaclub-chat] bridge disabled on Railway (Vercel cron is canonical)', {
+      flag: 'ALFACLUB_CHAT_BRIDGE_ENABLED',
+      overrideFlag: 'ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY',
+    })
+    return {
+      started: false,
+      reason: 'railway_blocked',
+      intervalMs: flags.pollIntervalMs,
+      roomId: flags.roomId,
+      stop,
+    }
+  }
   if (!flags.enabled) {
     return {
       started: false,
@@ -2756,7 +3771,8 @@ export function startAlfaClubChatBridge(opts?: {
       stop,
     }
   }
-  if (!flags.roomId) {
+  const pollRoomIds = resolveAlfaClubBridgePollRoomIds(flags)
+  if (pollRoomIds.length === 0) {
     return {
       started: false,
       reason: 'env_missing',
@@ -2773,6 +3789,7 @@ export function startAlfaClubChatBridge(opts?: {
     liveFallbackActive: false,
     liveSocket: null,
     liveSocketJwt: null,
+    liveSocketWebsocketUrl: null,
     liveSocketRoomId: null,
   }
 
@@ -2780,8 +3797,10 @@ export function startAlfaClubChatBridge(opts?: {
     if (activeTickPromise !== null) return
     const tickPromise = (async () => {
       try {
-        const result = await runBridgeTick(flags)
-        opts?.onTick?.(result)
+        for (const pollRoomId of pollRoomIds) {
+          const result = await runBridgeTick(flags, { pollRoomId })
+          opts?.onTick?.(result)
+        }
       } catch (error) {
         opts?.onError?.(error)
       }
@@ -2865,6 +3884,164 @@ export async function _sendRoomMessageViaBotTokenForTests(params: {
   return sendRoomMessageViaBotToken(params)
 }
 
+export async function _sendRoomMessageViaBotTokenWithProxyFallbackForTests(params: {
+  apiBaseUrl: string
+  directApiBaseUrl: string
+  botToken: string
+  roomId: string
+  text: string
+  replyToMessageId?: string
+  proxySecret?: string | null
+  idempotencyKey: string
+  timeoutMs: number
+}): Promise<BotSendResultSummary> {
+  return sendRoomMessageViaBotTokenWithProxyFallback(params)
+}
+
+export async function _sendRoomMessageViaWebSocketForTests(params: {
+  websocketUrl: string
+  wsProxyHttpSendUrl?: string | null
+  wsProxySecret?: string | null
+  jwt: string
+  roomId: string
+  text: string
+  attachments?: unknown
+  replyToMessageId?: string
+  timeoutMs: number
+}): Promise<'ws_proxy_http' | 'websocket'> {
+  return sendRoomMessageViaWebSocket(params)
+}
+
+export async function sendAlfaClubRoomText(params: {
+  text: string
+  roomId?: string | null
+  replyToMessageId?: string
+  flags?: AlfaClubChatBridgeFlags
+  jwt?: string | null
+  attachments?: unknown
+}): Promise<{ lane: string }> {
+  const flags = params.flags ?? readAlfaClubChatBridgeFlags()
+  const roomId = (params.roomId ?? flags.roomId ?? '').trim()
+  if (!roomId) throw new Error('alfaclub_room_id_missing')
+  const text = String(params.text ?? '').trim()
+  if (!text) throw new Error('alfaclub_message_empty')
+
+  const jwt = (await resolveBridgeJwt(params.jwt ?? flags.jwt ?? null))?.trim() ?? ''
+  const idempotencyKey = buildBotMessageIdempotencyKey({
+    roomId,
+    messageId: params.replyToMessageId ?? `room-text-${Date.now()}`,
+  })
+
+  if (flags.botToken) {
+    try {
+      await sendRoomMessageViaBotTokenWithProxyFallback({
+        apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
+        directApiBaseUrl: flags.apiBaseUrl,
+        botToken: flags.botToken,
+        roomId,
+        text,
+        replyToMessageId: params.replyToMessageId,
+        proxySecret: resolveAlfaClubProxySecret(flags),
+        idempotencyKey,
+        timeoutMs: flags.sendTimeoutMs,
+      })
+      return {
+        lane: params.replyToMessageId ? 'bot_token_with_reply_id' : 'bot_token_without_reply_id',
+      }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      if (!jwt || !isBotMessageForbiddenError(error)) {
+        throw error
+      }
+      logger.warn('[alfaclub-chat] bot_send_forbidden:fallback_jwt', {
+        roomId,
+        error: detail.slice(0, 180),
+      })
+      try {
+        await sendRoomMessageViaJwtHttpWithProxyFallback({
+          apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
+          directApiBaseUrl: flags.apiBaseUrl,
+          jwt,
+          roomId,
+          text,
+          replyToMessageId: params.replyToMessageId,
+          proxySecret: resolveAlfaClubProxySecret(flags),
+          timeoutMs: flags.sendTimeoutMs,
+        })
+        return {
+          lane: params.replyToMessageId
+            ? 'jwt_http_with_reply_id_after_bot_forbidden'
+            : 'jwt_http_without_reply_id_after_bot_forbidden',
+        }
+      } catch (jwtHttpError) {
+        let lastJwtHttpError: unknown = jwtHttpError
+        logger.warn('[alfaclub-chat] jwt_http_send_failed:fallback_ws', {
+          roomId,
+          error: (jwtHttpError instanceof Error ? jwtHttpError.message : String(jwtHttpError)).slice(
+            0,
+            180,
+          ),
+        })
+        if (isJwtMessageAuthError(jwtHttpError)) {
+          await requestImmediatePrivyRefresh('bridge_auth_fail').catch(() => {})
+          const refreshedJwt =
+            (await resolveBridgeJwt(params.jwt ?? flags.jwt ?? null))?.trim() ?? ''
+          if (refreshedJwt && refreshedJwt !== jwt) {
+            try {
+              await sendRoomMessageViaJwtHttpWithProxyFallback({
+                apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
+                directApiBaseUrl: flags.apiBaseUrl,
+                jwt: refreshedJwt,
+                roomId,
+                text,
+                replyToMessageId: params.replyToMessageId,
+                proxySecret: resolveAlfaClubProxySecret(flags),
+                timeoutMs: flags.sendTimeoutMs,
+              })
+              return {
+                lane: params.replyToMessageId
+                  ? 'jwt_http_with_reply_id_after_refresh'
+                  : 'jwt_http_without_reply_id_after_refresh',
+              }
+            } catch (retryError) {
+              lastJwtHttpError = retryError
+              logger.warn('[alfaclub-chat] jwt_http_send_failed:after_refresh', {
+                roomId,
+                error: (retryError instanceof Error ? retryError.message : String(retryError)).slice(
+                  0,
+                  180,
+                ),
+              })
+            }
+          }
+        }
+        if (shouldSkipRawWebSocketSend(flags)) {
+          throw lastJwtHttpError instanceof Error
+            ? lastJwtHttpError
+            : new Error(String(lastJwtHttpError))
+        }
+      }
+    }
+  }
+
+  if (!jwt) throw new Error('alfaclub_jwt_missing')
+  const wsLane = await sendRoomMessageViaWebSocket({
+    websocketUrl: flags.websocketUrl,
+    wsProxyHttpSendUrl: flags.wsProxyHttpSendUrl,
+    wsProxySecret: flags.wsProxySecret,
+    jwt,
+    roomId,
+    text,
+    attachments: params.attachments,
+    replyToMessageId: params.replyToMessageId,
+    timeoutMs: flags.sendTimeoutMs,
+  })
+  const jwtLane = wsLane === 'ws_proxy_http' ? 'ws_proxy_http_primary' : 'websocket_primary'
+  return {
+    lane: flags.botToken ? `${jwtLane}_after_bot_forbidden` : jwtLane,
+  }
+}
+
 export function _resetAlfaClubChatBridgeStateForTests(): void {
   if (activeHandle !== null) clearInterval(activeHandle)
   activeHandle = null
@@ -2877,11 +4054,13 @@ export function _resetAlfaClubChatBridgeStateForTests(): void {
     liveFallbackActive: false,
     liveSocket: null,
     liveSocketJwt: null,
+    liveSocketWebsocketUrl: null,
     liveSocketRoomId: null,
   }
   bridgeAuthState.lastBadJwt = null
   bridgeAuthState.lastBadJwtAt = 0
   bridgeAuthState.lastBadJwtWarnAt = Number.NEGATIVE_INFINITY
+  bridgeAuthState.privyRefreshKickedThisTick = false
   bridgeAuthState.badJwtTtlMs = BAD_JWT_TTL_MS
   bridgeAuthState.socketBackoffMs = 0
   bridgeAuthState.socketBackoffUntil = 0
@@ -2904,6 +4083,12 @@ export function _resetAlfaClubChatBridgeStateForTests(): void {
   bridgeAuthState.wsErrorLastLoggedAt = Number.NEGATIVE_INFINITY
   bridgeAuthState.wsErrorRoomId = null
   bridgeAuthState.wsErrorLastMessage = null
+  bridgeAuthState.wsErrorLastCode = null
+  bridgeAuthState.wsErrorLastErrno = null
+  bridgeAuthState.wsErrorLastHandshakeStatus = null
+  bridgeAuthState.wsErrorLastPhase = null
+  bridgeAuthState.wsErrorLastUpstream = null
+  bridgeAuthState.wsBenignWindowByRoom.clear()
   bridgeAuthState.wsCloseAtMs = []
   bridgeAuthState.wsCloseChurnLastLoggedAt = Number.NEGATIVE_INFINITY
   if (bridgeAuthState.cfChallengeFlushTimer) {
@@ -2921,8 +4106,9 @@ export function _resetAlfaClubChatBridgeStateForTests(): void {
 
 export function _runAlfaClubChatBridgeTickForTests(
   flags: AlfaClubChatBridgeFlags,
+  options: RunBridgeTickOptions = {},
 ): Promise<AlfaClubChatBridgeTickResult> {
-  return runBridgeTick(flags)
+  return runBridgeTick(flags, options)
 }
 
 export function _ensureLiveCommandSocketForTests(params: {

@@ -1,5 +1,6 @@
 import { getDb } from '../db/postgres.js'
-import { ensureWorkspaceSchema } from './schema.js'
+import { ensureWorkspaceSchema } from '../db/schemaBootstrap.js'
+import { shouldSampleEvent } from '../infra/telemetrySampling.js'
 
 export type WorkspaceSeverity = 'info' | 'warn' | 'critical'
 
@@ -185,7 +186,7 @@ function normalizeLimit(value: number | undefined, max = 100): number {
 async function withDb() {
   const db = await getDb()
   if (!db) throw new Error('db_not_configured')
-  await ensureWorkspaceSchema()
+  await ensureWorkspaceSchema(db)
   return db
 }
 
@@ -444,6 +445,19 @@ export async function insertMonitoringSnapshot(params: {
   payload: Record<string, unknown>
   source?: string
 }): Promise<WorkspaceMonitoringSnapshot> {
+  // High-volume per-vault monitoring snapshots. Sample by vault for stable per-vault signal.
+  if (!shouldSampleEvent('workspace_monitoring_snapshots', params.vaultAddress)) {
+    // Return a minimal shape the caller can ignore; the function is fire-and-forget in most paths.
+    return {
+      id: -1,
+      vaultAddress: params.vaultAddress,
+      snapshotKind: params.snapshotKind?.trim() || 'vault_report',
+      payload: params.payload,
+      source: params.source?.trim() || 'workspace',
+      createdAt: new Date().toISOString(),
+    } as WorkspaceMonitoringSnapshot
+  }
+
   const db = await withDb()
   const result = await db.sql`
     INSERT INTO workspace_monitoring_snapshots (
@@ -495,6 +509,28 @@ export async function createAlertEvent(params: {
   relatedTaskId?: number | null
   createdBy?: `0x${string}` | null
 }): Promise<WorkspaceAlertEvent> {
+  // Workspace alerts are important but the raw event stream is high-volume during incidents.
+  if (!shouldSampleEvent('workspace_alert_events', params.vaultAddress)) {
+    return {
+      id: -1,
+      vaultAddress: params.vaultAddress,
+      source: params.source,
+      severity: params.severity ?? 'info',
+      kind: params.kind,
+      title: params.title,
+      message: params.message ?? null,
+      details: params.details ?? null,
+      status: params.status ?? 'open',
+      dedupeKey: params.dedupeKey ?? null,
+      relatedTaskId: params.relatedTaskId ?? null,
+      createdBy: params.createdBy ?? null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      acknowledgedBy: null,
+      acknowledgedAt: null,
+    } as WorkspaceAlertEvent
+  }
+
   const db = await withDb()
   const result = await db.sql`
     INSERT INTO workspace_alert_events (
@@ -832,6 +868,24 @@ export async function createActivityEvent(params: {
   relatedApprovalId?: number | null
   relatedAlertId?: number | null
 }): Promise<WorkspaceActivityEvent> {
+  if (!shouldSampleEvent('workspace_activity_events', params.vaultAddress)) {
+    return {
+      id: -1,
+      vaultAddress: params.vaultAddress,
+      eventType: params.eventType,
+      actorAddress: params.actorAddress ?? null,
+      source: params.source ?? 'workspace',
+      title: params.title,
+      description: params.description ?? null,
+      severity: params.severity ?? 'info',
+      payload: params.payload ?? null,
+      relatedTaskId: params.relatedTaskId ?? null,
+      relatedApprovalId: params.relatedApprovalId ?? null,
+      relatedAlertId: params.relatedAlertId ?? null,
+      createdAt: new Date().toISOString(),
+    } as WorkspaceActivityEvent
+  }
+
   const db = await withDb()
   const result = await db.sql`
     INSERT INTO workspace_activity_events (
@@ -980,6 +1034,23 @@ export async function appendAuditLog(params: {
   after?: Record<string, unknown> | null
   details?: Record<string, unknown>
 }): Promise<WorkspaceAuditLog> {
+  if (!shouldSampleEvent('workspace_audit_logs', params.vaultAddress)) {
+    return {
+      id: -1,
+      vaultAddress: params.vaultAddress,
+      actorAddress: params.actorAddress ?? null,
+      actorRole: params.actorRole ?? null,
+      source: params.source,
+      action: params.action,
+      targetType: params.targetType ?? null,
+      targetId: params.targetId ?? null,
+      before: params.before ?? null,
+      after: params.after ?? null,
+      details: params.details ?? null,
+      createdAt: new Date().toISOString(),
+    } as WorkspaceAuditLog
+  }
+
   const db = await withDb()
   const result = await db.sql`
     INSERT INTO workspace_audit_logs (

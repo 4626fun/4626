@@ -2,7 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import {DeploymentBatcher, DeploymentBatcherPhase2Module, ICharmFactory} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
+import {DeploymentBatcher, ICharmFactory} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
+import "./helpers/DeploymentBatcherFixture.sol";
 
 contract MockOwnableTransfer {
     address public owner;
@@ -18,10 +19,22 @@ contract MockOwnableTransfer {
 
 contract MockCharmStrategy is MockOwnableTransfer {
     bool public approvalsInitialized;
+    address public creatorOracle;
+    address public ajnaPool;
 
     function initializeApprovals() external {
         approvalsInitialized = true;
     }
+
+    function setCreatorOracle(address _creatorOracle) external {
+        creatorOracle = _creatorOracle;
+    }
+
+    function setAjnaPool(address _ajnaPool) external {
+        ajnaPool = _ajnaPool;
+    }
+
+    function setAjnaBorrowConfig(bool, uint256, uint256, uint256, uint256, uint256) external {}
 }
 
 contract MockAjnaVaultAuth {
@@ -161,12 +174,15 @@ contract MockVaultStrategyManager {
     mapping(address => uint256) public addedWeights;
     bool public autoAllocate;
 
+    error Unauthorized();
+
     constructor(address owner_) {
         owner = owner_;
         managementAddress = owner_;
     }
 
     function addStrategy(address strategy, uint256 weight) external {
+        if (msg.sender != managementAddress && msg.sender != owner) revert Unauthorized();
         addedWeights[strategy] = weight;
     }
 
@@ -179,6 +195,7 @@ contract MockVaultStrategyManager {
     }
 
     function setAutoAllocate(bool enabled) external {
+        if (msg.sender != managementAddress && msg.sender != owner) revert Unauthorized();
         autoAllocate = enabled;
     }
 }
@@ -200,6 +217,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
 
     address internal immutable ownerAddr = makeAddr("owner");
     address internal immutable protocolTreasury = makeAddr("protocolTreasury");
+    address internal immutable protocolAutomation = makeAddr("protocolAutomation");
 
     MockVaultStrategyManager internal vault;
     MockCreate2Deployer internal create2Deployer;
@@ -217,38 +235,30 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             SOLANA_STRATEGY_CODE_ID
         );
 
-        DeploymentBatcherPhase2Module phase2Fixture = new DeploymentBatcherPhase2Module(
-            address(create2Deployer),
-            makeAddr("registry"),
-            makeAddr("chainlinkEthUsd"),
-            makeAddr("poolManager"),
-            makeAddr("taxHook"),
-            protocolTreasury,
-            makeAddr("lotteryManager"),
-            makeAddr("vaultActivationBatcher"),
-            makeAddr("batcher")
-        );
-        batcher = new DeploymentBatcher(
-            makeAddr("registry"),
-            makeAddr("bytecodeStore"),
-            address(create2Deployer),
-            protocolTreasury,
-            makeAddr("poolManager"),
-            makeAddr("taxHook"),
-            makeAddr("chainlinkEthUsd"),
-            makeAddr("vaultActivationBatcher"),
-            makeAddr("lotteryManager"),
-            makeAddr("permit2"),
-            makeAddr("usdc"),
-            address(new MockUniswapV3Factory(makeAddr("v3Pool"))),
-            makeAddr("uniswapRouter"),
-            address(new MockAjnaPoolFactory(makeAddr("ajnaPool"))),
-            makeAddr("vaultCoreModule"),
-            makeAddr("vaultStrategiesModule"),
-            makeAddr("vaultAdminModule"),
-            address(phase2Fixture)
-        );
+        DeploymentBatcherFixture deployerLib = new DeploymentBatcherFixture();
+        DeploymentBatcherFixture.BatcherConfig memory cfg = DeploymentBatcherFixture.BatcherConfig({
+            registry: makeAddr("registry"),
+            bytecodeStore: makeAddr("bytecodeStore"),
+            create2Deployer: address(create2Deployer),
+            protocolTreasury: protocolTreasury,
+            protocolAutomation: protocolAutomation,
+            poolManager: makeAddr("poolManager"),
+            taxHook: makeAddr("taxHook"),
+            chainlinkEthUsd: makeAddr("chainlinkEthUsd"),
+            vaultActivationBatcher: makeAddr("vaultActivationBatcher"),
+            lotteryManager: makeAddr("lotteryManager"),
+            permit2: makeAddr("permit2"),
+            usdc: makeAddr("usdc"),
+            uniswapV3Factory: address(new MockUniswapV3Factory(makeAddr("v3Pool"))),
+            uniswapRouter: makeAddr("uniswapRouter"),
+            ajnaFactory: address(new MockAjnaPoolFactory(makeAddr("ajnaPool"))),
+            vaultCoreModule: makeAddr("vaultCoreModule"),
+            vaultStrategiesModule: makeAddr("vaultStrategiesModule"),
+            vaultAdminModule: makeAddr("vaultAdminModule")
+        });
+        (batcher,) = deployerLib.deployBatcher(cfg);
         vault.setManagement(address(batcher));
+        deployerLib.mockRegistryCreatorCoin(cfg.registry, makeAddr("creatorToken"), makeAddr("creatorOracle"));
 
         vm.mockCall(
             batcher.CHARM_FACTORY(),
@@ -261,7 +271,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         vm.mockCall(
             batcher.CHARM_FACTORY(),
             abi.encodeWithSelector(CREATE_VAULT_SELECTOR),
-            abi.encode(address(new MockCharmVault(protocolTreasury)))
+            abi.encode(address(new MockCharmVault(protocolAutomation)))
         );
     }
 
@@ -278,7 +288,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             ajnaVaultSymbol: "AIV",
             charmWeightBps: 7000,
             ajnaWeightBps: 2000,
-            solanaWeightBps: 1000,
+            solanaWeightBps: 0,
             ajnaBufferRatioBps: 1_500,
             ajnaMinBucketIndex: 4_156,
             ajnaKeeper: makeAddr("ajnaKeeper"),
@@ -305,8 +315,8 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         assertEq(MockOwnableTransfer(out.ajnaStrategy).owner(), protocolTreasury, "ajna adapter owner should be treasury");
         assertEq(
             MockAjnaVaultAuth(out.ajnaVaultAuth).admin(),
-            protocolTreasury,
-            "ajna auth admin should be treasury"
+            protocolAutomation,
+            "ajna auth admin should be protocol automation Safe"
         );
         assertEq(MockAjnaAdapter(out.ajnaStrategy).idleBufferBps(), 0, "adapter idle buffer should be disabled");
         assertEq(MockOwnableTransfer(out.charmStrategy).owner(), protocolTreasury, "charm owner remains treasury");
@@ -328,7 +338,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             ajnaVaultSymbol: "AIV",
             charmWeightBps: 7000,
             ajnaWeightBps: 2000,
-            solanaWeightBps: 1000,
+            solanaWeightBps: 0,
             ajnaBufferRatioBps: 1_500,
             ajnaMinBucketIndex: 4_156,
             ajnaKeeper: makeAddr("ajnaKeeper"),
@@ -352,9 +362,9 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         address v3Pool = MockUniswapV3Factory(batcher.uniswapV3Factory()).getPool(params.creatorToken, batcher.usdc(), 3000);
         ICharmFactory.VaultParams memory expectedVaultParams = ICharmFactory.VaultParams({
             pool: v3Pool,
-            manager: protocolTreasury,
+            manager: protocolAutomation,
             managerFee: CHARM_MANAGER_FEE_PIPS,
-            rebalanceDelegate: protocolTreasury,
+            rebalanceDelegate: params.owner,
             maxTotalSupply: type(uint256).max,
             baseThreshold: 3000,
             limitThreshold: 6000,
@@ -386,7 +396,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             ajnaVaultSymbol: "AIV",
             charmWeightBps: 7000,
             ajnaWeightBps: 2000,
-            solanaWeightBps: 1000,
+            solanaWeightBps: 0,
             ajnaBufferRatioBps: 1_500,
             ajnaMinBucketIndex: 4_156,
             ajnaKeeper: makeAddr("ajnaKeeper"),
@@ -436,7 +446,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             ajnaVaultSymbol: "AIV",
             charmWeightBps: 7000,
             ajnaWeightBps: 2000,
-            solanaWeightBps: 1000,
+            solanaWeightBps: 0,
             ajnaBufferRatioBps: 1_500,
             ajnaMinBucketIndex: 4_156,
             ajnaKeeper: makeAddr("ajnaKeeper"),
@@ -475,7 +485,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             ajnaVaultSymbol: "AIV",
             charmWeightBps: 7000,
             ajnaWeightBps: 2000,
-            solanaWeightBps: 1000,
+            solanaWeightBps: 0,
             ajnaBufferRatioBps: 1_500,
             ajnaMinBucketIndex: 4_156,
             ajnaKeeper: makeAddr("ajnaKeeper"),
@@ -516,7 +526,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             ajnaVaultSymbol: "AIV",
             charmWeightBps: 7000,
             ajnaWeightBps: 2000,
-            solanaWeightBps: 1000,
+            solanaWeightBps: 0,
             ajnaBufferRatioBps: 1_500,
             ajnaMinBucketIndex: 4_156,
             ajnaKeeper: makeAddr("ajnaKeeper"),
@@ -547,7 +557,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         vm.prank(ownerAddr);
         vm.expectRevert(
             abi.encodeWithSelector(
-                DeploymentBatcher.CharmVaultManagerMismatch.selector, protocolTreasury, wrongManager
+                DeploymentBatcher.CharmVaultManagerMismatch.selector, protocolAutomation, wrongManager
             )
         );
         batcher.deployPhase3Strategies(params, codeIds);

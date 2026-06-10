@@ -1,12 +1,7 @@
 import type { ReactNode } from 'react'
 import { Search } from 'lucide-react'
-import { Link, useLocation } from 'react-router-dom'
 import { useUniswapServiceStatus } from '@/lib/uniswap/hooks'
-
-type Tab = {
-  label: string
-  to: string
-}
+import { ExploreTabNav } from '@/components/explore/ExploreTabNav'
 
 type ExploreTimeFilterOption = {
   label: string
@@ -17,14 +12,6 @@ type ExploreSortOption = {
   label: string
   value: string
 }
-
-const TABS: Tab[] = [
-  { label: 'Creators', to: '/explore/creators' },
-  { label: 'Content', to: '/explore/content' },
-  { label: 'Vaults', to: '/explore/vaults' },
-  { label: 'Trends', to: '/explore/trends' },
-  { label: 'Transactions', to: '/explore/transactions' },
-]
 
 // Zora explore volume is 24h or all-time (`totalVolume`); 1W is labeled honestly in copy when selected.
 // Pill availability: 1D always; others when Uniswap historical service is configured (see useUniswapServiceStatus).
@@ -40,11 +27,6 @@ const DEFAULT_SORT_OPTIONS: readonly ExploreSortOption[] = [
   { label: 'Price change', value: 'priceChange' },
   { label: 'Recently added', value: 'new' },
 ]
-
-function isActive(pathname: string, to: string): boolean {
-  if (pathname === to) return true
-  return pathname.startsWith(`${to}/`)
-}
 
 export function applyExploreParamChange({
   value,
@@ -73,6 +55,9 @@ export function ExploreSubnav({
   sortOptions = DEFAULT_SORT_OPTIONS,
   disableUniswapTimeGating = false,
   extraFilters,
+  showSearch = true,
+  showMobileSortRow = true,
+  showTabs = true,
 }: {
   searchPlaceholder?: string
   searchValue?: string
@@ -87,9 +72,11 @@ export function ExploreSubnav({
   sortOptions?: readonly ExploreSortOption[]
   disableUniswapTimeGating?: boolean
   extraFilters?: ReactNode
+  showSearch?: boolean
+  showMobileSortRow?: boolean
+  /** When false, tab links render in ExploreListLayout instead (list routes only). */
+  showTabs?: boolean
 }) {
-  const location = useLocation()
-
   // Check if Uniswap historical data service is available
   const { data: uniswapStatus } = useUniswapServiceStatus()
   const uniswapAvailable = uniswapStatus?.available === true
@@ -110,102 +97,83 @@ export function ExploreSubnav({
     })
   }
 
+  const showTimeFilter = timeFilters.length > 1
+
   return (
     <div className="space-y-2.5 sm:space-y-3">
-      {/* Main navigation row */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
-        {/* Tabs */}
-        <div className="flex items-center gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide rounded-full border border-white/8 bg-black/20 p-0.5">
-          {TABS.map((tab) => {
-            const active = isActive(location.pathname, tab.to)
-            return (
-              <Link
-                key={tab.to}
-                to={tab.to}
-                aria-current={active ? 'page' : undefined}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border text-[13px] sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
-                  active
-                    ? 'border-brand-primary/35 bg-brand-primary/14 text-white shadow-[0_10px_22px_-16px_rgba(0,82,255,0.88)]'
-                    : 'border-transparent text-zinc-400 hover:text-white hover:border-white/10 hover:bg-white/7'
-                }`}
-              >
-                {tab.label}
-              </Link>
-            )
-          })}
-        </div>
+        {showTabs ? <ExploreTabNav /> : null}
 
-        {/* Search & Filters */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-            <input
-              type="text"
-              placeholder={searchPlaceholder}
-              value={searchValue}
-              className="w-full sm:w-[260px] h-9 sm:h-10 rounded-full border border-white/12 bg-linear-to-b from-white/7 to-white/3 pl-9 sm:pl-10 pr-4 text-[13px] sm:text-sm text-white placeholder:text-zinc-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-all duration-200 focus:outline-none focus:border-brand-primary/50 focus:ring-2 focus:ring-brand-primary/30"
-              aria-label="Search"
-              onChange={(e) => onSearch?.(e.target.value)}
-            />
-          </div>
-
-          <div className="flex flex-col items-start gap-1.5">
-            {/* Time filter pills */}
-            <div className="w-fit self-start sm:self-auto flex items-center gap-0.5 sm:gap-1 h-8 sm:h-9 rounded-full border border-white/12 bg-linear-to-b from-white/7 to-white/3 p-0.5">
-              {timeFilters.map((filter) => {
-                const active = currentTimeFilter === filter.value
-                const isAvailable = disableUniswapTimeGating || filter.value === '1d' || uniswapAvailable
-                const disabled = !isAvailable
-                return (
-                  <button
-                    key={filter.value}
-                    type="button"
-                    onClick={() => !disabled && handleTimeFilterClick(filter.value)}
-                    disabled={disabled}
-                    title={disabled ? 'Requires THEGRAPH_API_KEY - Uniswap V4 historical data' : `View ${filter.label} data`}
-                    className={`h-6 sm:h-7 px-2 sm:px-2.5 rounded-full border text-[10px] sm:text-[11px] font-medium leading-none transition-all duration-200 ${
-                      active
-                        ? 'border-blue-300/35 bg-blue-500/20 text-blue-100 shadow-[0_8px_20px_-14px_rgba(59,130,246,0.9)]'
-                        : disabled
-                          ? 'border-transparent text-zinc-600 cursor-not-allowed'
-                          : 'border-transparent text-zinc-400 hover:border-white/10 hover:bg-white/7 hover:text-white'
-                    }`}
-                  >
-                    {filter.label}
-                  </button>
-                )
-              })}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 lg:ml-auto">
+          {showSearch ? (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+              <input
+                type="text"
+                placeholder={searchPlaceholder}
+                value={searchValue}
+                className="w-full sm:w-[260px] h-9 sm:h-10 rounded-full border border-white/12 bg-linear-to-b from-white/7 to-white/3 pl-9 sm:pl-10 pr-4 text-[13px] sm:text-sm text-white placeholder:text-zinc-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-all duration-200 focus:outline-none focus:border-brand-primary/50 focus:ring-2 focus:ring-brand-primary/30"
+                aria-label="Search"
+                onChange={(e) => onSearch?.(e.target.value)}
+              />
             </div>
-            {volumeColumnNote ? (
-              <p className="text-[11px] text-zinc-500 max-w-md leading-snug">{volumeColumnNote}</p>
-            ) : null}
-          </div>
+          ) : null}
+
+          {showTimeFilter ? (
+            <div className="flex flex-col items-start gap-1.5">
+              <div className="w-fit self-start sm:self-auto">
+                <select
+                  value={currentTimeFilter}
+                  onChange={(event) => handleTimeFilterClick(event.target.value)}
+                  className="h-8 sm:h-9 rounded-lg border border-white/12 bg-linear-to-b from-white/7 to-white/3 px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-medium text-zinc-200 focus:outline-none focus:border-brand-primary/50 focus:ring-2 focus:ring-brand-primary/30"
+                  aria-label="Time range"
+                >
+                  {timeFilters.map((filter) => {
+                    const isAvailable = disableUniswapTimeGating || filter.value === '1d' || uniswapAvailable
+                    return (
+                      <option
+                        key={filter.value}
+                        value={filter.value}
+                        disabled={!isAvailable}
+                      >
+                        {filter.label}
+                        {!isAvailable ? ' (Unavailable)' : ''}
+                      </option>
+                    )
+                  })}
+                </select>
+              </div>
+              {volumeColumnNote ? (
+                <p className="text-[11px] text-zinc-500 max-w-md leading-snug">{volumeColumnNote}</p>
+              ) : null}
+            </div>
+          ) : null}
           {extraFilters ? <div className="flex items-center">{extraFilters}</div> : null}
         </div>
       </div>
 
-      {/* Sort options row — visible below lg, horizontally scrollable */}
-      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 scrollbar-hide lg:hidden -mx-1 px-1">
-        <span className="text-[11px] sm:text-xs text-zinc-500 shrink-0">Sort:</span>
-        {sortOptions.map((option) => {
-          const active = currentSort === option.value
-          return (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => handleSortClick(option.value)}
-              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full border text-[11px] sm:text-xs font-medium transition-all duration-200 whitespace-nowrap active:scale-[0.97] ${
-                active
-                  ? 'border-brand-primary/35 bg-brand-primary/14 text-white shadow-[0_10px_22px_-16px_rgba(0,82,255,0.88)]'
-                  : 'border-transparent text-zinc-400 hover:text-white hover:border-white/10 hover:bg-white/7'
-              }`}
-            >
-              {option.label}
-            </button>
-          )
-        })}
-      </div>
+      {showMobileSortRow ? (
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 scrollbar-hide lg:hidden -mx-1 px-1">
+          <span className="text-[11px] sm:text-xs text-zinc-500 shrink-0">Sort:</span>
+          {sortOptions.map((option) => {
+            const active = currentSort === option.value
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => handleSortClick(option.value)}
+                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full border text-[11px] sm:text-xs font-medium transition-all duration-200 whitespace-nowrap active:scale-[0.97] ${
+                  active
+                    ? 'border-brand-primary/35 bg-brand-primary/14 text-white shadow-[0_10px_22px_-16px_rgb(var(--brand-primary)/0.88)]'
+                    : 'border-transparent text-zinc-400 hover:text-white hover:border-white/10 hover:bg-white/7'
+                }`}
+              >
+                {option.label}
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
     </div>
   )
 }

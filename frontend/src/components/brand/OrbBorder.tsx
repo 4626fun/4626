@@ -40,16 +40,16 @@ export function OrbBorder({
           style={{
             background: `conic-gradient(
               from 0deg,
-              #0033CC 0%,
-              #001F7A 15%,
-              #004AD9 25%,
-              #0052FF 35%,
+              rgb(var(--brand-primary) / 0.7) 0%,
+              rgb(var(--brand-primary) / 0.45) 15%,
+              rgb(var(--brand-hover)) 25%,
+              rgb(var(--brand-primary)) 35%,
               #FFFFFF 42%,
-              #0052FF 48%,
-              #004AD9 58%,
-              #001F7A 72%,
-              #3B82F6 86%,
-              #0033CC 100%
+              rgb(var(--brand-primary)) 48%,
+              rgb(var(--brand-hover)) 58%,
+              rgb(var(--brand-primary) / 0.45) 72%,
+              rgb(var(--brand-hover) / 0.9) 86%,
+              rgb(var(--brand-primary) / 0.7) 100%
             )`,
           }}
         />
@@ -67,11 +67,11 @@ export function OrbBorder({
             background: `conic-gradient(
               from 180deg,
               transparent 0%,
-              #0052FF 20%,
+              rgb(var(--brand-primary)) 20%,
               transparent 40%,
               #EDEDED 50%,
               transparent 60%,
-              #0052FF 80%,
+              rgb(var(--brand-primary)) 80%,
               transparent 100%
             )`,
           }}
@@ -87,7 +87,7 @@ export function OrbBorder({
       <div className={`absolute inset-0 ${shapeClass} z-10 pointer-events-none mix-blend-screen opacity-50 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.8)_0%,transparent_60%)]`} />
 
       {/* Layer 5: bottom rim light */}
-      <div className={`absolute inset-0 ${shapeClass} z-10 pointer-events-none opacity-40 bg-[radial-gradient(circle_at_50%_100%,rgba(0,82,255,0.35)_0%,transparent_55%)]`} />
+      <div className={`absolute inset-0 ${shapeClass} z-10 pointer-events-none opacity-40 bg-[radial-gradient(circle_at_50%_100%,rgb(var(--brand-primary)/0.35)_0%,transparent_55%)]`} />
 
       {/* Inner content */}
       <div className={`relative ${shapeClass} z-20 h-full w-full flex items-center justify-center overflow-hidden`}>

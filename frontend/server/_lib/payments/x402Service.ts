@@ -13,14 +13,16 @@ import {
 import { useFacilitator as createFacilitatorClient } from 'x402/verify'
 
 import { getCanonicalOrigin } from '../infra/origin.js'
-import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
+import siteConfig from '../../../shared/site-config.json' with { type: 'json' }
+import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
+import { resolveServerAgentInboxAddress } from '../wallet/canonicalCswEnv.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
 const DEFAULT_NETWORK = 'base' as const
 const DEFAULT_PRICE_USD = 1
 const DEFAULT_MAX_TIMEOUT_SECONDS = 300
-const DEFAULT_PAY_TO = TARGET_CANONICAL_CSW_ADDRESS
+const DEFAULT_PAY_TO = CANONICAL_CSW_ADDRESS
 const X402_VERSION = 1
 const PAYMENT_ALLOW_HEADERS = [
   'PAYMENT-SIGNATURE',
@@ -109,18 +111,14 @@ function normalizePrice(raw: number | string | undefined): number {
 }
 
 function resolvePayTo(): `0x${string}` {
-  const candidates = [
+  const explicit = [
     (process.env.ERC8004_REVIEW_PAY_TO ?? '').trim(),
     (process.env.X402_PAY_TO ?? '').trim(),
-    (process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim(),
-    (process.env.XMTP_AGENT_ADDRESS ?? '').trim(),
-    (process.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim(),
-    DEFAULT_PAY_TO,
   ]
-  for (const candidate of candidates) {
+  for (const candidate of explicit) {
     if (isAddressLike(candidate)) return candidate
   }
-  return DEFAULT_PAY_TO
+  return resolveServerAgentInboxAddress()
 }
 
 function resolveResourceUrl(req: VercelRequest, resourcePath: string): string {
@@ -317,7 +315,7 @@ export function sendPaymentRequiredResponse(
         currentUrl: resolveResourceUrl(req, req.url ?? params.paymentRequirements.resource),
         testnet: params.network === 'base-sepolia',
         appName: '4626',
-        appLogo: 'https://4626.fun/assets/logo-mark-1024.png',
+        appLogo: `https://4626.fun/assets/base-app-icon-1024.png?v=${Number(siteConfig.brandAssetVersion ?? 3)}`,
         cdpClientKey: (process.env.X402_CDP_CLIENT_KEY ?? '').trim() || undefined,
       }),
     )

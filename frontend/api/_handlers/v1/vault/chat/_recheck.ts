@@ -6,7 +6,7 @@ import {
   requireKeeprApiKey,
   setCors,
   setNoStore,
-} from '../../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { recheckVaultChatMemberships } from '../../../../../server/_lib/chat/vaultChatPolicy.js'
 import { normalizeVaultAddressFromQuery } from '../../workspace/_shared.js'
 

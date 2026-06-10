@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/deploy/deployLaunchImage
+[4626-web](../../../index.md) / server/\_lib/deploy/deployLaunchImage
 
 # server/\_lib/deploy/deployLaunchImage
 
@@ -58,7 +58,7 @@ Defined in: [server/\_lib/deploy/deployLaunchImage.ts:21](https://github.com/wen
 
 ### ensureLaunchImageReady()
 
-> **ensureLaunchImageReady**(`params`): `Promise`\<\{ `outputBlobUrl`: `string`; `projectId`: `string`; `shareOFT`: `` `0x${string}` ``; `vaultAddress`: `` `0x${string}` ``; \}\>
+> **ensureLaunchImageReady**(`params`): `Promise`\<\{ `outputBlobUrl`: `string`; `projectId`: `string`; `shareOFT`: `string`; `vaultAddress`: `string`; \}\>
 
 Defined in: [server/\_lib/deploy/deployLaunchImage.ts:298](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deployLaunchImage.ts#L298)
 
@@ -96,7 +96,7 @@ Defined in: [server/\_lib/deploy/deployLaunchImage.ts:298](https://github.com/we
 
 ###### sessionAddress
 
-`` `0x${string}` ``
+`string`
 
 ###### sessionId
 
@@ -104,4 +104,4 @@ Defined in: [server/\_lib/deploy/deployLaunchImage.ts:298](https://github.com/we
 
 #### Returns
 
-`Promise`\<\{ `outputBlobUrl`: `string`; `projectId`: `string`; `shareOFT`: `` `0x${string}` ``; `vaultAddress`: `` `0x${string}` ``; \}\>
+`Promise`\<\{ `outputBlobUrl`: `string`; `projectId`: `string`; `shareOFT`: `string`; `vaultAddress`: `string`; \}\>

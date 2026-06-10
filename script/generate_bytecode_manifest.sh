@@ -4,7 +4,7 @@ set -euo pipefail
 # Generates deployments/base/<release>-bytecode-manifest.json from Foundry artifacts.
 #
 # Usage:
-#   ./script/generate_bytecode_manifest.sh v1.11.0
+#   ./script/generate_bytecode_manifest.sh v1.13.0
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RELEASE_TAG="${1:-}"
@@ -57,12 +57,52 @@ contracts=(
   "DeploymentBatcherUtilsHelper"
 )
 
+artifact_path() {
+  local contract="$1"
+  case "$contract" in
+    DeploymentBatcher|DeploymentBatcherPhase1Module|DeploymentBatcherPhase2Module|DeploymentBatcherPhase3Helper|DeploymentBatcherUniV4Helper|DeploymentBatcherUtilsHelper)
+      printf "%s/out/DeploymentBatcher.sol/%s.json" "$ROOT_DIR" "$contract"
+      ;;
+    *)
+      printf "%s/out/%s.sol/%s.json" "$ROOT_DIR" "$contract" "$contract"
+      ;;
+  esac
+}
+
 bytecode() {
   local contract="$1"
-  local bc
-  bc="$(forge inspect "$contract" bytecode | tail -n 1)"
-  bc="${bc#0x}"
-  printf "%s" "$bc"
+  local artifact
+  artifact="$(artifact_path "$contract")"
+  if [[ ! -f "$artifact" ]]; then
+    echo "Missing artifact: $artifact (run forge build --skip test --skip script first)" >&2
+    exit 1
+  fi
+  python3 - "$artifact" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as fh:
+    obj = fh.read().strip()
+# forge may emit concatenated JSON objects; keep the bytecode record only.
+decoder = json.JSONDecoder()
+bytecode_obj = None
+idx = 0
+while idx < len(obj):
+    value, end = decoder.raw_decode(obj, idx)
+    if isinstance(value, dict) and "bytecode" in value:
+        bytecode_obj = value["bytecode"]
+    idx = end
+if bytecode_obj is None or not bytecode_obj.get("object"):
+    raise SystemExit(f"bytecode.object missing in {path}")
+bc = bytecode_obj["object"]
+if bc.startswith("0x"):
+    bc = bc[2:]
+import re
+m = re.match(r"^([0-9a-fA-F]+)", bc)
+if not m:
+    raise SystemExit(f"no hex bytecode in {path}")
+bc = m.group(1).lower()
+print(bc, end="")
+PY
 }
 
 json_escape() {

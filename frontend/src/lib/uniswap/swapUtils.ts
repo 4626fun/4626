@@ -107,18 +107,28 @@ export function getCoreTokensForChain(config: ChainTokenConfig): TokenOption[] {
   return tokens
 }
 
-export function shareTokenLogo(address: string, chainId = BASE_CHAIN_ID, size = 128): string {
-  const normalizedSize = Number.isFinite(size) ? Math.max(32, Math.min(1024, Math.trunc(size))) : 128
-  return `/api/token/image?address=${getAddress(address)}&chain=${chainId}&size=${normalizedSize}`
+export function shareTokenLogo(address: string, chainId = BASE_CHAIN_ID, _size = 128): string {
+  void address
+  void chainId
+  return ''
 }
 
 export function creatorCoinRawLogo(address: string, chainId = BASE_CHAIN_ID): string {
   return `/api/v1/token/${getAddress(address).toLowerCase()}/image?chain=${chainId}&format=png&style=raw&tokenKind=creator`
 }
 
+function isOpaqueInternalTokenLabel(value: string | undefined): boolean {
+  const trimmed = String(value ?? '').trim()
+  if (!trimmed) return true
+  if (isAddress(trimmed)) return false
+  if (/^[a-f0-9]{20,}$/i.test(trimmed)) return true
+  return false
+}
+
 function isGenericLabel(value: string | undefined, group: TokenOption['group'] | undefined, address: string): boolean {
   const normalized = String(value ?? '').trim().toLowerCase()
   if (!normalized) return true
+  if (isOpaqueInternalTokenLabel(normalized)) return true
   if (normalized === shortAddress(address).toLowerCase()) return true
   if (normalized === 'token' || normalized === 'unknown') return true
   if (group === 'creator' && normalized === 'creator coin') return true
@@ -165,6 +175,7 @@ export function getNestedAmountOut(input: unknown): string | null {
     obj?.orderInfo?.outputs?.[0]?.startAmount,
     obj?.orderInfo?.outputs?.[0]?.amount,
     obj?.amountOut,
+    obj?.quote?.amountOut,
     obj?.outAmount,
     obj?.currencyAmountOut,
   ]
@@ -275,12 +286,7 @@ export function resolveTokenDisplay(params: {
     : (preferOptionName ? optionName : onchainName || optionName || optionSymbol || shortAddress(params.address))
 
   const allowExternalRegistryFallbacks = isCore
-  const internalImageFallback =
-    isAddress(params.address) && params.option?.group === 'creator'
-      ? creatorCoinRawLogo(params.address, BASE_CHAIN_ID)
-      : isAddress(params.address)
-        ? shareTokenLogo(params.address, BASE_CHAIN_ID)
-        : null
+  const internalImageFallback = null
   const fallbackUrls =
     isAddress(params.address) && allowExternalRegistryFallbacks ? tokenLogoFallbacks(params.address) : []
   const logoCandidates = [

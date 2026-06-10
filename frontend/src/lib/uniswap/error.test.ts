@@ -15,6 +15,14 @@ describe('normalizeUniswapError', () => {
     expect(normalizeUniswapError('approval required').code).toBe('APPROVAL_REQUIRED')
   })
 
+  it('maps transfer_from_failed simulation errors', () => {
+    const normalized = normalizeUniswapError(
+      'Failed to fetch gas fee and/or simulate transaction: FAILED_TO_ESTIMATE_GAS: TRANSFER_FROM_FAILED',
+    )
+    expect(normalized.code).toBe('INSUFFICIENT_FUNDS')
+    expect(normalized.message).toContain('wrap')
+  })
+
   it('maps missing 4626 session token during canonical submit', () => {
     const normalized = normalizeUniswapError('Missing 4626 session token for paymaster request.')
     expect(normalized.code).toBe('AUTH_REQUIRED')
@@ -33,9 +41,35 @@ describe('normalizeUniswapError', () => {
     expect(normalized.message).toContain('session does not match')
   })
 
+  it('maps Uniswap transaction value schema validation errors', () => {
+    const normalized = normalizeUniswapError(
+      'RequestValidationError: "value" does not match any of the allowed types',
+    )
+    expect(normalized.message).toContain('invalid transaction payload from the router')
+    expect(normalized.retryable).toBe(true)
+  })
+
   it('falls back safely', () => {
     const normalized = normalizeUniswapError('weird edge case')
     expect(normalized.code).toBe('UNKNOWN')
     expect(normalized.message).toContain('weird edge case')
+  })
+
+  it('does not blame balance for opaque execution reverts', () => {
+    const normalized = normalizeUniswapError({
+      name: 'RpcRequestError',
+      message: 'Execution reverted for an unknown reason.',
+      details: 'execution reverted',
+    })
+    expect(normalized.message).not.toContain('Check your balance')
+    expect(normalized.message).toContain('stale quote')
+  })
+
+  it('maps bundler rejection after local simulation', () => {
+    const normalized = normalizeUniswapError(
+      'Swap simulation passed but the sponsored UserOp was rejected by the bundler.',
+    )
+    expect(normalized.code).toBe('QUOTE_EXPIRED')
+    expect(normalized.message).toContain('Refresh the quote')
   })
 })

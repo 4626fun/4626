@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
-import { Link, Outlet, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { ShieldCheck } from 'lucide-react'
 import { useAccount } from 'wagmi'
+
+import { PageTransitionNestedOutlet } from '@/components/layout/PageTransition'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { deriveAdminWalletRoles } from '@/lib/wallet/adminWalletRoles'
@@ -41,6 +43,11 @@ const ADMIN_TABS = [
     label: 'UserOp Health',
     to: '/admin/userop-health',
     description: 'ERC-4337 / paymaster telemetry',
+  },
+  {
+    label: 'Control Plane',
+    to: '/admin/control-plane',
+    description: 'Operation lifecycle, timelines, stuck runs',
   },
 ] as const
 
@@ -154,7 +161,7 @@ export function AdminLayout() {
       ) : null}
       {/* Tab navigation */}
       <div className="rounded-xl border border-white/10 bg-black/30 p-2">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-7">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-8">
           {ADMIN_TABS.map((tab) => {
             const active = activeTab?.to === tab.to
             return (
@@ -176,7 +183,7 @@ export function AdminLayout() {
       </div>
 
       {/* Child route */}
-      <Outlet />
+      <PageTransitionNestedOutlet />
     </div>
   )
 }

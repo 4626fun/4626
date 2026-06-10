@@ -1,11 +1,15 @@
 import fs from 'node:fs'
 
+import { resolveCanvasTokens } from './canvasTokens.mjs'
+
 const SHARED_SITE_META = JSON.parse(
   fs.readFileSync(new URL('../shared/site-meta.json', import.meta.url), 'utf8'),
 )
 const SHARED_SITE_CONFIG = JSON.parse(
   fs.readFileSync(new URL('../shared/site-config.json', import.meta.url), 'utf8'),
 )
+
+const CANVAS_TOKENS = resolveCanvasTokens(SHARED_SITE_CONFIG)
 
 function trimTrailingSlash(url) {
   return String(url).replace(/\/+$/, '')
@@ -22,20 +26,24 @@ function buildAbsoluteUrl(baseUrl, assetPath, version) {
   return `${normalizedBaseUrl}${normalizedAssetPath}${suffix}`
 }
 
+const BRAND_ASSET_VERSION = Number(SHARED_SITE_CONFIG.brandAssetVersion ?? 3)
+const APP_SHELL_ORIGIN = trimTrailingSlash(SHARED_SITE_CONFIG.appUrl ?? 'https://app.4626.fun')
+
 const BASE_HTML_SHELL_CONFIG = {
   appBaseUrl: SHARED_SITE_CONFIG.url,
   marketingSocialImagePath: SHARED_SITE_CONFIG.assets.ogImage,
-  marketingSocialImageVersion: 2,
+  marketingSocialImageVersion: BRAND_ASSET_VERSION,
   appSocialImagePath: SHARED_SITE_CONFIG.assets.ogImage,
-  appSocialImageVersion: 2,
+  appSocialImageVersion: BRAND_ASSET_VERSION,
   twitterCardImagePath: SHARED_SITE_CONFIG.assets.twitterImage,
-  twitterCardImageVersion: 2,
+  twitterCardImageVersion: BRAND_ASSET_VERSION,
   ogImageWidth: '1200',
   ogImageHeight: '630',
-  miniappHeroPath: SHARED_SITE_CONFIG.assets.ogImage,
-  miniappHeroVersion: 2,
+  // Base App manifest expects a 1024px PNG; use the opaque tile (not 200px splash or og-image).
+  miniappHeroPath: SHARED_SITE_CONFIG.assets.baseAppIcon,
+  miniappHeroVersion: BRAND_ASSET_VERSION,
   miniappSplashPath: SHARED_SITE_CONFIG.assets.miniappSplash,
-  miniappSplashVersion: 2,
+  miniappSplashVersion: BRAND_ASSET_VERSION,
   siteAppName: SHARED_SITE_META.siteAppName,
   siteName: SHARED_SITE_META.siteName,
   siteTitle: SHARED_SITE_META.siteTitle,
@@ -57,15 +65,19 @@ const BASE_HTML_SHELL_CONFIG = {
     '4b7b5b97d054b1a85c4d9635e53e928824fe96da81482cdecc54993bbe539de3df58eba944a698e62a7e6d5bad8b974254b2770354f4f3521c083c74a74af0da',
   miniappLaunchName: '4626.fun',
   miniappSplashBackgroundColor: SHARED_SITE_CONFIG.themeColor,
-  faviconIcoPath: `${SHARED_SITE_CONFIG.assets.faviconIco}?v=2`,
-  faviconSvgPath: `${SHARED_SITE_CONFIG.assets.faviconSvg}?v=2`,
-  favicon64Path: SHARED_SITE_CONFIG.assets.favicon64,
-  favicon48Path: SHARED_SITE_CONFIG.assets.favicon48,
-  favicon32Path: SHARED_SITE_CONFIG.assets.favicon32,
-  favicon16Path: SHARED_SITE_CONFIG.assets.favicon16,
-  appleTouchIconPath: `${SHARED_SITE_CONFIG.assets.appleTouchIcon}?v=2`,
-  safariPinnedTabPath: SHARED_SITE_CONFIG.assets.safariPinnedTab,
-  organizationLogoUrl: buildAbsoluteUrl(SHARED_SITE_CONFIG.url, SHARED_SITE_CONFIG.assets.logoPng, 2),
+  faviconIcoPath: `${SHARED_SITE_CONFIG.assets.faviconIco}?v=${BRAND_ASSET_VERSION}`,
+  faviconSvgPath: `${SHARED_SITE_CONFIG.assets.faviconSvg}?v=${BRAND_ASSET_VERSION}`,
+  favicon64Path: `${SHARED_SITE_CONFIG.assets.favicon64}?v=${BRAND_ASSET_VERSION}`,
+  favicon48Path: `${SHARED_SITE_CONFIG.assets.favicon48}?v=${BRAND_ASSET_VERSION}`,
+  favicon32Path: `${SHARED_SITE_CONFIG.assets.favicon32}?v=${BRAND_ASSET_VERSION}`,
+  favicon16Path: `${SHARED_SITE_CONFIG.assets.favicon16}?v=${BRAND_ASSET_VERSION}`,
+  appleTouchIconPath: `${SHARED_SITE_CONFIG.assets.appleTouchIcon}?v=${BRAND_ASSET_VERSION}`,
+  safariPinnedTabPath: `${SHARED_SITE_CONFIG.assets.safariPinnedTab}?v=${BRAND_ASSET_VERSION}`,
+  organizationLogoUrl: buildAbsoluteUrl(
+    SHARED_SITE_CONFIG.url,
+    SHARED_SITE_CONFIG.assets.logoPng,
+    BRAND_ASSET_VERSION,
+  ),
 }
 
 export const HTML_SHELL_CONFIG = Object.freeze({
@@ -96,6 +108,32 @@ export const HTML_SHELL_CONFIG = Object.freeze({
     BASE_HTML_SHELL_CONFIG.miniappSplashPath,
     BASE_HTML_SHELL_CONFIG.miniappSplashVersion,
   ),
+  appShellUrlTrailing: withTrailingSlash(APP_SHELL_ORIGIN),
+  appShellFaviconIcoUrl: buildAbsoluteUrl(
+    APP_SHELL_ORIGIN,
+    SHARED_SITE_CONFIG.assets.faviconIco,
+    BRAND_ASSET_VERSION,
+  ),
+  appShellFavicon32Url: buildAbsoluteUrl(
+    APP_SHELL_ORIGIN,
+    SHARED_SITE_CONFIG.assets.favicon32,
+    BRAND_ASSET_VERSION,
+  ),
+  appShellFavicon16Url: buildAbsoluteUrl(
+    APP_SHELL_ORIGIN,
+    SHARED_SITE_CONFIG.assets.favicon16,
+    BRAND_ASSET_VERSION,
+  ),
+  appShellAppleTouchIconUrl: buildAbsoluteUrl(
+    APP_SHELL_ORIGIN,
+    SHARED_SITE_CONFIG.assets.appleTouchIcon,
+    BRAND_ASSET_VERSION,
+  ),
+  appShellMiniappSplashUrl: buildAbsoluteUrl(
+    APP_SHELL_ORIGIN,
+    BASE_HTML_SHELL_CONFIG.miniappSplashPath,
+    BASE_HTML_SHELL_CONFIG.miniappSplashVersion,
+  ),
 })
 
 export const HTML_SHELL_TEMPLATE_VARS = {
@@ -108,6 +146,12 @@ export const HTML_SHELL_TEMPLATE_VARS = {
   OG_IMAGE_HEIGHT: HTML_SHELL_CONFIG.ogImageHeight,
   MINIAPP_HERO_URL: HTML_SHELL_CONFIG.miniappHeroUrl,
   MINIAPP_SPLASH_URL: HTML_SHELL_CONFIG.miniappSplashUrl,
+  APP_SHELL_URL_TRAILING: HTML_SHELL_CONFIG.appShellUrlTrailing,
+  APP_SHELL_FAVICON_ICO_URL: HTML_SHELL_CONFIG.appShellFaviconIcoUrl,
+  APP_SHELL_FAVICON_32_URL: HTML_SHELL_CONFIG.appShellFavicon32Url,
+  APP_SHELL_FAVICON_16_URL: HTML_SHELL_CONFIG.appShellFavicon16Url,
+  APP_SHELL_APPLE_TOUCH_URL: HTML_SHELL_CONFIG.appShellAppleTouchIconUrl,
+  APP_SHELL_MINIAPP_SPLASH_URL: HTML_SHELL_CONFIG.appShellMiniappSplashUrl,
   SITE_APP_NAME: HTML_SHELL_CONFIG.siteAppName,
   SITE_NAME: HTML_SHELL_CONFIG.siteName,
   SITE_TITLE: HTML_SHELL_CONFIG.siteTitle,
@@ -137,4 +181,6 @@ export const HTML_SHELL_TEMPLATE_VARS = {
   TALENTAPP_PROJECT_VERIFICATION: HTML_SHELL_CONFIG.talentappProjectVerification,
   MINIAPP_LAUNCH_NAME: HTML_SHELL_CONFIG.miniappLaunchName,
   MINIAPP_SPLASH_BACKGROUND_COLOR: HTML_SHELL_CONFIG.miniappSplashBackgroundColor,
+  CANVAS_BG: CANVAS_TOKENS.bg,
+  CANVAS_BG_RGB: CANVAS_TOKENS.bgRgb,
 }

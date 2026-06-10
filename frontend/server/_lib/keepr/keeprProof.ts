@@ -8,7 +8,7 @@ import { getDb } from '../db/postgres.js'
 declare const process: { env: Record<string, string | undefined> }
 
 const JOIN_NONCE_TTL_SECONDS = 60 * 10 // 10m
-const KEEPR_JOIN_MESSAGE_TITLE = '4626 Keepr Join' as const
+const KPR_JOIN_MESSAGE_TITLE = '4626 Keepr Join' as const
 
 function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
@@ -131,7 +131,7 @@ export type KeeprJoinMessageFields = {
 
 export function buildKeeprJoinMessage(fields: KeeprJoinMessageFields): string {
   return [
-    KEEPR_JOIN_MESSAGE_TITLE,
+    KPR_JOIN_MESSAGE_TITLE,
     '',
     `Wallet: ${fields.wallet}`,
     `Vault: ${fields.vaultAddress}`,
@@ -144,7 +144,7 @@ export function buildKeeprJoinMessage(fields: KeeprJoinMessageFields): string {
 export function parseKeeprJoinMessage(message: string): KeeprJoinMessageFields | null {
   if (typeof message !== 'string' || message.trim().length === 0) return null
   const lines = message.split('\n').map((l) => l.trim())
-  if (lines[0] !== KEEPR_JOIN_MESSAGE_TITLE) return null
+  if (lines[0] !== KPR_JOIN_MESSAGE_TITLE) return null
 
   const readField = (prefix: string): string | null => {
     const line = lines.find((l) => l.toLowerCase().startsWith(prefix.toLowerCase()))

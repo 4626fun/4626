@@ -6,6 +6,7 @@ import { toAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
 import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
+import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import {
   handleOptions,
   readBoundedJsonObjectBody,
@@ -15,7 +16,7 @@ import {
   checkRateLimit,
   RATE_LIMITS,
   rateLimitKey,
-} from '../../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 import { getDeploySessionById, signDeployToken, transitionDeploySession, updateDeploySession } from '../../../../../server/_lib/deploy/deploySessions.js'
@@ -26,7 +27,13 @@ import { parseGrant, validateCallsAgainstGrant } from '../../../../../server/_li
 import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
 import { ensureLaunchImageReady } from '../../../../../server/_lib/deploy/deployLaunchImage.js'
 import { verifyDeployPhase2Invariants } from '../../../../../server/_lib/deploy/deployPhase2Invariants.js'
+import { maybeAutoSetupPayoutRouterTreasury } from '../../../../../server/_lib/onchain/payoutRouterTreasurySetup.js'
+import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
+import {
+  ensureShareMeshOvaultPreflight,
+  isLegacySolanaBridgePreflightEnabled,
+} from '../../../../../server/_lib/deploy/solanaShareMeshPreflight.js'
 import { validateSponsoredSmartWalletCalls } from '../../../paymaster/_paymaster.js'
 import { DeploySessionAccessError, loadAuthorizedDeploySession, normalizeDeploySessionId } from './_sessionAccess.js'
 
@@ -507,6 +514,13 @@ async function ensureOvaultPreflight(params: {
     }
     return defaultStatus
   }
+  if (!isLegacySolanaBridgePreflightEnabled()) {
+    return ensureShareMeshOvaultPreflight({
+      publicClient: params.publicClient,
+      finalizeCall: finalizeEntry.call,
+      ovaultRequested,
+    })
+  }
   const { call: finalizeCall, info: finalizeInfo } = finalizeEntry
   if (ovaultRequested) {
     await assertOvaultRuntimeReady({
@@ -791,7 +805,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
     const smartWallet = getAddress(rec.smartWallet)
     const ownerIndex = await findOwnerIndex({
-      publicClient: createPublicClient({ chain: base, transport: http((process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim()) }),
+      publicClient: createPublicClient({ chain: base, transport: http(resolveDeploySessionRpcUrl()) }),
       smartWallet,
       ownerAddress: sessionSigner,
       maxScan: 512,
@@ -800,7 +814,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const publicClient = createPublicClient({
       chain: base,
-      transport: http((process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim(), { timeout: 12_000 }),
+      transport: http(resolveDeploySessionRpcUrl(), { timeout: 12_000 }),
     })
 
     const origin = getCanonicalOrigin(req)
@@ -995,12 +1009,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const summary = result.violations.map((entry) => entry.code).join(',')
         throw new Error(`phase2_invariant_failed:${summary || 'unknown'}`)
       }
+      if (
+        result.expectations?.payoutRecipientMode === 'payout_router' &&
+        result.expectations.expectedPayoutRecipient &&
+        result.expectations.creatorToken
+      ) {
+        void maybeAutoSetupPayoutRouterTreasury({
+          publicClient: publicClient as any,
+          rpcUrl: resolveDeploySessionRpcUrl(),
+          payoutRouter: result.expectations.expectedPayoutRecipient,
+          creatorToken: result.expectations.creatorToken,
+        })
+      }
     }
 
     const sendNextAfterPhase2 = () => {
       if (hasPhase3) return sendStage('phase3_sent', phase3Calls, !hasPhase4)
       if (hasPhase4) return sendStage('phase4_sent', phase4Calls, true)
       return null
+    }
+    const resolvePhase2FinalizeCallsForSend = async (
+      calls: Array<{ to: Address; value: bigint; data: Hex }>,
+    ): Promise<Array<{ to: Address; value: bigint; data: Hex }>> => {
+      if (calls.length === 0) return calls
+      const attached = await attachFinalizeShareBridgeValueToCalls({
+        publicClient,
+        calls: calls.map((call) => ({
+          to: call.to,
+          value: String(call.value),
+          data: call.data,
+        })),
+      })
+      return attached.map((call) => ({
+        to: getAddress(call.to as Address),
+        value: toBigInt(call.value ?? 0),
+        data: call.data as Hex,
+      }))
     }
     const sendStage = async (toStep: string, stageCalls: Array<{ to: Address; value: bigint; data: Hex }>, attachCleanup: boolean) => {
       if (toStep === 'phase4_sent') {
@@ -1172,7 +1216,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (hasPhase2Finalize) {
         if (!shouldSkipPhase2Finalize) {
           const attachCleanup = !hasPostPhase2
-          return sendStage(PHASE2_FINALIZE_SENT_STEP, phase2FinalizeCalls, attachCleanup)
+          const finalizeCalls = await resolvePhase2FinalizeCallsForSend(phase2FinalizeCalls)
+          return sendStage(PHASE2_FINALIZE_SENT_STEP, finalizeCalls, attachCleanup)
         }
         await markReplaySkip('phase2Finalize')
       }
@@ -1183,7 +1228,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (hasPhase2Finalize) {
         if (!shouldSkipPhase2Finalize) {
           const attachCleanup = !hasPostPhase2
-          return sendStage(PHASE2_FINALIZE_SENT_STEP, phase2FinalizeCalls, attachCleanup)
+          const finalizeCalls = await resolvePhase2FinalizeCallsForSend(phase2FinalizeCalls)
+          return sendStage(PHASE2_FINALIZE_SENT_STEP, finalizeCalls, attachCleanup)
         }
         await markReplaySkip('phase2Finalize')
       }

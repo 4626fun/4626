@@ -1,4 +1,6 @@
-import { describe, it, expect, vi } from 'vitest'
+import { beforeEach, describe, it, expect, vi, type Mock } from 'vitest'
+
+import * as subAccountOwnerInstall from './subAccountOwnerInstall'
 import {
   getExistingSubAccount,
   createSubAccount,
@@ -7,6 +9,15 @@ import {
   type SubAccount,
   type SubAccountSetupStageEvent,
 } from './subAccountSetup'
+
+beforeEach(() => {
+  vi.spyOn(subAccountOwnerInstall, 'installEmbeddedOwnerOnSubAccount').mockResolvedValue({
+    installed: true,
+    alreadyOwner: false,
+    transactionHash: null,
+    callBundleId: 'bundle_test',
+  })
+})
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -212,7 +223,42 @@ describe('setupSubAccount', () => {
     expect(result.created).toBe(true)
     expect(params.baseAccountSdk.subAccount.setToOwnerAccount).toHaveBeenCalledTimes(1)
     expect(stages.some((s) => s.stage === 'create_sub_account' && s.status === 'success')).toBe(true)
+    expect(stages.some((s) => s.stage === 'install_embedded_owner' && s.status === 'success')).toBe(true)
+    expect(stages.some((s) => s.stage === 'configure_signer' && s.status === 'success')).toBe(true)
     expect(stages.some((s) => s.stage === 'done' && s.status === 'success')).toBe(true)
+  })
+
+  it('prefers baseAccountSdk.getProvider() over Privy wallet provider for sub-account RPCs', async () => {
+    const walletProvider = mockProvider({
+      wallet_getSubAccounts: () => {
+        throw new Error('-32604 method not supported')
+      },
+    })
+    const sdkProvider = mockProvider({
+      wallet_getSubAccounts: { subAccounts: [] },
+      wallet_addSubAccount: mockSubAccount(),
+    })
+
+    const params = createSetupParams({ provider: walletProvider }) as ReturnType<typeof createSetupParams> & {
+      baseAccountSdk: {
+        getProvider: () => typeof sdkProvider
+        subAccount: { create: Mock; setToOwnerAccount: Mock }
+      }
+    }
+    params.baseAccountSdk = {
+      getProvider: () => sdkProvider,
+      subAccount: {
+        create: vi.fn().mockResolvedValue(mockSubAccount()),
+        setToOwnerAccount: vi.fn(),
+      },
+    }
+
+    const result = await setupSubAccount(params)
+
+    expect(result.created).toBe(true)
+    expect(walletProvider.request).not.toHaveBeenCalled()
+    expect(sdkProvider.request).toHaveBeenCalled()
+    expect(params.baseAccountSdk.subAccount.create).toHaveBeenCalledTimes(1)
   })
 
   it('reuses an existing sub-account', async () => {
@@ -259,7 +305,10 @@ describe('setupSubAccount', () => {
         throw new Error('User rejected')
       },
     })
-    const params = createSetupParams({ provider })
+    const params = createSetupParams({ provider }) as ReturnType<typeof createSetupParams> & {
+      baseAccountSdk: { subAccount: { create: Mock; setToOwnerAccount: Mock } }
+    }
+    params.baseAccountSdk.subAccount.create = vi.fn().mockRejectedValue(new Error('User rejected'))
     const stages: SubAccountSetupStageEvent[] = []
 
     await expect(

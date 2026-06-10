@@ -8,7 +8,7 @@ import {
   getDb,
   ensureTelegramTradingSchema,
   getTelegramPortfolioSummary,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 import { verifyTelegramLinkApiSecret } from './webhook/services/access.js'
 import { readQueryString } from './webhook/utils.js'

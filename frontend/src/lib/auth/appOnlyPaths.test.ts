@@ -18,6 +18,7 @@ describe('appOnlyPaths', () => {
     expect(isAppOnlyPath('/activate-akita')).toBe(false)
     expect(isAppOnlyPath('/dashboard')).toBe(false)
     expect(isAppOnlyPath('/launch')).toBe(false)
+    expect(isAppOnlyPath('/positions')).toBe(false)
   })
 
   it('continues marking core app routes as app-only', () => {
@@ -25,7 +26,7 @@ describe('appOnlyPaths', () => {
     expect(isAppOnlyPath('/telegram/link')).toBe(true)
     expect(isAppOnlyPath('/deploy')).toBe(true)
     expect(isAppOnlyPath('/continue')).toBe(false)
-    expect(isAppOnlyPath('/portfolio/0xabc')).toBe(true)
+    expect(isAppOnlyPath('/portfolio/0xabc')).toBe(false)
     expect(isAppOnlyPath('/alfaclub/liquidity')).toBe(true)
   })
 })

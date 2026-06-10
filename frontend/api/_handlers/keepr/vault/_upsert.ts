@@ -13,7 +13,7 @@ import {
   getClientIp,
   rateLimitKey,
   RATE_LIMITS,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 import { computeConfigHash, type KeeprConfigV1, upsertKeeprVault } from '../../../../server/_lib/keepr/keeprRegistry.js'
@@ -47,7 +47,7 @@ type UpsertResponse = {
   configHash: string
 }
 
-const KEEPR_UPSERT_BODY_MAX_BYTES = 65_536
+const KPR_UPSERT_BODY_MAX_BYTES = 65_536
 
 function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
@@ -77,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Sign in required' } satisfies ApiEnvelope<never>)
   }
 
-  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: KEEPR_UPSERT_BODY_MAX_BYTES })) as UpsertBody
+  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: KPR_UPSERT_BODY_MAX_BYTES })) as UpsertBody
   const config = body?.config
   if (!config || typeof config !== 'object') {
     return res.status(400).json({ success: false, error: 'Missing config' } satisfies ApiEnvelope<never>)

@@ -1,18 +1,23 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  canEnterAppFromAccountState,
-  deriveWaitlistAuthUi,
-  deriveWaitlistDoneUi,
-} from './waitlistFlowUi'
+import { canEnterAppFromAccountState, deriveWaitlistAuthUi } from './waitlistFlowUi'
 
 describe('deriveWaitlistAuthUi', () => {
   it('uses sign-in copy that supports both existing and new accounts', () => {
     expect(deriveWaitlistAuthUi()).toEqual({
       title: 'Waitlist',
-      subtitle: 'Secure sign-in to save your spot.',
-      ctaLabel: 'Continue',
-      busyLabel: 'Preparing your account...',
+      subtitle: 'Step 1: sign in with email (Privy). Wallet setup is step 2.',
+      ctaLabel: 'Continue with email',
+      busyLabel: 'Finishing sign-in…',
+    })
+  })
+
+  it('switches to existing-account recovery copy when recovery is required', () => {
+    expect(deriveWaitlistAuthUi({ recoveryRequired: true })).toEqual({
+      title: 'Welcome back',
+      subtitle: 'This email already has a 4626 account. Sign in to join the waitlist with it.',
+      ctaLabel: 'Use existing account',
+      busyLabel: 'Signing in to your existing account…',
     })
   })
 })
@@ -25,25 +30,5 @@ describe('canEnterAppFromAccountState', () => {
   it('keeps app entry blocked until admin approval exists', () => {
     expect(canEnterAppFromAccountState({ appAccessStatus: null })).toBe(false)
     expect(canEnterAppFromAccountState({ appAccessStatus: 'pending' })).toBe(false)
-  })
-})
-
-describe('deriveWaitlistDoneUi', () => {
-  it('points accepted users toward app entry first', () => {
-    expect(deriveWaitlistDoneUi(true)).toEqual({
-      title: 'You are approved',
-      subtitle: 'Your setup is complete and access is live. Enter the app now, or open Accounts for advanced controls.',
-      primaryLabel: '■ Enter App',
-      secondaryLabel: 'Open Accounts',
-    })
-  })
-
-  it('points unaccepted users toward accounts while they wait for approval', () => {
-    expect(deriveWaitlistDoneUi(false)).toEqual({
-      title: 'Setup complete',
-      subtitle: 'Your account is ready. App access is still pending. Open Accounts for advanced controls while approval catches up.',
-      primaryLabel: '■ Open Accounts',
-      secondaryLabel: null,
-    })
   })
 })

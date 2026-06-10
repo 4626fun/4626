@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/cca/RecentBidsActivity
+[4626-web](../../../index.md) / src/components/cca/RecentBidsActivity
 
 # src/components/cca/RecentBidsActivity
 

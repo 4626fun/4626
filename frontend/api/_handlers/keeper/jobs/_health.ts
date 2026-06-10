@@ -3,11 +3,11 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  getDb,
+  getDbForCron,
   requireKeeprApiKey,
   setCors,
   setNoStore,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 type KeeperJobHealth = {
   retry: number
@@ -28,7 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!requireKeeprApiKey(req, res, { missingSecretError: 'Server misconfigured' })) return
 
   try {
-    const db = await getDb()
+    const db = await getDbForCron()
     if (!db) {
       return res.status(500).json({ success: false, error: 'Database not configured' } satisfies ApiEnvelope<never>)
     }

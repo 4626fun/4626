@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/paymaster/\_paymaster
+[4626-web](../../../index.md) / api/\_handlers/paymaster/\_paymaster
 
 # api/\_handlers/paymaster/\_paymaster
 
@@ -10,9 +10,9 @@
 
 ### DEFAULT\_PROTOCOL\_REWARDS
 
-> `const` **DEFAULT\_PROTOCOL\_REWARDS**: `` `0x${string}` ``
+> `const` **DEFAULT\_PROTOCOL\_REWARDS**: `string`
 
-Defined in: [api/\_handlers/paymaster/\_paymaster.ts:1005](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/paymaster/_paymaster.ts#L1005)
+Defined in: [api/\_handlers/paymaster/\_paymaster.ts:1042](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/paymaster/_paymaster.ts#L1042)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/paymaster/\_paymaster.ts:1005](https://github.com/we
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/paymaster/\_paymaster.ts:3306](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/paymaster/_paymaster.ts#L3306)
+Defined in: [api/\_handlers/paymaster/\_paymaster.ts:3402](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/paymaster/_paymaster.ts#L3402)
 
 #### Parameters
 
@@ -42,7 +42,7 @@ Defined in: [api/\_handlers/paymaster/\_paymaster.ts:3306](https://github.com/we
 
 > **validatePayoutRouterProtocolRewardsArg**(`protocolRewardsArg`): `"payout_router_protocol_rewards_mismatch"` \| `null`
 
-Defined in: [api/\_handlers/paymaster/\_paymaster.ts:1016](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/paymaster/_paymaster.ts#L1016)
+Defined in: [api/\_handlers/paymaster/\_paymaster.ts:1053](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/paymaster/_paymaster.ts#L1053)
 
 4626-audit-2026-04-25 review: validates the 7th constructor arg of a
 sponsored PayoutRouter deploy. Returns null if accepted, otherwise an
@@ -56,7 +56,7 @@ paymaster mock stack.
 
 ##### protocolRewardsArg
 
-`` `0x${string}` `` | `null`
+`string` | `null`
 
 #### Returns
 
@@ -66,9 +66,9 @@ paymaster mock stack.
 
 ### validateSponsoredSmartWalletCalls()
 
-> **validateSponsoredSmartWalletCalls**(`params`): `Promise`\<\{ `expectedCreatorToken`: `` `0x${string}` `` \| `null`; `mode`: `string`; \}\>
+> **validateSponsoredSmartWalletCalls**(`params`): `Promise`\<\{ `expectedCreatorToken`: `string` \| `null`; `mode`: `string`; \}\>
 
-Defined in: [api/\_handlers/paymaster/\_paymaster.ts:1329](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/paymaster/_paymaster.ts#L1329)
+Defined in: [api/\_handlers/paymaster/\_paymaster.ts:1391](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/paymaster/_paymaster.ts#L1391)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ Defined in: [api/\_handlers/paymaster/\_paymaster.ts:1329](https://github.com/we
 
 ###### canonicalEmbeddedOwner?
 
-`` `0x${string}` `` \| `null`
+`string` \| `null`
 
 ###### customOwnerPolicyToken?
 
@@ -96,11 +96,11 @@ Defined in: [api/\_handlers/paymaster/\_paymaster.ts:1329](https://github.com/we
 
 ###### deploySessionOwner?
 
-`` `0x${string}` `` \| `null`
+`string` \| `null`
 
 ###### factory?
 
-`` `0x${string}` `` \| `null`
+`string` \| `null`
 
 ###### factoryData?
 
@@ -112,12 +112,12 @@ Defined in: [api/\_handlers/paymaster/\_paymaster.ts:1329](https://github.com/we
 
 ###### sender
 
-`` `0x${string}` ``
+`string`
 
 ###### sessionAddress
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
-`Promise`\<\{ `expectedCreatorToken`: `` `0x${string}` `` \| `null`; `mode`: `string`; \}\>
+`Promise`\<\{ `expectedCreatorToken`: `string` \| `null`; `mode`: `string`; \}\>

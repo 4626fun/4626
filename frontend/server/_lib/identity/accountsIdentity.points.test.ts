@@ -103,12 +103,35 @@ describe('accounts identity points ledger', () => {
           return { rows: [{ id: 'pt-1' }] }
         }
 
-        if (query.includes('from points p') && query.includes('where p.signup_id in')) {
+        if (query.includes('from points_amoe_eligible_balance')) {
           let total = 0
           for (const amount of pointsLedger.values()) {
             total += amount
           }
-          return { rows: [{ points: total }] }
+          return { rows: [{ credits: total }] }
+        }
+
+        if (query.includes('from points') && query.includes('where signup_id')) {
+          let total = 0
+          for (const [key, amount] of pointsLedger.entries()) {
+            const source = key.split(':')[1] ?? ''
+            if (source.startsWith('referral_')) total += Math.round(amount * 0.6)
+            else if (source.startsWith('link_') || source === 'resolve_csw') total += Math.round(amount * 0.6)
+            else total += amount
+          }
+          return {
+            rows: [
+              {
+                total,
+                invite: 0,
+                signup: 0,
+                tasks: 0,
+                csw: 0,
+                social: 0,
+                bonus: 0,
+              },
+            ],
+          }
         }
 
         return { rows: [] }

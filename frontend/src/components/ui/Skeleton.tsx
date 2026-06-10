@@ -1,4 +1,3 @@
-import { Fallback } from '@coinbase/cds-web/layout'
 import { cn } from '@/lib/shared/utils'
 
 interface SkeletonProps {
@@ -7,9 +6,10 @@ interface SkeletonProps {
 
 export function Skeleton({ className }: SkeletonProps) {
   return (
-    <span className={cn('block overflow-hidden', className)}>
-      <Fallback width="100%" height="100%" shape="rectangle" />
-    </span>
+    <span
+      className={cn('block animate-pulse rounded-md bg-white/10', className)}
+      aria-hidden="true"
+    />
   )
 }
 
@@ -17,12 +17,7 @@ export function SkeletonText({ lines = 3, className }: { lines?: number; classNa
   return (
     <div className={cn('flex flex-col gap-2', className)} aria-hidden="true">
       {Array.from({ length: lines }).map((_, i) => (
-        <Fallback
-          key={i}
-          width={i === lines - 1 ? '60%' : '100%'}
-          height={12}
-          shape="rectangle"
-        />
+        <Skeleton key={i} className={cn('h-3', i === lines - 1 ? 'w-[60%]' : 'w-full')} />
       ))}
     </div>
   )
@@ -38,9 +33,7 @@ export function SkeletonRows({
   return (
     <div className="flex flex-col gap-3">
       {Array.from({ length: count }).map((_, i) => (
-        <span key={i} className={cn('block', rowClassName)}>
-          <Fallback width="100%" height={40} shape="rectangle" />
-        </span>
+        <Skeleton key={i} className={cn('h-10 w-full', rowClassName)} />
       ))}
     </div>
   )

@@ -9,6 +9,8 @@
 import type { Address, Hex } from 'viem'
 import { getAddress } from 'viem'
 
+import { listEntitlementLookupKeys } from './bundleEntitlements.js'
+
 type Db = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
 }
@@ -114,18 +116,21 @@ export async function hasLiveActivationForFeature(
   params: { creatorToken: Address; featureKey: string },
 ): Promise<boolean> {
   const creatorKey = params.creatorToken.toLowerCase()
-  const featureKey = String(params.featureKey ?? '').trim()
-  if (!featureKey) return false
-  const result = await db.sql`
-    SELECT 1
-    FROM creator_strategy_features
-    WHERE creator_token = ${creatorKey}
-      AND feature_key = ${featureKey}
-      AND status IN ('pending', 'active')
-      AND payment_verified_at IS NOT NULL
-    LIMIT 1;
-  `
-  return Array.isArray(result.rows) && result.rows.length > 0
+  const lookupKeys = listEntitlementLookupKeys(String(params.featureKey ?? ''))
+  if (lookupKeys.length === 0) return false
+  for (const featureKey of lookupKeys) {
+    const result = await db.sql`
+      SELECT 1
+      FROM creator_strategy_features
+      WHERE creator_token = ${creatorKey}
+        AND feature_key = ${featureKey}
+        AND status IN ('pending', 'active')
+        AND payment_verified_at IS NOT NULL
+      LIMIT 1;
+    `
+    if (Array.isArray(result.rows) && result.rows.length > 0) return true
+  }
+  return false
 }
 
 export type InsertActivationInput = {

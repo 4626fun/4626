@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/workspace/auth
+[4626-web](../../../index.md) / server/\_lib/workspace/auth
 
 # server/\_lib/workspace/auth
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/commands/families/twitter
+[4626-web](../../../index.md) / server/commands/families/twitter
 
 # server/commands/families/twitter
 
@@ -28,7 +28,7 @@ Defined in: [server/commands/families/twitter.ts:6](https://github.com/wenakita/
 
 ###### senderWallet
 
-`` `0x${string}` ``
+`string`
 
 ###### text
 

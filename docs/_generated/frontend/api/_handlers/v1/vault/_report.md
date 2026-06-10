@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/v1/vault/\_report
+[4626-web](../../../../index.md) / api/\_handlers/v1/vault/\_report
 
 # api/\_handlers/v1/vault/\_report
 

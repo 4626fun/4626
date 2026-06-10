@@ -7,13 +7,13 @@ const { ensureKeeprSchemaMock, getDbMock } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   handleOptions: () => false,
   setCors: () => undefined,
   setNoStore: () => undefined,
   getDb: getDbMock,
   requireKeeprApiKey: (req: any, res: any, opts?: { missingSecretError?: string }) => {
-    const expected = String(process.env.KEEPR_API_KEY ?? '').trim()
+    const expected = String(process.env.KPR_API_KEY ?? '').trim()
     if (!expected) {
       res.status(500).json({ success: false, error: opts?.missingSecretError ?? 'Server misconfigured' })
       return false
@@ -50,8 +50,8 @@ describe('keepr/actions/pending', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({
-      KEEPR_API_KEY: 'test-keepr-key',
-      KEEPR_ZONE_KEY_FINANCIAL_EXECUTION: 'zone-financial-secret',
+      KPR_API_KEY: 'test-keepr-key',
+      KPR_ZONE_KEY_FINANCIAL_EXECUTION: 'zone-financial-secret',
     })
   })
 

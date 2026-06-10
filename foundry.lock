@@ -1,4 +1,10 @@
 {
+  "acp-cli": {
+    "rev": "110639ba904037a2ca4d2f36767bd7b978fd419e"
+  },
+  "dgclaw-skill": {
+    "rev": "f3e23d1a208a14a7993753e88441344281956603"
+  },
   "lib/continuous-clearing-auction": {
     "rev": "148a0e1c4d549a12e2e91cf03442345138377a5b"
   },
@@ -28,5 +34,8 @@
       "name": "v1.3.0",
       "rev": "80f26c86c57b8a5e4b913f42844d4c8bd274d058"
     }
+  },
+  "skills": {
+    "rev": "749903d4a068477344739f9bb3346ca35a06be60"
   }
 }

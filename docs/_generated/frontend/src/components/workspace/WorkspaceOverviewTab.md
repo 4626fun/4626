@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/workspace/WorkspaceOverviewTab
+[4626-web](../../../index.md) / src/components/workspace/WorkspaceOverviewTab
 
 # src/components/workspace/WorkspaceOverviewTab
 

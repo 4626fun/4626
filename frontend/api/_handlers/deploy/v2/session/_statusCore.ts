@@ -6,6 +6,7 @@ import { toAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
 import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
+import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import {
   handleOptions,
   readBoundedJsonObjectBody,
@@ -14,7 +15,8 @@ import {
   checkRateLimit,
   RATE_LIMITS,
   rateLimitKey,
-} from '../../../../../packages/server-core/src/index.js'
+  isDbConfigured,
+} from '@4626/server-core'
 import { getDeploySessionById, signDeployToken, transitionDeploySession, updateDeploySession } from '../../../../../server/_lib/deploy/deploySessions.js'
 import { getCanonicalOrigin } from '../../../../../server/_lib/infra/origin.js'
 import { buildUserOpErrorDebug } from '../../../../../server/_lib/deploy/userOpRevertDebug.js'
@@ -33,10 +35,13 @@ import {
 } from '../../../../../server/_lib/deploy/deployLaunchImage.js'
 import { verifyDeployPhase2Invariants } from '../../../../../server/_lib/deploy/deployPhase2Invariants.js'
 import { ingestShareOftIntoManagedTokenlist } from '../../../token/_managedTokenList.js'
+import {
+  ensureShareMeshOvaultPreflight,
+  isLegacySolanaBridgePreflightEnabled,
+} from '../../../../../server/_lib/deploy/solanaShareMeshPreflight.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
 import { validateSponsoredSmartWalletCalls } from '../../../paymaster/_paymaster.js'
 import { upsertAjnaVaultRegistryEntry } from '../../../../../server/_lib/ajnaVaultManager/registry.js'
-import { isDbConfigured } from '../../../../../server/_lib/db/postgres.js'
 import { DeploySessionAccessError, loadAuthorizedDeploySession, normalizeDeploySessionId } from './_sessionAccess.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -1351,23 +1356,28 @@ async function verifyPhase3PostState(params: {
       bridgeAddress: await readSolanaBridgeAddress({ publicClient: params.publicClient, strategy: entry.strategy }),
     })),
   )
-  const charm = strategyDetails.find((entry) => Boolean(entry.charmVault))
-  if (!charm) {
-    throw new Error('phase3 verification failed: charm strategy not registered on vault')
-  }
-  if (charm.weight !== info.charmWeightBps) {
-    throw new Error(
-      `phase3 verification failed: charm strategy weight ${charm.weight.toString()} does not match expected ${info.charmWeightBps.toString()}`,
-    )
-  }
-  if (!(await hasRuntimeCode(params.publicClient, charm.strategy))) {
-    throw new Error(`phase3 verification failed: charm strategy code missing at ${charm.strategy}`)
-  }
-  if (!(await hasRuntimeCode(params.publicClient, charm.charmVault ?? null))) {
-    throw new Error(`phase3 verification failed: charm vault code missing at ${String(charm.charmVault ?? '')}`)
+  let charm: (typeof strategyDetails)[number] | undefined
+  if (info.charmWeightBps > 0n) {
+    charm = strategyDetails.find((entry) => Boolean(entry.charmVault))
+    if (!charm) {
+      throw new Error('phase3 verification failed: charm strategy not registered on vault')
+    }
+    if (charm.weight !== info.charmWeightBps) {
+      throw new Error(
+        `phase3 verification failed: charm strategy weight ${charm.weight.toString()} does not match expected ${info.charmWeightBps.toString()}`,
+      )
+    }
+    if (!(await hasRuntimeCode(params.publicClient, charm.strategy))) {
+      throw new Error(`phase3 verification failed: charm strategy code missing at ${charm.strategy}`)
+    }
+    if (!(await hasRuntimeCode(params.publicClient, charm.charmVault ?? null))) {
+      throw new Error(`phase3 verification failed: charm vault code missing at ${String(charm.charmVault ?? '')}`)
+    }
   }
 
-  const remaining = strategyDetails.filter((entry) => entry.strategy.toLowerCase() !== charm.strategy.toLowerCase())
+  const remaining = charm
+    ? strategyDetails.filter((entry) => entry.strategy.toLowerCase() !== charm!.strategy.toLowerCase())
+    : [...strategyDetails]
 
   let ajna: (typeof strategyDetails)[number] | undefined
   let ajnaAuthAddress: Address | null = null
@@ -1693,6 +1703,14 @@ async function ensureSolanaRouteReadyForPhase3(params: {
     return defaultStatus
   }
 
+  if (!isLegacySolanaBridgePreflightEnabled()) {
+    return ensureShareMeshOvaultPreflight({
+      publicClient: params.publicClient,
+      finalizeCall: finalizeEntry.call,
+      ovaultRequested,
+    })
+  }
+
   const { call: finalizeCall, info: finalizeInfo } = finalizeEntry
   const batcherAddress = getAddress(finalizeCall.to)
   const bridgeToken = finalizeInfo.creatorToken
@@ -2002,7 +2020,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
 
   const publicClient = createPublicClient({
     chain: base,
-    transport: http((process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim(), { timeout: 12_000 }),
+    transport: http(resolveDeploySessionRpcUrl(), { timeout: 12_000 }),
   })
   const bundlerClient = createBundlerClient({ client: publicClient as any, transport })
 
@@ -2668,8 +2686,8 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
         ajnaAuth: ajnaAdminAlignment.ajnaAuthAddress,
         ajnaPool: ajnaAdminAlignment.ajnaPool,
         ownerAddress: phase3DeployInfo.owner,
-        bufferRatioBps: ajnaAdminAlignment.ajnaBufferRatioBps,
-        minBucketIndex: ajnaAdminAlignment.ajnaMinBucketIndex,
+        bufferRatioBps: ajnaAdminAlignment.ajnaBufferRatioBps ?? null,
+        minBucketIndex: ajnaAdminAlignment.ajnaMinBucketIndex ?? null,
         metadata: {
           source: 'deploy_session_phase3_confirm',
           deploySessionId: rec.id,

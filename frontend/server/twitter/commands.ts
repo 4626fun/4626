@@ -2,9 +2,15 @@ import { createHmac, randomBytes } from 'node:crypto'
 
 import type { Address } from 'viem'
 
+import { buildAlfaRoomChart } from '../_lib/alfaclub/roomCharts.js'
 import { logger } from '../_lib/infra/logger.js'
-
-declare const process: { env: Record<string, string | undefined> }
+import {
+  hasAnyHermitTwitterOauth1EnvConfigured,
+  isHermitTwitterStrictModeEnabled,
+  missingTwitterOauth1EnvKeys,
+  readTwitterOauth1Credentials,
+  type TwitterOauth1Credentials,
+} from './twitterEnv.js'
 
 export type TwitterRole = 'OWNER' | 'ADMIN' | 'MEMBER'
 
@@ -18,6 +24,17 @@ const TWITTER_POST_COOLDOWN_MS = 60_000
 const TWITTER_POST_PREVIEW_TTL_SECONDS = 90
 const tweetRateLimits = new Map<string, number>()
 const DASH_PREFIX_RE = /^[-\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]+/
+const CHART_KIND_ALIASES = new Set([
+  'top',
+  'top-volume',
+  'volume',
+  'tier',
+  'tier-mix',
+  'mix',
+  'pnl',
+  'pnl-distribution',
+  'distribution',
+])
 
 function canPostTweet(groupId: string): boolean {
   const lastPost = tweetRateLimits.get(groupId)
@@ -108,7 +125,11 @@ function formatHelp(): string {
     '- /x help - Show this help',
     '- /x status - Verify posting account config',
     '- /x post <message> --confirm - Post a tweet (ADMIN/OWNER)',
+    '- /x chart [kind] [limit] <message> --confirm - Post a live AlfaClub chart image tweet',
     '- /tweet <message> --confirm - Alias for /x post',
+    '',
+    'Chart kinds:',
+    '- top-volume · tier-mix · pnl-distribution',
     '',
     'Notes:',
     '- Posts are rate-limited to 1 per minute per group.',
@@ -127,11 +148,56 @@ function formatTwitterPostPreview(tweetText: string): string {
   ].join('\n')
 }
 
-type TwitterOauthConfig = {
-  apiKey: string
-  apiSecret: string
-  accessToken: string
-  accessSecret: string
+function formatTwitterChartPreview(params: {
+  kindRaw: string | null
+  limit: number | null
+  tweetText: string
+}): string {
+  const kind = params.kindRaw?.trim() || 'top-volume'
+  const limit = params.limit ? ` ${params.limit}` : ''
+  return [
+    'Twitter/X chart post preview',
+    '',
+    `chart: ${kind}${limit}`,
+    '',
+    params.tweetText,
+    '',
+    `Rerun with \`/x chart ${kind}${limit} ${params.tweetText} --confirm\`.`,
+    `Preview expires in ${TWITTER_POST_PREVIEW_TTL_SECONDS}s.`,
+  ].join('\n')
+}
+
+function parseTwitterChartArgs(args: string[]): {
+  hasConfirm: boolean
+  kindRaw: string | null
+  limit: number | null
+  tweetText: string
+} {
+  const hasConfirm = args.some((arg) => isConfirmFlag(arg))
+  const filtered = args.filter((arg) => !isConfirmFlag(arg))
+  let idx = 0
+  let kindRaw: string | null = null
+  let limit: number | null = null
+  const first = String(filtered[0] ?? '').trim().toLowerCase()
+  if (CHART_KIND_ALIASES.has(first)) {
+    kindRaw = filtered[0] ?? null
+    idx = 1
+  }
+  const maybeLimit = String(filtered[idx] ?? '').trim()
+  if (/^\d+$/.test(maybeLimit)) {
+    limit = Number.parseInt(maybeLimit, 10)
+    idx += 1
+  }
+  const tweetText = filtered.slice(idx).join(' ').trim()
+  return { hasConfirm, kindRaw, limit, tweetText }
+}
+
+type TwitterOauthConfig = TwitterOauth1Credentials
+
+type TweetMediaInput = {
+  url: string
+  filename?: string | null
+  contentType?: string | null
 }
 
 type TwitterVerifiedAccount = {
@@ -141,32 +207,12 @@ type TwitterVerifiedAccount = {
   canWrite: boolean | null
 }
 
-function isHermitTwitterStrictModeEnabled(): boolean {
-  const raw = String(process.env.HERMIT_TWITTER_STRICT ?? '')
-    .trim()
-    .toLowerCase()
-  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
-}
-
-function readEnvWithPrefix(baseKey: string, strictHermitOnly: boolean): string {
-  const hermitScoped = String(process.env[`HERMIT_${baseKey}`] ?? '').trim()
-  if (hermitScoped) return hermitScoped
-  if (strictHermitOnly) return ''
-  return String(process.env[baseKey] ?? '').trim()
-}
-
-function readTwitterOauthConfig(): { ok: true; config: TwitterOauthConfig } | { ok: false; response: string } {
-  const strictHermitOnly = isHermitTwitterStrictModeEnabled()
-  const apiKey = readEnvWithPrefix('TWITTER_API_KEY', strictHermitOnly)
-  const apiSecret = readEnvWithPrefix('TWITTER_API_SECRET', strictHermitOnly)
-  const accessToken = readEnvWithPrefix('TWITTER_ACCESS_TOKEN', strictHermitOnly)
-  const accessSecret = readEnvWithPrefix('TWITTER_ACCESS_SECRET', strictHermitOnly)
-
-  const missing: string[] = []
-  if (!apiKey) missing.push(strictHermitOnly ? 'HERMIT_TWITTER_API_KEY' : 'TWITTER_API_KEY')
-  if (!apiSecret) missing.push(strictHermitOnly ? 'HERMIT_TWITTER_API_SECRET' : 'TWITTER_API_SECRET')
-  if (!accessToken) missing.push(strictHermitOnly ? 'HERMIT_TWITTER_ACCESS_TOKEN' : 'TWITTER_ACCESS_TOKEN')
-  if (!accessSecret) missing.push(strictHermitOnly ? 'HERMIT_TWITTER_ACCESS_SECRET' : 'TWITTER_ACCESS_SECRET')
+function readTwitterOauthConfig(options: {
+  strictHermitOnly?: boolean
+} = {}): { ok: true; config: TwitterOauthConfig } | { ok: false; response: string } {
+  const strictHermitOnly = options.strictHermitOnly ?? isHermitTwitterStrictModeEnabled()
+  const config = readTwitterOauth1Credentials({ strictHermitOnly })
+  const missing = missingTwitterOauth1EnvKeys(config, strictHermitOnly)
 
   if (missing.length > 0) {
     return {
@@ -177,12 +223,7 @@ function readTwitterOauthConfig(): { ok: true; config: TwitterOauthConfig } | { 
 
   return {
     ok: true,
-    config: {
-      apiKey,
-      apiSecret,
-      accessToken,
-      accessSecret,
-    },
+    config,
   }
 }
 
@@ -320,12 +361,141 @@ async function verifyTwitterConfig(config: TwitterOauthConfig): Promise<TwitterC
   }
 }
 
+export function isTweetMediaDownloadFailure(response: string): boolean {
+  return /Failed to download Twitter media/i.test(String(response ?? ''))
+}
+
+const TWEET_MEDIA_FETCH_HEADERS = {
+  accept: 'image/png,image/jpeg,image/webp,image/gif,*/*',
+  'user-agent':
+    'Mozilla/5.0 (compatible; 4626Hermit/1.0; +https://4626.fun) TwitterMediaFetcher',
+} as const
+
+async function downloadTweetMedia(input: TweetMediaInput): Promise<
+  | { ok: true; bytes: Uint8Array; filename: string; contentType: string }
+  | { ok: false; response: string }
+> {
+  const url = String(input.url ?? '').trim()
+  if (!/^https:\/\//i.test(url)) {
+    return { ok: false, response: 'Twitter media URL must be a public HTTPS URL.' }
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: TWEET_MEDIA_FETCH_HEADERS,
+      redirect: 'follow',
+    })
+    if (!response.ok) {
+      return { ok: false, response: `Failed to download Twitter media (${response.status}).` }
+    }
+    const arrayBuffer = await response.arrayBuffer()
+    const bytes = new Uint8Array(arrayBuffer)
+    if (bytes.byteLength === 0) {
+      return { ok: false, response: 'Downloaded Twitter media was empty.' }
+    }
+    const contentType = String(input.contentType ?? response.headers.get('content-type') ?? 'image/png')
+      .split(';', 1)[0]
+      .trim()
+      .toLowerCase()
+    if (!['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'].includes(contentType)) {
+      return { ok: false, response: `Unsupported Twitter media content-type: ${contentType || 'unknown'}` }
+    }
+    const pathName = (() => {
+      try {
+        return new URL(url).pathname.split('/').pop() ?? ''
+      } catch {
+        return ''
+      }
+    })()
+    const ext =
+      contentType === 'image/png'
+        ? 'png'
+        : contentType === 'image/webp'
+          ? 'webp'
+          : contentType === 'image/gif'
+            ? 'gif'
+            : 'jpg'
+    const filename =
+      String(input.filename ?? '').trim() ||
+      (pathName && /\.[A-Za-z0-9]+$/.test(pathName) ? pathName : `twitter-media.${ext}`)
+    return { ok: true, bytes, filename, contentType: contentType === 'image/jpg' ? 'image/jpeg' : contentType }
+  } catch (error) {
+    logger.error('[x/media] download error', error)
+    return { ok: false, response: 'Failed to download Twitter media due to a network/runtime error.' }
+  }
+}
+
+async function uploadTweetMedia(params: {
+  config: TwitterOauthConfig
+  media: TweetMediaInput
+}): Promise<{ ok: true; mediaId: string } | TwitterCommandFailure> {
+  const downloaded = await downloadTweetMedia(params.media)
+  if (!downloaded.ok) return downloaded
+
+  const url = 'https://upload.twitter.com/1.1/media/upload.json'
+  try {
+    const authHeader = oauth1AuthorizationHeader({
+      method: 'POST',
+      url,
+      config: params.config,
+    })
+    const form = new FormData()
+    // Copy into a plain ArrayBuffer so BlobPart typing stays compatible
+    // across Node/DOM lib combinations (ArrayBufferLike can include SAB).
+    const mediaBytes = new Uint8Array(downloaded.bytes.byteLength)
+    mediaBytes.set(downloaded.bytes)
+    const mediaBuffer = mediaBytes.buffer
+    const blob = new Blob([mediaBuffer], { type: downloaded.contentType })
+    form.append('media', blob, downloaded.filename)
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: authHeader,
+      },
+      body: form,
+    })
+
+    if (!response.ok) {
+      const errorBody = await response.text()
+      const detail = parseTwitterApiError(errorBody)
+      logger.error('[x/media] upload failed', { status: response.status, detail })
+      return {
+        ok: false,
+        response: detail
+          ? `Twitter media upload failed (${response.status}): ${detail}`
+          : `Twitter media upload failed (${response.status}).`,
+      }
+    }
+
+    const body = (await response.json()) as any
+    const mediaId =
+      typeof body?.media_id_string === 'string'
+        ? body.media_id_string
+        : typeof body?.media_id === 'number'
+          ? String(body.media_id)
+          : null
+    if (!mediaId) {
+      logger.warn('[x/media] upload response missing media id', { body })
+      return { ok: false, response: 'Twitter media upload succeeded, but no media id was returned.' }
+    }
+
+    return { ok: true, mediaId }
+  } catch (error) {
+    logger.error('[x/media] upload error', error)
+    return { ok: false, response: 'Failed to upload Twitter media due to a network/runtime error.' }
+  }
+}
+
 async function postTweet(params: {
   text: string
   groupId: string
   senderWallet: Address
+  media?: TweetMediaInput | null
+  strictHermitOnly?: boolean
 }): Promise<TwitterCommandResult> {
-  const cfg = readTwitterOauthConfig()
+  const cfg = readTwitterOauthConfig({ strictHermitOnly: params.strictHermitOnly })
   if (!cfg.ok) return cfg
 
   if (!canPostTweet(params.groupId)) {
@@ -360,13 +530,36 @@ async function postTweet(params: {
       config: cfg.config,
     })
 
+    let mediaIds: string[] | undefined
+    if (params.media) {
+      const uploaded = await uploadTweetMedia({
+        config: cfg.config,
+        media: params.media,
+      })
+      if (!uploaded.ok) {
+        if (isTweetMediaDownloadFailure(uploaded.response)) {
+          logger.warn('[x/post] media download failed; posting text-only', {
+            url: params.media.url,
+            detail: uploaded.response,
+          })
+        } else {
+          return uploaded
+        }
+      } else {
+        mediaIds = [uploaded.mediaId]
+      }
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         Authorization: authHeader,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ text: tweetText }),
+      body: JSON.stringify({
+        text: tweetText,
+        ...(mediaIds ? { media: { media_ids: mediaIds } } : {}),
+      }),
     })
 
     if (!response.ok) {
@@ -406,6 +599,7 @@ async function postTweet(params: {
         tweetUrl,
         text: tweetText,
         actor: params.senderWallet,
+        mediaUrl: params.media?.url ?? null,
       },
     }
   } catch (error) {
@@ -418,8 +612,13 @@ export async function postTweetFromSystem(params: {
   text: string
   groupId: string
   senderWallet: Address
+  media?: TweetMediaInput | null
 }): Promise<TwitterCommandResult> {
-  return postTweet(params)
+  const strictHermitOnly = isHermitTwitterStrictModeEnabled() || hasAnyHermitTwitterOauth1EnvConfigured()
+  return postTweet({
+    ...params,
+    strictHermitOnly,
+  })
 }
 
 function parseTwitterCommand(raw: string): { cmd: string; args: string[] } {
@@ -497,6 +696,60 @@ export async function handleTwitterCommand(params: {
         groupId: params.groupId,
         senderWallet: params.senderWallet,
       })
+    }
+
+    case 'chart': {
+      if (params.role === 'MEMBER') {
+        return { ok: false, response: 'Denied: ADMIN or OWNER only.' }
+      }
+
+      const parsed = parseTwitterChartArgs(args)
+      if (!parsed.tweetText) {
+        return { ok: false, response: 'Usage: /x chart [kind] [limit] <message> --confirm' }
+      }
+      if (!parsed.hasConfirm) {
+        return {
+          ok: false,
+          response: formatTwitterChartPreview(parsed),
+          action: {
+            action: 'twitter.preview_post',
+            tweetText: parsed.tweetText,
+            ttlSeconds: TWITTER_POST_PREVIEW_TTL_SECONDS,
+            chartKind: parsed.kindRaw ?? 'top-volume',
+            chartLimit: parsed.limit,
+          },
+        }
+      }
+
+      const chartResult = await buildAlfaRoomChart({
+        kindRaw: parsed.kindRaw,
+        limit: parsed.limit,
+      })
+      if (!chartResult.ok) {
+        return { ok: false, response: chartResult.error }
+      }
+
+      const posted = await postTweet({
+        text: parsed.tweetText,
+        groupId: params.groupId,
+        senderWallet: params.senderWallet,
+        media: {
+          url: chartResult.chart.attachment.url,
+          filename: chartResult.chart.attachment.filename,
+          contentType: chartResult.chart.attachment.mime_type,
+        },
+      })
+      if (!posted.ok) return posted
+      return {
+        ...posted,
+        response: `${posted.response}\n- chart: ${chartResult.chart.title}`,
+        action: {
+          ...(posted.action ?? {}),
+          chartKind: chartResult.chart.kind,
+          chartTitle: chartResult.chart.title,
+          chartUrl: chartResult.chart.attachment.url,
+        },
+      }
     }
 
     default:

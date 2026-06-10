@@ -28,6 +28,7 @@ export type ApiContracts = {
   vaultActivationBatcher: ContractAddress
   creatorVaultBatcher?: ContractAddress
   protocolTreasury: ContractAddress
+  protocolAutomation?: ContractAddress
   vaultGaugeVoting?: ContractAddress
   voterRewardsDistributor?: ContractAddress
   bribesFactory?: ContractAddress
@@ -50,6 +51,9 @@ export type ApiContracts = {
   usdc: ContractAddress
   permit2: ContractAddress
   strategyDeploymentBatcher?: ContractAddress
+  impairmentClaims?: ContractAddress
+  impairmentRecoveryEscrow?: ContractAddress
+  impairmentGuardian?: ContractAddress
 }
 
 function pickAddress(envKey: string, fallback?: string): ContractAddress | undefined {
@@ -104,6 +108,7 @@ export function getApiContracts(): ApiContracts {
     vaultActivationBatcher: pickAddressProdSafe('VAULT_ACTIVATION_BATCHER', BASE_DEFAULTS.vaultActivationBatcher)!,
     creatorVaultBatcher: resolveCreatorVaultBatcherAddress(),
     protocolTreasury: pickAddress('PROTOCOL_TREASURY', BASE_DEFAULTS.protocolTreasury)!,
+    protocolAutomation: pickAddressProdSafe('PROTOCOL_AUTOMATION_SAFE', BASE_DEFAULTS.protocolAutomation),
     vaultGaugeVoting: pickAddressProdSafe('VAULT_GAUGE_VOTING'),
     voterRewardsDistributor: pickAddressProdSafe('VOTER_REWARDS_DISTRIBUTOR'),
     bribesFactory: pickAddressProdSafe('BRIBES_FACTORY'),
@@ -126,5 +131,11 @@ export function getApiContracts(): ApiContracts {
     usdc: pickAddress('USDC_TOKEN', BASE_DEFAULTS.usdc)!,
     permit2: pickAddress('PERMIT2', BASE_DEFAULTS.permit2)!,
     strategyDeploymentBatcher: pickAddress('STRATEGY_DEPLOYMENT_BATCHER'),
+    impairmentClaims: pickAddressProdSafe('IMPAIRMENT_CLAIMS', BASE_DEFAULTS.impairmentClaims),
+    impairmentRecoveryEscrow: pickAddressProdSafe(
+      'IMPAIRMENT_RECOVERY_ESCROW',
+      BASE_DEFAULTS.impairmentRecoveryEscrow,
+    ),
+    impairmentGuardian: pickAddressProdSafe('IMPAIRMENT_GUARDIAN', BASE_DEFAULTS.impairmentGuardian),
   }
 }

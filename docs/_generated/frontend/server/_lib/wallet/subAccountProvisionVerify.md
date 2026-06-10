@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/wallet/subAccountProvisionVerify
+[4626-web](../../../index.md) / server/\_lib/wallet/subAccountProvisionVerify
 
 # server/\_lib/wallet/subAccountProvisionVerify
 
@@ -219,7 +219,7 @@ Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:91](https://github
 
 ###### address
 
-`` `0x${string}` ``
+`string`
 
 ###### publicClient
 
@@ -253,7 +253,7 @@ Either path is sufficient; we try EOA first because it is cheap.
 
 ###### parentCsw
 
-`` `0x${string}` ``
+`string`
 
 ###### permission
 

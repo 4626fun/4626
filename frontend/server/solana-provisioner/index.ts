@@ -10,7 +10,7 @@ import { base } from 'viem/chains'
 import {
   runWrapToken,
   toExecErrorText as toErrorText,
-} from '../_lib/solanaBridgeCliRunner.js'
+} from '../_lib/onchain/solanaBridgeCliRunner.js'
 import {
   WRAP_TOKEN_NAME_MAX_LENGTH,
   WRAP_TOKEN_SYMBOL_MAX_LENGTH,
@@ -19,12 +19,12 @@ import {
   normalizeWrapTokenName,
   normalizeWrapTokenSymbol,
   readBridgeTokenMetadata,
-} from '../_lib/solanaBridgeTokenMetadata.js'
+} from '../_lib/onchain/solanaBridgeTokenMetadata.js'
 import {
   parseMintPubkeyFromAlreadyExistsError,
   parseMintPubkeyFromWrapOutput,
   solanaPubkeyToBytes32Hex,
-} from '../_lib/solanaBridgePubkey.js'
+} from '../_lib/onchain/solanaBridgePubkey.js'
 
 const execFileAsync = promisify(execFile)
 const BASE_SOLANA_BRIDGE = '0x3eff766c76a1be2ce1acf2b69c78bcae257d5188' as Address
@@ -71,8 +71,17 @@ type MeteoraIxsBody = {
 }
 
 const PROVISIONER_MAX_BODY_BYTES = 64 * 1024
-const PROVISIONER_HEALTH_DEBUG_ENABLED = parseBooleanEnv(process.env.PROVISIONER_HEALTH_DEBUG, false)
-const PROVISIONER_EXTENDED_ENDPOINTS_ENABLED = parseBooleanEnv(process.env.PROVISIONER_EXTENDED_ENDPOINTS, false)
+
+function parseBooleanEnv(name: string, fallback: boolean): boolean {
+  const raw = String(process.env[name] ?? '').trim().toLowerCase()
+  if (!raw) return fallback
+  if (raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on') return true
+  if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') return false
+  return fallback
+}
+
+const PROVISIONER_HEALTH_DEBUG_ENABLED = parseBooleanEnv('PROVISIONER_HEALTH_DEBUG', false)
+const PROVISIONER_EXTENDED_ENDPOINTS_ENABLED = parseBooleanEnv('PROVISIONER_EXTENDED_ENDPOINTS', false)
 
 type ProvisionerMintCompatibilityHints = {
   tokenProgram: 'spl-token' | 'token-2022' | null
@@ -766,83 +775,19 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
       })
     }
 
-    // ── Post-provision: DLMM pool + Alpha Vault (opt-in) ──────────────
-    // When SOLANA_AUTO_POOL=1 and CRE scripts are available, automatically
-    // create a Meteora DLMM pool and Alpha Vault for the newly created mint.
-    // This eliminates the chicken-and-egg problem where Phase 2 Finalize
-    // needs a Meteora vault but the mint doesn't exist until wrap-token runs.
+    // ── Post-provision: legacy creator-SPL auto-pool (retired) ─────────
+    // SOLANA_AUTO_POOL previously created DLMM + Alpha Vault on bridge-wrapped
+    // creator SPL. Greenfield share liquidity uses the LZ share-mesh runbook instead
+    // (docs/operations/solana-share-mesh-budget-paths.md). The env var is ignored.
     let poolResult: { signature?: string; error?: string } | null = null
     let vaultResult: { vault?: string; signature?: string; error?: string } | null = null
 
     if (envBool('SOLANA_AUTO_POOL', false)) {
-      const repoRoot = String(process.env.CRE_REPO_ROOT ?? process.env.REPO_ROOT ?? '').trim()
-      const creDir = repoRoot ? `${repoRoot}/cre` : ''
-      const strictSolPair = readStrictSolPairEnabled()
-      const configuredQuoteMint = String(process.env.SOLANA_POOL_QUOTE_MINT ?? SOLANA_NATIVE_MINT).trim()
-      const quoteMint = strictSolPair ? SOLANA_NATIVE_MINT : configuredQuoteMint
-      const binStep = String(process.env.SOLANA_POOL_BIN_STEP ?? '25').trim()
-      const poolFeeBps = String(process.env.SOLANA_POOL_FEE_BPS ?? '100').trim()
-      if (strictSolPair && configuredQuoteMint && configuredQuoteMint !== SOLANA_NATIVE_MINT) {
-        process.stderr.write(
-          `[solana-provisioner] SOLANA_STRICT_SOL_PAIR=1 forcing quote mint ${SOLANA_NATIVE_MINT} (ignoring SOLANA_POOL_QUOTE_MINT=${configuredQuoteMint})\n`,
-        )
-      }
-
-      if (creDir && existsSync(creDir)) {
-        // Step 1: Create DLMM pool
-        try {
-          process.stderr.write(`[solana-provisioner] Creating DLMM pool for ${mintPubkey}...\n`)
-          const poolEnv = {
-            ...process.env,
-            TOKEN_MINT_X: mintPubkey,
-            TOKEN_MINT_Y: quoteMint,
-            BIN_STEP: binStep,
-            ACTIVE_ID: '0',
-            FEE_BPS: poolFeeBps,
-          }
-          const { stdout: poolOut, stderr: poolErr } = await execFileAsync(
-            'node',
-            [`${creDir}/_create-pool.cjs`],
-            { cwd: creDir, timeout: 3 * 60_000, maxBuffer: 4 * 1024 * 1024, env: poolEnv },
-          )
-          if (poolErr) process.stderr.write(poolErr)
-          const sigMatch = (poolOut ?? '').match(/Signature:\s*(\S+)/)
-          poolResult = { signature: sigMatch?.[1] ?? undefined }
-          process.stderr.write(`[solana-provisioner] DLMM pool created: ${sigMatch?.[1] ?? 'unknown'}\n`)
-        } catch (error) {
-          const errMsg = error instanceof Error ? error.message : String(error)
-          poolResult = { error: errMsg }
-          process.stderr.write(`[solana-provisioner] DLMM pool creation failed (non-fatal): ${errMsg}\n`)
-        }
-
-        // Step 2: Create Alpha Vault (only if pool succeeded)
-        if (poolResult && !poolResult.error) {
-          try {
-            process.stderr.write(`[solana-provisioner] Creating Alpha Vault for ${mintPubkey}...\n`)
-            const vaultEnv = {
-              ...process.env,
-              TOKEN_MINT: mintPubkey,
-              // DLMM_POOL will be auto-derived by the script from the mint pair
-            }
-            const { stdout: vaultOut, stderr: vaultErr } = await execFileAsync(
-              'node',
-              [`${creDir}/_create-vault.cjs`],
-              { cwd: creDir, timeout: 3 * 60_000, maxBuffer: 4 * 1024 * 1024, env: vaultEnv },
-            )
-            if (vaultErr) process.stderr.write(vaultErr)
-            const vaultMatch = (vaultOut ?? '').match(/Vault:\s*(\S+)/)
-            const vaultSigMatch = (vaultOut ?? '').match(/Signature:\s*(\S+)/)
-            vaultResult = { vault: vaultMatch?.[1], signature: vaultSigMatch?.[1] }
-            process.stderr.write(`[solana-provisioner] Alpha Vault created: ${vaultMatch?.[1] ?? 'unknown'}\n`)
-          } catch (error) {
-            const errMsg = error instanceof Error ? error.message : String(error)
-            vaultResult = { error: errMsg }
-            process.stderr.write(`[solana-provisioner] Alpha Vault creation failed (non-fatal): ${errMsg}\n`)
-          }
-        }
-      } else {
-        process.stderr.write(`[solana-provisioner] SOLANA_AUTO_POOL=1 but CRE_REPO_ROOT not configured; skipping pool/vault\n`)
-      }
+      process.stderr.write(
+        '[solana-provisioner] SOLANA_AUTO_POOL is retired and ignored. ' +
+          'Do not auto-pool bridge-wrapped creator SPL. Use share-mesh Path 1/2 instead ' +
+          '(docs/operations/solana-share-mesh-budget-paths.md).\n',
+      )
     }
 
     return json(res, 200, {
@@ -1022,13 +967,13 @@ async function handleSetupCreator(req: IncomingMessage, res: ServerResponse): Pr
     return json(res, 401, { success: false, error: 'Unauthorized' })
   }
 
-  const repoRoot = String(process.env.CRE_REPO_ROOT ?? '').trim()
+  const repoRoot = String(process.env.KPR_REPO_ROOT ?? '').trim()
     || String(process.env.REPO_ROOT ?? '').trim()
-  const creDir = repoRoot ? `${repoRoot}/cre` : ''
-  if (!creDir || !existsSync(creDir)) {
+  const keeperScriptsDir = repoRoot ? `${repoRoot}/kpr` : ''
+  if (!keeperScriptsDir || !existsSync(keeperScriptsDir)) {
     return json(res, 503, {
       success: false,
-      error: 'CRE_REPO_ROOT (or REPO_ROOT) is not configured or cre/ directory not found.',
+      error: 'KPR_REPO_ROOT (or REPO_ROOT) is not configured or kpr/ directory not found.',
     })
   }
 
@@ -1073,7 +1018,7 @@ async function handleSetupCreator(req: IncomingMessage, res: ServerResponse): Pr
 
   try {
     const { stdout, stderr } = await execFileAsync('tsx', args, {
-      cwd: creDir,
+      cwd: keeperScriptsDir,
       timeout: 5 * 60_000,
       maxBuffer: 4 * 1024 * 1024,
       env: { ...process.env },
@@ -1118,13 +1063,13 @@ async function handleCreatePool(req: IncomingMessage, res: ServerResponse): Prom
     return json(res, 401, { success: false, error: 'Unauthorized' })
   }
 
-  const repoRoot = String(process.env.CRE_REPO_ROOT ?? '').trim()
+  const repoRoot = String(process.env.KPR_REPO_ROOT ?? '').trim()
     || String(process.env.REPO_ROOT ?? '').trim()
-  const creDir = repoRoot ? `${repoRoot}/cre` : ''
-  if (!creDir || !existsSync(creDir)) {
+  const keeperScriptsDir = repoRoot ? `${repoRoot}/kpr` : ''
+  if (!keeperScriptsDir || !existsSync(keeperScriptsDir)) {
     return json(res, 503, {
       success: false,
-      error: 'CRE_REPO_ROOT (or REPO_ROOT) is not configured or cre/ directory not found.',
+      error: 'KPR_REPO_ROOT (or REPO_ROOT) is not configured or kpr/ directory not found.',
     })
   }
 
@@ -1165,7 +1110,7 @@ async function handleCreatePool(req: IncomingMessage, res: ServerResponse): Prom
     const { stdout, stderr } = await execFileAsync(
       'tsx',
       ['scripts/solana/launch/create-dlmm-pool.ts'],
-      { cwd: creDir, timeout: 5 * 60_000, maxBuffer: 4 * 1024 * 1024, env },
+      { cwd: keeperScriptsDir, timeout: 5 * 60_000, maxBuffer: 4 * 1024 * 1024, env },
     )
     if (stderr) process.stderr.write(stderr)
     const output = `${stdout ?? ''}\n${stderr ?? ''}`

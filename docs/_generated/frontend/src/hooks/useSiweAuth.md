@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / src/hooks/useSiweAuth
+[4626-web](../../index.md) / src/hooks/useSiweAuth
 
 # src/hooks/useSiweAuth
 
@@ -12,7 +12,7 @@
 
 > `const` **PRIVY\_INTERACTIVE\_LOGIN\_METHODS**: readonly \[`"email"`, `"wallet"`\]
 
-Defined in: [src/hooks/useSiweAuth.ts:41](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L41)
+Defined in: [src/hooks/useSiweAuth.ts:46](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L46)
 
 Explicit user-initiated Privy sign-in should prefer identity-first methods.
 Wallet-first in this path can accidentally create a new Privy identity and
@@ -20,11 +20,51 @@ then collide with an existing email-bound account.
 
 ## Functions
 
+### deriveInitialAuthSessionState()
+
+> **deriveInitialAuthSessionState**(`input`): `object`
+
+Defined in: [src/hooks/useSiweAuth.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L69)
+
+#### Parameters
+
+##### input
+
+###### address
+
+`string` \| `null` \| `undefined`
+
+###### now
+
+`number`
+
+###### resolvedAt
+
+`number`
+
+###### ttlMs?
+
+`number`
+
+#### Returns
+
+`object`
+
+##### authAddress
+
+> **authAddress**: `string` \| `null`
+
+##### sessionHydrated
+
+> **sessionHydrated**: `boolean`
+
+***
+
 ### deriveSiweSessionState()
 
 > **deriveSiweSessionState**(`input`): `DerivedSiweSessionState`
 
-Defined in: [src/hooks/useSiweAuth.ts:107](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L107)
+Defined in: [src/hooks/useSiweAuth.ts:165](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L165)
 
 #### Parameters
 
@@ -42,7 +82,7 @@ Defined in: [src/hooks/useSiweAuth.ts:107](https://github.com/wenakita/4626/blob
 
 > **shouldAutoBridgeConnectedPrivySession**(`input`): `boolean`
 
-Defined in: [src/hooks/useSiweAuth.ts:137](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L137)
+Defined in: [src/hooks/useSiweAuth.ts:195](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L195)
 
 #### Parameters
 
@@ -60,7 +100,7 @@ Defined in: [src/hooks/useSiweAuth.ts:137](https://github.com/wenakita/4626/blob
 
 > **shouldAutoBridgeRestoredPrivySession**(`input`): `boolean`
 
-Defined in: [src/hooks/useSiweAuth.ts:162](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L162)
+Defined in: [src/hooks/useSiweAuth.ts:220](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L220)
 
 #### Parameters
 
@@ -78,7 +118,7 @@ Defined in: [src/hooks/useSiweAuth.ts:162](https://github.com/wenakita/4626/blob
 
 > **shouldResetPrivyBridgeState**(`message`): `boolean`
 
-Defined in: [src/hooks/useSiweAuth.ts:96](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L96)
+Defined in: [src/hooks/useSiweAuth.ts:154](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L154)
 
 #### Parameters
 
@@ -96,7 +136,7 @@ Defined in: [src/hooks/useSiweAuth.ts:96](https://github.com/wenakita/4626/blob/
 
 > **useSiweAuth**(): `object`
 
-Defined in: [src/hooks/useSiweAuth.ts:391](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L391)
+Defined in: [src/hooks/useSiweAuth.ts:449](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L449)
 
 #### Returns
 
@@ -154,6 +194,10 @@ Defined in: [src/hooks/useSiweAuth.ts:391](https://github.com/wenakita/4626/blob
 
 `SignInMethod`
 
+###### preferBaseAccountWallet?
+
+`boolean`
+
 ###### Returns
 
 `Promise`\<`string` \| `null`\>
@@ -196,7 +240,7 @@ Defined in: [src/hooks/useSiweAuth.ts:391](https://github.com/wenakita/4626/blob
 
 > **writeStoredSessionToken**(`token`): `void`
 
-Defined in: [src/hooks/useSiweAuth.ts:327](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L327)
+Defined in: [src/hooks/useSiweAuth.ts:385](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L385)
 
 #### Parameters
 

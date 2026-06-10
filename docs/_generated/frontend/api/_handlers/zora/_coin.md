@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/zora/\_coin
+[4626-web](../../../index.md) / api/\_handlers/zora/\_coin
 
 # api/\_handlers/zora/\_coin
 
@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/zora/\_coin.ts:15](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/_coin.ts#L15)
+Defined in: [api/\_handlers/zora/\_coin.ts:47](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/_coin.ts#L47)
 
 #### Parameters
 

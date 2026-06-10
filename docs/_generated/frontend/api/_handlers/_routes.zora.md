@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / api/\_handlers/\_routes.zora
+[4626-web](../../index.md) / api/\_handlers/\_routes.zora
 
 # api/\_handlers/\_routes.zora
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/\_routes.zora.ts:5](https://github.com/wenakita/4626
 
 > **getZoraApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.zora.ts:29](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.zora.ts#L29)
+Defined in: [api/\_handlers/\_routes.zora.ts:32](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.zora.ts#L32)
 
 #### Parameters
 

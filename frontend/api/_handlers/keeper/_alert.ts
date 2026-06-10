@@ -17,7 +17,7 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 type AlertSeverity = 'info' | 'warning' | 'critical'
 
@@ -42,7 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const limiter = checkRateLimit(
     rateLimitKey('keeper-alert', getClientIp(req)),
-    RATE_LIMITS.creRuntimeTriggerWrite,
+    RATE_LIMITS.keeperTriggerWrite,
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
@@ -75,7 +75,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log(logMsg, details ?? '')
   }
 
-  const webhookUrl = process.env.KEEPR_ALERT_WEBHOOK_URL
+  const webhookUrl = process.env.KPR_ALERT_WEBHOOK_URL
   if (webhookUrl) {
     try {
       await fetch(webhookUrl, {

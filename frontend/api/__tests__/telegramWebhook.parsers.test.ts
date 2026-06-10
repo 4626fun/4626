@@ -241,19 +241,19 @@ describe('telegram webhook parsers', () => {
     expect(resolveNavigationCallbackToast('help:arena_play', null)).toBe('Help topic')
   })
 
-  it('maps CRE and Solana operator callbacks to concrete commands', () => {
-    expect(resolveHelpCallbackCommand('cre:status')).toBe('/cre status')
-    expect(resolveHelpCallbackCommand('cre:auction')).toBe('/cre auction')
-    expect(resolveHelpCallbackCommand('cre:solana')).toBe('/cre solana')
-    expect(resolveHelpCallbackCommand('cre:health')).toBe('/cre health')
-    expect(resolveHelpCallbackCommand('cre:tend')).toBe('/cre tend')
-    expect(resolveHelpCallbackCommand('cre:report')).toBe('/cre report')
-    expect(resolveHelpCallbackCommand('cre:settle-fees')).toBe('/cre settle-fees')
-    expect(resolveHelpCallbackCommand('cre:relay-entries')).toBe('/cre relay-entries')
-    expect(resolveNavigationCallbackToast('menu:cre', null)).toBe('CRE ops')
+  it('maps keeper and Solana operator callbacks to concrete commands', () => {
+    expect(resolveHelpCallbackCommand('keeper:status')).toBe('/keepr status')
+    expect(resolveHelpCallbackCommand('keeper:auction')).toBe('/keepr auction')
+    expect(resolveHelpCallbackCommand('keeper:solana')).toBe('/keepr solana')
+    expect(resolveHelpCallbackCommand('keeper:health')).toBe('/keepr health')
+    expect(resolveHelpCallbackCommand('keeper:tend')).toBe('/keepr tend')
+    expect(resolveHelpCallbackCommand('keeper:report')).toBe('/keepr report')
+    expect(resolveHelpCallbackCommand('keeper:settle-fees')).toBe('/keepr settle-fees')
+    expect(resolveHelpCallbackCommand('keeper:relay-entries')).toBe('/keepr relay-entries')
+    expect(resolveNavigationCallbackToast('menu:keeper', null)).toBe('Keeper ops')
     expect(resolveNavigationCallbackToast('menu:solana', null)).toBe('Solana ops')
-    expect(resolveNavigationCallbackToast('cre:settle-fees', '/cre settle-fees')).toBe('Settling fees')
-    expect(resolveNavigationCallbackToast('cre:relay-entries', '/cre relay-entries')).toBe('Relaying entries')
+    expect(resolveNavigationCallbackToast('keeper:settle-fees', '/keepr settle-fees')).toBe('Settling fees')
+    expect(resolveNavigationCallbackToast('keeper:relay-entries', '/keepr relay-entries')).toBe('Relaying entries')
   })
 
   it('builds compressed inline answers with deterministic ids', () => {

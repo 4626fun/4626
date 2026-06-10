@@ -51,7 +51,7 @@ describe('deploy solana infra status handler', () => {
 
   it('returns 401 when session is missing', async () => {
     const restoreEnv = applyEnv({
-      KEEPR_API_KEY: undefined,
+      KPR_API_KEY: undefined,
       DEPLOY_SOLANA_REGISTRATION_SECRET: undefined,
       SOLANA_REGISTRATION_INTERNAL_SECRET: undefined,
     })
@@ -69,9 +69,9 @@ describe('deploy solana infra status handler', () => {
     }
   })
 
-  it('allows machine auth via KEEPR_API_KEY when session is missing', async () => {
+  it('allows machine auth via KPR_API_KEY when session is missing', async () => {
     const restoreEnv = applyEnv({
-      KEEPR_API_KEY: 'test-keepr-key',
+      KPR_API_KEY: 'test-keepr-key',
       DEPLOY_SOLANA_REGISTRATION_SECRET: undefined,
       SOLANA_REGISTRATION_INTERNAL_SECRET: undefined,
       SOLANA_DYNAMIC_ROUTE_ENABLED: '0',
@@ -95,7 +95,7 @@ describe('deploy solana infra status handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'owner':
@@ -135,7 +135,7 @@ describe('deploy solana infra status handler', () => {
       SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET: undefined,
       SOLANA_ADAPTER_OWNER_PRIVATE_KEY: 'not-a-hex-private-key',
       SOLANA_DEFAULT_MINT_BYTES32: undefined,
-      KEEPR_PRIVATE_KEY: undefined,
+      KPR_PRIVATE_KEY: undefined,
       PRIVATE_KEY: undefined,
     })
     try {
@@ -143,7 +143,7 @@ describe('deploy solana infra status handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'owner':
@@ -199,7 +199,7 @@ describe('deploy solana infra status handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'owner':
@@ -260,7 +260,7 @@ describe('deploy solana infra status handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'owner':

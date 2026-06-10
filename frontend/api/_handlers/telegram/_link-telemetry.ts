@@ -9,7 +9,7 @@ import {
   getClientIp,
   rateLimitKey,
   trackTelegramLinkEvent,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { checkDurableRateLimit } from '../../../server/_lib/infra/durableRateLimit.js'
 import { verifyTelegramLinkApiSecret } from './webhook/services/access.js'
 

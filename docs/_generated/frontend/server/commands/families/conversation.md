@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/commands/families/conversation
+[4626-web](../../../index.md) / server/commands/families/conversation
 
 # server/commands/families/conversation
 
@@ -24,7 +24,7 @@ Defined in: [server/commands/families/conversation.ts:18](https://github.com/wen
 
 ###### senderWallet
 
-`` `0x${string}` ``
+`string`
 
 ###### text
 

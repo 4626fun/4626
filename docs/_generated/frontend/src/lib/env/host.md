@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/env/host
+[4626-web](../../../index.md) / src/lib/env/host
 
 # src/lib/env/host
 
@@ -107,6 +107,22 @@ Base URL for the marketing/waitlist site.
 
 When on marketing domain, returns current origin.
 When on app domain, returns 4626.fun.
+
+#### Returns
+
+`string`
+
+***
+
+### getSubAccountAppDomain()
+
+> **getSubAccountAppDomain**(): `string`
+
+Defined in: [src/lib/env/host.ts:260](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L260)
+
+Base Account sub-accounts are scoped to the marketing app domain
+(`4626.fun`), not the app subdomain. Use this origin for
+`wallet_getSubAccounts` / provisioning on both hosts.
 
 #### Returns
 

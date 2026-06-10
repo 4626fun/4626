@@ -1,41 +1,57 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useActiveWallet, useConnectWallet, useCrossAppAccounts, useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
-import { createWalletClient, custom, formatEther, getAddress, type Address } from 'viem'
+import { useActiveWallet, useConnectWallet, useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
+import { getAddress } from 'viem'
 import { base } from 'viem/chains'
 import { useAccount, useConnections, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 
+import { mergeAccountMeWithBootstrap } from '@/lib/account/mergeAccountMeBootstrap'
 import { apiFetch } from '@/lib/api/apiBase'
-import { trackEvent } from '@/lib/analytics/analytics'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
-import { logger } from '@/lib/observability/logger'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { extractPrivyWalletsFromUser, useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { isUnauthorizedCrossAppLinkError, performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
 import { isTelegramMiniAppContext, readPrivyTelegramLaunchParams } from '@/lib/telegram/telegramWebApp'
-import { useSiweAuth } from '@/hooks/useSiweAuth'
+import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
+
+/**
+ * Exhaustive-deps is disabled for this file.
+ *
+ * This controller (used by WaitlistFlow + AccountSetupWorkspaceView) must remain stable
+ * while wagmi (usePublicClient, useConnections, useWalletClient, useAccount) and Privy
+ * hook objects change identity rapidly during long async flows:
+ *   - email OTP + Privy session finalization
+ *   - Zora cross-app linking
+ *   - embedded wallet provisioning
+ *   - Base App wallet_sendCalls + parent CSW addOwnerAddress (the validated 2026
+ *     EntryPoint self-call path)
+ *   - on-chain owner checks and CSW ownership probes
+ *
+ * We use the same proven pattern as useAddUserOpOwnerInstall:
+ *   - stable refs for all noisy external objects
+ *   - guarded setters (set*Guarded) that only update state on actual change
+ *   - callbacks read latest values via refs and never list the unstable objects in deps
+ *
+ * This is required to prevent React #185 max-update-depth loops on waitlist and
+ * account setup surfaces.
+ */
+/* eslint-disable react-hooks/exhaustive-deps */
+
 import {
-  type ApiEnvelope,
-  type OnboardingBootstrapResponse,
-  type OwnerInstallIntent,
   type OwnerDelegationFlags,
-  type OwnerApprovalStageEvent,
-  type PrepareOwnerResponse,
-  type PreparedOwnerTxRequest,
-  buildOwnerDelegationError,
   deriveOwnerDelegationFlags,
   readApiError,
-  sendPreparedOwnerTx as submitPreparedOwnerTx,
-  _submitOwnerViaPreparedCallsWithEoaOwner,
   shouldRefreshOwnerDelegationOnForeground,
-} from '@/lib/wallet/onboardingWallet'
+} from '@/lib/wallet/onboardingWalletDelegation'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
-import { ensureWalletAlignedPaymasterSessionDetailed } from '@/lib/paymaster/paymasterSession'
 import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
 import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 import { selectCrossAppAuthAction } from '@/features/waitlist/crossAppWalletUtils'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import { checkEoaOwnershipOfCsw } from '@/wallet/accountContext/ownership'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
+import { submitOwnerViaPreparedCallsWithEoaOwner } from '@/lib/wallet/eoaOwnerPreparedCalls'
+import type { PreparedOwnerTxRequest } from '@/lib/wallet/zoraAddOwnerApi'
 
 import { PROVIDER_ROWS, deriveOwnerAuthorityState, hasResolvedZoraSignals, isMobileWalletEnvironment, shortValue, sleep } from './shared'
 import type {
@@ -48,6 +64,12 @@ import type {
   ZoraLinkStatusResponse,
   ZoraResolveResponse,
 } from './types'
+
+function resolveDirectPreparedCallsPaymasterUrl(): string | null {
+  const direct = String(import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL ?? '').trim()
+  if (/^https?:\/\//i.test(direct)) return direct
+  return null
+}
 
 function parseChainId(value: string | number | null | undefined): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -63,12 +85,6 @@ function parseChainId(value: string | number | null | undefined): number | null 
   return Number.isFinite(parsed) ? parsed : null
 }
 
-function resolveDirectPreparedCallsPaymasterUrl(): string | null {
-  const direct = String(import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL ?? '').trim()
-  if (/^https?:\/\//i.test(direct)) return direct
-  return null
-}
-
 function isPrivyExternalEthereumWallet(wallet: any): boolean {
   if (!wallet || typeof wallet !== 'object') return false
   const chainType = String(wallet.chainType ?? wallet.chain_type ?? wallet.type ?? '').toLowerCase().trim()
@@ -80,19 +96,6 @@ function isPrivyExternalEthereumWallet(wallet: any): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(String(wallet.address ?? '').trim())
 }
 
-async function getPrivyEthereumProvider(wallet: any): Promise<any | null> {
-  if (!wallet) return null
-  if (wallet?.provider && typeof wallet.provider.request === 'function') return wallet.provider
-  if (typeof wallet.getEthereumProvider === 'function') {
-    const provider = await wallet.getEthereumProvider().catch(() => null)
-    if (provider && typeof provider.request === 'function') return provider
-  }
-  if (typeof wallet.request === 'function') {
-    return { request: wallet.request.bind(wallet) }
-  }
-  return null
-}
-
 async function maybeCallMethod(target: any, methodNames: string[], args: unknown[] = []): Promise<boolean> {
   if (!target) return false
   for (const methodName of methodNames) {
@@ -102,14 +105,6 @@ async function maybeCallMethod(target: any, methodNames: string[], args: unknown
     }
   }
   return false
-}
-
-type OwnerInstallGasPreflight = {
-  payerAddress: `0x${string}`
-  estimatedGas: bigint
-  maxFeePerGas: bigint
-  requiredWei: bigint
-  balanceWei: bigint
 }
 
 function selectLinkedValues(me: AccountSetupMe | null, provider: string): string[] {
@@ -186,14 +181,6 @@ function useSafeActiveWallet() {
   }
 }
 
-function useSafeWallets() {
-  try {
-    return useWallets() as any
-  } catch {
-    return { wallets: [] } as any
-  }
-}
-
 export function useAccountSetupController(params: {
   initialData?: AccountSetupInitialData
   zoraReturnPath?: string
@@ -204,8 +191,6 @@ export function useAccountSetupController(params: {
   const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossApp()
   const { connectWallet } = useSafeConnectWallet()
   const { wallet: activePrivyWallet, setActiveWallet } = useSafeActiveWallet()
-  const { wallets: privyLiveWallets } = useSafeWallets()
-  const siwe = useSiweAuth()
   const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
   const { address: connectedAddress, chainId } = useAccount()
@@ -215,6 +200,70 @@ export function useAccountSetupController(params: {
   const ownerInstallSectionRef = useRef<HTMLElement | null>(null)
   const hasInitialDataRef = useRef(Boolean(params.initialData))
   const ownerApprovalRunIdRef = useRef(0)
+  const pendingOwnerInstallHashRef = useRef<string | null>(null)
+
+  // Pending owner install state (especially for the long Base App wallet_sendCalls +
+  // EntryPoint self-call addOwnerAddress path). When set, the waitlist accordion and
+  // other setup surfaces can show the same high-quality "Waiting for Base App signature…",
+  // hash + copy, "Check now (refresh gas)" UX that the dedicated AddOwnerBaseApp page has.
+  const [pendingOwnerInstallHash, setPendingOwnerInstallHash] = useState<string | null>(null)
+  const setPendingOwnerInstallHashGuarded = useCallback((next: string | null) => {
+    pendingOwnerInstallHashRef.current = next
+    setPendingOwnerInstallHash((prev) => (prev === next ? prev : next))
+  }, [])
+
+  // Phase for the current owner install operation (awaiting_signature, broadcasting,
+  // confirming, etc.). Powered by the modern Base App self-call hook when active.
+  // Allows waitlist banners to show precise copy during long signature + bundle waits.
+  const [ownerInstallPhase, setOwnerInstallPhase] = useState<string | null>(null)
+  const ownerInstallPhaseRef = useRef<string | null>(null)
+  const setOwnerInstallPhaseGuarded = useCallback((next: string | null) => {
+    ownerInstallPhaseRef.current = next
+    setOwnerInstallPhase((prev) => (prev === next ? prev : next))
+  }, [])
+
+  // Refs for unstable external objects (wagmi/Privy) to prevent React #185 max-update-depth
+  // during long async flows (Zora cross-app, owner install wallet_sendCalls signature prompts,
+  // embedded wallet ensure, CSW owner checks). Mirrors the stabilization pattern used in
+  // useAddUserOpOwnerInstall for the validated Base App parent-CSW EntryPoint self-call path.
+  const publicClientRef = useRef(publicClient)
+  const walletClientRef = useRef(walletClient)
+  const connectionsRef = useRef(wagmiConnections)
+  const connectedAddressRef = useRef(connectedAddress)
+  const chainIdRef = useRef(chainId)
+  const privyRef = useRef(privy)
+  const activePrivyWalletRef = useRef(activePrivyWallet)
+  const switchChainAsyncRef = useRef(switchChainAsync)
+  const ensureEmbeddedWalletRef = useRef(ensureEmbeddedWallet)
+
+  // Keep refs current without adding the objects themselves to any callback/effect deps.
+  useEffect(() => {
+    publicClientRef.current = publicClient
+  }, [publicClient])
+  useEffect(() => {
+    walletClientRef.current = walletClient
+  }, [walletClient])
+  useEffect(() => {
+    connectionsRef.current = wagmiConnections
+  }, [wagmiConnections])
+  useEffect(() => {
+    connectedAddressRef.current = connectedAddress
+  }, [connectedAddress])
+  useEffect(() => {
+    chainIdRef.current = chainId
+  }, [chainId])
+  useEffect(() => {
+    privyRef.current = privy
+  }, [privy])
+  useEffect(() => {
+    activePrivyWalletRef.current = activePrivyWallet
+  }, [activePrivyWallet])
+  useEffect(() => {
+    switchChainAsyncRef.current = switchChainAsync
+  }, [switchChainAsync])
+  useEffect(() => {
+    ensureEmbeddedWalletRef.current = ensureEmbeddedWallet
+  }, [ensureEmbeddedWallet])
 
   const privyAuthed = Boolean(privy?.authenticated)
   const privyWallets = useMemo(() => extractPrivyWalletsFromUser(privy?.user), [privy?.user])
@@ -233,14 +282,29 @@ export function useAccountSetupController(params: {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
+  // Guarded setters — only call React setState when the value actually changes.
+  // Prevents unnecessary re-renders during long wallet/OTP/Privy-sync flows (same pattern
+  // as setSubmitPhaseGuarded / appendEvent dedup in the Base App owner install hook).
+  const setMeGuarded = useCallback((next: AccountSetupMe | null) => {
+    setMe((prev) => (prev === next ? prev : next))
+  }, [])
+  const setLoadingGuarded = useCallback((next: boolean) => {
+    setLoading((prev) => (prev === next ? prev : next))
+  }, [])
+  const setBusyProviderGuarded = useCallback((next: string | null) => {
+    setBusyProvider((prev) => (prev === next ? prev : next))
+  }, [])
+  const setErrorGuarded = useCallback((next: string | null) => {
+    setError((prev) => (prev === next ? prev : next))
+  }, [])
+  const setNoticeGuarded = useCallback((next: string | null) => {
+    setNotice((prev) => (prev === next ? prev : next))
+  }, [])
+
   const [advancedBusy, setAdvancedBusy] = useState(false)
   const [ownerDelegationFlags, setOwnerDelegationFlags] = useState<OwnerDelegationFlags | null>(null)
   const [connectedOwnerState, setConnectedOwnerState] = useState<ConnectedOwnerState>({ value: null, reason: 'idle' })
   const [cswOwnersState, setCswOwnersState] = useState<CswOwnersState>({ status: 'idle', owners: [], error: null })
-  const [ownerInstallIntent, setOwnerInstallIntent] = useState<OwnerInstallIntent>('embeddedOwner')
-  const [customOwnerGasPreflight, setCustomOwnerGasPreflight] = useState<OwnerInstallGasPreflight | null>(null)
-  const [customOwnerPreparedTxRequest, setCustomOwnerPreparedTxRequest] = useState<PreparedOwnerTxRequest | null>(null)
-  const [customOwnerPreparedAddress, setCustomOwnerPreparedAddress] = useState<string | null>(null)
 
   const canonicalCswAddress = me?.accountSignals?.canonicalCswAddress ?? null
   const zoraLinked = Boolean(zoraStatus?.zoraLinked || me?.accountSignals?.linked)
@@ -274,11 +338,6 @@ export function useAccountSetupController(params: {
     return activeExternalOwnerWallet.address.toLowerCase() === connectedAddress.toLowerCase()
   }, [activeExternalOwnerWallet?.address, connectedAddress])
   const ownerSignerAddress = connectedAddress ?? activeExternalOwnerWallet?.address ?? null
-  const shouldUsePrivyExternalOwnerWallet = Boolean(
-    activeExternalOwnerWallet &&
-      ownerSignerAddress &&
-      (!connectedAddress || activeExternalOwnerWalletMatchesConnectedAddress),
-  )
   const ownerSignerChainId =
     typeof chainId === 'number'
       ? chainId
@@ -303,100 +362,34 @@ export function useAccountSetupController(params: {
     [getAccessToken],
   )
 
-  const postOnboardingBootstrap = useCallback(
-    async (
-      headers: Record<string, string>,
-    ): Promise<{ response: Response; payload: ApiEnvelope<OnboardingBootstrapResponse> | null }> => {
-      const response = await apiFetch('/api/onboarding/bootstrap', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({}),
-      })
-      const payload = (await response.json().catch(() => null)) as ApiEnvelope<OnboardingBootstrapResponse> | null
-      return { response, payload }
-    },
-    [],
-  )
-
-  const runOnboardingBootstrapPreflight = useCallback(async (): Promise<{
-    headers: Record<string, string>
-    response: Response
-    payload: ApiEnvelope<OnboardingBootstrapResponse> | null
-  }> => {
-    let headers = await authHeaders()
-    let { response, payload } = await postOnboardingBootstrap(headers)
-    if ((!response.ok || !payload?.success) && response.status === 401) {
-      await sleep(150)
-      headers = await authHeaders()
-      const retry = await postOnboardingBootstrap(headers)
-      response = retry.response
-      payload = retry.payload
-    }
-    return { headers, response, payload }
-  }, [authHeaders, postOnboardingBootstrap])
-
-  const ensurePaymasterSession = useCallback(async (): Promise<boolean> => {
-    const result = await ensureWalletAlignedPaymasterSessionDetailed({
-      hasMatchingSiweSession: Boolean(siwe.hasSession),
-      preferWalletSession: true,
-      allowPrivyBridgeFallback: false,
-      signIn:
-        typeof siwe.signIn === 'function'
-          ? async () =>
-              await siwe.signIn({
-                method: 'siwe',
-              })
-          : null,
-      signInWithPrivyToken:
-        typeof siwe.signInWithPrivyToken === 'function' ? siwe.signInWithPrivyToken : null,
-      getPrivyAccessToken: getAccessToken,
-    })
-    if (result.ok) return true
-    const reason = result.reason ?? 'unknown_session_bootstrap_failure'
-    throw new Error(`Paymaster session bootstrap failed: ${reason}`)
-  }, [getAccessToken, siwe])
-
-  const emitOwnerApprovalStageEvent = useCallback(
-    (event: OwnerApprovalStageEvent) => {
-      const payload = {
-        runId: event.runId,
-        stage: event.stage,
-        status: event.status,
-        attempt: event.attempt ?? null,
-        executionMode: event.executionMode,
-        signerAddress: event.signerAddress ?? null,
-        canonicalCswAddress: event.canonicalCswAddress ?? null,
-        txHash: event.txHash ?? null,
-        code: event.code ?? null,
-        message: event.message ?? null,
-      }
-      trackEvent('owner_approval_stage', payload)
-      logger.info('[OwnerApproval] stage', payload)
-    },
-    [],
-  )
-
   const loadMe = useCallback(
     async (options?: { showSpinner?: boolean }) => {
-      if (!privyAuthed) {
-        setMe(null)
+      // Read unstable objects via refs so the callback does not need them in its dependency array.
+      const privyAuthedNow = Boolean(privyRef.current?.authenticated)
+      const getAccessTokenNow = typeof privyRef.current?.getAccessToken === 'function'
+        ? (privyRef.current.getAccessToken as () => Promise<string | null>)
+        : async () => null
+      const ensureEmbeddedWalletNow = ensureEmbeddedWalletRef.current
+
+      if (!privyAuthedNow) {
+        setMeGuarded(null)
         setZoraStatus(null)
-        setLoading(false)
+        setLoadingGuarded(false)
         return
       }
 
       if (options?.showSpinner !== false) {
-        setLoading(true)
+        setLoadingGuarded(true)
       }
-      setError(null)
+      setErrorGuarded(null)
       try {
-        const token = await getAccessToken()
+        const token = await getAccessTokenNow()
         if (!token) throw new Error('Missing Privy auth token. Sign in and retry.')
         let canonicalization = await runCanonicalizationPipeline({
           privyToken: token,
         })
         if (!canonicalization.onboardingBootstrapped && canonicalization.flags.needsEmbeddedWallet) {
-          await ensureEmbeddedWallet()
+          await ensureEmbeddedWalletNow()
           canonicalization = await runCanonicalizationPipeline({
             privyToken: token,
           })
@@ -422,7 +415,8 @@ export function useAccountSetupController(params: {
           throw new Error(readApiError(mePayload, 'Failed to load account state.'))
         }
 
-        setMe(mePayload.data)
+        const mergedMe = await mergeAccountMeWithBootstrap(mePayload.data, getAccessTokenNow)
+        setMeGuarded(mergedMe)
         if (zoraResult.status !== 'fulfilled') {
           setZoraStatus(null)
         } else {
@@ -430,12 +424,13 @@ export function useAccountSetupController(params: {
           setZoraStatus(readOptionalZoraStatus({ responseOk: zoraResult.value.ok, payload: zoraPayload }))
         }
       } catch (loadError: any) {
-        setError(typeof loadError?.message === 'string' ? loadError.message : 'Failed to load account state.')
+        setErrorGuarded(typeof loadError?.message === 'string' ? loadError.message : 'Failed to load account state.')
       } finally {
-        setLoading(false)
+        setLoadingGuarded(false)
       }
     },
-    [ensureEmbeddedWallet, getAccessToken, privyAuthed],
+    // Intentionally stable — all external objects are read via refs inside the callback.
+    []
   )
 
   useEffect(() => {
@@ -469,14 +464,33 @@ export function useAccountSetupController(params: {
       return
     }
 
+    const hasOnchainEoaOwner = cswOwnersState.owners.some(
+      (owner) => owner.isAddressOwner && owner.ownerAddress,
+    )
+    const passkeyOnlyCanonicalCsw =
+      cswOwnersState.status === 'ready' && cswOwnersState.owners.length > 0 && !hasOnchainEoaOwner
+
     if (connectedCanonicalWalletSelected) {
-      setConnectedOwnerState({ value: true, reason: 'ok' })
+      // Passkey-owned Zora CSWs cannot complete owner install from a desktop
+      // browser session — WebAuthn RP IDs are Coinbase-scoped. Steer to Base App
+      // or an on-chain EOA owner instead of treating CSW connect as signing-ready.
+      if (passkeyOnlyCanonicalCsw && !isMobileWalletEnvironment()) {
+        setConnectedOwnerState({ value: null, reason: 'passkey_requires_base_app' })
+      } else if (!isMobileWalletEnvironment() && !isBaseAppInAppContext()) {
+        // Desktop browsers: the CSW address itself is custody, not an owner signing key.
+        setConnectedOwnerState({ value: null, reason: 'csw_not_owner_signer' })
+      } else {
+        setConnectedOwnerState({ value: true, reason: 'ok' })
+      }
       return
     }
 
     const run = async () => {
+      // Read via ref — the effect still legitimately depends on the derived ownerSigner* values,
+      // but we avoid putting the wagmi publicClient object itself in the dep array.
+      const pc = publicClientRef.current
       const result = await checkEoaOwnershipOfCsw({
-        publicClient,
+        publicClient: pc,
         chainId: ownerSignerChainId,
         cswAddress: canonicalCswAddress,
         ownerAddress: ownerSignerAddress ?? null,
@@ -489,11 +503,17 @@ export function useAccountSetupController(params: {
     return () => {
       cancelled = true
     }
-  }, [canonicalCswAddress, connectedCanonicalWalletSelected, ownerSignerAddress, ownerSignerChainId, publicClient])
+  }, [
+    canonicalCswAddress,
+    connectedCanonicalWalletSelected,
+    cswOwnersState.owners,
+    cswOwnersState.status,
+    ownerSignerAddress,
+    ownerSignerChainId,
+    // publicClient intentionally omitted — read from ref inside run()
+  ])
 
-  useEffect(() => {
-    let cancelled = false
-
+  const refreshCswOwners = useCallback(async () => {
     if (!canonicalCswAddress) {
       setCswOwnersState({ status: 'idle', owners: [], error: null })
       return
@@ -501,49 +521,50 @@ export function useAccountSetupController(params: {
 
     setCswOwnersState((current) => ({ status: 'loading', owners: current.owners, error: null }))
 
-    const run = async () => {
-      try {
-        const res = await apiFetch('/api/deploy/smartWalletOwners', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ smartWallet: canonicalCswAddress }),
-        })
-        const payload = (await res.json().catch(() => null)) as ApiEnvelope<any> | null
-        if (!res.ok || !payload?.success || !payload.data) {
-          throw new Error(readApiError(payload, 'Failed to load current smart wallet owners.'))
-        }
-        if (cancelled) return
-        setCswOwnersState({
-          status: 'ready',
-          owners: Array.isArray(payload.data.owners) ? payload.data.owners : [],
-          error: null,
-        })
-      } catch (ownerListError: any) {
-        if (cancelled) return
-        setCswOwnersState({
-          status: 'error',
-          owners: [],
-          error:
-            typeof ownerListError?.message === 'string'
-              ? ownerListError.message
-              : 'Failed to load current smart wallet owners.',
-        })
+    try {
+      const res = await apiFetch('/api/deploy/smartWalletOwners', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ smartWallet: canonicalCswAddress }),
+      })
+      const payload = (await res.json().catch(() => null)) as ApiEnvelope<any> | null
+      if (!res.ok || !payload?.success || !payload.data) {
+        throw new Error(readApiError(payload, 'Failed to load current smart wallet owners.'))
       }
-    }
-
-    void run()
-    return () => {
-      cancelled = true
+      setCswOwnersState({
+        status: 'ready',
+        owners: Array.isArray(payload.data.owners) ? payload.data.owners : [],
+        error: null,
+      })
+    } catch (ownerListError: any) {
+      setCswOwnersState({
+        status: 'error',
+        owners: [],
+        error:
+          typeof ownerListError?.message === 'string'
+            ? ownerListError.message
+            : 'Failed to load current smart wallet owners.',
+      })
     }
   }, [canonicalCswAddress])
 
+  useEffect(() => {
+    void refreshCswOwners()
+  }, [refreshCswOwners])
+
   const connectOwnerWallet = useCallback(async () => {
-    setError(null)
-    setNotice(null)
-    setBusyProvider('owner_wallet')
+    // Read via refs so we do not close over unstable wagmi/Privy objects.
+    const connectWalletNow = connectWallet
+    const setActiveWalletNow = activePrivyWalletRef.current
+      ? (activePrivyWalletRef.current as any).setActiveWallet ?? setActiveWallet
+      : setActiveWallet
+
+    setErrorGuarded(null)
+    setNoticeGuarded(null)
+    setBusyProviderGuarded('owner_wallet')
     try {
       const result = await Promise.resolve(
-        connectWallet({
+        connectWalletNow({
           walletList: [
             'coinbase_wallet',
             'base_account',
@@ -563,14 +584,14 @@ export function useAccountSetupController(params: {
         result && typeof result === 'object' && 'wallet' in (result as Record<string, unknown>)
           ? ((result as { wallet?: unknown }).wallet ?? null)
           : result ?? null
-      if (selectedWallet && typeof setActiveWallet === 'function') {
-        await Promise.resolve(setActiveWallet(selectedWallet)).catch(() => null)
+      if (selectedWallet && typeof setActiveWalletNow === 'function') {
+        await Promise.resolve(setActiveWalletNow(selectedWallet)).catch(() => null)
       }
       await sleep(120)
     } catch (connectError: any) {
-      setError(typeof connectError?.message === 'string' ? connectError.message : 'Failed to connect owner wallet.')
+      setErrorGuarded(typeof connectError?.message === 'string' ? connectError.message : 'Failed to connect owner wallet.')
     } finally {
-      setBusyProvider(null)
+      setBusyProviderGuarded(null)
     }
   }, [connectWallet, prefersWalletConnectQr, setActiveWallet])
 
@@ -586,8 +607,8 @@ export function useAccountSetupController(params: {
       if (!response.ok || !payload?.success || !payload.data) {
         throw new Error(readApiError(payload, `Failed to link ${provider}.`))
       }
-      setMe(payload.data)
-      setNotice(`${provider.replace(/_/g, ' ')} linked.`)
+      setMeGuarded(payload.data)
+      setNoticeGuarded(`${provider.replace(/_/g, ' ')} linked.`)
     },
     [authHeaders],
   )
@@ -604,8 +625,8 @@ export function useAccountSetupController(params: {
       if (!response.ok || !payload?.success || !payload.data) {
         throw new Error(readApiError(payload, `Failed to unlink ${provider}.`))
       }
-      setMe(payload.data)
-      setNotice(`${provider.replace(/_/g, ' ')} unlinked in 4626.`)
+      setMeGuarded(payload.data)
+      setNoticeGuarded(`${provider.replace(/_/g, ' ')} unlinked in 4626.`)
     },
     [authHeaders],
   )
@@ -687,15 +708,16 @@ export function useAccountSetupController(params: {
   }, [privy])
 
   const onLinkProvider = useCallback(async (provider: string) => {
-    if (!privyAuthed) return
-    setBusyProvider(provider)
-    setError(null)
-    setNotice(null)
+    // Read via ref; guarded sets for the long link flow.
+    const privyAuthedNow = Boolean(privyRef.current?.authenticated)
+    if (!privyAuthedNow) return
+    setBusyProviderGuarded(provider)
+    setErrorGuarded(null)
+    setNoticeGuarded(null)
     try {
       await performClientSideLink(provider)
       if (provider === 'external_eoa') {
         let linked = false
-        let lastError: Error | null = null
         for (let attempt = 0; attempt < 4; attempt += 1) {
           try {
             await callLinkEndpoint(provider)
@@ -706,15 +728,13 @@ export function useAccountSetupController(params: {
             if (!/No linked value found for provider "external_eoa"\./i.test(message)) {
               throw linkError
             }
-            lastError = linkError instanceof Error ? linkError : new Error(message)
             await sleep(500)
           }
         }
         if (!linked) {
           await loadMe({ showSpinner: false })
-          throw (
-            lastError ??
-            new Error('No external owner wallet was linked in Privy yet. Connect a real Base wallet and retry.')
+          throw new Error(
+            'External wallet link is still syncing. Connect Base App (or your external wallet) again and retry in a moment.',
           )
         }
       } else {
@@ -722,33 +742,39 @@ export function useAccountSetupController(params: {
       }
       await loadMe({ showSpinner: false })
     } catch (linkError: any) {
-      setError(typeof linkError?.message === 'string' ? linkError.message : `Failed to link ${provider}.`)
+      setErrorGuarded(typeof linkError?.message === 'string' ? linkError.message : `Failed to link ${provider}.`)
     } finally {
-      setBusyProvider(null)
+      setBusyProviderGuarded(null)
     }
   }, [callLinkEndpoint, loadMe, performClientSideLink, privyAuthed])
 
   const onUnlinkProvider = useCallback(async (provider: string) => {
-    if (!privyAuthed) return
-    setBusyProvider(provider)
-    setError(null)
-    setNotice(null)
+    const privyAuthedNow = Boolean(privyRef.current?.authenticated)
+    if (!privyAuthedNow) return
+    setBusyProviderGuarded(provider)
+    setErrorGuarded(null)
+    setNoticeGuarded(null)
     try {
       const currentValue = selectLinkedValues(me, provider)[0] ?? null
       await performClientSideUnlink(provider, currentValue)
       await callUnlinkEndpoint(provider, currentValue)
       await loadMe({ showSpinner: false })
     } catch (unlinkError: any) {
-      setError(typeof unlinkError?.message === 'string' ? unlinkError.message : `Failed to unlink ${provider}.`)
+      setErrorGuarded(typeof unlinkError?.message === 'string' ? unlinkError.message : `Failed to unlink ${provider}.`)
     } finally {
-      setBusyProvider(null)
+      setBusyProviderGuarded(null)
     }
   }, [callUnlinkEndpoint, loadMe, me, performClientSideUnlink, privyAuthed])
 
   const onLinkZora = useCallback(async () => {
-    setBusyProvider('zora_cross_app')
-    setError(null)
-    setNotice(null)
+    // Read via refs to keep the callback stable during long cross-app auth flows.
+    const privyAuthedNow = Boolean(privyRef.current?.authenticated)
+    const linkCrossAppAccountNow = linkCrossAppAccount
+    const loginWithCrossAppAccountNow = loginWithCrossAppAccount
+
+    setBusyProviderGuarded('zora_cross_app')
+    setErrorGuarded(null)
+    setNoticeGuarded(null)
     try {
       const headers = await authHeaders()
       const resolveSignals = async () => {
@@ -770,28 +796,28 @@ export function useAccountSetupController(params: {
 
       const existingSignals = await resolveSignals()
       if (hasResolvedZoraSignals(existingSignals)) {
-        setNotice('Zora signals were detected from your current account. Cross-app login was not needed.')
+        setNoticeGuarded('Zora signals were detected from your current account. Cross-app login was not needed.')
         await loadMe({ showSpinner: false })
         return
       }
       if (existingSignals?.zoraHandle || existingSignals?.creatorCoin?.address) {
-        setNotice('Zora profile found, but wallet detection is still pending. Open Base app and retry detection.')
+        setNoticeGuarded('Zora profile found, but wallet detection is still pending. Open Base app and retry detection.')
         await loadMe({ showSpinner: false })
         return
       }
 
       const action = selectCrossAppAuthAction({
-        privyAuthed,
-        linkCrossAppAccount,
-        loginWithCrossAppAccount,
+        privyAuthed: privyAuthedNow,
+        linkCrossAppAccount: linkCrossAppAccountNow,
+        loginWithCrossAppAccount: loginWithCrossAppAccountNow,
       })
       if (!action) throw new Error('Zora linking is unavailable in this client.')
 
       await performZoraCrossAppAuth({
-        privyAuthed,
+        privyAuthed: privyAuthedNow,
         appId: ZORA_PRIVY_APP_ID,
-        linkCrossAppAccount,
-        loginWithCrossAppAccount,
+        linkCrossAppAccount: linkCrossAppAccountNow,
+        loginWithCrossAppAccount: loginWithCrossAppAccountNow,
         sanitizeRedirect: sanitizeCrossAppRedirectUrlForAuth,
         isRedirectUrlNotAllowedError: isPrivyRedirectUrlNotAllowedError,
       })
@@ -805,10 +831,10 @@ export function useAccountSetupController(params: {
       if (!linkResponse.ok || !linkPayload?.success || !linkPayload.data) {
         throw new Error(readApiError(linkPayload, 'Failed to link zora_cross_app.'))
       }
-      setMe(linkPayload.data)
+      setMeGuarded(linkPayload.data)
 
       const resolvedSignals = await resolveSignals()
-      setNotice(
+      setNoticeGuarded(
         hasResolvedZoraSignals(resolvedSignals)
           ? 'Zora linked and signals resolved.'
           : 'Zora linked. Open Zora once if needed, then refresh signals here.',
@@ -816,25 +842,25 @@ export function useAccountSetupController(params: {
       await loadMe({ showSpinner: false })
     } catch (zoraError: any) {
       if (isPrivyRedirectUrlNotAllowedError(zoraError)) {
-        setError('Privy redirect URL is not allowed for this origin. Add this app URL in Privy settings and retry.')
+        setErrorGuarded('Privy redirect URL is not allowed for this origin. Add this app URL in Privy settings and retry.')
       } else if (
         isUnauthorizedCrossAppLinkError(zoraError) ||
         Number(zoraError?.status) === 401 ||
         String(zoraError?.message ?? '').toLowerCase().includes('oauth/init')
       ) {
-        setError('Privy cross-app Zora auth is unavailable right now. Open Zora, confirm your wallet there, then return here and use Refresh Zora signals.')
+        setErrorGuarded('Privy cross-app Zora auth is unavailable right now. Use Connect with Zora again, or refresh signals if you already linked.')
       } else {
-        setError(typeof zoraError?.message === 'string' ? zoraError.message : 'Failed to link Zora.')
+        setErrorGuarded(typeof zoraError?.message === 'string' ? zoraError.message : 'Failed to link Zora.')
       }
     } finally {
-      setBusyProvider(null)
+      setBusyProviderGuarded(null)
     }
   }, [authHeaders, linkCrossAppAccount, loadMe, loginWithCrossAppAccount, privyAuthed])
 
   const onRefreshZora = useCallback(async () => {
-    setBusyProvider('zora_cross_app')
-    setError(null)
-    setNotice(null)
+    setBusyProviderGuarded('zora_cross_app')
+    setErrorGuarded(null)
+    setNoticeGuarded(null)
     try {
       const headers = await authHeaders()
       const response = await apiFetch('/api/zora/refresh', {
@@ -847,23 +873,25 @@ export function useAccountSetupController(params: {
         throw new Error(readApiError(payload, 'Failed to refresh Zora signals.'))
       }
       const refreshLimited = response.headers.get('X-Zora-Refresh-Limited') === '1'
-      setNotice(refreshLimited ? 'Zora refresh is rate-limited. Using your latest saved signals.' : 'Zora signals refreshed.')
+      setNoticeGuarded(refreshLimited ? 'Zora refresh is rate-limited. Using your latest saved signals.' : 'Zora signals refreshed.')
       await loadMe({ showSpinner: false })
     } catch (refreshError: any) {
-      setError(typeof refreshError?.message === 'string' ? refreshError.message : 'Failed to refresh Zora signals.')
+      setErrorGuarded(typeof refreshError?.message === 'string' ? refreshError.message : 'Failed to refresh Zora signals.')
     } finally {
-      setBusyProvider(null)
+      setBusyProviderGuarded(null)
     }
   }, [authHeaders, loadMe])
 
   const onSwitchAccount = useCallback(async () => {
-    setBusyProvider('email')
-    setError(null)
-    setNotice(null)
+    // Read logout via ref so the callback stays stable.
+    const privyNow = privyRef.current
+    setBusyProviderGuarded('email')
+    setErrorGuarded(null)
+    setNoticeGuarded(null)
     try {
       await runWaitlistPrivyLogout({
         logout: async () => {
-          await privy.logout().catch(() => null)
+          await (privyNow?.logout ? privyNow.logout().catch(() => null) : Promise.resolve())
         },
         shouldLogout: true,
       })
@@ -871,131 +899,18 @@ export function useAccountSetupController(params: {
         window.location.assign('/waitlist')
       }
     } catch (switchError: any) {
-      setError(typeof switchError?.message === 'string' ? switchError.message : 'Failed to switch account.')
+      setErrorGuarded(typeof switchError?.message === 'string' ? switchError.message : 'Failed to switch account.')
     } finally {
-      setBusyProvider(null)
+      setBusyProviderGuarded(null)
     }
-  }, [privy])
+  }, [])
 
-  const sendPreparedOwnerTx = useCallback(
-    async (
-      txRequest: { chainId: 8453; to: `0x${string}`; data: `0x${string}`; value: '0x0' },
-      ownerAddress?: string | null,
-      ownerIndexLookupAddress?: string | null,
-      opts?: {
-        approvalRunId?: string | null
-        onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
-        ownerInstallIntent?: OwnerInstallIntent
-        customOwnerPolicyToken?: string | null
-        preferSponsoredFirst?: boolean
-        signerAddressOverride?: string | null
-        signerWalletOverride?: any
-      },
-    ) => {
-      let effectiveWalletClient = walletClient
-      let effectiveChainId = chainId
-      let effectiveSwitchChain = switchChainAsync
-      let effectiveSignerAddress = ownerSignerAddress
+  const sendPreparedOwnerTx = useCallback(async () => {
+    throw new Error(
+      'User owner-mutation setup is paused. Use /swap with an external wallet (EOA mode), or wait for wallet onboarding to return.',
+    )
+  }, [])
 
-      if (typeof opts?.signerAddressOverride === 'string' && opts.signerAddressOverride.trim()) {
-        try {
-          effectiveSignerAddress = getAddress(opts.signerAddressOverride.trim())
-        } catch {
-          // Ignore malformed override and keep existing signer.
-        }
-      }
-
-      const signerWalletOverride = opts?.signerWalletOverride ?? null
-      if (signerWalletOverride && effectiveSignerAddress) {
-        let provider = await getPrivyEthereumProvider(signerWalletOverride)
-        if (!provider?.request && typeof setActiveWallet === 'function') {
-          await Promise.resolve(setActiveWallet(signerWalletOverride as any)).catch(() => null)
-          provider = await getPrivyEthereumProvider(signerWalletOverride)
-        }
-        if (!provider?.request) {
-          throw new Error('Embedded owner signer is unavailable. Reconnect your embedded wallet and retry.')
-        }
-        effectiveWalletClient = createWalletClient({
-          account: effectiveSignerAddress as Address,
-          chain: base,
-          transport: custom(provider),
-        }) as any
-        effectiveChainId = parseChainId((signerWalletOverride as any)?.chainId) ?? effectiveChainId
-        effectiveSwitchChain =
-          typeof (signerWalletOverride as any)?.switchChain === 'function'
-            ? ({ chainId: targetChainId }: { chainId: number }) =>
-                (signerWalletOverride as any).switchChain(targetChainId)
-            : switchChainAsync
-      } else if (shouldUsePrivyExternalOwnerWallet) {
-        if (!effectiveSignerAddress) {
-          throw new Error('Connect an owner wallet signer before submitting owner approval.')
-        }
-        const provider = await getPrivyEthereumProvider(activeExternalOwnerWallet)
-        if (!provider?.request) {
-          throw new Error('Connected owner wallet signer is unavailable. Reconnect the wallet and retry.')
-        }
-        effectiveWalletClient = createWalletClient({
-          account: effectiveSignerAddress as Address,
-          chain: base,
-          transport: custom(provider),
-        }) as any
-        effectiveChainId = parseChainId(activeExternalOwnerWallet.chainId) ?? effectiveChainId
-        effectiveSwitchChain =
-          typeof activeExternalOwnerWallet.switchChain === 'function'
-            ? ({ chainId: targetChainId }: { chainId: number }) => activeExternalOwnerWallet.switchChain(targetChainId)
-            : switchChainAsync
-      }
-
-      if (!effectiveSignerAddress) {
-        throw new Error('Connect an owner wallet signer before submitting owner approval.')
-      }
-
-      await submitPreparedOwnerTx({
-        txRequest,
-        walletClient: effectiveWalletClient,
-        chainId: typeof effectiveChainId === 'number' ? effectiveChainId : undefined,
-        switchChainAsync: effectiveSwitchChain,
-        authHeaders,
-        ownerAddress,
-        ownerIndexLookupAddress,
-        signerAddress: effectiveSignerAddress,
-        executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
-        canonicalSmartWalletAddress: canonicalCswAddress,
-        publicClient,
-        ensurePaymasterSession,
-        approvalRunId: opts?.approvalRunId ?? null,
-        onStageEvent: opts?.onStageEvent ?? null,
-        ownerInstallIntent: opts?.ownerInstallIntent ?? 'embeddedOwner',
-        customOwnerPolicyToken: opts?.customOwnerPolicyToken ?? null,
-        preferSponsoredFirst: opts?.preferSponsoredFirst === true,
-        enforceSelfAuthEmbeddedOwner: opts?.ownerInstallIntent === 'embeddedOwner',
-      })
-    },
-    [
-      activeExternalOwnerWallet,
-      authHeaders,
-      canonicalCswAddress,
-      chainId,
-      ensurePaymasterSession,
-      ownerSignerAddress,
-      publicClient,
-      setActiveWallet,
-      shouldUsePrivyExternalOwnerWallet,
-      switchChainAsync,
-      walletClient,
-    ],
-  )
-
-  // ── EOA-owner submission lane ───────────────────────────────────────
-  // Surfaces three pieces of state for the UI to render the "Sign with
-  // on-chain EOA owner" path:
-  //   - `onchainEoaOwnerCandidates` — every EOA owner from cswOwnersState
-  //   - `connectedOnchainEoaOwner` — the candidate whose address matches the
-  //     connected wagmi account, or null if none match
-  //   - `submitOwnerInstallViaOnchainEoa(txRequest)` — runs the lane against
-  //     the matched EOA, recovering the signature locally before sending so a
-  //     substituted Base App key fails fast with a clear message instead of
-  //     a bundler revert.
   const onchainEoaOwnerCandidates = useMemo(
     () =>
       cswOwnersState.owners
@@ -1011,6 +926,20 @@ export function useAccountSetupController(params: {
     const lower = connectedAddress.toLowerCase()
     return onchainEoaOwnerCandidates.find((c) => c.ownerAddress.toLowerCase() === lower) ?? null
   }, [connectedAddress, onchainEoaOwnerCandidates])
+  const passkeyOnlyCanonicalCsw = useMemo(
+    () =>
+      Boolean(
+        canonicalCswAddress &&
+          cswOwnersState.status === 'ready' &&
+          cswOwnersState.owners.length > 0 &&
+          onchainEoaOwnerCandidates.length === 0,
+      ),
+    [canonicalCswAddress, cswOwnersState.owners.length, cswOwnersState.status, onchainEoaOwnerCandidates.length],
+  )
+  const requiresBaseAppForOwnerInstall = useMemo(
+    () => passkeyOnlyCanonicalCsw && !isMobileWalletEnvironment() && !connectedOnchainEoaOwner,
+    [connectedOnchainEoaOwner, passkeyOnlyCanonicalCsw],
+  )
 
   const submitOwnerInstallViaOnchainEoa = useCallback(
     async (txRequest: PreparedOwnerTxRequest): Promise<`0x${string}`> => {
@@ -1029,15 +958,6 @@ export function useAccountSetupController(params: {
         throw new Error('Prepared transaction target does not match the canonical Coinbase Smart Wallet.')
       }
 
-      // Resolve two transports:
-      //   - signerRequest: the wagmi connection whose connected accounts
-      //     include the on-chain EOA owner — this is the only key that can
-      //     produce a valid `personal_sign` over the userOpHash.
-      //   - cswRequest: a Coinbase / Base App connector that implements the
-      //     `wallet_prepareCalls` / `wallet_sendPreparedCalls` Coinbase RPC
-      //     methods. If the EOA-owner connector is itself a Coinbase
-      //     connector (rare — only when the Coinbase wallet IS the EOA
-      //     owner), reuse the same provider.
       const ownerLower = connectedOnchainEoaOwner.ownerAddress.toLowerCase()
       const signerConnection = wagmiConnections.find((conn) =>
         conn.accounts.some((acct) => String(acct).toLowerCase() === ownerLower),
@@ -1076,10 +996,6 @@ export function useAccountSetupController(params: {
               await coinbaseProvider.request!(args)
           }
         }
-        // If no Coinbase connector is present, the EOA connector remains as
-        // the cswRequest. This will fail-fast on `wallet_prepareCalls` with a
-        // clear "method not supported" error from the connector, surfacing
-        // the missing-Coinbase-provider state to the user.
       }
 
       if (chainId !== base.id && typeof switchChainAsync === 'function') {
@@ -1091,9 +1007,8 @@ export function useAccountSetupController(params: {
           'Sponsored owner approval requires `VITE_CDP_SENDCALLS_PAYMASTER_URL` to be set to a direct CDP RPC URL.',
         )
       }
-      const runId = ++ownerApprovalRunIdRef.current
-      const approvalRunId = `eoa-owner-approval-${Date.now()}-${runId}`
-      return await _submitOwnerViaPreparedCallsWithEoaOwner({
+
+      return await submitOwnerViaPreparedCallsWithEoaOwner({
         cswRequest,
         signerRequest,
         eoaOwnerAddress: connectedOnchainEoaOwner.ownerAddress,
@@ -1103,495 +1018,52 @@ export function useAccountSetupController(params: {
         to: txRequest.to,
         data: txRequest.data,
         paymasterUrl,
-        approvalRunId,
-        executionMode: 'canonicalSmartWallet',
-        canonicalCswAddress,
-        onStageEvent: emitOwnerApprovalStageEvent,
       })
     },
     [
       canonicalCswAddress,
       chainId,
       connectedOnchainEoaOwner,
-      emitOwnerApprovalStageEvent,
       onchainEoaOwnerCandidates,
       switchChainAsync,
       wagmiConnections,
     ],
   )
 
-  const runCustomOwnerGasPreflight = useCallback(
-    async (input: {
-      txRequest: { chainId: 8453; to: `0x${string}`; data: `0x${string}`; value: '0x0' }
-      payerAddress: `0x${string}`
-    }): Promise<OwnerInstallGasPreflight> => {
-      if (!publicClient) {
-        throw new Error('Base RPC client is unavailable. Reload and retry.')
-      }
-      const payerAddress = getAddress(input.payerAddress) as `0x${string}`
-      const client = publicClient as any
-      const [estimatedGasRaw, feesRaw, balanceWei] = await Promise.all([
-        client.estimateGas({
-          account: payerAddress,
-          to: input.txRequest.to,
-          data: input.txRequest.data,
-          value: 0n,
-        }),
-        typeof client.estimateFeesPerGas === 'function'
-          ? client.estimateFeesPerGas()
-          : typeof client.getGasPrice === 'function'
-            ? client.getGasPrice().then((gasPrice: bigint) => ({ gasPrice }))
-            : Promise.resolve(null),
-        client.getBalance({
-          address: payerAddress,
-        }),
-      ])
-      const estimatedGas = BigInt(estimatedGasRaw ?? 0n)
-      const fees = feesRaw as { maxFeePerGas?: bigint; gasPrice?: bigint } | null
-      const maxFeePerGas = BigInt(fees?.maxFeePerGas ?? fees?.gasPrice ?? 0n)
-      if (estimatedGas <= 0n || maxFeePerGas <= 0n) {
-        throw new Error('Could not estimate Base gas requirements for co-owner install.')
-      }
-      return {
-        payerAddress,
-        estimatedGas,
-        maxFeePerGas,
-        requiredWei: estimatedGas * maxFeePerGas,
-        balanceWei: BigInt(balanceWei ?? 0n),
-      }
-    },
-    [publicClient],
-  )
-
-  const onEnable4626Signing = useCallback(async () => {
-    if (!canonicalCswAddress) return
-    const runId = ++ownerApprovalRunIdRef.current
-    const approvalRunId = `owner-approval-${Date.now()}-${runId}`
-    setOwnerInstallIntent('embeddedOwner')
-    setCustomOwnerGasPreflight(null)
-    setAdvancedBusy(true)
-    setError(null)
-    setNotice(null)
-    setOwnerDelegationFlags(null)
-    try {
-      // ── Owner-approval path ─────────────────────────────────────────
-      const ownerCheck = await checkEoaOwnershipOfCsw({
-        publicClient,
-        chainId: ownerSignerChainId,
-        cswAddress: canonicalCswAddress,
-        ownerAddress: connectedCanonicalWalletSelected ? canonicalCswAddress : ownerSignerAddress ?? null,
-      })
-      const effectiveOwnerCheck = connectedCanonicalWalletSelected ? { value: true, reason: 'ok' as const } : ownerCheck
-      setConnectedOwnerState(effectiveOwnerCheck)
-      if (effectiveOwnerCheck.value !== true) {
-        if (ownerCheck.reason === 'network_mismatch') {
-          throw new Error('Switch the connected wallet to Base, then retry owner approval.')
-        }
-        if (ownerSignerAddress) {
-          throw new Error('Connected wallet is not a current owner of your Coinbase Smart Wallet. Connect an existing owner and retry.')
-        }
-        throw new Error('Connect a wallet that is already an owner of your Coinbase Smart Wallet before enabling 4626 signing.')
-      }
-
-      let { headers, response: preflightRes, payload: preflightPayload } = await runOnboardingBootstrapPreflight()
-      emitOwnerApprovalStageEvent({
-        runId: approvalRunId,
-        stage: 'preflight',
-        status: 'start',
-        attempt: 1,
-        executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
-        signerAddress: ownerSignerAddress ?? null,
-        canonicalCswAddress,
-      })
-      if ((!preflightRes.ok || !preflightPayload?.success) && (preflightPayload as any)?.needsEmbeddedWallet === true) {
-        await ensureEmbeddedWallet()
-        const embeddedRetry = await runOnboardingBootstrapPreflight()
-        headers = embeddedRetry.headers
-        preflightRes = embeddedRetry.response
-        preflightPayload = embeddedRetry.payload
-        if (!preflightRes.ok || !preflightPayload?.success) {
-          emitOwnerApprovalStageEvent({
-            runId: approvalRunId,
-            stage: 'preflight',
-            status: 'error',
-            executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
-            signerAddress: ownerSignerAddress ?? null,
-            canonicalCswAddress,
-            code: 'preflight_failed_after_embedded_retry',
-            message: readApiError(preflightPayload, 'Signer preflight failed.'),
-          })
-          throw buildOwnerDelegationError(preflightPayload, 'Signer preflight failed.')
-        }
-      }
-      if (!preflightRes.ok || !preflightPayload?.success) {
-        emitOwnerApprovalStageEvent({
-          runId: approvalRunId,
-          stage: 'preflight',
-          status: 'error',
-          executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
-          signerAddress: ownerSignerAddress ?? null,
-          canonicalCswAddress,
-          code: 'preflight_failed',
-          message: readApiError(preflightPayload, 'Signer preflight failed.'),
-        })
-        throw buildOwnerDelegationError(preflightPayload, 'Signer preflight failed.')
-      }
-      emitOwnerApprovalStageEvent({
-        runId: approvalRunId,
-        stage: 'preflight',
-        status: 'success',
-        executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
-        signerAddress: ownerSignerAddress ?? null,
-        canonicalCswAddress,
-      })
-      const preflightOwnerLookupAddress =
-        connectedCanonicalWalletSelected && preflightPayload?.data?.privyIsOwner === true
-          ? preflightPayload?.data?.privyEmbeddedEoaAddress ?? null
-          : null
-
-      emitOwnerApprovalStageEvent({
-        runId: approvalRunId,
-        stage: 'prepare',
-        status: 'start',
-        attempt: 1,
-        executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
-        signerAddress: ownerSignerAddress ?? null,
-        canonicalCswAddress,
-      })
-      const prepareRes = await apiFetch('/api/wallet/prepare-add-privy-owner', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({}),
-      })
-      const preparePayload = (await prepareRes.json().catch(() => null)) as ApiEnvelope<PrepareOwnerResponse> | null
-      if (!prepareRes.ok || !preparePayload?.success || !preparePayload.data) {
-        emitOwnerApprovalStageEvent({
-          runId: approvalRunId,
-          stage: 'prepare',
-          status: 'error',
-          executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
-          signerAddress: ownerSignerAddress ?? null,
-          canonicalCswAddress,
-          code: 'prepare_failed',
-          message: readApiError(preparePayload, 'Failed to prepare owner install.'),
-        })
-        throw buildOwnerDelegationError(preparePayload, 'Failed to prepare owner install.')
-      }
-      if (preparePayload.data.alreadyOwner) {
-        emitOwnerApprovalStageEvent({
-          runId: approvalRunId,
-          stage: 'prepare',
-          status: 'success',
-          executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
-          signerAddress: ownerSignerAddress ?? null,
-          canonicalCswAddress,
-          code: 'already_owner',
-        })
-        setNotice('4626 signing is already enabled.')
-        return
-      }
-      emitOwnerApprovalStageEvent({
-        runId: approvalRunId,
-        stage: 'prepare',
-        status: 'success',
-        executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
-        signerAddress: ownerSignerAddress ?? null,
-        canonicalCswAddress,
-      })
-      // Self-auth (CSW selected as the connected wallet) must stay on the
-      // passkey/WebAuthn lane. The split EOA-owner lane is only for cases where
-      // the user has connected a real on-chain EOA owner separately.
-      const ownerAddressForTx = ownerSignerAddress ?? null
-      await sendPreparedOwnerTx(
-        preparePayload.data.txRequest,
-        ownerAddressForTx,
-        preflightOwnerLookupAddress,
-        {
-          approvalRunId,
-          onStageEvent: emitOwnerApprovalStageEvent,
-          ownerInstallIntent: 'embeddedOwner',
-        },
-      )
-      setNotice('4626 signing is enabled on your canonical CSW.')
-      await loadMe({ showSpinner: false })
-    } catch (ownerError: any) {
-      if (runId !== ownerApprovalRunIdRef.current) return
-      const flags = {
-        ...(ownerError?.needsEmbeddedWallet === true ? { needsEmbeddedWallet: true } : null),
-        ...(ownerError?.needsBaseAppSetup === true ? { needsBaseAppSetup: true } : null),
-        ...(typeof ownerError?.baseAppUrl === 'string' && ownerError.baseAppUrl.trim()
-          ? { baseAppUrl: ownerError.baseAppUrl.trim() }
-          : null),
-      }
-      setOwnerDelegationFlags(Object.keys(flags).length > 0 ? flags : null)
-      setError(typeof ownerError?.message === 'string' ? ownerError.message : 'Failed to enable 4626 signing.')
-    } finally {
-      if (runId !== ownerApprovalRunIdRef.current) return
-      setAdvancedBusy(false)
-    }
-  }, [
-    canonicalCswAddress,
-    connectedCanonicalWalletSelected,
-    emitOwnerApprovalStageEvent,
-    ensureEmbeddedWallet,
-    loadMe,
-    ownerSignerAddress,
-    ownerSignerChainId,
-    publicClient,
-    runOnboardingBootstrapPreflight,
-    sendPreparedOwnerTx,
-  ])
-
   const retryOwnerCheck = useCallback(async () => {
     if (!canonicalCswAddress) return
+    const pc = publicClientRef.current
     const result = await checkEoaOwnershipOfCsw({
-      publicClient,
+      publicClient: pc,
       chainId: ownerSignerChainId,
       cswAddress: canonicalCswAddress,
       ownerAddress: ownerSignerAddress ?? null,
     })
     setConnectedOwnerState(result)
-  }, [canonicalCswAddress, ownerSignerAddress, ownerSignerChainId, publicClient])
+  }, [canonicalCswAddress, ownerSignerAddress, ownerSignerChainId])
 
   const onResetOwnerApproval = useCallback(async () => {
     ownerApprovalRunIdRef.current += 1
     setAdvancedBusy(false)
-    setError(null)
-    setNotice(null)
+    setErrorGuarded(null)
+    setNoticeGuarded(null)
     setConnectedOwnerState({ value: null, reason: 'idle' })
-    setOwnerInstallIntent('embeddedOwner')
-    setCustomOwnerGasPreflight(null)
-    setCustomOwnerPreparedTxRequest(null)
-    setCustomOwnerPreparedAddress(null)
     setOwnerDelegationFlags(null)
+
+    // Also clear any pending modern owner install state on explicit reset
+    // (symmetry with the auto-clear we added on successful completion).
+    setPendingOwnerInstallHashGuarded(null)
+    setOwnerInstallPhaseGuarded(null)
+
     await retryOwnerCheck()
-    setNotice('Signing state reset. Reconnect or switch owner wallet if needed.')
-  }, [retryOwnerCheck])
+    setNoticeGuarded('Signing state reset. Reconnect or switch owner wallet if needed.')
+  }, [retryOwnerCheck, setPendingOwnerInstallHashGuarded, setOwnerInstallPhaseGuarded])
 
-  const onAddRabbyCoOwner = useCallback(async (advancedOwnerAddress: string) => {
-    const raw = String(advancedOwnerAddress ?? '').trim()
-    if (!/^0x[a-fA-F0-9]{40}$/.test(raw)) {
-      setError('Enter a valid Rabby EOA address.')
-      return
-    }
-    let normalized: `0x${string}`
-    try {
-      normalized = getAddress(raw) as `0x${string}`
-    } catch {
-      setError('Enter a valid Rabby EOA address.')
-      return
-    }
-    // In mobile in-app browsers (Base App / Telegram WebView), native confirm
-    // dialogs can be suppressed or auto-cancelled, which makes this button look
-    // like a no-op. Keep the explicit confirmation on desktop browsers only.
-    const requireDesktopConfirm = typeof window !== 'undefined' && !isMobileWalletEnvironment()
-    if (requireDesktopConfirm) {
-      const confirmed = window.confirm('Add this Rabby EOA as a co-owner? This is advanced and never automatic.')
-      if (!confirmed) return
-    }
-
-    const runId = ++ownerApprovalRunIdRef.current
-    const approvalRunId = `co-owner-approval-${Date.now()}-${runId}`
-    const executionMode = canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect'
-    setOwnerInstallIntent('customCoOwner')
-    setCustomOwnerGasPreflight(null)
-    setCustomOwnerPreparedTxRequest(null)
-    setCustomOwnerPreparedAddress(null)
-    setAdvancedBusy(true)
-    setError(null)
-    setNotice(null)
-    setOwnerDelegationFlags(null)
-    try {
-      emitOwnerApprovalStageEvent({
-        runId: approvalRunId,
-        stage: 'preflight',
-        status: 'start',
-        attempt: 1,
-        executionMode,
-        signerAddress: ownerSignerAddress ?? null,
-        canonicalCswAddress,
-      })
-      const { headers, response: preflightRes, payload: preflightPayload } = await runOnboardingBootstrapPreflight()
-      if (!preflightRes.ok || !preflightPayload?.success) {
-        emitOwnerApprovalStageEvent({
-          runId: approvalRunId,
-          stage: 'preflight',
-          status: 'error',
-          executionMode,
-          signerAddress: ownerSignerAddress ?? null,
-          canonicalCswAddress,
-          code: 'preflight_failed',
-          message: readApiError(preflightPayload, 'Signer preflight failed.'),
-        })
-        throw buildOwnerDelegationError(preflightPayload, 'Signer preflight failed.')
-      }
-      const preflightOwnerLookupAddress =
-        connectedCanonicalWalletSelected && preflightPayload?.data?.privyIsOwner === true
-          ? preflightPayload?.data?.privyEmbeddedEoaAddress ?? null
-          : null
-      const liveEmbeddedOwnerWalletCandidate =
-        preflightOwnerLookupAddress && Array.isArray(privyLiveWallets)
-          ? ((privyLiveWallets as any[]).find((wallet) => {
-              const walletAddress =
-                typeof wallet?.address === 'string' && /^0x[a-fA-F0-9]{40}$/.test(wallet.address)
-                  ? wallet.address.toLowerCase()
-                  : null
-              if (!walletAddress || walletAddress !== preflightOwnerLookupAddress.toLowerCase()) return false
-              const walletType = String(
-                wallet?.walletClientType ?? wallet?.wallet_client_type ?? wallet?.connector_type ?? wallet?.type ?? '',
-              )
-                .toLowerCase()
-                .trim()
-              const looksEmbedded = walletType === 'privy' || walletType.includes('embedded') || walletType.includes('privy')
-              const hasProviderSurface =
-                typeof wallet?.request === 'function' ||
-                typeof wallet?.getEthereumProvider === 'function' ||
-                Boolean(wallet?.provider && typeof wallet.provider.request === 'function')
-              return looksEmbedded || hasProviderSurface
-            }) ?? null)
-          : null
-      const embeddedOwnerWalletCandidate =
-        preflightOwnerLookupAddress ? liveEmbeddedOwnerWalletCandidate : null
-      if (preflightOwnerLookupAddress && !embeddedOwnerWalletCandidate) {
-        throw new Error(
-          `Embedded owner signer ${preflightOwnerLookupAddress} is not available in this session. ` +
-            'Reconnect your Privy embedded wallet in Base App, then retry Add co-owner.',
-        )
-      }
-
-      emitOwnerApprovalStageEvent({
-        runId: approvalRunId,
-        stage: 'prepare',
-        status: 'start',
-        attempt: 1,
-        executionMode,
-        signerAddress: ownerSignerAddress ?? null,
-        canonicalCswAddress,
-      })
-      const prepareRes = await apiFetch('/api/wallet/prepare-add-rabby-owner', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          rabbyAddress: normalized,
-          confirmedAdvanced: true,
-        }),
-      })
-      const preparePayload = (await prepareRes.json().catch(() => null)) as ApiEnvelope<PrepareOwnerResponse> | null
-      if (!prepareRes.ok || !preparePayload?.success || !preparePayload.data) {
-        emitOwnerApprovalStageEvent({
-          runId: approvalRunId,
-          stage: 'prepare',
-          status: 'error',
-          executionMode,
-          signerAddress: ownerSignerAddress ?? null,
-          canonicalCswAddress,
-          code: 'prepare_failed',
-          message: readApiError(preparePayload, 'Failed to prepare Rabby co-owner transaction.'),
-        })
-        throw buildOwnerDelegationError(preparePayload, 'Failed to prepare Rabby co-owner transaction.')
-      }
-      if (preparePayload.data.alreadyOwner) {
-        setCustomOwnerPreparedTxRequest(null)
-        setCustomOwnerPreparedAddress(normalized.toLowerCase())
-        emitOwnerApprovalStageEvent({
-          runId: approvalRunId,
-          stage: 'prepare',
-          status: 'success',
-          executionMode,
-          signerAddress: ownerSignerAddress ?? null,
-          canonicalCswAddress,
-          code: 'already_owner',
-        })
-        setNotice('Rabby address is already an owner.')
-        return
-      }
-      emitOwnerApprovalStageEvent({
-        runId: approvalRunId,
-        stage: 'prepare',
-        status: 'success',
-        executionMode,
-        signerAddress: ownerSignerAddress ?? null,
-        canonicalCswAddress,
-      })
-      setCustomOwnerPreparedTxRequest(preparePayload.data.txRequest)
-      setCustomOwnerPreparedAddress(normalized.toLowerCase())
-      const customOwnerPolicyToken =
-        typeof preparePayload.data.sponsorship?.customOwnerPolicyToken === 'string' &&
-        preparePayload.data.sponsorship.customOwnerPolicyToken.trim()
-          ? preparePayload.data.sponsorship.customOwnerPolicyToken.trim()
-          : null
-      if (!customOwnerPolicyToken) {
-        const preflightPayerAddress =
-          connectedCanonicalWalletSelected && canonicalCswAddress
-            ? (canonicalCswAddress as `0x${string}`)
-            : ownerSignerAddress
-              ? (ownerSignerAddress as `0x${string}`)
-              : null
-        if (!preflightPayerAddress) {
-          throw new Error('Connect an owner wallet before submitting co-owner approval.')
-        }
-
-        const gasPreflight = await runCustomOwnerGasPreflight({
-          txRequest: preparePayload.data.txRequest,
-          payerAddress: preflightPayerAddress,
-        })
-        setCustomOwnerGasPreflight(gasPreflight)
-        if (gasPreflight.balanceWei < gasPreflight.requiredWei) {
-          emitOwnerApprovalStageEvent({
-            runId: approvalRunId,
-            stage: 'preflight',
-            status: 'error',
-            executionMode,
-            signerAddress: ownerSignerAddress ?? null,
-            canonicalCswAddress,
-            code: 'custom_co_owner_insufficient_gas',
-            message: `required=${gasPreflight.requiredWei.toString()} balance=${gasPreflight.balanceWei.toString()} payer=${gasPreflight.payerAddress}`,
-          })
-          throw new Error(
-            `Direct co-owner approval needs ${formatEther(gasPreflight.requiredWei)} ETH for gas from ${gasPreflight.payerAddress}. Current balance is ${formatEther(gasPreflight.balanceWei)} ETH. Fund this wallet on Base and retry.`,
-          )
-        }
-      } else {
-        setCustomOwnerGasPreflight(null)
-      }
-
-      await sendPreparedOwnerTx(preparePayload.data.txRequest, normalized, preflightOwnerLookupAddress, {
-        approvalRunId,
-        onStageEvent: emitOwnerApprovalStageEvent,
-        ownerInstallIntent: 'customCoOwner',
-        customOwnerPolicyToken,
-        preferSponsoredFirst: customOwnerPolicyToken !== null,
-        signerAddressOverride: embeddedOwnerWalletCandidate ? preflightOwnerLookupAddress : null,
-        signerWalletOverride: embeddedOwnerWalletCandidate,
-      })
-      setNotice('Rabby co-owner added.')
-      await loadMe({ showSpinner: false })
-    } catch (rabbyError: any) {
-      if (runId !== ownerApprovalRunIdRef.current) return
-      const flags = {
-        ...(rabbyError?.needsEmbeddedWallet === true ? { needsEmbeddedWallet: true } : null),
-        ...(rabbyError?.needsBaseAppSetup === true ? { needsBaseAppSetup: true } : null),
-        ...(typeof rabbyError?.baseAppUrl === 'string' && rabbyError.baseAppUrl.trim()
-          ? { baseAppUrl: rabbyError.baseAppUrl.trim() }
-          : null),
-      }
-      setOwnerDelegationFlags(Object.keys(flags).length > 0 ? flags : null)
-      setError(typeof rabbyError?.message === 'string' ? rabbyError.message : 'Failed to add Rabby co-owner.')
-    } finally {
-      if (runId !== ownerApprovalRunIdRef.current) return
-      setAdvancedBusy(false)
-    }
-  }, [
-    canonicalCswAddress,
-    connectedCanonicalWalletSelected,
-    emitOwnerApprovalStageEvent,
-    loadMe,
-    ownerSignerAddress,
-    privyLiveWallets,
-    runCustomOwnerGasPreflight,
-    runOnboardingBootstrapPreflight,
-    sendPreparedOwnerTx,
-  ])
+  const onAddRabbyCoOwner = useCallback(async (_advancedOwnerAddress: string) => {
+    setError(
+      'Add co-owner setup is paused. Use /swap with an external wallet (EOA mode), or wait for wallet onboarding to return.',
+    )
+  }, [])
 
   const zoraCrossAppCount = zoraStatus?.zoraCrossAppAccounts?.length ?? 0
   const canShowAdvanced = Boolean(canonicalCswAddress)
@@ -1612,9 +1084,12 @@ export function useAccountSetupController(params: {
       ownerSignerAddress &&
       (!connectedAddress || activeExternalOwnerWalletMatchesConnectedAddress),
   )
-  const subAccountReady = false
-  const needsBaseAccountReconnect = false
   const ownerApprovalReady = connectedOwnerReady && (signerClientReady || privySignerClientReady) && !needsEmbeddedWallet
+
+  // When a modern owner install (Base App self-call path) is actively running,
+  // surface this so the waitlist accordion and other surfaces can show consistent
+  // "in progress" language instead of offering to start the same operation again.
+  const ownerInstallInProgress = Boolean(pendingOwnerInstallHash) || (ownerInstallPhase != null && ownerInstallPhase !== 'idle')
   const ownerAuthorityState = useMemo(
     () =>
       deriveOwnerAuthorityState({
@@ -1627,9 +1102,9 @@ export function useAccountSetupController(params: {
   )
   const connectedSignerLabel = ownerSignerAddress ? shortValue(ownerSignerAddress) : 'No wallet connected'
   const connectedSignerDetail = ownerApprovalReady
-    ? ownerAuthorityState.detail
+    ? 'On-chain owner connected. Enable 4626 signing when your embedded signer is not yet installed.'
     : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
-      ? 'Wallet connection is still finishing. Wait for the signer session to hydrate before submitting the Base smart-wallet approval.'
+      ? 'Wallet connection is still finishing. Wait for the signer session to hydrate.'
       : ownerAuthorityState.detail
   const readableCswOwners = useMemo(
     () => cswOwnersState.owners.filter((owner) => owner.ownerAddress),
@@ -1657,36 +1132,52 @@ export function useAccountSetupController(params: {
         state: connectedOwnerReady ? 'complete' : ownerSignerAddress ? 'active' : 'blocked',
       },
       {
-        title: 'Approve on Base',
-        description: ownerApprovalReady
-          ? connectedCanonicalWalletSelected
-            ? '4626 can now enable embedded signing for your smart wallet.'
-            : '4626 can now use one Base owner transaction for signing access.'
-          : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
-            ? 'Wait for the signer client to finish hydrating, then approve.'
-            : 'Approval unlocks after a current owner is connected and verified.',
-        state: ownerApprovalReady ? 'complete' : connectedOwnerReady ? 'active' : 'blocked',
+        title: 'Wallet signing',
+        description: ownerInstallInProgress
+          ? ownerInstallPhase === 'awaiting_signature'
+            ? 'Confirm the request in Base App. This can take up to 3 minutes.'
+            : 'Owner install running — waiting for signature or bundle confirmation.'
+          : ownerApprovalReady
+            ? 'Run Enable 4626 signing to add your embedded signer as a CSW owner.'
+            : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
+              ? 'Wait for the signer client to finish hydrating.'
+              : 'Connect and verify a current CSW owner first.',
+        state: ownerInstallInProgress ? 'active' : connectedOwnerReady ? 'active' : 'blocked',
       },
     ],
     [
-      connectedCanonicalWalletSelected,
       connectedOwnerReady,
       ownerApprovalReady,
       ownerAuthorityState.hint,
       ownerSignerAddress,
       privySignerClientReady,
       signerClientReady,
+      ownerInstallInProgress,
+      ownerInstallPhase,
     ],
   )
-  const ownerPrimaryCtaLabel = needsBaseAccountReconnect
-    ? 'Reconnect via Base Account'
+  const ownerPrimaryCtaLabel = ownerInstallInProgress
+    ? ownerInstallPhase === 'awaiting_signature'
+      ? 'Waiting for Base App signature…'
+      : 'Owner install in progress…'
     : ownerApprovalReady
-      ? 'Approve 4626 on this wallet'
+      ? 'Ready to enable signing'
       : needsEmbeddedWallet
         ? 'Provisioning embedded wallet…'
         : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
           ? 'Finishing wallet session…'
-          : 'Owner approval required'
+          : 'Connect owner wallet'
+
+  // Global auto-clear of pending owner install state once the step is complete.
+  // This prevents stale "Waiting for signature…" banners and in-progress labels
+  // after a successful modern Base App owner install (or any other path that
+  // results in the embedded EOA becoming an on-chain owner).
+  useEffect(() => {
+    if (ownerInstallInProgress && ownerApprovalReady) {
+      setPendingOwnerInstallHashGuarded(null);
+      setOwnerInstallPhaseGuarded(null);
+    }
+  }, [ownerInstallInProgress, ownerApprovalReady, setPendingOwnerInstallHashGuarded, setOwnerInstallPhaseGuarded]);
 
   useEffect(() => {
     if (!ownerInstallResumeState.requested) return
@@ -1719,9 +1210,6 @@ export function useAccountSetupController(params: {
     connectedSignerLabel,
     connectOwnerWallet,
     connectWallet,
-    customOwnerGasPreflight,
-    customOwnerPreparedAddress,
-    customOwnerPreparedTxRequest,
     cswOwnersState,
     ensureEmbeddedWallet,
     error,
@@ -1733,11 +1221,9 @@ export function useAccountSetupController(params: {
     login,
     loginWithCrossAppAccount,
     me,
-    needsBaseAccountReconnect,
     needsBaseAppSetup,
     needsEmbeddedWallet,
     notice,
-    onEnable4626Signing,
     onLinkProvider,
     onLinkZora,
     onUnlinkProvider,
@@ -1745,13 +1231,19 @@ export function useAccountSetupController(params: {
     onResetOwnerApproval,
     onSwitchAccount,
     onAddRabbyCoOwner,
+    onchainEoaOwnerCandidates,
+    connectedOnchainEoaOwner,
     ownerApprovalReady,
     ownerAuthorityState,
     ownerChecklist,
     ownerDelegationFlags,
     ownerInstallResumeState,
     ownerInstallSectionRef,
-    ownerInstallIntent,
+    pendingOwnerInstallHash,
+    setPendingOwnerInstallHash: setPendingOwnerInstallHashGuarded,
+    ownerInstallPhase,
+    setOwnerInstallPhase: setOwnerInstallPhaseGuarded,
+    ownerInstallInProgress,
     ownerPrimaryCtaLabel,
     ownerSignerAddress,
     ownerSignerChainId,
@@ -1763,11 +1255,11 @@ export function useAccountSetupController(params: {
     providerCollision,
     providerCards,
     publicClient,
+    refreshCswOwners,
+    requiresBaseAppForOwnerInstall,
     readableCswOwners,
     retryOwnerCheck,
     sendPreparedOwnerTx,
-    onchainEoaOwnerCandidates,
-    connectedOnchainEoaOwner,
     submitOwnerInstallViaOnchainEoa,
     setAdvancedBusy,
     setBusyProvider,
@@ -1777,12 +1269,13 @@ export function useAccountSetupController(params: {
     setNotice,
     setOwnerDelegationFlags,
     setZoraStatus,
+    // Explicit guarded variants (stable during long flows; prefer these from waitlist/setup UI)
+    setMeGuarded,
+    setLoadingGuarded,
+    setBusyProviderGuarded,
+    setErrorGuarded,
+    setNoticeGuarded,
     signerClientReady,
-    subAccountReady,
-    subAccountAddress: null,
-    subAccountSettingUp: false,
-    subAccountError: null,
-    subAccountStage: null,
     switchChainAsync,
     telegramLaunchParamsAvailable,
     walletClient,

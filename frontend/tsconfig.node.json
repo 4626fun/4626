@@ -1,4 +1,5 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
     "skipLibCheck": true,
@@ -9,13 +10,21 @@
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "allowSyntheticDefaultImports": true,
-    "strict": true
+    "strict": true,
+    "types": ["vite/client", "node"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@4626/server-core": ["./packages/server-core/src/index.ts"],
+      "@4626/server-core/*": ["./packages/server-core/src/*"]
+    }
   },
   "include": [
     "vite.config.ts",
     "packages/server-core/src/**/*.ts",
     "api/**/*.ts",
     "api/_handlers/**/*.ts",
+    "api/_handlers/**/*.d.ts",
     "server/_lib/**/*.ts",
     "server/_lib/**/*.d.ts",
     "server/auth/**/*.ts",
@@ -28,17 +37,45 @@
     "server/cdp/**/*.ts",
     "server/keepr/**/*.ts",
     "server/ai/**/*.ts",
-    "server/agent/**/*.ts",
+    "server/agents/**/*.ts",
     "scripts/**/*.d.ts",
     "src/config/contracts.defaults.ts",
+    "src/config/contracts.ts",
     "src/deploy/**/*.ts",
+    "src/lib/cca/**/*.ts",
+    "src/lib/deploy/**/*.ts",
     "src/lib/deploy/create2Salts.ts",
     "src/lib/deploy/deploymentBatcherConfigError.ts",
+    "src/lib/flags/**/*.ts",
+    "src/lib/observability/**/*.ts",
+    "src/lib/uniswap/swapQuoteSanitize.ts",
+    "src/lib/xmtp/xmtpInteractive.ts",
+    "src/lib/api/**/*.ts",
+    "src/lib/auth/**/*.ts",
+    "src/lib/debank/**/*.ts",
+    "src/components/account/trayPortfolioHelpers.ts",
     "src/lib/agent/erc8004AgentUriPolicy.ts",
+    "src/lib/zora/migrationScan.ts",
     "src/lib/viteManualChunks.ts",
     "shared/deploy/bytecode.generated.ts",
     "shared/deploy/create2Salts.ts",
     "shared/wallet/bytecode.ts",
-    "src/wallet/canonicalWalletPolicy.ts"
+    "src/wallet/canonicalWalletPolicy.ts",
+    "src/lib/env/**/*.ts",
+    "src/lib/routes/**/*.ts",
+    "src/lib/vanity/**/*.ts",
+    "src/lib/relay/goldenRelayPart1Shape.ts",
+    "src/lib/wallet/cswOwnerMutationEncode.ts",
+    "src/lib/wallet/cswOwnerAbi.ts",
+    "src/pages/deploy/deployVaultHelpers.ts",
+    "src/pages/deploy/deployVaultSignals.ts",
+    "src/pages/deploy/deployVaultVanityPersistence.ts",
+    "src/features/deploy-vault/deploySteps.ts"
+  ],
+  "exclude": [
+    "src/**/*.test.ts",
+    // These tests pull in app-layer code outside the restricted server/node typecheck surface
+    "server/_lib/wallet/cswOwnerSignature.test.ts",
+    "server/_lib/wallet/zoraWalletHoldings.test.ts",
   ]
 }

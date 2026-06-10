@@ -73,8 +73,8 @@ export function requireKeeprApiKey(
   options?: Pick<BearerAuthOptions, 'missingSecretError' | 'unauthorizedError'>,
 ): boolean {
   return requireBearerEnvAuth(req, res, {
-    envKey: 'KEEPR_API_KEY',
-    missingSecretError: options?.missingSecretError ?? 'KEEPR_API_KEY not configured',
+    envKey: 'KPR_API_KEY',
+    missingSecretError: options?.missingSecretError ?? 'KPR_API_KEY not configured',
     unauthorizedError: options?.unauthorizedError ?? 'Unauthorized',
   })
 }

@@ -105,8 +105,8 @@ async function ownerAppearsInCswOwnerList(params: {
 export async function isCswOwner(ownerAddress: string, cswAddress: string): Promise<boolean> {
   if (!isValidEvmAddress(ownerAddress) || !isValidEvmAddress(cswAddress)) return false
   const rpcs = getBaseRpcUrls()
-  const normalizedOwner = getAddress(ownerAddress as `0x${string}`)
-  const normalizedCsw = getAddress(cswAddress as `0x${string}`)
+  const normalizedOwner = getAddress(ownerAddress) as `0x${string}`
+  const normalizedCsw = getAddress(cswAddress) as `0x${string}`
   let lastError: unknown = null
   for (const rpc of rpcs) {
     try {

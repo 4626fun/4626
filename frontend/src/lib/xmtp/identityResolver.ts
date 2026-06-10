@@ -8,6 +8,7 @@ type ResolveModePreferredIdentityInput = {
   modeOverride?: XmtpModeOverride
   accountContextSmartAddress?: string | null
   waitlistCanonicalAddress?: string | null
+  waitlistXmtpMemberAddress?: string | null
 }
 
 type ResolveModePreferredIdentityResult = {
@@ -45,6 +46,15 @@ export function resolveModePreferredIdentity(
     }
   }
 
+  const waitlistMember = normalizeEvmAddress(input.waitlistXmtpMemberAddress)
+  if (waitlistMember && waitlistMember !== connected) {
+    return {
+      preferredAddress: waitlistMember,
+      isSmartWalletIdentity: true,
+      source: 'waitlist',
+    }
+  }
+
   const waitlistCanonical = normalizeEvmAddress(input.waitlistCanonicalAddress)
   if (waitlistCanonical && waitlistCanonical !== connected) {
     return {
@@ -66,6 +76,7 @@ export function shouldRequireAuthBackedXmtpIdentity(input: {
   modeOverride?: XmtpModeOverride
   accountContextSmartAddress?: string | null
   waitlistCanonicalAddress?: string | null
+  waitlistXmtpMemberAddress?: string | null
   enforceCanonicalForConnectedSigner: boolean
 }): boolean {
   if (input.enforceCanonicalForConnectedSigner) return true
@@ -76,6 +87,7 @@ export function shouldRequireAuthBackedXmtpIdentity(input: {
     modeOverride: input.modeOverride,
     accountContextSmartAddress: input.accountContextSmartAddress,
     waitlistCanonicalAddress: input.waitlistCanonicalAddress ?? null,
+    waitlistXmtpMemberAddress: input.waitlistXmtpMemberAddress ?? null,
   })
 
   return preferred.isSmartWalletIdentity

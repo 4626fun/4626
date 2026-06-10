@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/pages/deploy/DeployCoin
+[4626-web](../../../index.md) / src/pages/deploy/DeployCoin
 
 # src/pages/deploy/DeployCoin
 

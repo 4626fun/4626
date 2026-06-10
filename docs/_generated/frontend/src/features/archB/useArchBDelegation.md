@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/features/archB/useArchBDelegation
+[4626-web](../../../index.md) / src/features/archB/useArchBDelegation
 
 # src/features/archB/useArchBDelegation
 
@@ -106,7 +106,7 @@ Defined in: [src/features/archB/useArchBDelegation.ts:100](https://github.com/we
 
 > **disable**: () => `Promise`\<[`ArchBActionResult`](#archbactionresult)\>
 
-Defined in: [src/features/archB/useArchBDelegation.ts:105](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L105)
+Defined in: [src/features/archB/useArchBDelegation.ts:112](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L112)
 
 Backend revoke + Privy wallet revoke. No-op if not provisioned.
 
@@ -126,6 +126,21 @@ Trigger delegation consent + backend enroll. No-op if not ready.
 
 `Promise`\<[`ArchBActionResult`](#archbactionresult)\>
 
+##### ensureDelegation()
+
+> **ensureDelegation**: () => `Promise`\<[`ArchBActionResult`](#archbactionresult)\>
+
+Defined in: [src/features/archB/useArchBDelegation.ts:110](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L110)
+
+Ensure the Privy embedded EOA has delegated to the Arch B quorum.
+Skips the Privy modal when `/api/arch-b/status` already reports
+`delegated: true`. Does not call `/api/arch-b/enroll` — sub-account
+provisioning writes its own execution-context row.
+
+###### Returns
+
+`Promise`\<[`ArchBActionResult`](#archbactionresult)\>
+
 ##### error
 
 > **error**: [`ArchBDelegationError`](#archbdelegationerror) \| `null`
@@ -136,7 +151,7 @@ Defined in: [src/features/archB/useArchBDelegation.ts:101](https://github.com/we
 
 > **refresh**: () => `void`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:107](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L107)
+Defined in: [src/features/archB/useArchBDelegation.ts:114](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L114)
 
 Manually refresh status (e.g. after returning from external browser).
 
@@ -195,7 +210,7 @@ True when the backend-returned caps match the expected on-chain policy.
 
 > **useArchBDelegation**(): [`UseArchBDelegationReturn`](#usearchbdelegationreturn)
 
-Defined in: [src/features/archB/useArchBDelegation.ts:179](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L179)
+Defined in: [src/features/archB/useArchBDelegation.ts:186](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L186)
 
 #### Returns
 

@@ -21,13 +21,32 @@ export const LEGACY_DEPLOYMENT_BATCHER = addr('56E8527Bf0824155e1556aED5740366f2
 export const MODULE_MISMATCH_DEPLOYMENT_BATCHER = addr('32403a647e73e04ae42b02bdd1ade9c88698fd0c')
 export const PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER = addr('e3F9490CfD6bd3D68010405d18Bf772C167E7178')
 export const PRE_V1110_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('004684670d284EF607E1B2424fcf8ccBda8ef828')
-export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('271Ab2C53D79d52ddB14506a44133Fe3FA395332')
+export const PRE_V1111_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('271Ab2C53D79d52ddB14506a44133Fe3FA395332')
+export const PRE_V1112_PIPE_A_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8')
+/** v1.11.2-pipe-a epoch: slim shell + post-deploy helper wiring + payable finalize / ShareOFT peer. */
+export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('a99058f424FB3ACC639F59355C65C40149030651')
+/** v1.14.0 greenfield target: v3 impairment modules + store-aligned create2 deployer. */
+export const SPLIT_PHASE1_PHASE1_MODULE = addr('E83876c67E1E845A199f64fb33D76ADC62EAaB9D')
+/** Retired v1.13.0 v2 Phase1Module (grandfathered greenfield only). */
+export const SPLIT_PHASE1_PHASE1_MODULE_V2_LEGACY = addr('19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87')
+/** Earlier impairment pilot Phase1Module (superseded by v1.14.0 store cutover). */
+export const SPLIT_PHASE1_PHASE1_MODULE_V3_IMPAIRMENT = addr('ffbFf3E529e5A4dBFD9ea2e9C01B773D1B7fA1a0')
+export const SPLIT_PHASE1_PHASE2_MODULE = addr('67FD8A34E5b26F875a9513DFf37521A1ca92d80f')
+export const SPLIT_PHASE1_PHASE3_HELPER = addr('674a2D5EE33e184e2120B373a9AcB3fef640885c')
+export const SPLIT_PHASE1_UNIV4_HELPER = addr('F71a6236586077CD29C971443D2cce37B543DcBB')
+export const SPLIT_PHASE1_UTILS_HELPER = addr('D71C4910C7bB38FB1089Cca42b0883F1BFFfa28D')
+export const CREATOR_OVAULT_FACTORY = addr('09a2fd817F30D2599fb13520d06751259b6AdcFE')
+export const CREATOR_OVAULT_CORE_MODULE = addr('72689fB2243ff247F3A59b431C2C9E95AeFE8A2B')
+export const CREATOR_OVAULT_STRATEGIES_MODULE = addr('F1430f5E10B4C73De06de37ADa6bC77C51DA8157')
+export const CREATOR_OVAULT_ADMIN_MODULE = addr('702DB3176493D79Ee47ac746AA9865113e667aD1')
 
 const DEPRECATED_CREATOR_VAULT_BATCHERS = new Set<string>([
   LEGACY_DEPLOYMENT_BATCHER.toLowerCase(),
   MODULE_MISMATCH_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V1110_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V1111_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V1112_PIPE_A_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
 ])
 
 export function isDeprecatedCreatorVaultBatcherAddress(value: string | null | undefined): boolean {
@@ -36,6 +55,34 @@ export function isDeprecatedCreatorVaultBatcherAddress(value: string | null | un
   if (!trimmed) return false
   if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return false
   return DEPRECATED_CREATOR_VAULT_BATCHERS.has(trimmed.toLowerCase())
+}
+
+/** Historical split Phase-1 batcher that also rejects non-zero share vanity salt overrides. */
+export const PRE_V110_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('f941Bb68e4f083f3F531cc598d5C08d0b8FfbA7E')
+
+/**
+ * Split Phase-1 batchers that expose *WithSalt entrypoints but still reject
+ * non-zero `shareOftSaltOverride` with `SaltOverrideDisabled()`.
+ *
+ * Keep this list explicit and historical: do not key off the canonical
+ * `SPLIT_PHASE1_DEPLOYMENT_BATCHER` constant so future cutovers do not get
+ * accidentally pinned to stale disable-list behavior.
+ */
+export const SPLIT_PHASE1_SALT_DISABLED_BATCHER = PRE_V110_SPLIT_PHASE1_DEPLOYMENT_BATCHER
+const SHARE_OFT_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
+  PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V110_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V1110_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V1111_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V1112_PIPE_A_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+])
+
+export function isShareOftSaltOverrideDisabledBatcher(value: string | null | undefined): boolean {
+  if (value == null) return false
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return false
+  return SHARE_OFT_SALT_OVERRIDE_DISABLED_BATCHERS.has(trimmed.toLowerCase())
 }
 
 export function normalizeCreatorVaultBatcherAddress(
@@ -52,17 +99,17 @@ export function normalizeCreatorVaultBatcherAddress(
 
 export const BASE_DEFAULTS = {
   // Shared infrastructure
-  // v1.11.0 protocol cutover addresses.
-  registry: addr('a6216Ea21f4a4d190EdD453A51e4e015A44e60C4'),
-  lotteryManager: addr('04CADE6FDf564A5005FF80930d8e8784cb1A7Cf8'),
-  vrfConsumer: addr('d62D561A48dCe00D9913206Bfce060F8960B57b5'),
+  // v1.11.2-pipe-a protocol cutover addresses.
+  registry: addr('3f64087dc361Ad52300409E5873b26941D6418B6'),
+  lotteryManager: addr('5c0115589d7F4930A0dc93417aE409f44186f4E7'),
+  vrfConsumer: addr('E4AcDD5316EcF4D98301509968F0728EEDaaB68E'),
   // No live global PayoutRouterFactory is part of the current deploy flow.
   // PayoutRouter is deployed per creator through DeploymentBatcher; keep this
   // zero so stale no-code factory addresses fail closed if a legacy caller uses it.
   payoutRouterFactory: addr('0000000000000000000000000000000000000000'),
 
-  // Base↔Solana bridge integration for current v1.11.0 stack.
-  solanaBridgeAdapter: addr('3a9dC0b2c11b348E4bD60D9605dc3D4Be9bB6cf5'),
+  // Base↔Solana bridge integration for current v1.14.0 target stack.
+  solanaBridgeAdapter: addr('700b4BBAf965c013123bAd02a6562FBa487aC0f1'),
 
   // CREATE2 infra (canonical, chain-agnostic)
   create2Factory: addr('4e59b44847b379578588920cA78FbF26c0B4956C'),
@@ -72,12 +119,13 @@ export const BASE_DEFAULTS = {
   // active Base DeploymentBatcher. Keep these paired with
   // `creatorVaultBatcher`; strict no-EOA deploy preflight checks the
   // batcher's onchain getters.
-  universalBytecodeStore: addr('Bd21c58f3D59c6E90a6bCCe462c68670F124a792'),
-  universalCreate2DeployerFromStore: addr('24c80676E03f4c160bfa769589280fE9f9509eCb'),
+  universalBytecodeStore: addr('8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4'),
+  /** Paired with `universalBytecodeStore` on live split batcher `0xa99058…`. */
+  universalCreate2DeployerFromStore: addr('4760216AFd59B843671E0FdFCe6498Ec8CFf38a7'),
   vaultAuxiliaryDeployBatcher: addr('a3986F2F812a80a4Ee4A33646bE5248D9e22eb88'),
 
   // AA helpers
-  vaultActivationBatcher: addr('681DC69607f6E8848a56819ce8C6d591E764187a'),
+  vaultActivationBatcher: addr('5036FB536f53b15307825eB2006B21E22f0F3193'),
   // Module-fixed split Phase-1 deployment batcher for strict no-EOA deploy
   // sessions. It exposes both core/finalize split selectors, Base↔Solana
   // bridge routing, compatible CreatorOVault modules, and enabled OVault
@@ -86,8 +134,10 @@ export const BASE_DEFAULTS = {
   // Optional alias used by env-based rollout/cutover logic.
   creatorVaultBatcherAutoHandoff: SPLIT_PHASE1_DEPLOYMENT_BATCHER,
 
-  // Treasury
+  // Treasury (cold — custody, strategy ownership, feature payments)
   protocolTreasury: addr('7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3'),
+  // Automation (hot — Charm vault manager; set PROTOCOL_AUTOMATION_SAFE after Safe deploy)
+  protocolAutomation: addr('0000000000000000000000000000000000000000'),
 
   // Uniswap V4 core + hook
   poolManager: addr('498581fF718922c3f8e6A244956aF099B2652b2b'),
@@ -116,19 +166,28 @@ export const BASE_DEFAULTS = {
   uniswapV3Factory: addr('33128a8fC17869897dcE68Ed026d694621f6FDfD'),
 
   // 4626 AlfaClub secondary-market LP factory. Zero until deployed.
-  // Deploy script: `script/alfaclub/DeployAlfaCreatorKeyLPFactory.s.sol`.
+  // Deploy script: `alfaclub/contracts/script/DeployAlfaCreatorKeyLPFactory.s.sol`.
   // Per-environment override at runtime: `VITE_ALFA_CREATOR_KEY_LP_FACTORY`.
   // For Base Sepolia we rely on the env override; the default stays zero so
   // an unconfigured environment fails loudly at the consumer rather than
   // routing writes to a stale or wrong address.
   alfaCreatorKeyLpFactory: addr('0000000000000000000000000000000000000000'),
+
+  // Impairment-v1 auxiliary defaults.
+  // Keep zero-by-default so unconfigured environments fail closed instead of
+  // accidentally wiring stale impairment endpoints into new deploys.
+  impairmentClaims: addr('0000000000000000000000000000000000000000'),
+  impairmentRecoveryEscrow: addr('0000000000000000000000000000000000000000'),
+  impairmentGuardian: addr('0000000000000000000000000000000000000000'),
+  // 1 day default in CreatorOVault constructor; runtime can override via env.
+  impairmentChallengeWindowSeconds: 86_400,
 } as const
 
 export const AKITA_DEFAULTS = {
   // NOTE: This is an example creator coin stack.
   // If/when you redeploy the AKITA vault stack, update these addresses to the new deployment outputs.
   token: addr('5b674196812451b7cec024fe9d22d2c0b172fa75'),
-  vault: addr('A015954E2606d08967Aee3787456bB3A86a46A42'),
+  vault: addr('82C06EaAE27B1Ca31fA29F22341A162A670A4471'),
   wrapper: addr('58Cd1E9248F89138208A601e95A531d3c0fa0c4f'),
   shareOFT: addr('4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57'),
   gaugeController: addr('B471B53cD0A30289Bc3a2dc3c6dd913288F8baA1'),
@@ -140,7 +199,7 @@ export const ERC4626_DEFAULTS = {
   // Canonical protocol token defaults currently point to the live Base protocol stack.
   // Keep explicit addresses here so this default set remains independent from AKITA aliases.
   token: addr('5b674196812451b7cec024fe9d22d2c0b172fa75'),
-  vault: addr('A015954E2606d08967Aee3787456bB3A86a46A42'),
+  vault: addr('82C06EaAE27B1Ca31fA29F22341A162A670A4471'),
   wrapper: addr('58Cd1E9248F89138208A601e95A531d3c0fa0c4f'),
   shareOFT: addr('4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57'),
   gaugeController: addr('B471B53cD0A30289Bc3a2dc3c6dd913288F8baA1'),

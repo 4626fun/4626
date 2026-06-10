@@ -3,9 +3,10 @@ import { useQuery } from '@tanstack/react-query'
 import { getAddress, isAddress } from 'viem'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 
-import { apiFetch } from '@/lib/api/apiBase'
-import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
-import { pickCanonicalSmartWalletAddress, type WaitlistMeData } from '@/hooks/canonicalWalletUtils'
+import { pickCanonicalSmartWalletAddress } from '@/hooks/canonicalWalletUtils'
+import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { WAITLIST_ME_QUERY_KEY, fetchWaitlistMe } from '@/lib/waitlist/waitlistMeQuery'
+import { WAITLIST_EMBEDDED_CONNECTOR_ID } from '@/lib/xmtp/waitForMessagingWallet'
 import { probeWalletCapabilities } from './getCapabilities'
 import { detectSignerType } from './detectSignerType'
 import { checkEoaOwnershipOfCsw } from './ownership'
@@ -14,7 +15,7 @@ import { readPreferredAccountMode, writePreferredAccountMode } from './storage'
 import { deriveAccountUiFlags } from './deriveUiFlags'
 import {
   isAllowedCanonicalSigner,
-  isTargetCanonicalCsw,
+  isCanonicalCsw,
   resolvePolicyCanonicalAddress,
   shouldApplyCanonicalEnforcement,
 } from '../canonicalWalletPolicy'
@@ -49,32 +50,33 @@ function normalizeAddress(value: string | undefined): `0x${string}` | undefined 
 }
 
 export function AccountContextProvider(props: { children: ReactNode }) {
-  const { address: connectedAddress, chainId } = useAccount()
+  const { address: connectedAddress, chainId, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
+  const auth = useSiweAuth()
 
   const signerAddress = useMemo(() => normalizeAddress(connectedAddress), [connectedAddress])
   const chainIdValue = typeof chainId === 'number' ? chainId : null
   const chainIdHex = useMemo(() => toChainIdHex(chainIdValue), [chainIdValue])
 
   const waitlistMeQuery = useQuery({
-    queryKey: ['account-context', 'waitlist-me'],
-    enabled: Boolean(signerAddress),
-    queryFn: async (): Promise<WaitlistMeData | null> => {
-      const res = await apiFetch('/api/waitlist/me', {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      })
-      const json = (await res.json().catch(() => null)) as ApiEnvelope<WaitlistMeData | null> | null
-      if (!res.ok || !json?.success) return null
-      return json.data ?? null
-    },
+    queryKey: WAITLIST_ME_QUERY_KEY,
+    enabled: Boolean(signerAddress) || auth.hasSession,
+    queryFn: fetchWaitlistMe,
     staleTime: 15_000,
   })
 
   const capabilitiesQuery = useQuery({
     queryKey: ['account-context', 'capabilities', signerAddress, chainIdHex],
-    enabled: Boolean(walletClient && signerAddress && chainIdHex),
+    // On the waitlist group chat path we mount a synthetic injected connector
+    // around the Privy embedded EOA (only for XMTP identity/signing). That
+    // connector intentionally does not support (and must not leak to RPC)
+    // wallet_getCapabilities / wallet_requestPermissions etc. Skip the probe
+    // entirely when it is active; the rest of the app treats missing caps as
+    // the safe "unknown" defaults.
+    enabled:
+      Boolean(walletClient && signerAddress && chainIdHex) &&
+      connector?.id !== WAITLIST_EMBEDDED_CONNECTOR_ID,
     queryFn: async () =>
       probeWalletCapabilities({
         walletClient,
@@ -116,13 +118,21 @@ export function AccountContextProvider(props: { children: ReactNode }) {
     return picked ? normalizeAddress(picked) : undefined
   }, [waitlistMeQuery.data])
 
+  const policySignerAddress = useMemo(() => {
+    const embedded = waitlistMeQuery.data?.primaryEmbeddedEoa
+    if (typeof embedded === 'string' && isAddress(embedded)) {
+      return normalizeAddress(embedded)
+    }
+    return signerAddress
+  }, [signerAddress, waitlistMeQuery.data?.primaryEmbeddedEoa])
+
   const policyCanonicalAddress = useMemo(
     () =>
       resolvePolicyCanonicalAddress({
         canonicalAddress: profileCswAddress,
-        signerAddress,
+        signerAddress: policySignerAddress,
       }) ?? undefined,
-    [profileCswAddress, signerAddress],
+    [policySignerAddress, profileCswAddress],
   )
 
   const canonicalPolicyApplies = useMemo(
@@ -185,7 +195,7 @@ export function AccountContextProvider(props: { children: ReactNode }) {
 
     if (!canonicalPolicyApplies || !policyCanonicalAddress) return baseResolution
 
-    const signerIsCanonicalCsw = isTargetCanonicalCsw(signerAddress)
+    const signerIsCanonicalCsw = isCanonicalCsw(signerAddress)
     const signerIsAllowedEoa =
       signerType === 'EOA' &&
       isAllowedCanonicalSigner(signerAddress) &&

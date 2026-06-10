@@ -1,8 +1,10 @@
-import { Component, type ReactNode, useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Component, type ReactNode, useState } from 'react'
+import { Search } from 'lucide-react'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 
 import { ConnectButton } from '@/components/account/ConnectButton'
-import { apiFetch } from '@/lib/api/apiBase'
+import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
+import { useSiweAuth } from '@/hooks/useSiweAuth'
 import {
   buildCanonicalMarketingWaitlistUrl,
   getCanonicalMarketingWaitlistPath,
@@ -22,7 +24,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Trade', to: '/swap', activePrefixes: ['/swap'] },
   { label: 'Explore', to: '/explore/creators', activePrefixes: ['/explore'] },
   { label: 'Deploy', to: '/deploy', activePrefixes: ['/deploy', '/status', '/vault'] },
-  { label: 'Wallet', to: '/portfolio', activePrefixes: ['/portfolio'] },
 ]
 
 const NAV_ITEMS_PUBLIC: NavItem[] = [
@@ -76,6 +77,7 @@ type VaultNavBarContentProps = {
 
 function VaultNavBarContent(props: VaultNavBarContentProps) {
   const { interactive, location, publicMode, hostMode, isAdmin } = props
+  const [searchParams, setSearchParams] = useSearchParams()
   const [brandHovered, setBrandHovered] = useState(false)
   const canonicalMarketingWaitlistHref =
     hostMode === 'marketing'
@@ -85,6 +87,19 @@ function VaultNavBarContent(props: VaultNavBarContentProps) {
   const items = interactive && isAdmin && hostMode !== 'marketing' ? [...baseItems, ADMIN_ITEM] : baseItems
   const brandHref = hostMode === 'marketing' ? MARKETING_ORIGIN : '/swap'
   const showConnect = interactive && !publicMode && hostMode !== 'marketing'
+  const isExploreRoute = location.pathname.startsWith('/explore')
+  const exploreSearchValue = searchParams.get('q') ?? ''
+  const exploreSearchPlaceholder = location.pathname.startsWith('/explore/creators')
+    ? 'Search creators'
+    : location.pathname.startsWith('/explore/content')
+      ? 'Search content'
+      : location.pathname.startsWith('/explore/vaults')
+        ? 'Search vaults'
+        : location.pathname.startsWith('/explore/trends')
+          ? 'Search trends'
+          : location.pathname.startsWith('/explore/transactions')
+            ? 'Search transactions'
+            : 'Search explore'
   const brandElement = (
     <>
       <Logo showText={false} width={28} height={28} forceHover={brandHovered} />
@@ -170,7 +185,7 @@ function VaultNavBarContent(props: VaultNavBarContentProps) {
   // collapsing the header to ~34px; this replacement is a plain flex row
   // with a proper 56px min-height and no divider between nav and page.
   return (
-    <header className="hidden md:block sticky top-0 left-0 right-0 z-50">
+    <header className="hidden md:block sticky top-0 left-0 right-0 z-[55]">
       <div aria-hidden="true" className="absolute inset-0 bg-vault-bg/74 backdrop-blur-xl" />
 
       <div className="relative flex min-h-14 items-center gap-4 px-4 lg:px-6">
@@ -184,6 +199,26 @@ function VaultNavBarContent(props: VaultNavBarContentProps) {
             {renderNavLinks()}
           </div>
         </nav>
+
+        {isExploreRoute ? (
+          <div className="relative hidden lg:block w-[240px] xl:w-[280px] shrink-0 lg:absolute lg:left-1/2 lg:-translate-x-1/2">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <input
+              type="text"
+              value={exploreSearchValue}
+              placeholder={exploreSearchPlaceholder}
+              aria-label="Search explore"
+              onChange={(event) => {
+                const nextQuery = event.target.value.trim()
+                const next = new URLSearchParams(searchParams)
+                if (nextQuery) next.set('q', nextQuery)
+                else next.delete('q')
+                setSearchParams(next, { replace: true })
+              }}
+              className="h-9 w-full rounded-full border border-white/12 bg-linear-to-b from-white/7 to-white/3 pl-9 pr-3 text-[13px] text-white placeholder:text-zinc-500 transition-all duration-200 focus:outline-none focus:border-brand-primary/50 focus:ring-2 focus:ring-brand-primary/30"
+            />
+          </div>
+        ) : null}
 
         {showConnect ? (
           <div className="flex shrink-0 items-center gap-2">
@@ -203,33 +238,13 @@ function VaultNavBarWithAdminStatus(props: {
   publicMode: boolean
   hostMode: ReturnType<typeof getHostMode>
 }) {
-  const [isAdmin, setIsAdmin] = useState(false)
+  const siwe = useSiweAuth()
+  const adminStatus = useAdminStatusFromSession({
+    authAddress: typeof siwe.authAddress === 'string' ? siwe.authAddress : null,
+    sessionHydrated: siwe.sessionHydrated,
+  })
 
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      try {
-        const res = await apiFetch('/api/auth/admin', {
-          method: 'GET',
-          headers: { Accept: 'application/json' },
-          credentials: 'include',
-        })
-        const json = (await res.json().catch(() => null)) as
-          | { success?: boolean; data?: { isAdmin?: boolean } | null }
-          | null
-        const nextIsAdmin = Boolean(res.ok && json?.success && json?.data?.isAdmin === true)
-        if (!cancelled) setIsAdmin(nextIsAdmin)
-      } catch {
-        if (!cancelled) setIsAdmin(false)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  return <VaultNavBarContent {...props} isAdmin={isAdmin} />
+  return <VaultNavBarContent {...props} isAdmin={adminStatus.isAdmin} />
 }
 
 export function VaultNavBar(props: { interactive?: boolean }) {

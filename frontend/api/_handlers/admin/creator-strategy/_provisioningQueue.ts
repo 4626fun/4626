@@ -10,7 +10,7 @@ import {
   isDbConfigured,
   getSessionAddress,
   isAdminAddress,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { getAddress, isAddress, type Address, type Hex } from 'viem'
 
 /**

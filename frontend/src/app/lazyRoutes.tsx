@@ -1,10 +1,20 @@
 import { Suspense, lazy, type ComponentType, type LazyExoticComponent, type ReactNode } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
 
-import { AppLoadingState } from '@/components/layout/AppLoadingState'
-import { getLoadingIntentFromPath } from '@/components/layout/appLoadingIntents'
+import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { SmartWalletsRouteProvider as SmartWalletsRouteProviderComponent } from '@/lib/privy/SmartWalletsRouteProvider'
 import { Swap as SwapPage } from '../pages/Swap'
+
+function isDynamicImportLoadError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error ?? '')
+  return (
+    msg.includes('Failed to fetch dynamically imported module') ||
+    msg.includes('Importing a module script failed') ||
+    msg.includes('error loading dynamically imported module')
+  )
+}
+
+const DEPLOY_VAULT_IMPORT_RELOAD_KEY = 'cv:deploy-vault:import-reload'
 
 export function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof TModule>(
   loader: () => Promise<TModule>,
@@ -13,6 +23,37 @@ export function lazyNamed<TModule extends Record<string, unknown>, TKey extends 
   return lazy(async () => {
     const mod = await loader()
     return { default: mod[exportName] as ComponentType<any> }
+  })
+}
+
+export function lazyNamedWithImportRecovery<TModule extends Record<string, unknown>, TKey extends keyof TModule>(
+  loader: () => Promise<TModule>,
+  exportName: TKey,
+  options?: { reloadOnceKey?: string },
+) {
+  return lazy(async () => {
+    try {
+      const mod = await loader()
+      if (options?.reloadOnceKey && typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem(options.reloadOnceKey)
+      }
+      return { default: mod[exportName] as ComponentType<any> }
+    } catch (error) {
+      const reloadKey = options?.reloadOnceKey
+      if (
+        import.meta.env.DEV &&
+        reloadKey &&
+        typeof window !== 'undefined' &&
+        typeof sessionStorage !== 'undefined' &&
+        isDynamicImportLoadError(error) &&
+        !sessionStorage.getItem(reloadKey)
+      ) {
+        sessionStorage.setItem(reloadKey, '1')
+        window.location.reload()
+        await new Promise(() => {})
+      }
+      throw error
+    }
   })
 }
 
@@ -84,9 +125,7 @@ export const LazyRequireAccepted = lazyNamed(() => import('./accessRuntime'), 'R
 export const LazyRequireAdmin = lazyNamed(() => import('./accessRuntime'), 'RequireAdmin')
 
 export function LazyRouteBoundary(props: { children: ReactNode }) {
-  const location = useLocation()
-  const intent = getLoadingIntentFromPath(location.pathname)
-  return <Suspense fallback={<AppLoadingState intent={intent} />}>{props.children}</Suspense>
+  return <Suspense fallback={<AppLoadingRegistrar />}>{props.children}</Suspense>
 }
 
 export type LazyRouteComponent = ComponentType<any> | LazyExoticComponent<ComponentType<any>>
@@ -110,7 +149,13 @@ export const CompleteAuction = lazyNamed(() => import('../pages/auction/Complete
 export const AuctionBid = lazyNamed(() => import('../pages/auction/AuctionBid'), 'AuctionBid')
 export const Deploy = lazyNamed(() => import('../pages/deploy/Deploy'), 'Deploy')
 export const DeployCoin = lazyNamed(() => import('../pages/deploy/DeployCoin'), 'DeployCoin')
-export const DeployVault = lazyNamed(() => import('../pages/deploy/DeployVault'), 'DeployVault')
+// Mega-module: after Vite/esbuild restart (common on WSL deploy dry-run), a rejected lazy
+// import promise traps /deploy/vault behind RootErrorBoundary until a hard reload.
+export const DeployVault = lazyNamedWithImportRecovery(
+  () => import('../pages/deploy/DeployVault'),
+  'DeployVault',
+  { reloadOnceKey: DEPLOY_VAULT_IMPORT_RELOAD_KEY },
+)
 export const Leaderboard = lazyNamed(() => import('../pages/Leaderboard'), 'Leaderboard')
 export const CoinManage = lazyNamed(() => import('../pages/CoinManage'), 'CoinManage')
 export const CreatorEarnings = lazyNamed(() => import('../pages/CreatorEarnings'), 'CreatorEarnings')
@@ -120,6 +165,11 @@ export const CreatorStrategyFeatures = lazyNamed(
 )
 export const Faq = lazyNamed(() => import('../pages/Faq'), 'Faq')
 export const FaqHowItWorks = lazyNamed(() => import('../pages/FaqHowItWorks'), 'FaqHowItWorks')
+export const Arena = lazyNamed(() => import('../pages/Arena'), 'Arena')
+export const ArenaIntroductionPage = lazyNamed(() => import('../pages/Arena'), 'ArenaIntroductionPage')
+export const ArenaGettingStartedPage = lazyNamed(() => import('../pages/Arena'), 'ArenaGettingStartedPage')
+export const ArenaStatusPage = lazyNamed(() => import('../pages/Arena'), 'ArenaStatusPage')
+export const ArenaChartPage = lazyNamed(() => import('../pages/Arena'), 'ArenaChartPage')
 export const DistributeCcaLaunch = lazyNamed(() => import('../pages/DistributeCcaLaunch'), 'DistributeCcaLaunch')
 export const Status = lazyNamed(() => import('../pages/status/Status'), 'Status')
 export const AdminCreatorAccess = lazyNamed(() => import('../pages/admin/AdminCreatorAccess'), 'AdminCreatorAccess')
@@ -146,11 +196,19 @@ export const AdminUserOpHealth = lazyNamed(
   () => import('../pages/admin/AdminUserOpHealth'),
   'AdminUserOpHealth',
 )
+export const AdminControlPlane = lazyNamed(
+  () => import('../pages/admin/AdminControlPlane'),
+  'AdminControlPlane',
+)
 export const GaugeVoting = lazyDefault(() => import('../pages/GaugeVoting'))
 export const AuctionDemo = lazyDefault(() => import('../pages/auction/AuctionDemo'))
 export const AgentDirectory = lazyNamed(() => import('../pages/agents/AgentDirectory'), 'AgentDirectory')
 export const AgentRegister = lazyNamed(() => import('../pages/agents/AgentRegister'), 'AgentRegister')
 export const AgentUriService = lazyNamed(() => import('../pages/agents/AgentUriService'), 'AgentUriService')
+export const ExploreListLayout = lazyNamed(
+  () => import('../components/explore/ExploreListLayout'),
+  'ExploreListLayout',
+)
 export const ExploreCreators = lazyNamed(() => import('../pages/explore/ExploreCreators'), 'ExploreCreators')
 export const ExploreContent = lazyNamed(() => import('../pages/explore/ExploreContent'), 'ExploreContent')
 export const ExploreVaults = lazyNamed(() => import('../pages/explore/ExploreVaults'), 'ExploreVaults')
@@ -186,17 +244,18 @@ export const AlfaClubLiquidity = lazyNamed(
   'AlfaClubLiquidity',
 )
 export const Positions = lazyNamed(() => import('../pages/Positions'), 'Positions')
-export const Portfolio = lazyNamed(() => import('../pages/Portfolio'), 'Portfolio')
 export const AccountsPage = lazyNamed(() => import('../pages/accounts/AccountsPage'), 'AccountsPage')
-export const AddOwnerPage = lazyNamed(() => import('../pages/AddOwner'), 'AddOwnerPage')
+export const AddOwnerBaseApp = lazyNamed(
+  () => import('../pages/AddOwnerBaseApp'),
+  'AddOwnerBaseApp',
+)
 export const RemoveOwnerPage = lazyNamed(() => import('../pages/RemoveOwner'), 'RemoveOwnerPage')
-export const CswFundingPage = lazyNamed(() => import('../pages/CswFunding'), 'CswFundingPage')
-export const ZoraConnectorProbe = lazyNamed(
-  () => import('../pages/dev/ZoraConnectorProbe'),
-  'ZoraConnectorProbe',
+export const MetaballOsProbe = lazyNamed(
+  () => import('../pages/dev/MetaballOsProbe'),
+  'MetaballOsProbe',
 )
-export const CswSignatureProbe = lazyNamed(
-  () => import('../pages/dev/CswSignatureProbe'),
-  'CswSignatureProbe',
+export const TacticalTokenMap = lazyNamed(
+  () => import('../pages/dev/TacticalTokenMap'),
+  'TacticalTokenMap',
 )
-export const ToshiProbe = lazyNamed(() => import('../pages/dev/ToshiProbe'), 'ToshiProbe')
+export const AmoeQuickTasks = lazyNamed(() => import('../pages/AmoeQuickTasks'), 'AmoeQuickTasks')

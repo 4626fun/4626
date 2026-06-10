@@ -1,45 +1,65 @@
-/**
- * CDS Tooltip wrapper.
- *
- * Wraps the CDS Tooltip from `@coinbase/cds-web/overlays` with a simplified
- * API that matches how tooltips are used in this app.
- */
-
 import { type ReactElement, type ReactNode } from 'react'
-import { Tooltip as CdsTooltip } from '@coinbase/cds-web/overlays'
+import * as TooltipPrimitive from '@radix-ui/react-tooltip'
+
+import { cn } from '@/lib/shared/utils'
+
+export function TooltipProvider({
+  children,
+  delayDuration = 300,
+}: {
+  children: ReactNode
+  delayDuration?: number
+}) {
+  return (
+    <TooltipPrimitive.Provider delayDuration={delayDuration} skipDelayDuration={0}>
+      {children}
+    </TooltipPrimitive.Provider>
+  )
+}
 
 export interface TooltipProps {
-  /** The content shown inside the tooltip popup. */
   content: ReactNode
-  /** The trigger element (must accept ref). */
   children: ReactElement
-  /** Position relative to the trigger. */
   placement?: 'top' | 'bottom' | 'left' | 'right'
-  /** Delay in ms before showing on hover. */
   openDelay?: number
-  /** Delay in ms before hiding after pointer leaves. */
   closeDelay?: number
-  /** Whether the tooltip contains interactive elements (links, buttons). */
   hasInteractiveContent?: boolean
+  contentClassName?: string
 }
+
+const SIDE_MAP = {
+  top: 'top',
+  bottom: 'bottom',
+  left: 'left',
+  right: 'right',
+} as const
 
 export function Tooltip({
   content,
   children,
-  placement,
+  placement = 'top',
   openDelay,
   closeDelay,
   hasInteractiveContent,
+  contentClassName,
 }: TooltipProps) {
   return (
-    <CdsTooltip
-      content={content}
-      placement={placement}
-      openDelay={openDelay}
-      closeDelay={closeDelay}
-      hasInteractiveContent={hasInteractiveContent}
-    >
-      {children}
-    </CdsTooltip>
+    <TooltipPrimitive.Root delayDuration={openDelay} disableHoverableContent={!hasInteractiveContent}>
+      <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
+      <TooltipPrimitive.Portal>
+        <TooltipPrimitive.Content
+          side={SIDE_MAP[placement]}
+          sideOffset={6}
+          className={cn(
+            'z-50 max-w-xs rounded-lg border border-vault-borderStrong bg-vault-cardRaised px-3 py-2 text-xs text-vault-text shadow-xl',
+            contentClassName,
+          )}
+          {...(closeDelay != null ? { hideWhenDetached: true } : {})}
+        >
+          {content}
+          <TooltipPrimitive.Arrow className="fill-vault-cardRaised" />
+        </TooltipPrimitive.Content>
+      </TooltipPrimitive.Portal>
+    </TooltipPrimitive.Root>
   )
 }

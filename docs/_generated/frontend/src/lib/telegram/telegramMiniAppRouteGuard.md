@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/telegram/telegramMiniAppRouteGuard
+[4626-web](../../../index.md) / src/lib/telegram/telegramMiniAppRouteGuard
 
 # src/lib/telegram/telegramMiniAppRouteGuard
 

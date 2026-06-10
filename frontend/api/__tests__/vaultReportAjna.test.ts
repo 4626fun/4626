@@ -72,7 +72,7 @@ describe('status vault report Ajna classification', () => {
 
     mocks.handleOptions.mockReturnValue(false)
     mocks.readContract.mockImplementation(async ({ functionName }: { functionName: string }) => {
-      if (functionName === 'symbol') return 'CRE'
+      if (functionName === 'symbol') return 'KPR'
       throw new Error(`Unexpected readContract call: ${functionName}`)
     })
     mocks.multicall.mockImplementation(async ({ contracts }: { contracts: Array<{ address: string; functionName: string }> }) =>
@@ -87,7 +87,7 @@ describe('status vault report Ajna classification', () => {
           case 'name':
             return success(address.toLowerCase() === VAULT.toLowerCase() ? 'Creator Vault' : 'Creator')
           case 'symbol':
-            return success(address.toLowerCase() === VAULT.toLowerCase() ? 'CVLT' : 'CRE')
+            return success(address.toLowerCase() === VAULT.toLowerCase() ? 'CVLT' : 'KPR')
           case 'getStrategies':
             return success([[STRATEGY], [10_000n], [0n]])
           case 'isActive':

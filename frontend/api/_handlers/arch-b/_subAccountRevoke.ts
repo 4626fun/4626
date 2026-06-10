@@ -49,8 +49,8 @@ import {
   readBoundedJsonObjectBody,
   resolveAuthorizedRequestPrincipal,
   logger,
-} from '../../../packages/server-core/src/index.js'
-import { revokeSubAccountSpendPermission } from '../../../server/_lib/wallet/commandIssuerContext.js'
+} from '@4626/server-core'
+import { revokeSubAccountSpendPermission } from '@4626/server-core/identity'
 
 const REVOKE_BODY_MAX_BYTES = 8_192
 
@@ -100,21 +100,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const rawReason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 256) : ''
   const reason = rawReason || 'user_revoked_spend_permission'
 
-  const outcome = await revokeSubAccountSpendPermission({ profileId: principal.profileId })
-  if (!outcome.ok) {
-    const statusCode =
-      outcome.error === 'db_unavailable'
-        ? 503
-        : outcome.error === 'not_provisioned' || outcome.error === 'context_row_missing'
-          ? 404
-          : 500
+  const ok = await revokeSubAccountSpendPermission(principal.profileId)
+  if (!ok) {
     logger.info('[arch-b/subacct/revoke] refused', {
       profileId: principal.profileId,
-      error: outcome.error,
     })
     return res
-      .status(statusCode)
-      .json({ success: false, error: outcome.error } satisfies ApiEnvelope<never>)
+      .status(500)
+      .json({ success: false, error: 'revoke_failed' } satisfies ApiEnvelope<never>)
   }
 
   return res.status(200).json({
@@ -122,7 +115,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     data: {
       profileId: principal.profileId,
       revokedAt: new Date().toISOString(),
-      alreadyRevoked: outcome.alreadyRevoked,
       reason,
     },
   } satisfies ApiEnvelope<unknown>)

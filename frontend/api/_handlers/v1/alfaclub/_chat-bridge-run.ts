@@ -12,7 +12,7 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { runAlfaClubChatBridgeTickOnce } from '../../../../server/_lib/alfaclub/chatBridge.js'
 
 declare const process: { env: Record<string, string | undefined> }

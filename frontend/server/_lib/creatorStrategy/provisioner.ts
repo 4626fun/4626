@@ -37,6 +37,7 @@ import {
   getCreatorStrategyFeature,
   type CreatorStrategyFeatureKey,
 } from './catalog.js'
+import { enqueueSolanaShareMeshProvisioning } from './solanaShareMeshProvisioning.js'
 
 export type ProvisioningRequest = {
   creatorToken: Address
@@ -91,19 +92,36 @@ export async function dispatchProvisioning(
   // `enqueued` without doing the real work. When we automate:
   //
   //   - phase3_strategy_charm    → call activate-strategy-post-deploy
-  //                                (same script the operator runs)
   //   - phase3_strategy_ajna     → same
-  //   - phase3_strategy_solana_bridge → same
-  //   - solana_meteora           → enqueue Meteora DLMM/Alpha Vault
-  //                                creation via the solana-provisioner
+  //   - solana_meteora           → enqueue Meteora DLMM on share mesh mint
   //
   // Until then, the operator polls `creator_strategy_features` for
   // `status = 'pending'` rows and provisions manually.
 
   switch (feature.provisionerTag) {
+    case 'vault_full_deploy_bundle': {
+      const queue = await enqueueSolanaShareMeshProvisioning({
+        creatorToken: request.creatorToken,
+        activationId: request.activationId,
+        paymentSource: request.paymentSource,
+        trigger: 'payment',
+      })
+      return {
+        ok: true,
+        outcome: 'enqueued',
+        ref: queue.jobId ? String(queue.jobId) : null,
+        note:
+          queue.enqueued
+            ? `Full deploy bundle for ${request.creatorToken} queued Solana share-mesh provisioning ` +
+              `(keeper job ${queue.jobId ?? 'pending'}). Vault deploy unlocks immediately; Path 1/2 ` +
+              'follow-up runs via keeper worker + docs/operations/solana-share-mesh-budget-paths.md.'
+            : `Full deploy bundle active for ${request.creatorToken}; Solana queue skipped (${queue.reason ?? 'unknown'}). ` +
+              'Follow docs/operations/solana-share-mesh-budget-paths.md for Path 1/2 operator steps.',
+      }
+    }
+
     case 'phase3_strategy_charm':
     case 'phase3_strategy_ajna':
-    case 'phase3_strategy_solana_bridge':
       return {
         ok: true,
         outcome: 'enqueued',
@@ -122,9 +140,11 @@ export async function dispatchProvisioning(
         outcome: 'enqueued',
         ref: null,
         note:
-          `Meteora add-on for ${request.creatorToken} needs: (a) Solana keeper funded ` +
-          `with ≥ 1.5 SOL, (b) Meteora DLMM pool + Alpha Vault creation via solana-provisioner, ` +
-          `(c) row insertion into \`creator_meteora_alpha_vaults\`. See ` +
+          `Meteora add-on for ${request.creatorToken} needs share-mesh Path 1 live, then ` +
+          `(a) Meteora DLMM pool on the LZ share mint via ` +
+          `\`pnpm -C kpr solana:create-dlmm-pool\`, (b) optional Alpha Vault, ` +
+          `(c) row in \`creator_meteora_alpha_vaults\` when used. See ` +
+          `docs/operations/solana-share-mesh-budget-paths.md and ` +
           `docs/operations/creator-strategy-features.md § "solana_meteora_alpha_vault".`,
       }
 

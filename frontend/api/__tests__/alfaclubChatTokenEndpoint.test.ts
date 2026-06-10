@@ -9,6 +9,7 @@ const {
   clearAlfaClubChatTokenMock,
   upsertAlfaClubPrivyAccessTokenMock,
   upsertAlfaClubPrivyRefreshTokenMock,
+  readAlfaClubPrivyRefreshTokenMock,
   getSessionAddressMock,
   isAdminAddressMock,
 } = vi.hoisted(() => ({
@@ -18,6 +19,7 @@ const {
   clearAlfaClubChatTokenMock: vi.fn(),
   upsertAlfaClubPrivyAccessTokenMock: vi.fn(),
   upsertAlfaClubPrivyRefreshTokenMock: vi.fn(),
+  readAlfaClubPrivyRefreshTokenMock: vi.fn(),
   getSessionAddressMock: vi.fn(),
   isAdminAddressMock: vi.fn(),
 }))
@@ -29,6 +31,7 @@ vi.mock('../../server/_lib/alfaclub/chatTokenStore.js', () => ({
   clearAlfaClubChatToken: clearAlfaClubChatTokenMock,
   upsertAlfaClubPrivyAccessToken: upsertAlfaClubPrivyAccessTokenMock,
   upsertAlfaClubPrivyRefreshToken: upsertAlfaClubPrivyRefreshTokenMock,
+  readAlfaClubPrivyRefreshToken: readAlfaClubPrivyRefreshTokenMock,
 }))
 
 vi.mock('../../server/_lib/auth/session.js', () => ({
@@ -73,6 +76,7 @@ describe('/api/v1/alfaclub/chat-token', () => {
       updatedBy: ADMIN.toLowerCase(),
       isExpired: null,
     })
+    readAlfaClubPrivyRefreshTokenMock.mockResolvedValue(null)
   })
 
   afterEach(() => {

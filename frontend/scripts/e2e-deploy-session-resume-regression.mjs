@@ -139,7 +139,8 @@ async function main() {
     assert.equal(parsed.cleared, true)
     assert.equal(parsed.sessionSignerAddress, '0x00000000000000000000000000000000000000AA')
     assert.deepEqual(parsed.steps, ['created', 'phase2_sent', 'completed'])
-    assert.equal(continueCalls, 1)
+    // v2 flow issues one explicit resume from `created`, then one resume tick while pending.
+    assert.equal(continueCalls, 2)
     assert.deepEqual(pageErrors, [], `unexpected page errors: ${pageErrors.join('\n')}`)
 
     await page.close()

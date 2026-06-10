@@ -15,6 +15,7 @@ import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wa
 
 import { toast } from '@/components/ui/Toast'
 import { CONTRACTS } from '@/config/contracts'
+import { useCounterTradeStatus } from '@/hooks/useCounterTradeStatus'
 import {
   ALFA_CREATOR_KEY_LP_FACTORY_ABI,
   ALFA_CREATOR_KEY_POOL_ABI,
@@ -127,6 +128,7 @@ type LpSnapshot = {
 
 export function AlfaClubLiquidity() {
   const queryClient = useQueryClient()
+  const counterTradeStatus = useCounterTradeStatus()
   const account = useAccount()
   const accountContext = useAccountContext()
   const { switchChainAsync, isPending: switchingChain } = useSwitchChain()
@@ -769,7 +771,7 @@ export function AlfaClubLiquidity() {
                   type="button"
                   disabled={Boolean(disabledReason) || isSubmitting || switchingChain}
                   onClick={submit}
-                  className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand-primary px-4 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-600"
+                  className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand-primary px-4 text-sm font-medium text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-600"
                 >
                   <Droplets className="h-4 w-4" />
                   {switchingChain ? 'Switching Chain' : isSubmitting ? 'Submitting' : disabledReason ?? modeTabs.find((x) => x.id === mode)?.label}
@@ -779,6 +781,85 @@ export function AlfaClubLiquidity() {
             </div>
 
             <div className="space-y-5">
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs text-zinc-500">Counter-trade strategy status</div>
+                    <div className="mt-1 text-sm text-zinc-200">Your AlfaClub counter-trade state</div>
+                    <div className="mt-1 text-[11px] text-zinc-500">
+                      In-room command: <span className="font-mono text-zinc-300">/strategy status</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => counterTradeStatus.refetch()}
+                    className="rounded-full border border-white/10 px-3 py-1 text-[11px] text-zinc-400 hover:text-zinc-200"
+                  >
+                    Refresh
+                  </button>
+                </div>
+
+                {counterTradeStatus.isLoading ? (
+                  <div className="mt-4 text-xs text-zinc-500">Loading strategy status…</div>
+                ) : counterTradeStatus.isAuthRequired ? (
+                  <div className="mt-4 text-xs text-amber-300">Sign in to view your strategy status.</div>
+                ) : counterTradeStatus.error ? (
+                  <div className="mt-4 text-xs text-red-300">
+                    {(counterTradeStatus.error as Error).message || 'Unable to load strategy status.'}
+                  </div>
+                ) : counterTradeStatus.data ? (
+                  <div className="mt-4 space-y-3">
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <div className="text-xs text-zinc-500">Engine</div>
+                        <div className="mt-1 text-zinc-200">
+                          {counterTradeStatus.data.engineEnabled ? 'Enabled' : 'Disabled'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-zinc-500">Your state</div>
+                        <div className="mt-1 text-zinc-200">{counterTradeStatus.data.user.state}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-zinc-500">Global bias</div>
+                        <div className="mt-1 text-zinc-200">
+                          {counterTradeStatus.data.strategy?.globalBias ?? 'neutral'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-zinc-500">Preset</div>
+                        <div className="mt-1 text-zinc-200">{counterTradeStatus.data.user.preset ?? '--'}</div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-zinc-500">Recent actions</div>
+                      {counterTradeStatus.data.recentActions.length === 0 ? (
+                        <div className="mt-1 text-xs text-zinc-500">No actions recorded yet.</div>
+                      ) : (
+                        <div className="mt-2 space-y-2">
+                          {counterTradeStatus.data.recentActions.slice(0, 3).map((action) => (
+                            <div key={action.id} className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-zinc-300">{action.status}</span>
+                                <span className="text-zinc-600">{new Date(action.createdAt).toLocaleString()}</span>
+                              </div>
+                              <div className="mt-1 text-zinc-500">
+                                {action.counterSide ? `${action.counterSide} @ ${action.counterLeverage ?? '--'}x` : 'No counter order'}
+                                {' · '}
+                                {action.counterNotionalUsd != null ? `$${action.counterNotionalUsd.toFixed(2)}` : '--'}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 text-xs text-zinc-500">No strategy status available.</div>
+                )}
+              </div>
+
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>

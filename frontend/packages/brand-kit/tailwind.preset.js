@@ -5,9 +5,9 @@ const preset = {
     extend: {
       colors: {
         brand: {
-          primary: '#0052FF',
-          hover: '#004AD9',
-          accent: '#3B82F6',
+          primary: 'rgb(var(--brand-primary) / <alpha-value>)',
+          hover: 'rgb(var(--brand-hover) / <alpha-value>)',
+          accent: 'rgb(var(--brand-accent-rgb) / <alpha-value>)',
         },
         vault: {
           bg: 'rgb(var(--vault-bg) / <alpha-value>)',

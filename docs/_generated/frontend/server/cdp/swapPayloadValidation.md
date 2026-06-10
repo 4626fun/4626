@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / server/cdp/swapPayloadValidation
+[4626-web](../../index.md) / server/cdp/swapPayloadValidation
 
 # server/cdp/swapPayloadValidation
 

@@ -10,17 +10,28 @@ const SUB = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
 const EMBED = '0xcccccccccccccccccccccccccccccccccccccccc'
 
 const hookState = {
-  setup: vi.fn(),
+  provision: vi.fn(),
+  confirmOwner: vi.fn(),
+  finalize: vi.fn(),
+  connectWallet: vi.fn(),
+  getLastSetupError: vi.fn(),
   isSettingUp: false,
-  lastStage: null as
-    | null
-    | { stage: 'check_existing' | 'create_sub_account' | 'configure_signer' | 'done'; status: string },
+  lastStage: null as null | { stage: string; status: string; message?: string },
   embeddedAddress: EMBED as string,
 }
 
+vi.mock('@/lib/privy/client', () => ({
+  usePrivyClientStatus: () => 'ready',
+}))
+
 vi.mock('@/hooks/useSubAccountSetup', () => ({
   useSubAccountSetup: () => ({
-    setupSubAccount: hookState.setup,
+    provisionSubAccount: hookState.provision,
+    confirmSubAccountEmbeddedOwner: hookState.confirmOwner,
+    finalizeSubAccountSigner: hookState.finalize,
+    connectBaseAccountWallet: hookState.connectWallet,
+    getLastSetupError: hookState.getLastSetupError,
+    setupSubAccount: vi.fn(),
     isSettingUp: hookState.isSettingUp,
     lastStage: hookState.lastStage,
     embeddedWallet: hookState.embeddedAddress ? { address: hookState.embeddedAddress } : null,
@@ -37,26 +48,40 @@ vi.mock('@/components/ui/PixelWaveLoader', () => ({
   PixelWaveLoader: () => <span data-testid="pixel-loader" />,
 }))
 
-const fetchMock = vi.fn()
-vi.mock('@/lib/api/apiBase', () => ({
-  apiFetch: (...args: unknown[]) => fetchMock(...args),
+vi.mock('./SubAccountOwnerInstallPanel', () => ({
+  SubAccountOwnerInstallPanel: () => null,
 }))
 
-function jsonResponse(status: number, body: Record<string, unknown>): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body,
-  } as unknown as Response
+const registerMock = vi.hoisted(() => vi.fn())
+
+vi.mock('@/lib/wallet/subAccountBaseAppRegister', () => ({
+  registerBaseAppSubAccountLink: (...args: unknown[]) => registerMock(...args),
+}))
+
+function mockProvision(created = true) {
+  hookState.provision.mockResolvedValueOnce({
+    parentAddress: PARENT,
+    subAccountAddress: SUB,
+    created,
+    provider: { request: vi.fn() },
+  })
 }
 
 describe('WaitlistConnectBaseApp', () => {
   beforeEach(() => {
-    hookState.setup.mockReset()
+    hookState.provision.mockReset()
+    hookState.confirmOwner.mockReset()
+    hookState.finalize.mockReset()
+    hookState.connectWallet.mockReset()
+    hookState.getLastSetupError.mockReset()
     hookState.isSettingUp = false
     hookState.lastStage = null
     hookState.embeddedAddress = EMBED
-    fetchMock.mockReset()
+    registerMock.mockReset()
+    hookState.connectWallet.mockResolvedValue(true)
+    hookState.getLastSetupError.mockReturnValue(null)
+    hookState.confirmOwner.mockResolvedValue({ alreadyOwner: false, transactionHash: null })
+    hookState.finalize.mockResolvedValue(true)
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -68,180 +93,103 @@ describe('WaitlistConnectBaseApp', () => {
     expect(screen.getByTestId('skip-base-app-button')).toBeTruthy()
   })
 
-  it('Skip invokes onSkip immediately', () => {
-    const onSkip = vi.fn()
-    render(<WaitlistConnectBaseApp onSkip={onSkip} onComplete={() => {}} />)
-    fireEvent.click(screen.getByTestId('skip-base-app-button'))
-    expect(onSkip).toHaveBeenCalledTimes(1)
+  it('allows skip after a failed required Base App connect', async () => {
+    hookState.connectWallet.mockResolvedValueOnce(false)
+    hookState.getLastSetupError.mockReturnValue(new Error('Base Account SDK unavailable'))
+
+    render(<WaitlistConnectBaseApp requireBaseAppConnect onSkip={() => {}} onComplete={() => {}} />)
+
+    expect(screen.queryByTestId('skip-base-app-button')).toBeNull()
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('connect-base-app-button'))
+    })
+
+    expect(await screen.findByTestId('waitlist-connect-base-app-error')).toBeTruthy()
+    expect(screen.getByTestId('skip-base-app-button')).toBeTruthy()
+    expect(screen.getByText(/continue without base app/i)).toBeTruthy()
   })
 
-  it('Connect runs setupSubAccount + POSTs to /api/arch-b/sub-account/baseapp/register and lands in complete', async () => {
-    hookState.setup.mockResolvedValueOnce({
-      parentAddress: PARENT,
-      subAccountAddress: SUB,
-      created: true,
-    })
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(200, {
-        success: true,
-        data: { profileId: 'p1', parentAddress: PARENT, subAccountAddress: SUB },
-      }),
-    )
+  it('single-step flow: connect wallet, provision, finalize signer, register, then optional owner install', async () => {
+    mockProvision(true)
+    registerMock.mockResolvedValueOnce({ ok: true, message: '' })
 
     const onComplete = vi.fn()
     render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={onComplete} />)
+
     await act(async () => {
       fireEvent.click(screen.getByTestId('connect-base-app-button'))
     })
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
-    const firstCall = fetchMock.mock.calls[0] ?? []
-    const path = firstCall[0]
-    const init = (firstCall[1] ?? {}) as RequestInit
-    expect(path).toBe('/api/arch-b/sub-account/baseapp/register')
-    expect(init.method).toBe('POST')
-    const body = JSON.parse((init.body as string) || '{}')
-    expect(body).toEqual({ parentAddress: PARENT, subAccountAddress: SUB, embeddedEoaAddress: EMBED })
-
-    await waitFor(() => expect(screen.queryByTestId('waitlist-connect-base-app-complete')).toBeTruthy())
-    expect(screen.getByTestId('basescan-link').getAttribute('href')).toContain(SUB)
+    expect(hookState.connectWallet).toHaveBeenCalled()
+    await waitFor(() =>
+      expect(hookState.finalize).toHaveBeenCalledWith({
+        parentAddress: PARENT,
+        subAccountAddress: SUB,
+      }),
+    )
+    await waitFor(() => expect(registerMock).toHaveBeenCalled())
+    await waitFor(
+      () =>
+        expect(onComplete).toHaveBeenCalledWith({
+          parentAddress: PARENT,
+          subAccountAddress: SUB,
+        }),
+      { timeout: 3000 },
+    )
+    await waitFor(() =>
+      expect(hookState.confirmOwner).toHaveBeenCalledWith({
+        parentAddress: PARENT,
+        subAccountAddress: SUB,
+        provider: expect.objectContaining({ request: expect.any(Function) }),
+      }),
+    )
   })
 
-  it('orchestrator rejection surfaces error with retry control', async () => {
-    hookState.setup.mockRejectedValueOnce(new Error('passkey cancelled'))
+  it('still completes when optional owner install fails after register', async () => {
+    mockProvision(true)
+    registerMock.mockResolvedValueOnce({ ok: true, message: '' })
+    hookState.confirmOwner.mockResolvedValueOnce(null)
+
+    void vi.fn()
     render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={() => {}} />)
     await act(async () => {
       fireEvent.click(screen.getByTestId('connect-base-app-button'))
     })
-    await waitFor(() => expect(screen.queryByTestId('waitlist-connect-base-app-error')).toBeTruthy())
-    expect(screen.getByTestId('retry-base-app-button')).toBeTruthy()
-    expect(screen.getByText(/passkey cancelled/i)).toBeTruthy()
+
+    await waitFor(() => expect(hookState.finalize).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getByTestId('waitlist-connect-base-app-complete')).toBeTruthy())
+    expect(screen.queryByTestId('waitlist-connect-base-app-error')).toBeNull()
   })
 
-  it('orchestrator returning null surfaces a generic retryable error', async () => {
-    hookState.setup.mockResolvedValueOnce(null)
-    render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={() => {}} />)
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('connect-base-app-button'))
-    })
-    await waitFor(() => expect(screen.queryByTestId('waitlist-connect-base-app-error')).toBeTruthy())
-    expect(screen.getByTestId('retry-base-app-button')).toBeTruthy()
-  })
-
-  it('embedded_eoa_mismatch shows non-retryable friendly message', async () => {
-    hookState.setup.mockResolvedValueOnce({
-      parentAddress: PARENT,
-      subAccountAddress: SUB,
-      created: false,
-    })
-    fetchMock.mockResolvedValueOnce(jsonResponse(400, { success: false, error: 'embedded_eoa_mismatch' }))
-
-    render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={() => {}} />)
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('connect-base-app-button'))
-    })
-    await waitFor(() => expect(screen.queryByTestId('waitlist-connect-base-app-error')).toBeTruthy())
-    expect(screen.getByText(/different 4626 account/i)).toBeTruthy()
-    expect(screen.queryByTestId('retry-base-app-button')).toBeNull()
-  })
-
-  it('parent_csw_conflict shows non-retryable contact-support copy', async () => {
-    hookState.setup.mockResolvedValueOnce({
-      parentAddress: PARENT,
-      subAccountAddress: SUB,
-      created: false,
-    })
-    fetchMock.mockResolvedValueOnce(jsonResponse(409, { success: false, error: 'parent_csw_conflict' }))
+  it('surfaces user-rejection copy when provisioning fails', async () => {
+    hookState.provision.mockResolvedValueOnce(null)
+    hookState.getLastSetupError.mockReturnValue(new Error('User rejected the request'))
 
     render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={() => {}} />)
     await act(async () => {
       fireEvent.click(screen.getByTestId('connect-base-app-button'))
     })
-    await waitFor(() => expect(screen.queryByTestId('waitlist-connect-base-app-error')).toBeTruthy())
-    expect(screen.getByText(/already linked to a different Base App wallet/i)).toBeTruthy()
-    expect(screen.queryByTestId('retry-base-app-button')).toBeNull()
-  })
-
-  it('feature_disabled auto-skips after a brief notice', async () => {
-    hookState.setup.mockResolvedValueOnce({
-      parentAddress: PARENT,
-      subAccountAddress: SUB,
-      created: false,
-    })
-    fetchMock.mockResolvedValueOnce(jsonResponse(503, { success: false, error: 'feature_disabled' }))
-
-    const onSkip = vi.fn()
-    render(<WaitlistConnectBaseApp onSkip={onSkip} onComplete={() => {}} />)
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('connect-base-app-button'))
-    })
-    await waitFor(() => expect(screen.queryByTestId('waitlist-connect-base-app-error')).toBeTruthy())
-    expect(screen.getByText(/feature is not yet enabled/i)).toBeTruthy()
-    await waitFor(() => expect(onSkip).toHaveBeenCalled(), { timeout: 2_000 })
+    await waitFor(() => expect(screen.getByTestId('waitlist-connect-base-app-error')).toBeTruthy())
+    expect(screen.getByText(/you declined the base app request/i)).toBeTruthy()
   })
 
   it('generic server error allows retry', async () => {
-    hookState.setup.mockResolvedValue({
-      parentAddress: PARENT,
-      subAccountAddress: SUB,
-      created: false,
-    })
-    fetchMock.mockResolvedValueOnce(jsonResponse(500, { success: false, error: 'unexpected_error' }))
+    mockProvision(false)
+    registerMock.mockResolvedValueOnce({ ok: false, message: 'unexpected_error', errorCode: 'unexpected_error' })
 
     render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={() => {}} />)
     await act(async () => {
       fireEvent.click(screen.getByTestId('connect-base-app-button'))
     })
     await waitFor(() => expect(screen.queryByTestId('waitlist-connect-base-app-error')).toBeTruthy())
-    expect(screen.getByTestId('retry-base-app-button')).toBeTruthy()
+    expect(screen.getByText(/could not save your base app link/i)).toBeTruthy()
 
-    // Retry path: a second call should re-invoke setupSubAccount + fetch.
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(200, { success: true, data: { profileId: 'p1', parentAddress: PARENT, subAccountAddress: SUB } }),
-    )
+    mockProvision(false)
+    registerMock.mockResolvedValueOnce({ ok: true, message: '' })
     await act(async () => {
       fireEvent.click(screen.getByTestId('retry-base-app-button'))
     })
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
-  })
-
-  it('success path eventually invokes onComplete with the (parent, sub-account) pair', async () => {
-    hookState.setup.mockResolvedValueOnce({
-      parentAddress: PARENT,
-      subAccountAddress: SUB,
-      created: true,
-    })
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(200, {
-        success: true,
-        data: { profileId: 'p1', parentAddress: PARENT, subAccountAddress: SUB },
-      }),
-    )
-
-    const onComplete = vi.fn()
-    render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={onComplete} />)
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('connect-base-app-button'))
-    })
-    await waitFor(() => expect(screen.queryByTestId('waitlist-connect-base-app-complete')).toBeTruthy())
-    await waitFor(
-      () => expect(onComplete).toHaveBeenCalledWith({ parentAddress: PARENT, subAccountAddress: SUB }),
-      { timeout: 3_000 },
-    )
-  })
-
-  it('missing embedded EOA surfaces a retryable error and does not POST', async () => {
-    hookState.embeddedAddress = ''
-    hookState.setup.mockResolvedValueOnce({
-      parentAddress: PARENT,
-      subAccountAddress: SUB,
-      created: false,
-    })
-    render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={() => {}} />)
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('connect-base-app-button'))
-    })
-    await waitFor(() => expect(screen.queryByTestId('waitlist-connect-base-app-error')).toBeTruthy())
-    expect(fetchMock).not.toHaveBeenCalled()
+    await waitFor(() => expect(registerMock).toHaveBeenCalledTimes(2))
   })
 })

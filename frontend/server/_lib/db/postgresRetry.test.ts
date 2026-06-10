@@ -74,6 +74,7 @@ describe('postgres session-mode retry', () => {
     vi.stubEnv('SUPABASE_URL', 'https://test.supabase.co')
     vi.stubEnv('POSTGRES_QUERY_RETRY_COUNT', '2')
 
+    // Clear legacy Vercel Postgres vars for the test (Supabase is the canonical path)
     delete process.env.POSTGRES_URL
     delete process.env.POSTGRES_URL_NON_POOLING
     delete process.env.VERCEL

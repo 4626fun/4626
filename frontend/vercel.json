@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pnpm run builder-codes:assert-env && pnpm run build:highmem",
+  "buildCommand": "pnpm run builder-codes:assert-env && pnpm run build",
   "devCommand": "pnpm run dev",
   "installCommand": "pnpm install --frozen-lockfile",
   "ignoreCommand": "bash scripts/vercel-ignore.sh",
@@ -20,12 +20,12 @@
       "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node,node_modules/.pnpm/**/bindings_node.linux-arm64*.node,node_modules/.pnpm/**/bindings_node.linux-x64-musl.node}"
     },
     "api/agent/process.ts": {
-      "maxDuration": 60,
-      "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node,node_modules/.pnpm/**/bindings_node.linux-arm64*.node,node_modules/.pnpm/**/bindings_node.linux-x64-musl.node}"
+      "maxDuration": 10
     },
     "api/[...path].ts": {
       "maxDuration": 60,
-      "includeFiles": "server/_lib/alfaclub/assets/**"
+      "includeFiles": "{server/_lib/alfaclub/assets/**,server/_lib/lottery/amoe-zk-assets/**,../supabase/migrations/**}",
+      "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node,node_modules/.pnpm/**/bindings_node.linux-arm64*.node,node_modules/.pnpm/**/bindings_node.linux-x64-musl.node}"
     },
     "api/social-preview.ts": {
       "maxDuration": 10
@@ -42,8 +42,12 @@
   },
   "crons": [
     {
-      "path": "/api/sync-creator-metrics",
-      "schedule": "*/5 * * * *"
+      "path": "/api/sync-creator-metrics?mode=hot",
+      "schedule": "1,6,11,16,21,26,31,36,41,46,51,56 * * * *"
+    },
+    {
+      "path": "/api/sync-creator-metrics?mode=backfill",
+      "schedule": "5,35 * * * *"
     },
     {
       "path": "/api/waitlist/airtable-sync",
@@ -58,16 +62,36 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/v1/alfaclub/proliquid-score-run",
+      "schedule": "*/2 * * * *"
+    },
+    {
       "path": "/api/v1/alfaclub/radar",
       "schedule": "5 12 * * *"
     },
     {
+      "path": "/api/v1/alfaclub/daily-brief",
+      "schedule": "10 12 * * *"
+    },
+    {
       "path": "/api/v1/alfaclub/chat-token-refresh",
-      "schedule": "13,43 * * * *"
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/v1/alfaclub/position-alerts",
+      "schedule": "1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51,53,55,57,59 * * * *"
+    },
+    {
+      "path": "/api/v1/alfaclub/room-label-sync",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/v1/alfaclub/counter-trade-run",
+      "schedule": "*/2 * * * *"
     },
     {
       "path": "/api/v1/lottery/amoe/retry-cron",
-      "schedule": "*/5 * * * *"
+      "schedule": "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
     },
     {
       "path": "/api/v1/lottery/amoe/publish-cron",
@@ -86,12 +110,20 @@
       "schedule": "*/30 * * * *"
     },
     {
+      "path": "/api/v1/zora-profiles/refresh-cron",
+      "schedule": "15 */6 * * *"
+    },
+    {
       "path": "/api/v1/chat/ethos-sync",
-      "schedule": "*/15 * * * *"
+      "schedule": "9,24,39,54 * * * *"
+    },
+    {
+      "path": "/api/v1/chat/ethos-sync-hot",
+      "schedule": "0,2,4,6,8,10,12,14,16,18,20,22,26,28,30,32,34,36,38,40,42,44,46,48,50,52,56,58 * * * *"
     },
     {
       "path": "/api/keeper/jobs/run",
-      "schedule": "*/5 * * * *"
+      "schedule": "3,8,13,18,23,28,33,38,43,48,53,58 * * * *"
     },
     {
       "path": "/api/keeper/jobs/enqueue-sweep-canary",
@@ -107,11 +139,15 @@
     },
     {
       "path": "/api/keeper/jobs/process-keepr-actions",
-      "schedule": "*/5 * * * *"
+      "schedule": "3,8,13,18,23,28,33,38,43,48,53,58 * * * *"
     },
     {
       "path": "/api/keeper/jobs/enqueue-bridge-integrity",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/keeper/jobs/enqueue-ethos-sync",
+      "schedule": "7,17,27,37,47,57 * * * *"
     },
     {
       "path": "/api/keeper/jobs/enqueue-strategy-canary",
@@ -122,8 +158,12 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/keeper/jobs/enqueue-ajna-manager",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/keeper/jobs/enqueue-strategy-signals",
-      "schedule": "*/5 * * * *"
+      "schedule": "6,11,16,21,26,31,36,41,46,51,56 * * * *"
     }
   ],
   "routes": [
@@ -152,7 +192,8 @@
     {
       "src": "/(.*)",
       "headers": {
-        "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://telegram.org https://ajax.googleapis.com https://auth.privy.io https://vercel.live; script-src-elem 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://telegram.org https://ajax.googleapis.com https://auth.privy.io https://vercel.live; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.choicecdn.com https://imagedelivery.net https://metadata.ens.domains https://euc.li https://grails.app https://efp.app https://ipfs.decentralized-content.com https://raw.githubusercontent.com https://explorer-api.walletconnect.com https://*.mypinata.cloud https://4626.fun https://pinata.4626.fun; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; child-src https://auth.privy.io https://privy.app.4626.fun https://privy.4626.fun https://oauth.telegram.org https://vercel.live https://dexscreener.com https://www.dexscreener.com; frame-src https://auth.privy.io https://privy.app.4626.fun https://privy.4626.fun https://oauth.telegram.org https://challenges.cloudflare.com https://vercel.live https://dexscreener.com https://www.dexscreener.com https://keys.coinbase.com https://account.base.app; connect-src 'self' https://auth.privy.io https://api.developer.coinbase.com https://chain-proxy.wallet.coinbase.com https://keys.coinbase.com https://*.wallet.coinbase.com https://account.base.app https://api.cdp.coinbase.com https://base-mainnet.g.alchemy.com https://*.g.alchemy.com https://explorer-api.walletconnect.com https://metamask-sdk.api.cx.metamask.io wss://metamask-sdk.api.cx.metamask.io wss://www.walletlink.org https://www.walletlink.org https://*.rpc.privy.systems https://rpc.zora.energy https://mainnet.base.org https://api.production.xmtp.network:5558 https://*.xmtp.network:5558 https://*.xmtp.network:* wss://*.xmtp.network:* https://ipfs.decentralized-content.com https://api.lens.xyz https://ccip.ens.xyz; worker-src 'self' blob:; manifest-src 'self'",
+        "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://telegram.org https://ajax.googleapis.com https://auth.privy.io https://vercel.live; script-src-elem 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://telegram.org https://ajax.googleapis.com https://auth.privy.io https://vercel.live; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.choicecdn.com https://imagedelivery.net https://metadata.ens.domains https://euc.li https://grails.app https://efp.app https://ipfs.decentralized-content.com https://raw.githubusercontent.com https://explorer-api.walletconnect.com https://*.mypinata.cloud https://4626.fun https://pinata.4626.fun https://res.cloudinary.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; child-src https://auth.privy.io https://privy.app.4626.fun https://privy.4626.fun https://oauth.telegram.org https://vercel.live https://dexscreener.com https://www.dexscreener.com; frame-src https://auth.privy.io https://privy.app.4626.fun https://privy.4626.fun https://oauth.telegram.org https://challenges.cloudflare.com https://vercel.live https://dexscreener.com https://www.dexscreener.com https://keys.coinbase.com https://account.base.app; connect-src 'self' https://auth.privy.io https://api.developer.coinbase.com https://chain-proxy.wallet.coinbase.com https://keys.coinbase.com https://*.wallet.coinbase.com https://account.base.app https://api.cdp.coinbase.com https://base-mainnet.g.alchemy.com https://*.g.alchemy.com https://explorer-api.walletconnect.com https://metamask-sdk.api.cx.metamask.io wss://metamask-sdk.api.cx.metamask.io wss://www.walletlink.org https://www.walletlink.org https://*.rpc.privy.systems https://rpc.zora.energy https://mainnet.base.org https://api.production.xmtp.network:5558 https://*.xmtp.network:5558 https://*.xmtp.network:* wss://*.xmtp.network:* https://ipfs.decentralized-content.com https://api.lens.xyz https://ccip.ens.xyz https://res.cloudinary.com; worker-src 'self' blob:; manifest-src 'self'",
+        "cross-origin-opener-policy": "same-origin-allow-popups",
         "referrer-policy": "strict-origin-when-cross-origin",
         "x-content-type-options": "nosniff"
       },
@@ -169,9 +210,37 @@
       "dest": "https://pinata.4626.fun/ipfs/$1"
     },
     {
+      "src": "/(favicon\\.ico|icon\\.png|favicon-16x16\\.png|favicon-32x32\\.png|apple-touch-icon\\.png|apple-touch-icon-precomposed\\.png|app-icon\\.png|pwa-512\\.png|miniapp-icon\\.png|miniapp-hero\\.png|icon-192\\.png|icon-512\\.png)",
+      "headers": {
+        "cache-control": "public, max-age=3600, must-revalidate"
+      },
+      "continue": true
+    },
+    {
+      "src": "/favicon.ico",
+      "headers": {
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "continue": true
+    },
+    {
+      "src": "/icon.png",
+      "headers": {
+        "cache-control": "public, max-age=3600, must-revalidate"
+      },
+      "continue": true
+    },
+    {
       "src": "/assets/(.*)",
       "headers": {
         "cache-control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "/assets/(favicon-brand\\.ico|base-app-icon-1024\\.png|base-miniapp-icon(?:-v\\d+)?-200\\.png|domain-bar-icon(?:-v\\d+)?-(32|180)\\.png|app-tab-icon-(32|180)\\.png|favicon-\\d+x\\d+\\.png|apple-touch-icon\\.png|android-chrome-(192x192|512x512)\\.png|maskable-icon-(192x192|512x512)\\.png|mstile-150x150\\.png)",
+      "headers": {
+        "cache-control": "public, max-age=3600, must-revalidate"
       },
       "continue": true
     },
@@ -446,6 +515,26 @@
       "dest": "/api/token/image?address=$1&format=$2&size=64"
     },
     {
+      "src": "/api/telegram/webhook",
+      "has": [
+        {
+          "type": "host",
+          "value": "hermit.4626.fun"
+        }
+      ],
+      "dest": "/api/telegram/hermit-webhook"
+    },
+    {
+      "src": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "hermit.4626.fun"
+        }
+      ],
+      "dest": "/api/telegram/hermit-webhook"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "/api/[...path]?path=$1"
     },
@@ -479,6 +568,19 @@
     },
     {
       "handle": "filesystem"
+    },
+    {
+      "src": "/waitlist(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "app.4626.fun"
+        }
+      ],
+      "status": 308,
+      "headers": {
+        "location": "https://4626.fun/waitlist"
+      }
     },
     {
       "src": "/((?!assets/).*)",

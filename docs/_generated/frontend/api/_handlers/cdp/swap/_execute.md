@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/cdp/swap/\_execute
+[4626-web](../../../../index.md) / api/\_handlers/cdp/swap/\_execute
 
 # api/\_handlers/cdp/swap/\_execute
 

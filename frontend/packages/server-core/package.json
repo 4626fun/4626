@@ -3,5 +3,21 @@
   "private": true,
   "version": "1.11.0",
   "type": "module",
-  "main": "./src/index.ts"
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./*": {
+      "import": "./dist/*.js",
+      "types": "./dist/*.d.ts"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "node build.mjs",
+    "clean": "rm -rf dist"
+  }
 }

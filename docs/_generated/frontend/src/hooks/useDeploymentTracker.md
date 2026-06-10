@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / src/hooks/useDeploymentTracker
+[4626-web](../../index.md) / src/hooks/useDeploymentTracker
 
 # src/hooks/useDeploymentTracker
 
@@ -27,39 +27,39 @@ Deployed contract addresses
 
 ###### burnStream?
 
-> `optional` **burnStream**: `` `0x${string}` ``
+> `optional` **burnStream**: `string`
 
 ###### ccaStrategy?
 
-> `optional` **ccaStrategy**: `` `0x${string}` ``
+> `optional` **ccaStrategy**: `string`
 
 ###### gaugeController?
 
-> `optional` **gaugeController**: `` `0x${string}` ``
+> `optional` **gaugeController**: `string`
 
 ###### oracle?
 
-> `optional` **oracle**: `` `0x${string}` ``
+> `optional` **oracle**: `string`
 
 ###### payoutRouter?
 
-> `optional` **payoutRouter**: `` `0x${string}` ``
+> `optional` **payoutRouter**: `string`
 
 ###### shareOFT
 
-> **shareOFT**: `` `0x${string}` ``
+> **shareOFT**: `string`
 
 ###### vault
 
-> **vault**: `` `0x${string}` ``
+> **vault**: `string`
 
 ###### wrapper
 
-> **wrapper**: `` `0x${string}` ``
+> **wrapper**: `string`
 
 ##### creatorToken
 
-> **creatorToken**: `` `0x${string}` ``
+> **creatorToken**: `string`
 
 Defined in: [src/hooks/useDeploymentTracker.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useDeploymentTracker.ts#L10)
 
@@ -75,7 +75,7 @@ Unix timestamp (ms) when deployment completed
 
 ##### owner
 
-> **owner**: `` `0x${string}` ``
+> **owner**: `string`
 
 Defined in: [src/hooks/useDeploymentTracker.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useDeploymentTracker.ts#L12)
 
@@ -127,7 +127,7 @@ Retrieves deployment for a specific owner and version.
 
 ##### owner
 
-`` `0x${string}` ``
+`string`
 
 ##### version
 
@@ -151,7 +151,7 @@ Retrieves all deployments for a given owner across all versions.
 
 ##### owner
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
@@ -186,7 +186,7 @@ Enforces 1 deployment per owner per VITE_DEPLOYMENT_VERSION.
 
 ##### owner
 
-`` `0x${string}` `` | `null`
+`string` | `null`
 
 ##### version
 
@@ -234,43 +234,43 @@ Record a new deployment
 
 ###### contracts
 
-\{ `burnStream?`: `` `0x${string}` ``; `ccaStrategy?`: `` `0x${string}` ``; `gaugeController?`: `` `0x${string}` ``; `oracle?`: `` `0x${string}` ``; `payoutRouter?`: `` `0x${string}` ``; `shareOFT`: `` `0x${string}` ``; `vault`: `` `0x${string}` ``; `wrapper`: `` `0x${string}` ``; \}
+\{ `burnStream?`: `string`; `ccaStrategy?`: `string`; `gaugeController?`: `string`; `oracle?`: `string`; `payoutRouter?`: `string`; `shareOFT`: `string`; `vault`: `string`; `wrapper`: `string`; \}
 
 ###### contracts.burnStream?
 
-`` `0x${string}` ``
+`string`
 
 ###### contracts.ccaStrategy?
 
-`` `0x${string}` ``
+`string`
 
 ###### contracts.gaugeController?
 
-`` `0x${string}` ``
+`string`
 
 ###### contracts.oracle?
 
-`` `0x${string}` ``
+`string`
 
 ###### contracts.payoutRouter?
 
-`` `0x${string}` ``
+`string`
 
 ###### contracts.shareOFT
 
-`` `0x${string}` ``
+`string`
 
 ###### contracts.vault
 
-`` `0x${string}` ``
+`string`
 
 ###### contracts.wrapper
 
-`` `0x${string}` ``
+`string`
 
 ###### creatorToken
 
-`` `0x${string}` ``
+`string`
 
 ###### txHashes?
 

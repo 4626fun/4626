@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { handleOptions, setCors } from '../../../packages/server-core/src/index.js'
+import { handleOptions, setCors } from '@4626/server-core'
 
 declare const process: { env: Record<string, string | undefined> }
 

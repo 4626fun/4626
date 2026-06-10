@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/agents/AgentVerificationCard
+[4626-web](../../../index.md) / src/components/agents/AgentVerificationCard
 
 # src/components/agents/AgentVerificationCard
 

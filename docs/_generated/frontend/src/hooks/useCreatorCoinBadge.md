@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / src/hooks/useCreatorCoinBadge
+[4626-web](../../index.md) / src/hooks/useCreatorCoinBadge
 
 # src/hooks/useCreatorCoinBadge
 
@@ -83,7 +83,7 @@ Defined in: [src/hooks/useCreatorCoinBadge.ts:45](https://github.com/wenakita/46
 
 ##### address?
 
-`` `0x${string}` `` | `null`
+`string` | `null`
 
 #### Returns
 

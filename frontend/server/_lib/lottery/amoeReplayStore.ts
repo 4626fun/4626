@@ -58,6 +58,7 @@ import {
   AmoeBadRequestError,
   AmoeServerError,
 } from './lotteryAmoeErrors.js'
+import { ensureMigrationApplied, ensureAmoeSchema } from '../db/schemaBootstrap.js'
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -252,93 +253,13 @@ async function ensureAmoeReplayStoreSchema(
   db: { sql: (s: TemplateStringsArray, ...v: any[]) => Promise<{ rows: any[] }> },
 ): Promise<void> {
   if (amoeReplayStoreSchemaEnsured) return
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS amoe_zk_submissions (
-      id                         UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-      signup_id                  BIGINT       NOT NULL,
-      wallet_address             TEXT         NOT NULL,
-      creator_coin               TEXT         NOT NULL,
-      epoch                      BIGINT       NOT NULL,
-      nonce_commit_hex           TEXT,
-      wallet_commit_hex          TEXT,
-      points_burn_nullifier_hex  TEXT,
-      twitter_credit_nullifier_hex TEXT,
-      proof_blob                 JSONB,
-      proof_kept_until           TIMESTAMPTZ,
-      spend_ref_id               TEXT         NOT NULL,
-      points_burned              BIGINT       NOT NULL,
-      state                      TEXT         NOT NULL,
-      state_reason               TEXT,
-      created_at                 TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-      proven_at                  TIMESTAMPTZ,
-      broadcast_at               TIMESTAMPTZ,
-      settled_at                 TIMESTAMPTZ,
-      tx_hash                    TEXT,
-      block_number               BIGINT,
-      manager_entry_id           BIGINT,
-      retry_count                SMALLINT     NOT NULL DEFAULT 0,
-      next_retry_at              TIMESTAMPTZ,
-      last_retry_error           TEXT,
-      retry_started_at           TIMESTAMPTZ,
-      CONSTRAINT amoe_zk_submissions_state_chk CHECK (
-        state IN (
-          'pending',
-          'proven',
-          'broadcast',
-          'manager_declined',
-          'settled',
-          'prove_failed',
-          'rejected_chain',
-          'abandoned'
-        )
-      )
-    );
-  `
-  // Forward-compat: deployments that ran an earlier version of this
-  // bootstrap (without `retry_started_at`) need the column added
-  // before any of the cron / reclaim queries can reference it.
-  // `ADD COLUMN IF NOT EXISTS` is a single-statement no-op on fresh
-  // tables and idempotent on existing ones.
-  await db.sql`
-    ALTER TABLE amoe_zk_submissions
-      ADD COLUMN IF NOT EXISTS retry_started_at TIMESTAMPTZ;
-  `
-  // Forward-compat (PR 5b): the publisher's projection step joins
-  // against this column to recover the twitter-credit nullifier the
-  // submit handler derived. Pre-PR-5b rows have it NULL; the
-  // projector skips those (they have no on-chain identity binding).
-  await db.sql`
-    ALTER TABLE amoe_zk_submissions
-      ADD COLUMN IF NOT EXISTS twitter_credit_nullifier_hex TEXT;
-  `
-  // Partial unique index over `nonce_commit_hex IS NOT NULL`. This is
-  // the portable form of `UNIQUE NULLS NOT DISTINCT` (PG 15+). Using
-  // the partial index keeps us compatible with PG 14 if a deployment
-  // is pinned older.
-  await db.sql`
-    CREATE UNIQUE INDEX IF NOT EXISTS amoe_zk_submissions_nonce_commit_unique
-      ON amoe_zk_submissions (nonce_commit_hex)
-      WHERE nonce_commit_hex IS NOT NULL;
-  `
-  await db.sql`
-    CREATE INDEX IF NOT EXISTS amoe_zk_submissions_signup_state_idx
-      ON amoe_zk_submissions (signup_id, state, created_at DESC);
-  `
-  await db.sql`
-    CREATE INDEX IF NOT EXISTS amoe_zk_submissions_retry_idx
-      ON amoe_zk_submissions (next_retry_at)
-      WHERE state = 'manager_declined';
-  `
-  await db.sql`
-    CREATE INDEX IF NOT EXISTS amoe_zk_submissions_pubnull_idx
-      ON amoe_zk_submissions (points_burn_nullifier_hex)
-      WHERE points_burn_nullifier_hex IS NOT NULL;
-  `
-  await db.sql`
-    CREATE INDEX IF NOT EXISTS amoe_zk_submissions_walletcommit_idx
-      ON amoe_zk_submissions (epoch, wallet_commit_hex)
-      WHERE wallet_commit_hex IS NOT NULL;
-  `
+
+  // Condensed path
+  await ensureAmoeSchema(db as any)
+
+  // All core amoe_zk_submissions DDL + indexes are now covered by the migration
+  // via ensureAmoeSchema(). The raw block above has been removed.
+  // Only keep truly dynamic logic here if needed in the future.
   amoeReplayStoreSchemaEnsured = true
 }
 

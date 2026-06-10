@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { classifyLinkedAccounts } from '../../server/_lib/wallet/walletMapping.ts'
+import { classifyLinkedAccounts, extractPrivyEmbeddedEoaAddress } from '../../server/_lib/wallet/walletMapping.ts'
 import { syncUserWallets } from '../../server/_lib/wallet/walletSync.ts'
 import { canonicalWalletSchemaReadyResult } from './helpers'
 
@@ -85,6 +85,17 @@ describe('wallet mapping + sync', () => {
     expect(classified.embeddedEoa?.address).toBe('0x00000000000000000000000000000000000000c1')
   })
 
+  it('classifies base_account linked accounts when connector identity is on type', () => {
+    const user = {
+      id: 'did:privy:base-account-type',
+      linkedAccounts: [{ type: 'base_account', address: '0x00000000000000000000000000000000000000d1' }],
+    }
+
+    const classified = classifyLinkedAccounts(user as any)
+    expect(classified.canonicalSmartWallet?.address).toBe('0x00000000000000000000000000000000000000d1')
+    expect(classified.primaryWalletAddress).toBe('0x00000000000000000000000000000000000000d1')
+  })
+
   it('tracks the active owner wallet separately from the canonical smart wallet', () => {
     const user = {
       id: 'did:privy:owner-split',
@@ -123,6 +134,81 @@ describe('wallet mapping + sync', () => {
     const classified = classifyLinkedAccounts(user as any)
     expect(classified.canonicalSmartWallet).toBeNull()
     expect(classified.primaryWalletAddress).toBe('0x00000000000000000000000000000000000000e2')
+  })
+
+  it('prefers nested embeddedWallets over Privy smart-wallet counterfactuals for embedded EOA resolution', () => {
+    const embedded = '0x00000000000000000000000000000000000000f1'
+    const privySmartWallet = '0x00000000000000000000000000000000000000f2'
+    const user = {
+      id: 'did:privy:embedded-vs-smart',
+      linkedAccounts: [
+        {
+          type: 'wallet',
+          address: privySmartWallet,
+          walletClientType: 'privy',
+          embeddedWallets: [{ address: embedded, walletClientType: 'embedded_privy_wallet' }],
+          smartWallets: [{ address: privySmartWallet, walletClientType: 'privy' }],
+        },
+      ],
+    }
+
+    const classified = classifyLinkedAccounts(user as any)
+    expect(classified.embeddedEoa?.address).toBe(embedded)
+    expect(classified.embeddedEoa?.address).not.toBe(privySmartWallet)
+  })
+
+  it('excludes Privy server-managed agent wallets from embedded EOA resolution', () => {
+    const loginEmbedded = '0x1b77a85c5dcf6302ff60265f615f99030b5bc475'
+    const agentWallet = '0xfb11237c0d82520832fc0dc52feb8eb5e2e81a4b'
+    const user = {
+      id: 'did:privy:server-wallet-exclude',
+      linkedAccounts: [
+        {
+          type: 'wallet',
+          address: loginEmbedded,
+          walletClientType: 'privy',
+          latest_verified_at: '2026-05-01T00:00:00.000Z',
+        },
+        {
+          type: 'wallet',
+          address: agentWallet,
+          walletClientType: 'privy',
+          policy_ids: ['4626-prod-autoprovision-example'],
+          latest_verified_at: '2026-05-20T00:00:00.000Z',
+        },
+      ],
+    }
+
+    expect(extractPrivyEmbeddedEoaAddress(user as any)).toBe(loginEmbedded)
+    const classified = classifyLinkedAccounts(user as any)
+    expect(classified.embeddedEoa?.address).toBe(loginEmbedded)
+  })
+
+  it('prefers the most recently used login embedded EOA when multiple exist', () => {
+    const olderEmbedded = '0xb2aad65a5402714bf428a66731ae62ba5c45cac0'
+    const newerEmbedded = '0x1b77a85c5dcf6302ff60265f615f99030b5bc475'
+    const user = {
+      id: 'did:privy:multi-embedded',
+      linkedAccounts: [
+        {
+          type: 'wallet',
+          embeddedWallets: [
+            {
+              address: olderEmbedded,
+              walletClientType: 'embedded_privy_wallet',
+              latest_verified_at: '2026-03-01T00:00:00.000Z',
+            },
+            {
+              address: newerEmbedded,
+              walletClientType: 'embedded_privy_wallet',
+              latest_verified_at: '2026-05-01T00:00:00.000Z',
+            },
+          ],
+        },
+      ],
+    }
+
+    expect(extractPrivyEmbeddedEoaAddress(user as any)).toBe(newerEmbedded)
   })
 
   it('syncUserWallets writes profile + wallet graph rows', async () => {
@@ -491,6 +577,114 @@ describe('wallet mapping + sync', () => {
 
     const result = await syncUserWallets(db as any, user as any)
     expect(result.canonicalSmartWallet?.address).toBe('0x00000000000000000000000000000000000000f2')
+  })
+
+  it('does not resurrect a persisted embedded EOA unlinked from the live Privy classification (M-20 symmetric)', async () => {
+    const staleEmbedded = '0x00000000000000000000000000000000000000bb'
+    const canonicalCsw = '0x00000000000000000000000000000000000000aa'
+    const externalEoa = '0x0000000000000000000000000000000000000011'
+
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray, ..._values: any[]) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        const schemaReady = canonicalWalletSchemaReadyResult(text)
+        if (schemaReady) return schemaReady
+
+        if (text.includes('from profiles') && text.includes('where privy_user_id')) {
+          return { rows: [{ id: 101, email: 'user@example.com' }] }
+        }
+        if (text.includes('select') && text.includes('from profiles') && text.includes('where id') && text.includes('primary_smart_wallet')) {
+          return {
+            rows: [
+              {
+                primary_wallet: externalEoa,
+                primary_smart_wallet: canonicalCsw,
+                csw_address: canonicalCsw,
+                base_sub_account: null,
+                canonical_solana_wallet: null,
+                operational_solana_wallet: null,
+                solana_wallet: null,
+                primary_embedded_eoa: staleEmbedded,
+                embedded_wallet: staleEmbedded,
+              },
+            ],
+          }
+        }
+
+        return { rows: [] }
+      }),
+    }
+
+    const user = {
+      id: 'did:privy:stale-embedded',
+      linkedAccounts: [
+        { type: 'wallet', address: externalEoa, walletClientType: 'metamask' },
+        { type: 'smart_wallet', address: canonicalCsw, walletClientType: 'coinbase_smart_wallet' },
+      ],
+    }
+
+    const result = await syncUserWallets(db as any, user as any)
+
+    expect(result.canonicalSmartWallet?.address).toBe(canonicalCsw)
+    expect(result.embeddedEoa).toBeNull()
+    expect(
+      result.connectedWallets.some((w) => w.address.toLowerCase() === staleEmbedded.toLowerCase()),
+    ).toBe(false)
+  })
+
+
+  it('does not resurrect stale embedded via profiles.primary_wallet when unlinked (M-20)', async () => {
+    const staleEmbedded = '0x00000000000000000000000000000000000000bb'
+    const canonicalCsw = '0x00000000000000000000000000000000000000aa'
+    const externalEoa = '0x0000000000000000000000000000000000000011'
+
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray, ..._values: any[]) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        const schemaReady = canonicalWalletSchemaReadyResult(text)
+        if (schemaReady) return schemaReady
+
+        if (text.includes('from profiles') && text.includes('where privy_user_id')) {
+          return { rows: [{ id: 101, email: 'user@example.com' }] }
+        }
+        if (text.includes('select') && text.includes('from profiles') && text.includes('where id') && text.includes('primary_smart_wallet')) {
+          return {
+            rows: [
+              {
+                primary_wallet: staleEmbedded,
+                primary_smart_wallet: canonicalCsw,
+                csw_address: canonicalCsw,
+                base_sub_account: null,
+                canonical_solana_wallet: null,
+                operational_solana_wallet: null,
+                solana_wallet: null,
+                primary_embedded_eoa: staleEmbedded,
+                embedded_wallet: staleEmbedded,
+              },
+            ],
+          }
+        }
+
+        return { rows: [] }
+      }),
+    }
+
+    const user = {
+      id: 'did:privy:stale-primary-wallet',
+      linkedAccounts: [
+        { type: 'wallet', address: externalEoa, walletClientType: 'metamask' },
+        { type: 'smart_wallet', address: canonicalCsw, walletClientType: 'coinbase_smart_wallet' },
+      ],
+    }
+
+    const result = await syncUserWallets(db as any, user as any)
+
+    expect(result.canonicalSmartWallet?.address).toBe(canonicalCsw)
+    expect(result.embeddedEoa).toBeNull()
+    expect(result.primaryWalletAddress?.toLowerCase()).not.toBe(staleEmbedded.toLowerCase())
+    expect(
+      result.connectedWallets.some((w) => w.address.toLowerCase() === staleEmbedded.toLowerCase()),
+    ).toBe(false)
   })
 
   it('seeds Zora lookup from preprov_zora_handle when available', async () => {

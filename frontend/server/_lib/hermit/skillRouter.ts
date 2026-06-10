@@ -1,8 +1,8 @@
 /**
- * Hermit / Pinata creative lane — strict architectural boundary.
+ * Hermit creative lane — strict architectural boundary.
  *
  * This module owns ONLY creative generation (`/hermit`, `/meme`, `/gmeow`)
- * by delegating to the Pinata-hosted Open Claw / Hermit agent. It must not:
+ * by delegating to a Hermit-hosted creative agent endpoint. It must not:
  *
  *   - read or write `alfaclub_runtime_secret` rows (auth state),
  *   - call `chatTokenStore` helpers,
@@ -17,7 +17,8 @@
  * If you find yourself adding an import from `../alfaclub/chatTokenStore.js`
  * here, stop — that belongs in the auth lane, not the creative lane.
  */
-import { pickRandomHermitMeme } from './memeStore.js'
+import { pickGmeowLocalLine, pickRandomHermitMeme } from './memeStore.js'
+import { formatHermitCommandRoomHelp } from './hermitAlfaClubHelp.js'
 import type {
   HermitExecutionParams,
   HermitExecutionResult,
@@ -25,7 +26,58 @@ import type {
   HermitPreferenceLister,
   HermitUserPreferences,
 } from './types.js'
-import WebSocket from 'ws'
+import { logger } from '../infra/logger.js'
+import { getClearinghouseState } from '../alfaclub/hyperliquid.js'
+import {
+  formatRoom1659MarketForHermit,
+  resolveRoom1659MarketContext,
+  resolveRoom1659HyperliquidUserForSnapshot,
+} from '../alfaclub/room1659Market.js'
+import { buildAlfaClubBriefContext } from '../alfaclub/dailyBrief.js'
+import {
+  buildHyperliquidEntrySignalReport,
+  buildHyperliquidPositionReport,
+  formatPositionAlertStatusBlock,
+} from '../alfaclub/positionReport.js'
+import { buildRoomTimelineData, type RoomTimelineChatEvent } from '../alfaclub/roomTimeline.js'
+import {
+  disableHyperliquidPositionAlert,
+  describeHyperliquidAlertDefaults,
+  enableDefaultHyperliquidPositionAlert,
+  parseHermitAlertCommandArgs,
+  readHyperliquidPositionAlert,
+  resolveTelegramChatIdForWallet,
+  upsertHyperliquidPositionAlert,
+} from '../alfaclub/positionAlertStore.js'
+import { arenaCommandAllowedForRoom, readArenaConfig } from '../arena/arenaConfig.js'
+import {
+  listArenaAssets,
+  runArenaActivateUnifiedAccount,
+  runArenaAddApiWallet,
+  runArenaCreateAgent,
+  runArenaDepositUsdc,
+  runArenaJoin,
+  runArenaStatus,
+  runArenaTrade,
+} from '../arena/arenaClient.js'
+import {
+  clearArenaIdentityMapping,
+  resolveArenaIdentityForContext,
+  upsertArenaIdentityMapping,
+} from '../arena/arenaIdentityMappingStore.js'
+import {
+  readCounterTradeRuntimeConfig,
+  type CounterTradeBias,
+  type CounterTradePreset,
+} from '../alfaclub/counterTradeConfig.js'
+import {
+  pauseCounterTradeOptIn,
+  readCounterTradeUserOptIn,
+  readOrCreateCounterTradeRoomStrategy,
+  resumeCounterTradeOptIn,
+  setCounterTradeGlobalBias,
+  upsertCounterTradeOptIn,
+} from '../alfaclub/counterTradeStore.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -33,15 +85,26 @@ type PinataChatResult = {
   text: string
 }
 
-type PinataGatewayEvent =
-  | { type: 'event'; event?: string; payload?: Record<string, unknown> }
-  | { type: 'res'; id?: string; ok?: boolean; payload?: Record<string, unknown>; error?: Record<string, unknown> }
-
-const PINATA_GATEWAY_RPC_TIMEOUT_MS = 30_000
 const PINATA_HTTP_FALLBACK_TIMEOUT_MS_DEFAULT = 30_000
 
+const PINATA_AGENT_FAILURE_PATTERNS = [
+  /oauth token refresh failed/i,
+  /agent failed before reply/i,
+  /failed to load agent model/i,
+  /incorrect api key provided/i,
+  /no api key found for provider/i,
+  /re-authenticate/i,
+  /all models failed/i,
+] as const
+
+export function isPinataAgentFailureReply(text: string): boolean {
+  const trimmed = text.trim()
+  if (!trimmed) return true
+  return PINATA_AGENT_FAILURE_PATTERNS.some((pattern) => pattern.test(trimmed))
+}
+
 function readPinataHttpTimeoutMs(): number {
-  const raw = asTrimmed(process.env.HERMIT_PINATA_HTTP_TIMEOUT_MS)
+  const raw = asTrimmed(process.env.HERMIT_AGENT_HTTP_TIMEOUT_MS)
   if (!raw) return PINATA_HTTP_FALLBACK_TIMEOUT_MS_DEFAULT
   const parsed = Number(raw)
   if (!Number.isFinite(parsed) || parsed <= 0) return PINATA_HTTP_FALLBACK_TIMEOUT_MS_DEFAULT
@@ -54,6 +117,9 @@ function asTrimmed(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+const HERMIT_STRICT_JSON_SYSTEM_LINE = 'You are Hermit crafting one short meme line for AlfaChat.'
+const HERMIT_STRICT_JSON_OUTPUT_LINE = 'Output STRICT JSON only:'
+const HERMIT_STRICT_JSON_SCHEMA_LINE = '{"line":"string"}'
 function isLikelyPinataProviderErrorText(value: string): boolean {
   const text = value.trim().toLowerCase()
   if (!text) return false
@@ -94,11 +160,394 @@ function parseHermitDraftMode(args: string): { mode: HermitDraftMode; prompt: st
   return { mode: 'copy', prompt: trimmed }
 }
 
+type ParsedArenaCommand =
+  | { kind: 'help' | 'status' | 'assets' | 'join' | 'activate' | 'add-api-wallet' }
+  | { kind: 'identity-show' }
+  | {
+      kind: 'identity-set'
+      target: 'default' | 'mine' | 'user'
+      senderAddress?: string
+      agentId: string
+      agentWalletAddress: string
+      hlApiWalletAddress?: string
+    }
+  | {
+      kind: 'identity-clear'
+      target: 'default' | 'mine' | 'user'
+      senderAddress?: string
+    }
+  | { kind: 'deposit'; amountUsd: number }
+  | {
+      kind: 'trade'
+      action: 'open' | 'close'
+      pair: string
+      side?: 'long' | 'short'
+      sizeUsd?: number
+      leverage?: number
+    }
+  | {
+      kind: 'register'
+      target?: 'default'
+      agentId?: string
+      agentWalletAddress?: string
+      hlApiWalletAddress?: string
+    }
+
+type ParsedStrategyCommand =
+  | { kind: 'help' | 'status' | 'pause' | 'resume' }
+  | { kind: 'optin'; preset: CounterTradePreset }
+  | { kind: 'bias'; bias: CounterTradeBias }
+
+function parseArenaCommandArgs(args: string): ParsedArenaCommand | null {
+  const trimmed = args.trim()
+  if (!trimmed || trimmed === 'help') return { kind: 'help' }
+  const parts = trimmed.split(/\s+/)
+  const sub = (parts[0] ?? '').toLowerCase()
+
+  if (sub === 'status') return { kind: 'status' }
+  if (sub === 'assets') return { kind: 'assets' }
+  if (sub === 'join') return { kind: 'join' }
+  if (sub === 'activate' || sub === 'activate-unified-account') return { kind: 'activate' }
+  if (sub === 'add-api-wallet' || sub === 'api-wallet') return { kind: 'add-api-wallet' }
+
+  if (sub === 'identity') {
+    const action = (parts[1] ?? '').toLowerCase()
+    const target = (parts[2] ?? '').toLowerCase()
+    if (!action || action === 'show') return { kind: 'identity-show' }
+    if (action === 'set') {
+      if (target === 'default' || target === 'mine') {
+        const agentId = parts[3] ?? ''
+        const agentWalletAddress = parts[4] ?? ''
+        const hlApiWalletAddress = parts[5]
+        if (!agentId || !agentWalletAddress) return null
+        return {
+          kind: 'identity-set',
+          target,
+          agentId,
+          agentWalletAddress,
+          ...(hlApiWalletAddress ? { hlApiWalletAddress } : {}),
+        }
+      }
+      if (target === 'user') {
+        const senderAddress = parts[3] ?? ''
+        const agentId = parts[4] ?? ''
+        const agentWalletAddress = parts[5] ?? ''
+        const hlApiWalletAddress = parts[6]
+        if (!senderAddress || !agentId || !agentWalletAddress) return null
+        return {
+          kind: 'identity-set',
+          target,
+          senderAddress,
+          agentId,
+          agentWalletAddress,
+          ...(hlApiWalletAddress ? { hlApiWalletAddress } : {}),
+        }
+      }
+      return null
+    }
+    if (action === 'clear') {
+      if (target === 'default' || target === 'mine') {
+        return { kind: 'identity-clear', target }
+      }
+      if (target === 'user') {
+        const senderAddress = parts[3] ?? ''
+        if (!senderAddress) return null
+        return {
+          kind: 'identity-clear',
+          target,
+          senderAddress,
+        }
+      }
+      return null
+    }
+    return null
+  }
+
+  if (sub === 'deposit') {
+    const amountUsd = Number(parts[1] ?? '')
+    if (!Number.isFinite(amountUsd) || amountUsd <= 0) return null
+    return { kind: 'deposit', amountUsd }
+  }
+
+  if (sub === 'trade') {
+    const action = (parts[1] ?? '').toLowerCase()
+    if (action === 'close') {
+      const pair = parts[2] ?? ''
+      if (!pair) return null
+      return { kind: 'trade', action: 'close', pair }
+    }
+    if (action === 'open') {
+      const pair = parts[2] ?? ''
+      const side = (parts[3] ?? '').toLowerCase()
+      const sizeUsd = Number(parts[4] ?? '')
+      const leverage = Number(parts[5] ?? '')
+      if (!pair || (side !== 'long' && side !== 'short')) return null
+      if (!Number.isFinite(sizeUsd) || sizeUsd <= 0) return null
+      if (!Number.isFinite(leverage) || leverage <= 0) return null
+      return {
+        kind: 'trade',
+        action: 'open',
+        pair,
+        side,
+        sizeUsd,
+        leverage,
+      }
+    }
+  }
+
+  if (sub === 'register' || sub === 'create' || sub === 'create-agent') {
+    // /arena register [default] [agentId agentWallet [hlApi]]
+    // "default" targets the room-wide default (persisted in DB, overrides envs for the room)
+    // Without it, binds to the caller's sender ('mine').
+    // If ids supplied, bind + onboard. If omitted, drive acp create (for default: create then set as room default).
+    let idx = 1
+    let target: 'default' | undefined
+    if ((parts[1] || '').toLowerCase() === 'default') {
+      target = 'default'
+      idx = 2
+    }
+    const a1 = parts[idx]
+    const a2 = parts[idx + 1]
+    const a3 = parts[idx + 2]
+    if (a1 && a2) {
+      return {
+        kind: 'register',
+        target,
+        agentId: a1,
+        agentWalletAddress: a2,
+        ...(a3 ? { hlApiWalletAddress: a3 } : {}),
+      }
+    }
+    // no ids → drive create path
+    return {
+      kind: 'register',
+      target,
+      ...(parts[idx] ? { hlApiWalletAddress: parts[idx] } : {}),
+    }
+  }
+
+  return null
+}
+
+function parseStrategyCommandArgs(args: string): ParsedStrategyCommand | null {
+  const trimmed = args.trim().toLowerCase()
+  if (!trimmed || trimmed === 'help') return { kind: 'help' }
+  if (trimmed === 'status') return { kind: 'status' }
+  if (trimmed === 'pause') return { kind: 'pause' }
+  if (trimmed === 'resume') return { kind: 'resume' }
+  if (trimmed.startsWith('optin')) {
+    const preset = (trimmed.split(/\s+/)[1] ?? '').trim()
+    if (preset === 'defensive' || preset === 'balanced' || preset === 'aggressive') {
+      return { kind: 'optin', preset }
+    }
+    return null
+  }
+  if (trimmed.startsWith('bias')) {
+    const bias = (trimmed.split(/\s+/)[1] ?? '').trim()
+    if (bias === 'bullish' || bias === 'bearish' || bias === 'neutral') return { kind: 'bias', bias }
+    return null
+  }
+  return null
+}
+
+function formatArenaUsage(): string {
+  return [
+    '**Arena controls (room-gated)**',
+    '- `/arena status`',
+    '- `/arena assets`',
+    '- `/arena join`',
+    '- `/arena activate`',
+    '- `/arena add-api-wallet`',
+    '- `/arena deposit <usdc>`',
+    '- `/arena trade open <pair> <long|short> <sizeUsd> <leverage>`',
+    '- `/arena trade close <pair>`',
+    '- `/arena register`  (create path: runs acp agent create if enabled under the runtime ACP session; auto-binds + onboards the new agent for your sender or as room default)',
+    '- `/arena register <agentId> <agentWallet> [hlApiWallet]`  (supplied-ids: bind your sender + onboard)',
+    '- `/arena register default <agentId> <agentWallet> [hlApiWallet]`  (supplied-ids: set/change room default + onboard; use this to switch global for the room to one owned via your Alfa address)',
+    '- `/arena register default`  (create via server ACP session then set as room default + onboard)',
+    '- `/arena identity clear mine`  (remove your personal binding and fall back to room default)',
+    '- `/arena identity show`',
+    '- `/arena identity set default <agentId> <agentWallet> [hlApiWallet]`',
+    '- `/arena identity set mine <agentId> <agentWallet> [hlApiWallet]`',
+    '- `/arena identity set user <senderWallet> <agentId> <agentWallet> [hlApiWallet]`',
+    '- `/arena identity clear default|mine|user <senderWallet>`',
+    '',
+    'HIP-3 pairs must use `xyz:` (example: `xyz:GOLD`).',
+    'Create path (`/arena register` or `default`) runs under the bot\'s pre-configured ACP session (see ACP_OWNER_WALLET in acp-cli headless). Agent is functional for arena immediately (auto-bound + onboarded). For the agent to appear "owned by your Alfa EOA" in Virtuals ACP dashboard (userId match), create via web at app.virtuals.io/acp while connected as your Alfa sender, then supply ids with `/arena register [default] <id> <wallet>`.',
+    'IMPORTANT: In AlfaClub rooms, /arena commands are gated (see execute.ts). Add your sender wallet (e.g. 0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9 for 1659) to HERMIT_ALLOWED_USERS env, or set HERMIT_OWNER_ADDRESS to your wallet, and restart the service before running clears/registers from that wallet. Owner address bypasses the allowlist for /arena.',
+  ].join('\n')
+}
+
+function formatStrategyUsage(): string {
+  return [
+    '**Counter-trade strategy controls**',
+    '- `/strategy status`',
+    '- `/strategy optin <defensive|balanced|aggressive>`',
+    '- `/strategy pause`',
+    '- `/strategy resume`',
+    '- `/strategy bias <bullish|bearish|neutral>` (trusted operator)',
+  ].join('\n')
+}
+
+function sanitizeArenaOutputForReply(text: string | undefined | null, dgclawDir: string | null): string {
+  let s = String(text || '').trim()
+  if (dgclawDir) {
+    const escaped = dgclawDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    s = s.replace(new RegExp(escaped, 'gi'), '[dgclaw-dir]')
+  }
+  s = s.replace(/\b(ARENA_[A-Z0-9_]+)=[^\s]+/g, '$1=[redacted]')
+  return s.slice(0, 400)
+}
+
+async function autoProvisionArenaIdentityForStrategy(params: {
+  roomId: string
+  senderAddress: string
+  baseConfig: ReturnType<typeof readArenaConfig>
+}): Promise<{ ok: true; summary: string } | { ok: false; message: string }> {
+  const createResult = await runArenaCreateAgent(params.baseConfig, params.senderAddress)
+  if (!createResult.agentId || !createResult.agentWalletAddress) {
+    const out = sanitizeArenaOutputForReply(
+      createResult.run?.stdout || createResult.run?.stderr,
+      params.baseConfig.dgclawDir,
+    )
+    return {
+      ok: false,
+      message: [
+        'Unable to enable automation: auto-setup could not create an Arena identity.',
+        createResult.message || 'Create failed or produced no parsable ids.',
+        out ? `acp output (sanitized): ${out}` : '',
+        'Run /arena register first, then retry.',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    }
+  }
+
+  await upsertArenaIdentityMapping({
+    roomId: params.roomId,
+    senderAddress: params.senderAddress,
+    arenaAgentId: createResult.agentId,
+    arenaWalletAddress: createResult.agentWalletAddress,
+    ...(createResult.hlApiWalletAddress ? { hlApiWalletAddress: createResult.hlApiWalletAddress } : {}),
+    updatedBy: params.senderAddress,
+  })
+
+  const activeConfig = {
+    ...params.baseConfig,
+    agentId: createResult.agentId,
+    agentWalletAddress: createResult.agentWalletAddress,
+    ...(createResult.hlApiWalletAddress ? { hlApiWalletAddress: createResult.hlApiWalletAddress } : {}),
+  }
+  const steps = [
+    { name: 'join', result: await runArenaJoin(activeConfig) },
+    { name: 'activate', result: await runArenaActivateUnifiedAccount(activeConfig) },
+    { name: 'add-api-wallet', result: await runArenaAddApiWallet(activeConfig) },
+  ]
+  const summaries = steps.map((step) => `${step.name}=${step.result.ok ? 'ok' : 'fail'}${step.result.run?.dryRun ? '[dry]' : ''}`)
+  const failed = steps.filter((step) => !step.result.ok)
+
+  const discoveredHlApiWallet =
+    typeof steps[2]?.result?.details?.hlApiWalletAddress === 'string'
+      ? steps[2].result.details.hlApiWalletAddress.toLowerCase()
+      : undefined
+  if (discoveredHlApiWallet && discoveredHlApiWallet !== createResult.hlApiWalletAddress) {
+    await upsertArenaIdentityMapping({
+      roomId: params.roomId,
+      senderAddress: params.senderAddress,
+      arenaAgentId: createResult.agentId,
+      arenaWalletAddress: createResult.agentWalletAddress,
+      hlApiWalletAddress: discoveredHlApiWallet,
+      updatedBy: params.senderAddress,
+    })
+  }
+
+  if (failed.length > 0) {
+    return {
+      ok: false,
+      message: [
+        'Arena identity was created, but onboarding steps failed.',
+        `steps: ${summaries.join(' ')}`,
+        ...failed.map((step) => {
+          const detail = sanitizeArenaOutputForReply(
+            [step.result.message, step.result.run?.error, step.result.run?.stderr].filter(Boolean).join(' | '),
+            params.baseConfig.dgclawDir,
+          )
+          return `- ${step.name}: ${detail || 'unknown failure'}`
+        }),
+        'Run /arena register manually, then retry.',
+      ].join('\n'),
+    }
+  }
+
+  return {
+    ok: true,
+    summary: `Auto-provisioned Arena identity (${summaries.join(' ')}).`,
+  }
+}
+
 function trimList(values: string[], max = 6): string[] {
   return values
     .map((value) => value.trim())
     .filter(Boolean)
     .slice(0, max)
+}
+
+const STRATEGY_STATUS_AUTOPROVISION_RETRY_MS = 10 * 60_000
+const strategyStatusAutoprovisionLastAttempt = new Map<string, number>()
+const ALERT_TEST_DM_TIMEOUT_MS = 12_000
+
+function shouldAttemptStrategyStatusAutoprovision(roomId: string, senderAddress: string): boolean {
+  const key = `${roomId}:${senderAddress.toLowerCase()}`
+  const now = Date.now()
+  const last = strategyStatusAutoprovisionLastAttempt.get(key) ?? 0
+  if (now - last < STRATEGY_STATUS_AUTOPROVISION_RETRY_MS) return false
+  strategyStatusAutoprovisionLastAttempt.set(key, now)
+  return true
+}
+
+function readPositionAlertBotToken(): string | null {
+  const candidates = [
+    process.env.ALFACLUB_API_KEY,
+    process.env.alfaclub_api_key,
+    process.env.ALFACLUB_BOT_TOKEN,
+  ]
+  for (const candidate of candidates) {
+    const value = asTrimmed(candidate)
+    if (value) return value
+  }
+  return null
+}
+
+async function sendTelegramAlertTestDm(params: {
+  chatId: string
+  senderAddress: string
+  botToken: string
+}): Promise<boolean> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), ALERT_TEST_DM_TIMEOUT_MS)
+  const text = [
+    '🧪 **Hermit alert test**',
+    `Wallet ${params.senderAddress.slice(0, 6)}…${params.senderAddress.slice(-4)}`,
+    'Telegram delivery is configured for this wallet.',
+    'You will now receive Hyperliquid alert DMs when your thresholds are triggered.',
+  ].join('\n')
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${params.botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: params.chatId,
+        text,
+        disable_web_page_preview: true,
+      }),
+      signal: controller.signal,
+    })
+    return response.ok
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 function parseLooseJsonObject(text: string): Record<string, unknown> | null {
@@ -277,216 +726,92 @@ function inferPublicMediaAttachment(url: string): HermitMediaAttachment | null {
   }
 }
 
-function readPinataHermitConfig(): { endpoint: string; bearer: string } | null {
-  const endpoint = asTrimmed(process.env.HERMIT_PINATA_CHAT_ENDPOINT)
-  const bearer = asTrimmed(process.env.HERMIT_PINATA_BEARER_TOKEN)
+function readHermitAgentConfig(): { endpoint: string; bearer: string } | null {
+  const endpoint = asTrimmed(process.env.HERMIT_AGENT_CHAT_ENDPOINT)
+  const bearer = asTrimmed(process.env.HERMIT_AGENT_BEARER_TOKEN)
   if (!endpoint || !bearer) return null
   return { endpoint, bearer }
 }
 
-function toGatewaySocketUrl(rawEndpoint: string): { wsUrl: string; origin: string } | null {
-  let parsed: URL
-  try {
-    parsed = new URL(rawEndpoint)
-  } catch {
-    return null
+/**
+ * Whether /gmeow should call Hermit agent for an extra caption line.
+ *
+ * Default (env unset): Hermit-agent one-liner when configured; else local hooks + rotating GIFs.
+ * - `HERMIT_GMEOW_HERMIT_CAPTION=always` — call Hermit agent on every /gmeow when configured.
+ * - `HERMIT_GMEOW_HERMIT_CAPTION=prompt` — call Hermit agent only when the user adds text after /gmeow.
+ * - `HERMIT_GMEOW_HERMIT_CAPTION=0` — never call Hermit agent for /gmeow (local hooks only).
+ * - `HERMIT_GMEOW_HERMIT_CAPTION=local` — force local hooks even when Hermit agent is configured.
+ */
+export function shouldRequestPinataGmeowCaption(userPromptAfterCommand: string): boolean {
+  const mode = asTrimmed(process.env.HERMIT_GMEOW_HERMIT_CAPTION)
+  const normalizedMode = mode.toLowerCase()
+  if (normalizedMode === '0' || normalizedMode === 'false' || normalizedMode === 'no' || normalizedMode === 'off' || normalizedMode === 'never') {
+    return false
   }
-
-  const host = parsed.hostname.toLowerCase()
-  const isPinataGatewayHost =
-    host.endsWith('.agents.pinata.cloud') || host.endsWith('.apps.pinata.cloud')
-  if (!isPinataGatewayHost) return null
-
-  const wsProtocol = parsed.protocol === 'https:' || parsed.protocol === 'wss:' ? 'wss:' : 'ws:'
-  const originProtocol = parsed.protocol === 'wss:' ? 'https:' : parsed.protocol === 'ws:' ? 'http:' : parsed.protocol
-  const wsUrl = `${wsProtocol}//${parsed.host}${parsed.pathname || '/'}`
-  const origin = `${originProtocol}//${parsed.host}`
-  return { wsUrl, origin }
+  if (normalizedMode === 'local' || normalizedMode === 'offline') {
+    return false
+  }
+  if (
+    normalizedMode === '1' ||
+    normalizedMode === 'true' ||
+    normalizedMode === 'yes' ||
+    normalizedMode === 'on' ||
+    normalizedMode === 'always' ||
+    normalizedMode === 'all' ||
+    normalizedMode === 'legacy'
+  ) {
+    return true
+  }
+  if (normalizedMode === 'prompt' || normalizedMode === 'args' || normalizedMode === 'text') {
+    return userPromptAfterCommand.trim().length > 0
+  }
+  // Env unset: creative Hermit-agent line when endpoint is configured (caller still gates on config).
+  return true
 }
 
-function extractChatFinalText(payload: Record<string, unknown> | undefined): string | null {
-  if (!payload) return null
-  const state = typeof payload.state === 'string' ? payload.state : ''
-  if (state !== 'final') return null
-  const message = payload.message
-  if (!message || typeof message !== 'object' || Array.isArray(message)) return null
-  const content = (message as { content?: unknown }).content
-  if (!Array.isArray(content)) return null
-  const textParts = content
-    .map((entry) => {
-      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return ''
-      const text = (entry as { text?: unknown }).text
-      return typeof text === 'string' ? text : ''
-    })
-    .filter(Boolean)
-  const joined = textParts.join('').trim()
-  return joined || null
+function toPinataHttpChatUrl(rawEndpoint: string): string {
+  return rawEndpoint
 }
 
-async function runPinataDraftOverGateway(params: {
+export function pinataEndpointSupportsHttpDraft(rawEndpoint: string | undefined): boolean {
+  const endpoint = asTrimmed(rawEndpoint)
+  if (!endpoint) return false
+  return endpoint.startsWith('http://') || endpoint.startsWith('https://')
+}
+
+/**
+ * Hermit draft calls are HTTP-only and must target first-party endpoints
+ * (Vercel or Railway), not Pinata gateway chat transports.
+ */
+export function shouldPreferPinataHttpDraft(params: {
+  sourceIdentity?: string | null
+  prompt: string
+  endpoint?: string | null
+}): boolean {
+  const endpoint = asTrimmed(params.endpoint) || asTrimmed(process.env.HERMIT_AGENT_CHAT_ENDPOINT)
+  if (!pinataEndpointSupportsHttpDraft(endpoint)) return false
+  return true
+}
+
+async function runPinataDraftOverHttp(params: {
   endpoint: string
   bearer: string
   prompt: string
 }): Promise<PinataChatResult | null> {
-  const gateway = toGatewaySocketUrl(params.endpoint)
-  if (!gateway) return null
-
-  return await new Promise<PinataChatResult | null>((resolve) => {
-    const socket = new WebSocket(gateway.wsUrl, {
-      headers: {
-        Authorization: `Bearer ${params.bearer}`,
-        Origin: gateway.origin,
-        'User-Agent':
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      },
-    })
-
-    let settled = false
-    let connectSent = false
-    let connected = false
-    let runId: string | null = null
-
-    const finish = (result: PinataChatResult | null): void => {
-      if (settled) return
-      settled = true
-      clearTimeout(timeout)
-      try {
-        socket.close()
-      } catch {}
-      resolve(result)
-    }
-
-    const sendReq = (id: string, method: string, payload: Record<string, unknown>): void => {
-      socket.send(
-        JSON.stringify({
-          type: 'req',
-          id,
-          method,
-          params: payload,
-        }),
-      )
-    }
-
-    const sendConnect = (): void => {
-      if (settled || connectSent) return
-      connectSent = true
-      sendReq('connect-1', 'connect', {
-        minProtocol: 3,
-        maxProtocol: 3,
-        client: {
-          id: 'openclaw-control-ui',
-          version: 'control-ui',
-          platform: 'node',
-          mode: 'webchat',
-          instanceId: `hermit-${Date.now()}`,
-        },
-        role: 'operator',
-        scopes: ['operator.admin', 'operator.approvals', 'operator.pairing'],
-        caps: ['tool-events'],
-        auth: { token: params.bearer },
-        userAgent: 'Mozilla/5.0',
-        locale: 'en-US',
-      })
-    }
-
-    const timeout = setTimeout(() => finish(null), PINATA_GATEWAY_RPC_TIMEOUT_MS)
-
-    socket.on('open', () => {
-      setTimeout(() => sendConnect(), 300)
-    })
-
-    socket.on('message', (raw) => {
-      if (settled) return
-      let msg: PinataGatewayEvent
-      try {
-        msg = JSON.parse(String(raw)) as PinataGatewayEvent
-      } catch {
-        return
-      }
-
-      if (msg.type === 'event') {
-        if (msg.event === 'connect.challenge') {
-          sendConnect()
-          return
-        }
-        if (msg.event === 'chat') {
-          const payload = msg.payload
-          if (!payload || typeof payload !== 'object') return
-          if (runId && (payload as { runId?: unknown }).runId !== runId) return
-          const text = extractChatFinalText(payload)
-          if (text) finish({ text })
-          return
-        }
-        return
-      }
-
-      if (msg.type !== 'res') return
-      if (msg.id === 'connect-1') {
-        if (!msg.ok) {
-          finish(null)
-          return
-        }
-        connected = true
-        const nextRunId = `hermit-${Date.now()}`
-        runId = nextRunId
-        sendReq('chat-send-1', 'chat.send', {
-          sessionKey: 'main',
-          message: params.prompt,
-          deliver: false,
-          idempotencyKey: nextRunId,
-        })
-        return
-      }
-
-      if (!connected) return
-      if (msg.id === 'chat-send-1') {
-        if (!msg.ok) {
-          finish(null)
-          return
-        }
-        const payload = msg.payload
-        runId =
-          payload && typeof payload === 'object' && typeof payload.runId === 'string'
-            ? payload.runId
-            : null
-        return
-      }
-    })
-
-    socket.on('close', () => finish(null))
-    socket.on('error', () => finish(null))
-  })
-}
-
-async function runPinataDraft(prompt: string): Promise<PinataChatResult | null> {
-  const cfg = readPinataHermitConfig()
-  if (!cfg) return null
-
-  const gatewayTarget = toGatewaySocketUrl(cfg.endpoint)
-  if (gatewayTarget) {
-    const viaGateway = await runPinataDraftOverGateway({
-      endpoint: cfg.endpoint,
-      bearer: cfg.bearer,
-      prompt,
-    })
-    return viaGateway?.text ? viaGateway : null
-  }
-
-  // HTTP fallback path. Bound by `HERMIT_PINATA_HTTP_TIMEOUT_MS` so a hung
-  // creative backend cannot stall the AlfaClub chat-bridge tick or leave a
-  // /hermit serverless invocation running until Vercel kills it. On timeout
-  // or any non-2xx, returns null and the caller surfaces a fallback reply.
+  // Bound by `HERMIT_AGENT_HTTP_TIMEOUT_MS` so a hung creative backend
+  // cannot stall the AlfaClub chat-bridge tick or leave a /hermit
+  // serverless invocation running until Vercel kills it.
   const controller = new AbortController()
   const timeoutHandle = setTimeout(() => controller.abort(), readPinataHttpTimeoutMs())
   let res: Response
   try {
-    res = await fetch(cfg.endpoint, {
+    res = await fetch(toPinataHttpChatUrl(params.endpoint), {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${cfg.bearer}`,
+        Authorization: `Bearer ${params.bearer}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ prompt: params.prompt }),
       signal: controller.signal,
     })
   } catch {
@@ -507,6 +832,21 @@ async function runPinataDraft(prompt: string): Promise<PinataChatResult | null> 
   } catch {
     return null
   }
+}
+
+async function runPinataDraft(params: {
+  prompt: string
+  senderAddress?: string
+  sourceIdentity?: string | null
+}): Promise<PinataChatResult | null> {
+  const cfg = readHermitAgentConfig()
+  if (!cfg) return null
+
+  return runPinataDraftOverHttp({
+    endpoint: cfg.endpoint,
+    bearer: cfg.bearer,
+    prompt: params.prompt,
+  })
 }
 
 export type SpanishDialect =
@@ -696,10 +1036,12 @@ function resolveActiveDialect(params: {
   return { dialect: null, source: 'default' }
 }
 
-function buildPinataPromptForHermit(params: {
+export function buildPinataPromptForHermit(params: {
   mode: HermitDraftMode
   userPrompt: string
   userPreferences?: HermitUserPreferences | null
+  // Room 1659 market data (only present when called from room 1659)
+  room1659Market?: any
 }): string {
   const modeInstruction =
     params.mode === 'announce'
@@ -715,6 +1057,26 @@ function buildPinataPromptForHermit(params: {
   })
   const tone = asHermitTone(params.userPreferences?.tone ?? null)
   const toneClause = buildHermitToneClause(tone)
+
+  let marketContext = ''
+  if (params.room1659Market && params.room1659Market.ok !== false) {
+    const m = params.room1659Market
+
+    const lines = [
+      '',
+      '=== ROOM 1659 LIVE MARKET CONTEXT (use this for theatrical, dramatic, marketing copy) ===',
+      `Current hype score: ${m.hype ?? 'unknown'}`,
+      `Current liquidation level: ${m.liquidation ?? 'unknown'}`,
+    ]
+
+    const formatted = formatRoom1659MarketForHermit(m)
+    lines.push(formatted.yourPosition)
+
+    lines.push('')
+    lines.push('INSTRUCTION FOR HERMIT: This room is stressed and theatrical. Turn the numbers above (especially the quadratic curve acceleration, low supply, and liquidation tension) into unhinged, quotable, cinematic, memeable lines. Be dramatic. Be memorable. The "Do not be overly dramatic" rule is suspended for room 1659.')
+    marketContext = lines.join('\n')
+  }
+
   return [
     'You are Hermit, a crypto-native creative assistant for AlfaChat communities.',
     modeInstruction,
@@ -723,11 +1085,13 @@ function buildPinataPromptForHermit(params: {
     'Rules: line <= 220 chars, alt 2-4 entries, hashtags 1-5, no fabricated claims.',
     buildHermitLanguageDirective(dialect, source),
     ...(toneClause ? [toneClause] : []),
+    marketContext,
     `User input: ${params.userPrompt}`,
   ].join('\n')
 }
 
-function buildHermitHelpReply(): string {
+function buildHermitHelpReply(roomId?: string | null): string {
+  if (roomId) return formatHermitCommandRoomHelp(roomId)
   return [
     'Hermit drafts room-ready copy.',
     '',
@@ -736,11 +1100,21 @@ function buildHermitHelpReply(): string {
     '- `/hermit announce <news>` — announcement-style room update',
     '- `/hermit quest <reward/task>` — quest or reward drop copy',
     '- `/hermit tone <message>` — rewrite your message with sharper social tone',
+    '- `/position` — your HL snapshot + proactive risk brief',
+    '- `/position chart` — timeline chart link + marker counts',
+    '- `/position markers all` — expanded trade/chat marker list',
+    '- `/position host markers` — host-only chat markers',
+    '- `/position sender <address|me>` — sender-specific chat markers',
+    '- `/position marker latest|trade 1|host 1|<n>` — inspect marker context',
+    '- `/signal` — position-aware enter/exit bias from your live entries',
+    '- `/market` — broader majors + AlfaClub market scope',
     '',
     'Examples:',
     '- `/hermit announce reward drop opens in 30 minutes`',
     '- `/hermit quest best vault thesis wins custom role`',
     '- `/hermit tone make this clearer: we are shipping tonight`',
+    '',
+    'In an AlfaClub Hermit room, `/help` lists the full catalog.',
   ].join('\n')
 }
 
@@ -780,6 +1154,7 @@ function buildPinataPromptForGmeow(params: {
     'Output STRICT JSON only:',
     '{"line":"string"}',
     'Rules: line <= 160 chars, playful but clean, no markdown.',
+    'Do not repeat the reference caption verbatim — invent a fresh one-liner that fits the GIF vibe.',
     buildHermitLanguageDirective(dialect, source),
     ...(toneClause ? [toneClause] : []),
     `Reference caption: ${params.memeCaption}`,
@@ -996,6 +1371,7 @@ const HERMIT_SETUP_SUBCOMMANDS = new Set([
   'reset',
   'lang',
   'tone',
+  'alert',
 ])
 
 function isFlagOnlyInput(text: string): boolean {
@@ -1188,7 +1564,716 @@ async function handleHermitSetupSubcommand(
     }
   }
 
+  if (subcommand === 'alert') {
+    return handleHermitAlertSubcommand(params, args)
+  }
+
   return null
+}
+
+async function handleHermitAlertSubcommand(
+  params: HermitExecutionParams,
+  args: string,
+): Promise<HermitExecutionResult> {
+  const sender = params.senderAddress
+  try {
+    const parsed = parseHermitAlertCommandArgs(args)
+    if (parsed.action === 'invalid') {
+      return { kind: 'hermit', provider: 'local', reply: parsed.reason }
+    }
+
+    if (parsed.action === 'off') {
+      await disableHyperliquidPositionAlert(sender)
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: 'Hyperliquid alerts disabled. Run `/position` anytime for a live HL snapshot.',
+      }
+    }
+
+    if (parsed.action === 'test') {
+      const botToken = readPositionAlertBotToken()
+      if (!botToken) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply:
+            'Telegram alert test failed: bot token is not configured on this runtime. Set `ALFACLUB_API_KEY` (and/or Telegram relay token) and retry.',
+        }
+      }
+      const chatId = await resolveTelegramChatIdForWallet(sender)
+      if (!chatId) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply:
+            'Telegram alert test failed: no linked Telegram for this wallet. Link in the 4626 Telegram Mini App, then retry `/hermit alert test`.',
+        }
+      }
+      const sent = await sendTelegramAlertTestDm({
+        chatId,
+        senderAddress: sender,
+        botToken,
+      })
+      if (sent) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: `Telegram alert test sent ✅ (chat ${chatId}).`,
+        }
+      }
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply:
+          'Telegram alert test failed during send. Check bot permissions/chat access, then retry `/hermit alert test`.',
+      }
+    }
+
+    if (parsed.action === 'status') {
+      const alert = await readHyperliquidPositionAlert(sender)
+      const telegramLinked = await resolveTelegramChatIdForWallet(sender)
+      const lines = ['🔔 **Hyperliquid alert settings**', '', ...formatPositionAlertStatusBlock(alert)]
+      if (telegramLinked) {
+        lines.push(`• Linked Telegram: **yes**`)
+      } else {
+        lines.push('• Linked Telegram: **no** — link your wallet in the 4626 Telegram Mini App first')
+      }
+      return { kind: 'hermit', provider: 'local', reply: lines.join('\n') }
+    }
+
+    if (parsed.action === 'default') {
+      const telegramLinked = await resolveTelegramChatIdForWallet(sender)
+      const saved = await enableDefaultHyperliquidPositionAlert(sender, {
+        telegramEnabled: telegramLinked ? true : false,
+      })
+      if (!saved) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Could not save alert settings right now. Try again in a moment.',
+        }
+      }
+      const lines = [
+        '✅ **Hyperliquid alerts on** (defaults)',
+        '',
+        ...describeHyperliquidAlertDefaults(),
+      ]
+      if (telegramLinked) {
+        lines.push('', 'Telegram DMs **enabled** for this wallet.')
+      } else {
+        lines.push(
+          '',
+          'Telegram not linked yet — link via 4626 Telegram Mini App, then run `/hermit alert` again.',
+        )
+      }
+      lines.push('', 'Live snapshot: `/position` · disable: `/hermit alert off`')
+      lines.push('Verify delivery now: `/hermit alert test`')
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: lines.join('\n'),
+      }
+    }
+
+    if (parsed.action === 'telegram') {
+      if (parsed.enabled) {
+        const chatId = await resolveTelegramChatIdForWallet(sender)
+        if (!chatId) {
+          return {
+            kind: 'hermit',
+            provider: 'local',
+            reply:
+              'No linked Telegram for this wallet. Link via 4626 Telegram, then retry `/hermit alert telegram on`.',
+          }
+        }
+        await upsertHyperliquidPositionAlert({
+          senderAddress: sender,
+          enabled: true,
+          telegramEnabled: true,
+        })
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: `Telegram DMs **on** for Hyperliquid alerts. Set thresholds with \`/hermit alert liq 10\` and/or \`/hermit alert target 5000\`.`,
+        }
+      }
+      await upsertHyperliquidPositionAlert({
+        senderAddress: sender,
+        telegramEnabled: false,
+      })
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: 'Telegram DMs off. `/position` still works in chat anytime.',
+      }
+    }
+
+    const telegramLinked = await resolveTelegramChatIdForWallet(sender)
+    const autoTelegram = Boolean(telegramLinked)
+
+    if (parsed.action === 'liq') {
+      const saved = await upsertHyperliquidPositionAlert({
+        senderAddress: sender,
+        enabled: true,
+        liquidationWarnPct: parsed.pct,
+        ...(autoTelegram ? { telegramEnabled: true } : {}),
+      })
+      if (!saved) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Could not save alert settings right now. Try again in a moment.',
+        }
+      }
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [
+          `Hyperliquid liquidation alert **on** — Telegram when **any open leg** is within **${parsed.pct}%** of liquidation.`,
+          autoTelegram
+            ? 'Telegram DMs enabled (wallet linked).'
+            : 'Link Telegram to 4626 to receive DMs, or run `/hermit alert telegram on` after linking.',
+          'Check live levels with `/position`.',
+        ].join('\n'),
+      }
+    }
+
+    if (parsed.action === 'target') {
+      const saved = await upsertHyperliquidPositionAlert({
+        senderAddress: sender,
+        enabled: true,
+        targetPnlUsd: parsed.usd,
+        ...(autoTelegram ? { telegramEnabled: true } : {}),
+      })
+      if (!saved) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Could not save alert settings right now. Try again in a moment.',
+        }
+      }
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [
+          `Hyperliquid target alert **on** — combined unrealized PnL **+$${parsed.usd.toLocaleString('en-US')}**.`,
+          'Default fire at 90% of target; override with `/hermit alert progress 80`.',
+          autoTelegram
+            ? 'Telegram DMs enabled (wallet linked).'
+            : 'Link Telegram to 4626 to receive DMs.',
+        ].join('\n'),
+      }
+    }
+
+    if (parsed.action === 'progress') {
+      const saved = await upsertHyperliquidPositionAlert({
+        senderAddress: sender,
+        enabled: true,
+        targetProgressPct: parsed.pct,
+      })
+      if (!saved) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Could not save alert settings right now. Try again in a moment.',
+        }
+      }
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: `Target alert will fire at **${parsed.pct}%** of your configured HL PnL target.`,
+      }
+    }
+
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: 'Unknown alert command. Try `/hermit alert status`.',
+    }
+  } catch (error) {
+    logger.warn('[hermit] alert subcommand failed', {
+      senderAddress: sender,
+      message: error instanceof Error ? error.message : String(error),
+    })
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply:
+        'Hermit alert service is temporarily unavailable. Retry `/hermit alert status` in a moment.',
+    }
+  }
+}
+
+async function buildPositionCommandReply(params: HermitExecutionParams): Promise<string> {
+  // Room 1659 tracks a dedicated room-level Hyperliquid portfolio rather than
+  // the sender's personal wallet. Keep alert config per-sender, but pull HL
+  // positions for the room portfolio so /position matches the room context.
+  const hlWallet =
+    params.roomId === '1659'
+      ? resolveRoom1659HyperliquidUserForSnapshot(params.senderAddress)
+      : params.senderAddress
+  const hlState = await getClearinghouseState(hlWallet)
+  const alert = await readHyperliquidPositionAlert(params.senderAddress)
+  const room1659Market =
+    params.roomId === '1659' ? await resolveRoom1659MarketContext(params.senderAddress) : null
+  const marketBrief = await buildMarketScopeSummary()
+  return buildHyperliquidPositionReport({
+    walletAddress: hlWallet,
+    hlState,
+    alert,
+    roomId: params.roomId ?? null,
+    room1659Market,
+    marketBrief,
+  })
+}
+
+type PositionMarkerEvent =
+  | {
+      markerIndex: number
+      time: number
+      kind: 'trade'
+      summary: string
+      trade: {
+        action: string
+        coin: string | null
+        side: 'long' | 'short' | null
+        price: number | null
+        size: number | null
+        dir: string | null
+        closedPnl: number
+        fee: number
+      }
+    }
+  | {
+      markerIndex: number
+      time: number
+      kind: 'chat'
+      summary: string
+      chat: RoomTimelineChatEvent
+    }
+
+// Distributive Omit so the trade | chat discriminated union survives — a plain
+// `Omit<PositionMarkerEvent, 'markerIndex'>` collapses to the common keys only and drops
+// the branch-specific `trade` / `chat` payloads.
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
+
+function formatMarkerTime(ms: number): string {
+  return new Date(ms).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function toMarkerSummary(event: PositionMarkerEvent): string {
+  if (event.kind === 'trade') {
+    const action = event.trade.action.toUpperCase()
+    const coin = event.trade.coin ?? 'HL'
+    const price = event.trade.price != null ? `$${event.trade.price.toFixed(2)}` : 'price ?'
+    const size = event.trade.size != null ? `${event.trade.size.toFixed(4)} size` : 'size ?'
+    return `[${event.markerIndex}] ${formatMarkerTime(event.time)} · TRADE ${action} ${coin} · ${price} · ${size}`
+  }
+
+  const who =
+    event.chat.senderLabel?.trim() ||
+    `${event.chat.senderAddress.slice(0, 6)}…${event.chat.senderAddress.slice(-4)}`
+  const hostTag = event.chat.isHost ? 'host' : 'chat'
+  const firstTag = event.chat.isFirstFromSender ? ' · first message' : ''
+  const text = event.chat.text.replace(/\s+/g, ' ').slice(0, 120)
+  return `[${event.markerIndex}] ${formatMarkerTime(event.time)} · ${hostTag}${firstTag} · ${who} · "${text}${event.chat.text.length > 120 ? '…' : ''}"`
+}
+
+async function buildPositionMarkerEvents(params: HermitExecutionParams): Promise<PositionMarkerEvent[]> {
+  if (!params.roomId) return []
+  const timeline = await buildRoomTimelineData({
+    roomId: params.roomId,
+    windowHours: 24 * 7,
+  })
+  const merged: Array<DistributiveOmit<PositionMarkerEvent, 'markerIndex'>> = [
+    ...timeline.tradeEvents.map((trade) => ({
+      kind: 'trade' as const,
+      time: trade.time,
+      summary: '',
+      trade: {
+        action: trade.action,
+        coin: trade.coin,
+        side: trade.side,
+        price: trade.price,
+        size: trade.size,
+        dir: trade.dir,
+        closedPnl: trade.closedPnl,
+        fee: trade.fee,
+      },
+    })),
+    ...timeline.chatEvents.map((chat) => ({
+      kind: 'chat' as const,
+      time: chat.time,
+      summary: '',
+      chat,
+    })),
+  ]
+
+  merged.sort((a, b) => a.time - b.time)
+  // Construct each branch explicitly so the discriminated union (trade | chat) survives the
+  // spread — spreading the union directly would widen it to a merged shape that no longer
+  // matches PositionMarkerEvent.
+  return merged.map((event, idx): PositionMarkerEvent => {
+    if (event.kind === 'trade') {
+      const withIndex = { ...event, markerIndex: idx + 1 }
+      return { ...withIndex, summary: toMarkerSummary(withIndex) }
+    }
+    const withIndex = { ...event, markerIndex: idx + 1 }
+    return { ...withIndex, summary: toMarkerSummary(withIndex) }
+  })
+}
+
+function positionSubcommandUsage(): string {
+  return [
+    'Position timeline commands:',
+    '- `/position` — live Hyperliquid snapshot + risk brief',
+    '- `/position chart` — timeline chart link + marker counts',
+    '- `/position markers all` — expanded numbered marker feed (trade + chat)',
+    '- `/position host markers` — host-only chat marker feed',
+    '- `/position sender <address|me>` — sender-specific chat marker feed',
+    '- `/position marker latest` — newest marker',
+    '- `/position marker trade <n>` — nth most recent trade marker (1 = newest)',
+    '- `/position marker host <n>` — nth most recent host-chat marker (1 = newest)',
+    '- `/position marker <n>` — exact marker index from marker lists',
+  ].join('\n')
+}
+
+async function buildPositionChartCommandReply(params: HermitExecutionParams): Promise<string> {
+  if (!params.roomId) {
+    return 'Timeline chart mode is available in AlfaClub room contexts only.'
+  }
+  const events = await buildPositionMarkerEvents(params)
+  const trades = events.filter((event) => event.kind === 'trade').length
+  const chats = events.filter((event) => event.kind === 'chat').length
+  const hostChats = events.filter((event) => event.kind === 'chat' && event.chat.isHost).length
+  return [
+    '📈 **Position timeline chart**',
+    `Room ${params.roomId} · markers: ${events.length} total (${trades} trades, ${chats} chats, ${hostChats} host chats)`,
+    'Open: https://app.4626.fun/positions',
+    '',
+    'In chat:',
+    '- `/position markers all` for the full indexed list',
+    '- `/position host markers` for host-only chats',
+    '- `/position sender <address|me>` for one sender',
+    '- `/position marker <n>` to inspect one marker',
+  ].join('\n')
+}
+
+async function buildPositionMarkersAllReply(params: HermitExecutionParams): Promise<string> {
+  if (!params.roomId) {
+    return 'Marker feed is available in AlfaClub room contexts only.'
+  }
+  const events = await buildPositionMarkerEvents(params)
+  if (events.length === 0) {
+    return 'No timeline markers found in this window yet. Retry after new fills or chat activity.'
+  }
+  const maxRows = 80
+  const slice = events.slice(-maxRows)
+  return [
+    `🧭 **Timeline markers** (latest ${slice.length} of ${events.length})`,
+    ...slice.map((event) => event.summary),
+    '',
+    'Inspect one marker: `/position marker <n>`',
+  ].join('\n')
+}
+
+function normalizePositionSenderFilter(raw: string, senderAddress: string): string | null {
+  const token = raw.trim().toLowerCase()
+  if (!token) return null
+  if (token === 'me') return senderAddress.toLowerCase()
+  if (/^0x[a-f0-9]{40}$/.test(token)) return token
+  return null
+}
+
+async function buildPositionFilteredChatMarkersReply(
+  params: HermitExecutionParams,
+  filter:
+    | { kind: 'host' }
+    | {
+        kind: 'sender'
+        senderAddress: string
+      },
+): Promise<string> {
+  if (!params.roomId) {
+    return 'Marker feed is available in AlfaClub room contexts only.'
+  }
+  const events = await buildPositionMarkerEvents(params)
+  const chats = events.filter(
+    (event): event is Extract<PositionMarkerEvent, { kind: 'chat' }> => event.kind === 'chat',
+  )
+  const filtered =
+    filter.kind === 'host'
+      ? chats.filter((event) => event.chat.isHost)
+      : chats.filter((event) => event.chat.senderAddress.toLowerCase() === filter.senderAddress)
+
+  if (filtered.length === 0) {
+    if (filter.kind === 'host') {
+      return 'No host chat markers found in this timeline window yet.'
+    }
+    return `No chat markers found for ${filter.senderAddress} in this timeline window yet.`
+  }
+
+  const maxRows = 80
+  const slice = filtered.slice(-maxRows)
+  const heading =
+    filter.kind === 'host'
+      ? `🧭 **Host chat markers** (latest ${slice.length} of ${filtered.length})`
+      : `🧭 **Sender chat markers** (${filter.senderAddress.slice(0, 6)}…${filter.senderAddress.slice(-4)}) — latest ${slice.length} of ${filtered.length}`
+
+  return [
+    heading,
+    ...slice.map((event) => event.summary),
+    '',
+    'Inspect one marker: `/position marker <n>`',
+  ].join('\n')
+}
+
+async function buildPositionMarkerDetailReply(
+  params: HermitExecutionParams,
+  markerSelector:
+    | { kind: 'index'; markerIndex: number }
+    | { kind: 'latest' }
+    | { kind: 'trade_recent'; nth: number }
+    | { kind: 'host_recent'; nth: number },
+): Promise<string> {
+  if (!params.roomId) {
+    return 'Marker detail is available in AlfaClub room contexts only.'
+  }
+  const events = await buildPositionMarkerEvents(params)
+  if (events.length === 0) {
+    return 'No timeline markers found in this window yet. Retry after new fills or chat activity.'
+  }
+
+  const targetBySelector = (() => {
+    if (markerSelector.kind === 'index') {
+      return events.find((event) => event.markerIndex === markerSelector.markerIndex) ?? null
+    }
+    if (markerSelector.kind === 'latest') {
+      return events[events.length - 1] ?? null
+    }
+    if (markerSelector.kind === 'trade_recent') {
+      const trades = events.filter(
+        (event): event is Extract<PositionMarkerEvent, { kind: 'trade' }> => event.kind === 'trade',
+      )
+      if (trades.length === 0) return null
+      return trades[trades.length - markerSelector.nth] ?? null
+    }
+    const hostChats = events.filter(
+      (event): event is Extract<PositionMarkerEvent, { kind: 'chat' }> =>
+        event.kind === 'chat' && event.chat.isHost,
+    )
+    if (hostChats.length === 0) return null
+    return hostChats[hostChats.length - markerSelector.nth] ?? null
+  })()
+
+  const target = targetBySelector
+  if (!target) {
+    if (markerSelector.kind === 'index') {
+      return `Marker #${markerSelector.markerIndex} not found. Use \`/position markers all\` for valid indexes.`
+    }
+    if (markerSelector.kind === 'trade_recent') {
+      return `Trade marker #${markerSelector.nth} not found. Use \`/position markers all\` to inspect available trades.`
+    }
+    if (markerSelector.kind === 'host_recent') {
+      return `Host marker #${markerSelector.nth} not found. Use \`/position host markers\` to inspect available host chats.`
+    }
+    return 'No latest marker found. Use `/position markers all` first.'
+  }
+
+  if (target.kind === 'trade') {
+    const side = target.trade.side?.toUpperCase() ?? 'UNKNOWN'
+    const price = target.trade.price != null ? `$${target.trade.price.toFixed(2)}` : 'n/a'
+    const size = target.trade.size != null ? target.trade.size.toFixed(6) : 'n/a'
+    const pnl = `${target.trade.closedPnl >= 0 ? '+' : ''}${target.trade.closedPnl.toFixed(2)}`
+    const fee = target.trade.fee.toFixed(4)
+    return [
+      `🔎 **Marker #${target.markerIndex}** · trade`,
+      `${formatMarkerTime(target.time)} · ${target.trade.action.toUpperCase()} ${target.trade.coin ?? 'HL'} · ${side}`,
+      `price ${price} · size ${size} · closedPnL ${pnl} · fee ${fee}`,
+      target.trade.dir ? `dir: ${target.trade.dir}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  const chat = target.chat
+  const who =
+    chat.senderLabel?.trim() || `${chat.senderAddress.slice(0, 6)}…${chat.senderAddress.slice(-4)}`
+  const replies = events
+    .filter((event): event is Extract<PositionMarkerEvent, { kind: 'chat' }> => event.kind === 'chat')
+    .filter((event) => event.chat.replyId != null && event.chat.replyId === chat.messageId)
+    .slice(0, 8)
+  return [
+    `💬 **Marker #${target.markerIndex}** · ${chat.isHost ? 'host chat' : 'chat'}`,
+    `${formatMarkerTime(chat.time)} · ${who}${chat.isFirstFromSender ? ' · first message' : ''}`,
+    '',
+    chat.text,
+    chat.replyText ? ['', `In reply to (${chat.replySenderLabel || chat.replySender || 'unknown'}):`, chat.replyText] : [],
+    replies.length > 0
+      ? [
+          '',
+          `Replies (${replies.length} shown):`,
+          ...replies.map((reply) => {
+            const replyWho =
+              reply.chat.senderLabel?.trim() ||
+              `${reply.chat.senderAddress.slice(0, 6)}…${reply.chat.senderAddress.slice(-4)}`
+            return `- ${formatMarkerTime(reply.chat.time)} · ${replyWho}: ${reply.chat.text.replace(/\s+/g, ' ').slice(0, 180)}${reply.chat.text.length > 180 ? '…' : ''}`
+          }),
+        ]
+      : [],
+  ]
+    .flat()
+    .join('\n')
+}
+
+type PositionSubcommand =
+  | { kind: 'default' }
+  | { kind: 'chart' }
+  | { kind: 'markers_all' }
+  | { kind: 'host_markers' }
+  | { kind: 'sender_markers'; senderToken: string }
+  | {
+      kind: 'marker'
+      selector:
+        | { kind: 'index'; markerIndex: number }
+        | { kind: 'latest' }
+        | { kind: 'trade_recent'; nth: number }
+        | { kind: 'host_recent'; nth: number }
+    }
+  | { kind: 'usage' }
+
+function parsePositionSubcommand(rawArgs: string): PositionSubcommand {
+  const args = rawArgs.trim()
+  if (!args) return { kind: 'default' }
+  if (/^chart$/i.test(args)) return { kind: 'chart' }
+  if (/^markers\s+all$/i.test(args)) return { kind: 'markers_all' }
+  if (/^host\s+markers$/i.test(args)) return { kind: 'host_markers' }
+  const senderMatch = args.match(/^sender\s+(.+)$/i)
+  if (senderMatch?.[1]) return { kind: 'sender_markers', senderToken: senderMatch[1].trim() }
+  if (/^marker\s+latest$/i.test(args) || /^marker\s+last$/i.test(args)) {
+    return { kind: 'marker', selector: { kind: 'latest' } }
+  }
+  const markerTradeMatch = args.match(/^marker\s+trade\s+(\d+)$/i)
+  if (markerTradeMatch?.[1]) {
+    return {
+      kind: 'marker',
+      selector: { kind: 'trade_recent', nth: Number(markerTradeMatch[1]) },
+    }
+  }
+  const markerHostMatch = args.match(/^marker\s+host\s+(\d+)$/i)
+  if (markerHostMatch?.[1]) {
+    return {
+      kind: 'marker',
+      selector: { kind: 'host_recent', nth: Number(markerHostMatch[1]) },
+    }
+  }
+  const markerMatch = args.match(/^marker\s+(\d+)$/i)
+  if (markerMatch?.[1]) {
+    return {
+      kind: 'marker',
+      selector: { kind: 'index', markerIndex: Number(markerMatch[1]) },
+    }
+  }
+  return { kind: 'usage' }
+}
+
+async function buildSignalCommandReply(params: HermitExecutionParams): Promise<string> {
+  const hlWallet =
+    params.roomId === '1659'
+      ? resolveRoom1659HyperliquidUserForSnapshot(params.senderAddress)
+      : params.senderAddress
+  const [hlState, room1659Market, marketBrief] = await Promise.all([
+    getClearinghouseState(hlWallet),
+    params.roomId === '1659' ? resolveRoom1659MarketContext(params.senderAddress) : Promise.resolve(null),
+    buildMarketScopeSummary(),
+  ])
+
+  return buildHyperliquidEntrySignalReport({
+    walletAddress: hlWallet,
+    hlState,
+    roomId: params.roomId ?? null,
+    room1659Market,
+    marketBrief,
+  })
+}
+
+async function buildMarketScopeSummary(): Promise<{
+  snapshotTs: string | null
+  previousSnapshotTs: string | null
+  majors: Array<{ symbol: string; priceUsd: number | null; change24hPct: number | null }>
+  topCreators: Array<{ rank: number; label: string; score: number }>
+} | null> {
+  const brief = await buildAlfaClubBriefContext({
+    topRows: 3,
+    moverRows: 3,
+    majorRows: 6,
+    compact: true,
+    fetchMarkets: true,
+  })
+  if (!brief.ok) return null
+  const topCreators = brief.formatInput.currentRows.slice(0, 3).map((row) => {
+    const label =
+      brief.formatInput.labels.get(row.creatorAddress.toLowerCase()) ??
+      `${row.creatorAddress.slice(0, 6)}…${row.creatorAddress.slice(-4)}`
+    return {
+      rank: row.rank,
+      label: `${label} · #${row.tokenId.toString()}`,
+      score: row.score,
+    }
+  })
+  return {
+    snapshotTs: brief.snapshotTs,
+    previousSnapshotTs: brief.previousSnapshotTs,
+    majors: brief.formatInput.marketRows.slice(0, 6),
+    topCreators,
+  }
+}
+
+async function buildMarketCommandReply(): Promise<string> {
+  const summary = await buildMarketScopeSummary()
+  if (!summary) {
+    return 'Market scope is temporarily unavailable. Retry `/market` in a moment.'
+  }
+
+  const majorLine = summary.majors
+    .map((row) => {
+      const px =
+        row.priceUsd == null
+          ? 'n/a'
+          : row.priceUsd >= 1000
+            ? `$${row.priceUsd.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+            : `$${row.priceUsd.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+      const chg =
+        row.change24hPct == null
+          ? 'n/a'
+          : `${row.change24hPct > 0 ? '+' : ''}${row.change24hPct.toFixed(1)}%`
+      return `${row.symbol} ${px} (${chg})`
+    })
+    .join(' · ')
+
+  const topLine = summary.topCreators
+    .map((row) => `#${row.rank} ${row.label} (${row.score.toFixed(3)})`)
+    .join('\n')
+
+  return [
+    '🌐 **Market scope brief**',
+    summary.snapshotTs
+      ? `Snapshot: ${summary.snapshotTs}${summary.previousSnapshotTs ? ` vs ${summary.previousSnapshotTs}` : ''}`
+      : 'Snapshot: latest',
+    '',
+    `**Majors (24h)** ${majorLine || 'n/a'}`,
+    '',
+    '**Top AlfaClub creators (snapshot)**',
+    topLine || '- No ranked creators available in this snapshot.',
+    '',
+    'Proactive loop: run `/market` every 15–30m, then `/position` before sizing changes.',
+  ].join('\n')
 }
 
 const HERMIT_ONBOARDING_NUDGE =
@@ -1233,30 +2318,777 @@ export async function executeHermitCommand(
   const { command, args } = splitCommandAndArgs(params.commandText)
   const userPreferences: HermitUserPreferences | null = params.userPreferences ?? null
 
+  if (command === '/strategy') {
+    const parsed = parseStrategyCommandArgs(args)
+    if (!parsed) {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [
+          'Invalid strategy command.',
+          formatStrategyUsage(),
+          'Preset must be one of: defensive, balanced, aggressive.',
+        ].join('\n\n'),
+      }
+    }
+
+    const runtime = readCounterTradeRuntimeConfig()
+    const roomId = params.roomId ?? runtime.roomId
+    if (!arenaCommandAllowedForRoom(roomId)) {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: 'Strategy automation is only enabled in approved rooms.',
+      }
+    }
+
+    if (parsed.kind === 'help') {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: formatStrategyUsage(),
+      }
+    }
+
+    const strategy = await readOrCreateCounterTradeRoomStrategy(roomId)
+    const userState = await readCounterTradeUserOptIn({
+      roomId,
+      senderAddress: params.senderAddress,
+    })
+
+    if (parsed.kind === 'status') {
+      const statusNotes: string[] = []
+      const baseConfig = readArenaConfig()
+      if (baseConfig.enabled) {
+        const identity = await resolveArenaIdentityForContext({
+          roomId,
+          senderAddress: params.senderAddress,
+          baseConfig,
+        })
+        const hasMappedIdentity =
+          identity.source !== 'env_default' &&
+          Boolean(identity.agentId) &&
+          Boolean(identity.agentWalletAddress)
+        if (!hasMappedIdentity) {
+          if (shouldAttemptStrategyStatusAutoprovision(roomId, params.senderAddress)) {
+            const autoSetup = await autoProvisionArenaIdentityForStrategy({
+              roomId,
+              senderAddress: params.senderAddress,
+              baseConfig,
+            })
+            if (autoSetup.ok) {
+              statusNotes.push(`arenaSetup: ${autoSetup.summary}`)
+            } else {
+              statusNotes.push('arenaSetup: auto-provision failed (run /arena register manually).')
+            }
+          } else {
+            statusNotes.push('arenaSetup: retry window active, skipping auto-provision for now.')
+          }
+        } else {
+          statusNotes.push('arenaSetup: identity already mapped.')
+        }
+      } else {
+        statusNotes.push('arenaSetup: disabled (ARENA_ENABLED=0).')
+      }
+
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [
+          '**Strategy status**',
+          `state: ${userState?.state ?? 'not_opted_in'}`,
+          `preset: ${userState?.preset ?? 'n/a'}`,
+          `globalBias: ${strategy?.globalBias ?? 'neutral'}`,
+          `enabled: ${String(strategy?.enabled ?? false)}`,
+          `killSwitch: ${String(strategy?.killSwitch ?? false)}`,
+          `lastActionAt: ${userState?.lastActionAt ?? 'none'}`,
+          ...statusNotes,
+          ...(userState?.pauseReason ? [`pauseReason: ${userState.pauseReason}`] : []),
+        ].join('\n'),
+      }
+    }
+
+    if (parsed.kind === 'optin') {
+      const baseConfig = readArenaConfig()
+      let identity = await resolveArenaIdentityForContext({
+        roomId,
+        senderAddress: params.senderAddress,
+        baseConfig,
+      })
+      let hasMappedIdentity =
+        identity.source !== 'env_default' &&
+        Boolean(identity.agentId) &&
+        Boolean(identity.agentWalletAddress)
+      if (!hasMappedIdentity) {
+        const autoSetup = await autoProvisionArenaIdentityForStrategy({
+          roomId,
+          senderAddress: params.senderAddress,
+          baseConfig,
+        })
+        if (!autoSetup.ok) {
+          return {
+            kind: 'hermit',
+            provider: 'local',
+            reply: autoSetup.message,
+          }
+        }
+        identity = await resolveArenaIdentityForContext({
+          roomId,
+          senderAddress: params.senderAddress,
+          baseConfig,
+        })
+        hasMappedIdentity =
+          identity.source !== 'env_default' &&
+          Boolean(identity.agentId) &&
+          Boolean(identity.agentWalletAddress)
+        if (!hasMappedIdentity) {
+          return {
+            kind: 'hermit',
+            provider: 'local',
+            reply: [
+              'Auto-setup ran, but no Arena identity mapping was found for your account.',
+              'Run /arena register first, then retry.',
+            ].join('\n'),
+          }
+        }
+      }
+
+      const saved = await upsertCounterTradeOptIn({
+        roomId,
+        senderAddress: params.senderAddress,
+        preset: parsed.preset,
+      })
+      if (!saved) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: [
+            'Unable to enable automation: no Arena identity mapping found for your account.',
+            'Run /arena register first, then retry.',
+          ].join('\n'),
+        }
+      }
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [
+          'Automation enabled for your account.',
+          'Arena setup is linked for your sender and should now appear on Virtuals Arena.',
+          `Preset: ${saved.preset}. Mode: room-level strategy + personal risk controls.`,
+          'You can pause instantly with /strategy pause.',
+        ].join('\n'),
+      }
+    }
+
+    if (parsed.kind === 'pause') {
+      const paused = await pauseCounterTradeOptIn({
+        roomId,
+        senderAddress: params.senderAddress,
+        reason: 'user_paused',
+      })
+      if (!paused) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Automation is not enabled for your account.\nRun /strategy optin <preset> to start.',
+        }
+      }
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [
+          'Automation paused immediately for your account.',
+          'No new counter-trades will be opened until you resume.',
+        ].join('\n'),
+      }
+    }
+
+    if (parsed.kind === 'resume') {
+      const resumed = await resumeCounterTradeOptIn({
+        roomId,
+        senderAddress: params.senderAddress,
+      })
+      if (!resumed) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Automation is not enabled for your account.\nRun /strategy optin <preset> to start.',
+        }
+      }
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [`Automation resumed for your account.`, `Preset remains: ${resumed.preset}.`].join('\n'),
+      }
+    }
+
+    if (parsed.kind === 'bias') {
+      if (!params.isTrustedOperator) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply:
+            'Only trusted operators can change room bias. Ask an OWNER/ADMIN or allowlisted operator.',
+        }
+      }
+      const updated = await setCounterTradeGlobalBias({
+        roomId,
+        globalBias: parsed.bias,
+      })
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: updated
+          ? `Room strategy bias updated to ${updated.globalBias}.`
+          : 'Could not update room strategy bias.',
+      }
+    }
+  }
+
+  if (command === '/arena') {
+    const parsed = parseArenaCommandArgs(args)
+    if (!parsed) {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: formatArenaUsage(),
+      }
+    }
+    if (!arenaCommandAllowedForRoom(params.roomId ?? null)) {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: 'Arena commands are only enabled in approved rooms.',
+      }
+    }
+
+    const baseConfig = readArenaConfig()
+    const resolvedIdentity = await resolveArenaIdentityForContext({
+      roomId: params.roomId ?? null,
+      senderAddress: params.senderAddress,
+      baseConfig,
+    })
+    const config = {
+      ...baseConfig,
+      agentId: resolvedIdentity.agentId,
+      agentWalletAddress: resolvedIdentity.agentWalletAddress,
+      hlApiWalletAddress: resolvedIdentity.hlApiWalletAddress,
+    }
+    if (parsed.kind === 'help') {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: formatArenaUsage(),
+      }
+    }
+    if (parsed.kind === 'identity-show') {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [
+          'Arena identity resolution',
+          `- source: ${resolvedIdentity.source}`,
+          `- room: ${params.roomId ?? 'n/a'}`,
+          `- sender: ${params.senderAddress}`,
+          `- agentId: ${config.agentId ?? 'unset'}`,
+          `- arenaWallet: ${config.agentWalletAddress ?? 'unset'}`,
+          `- hlApiWallet: ${config.hlApiWalletAddress ?? 'unset'}`,
+        ].join('\n'),
+      }
+    }
+    if (parsed.kind === 'identity-set') {
+      const targetSenderAddress =
+        parsed.target === 'default'
+          ? '*'
+          : parsed.target === 'mine'
+            ? params.senderAddress
+            : parsed.senderAddress
+      const saved = await upsertArenaIdentityMapping({
+        roomId: params.roomId ?? '',
+        senderAddress: targetSenderAddress ?? '',
+        arenaAgentId: parsed.agentId,
+        arenaWalletAddress: parsed.agentWalletAddress,
+        ...(parsed.hlApiWalletAddress ? { hlApiWalletAddress: parsed.hlApiWalletAddress } : {}),
+        updatedBy: params.senderAddress,
+      })
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: saved
+          ? `Arena identity mapping saved for ${parsed.target}.`
+          : 'Could not save Arena identity mapping. Check args and retry.',
+      }
+    }
+    if (parsed.kind === 'identity-clear') {
+      const targetSenderAddress =
+        parsed.target === 'default'
+          ? '*'
+          : parsed.target === 'mine'
+            ? params.senderAddress
+            : parsed.senderAddress
+      const cleared = await clearArenaIdentityMapping({
+        roomId: params.roomId ?? '',
+        senderAddress: targetSenderAddress ?? '',
+      })
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: cleared
+          ? `Arena identity mapping cleared for ${parsed.target}.`
+          : 'Could not clear Arena identity mapping. Check args and retry.',
+      }
+    }
+    if (parsed.kind === 'register') {
+      const isDefault = parsed.target === 'default'
+      const targetSenderForBind = isDefault ? '*' : params.senderAddress
+      const isCreatePath = !parsed.agentId || !parsed.agentWalletAddress
+
+      function sanitizeOutputForReply(text: string | undefined | null): string {
+        let s = String(text || '').trim()
+        if (baseConfig.dgclawDir) {
+          const escaped = baseConfig.dgclawDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          s = s.replace(new RegExp(escaped, 'gi'), '[dgclaw-dir]')
+        }
+        s = s.replace(/\b(ARENA_[A-Z0-9_]+)=[^\s]+/g, '$1=[redacted]')
+        return s.slice(0, 400)
+      }
+
+      type ArenaOnboardStep = {
+        name: 'join' | 'activate' | 'add-api-wallet'
+        result: Awaited<ReturnType<typeof runArenaJoin>>
+      }
+
+      function summarizeArenaOnboardStep(step: ArenaOnboardStep): string {
+        return `${step.name}=${step.result.ok ? 'ok' : 'fail'}${step.result.run?.dryRun ? '[dry]' : ''}`
+      }
+
+      function describeArenaOnboardFailure(step: ArenaOnboardStep): string {
+        const timeoutHint = step.result.run?.timedOut ? 'command timed out before completion' : ''
+        const message = sanitizeOutputForReply(
+          [
+            step.result.message,
+            timeoutHint,
+            step.result.run?.error ?? '',
+            step.result.run?.stderr ?? '',
+            step.result.run?.stdout ?? '',
+          ]
+            .map((part) => String(part).trim())
+            .filter(Boolean)
+            .join(' | '),
+        )
+        return message || 'unknown step failure'
+      }
+
+      async function runArenaOnboardSequence(activeConfig: typeof config): Promise<{
+        stepSummaries: string[]
+        failureLines: string[]
+        discoveredHlApiWalletAddress?: string
+      }> {
+        const steps: ArenaOnboardStep[] = [
+          { name: 'join', result: await runArenaJoin(activeConfig) },
+          { name: 'activate', result: await runArenaActivateUnifiedAccount(activeConfig) },
+          { name: 'add-api-wallet', result: await runArenaAddApiWallet(activeConfig) },
+        ]
+        const stepSummaries = steps.map(summarizeArenaOnboardStep)
+        const failedSteps = steps.filter((step) => !step.result.ok)
+        const failureLines =
+          failedSteps.length > 0
+            ? [
+                'onboarding diagnostics:',
+                ...failedSteps.map((step) => `- ${step.name}: ${describeArenaOnboardFailure(step)}`),
+              ]
+            : []
+        const addApiWalletStep = steps.find((step) => step.name === 'add-api-wallet')
+        const discoveredHlApiWalletAddress =
+          typeof addApiWalletStep?.result?.details?.hlApiWalletAddress === 'string'
+            ? addApiWalletStep.result.details.hlApiWalletAddress.toLowerCase()
+            : undefined
+        return { stepSummaries, failureLines, discoveredHlApiWalletAddress }
+      }
+
+      if (isCreatePath) {
+        // Create path (no ids supplied): drive `acp agent create` via the runtime's ACP session
+        // (pre-configured via acp configure / ACP_* tokens + ACP_OWNER_WALLET; see acp-cli source).
+        // On success (parsable Agent ID + wallet from stdout), auto-bind as 'mine' (sender) or '*'
+        // (room default) and run the full arena onboard (join/activate/add-api-wallet).
+        // The --owner <sender> is passed best-effort (official acp-cli create does not declare
+        // this flag; ownership on ACP is the session's user, not a create-time param).
+        // For an agent whose ACP owner/dashboard identity is specifically the Alfa sender EOA
+        // (not the bot session), the user should create via the web UI (app.virtuals.io) while
+        // authenticated/connected with that exact wallet, then supply the ids.
+        const cr = await runArenaCreateAgent(config, targetSenderForBind === '*' ? params.senderAddress : targetSenderForBind)
+
+        if (cr.agentId && cr.agentWalletAddress) {
+          const out = sanitizeOutputForReply(cr.run?.stdout)
+
+          // For both default and personal create: auto-bind the mapping + run onboarding.
+          // The mapping + activeConfig gives the bot control for arena cmds under that sender.
+          // The ACP creator of the agent is the runtime session (see audit + ACP_OWNER_WALLET).
+          const bindSender = isDefault ? '*' : targetSenderForBind
+
+          const saved = await upsertArenaIdentityMapping({
+            roomId: params.roomId ?? '',
+            senderAddress: bindSender,
+            arenaAgentId: cr.agentId,
+            arenaWalletAddress: cr.agentWalletAddress,
+            ...(cr.hlApiWalletAddress ? { hlApiWalletAddress: cr.hlApiWalletAddress } : {}),
+            updatedBy: params.senderAddress,
+          })
+
+          const activeConfig = {
+            ...config,
+            agentId: cr.agentId,
+            agentWalletAddress: cr.agentWalletAddress,
+            ...(cr.hlApiWalletAddress ? { hlApiWalletAddress: cr.hlApiWalletAddress } : {}),
+          }
+
+          const { stepSummaries, failureLines, discoveredHlApiWalletAddress } = await runArenaOnboardSequence(activeConfig)
+
+          let effectiveHlApiWalletAddress = cr.hlApiWalletAddress
+          if (discoveredHlApiWalletAddress && discoveredHlApiWalletAddress !== effectiveHlApiWalletAddress) {
+            effectiveHlApiWalletAddress = discoveredHlApiWalletAddress
+            await upsertArenaIdentityMapping({
+              roomId: params.roomId ?? '',
+              senderAddress: bindSender,
+              arenaAgentId: cr.agentId,
+              arenaWalletAddress: cr.agentWalletAddress,
+              hlApiWalletAddress: effectiveHlApiWalletAddress,
+              updatedBy: params.senderAddress,
+            })
+          }
+
+          const what = isDefault ? 'room default' : 'personal (\'mine\') identity for your sender'
+          return {
+            kind: 'hermit',
+            provider: 'local',
+            reply: [
+              cr.run?.dryRun
+                ? `Dry-run: created agent and would have bound as ${what} + onboarded.`
+                : `Created agent via acp and bound as ${what} + onboarded.`,
+              out ? `acp output (sanitized, truncated):\n${out}` : '',
+              `agentId=${cr.agentId} arenaWallet=${cr.agentWalletAddress}${effectiveHlApiWalletAddress ? ` hl=${effectiveHlApiWalletAddress}` : ''}`,
+              saved ? 'Mapping saved.' : 'Mapping write may have failed (check logs).',
+              `steps: ${stepSummaries.join(' ')}`,
+              ...failureLines,
+              'Verify with: /arena identity show  |  /arena status',
+              'Note: the agent was created under the active runtime ACP session (owner resolves to ACP_OWNER_WALLET when ACP_* rotation vars are set). For full Virtuals dashboard ownership under your Alfa EOA, create/claim via web UI at app.virtuals.io while connected as that wallet.',
+            ].filter(Boolean).join('\n'),
+          }
+        }
+
+        // Create failed or no parsable ids
+        const out = sanitizeOutputForReply(cr.run?.stdout || cr.run?.stderr)
+        const guidance = isDefault
+          ? 'To switch the room default: create on web connected as your Alfa wallet (recommended for dashboard ownership), then /arena register default <id> <wallet>, or run /arena register default (no args) again. (No-args create uses the runtime ACP session currently active on the service.)'
+          : 'Create/claim at app.virtuals.io/acp/new while connected as your room sender wallet (for ownership match), then /arena register <id> <wallet>. (No-args create uses the runtime ACP session currently active on the service.)'
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: [
+            cr.message || 'Create failed or produced no parsable ids.',
+            out ? `acp output (sanitized, truncated):\n${out}` : '',
+            guidance,
+          ].filter(Boolean).join('\n'),
+        }
+      }
+
+      // Supplied-ids path (ids provided)
+      let agentId = parsed.agentId!
+      let agentWalletAddress = parsed.agentWalletAddress!
+      let hlApiWalletAddress = parsed.hlApiWalletAddress
+
+      // For personal only: short-circuit if already bound to these exact ids
+      if (!isDefault && resolvedIdentity &&
+          resolvedIdentity.agentId === agentId &&
+          resolvedIdentity.agentWalletAddress === agentWalletAddress) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: [
+            `Already bound for your sender (${targetSenderForBind}) to this agent.`,
+            `agentId: ${agentId}`,
+            `arenaWallet: ${agentWalletAddress}`,
+            'No re-bind or re-onboard performed. Use dedicated subcommands if needed.',
+          ].join('\n'),
+        }
+      }
+
+      // Validation
+      const looksLikeAgentId = /^[0-9a-fA-F-]{8,}$/.test(agentId)
+      const looksLikeWallet = /^0x[0-9a-fA-F]{40}$/.test(agentWalletAddress)
+      if (!looksLikeAgentId || !looksLikeWallet) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Invalid agentId or agentWallet format. Use the exact values from ACP create / web UI.',
+        }
+      }
+
+      // Bind (for default uses '*' sender)
+      const saved = await upsertArenaIdentityMapping({
+        roomId: params.roomId ?? '',
+        senderAddress: targetSenderForBind,
+        arenaAgentId: agentId,
+        arenaWalletAddress: agentWalletAddress,
+        ...(hlApiWalletAddress ? { hlApiWalletAddress } : {}),
+        updatedBy: params.senderAddress,
+      })
+
+      const activeConfig = {
+        ...config,
+        agentId,
+        agentWalletAddress,
+        ...(hlApiWalletAddress ? { hlApiWalletAddress } : {}),
+      }
+
+      // Run onboarding steps
+      const { stepSummaries, failureLines, discoveredHlApiWalletAddress } = await runArenaOnboardSequence(activeConfig)
+      if (discoveredHlApiWalletAddress && discoveredHlApiWalletAddress !== hlApiWalletAddress) {
+        hlApiWalletAddress = discoveredHlApiWalletAddress
+        await upsertArenaIdentityMapping({
+          roomId: params.roomId ?? '',
+          senderAddress: targetSenderForBind,
+          arenaAgentId: agentId,
+          arenaWalletAddress: agentWalletAddress,
+          hlApiWalletAddress,
+          updatedBy: params.senderAddress,
+        })
+      }
+
+      const prefix = isDefault ? 'Arena room default register (supplied ids)' : 'Arena register (supplied ids)'
+      const identityLine = isDefault
+        ? (saved ? 'Room default mapping saved/updated.' : 'Room default mapping write may have failed (check logs).')
+        : (saved ? `Identity bound for 'mine' (sender ${targetSenderForBind}).` : `Identity bind failed (check DB/logs). sender=${targetSenderForBind}`)
+
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [
+          prefix + ':',
+          identityLine,
+          `steps: ${stepSummaries.join(' ')}`,
+          ...failureLines,
+          `agentId: ${agentId}`,
+          `arenaWallet: ${agentWalletAddress}`,
+          hlApiWalletAddress ? `hlApiWallet: ${hlApiWalletAddress}` : '',
+          'Verify: /arena identity show  |  /arena status  |  (use /arena deposit for funds; dry-run trade first if live)',
+        ].filter(Boolean).join('\n'),
+      }
+    }
+    if (parsed.kind === 'status') {
+      const result = await runArenaStatus(config)
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: result.ok
+          ? `Arena status: enabled=${String(result.details?.enabled)} tradingEnabled=${String(result.details?.tradingEnabled)} dryRun=${String(result.details?.dryRun)} identitySource=${resolvedIdentity.source} agentId=${resolvedIdentity.agentId ?? 'none'} arenaWallet=${resolvedIdentity.agentWalletAddress ?? 'none'}${resolvedIdentity.source === 'env_default' ? ' (no active DB mapping for room; run /arena register default or set via identity commands to bind a new one)' : ''}`
+          : `Arena status unavailable: ${result.message}`,
+      }
+    }
+    if (parsed.kind === 'assets') {
+      const result = await listArenaAssets(config)
+      if (!result.ok) {
+        return { kind: 'hermit', provider: 'local', reply: `Arena assets unavailable: ${result.message}` }
+      }
+      const assets = Array.isArray(result.details?.assets) ? (result.details?.assets as string[]) : []
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: `Arena assets (${assets.length}): ${assets.join(', ')}`,
+      }
+    }
+    if (parsed.kind === 'join') {
+      const result = await runArenaJoin(config)
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: result.ok ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}` : result.message,
+      }
+    }
+    if (parsed.kind === 'activate') {
+      const result = await runArenaActivateUnifiedAccount(config)
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: result.ok ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}` : result.message,
+      }
+    }
+    if (parsed.kind === 'add-api-wallet') {
+      const result = await runArenaAddApiWallet(config)
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: result.ok ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}` : result.message,
+      }
+    }
+    if (parsed.kind === 'deposit') {
+      const result = await runArenaDepositUsdc(parsed.amountUsd, config)
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: result.ok ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}` : result.message,
+      }
+    }
+    if (parsed.kind === 'trade') {
+      const result = await runArenaTrade(
+        {
+          action: parsed.action,
+          pair: parsed.pair,
+          ...(parsed.side ? { side: parsed.side } : {}),
+          ...(parsed.sizeUsd ? { sizeUsd: parsed.sizeUsd } : {}),
+          ...(parsed.leverage ? { leverage: parsed.leverage } : {}),
+        },
+        config,
+      )
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: result.ok ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}` : result.message,
+      }
+    }
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: formatArenaUsage(),
+    }
+  }
+
+  if (command === '/position') {
+    const parsed = parsePositionSubcommand(args)
+    if (parsed.kind === 'chart') {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: await buildPositionChartCommandReply(params),
+      }
+    }
+    if (parsed.kind === 'markers_all') {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: await buildPositionMarkersAllReply(params),
+      }
+    }
+    if (parsed.kind === 'host_markers') {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: await buildPositionFilteredChatMarkersReply(params, { kind: 'host' }),
+      }
+    }
+    if (parsed.kind === 'sender_markers') {
+      const senderAddress = normalizePositionSenderFilter(parsed.senderToken, params.senderAddress)
+      if (!senderAddress) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply:
+            'Invalid sender filter. Use `/position sender <0x...>` or `/position sender me`.',
+        }
+      }
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: await buildPositionFilteredChatMarkersReply(params, {
+          kind: 'sender',
+          senderAddress,
+        }),
+      }
+    }
+    if (parsed.kind === 'marker') {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: await buildPositionMarkerDetailReply(params, parsed.selector),
+      }
+    }
+    if (parsed.kind === 'usage') {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: positionSubcommandUsage(),
+      }
+    }
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: await buildPositionCommandReply(params),
+    }
+  }
+
+  if (command === '/market') {
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: await buildMarketCommandReply(),
+    }
+  }
+
+  if (command === '/signal') {
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: await buildSignalCommandReply(params),
+    }
+  }
+
   if (command === '/gmeow') {
-    const meme = pickRandomHermitMeme(args || 'laugh')
+    const vibeTag = args.trim() || undefined
+    const meme = pickRandomHermitMeme(vibeTag)
     const attachment = inferPublicMediaAttachment(meme.url)
-    const localReply = `${meme.caption}\n${meme.url}`
+    const localLine = pickGmeowLocalLine(meme)
+    const localReply = `${localLine}\n${meme.url}`
     const explicitSignalSource = classifyExplicitSignal(args)
-    const draft = await runPinataDraft(
-      buildPinataPromptForGmeow({
-        userPrompt: args,
-        memeCaption: meme.caption,
-        memeTags: meme.tags,
-        userPreferences,
-      }),
-    )
+    let draft: PinataChatResult | null = null
+    let fallbackReason: 'pinata_throw' | 'pinata_provider_error_text' | null = null
+    const pinataCaptionRequested =
+      shouldRequestPinataGmeowCaption(args) && readHermitAgentConfig() !== null
+    if (pinataCaptionRequested) {
+      try {
+        draft = await runPinataDraft({
+          prompt: buildPinataPromptForGmeow({
+            userPrompt: args,
+            memeCaption: meme.caption,
+            memeTags: meme.tags,
+            userPreferences,
+          }),
+          senderAddress: params.senderAddress,
+          sourceIdentity: params.sourceIdentity ?? null,
+        })
+      } catch (error) {
+        fallbackReason = 'pinata_throw'
+        logger.warn('[hermit] /gmeow draft failed; using local fallback', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+        draft = null
+      }
+    }
     if (explicitSignalSource) {
       await persistExplicitDialectSignal(params, args, explicitSignalSource)
     }
     const parsed = draft?.text ? parseLooseJsonObject(draft.text) : null
     const draftedLineRaw =
       asString(parsed?.line) || asString(parsed?.caption) || asString(parsed?.text) || asString(draft?.text)
-    const draftedLine = isLikelyPinataProviderErrorText(draftedLineRaw) ? '' : draftedLineRaw
+    const draftedLineLooksLikeProviderError = isLikelyPinataProviderErrorText(draftedLineRaw)
+    if (!fallbackReason && draftedLineLooksLikeProviderError) {
+      fallbackReason = 'pinata_provider_error_text'
+      logger.warn('[hermit] /gmeow provider returned fallback-worthy text; using local fallback', {
+        replyHead: draftedLineRaw.slice(0, 120),
+      })
+    }
+    const draftedLine = draftedLineLooksLikeProviderError ? '' : draftedLineRaw
     const reply = draftedLine ? `${draftedLine}\n${meme.url}` : localReply
+    const provider = draftedLine ? 'hermit' : 'local'
+    logger.info('[hermit] /gmeow resolved', {
+      provider,
+      fallbackReason,
+      pinataCaptionRequested,
+      hasAttachment: Boolean(attachment),
+      explicitSignalSource,
+    })
     const result: HermitExecutionResult = {
       kind: 'gmeow',
-      provider: draftedLine ? 'pinata' : 'local',
+      provider,
       meme,
       reply,
       ...(attachment ? { mediaAttachments: [attachment] } : {}),
@@ -1266,19 +3098,23 @@ export async function executeHermitCommand(
 
   if (command === '/meme') {
     const explicitSignalSource = classifyExplicitSignal(args)
-    const draft = await runPinataDraft(buildPinataPromptForHermitImage(args, userPreferences))
+    const draft = await runPinataDraft({
+      prompt: buildPinataPromptForHermitImage(args, userPreferences),
+      senderAddress: params.senderAddress,
+      sourceIdentity: params.sourceIdentity ?? null,
+    })
     if (explicitSignalSource) {
       await persistExplicitDialectSignal(params, args, explicitSignalSource)
     }
     if (!draft?.text) {
       throw commandError(
-        'Hermit meme path unavailable. Configure HERMIT_PINATA_CHAT_ENDPOINT and HERMIT_PINATA_BEARER_TOKEN.',
+        'Hermit meme path unavailable. Configure HERMIT_AGENT_CHAT_ENDPOINT and HERMIT_AGENT_BEARER_TOKEN.',
       )
     }
     const image = formatHermitImageResult(draft.text)
     const result: HermitExecutionResult = {
       kind: 'meme',
-      provider: 'pinata',
+      provider: 'hermit',
       imagePrompt: image.imagePrompt,
       reply: image.reply,
       ...(image.mediaAttachments.length > 0
@@ -1293,11 +3129,11 @@ export async function executeHermitCommand(
       return {
         kind: 'hermit',
         provider: 'local',
-        reply: buildHermitHelpReply(),
+        reply: buildHermitHelpReply(params.roomId),
       }
     }
 
-    // Setup / personalization subcommands run locally — no Pinata
+    // Setup / personalization subcommands run locally — no external Hermit call
     // call, no onboarding nudge (the user is explicitly in setup
     // mode already, so the nudge would be redundant). They are
     // routed BEFORE parseHermitDraftMode so the words `setup`,
@@ -1344,30 +3180,33 @@ export async function executeHermitCommand(
 
     const { mode, prompt } = parseHermitDraftMode(args)
     const explicitSignalSource = classifyExplicitSignal(prompt)
-    const draft = await runPinataDraft(
-      buildPinataPromptForHermit({
+    const draft = await runPinataDraft({
+      prompt: buildPinataPromptForHermit({
         mode,
         userPrompt: prompt,
         userPreferences,
+        room1659Market: params.room1659Market,
       }),
-    )
+      senderAddress: params.senderAddress,
+      sourceIdentity: params.sourceIdentity ?? null,
+    })
     if (explicitSignalSource) {
       await persistExplicitDialectSignal(params, prompt, explicitSignalSource)
     }
     if (!draft?.text) {
       throw commandError(
-        'Hermit Pinata path unavailable. Configure HERMIT_PINATA_CHAT_ENDPOINT and HERMIT_PINATA_BEARER_TOKEN.',
+        'Hermit agent path unavailable. Configure HERMIT_AGENT_CHAT_ENDPOINT and HERMIT_AGENT_BEARER_TOKEN.',
       )
     }
     const result: HermitExecutionResult = {
       kind: 'hermit',
-      provider: 'pinata',
+      provider: 'hermit',
       reply: formatHermitReplyFromDraft(draft.text),
     }
     return await withOnboardingNudge(params, result)
   }
 
   throw commandError(
-    'Unsupported Hermit command. Use /gmeow, /hermit [copy|announce|quest|tone], or /meme.',
+    'Unsupported Hermit command. Use /gmeow, /hermit [copy|announce|quest|tone], /meme, /position, /signal, /market, /strategy, or /arena.',
   )
 }

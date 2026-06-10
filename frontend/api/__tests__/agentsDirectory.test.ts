@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   getErc8004PublicOrigin: vi.fn(() => 'https://4626.fun'),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   guardAgentApiRequest: mocks.guardAgentApiRequest,
   checkRateLimit: mocks.checkRateLimit,
   getClientIp: mocks.getClientIp,
@@ -35,7 +35,7 @@ describe('/api/agents directory hints', () => {
       ERC8004_AGENT_REGISTRY: '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432',
       ERC8004_AGENT_CHAIN_ID: '8453',
       ERC8004_AGENT_ID: '2205',
-      XMTP_AGENT_CSW_ADDRESS: '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5',
+      CANONICAL_CSW_ADDRESS: '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5',
     })
   })
 

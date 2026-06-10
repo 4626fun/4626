@@ -77,4 +77,4 @@ The role badge in the `Wallet` column matches the Mermaid node color.
 - [Account Primitive](/primitives/account)
 - [4626 Connection Methods](/4626-connection-methods)
 - [ERC-4337 Debugging](/reference/erc4337-debugging)
-- [Canonical CSW Owner Approval](/operations/canonical-csw-owner-approval)
+- [Owner-Install Reference Methods](/operations/owner-install-reference-methods)

@@ -7,7 +7,7 @@ export type NumberedCommandOption = {
 const DEFAULT_OPTIONS: readonly NumberedCommandOption[] = [
   { index: 1, command: '/help', description: 'see all commands' },
   { index: 2, command: '/keepr status', description: 'check this vault' },
-  { index: 3, command: '/cre health', description: 'check keeper health' },
+  { index: 3, command: '/keepr health', description: 'check keeper health' },
   { index: 4, command: '/wallet', description: 'review wallet + positions' },
   { index: 5, command: '/ai <question>', description: 'ask in plain English' },
 ]
@@ -35,4 +35,34 @@ export function formatWelcomeNumberedOptions(): string {
     '',
     ...renderNumberedOptions(DEFAULT_OPTIONS),
   ].join('\n')
+}
+
+export function formatAiPromptGuidance(): string {
+  return 'Ask me anything about this vault or DeFi on Base — for example: `/ai what is idle liquidity?`'
+}
+
+const MENU_NUMBER_RE = /^(\d{1,2})$/
+
+export type WelcomeMenuResolution =
+  | { kind: 'passthrough' }
+  | { kind: 'command'; resolvedText: string }
+  | { kind: 'ai_prompt' }
+  | { kind: 'invalid'; selection: string }
+
+export function resolveWelcomeMenuSelection(index: number): WelcomeMenuResolution {
+  const option = DEFAULT_OPTIONS.find((entry) => entry.index === index)
+  if (!option) {
+    return { kind: 'invalid', selection: String(index) }
+  }
+  if (option.command.startsWith('/ai')) {
+    return { kind: 'ai_prompt' }
+  }
+  return { kind: 'command', resolvedText: option.command }
+}
+
+export function resolveInboundMenuText(input: string): WelcomeMenuResolution {
+  const trimmed = String(input ?? '').trim()
+  const match = trimmed.match(MENU_NUMBER_RE)
+  if (!match) return { kind: 'passthrough' }
+  return resolveWelcomeMenuSelection(Number(match[1]))
 }

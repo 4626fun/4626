@@ -332,6 +332,88 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     expect(errMsg).not.toMatch(/custom_owner_policy/i)
   })
 
+  it('accepts relay Part 1 depositNative when custom owner policy matches session + sender', async () => {
+    mockReadContract.mockImplementation((opts: { functionName?: string }) => {
+      if (opts.functionName === 'isOwnerAddress') return Promise.resolve(false)
+      if (opts.functionName === 'store') return Promise.resolve('0x2C5Ff5bd3D6f4aF4742e37Df12E51b39F2C63e6c')
+      if (opts.functionName === 'entryPoint') return Promise.resolve(ENTRYPOINT_V06)
+      if (opts.functionName === 'implementation') return Promise.resolve(CSW_IMPLEMENTATION)
+      return Promise.resolve(null)
+    })
+
+    const customOwner = getAddress('0x4444444444444444444444444444444444444444')
+    const relayDepository = getAddress('0x4cd00e387622c35bddb9b4c962c136462338bc31')
+    const policyToken = issueCustomOwnerSponsorshipToken({
+      sessionAddress,
+      smartWalletAddress: sender,
+      ownerToAdd: customOwner,
+      profileId: 42,
+    })
+
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'payable',
+        inputs: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const depositData = (`0x49290c1c${'0'.repeat(128)}`) as `0x${string}`
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'execute',
+      args: [relayDepository, 1n, depositData],
+    })
+
+    const validated = await validateSponsoredSmartWalletCalls({
+      sender,
+      sessionAddress,
+      calls: [{ to: relayDepository, value: 1n, data: depositData }],
+      customOwnerPolicyToken: policyToken,
+      initCode: '0x',
+    })
+
+    expect(validated.mode).toBe('relay_owner_install_part1')
+    expect(validated.expectedCreatorToken).toBeNull()
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'eth_sendUserOperation',
+      params: [
+        {
+          sender,
+          callData,
+          initCode: '0x',
+          paymasterAndData: '0x',
+        },
+        ENTRYPOINT_V06,
+      ],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: {
+        'content-type': 'application/json',
+        'x-cv-custom-owner-policy': policyToken,
+      },
+    })
+    const res = createMockRes()
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect(errMsg).not.toMatch(/not_owner/i)
+  })
+
   it('accepts custom-owner policy token even when canonical embedded owner resolves', async () => {
     getActiveDeploySessionMock.mockResolvedValue(null)
     const customOwner = getAddress('0x6666666666666666666666666666666666666666')
@@ -1624,7 +1706,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     expect(errMsg).toMatch(/swap_approval_call_count_not_allowed|swap_approval_token_mismatch/i)
   })
 
-  it('rejects non-canonical universal router execute calldata', async () => {
+  it('accepts decode-equivalent non-canonical universal router execute calldata', async () => {
     const COINBASE_SMART_WALLET_ABI = [
       {
         type: 'function',
@@ -1659,11 +1741,13 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
       },
     ] as const
 
+    const baseUsdc = getAddress('0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')
     const baseSwapRouter = '0x6ff5693b99212da76ad316178a184ab56d299b43'
+    const inputWithUsdc = `0x${'0'.repeat(24)}${baseUsdc.slice(2)}` as `0x${string}`
     const canonicalSwapData = encodeFunctionData({
       abi: UNIVERSAL_ROUTER_ABI,
       functionName: 'execute',
-      args: ['0x00', ['0x'], 1_900_000_000n],
+      args: ['0x00', [inputWithUsdc], 1_900_000_000n],
     })
 
     const tamperedSwapData = toNonCanonicalExecuteWithDeadline(canonicalSwapData)
@@ -1702,14 +1786,388 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     expect(res.statusCode).toBe(200)
     const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
     const errMsg = String(responseBody?.error?.message ?? '')
-    expect(errMsg).toMatch(/swap_router_non_canonical_encoding/i)
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect(errMsg).not.toMatch(/missing_primary_call/i)
+    expect(errMsg).not.toMatch(/swap_router_non_canonical_encoding/i)
+  })
+
+  it('accepts Trading API universal-router swap with Permit2 permit opcode (0x0a000c)', async () => {
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'payable',
+        inputs: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const UNIVERSAL_ROUTER_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'payable',
+        inputs: [
+          { name: 'commands', type: 'bytes' },
+          { name: 'inputs', type: 'bytes[]' },
+          { name: 'deadline', type: 'uint256' },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const baseUsdc = getAddress('0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')
+    const baseSwapRouter = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43')
+    const permitInput = `0x${'0'.repeat(24)}${baseUsdc.slice(2)}${'0'.repeat(128)}` as `0x${string}`
+    const swapInput = `0x${'0'.repeat(64)}` as `0x${string}`
+    const unwrapInput = `0x${'0'.repeat(64)}` as `0x${string}`
+    const tradingApiStyleSwapData = encodeFunctionData({
+      abi: UNIVERSAL_ROUTER_ABI,
+      functionName: 'execute',
+      args: ['0x0a000c', [permitInput, swapInput, unwrapInput], BigInt(Math.floor(Date.now() / 1000) + 300)],
+    })
+
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'execute',
+      args: [baseSwapRouter, 0n, tradingApiStyleSwapData],
+    })
+
+    const validated = await validateSponsoredSmartWalletCalls({
+      sender,
+      sessionAddress,
+      calls: [{ to: baseSwapRouter, value: 0n, data: tradingApiStyleSwapData }],
+    })
+
+    expect(validated.mode).toBe('swap')
+    expect(validated.expectedCreatorToken?.toLowerCase()).toBe(baseUsdc.toLowerCase())
+
+    const userOp = { sender, callData, initCode: '0x' }
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect(errMsg).not.toMatch(/missing_primary_call/i)
+    expect(errMsg).not.toMatch(/swap_router_command_not_allowed/i)
+  })
+
+  it('accepts captured production canonical-CSW USDC universal-router swap calldata', async () => {
+    const canonicalCsw = getAddress('0xAb6d5C10b03300326CD7fAb7267Ae192842967b5')
+    const baseSwapRouter = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43')
+    const baseUsdc = getAddress('0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')
+
+    // Captured from localhost /swap pm_getPaymasterStubData failure (USDC -> ETH, 0x0a000c).
+    const callData =
+      '0xb61d27f60000000000000000000000006ff5693b99212da76ad316178a184ab56d299b430000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000004a43593564c000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000006a1d008100000000000000000000000000000000000000000000000000000000000000030a000c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000260000000000000000000000000000000000000000000000000000000000000038000000000000000000000000000000000000000000000000000000000000001e0000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda0291300000000000000000000000000000000000000000000000000000000000f4240000000000000000000000000000000000000000000000000000000006a44866900000000000000000000000000000000000000000000000000000000000000160000000000000000000000006ff5693b99212da76ad316178a184ab56d299b43000000000000000000000000000000000000000000000000000000006a1d007100000000000000000000000000000000000000000000000000000000000000e000000000000000000000000000000000000000000000000000000000000000e0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000004112eec5389b35e1918cab070ba1e3e4c1a2274d3733d027122e7c4ceee08b077a55b42f7ae493958993b346e7e86368779c80d9678902eb9537ede31d9832b3191c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000f4240000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002b833589fcd6edb6e08f4c7c32d4f71b54bda0291300006442000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000ab6d5c10b03300326cd7fab7267ae192842967b50000000000000000000000000000000000000000000000000001b89c2419864a00000000000000000000000000000000000000000000000000000000' as `0x${string}`
+
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'payable',
+        inputs: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const decoded = decodeFunctionData({ abi: COINBASE_SMART_WALLET_ABI, data: callData })
+    expect(getAddress(decoded.args[0] as `0x${string}`)).toBe(baseSwapRouter)
+
+    const validated = await validateSponsoredSmartWalletCalls({
+      sender: canonicalCsw,
+      sessionAddress: canonicalCsw,
+      calls: [
+        {
+          to: decoded.args[0] as `0x${string}`,
+          value: decoded.args[1] as bigint,
+          data: decoded.args[2] as `0x${string}`,
+        },
+      ],
+    })
+
+    expect(validated.mode).toBe('swap')
+    expect(validated.expectedCreatorToken?.toLowerCase()).toBe(baseUsdc.toLowerCase())
+
+    const userOp = { sender: canonicalCsw, callData, initCode: '0x' }
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+    readRequestPrincipalMock.mockReturnValue(canonicalCsw)
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect(errMsg).not.toMatch(/missing_primary_call/i)
+  })
+
+  it('accepts Zora universal-router swap with permit embedded (execute bytes,bytes[] only)', async () => {
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'executeBatch',
+        stateMutability: 'nonpayable',
+        inputs: [
+          {
+            name: 'calls',
+            type: 'tuple[]',
+            components: [
+              { name: 'target', type: 'address' },
+              { name: 'value', type: 'uint256' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const ZORA_UNIVERSAL_ROUTER_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'payable',
+        inputs: [
+          { name: 'commands', type: 'bytes' },
+          { name: 'inputs', type: 'bytes[]' },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const baseUsdc = getAddress('0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')
+    const baseSwapRouter = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43')
+    const commandsWithUsdc = `0x${'00'.repeat(32)}${baseUsdc.slice(2).toLowerCase()}` as `0x${string}`
+    const zoraSwapData = encodeFunctionData({
+      abi: ZORA_UNIVERSAL_ROUTER_ABI,
+      functionName: 'execute',
+      args: [commandsWithUsdc, ['0x']],
+    })
+    expect(zoraSwapData.startsWith('0x24856bc3')).toBe(true)
+
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'executeBatch',
+      args: [[{ target: baseSwapRouter, value: 0n, data: zoraSwapData }]],
+    })
+
+    const validated = await validateSponsoredSmartWalletCalls({
+      sender,
+      sessionAddress,
+      calls: [{ to: baseSwapRouter, value: 0n, data: zoraSwapData }],
+    })
+
+    expect(validated.mode).toBe('swap')
+    expect(validated.expectedCreatorToken?.toLowerCase()).toBe(baseUsdc.toLowerCase())
+
+    const userOp = { sender, callData, initCode: '0x' }
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect(errMsg).not.toMatch(/missing_primary_call/i)
+  })
+
+  it('accepts Uniswap universal-router swap with Permit2 embedded (no approve inner call)', async () => {
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'executeBatch',
+        stateMutability: 'nonpayable',
+        inputs: [
+          {
+            name: 'calls',
+            type: 'tuple[]',
+            components: [
+              { name: 'target', type: 'address' },
+              { name: 'value', type: 'uint256' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const UNIVERSAL_ROUTER_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'payable',
+        inputs: [
+          { name: 'commands', type: 'bytes' },
+          { name: 'inputs', type: 'bytes[]' },
+          { name: 'deadline', type: 'uint256' },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const baseUsdc = getAddress('0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')
+    const baseSwapRouter = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43')
+    const inputWithUsdc = `0x${'0'.repeat(24)}${baseUsdc.slice(2)}` as `0x${string}`
+    const universalSwapData = encodeFunctionData({
+      abi: UNIVERSAL_ROUTER_ABI,
+      functionName: 'execute',
+      args: ['0x00', [inputWithUsdc], BigInt(Math.floor(Date.now() / 1000) + 300)],
+    })
+    expect(universalSwapData.startsWith('0x3593564c')).toBe(true)
+
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'executeBatch',
+      args: [[{ target: baseSwapRouter, value: 0n, data: universalSwapData }]],
+    })
+
+    const validated = await validateSponsoredSmartWalletCalls({
+      sender,
+      sessionAddress,
+      calls: [{ to: baseSwapRouter, value: 0n, data: universalSwapData }],
+    })
+
+    expect(validated.mode).toBe('swap')
+    expect(validated.expectedCreatorToken?.toLowerCase()).toBe(baseUsdc.toLowerCase())
+
+    const userOp = { sender, callData, initCode: '0x' }
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect(errMsg).not.toMatch(/missing_primary_call/i)
+  })
+
+  it('accepts Zora swap via single CSW execute (not executeBatch)', async () => {
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const ZORA_UNIVERSAL_ROUTER_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'payable',
+        inputs: [
+          { name: 'commands', type: 'bytes' },
+          { name: 'inputs', type: 'bytes[]' },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const baseUsdc = getAddress('0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')
+    const baseSwapRouter = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43')
+    const commandsWithUsdc = `0x${'00'.repeat(32)}${baseUsdc.slice(2).toLowerCase()}` as `0x${string}`
+    const zoraSwapData = encodeFunctionData({
+      abi: ZORA_UNIVERSAL_ROUTER_ABI,
+      functionName: 'execute',
+      args: [commandsWithUsdc, ['0x']],
+    })
+
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'execute',
+      args: [baseSwapRouter, 0n, zoraSwapData],
+    })
+
+    const validated = await validateSponsoredSmartWalletCalls({
+      sender,
+      sessionAddress,
+      calls: [{ to: baseSwapRouter, value: 0n, data: zoraSwapData }],
+    })
+    expect(validated.mode).toBe('swap')
+
+    const userOp = { sender, callData, initCode: '0x' }
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect(errMsg).not.toMatch(/missing_primary_call/i)
   })
 })
 
 describe('paymaster payout-router external approvals', () => {
   let restoreEnv: () => void
 
-  const creatorToken = getAddress('0x4444444444444444444444444444444444444444')
+  const creatorToken = getAddress('0x4444444444444444444444444444444444444444') as `0x${string}`
   const vault = getAddress('0x5555555555555555555555555555555555555555')
   const wrapper = getAddress('0x6666666666666666666666666666666666666666')
   const shareOFT = getAddress('0x7777777777777777777777777777777777777777')
@@ -1722,8 +2180,8 @@ describe('paymaster payout-router external approvals', () => {
   const permit2 = getAddress('0x000000000022D473030F116dDEE9F6B43aC78BA3')
   const create2Deployer = getAddress('0x74183076C7D33346880A5bf0e263B761FB4d38BA')
   const bytecodeStore = getAddress('0x6A578022609cdb65C614FF28912C49FC1EC97071')
-  const currentUniversalRouter = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43')
-  const unknownSpender = getAddress('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
+  const currentUniversalRouter = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43') as `0x${string}`
+  const unknownSpender = getAddress('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') as `0x${string}`
 
   const BATCHER_FINALIZE_PHASE2_ABI = [
     {
@@ -1832,7 +2290,7 @@ describe('paymaster payout-router external approvals', () => {
         },
       ],
     })
-    return { target: creatorVaultBatcher, value: 0n, data: finalizeData }
+    return { target: creatorVaultBatcher as `0x${string}`, value: 0n, data: finalizeData }
   }
 
   function buildRouterAdminCall(params: {
@@ -1873,7 +2331,7 @@ describe('paymaster payout-router external approvals', () => {
   function extractExpectedPayoutRouter(message: string): `0x${string}` {
     const match = /expectedPayoutRouter=(0x[a-fA-F0-9]{40})/.exec(message)
     if (!match) throw new Error(`Missing expectedPayoutRouter in debug payload: ${message}`)
-    return getAddress(match[1] as `0x${string}`)
+    return getAddress(match[1]) as `0x${string}`
   }
 
   async function discoverExpectedPayoutRouterAddress(): Promise<`0x${string}`> {

@@ -13,13 +13,13 @@ This site publishes curated documentation from multiple sources across the monor
 | **Manual docs** | `docs/` | `/` (root) | Human-written documentation (source of truth) |
 | **Contract API** | `docs/_generated/contracts/` | `/api/contracts/` | Solidity NatSpec (forge doc) |
 | **Frontend API** | `docs/_generated/frontend/` | `/api/frontend/` | TypeScript TSDoc (typedoc) |
-| **Automation workflows** | `cre/` | `/operations/cre/` | Automation docs (README + guides) |
+| **Automation workflows** | `kpr/` | `/operations/kpr/` | Automation docs (README + guides) |
 | **Frontend docs** | `frontend/` | `/frontend/` | Frontend guides, architecture notes, overview |
 
 ### Key Rules
 
 - **Code ≠ Docs** — Documentation describes code, it does not mirror it 1:1.
-- `docs/` is the primary manual source. `cre/` and `frontend/` contribute workspace-level docs (READMEs, design docs).
+- `docs/` is the primary manual source. `kpr/` and `frontend/` contribute workspace-level docs (READMEs, design docs).
 - `docs/_internal/` and `docs/plans/` are intentionally excluded from public docs publishing.
 - Documentation describing contracts lives in `docs/contracts/`.
 - Documentation describing frontend lives in `docs/frontend/` (manual) + `frontend/docs/` (workspace).
@@ -30,11 +30,11 @@ This site publishes curated documentation from multiple sources across the monor
 
 | Action | Description |
 |--------|-------------|
-| Reads from | `docs/` (manual) + `docs/_generated/` (API) + `cre/` + `frontend/` |
+| Reads from | `docs/` (manual) + `docs/_generated/` (API) + `kpr/` + `frontend/` |
 | Publishes | Markdown files to `docs-site/docs/` |
 | Normalizes | Adds frontmatter (title, sidebar_position) |
 | Enforces metadata | Manual docs get audience/stage/owner/last_reviewed/status |
-| Renames | `README.md` → `index.md` (cre) or `overview.md` (frontend) |
+| Renames | `README.md` → `index.md` (kpr) or `overview.md` (frontend) |
 | Fixes links | Transforms broken links in generated API docs |
 | Validates | Internal links (in strict mode) |
 | Brand assets | Syncs `frontend/public/brand/` → `static/brand/` |

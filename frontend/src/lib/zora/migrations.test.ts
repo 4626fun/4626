@@ -4,7 +4,7 @@ import { encodeAbiParameters, parseAbiParameters } from 'viem'
 import {
   extractMigratedCoinAddressFromLog,
   parseMinimalProxyImplementation,
-} from './migrations'
+} from './migrationScan'
 
 const MIGRATION_DATA_ABI = parseAbiParameters(
   '(address,address,uint24,int24,address),bytes32,(address,address,uint24,int24,address),bytes32',

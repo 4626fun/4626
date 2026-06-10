@@ -1,14 +1,14 @@
 import { logger } from '../_lib/infra/logger.js'
 import type { KeeprVaultRow } from '../_lib/keepr/keeprRegistry.js'
-import { isHandledConversationalSlashPrefix, normalizeConversationalPrompt } from '../agent/core/conversationalInput.js'
-import { toAgentError } from '../agent/eliza/_errors.js'
-import { parsePositiveNumber } from '../agent/eliza/_rateLimit.js'
-import { withRetry, withTimeout } from '../agent/eliza/_retry.js'
-import { getActionRetryBudget } from '../agent/eliza/_runtimePolicy.js'
-import { buildContinuityContextBlock } from '../agent/eliza/_stateHelpers.js'
-import { resolveCharacterRuntimeConfig } from '../agent/eliza/character.js'
-import { getElizaLlmService } from '../agent/eliza/llm.js'
-import { createRuntimeBridge } from '../agent/eliza/runtimeBridge.js'
+import { isHandledConversationalSlashPrefix, normalizeConversationalPrompt } from '../agents/core/conversationalInput.js'
+import { toAgentError } from '../agents/eliza/_errors.js'
+import { parsePositiveNumber } from '../agents/eliza/_rateLimit.js'
+import { withRetry, withTimeout } from '../agents/eliza/_retry.js'
+import { getActionRetryBudget } from '../agents/eliza/_runtimePolicy.js'
+import { buildContinuityContextBlock } from '../agents/eliza/_stateHelpers.js'
+import { resolveCharacterRuntimeConfig } from '../agents/eliza/character.js'
+import { getElizaLlmService } from '../agents/eliza/llm.js'
+import { createRuntimeBridge } from '../agents/eliza/runtimeBridge.js'
 import {
   hasVerifiedMemoryContinuity,
   resolveAssistantRuntimeTruth,
@@ -48,10 +48,77 @@ const LLM_COOLDOWN_MS = Math.floor(parsePositiveNumber(
   (globalThis as any).process?.env?.ELIZA_LLM_COOLDOWN_MS, 10_000))
 const LLM_COOLDOWN_CACHE_LIMIT = Math.floor(parsePositiveNumber(
   (globalThis as any).process?.env?.ELIZA_LLM_COOLDOWN_CACHE_LIMIT, 2_000))
+const AKITAI_PINATA_HTTP_TIMEOUT_MS = Math.floor(parsePositiveNumber(
+  (globalThis as any).process?.env?.AKITAI_PINATA_HTTP_TIMEOUT_MS, 30_000))
 
 const groupCooldowns = new Map<string, number>()
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 const SENTINEL_ADDRESS_PATTERN = /^0x0{38}[a-f0-9]{2}$/
+
+function readAkitaiPinataConfig(): { endpoint: string; bearer: string } | null {
+  const endpoint = String((globalThis as any).process?.env?.AKITAI_PINATA_CHAT_ENDPOINT ?? '').trim()
+  const bearer = String((globalThis as any).process?.env?.AKITAI_PINATA_BEARER_TOKEN ?? '').trim()
+  if (!endpoint || !bearer) return null
+  return { endpoint, bearer }
+}
+
+function buildAkitaiPinataPrompt(params: {
+  systemPrompt: string
+  vaultContext: string
+  userText: string
+}): string {
+  const blocks = [
+    '[system]',
+    params.systemPrompt.trim(),
+    '[/system]',
+    params.vaultContext.trim() ? `[context]\n${params.vaultContext.trim()}\n[/context]` : '',
+    `[user]\n${params.userText.trim()}\n[/user]`,
+    'Respond as Akitai in concise plain text.',
+  ].filter(Boolean)
+  return blocks.join('\n\n')
+}
+
+async function generateAkitaiPinataResponse(params: {
+  endpoint: string
+  bearer: string
+  systemPrompt: string
+  vaultContext: string
+  userText: string
+  correlationId: string
+}): Promise<string | null> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), AKITAI_PINATA_HTTP_TIMEOUT_MS)
+  try {
+    const res = await fetch(params.endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${params.bearer}`,
+        'Content-Type': 'application/json',
+        'x-correlation-id': params.correlationId,
+      },
+      body: JSON.stringify({
+        prompt: buildAkitaiPinataPrompt({
+          systemPrompt: params.systemPrompt,
+          vaultContext: params.vaultContext,
+          userText: params.userText,
+        }),
+      }),
+      signal: controller.signal,
+    })
+    if (!res.ok) return null
+    const body = (await res.json()) as Record<string, unknown>
+    const text =
+      String(body.text ?? '').trim() ||
+      String(body.response ?? '').trim() ||
+      String(body.output ?? '').trim() ||
+      String(body.message ?? '').trim()
+    return text || null
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timeout)
+  }
+}
 
 function isUnauthenticatedSenderWallet(address: string): boolean {
   const normalized = String(address ?? '').trim().toLowerCase()
@@ -291,17 +358,17 @@ async function getChatRuntimeContext(): Promise<ChatRuntimeContext> {
       { lensPlugin },
       { walletIntelPlugin },
       { reputationPlugin },
-      { crePlugin },
+      { keeprOpsPlugin },
       { knowledgePlugin },
     ] = await Promise.all([
-      import('../agent/eliza/plugins/keepr/index.js'),
-      import('../agent/eliza/plugins/zora/index.js'),
-      import('../agent/eliza/plugins/uniswap/index.js'),
-      import('../agent/eliza/plugins/lens/index.js'),
-      import('../agent/eliza/plugins/walletIntel/index.js'),
-      import('../agent/eliza/plugins/reputation/index.js'),
-      import('../agent/eliza/plugins/cre/index.js'),
-      import('../agent/eliza/plugins/knowledge/index.js'),
+      import('../agents/eliza/plugins/keepr/index.js'),
+      import('../agents/eliza/plugins/zora/index.js'),
+      import('../agents/eliza/plugins/uniswap/index.js'),
+      import('../agents/eliza/plugins/lens/index.js'),
+      import('../agents/eliza/plugins/walletIntel/index.js'),
+      import('../agents/eliza/plugins/reputation/index.js'),
+      import('../agents/eliza/plugins/keeperOps/index.js'),
+      import('../agents/eliza/plugins/knowledge/index.js'),
     ])
     const characterRuntimeConfig = resolveCharacterRuntimeConfig()
     const plugins = [
@@ -311,7 +378,7 @@ async function getChatRuntimeContext(): Promise<ChatRuntimeContext> {
       lensPlugin,
       walletIntelPlugin,
       reputationPlugin,
-      crePlugin,
+      keeprOpsPlugin,
       knowledgePlugin,
     ]
     const bridge = createRuntimeBridge({
@@ -707,18 +774,39 @@ export async function generateLlmResponse(params: {
       const combinedVaultContext = [vaultContext.trim(), truthBlock].filter(Boolean).join('\n\n')
 
       const identityHint = `[${params.senderWallet.slice(0, 6)}...${params.senderWallet.slice(-4)}]`
-      const result = await llmService.generateResponse({
-        agentKey: params.groupId,
-        userMessage: `${identityHint}: ${userText}`,
-        systemPrompt,
-        vaultContext: combinedVaultContext.trim(),
-        correlationId,
-        preferredModel: characterConfig.preferredModel,
-      })
-      if (!result.text?.trim()) {
-        return { ok: false, response: '', handledByRuntime: true }
+      const pinataConfig = readAkitaiPinataConfig()
+      if (pinataConfig) {
+        const pinataText = await generateAkitaiPinataResponse({
+          endpoint: pinataConfig.endpoint,
+          bearer: pinataConfig.bearer,
+          systemPrompt,
+          vaultContext: combinedVaultContext.trim(),
+          userText: `${identityHint}: ${userText}`,
+          correlationId,
+        })
+        if (pinataText?.trim()) {
+          finalText = pinataText.trim()
+        } else {
+          return {
+            ok: false,
+            response: 'Akitai Pinata lane is unavailable. Please retry shortly.',
+            handledByRuntime: true,
+          }
+        }
+      } else {
+        const result = await llmService.generateResponse({
+          agentKey: params.groupId,
+          userMessage: `${identityHint}: ${userText}`,
+          systemPrompt,
+          vaultContext: combinedVaultContext.trim(),
+          correlationId,
+          preferredModel: characterConfig.preferredModel,
+        })
+        if (!result.text?.trim()) {
+          return { ok: false, response: '', handledByRuntime: true }
+        }
+        finalText = result.text.trim()
       }
-      finalText = result.text.trim()
     } catch (error) {
       const agentError = toAgentError(error, 'UPSTREAM_ERROR', 'LLM generation failed')
       if (agentError.code === 'BUDGET_EXCEEDED') {

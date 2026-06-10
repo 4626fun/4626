@@ -69,6 +69,7 @@ export const CONTRACTS = {
 
   // Protocol treasury / multisig (receives protocol fee slice from GaugeController)
   protocolTreasury: envAddress('VITE_PROTOCOL_TREASURY', BASE_DEFAULTS.protocolTreasury)!,
+  protocolAutomation: envAddress('VITE_PROTOCOL_AUTOMATION', BASE_DEFAULTS.protocolAutomation),
 
   // ve(3,3) + rewards ecosystem (optional until deployed)
   vaultGaugeVoting: envAddress('VITE_VAULT_GAUGE_VOTING'),
@@ -113,6 +114,12 @@ export const CONTRACTS = {
     'VITE_ALFA_CREATOR_KEY_LP_FACTORY',
     BASE_DEFAULTS.alfaCreatorKeyLpFactory,
   )!,
+  impairmentClaims: envAddress('VITE_IMPAIRMENT_CLAIMS', BASE_DEFAULTS.impairmentClaims),
+  impairmentRecoveryEscrow: envAddress(
+    'VITE_IMPAIRMENT_RECOVERY_ESCROW',
+    BASE_DEFAULTS.impairmentRecoveryEscrow,
+  ),
+  impairmentGuardian: envAddress('VITE_IMPAIRMENT_GUARDIAN', BASE_DEFAULTS.impairmentGuardian),
 } as const
 
 // Example: AKITA Vault (first creator)

@@ -208,7 +208,7 @@ This telemetry is required for production diagnosis of the server-side track and
 ### Related docs
 
 - User-initiated and server-side architecture overview: `docs/4626-connection-methods.md`
-- Server-side owner-install operational runbook (legacy direct-install banner applies to the user-facing flow): `docs/operations/canonical-csw-owner-approval.md`
+- Owner-install reference methods runbook (legacy/server lanes and current relay path): `docs/operations/owner-install-reference-methods.md`
 - User-initiated troubleshooting: `docs/guides/troubleshooting/activate-account-signing.md`
 
 ### Session implementation notes

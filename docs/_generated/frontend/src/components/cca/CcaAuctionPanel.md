@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/cca/CcaAuctionPanel
+[4626-web](../../../index.md) / src/components/cca/CcaAuctionPanel
 
 # src/components/cca/CcaAuctionPanel
 
@@ -12,7 +12,7 @@
 
 > **CcaAuctionPanel**(`__namedParameters`): `Element`
 
-Defined in: [src/components/cca/CcaAuctionPanel.tsx:82](https://github.com/wenakita/4626/blob/main/frontend/src/components/cca/CcaAuctionPanel.tsx#L82)
+Defined in: [src/components/cca/CcaAuctionPanel.tsx:83](https://github.com/wenakita/4626/blob/main/frontend/src/components/cca/CcaAuctionPanel.tsx#L83)
 
 #### Parameters
 
@@ -20,11 +20,11 @@ Defined in: [src/components/cca/CcaAuctionPanel.tsx:82](https://github.com/wenak
 
 ###### ccaStrategy
 
-`` `0x${string}` ``
+`string`
 
 ###### vaultAddress?
 
-`` `0x${string}` ``
+`string`
 
 ###### wsSymbol
 

@@ -1,5 +1,7 @@
     <style>
       :root {
+        --trust-page-bg: {{CANVAS_BG}};
+        --trust-page-bg-rgb: {{CANVAS_BG_RGB}};
         --vault-bg: 248 250 252;
         --vault-card: 255 255 255;
         --vault-border: 226 232 240;
@@ -7,17 +9,32 @@
         --vault-subtext: 71 85 105;
       }
       html.dark {
-        --vault-bg: 2 2 2;
+        --vault-bg: var(--trust-page-bg-rgb);
         --vault-card: 10 10 10;
         --vault-border: 31 31 31;
         --vault-text: 237 237 237;
         --vault-subtext: 102 102 102;
       }
-      html, body {
-        background-color: rgb(var(--vault-bg)); /* Vault background */
-        color: rgb(var(--vault-text));
+      html, body, #root {
         margin: 0;
         padding: 0;
-        height: 100%;
+        min-height: 100dvh;
+      }
+      #root {
+        display: flex;
+        flex-direction: column;
+      }
+      html:not(.dark) body {
+        background-color: rgb(var(--vault-bg));
+        color: rgb(var(--vault-text));
+      }
+      html.dark body {
+        background-color: var(--trust-page-bg);
+        color: rgb(var(--vault-text));
+      }
+      html.dark #root,
+      html.dark .vault-shell,
+      html.dark main {
+        background-color: transparent;
       }
     </style>

@@ -1,23 +1,35 @@
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
-import { useAccount, useChainId, useConfig, useConnect, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
+import { useAccount, useChainId, useConnect, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
 import { debugLogsFlag } from '@/lib/flags/featureFlags'
 import { base } from 'wagmi/chains'
 import type { Address, Hex } from 'viem'
 import {
   ZERO_BYTES32,
   encodeUniswapV3Path,
-  findCreate2SaltForSuffix,
   normalizeAddressArray,
   normalizeAddressLike,
   normalizeBytes32,
   normalizeDeploymentVersion,
   normalizeHexSuffix,
   parsePositiveTokenAmount,
+  type DeploymentVanityVersionSearchOutcome,
+  buildDeployVanityLoadingMessage,
   parseUint8,
   parseUniswapV3Fee,
   sameAddress,
 } from './deployVaultHelpers'
+import {
+  deriveDeployBaseSalt,
+  predictCreate2AddressFromInitCode,
+  saltForDeployLabel,
+} from '@/lib/deploy/perVaultVanityVersionSearch'
+import {
+  readCreatorVaultBatcherInfra,
+  type CreatorVaultBatcherInfra,
+} from '@/lib/deploy/creatorVaultBatcherInfra'
+import { resolveDeployExpectedAddresses } from '@/lib/deploy/resolveDeployExpectedAddresses'
+import { resolveDeployVanityPlan } from '@/lib/deploy/resolveDeployVanityPlan'
 import {
   debugSignatureReady,
   ensureSignatureHex,
@@ -36,7 +48,6 @@ import {
   erc20Abi,
   formatUnits,
   getAddress,
-  getCreate2Address,
   isAddress,
   http,
   keccak256,
@@ -46,7 +57,7 @@ import {
 } from 'viem'
 import { getWalletClient } from '@wagmi/core'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { coinABI } from '@zoralabs/protocol-deployments'
 import { ChevronDown, ExternalLink } from 'lucide-react'
 import { useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
@@ -56,12 +67,32 @@ import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 import { RequestCreatorAccess } from '@/components/deploy/RequestCreatorAccess'
 import { LaunchCoinCard } from '@/features/waitlist/LaunchCoinCard'
 import { CONTRACTS } from '@/config/contracts'
+import { wagmiConfig } from '@/config/wagmi'
 import {
+  BASE_DEFAULTS,
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
+  SPLIT_PHASE1_PHASE3_HELPER,
   isDeprecatedCreatorVaultBatcherAddress,
+  isShareOftSaltOverrideDisabledBatcher,
   normalizeCreatorVaultBatcherAddress,
 } from '@/config/contracts.defaults'
 import { deploymentBatcherNotConfiguredMessage } from '@/lib/deploy/deploymentBatcherConfigError'
+import { evaluateDeployEligibility } from '@/lib/deploy/deployEligibility'
+import {
+  attachFinalizeShareBridgeValueToCalls,
+  parseCallValue,
+  type FinalizePhase2Params,
+} from '@/lib/deploy/finalizeShareBridgeFee'
+import {
+  mergePipeAFinalizeParams,
+  readDeployedPhase1CoreAddresses,
+} from '@/lib/deploy/phase1OnchainState'
+import {
+  resolveAlignedPhase1DeployDeps,
+} from '@/lib/deploy/phase1ModuleDeploy'
+import { assertCreatorOvaultModuleStorageCompatible } from '@/lib/deploy/ovaultModuleIdentity'
+import { ShareBridgeFinalizeWiringPanel } from '@/components/deploy/ShareBridgeFinalizeWiringPanel'
+import { useAccountMe } from '@/hooks/useAccountMe'
 import { useCreatorAllowlist, useDeploymentTracker } from '@/hooks'
 import { DeploymentSuccess, AlreadyDeployedBanner } from '@/components/deploy/DeploymentSuccess'
 import { VaultImageGenerator } from '@/components/deploy/VaultImageGenerator'
@@ -90,22 +121,14 @@ import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { buildPermit2SignatureTransfer, createPermit2Deadline, createPermit2Nonce } from '@/lib/deploy/permit2'
 import {
-  deriveCreatorCoinPolicyControllerSalt,
-  derivePayoutRouterSalt,
-  deriveVaultShareBurnStreamSalt,
-} from '@/lib/deploy/create2Salts'
-import { findPerVaultVanityVersionWithWasm } from '@/lib/vanity/perVaultVanityWasm'
-import {
   type DeploySessionStatusData,
 } from '@/lib/deploy/sessionClient'
 import { useDeploySessionV2 } from '@/features/deploy-vault/useDeploySessionV2'
 import {
-  buildShareVanitySkipLogKey,
   deployTimelineProgressLabel,
   deriveDeployTimelineProgressState,
   isProviderCollisionErrorMessage,
   summarizeDeployTimelineProgress,
-  shouldEmitShareVanitySkipLog,
 } from './deployVaultSignals'
 import { 
   sendCoinbaseSmartWalletUserOperation, 
@@ -114,6 +137,7 @@ import {
   assertEntryPointV06,
 } from '@/lib/aa/coinbaseErc4337'
 import { PageMeta, META } from '@/components/seo/PageMeta'
+import { Button } from '@/components/ui/Button'
 import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
 import {
   DEPLOY_TIMELINE_STAGE_INDEX,
@@ -129,7 +153,11 @@ const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 50_000_000n
 const MIN_FIRST_DEPOSIT = DEFAULT_MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
 const ZERO_ADDRESS = addr('0000000000000000000000000000000000000000')
-const SPLIT_PHASE1_PHASE3_HELPER = addr('7e4b2dd557bA62FD1Dd5f72CBf5FFAAaaB8A468c')
+const normalizeConfiguredAddress = (value: unknown): Address | null => {
+  const normalized = normalizeAddressLike(value)
+  if (!normalized || sameAddress(normalized, ZERO_ADDRESS)) return null
+  return normalized
+}
 const BASE_PUBLIC_RPC_URL = 'https://mainnet.base.org'
 const BASE_SWAP_ROUTER = addr('2626664c2603336E57B271c5C0b26F421741e481')
 const BASE_WETH = addr('4200000000000000000000000000000000000006')
@@ -142,17 +170,15 @@ const DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE = 3_000
 
 // Uniswap CCA uses Q96 fixed-point prices + a compact step schedule.
 const DEFAULT_REQUIRED_RAISE_WEI = 100_000_000_000_000_000n // 0.1 ETH
-// Phase-2 split in the deployment batcher is 50% auction / 50% vesting.
-// Keep this as a boolean gate for deferred launch wiring.
-const DEFAULT_AUCTION_PERCENT = 50
-// Strategy deployment targets (of total deposited creator tokens):
-// - 30% Charm
-// - 30% Ajna
-// - 30% SolanaStrategy
-// - 10% idle operational buffer
-const DEFAULT_CHARM_WEIGHT_BPS = 3_000n
-const DEFAULT_AJNA_WEIGHT_BPS = 3_000n
-const DEFAULT_SOLANA_WEIGHT_BPS = 3_000n
+// Phase-2 share split in the deployment batcher: 30% CCA / 30% vesting / 30% Solana / 10% LP.
+const DEFAULT_AUCTION_PERCENT = 30
+void 30 // DEFAULT_VESTING_PERCENT (30) — UI reads server deploy config
+void 30 // DEFAULT_SOLANA_SHARE_PERCENT (30)
+void 10 // DEFAULT_LP_RESERVE_PERCENT (10)
+// Phase-3 strategy weights (vault TVL): Charm + Ajna only at 45/45; Solana is share auto-bridge at finalize.
+const DEFAULT_CHARM_WEIGHT_BPS = 4_500n
+const DEFAULT_AJNA_WEIGHT_BPS = 4_500n
+const DEFAULT_SOLANA_WEIGHT_BPS = 0n
 const DEFAULT_IDLE_PERCENT_BPS = 1_000n // 10% explicit idle target
 const DEFAULT_MIN_IDLE_PERCENT_BPS = DEFAULT_IDLE_PERCENT_BPS
 const DEFAULT_SOLANA_MAX_NAV_AGE = 3_600n
@@ -174,11 +200,6 @@ const BATCHER_PHASE1_FINALIZE_SELECTOR = 'a98ec9d8'
 const BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR = '3bc09a8b'
 const BATCHER_PHASE2_FINALIZE_WITH_PERMIT2_SELECTOR = '0ecf9382'
 const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
-const KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
-  '0x004684670d284ef607e1b2424fcf8ccbda8ef828',
-  '0xe3f9490cfd6bd3d68010405d18bf772c167e7178',
-  '0xf941bb68e4f083f3f531cc598d5c08d0b8ffba7e',
-])
 // The phased deployment batcher v4+ exposes these immutables as getters. We use this as a
 // compatibility gate to avoid legacy batchers that deploy module-uninitialized vaults.
 const BATCHER_VAULT_CORE_MODULE_SELECTOR = '22c40b75'
@@ -234,7 +255,7 @@ function resolveDeployMode(): DeployMode {
 // Rationale: reduce launch-manipulation surface area on brand new coins with thin/no trading history.
 const DEFAULT_MIN_COIN_AGE_DAYS = 7
 const MIN_COIN_AGE_LOCALSTORAGE_KEY = 'cv:deploy:minCoinAgeDays'
-const DEFAULT_DEPLOYMENT_VERSION = 'v1.11.0'
+const DEFAULT_DEPLOYMENT_VERSION = 'v1.14.0'
 
 function isDebugEnabled(): boolean {
   if (debugLogsFlag()) return true
@@ -248,7 +269,17 @@ function isDebugEnabled(): boolean {
 
 const AA_DEBUG = isDebugEnabled()
 setAaDebugMode(AA_DEBUG)
-const DEPLOY_SESSION_DRY_RUN_REQUEST_TIMEOUT_MS = 60_000
+
+function resolveDeploySessionDryRunRequestTimeoutMs(): number {
+  const raw = import.meta.env.VITE_DEPLOY_DRY_RUN_REQUEST_TIMEOUT_MS as string | undefined
+  const parsed = Number(String(raw ?? '').trim())
+  if (Number.isFinite(parsed) && parsed >= 60_000) {
+    return Math.floor(parsed)
+  }
+  return 300_000
+}
+
+const DEPLOY_SESSION_DRY_RUN_REQUEST_TIMEOUT_MS = resolveDeploySessionDryRunRequestTimeoutMs()
 
 function resolveDeploymentVersionFromRuntime(): string {
   const envVersion = normalizeDeploymentVersion(import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined)
@@ -422,12 +453,18 @@ type DeployRuntimeConfigResponse = {
   allowApiContractOverrides: boolean
   deployMode: string
   serverContinue: boolean
+  protocolAutomation: Address | null
+  protocolAjnaKeeper: Address | null
   payoutRouterKeeperAddress: Address | null
   payoutRouterApprovedExternalSwapTargets: Address[]
   payoutRouterApprovedExternalSwapSpenders: Address[]
   zoraToken: Address | null
   payoutRouterZoraWethFee: number
   payoutRouterWethCreatorFee: number
+  impairmentClaims: Address | null
+  impairmentRecoveryEscrow: Address | null
+  impairmentGuardian: Address | null
+  impairmentChallengeWindowSeconds: number | null
 }
 
 type RolePolicyRuleLabel = 'any' | 'must_equal_owner' | 'must_be_allowlisted' | 'unknown'
@@ -509,6 +546,7 @@ type DeploySessionCreateRequest = {
   smartWallet: Address
   creatorToken: Address
   ownerAddress: Address
+  rolePolicyId?: number
   preflightOnly?: boolean
   phase1Calls: DeploySessionCall[]
   phase2CoreCalls: DeploySessionCall[]
@@ -773,18 +811,6 @@ function encodeUniswapCcaLinearSteps(durationBlocks: bigint): Hex {
   return concatHex(steps)
 }
 
-function deriveBaseSalt(params: { creatorToken: Address; owner: Address; chainId: number; version: string }): Hex {
-  const { creatorToken, owner, chainId, version } = params
-  return keccak256(
-    encodePacked(['address', 'address', 'uint256', 'string'], [
-      creatorToken,
-      owner,
-      BigInt(chainId),
-      `4626:deploy:${version}`,
-    ]),
-  )
-}
-
 // L-16: Map known revert reasons / extension conflicts to user-friendly
 // messages. Raw error.message is never rendered in production because it
 // may leak internal contract storage slot names, addresses, or logic
@@ -843,7 +869,7 @@ class DeployVaultErrorBoundary extends Component<
       const userMessage = sanitizeDeployVaultError(this.state.error)
       const showRawForDev = import.meta.env.DEV && this.state.error?.message
       return (
-        <div className="vault-shell min-h-screen bg-vault-bg text-white">
+        <div className="vault-shell min-h-0 bg-transparent text-white">
           <section className="max-w-[1400px] mx-auto px-6 py-16">
             <div className="text-[10px] font-medium text-zinc-500 mb-4">Deploy</div>
             <div className="vault-surface vault-hover-lift p-8 space-y-4">
@@ -857,20 +883,12 @@ class DeployVaultErrorBoundary extends Component<
                 </div>
               ) : null}
               <div className="flex gap-3">
-                <button
-                  type="button"
-                  className="btn-accent"
-                  onClick={this.handleRetry}
-                >
+                <Button type="button" variant="primary" onClick={this.handleRetry}>
                   Retry
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => window.location.reload()}
-                >
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => window.location.reload()}>
                   Reload page
-                </button>
+                </Button>
               </div>
               <div className="text-xs text-zinc-600">
                 Tip: Try disabling other wallet extensions (MetaMask, Rabby) if this persists.
@@ -888,26 +906,10 @@ class DeployVaultErrorBoundary extends Component<
 export function DeployVault() {
   const privyClientStatus = usePrivyClientStatus()
 
-  if (privyClientStatus === 'loading') {
-    return (
-      <div className="vault-shell min-h-screen bg-vault-bg text-white">
-        <section className="max-w-[1400px] mx-auto px-6 py-16">
-          <div className="text-[10px] font-medium text-zinc-500 mb-4">Deploy</div>
-          <div className="vault-surface vault-hover-lift p-8 space-y-3">
-            <div className="text-lg font-medium">Initializing authentication</div>
-            <div className="text-sm text-zinc-400 leading-relaxed">
-              Waiting for Privy client readiness before loading deploy controls.
-            </div>
-          </div>
-        </section>
-      </div>
-    )
-  }
-
   // Privy is used for auth/session - if disabled, show setup hint.
   if (privyClientStatus === 'disabled') {
     return (
-      <div className="vault-shell min-h-screen bg-vault-bg text-white">
+      <div className="vault-shell min-h-0 bg-transparent text-white">
         <section className="max-w-[1400px] mx-auto px-6 py-16">
           <div className="text-[10px] font-medium text-zinc-500 mb-4">Deploy</div>
           <div className="vault-surface vault-hover-lift p-8 space-y-3">
@@ -931,165 +933,16 @@ export function DeployVault() {
   )
 }
 
+function deriveBaseSalt(params: { creatorToken: Address; owner: Address; chainId: number; version: string }): Hex {
+  return deriveDeployBaseSalt(params)
+}
+
 function saltFor(baseSalt: Hex, label: string): Hex {
-  return keccak256(encodePacked(['bytes32', 'string'], [baseSalt, label]))
-}
-
-function deriveShareOftSalt(params: { owner: Address; shareSymbol: string; version: string }): Hex {
-  const base = keccak256(encodePacked(['address', 'string'], [params.owner, params.shareSymbol.toLowerCase()]))
-  return keccak256(encodePacked(['bytes32', 'string'], [base, `CreatorShareOFT:${params.version}`]))
-}
-
-function deriveOftBootstrapSalt(): Hex {
-  return keccak256(encodePacked(['string'], ['4626:OFTBootstrapRegistry:v1']))
-}
-
-async function findDeploymentVersionForVanityTargets(params: {
-  create2Deployer: Address
-  creatorToken: Address
-  owner: Address
-  chainId: number
-  baseVersion: string
-  vaultPrefix?: string | null
-  shareSuffix?: string | null
-  maxTries: number
-  vaultInitCode: Hex
-  shareOftInitCode: Hex
-  shareSymbol: string
-  isAddressDeployed?: (addr: Address) => Promise<boolean>
-  yieldEvery?: number
-}): Promise<string | null> {
-  const vaultPrefix = normalizeHexSuffix(params.vaultPrefix ?? null)
-  const shareSuffix = normalizeHexSuffix(params.shareSuffix ?? null)
-  if (!vaultPrefix && !shareSuffix) return null
-  const maxTries = Math.max(1, Math.floor(params.maxTries))
-
-  if (typeof WebAssembly !== 'undefined' && typeof fetch === 'function') {
-    let startAttempt = 0
-    try {
-      while (startAttempt < maxTries) {
-        const result = await findPerVaultVanityVersionWithWasm({
-          create2Deployer: params.create2Deployer,
-          creatorToken: params.creatorToken,
-          owner: params.owner,
-          chainId: params.chainId,
-          baseVersion: params.baseVersion,
-          vaultPrefix,
-          shareSuffix,
-          startAttempt,
-          maxAttempts: maxTries - startAttempt,
-          vaultInitCodeHash: vaultPrefix ? keccak256(params.vaultInitCode) : null,
-          shareOftInitCodeHash: shareSuffix ? keccak256(params.shareOftInitCode) : null,
-          shareSymbol: shareSuffix ? params.shareSymbol : null,
-        })
-        const toCheck: Address[] = []
-        for (const value of [result.vaultAddress, result.shareOftAddress]) {
-          if (value && isAddress(value)) toCheck.push(getAddress(value))
-        }
-        if (params.isAddressDeployed && toCheck.length > 0) {
-          const deployedStates = await Promise.all(toCheck.map((addr) => params.isAddressDeployed!(addr)))
-          if (deployedStates.some(Boolean)) {
-            startAttempt = result.attempt + 1
-            continue
-          }
-        }
-        return result.version
-      }
-      return null
-    } catch (err) {
-      logger.warn('[DeployVault] Rust WASM vanity search failed; falling back to TypeScript mirror', {
-        error: err instanceof Error ? err.message : String(err ?? ''),
-      })
-    }
-  }
-
-  return findDeploymentVersionForVanityTargetsInTypescript({
-    ...params,
-    vaultPrefix,
-    shareSuffix,
-    maxTries,
-  })
-}
-
-async function findDeploymentVersionForVanityTargetsInTypescript(params: {
-  create2Deployer: Address
-  creatorToken: Address
-  owner: Address
-  chainId: number
-  baseVersion: string
-  vaultPrefix?: string | null
-  shareSuffix?: string | null
-  maxTries: number
-  vaultInitCode: Hex
-  shareOftInitCode: Hex
-  shareSymbol: string
-  isAddressDeployed?: (addr: Address) => Promise<boolean>
-  yieldEvery?: number
-}): Promise<string | null> {
-  const vaultPrefix = normalizeHexSuffix(params.vaultPrefix ?? null)
-  const shareSuffix = normalizeHexSuffix(params.shareSuffix ?? null)
-  if (!vaultPrefix && !shareSuffix) return null
-  const maxTries = Math.max(1, Math.floor(params.maxTries))
-  const yieldEvery = Math.max(256, Math.floor(params.yieldEvery ?? 4096))
-
-  for (let i = 0; i < maxTries; i += 1) {
-    if (i > 0 && i % yieldEvery === 0) {
-      // Yield periodically so large vanity scans do not freeze the UI thread.
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    }
-    const candidateVersion = i === 0 ? params.baseVersion : `${params.baseVersion}-v${i.toString(36)}`
-    const baseSalt = deriveBaseSalt({
-      creatorToken: params.creatorToken,
-      owner: params.owner,
-      chainId: params.chainId,
-      version: candidateVersion,
-    })
-
-    let vaultAddress: Address | null = null
-    if (vaultPrefix) {
-      const vaultSalt = saltFor(baseSalt, 'vault')
-      vaultAddress = predictCreate2Address({
-        create2Deployer: params.create2Deployer,
-        salt: vaultSalt,
-        initCode: params.vaultInitCode,
-      })
-      if (vaultAddress.slice(2, 2 + vaultPrefix.length).toLowerCase() !== vaultPrefix) continue
-    }
-
-    let shareAddress: Address | null = null
-    if (shareSuffix) {
-      const shareSalt = deriveShareOftSalt({
-        owner: params.owner,
-        shareSymbol: params.shareSymbol,
-        version: candidateVersion,
-      })
-      shareAddress = predictCreate2Address({
-        create2Deployer: params.create2Deployer,
-        salt: shareSalt,
-        initCode: params.shareOftInitCode,
-      })
-      if (!shareAddress.toLowerCase().endsWith(shareSuffix)) continue
-    }
-
-    if (params.isAddressDeployed) {
-      const toCheck = [vaultAddress, shareAddress].filter((v): v is Address => Boolean(v))
-      if (toCheck.length > 0) {
-        try {
-          const deployedStates = await Promise.all(toCheck.map((addr) => params.isAddressDeployed!(addr)))
-          if (deployedStates.some(Boolean)) continue
-        } catch {
-          // ignore deployed-check failures; allow candidate version
-        }
-      }
-    }
-    return candidateVersion
-  }
-  return null
+  return saltForDeployLabel(baseSalt, label)
 }
 
 function predictCreate2Address(params: { create2Deployer: Address; salt: Hex; initCode: Hex }): Address {
-  const bytecodeHash = keccak256(params.initCode)
-  return getCreate2Address({ from: params.create2Deployer, salt: params.salt, bytecodeHash })
+  return predictCreate2AddressFromInitCode(params)
 }
 
 async function fetchAdminAuth(): Promise<AdminAuthResponse> {
@@ -1345,6 +1198,16 @@ const BATCHER_PHASE3_CONFIG_ABI = [
   },
 ] as const
 
+const PHASE3_HELPER_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'protocolAutomation',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
 const AJNA_FACTORY_ABI = [
   {
     type: 'function',
@@ -1425,6 +1288,13 @@ const CHARM_FACTORY_ABI = [
 const CREATOR_VAULT_ADMIN_ABI = [
   {
     type: 'function',
+    name: 'management',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
     name: 'burnStream',
     stateMutability: 'view',
     inputs: [],
@@ -1449,6 +1319,16 @@ const CREATOR_VAULT_ADMIN_ABI = [
   },
   {
     type: 'function',
+    name: 'setBurnStreamAuthorizedQueuer',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'queuer', type: 'address' },
+      { name: 'authorized', type: 'bool' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
     name: 'setMinimumTotalIdle',
     stateMutability: 'nonpayable',
     inputs: [{ name: '_minimumTotalIdle', type: 'uint256' }],
@@ -1460,6 +1340,96 @@ const CREATOR_VAULT_ADMIN_ABI = [
     stateMutability: 'nonpayable',
     inputs: [],
     outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'impairmentGuardian',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'impairmentClaims',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'impairmentRecoveryEscrow',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'impairmentChallengeWindow',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint64' }],
+  },
+  {
+    type: 'function',
+    name: 'setImpairmentGuardian',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'guardian', type: 'address' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setImpairmentClaims',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'claims', type: 'address' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setImpairmentRecoveryEscrow',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'escrow', type: 'address' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setImpairmentChallengeWindow',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'window', type: 'uint64' }],
+    outputs: [],
+  },
+] as const
+
+const IMPAIRMENT_AUX_OWNED_ABI = [
+  {
+    type: 'function',
+    name: 'owner',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'vault',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'setVault',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'vault_', type: 'address' }],
+    outputs: [],
+  },
+] as const
+
+const VAULT_SHARE_BURN_STREAM_ABI = [
+  {
+    type: 'function',
+    name: 'authorizedQueuers',
+    stateMutability: 'view',
+    inputs: [{ name: 'queuer', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
   },
 ] as const
 
@@ -2273,6 +2243,19 @@ function renderRolePolicySourceLabel(source: RolePolicySourceLabel): string {
   }
 }
 
+function parseRolePolicyOverrideInput(raw: string): { value: number | null; error: string | null } {
+  const trimmed = raw.trim()
+  if (!trimmed) return { value: null, error: null }
+  if (!/^\d+$/.test(trimmed)) {
+    return { value: null, error: 'Role policy override must be a whole number (0-65535).' }
+  }
+  const parsed = Number(trimmed)
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0 || parsed > 65_535) {
+    return { value: null, error: 'Role policy override must be between 0 and 65535.' }
+  }
+  return { value: parsed, error: null }
+}
+
 function DeployVaultBatcher({
   creatorToken,
   owner,
@@ -2505,15 +2488,23 @@ function DeployVaultBatcher({
     () => isLocalForkRpcUrl(String(import.meta.env.VITE_BASE_RPC ?? '')),
     [],
   )
+  const [rolePolicyOverrideInput, setRolePolicyOverrideInput] = useState('')
+  const rolePolicyOverride = useMemo(
+    () => parseRolePolicyOverrideInput(rolePolicyOverrideInput),
+    [rolePolicyOverrideInput],
+  )
   const expectedRef = useRef<ServerDeployResponse['addresses'] | null>(null)
   const lastPolledStepRef = useRef<string>('')
   const rolePolicyDiagnosticsQuery = useQuery({
-    queryKey: ['deployRolePolicyResolve', creatorToken],
+    queryKey: ['deployRolePolicyResolve', creatorToken, rolePolicyOverride.value],
     enabled: Boolean(creatorToken),
     staleTime: 30_000,
     retry: 0,
     queryFn: async () => {
       const qs = new URLSearchParams({ creatorToken })
+      if (rolePolicyOverride.value !== null) {
+        qs.set('rolePolicyId', String(rolePolicyOverride.value))
+      }
       const res = await apiFetch(`/api/deploy/v2/session/role-policy/resolve?${qs.toString()}`, {
         method: 'GET',
         headers: { Accept: 'application/json' },
@@ -2564,12 +2555,19 @@ function DeployVaultBatcher({
     const ow = String(owner ?? '').toLowerCase()
     return `cv:deploy:session:${ct}:${ow}`
   }, [creatorToken, owner])
+  const deploySessionBatcherAddress = useMemo(() => {
+    const normalizedOverride = normalizeDeploymentBatcherAddress(batcherOverride)
+    if (normalizedOverride) return normalizedOverride
+    const configured = CONTRACTS.creatorVaultBatcher ?? null
+    return normalizeDeploymentBatcherAddress(configured)
+  }, [batcherOverride])
   const deploySessionStorageKey = useMemo(() => {
     const ct = String(creatorToken ?? '').toLowerCase()
     const ow = String(owner ?? '').toLowerCase()
     const vv = String(deploymentVersion ?? '').trim().toLowerCase()
-    return `cv:deploy:session:${ct}:${ow}:${vv}`
-  }, [creatorToken, deploymentVersion, owner])
+    const bb = String(deploySessionBatcherAddress ?? '').toLowerCase()
+    return `cv:deploy:session:${ct}:${ow}:${vv}:${bb}`
+  }, [creatorToken, deploySessionBatcherAddress, deploymentVersion, owner])
   const persistDeploySession = useCallback(
     (sessionId: string) => {
       if (typeof window === 'undefined') return
@@ -2581,6 +2579,7 @@ function DeployVaultBatcher({
             creatorToken: String(creatorToken).toLowerCase(),
             owner: String(owner).toLowerCase(),
             version: String(deploymentVersion),
+            batcher: String(deploySessionBatcherAddress ?? '').toLowerCase(),
             createdAt: new Date().toISOString(),
           }),
         )
@@ -2588,7 +2587,7 @@ function DeployVaultBatcher({
         // ignore storage errors
       }
     },
-    [creatorToken, deploySessionStorageKey, deploymentVersion, owner],
+    [creatorToken, deploySessionBatcherAddress, deploySessionStorageKey, deploymentVersion, owner],
   )
   const clearDeploySession = useCallback(() => {
     if (typeof window === 'undefined') return
@@ -2607,12 +2606,15 @@ function DeployVaultBatcher({
       const parsed = JSON.parse(raw)
       const rawVersion = typeof parsed?.version === 'string' ? parsed.version.trim() : ''
       if (rawVersion && rawVersion !== deploymentVersion) return null
+      const rawBatcher = typeof parsed?.batcher === 'string' ? parsed.batcher.trim().toLowerCase() : ''
+      const expectedBatcher = String(deploySessionBatcherAddress ?? '').toLowerCase()
+      if (rawBatcher && expectedBatcher && rawBatcher !== expectedBatcher) return null
       const sessionId = typeof parsed?.sessionId === 'string' ? parsed.sessionId.trim() : ''
       return sessionId.length > 0 ? sessionId : null
     } catch {
       return null
     }
-  }, [deploySessionStorageKey, deploymentVersion])
+  }, [deploySessionBatcherAddress, deploySessionStorageKey, deploymentVersion])
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
@@ -2623,7 +2625,11 @@ function DeployVaultBatcher({
     }
   }, [legacyDeploySessionStorageKey])
   const shareOftVanityCacheRef = useRef<{ key: string; salt: Hex } | null>(null)
-  const vaultVanityVersionCacheRef = useRef<{ key: string; version: string } | null>(null)
+  const vaultVanityVersionCacheRef = useRef<{
+    key: string
+    version: string
+    outcome?: DeploymentVanityVersionSearchOutcome
+  } | null>(null)
   const shareOftVanitySkipLogKeyRef = useRef<string | null>(null)
   const creatorCoinOwnerUnresolvedLogKeyRef = useRef<string | null>(null)
   const ensurePaymasterSession = useCallback(async () => {
@@ -2863,8 +2869,11 @@ function DeployVaultBatcher({
     }
     if (lower.includes('0x5cfe78fe') || lower.includes('invalidmoduleaddress')) {
       return (
-        'The selected deployment batcher is wired to incompatible CreatorOVault modules (InvalidModuleAddress). ' +
-        'Switch to a module-compatible batcher/runtime deploy stack, then retry.'
+        'Phase 1 reverted: CreatorOVault rejected the batcher wired modules (InvalidModuleAddress / 0x5cfe78fe). ' +
+        'Deploy bytecode and Phase1Module wiring must share the same moduleStorageVersion fingerprint (v1.14.0 uses CreatorOVaultModuleStorage.v3). ' +
+        'If the live batcher still wires v2 modules, protocol ops must rotate to the v1.14.0 v3 Phase1Module via setPhase1Module before greenfield deploy. ' +
+        'Hard-refresh the app so predicted CREATE2 addresses use the Phase1Module create2 deployer (not stale batcher-shell getters), ' +
+        'confirm UniversalBytecodeStore CreatorOVault bytecode is seeded for v1.14.0, then bump deploymentVersion in the URL if retrying after a partial Phase 1 (e.g. ?deploymentVersion=v1.14.0-retry-1).'
       )
     }
     if (
@@ -3317,8 +3326,11 @@ function DeployVaultBatcher({
     let cancelled = false
     ;(async () => {
       const runtimeConfig = await fetchDeployRuntimeConfig().catch(() => null)
-      if (cancelled || !runtimeConfig) {
-        if (!cancelled) setRuntimeBatcherConfigError(null)
+      if (cancelled) return
+      if (!runtimeConfig) {
+        setRuntimeBatcherConfigError(
+          'Deploy runtime config is unavailable. Retry in a moment before submitting.',
+        )
         return
       }
       setRuntimeBatcherConfigError(runtimeConfig.creatorVaultBatcherConfigError ?? null)
@@ -3399,10 +3411,33 @@ function DeployVaultBatcher({
     } as const
   }, [])
 
-  const expectedQuery = useQuery({
+  const batcherInfraQuery = useQuery({
+    queryKey: ['creatorVaultBatcher', 'infra', batcherAddress],
+    enabled: !!publicClient && !!batcherAddress,
+    staleTime: 300_000,
+    retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
+    retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
+    queryFn: async () => {
+      const result = await readCreatorVaultBatcherInfra({
+        publicClient: publicClient!,
+        batcherAddress: batcherAddress as Address,
+        fallbacks: {
+          create2Deployer: (CONTRACTS.universalCreate2DeployerFromStore ?? null) as Address | null,
+          bytecodeStore: (CONTRACTS.universalBytecodeStore ?? null) as Address | null,
+          protocolTreasury: (CONTRACTS.protocolTreasury ?? null) as Address | null,
+          registry: (CONTRACTS.registry ?? null) as Address | null,
+          chainlinkEthUsd: (CONTRACTS.chainlinkEthUsd ?? BASE_CHAINLINK_ETH_USD) as Address | null,
+        },
+      })
+      if (!result.ok) throw new Error(result.message)
+      return result.infra
+    },
+  })
+
+  const vanityPlanQuery = useQuery({
     queryKey: [
       'creatorVaultBatcher',
-      'expected',
+      'vanityPlan',
       batcherAddress,
       creatorToken,
       owner,
@@ -3417,540 +3452,172 @@ function DeployVaultBatcher({
       vaultVanityPrefix,
       vaultVanityMaxTries,
     ],
-    enabled: !!publicClient && !!batcherAddress && !!creatorToken && !!owner && !!shareSymbol && !!shareName && !!vaultName && !!vaultSymbol,
-    staleTime: 30_000,
+    enabled:
+      !!publicClient &&
+      !!batcherAddress &&
+      !!creatorToken &&
+      !!owner &&
+      !!shareSymbol &&
+      !!shareName &&
+      !!vaultName &&
+      !!vaultSymbol &&
+      batcherInfraQuery.isSuccess,
+    staleTime: 3_600_000,
+    gcTime: 3_600_000,
     retry: 0,
     queryFn: async () => {
-      let create2Deployer: Address | null = null
-      try {
-        create2Deployer = (await publicClient!.readContract({
-          address: batcherAddress as Address,
-          abi: CREATOR_VAULT_BATCHER_ABI,
-          functionName: 'create2Deployer',
-        })) as Address
-      } catch {
-        create2Deployer = null
-      }
-      if (!create2Deployer || !isAddress(String(create2Deployer))) {
-        const fallback = (CONTRACTS.universalCreate2DeployerFromStore ?? null) as Address | null
-        create2Deployer = fallback && isAddress(String(fallback)) ? fallback : null
-      }
-      if (!create2Deployer) throw new Error('Create2 deployer not available')
-
-      let protocolTreasury: Address | null = null
-      try {
-        protocolTreasury = (await publicClient!.readContract({
-          address: batcherAddress as Address,
-          abi: CREATOR_VAULT_BATCHER_ABI,
-          functionName: 'protocolTreasury',
-        })) as Address
-      } catch {
-        protocolTreasury = null
-      }
-      if (!protocolTreasury || !isAddress(String(protocolTreasury))) {
-        const fallback = (CONTRACTS.protocolTreasury ?? null) as Address | null
-        protocolTreasury = fallback && isAddress(String(fallback)) ? fallback : null
-      }
-      if (!protocolTreasury) throw new Error('Protocol treasury not available')
-
-      let registryAddress: Address | null = null
-      try {
-        registryAddress = (await publicClient!.readContract({
-          address: batcherAddress as Address,
-          abi: CREATOR_VAULT_BATCHER_ABI,
-          functionName: 'registry',
-        })) as Address
-      } catch {
-        registryAddress = null
-      }
-      if (!registryAddress || !isAddress(String(registryAddress))) {
-        const fallback = (CONTRACTS.registry ?? null) as Address | null
-        registryAddress = fallback && isAddress(String(fallback)) ? fallback : null
-      }
-      if (!registryAddress) throw new Error('Registry not available')
-
-      let chainlinkEthUsd: Address | null = null
-      try {
-        chainlinkEthUsd = (await publicClient!.readContract({
-          address: batcherAddress as Address,
-          abi: CREATOR_VAULT_BATCHER_ABI,
-          functionName: 'chainlinkEthUsd',
-        })) as Address
-      } catch {
-        chainlinkEthUsd = null
-      }
-      if (!chainlinkEthUsd || !isAddress(String(chainlinkEthUsd))) {
-        const fallback = (CONTRACTS.chainlinkEthUsd ?? null) as Address | null
-        chainlinkEthUsd = fallback && isAddress(String(fallback)) ? fallback : null
-      }
-      if (!chainlinkEthUsd) throw new Error('Chainlink feed not available')
-
-      const tempOwner = batcherAddress as Address
-      const batcherBytecode =
-        (await publicClient!
-          .getBytecode({ address: batcherAddress as Address })
-          .catch(() => null)) ?? null
-      const batcherBytecodeLower = (batcherBytecode ?? '0x').toLowerCase()
-      const batcherAddressLower = String(batcherAddress ?? '').toLowerCase()
-      const saltOverridesDisabledByBatcher =
-        KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS.has(batcherAddressLower) ||
-        batcherBytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR)
-      const supportsLegacyPhase1WithSaltSelector = (() => {
-        if (!batcherBytecode || batcherBytecode === '0x') return false
-        return !saltOverridesDisabledByBatcher && batcherBytecodeLower.includes(BATCHER_PHASE1_WITH_SALT_SELECTOR)
-      })()
-      const supportsSplitPhase1WithSaltSelectors = (() => {
-        if (!batcherBytecode || batcherBytecode === '0x') return false
-        return (
-          !saltOverridesDisabledByBatcher &&
-          batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR) &&
-          batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR)
-        )
-      })()
-      const supportsPhase1WithSalt = (() => {
-        return supportsLegacyPhase1WithSaltSelector || supportsSplitPhase1WithSaltSelectors
-      })()
-
-      // IMPORTANT: The onchain deployment batcher uses *lowercase* symbols for salts + oracle wiring,
-      // but uses *uppercase* symbols for ShareOFT metadata. We must mirror both to keep expected
-      // addresses deterministic (especially for ShareOFT + gauge + oracle predictions).
-      const shareSymbolLower = shareSymbol.toLowerCase()
-      const shareSymbolUpper = shareSymbol.toUpperCase()
-
-      const oftBootstrapSalt = deriveOftBootstrapSalt()
-      const oftBootstrapRegistry = predictCreate2Address({
-        create2Deployer,
-        salt: oftBootstrapSalt,
-        initCode: DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex,
-      })
-
-      const shareOftArgs = encodeAbiParameters(parseAbiParameters('string,string,address,address'), [
-        shareName,
-        shareSymbolUpper,
-        oftBootstrapRegistry,
-        tempOwner,
-      ])
-      const shareOftInitCode = concatHex([DEPLOY_BYTECODE.CreatorShareOFT as Hex, shareOftArgs])
-      const vaultArgs = encodeAbiParameters(parseAbiParameters('address,address,string,string'), [
+      const plan = await resolveDeployVanityPlan({
+        publicClient: publicClient!,
+        batcherAddress: batcherAddress as Address,
+        batcherInfra: batcherInfraQuery.data!,
         creatorToken,
-        tempOwner,
+        owner,
+        chainId: base.id,
+        deploymentVersion,
+        shareOftSaltOverride,
         vaultName,
         vaultSymbol,
-      ])
-      const vaultInitCode = concatHex([DEPLOY_BYTECODE.CreatorOVault as Hex, vaultArgs])
-
-      let deploymentVersionUsed = deploymentVersion
-      let vanityVersionSearchWarning: string | null = null
-      // Apply deployment-version search for deterministic vanity when possible.
-      // When Phase-1 salt overrides are unavailable, also attempt share-suffix matching
-      // via version search (with share suffix taking priority over vault prefix fallback).
-      const useVersionSearchForShareSuffix = Boolean(shareOftVanitySuffix) && !supportsPhase1WithSalt
-      const versionSearchVaultPrefix = vaultVanityPrefix ?? null
-      const versionSearchShareSuffix = useVersionSearchForShareSuffix ? shareOftVanitySuffix : null
-      const usingDefaultVaultVanityTarget = versionSearchVaultPrefix === DEFAULT_VAULT_VANITY_PREFIX
-      const usingDefaultShareVanityTarget =
-        !versionSearchShareSuffix || versionSearchShareSuffix === DEFAULT_SHARE_OFT_VANITY_SUFFIX
-      if (versionSearchVaultPrefix || versionSearchShareSuffix) {
-        const vanityTargetsKey = [
-          create2Deployer.toLowerCase(),
-          creatorToken.toLowerCase(),
-          owner.toLowerCase(),
-          String(base.id),
-          vaultName,
-          vaultSymbol,
-          shareName,
-          shareSymbol,
-          deploymentVersion,
-          versionSearchVaultPrefix ?? '',
-          versionSearchShareSuffix ?? '',
-          String(vaultVanityMaxTries),
-          String(shareOftVanityMaxTries),
-          '0',
-        ].join(':')
-        const cached = vaultVanityVersionCacheRef.current
-        if (cached?.key === vanityTargetsKey) {
-          deploymentVersionUsed = cached.version
-        } else {
-          const versionSearchMaxTries =
-            versionSearchVaultPrefix && versionSearchShareSuffix
-              ? Math.min(10_000, vaultVanityMaxTries, shareOftVanityMaxTries)
-              : versionSearchVaultPrefix
-                ? vaultVanityMaxTries
-                : shareOftVanityMaxTries
-          let foundVersion = await findDeploymentVersionForVanityTargets({
-            create2Deployer,
-            creatorToken,
-            owner,
-            chainId: base.id,
-            baseVersion: deploymentVersion,
-            vaultPrefix: versionSearchVaultPrefix,
-            shareSuffix: versionSearchShareSuffix,
-            maxTries: versionSearchMaxTries,
-            vaultInitCode,
-            shareOftInitCode,
-            shareSymbol,
-            isAddressDeployed: async (addr) => {
-              const bc = await publicClient!.getBytecode({ address: addr })
-              return !!bc && bc !== '0x'
-            },
-          })
-          // If both targets are requested and a combined hit wasn't found,
-          // prioritize deterministic share suffix for deploy correctness/UX.
-          if (!foundVersion && versionSearchVaultPrefix && versionSearchShareSuffix) {
-            foundVersion = await findDeploymentVersionForVanityTargets({
-              create2Deployer,
-              creatorToken,
-              owner,
-              chainId: base.id,
-              baseVersion: deploymentVersion,
-              vaultPrefix: null,
-              shareSuffix: versionSearchShareSuffix,
-              maxTries: shareOftVanityMaxTries,
-              vaultInitCode,
-              shareOftInitCode,
-              shareSymbol,
-              isAddressDeployed: async (addr) => {
-                const bc = await publicClient!.getBytecode({ address: addr })
-                return !!bc && bc !== '0x'
-              },
-            })
-            if (foundVersion) {
-              vanityVersionSearchWarning =
-                `Could not satisfy vault prefix 0x${versionSearchVaultPrefix} with share suffix ${versionSearchShareSuffix} in the same version search window. ` +
-                `Prioritizing share suffix ${versionSearchShareSuffix} for this deploy.`
-            }
-          }
-          if (!foundVersion) {
-            if (versionSearchVaultPrefix && versionSearchShareSuffix) {
-              if (!usingDefaultVaultVanityTarget || !usingDefaultShareVanityTarget) {
-                throw new Error(
-                  `Unable to find a deployment version matching vault prefix "0x${versionSearchVaultPrefix}" and share suffix "${versionSearchShareSuffix}" ` +
-                    `in ${versionSearchMaxTries.toLocaleString()} tries (share-only fallback also failed after ${shareOftVanityMaxTries.toLocaleString()} tries).`,
-                )
-              }
-              vanityVersionSearchWarning =
-                `Default vanity targets (0x${versionSearchVaultPrefix} / ${versionSearchShareSuffix}) were not found in the current search window. ` +
-                'Continuing with deterministic deployment addresses.'
-            } else if (versionSearchShareSuffix) {
-              if (!usingDefaultShareVanityTarget) {
-                throw new Error(
-                  `Unable to find ShareOFT vanity suffix "${versionSearchShareSuffix}" in ${shareOftVanityMaxTries.toLocaleString()} deployment-version tries.`,
-                )
-              }
-              vanityVersionSearchWarning =
-                `Default share suffix "${versionSearchShareSuffix}" was not found in the current search window. ` +
-                'Continuing with deterministic deployment addresses.'
-            } else if (versionSearchVaultPrefix) {
-              if (!usingDefaultVaultVanityTarget) {
-                throw new Error(
-                  `Unable to find vault vanity prefix "0x${versionSearchVaultPrefix}" in ${vaultVanityMaxTries.toLocaleString()} deployment-version tries. ` +
-                    'Increase VITE_VAULT_VANITY_MAX_TRIES and retry.',
-                )
-              }
-              vanityVersionSearchWarning =
-                `Default vault prefix "0x${versionSearchVaultPrefix}" was not found in the current search window. ` +
-                'Continuing with deterministic deployment addresses.'
-            }
-          }
-          if (foundVersion) {
-            deploymentVersionUsed = foundVersion
-            vaultVanityVersionCacheRef.current = { key: vanityTargetsKey, version: foundVersion }
-          }
-        }
-      }
-
-      const baseSalt = deriveBaseSalt({ creatorToken, owner, chainId: base.id, version: deploymentVersionUsed })
-      const vaultSalt = saltFor(baseSalt, 'vault')
-      const wrapperSalt = saltFor(baseSalt, 'wrapper')
-      const gaugeSalt = saltFor(baseSalt, 'gauge')
-      const ccaSalt = saltFor(baseSalt, 'cca')
-      const oracleSalt = saltFor(baseSalt, 'oracle')
-
-      const shareOftVanityUnsupportedByBatcher = !supportsPhase1WithSalt && Boolean(shareOftVanitySuffix)
-      const batcherDisplay = batcherAddress ? shortAddress(batcherAddress) : 'unknown'
-      let shareOftVanityWarning: string | null = null
-      if (shareOftVanityUnsupportedByBatcher) {
-        if (shareVanityIsCustom) {
-          const blockingMessage =
-            `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides. ` +
-            `Custom share token vanity suffix "${shareOftVanitySuffix}" is blocked for this deploy.`
-          logger.warn('[DeployVault] share_oft_vanity_suffix_blocked', {
-            batcher: batcherAddress,
-            suffix: shareOftVanitySuffix,
-            reason: 'phase1_salt_overrides_not_supported',
-          })
-          throw new Error(blockingMessage)
-        }
-        const skipLogKey = buildShareVanitySkipLogKey({
-          batcher: batcherAddress,
-          suffix: shareOftVanitySuffix,
-          reason: 'phase1_salt_overrides_not_supported',
-        })
-        if (shouldEmitShareVanitySkipLog({ lastKey: shareOftVanitySkipLogKeyRef.current, nextKey: skipLogKey })) {
-          shareOftVanitySkipLogKeyRef.current = skipLogKey
-          logger.debug('[DeployVault] share_oft_vanity_suffix_skipped_default', {
-            batcher: batcherAddress,
-            suffix: shareOftVanitySuffix,
-            reason: 'phase1_salt_overrides_not_supported',
-          })
-        }
-        shareOftVanityWarning =
-          `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides, so default share suffix ` +
-          `"${shareOftVanitySuffix}" is not guaranteed for this deploy.`
-      }
-      if (vanityVersionSearchWarning) {
-        shareOftVanityWarning = shareOftVanityWarning
-          ? `${shareOftVanityWarning} ${vanityVersionSearchWarning}`
-          : vanityVersionSearchWarning
-      }
-
-      const derivedShareOftSalt = deriveShareOftSalt({ owner, shareSymbol, version: deploymentVersionUsed })
-      let shareOftSaltOverrideUsed = shareOftSaltOverride
-      if (shareOftSaltOverrideUsed && shareOftVanityUnsupportedByBatcher) {
-        logger.warn('[DeployVault] share_oft_salt_override_ignored', {
-          batcher: batcherAddress,
-          reason: 'phase1_salt_overrides_not_supported',
-          shareOftSaltOverride: shareOftSaltOverrideUsed,
-        })
-        shareOftSaltOverrideUsed = null
-        const overrideWarning =
-          `Ignoring ShareOFT salt override because active batcher ${batcherDisplay} does not support Phase-1 salt overrides.`
-        shareOftVanityWarning = shareOftVanityWarning
-          ? `${shareOftVanityWarning} ${overrideWarning}`
-          : overrideWarning
-      }
-      if (!shareOftSaltOverrideUsed && shareOftVanitySuffix && !shareOftVanityUnsupportedByBatcher) {
-        const initCodeHash = keccak256(shareOftInitCode)
-        const vanitySeed = keccak256(
-          encodePacked(['string', 'address', 'address', 'string'], [
-            'CreatorShareOFT:vanity',
-            creatorToken,
-            owner,
-            deploymentVersionUsed,
-          ]),
-        )
-        const vanityStart = BigInt(vanitySeed)
-        const vanityKey = [
-          create2Deployer.toLowerCase(),
-          initCodeHash.toLowerCase(),
-          shareOftVanitySuffix,
-          String(shareOftVanityMaxTries),
-          deploymentVersionUsed,
-          creatorToken.toLowerCase(),
-          owner.toLowerCase(),
-        ].join(':')
-        const cached = shareOftVanityCacheRef.current
-        if (cached?.key === vanityKey) {
-          shareOftSaltOverrideUsed = cached.salt
-        } else {
-          const found = await findCreate2SaltForSuffix({
-            create2Deployer,
-            initCode: shareOftInitCode,
-            suffix: shareOftVanitySuffix,
-            maxTries: shareOftVanityMaxTries,
-            startAt: vanityStart,
-            isAddressDeployed: async (addr) => {
-              const bc = await publicClient!.getBytecode({ address: addr })
-              return !!bc && bc !== '0x'
-            },
-          })
-          if (!found) {
-            throw new Error(
-              `Unable to find ShareOFT vanity suffix "${shareOftVanitySuffix}" in ${shareOftVanityMaxTries.toLocaleString()} tries. ` +
-                'Increase VITE_SHARE_OFT_VANITY_MAX_TRIES and retry.',
-            )
-          }
-          shareOftSaltOverrideUsed = found
-          shareOftVanityCacheRef.current = { key: vanityKey, salt: found }
-        }
-      }
-      const shareOftSalt = shareOftSaltOverrideUsed ?? derivedShareOftSalt
-      const shareOftAddress = predictCreate2Address({ create2Deployer, salt: shareOftSalt, initCode: shareOftInitCode })
-      const vaultAddress = predictCreate2Address({ create2Deployer, salt: vaultSalt, initCode: vaultInitCode })
-
-      const wrapperArgs = encodeAbiParameters(parseAbiParameters('address,address,address'), [creatorToken, vaultAddress, tempOwner])
-      const wrapperInitCode = concatHex([DEPLOY_BYTECODE.CreatorOVaultWrapper as Hex, wrapperArgs])
-      const wrapperAddress = predictCreate2Address({ create2Deployer, salt: wrapperSalt, initCode: wrapperInitCode })
-
-      // Must mirror DeploymentBatcherPhase2Module.deployPhase2Core exactly:
-      // gauge ctor args = (shareOFT, protocolTreasury, protocolTreasury, batcher).
-      // Using `owner` here predicts the wrong CREATE2 address and causes
-      // finalizePhase2 to revert with Phase2Missing().
-      const gaugeArgs = encodeAbiParameters(parseAbiParameters('address,address,address,address'), [
-        shareOftAddress,
-        protocolTreasury,
-        protocolTreasury,
-        tempOwner,
-      ])
-      const gaugeInitCode = concatHex([DEPLOY_BYTECODE.CreatorGaugeController as Hex, gaugeArgs])
-      const gaugeAddress = predictCreate2Address({ create2Deployer, salt: gaugeSalt, initCode: gaugeInitCode })
-
-      const ccaArgs = encodeAbiParameters(parseAbiParameters('address,address,address,address,address'), [
-        shareOftAddress,
-        ZERO_ADDRESS,
-        vaultAddress,
-        vaultAddress,
-        tempOwner,
-      ])
-      const ccaInitCode = concatHex([DEPLOY_BYTECODE.CCALaunchStrategy as Hex, ccaArgs])
-      const ccaAddress = predictCreate2Address({ create2Deployer, salt: ccaSalt, initCode: ccaInitCode })
-
-      const weth = getAddress((CONTRACTS.weth ?? BASE_WETH) as Address)
-      const burnStreamSalt = deriveVaultShareBurnStreamSalt({ creatorToken, owner })
-      const burnStreamArgs = encodeAbiParameters(parseAbiParameters('address'), [vaultAddress])
-      const burnStreamInitCode = concatHex([DEPLOY_BYTECODE.VaultShareBurnStream as Hex, burnStreamArgs])
-
-      const payoutRouterSalt = derivePayoutRouterSalt({ creatorToken, owner })
-      const creatorCoinPolicyControllerSalt = deriveCreatorCoinPolicyControllerSalt({ creatorToken, owner })
-
-      // IMPORTANT: burnStream + payoutRouter are deployed via UniversalCreate2DeployerFromStore in Phase 2.
-      // The paymaster computes expected addresses using `bytecodeStore.get(codeId)` + CREATE2.
-      // To avoid mismatches, compute these expected addresses the same way (fall back to local bytecode if needed).
-      let burnStreamAddress = predictCreate2Address({ create2Deployer, salt: burnStreamSalt, initCode: burnStreamInitCode })
-      let payoutRouterAddress = (() => {
-        const args = encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address,address'), [
-          creatorToken,
-          vaultAddress,
-          burnStreamAddress,
-          protocolTreasury,
-          getAddress(BASE_SWAP_ROUTER as Address),
-          weth,
-          ZERO_ADDRESS,
-        ])
-        const init = concatHex([DEPLOY_BYTECODE.PayoutRouter as Hex, args])
-        return predictCreate2Address({ create2Deployer, salt: payoutRouterSalt, initCode: init })
-      })()
-      let creatorCoinPolicyControllerAddress = (() => {
-        const args = encodeAbiParameters(parseAbiParameters('address,address,address'), [
-          creatorToken,
-          payoutRouterAddress,
-          protocolTreasury,
-        ])
-        const init = concatHex([DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex, args])
-        return predictCreate2Address({ create2Deployer, salt: creatorCoinPolicyControllerSalt, initCode: init })
-      })()
-
-      try {
-        const BYTECODE_STORE_GET_ABI = [
-          {
-            type: 'function',
-            name: 'get',
-            stateMutability: 'view',
-            inputs: [{ name: 'codeId', type: 'bytes32' }],
-            outputs: [{ name: 'creationCode', type: 'bytes' }],
-          },
-        ] as const
-
-        let bytecodeStore: Address | null = null
-        try {
-          bytecodeStore = (await publicClient!.readContract({
-            address: batcherAddress as Address,
-            abi: CREATOR_VAULT_BATCHER_ABI,
-            functionName: 'bytecodeStore',
-          })) as Address
-        } catch {
-          bytecodeStore = null
-        }
-        if (!bytecodeStore || !isAddress(String(bytecodeStore))) {
-          const fallback = (CONTRACTS.universalBytecodeStore ?? null) as Address | null
-          bytecodeStore = fallback && isAddress(String(fallback)) ? fallback : null
-        }
-
-        if (bytecodeStore) {
-          const [burnCreation, routerCreation, policyControllerCreation] = (await Promise.all([
-            publicClient!.readContract({
-              address: bytecodeStore,
-              abi: BYTECODE_STORE_GET_ABI,
-              functionName: 'get',
-              args: [vaultShareBurnStreamCodeId],
-            }),
-            publicClient!.readContract({
-              address: bytecodeStore,
-              abi: BYTECODE_STORE_GET_ABI,
-              functionName: 'get',
-              args: [payoutRouterCodeId],
-            }),
-            publicClient!.readContract({
-              address: bytecodeStore,
-              abi: BYTECODE_STORE_GET_ABI,
-              functionName: 'get',
-              args: [creatorCoinPolicyControllerCodeId],
-            }),
-          ])) as [Hex, Hex, Hex]
-
-          const burnInitHash = keccak256(concatHex([burnCreation as Hex, burnStreamArgs]))
-          burnStreamAddress = getCreate2Address({ from: create2Deployer, salt: burnStreamSalt, bytecodeHash: burnInitHash })
-
-          const routerArgsFixed = encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address,address'), [
-            creatorToken,
-            vaultAddress,
-            burnStreamAddress,
-            protocolTreasury,
-            getAddress(BASE_SWAP_ROUTER as Address),
-            weth,
-            ZERO_ADDRESS,
-          ])
-          const routerInitHash = keccak256(concatHex([routerCreation as Hex, routerArgsFixed]))
-          payoutRouterAddress = getCreate2Address({ from: create2Deployer, salt: payoutRouterSalt, bytecodeHash: routerInitHash })
-
-          const policyControllerArgsFixed = encodeAbiParameters(parseAbiParameters('address,address,address'), [
-            creatorToken,
-            payoutRouterAddress,
-            protocolTreasury,
-          ])
-          const policyControllerInitHash = keccak256(
-            concatHex([policyControllerCreation as Hex, policyControllerArgsFixed]),
-          )
-          creatorCoinPolicyControllerAddress = getCreate2Address({
-            from: create2Deployer,
-            salt: creatorCoinPolicyControllerSalt,
-            bytecodeHash: policyControllerInitHash,
-          })
-        }
-      } catch {
-        // Best-effort: fall back to local bytecode predictions
-      }
-
-      const oracleArgs = encodeAbiParameters(parseAbiParameters('address,address,string,address'), [
-        registryAddress,
-        chainlinkEthUsd,
-        shareSymbolLower,
-        tempOwner,
-      ])
-      const oracleInitCode = concatHex([DEPLOY_BYTECODE.CreatorOracle as Hex, oracleArgs])
-      const oracleAddress = predictCreate2Address({ create2Deployer, salt: oracleSalt, initCode: oracleInitCode })
-
-      return {
-        create2Deployer,
-        protocolTreasury,
-        deploymentVersion: deploymentVersionUsed,
-        shareOftSaltOverride: shareOftSaltOverrideUsed ?? null,
-        shareOftVanityWarning,
-        expected: {
-          vault: vaultAddress,
-          wrapper: wrapperAddress,
-          shareOFT: shareOftAddress,
-          gaugeController: gaugeAddress,
-          ccaStrategy: ccaAddress,
-          oracle: oracleAddress,
-          burnStream: burnStreamAddress,
-          payoutRouter: payoutRouterAddress,
-          creatorCoinPolicyController: creatorCoinPolicyControllerAddress,
+        shareName,
+        shareSymbol,
+        vaultVanityPrefix: vaultVanityPrefix ?? null,
+        shareOftVanitySuffix: shareOftVanitySuffix ?? null,
+        vaultVanityMaxTries,
+        shareOftVanityMaxTries,
+        shareVanityIsCustom,
+        cacheState: {
+          vaultVanityVersion: vaultVanityVersionCacheRef.current,
+          shareOftVanity: shareOftVanityCacheRef.current,
+          shareOftVanitySkipLogKey: shareOftVanitySkipLogKeyRef.current,
         },
-      }
+        shortAddress,
+      })
+      vaultVanityVersionCacheRef.current = plan.cacheState.vaultVanityVersion
+      shareOftVanityCacheRef.current = plan.cacheState.shareOftVanity
+      shareOftVanitySkipLogKeyRef.current = plan.cacheState.shareOftVanitySkipLogKey
+      return plan
     },
   })
 
-  const expected = expectedQuery.data?.expected ?? null
-  const expectedCreate2Deployer = expectedQuery.data?.create2Deployer ?? null
-  const expectedProtocolTreasury = normalizeAddressLike(expectedQuery.data?.protocolTreasury ?? CONTRACTS.protocolTreasury)
-  const expectedDeploymentVersion = expectedQuery.data?.deploymentVersion ?? deploymentVersion
-  const expectedShareOftSaltOverride = expectedQuery.data?.shareOftSaltOverride ?? null
-  const expectedShareOftVanityWarning = expectedQuery.data?.shareOftVanityWarning ?? null
+  const expectedAddressesQuery = useQuery({
+    queryKey: [
+      'creatorVaultBatcher',
+      'expectedAddresses',
+      batcherAddress,
+      creatorToken,
+      owner,
+      vanityPlanQuery.data?.deploymentVersionUsed,
+      vanityPlanQuery.data?.shareOftSaltOverrideUsed,
+      vanityPlanQuery.data?.vaultAddress,
+    ],
+    enabled: !!publicClient && !!batcherAddress && !!creatorToken && !!owner && vanityPlanQuery.isSuccess,
+    staleTime: 30_000,
+    retry: 0,
+    queryFn: async () =>
+      resolveDeployExpectedAddresses({
+        publicClient: publicClient!,
+        batcherAddress: batcherAddress as Address,
+        batcherInfra: batcherInfraQuery.data!,
+        creatorToken,
+        owner,
+        chainId: base.id,
+        vanityPlan: vanityPlanQuery.data!,
+        universalBytecodeStoreFallback: (CONTRACTS.universalBytecodeStore ?? null) as Address | null,
+        wethAddress: (CONTRACTS.weth ?? BASE_WETH) as Address,
+        vaultShareBurnStreamCodeId,
+        payoutRouterCodeId,
+        creatorCoinPolicyControllerCodeId,
+      }),
+  })
+
+  const batcherInfraQueryLoading = batcherInfraQuery.isLoading || batcherInfraQuery.isFetching
+  const vanityPlanQueryLoading = vanityPlanQuery.isLoading || vanityPlanQuery.isFetching
+  const expectedAddressesQueryLoading =
+    expectedAddressesQuery.isLoading || expectedAddressesQuery.isFetching
+  const expectedQueryLoading =
+    batcherInfraQueryLoading || vanityPlanQueryLoading || expectedAddressesQueryLoading
+  const expectedQueryIsError = vanityPlanQuery.isError || expectedAddressesQuery.isError
+  const expectedQueryError = vanityPlanQuery.error ?? expectedAddressesQuery.error
+
+  const expected = expectedAddressesQuery.data?.expected ?? null
+  const expectedCreate2Deployer = expectedAddressesQuery.data?.create2Deployer ?? null
+  const expectedProtocolTreasury = normalizeAddressLike(
+    expectedAddressesQuery.data?.protocolTreasury ?? CONTRACTS.protocolTreasury,
+  )
+  const expectedDeploymentVersion = vanityPlanQuery.data?.deploymentVersionUsed ?? deploymentVersion
+  const expectedShareOftSaltOverride = vanityPlanQuery.data?.shareOftSaltOverrideUsed ?? null
+  const expectedShareOftVanityWarning = vanityPlanQuery.data?.shareOftVanityWarning ?? null
+  const expectedShareOftVanityInfo = vanityPlanQuery.data?.shareOftVanityInfo ?? null
   const expectedGauge = expected?.gaugeController ?? null
   const expectedBurnStream = expected?.burnStream ?? null
   const expectedPayoutRouter = expected?.payoutRouter ?? null
   const expectedCreatorCoinPolicyController = expected?.creatorCoinPolicyController ?? null
+
+  const phase1BaseSalt = useMemo<Hex | null>(() => {
+    if (!creatorToken || !owner) return null
+    return deriveBaseSalt({
+      creatorToken,
+      owner,
+      chainId: base.id,
+      version: expectedDeploymentVersion,
+    })
+  }, [creatorToken, expectedDeploymentVersion, owner])
+
+  const phase1OnchainQuery = useQuery({
+    queryKey: ['creatorVaultBatcher', 'phase1Onchain', batcherAddress, phase1BaseSalt],
+    enabled: Boolean(publicClient && batcherAddress && phase1BaseSalt),
+    staleTime: 15_000,
+    retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
+    retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
+    queryFn: async () =>
+      readDeployedPhase1CoreAddresses({
+        publicClient: publicClient!,
+        batcherAddress: batcherAddress as Address,
+        baseSalt: phase1BaseSalt as Hex,
+      }),
+  })
+
+  const pipeAFinalizeParams = useMemo<FinalizePhase2Params | null>(() => {
+    if (!expected || !creatorToken || !owner) return null
+    const floorPriceQ96ForBatcher =
+      floorPriceQ96Aligned && floorPriceQ96Aligned > 0n ? floorPriceQ96Aligned : 1n
+    const predicted: FinalizePhase2Params = {
+      creatorToken,
+      owner,
+      vault: expected.vault,
+      wrapper: expected.wrapper,
+      shareOFT: expected.shareOFT,
+      gaugeController: expected.gaugeController,
+      ccaStrategy: expected.ccaStrategy,
+      oracle: expected.oracle,
+      version: expectedDeploymentVersion,
+      depositAmount: minFirstDeposit,
+      requiredRaise: DEFAULT_REQUIRED_RAISE_WEI,
+      floorPriceQ96: floorPriceQ96ForBatcher,
+      auctionSteps: encodeUniswapCcaLinearSteps(DEFAULT_CCA_DURATION_BLOCKS),
+      meteoraAlphaVault: ZERO_BYTES32 as Hex,
+      solanaIxs: [],
+    }
+    return mergePipeAFinalizeParams(predicted, phase1OnchainQuery.data ?? null)
+  }, [
+    creatorToken,
+    expected,
+    expectedDeploymentVersion,
+    floorPriceQ96Aligned,
+    minFirstDeposit,
+    owner,
+    phase1OnchainQuery.data,
+  ])
+
+  const pipeAWrapperDeployed = useMemo<boolean | null>(() => {
+    if (phase1OnchainQuery.isLoading || phase1OnchainQuery.isFetching) return null
+    if (!phase1OnchainQuery.isSuccess) return null
+    return Boolean(phase1OnchainQuery.data?.wrapper)
+  }, [
+    phase1OnchainQuery.data,
+    phase1OnchainQuery.isFetching,
+    phase1OnchainQuery.isLoading,
+    phase1OnchainQuery.isSuccess,
+  ])
 
   useEffect(() => {
     if (expectedDeploymentVersion && expectedDeploymentVersion !== deploymentVersion) {
@@ -4025,9 +3692,24 @@ function DeployVaultBatcher({
             functionName: 'ajnaFactory',
           })
           .catch(() => null),
+        null as Address | null,
       ])
 
       const phase3HelperAddress = normalizeAddressLike(phase3HelperRaw) ?? defaultPhase3HelperForBatcher(batcherAddress)
+      let protocolAutomationAddress =
+        normalizeAddressLike((CONTRACTS as { protocolAutomation?: Address }).protocolAutomation) ?? null
+      if (phase3HelperAddress) {
+        try {
+          const onChainAutomation = (await publicClient!.readContract({
+            address: phase3HelperAddress,
+            abi: PHASE3_HELPER_VIEW_ABI,
+            functionName: 'protocolAutomation',
+          })) as Address
+          protocolAutomationAddress = normalizeAddressLike(onChainAutomation) ?? protocolAutomationAddress
+        } catch {
+          // keep env fallback
+        }
+      }
       const usdcAddress = normalizeAddressLike(usdcRaw) ?? fallbackUsdc
       const uniswapRouterAddress = normalizeAddressLike(uniswapRouterRaw) ?? fallbackUniswapRouter
       const uniswapV3FactoryAddress = normalizeAddressLike(uniswapV3FactoryRaw) ?? fallbackUniswapV3Factory
@@ -4107,7 +3789,7 @@ function DeployVaultBatcher({
       }
 
       let charmVaultAddress: Address | null = null
-      if (v3PoolAddress && expectedProtocolTreasury) {
+      if (v3PoolAddress && protocolAutomationAddress) {
         const charmLabel = (depositSymbol || '').toLowerCase()
         const charmVaultName = charmLabel ? `4626: ${charmLabel}/USDC` : '4626: CREATOR/USDC'
         const charmVaultSymbol = charmLabel ? `CV-${charmLabel}-USDC` : 'CV-CREATOR-USDC'
@@ -4119,9 +3801,9 @@ function DeployVaultBatcher({
             args: [
               {
                 pool: v3PoolAddress,
-                manager: expectedProtocolTreasury,
+                manager: protocolAutomationAddress,
                 managerFee: 160_000,
-                rebalanceDelegate: expectedProtocolTreasury,
+                rebalanceDelegate: owner,
                 maxTotalSupply: (1n << 256n) - 1n,
                 baseThreshold: 3_000,
                 limitThreshold: 6_000,
@@ -4244,6 +3926,7 @@ function DeployVaultBatcher({
 
       return {
         v3Pool: v3PoolAddress,
+        protocolAutomation: protocolAutomationAddress,
         charmVault: charmVaultAddress,
         creatorCharmStrategy: creatorCharmStrategyAddress,
         ajnaPool: ajnaPoolAddress,
@@ -4538,6 +4221,7 @@ function DeployVaultBatcher({
           clientValue: batcherAddress,
           runtimeValue: runtimeBatcher,
         })
+        clearDeploySession()
         setBatcherOverride(runtimeBatcher)
         setError(
           recovered
@@ -4561,6 +4245,7 @@ function DeployVaultBatcher({
           clientValue: clientRuntimeDeploymentVersion,
           runtimeValue: runtimeDeploymentVersion,
         })
+        clearDeploySession()
         setDeploymentVersionOverride(runtimeDeploymentVersion)
         setError(
           recovered
@@ -4588,6 +4273,26 @@ function DeployVaultBatcher({
         parseUniswapV3Fee(runtimeConfig?.payoutRouterZoraWethFee) ?? DEFAULT_PAYOUT_ROUTER_ZORA_WETH_FEE
       const payoutRouterWethCreatorFee =
         parseUniswapV3Fee(runtimeConfig?.payoutRouterWethCreatorFee) ?? DEFAULT_PAYOUT_ROUTER_WETH_CREATOR_FEE
+      const impairmentClaimsAddress = normalizeConfiguredAddress(
+        runtimeConfig?.impairmentClaims ?? (CONTRACTS as any).impairmentClaims ?? null,
+      )
+      const impairmentRecoveryEscrowAddress = normalizeConfiguredAddress(
+        runtimeConfig?.impairmentRecoveryEscrow ?? (CONTRACTS as any).impairmentRecoveryEscrow ?? null,
+      )
+      const impairmentGuardianAddress = normalizeConfiguredAddress(
+        runtimeConfig?.impairmentGuardian ?? (CONTRACTS as any).impairmentGuardian ?? null,
+      )
+      const configuredImpairmentChallengeWindowSeconds = (() => {
+        const raw = runtimeConfig?.impairmentChallengeWindowSeconds
+        if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) return Math.floor(raw)
+        if (raw == null) return BASE_DEFAULTS.impairmentChallengeWindowSeconds
+        return null
+      })()
+      if (Boolean(impairmentClaimsAddress) !== Boolean(impairmentRecoveryEscrowAddress)) {
+        throw new Error(
+          'Impairment config is incomplete. Configure both impairment claims and recovery escrow addresses.',
+        )
+      }
       if (!publicClient) throw new Error('Network client not ready')
       const vaultAuxiliaryDeployBatcher = normalizeAddressLike(CONTRACTS.vaultAuxiliaryDeployBatcher)
       if (
@@ -4629,9 +4334,10 @@ function DeployVaultBatcher({
       const depositAmount = minFirstDeposit
       const minimumTotalIdle = (depositAmount * DEFAULT_MIN_IDLE_PERCENT_BPS) / 10_000n
       const auctionSteps = encodeUniswapCcaLinearSteps(DEFAULT_CCA_DURATION_BLOCKS)
-      // Safety: the deployment batcher tries to call `CreatorCoin.setPayoutRecipient(payoutRecipient)` when non-zero.
+      // Safety: the deployment batcher tries to call `CreatorCoin.setPayoutRecipient(...)` when non-zero.
+      // This field in the batcher calldata corresponds to the `creatorCoinPayoutRecipient` (external earnings lane per AGENTS.md).
       // Zora Creator Coins restrict that setter to the coin owner, so the batcher-side internal call reverts (msg.sender=batcher).
-      // We always pass `address(0)` to the batcher and, when needed, set CreatorCoin payoutRecipient from the identity wallet separately.
+      // We always pass `address(0)` to the batcher and, when needed, set the creatorCoinPayoutRecipient from the identity wallet separately after deploy.
       const payoutForDeploy = ZERO_ADDRESS as Address
 
       const weth = getAddress((CONTRACTS.weth ?? BASE_WETH) as Address)
@@ -5029,6 +4735,29 @@ function DeployVaultBatcher({
         }),
       } as const
 
+      const payoutRouterQueuerAlreadyAuthorized = await (async () => {
+        try {
+          return await publicClient.readContract({
+            address: expectedBurnStream,
+            abi: VAULT_SHARE_BURN_STREAM_ABI,
+            functionName: 'authorizedQueuers',
+            args: [expectedPayoutRouter],
+          })
+        } catch {
+          return false
+        }
+      })()
+
+      const vaultAuthorizeBurnStreamQueuerCall = {
+        target: expected.vault,
+        value: 0n,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_ADMIN_ABI,
+          functionName: 'setBurnStreamAuthorizedQueuer',
+          args: [expectedPayoutRouter, true],
+        }),
+      } as const
+
       const vaultSetMinimumIdleCall = {
         target: expected.vault,
         value: 0n,
@@ -5038,6 +4767,177 @@ function DeployVaultBatcher({
           args: [minimumTotalIdle],
         }),
       } as const
+
+      const impairmentPhase3Calls: Array<{ target: Address; value: bigint; data: Hex }> = []
+      const currentVaultImpairmentConfig = await (async () => {
+        try {
+          const [management, guardian, claims, escrow, challengeWindow] = await Promise.all([
+            publicClient.readContract({
+              address: expected.vault,
+              abi: CREATOR_VAULT_ADMIN_ABI,
+              functionName: 'management',
+            }),
+            publicClient.readContract({
+              address: expected.vault,
+              abi: CREATOR_VAULT_ADMIN_ABI,
+              functionName: 'impairmentGuardian',
+            }),
+            publicClient.readContract({
+              address: expected.vault,
+              abi: CREATOR_VAULT_ADMIN_ABI,
+              functionName: 'impairmentClaims',
+            }),
+            publicClient.readContract({
+              address: expected.vault,
+              abi: CREATOR_VAULT_ADMIN_ABI,
+              functionName: 'impairmentRecoveryEscrow',
+            }),
+            publicClient.readContract({
+              address: expected.vault,
+              abi: CREATOR_VAULT_ADMIN_ABI,
+              functionName: 'impairmentChallengeWindow',
+            }),
+          ])
+          return {
+            management: normalizeAddressLike(management) ?? ZERO_ADDRESS,
+            guardian: normalizeAddressLike(guardian) ?? ZERO_ADDRESS,
+            claims: normalizeAddressLike(claims) ?? ZERO_ADDRESS,
+            escrow: normalizeAddressLike(escrow) ?? ZERO_ADDRESS,
+            challengeWindow:
+              typeof challengeWindow === 'bigint'
+                ? Number(challengeWindow)
+                : Number(challengeWindow ?? BASE_DEFAULTS.impairmentChallengeWindowSeconds),
+          }
+        } catch {
+          return {
+            management: ZERO_ADDRESS,
+            guardian: ZERO_ADDRESS,
+            claims: ZERO_ADDRESS,
+            escrow: ZERO_ADDRESS,
+            challengeWindow: BASE_DEFAULTS.impairmentChallengeWindowSeconds,
+          }
+        }
+      })()
+      if (
+        impairmentClaimsAddress &&
+        !sameAddress(currentVaultImpairmentConfig.claims, impairmentClaimsAddress)
+      ) {
+        impairmentPhase3Calls.push({
+          target: expected.vault,
+          value: 0n,
+          data: encodeFunctionData({
+            abi: CREATOR_VAULT_ADMIN_ABI,
+            functionName: 'setImpairmentClaims',
+            args: [impairmentClaimsAddress],
+          }),
+        })
+      }
+      if (
+        impairmentRecoveryEscrowAddress &&
+        !sameAddress(currentVaultImpairmentConfig.escrow, impairmentRecoveryEscrowAddress)
+      ) {
+        impairmentPhase3Calls.push({
+          target: expected.vault,
+          value: 0n,
+          data: encodeFunctionData({
+            abi: CREATOR_VAULT_ADMIN_ABI,
+            functionName: 'setImpairmentRecoveryEscrow',
+            args: [impairmentRecoveryEscrowAddress],
+          }),
+        })
+      }
+      if (
+        impairmentGuardianAddress &&
+        !sameAddress(currentVaultImpairmentConfig.guardian, impairmentGuardianAddress)
+      ) {
+        impairmentPhase3Calls.push({
+          target: expected.vault,
+          value: 0n,
+          data: encodeFunctionData({
+            abi: CREATOR_VAULT_ADMIN_ABI,
+            functionName: 'setImpairmentGuardian',
+            args: [impairmentGuardianAddress],
+          }),
+        })
+      }
+      if (
+        configuredImpairmentChallengeWindowSeconds !== null &&
+        configuredImpairmentChallengeWindowSeconds > 0 &&
+        currentVaultImpairmentConfig.challengeWindow !== configuredImpairmentChallengeWindowSeconds
+      ) {
+        const challengeWindowCallData = encodeFunctionData({
+          abi: CREATOR_VAULT_ADMIN_ABI,
+          functionName: 'setImpairmentChallengeWindow',
+          args: [BigInt(configuredImpairmentChallengeWindowSeconds)],
+        })
+        const canSetChallengeWindow = await (async () => {
+          try {
+            await publicClient.call({
+              to: expected.vault,
+              data: challengeWindowCallData,
+              account: owner,
+            })
+            return true
+          } catch {
+            return false
+          }
+        })()
+        if (!canSetChallengeWindow) {
+          throw new Error(
+            `Cannot set impairment challenge window from ${shortAddress(owner)}. ` +
+              `Current management is ${shortAddress(currentVaultImpairmentConfig.management)}.`,
+          )
+        }
+        impairmentPhase3Calls.push({
+          target: expected.vault,
+          value: 0n,
+          data: challengeWindowCallData,
+        })
+      }
+      const ensureImpairmentAuxVaultLinkCall = async (label: 'claims' | 'escrow', target: Address) => {
+        let currentOwner = ZERO_ADDRESS
+        let linkedVault = ZERO_ADDRESS
+        try {
+          const [ownerRead, vaultRead] = await Promise.all([
+            publicClient.readContract({
+              address: target,
+              abi: IMPAIRMENT_AUX_OWNED_ABI,
+              functionName: 'owner',
+            }),
+            publicClient.readContract({
+              address: target,
+              abi: IMPAIRMENT_AUX_OWNED_ABI,
+              functionName: 'vault',
+            }),
+          ])
+          currentOwner = normalizeAddressLike(ownerRead) ?? ZERO_ADDRESS
+          linkedVault = normalizeAddressLike(vaultRead) ?? ZERO_ADDRESS
+        } catch {
+          throw new Error(`Cannot read impairment ${label} ownership/vault state at ${target}.`)
+        }
+        if (sameAddress(linkedVault, expected.vault)) return
+        if (!sameAddress(currentOwner, owner)) {
+          throw new Error(
+            `Impairment ${label} contract owner is ${shortAddress(currentOwner)} but deploy owner is ${shortAddress(owner)}. ` +
+              `Transfer ownership or update runtime impairment contract addresses before deploy.`,
+          )
+        }
+        impairmentPhase3Calls.push({
+          target,
+          value: 0n,
+          data: encodeFunctionData({
+            abi: IMPAIRMENT_AUX_OWNED_ABI,
+            functionName: 'setVault',
+            args: [expected.vault],
+          }),
+        })
+      }
+      if (impairmentClaimsAddress) {
+        await ensureImpairmentAuxVaultLinkCall('claims', impairmentClaimsAddress)
+      }
+      if (impairmentRecoveryEscrowAddress) {
+        await ensureImpairmentAuxVaultLinkCall('escrow', impairmentRecoveryEscrowAddress)
+      }
 
       const vaultDeployToStrategiesCall = {
         target: expected.vault,
@@ -5119,7 +5019,9 @@ function DeployVaultBatcher({
       // Base mainnet can no longer fit the full stack deploy (vault + wrapper + shareOFT + gauge + CCA + oracle + deposit + launch)
       // in a single transaction due to code-deposit gas limits. If the configured batcher supports the two-step ABI,
       // prefer it and bypass the legacy one-tx deploy flow below.
-      const batcherBytecode = await publicClient.getBytecode({ address: batcherAddress })
+      const batcherBytecode =
+        batcherInfraQuery.data?.batcherBytecode ??
+        (await publicClient.getBytecode({ address: batcherAddress }).catch(() => null))
       const isTwoStepBatcher = (() => {
         if (!batcherBytecode || batcherBytecode === '0x') return false
         const phase1Topic = keccak256(
@@ -5156,6 +5058,15 @@ function DeployVaultBatcher({
             'This version cannot initialize CreatorOVault modules and will stall at Phase 1 finalize. ' +
             'Update `VITE_CREATOR_VAULT_BATCHER` (and server `CREATOR_VAULT_BATCHER`) to the current batcher.',
         )
+      }
+      if (isTwoStepBatcher && supportsVaultModuleGetters) {
+        const modulePreflight = await assertCreatorOvaultModuleStorageCompatible({
+          publicClient,
+          batcherAddress: batcherAddress as Address,
+        })
+        if (!modulePreflight.ok) {
+          throw new Error(modulePreflight.message)
+        }
       }
       const supportsSplitPhase1NoSalt = (() => {
         if (!batcherBytecode || batcherBytecode === '0x') return false
@@ -5197,7 +5108,7 @@ function DeployVaultBatcher({
       }
       const batcherAddressLower = String(batcherAddress ?? '').toLowerCase()
       const splitPhase1SaltOverrideDisabled = (
-        KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS.has(batcherAddressLower) ||
+        isShareOftSaltOverrideDisabledBatcher(batcherAddressLower) ||
         batcherBytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR)
       )
       const supportsLegacyPhase1WithSalt = (() => {
@@ -5452,13 +5363,13 @@ function DeployVaultBatcher({
           solanaIxs: [],
         } as const
 
-        // Phase 3 (strategies): Charm CREATOR/USDC + nested Ajna + SolanaStrategy
+        // Phase 3 (strategies): Charm CREATOR/USDC + nested Ajna only (Solana share seed is Phase 2 auto-bridge)
         const charmWeightBps = DEFAULT_CHARM_WEIGHT_BPS
         const ajnaWeightBps = DEFAULT_AJNA_WEIGHT_BPS
         const solanaWeightBps = DEFAULT_SOLANA_WEIGHT_BPS
         if (charmWeightBps <= 0n) throw new Error('Charm strategy is required')
         if (ajnaWeightBps <= 0n) throw new Error('Ajna strategy is required')
-        if (solanaWeightBps <= 0n) throw new Error('Solana strategy is required')
+        if (solanaWeightBps !== 0n) throw new Error('Solana vault strategy weight must remain zero')
         if (charmWeightBps + ajnaWeightBps + solanaWeightBps > 10_000n) {
           throw new Error('Strategy weights exceed 100%')
         }
@@ -5468,7 +5379,12 @@ function DeployVaultBatcher({
         }
         const solanaBridgeAddress = getAddress(configuredSolanaBridge as Address)
         const solanaKeeper = expectedProtocolTreasury
-        const ajnaKeeper = solanaKeeper
+        const ajnaKeeper = normalizeAddressLike(runtimeConfig?.protocolAjnaKeeper)
+        if (!ajnaKeeper) {
+          throw new Error(
+            'Protocol Ajna keeper is not configured. Set 4626_KEEPER_AUTOMATION_PUBLIC_KEY on the server.',
+          )
+        }
         const ajnaBufferRatioBps = 1_000n
         const ajnaMinBucketIndex = 4_156n
         const charmLabel = (depositSymbol || '').toLowerCase()
@@ -5670,6 +5586,17 @@ function DeployVaultBatcher({
           )
         }
 
+        const finalizePhase2Calldata = encodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_ABI,
+          functionName: 'finalizePhase2',
+          args: [phase2FinalizeParams],
+        })
+        const attachedFinalizeCalls = await attachFinalizeShareBridgeValueToCalls({
+          publicClient,
+          calls: [{ to: batcherAddress, value: '0', data: finalizePhase2Calldata }],
+        })
+        const finalizeBridgeNativeFee = parseCallValue(attachedFinalizeCalls[0]?.value ?? '0')
+
         const phase1Calls: Array<{ target: Address; value: bigint; data: Hex }> = phase1CallsPrepared
 
         const phase2Calls: Array<{ target: Address; value: bigint; data: Hex }> = []
@@ -5711,7 +5638,7 @@ function DeployVaultBatcher({
             })
             const phase2FinalizeCall = {
               target: batcherAddress,
-              value: 0n,
+              value: finalizeBridgeNativeFee,
               data: encodeFunctionData({
                 abi: CREATOR_VAULT_BATCHER_ABI,
                 functionName: 'finalizePhase2WithPermit2',
@@ -5807,12 +5734,8 @@ function DeployVaultBatcher({
           ? (phase2Calls[0] as { target: Address; value: bigint; data: Hex })
           : ({
               target: batcherAddress,
-              value: 0n,
-              data: encodeFunctionData({
-                abi: CREATOR_VAULT_BATCHER_ABI,
-                functionName: 'finalizePhase2',
-                args: [phase2FinalizeParams],
-              }),
+              value: finalizeBridgeNativeFee,
+              data: finalizePhase2Calldata,
             } as const)
 
         const phase2CoreNeeded = !phase2CoreAll
@@ -5836,6 +5759,7 @@ function DeployVaultBatcher({
         if (phase2AuxiliaryDeployCall) phase2Calls.push(phase2AuxiliaryDeployCall)
         if (!burnStreamAlreadyConfigured) phase2Calls.push(vaultSetBurnStreamCall)
         phase2Calls.push(vaultWhitelistRouterCall)
+        if (!payoutRouterQueuerAlreadyAuthorized) phase2Calls.push(vaultAuthorizeBurnStreamQueuerCall)
         if (payoutRouterSetKeeperCall) phase2Calls.push(payoutRouterSetKeeperCall)
         if (payoutRouterSetExternalSwapTargetApprovalCalls.length > 0) {
           phase2Calls.push(...payoutRouterSetExternalSwapTargetApprovalCalls)
@@ -5922,6 +5846,8 @@ function DeployVaultBatcher({
             getAddress(expectedCreate2Deployer).toLowerCase(),
             getAddress(expected.vault).toLowerCase(),
             getAddress(expectedPayoutRouter).toLowerCase(),
+            ...(impairmentClaimsAddress ? [getAddress(impairmentClaimsAddress).toLowerCase()] : []),
+            ...(impairmentRecoveryEscrowAddress ? [getAddress(impairmentRecoveryEscrowAddress).toLowerCase()] : []),
           ])
           for (const c of calls) {
             const to = getAddress(c.target).toLowerCase()
@@ -5954,6 +5880,7 @@ function DeployVaultBatcher({
           vaultSetMinimumIdleCall,
           // Apply 30/30/30 from the 90% deployable bucket; keep 10% idle.
           vaultDeployToStrategiesCall,
+          ...impairmentPhase3Calls,
           ...phase2Create2Calls,
           ...phase2ConfigCalls,
         ]
@@ -5971,6 +5898,7 @@ function DeployVaultBatcher({
           smartWallet: owner,
           creatorToken,
           ownerAddress: owner,
+          ...(rolePolicyOverride.value !== null ? { rolePolicyId: rolePolicyOverride.value } : {}),
           phase1Calls: serializeSessionCalls(phase1Calls),
           phase2CoreCalls: serializeSessionCalls(
             phase2CoreNeeded ? [...phase2ApproveCalls, phase2CoreCall] : [...phase2ApproveCalls],
@@ -6103,25 +6031,26 @@ function DeployVaultBatcher({
         const persistUserOpResult = (
           phaseLabel: 'phase1' | 'phase2' | 'phase3' | 'phase4',
           logPhaseLabel: string,
-          result: { userOpHash: Hex; transactionHash: Hex },
+          result: { userOpHash: Hex; transactionHash: Hex | null },
           context: string,
         ) => {
-          setTxId(result.transactionHash)
+          const txHash = result.transactionHash ?? result.userOpHash
+          setTxId(txHash)
           setPhaseTxs((s) => ({
             ...s,
             [ownerSlotForPhase(phaseLabel)]: result.userOpHash,
-            [txSlotForPhase(phaseLabel)]: result.transactionHash,
+            [txSlotForPhase(phaseLabel)]: txHash,
           }))
           logger.info(`[DeployVault] ${logPhaseLabel}_confirmed via ${context}`, {
             userOpHash: result.userOpHash,
-            txHash: result.transactionHash,
+            txHash,
           })
           // In production, logger.info is hidden unless debug is enabled.
           // Keep a plain console line so operators can still see phase progress.
           console.log(`[DeployVault] ${logPhaseLabel}_confirmed`, {
             via: context,
             userOpHash: result.userOpHash,
-            txHash: result.transactionHash,
+            txHash,
           })
         }
 
@@ -6971,8 +6900,11 @@ function DeployVaultBatcher({
     }
   }
 
-  const expectedError = expectedQuery.isError
-    ? ((expectedQuery.error as any)?.message || 'Failed to compute deployment addresses.')
+  const batcherInfraError = batcherInfraQuery.isError
+    ? ((batcherInfraQuery.error as Error | undefined)?.message || 'Failed to read deployment batcher infrastructure.')
+    : null
+  const expectedError = expectedQueryIsError
+    ? ((expectedQueryError as any)?.message || 'Failed to compute deployment addresses.')
     : null
   const vanityCustomPaidNotice =
     vaultVanityIsCustom || shareVanityIsCustom
@@ -6984,13 +6916,24 @@ function DeployVaultBatcher({
       : null
   const vanityDefaultNotice =
     !vanityCustomPaidNotice && (vaultVanityPrefix || shareOftVanitySuffix)
-      ? `Default vanity targets: vault 0x${DEFAULT_VAULT_VANITY_PREFIX}, share ${DEFAULT_SHARE_OFT_VANITY_SUFFIX} (best-effort).`
+      ? `Default vanity: vault prefix 0x${DEFAULT_VAULT_VANITY_PREFIX} and share suffix ${DEFAULT_SHARE_OFT_VANITY_SUFFIX} are now enforced (deploy fails closed if either target is not found).`
       : null
 
   const disabledReason =
     busy
       ? 'Deployment in progress…'
-      : expectedQuery.isLoading
+      : rolePolicyOverride.error
+        ? rolePolicyOverride.error
+      : batcherInfraQueryLoading
+        ? 'Reading deployment batcher infrastructure…'
+      : batcherInfraError
+        ? batcherInfraError
+      : vanityPlanQueryLoading
+        ? buildDeployVanityLoadingMessage({
+            vaultVanityPrefix: vaultVanityPrefix ?? null,
+            shareOftVanitySuffix: shareOftVanitySuffix ?? null,
+          })
+      : expectedAddressesQueryLoading
         ? 'Computing deployment addresses…'
         : !expected
           ? expectedError || 'Deployment addresses are not ready.'
@@ -7152,6 +7095,9 @@ function DeployVaultBatcher({
       {vanityDefaultNotice ? (
         <div className="text-[11px] text-zinc-600">{vanityDefaultNotice}</div>
       ) : null}
+      {expectedShareOftVanityInfo ? (
+        <div className="text-[11px] text-zinc-500">{expectedShareOftVanityInfo}</div>
+      ) : null}
       {expectedShareOftVanityWarning ? (
         <div className="text-[11px] text-amber-300/80">{expectedShareOftVanityWarning}</div>
       ) : null}
@@ -7258,7 +7204,16 @@ function DeployVaultBatcher({
                 <div className={timelineProgressTone('phase2Finalize')}>Finalize + configure payout and ownership routing</div>
                 {renderStageDetailStatus('phase2Finalize')}
               </div>
-              <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
+              <div className="mb-3">
+                <ShareBridgeFinalizeWiringPanel
+                  enabled={ovaultMeshEnabledForSession}
+                  publicClient={publicClient}
+                  batcherAddress={batcherAddress}
+                  finalizeParams={pipeAFinalizeParams}
+                  wrapperDeployed={pipeAWrapperDeployed}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4 text-[11px] mb-3 mt-3">
                 <div className={timelineProgressTone('phase2bOvaultMesh')}>OVault mesh preflight + peer wiring</div>
                 {renderStageDetailStatus('phase2bOvaultMesh')}
               </div>
@@ -7266,13 +7221,15 @@ function DeployVaultBatcher({
                 <div className="rounded-md border border-white/10 bg-black/10 px-3 py-3 mb-3 space-y-2">
                   <div className="text-[10px] font-medium text-zinc-500">Solana token lanes</div>
                   <div className="flex items-center justify-between gap-4 text-[11px]">
-                    <div className="text-zinc-500">Solana wrapped asset mint (Base/Solana bridge)</div>
+                    <div className="text-zinc-500">
+                      OVault compose asset lane <span className="text-zinc-600">(optional — not Pipe A)</span>
+                    </div>
                     <div className="font-mono text-zinc-200/90">
                       {String(depositSymbol ?? '').trim() ? String(depositSymbol).trim().toLowerCase() : '$asset'}
                     </div>
                   </div>
                   <div className="flex items-center justify-between gap-4 text-[11px]">
-                    <div className="text-zinc-500">Solana share token lane (LayerZero ShareOFT)</div>
+                    <div className="text-zinc-500">Share mesh tradable lane (LayerZero ShareOFT · Pipe A)</div>
                     <div className="font-mono text-zinc-200/90">
                       {String(shareSymbol ?? '').trim() ? String(shareSymbol).trim() : '■ASSET'}
                     </div>
@@ -7339,15 +7296,15 @@ function DeployVaultBatcher({
                   address={expected?.creatorCoinPolicyController}
                   deployed={expectedAddressDeployment?.creatorCoinPolicyController ?? null}
                 />
-                <AddressRow label="Creator coin payout recipient" address={currentPayoutRecipient} />
+                <AddressRow label="Creator coin payout recipient (external earnings)" address={currentPayoutRecipient} />
               </div>
               {payoutMismatch ? (
                 <div className="mt-2 text-[11px] text-amber-300/80">
-                  Creator coin payout recipient will update to{' '}
+                  Creator coin payout recipient (creatorCoinPayoutRecipient lane) will update to{' '}
                   <span className="font-mono text-amber-200">
                     {expectedPayoutRouter ? shortAddress(expectedPayoutRouter) : 'the configured payout router'}
                   </span>{' '}
-                  during deploy. Continue only if this is intended.
+                  during deploy (via PayoutRouter for PPS accretion). Continue only if this is intended.
                 </div>
               ) : null}
             </div>
@@ -7446,23 +7403,23 @@ function DeployVaultBatcher({
           </div>
           <div className="mt-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <button
+              <Button
                 type="button"
-                className="btn-secondary"
-                disabled={busy || exportBusy || dryRunBusy || expectedQuery.isLoading || !expected}
+                variant="secondary"
+                disabled={busy || exportBusy || dryRunBusy || expectedQueryLoading || !expected}
                 onClick={() => void exportPlan()}
               >
                 {exportBusy ? 'Preparing plan…' : 'Export Plan JSON'}
-              </button>
+              </Button>
               {dryRunLocalForkRpc ? (
-                <button
+                <Button
                   type="button"
-                  className="btn-secondary"
-                  disabled={busy || exportBusy || dryRunBusy || expectedQuery.isLoading || !expected}
+                  variant="secondary"
+                  disabled={busy || exportBusy || dryRunBusy || expectedQueryLoading || !expected}
                   onClick={() => void runDryRun()}
                 >
                   {dryRunBusy ? 'Running dry-run…' : 'Run dry-run'}
-                </button>
+                </Button>
               ) : (
                 <div className="text-[11px] text-zinc-500">
                   Dry-run is local-fork-only. Start local mode with{' '}
@@ -7574,6 +7531,34 @@ function DeployVaultBatcher({
             </div>
           </div>
           <div className="flex items-center justify-between gap-3">
+            <label htmlFor="role-policy-override" className="text-zinc-500">
+              Canary override
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="role-policy-override"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={rolePolicyOverrideInput}
+                onChange={(event) => setRolePolicyOverrideInput(event.target.value)}
+                placeholder="none"
+                className="w-24 rounded border border-white/10 bg-black/20 px-2 py-1 text-[11px] font-mono text-zinc-200 outline-hidden focus:border-blue-400/60"
+              />
+              {rolePolicyOverrideInput.trim().length > 0 ? (
+                <button
+                  type="button"
+                  className="text-[10px] text-zinc-400 hover:text-zinc-200 underline underline-offset-2"
+                  onClick={() => setRolePolicyOverrideInput('')}
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+          </div>
+          {rolePolicyOverride.error ? (
+            <div className="text-[10px] text-amber-300/90">{rolePolicyOverride.error}</div>
+          ) : null}
+          <div className="flex items-center justify-between gap-3">
             <div className="text-zinc-500">Effective policy ID</div>
             <div className="font-mono text-zinc-300">
               {rolePolicyDiagnostics?.effectiveResolution.rolePolicyId ?? 'none'}
@@ -7653,9 +7638,15 @@ function DeployVaultBatcher({
                         : 'via app smart wallet owner'
                 }`}
           </div>
-          <button type="button" onClick={() => void submit()} disabled={disabled || exportBusy} className="btn-primary w-full rounded-lg">
+          <Button
+            type="button"
+            variant="primary"
+            className="w-full rounded-lg"
+            onClick={() => void submit()}
+            disabled={disabled || exportBusy}
+          >
             {busy ? 'Deploying…' : '1‑Click Deploy (Gas-Free)'}
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="rounded-lg border border-amber-500/35 bg-linear-to-b from-amber-500/16 to-amber-500/9 p-4 space-y-3 backdrop-blur-sm">
@@ -7706,9 +7697,9 @@ function DeployVaultBatcher({
           </div>
           {/* Only show auth-switch CTA for auth/session issues (not for signing-method incompatibility). */}
           {switchAuthCta && /no_session|not authenticated|gas sponsorship requires a session|base account|email|privy|smart wallet/i.test(error) ? (
-            <button type="button" className="btn-primary w-full" onClick={switchAuthCta.onClick}>
+            <Button type="button" variant="primary" className="w-full" onClick={switchAuthCta.onClick}>
               {switchAuthCta.label}
-            </button>
+            </Button>
           ) : null}
           {isVanityPaidFeatureError(error) ? (
             <Link to={creatorStrategyFeaturesHref} className="inline-flex text-[11px] text-blue-300 hover:text-blue-200">
@@ -7733,8 +7724,8 @@ function DeployVaultBatcher({
 }
 
 function DeployVaultMain() {
+  const queryClient = useQueryClient()
   const { address, isConnected, connector } = useAccount()
-  const wagmiConfig = useConfig()
   const chainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
   const { data: walletClient } = useWalletClient({ chainId: base.id })
@@ -7744,6 +7735,7 @@ function DeployVaultMain() {
   const { wallets } = useWallets()
   const { client: smartWalletClient } = useSmartWallets()
   const siwe = useSiweAuth()
+  const accountMe = useAccountMe()
   // State for adding Privy app smart wallet as owner (EIP-1271 signer)
   const [addPrivySmartWalletOwnerBusy, setAddPrivySmartWalletOwnerBusy] = useState(false)
   const [addPrivySmartWalletOwnerTxHash, setAddPrivySmartWalletOwnerTxHash] = useState<string | null>(null)
@@ -8150,7 +8142,7 @@ function DeployVaultMain() {
         setExternalWalletConnectBusy(false)
       }
     })()
-  }, [address, connector?.id, ensureBaseChain, externalWalletConnectBusy, isConnected, wagmiConfig, wagmiConnectAsync, wagmiConnectors, walletClient])
+  }, [address, connector?.id, ensureBaseChain, externalWalletConnectBusy, isConnected, wagmiConnectAsync, wagmiConnectors, walletClient])
 
   useEffect(() => {
     if (isConnected) setExternalWalletConnectError(null)
@@ -8535,6 +8527,7 @@ function DeployVaultMain() {
     queryFn: async () => {
       if (!canonicalIdentityAddress || !addPrivySmartWalletOwnerCalldata) return null
       return await encodeSingleCallSendCallsProlink({
+        from: canonicalIdentityAddress,
         to: canonicalIdentityAddress,
         data: addPrivySmartWalletOwnerCalldata,
       })
@@ -8972,14 +8965,20 @@ function DeployVaultMain() {
       deployCodeIds.solanaStrategy,
     ],
     enabled: Boolean(publicClient && creatorVaultBatcherAddress),
-    staleTime: 60_000,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
     retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
     queryFn: async () => {
       const batcher = creatorVaultBatcherAddress as Address
+      const cachedInfra = queryClient.getQueryData<CreatorVaultBatcherInfra>([
+        'creatorVaultBatcher',
+        'infra',
+        batcher,
+      ])
       let readClient = publicClient!
 
-      let batcherCode = await readClient.getBytecode({ address: batcher })
+      let batcherCode = cachedInfra?.batcherBytecode ?? (await readClient.getBytecode({ address: batcher }))
       if (!batcherCode || batcherCode === '0x') {
         const fallbackClient = createBaseFallbackClient()
         const fallbackCode = await fallbackClient.getBytecode({ address: batcher }).catch(() => null)
@@ -8995,48 +8994,26 @@ function DeployVaultMain() {
         )
       }
 
-      const getterErrors: unknown[] = []
-      let bytecodeStore: Address | null = null
-      let create2Deployer: Address | null = null
-      try {
-        bytecodeStore = (await readClient.readContract({
-          address: batcher,
-          abi: CREATOR_VAULT_BATCHER_ABI,
-          functionName: 'bytecodeStore',
-        })) as Address
-      } catch (err: unknown) {
-        getterErrors.push(err)
-      }
-      try {
-        create2Deployer = (await readClient.readContract({
-          address: batcher,
-          abi: CREATOR_VAULT_BATCHER_ABI,
-          functionName: 'create2Deployer',
-        })) as Address
-      } catch (err: unknown) {
-        getterErrors.push(err)
-      }
-
-      if (!bytecodeStore || !isAddress(String(bytecodeStore))) {
-        const fallback = (CONTRACTS.universalBytecodeStore ?? null) as Address | null
-        bytecodeStore = fallback && isAddress(String(fallback)) ? fallback : null
-      }
-      if (!create2Deployer || !isAddress(String(create2Deployer))) {
-        const fallback = (CONTRACTS.universalCreate2DeployerFromStore ?? null) as Address | null
-        create2Deployer = fallback && isAddress(String(fallback)) ? fallback : null
-      }
-      if (!bytecodeStore || !create2Deployer) {
-        if (getterErrors.some((e) => isTransientRpcFailure(e))) {
-          throw new Error(
-            'Could not verify deployment batcher interface due to temporary RPC/network limits. Retry in a few seconds.',
-          )
+      let bytecodeStoreAddress: Address
+      let create2DeployerAddress: Address
+      if (cachedInfra) {
+        bytecodeStoreAddress = cachedInfra.bytecodeStore
+        create2DeployerAddress = cachedInfra.create2Deployer
+      } else {
+        const alignedDeps = await resolveAlignedPhase1DeployDeps({
+          publicClient: readClient,
+          batcherAddress: batcher,
+          fallbacks: {
+            bytecodeStore: (CONTRACTS.universalBytecodeStore ?? null) as Address | null,
+            create2Deployer: (CONTRACTS.universalCreate2DeployerFromStore ?? null) as Address | null,
+          },
+        })
+        if (!alignedDeps.ok) {
+          throw new Error(alignedDeps.message)
         }
-        throw new Error(
-          `Configured batcher at ${batcher} does not expose expected phased deploy interface (bytecodeStore/create2Deployer). Update VITE_CREATOR_VAULT_BATCHER / CREATOR_VAULT_BATCHER.`,
-        )
+        bytecodeStoreAddress = alignedDeps.bytecodeStore
+        create2DeployerAddress = alignedDeps.create2Deployer
       }
-      const bytecodeStoreAddress = bytecodeStore as Address
-      const create2DeployerAddress = create2Deployer as Address
 
       let deployerStore: Address | null = null
       try {
@@ -9116,12 +9093,34 @@ function DeployVaultMain() {
         })),
       })
 
-      const entries = codeEntries.map((c, i) => {
+      let entries = codeEntries.map((c, i) => {
         const r: any = pointerResults[i]
         const pointer = r?.status === 'success' ? (r.result as Address) : (ZERO_ADDRESS as Address)
         const ok = r?.status === 'success' && pointer !== ZERO_ADDRESS
         return { ...c, pointer, ok }
       })
+
+      const unresolved = entries.filter((e) => !e.ok)
+      if (unresolved.length > 0) {
+        const fallbackClient = createBaseFallbackClient()
+        entries = await Promise.all(
+          entries.map(async (entry) => {
+            if (entry.ok) return entry
+            try {
+              const pointer = (await fallbackClient.readContract({
+                address: bytecodeStoreAddress,
+                abi: UNIVERSAL_BYTECODE_STORE_POINTERS_ABI,
+                functionName: 'pointers',
+                args: [entry.codeId],
+              })) as Address
+              const ok = pointer !== ZERO_ADDRESS
+              return { ...entry, pointer, ok }
+            } catch {
+              return entry
+            }
+          }),
+        )
+      }
 
       const missing = entries.filter((e) => !e.ok).map((e) => e.label)
 
@@ -9317,14 +9316,42 @@ function DeployVaultMain() {
       connectedEoaOwnerReady ||
       (privySmartWalletReady &&
         (smartWalletMatchesCanonical || privySmartWalletOwnerReady || privyEmbeddedOwnerReady))
+  const hasDetectedZoraCrossAppWallet = Boolean(privyCrossAppSmartWalletAddress || privyCrossAppEmbeddedEoaAddress)
+
+  const deployEligibility = useMemo(
+    () =>
+      evaluateDeployEligibility({
+        canonicalCswAddress: canonicalIdentityAddress,
+        canonicalIdentityType,
+        zoraLinked: hasDetectedZoraCrossAppWallet,
+        baseAppLinked: Boolean(isCoinbaseWalletDirect && !hasDetectedZoraCrossAppWallet),
+        executionTrack: accountMe.me?.accountSignals?.executionTrack ?? null,
+        onchainEoaOwnerCount: connectedEoaOwnerReady || privyEmbeddedOwnerReady ? 1 : 0,
+        privyEmbeddedEoaIsOwnerOfCanonicalCsw:
+          accountMe.me?.accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw ??
+          (privyEmbeddedEoaIsCanonicalOwner ? true : null),
+      }),
+    [
+      accountMe.me?.accountSignals?.executionTrack,
+      accountMe.me?.accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw,
+      canonicalIdentityAddress,
+      canonicalIdentityType,
+      connectedEoaOwnerReady,
+      hasDetectedZoraCrossAppWallet,
+      isCoinbaseWalletDirect,
+      privyEmbeddedEoaIsCanonicalOwner,
+      privyEmbeddedOwnerReady,
+    ],
+  )
+
   const oneTimePrivyOwnerApprovalNeeded = Boolean(
-    canonicalIdentityIsContract &&
+    deployEligibility.showOwnerApprovalPanel &&
+      canonicalIdentityIsContract &&
       canonicalIdentityAddress &&
       privySmartWalletAddress &&
       !smartWalletMatchesCanonical &&
       !privySmartWalletIsCanonicalOwner,
   )
-  const hasDetectedZoraCrossAppWallet = Boolean(privyCrossAppSmartWalletAddress || privyCrossAppEmbeddedEoaAddress)
 
   const canDeploy =
     tokenIsValid &&
@@ -9346,6 +9373,7 @@ function DeployVaultMain() {
     !solanaMintOverrideInvalid &&
     !solanaDecimalsOverrideInvalid &&
     !identityBlockingReason &&
+    deployEligibility.canProceedWithDeploySession &&
     smartWalletCapabilityReady
 
   const vrfConsumerAddress = (CONTRACTS.vrfConsumer ?? null) as Address | null
@@ -9481,6 +9509,8 @@ function DeployVaultMain() {
                       ? `Needs ${minFirstDepositDisplay} ${underlyingSymbolUpper || 'TOKENS'} to deploy.`
                       : strictNoEoaEnforced && !strictNoEoaEligibility
                         ? NO_EOA_STRICT_BLOCKER
+                      : deployEligibility.blockerMessage
+                        ? deployEligibility.blockerMessage
                       : identityBlockingReason
                         ? identityBlockingReason
                       : solanaMintOverrideInvalid
@@ -9548,26 +9578,26 @@ function DeployVaultMain() {
                       {externalSignerConnectors.slice(0, 3).map((externalConnector) => {
                         const label = String(externalConnector.name || externalConnector.id || 'Wallet')
                         return (
-                          <button
+                          <Button
                             key={`${externalConnector.id}:${externalConnector.name}`}
                             type="button"
-                            className="btn-secondary"
+                            variant="secondary"
                             disabled={externalWalletConnectBusy}
                             onClick={() => connectExternalSignerWallet(externalConnector)}
                           >
                             {externalWalletConnectBusy ? 'Connecting…' : `Connect ${label}`}
-                          </button>
+                          </Button>
                         )
                       })}
                       {externalSignerConnectors.length === 0 ? (
-                        <button
+                        <Button
                           type="button"
-                          className="btn-secondary"
+                          variant="secondary"
                           disabled={externalWalletConnectBusy}
                           onClick={() => connectExternalSignerWallet()}
                         >
                           {externalWalletConnectBusy ? 'Connecting…' : 'Connect external wallet'}
-                        </button>
+                        </Button>
                       ) : null}
                     </div>
                     {externalWalletConnectError ? (
@@ -9643,13 +9673,14 @@ function DeployVaultMain() {
                     <div className="text-[11px] text-amber-200/85">
                       Connect your canonical Base Account wallet to submit this one-time approval.
                     </div>
-                    <button
+                    <Button
                       type="button"
-                      className="btn-secondary w-full sm:w-auto"
+                      variant="secondary"
+                      className="w-full sm:w-auto"
                       onClick={() => void login({ loginMethods: ['wallet'] })}
                     >
                       Connect Base Account Wallet
-                    </button>
+                    </Button>
                   </div>
                 ) : null}
                 {connectedWalletAddress && !connectedWalletMatchesCanonical ? (
@@ -9673,14 +9704,15 @@ function DeployVaultMain() {
                 {addPrivySmartWalletOwnerError ? (
                   <div className="text-[11px] text-red-400">{addPrivySmartWalletOwnerError}</div>
                 ) : null}
-                <button
+                <Button
                   type="button"
+                  variant="primary"
+                  className="w-full sm:w-auto"
                   onClick={() => void handleAddPrivyAppSmartWalletOwner()}
                   disabled={addPrivySmartWalletOwnerBusy || !connectedWalletAddress || !connectedWalletMatchesCanonical}
-                  className="btn-primary w-full sm:w-auto"
                 >
                   {addPrivySmartWalletOwnerBusy ? 'Waiting for wallet confirmation…' : 'Approve Once'}
-                </button>
+                </Button>
               </div>
             ) : null}
 
@@ -9712,16 +9744,17 @@ function DeployVaultMain() {
                 Found an older local deployment record for this version, but final on-chain completion is missing. You can resume
                 deployment now.
               </div>
-              <button
+              <Button
                 type="button"
-                className="btn-secondary text-[12px]"
+                variant="secondary"
+                className="text-[12px]"
                 onClick={() => {
                   deploymentTracker.clearCurrentDeployment()
                   setJustCompletedDeployment(null)
                 }}
               >
                 Clear stale local record
-              </button>
+              </Button>
             </div>
           ) : null}
 
@@ -9873,23 +9906,25 @@ function DeployVaultMain() {
                   <LoadingInline intent="session" labelOverride="Loading..." />
                 </div>
               ) : !privyAuthenticated ? (
-                <button
+                <Button
                   type="button"
-                  className="btn-accent w-full"
+                  variant="primary"
+                  className="w-full"
                   onClick={() => void login({ loginMethods: ['wallet'] })}
                 >
                   Sign in to Deploy
-                </button>
+                </Button>
               ) : !hasWallet ? (
                 <div className="space-y-2">
                   <div className="text-sm text-amber-300/80">Connect your wallet to continue</div>
-                  <button
+                  <Button
                     type="button"
-                    className="btn-primary w-full"
+                    variant="primary"
+                    className="w-full"
                     onClick={() => void login({ loginMethods: ['wallet'] })}
                   >
                     Connect Wallet
-                  </button>
+                  </Button>
                 </div>
               ) : !tokenIsValid && creatorAllowlistQuery.isLoading ? (
                 <button
@@ -10016,9 +10051,9 @@ function DeployVaultMain() {
                 <div className="space-y-2">
                   <div className="text-xs text-amber-300/80">{deployBlocker}</div>
                   {!hasPrimaryDeployAuthAction && !privySmartWalletReady && switchAuthCta ? (
-                    <button type="button" className="btn-primary w-full" onClick={switchAuthCta.onClick}>
+                    <Button type="button" variant="primary" className="w-full" onClick={switchAuthCta.onClick}>
                       {switchAuthCta.label}
-                    </button>
+                    </Button>
                   ) : null}
                   {!creatorCoinReady ? (
                     <div className="space-y-3 rounded-lg border border-amber-500/25 bg-linear-to-b from-amber-500/16 to-amber-500/8 p-3 backdrop-blur-sm">

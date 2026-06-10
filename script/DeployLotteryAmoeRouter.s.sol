@@ -13,7 +13,7 @@ import {LotteryAmoeRouter} from "../contracts/utilities/lottery/zk/LotteryAmoeRo
  *
  * @dev    What this deploys
  *         - `AmoePlonkVerifier`: emitted by `snarkjs zkey export soliditverifier`
- *           from `circuits/amoe/build/plonk_fresh/amoe_plonk_final.zkey`. The
+ *           from `amoe/circuits/build/plonk_fresh/amoe_plonk_final.zkey`. The
  *           zkey was produced from a `circom --O1` build of `amoe_eligibility.circom`
  *           combined with the universal Hermez powersOfTau pot17 SRS
  *           (`powersOfTau28_hez_final_17.ptau`). PLONK uses a universal
@@ -33,7 +33,7 @@ import {LotteryAmoeRouter} from "../contracts/utilities/lottery/zk/LotteryAmoeRo
  *                                  consumer and `setConsumer` must be called.
  *
  * @dev    Pre-deploy checklist:
- *         1. `circuits/amoe/build/plonk_fresh/AmoePlonkVerifier_raw.sol`
+ *         1. `amoe/circuits/build/plonk_fresh/AmoePlonkVerifier_raw.sol`
  *            (snarkjs source-of-truth) byte-equals the cleaned
  *            `contracts/utilities/lottery/zk/AmoePlonkVerifier.sol` modulo
  *            our header banner + the renamed contract name.

@@ -21,6 +21,7 @@ const {
   validateSponsoredSmartWalletCallsMock,
   verifyDeployPhase2InvariantsMock,
   checkRateLimitMock,
+  ensureShareMeshOvaultPreflightMock,
 } = vi.hoisted(() => ({
   readJsonBodyMock: vi.fn(async (req: any) => req.body),
   readSessionFromRequestMock: vi.fn(() => ({ address: '0x0000000000000000000000000000000000000001' })),
@@ -54,9 +55,17 @@ const {
     }),
   ),
   checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+  ensureShareMeshOvaultPreflightMock: vi.fn(async () => ({
+    existingMintCompatible: true,
+    depositEligible: true,
+    redeemEligible: true,
+    assetPeerSet: true,
+    sharePeerSet: true,
+    meshStep: 'ovault_mesh_confirmed' as const,
+  })),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   handleOptions: vi.fn(() => false),
   setCors: vi.fn(),
   setNoStore: vi.fn(),
@@ -112,6 +121,14 @@ vi.mock('../../server/_lib/deploy/deployPhase2Invariants.js', () => ({
 vi.mock('../_handlers/paymaster/_paymaster.js', () => ({
   validateSponsoredSmartWalletCalls: validateSponsoredSmartWalletCallsMock,
 }))
+
+vi.mock('../../server/_lib/deploy/solanaShareMeshPreflight.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../server/_lib/deploy/solanaShareMeshPreflight.js')>()
+  return {
+    ...actual,
+    ensureShareMeshOvaultPreflight: ensureShareMeshOvaultPreflightMock,
+  }
+})
 
 vi.mock('viem', async (importOriginal) => {
   const actual = await importOriginal<typeof import('viem')>()
@@ -232,9 +249,21 @@ describe('deploy session optimistic concurrency', () => {
       expectations: null,
     })
     process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = 'internal-secret'
+    delete process.env.DEPLOY_SESSION_PERSIST_OWNER
+    delete process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT
+    delete process.env.DEPLOY_SOLANA_REQUIRE_INLINE_METEORA_PAYLOAD
+    delete process.env.MANAGED_TOKENLIST_INGEST_ON_DEPLOY
     delete process.env.DEPLOY_SOLANA_REGISTRATION_ORIGINS
     delete process.env.SOLANA_REGISTRATION_ORIGINS
     checkRateLimitMock.mockReturnValue({ allowed: true, resetAt: Date.now() + 60_000 })
+    ensureShareMeshOvaultPreflightMock.mockResolvedValue({
+      existingMintCompatible: true,
+      depositEligible: true,
+      redeemEligible: true,
+      assetPeerSet: true,
+      sharePeerSet: true,
+      meshStep: 'ovault_mesh_confirmed',
+    })
   })
 
   it('allows one continue transition and returns 409 on the second', async () => {
@@ -544,7 +573,7 @@ describe('deploy session optimistic concurrency', () => {
       checksRun: 5,
       violations: [
         {
-          code: 'external_revenue_recipient_mismatch',
+          code: 'creator_coin_payout_recipient_mismatch',
           message: 'Creator Coin payoutRecipient does not match expected recipient',
         },
       ],
@@ -571,7 +600,7 @@ describe('deploy session optimistic concurrency', () => {
       .mockResolvedValueOnce({
         ...rec,
         step: 'failed',
-        lastError: 'phase2_invariant_failed:external_revenue_recipient_mismatch',
+        lastError: 'phase2_invariant_failed:creator_coin_payout_recipient_mismatch',
         payload: {
           ...rec.payload,
           phase2InvariantGate: gateResult,
@@ -584,16 +613,16 @@ describe('deploy session optimistic concurrency', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body?.data?.step).toBe('failed')
-    expect(res.body?.data?.lastError).toBe('phase2_invariant_failed:external_revenue_recipient_mismatch')
+    expect(res.body?.data?.lastError).toBe('phase2_invariant_failed:creator_coin_payout_recipient_mismatch')
     expect(res.body?.data?.phase2InvariantGate?.violations?.[0]?.code).toBe(
-      'external_revenue_recipient_mismatch',
+      'creator_coin_payout_recipient_mismatch',
     )
     expect(sendUserOperationMock).not.toHaveBeenCalled()
     expect(updateDeploySessionMock).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'sess_1',
         step: 'failed',
-        lastError: 'phase2_invariant_failed:external_revenue_recipient_mismatch',
+        lastError: 'phase2_invariant_failed:creator_coin_payout_recipient_mismatch',
       }),
     )
   })
@@ -1445,6 +1474,7 @@ describe('deploy session optimistic concurrency', () => {
     })) as any
 
     try {
+      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
       ;(globalThis as any).fetch = fetchMock
       const viem = await import('viem')
       ;(viem.createPublicClient as any).mockReturnValue({
@@ -1457,7 +1487,7 @@ describe('deploy session optimistic concurrency', () => {
             case 'ownerAtIndex':
               return '0xownerbytes'
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -1518,6 +1548,7 @@ describe('deploy session optimistic concurrency', () => {
     })) as any
 
     try {
+      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
       ;(globalThis as any).fetch = fetchMock
       const viem = await import('viem')
       ;(viem.createPublicClient as any).mockReturnValue({
@@ -1530,7 +1561,7 @@ describe('deploy session optimistic concurrency', () => {
             case 'ownerAtIndex':
               return '0xownerbytes'
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -1592,6 +1623,7 @@ describe('deploy session optimistic concurrency', () => {
     })) as any
 
     try {
+      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
       ;(globalThis as any).fetch = fetchMock
       const viem = await import('viem')
       ;(viem.createPublicClient as any).mockReturnValue({
@@ -1604,7 +1636,7 @@ describe('deploy session optimistic concurrency', () => {
             case 'ownerAtIndex':
               return '0xownerbytes'
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -1655,6 +1687,7 @@ describe('deploy session optimistic concurrency', () => {
     }) as any
 
     try {
+      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
       ;(globalThis as any).fetch = fetchMock
       const viem = await import('viem')
       ;(viem.createPublicClient as any).mockReturnValue({
@@ -1667,7 +1700,7 @@ describe('deploy session optimistic concurrency', () => {
             case 'ownerAtIndex':
               return '0xownerbytes'
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -1723,6 +1756,7 @@ describe('deploy session optimistic concurrency', () => {
     })) as any
 
     try {
+      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
       ;(globalThis as any).fetch = fetchMock
       const viem = await import('viem')
       ;(viem.createPublicClient as any).mockReturnValue({
@@ -1735,7 +1769,7 @@ describe('deploy session optimistic concurrency', () => {
             case 'ownerAtIndex':
               return '0xownerbytes'
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -1791,6 +1825,7 @@ describe('deploy session optimistic concurrency', () => {
     }) as any
 
     try {
+      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
       ;(globalThis as any).fetch = fetchMock
       const viem = await import('viem')
       ;(viem.createPublicClient as any).mockReturnValue({
@@ -1803,7 +1838,7 @@ describe('deploy session optimistic concurrency', () => {
             case 'ownerAtIndex':
               return '0xownerbytes'
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -1844,6 +1879,7 @@ describe('deploy session optimistic concurrency', () => {
     delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
 
     try {
+      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
       const viem = await import('viem')
       ;(viem.createPublicClient as any).mockReturnValue({
         readContract: vi.fn(async ({ functionName }: any) => {
@@ -1855,7 +1891,7 @@ describe('deploy session optimistic concurrency', () => {
             case 'ownerAtIndex':
               return '0xownerbytes'
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -1914,6 +1950,7 @@ describe('deploy session optimistic concurrency', () => {
     }) as any
 
     try {
+      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
       ;(globalThis as any).fetch = fetchMock
       const viem = await import('viem')
       ;(viem.createPublicClient as any).mockReturnValue({
@@ -1926,7 +1963,7 @@ describe('deploy session optimistic concurrency', () => {
             case 'ownerAtIndex':
               return '0xownerbytes'
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
@@ -2282,7 +2319,7 @@ describe('deploy session optimistic concurrency', () => {
     expect(updateDeploySessionMock).toHaveBeenCalled()
   })
 
-  it('status blocks phase3_sent when legacy two-strategy payload omits Solana weight', async () => {
+  it('status advances phase3_sent when greenfield payload uses zero Solana vault strategy weight', async () => {
     const rec = {
       ...makeDeploySession('phase3_sent'),
       payload: JSON.stringify({
@@ -3293,51 +3330,27 @@ describe('deploy session optimistic concurrency', () => {
         solanaOvault: { enabled: true },
       },
     }
-    const previous = process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
-    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = 'internal-secret'
-    const originalFetch = globalThis.fetch
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      text: async () =>
-        JSON.stringify({
-          success: true,
-          data: {
-            registered: true,
-            existingMintCompatible: true,
-            depositEligible: true,
-            redeemEligible: true,
-          },
-        }),
-    })) as any
 
-    try {
-      ;(globalThis as any).fetch = fetchMock
-      getDeploySessionByIdMock.mockResolvedValue(rec)
-      transitionDeploySessionMock.mockResolvedValue(true)
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
 
-      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
-      const res = createMockRes()
-      await continueHandler(req, res)
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
 
-      expect(res.statusCode).toBe(200)
-      expect(res.body?.data?.step).toBe('ovault_mesh_confirmed')
-      expect(fetchMock).toHaveBeenCalled()
-      expect(transitionDeploySessionMock).toHaveBeenCalledTimes(2)
-      expect(transitionDeploySessionMock).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({ id: 'sess_1', fromStep: 'phase2_confirmed', toStep: 'ovault_mesh_sent' }),
-      )
-      expect(transitionDeploySessionMock).toHaveBeenNthCalledWith(
-        2,
-        expect.objectContaining({ id: 'sess_1', fromStep: 'ovault_mesh_sent', toStep: 'ovault_mesh_confirmed' }),
-      )
-      expect(sendUserOperationMock).not.toHaveBeenCalled()
-    } finally {
-      if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
-      else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous
-      ;(globalThis as any).fetch = originalFetch
-    }
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('ovault_mesh_confirmed')
+    expect(ensureShareMeshOvaultPreflightMock).toHaveBeenCalled()
+    expect(transitionDeploySessionMock).toHaveBeenCalledTimes(2)
+    expect(transitionDeploySessionMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase2_confirmed', toStep: 'ovault_mesh_sent' }),
+    )
+    expect(transitionDeploySessionMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ id: 'sess_1', fromStep: 'ovault_mesh_sent', toStep: 'ovault_mesh_confirmed' }),
+    )
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
   })
 
   it('continue resumes ovault_mesh_sent by confirming mesh without re-sending sent transition', async () => {
@@ -3350,46 +3363,22 @@ describe('deploy session optimistic concurrency', () => {
         solanaOvault: { enabled: true },
       },
     }
-    const previous = process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
-    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = 'internal-secret'
-    const originalFetch = globalThis.fetch
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      text: async () =>
-        JSON.stringify({
-          success: true,
-          data: {
-            registered: true,
-            existingMintCompatible: true,
-            depositEligible: true,
-            redeemEligible: true,
-          },
-        }),
-    })) as any
 
-    try {
-      ;(globalThis as any).fetch = fetchMock
-      getDeploySessionByIdMock.mockResolvedValue(rec)
-      transitionDeploySessionMock.mockResolvedValue(true)
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
 
-      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
-      const res = createMockRes()
-      await continueHandler(req, res)
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
 
-      expect(res.statusCode).toBe(200)
-      expect(res.body?.data?.step).toBe('ovault_mesh_confirmed')
-      expect(fetchMock).toHaveBeenCalled()
-      expect(transitionDeploySessionMock).toHaveBeenCalledTimes(1)
-      expect(transitionDeploySessionMock).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'sess_1', fromStep: 'ovault_mesh_sent', toStep: 'ovault_mesh_confirmed' }),
-      )
-      expect(sendUserOperationMock).not.toHaveBeenCalled()
-    } finally {
-      if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
-      else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous
-      ;(globalThis as any).fetch = originalFetch
-    }
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('ovault_mesh_confirmed')
+    expect(ensureShareMeshOvaultPreflightMock).toHaveBeenCalled()
+    expect(transitionDeploySessionMock).toHaveBeenCalledTimes(1)
+    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'ovault_mesh_sent', toStep: 'ovault_mesh_confirmed' }),
+    )
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
   })
 
   it('continue uses only the internal registration secret during OVault mesh preflight', async () => {
@@ -3421,6 +3410,7 @@ describe('deploy session optimistic concurrency', () => {
     })) as any
 
     try {
+      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
       ;(globalThis as any).fetch = fetchMock
       getDeploySessionByIdMock.mockResolvedValue(rec)
       transitionDeploySessionMock.mockResolvedValue(true)
@@ -3467,6 +3457,7 @@ describe('deploy session optimistic concurrency', () => {
     delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
 
     try {
+      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
       getDeploySessionByIdMock.mockResolvedValue(rec)
       transitionDeploySessionMock.mockResolvedValue(true)
 
@@ -3477,6 +3468,7 @@ describe('deploy session optimistic concurrency', () => {
       expect(res.statusCode).toBe(500)
       expect(String(res.body?.error ?? '')).toContain('Internal server error')
     } finally {
+      delete process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT
       if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
       else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous
     }

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/lottery/lotteryAmoeErrors
+[4626-web](../../../index.md) / server/\_lib/lottery/lotteryAmoeErrors
 
 # server/\_lib/lottery/lotteryAmoeErrors
 

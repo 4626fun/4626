@@ -12,7 +12,7 @@ import { Spinner } from '@/components/ui/Spinner'
  * `/accounts` "Execution scopes" card.
  *
  * Surfaces the Arch B sub-account that the 4626 backend uses to execute
- * in-chat commands (`/coin buy`, `/coin sell`, `/keepr send`,
+ * XMTP chat commands (`/coin buy`, `/coin sell`, `/keepr send`,
  * `/coin trend reserve`) on behalf of the creator. The sub-account is
  * funded by the parent CSW via a signed SpendPermission with per-tx +
  * per-period caps enforced by the SpendPermissionManager contract.
@@ -31,6 +31,8 @@ export function ExecutionScopeCard() {
   const revoke = useRevokeSubAccount()
   const reprovision = useReprovisionSubAccount()
   const ownerCheck = useCswOwnerSigner()
+  const ownerInstallHref = '/waitlist'
+  const ownerInstallLabel = 'Open waitlist setup'
   const [confirmRevoke, setConfirmRevoke] = useState(false)
 
   const onRevokeClick = async () => {
@@ -53,7 +55,7 @@ export function ExecutionScopeCard() {
   if (scope.status === 'error') {
     return (
       <CardShell>
-        <Header title="4626.fun in-chat commands" subtitle="Status unavailable right now." />
+        <Header title="XMTP chat commands" subtitle="Status unavailable right now." />
         <p className="mt-3 text-xs text-zinc-500">
           We couldn't load your execution scope. Refresh the page or retry in a minute.
         </p>
@@ -64,17 +66,18 @@ export function ExecutionScopeCard() {
   if (scope.status === 'not_provisioned') {
     const signer = ownerCheck.preferredSigner
     const hasOwnerSigner = Boolean(signer)
+    const needsPrivyDelegation = scope.data?.delegated !== true
     return (
       <CardShell>
         <Header
-          title="4626.fun in-chat commands"
-          subtitle="Not enabled. In-chat trading (/coin buy, /keepr send) is disabled for your account."
+          title="XMTP chat commands"
+          subtitle="Not enabled. The 4626 agent cannot run /coin buy, /coin sell, or /keepr send in XMTP chat for your account."
         />
         <p className="mt-3 text-xs text-zinc-500">
-          Enabling creates a capped spend scope on your Coinbase Smart Wallet so 4626 can execute
-          in-chat commands without per-transaction popups. Caps are enforced by the{' '}
-          <code className="text-zinc-400">SpendPermissionManager</code> contract on Base. You can
-          revoke at any time.
+          Enabling lets the 4626 agent execute those chat commands from XMTP without asking you to
+          approve every transaction. Your Coinbase Smart Wallet funds a capped spend permission
+          enforced by the <code className="text-zinc-400">SpendPermissionManager</code> contract on
+          Base. You can revoke it any time.
         </p>
 
         {/* Owner-status hint. Covers three distinct signer paths + the
@@ -85,22 +88,40 @@ export function ExecutionScopeCard() {
         {ownerCheck.loading ? (
           <p className="mt-3 text-[11px] text-zinc-600">Checking which wallet can sign…</p>
         ) : hasOwnerSigner ? (
-          <p className="mt-3 text-[11px] text-emerald-300/80">
-            {signer!.label === 'smart_wallet' ? (
-              <>
-                Signing through your 4626 signer (ERC-1271). Expect one Privy prompt to approve
-                the spend permission.
-              </>
-            ) : signer!.label === 'external' ? (
-              <>
-                Signing with your connected wallet{' '}
-                <code className="text-zinc-400">{shortAddr(signer!.address)}</code>. Expect one
-                wallet popup to approve the spend permission.
-              </>
-            ) : (
-              <>Signing with your embedded signer. Expect one Privy prompt.</>
-            )}
-          </p>
+          <div className="mt-3 space-y-2">
+            {needsPrivyDelegation ? (
+              <p className="text-[11px] text-zinc-400">
+                Step 1 — Privy will ask you to delegate signing to the 4626 agent. Step 2 — your
+                CSW owner wallet signs the capped spend permission.
+              </p>
+            ) : null}
+            <p className="text-[11px] text-emerald-300/80">
+              {signer!.label === 'smart_wallet' ? (
+                <>
+                  {needsPrivyDelegation
+                    ? 'After delegation, signing goes through your 4626 smart-wallet co-signer (ERC-1271).'
+                    : 'Signing through your 4626 smart-wallet co-signer (ERC-1271). Expect one Privy prompt'}
+                  {!needsPrivyDelegation ? ' to approve the spend permission.' : null}
+                </>
+              ) : signer!.label === 'external' ? (
+                <>
+                  {needsPrivyDelegation
+                    ? 'After the Privy delegation prompt, your connected wallet '
+                    : 'Signing with your connected wallet '}
+                  <code className="text-zinc-400">{shortAddr(signer!.address)}</code>
+                  {needsPrivyDelegation
+                    ? ' signs the spend permission.'
+                    : '. Expect one wallet popup to approve the spend permission.'}
+                </>
+              ) : (
+                <>
+                  {needsPrivyDelegation
+                    ? 'After delegation, your Privy embedded signer approves the spend permission.'
+                    : 'Signing with your Privy embedded signer. Expect one Privy prompt.'}
+                </>
+              )}
+            </p>
+          </div>
         ) : (
           <div className="mt-3 space-y-2">
             <p className="text-[11px] text-amber-300/80">
@@ -108,10 +129,12 @@ export function ExecutionScopeCard() {
               can sign the spend permission yet.
             </p>
             <p className="text-[11px] text-zinc-500">
-              The usual fix is to finish the <strong>Enable 4626 signing</strong> step on the
-              waitlist — it installs your 4626 app signer as an owner of your smart wallet
-              (one-time setup). If you manage your CSW manually, you can also connect the wallet
-              you used to create it (Rabby, MetaMask, Coinbase Wallet).
+              In-app owner setup is paused. Connect the wallet you used to create your CSW (Rabby,
+              MetaMask, Coinbase Wallet), or use{' '}
+              <a href="/swap" className="text-zinc-300 underline underline-offset-2">
+                /swap
+              </a>{' '}
+              with an external wallet (EOA mode).
             </p>
           </div>
         )}
@@ -121,18 +144,18 @@ export function ExecutionScopeCard() {
             type="button"
             onClick={onReprovisionClick}
             disabled={reprovision.busy || !hasOwnerSigner}
-            title={hasOwnerSigner ? undefined : 'Finish the owner-install step or connect an owner wallet first'}
+            title={hasOwnerSigner ? undefined : 'Connect an owner wallet first, or use /swap in EOA mode'}
             className="inline-flex items-center gap-2 rounded-lg bg-white text-black text-xs font-medium px-3 py-2 hover:bg-zinc-200 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             {reprovision.busy ? <Spinner size="sm" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            {reprovision.busy ? provisionBusyLabel(reprovision.phase) : 'Enable in-chat commands'}
+            {reprovision.busy ? provisionBusyLabel(reprovision.phase) : 'Enable XMTP chat commands'}
           </button>
           {!hasOwnerSigner && !ownerCheck.loading ? (
             <a
-              href="/waitlist?setup=owner-install"
+              href={ownerInstallHref}
               className="inline-flex items-center gap-1 text-[11px] text-brand-accent hover:text-white underline decoration-dotted"
             >
-              Open owner-install flow
+              {ownerInstallLabel}
             </a>
           ) : null}
         </div>
@@ -162,7 +185,7 @@ export function ExecutionScopeCard() {
   return (
     <CardShell>
       <Header
-        title="4626.fun in-chat commands"
+        title="XMTP chat commands"
         subtitle={subtitleForStatus(scope.status)}
         status={scope.status}
       />
@@ -301,6 +324,8 @@ export function ExecutionScopeCard() {
 
 function provisionBusyLabel(phase: ReturnType<typeof useReprovisionSubAccount>['phase']): string {
   switch (phase) {
+    case 'delegating':
+      return 'Approve in Privy…'
     case 'preparing':
       return 'Preparing…'
     case 'signing':
@@ -465,9 +490,9 @@ function formatDate(iso: string): string {
 function subtitleForStatus(status: ExecutionScopeStatus): string {
   switch (status) {
     case 'active':
-      return 'Enabled. 4626 can execute in-chat commands within your signed caps.'
+      return 'Enabled. The 4626 agent can run XMTP chat commands within your signed caps.'
     case 'revoked':
-      return 'This spend permission has been revoked. In-chat commands are refused.'
+      return 'This spend permission has been revoked. XMTP chat commands are refused.'
     case 'expired':
       return 'The spend permission window has ended. Re-provisioning is required.'
     default:

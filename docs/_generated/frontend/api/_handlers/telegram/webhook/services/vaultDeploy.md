@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / api/\_handlers/telegram/webhook/services/vaultDeploy
+[4626-web](../../../../../index.md) / api/\_handlers/telegram/webhook/services/vaultDeploy
 
 # api/\_handlers/telegram/webhook/services/vaultDeploy
 
@@ -158,7 +158,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:725](https:
 
 ###### canonicalSmartWallet
 
-`` `0x${string}` ``
+`string`
 
 ###### version
 
@@ -200,7 +200,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:951](https:
 
 ###### canonicalSmartWallet
 
-`` `0x${string}` ``
+`string`
 
 ###### sessionId
 
@@ -224,7 +224,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:689](https:
 
 ###### creatorToken
 
-`` `0x${string}` ``
+`string`
 
 ###### expiresAt
 
@@ -232,7 +232,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:689](https:
 
 ###### smartWallet
 
-`` `0x${string}` ``
+`string`
 
 ###### version
 
@@ -274,7 +274,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:898](https:
 
 ###### canonicalSmartWallet
 
-`` `0x${string}` ``
+`string`
 
 ###### version
 

@@ -16,7 +16,7 @@ import {
   setCors,
   setNoStore,
   RATE_LIMITS,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 type BridgeIntegrityResponse = {
   status: 'ok' | 'warning' | 'critical'
@@ -55,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const limiter = checkRateLimit(
     rateLimitKey('keeper-bridge-integrity', getClientIp(req)),
-    RATE_LIMITS.creRuntimeTriggerWrite,
+    RATE_LIMITS.keeperTriggerWrite,
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
@@ -63,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const baseUrl = getBaseUrl(req)
-  const apiKey = String(process.env.KEEPR_API_KEY ?? '').trim()
+  const apiKey = String(process.env.KPR_API_KEY ?? '').trim()
   if (!baseUrl || !apiKey) {
     return res.status(500).json({ success: false, error: 'bridge_integrity_not_configured' } satisfies ApiEnvelope<never>)
   }

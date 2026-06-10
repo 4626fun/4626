@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/infra/trust
+[4626-web](../../../index.md) / server/\_lib/infra/trust
 
 # server/\_lib/infra/trust
 

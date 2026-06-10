@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/wallet/accountContext/types
+[4626-web](../../../index.md) / src/wallet/accountContext/types
 
 # src/wallet/accountContext/types
 

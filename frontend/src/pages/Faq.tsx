@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight, Search, ShieldCheck, X } from 'lucide-react'
 import { FaqAccordion } from '@/components/ui/Accordion'
+import { Button } from '@/components/ui/Button'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
-import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
+import { getHostMode, getMarketingBaseUrl, isCurrentWindowUrl } from '@/lib/env/host'
 import { META, PageMeta } from '@/components/seo/PageMeta'
 
 type FaqItem = {
@@ -608,7 +609,9 @@ export function Faq() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (getHostMode() !== 'app') return
-    window.location.replace(`${getMarketingBaseUrl()}/faq`)
+    const target = `${getMarketingBaseUrl()}/faq`
+    if (isCurrentWindowUrl(target)) return
+    window.location.replace(target)
   }, [])
 
   const [query, setQuery] = useState('')
@@ -747,7 +750,7 @@ export function Faq() {
             <div>
             <span className="label">FAQ</span>
               <h1 className="headline text-3xl sm:text-5xl mt-4">Frequently asked questions</h1>
-              <p className="text-sm text-zinc-500 font-light max-w-prose mt-4">
+              <p className="text-sm text-zinc-400 font-light max-w-prose mt-4">
                 Short answers, no fluff. Built for creators launching and users depositing, trading, and holding.
               </p>
             </div>
@@ -774,6 +777,18 @@ export function Faq() {
                     </div>
                     <ArrowRight className="w-4 h-4 text-zinc-600" />
                   </Link>
+                  <a
+                    href="https://docs.4626.fun/users/explore-analytics"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between gap-4 rounded-xl px-3 py-3 hover:bg-white/3 transition-colors"
+                  >
+                    <div className="space-y-1">
+                      <div className="text-white font-light">Explore analytics</div>
+                      <div className="text-xs text-zinc-600 font-light">How indexed totals and charts are built</div>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-zinc-600" />
+                  </a>
                 </div>
               </div>
 
@@ -896,7 +911,7 @@ export function Faq() {
                           <div className="text-xs text-zinc-600 font-mono">{section.items.length} questions</div>
                         </div>
                         {section.description ? (
-                          <p className="text-zinc-600 text-sm font-light mt-2">{section.description}</p>
+                          <p className="text-zinc-400 text-sm font-light mt-2">{section.description}</p>
                         ) : null}
                       </div>
 
@@ -943,9 +958,11 @@ export function Faq() {
             <h2 className="headline text-4xl sm:text-5xl lg:text-6xl mb-8">
               Ready to start earning?
             </h2>
-            <Link to={getCanonicalMarketingWaitlistPath()} className="btn-accent inline-flex items-center">
-              Join waitlist <ArrowRight className="w-4 h-4 ml-2" />
-            </Link>
+            <Button variant="primary" asChild>
+              <Link to={getCanonicalMarketingWaitlistPath()} className="inline-flex items-center">
+                Join waitlist <ArrowRight className="w-4 h-4 ml-2" />
+              </Link>
+            </Button>
           </motion.div>
         </div>
       </section>

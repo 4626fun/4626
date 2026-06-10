@@ -1,24 +1,53 @@
 # --------------------------------------------------------------------------
-# Railway deployment config — Hermit AlfaClub/Pinata Agent
+# Railway deployment config — Hermit AlfaClub/Pinata Creative Agent
+# (4626-hermit-agent / 4626-alfaclub-bridge Railway service)
 # --------------------------------------------------------------------------
-# Deploy:
-#   railway up --service 4626-hermit-agent -c
+# Custom domain hermit.4626.fun is owned by Vercel for Telegram webhook ingress
+# (see TELEGRAM_TO_ALFACLUB_INGRESS_HOST + HERMIT_TELEGRAM_WEBHOOK_URL). Railway
+# health stays on *.up.railway.app — do not attach hermit.4626.fun here.
+# EXACT UI SETTINGS TO COPY (for your 4626-alfaclub-bridge service):
 #
-# This service uses the shared agent image with AGENT_PROCESS=hermit, so it
-# starts only the AlfaClub chat bridge and Privy token refresher. Keepr/XMTP
-# remains isolated in the main Railway service.
+# Build
+#   - Dockerfile Path: frontend/Dockerfile.hermit
+#
+# Deploy
+#   - Custom Start Command: ./node_modules/.bin/tsx server/agents/hermit/bootstrap.ts
+#   - Healthcheck Path: /healthz
+#   - Healthcheck Timeout: 300
+#   - Restart Policy: On Failure
+#   - Max restart retries: 5
+#
+# REQUIRED environment variables (add these in Railway Variables for this service):
+#
+#   ALFACLUB_CHAT_BRIDGE_ENABLED=1
+#   ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY=1
+#
+# These two are mandatory to make the actual chat bridge start on this
+# dedicated Railway service. Without them you will keep seeing:
+#   [hermit] AlfaClub chat bridge not started
+#
+# With both set, the bridge will run here and this process becomes the
+# primary long-lived consumer for AlfaClub room commands (including
+# rich 1659 context injection for /hermit /gmeow etc.).
+#
+# You should also have the usual ones:
+#   ALFACLUB_CHAT_JWT (or the Privy triplet)
+#   HERMIT_AGENT_CHAT_ENDPOINT + HERMIT_AGENT_BEARER_TOKEN
+#   ALFACLUB_CHAT_ROOM_ID=1043 (primary / legacy single-room paths)
+#   ALFACLUB_HERMIT_COMMAND_ROOMS=1043,1659 (both Hermit command rooms)
+#
+# Config-as-code
+#   - Railway Config File: railway.hermit.toml
+#
+# Apply the UI settings + the two ALFACLUB_CHAT_BRIDGE_* variables above,
+# then redeploy. The bridge should start and the service will be fully live.
 # --------------------------------------------------------------------------
 
 [build]
-dockerfilePath = "frontend/Dockerfile.agent"
+dockerfilePath = "frontend/Dockerfile.hermit"
 watchPatterns = [
-  "/frontend/Dockerfile.agent",
-  "/frontend/server/_lib/alfaclub/**",
-  "/frontend/server/_lib/hermit/**",
-  "/frontend/server/_lib/infra/**",
-  "/frontend/server/agent/hermit/**",
-  "/frontend/server/agent/core/**",
-  "/frontend/server/commands/**",
+  "/frontend/Dockerfile.hermit",
+  "/frontend/server/**",
   "/frontend/api/**",
   "/frontend/src/config/**",
   "/frontend/src/wallet/**",
@@ -27,12 +56,21 @@ watchPatterns = [
   "/frontend/tsconfig.json",
   "/frontend/tsconfig.node.json",
   "/patches/**",
+  "/frontend/shared/**",
   "/railway.hermit.toml",
 ]
 
 [deploy]
 numReplicas = 1
+
+# Healthcheck must succeed for the deploy to be considered healthy.
+# bootstrap.ts serves /healthz very early (before heavy imports).
 healthcheckPath = "/healthz"
-healthcheckTimeout = 120
+healthcheckTimeout = 300   # 5 minutes — generous for first cold start + module load
+
+# Restart on crash (common during early debugging of env / module issues).
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
+
+# Start command can be left to the Dockerfile CMD, or overridden in UI
+# to the ultra-minimal form above for fastest health listener start.

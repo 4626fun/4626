@@ -8,7 +8,7 @@ import {
   RATE_LIMITS,
   rateLimitKey,
   readBoundedJsonObjectBody,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { setPublicCors, setCache, DEFAULT_CHAIN_ID, getNumberQuery, getStringQuery, handleOptions, requireServerKey } from '../../../server/zora/_shared.js'
 import { blobHeadOrNull, blobPutBytes, fetchBytes } from '../../../server/_lib/infra/blob.js'
 

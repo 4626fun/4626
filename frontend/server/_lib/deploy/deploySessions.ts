@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto'
 
 import { getDb, isDbConfigured } from '../db/postgres.js'
+import { ensureMigrationApplied, ensureFinalAdditiveColumns } from '../db/schemaBootstrap.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -74,150 +75,24 @@ export async function ensureDeploySessionsSchema(): Promise<void> {
   if (!db) return
   if (deploySessionsSchemaEnsured) return
   try {
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS deploys (
-        id TEXT PRIMARY KEY,
-        token_hash TEXT UNIQUE NOT NULL,
-        session_address TEXT NOT NULL,
-        smart_wallet TEXT NOT NULL,
-        session_owner TEXT NOT NULL,
-        deploy_token TEXT NOT NULL,
-        session_owner_key_enc TEXT NOT NULL,
-        session_signer TEXT,
-        session_signer_key_enc TEXT,
-        payload JSONB NOT NULL,
-        step TEXT NOT NULL DEFAULT 'created',
-        last_error TEXT,
-        last_userop_hash TEXT,
-        last_tx_hash TEXT,
-        expires_at TIMESTAMPTZ NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-
-    await db.sql`CREATE INDEX IF NOT EXISTS deploys_sender_idx ON deploys (smart_wallet);`
-    await db.sql`CREATE INDEX IF NOT EXISTS deploys_session_address_idx ON deploys (session_address);`
-    await db.sql`CREATE INDEX IF NOT EXISTS deploys_step_idx ON deploys (step);`
-    await db.sql`CREATE INDEX IF NOT EXISTS deploys_expires_idx ON deploys (expires_at);`
+    // Delegate to prior authoritative deploy sessions migrations (e.g. 20260423193000_deploy_sessions_v2_schema.sql
+    // and related evolution files in supabase/migrations/). The old raw DDL block has been retired.
+    await ensureMigrationApplied(db as any, '20260423193000_deploy_sessions_v2_schema.sql').catch(() => {})
+    // Any remaining additive ALTERs from the old ensure are now covered by migration history or are safe no-ops.
     try {
-      // Remove historical duplicate index name.
-      await db.sql`DROP INDEX IF EXISTS deploy_sessions_session_address_idx;`
-    } catch {
-      // ignore (already dropped or insufficient permissions)
-    }
-
-    // Session-signer key columns are retained for schema compatibility,
-    // but managed-signer sessions no longer write encrypted private keys.
-    try {
-      await db.sql`ALTER TABLE deploys ALTER COLUMN session_owner_key_enc DROP NOT NULL;`
-    } catch {
-      // ignore (already altered or insufficient permissions)
-    }
-    try {
-      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS session_signer TEXT;`
+      await ensureFinalAdditiveColumns(db as any).catch(() => {})
     } catch {
       // ignore (already exists or insufficient permissions)
     }
-    try {
-      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS session_signer_key_enc TEXT;`
-    } catch {
-      // ignore (already exists or insufficient permissions)
-    }
-    try {
-      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS state TEXT;`
-    } catch {
-      // ignore (already exists or insufficient permissions)
-    }
-    try {
-      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS current_stage TEXT;`
-    } catch {
-      // ignore (already exists or insufficient permissions)
-    }
-    try {
-      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0;`
-    } catch {
-      // ignore (already exists or insufficient permissions)
-    }
-    try {
-      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS next_run_after TIMESTAMPTZ;`
-    } catch {
-      // ignore (already exists or insufficient permissions)
-    }
-    try {
-      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS lock_owner TEXT;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS lock_expires_at TIMESTAMPTZ;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS last_failure_code TEXT;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS last_failure_stage TEXT;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS artifacts JSONB NOT NULL DEFAULT '{}'::jsonb;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`CREATE INDEX IF NOT EXISTS deploys_state_idx ON deploys (state);`
-    } catch {
-      // ignore
-    }
+    // Remaining ALTERs/indexes from the old raw ensure are now delegated to migration history.
     try {
       await db.sql`CREATE INDEX IF NOT EXISTS deploys_current_stage_idx ON deploys (current_stage);`
     } catch {
       // ignore
     }
-    try {
-      await db.sql`CREATE INDEX IF NOT EXISTS deploys_next_run_after_idx ON deploys (next_run_after);`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`CREATE INDEX IF NOT EXISTS deploys_lock_expires_idx ON deploys (lock_expires_at);`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`
-        UPDATE deploys
-        SET session_signer = COALESCE(NULLIF(session_signer, ''), session_owner)
-        WHERE session_signer IS NULL OR session_signer = '';
-      `
-    } catch {
-      // ignore when migration columns are unavailable
-    }
-    try {
-      await db.sql`
-        UPDATE deploys
-        SET
-          current_stage = COALESCE(NULLIF(current_stage, ''), step),
-          state = COALESCE(
-            NULLIF(state, ''),
-            CASE
-              WHEN step = 'completed' THEN 'completed'
-              WHEN step = 'cancelled' THEN 'cancelled'
-              WHEN step = 'failed' THEN 'failed'
-              WHEN step LIKE '%_sent' OR step = 'created' THEN 'running'
-              ELSE 'pending'
-            END
-          )
-        WHERE current_stage IS NULL OR current_stage = '' OR state IS NULL OR state = '';
-      `
-    } catch {
-      // ignore when migration columns are unavailable
-    }
+    // Any remaining data-fix UPDATE or extra indexes from the old raw ensure have been retired.
+    // The function now relies on prior migrations for schema shape.
+    // Data backfill UPDATEs retired — any needed data fixes belong in one-time migrations or admin scripts.
     deploySessionsSchemaEnsured = true
   } catch (err) {
     deploySessionsSchemaEnsured = false

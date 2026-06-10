@@ -6,6 +6,8 @@ import { getAddress, isAddress } from 'viem'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
 import { PageMeta } from '@/components/seo/PageMeta'
+import { TokenAvatar } from '@/components/swap/TokenAvatar'
+import { Button } from '@/components/ui/Button'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { getPoolsByToken, getPoolSwaps } from '@/lib/uniswap/client'
 import type { UniswapPool } from '@/lib/uniswap/types'
@@ -115,6 +117,8 @@ export function ExploreContentTransactions() {
         amountUsd: parseNumber(swap.amountUSD),
         amount0,
         amount1,
+        token0Address: swap.token0.id,
+        token1Address: swap.token1.id,
         token0Symbol: swap.token0.symbol || 'TOKEN0',
         token1Symbol: swap.token1.symbol || 'TOKEN1',
         wallet: swap.origin || swap.sender || '',
@@ -329,10 +333,28 @@ export function ExploreContentTransactions() {
                         </td>
                         <td className="px-3 py-3 text-right text-white tabular-nums">{formatUsd(row.amountUsd)}</td>
                         <td className="px-3 py-3 text-right text-zinc-300 tabular-nums">
-                          {formatTokenAmount(row.amount0)} {row.token0Symbol}
+                          <span className="inline-flex items-center justify-end gap-2">
+                            <span>{formatTokenAmount(row.amount0)}</span>
+                            <TokenAvatar
+                              token={{ address: row.token0Address, symbol: row.token0Symbol, chainId: 8453 }}
+                              symbol={row.token0Symbol}
+                              size={16}
+                              className="shrink-0"
+                              withFallbackLabel
+                            />
+                          </span>
                         </td>
                         <td className="px-3 py-3 text-right text-zinc-300 tabular-nums">
-                          {formatTokenAmount(row.amount1)} {row.token1Symbol}
+                          <span className="inline-flex items-center justify-end gap-2">
+                            <span>{formatTokenAmount(row.amount1)}</span>
+                            <TokenAvatar
+                              token={{ address: row.token1Address, symbol: row.token1Symbol, chainId: 8453 }}
+                              symbol={row.token1Symbol}
+                              size={16}
+                              className="shrink-0"
+                              withFallbackLabel
+                            />
+                          </span>
                         </td>
                         <td className="px-3 py-3 text-right text-zinc-300">{formatShortAddress(row.wallet)}</td>
                         <td className="px-3 py-3 text-right">
@@ -357,12 +379,9 @@ export function ExploreContentTransactions() {
             </div>
 
             <div className="mt-6 flex flex-col sm:flex-row gap-3">
-              <Link
-                to={`/explore/content/base/${contentCoinAddress}`}
-                className="btn-primary btn-compact inline-flex items-center justify-center rounded-full text-xs"
-              >
-                Back to market
-              </Link>
+              <Button variant="primary" size="sm" className="btn-compact rounded-full text-xs" asChild>
+                <Link to={`/explore/content/base/${contentCoinAddress}`}>Back to market</Link>
+              </Button>
             </div>
           </div>
         </div>

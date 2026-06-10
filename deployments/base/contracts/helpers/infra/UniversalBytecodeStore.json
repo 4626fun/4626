@@ -2,10 +2,10 @@
   "contractName": "UniversalBytecodeStoreV2",
   "network": "Base",
   "chainId": 8453,
-  "address": "0xBd21c58f3D59c6E90a6bCCe462c68670F124a792",
+  "address": "0x9C3e2A7bd73690d5b5DC0C47f8dB74c4dc5D1c69",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
   "deployedAt": "2026-05-05T07:51:45Z",
-  "deploymentTx": "0x7c5f97107f904c13387f59da35f1d2d6b7024b74580397d0b70c829ab9cae550",
+  "deploymentTx": "0x0adbeddb72fa7b1245ef3bd2a9013119ff7566e04d849b96a22702b9a7f83dfa",
   "abi": [
     {
       "type": "function",

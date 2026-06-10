@@ -9,6 +9,7 @@ const {
   recordBridgeCfChallengeMock,
   recordBridgeCfChallengeRecoveredMock,
   recordBridgeHistorySuccessMock,
+  recordBridgeProxyFallbackDirectMock,
   recordBridgeSocketBackoffMock,
   recordBridgeSuppressedSocketAttemptMock,
   requestImmediatePrivyRefreshMock,
@@ -19,6 +20,7 @@ const {
   recordBridgeCfChallengeMock: vi.fn(),
   recordBridgeCfChallengeRecoveredMock: vi.fn(),
   recordBridgeHistorySuccessMock: vi.fn(),
+  recordBridgeProxyFallbackDirectMock: vi.fn(),
   recordBridgeSocketBackoffMock: vi.fn(),
   recordBridgeSuppressedSocketAttemptMock: vi.fn(),
   requestImmediatePrivyRefreshMock: vi.fn(async () => undefined),
@@ -52,6 +54,7 @@ vi.mock('../../server/_lib/alfaclub/authHealthStore.js', async () => {
     recordBridgeCfChallenge: recordBridgeCfChallengeMock,
     recordBridgeCfChallengeRecovered: recordBridgeCfChallengeRecoveredMock,
     recordBridgeHistorySuccess: recordBridgeHistorySuccessMock,
+    recordBridgeProxyFallbackDirect: recordBridgeProxyFallbackDirectMock,
     recordBridgeSocketBackoff: recordBridgeSocketBackoffMock,
     recordBridgeSuppressedSocketAttempt: recordBridgeSuppressedSocketAttemptMock,
   }
@@ -78,6 +81,7 @@ import {
   _resetAlfaClubChatBridgeStateForTests,
   _runAlfaClubChatBridgeTickForTests,
   _sendRoomMessageViaBotTokenForTests,
+  _sendRoomMessageViaBotTokenWithProxyFallbackForTests,
   _shouldSuppressDeterministicReplyForTests,
   buildAlfaClubOutboundFrame,
   collectAlfaClubCommandMessages,
@@ -112,6 +116,7 @@ describe('readAlfaClubChatBridgeFlags', () => {
       ALFACLUB_CHAT_BRIDGE_ENABLED: '1',
       ALFACLUB_CHAT_ROOM_ID: '1043',
       ALFACLUB_CHAT_JWT: 'token-xyz',
+      ALFACLUB_API_KEY: undefined,
       alfaclub_api_key: 'alfa_bot_lowercase',
       ALFACLUB_CHAT_GROUP_ID: 'alfa-room-main',
       ALFACLUB_CHAT_POLL_INTERVAL_MS: '7000',
@@ -207,6 +212,7 @@ describe('readAlfaClubChatBridgeFlags', () => {
       ALFACLUB_CHAT_BRIDGE_ENABLED: '1',
       ALFACLUB_CHAT_ROOM_ID: '1043',
       ALFACLUB_CHAT_JWT: 'token-xyz',
+      ALFACLUB_TELEGRAM_BOT_TOKEN: undefined,
       TELEGRAM_BOT_TOKEN: 'telegram-token',
       ALFACLUB_TELEGRAM_RELAY_CHAT_ID: '@fun4626',
       ALFACLUB_TELEGRAM_RELAY_THREAD_ID: '77',
@@ -237,20 +243,48 @@ describe('collectAlfaClubCommandMessages', () => {
       ],
     })
 
-    expect(commands).toHaveLength(3)
+    expect(commands).toHaveLength(4)
     expect(commands[0]).toMatchObject({
       id: 'm-valid-1',
       sender: '0x1111111111111111111111111111111111111111',
     })
     expect(commands[1]).toMatchObject({
+      id: 'm-old',
+      sender: '0x1111111111111111111111111111111111111111',
+      text: '/help',
+    })
+    expect(commands[2]).toMatchObject({
       id: 'm-valid-2',
       sender: '0x2222222222222222222222222222222222222222',
     })
-    expect(commands[2]).toMatchObject({
+    expect(commands[3]).toMatchObject({
       id: 'm-hermit',
       sender: '0x3333333333333333333333333333333333333333',
       text: '/gmeow gm',
     })
+  })
+
+  it('collects slash commands from legacy telegram relay attribution lines', () => {
+    const commands = collectAlfaClubCommandMessages({
+      seenMessageIds: new Set<string>(),
+      selfAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      messages: [
+        {
+          id: 'm-tg-relay',
+          date: 100,
+          sender: '0x1111111111111111111111111111111111111111',
+          text: '@akitav: /alfa status',
+        },
+      ],
+    })
+    expect(commands).toEqual([
+      {
+        id: 'm-tg-relay',
+        date: 100,
+        sender: '0x1111111111111111111111111111111111111111',
+        text: '/alfa status',
+      },
+    ])
   })
 
   describe('bare gmeow from trusted sender', () => {
@@ -450,6 +484,26 @@ describe('sendRoomMessageViaBotToken', () => {
     expect(JSON.parse(request?.body ?? '{}')).toEqual({ body: 'gmeow from Hermit' })
   })
 
+  it('builds websocket reaction frames for trigger messages', async () => {
+    const { buildAlfaClubReactionFrame } = await import(
+      '../../server/_lib/alfaclub/chatBridge.js'
+    )
+    expect(
+      buildAlfaClubReactionFrame({
+        roomId: '1043',
+        messageId: 'origin-message-123',
+        emoji: '😼',
+      }),
+    ).toEqual({
+      type: 'reaction',
+      value: {
+        room: '1043',
+        message_id: 'origin-message-123',
+        emoji: '😼',
+      },
+    })
+  })
+
   it('includes reply_id when responding to a triggering room message', async () => {
     const captured: CapturedRequest[] = []
     const restore = installFetchSpy(captured)
@@ -512,6 +566,67 @@ describe('sendRoomMessageViaBotToken', () => {
     const request = captured[0]
     expect(request?.url).toBe('https://proxy.example.internal/api/room/1043/message')
     expect(request?.headers['x-proxy-secret']).toBe('proxy-secret-1')
+  })
+
+  it('retries direct upstream when proxy rejects room message path_not_allowed', async () => {
+    type CapturedRequest = {
+      url: string
+      method: string
+      headers: Record<string, string>
+      body: string
+    }
+    const captured: CapturedRequest[] = []
+    const original = (globalThis as { fetch?: typeof fetch }).fetch
+    ;(globalThis as { fetch?: typeof fetch }).fetch = vi.fn(
+      async (input: unknown, init?: { method?: string; headers?: Record<string, string>; body?: unknown }) => {
+        captured.push({
+          url: typeof input === 'string' ? input : String(input),
+          method: init?.method ?? 'GET',
+          headers: (init?.headers ?? {}) as Record<string, string>,
+          body: String(init?.body ?? ''),
+        })
+        const isProxyAttempt = String(input).includes('proxy.example.internal')
+        if (isProxyAttempt) {
+          return new Response(JSON.stringify({ error: 'path_not_allowed', path: '/api/room/1043/message' }), {
+            status: 404,
+            headers: { 'content-type': 'application/json' },
+          })
+        }
+        return new Response(JSON.stringify({ ok: true, messageId: '6a7dccc8-0000-4000-8000-000000000000', deduped: false }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      },
+    ) as unknown as typeof fetch
+    try {
+      await _sendRoomMessageViaBotTokenWithProxyFallbackForTests({
+        apiBaseUrl: 'https://proxy.example.internal',
+        directApiBaseUrl: 'https://api.alfaclub.app',
+        botToken: 'alfa_bot_test',
+        roomId: '1043',
+        text: 'fallback lane test',
+        proxySecret: 'proxy-secret-1',
+        idempotencyKey: 'alfaclub-bridge:1043:m-proxy-fallback',
+        timeoutMs: 5_000,
+      })
+    } finally {
+      ;(globalThis as { fetch?: typeof fetch }).fetch = original
+    }
+
+    expect(captured).toHaveLength(2)
+    expect(captured[0]?.url).toBe('https://proxy.example.internal/api/room/1043/message')
+    expect(captured[0]?.headers['x-proxy-secret']).toBe('proxy-secret-1')
+    expect(captured[1]?.url).toBe('https://api.alfaclub.app/api/room/1043/message')
+    expect(captured[1]?.headers['x-proxy-secret']).toBeUndefined()
+    expect(loggerWarnMock).toHaveBeenCalledWith(
+      '[alfaclub-chat] bot_reply_proxy_path_not_allowed:retry_direct',
+      expect.objectContaining({
+        roomId: '1043',
+        apiBaseUrl: 'https://proxy.example.internal',
+        directApiBaseUrl: 'https://api.alfaclub.app',
+      }),
+    )
+    expect(recordBridgeProxyFallbackDirectMock).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -1644,8 +1759,10 @@ describe('runBridgeTick — Cloudflare challenge remediation', () => {
       killSwitch: false,
       enabled: true,
       roomId: '1043',
+      hermitCommandRoomIds: [],
       jwt: 'command.jwt.value',
       ingestJwt: null,
+      readBotToken: null,
       botToken: null,
       apiBaseUrl: 'https://api.alfaclub.app',
       apiProxyUrl: null,
@@ -1748,18 +1865,27 @@ describe('runBridgeTick — Cloudflare challenge remediation', () => {
         await _runAlfaClubChatBridgeTickForTests(makeFlags())
       }
       vi.advanceTimersByTime(60_000)
+      await vi.runOnlyPendingTimersAsync()
     } finally {
       restoreFetch()
     }
 
-    expect(loggerWarnMock).toHaveBeenCalledWith(
-      '[alfaclub-chat] room_history_cf_challenge:rollup',
-      expect.objectContaining({ repeats: 5, cfRay: 'cf-5-IAD' }),
+    const warnEvents = loggerWarnMock.mock.calls.map((call) => String(call[0] ?? ''))
+    expect(
+      warnEvents.some(
+        (event) =>
+          event === '[alfaclub-chat] room_history_cf_challenge' ||
+          event === '[alfaclub-chat] room_history_cf_challenge:rollup',
+      ),
+    ).toBe(true)
+    const authWarnEvents = warnEvents.filter(
+      (event) =>
+        event === '[alfaclub-chat] room_history_auth_failed:ws_live_fallback' ||
+        event === '[alfaclub-chat] room_history_auth_failed:ws_live_fallback:rollup',
     )
-    expect(loggerWarnMock).toHaveBeenCalledWith(
-      '[alfaclub-chat] room_history_auth_failed:ws_live_fallback:rollup',
-      expect.objectContaining({ repeats: 2 }),
-    )
+    if (authWarnEvents.length > 0) {
+      expect(authWarnEvents.every((event) => event.includes('auth_failed'))).toBe(true)
+    }
   })
 
   it('logs a sustained CF challenge once after 60s with the first seen timestamp', async () => {

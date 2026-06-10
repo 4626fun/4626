@@ -20,7 +20,7 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { runAlfaClubPrivyRefreshOnce } from '../../../../server/_lib/alfaclub/privyTokenRefresher.js'
 
 declare const process: { env: Record<string, string | undefined> }

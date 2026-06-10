@@ -2,6 +2,7 @@ import { getAddress } from 'viem'
 
 import { createAgentWallet } from './privyWalletApi.js'
 import { getDb, isDbConfigured } from '../db/postgres.js'
+import { ensureWalletOnchainOpsAuditSchema } from '../db/schemaBootstrap.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
@@ -10,15 +11,7 @@ let creatorAgentWalletsEnsured = false
 export async function ensureCreatorAgentWalletsSchema(db: Db): Promise<void> {
   if (creatorAgentWalletsEnsured) return
   try {
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS creator_agent_wallets (
-        coin_address TEXT PRIMARY KEY,
-        agent_wallet_id TEXT NOT NULL,
-        agent_wallet_address TEXT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
+    await ensureWalletOnchainOpsAuditSchema(db as any)
     creatorAgentWalletsEnsured = true
   } catch (err) {
     creatorAgentWalletsEnsured = false

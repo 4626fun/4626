@@ -1,5 +1,6 @@
 import tsParser from '@typescript-eslint/parser'
 import tsPlugin from '@typescript-eslint/eslint-plugin'
+import jsxA11y from 'eslint-plugin-jsx-a11y'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 
@@ -15,6 +16,10 @@ export default [
       // own directives that trip "unused eslint-disable" warnings — we
       // must not modify vendor sources.
       'public/immersive/vendor/**',
+      // Generated immersive bundles include plugin-specific directives/rules
+      // from upstream build pipelines and are not source-authored in this repo.
+      'public/immersive/vault-hero/**',
+      'public/immersive/vault.js',
     ],
   },
   {
@@ -45,6 +50,7 @@ export default [
       'react-refresh/only-export-components': 'off',
     },
   },
+  jsxA11y.flatConfigs.recommended,
 ]
 
 

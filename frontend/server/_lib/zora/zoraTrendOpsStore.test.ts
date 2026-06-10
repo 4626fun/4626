@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 
+const { ensureTelemetryCreativeLogsSchemaMock } = vi.hoisted(() => ({
+  ensureTelemetryCreativeLogsSchemaMock: vi.fn(async () => {}),
+}))
+
+vi.mock('../db/schemaBootstrap.js', () => ({
+  ensureTelemetryCreativeLogsSchema: ensureTelemetryCreativeLogsSchemaMock,
+}))
+
 describe('zora trend ops state transitions', () => {
   it('allows forward status transitions', async () => {
     const { applyTrendStatusTransition } = await import('./zoraTrendOpsStore')
@@ -30,20 +38,15 @@ describe('zora trend ops state transitions', () => {
 
 describe('ensureZoraTrendOpsSchema', () => {
   it('creates the trend ops table and indexes', async () => {
-    const executed: string[] = []
     const db = {
-      sql: vi.fn(async (strings: TemplateStringsArray) => {
-        executed.push(strings.join(' '))
-        return { rows: [] }
-      }),
+      sql: vi.fn(async () => ({ rows: [] })),
     }
 
     const { ensureZoraTrendOpsSchema } = await import('./zoraTrendOpsStore')
     await ensureZoraTrendOpsSchema(db as any)
 
-    const sql = executed.join('\n')
-    expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS zora_trend_ops/i)
-    expect(sql).toMatch(/ticker_hash TEXT NOT NULL UNIQUE/i)
-    expect(sql).toMatch(/CREATE INDEX IF NOT EXISTS zora_trend_ops_status_idx/i)
+    expect(ensureTelemetryCreativeLogsSchemaMock).toHaveBeenCalledTimes(1)
+    expect(ensureTelemetryCreativeLogsSchemaMock).toHaveBeenCalledWith(db)
+    expect(db.sql).not.toHaveBeenCalled()
   })
 })

@@ -9,10 +9,12 @@ export interface ChainSelectorProps {
   compact?: boolean
 }
 
+const BASE_CHAIN_LOGO = '/base/base-chain-light.svg'
+
 function ChainLogo({ src, name, size = 20 }: { src: string; name: string; size?: number }) {
   const [error, setError] = useState(false)
   const isBaseLogo = name.trim().toLowerCase() === 'base'
-  const resolvedSrc = isBaseLogo ? '/base/base-square-blue.svg' : src
+  const resolvedSrc = isBaseLogo ? BASE_CHAIN_LOGO : src
   const shapeClass = isBaseLogo ? 'rounded-[4px]' : 'rounded-full'
   const fitClass = isBaseLogo ? 'object-contain' : 'object-cover'
   if (error || !resolvedSrc) {
@@ -98,7 +100,7 @@ export const ChainSelector = memo(function ChainSelector({
         onClick={() => setOpen((v) => !v)}
         className={`inline-flex items-center gap-1 rounded-lg ${compact ? 'px-1.5 py-1' : 'px-2 py-1.5'} text-vault-text transition-colors hover:bg-[rgb(var(--vault-card-raised)/0.55)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--vault-border-strong))]`}
       >
-        <ChainLogo src={selected.logoUrl} name={selected.name} size={triggerSize} />
+        {!compact ? <ChainLogo src={selected.logoUrl} name={selected.name} size={triggerSize} /> : null}
         <ChevronDown
           className={`${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} text-vault-subtext transition-transform ${open ? 'rotate-180' : ''}`}
           aria-hidden="true"

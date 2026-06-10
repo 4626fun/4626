@@ -1,7 +1,12 @@
 import path from 'node:path'
 import { hasDedicatedMount, resolveXmtpDbDirectory } from '../../server/_lib/messaging/xmtpDbDirectory.js'
+import {
+  hasCanonicalCswRuntimeConfig,
+  readCanonicalCswAddressEnv,
+  readCanonicalCswPrivyWalletIdEnv,
+} from '../../server/_lib/wallet/canonicalCswEnv.js'
 
-type StartupMode = 'multi-agent' | 'single-agent-csw' | 'single-agent-eoa' | 'standby-only' | 'unconfigured'
+type StartupMode = 'multi-agent' | 'single-canonical-csw' | 'single-agent-eoa' | 'standby-only' | 'unconfigured'
 
 type Check = {
   label: string
@@ -37,14 +42,14 @@ function mask(value: string): string {
 
 function normalizeMode(): StartupMode {
   const consumeXmtp = envBool('AGENT_CONSUME_XMTP', env('AGENT_RUNTIME_ROLE').toLowerCase() !== 'standby')
-  const hasMultiAgent = has('DATABASE_URL') || has('POSTGRES_URL')
+  const hasMultiAgent = has('DATABASE_URL') || has('POSTGRES_URL') // Supabase preferred; POSTGRES_URL = legacy fallback
   const hasDbKey = has('XMTP_AGENT_KEY_ENCRYPTION_KEY')
-  const hasCsw = has('XMTP_AGENT_CSW_ADDRESS') && has('XMTP_AGENT_PRIVY_WALLET_ID')
+  const hasCsw = hasCanonicalCswRuntimeConfig()
   const hasEoa = has('XMTP_AGENT_PRIVATE_KEY')
 
   if (!consumeXmtp) return 'standby-only'
   if (hasMultiAgent && hasDbKey) return 'multi-agent'
-  if (hasCsw) return 'single-agent-csw'
+  if (hasCsw) return 'single-canonical-csw'
   if (hasEoa) return 'single-agent-eoa'
   return 'unconfigured'
 }
@@ -69,7 +74,7 @@ function configuredChannels(): string[] {
 
 function buildChecks(mode: StartupMode): Check[] {
   const consumeXmtp = envBool('AGENT_CONSUME_XMTP', env('AGENT_RUNTIME_ROLE').toLowerCase() !== 'standby')
-  const dbConfigured = has('DATABASE_URL') || has('POSTGRES_URL')
+  const dbConfigured = has('DATABASE_URL') || has('POSTGRES_URL') // Supabase is canonical
   const configuredXmtpDbDir = env('XMTP_DB_DIRECTORY')
   const effectiveXmtpDbDir = resolveXmtpDbDirectory()
   const displayedXmtpDbDir = configuredXmtpDbDir || effectiveXmtpDbDir
@@ -86,7 +91,7 @@ function buildChecks(mode: StartupMode): Check[] {
     {
       label: 'Active runtime entrypoint',
       ok: true,
-      detail: 'frontend/server/agent/eliza/index.ts',
+      detail: 'frontend/server/agents/eliza/index.ts',
     },
     {
       label: 'Deployment target',
@@ -149,10 +154,9 @@ function buildChecks(mode: StartupMode): Check[] {
     },
     {
       label: 'CSW signer config',
-      ok: mode !== 'single-agent-csw' || (has('XMTP_AGENT_CSW_ADDRESS') && has('XMTP_AGENT_PRIVY_WALLET_ID')),
-      detail:
-        has('XMTP_AGENT_CSW_ADDRESS') || has('XMTP_AGENT_PRIVY_WALLET_ID')
-          ? `address=${mask(env('XMTP_AGENT_CSW_ADDRESS'))}, walletId=${mask(env('XMTP_AGENT_PRIVY_WALLET_ID'))}`
+      ok: mode !== 'single-canonical-csw' || hasCanonicalCswRuntimeConfig(),
+      detail: hasCanonicalCswRuntimeConfig()
+          ? `address=${mask(readCanonicalCswAddressEnv())}, walletId=${mask(readCanonicalCswPrivyWalletIdEnv())}`
           : 'not configured',
     },
     {
@@ -180,9 +184,9 @@ function startupRecipe(mode: StartupMode): string[] {
         'Local dev XMTP agent: set XMTP_AGENT_PRIVATE_KEY, XMTP_DB_ENCRYPTION_KEY, one LLM key, then run pnpm -C frontend agent:start',
         'This is the smallest true end-to-end path, but it uses a raw EOA and is explicitly dev-only in this repo.',
       ]
-    case 'single-agent-csw':
+    case 'single-canonical-csw':
       return [
-        'Railway primary path: keep XMTP_AGENT_CSW_ADDRESS, XMTP_AGENT_PRIVY_WALLET_ID, Privy server creds, XMTP_DB_ENCRYPTION_KEY, and an LLM key on Railway, then deploy there.',
+        'Railway primary path: keep CANONICAL_CSW_ADDRESS, CANONICAL_CSW_PRIVY_WALLET_ID, Privy server creds, XMTP_DB_ENCRYPTION_KEY, and an LLM key on Railway, then deploy there.',
         'This is the canonical single-agent setup in 4626: CSW identity on XMTP, Privy as delegated signer.',
       ]
     case 'multi-agent':
@@ -193,7 +197,7 @@ function startupRecipe(mode: StartupMode): string[] {
     default:
       return [
         'No runnable XMTP mode is configured yet.',
-        'Choose one of: single-agent-csw, single-agent-eoa, or multi-agent.',
+        'Choose one of: single-canonical-csw, single-agent-eoa, or multi-agent.',
       ]
   }
 }
@@ -218,7 +222,7 @@ function main(): void {
   console.log(`Startup command: pnpm -C frontend agent:start`)
 
   printSection('Where ElizaOS Actually Fits', [
-    'ElizaOS is the orchestration layer inside frontend/server/agent/eliza.',
+    'ElizaOS is the orchestration layer inside frontend/server/agents/eliza.',
     'It does plugin/action/provider routing, memory/state composition, and LLM fallback.',
     'It is not the wallet/auth layer. Privy, CSW identity, Vercel routes, and contracts remain separate systems.',
   ])
@@ -228,16 +232,16 @@ function main(): void {
   ])
 
   printSection('Active End-to-End Flow', [
-    'XMTP ingress arrives through frontend/server/agent/eliza/plugins/xmtp/service.ts.',
-    'frontend/server/agent/eliza/index.ts normalizes the message, rate-limits it, and hands it to the runtime bridge.',
-    'frontend/server/agent/eliza/runtimeBridge.ts uses @elizaos/core shapes for memory, state, plugins, and action ranking.',
-    'Plugins in frontend/server/agent/eliza/plugins/* delegate into the existing 4626 production handlers.',
-    'If no action claims the message, frontend/server/agent/eliza/llm.ts generates the fallback response.',
+    'XMTP ingress arrives through frontend/server/agents/eliza/plugins/xmtp/service.ts.',
+    'frontend/server/agents/eliza/index.ts normalizes the message, rate-limits it, and hands it to the runtime bridge.',
+    'frontend/server/agents/eliza/runtimeBridge.ts uses @elizaos/core shapes for memory, state, plugins, and action ranking.',
+    'Plugins in frontend/server/agents/eliza/plugins/* delegate into the existing 4626 production handlers.',
+    'If no action claims the message, frontend/server/agents/eliza/llm.ts generates the fallback response.',
   ])
 
   printSection('Enabled Channels', [configuredChannels().join(', ')])
   printSection('Core Plugins', [
-    'keepr, lens, walletIntel, reputation, cre, zora, uniswap, knowledge',
+    'keepr, lens, walletIntel, reputation, kpr, zora, uniswap, knowledge',
   ])
 
   console.log('\nChecks')
@@ -252,7 +256,7 @@ function main(): void {
     printSection('Minimum Config To Learn It Safely', [
       'Standby only: AGENT_RUNTIME_ROLE=standby and AGENT_CONSUME_XMTP=false',
       'Then run pnpm -C frontend agent:eliza:doctor and pnpm -C frontend agent:eliza:standby:smoke',
-      'When ready for true message flow, graduate to single-agent-csw or single-agent-eoa.',
+      'When ready for true message flow, graduate to single-canonical-csw or single-agent-eoa.',
     ])
   }
 }

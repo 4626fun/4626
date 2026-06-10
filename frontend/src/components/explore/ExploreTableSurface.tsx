@@ -1,11 +1,11 @@
-import type { ReactNode, UIEventHandler } from 'react'
+import type { CSSProperties, ReactNode, UIEventHandler } from 'react'
 
 import { ExploreHorizontalScrollArrows } from '@/components/explore/ExploreHorizontalScrollArrows'
+import { EXPLORE_COLLAPSED_IDENTITY_WIDTH_PX } from '@/components/explore/tableColumns'
 
 type ExploreTableSurfaceProps = {
-  headerId: string
+  /** Scroll container id — used for horizontal sync + mobile sticky collapse CSS. */
   bodyId: string
-  onHeaderScroll: UIEventHandler<HTMLDivElement>
   onBodyScroll: UIEventHandler<HTMLDivElement>
   header: ReactNode
   body: ReactNode
@@ -16,12 +16,12 @@ type ExploreTableSurfaceProps = {
   onScrollRight: () => void
   leftAriaLabel: string
   rightAriaLabel: string
+  /** When true, left scroll control sits past the collapsed sticky identity column. */
+  collapseIdentity?: boolean
 }
 
 export function ExploreTableSurface({
-  headerId,
   bodyId,
-  onHeaderScroll,
   onBodyScroll,
   header,
   body,
@@ -32,15 +32,16 @@ export function ExploreTableSurface({
   onScrollRight,
   leftAriaLabel,
   rightAriaLabel,
+  collapseIdentity = false,
 }: ExploreTableSurfaceProps) {
+  const scrollBodyStyle = {
+    ['--explore-collapsed-identity-width' as string]: `${EXPLORE_COLLAPSED_IDENTITY_WIDTH_PX}px`,
+  } satisfies CSSProperties
+
+  const leftScrollInsetPx = collapseIdentity ? EXPLORE_COLLAPSED_IDENTITY_WIDTH_PX + 8 : 8
+
   return (
     <>
-      <div className="sticky top-0 z-50 border-b border-white/8 bg-vault-bg shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
-        <div className="overflow-x-auto scrollbar-hide" id={headerId} data-scrolled="0" onScroll={onHeaderScroll}>
-          <div className="min-w-max">{header}</div>
-        </div>
-      </div>
-
       <ExploreHorizontalScrollArrows
         hasOverflow={hasHorizontalOverflow}
         canScrollLeft={canScrollLeft}
@@ -49,10 +50,20 @@ export function ExploreTableSurface({
         onScrollRight={onScrollRight}
         leftAriaLabel={leftAriaLabel}
         rightAriaLabel={rightAriaLabel}
+        leftInsetPx={leftScrollInsetPx}
       />
 
-      <div className="overflow-x-auto scrollbar-hide" id={bodyId} data-scrolled="0" onScroll={onBodyScroll}>
-        <div className="min-w-max">{body}</div>
+      <div
+        id={bodyId}
+        className="explore-table-scroll overflow-x-auto scrollbar-hide"
+        data-scrolled="0"
+        style={scrollBodyStyle}
+        onScroll={onBodyScroll}
+      >
+        <div className="w-max min-w-0">
+          <div className="explore-table-sticky-bar sticky top-0 z-50 border-b border-white/8">{header}</div>
+          {body}
+        </div>
       </div>
     </>
   )

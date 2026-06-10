@@ -1,8 +1,8 @@
-[**4626-app**](../index.md)
+[**4626-web**](../index.md)
 
 ***
 
-[4626-app](../index.md) / api/agent-registration
+[4626-web](../index.md) / api/agent-registration
 
 # api/agent-registration
 

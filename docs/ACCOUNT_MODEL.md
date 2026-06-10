@@ -244,7 +244,35 @@ dark behind `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED` (frontend) +
 production until the flags are flipped. Spec:
 [docs/sub-accounts-baseapp-design.md](./sub-accounts-baseapp-design.md).
 
-### 5.4 Arch B agent commands — server-side spend-permission flow
+### 5.4 Track-aware XMTP (waitlist group + app messaging)
+
+**Decision (2026-05).** Waitlist group chat and user-facing XMTP must
+support **both** execution tracks:
+
+| Track | XMTP inbox / group member address | Eligibility |
+|---|---|---|
+| `legacy-owner-install` | Parent CSW (`profiles.csw_address`) | Embedded EOA is an on-chain owner of the parent CSW |
+| `sub-account` | App sub-account (`profiles.base_sub_account`) | Distinct sub-account registered; embedded EOA is the sub-account signer |
+
+**Invariants preserved:**
+- Parent CSW remains custody + public identity (leaderboard, Explore
+  display). Sub-account is never promoted to `profiles.csw_address` or
+  `is_canonical_smart_wallet`.
+- Waitlist group membership may mix parent CSW and sub-account addresses.
+- Sub-account provisioning domain stays `4626.fun` on both
+  `4626.fun` and `app.4626.fun` so the same app wallet inbox persists
+  across hosts. Browser XMTP install state remains per-origin until a
+  dedicated cross-origin handoff ships.
+
+**Location.** Eligibility:
+`frontend/server/_lib/waitlist/waitlistXmtpChatEligibility.ts`.
+API: `GET /api/waitlist/xmtp-status`, `POST /api/waitlist/xmtp-join`.
+Client identity resolution:
+`frontend/src/lib/xmtp/identityResolver.ts` +
+`frontend/src/lib/xmtp/provider.tsx` (reads `xmtpMemberAddress` from
+status).
+
+### 5.5 Arch B agent commands — server-side spend-permission flow
 
 **Location.** Server: `frontend/server/_lib/wallet/userOperationSubmitter.ts`,
 `frontend/server/_lib/wallet/commandIssuerContext.ts`.
@@ -262,7 +290,7 @@ infrastructure for the waitlist Base App connection — that path needs
 its own simpler endpoint per
 [docs/sub-accounts-baseapp-design.md](./sub-accounts-baseapp-design.md).
 
-### 5.5 Indexer: `zora_csw_owners` (the (c) vs (d) discriminator)
+### 5.6 Indexer: `zora_csw_owners` (the (c) vs (d) discriminator)
 
 **Location.** Server-side cron handlers at
 `frontend/api/_handlers/v1/zora-csw/_scanCron.ts` and `_enrichCron.ts`.

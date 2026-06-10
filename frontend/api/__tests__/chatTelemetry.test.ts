@@ -85,7 +85,7 @@ describe('POST /api/v1/chat/telemetry', () => {
         event: 'chat_command_sent',
         conversationId: 'group-1',
         conversationType: 'group',
-        commandId: 'cre-status',
+        commandId: 'keeper-status',
         source: 'command',
         extra: 'value',
       },
@@ -100,7 +100,7 @@ describe('POST /api/v1/chat/telemetry', () => {
       event: 'chat_command_sent',
       conversationId: 'group-1',
       conversationType: 'group',
-      commandId: 'cre-status',
+      commandId: 'keeper-status',
       source: 'command',
       payload: { extra: 'value' },
     })

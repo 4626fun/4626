@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   resolveAgentCapabilityResponse: vi.fn(async () => ({})),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   handleOptions: mocks.handleOptions,
   setCors: mocks.setCors,
   setNoStore: mocks.setNoStore,

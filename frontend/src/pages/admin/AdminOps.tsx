@@ -28,6 +28,7 @@ import {
   STRICT_IMMUTABLE_AGENT_URI_SUMMARY,
   toRegistrationDataUri,
 } from '@/lib/agent/erc8004AgentUriPolicy'
+import { Button } from '@/components/ui/Button'
 import { LoadingText } from '@/components/ui/LoadingState'
 
 import {
@@ -933,17 +934,18 @@ function AgentRegistration() {
                   </div>
                 ) : null}
                 {!isBase ? (
-                  <button
+                  <Button
                     type="button"
                     onClick={async () => {
                       if (!switchChainAsync) return
                       await switchChainAsync({ chainId: base.id })
                     }}
                     disabled={switchPending}
-                    className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                    variant="primary"
+                className="w-full"
                   >
                     {switchPending ? 'Switching…' : 'Switch to Base'}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             )}
@@ -973,14 +975,15 @@ function AgentRegistration() {
                   Current URI uses an allowlisted HTTPS gateway (mutable). Strict content-addressed URIs are safer for long-term integrity.
                 </div>
               ) : null}
-              <button
+              <Button
                 type="button"
                 onClick={() => void publishAgentRegistrationToLens()}
                 disabled={lensPublishState.status === 'loading'}
-                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="ghost"
+                className="w-full"
               >
                 {lensPublishState.status === 'loading' ? 'Publishing…' : 'Publish to Lens Grove'}
-              </button>
+              </Button>
               {lensPublishState.status === 'error' ? (
                 <div className="text-xs text-red-400">{lensPublishState.error}</div>
               ) : lensPublishState.status === 'success' ? (
@@ -1023,36 +1026,39 @@ function AgentRegistration() {
                 placeholder="e.g. 1"
                 className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
               />
-              <button
+              <Button
                 type="button"
                 onClick={() => void resolveAgentIdFromChain()}
                 disabled={resolveState.status === 'loading' || !isConnected || (!isCanonical && !canSubmitViaOwner)}
-                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="ghost"
+                className="w-full"
               >
                 {resolveState.status === 'loading' ? 'Resolving…' : 'Resolve agent ID from chain'}
-              </button>
+              </Button>
               {resolveState.status === 'error' ? (
                 <div className="text-xs text-red-400">{resolveState.error}</div>
               ) : resolveState.status === 'success' ? (
                 <div className="text-xs text-emerald-300/90">Agent ID resolved.</div>
               ) : null}
-              <button
+              <Button
                 type="button"
                 onClick={() => void updateAgentUri()}
                 disabled={updateTxState.status === 'pending' || !isConnected || (!isCanonical && !canSubmitViaOwner)}
-                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="ghost"
+                className="w-full"
               >
                 {updateTxState.status === 'pending' ? 'Updating…' : 'Update agent URI'}
-              </button>
+              </Button>
               <TxMeta state={updateTxState} />
-              <button
+              <Button
                 type="button"
                 onClick={() => void registerAgent()}
                 disabled={registerTxState.status === 'pending' || !isConnected || (!isCanonical && !canSubmitViaOwner)}
-                className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="primary"
+                className="w-full"
               >
                 {registerTxState.status === 'pending' ? 'Registering…' : 'Register agent'}
-              </button>
+              </Button>
               <TxMeta state={registerTxState} />
             </div>
 
@@ -1079,7 +1085,7 @@ function AgentRegistration() {
               {agentWalletAlreadyCanonical ? (
                 <div className="text-xs text-emerald-400/90">Already bound on-chain. No additional signature required.</div>
               ) : null}
-              <button
+              <Button
                 type="button"
                 onClick={() => void bindAgentWallet()}
                 disabled={
@@ -1089,14 +1095,15 @@ function AgentRegistration() {
                   (!isCanonical && !canSubmitViaOwner) ||
                   !/^\d+$/.test(agentIdInput.trim())
                 }
-                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="ghost"
+                className="w-full"
               >
                 {walletBindTxState.status === 'pending'
                   ? 'Binding wallet…'
                   : agentWalletAlreadyCanonical
                     ? 'Already bound'
                     : 'Bind CSW as agentWallet'}
-              </button>
+              </Button>
               <TxMeta state={walletBindTxState} />
             </div>
 
@@ -1130,7 +1137,7 @@ function AgentRegistration() {
                   ) : null}
                 </div>
               ) : null}
-              <button
+              <Button
                 type="button"
                 onClick={() => void syncAgentWalletMetadataCaip()}
                 disabled={
@@ -1139,12 +1146,13 @@ function AgentRegistration() {
                   (!isCanonical && !canSubmitViaOwner) ||
                   !/^\d+$/.test(agentIdInput.trim())
                 }
-                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="ghost"
+                className="w-full"
               >
                 {walletMetadataTxState.status === 'pending'
                   ? 'Syncing metadata…'
                   : 'Sync agentWallet metadata to CAIP-10'}
-              </button>
+              </Button>
               <TxMeta state={walletMetadataTxState} />
             </div>
           </div>
@@ -1526,32 +1534,35 @@ function AgentFeedback() {
               </div>
 
               {!isBase ? (
-                <button
+                <Button
                   type="button"
                   onClick={async () => { if (switchChainAsync) await switchChainAsync({ chainId: base.id }) }}
                   disabled={switchPending}
-                  className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                  variant="primary"
+                className="w-full"
                 >
                   {switchPending ? 'Switching…' : 'Switch to Base'}
-                </button>
+                </Button>
               ) : (
                 <div className="flex gap-3">
-                  <button
+                  <Button
                     type="button"
                     onClick={() => void submitFeedback()}
                     disabled={submitState.status === 'loading' || !walletClient}
-                    className="btn-accent flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    variant="primary"
+                    className="flex-1"
                   >
                     {submitState.status === 'loading' ? 'Submitting…' : 'Submit (direct)'}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
                     onClick={() => void submitFeedbackViaPaymaster()}
                     disabled={submitState.status === 'loading'}
-                    className="btn-ghost flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    variant="ghost"
+                    className="flex-1"
                   >
                     {submitState.status === 'loading' ? 'Submitting…' : 'Submit (sponsored)'}
-                  </button>
+                  </Button>
                 </div>
               )}
 
@@ -1858,17 +1869,18 @@ function ShareTokenMetadata() {
                   Canonical CSW: <span className="font-mono text-zinc-300">{shortAddress(canonicalCswAddress)}</span>
                 </div>
                 {!isBase ? (
-                  <button
+                  <Button
                     type="button"
                     onClick={async () => {
                       if (!switchChainAsync) return
                       await switchChainAsync({ chainId: base.id })
                     }}
                     disabled={switchPending}
-                    className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                    variant="primary"
+                className="w-full"
                   >
                     {switchPending ? 'Switching…' : 'Switch to Base'}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             )}
@@ -1881,14 +1893,15 @@ function ShareTokenMetadata() {
                 placeholder="0x..."
                 className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
               />
-              <button
+              <Button
                 type="button"
                 onClick={() => void resolveShareOft()}
                 disabled={resolveState.status === 'loading' || !vaultAddress}
-                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="ghost"
+                className="w-full"
               >
                 {resolveState.status === 'loading' ? 'Resolving…' : 'Resolve ShareOFT from vault'}
-              </button>
+              </Button>
               {resolveState.status === 'error' ? <div className="text-xs text-red-400">{resolveState.error}</div> : null}
 
               <div className="text-sm text-zinc-300">ShareOFT address</div>
@@ -1903,14 +1916,15 @@ function ShareTokenMetadata() {
                 <span className="font-mono text-zinc-400">{currentContractUri ? shortAddress(currentContractUri) : '—'}</span>
               </div>
 
-              <button
+              <Button
                 type="button"
                 onClick={() => void generateGroveMetadata()}
                 disabled={metadataState.status === 'loading' || !shareOftAddress}
-                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="ghost"
+                className="w-full"
               >
                 {metadataState.status === 'loading' ? 'Generating…' : 'Generate Grove metadata'}
-              </button>
+              </Button>
               {metadataState.status === 'error' ? <div className="text-xs text-red-400">{metadataState.error}</div> : null}
 
               {metadataPreview?.lensUri ? (
@@ -1936,14 +1950,15 @@ function ShareTokenMetadata() {
                 placeholder="lens://..."
                 className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
               />
-              <button
+              <Button
                 type="button"
                 onClick={() => void setShareTokenContractUri()}
                 disabled={txState.status === 'pending' || !shareOftAddress || !contractUri.trim()}
-                className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="primary"
+                className="w-full"
               >
                 {txState.status === 'pending' ? 'Setting…' : 'Set contractURI on ShareOFT'}
-              </button>
+              </Button>
               <TxMeta state={txState} />
             </div>
           </div>
@@ -2268,14 +2283,15 @@ function LegacyVaultWithdrawalCard({
             ? 'Release + unwrap + queue in a single transaction.'
             : 'Release + unwrap + withdraw now in a single transaction.'}
         </div>
-        <button
+        <Button
           type="button"
           onClick={() => sendBatchTx(oneClickKey, oneClickCalls)}
           disabled={!canOneClick}
-          className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+          variant="primary"
+                className="w-full"
         >
           One-click withdraw
-        </button>
+        </Button>
         <TxMeta state={txStates[oneClickKey]} />
       </div>
 
@@ -2285,7 +2301,7 @@ function LegacyVaultWithdrawalCard({
           <div className="text-xs text-zinc-500">
             Releasable now: <span className="text-zinc-200">{formatToken(releasable)}</span>
           </div>
-          <button
+          <Button
             type="button"
             onClick={() =>
               sendTx(releaseKey, {
@@ -2295,10 +2311,11 @@ function LegacyVaultWithdrawalCard({
               })
             }
             disabled={!isBase || !walletClient || !canUseSmartWallet || !hasVesting}
-            className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+            variant="primary"
+                className="w-full"
           >
             Release from vesting
-          </button>
+          </Button>
           <TxMeta state={txStates[releaseKey]} />
         </div>
 
@@ -2325,7 +2342,7 @@ function LegacyVaultWithdrawalCard({
           <div className="text-xs text-zinc-600">
             Vault shares to queue: <span className="text-zinc-200">{sharesToQueue ? formatToken(sharesToQueue) : '—'}</span>
           </div>
-          <button
+          <Button
             type="button"
             onClick={() =>
               sendTx(unwrapKey, {
@@ -2336,10 +2353,11 @@ function LegacyVaultWithdrawalCard({
               })
             }
             disabled={!canUnwrap}
-            className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+            variant="primary"
+            className="w-full"
           >
             Unwrap ShareOFT
-          </button>
+          </Button>
           <TxMeta state={txStates[unwrapKey]} />
         </div>
       </div>
@@ -2352,14 +2370,15 @@ function LegacyVaultWithdrawalCard({
               ? 'Large withdrawals require queueing. Wait 10 blocks, then claim.'
               : 'Small withdrawals redeem immediately (no queue).'}
           </div>
-          <button
+          <Button
             type="button"
             onClick={() => sendTx(queueKey, shouldQueue ? queueConfig : redeemConfig)}
             disabled={shouldQueue ? !canQueue : !canRedeem}
-            className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+            variant="primary"
+                className="w-full"
           >
             {shouldQueue ? 'Queue withdrawal' : 'Withdraw now'}
-          </button>
+          </Button>
           <TxMeta state={txStates[queueKey]} />
         </div>
 
@@ -2377,7 +2396,7 @@ function LegacyVaultWithdrawalCard({
           ) : (
             <div className="text-xs text-zinc-500">No queued withdrawal found.</div>
           )}
-          <button
+          <Button
             type="button"
             onClick={() =>
               sendTx(claimKey, {
@@ -2387,10 +2406,11 @@ function LegacyVaultWithdrawalCard({
               })
             }
             disabled={!canClaim}
-            className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+            variant="primary"
+                className="w-full"
           >
             Claim withdrawal
-          </button>
+          </Button>
           <TxMeta state={txStates[claimKey]} />
         </div>
       </div>
@@ -2417,38 +2437,41 @@ function LegacyVaultWithdrawalCard({
 
         <div className="grid gap-3 md:grid-cols-3">
           <div className="space-y-2">
-            <button
+            <Button
               type="button"
               onClick={() => sendTx(shutdownKey, emergencyShutdownConfig)}
               disabled={!canEmergencyShutdown}
-              className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="primary"
+                className="w-full"
             >
               Shutdown vault
-            </button>
+            </Button>
             <TxMeta state={txStates[shutdownKey]} />
           </div>
 
           <div className="space-y-2">
-            <button
+            <Button
               type="button"
               onClick={() => sendTx(emergencyPullKey, emergencyPullConfig)}
               disabled={!canEmergencyPull}
-              className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="primary"
+                className="w-full"
             >
               Pull from strategies
-            </button>
+            </Button>
             <TxMeta state={txStates[emergencyPullKey]} />
           </div>
 
           <div className="space-y-2">
-            <button
+            <Button
               type="button"
               onClick={() => sendTx(emergencyDrainKey, emergencyDrainConfig)}
               disabled={!canEmergencyDrain}
-              className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="primary"
+                className="w-full"
             >
               Drain vault asset
-            </button>
+            </Button>
             <TxMeta state={txStates[emergencyDrainKey]} />
           </div>
         </div>
@@ -3013,17 +3036,18 @@ function LegacyWithdrawals() {
                   </div>
                 ) : null}
                 {!isBase ? (
-                  <button
+                  <Button
                     type="button"
                     onClick={async () => {
                       if (!switchChainAsync) return
                       await switchChainAsync({ chainId: base.id })
                     }}
                     disabled={switchPending}
-                    className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                    variant="primary"
+                className="w-full"
                   >
                     {switchPending ? 'Switching…' : 'Switch to Base'}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             )}
@@ -3081,6 +3105,89 @@ function LegacyWithdrawals() {
         </div>
       </div>
     </section>
+  )
+}
+
+type ManualKeeperTickResult = {
+  claimed: number
+  releasedExpiredClaims: number
+  results: Array<{
+    id: number
+    kind: string
+    status: 'succeeded' | 'failed' | 'retry'
+    error: string | null
+    followUpJobId?: number
+  }>
+}
+
+function KeeperTickCard() {
+  const [running, setRunning] = useState(false)
+  const [lastResult, setLastResult] = useState<ManualKeeperTickResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const runTick = useCallback(async () => {
+    setRunning(true)
+    setError(null)
+    try {
+      const response = await fetch('/api/admin/keeper/jobs/run', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 1 }),
+      })
+      const json = (await response.json().catch(() => null)) as
+        | { success: true; data: ManualKeeperTickResult }
+        | { success: false; error?: string }
+        | null
+      if (!response.ok || !json || json.success !== true) {
+        const message = json && 'error' in json ? json.error : null
+        throw new Error(message || `HTTP ${response.status}`)
+      }
+      setLastResult(json.data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setRunning(false)
+    }
+  }, [])
+
+  const succeededCount = lastResult?.results.filter((item) => item.status === 'succeeded').length ?? 0
+  const failedCount = lastResult?.results.filter((item) => item.status === 'failed').length ?? 0
+  const retriedCount = lastResult?.results.filter((item) => item.status === 'retry').length ?? 0
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-4">
+      <div className="text-sm text-zinc-100">Run one keeper tick</div>
+      <div className="mt-1 text-xs text-zinc-500">
+        Manually execute one KPR coordination cycle from admin (server-authenticated; no secrets exposed in browser).
+      </div>
+      <div className="mt-3">
+        <Button
+          type="button"
+          onClick={() => {
+            void runTick()
+          }}
+          disabled={running}
+          variant="primary"
+        >
+          {running ? 'Running…' : 'Run keeper tick'}
+        </Button>
+      </div>
+      {error ? <div className="mt-3 text-xs text-red-400">{error}</div> : null}
+      {lastResult ? (
+        <div className="mt-3 text-xs text-zinc-400 space-y-1">
+          <div>
+            Claimed: <span className="text-zinc-200">{lastResult.claimed}</span> · Released stale claims:{' '}
+            <span className="text-zinc-200">{lastResult.releasedExpiredClaims}</span>
+          </div>
+          <div>
+            Succeeded: <span className="text-emerald-300">{succeededCount}</span> · Failed:{' '}
+            <span className="text-red-300">{failedCount}</span> · Retry:{' '}
+            <span className="text-amber-300">{retriedCount}</span>
+          </div>
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -3177,6 +3284,8 @@ export function AdminOps() {
                   ),
                 )}
               </div>
+
+              <KeeperTickCard />
             </div>
           </div>
         </div>

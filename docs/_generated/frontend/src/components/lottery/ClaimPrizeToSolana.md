@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/lottery/ClaimPrizeToSolana
+[4626-web](../../../index.md) / src/components/lottery/ClaimPrizeToSolana
 
 # src/components/lottery/ClaimPrizeToSolana
 
@@ -12,7 +12,7 @@
 
 > **ClaimPrizeToSolana**(`__namedParameters`): `Element`
 
-Defined in: [src/components/lottery/ClaimPrizeToSolana.tsx:188](https://github.com/wenakita/4626/blob/main/frontend/src/components/lottery/ClaimPrizeToSolana.tsx#L188)
+Defined in: [src/components/lottery/ClaimPrizeToSolana.tsx:189](https://github.com/wenakita/4626/blob/main/frontend/src/components/lottery/ClaimPrizeToSolana.tsx#L189)
 
 #### Parameters
 

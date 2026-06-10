@@ -15,11 +15,11 @@ import {
   checkRateLimit,
   rateLimitKey,
   logger,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { logAdminAction } from '../../../../server/_lib/admin/adminAudit.js'
 import {
-  executeProfileMerge,
+  executeProfileMergeInTransaction,
   planProfileMerge,
   ProfileMergeValidationError,
   type ProfileMergePlan,
@@ -164,7 +164,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<DryRunSummary>)
     }
 
-    const result = await executeProfileMerge(db as any, plan)
+    const result = await executeProfileMergeInTransaction(plan)
     await logAdminAction({
       db: db as any,
       adminAddress: admin,

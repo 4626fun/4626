@@ -58,8 +58,8 @@ This acceptance document covers all Informational severity findings from the Pha
 
 ## I-09 — Temp/scratch workflow file committed (Linear 4626-390)
 
-- Pattern: `cre/cre-workflows/.workflow-temp-*.ts`
-- Verification: `find cre/cre-workflows -name ".workflow-temp*"` returns no files at current `HEAD`. `.gitignore` lines 220–221 already have `**/.workflow-temp-*.ts` and `**/.workflow-temp-*.json`.
+- Pattern: `kpr/kpr-workflows/.workflow-temp-*.ts`
+- Verification: `find kpr/kpr-workflows -name ".workflow-temp*"` returns no files at current `HEAD`. `.gitignore` lines 220–221 already have `**/.workflow-temp-*.ts` and `**/.workflow-temp-*.json`.
 - Disposition: **Already fixed** — no temp files exist and the gitignore pattern is in place. No commit required beyond this acceptance doc.
 
 ## I-10 — `profiles` and core tables RLS model undocumented (Linear 4626-391)

@@ -13,7 +13,7 @@ import {
   getClientIp,
   rateLimitKey,
   syncUserWallets,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 import { PrivyClient } from '@privy-io/server-auth'
 

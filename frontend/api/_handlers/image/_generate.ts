@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { enqueueImageGenerationJob, getImageGenerationJob } from '../../../server/_lib/image/imageGenerationJobs.js'
 import { getImageGenerationProject } from '../../../server/_lib/image/imageProjects.js'
 import { processImageGenerationJob } from '../../../server/_lib/image/imageGenerationRunner.js'
-import { checkRateLimit, getClientIp, rateLimitKey, RATE_LIMITS } from '../../../packages/server-core/src/index.js'
+import { checkRateLimit, getClientIp, rateLimitKey, RATE_LIMITS } from '@4626/server-core'
 import { getImageApiActor, parseRequiredString, prepareImageApiAuthenticated, readBody } from './_shared.js'
 type Body = {
   projectId?: string

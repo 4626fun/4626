@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/explore/rowFormatting
+[4626-web](../../../index.md) / src/components/explore/rowFormatting
 
 # src/components/explore/rowFormatting
 
@@ -40,7 +40,7 @@ Defined in: [src/components/explore/rowFormatting.ts:26](https://github.com/wena
 
 > **buildGroupSpans**(`columns`): `object`[]
 
-Defined in: [src/components/explore/rowFormatting.ts:117](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L117)
+Defined in: [src/components/explore/rowFormatting.ts:145](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L145)
 
 #### Parameters
 
@@ -102,7 +102,7 @@ Defined in: [src/components/explore/rowFormatting.ts:60](https://github.com/wena
 
 > **formatMarketCapDeltaPercent**(`deltaRaw`, `marketCapRaw`): `object`
 
-Defined in: [src/components/explore/rowFormatting.ts:96](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L96)
+Defined in: [src/components/explore/rowFormatting.ts:109](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L109)
 
 #### Parameters
 
@@ -154,11 +154,83 @@ Defined in: [src/components/explore/rowFormatting.ts:31](https://github.com/wena
 
 ***
 
+### getMarketCapDeltaToneClass()
+
+> **getMarketCapDeltaToneClass**(`change`): `string`
+
+Defined in: [src/components/explore/rowFormatting.ts:130](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L130)
+
+#### Parameters
+
+##### change
+
+###### positive
+
+`boolean`
+
+###### text
+
+`string`
+
+#### Returns
+
+`string`
+
+***
+
+### getSignedPercentToneClass()
+
+> **getSignedPercentToneClass**(`value`): `string`
+
+Defined in: [src/components/explore/rowFormatting.ts:138](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L138)
+
+Green/red tone for signed percent deltas (sparklines, MCap Δ, etc.).
+
+#### Parameters
+
+##### value
+
+`number` | `null` | `undefined`
+
+#### Returns
+
+`string`
+
+***
+
+### resolveExploreFees24hDisplay()
+
+> **resolveExploreFees24hDisplay**(`fees24hUsd`, `volumeForFees`, `totalFeeRate`): `string`
+
+Defined in: [src/components/explore/rowFormatting.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L69)
+
+Prefer indexed 24h fees from Supabase when present; fall back to volume × fee rate.
+
+#### Parameters
+
+##### fees24hUsd
+
+`string` | `number` | `null` | `undefined`
+
+##### volumeForFees
+
+`string` | `undefined`
+
+##### totalFeeRate
+
+`number`
+
+#### Returns
+
+`string`
+
+***
+
 ### shortAddress()
 
 > **shortAddress**(`addr`): `string`
 
-Defined in: [src/components/explore/rowFormatting.ts:68](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L68)
+Defined in: [src/components/explore/rowFormatting.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/rowFormatting.ts#L81)
 
 #### Parameters
 

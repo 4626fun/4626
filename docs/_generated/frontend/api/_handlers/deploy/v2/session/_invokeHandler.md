@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / api/\_handlers/deploy/v2/session/\_invokeHandler
+[4626-web](../../../../../index.md) / api/\_handlers/deploy/v2/session/\_invokeHandler
 
 # api/\_handlers/deploy/v2/session/\_invokeHandler
 

@@ -144,7 +144,7 @@ export class RootErrorBoundary extends Component<RootErrorBoundaryProps, RootErr
           }}
         >
           <div style={{ maxWidth: '36rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ fontSize: '0.75rem', letterSpacing: '0.1em', color: '#71717a' }}>
+            <div style={{ fontSize: '0.75rem', letterSpacing: '0.1em', color: '#a1a1aa' }}>
               APPLICATION ERROR
             </div>
             <div style={{ fontSize: '1.25rem', fontWeight: 500 }}>
@@ -160,7 +160,7 @@ export class RootErrorBoundary extends Component<RootErrorBoundaryProps, RootErr
                 style={{
                   fontSize: '0.75rem',
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                  color: '#71717a',
+                  color: '#a1a1aa',
                   wordBreak: 'break-all',
                 }}
               >

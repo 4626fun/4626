@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/infra/shareTokenMetadata
+[4626-web](../../../index.md) / server/\_lib/infra/shareTokenMetadata
 
 # server/\_lib/infra/shareTokenMetadata
 
@@ -38,7 +38,7 @@ Defined in: [server/\_lib/infra/shareTokenMetadata.ts:61](https://github.com/wen
 
 ###### address
 
-`` `0x${string}` ``
+`string`
 
 ###### apiHost?
 

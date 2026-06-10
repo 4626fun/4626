@@ -11,6 +11,7 @@ const OPTIONAL_LOOKUP_TIMEOUT_MS = 1_200
 
 type BasenameProfileLite = {
   name: string | null
+  displayName?: string | null
   avatar?: string | null
 }
 
@@ -45,6 +46,40 @@ export async function getBasenameName(address: string): Promise<string | null> {
   // Ensure we only treat *.base.eth as a basename.
   if (!raw.toLowerCase().endsWith('.base.eth')) return null
   return raw
+}
+
+export type PeerChatPresentation = {
+  name: string
+  imageUrl?: string
+}
+
+/**
+ * Resolve DM peer label + avatar for chat list/header at XMTP connect time.
+ * Uses Basename profile (display name + ENS avatar) with a bounded timeout.
+ */
+export async function resolvePeerChatPresentation(
+  address: string,
+  truncateFallback: (address: string) => string,
+): Promise<PeerChatPresentation> {
+  const profile = await withTimeout(
+    getBasenameProfile(address).catch(() => EMPTY_BASENAME_PROFILE),
+    OPTIONAL_LOOKUP_TIMEOUT_MS,
+    EMPTY_BASENAME_PROFILE,
+  )
+
+  const basename = profile.name?.trim() ?? null
+  if (basename?.toLowerCase().endsWith('.base.eth')) {
+    const shortHandle = basename.replace(/\.base\.eth$/i, '').trim()
+    const displayName = profile.displayName?.trim() || shortHandle
+    return {
+      name: displayName || truncateFallback(address),
+      imageUrl: profile.avatar?.trim() || undefined,
+    }
+  }
+
+  return {
+    name: truncateFallback(address),
+  }
 }
 
 export type DmRecipientResolution = {

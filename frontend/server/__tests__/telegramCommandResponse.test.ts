@@ -8,13 +8,13 @@ describe('buildTelegramProcessedCommandResponse', () => {
     const resolveMediaFromAction = vi.fn().mockReturnValue(undefined)
 
     const result = buildTelegramProcessedCommandResponse({
-      commandText: '/cre status',
+      commandText: '/keepr status',
       processed: { responseText: 'raw response' },
       buildObservedCommandText,
       resolveMediaFromAction,
     })
 
-    expect(buildObservedCommandText).toHaveBeenCalledWith('/cre status', 'raw response')
+    expect(buildObservedCommandText).toHaveBeenCalledWith('/keepr status', 'raw response')
     expect(resolveMediaFromAction).toHaveBeenCalledWith(undefined)
     expect(result).toEqual({ text: 'wrapped response' })
   })

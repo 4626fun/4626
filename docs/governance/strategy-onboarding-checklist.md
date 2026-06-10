@@ -63,12 +63,15 @@ Onboarding requirements:
 
 ## Pending deploy features
 
+Greenfield creators purchase **`vault_full_deploy`** only (all-or-nothing). The bundled Phase 3 strategies below deploy together at 45%/45% when the bundle (or legacy equivalent rows) is active.
+
 | Feature flag | Role | Required action before non-trivial allocation |
 | --- | --- | --- |
 | `ajna_sleeve` (AJNA 4626 sleeve) | Phase 3 strategy; `capped` unless the valuation path is verified as internal-accounting or oracle-backed | Before activation, locate the concrete strategy address, compute intended debt ceiling and current estimated NAV, then set a trust ceiling with buffer. |
 | `charm_active_lp` (Charm Alpha Vault) | Phase 3 strategy; `capped` because LP positions are revalued through market state | Before activation, cap total trusted NAV, not just creator-token inventory; re-review after large swap/LP inventory shifts. |
-| `solana_bridge_strategy` (cross-chain inventory) | Phase 3 strategy; `capped` unless keeper/oracle reconciliation is verified as safe enough for another class | Start tighter because valuation depends on keeper/reconciliation trust; re-review if reconciliation changes or fails. |
-| `solana_ovault_mesh` (currently `active`) | Phase 2b routing entitlement, not a `CreatorOVault` strategy | Do not generate `setStrategyMaxAssets` or `addStrategy` calldata. Track route/peer/config risk in the deploy runbook, not the strategy cap flow. |
+| `solana_bridge_strategy` | **Retired** — replaced by Pipe A 30% ShareOFT finalize bridge for greenfield vaults | Do not generate cap calldata for new deploys. Historical AKITA vaults may still have on-chain `SolanaBridgeStrategy`. |
+| `solana_ovault_mesh` | Phase 2b routing entitlement (bundled in `vault_full_deploy`), not a `CreatorOVault` strategy | Do not generate `setStrategyMaxAssets` or `addStrategy` calldata. Track route/peer/config risk in the deploy runbook, not the strategy cap flow. |
+| `solana_meteora_alpha_vault` | Post-deploy Meteora entitlement (bundled in `vault_full_deploy`) | Operator-provisioned after vault is live; no Phase 3 strategy cap flow. |
 
 Pending Phase 3 strategy features are entitlements only until the activation/provisioning flow produces concrete per-creator strategy addresses. Non-strategy deploy entitlements do not produce strategy cap calldata.
 

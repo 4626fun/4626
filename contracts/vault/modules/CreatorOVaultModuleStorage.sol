@@ -5,8 +5,37 @@ pragma solidity ^0.8.20;
 /// @dev MUST match CreatorOVault's storage layout exactly (including OZ bases).
 /// FIX: I-02 — Layout integrity is verified at deploy time via `setModulesOnce()` which checks
 /// `moduleStorageVersion()`. Upgrades MUST bump MODULE_STORAGE_VERSION if layout changes.
-/// Consider adopting ERC-7201 namespaced storage for structural collision immunity.
+/// Storage-hardening roadmap: `docs/research/ovault-storage-namespacing-rfc.md`.
 abstract contract CreatorOVaultModuleStorage {
+    enum VaultMode {
+        Normal,
+        Suspect
+    }
+
+    enum ImpairmentEpochStatus {
+        None,
+        Tripped,
+        Finalized,
+        Resolved
+    }
+
+    struct ImpairmentEpoch {
+        ImpairmentEpochStatus status;
+        address strategy;
+        address recoveryAsset;
+        uint256 reasonCode;
+        uint256 tripBlock;
+        uint64 trippedAt;
+        uint64 finalizedAt;
+        uint64 resolvedAt;
+        uint256 totalSharesAtTrip;
+        uint256 totalClaimSupply;
+        uint256 excludedBookValue;
+        bytes32 snapshotRoot;
+        uint256 totalRecovered;
+        uint256 totalClaimed;
+    }
+
     // ---------------------------------------------------------------------
     // OpenZeppelin ERC20 storage (v5.4.0)
     // ---------------------------------------------------------------------
@@ -130,5 +159,42 @@ abstract contract CreatorOVaultModuleStorage {
     // misreporting / oracle-poisoned / donation-exposed strategy cannot inflate
     // `totalAssets()` beyond the value governance has explicitly approved.
     mapping(address => uint256) internal strategyMaxAssets;
+
+    // ---------------------------------------------------------------------
+    // v2: governance timelock, TVL fee, valuation auto-disable (appended)
+    // ---------------------------------------------------------------------
+    uint16 internal managementFee;
+    address internal managementFeeRecipient;
+
+    /// @notice Delay before scheduled risk changes execute. 0 = instant (legacy behavior).
+    uint64 internal riskConfigDelay;
+
+    /// @notice Single-flight pending risk update (Morpho-style governance latency).
+    uint8 internal pendingRiskKind;
+    address internal pendingRiskTarget;
+    uint256 internal pendingRiskValue;
+    uint64 internal pendingRiskUnlockTime;
+
+    /// @notice Consecutive unhealthy valuation reports before auto-disable. 0 = disabled.
+    uint8 internal valuationMissThreshold;
+    mapping(address => uint8) internal strategyValuationMisses;
+    mapping(address => uint256) internal sharePermitNonces;
+
+    // ---------------------------------------------------------------------
+    // v3: impairment side-pocket state (appended)
+    // ---------------------------------------------------------------------
+    VaultMode internal vaultMode;
+    uint256 internal activeImpairmentEpoch;
+    uint256 internal nextImpairmentEpochId;
+    uint64 internal impairmentChallengeWindow;
+    mapping(uint256 => ImpairmentEpoch) internal impairmentEpochs;
+    mapping(address => bool) internal strategyImpaired;
+    mapping(uint256 => mapping(address => uint256)) internal impairmentAmountClaimed;
+    mapping(uint256 => mapping(address => bool)) internal impairmentClaimMinted;
+    mapping(uint256 => uint64) internal impairmentRootUnlockTime;
+    mapping(uint256 => bool) internal impairmentRootChallenged;
+    address internal impairmentGuardian;
+    address internal impairmentClaims;
+    address internal impairmentRecoveryEscrow;
 }
 

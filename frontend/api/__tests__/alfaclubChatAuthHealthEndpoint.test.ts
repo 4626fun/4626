@@ -42,6 +42,7 @@ describe('GET /api/v1/alfaclub/chat-auth-health', () => {
       expiresAt: '2026-05-01T13:00:00.000Z',
     })
     readAuthHealthSnapshotMock.mockResolvedValue({
+      dbEnvStaleness: null,
       lastSuccess: {
         at: '2026-05-01T11:55:00.000Z',
         identityTokenExp: '2026-05-01T13:00:00.000Z',
@@ -63,6 +64,8 @@ describe('GET /api/v1/alfaclub/chat-auth-health', () => {
         lastCfChallengeAt: '2026-05-02T23:53:48.000Z',
         consecutiveCfChallenges: 7,
         cfChallengeSustained: true,
+        proxyFallbackDirectCount: 3,
+        lastProxyFallbackDirectAt: '2026-05-13T10:30:00.000Z',
         suppressedSocketAttempts: 11,
         socketBackoffMs: 16_000,
       },
@@ -83,7 +86,7 @@ describe('GET /api/v1/alfaclub/chat-auth-health', () => {
 
   it('returns 503 when CRON_SECRET is not configured', async () => {
     restoreEnv?.()
-    restoreEnv = applyEnv({})
+    restoreEnv = applyEnv({ CRON_SECRET: undefined })
     const req = createMockReq({ method: 'GET' })
     const res = createMockRes()
     await healthHandler(req, res)
@@ -142,6 +145,7 @@ describe('GET /api/v1/alfaclub/chat-auth-health', () => {
 
   it('surfaces an anomalous writer when the snapshot reports one', async () => {
     readAuthHealthSnapshotMock.mockResolvedValueOnce({
+      dbEnvStaleness: null,
       lastSuccess: null,
       lastFailure: null,
       liveChatJwt: {
@@ -161,6 +165,8 @@ describe('GET /api/v1/alfaclub/chat-auth-health', () => {
         lastCfChallengeAt: null,
         consecutiveCfChallenges: 0,
         cfChallengeSustained: false,
+        proxyFallbackDirectCount: 0,
+        lastProxyFallbackDirectAt: null,
         suppressedSocketAttempts: 0,
         socketBackoffMs: 0,
       },

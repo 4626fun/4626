@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / api/\_handlers/v1/agents/identity/\_setAgentWallet
+[4626-web](../../../../../index.md) / api/\_handlers/v1/agents/identity/\_setAgentWallet
 
 # api/\_handlers/v1/agents/identity/\_setAgentWallet
 

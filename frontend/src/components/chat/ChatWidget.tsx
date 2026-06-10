@@ -11,7 +11,7 @@
  * ┌──────────────────────────────────────────┐
  * │  ...page content...                      │
  * │                                          │
- * │   [ChatWindow 1] [ChatWindow 2]          │ ← bottom-left
+ * │          [ChatWindow 2] [ChatWindow 1] [Bar] │ ← bottom-right
  * └──────────────────────────────────────────┘
  */
 
@@ -31,6 +31,7 @@ import {
   resolveDmRecipient,
   type DmRecipientResolution,
 } from '@/lib/xmtp/socialIdentity'
+import { resolveClientAgentXmtpAddressLower } from '@/lib/xmtp/agentXmtpAddress'
 import { resolveDmRoute } from './dmRouting'
 import { ChatBar } from './ChatBar'
 import { ChatWindow } from './ChatWindow'
@@ -41,7 +42,7 @@ import { shouldAutoConnectMessaging } from './autoConnectPolicy'
 import { useChatActivation } from './useChatActivation'
 
 const MAX_OPEN_WINDOWS = 3
-const AGENT_XMTP_ADDRESS = String(import.meta.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim().toLowerCase()
+const CANONICAL_CSW_INBOX_ADDRESS = resolveClientAgentXmtpAddressLower()
 const AGENT_DISPLAY_NAME = String(import.meta.env.VITE_AGENT_DISPLAY_NAME ?? 'akita').trim() || 'akita'
 const XMTP_ENV_LABEL = String(import.meta.env.VITE_XMTP_ENV ?? 'production').trim().toLowerCase() || 'production'
 const DM_PREVIEW_LOOKUP_DEBOUNCE_MS = 450
@@ -93,9 +94,9 @@ type PendingDeepLinkIntent = {
   peerName: string
 }
 
-function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
+function ChatWidgetInner() {
   const { isConnected, address } = useAccount()
-  const { startDm, connect, status, identityAddress } = useXmtp()
+  const { startDm, connect, status, identityAddress, localStateResetRequired } = useXmtp()
 
   const [barExpanded, setBarExpanded] = useState(false)
   const [openWindows, setOpenWindows] = useState<OpenWindow[]>([])
@@ -111,12 +112,13 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
   const [pendingDeepLinkIntent, setPendingDeepLinkIntent] = useState<PendingDeepLinkIntent | null>(null)
   const [pendingOpenRequest, setPendingOpenRequest] = useState<ChatOpenRequest | null>(null)
   const newDmPreviewCacheRef = useRef<Map<string, DmRecipientResolution | null>>(new Map())
+  const newDmInputRef = useRef<HTMLInputElement>(null)
 
   const maybeConnectMessaging = useCallback(() => {
-    if (shouldAutoConnectMessaging(status)) {
-      void connect()
+    if (shouldAutoConnectMessaging(status, { localStateResetRequired })) {
+      void connect('auto')
     }
-  }, [connect, status])
+  }, [connect, localStateResetRequired, status])
 
   const clearChatActionQuery = useCallback(() => {
     if (typeof window === 'undefined') return
@@ -149,10 +151,10 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
     if (!getChatCommandById(actionId)) return
     const maybePeer = String(searchParams.get('chatPeer') ?? '').trim().toLowerCase()
     const peerAddress =
-      /^0x[a-fA-F0-9]{40}$/.test(maybePeer) ? maybePeer : AGENT_XMTP_ADDRESS
+      /^0x[a-fA-F0-9]{40}$/.test(maybePeer) ? maybePeer : CANONICAL_CSW_INBOX_ADDRESS
     if (!/^0x[a-fA-F0-9]{40}$/.test(peerAddress)) return
     const maybeName = String(searchParams.get('chatName') ?? '').trim()
-    const peerName = maybeName || (peerAddress === AGENT_XMTP_ADDRESS
+    const peerName = maybeName || (peerAddress === CANONICAL_CSW_INBOX_ADDRESS
       ? AGENT_DISPLAY_NAME
       : `${peerAddress.slice(0, 6)}…${peerAddress.slice(-4)}`)
     setPendingDeepLinkIntent({
@@ -197,6 +199,10 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
   }, [isMobile])
 
   const processOpenRequest = useCallback(async (request: ChatOpenRequest) => {
+    if (!isMobile) {
+      setBarExpanded(true)
+    }
+
     if (request.kind === 'group') {
       handleOpenChat({
         id: request.conversationId,
@@ -226,7 +232,7 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
       unreadCount: 0,
       seedCommandId: request.seedCommandId ?? null,
     } as ChatConversation)
-  }, [handleOpenChat, startDm])
+  }, [handleOpenChat, isMobile, startDm])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -237,7 +243,7 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
 
       if (detail.kind === 'dm' && status !== 'connected') {
         setPendingOpenRequest(detail)
-        void connect()
+        void connect('user')
         return
       }
 
@@ -257,7 +263,7 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
 
   useEffect(() => {
     if (!pendingOpenRequest || status !== 'idle' || !isConnected) return
-    void connect()
+    void connect('user')
   }, [connect, isConnected, pendingOpenRequest, status])
 
   useEffect(() => {
@@ -279,7 +285,7 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
       let targetPeerAddress = pendingDeepLinkIntent.peerAddress as `0x${string}`
       let dmResult = await startDm(targetPeerAddress)
       if (!dmResult.ok && dmResult.reason === 'self_recipient') {
-        const agentAddress = normalizeEvmAddress(AGENT_XMTP_ADDRESS)
+        const agentAddress = normalizeEvmAddress(CANONICAL_CSW_INBOX_ADDRESS)
         if (agentAddress && agentAddress !== targetPeerAddress) {
           targetPeerAddress = agentAddress
           dmResult = await startDm(agentAddress, { nameHint: AGENT_DISPLAY_NAME })
@@ -289,7 +295,7 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
       handleOpenChat({
         id: dmResult.conversationId,
         type: 'dm',
-        name: targetPeerAddress === AGENT_XMTP_ADDRESS
+        name: targetPeerAddress === CANONICAL_CSW_INBOX_ADDRESS
           ? AGENT_DISPLAY_NAME
           : pendingDeepLinkIntent.peerName,
         peerAddress: targetPeerAddress,
@@ -346,6 +352,11 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
     window.addEventListener(CHAT_NEW_DM_REQUEST_EVENT, handleNewDmRequest)
     return () => window.removeEventListener(CHAT_NEW_DM_REQUEST_EVENT, handleNewDmRequest)
   }, [handleNewDm, maybeConnectMessaging])
+
+  useEffect(() => {
+    if (!showNewDm) return
+    newDmInputRef.current?.focus()
+  }, [showNewDm])
 
   useEffect(() => {
     if (!showNewDm) return
@@ -409,12 +420,12 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
     setNewDmNotice('')
     setNewDmLoading(true)
     try {
-      const agentAddress = normalizeEvmAddress(AGENT_XMTP_ADDRESS)
+      const agentAddress = normalizeEvmAddress(CANONICAL_CSW_INBOX_ADDRESS)
       const routeDecision = resolveDmRoute({
         recipient: resolved,
         identityAddress,
         connectedAddress: address,
-        agentAddress: AGENT_XMTP_ADDRESS,
+        agentAddress: CANONICAL_CSW_INBOX_ADDRESS,
         agentDisplayName: AGENT_DISPLAY_NAME,
       })
       let destination = routeDecision.recipient
@@ -523,7 +534,7 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
         )}
 
         {!showMobileBar && !activeMobileWindow && (
-          <div className="absolute bottom-20 left-4 pointer-events-auto">
+          <div className="absolute bottom-20 right-4 pointer-events-auto">
             <ChatBar
               expanded={false}
               variant="mobile"
@@ -538,13 +549,7 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
         )}
       </div>
 
-      <div
-        className={`fixed bottom-4 z-50 hidden items-end gap-3 pointer-events-none transition-[left] duration-200 md:flex motion-reduce:transition-none ${
-          props.availabilityRailExpanded
-            ? 'left-[calc(1rem+320px+0.75rem)] xl:left-[calc(1rem+336px+0.75rem)]'
-            : 'left-5'
-        }`}
-      >
+      <div className="fixed bottom-4 right-5 z-50 hidden items-end gap-3 pointer-events-none md:flex md:flex-row-reverse">
         <div className="pointer-events-auto motion-safe:animate-slide-up">
           <ChatBar
             expanded={barExpanded}
@@ -558,7 +563,7 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
           />
         </div>
 
-        {/* Chat windows — stack from left to right, beside the bottom dock. */}
+        {/* Chat windows — stack leftward from the bottom-right dock. */}
         {openWindows.map((win) => (
           <div key={win.id} className="pointer-events-auto motion-safe:animate-slide-up">
             <ChatWindow
@@ -596,8 +601,12 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs text-zinc-400">Recipient address or Basename</label>
+              <label htmlFor="chat-new-dm-recipient" className="text-xs text-zinc-400">
+                Recipient address or Basename
+              </label>
               <input
+                id="chat-new-dm-recipient"
+                ref={newDmInputRef}
                 type="text"
                 value={newDmAddress}
                 onChange={(e) => {
@@ -608,7 +617,6 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
                 onKeyDown={(e) => { if (e.key === 'Enter') void handleStartDm() }}
                 placeholder="0x... or akita"
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-brand-primary/40 font-mono"
-                autoFocus
               />
               {showBasenameAutocomplete && basenameAutocomplete && (
                 <button
@@ -688,7 +696,7 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
  * Chat widget dock. The app layout owns the XMTP provider so directory pages,
  * the availability rail, and the dock all share one client.
  */
-export function ChatWidget(props: { initiallyActivated?: boolean; availabilityRailExpanded?: boolean } = {}) {
+export function ChatWidget(props: { initiallyActivated?: boolean } = {}) {
   const { chatActivated, setChatActivated } = useChatActivation({ initiallyActivated: props.initiallyActivated })
 
   if (!chatActivated) {
@@ -701,5 +709,5 @@ export function ChatWidget(props: { initiallyActivated?: boolean; availabilityRa
     )
   }
 
-  return <ChatWidgetInner availabilityRailExpanded={props.availabilityRailExpanded} />
+  return <ChatWidgetInner />
 }

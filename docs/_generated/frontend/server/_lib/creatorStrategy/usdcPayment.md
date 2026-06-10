@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/creatorStrategy/usdcPayment
+[4626-web](../../../index.md) / server/\_lib/creatorStrategy/usdcPayment
 
 # server/\_lib/creatorStrategy/usdcPayment
 
@@ -46,7 +46,7 @@ Defined in: [server/\_lib/creatorStrategy/usdcPayment.ts:36](https://github.com/
 
 ### resolveProtocolTreasuryForUsdcPayments()
 
-> **resolveProtocolTreasuryForUsdcPayments**(): `` `0x${string}` ``
+> **resolveProtocolTreasuryForUsdcPayments**(): `string`
 
 Defined in: [server/\_lib/creatorStrategy/usdcPayment.ts:176](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/usdcPayment.ts#L176)
 
@@ -57,7 +57,7 @@ destination.
 
 #### Returns
 
-`` `0x${string}` ``
+`string`
 
 ***
 

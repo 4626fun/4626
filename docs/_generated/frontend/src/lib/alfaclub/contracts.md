@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/alfaclub/contracts
+[4626-web](../../../index.md) / src/lib/alfaclub/contracts
 
 # src/lib/alfaclub/contracts
 
@@ -38,15 +38,15 @@ Defined in: [src/lib/alfaclub/contracts.ts:3](https://github.com/wenakita/4626/b
 
 ##### friendKey
 
-> `readonly` **friendKey**: `` `0x${string}` ``
+> `readonly` **friendKey**: `string`
 
 ##### friendPool
 
-> `readonly` **friendPool**: `` `0x${string}` ``
+> `readonly` **friendPool**: `string`
 
 ##### friendStakeBeacon
 
-> `readonly` **friendStakeBeacon**: `` `0x${string}` ``
+> `readonly` **friendStakeBeacon**: `string`
 
 ***
 

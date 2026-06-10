@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/wallet/spendPermission
+[4626-web](../../../index.md) / server/\_lib/wallet/spendPermission
 
 # server/\_lib/wallet/spendPermission
 
@@ -133,7 +133,7 @@ approve-first-then-spend transition atomically.
 
 ###### manager
 
-`` `0x${string}` ``
+`string`
 
 ###### permission
 
@@ -228,7 +228,7 @@ Defined in: [server/\_lib/wallet/spendPermission.ts:51](https://github.com/wenak
 
 ##### verifyingContract
 
-> **verifyingContract**: `` `0x${string}` ``
+> **verifyingContract**: `string`
 
 ##### version
 

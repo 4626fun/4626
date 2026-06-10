@@ -24,6 +24,7 @@ import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorO
 ///   PRIVATE_KEY=...
 ///   REGISTRY=...
 ///   PROTOCOL_TREASURY=...
+///   PROTOCOL_AUTOMATION=...   (hot Safe — Charm vault manager)
 ///   POOL_MANAGER=...
 ///   TAX_HOOK=...
 ///   CHAINLINK_ETH_USD=...
@@ -45,8 +46,9 @@ import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorO
 ///   CONFIGURE_OVAULT_RUNTIME=1
 ///   OVAULT_HUB_COMPOSER=...
 ///   OVAULT_SOLANA_EID=30168
-///
-/// Optional salt overrides (for fresh infra epochs):
+/// Optional default ShareOFT mesh peer (requires broadcaster == protocolTreasury):
+///   CONFIGURE_SOLANA_SHARE_OFT_PEER=1
+///   SOLANA_SHARE_OFT_PEER=0x<32-byte-solana-share-mesh-peer>
 ///   INFRA_STORE_SALT or INFRA_STORE_SALT_TAG
 ///   INFRA_DEPLOYER_FROM_STORE_SALT or INFRA_DEPLOYER_FROM_STORE_SALT_TAG
 ///   INFRA_VAULT_CORE_MODULE_SALT or INFRA_VAULT_CORE_MODULE_SALT_TAG
@@ -61,7 +63,7 @@ contract DeployBaseMainnetDeployer is Script {
     // - raw bytes32: INFRA_*_SALT
     // - string tag (hashed with keccak256): INFRA_*_SALT_TAG
     // - shared epoch: DEPLOYMENT_EPOCH_TAG
-    string constant DEFAULT_DEPLOYMENT_EPOCH_TAG = "v1.11.0";
+    string constant DEFAULT_DEPLOYMENT_EPOCH_TAG = "v1.13.0";
     string constant STORE_SALT_TAG_PREFIX = "base-release:UniversalBytecodeStore:";
     string constant DEPLOYER_FROM_STORE_SALT_TAG_PREFIX = "base-release:UniversalCreate2DeployerFromStore:";
 
@@ -72,15 +74,20 @@ contract DeployBaseMainnetDeployer is Script {
 
     // DeploymentBatcher salt (constructor args are chain-specific ⇒ address is chain-specific).
     string constant DEPLOYMENT_BATCHER_SALT_TAG_PREFIX = "base-release:DeploymentBatcher:";
+    string constant PHASE2_MODULE_SALT_TAG_PREFIX = "base-release:DeploymentBatcherPhase2Module:";
+    string constant PHASE1_MODULE_SALT_TAG_PREFIX = "base-release:DeploymentBatcherPhase1Module:";
+    string constant PHASE3_HELPER_SALT_TAG_PREFIX = "base-release:DeploymentBatcherPhase3Helper:";
+    string constant UNIV4_HELPER_SALT_TAG_PREFIX = "base-release:DeploymentBatcherUniV4Helper:";
+    string constant UTILS_HELPER_SALT_TAG_PREFIX = "base-release:DeploymentBatcherUtilsHelper:";
 
     // Live Base mainnet fallback defaults — overridden by shared/global handoff during fresh epochs.
-    address constant DEFAULT_REGISTRY = 0xa6216Ea21f4a4d190EdD453A51e4e015A44e60C4;
+    address constant DEFAULT_REGISTRY = 0x3f64087dc361Ad52300409E5873b26941D6418B6;
     address constant DEFAULT_PROTOCOL_TREASURY = 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3;
     address constant DEFAULT_POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     address constant DEFAULT_TAX_HOOK = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
     address constant DEFAULT_CHAINLINK_ETH_USD = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
-    address constant DEFAULT_VAULT_ACTIVATION_BATCHER = 0x681DC69607f6E8848a56819ce8C6d591E764187a;
-    address constant DEFAULT_LOTTERY_MANAGER = 0x04CADE6FDf564A5005FF80930d8e8784cb1A7Cf8;
+    address constant DEFAULT_VAULT_ACTIVATION_BATCHER = 0x5036FB536f53b15307825eB2006B21E22f0F3193;
+    address constant DEFAULT_LOTTERY_MANAGER = 0x5c0115589d7F4930A0dc93417aE409f44186f4E7;
     address constant DEFAULT_PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
     address constant DEFAULT_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address constant DEFAULT_UNISWAP_V3_FACTORY = 0x33128a8fC17869897dcE68Ed026d694621f6FDfD;
@@ -90,6 +97,7 @@ contract DeployBaseMainnetDeployer is Script {
     struct Config {
         address registry;
         address protocolTreasury;
+        address protocolAutomation;
         address poolManager;
         address taxHook;
         address chainlinkEthUsd;
@@ -105,6 +113,7 @@ contract DeployBaseMainnetDeployer is Script {
         bytes32 solanaDestination;
         address ovaultHubComposer;
         uint32 ovaultSolanaEid;
+        bytes32 solanaShareOftPeer;
     }
 
     struct SaltConfig {
@@ -113,6 +122,11 @@ contract DeployBaseMainnetDeployer is Script {
         bytes32 vaultCoreModule;
         bytes32 vaultStrategiesModule;
         bytes32 vaultAdminModule;
+        bytes32 phase2Module;
+        bytes32 phase1Module;
+        bytes32 phase3Helper;
+        bytes32 uniV4Helper;
+        bytes32 utilsHelper;
         bytes32 deploymentBatcher;
     }
 
@@ -122,6 +136,11 @@ contract DeployBaseMainnetDeployer is Script {
         address vaultCoreModule;
         address vaultStrategiesModule;
         address vaultAdminModule;
+        address phase2Module;
+        address phase1Module;
+        address phase3Helper;
+        address uniV4Helper;
+        address utilsHelper;
         address deploymentBatcher;
     }
 
@@ -143,6 +162,230 @@ contract DeployBaseMainnetDeployer is Script {
         return keccak256(bytes(tag));
     }
 
+    // Shell initcode ~53KB ⇒ ~10.6M deposit + constructor; keep under Base 25M tx cap (~24.8M stipend).
+    uint256 constant DEFAULT_DEPLOYMENT_BATCHER_CREATE2_GAS = 20_000_000;
+
+    function _predictBatcherShellAddress(
+        Config memory cfg,
+        bytes32 batcherSalt,
+        address storeAddr,
+        address create2DeployerAddr,
+        address coreModuleAddr,
+        address strategiesModuleAddr,
+        address adminModuleAddr
+    ) internal pure returns (address) {
+        bytes memory batcherInit = _buildBatcherInit(
+            cfg,
+            storeAddr,
+            create2DeployerAddr,
+            coreModuleAddr,
+            strategiesModuleAddr,
+            adminModuleAddr,
+            address(0),
+            address(0),
+            address(0),
+            address(0)
+        );
+        return _create2(CREATE2_FACTORY_ADDR, batcherSalt, keccak256(batcherInit));
+    }
+
+    function _helpersWired(DeploymentBatcher deployer) internal view returns (bool) {
+        return address(deployer.phase1Module()) != address(0) && address(deployer.phase2Module()) != address(0)
+            && address(deployer.phase3Helper()) != address(0) && address(deployer.uniV4Helper()) != address(0)
+            && address(deployer.utilsHelper()) != address(0);
+    }
+
+    function _deploymentBatcherCreate2Gas() internal returns (uint256) {
+        return vm.envOr("DEPLOYMENT_BATCHER_CREATE2_GAS", DEFAULT_DEPLOYMENT_BATCHER_CREATE2_GAS);
+    }
+
+    function _deployCreate2IfMissing(bytes32 salt, bytes memory initCode) internal {
+        address predicted = _create2(CREATE2_FACTORY_ADDR, salt, keccak256(initCode));
+        if (predicted.code.length == 0) {
+            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(salt, initCode));
+            require(ok, "CREATE2 deploy failed");
+        }
+    }
+
+    function _buildPhase2ModuleInit(Config memory cfg, address create2DeployerAddr, address batcherAddr)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return abi.encodePacked(
+            type(DeploymentBatcherPhase2Module).creationCode,
+            abi.encode(
+                create2DeployerAddr,
+                cfg.registry,
+                cfg.chainlinkEthUsd,
+                cfg.poolManager,
+                cfg.taxHook,
+                cfg.protocolTreasury,
+                cfg.lotteryManager,
+                cfg.vaultActivationBatcher,
+                batcherAddr
+            )
+        );
+    }
+
+    function _buildPhase1ModuleInit(
+        Config memory cfg,
+        address create2DeployerAddr,
+        address storeAddr,
+        address coreModuleAddr,
+        address strategiesModuleAddr,
+        address adminModuleAddr,
+        address utilsHelperAddr,
+        address batcherAddr
+    ) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            type(DeploymentBatcherPhase1Module).creationCode,
+            abi.encode(
+                create2DeployerAddr,
+                storeAddr,
+                cfg.registry,
+                coreModuleAddr,
+                strategiesModuleAddr,
+                adminModuleAddr,
+                cfg.vaultActivationBatcher,
+                utilsHelperAddr,
+                batcherAddr
+            )
+        );
+    }
+
+    function _buildPhase3HelperInit(Config memory cfg, address create2DeployerAddr, address batcherAddr)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return abi.encodePacked(
+            type(DeploymentBatcherPhase3Helper).creationCode,
+            abi.encode(
+                create2DeployerAddr,
+                cfg.protocolTreasury,
+                cfg.protocolAutomation,
+                cfg.usdc,
+                cfg.uniswapV3Factory,
+                cfg.uniswapRouter,
+                cfg.ajnaFactory,
+                batcherAddr
+            )
+        );
+    }
+
+    function _buildUniV4HelperInit(Config memory cfg, address create2DeployerAddr, address batcherAddr)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return abi.encodePacked(
+            type(DeploymentBatcherUniV4Helper).creationCode,
+            abi.encode(create2DeployerAddr, cfg.poolManager, cfg.permit2, batcherAddr)
+        );
+    }
+
+    function _buildUtilsHelperInit() internal pure returns (bytes memory) {
+        return type(DeploymentBatcherUtilsHelper).creationCode;
+    }
+
+    function _buildBatcherInit(
+        Config memory cfg,
+        address storeAddr,
+        address create2DeployerAddr,
+        address coreModuleAddr,
+        address strategiesModuleAddr,
+        address adminModuleAddr,
+        address phase2ModuleAddr,
+        address phase3HelperAddr,
+        address uniV4HelperAddr,
+        address utilsHelperAddr
+    ) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            type(DeploymentBatcher).creationCode,
+            abi.encode(
+                cfg.registry,
+                storeAddr,
+                create2DeployerAddr,
+                cfg.protocolTreasury,
+                cfg.protocolAutomation,
+                cfg.poolManager,
+                cfg.taxHook,
+                cfg.chainlinkEthUsd,
+                cfg.vaultActivationBatcher,
+                cfg.lotteryManager,
+                cfg.permit2,
+                cfg.usdc,
+                cfg.uniswapV3Factory,
+                cfg.uniswapRouter,
+                cfg.ajnaFactory,
+                coreModuleAddr,
+                strategiesModuleAddr,
+                adminModuleAddr,
+                phase2ModuleAddr,
+                phase3HelperAddr,
+                uniV4HelperAddr,
+                utilsHelperAddr
+            )
+        );
+    }
+
+    function _resolvePredictedBundle(
+        Config memory cfg,
+        SaltConfig memory salts,
+        address storeAddr,
+        address create2DeployerAddr,
+        address coreModuleAddr,
+        address strategiesModuleAddr,
+        address adminModuleAddr
+    ) internal pure returns (PredictedAddresses memory predicted) {
+        predicted.store = storeAddr;
+        predicted.deployerFromStore = create2DeployerAddr;
+        predicted.vaultCoreModule = coreModuleAddr;
+        predicted.vaultStrategiesModule = strategiesModuleAddr;
+        predicted.vaultAdminModule = adminModuleAddr;
+
+        bytes memory utilsInit = _buildUtilsHelperInit();
+        predicted.utilsHelper = _create2(CREATE2_FACTORY_ADDR, salts.utilsHelper, keccak256(utilsInit));
+
+        predicted.deploymentBatcher = _predictBatcherShellAddress(
+            cfg, salts.deploymentBatcher, storeAddr, create2DeployerAddr, coreModuleAddr, strategiesModuleAddr, adminModuleAddr
+        );
+
+        address batcherAddr = predicted.deploymentBatcher;
+        predicted.phase2Module = _create2(
+            CREATE2_FACTORY_ADDR,
+            salts.phase2Module,
+            keccak256(_buildPhase2ModuleInit(cfg, create2DeployerAddr, batcherAddr))
+        );
+        predicted.phase3Helper = _create2(
+            CREATE2_FACTORY_ADDR,
+            salts.phase3Helper,
+            keccak256(_buildPhase3HelperInit(cfg, create2DeployerAddr, batcherAddr))
+        );
+        predicted.uniV4Helper = _create2(
+            CREATE2_FACTORY_ADDR,
+            salts.uniV4Helper,
+            keccak256(_buildUniV4HelperInit(cfg, create2DeployerAddr, batcherAddr))
+        );
+        predicted.phase1Module = _create2(
+            CREATE2_FACTORY_ADDR,
+            salts.phase1Module,
+            keccak256(
+                _buildPhase1ModuleInit(
+                    cfg,
+                    create2DeployerAddr,
+                    storeAddr,
+                    coreModuleAddr,
+                    strategiesModuleAddr,
+                    adminModuleAddr,
+                    predicted.utilsHelper,
+                    batcherAddr
+                )
+            )
+        );
+    }
+
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address broadcaster = vm.addr(pk);
@@ -150,12 +393,18 @@ contract DeployBaseMainnetDeployer is Script {
         Config memory cfg;
         cfg.registry = vm.envOr("REGISTRY", DEFAULT_REGISTRY);
         cfg.protocolTreasury = vm.envOr("PROTOCOL_TREASURY", DEFAULT_PROTOCOL_TREASURY);
+        address protocolAutomation = vm.envOr("PROTOCOL_AUTOMATION", address(0));
+        if (protocolAutomation == address(0)) {
+            protocolAutomation = vm.envOr("PROTOCOL_AUTOMATION_SAFE", address(0));
+        }
+        require(protocolAutomation != address(0), "PROTOCOL_AUTOMATION or PROTOCOL_AUTOMATION_SAFE required");
+        cfg.protocolAutomation = protocolAutomation;
         cfg.poolManager = vm.envOr("POOL_MANAGER", DEFAULT_POOL_MANAGER);
         cfg.taxHook = vm.envOr("TAX_HOOK", DEFAULT_TAX_HOOK);
         cfg.chainlinkEthUsd = vm.envOr("CHAINLINK_ETH_USD", DEFAULT_CHAINLINK_ETH_USD);
         cfg.vaultActivationBatcher = vm.envOr("VAULT_ACTIVATION_BATCHER", DEFAULT_VAULT_ACTIVATION_BATCHER);
         cfg.lotteryManager = vm.envOr("LOTTERY_MANAGER", DEFAULT_LOTTERY_MANAGER);
-        require(cfg.lotteryManager != address(0), "LOTTERY_MANAGER required for v1.11.0+");
+        require(cfg.lotteryManager != address(0), "LOTTERY_MANAGER required for v1.11.1+");
         cfg.permit2 = vm.envOr("PERMIT2", DEFAULT_PERMIT2);
         cfg.usdc = vm.envOr("USDC", DEFAULT_USDC);
         cfg.uniswapV3Factory = vm.envOr("UNISWAP_V3_FACTORY", DEFAULT_UNISWAP_V3_FACTORY);
@@ -166,8 +415,10 @@ contract DeployBaseMainnetDeployer is Script {
         cfg.solanaDestination = vm.envOr("SOLANA_DESTINATION", bytes32(0));
         cfg.ovaultHubComposer = vm.envOr("OVAULT_HUB_COMPOSER", address(0));
         cfg.ovaultSolanaEid = uint32(vm.envOr("OVAULT_SOLANA_EID", uint256(0)));
+        cfg.solanaShareOftPeer = vm.envOr("SOLANA_SHARE_OFT_PEER", bytes32(0));
         bool configureSolana = vm.envOr("CONFIGURE_SOLANA", uint256(0)) == 1;
         bool configureOvaultRuntime = vm.envOr("CONFIGURE_OVAULT_RUNTIME", uint256(0)) == 1;
+        bool configureSolanaShareOftPeer = vm.envOr("CONFIGURE_SOLANA_SHARE_OFT_PEER", uint256(0)) == 1;
         SaltConfig memory salts;
         salts.store = _saltFromEnvOrEpoch("INFRA_STORE_SALT", "INFRA_STORE_SALT_TAG", STORE_SALT_TAG_PREFIX);
         salts.deployerFromStore = _saltFromEnvOrEpoch(
@@ -187,6 +438,21 @@ contract DeployBaseMainnetDeployer is Script {
             "INFRA_VAULT_ADMIN_MODULE_SALT",
             "INFRA_VAULT_ADMIN_MODULE_SALT_TAG",
             VAULT_ADMIN_MODULE_SALT_TAG_PREFIX
+        );
+        salts.phase2Module = _saltFromEnvOrEpoch(
+            "INFRA_PHASE2_MODULE_SALT", "INFRA_PHASE2_MODULE_SALT_TAG", PHASE2_MODULE_SALT_TAG_PREFIX
+        );
+        salts.phase1Module = _saltFromEnvOrEpoch(
+            "INFRA_PHASE1_MODULE_SALT", "INFRA_PHASE1_MODULE_SALT_TAG", PHASE1_MODULE_SALT_TAG_PREFIX
+        );
+        salts.phase3Helper = _saltFromEnvOrEpoch(
+            "INFRA_PHASE3_HELPER_SALT", "INFRA_PHASE3_HELPER_SALT_TAG", PHASE3_HELPER_SALT_TAG_PREFIX
+        );
+        salts.uniV4Helper = _saltFromEnvOrEpoch(
+            "INFRA_UNIV4_HELPER_SALT", "INFRA_UNIV4_HELPER_SALT_TAG", UNIV4_HELPER_SALT_TAG_PREFIX
+        );
+        salts.utilsHelper = _saltFromEnvOrEpoch(
+            "INFRA_UTILS_HELPER_SALT", "INFRA_UTILS_HELPER_SALT_TAG", UTILS_HELPER_SALT_TAG_PREFIX
         );
         salts.deploymentBatcher = _saltFromEnvOrEpoch(
             "INFRA_DEPLOYMENT_BATCHER_SALT",
@@ -238,30 +504,15 @@ contract DeployBaseMainnetDeployer is Script {
         console2.log("CreatorOVaultStrategiesModule (predicted):", strategiesModuleAddr);
         console2.log("CreatorOVaultAdminModule (predicted):", adminModuleAddr);
 
-        // Predict deterministic address for the phased deployer.
-        bytes memory deployerArgs = abi.encode(
-            cfg.registry,
-            storeAddr,
-            create2DeployerAddr,
-            cfg.protocolTreasury,
-            cfg.poolManager,
-            cfg.taxHook,
-            cfg.chainlinkEthUsd,
-            cfg.vaultActivationBatcher,
-            cfg.lotteryManager,
-            cfg.permit2,
-            cfg.usdc,
-            cfg.uniswapV3Factory,
-            cfg.uniswapRouter,
-            cfg.ajnaFactory,
-            coreModuleAddr,
-            strategiesModuleAddr,
-            adminModuleAddr,
-            address(0)
+        predicted = _resolvePredictedBundle(
+            cfg, salts, storeAddr, create2DeployerAddr, coreModuleAddr, strategiesModuleAddr, adminModuleAddr
         );
-        bytes memory deployerInit = abi.encodePacked(type(DeploymentBatcher).creationCode, deployerArgs);
-        address deployerAddr = _create2(CREATE2_FACTORY_ADDR, salts.deploymentBatcher, keccak256(deployerInit));
-        predicted.deploymentBatcher = deployerAddr;
+        address deployerAddr = predicted.deploymentBatcher;
+        console2.log("DeploymentBatcherUtilsHelper (predicted):", predicted.utilsHelper);
+        console2.log("DeploymentBatcherPhase2Module (predicted):", predicted.phase2Module);
+        console2.log("DeploymentBatcherPhase1Module (predicted):", predicted.phase1Module);
+        console2.log("DeploymentBatcherPhase3Helper (predicted):", predicted.phase3Helper);
+        console2.log("DeploymentBatcherUniV4Helper (predicted):", predicted.uniV4Helper);
         console2.log("DeploymentBatcher (predicted):", deployerAddr);
 
         if (cfg.create2FromStoreOwner != broadcaster) {
@@ -296,18 +547,73 @@ contract DeployBaseMainnetDeployer is Script {
             require(ok, "VAULT_ADMIN_MODULE deploy failed");
         }
 
-        // Deploy phased deployer (if missing).
+        // Pre-deploy batcher helpers in separate txs to stay under Base's 25M per-tx gas cap.
+        _deployCreate2IfMissing(salts.utilsHelper, _buildUtilsHelperInit());
+        _deployCreate2IfMissing(
+            salts.phase2Module, _buildPhase2ModuleInit(cfg, create2DeployerAddr, deployerAddr)
+        );
+        _deployCreate2IfMissing(
+            salts.phase3Helper, _buildPhase3HelperInit(cfg, create2DeployerAddr, deployerAddr)
+        );
+        _deployCreate2IfMissing(
+            salts.uniV4Helper, _buildUniV4HelperInit(cfg, create2DeployerAddr, deployerAddr)
+        );
+        _deployCreate2IfMissing(
+            salts.phase1Module,
+            _buildPhase1ModuleInit(
+                cfg,
+                create2DeployerAddr,
+                storeAddr,
+                coreModuleAddr,
+                strategiesModuleAddr,
+                adminModuleAddr,
+                predicted.utilsHelper,
+                deployerAddr
+            )
+        );
+
+        // Deploy phased deployer shell (if missing) — helpers are wired post-deploy via Safe setters.
         if (deployerAddr.code.length == 0) {
-            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(salts.deploymentBatcher, deployerInit));
+            bytes memory deployerInit = _buildBatcherInit(
+                cfg,
+                storeAddr,
+                create2DeployerAddr,
+                coreModuleAddr,
+                strategiesModuleAddr,
+                adminModuleAddr,
+                address(0),
+                address(0),
+                address(0),
+                address(0)
+            );
+            uint256 batcherCreate2Gas = _deploymentBatcherCreate2Gas();
+            console2.log("DeploymentBatcher CREATE2 gas stipend:", batcherCreate2Gas);
+            (bool ok,) = CREATE2_FACTORY_ADDR.call{gas: batcherCreate2Gas}(
+                abi.encodePacked(salts.deploymentBatcher, deployerInit)
+            );
             require(ok, "DEPLOYMENT_BATCHER deploy failed");
         }
 
-        // Authorize deploy-capable callers on the create2 deployer.
-        // - DeploymentBatcher (phase1/phase2/deferred auction)
-        // - Phase3 helper (external helper contract that performs CREATE2 deploys)
-        // - UniV4 helper (external helper contract that performs CREATE2 deploys)
+        // Authorize deploy-capable callers on the create2 deployer (after helpers are wired).
         UniversalCreate2DeployerFromStore create2Deployer = UniversalCreate2DeployerFromStore(create2DeployerAddr);
         DeploymentBatcher deployer = DeploymentBatcher(deployerAddr);
+
+        vm.stopBroadcast();
+
+        if (!_helpersWired(deployer)) {
+            console2.log("HELPERS_NOT_WIRED: execute protocolTreasury Safe wiring before authorize:");
+            console2.log(string.concat("  wireDeploymentHelpers("));
+            console2.log(string.concat("    ", vm.toString(predicted.phase2Module), ","));
+            console2.log(string.concat("    ", vm.toString(predicted.phase3Helper), ","));
+            console2.log(string.concat("    ", vm.toString(predicted.uniV4Helper), ","));
+            console2.log(string.concat("    ", vm.toString(predicted.utilsHelper)));
+            console2.log("  )");
+            console2.log(string.concat("  setPhase1Module(", vm.toString(predicted.phase1Module), ")"));
+            console2.log(string.concat("HANDOFF:WIRE_BATCHER_HELPERS_BATCHER=", vm.toString(deployerAddr)));
+            return;
+        }
+
+        vm.startBroadcast(pk);
         address[3] memory requiredDeployers = [
             deployerAddr,
             address(deployer.phase3Helper()),
@@ -319,7 +625,6 @@ contract DeployBaseMainnetDeployer is Script {
                 create2Deployer.setAuthorizedDeployer(deployerCaller, true);
             }
         }
-
         vm.stopBroadcast();
 
         // Minimal sanity checks (read-only).
@@ -396,6 +701,26 @@ contract DeployBaseMainnetDeployer is Script {
             }
         } else {
             console2.log("CONFIGURE_OVAULT_RUNTIME=0 (skipped setOVaultRuntimeConfig)");
+        }
+
+        if (configureSolanaShareOftPeer) {
+            require(cfg.solanaShareOftPeer != bytes32(0), "SOLANA_SHARE_OFT_PEER required");
+            if (broadcaster != cfg.protocolTreasury) {
+                console2.log(
+                    "CONFIGURE_SOLANA_SHARE_OFT_PEER=1 but broadcaster != protocolTreasury; skipping setSolanaShareOftPeer"
+                );
+            } else {
+                if (deployer.solanaShareOftPeer() != cfg.solanaShareOftPeer) {
+                    vm.startBroadcast(pk);
+                    deployer.setSolanaShareOftPeer(cfg.solanaShareOftPeer);
+                    vm.stopBroadcast();
+                }
+                require(deployer.solanaShareOftPeer() == cfg.solanaShareOftPeer, "Solana ShareOFT peer mismatch");
+                console2.logBytes32(cfg.solanaShareOftPeer);
+                console2.log("Solana ShareOFT default peer configured");
+            }
+        } else {
+            console2.log("CONFIGURE_SOLANA_SHARE_OFT_PEER=0 (skipped setSolanaShareOftPeer)");
         }
     }
 }

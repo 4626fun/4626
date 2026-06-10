@@ -5,7 +5,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import '@4626/brand-kit/styles'
 import './index.css'
 
-import { AppLoadingState } from '@/components/layout/AppLoadingState'
+import { AppLoadingOverlay, AppLoadingProvider, AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { TelegramMiniAppUnavailable } from '@/components/telegram/TelegramMiniAppUnavailable'
 import { useTelegramMiniAppEntryStatus } from '@/hooks/useTelegramMiniAppEntryStatus'
 import { TelegramLinkPrivyProvider } from '@/lib/privy/telegramLinkClient'
@@ -21,7 +21,7 @@ function TelegramLinkStandaloneApp() {
   }
 
   if (entryStatus === 'checking') {
-    return <AppLoadingState intent="session" />
+    return <AppLoadingRegistrar />
   }
 
   return (
@@ -33,11 +33,14 @@ function TelegramLinkStandaloneRoot() {
   return (
     <ThemeProvider>
       <TelegramLinkPrivyProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="*" element={<TelegramLinkStandaloneApp />} />
-          </Routes>
-        </BrowserRouter>
+        <AppLoadingProvider>
+          <BrowserRouter>
+            <AppLoadingOverlay />
+            <Routes>
+              <Route path="*" element={<TelegramLinkStandaloneApp />} />
+            </Routes>
+          </BrowserRouter>
+        </AppLoadingProvider>
       </TelegramLinkPrivyProvider>
     </ThemeProvider>
   )

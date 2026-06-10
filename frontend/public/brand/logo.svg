@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">4626.fun logo</title>
+  <desc id="desc">Black rounded-square icon containing a white geometric 4 mark.</desc>
+  <rect x="123" y="123" width="778" height="778" rx="74" fill="#000000"/>
+  <g fill="#ffffff">
+    <rect x="330" y="281" width="121" height="330" rx="20"/>
+    <rect x="330" y="505" width="377" height="106" rx="20"/>
+    <rect x="586" y="281" width="121" height="474" rx="20"/>
+  </g>
+</svg>

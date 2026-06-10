@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / api/\_handlers/deploy/v2/session/\_dryRunCore
+[4626-web](../../../../../index.md) / api/\_handlers/deploy/v2/session/\_dryRunCore
 
 # api/\_handlers/deploy/v2/session/\_dryRunCore
 
@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/deploy/v2/session/\_dryRunCore.ts:510](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_dryRunCore.ts#L510)
+Defined in: [api/\_handlers/deploy/v2/session/\_dryRunCore.ts:2014](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_dryRunCore.ts#L2014)
 
 #### Parameters
 

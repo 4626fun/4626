@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
 
+import { Button } from '@/components/ui/Button'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { STORY_CONTENT } from '@/features/home/vault-flow/model/storyContent'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
@@ -25,7 +26,7 @@ const MECHANIC_ROWS = [
 
 export function DistributeCcaLaunch() {
   return (
-    <div className="relative min-h-screen">
+    <div className="relative min-h-0 w-full bg-transparent">
       <PageMeta
         title="CCA Launch Distribution · 4626.fun"
         description={`${CCA_AMOUNT} ${SHARE_TOKEN} (${CCA_PERCENT} of the minted supply) is allocated to a weekly Uniswap CCA auction for market price discovery.`}
@@ -91,7 +92,7 @@ export function DistributeCcaLaunch() {
             >
               <div
                 className="flex flex-col items-start gap-1 rounded-[20px] border border-brand-primary/14 bg-gradient-to-br from-brand-primary/[0.07] via-brand-primary/[0.03] to-transparent p-6 sm:p-8"
-                style={{ boxShadow: '0 24px 80px -40px rgba(0,82,255,0.3)' }}
+                style={{ boxShadow: '0 24px 80px -40px rgb(var(--brand-primary) / 0.3)' }}
               >
                 <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.28em] text-zinc-600">
                   Allocated
@@ -204,10 +205,12 @@ export function DistributeCcaLaunch() {
                 Deposit mechanics, minting, distribution, and strategy allocation in one walkthrough.
               </p>
             </div>
-            <Link to="/faq/how-it-works" className="btn-primary btn-no-icon inline-flex items-center gap-2">
-              How it works
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            <Button variant="primary" className="inline-flex items-center gap-2" asChild>
+              <Link to="/faq/how-it-works">
+                How it works
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
           </motion.div>
         </div>
       </section>

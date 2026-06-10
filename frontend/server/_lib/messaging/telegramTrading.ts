@@ -1,4 +1,7 @@
 import { randomBytes } from 'node:crypto'
+import { ensureTelegramTradingSchema as ensureTelegramTradingSchemaFromBootstrap } from '../db/schemaBootstrap.js'
+import { getTelemetrySampleRate, shouldSampleEvent } from '../infra/telemetrySampling.js'
+import { shouldSample } from '../infra/telemetrySampling.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -113,6 +116,11 @@ import {
   type TelegramUserLink,
 } from './telegramTradingHelpers.js'
 
+/**
+ * @deprecated These flags are retained only for backward compatibility with
+ * any external test spies. The real idempotency + concurrency safety now lives
+ * in schemaBootstrap.ts (withEnsureOnce).
+ */
 let telegramTradingSchemaEnsured = false
 let telegramTradingSchemaEnsurePromise: Promise<void> | null = null
 
@@ -542,6 +550,22 @@ export async function createTelegramActionToken(params: {
   const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString()
   const token = randomBytes(18).toString('base64url')
   const tokenHash = hashTelegramActionToken(token)
+
+  // High-volume short-lived action tokens (Telegram trading/automation).
+  // Always issue the token to the caller; only thin the durable row when sampling < 1.
+  const sampleKey = `${userId}:${actionType}`
+  if (!shouldSampleEvent('telegram_action_tokens', sampleKey)) {
+    // Token is still returned and usable — we simply skip persisting the row for volume control.
+    return { token, expiresAt }
+  }
+
+  // Optional observability: surface the effective rate for this table (new helper).
+  const effectiveRate = getTelemetrySampleRate('telegram_action_tokens')
+  if (effectiveRate < 1) {
+    // One-time style note; in hot paths this can be gated further or sent to structured logs.
+    // console.debug('[telemetry] sampling telegram_action_tokens', { rate: effectiveRate })
+  }
+
   await params.db.sql`
     INSERT INTO telegram_action_tokens (
       token_hash,
@@ -648,6 +672,11 @@ export async function logTelegramActionAudit(params: {
   const status = asTrimmed(params.status).toLowerCase() || 'unknown'
   if (!userId || !chatId || !canonical || !actionType) return
 
+  // Telegram action audit (trading/automation). Sample for volume control while preserving per-user traces.
+  if (!shouldSampleEvent('telegram_action_audit', `${userId}:${actionType}`)) {
+    return
+  }
+
   await params.db.sql`
     INSERT INTO telegram_action_audit (
       telegram_user_id,
@@ -700,6 +729,11 @@ export async function logTelegramFunnelEvent(params: {
       : normalizeTelegramUserId(params.telegramUserId)
   const chatId = asTrimmed(params.chatId ?? '') || null
   const actionType = asTrimmed(params.actionType ?? '').toLowerCase() || null
+
+  // High-volume funnel sampling (see audit-telemetry-optimization.ts)
+  const sampleKey = userId !== null ? String(userId) : chatId ?? eventName
+  if (!shouldSample(sampleKey)) return
+
   await params.db.sql`
     INSERT INTO telegram_funnel_events (
       telegram_user_id,
@@ -718,303 +752,21 @@ export async function logTelegramFunnelEvent(params: {
   `
 }
 
+/**
+ * Thin backward-compat adapter.
+ *
+ * The real implementation + idempotency + pgcrypto side-effect now lives in
+ * schemaBootstrap.ts (centralized withEnsureOnce).
+ *
+ * The local flags are retained only for any legacy test observers.
+ */
 export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
   if (telegramTradingSchemaEnsured) return
   if (telegramTradingSchemaEnsurePromise) return telegramTradingSchemaEnsurePromise
+
   telegramTradingSchemaEnsurePromise = (async () => {
     try {
-      await db.sql`CREATE EXTENSION IF NOT EXISTS pgcrypto;`
-      await db.sql`
-      CREATE TABLE IF NOT EXISTS telegram_user_links (
-        telegram_user_id BIGINT PRIMARY KEY,
-        telegram_username TEXT NULL,
-        profile_id BIGINT NOT NULL,
-        privy_user_id TEXT NOT NULL,
-        canonical_csw_address TEXT NULL,
-        owner_verified BOOLEAN NOT NULL DEFAULT false,
-        link_status TEXT NOT NULL DEFAULT 'active',
-        linked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        last_verified_at TIMESTAMPTZ NULL,
-        last_used_at TIMESTAMPTZ NULL,
-        revoked_at TIMESTAMPTZ NULL,
-        failure_count INTEGER NOT NULL DEFAULT 0,
-        last_failure_reason TEXT NULL,
-        unlink_requested_at TIMESTAMPTZ NULL
-      );
-    `
-    await db.sql`ALTER TABLE telegram_user_links ALTER COLUMN canonical_csw_address DROP NOT NULL;`
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS telegram_action_tokens (
-        token_hash TEXT PRIMARY KEY,
-        telegram_user_id BIGINT NOT NULL,
-        chat_id TEXT NOT NULL,
-        action_type TEXT NOT NULL,
-        intent_payload_json JSONB NOT NULL,
-        expires_at TIMESTAMPTZ NOT NULL,
-        consumed_at TIMESTAMPTZ NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS telegram_action_audit (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        telegram_user_id BIGINT NOT NULL,
-        chat_id TEXT NOT NULL,
-        message_id BIGINT NULL,
-        profile_id BIGINT NOT NULL,
-        canonical_csw_address TEXT NOT NULL,
-        action_type TEXT NOT NULL,
-        intent_json JSONB NOT NULL,
-        quote_json JSONB NULL,
-        execution_json JSONB NULL,
-        status TEXT NOT NULL,
-        tx_hash TEXT NULL,
-        error_code TEXT NULL,
-        error_message TEXT NULL,
-        correlation_id TEXT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    await db.sql`ALTER TABLE telegram_action_audit ADD COLUMN IF NOT EXISTS correlation_id TEXT NULL;`
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS telegram_funnel_events (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        telegram_user_id BIGINT NULL,
-        chat_id TEXT NULL,
-        event_name TEXT NOT NULL,
-        action_type TEXT NULL,
-        context_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS telegram_miniapp_replay_nonces (
-        init_data_hash TEXT PRIMARY KEY,
-        telegram_user_id BIGINT NOT NULL,
-        auth_date INTEGER NOT NULL,
-        expires_at TIMESTAMPTZ NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS telegram_miniapp_sessions (
-        token_hash TEXT PRIMARY KEY,
-        telegram_user_id BIGINT NOT NULL,
-        telegram_username TEXT NULL,
-        chat_id TEXT NULL,
-        chat_type TEXT NULL,
-        chat_instance TEXT NULL,
-        init_data_hash TEXT NOT NULL,
-        auth_date INTEGER NOT NULL,
-        expires_at TIMESTAMPTZ NOT NULL,
-        last_used_at TIMESTAMPTZ NULL,
-        revoked_at TIMESTAMPTZ NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS telegram_link_start_token_claims (
-        token_hash TEXT PRIMARY KEY,
-        telegram_user_id BIGINT NOT NULL,
-        chat_id TEXT NOT NULL,
-        privy_user_id TEXT NOT NULL,
-        expires_at TIMESTAMPTZ NOT NULL,
-        consumed_at TIMESTAMPTZ NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS telegram_chat_vault_scope (
-        chat_id TEXT PRIMARY KEY,
-        allowed_vault_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
-        buy_sell_enabled BOOLEAN NOT NULL DEFAULT true,
-        bid_enabled BOOLEAN NOT NULL DEFAULT true
-      );
-    `
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS telegram_holder_room_policies (
-        chat_id TEXT NOT NULL,
-        vault_address TEXT NOT NULL,
-        room_chat_id TEXT NOT NULL,
-        min_shares_raw TEXT NOT NULL,
-        grace_hours INTEGER NOT NULL DEFAULT 24,
-        enabled BOOLEAN NOT NULL DEFAULT true,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        PRIMARY KEY (chat_id, vault_address)
-      );
-    `
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS telegram_holder_room_members (
-        room_chat_id TEXT NOT NULL,
-        telegram_user_id BIGINT NOT NULL,
-        canonical_csw_address TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'active',
-        last_eligible_at TIMESTAMPTZ NULL,
-        grace_until TIMESTAMPTZ NULL,
-        last_checked_at TIMESTAMPTZ NULL,
-        removed_at TIMESTAMPTZ NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        PRIMARY KEY (room_chat_id, telegram_user_id)
-      );
-    `
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS telegram_trade_percent_prompts (
-        chat_id TEXT NOT NULL,
-        telegram_user_id BIGINT NOT NULL,
-        action_type TEXT NOT NULL,
-        vault_address TEXT NOT NULL,
-        expires_at TIMESTAMPTZ NOT NULL,
-        consumed_at TIMESTAMPTZ NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        PRIMARY KEY (chat_id, telegram_user_id)
-      );
-    `
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS telegram_inline_signal_feeds (
-        inline_message_id TEXT PRIMARY KEY,
-        source_chat_id TEXT NOT NULL,
-        owner_telegram_user_id BIGINT NOT NULL,
-        paused BOOLEAN NOT NULL DEFAULT false,
-        closed_at TIMESTAMPTZ NULL,
-        last_render_hash TEXT NULL,
-        last_pushed_at TIMESTAMPTZ NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS telegram_active_messages (
-        chat_id TEXT NOT NULL,
-        owner_telegram_user_id BIGINT NOT NULL,
-        message_id BIGINT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        PRIMARY KEY (chat_id, owner_telegram_user_id)
-      );
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_user_links_csw_idx
-      ON telegram_user_links (canonical_csw_address);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_user_links_status_owner_idx
-      ON telegram_user_links (link_status, owner_verified);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_action_tokens_expires_idx
-      ON telegram_action_tokens (expires_at);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_action_tokens_user_consumed_idx
-      ON telegram_action_tokens (telegram_user_id, consumed_at);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_action_audit_created_idx
-      ON telegram_action_audit (created_at DESC);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_action_audit_user_created_idx
-      ON telegram_action_audit (telegram_user_id, created_at DESC);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_action_audit_correlation_idx
-      ON telegram_action_audit (correlation_id);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_inline_signal_feeds_source_idx
-      ON telegram_inline_signal_feeds (source_chat_id, updated_at DESC);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_active_messages_updated_idx
-      ON telegram_active_messages (updated_at DESC);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_funnel_events_created_idx
-      ON telegram_funnel_events (created_at DESC);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_funnel_events_name_created_idx
-      ON telegram_funnel_events (event_name, created_at DESC);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_funnel_events_chat_created_idx
-      ON telegram_funnel_events (chat_id, created_at DESC);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_funnel_events_user_created_idx
-      ON telegram_funnel_events (telegram_user_id, created_at DESC);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_miniapp_replay_nonces_expires_idx
-      ON telegram_miniapp_replay_nonces (expires_at);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_miniapp_sessions_expires_idx
-      ON telegram_miniapp_sessions (expires_at);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_miniapp_sessions_user_expires_idx
-      ON telegram_miniapp_sessions (telegram_user_id, expires_at DESC);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_miniapp_sessions_chat_expires_idx
-      ON telegram_miniapp_sessions (chat_id, expires_at DESC);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_miniapp_sessions_init_hash_idx
-      ON telegram_miniapp_sessions (init_data_hash);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_link_start_token_claims_expires_idx
-      ON telegram_link_start_token_claims (expires_at);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_link_start_token_claims_privy_idx
-      ON telegram_link_start_token_claims (privy_user_id, expires_at DESC);
-    `
-    await db.sql`
-      CREATE UNIQUE INDEX IF NOT EXISTS telegram_holder_room_policies_room_chat_uidx
-      ON telegram_holder_room_policies (room_chat_id);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_holder_room_policies_chat_enabled_idx
-      ON telegram_holder_room_policies (chat_id, enabled);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_holder_room_members_status_checked_idx
-      ON telegram_holder_room_members (status, last_checked_at);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_holder_room_members_wallet_idx
-      ON telegram_holder_room_members (canonical_csw_address);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_trade_percent_prompts_active_idx
-      ON telegram_trade_percent_prompts (expires_at, consumed_at);
-    `
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS telegram_onboarding_sessions (
-        telegram_user_id BIGINT PRIMARY KEY,
-        step TEXT NOT NULL,
-        expires_at TIMESTAMPTZ NOT NULL,
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS telegram_onboarding_sessions_expires_idx
-      ON telegram_onboarding_sessions (expires_at);
-    `
-      await db.sql`
-      CREATE TABLE IF NOT EXISTS telegram_private_dm_welcome_sent (
-        telegram_user_id BIGINT PRIMARY KEY,
-        sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-
+      await ensureTelegramTradingSchemaFromBootstrap(db)
       telegramTradingSchemaEnsured = true
     } catch (error) {
       telegramTradingSchemaEnsured = false
@@ -1023,6 +775,7 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
       telegramTradingSchemaEnsurePromise = null
     }
   })()
+
   return telegramTradingSchemaEnsurePromise
 }
 

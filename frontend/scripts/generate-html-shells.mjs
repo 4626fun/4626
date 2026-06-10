@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { HTML_SHELL_TEMPLATE_VARS } from './html-shells.config.mjs'
+import { syncCanvasTokens } from './sync-canvas-tokens.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -93,6 +94,11 @@ function main() {
   const checkOnly = args.has('--check')
   let changedCount = 0
   const stalePaths = []
+
+  const canvasSync = syncCanvasTokens({ checkOnly })
+  if (checkOnly && canvasSync.stalePaths.length > 0) {
+    stalePaths.push(...canvasSync.stalePaths)
+  }
 
   for (const { template, output } of templateTargets) {
     const rendered = renderShellFile(template)

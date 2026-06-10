@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/alfaclub/feedbackRelayer
+[4626-web](../../../index.md) / server/\_lib/alfaclub/feedbackRelayer
 
 # server/\_lib/alfaclub/feedbackRelayer
 
@@ -313,7 +313,7 @@ Defined in: [server/\_lib/alfaclub/feedbackRelayer.ts:266](https://github.com/we
 
 ###### resolveOwnerContext?
 
-() => `Promise`\<\{ `ownerAddress`: `` `0x${string}` ``; `ownerIndex`: `number`; \}\>
+() => `Promise`\<\{ `ownerAddress`: `string`; `ownerIndex`: `number`; \}\>
 
 ###### submitCall?
 

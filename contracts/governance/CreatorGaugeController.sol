@@ -148,7 +148,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     // FEE SPLIT (in basis points) — IMMUTABLE
     // ================================
     /// @dev Public constant names preserve legacy getter selectors (`burnShareBps()`, etc.) for
-    ///      off-chain monitors (e.g. CRE payout-integrity) and integrators. Do not rename.
+    ///      off-chain monitors (e.g. KPR payout-integrity) and integrators. Do not rename.
 
     /// @notice Percentage to burn (increases PPS for all holders)
     uint256 public constant burnShareBps = 2139; // 21.39% - ve(3,3) passive value accrual

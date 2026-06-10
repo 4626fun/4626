@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/agent/agentRegistrationPublisher
+[4626-web](../../../index.md) / server/\_lib/agent/agentRegistrationPublisher
 
 # server/\_lib/agent/agentRegistrationPublisher
 

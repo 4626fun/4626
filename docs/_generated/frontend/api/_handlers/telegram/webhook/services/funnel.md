@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / api/\_handlers/telegram/webhook/services/funnel
+[4626-web](../../../../../index.md) / api/\_handlers/telegram/webhook/services/funnel
 
 # api/\_handlers/telegram/webhook/services/funnel
 

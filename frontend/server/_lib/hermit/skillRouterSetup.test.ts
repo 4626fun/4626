@@ -288,8 +288,8 @@ describe('Hermit setup subcommands', () => {
 
     it('multi-word /hermit tone <message> still falls through to the draft mode', async () => {
       restoreEnv = applyEnv({
-        HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-        HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+        HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+        HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
       })
       fetchMock.mockResolvedValueOnce({
         ok: true,
@@ -314,7 +314,7 @@ describe('Hermit setup subcommands', () => {
       )
       expect(toneWrites).toHaveLength(0)
       expect(fetchMock).toHaveBeenCalledTimes(1)
-      expect(result.provider).toBe('pinata')
+      expect(result.provider).toBe('hermit')
     })
 
     it('single-token unknown tone returns local "Unknown tone" guidance and does NOT call Pinata', async () => {
@@ -346,13 +346,13 @@ describe('Hermit setup subcommands', () => {
     })
 
     it('single-token /hermit tone with no Pinata env still resolves locally (no thrown backend error)', async () => {
-      // Without HERMIT_PINATA_CHAT_ENDPOINT / HERMIT_PINATA_BEARER_TOKEN
+      // Without HERMIT_AGENT_CHAT_ENDPOINT / HERMIT_AGENT_BEARER_TOKEN
       // set, falling through to the draft path would have thrown
       // `Hermit Pinata path unavailable.`. Confirm that the local
       // handler intercepts before that happens.
       restoreEnv = applyEnv({
-        HERMIT_PINATA_CHAT_ENDPOINT: undefined,
-        HERMIT_PINATA_BEARER_TOKEN: undefined,
+        HERMIT_AGENT_CHAT_ENDPOINT: undefined,
+        HERMIT_AGENT_BEARER_TOKEN: undefined,
       })
       const result = await executeHermitCommand({
         commandText: '/hermit tone wat',
@@ -410,8 +410,8 @@ describe('Hermit onboarding nudge', () => {
 
   function setUpPinata(text: string) {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,

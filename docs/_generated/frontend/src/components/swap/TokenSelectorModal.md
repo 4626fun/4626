@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/swap/TokenSelectorModal
+[4626-web](../../../index.md) / src/components/swap/TokenSelectorModal
 
 # src/components/swap/TokenSelectorModal
 
@@ -12,13 +12,13 @@
 
 > **SwapTokenOption** = [`TokenOption`](../../lib/uniswap/swapUtils.md#tokenoption) & `object`
 
-Defined in: [src/components/swap/TokenSelectorModal.tsx:17](https://github.com/wenakita/4626/blob/main/frontend/src/components/swap/TokenSelectorModal.tsx#L17)
+Defined in: [src/components/swap/TokenSelectorModal.tsx:34](https://github.com/wenakita/4626/blob/main/frontend/src/components/swap/TokenSelectorModal.tsx#L34)
 
 #### Type Declaration
 
 ##### sectionTag?
 
-> `optional` **sectionTag**: `"core"` \| `"creator"` \| `"content"`
+> `optional` **sectionTag**: `"core"` \| `"creator"` \| `"content"` \| `"trend"`
 
 ##### verified?
 
@@ -30,7 +30,7 @@ Defined in: [src/components/swap/TokenSelectorModal.tsx:17](https://github.com/w
 
 > **TokenSelectorModal**(`__namedParameters`): `Element`
 
-Defined in: [src/components/swap/TokenSelectorModal.tsx:79](https://github.com/wenakita/4626/blob/main/frontend/src/components/swap/TokenSelectorModal.tsx#L79)
+Defined in: [src/components/swap/TokenSelectorModal.tsx:374](https://github.com/wenakita/4626/blob/main/frontend/src/components/swap/TokenSelectorModal.tsx#L374)
 
 #### Parameters
 

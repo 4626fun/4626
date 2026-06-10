@@ -46,8 +46,12 @@ import {
 } from '../wallet/privyCoinbaseSmartWallet.js'
 import { resolveBundlerUrl } from '../wallet/userOperationSubmitter.js'
 import {
-  TARGET_CANONICAL_CSW_ADDRESS,
+  CANONICAL_CSW_ADDRESS,
 } from '../../../src/wallet/canonicalWalletPolicy.js'
+import {
+  readCanonicalCswOwnerIndexEnv,
+  readCanonicalCswPrivyWalletIdEnv,
+} from '../wallet/canonicalCswEnv.js'
 import {
   abandonQueuedFeedback,
   attachErc8004TxHash,
@@ -140,7 +144,7 @@ function resolvePrivyEnv(): {
   bundlerUrl: string | null
 } {
   return {
-    walletId: (process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim() || null,
+    walletId: readCanonicalCswPrivyWalletIdEnv() || null,
     appId: (process.env.PRIVY_APP_ID ?? '').trim() || null,
     appSecret: (process.env.PRIVY_APP_SECRET ?? '').trim() || null,
     authKey: (process.env.PRIVY_WALLET_AUTHORIZATION_KEY ?? '').trim() || null,
@@ -149,7 +153,7 @@ function resolvePrivyEnv(): {
 }
 
 function configuredOwnerIndex(): number | null {
-  const raw = (process.env.XMTP_AGENT_CSW_OWNER_INDEX ?? '').trim()
+  const raw = readCanonicalCswOwnerIndexEnv()
   if (!/^\d+$/.test(raw)) return null
   const n = Number.parseInt(raw, 10)
   if (!Number.isFinite(n) || n < 0) return null
@@ -318,7 +322,7 @@ export async function relayAlfaClubFeedbackOnce(
         return resolvePrivyCoinbaseSmartWalletOwnerContext({
           publicClient,
           walletId: env.walletId as string,
-          smartWallet: TARGET_CANONICAL_CSW_ADDRESS as Address,
+          smartWallet: CANONICAL_CSW_ADDRESS as Address,
           configuredOwnerIndex: configuredOwnerIndex(),
           allowConfiguredOwnerIndexFallback: true,
         })
@@ -360,7 +364,7 @@ export async function relayAlfaClubFeedbackOnce(
 
     const result = await submitCall({
       walletId: env.walletId,
-      smartWallet: TARGET_CANONICAL_CSW_ADDRESS as Address,
+      smartWallet: CANONICAL_CSW_ADDRESS as Address,
       ownerAddress,
       ownerIndex,
       calls: [

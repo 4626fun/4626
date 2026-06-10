@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/pages/explore/ExploreContentPoolAlias
+[4626-web](../../../index.md) / src/pages/explore/ExploreContentPoolAlias
 
 # src/pages/explore/ExploreContentPoolAlias
 

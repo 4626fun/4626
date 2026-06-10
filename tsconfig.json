@@ -9,5 +9,5 @@
     "resolveJsonModule": true,
     "skipLibCheck": true
   },
-  "include": ["tests/**/*.ts"]
+  "include": ["programs/creator-share-hook/tests/**/*.ts"]
 }

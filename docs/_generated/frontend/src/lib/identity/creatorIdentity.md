@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/identity/creatorIdentity
+[4626-web](../../../index.md) / src/lib/identity/creatorIdentity
 
 # src/lib/identity/creatorIdentity
 
@@ -106,11 +106,11 @@ Rules (creator-identity safety approach):
 
 ###### connectedWallet
 
-`` `0x${string}` `` \| `null`
+`string` \| `null`
 
 ###### privySmartWallet?
 
-`` `0x${string}` `` \| `null`
+`string` \| `null`
 
 ###### zoraCoin?
 

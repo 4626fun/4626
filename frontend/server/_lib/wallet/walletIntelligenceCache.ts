@@ -12,6 +12,7 @@
  */
 
 import { getDb, isDbConfigured } from '../db/postgres.js'
+import { ensureWalletIntelligenceCacheSchema } from '../db/schemaBootstrap.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -31,150 +32,8 @@ export async function ensureWalletIntelligenceSchema(): Promise<void> {
   if (!db) return
   schemaEnsured = true
 
-  // ── wallet_intelligence_cache ──
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS wallet_intelligence_cache (
-      address       TEXT NOT NULL,
-      chain_ids     TEXT NOT NULL DEFAULT '8453,1',
-      hops          INT  NOT NULL DEFAULT 3,
-      graph         JSONB NOT NULL,
-      grove_uri     TEXT,
-      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      expires_at    TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '1 hour'),
-      PRIMARY KEY (address, chain_ids, hops)
-    );
-  `
-  try {
-    await db.sql`ALTER TABLE wallet_intelligence_cache ENABLE ROW LEVEL SECURITY;`
-  } catch {
-    // Ignore if RLS cannot be enabled in this runtime.
-  }
-  try {
-    await db.sql`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_policies
-          WHERE schemaname = 'public'
-            AND tablename = 'wallet_intelligence_cache'
-            AND policyname = 'wallet_intelligence_cache_deny_all'
-        ) THEN
-          CREATE POLICY wallet_intelligence_cache_deny_all
-            ON wallet_intelligence_cache
-            FOR ALL
-            TO public
-            USING (false)
-            WITH CHECK (false);
-        END IF;
-      END
-      $$;
-    `
-  } catch {
-    // Ignore if policy creation is unavailable in this runtime.
-  }
-  await db.sql`CREATE INDEX IF NOT EXISTS wic_expires_idx ON wallet_intelligence_cache (expires_at);`
-  await db.sql`CREATE INDEX IF NOT EXISTS wic_address_idx ON wallet_intelligence_cache (address);`
-
-  // ── entity_labels_cache ──
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS entity_labels_cache (
-      address       TEXT NOT NULL,
-      chain_id      INT  NOT NULL DEFAULT 8453,
-      labels        JSONB NOT NULL DEFAULT '[]'::jsonb,
-      is_known      BOOLEAN NOT NULL DEFAULT FALSE,
-      source        TEXT NOT NULL DEFAULT 'unknown',
-      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      expires_at    TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '24 hours'),
-      PRIMARY KEY (address, chain_id)
-    );
-  `
-  try {
-    await db.sql`ALTER TABLE entity_labels_cache ENABLE ROW LEVEL SECURITY;`
-  } catch {
-    // Ignore if RLS cannot be enabled in this runtime.
-  }
-  try {
-    await db.sql`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_policies
-          WHERE schemaname = 'public'
-            AND tablename = 'entity_labels_cache'
-            AND policyname = 'entity_labels_cache_deny_all'
-        ) THEN
-          CREATE POLICY entity_labels_cache_deny_all
-            ON entity_labels_cache
-            FOR ALL
-            TO public
-            USING (false)
-            WITH CHECK (false);
-        END IF;
-      END
-      $$;
-    `
-  } catch {
-    // Ignore if policy creation is unavailable in this runtime.
-  }
-  await db.sql`CREATE INDEX IF NOT EXISTS elc_expires_idx ON entity_labels_cache (expires_at);`
-
-  // ── feedback_index ──
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS feedback_index (
-      id              BIGSERIAL PRIMARY KEY,
-      agent_id        INT NOT NULL,
-      client_address  TEXT NOT NULL,
-      feedback_index  INT NOT NULL,
-      value           INT NOT NULL,
-      value_decimals  INT NOT NULL DEFAULT 0,
-      tag1            TEXT NOT NULL DEFAULT '',
-      tag2            TEXT NOT NULL DEFAULT '',
-      endpoint        TEXT,
-      feedback_uri    TEXT,
-      feedback_hash   TEXT,
-      grove_uri       TEXT,
-      is_revoked      BOOLEAN NOT NULL DEFAULT FALSE,
-      reasoning       TEXT,
-      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE (agent_id, client_address, feedback_index)
-    );
-  `
-  try {
-    await db.sql`ALTER TABLE feedback_index ENABLE ROW LEVEL SECURITY;`
-  } catch {
-    // Ignore if RLS cannot be enabled in this runtime.
-  }
-  try {
-    await db.sql`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_policies
-          WHERE schemaname = 'public'
-            AND tablename = 'feedback_index'
-            AND policyname = 'feedback_index_deny_all'
-        ) THEN
-          CREATE POLICY feedback_index_deny_all
-            ON feedback_index
-            FOR ALL
-            TO public
-            USING (false)
-            WITH CHECK (false);
-        END IF;
-      END
-      $$;
-    `
-  } catch {
-    // Ignore if policy creation is unavailable in this runtime.
-  }
-  await db.sql`CREATE INDEX IF NOT EXISTS fi_agent_idx ON feedback_index (agent_id, created_at DESC);`
-  await db.sql`CREATE INDEX IF NOT EXISTS fi_client_idx ON feedback_index (client_address, created_at DESC);`
-  await db.sql`CREATE INDEX IF NOT EXISTS fi_tags_idx ON feedback_index (tag1, tag2);`
-  await db.sql`CREATE INDEX IF NOT EXISTS fi_revoked_idx ON feedback_index (is_revoked);`
+  // Condensed path — all tables now live in the authoritative migration.
+  await ensureWalletIntelligenceCacheSchema(db)
 }
 
 // ---------------------------------------------------------------------------

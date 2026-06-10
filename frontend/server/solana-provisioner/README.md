@@ -79,7 +79,7 @@ wrap-token constraints (name<=32 bytes, symbol<=12 bytes, no null bytes).
 - `runner` (which CLI runner executed)
 - `tokenSymbol` (echo of the symbol used; equals `bridgeToken.symbol()` on Base)
 - `mintCompatibilityHints` (mint-compatibility diagnostics)
-- `pool` / `alphaVault` (when `SOLANA_AUTO_POOL=1`)
+- `pool` / `alphaVault` — **removed:** `SOLANA_AUTO_POOL` is retired (use share-mesh runbook instead)
 
 ## Request contract (`POST /meteora-ixs`)
 
@@ -271,7 +271,7 @@ wallet/aggregator icon visibility (Phantom/Backpack/Jupiter/Meteora) typically
 also depends on metadata indexing and/or token-list ingestion.
 
 For reliable display, run a token badge/metadata workflow after provisioning
-(for example `cre`'s `solana:prepare-token-badge`) and submit to the relevant
+(for example `kpr`'s `solana:prepare-token-badge`) and submit to the relevant
 ecosystem list/indexer as part of launch ops.
 
 ## Security notes

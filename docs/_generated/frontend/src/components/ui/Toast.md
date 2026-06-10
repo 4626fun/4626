@@ -1,27 +1,34 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/ui/Toast
+[4626-web](../../../index.md) / src/components/ui/Toast
 
 # src/components/ui/Toast
 
 ## Variables
 
+### ~~CdsToastBridge()~~
+
+> `const` **CdsToastBridge**: () => `Element` = `AppToaster`
+
+Defined in: [src/components/ui/Toast.tsx:27](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Toast.tsx#L27)
+
+#### Returns
+
+`Element`
+
+#### Deprecated
+
+Use AppToaster at app root; kept for one release of import stability.
+
+***
+
 ### toast
 
-> `const` **toast**: (`text`, `options?`) => `void` & `object`
+> `const` **toast**: (`text`, `options?`) => `string` \| `number` & `object`
 
-Defined in: [src/components/ui/Toast.tsx:87](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Toast.tsx#L87)
-
-Drop-in replacement for `import { toast } from 'sonner'`.
-
-Usage:
-```ts
-toast.success('Deposit confirmed')
-toast.error('Something went wrong')
-toast('Plain message')
-```
+Defined in: [src/components/ui/Toast.tsx:29](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Toast.tsx#L29)
 
 #### Type Declaration
 
@@ -35,15 +42,21 @@ toast('Plain message')
 
 ##### dismiss()
 
-> **dismiss**: () => `void`
+> **dismiss**: (`id?`) => `string` \| `number`
+
+###### Parameters
+
+###### id?
+
+`string` | `number`
 
 ###### Returns
 
-`void`
+`string` \| `number`
 
 ##### error()
 
-> **error**: (`text`, `options?`) => `void`
+> **error**: (`text`, `options?`) => `string` \| `number`
 
 ###### Parameters
 
@@ -59,19 +72,25 @@ toast('Plain message')
 
 ###### Returns
 
-`void`
+`string` \| `number`
 
 ##### hide()
 
-> **hide**: () => `void`
+> **hide**: (`id?`) => `string` \| `number`
+
+###### Parameters
+
+###### id?
+
+`string` | `number`
 
 ###### Returns
 
-`void`
+`string` \| `number`
 
 ##### info()
 
-> **info**: (`text`, `options?`) => `void`
+> **info**: (`text`, `options?`) => `string` \| `number`
 
 ###### Parameters
 
@@ -87,11 +106,11 @@ toast('Plain message')
 
 ###### Returns
 
-`void`
+`string` \| `number`
 
 ##### message()
 
-> **message**: (`text`, `options?`) => `void`
+> **message**: (`text`, `options?`) => `string` \| `number`
 
 ###### Parameters
 
@@ -107,11 +126,11 @@ toast('Plain message')
 
 ###### Returns
 
-`void`
+`string` \| `number`
 
 ##### success()
 
-> **success**: (`text`, `options?`) => `void`
+> **success**: (`text`, `options?`) => `string` \| `number`
 
 ###### Parameters
 
@@ -127,11 +146,11 @@ toast('Plain message')
 
 ###### Returns
 
-`void`
+`string` \| `number`
 
 ##### warning()
 
-> **warning**: (`text`, `options?`) => `void`
+> **warning**: (`text`, `options?`) => `string` \| `number`
 
 ###### Parameters
 
@@ -147,19 +166,16 @@ toast('Plain message')
 
 ###### Returns
 
-`void`
+`string` \| `number`
 
 ## Functions
 
-### CdsToastBridge()
+### AppToaster()
 
-> **CdsToastBridge**(): `null`
+> **AppToaster**(): `Element`
 
-Defined in: [src/components/ui/Toast.tsx:39](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Toast.tsx#L39)
-
-Render this once near the app root (inside CDS PortalProvider) to connect
-the imperative `toast` singleton to the CDS toast context.
+Defined in: [src/components/ui/Toast.tsx:7](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Toast.tsx#L7)
 
 #### Returns
 
-`null`
+`Element`

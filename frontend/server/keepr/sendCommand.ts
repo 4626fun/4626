@@ -12,7 +12,7 @@ import {
 import {
   resolveCommandIssuerContextByAddress,
   isExecutionReady,
-} from '../_lib/wallet/commandIssuerContext.js'
+} from '@4626/server-core'
 import {
   isArchBSendViaUserOpEnabled,
   submitUserOpOrRefuse,
@@ -21,6 +21,7 @@ import type { CoinbaseSmartWalletCall } from '../_lib/wallet/privyCoinbaseSmartW
 import { assertTeeAttestationOrThrow } from '../_lib/agent/teeAttestationGate.js'
 import { checkDurableRateLimit } from '../_lib/infra/durableRateLimit.js'
 import { getDb, isDbConfigured } from '../_lib/db/postgres.js'
+import { ensureAgentRuntimeAuditLedgerSchema } from '../_lib/db/schemaBootstrap.js'
 import type { KeeprVaultRow } from '../_lib/keepr/keeprRegistry.js'
 import type { KeeprRole, KeeprCommandResult } from '../commands/types.js'
 
@@ -85,20 +86,7 @@ let sendLimitsSchemaEnsured = false
 async function ensureSendLimitsSchema(db: Db): Promise<void> {
   if (sendLimitsSchemaEnsured) return
   try {
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS keepr_send_daily_ledger (
-        vault_address TEXT NOT NULL,
-        token TEXT NOT NULL,
-        day DATE NOT NULL,
-        amount DOUBLE PRECISION NOT NULL DEFAULT 0,
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        PRIMARY KEY (vault_address, token, day)
-      );
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS keepr_send_daily_ledger_vault_day_idx
-      ON keepr_send_daily_ledger (vault_address, day DESC);
-    `
+    await ensureAgentRuntimeAuditLedgerSchema(db as any)
     sendLimitsSchemaEnsured = true
   } catch (error) {
     sendLimitsSchemaEnsured = false

@@ -23,6 +23,7 @@ import {
   readBridgeAuthHealthSnapshotFromStorage,
   recordBridgeCfChallenge,
   recordBridgeCfChallengeRecovered,
+  recordBridgeProxyFallbackDirect,
 } from '../../server/_lib/alfaclub/authHealthStore.ts'
 
 function makeHealthDb() {
@@ -84,6 +85,36 @@ describe('AlfaClub bridge auth health store', () => {
         consecutiveCfChallenges: 0,
         cfChallengeSustained: false,
       })
+    })
+  })
+
+  it('persists proxy fallback direct-send counters in the bridge health row', async () => {
+    const { rows, db } = makeHealthDb()
+    getDbMock.mockResolvedValue(db)
+
+    recordBridgeProxyFallbackDirect('2026-05-13T10:30:00.000Z')
+    await vi.waitFor(() => {
+      const persisted = JSON.parse(rows.get(_HEALTH_KEYS_FOR_TESTS.BRIDGE)?.secret_value ?? '{}')
+      expect(persisted).toMatchObject({
+        proxyFallbackDirectCount: 1,
+        lastProxyFallbackDirectAt: '2026-05-13T10:30:00.000Z',
+      })
+    })
+
+    recordBridgeProxyFallbackDirect('2026-05-13T10:31:00.000Z')
+    await vi.waitFor(() => {
+      const persisted = JSON.parse(rows.get(_HEALTH_KEYS_FOR_TESTS.BRIDGE)?.secret_value ?? '{}')
+      expect(persisted).toMatchObject({
+        proxyFallbackDirectCount: 2,
+        lastProxyFallbackDirectAt: '2026-05-13T10:31:00.000Z',
+      })
+    })
+
+    _resetBridgeAuthHealthForTests()
+    const crossRuntimeSnapshot = await readBridgeAuthHealthSnapshotFromStorage()
+    expect(crossRuntimeSnapshot).toMatchObject({
+      proxyFallbackDirectCount: 2,
+      lastProxyFallbackDirectAt: '2026-05-13T10:31:00.000Z',
     })
   })
 })

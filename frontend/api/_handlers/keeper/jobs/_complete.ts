@@ -11,7 +11,7 @@ import {
   setCors,
   setNoStore,
   RATE_LIMITS,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { completeKeeperJob, type KeeperJob, type KeeperJobStatus } from '../../../../server/_lib/keeperJobs/keeperJobs.js'
 
 type CompleteBody = {
@@ -32,7 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const limiter = checkRateLimit(rateLimitKey('keeper:jobs:complete', getClientIp(req)), RATE_LIMITS.creRuntimeDecisionsWrite)
+  const limiter = checkRateLimit(rateLimitKey('keeper:jobs:complete', getClientIp(req)), RATE_LIMITS.keeperDecisionsWrite)
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)

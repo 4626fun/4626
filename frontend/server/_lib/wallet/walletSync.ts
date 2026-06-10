@@ -5,9 +5,18 @@ import {
   assertNoEmailPrivyCollision,
   assertNoWalletPrivyCollision,
 } from '../identity/identityRecovery.js'
+import { runWithWaitlistEmailCollisionAdoption } from '../identity/emailCollisionAdoption.js'
 import { extractPrivyVerifiedEmail } from '../infra/trust.js'
+import { resolveProfilesPrimaryWalletColumn } from './disconnectExternalWallet.js'
+import {
+  applyCanonicalCswPolicyToClassification,
+  resolveStoredCanonicalCswAddress,
+} from './canonicalCswPersistence.js'
 
-type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
+export type Db = {
+  sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[]; rowCount?: number }>
+  query?: (text: string, params?: any[]) => Promise<{ rows: any[]; rowCount?: number }>
+}
 
 type ExistingProfile = { id: number; email: string | null }
 
@@ -24,6 +33,23 @@ export type SyncUserWalletsResult = {
 
 function normalizeLower(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
+}
+
+async function withDbTransaction<T>(db: Db, fn: (txDb: Db) => Promise<T>): Promise<T> {
+  // Some test mocks expose only tagged-sql helpers; in that case we preserve
+  // current behavior while production db handles can execute atomic tx blocks.
+  if (typeof db.query !== 'function') {
+    return fn(db)
+  }
+  await db.query('BEGIN')
+  try {
+    const result = await fn(db)
+    await db.query('COMMIT')
+    return result
+  } catch (error) {
+    await db.query('ROLLBACK').catch(() => undefined)
+    throw error
+  }
 }
 
 function normalizeAddress(value: unknown): string | null {
@@ -440,11 +466,34 @@ function applyPersistedIdentity(params: {
   if (!persisted) return classification
 
   const persistedCanonicalRaw = persisted?.canonicalSmartWallet ?? null
+  // M-20 symmetric: only resurrect persisted embedded/active-owner EOAs when still
+  // present in the live Privy classification (canonical CSW intentionally exempt).
+  const persistedEmbeddedEoa =
+    persisted?.embeddedEoa &&
+    isEvmWalletAddressInClassification(classification, persisted.embeddedEoa)
+      ? persisted.embeddedEoa
+      : null
+  const persistedActiveOwnerEoa =
+    persisted?.activeOwnerWallet &&
+    isEvmWalletAddressInClassification(classification, persisted.activeOwnerWallet)
+      ? persisted.activeOwnerWallet
+      : null
+  // profiles.primary_wallet often mirrors the embedded signer when both exist;
+  // gate it the same way so a stale column cannot re-inject an unlinked Privy EOA.
+  const persistedPrimaryWallet =
+    persisted?.primaryWallet &&
+    isEvmWalletAddressInClassification(classification, persisted.primaryWallet)
+      ? persisted.primaryWallet
+      : null
   // The canonical CSW is the asset-holding account and can disappear from a
   // fresh Privy payload even though it remains the deployed account on Base.
   // Keep the persisted CSW as source of truth so a newly surfaced Privy smart
   // wallet/counterfactual address cannot silently replace it.
-  const persistedCanonical = normalizeAddress(persistedCanonicalRaw)
+  const persistedCanonical = resolveStoredCanonicalCswAddress({
+    candidate: persistedCanonicalRaw,
+    embeddedEoa: persistedEmbeddedEoa ?? classification.embeddedEoa?.address ?? null,
+    activeOwnerEoa: persistedActiveOwnerEoa ?? classification.activeOwnerWallet?.address ?? null,
+  })
   const persistedCanonicalSolana =
     persisted?.canonicalSolanaWallet &&
     isSolanaWalletAddressInClassification(classification, persisted.canonicalSolanaWallet)
@@ -459,9 +508,9 @@ function applyPersistedIdentity(params: {
   let allWallets = [...classification.allWallets]
   allWallets = withWalletIfMissing(
     allWallets,
-    persisted.primaryWallet
+    persistedPrimaryWallet
       ? {
-          address: persisted.primaryWallet,
+          address: persistedPrimaryWallet,
           walletType: 'external_eoa',
           provider: 'unknown',
           chain: 'evm',
@@ -507,9 +556,9 @@ function applyPersistedIdentity(params: {
   )
   allWallets = withWalletIfMissing(
     allWallets,
-    persisted.embeddedEoa
+    persistedEmbeddedEoa
       ? {
-          address: persisted.embeddedEoa,
+          address: persistedEmbeddedEoa,
           walletType: 'embedded_eoa',
           provider: 'privy',
           chain: 'evm',
@@ -531,8 +580,8 @@ function applyPersistedIdentity(params: {
   // classification; otherwise the active owner must come from the classification
   // record (or null).
   const persistedActiveOwnerRecord =
-    persisted?.activeOwnerWallet && isEvmWalletAddressInClassification(classification, persisted.activeOwnerWallet)
-      ? allWallets.find((wallet) => walletAddressEquals(wallet.address, persisted.activeOwnerWallet))
+    persistedActiveOwnerEoa
+      ? allWallets.find((wallet) => walletAddressEquals(wallet.address, persistedActiveOwnerEoa))
       : null
   const activeOwnerWallet = classificationActiveOwnerRecord
     ? {
@@ -547,14 +596,15 @@ function applyPersistedIdentity(params: {
           walletType: persistedActiveOwnerRecord.walletType,
         }
       : null
-  const embeddedEoa =
-    persisted.embeddedEoa
+  const embeddedEoa = classification.embeddedEoa
+    ? classification.embeddedEoa
+    : persistedEmbeddedEoa
       ? {
-          address: persisted.embeddedEoa,
-          chainType: classification.embeddedEoa?.chainType ?? 'evm',
-          clientType: classification.embeddedEoa?.clientType ?? null,
+          address: persistedEmbeddedEoa,
+          chainType: 'evm',
+          clientType: null,
         }
-      : classification.embeddedEoa
+      : null
   const classificationCanonicalSolanaRecord =
     classification.canonicalSolanaWallet
       ? allWallets.find((wallet) => walletAddressEquals(wallet.address, classification.canonicalSolanaWallet?.address))
@@ -584,12 +634,15 @@ function applyPersistedIdentity(params: {
     ? { address: operationalSolanaFromPersisted.address, provider: operationalSolanaFromPersisted.provider }
     : operationalSolanaFromClassification
 
-  const primaryWalletAddress =
-    persisted.primaryWallet ??
-    classification.primaryWalletAddress ??
-    embeddedEoa?.address ??
-    canonicalSmartWallet?.address ??
-    null
+  const primaryWalletAddress = resolveProfilesPrimaryWalletColumn({
+    embedded: embeddedEoa?.address ?? null,
+    canonical: canonicalSmartWallet?.address ?? null,
+    activeOwner: activeOwnerWallet?.address ?? persistedActiveOwnerEoa ?? null,
+    classificationPrimary:
+      classification.primaryWalletAddress ??
+      persistedPrimaryWallet ??
+      null,
+  })
 
   allWallets = withWalletIfMissing(
     allWallets,
@@ -698,10 +751,21 @@ async function insertOrUpdateProfile(params: {
   existing: ExistingProfile | null
   privyUserId: string | null
   email: string | null
+  privyUser: PrivyUserLike
   classification: ClassifiedLinkedAccounts
 }): Promise<number> {
-  const { db, existing, privyUserId, email, classification } = params
-  await assertNoEmailPrivyCollision({ db, email, privyUserId })
+  const { db, existing, privyUserId, email, privyUser, classification } = params
+  if (email && privyUserId) {
+    await runWithWaitlistEmailCollisionAdoption({
+      db,
+      email,
+      privyUserId,
+      privyUser,
+      action: () => assertNoEmailPrivyCollision({ db, email, privyUserId }),
+    })
+  } else {
+    await assertNoEmailPrivyCollision({ db, email, privyUserId })
+  }
   // Only guard new INSERT paths — existing matches already resolved
   // through the tombstone-aware lookup above. Without this, a wallet-only
   // Privy auth can still mint a fragment even when a canonical-email
@@ -723,7 +787,12 @@ async function insertOrUpdateProfile(params: {
   const canonicalSolana = classification.canonicalSolanaWallet?.address ?? null
   const operationalSolana = classification.operationalSolanaWallet?.address ?? null
   const embedded = classification.embeddedEoa?.address ?? null
-  const primary = activeOwner ?? canonical ?? classification.primaryWalletAddress ?? null
+  const primary = resolveProfilesPrimaryWalletColumn({
+    embedded,
+    canonical,
+    activeOwner,
+    classificationPrimary: classification.primaryWalletAddress ?? null,
+  })
 
   if (existing?.id) {
     await db.sql`
@@ -857,86 +926,120 @@ export async function syncUserWallets(db: Db, privyUser: PrivyUserLike): Promise
   const existing = await findExistingProfile(db, privyUserId, classification.allWallets)
   const persisted = existing?.id ? await readPersistedIdentity(db, existing.id) : null
 
-  const zoraCanonical = await resolveCanonicalSmartWalletFromZora({ classification, persisted })
+  const zoraCanonicalRaw = await resolveCanonicalSmartWalletFromZora({ classification, persisted })
+  const persistedEmbeddedForPolicy =
+    persisted?.embeddedEoa &&
+    isEvmWalletAddressInClassification(classification, persisted.embeddedEoa)
+      ? persisted.embeddedEoa
+      : null
+  const persistedActiveOwnerForPolicy =
+    persisted?.activeOwnerWallet &&
+    isEvmWalletAddressInClassification(classification, persisted.activeOwnerWallet)
+      ? persisted.activeOwnerWallet
+      : null
+  const zoraCanonical = resolveStoredCanonicalCswAddress({
+    candidate: zoraCanonicalRaw,
+    embeddedEoa: persistedEmbeddedForPolicy ?? classification.embeddedEoa?.address ?? null,
+    activeOwnerEoa: persistedActiveOwnerForPolicy ?? classification.activeOwnerWallet?.address ?? null,
+  })
   const persistedWithZora: PersistedIdentity | null = zoraCanonical
     ? {
         primaryWallet: persisted?.primaryWallet ?? null,
-        activeOwnerWallet: persisted?.activeOwnerWallet ?? null,
+        activeOwnerWallet: persistedActiveOwnerForPolicy,
         canonicalSmartWallet: zoraCanonical,
         canonicalSolanaWallet: persisted?.canonicalSolanaWallet ?? null,
         operationalSolanaWallet: persisted?.operationalSolanaWallet ?? null,
-        embeddedEoa: persisted?.embeddedEoa ?? null,
+        embeddedEoa: persistedEmbeddedForPolicy,
         preprovZoraHandle: persisted?.preprovZoraHandle ?? null,
       }
     : persisted
+    ? {
+        ...persisted,
+        embeddedEoa: persistedEmbeddedForPolicy,
+        activeOwnerWallet: persistedActiveOwnerForPolicy,
+      }
+    : null
 
-  const effectiveClassification = applyPersistedIdentity({ classification, persisted: persistedWithZora })
-  const profileId = await insertOrUpdateProfile({ db, existing, privyUserId, email, classification: effectiveClassification })
+  const effectiveClassification = applyCanonicalCswPolicyToClassification(
+    applyPersistedIdentity({ classification, persisted: persistedWithZora }),
+  )
+  const profileId = await withDbTransaction(db, async (txDb) => {
+    const resolvedProfileId = await insertOrUpdateProfile({
+      db: txDb,
+      existing,
+      privyUserId,
+      email,
+      privyUser,
+      classification: effectiveClassification,
+    })
 
-  await clearRoleFlags(db, profileId, effectiveClassification)
+    await clearRoleFlags(txDb, resolvedProfileId, effectiveClassification)
 
-  const canonicalAddress = effectiveClassification.canonicalSmartWallet?.address ?? null
-  const canonicalSolanaAddress = effectiveClassification.canonicalSolanaWallet?.address ?? null
-  const operationalSolanaAddress = effectiveClassification.operationalSolanaWallet?.address ?? null
-  const embeddedAddress = effectiveClassification.embeddedEoa?.address ?? null
-  const primaryAddress = effectiveClassification.primaryWalletAddress ?? null
+    const canonicalAddress = effectiveClassification.canonicalSmartWallet?.address ?? null
+    const canonicalSolanaAddress = effectiveClassification.canonicalSolanaWallet?.address ?? null
+    const operationalSolanaAddress = effectiveClassification.operationalSolanaWallet?.address ?? null
+    const embeddedAddress = effectiveClassification.embeddedEoa?.address ?? null
+    const primaryAddress = effectiveClassification.primaryWalletAddress ?? null
 
-  for (const wallet of effectiveClassification.allWallets) {
-    await db.sql`
-      INSERT INTO wallets (address, chain, wallet_type, provider)
-      VALUES (${wallet.address}, ${wallet.chain}, ${wallet.walletType}, ${wallet.provider})
-      ON CONFLICT (address) DO UPDATE
-      SET
-        chain = COALESCE(EXCLUDED.chain, wallets.chain),
-        wallet_type = COALESCE(EXCLUDED.wallet_type, wallets.wallet_type),
-        provider = CASE
-          WHEN wallets.provider = 'unknown' THEN EXCLUDED.provider
-          ELSE wallets.provider
-        END;
-    `
+    for (const wallet of effectiveClassification.allWallets) {
+      await txDb.sql`
+        INSERT INTO wallets (address, chain, wallet_type, provider)
+        VALUES (${wallet.address}, ${wallet.chain}, ${wallet.walletType}, ${wallet.provider})
+        ON CONFLICT (address) DO UPDATE
+        SET
+          chain = COALESCE(EXCLUDED.chain, wallets.chain),
+          wallet_type = COALESCE(EXCLUDED.wallet_type, wallets.wallet_type),
+          provider = CASE
+            WHEN wallets.provider = 'unknown' THEN EXCLUDED.provider
+            ELSE wallets.provider
+          END;
+      `
 
-    const metadata = {
-      clientType: wallet.clientType,
-      syncedFrom: 'privy',
-      syncedAt: new Date().toISOString(),
+      const metadata = {
+        clientType: wallet.clientType,
+        syncedFrom: 'privy',
+        syncedAt: new Date().toISOString(),
+      }
+      await txDb.sql`
+        INSERT INTO profile_wallets (
+          profile_id,
+          address,
+          is_primary,
+          is_canonical_smart_wallet,
+          is_embedded_eoa,
+          is_canonical_solana_wallet,
+          is_operational_solana_wallet,
+          verified_at,
+          metadata,
+          updated_at
+        )
+        VALUES (
+          ${resolvedProfileId},
+          ${wallet.address},
+          ${Boolean(primaryAddress && normalizeLower(wallet.address) === normalizeLower(primaryAddress))},
+          ${Boolean(canonicalAddress && normalizeLower(wallet.address) === normalizeLower(canonicalAddress))},
+          ${Boolean(embeddedAddress && normalizeLower(wallet.address) === normalizeLower(embeddedAddress))},
+          ${Boolean(canonicalSolanaAddress && walletAddressEquals(wallet.address, canonicalSolanaAddress))},
+          ${Boolean(operationalSolanaAddress && walletAddressEquals(wallet.address, operationalSolanaAddress))},
+          NOW(),
+          ${metadata},
+          NOW()
+        )
+        ON CONFLICT (profile_id, address) DO UPDATE
+        SET
+          is_primary = EXCLUDED.is_primary,
+          is_canonical_smart_wallet = EXCLUDED.is_canonical_smart_wallet,
+          is_embedded_eoa = EXCLUDED.is_embedded_eoa,
+          is_canonical_solana_wallet = EXCLUDED.is_canonical_solana_wallet,
+          is_operational_solana_wallet = EXCLUDED.is_operational_solana_wallet,
+          verified_at = NOW(),
+          metadata = EXCLUDED.metadata,
+          updated_at = NOW();
+      `
     }
-    await db.sql`
-      INSERT INTO profile_wallets (
-        profile_id,
-        address,
-        is_primary,
-        is_canonical_smart_wallet,
-        is_embedded_eoa,
-        is_canonical_solana_wallet,
-        is_operational_solana_wallet,
-        verified_at,
-        metadata,
-        updated_at
-      )
-      VALUES (
-        ${profileId},
-        ${wallet.address},
-        ${Boolean(primaryAddress && normalizeLower(wallet.address) === normalizeLower(primaryAddress))},
-        ${Boolean(canonicalAddress && normalizeLower(wallet.address) === normalizeLower(canonicalAddress))},
-        ${Boolean(embeddedAddress && normalizeLower(wallet.address) === normalizeLower(embeddedAddress))},
-        ${Boolean(canonicalSolanaAddress && walletAddressEquals(wallet.address, canonicalSolanaAddress))},
-        ${Boolean(operationalSolanaAddress && walletAddressEquals(wallet.address, operationalSolanaAddress))},
-        NOW(),
-        ${metadata},
-        NOW()
-      )
-      ON CONFLICT (profile_id, address) DO UPDATE
-      SET
-        is_primary = EXCLUDED.is_primary,
-        is_canonical_smart_wallet = EXCLUDED.is_canonical_smart_wallet,
-        is_embedded_eoa = EXCLUDED.is_embedded_eoa,
-        is_canonical_solana_wallet = EXCLUDED.is_canonical_solana_wallet,
-        is_operational_solana_wallet = EXCLUDED.is_operational_solana_wallet,
-        verified_at = NOW(),
-        metadata = EXCLUDED.metadata,
-        updated_at = NOW();
-    `
-  }
+
+    return resolvedProfileId
+  })
 
   return {
     profileId,

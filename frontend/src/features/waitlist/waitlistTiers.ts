@@ -3,7 +3,8 @@
  *
  * Mirrors the server-side `toScoreTier` in
  * `frontend/server/_lib/identity/accountsIdentity.ts` so the UI stays in sync
- * with the tier returned by `/onboarding/bootstrap`.
+ * with the tier returned by `/api/waitlist/bootstrap` and `/api/accounts/me`.
+ * Tier thresholds use canonical **waitlist points** (leaderboard score), not AMOE credits.
  *
  * Copy intentionally avoids promising product perks that aren't in place. Each
  * tier is phrased as a progression signal rather than an unlock claim.
@@ -107,69 +108,6 @@ export function computeProgress(points: number): WaitlistProgress {
     progressPercent,
   }
 }
-
-/**
- * Curated "how to earn more points" suggestions based on `WAITLIST_POINTS` on
- * the server. Kept in sync by mirror rather than import because
- * `server/_lib/*` is not importable from `src/` (frontend boundary rule).
- *
- * When `to` is set, the suggestion renders as an internal link; when unset,
- * it renders as static text (useful for passive actions like "a referral
- * completes their profile" which the user can't directly trigger).
- */
-export type PointSuggestion = {
-  label: string
-  points: number
-  hint?: string
-  /**
-   * Optional in-app route that will help the user complete this action.
-   * Kept as a simple path so the tiers module stays UI-framework-agnostic.
-   */
-  to?: string
-}
-
-/**
- * Mirrors server `LINK_POINTS` + event-point values in
- * `frontend/server/_lib/identity/accountsIdentity.ts`. Keep this list
- * deduplicated on the canonical actions: link Zora gives the biggest
- * single jump; detecting a creator coin is automatic and not actionable,
- * so it isn't surfaced here.
- *
- * Ordered highest-impact first so the UI's top 2-3 suggestions move the
- * user the furthest in a single session.
- */
-export const POINT_SUGGESTIONS: readonly PointSuggestion[] = [
-  // Highest single-action reward: enabling 4626 signing (sub-account
-  // registration on the user's canonical Coinbase Smart Wallet).
-  // Architecturally the sub-account flow described in
-  // docs/4626-connection-methods.md.
-  { label: 'Enable 4626 signing', points: 50, hint: 'One-time', to: '/waitlist' },
-  { label: 'Link Zora', points: 40, hint: 'One-time', to: '/waitlist' },
-  { label: 'Link Google or Apple', points: 20, hint: 'Per platform', to: '/waitlist' },
-  { label: 'Link X / Telegram / TikTok', points: 16, hint: 'Per platform', to: '/waitlist' },
-  { label: 'Verify email', points: 10, hint: 'One-time' },
-  { label: 'Share 4626 on X, Farcaster, or Telegram', points: 6, hint: 'Once per day', to: '/portfolio' },
-  // Referral reward is dynamic — referrer earns 50% of every point the
-  // referee scores via `recordReferralPassthrough` on the server. The
-  // numeric `points` here is 0 because the amount is not fixed; any
-  // renderer should treat 0 as "see hint" rather than a literal zero.
-  { label: 'Refer a friend', points: 0, hint: 'Earn 50% of every point they score' },
-] as const
-
-/**
- * AMOE daily-share event reward. Mirrors `AMOE_CHECKIN_POINTS` in
- * `frontend/server/_lib/lottery/amoeWaitlistPoints.ts`. Surfaced so the
- * AMOE card / portfolio can render a "+N points" hint without guessing
- * the server value.
- *
- * Note: lottery entry submissions intentionally don't award waitlist
- * points — the daily social share is the base earn action; entries
- * depend on credits earned from that share.
- */
-export const AMOE_POINTS = {
-  /** Points awarded per successful daily share (X / Farcaster / Telegram). */
-  checkin: 6,
-} as const
 
 /**
  * Per-provider point rewards. Mirrors server `LINK_POINTS` exactly so the

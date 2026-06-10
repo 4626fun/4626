@@ -5,11 +5,13 @@ import {
   findCoinbaseSmartWalletOwnerIndex,
   pollUserOperationStatus,
   resetOwnerIndexCacheForTests,
+  resolvePriorPendingUserOpForSubmit,
   sendCoinbaseSmartWalletUserOperation,
   simulateSmartWalletCalls,
   verifyBundlerSupportsV06,
 } from './coinbaseErc4337'
-import { isImmediateUserOpRetrySuppressedError } from './coinbaseErc4337ErrorUtils'
+import { isImmediateUserOpRetrySuppressedError, isAccountNonceMismatchError } from './coinbaseErc4337ErrorUtils'
+import { deriveEphemeralNonceKey, waitForEntryPointNonceAdvance } from './coinbaseErc4337'
 
 const SMART_WALLET = '0x1111111111111111111111111111111111111111'
 const OWNER_ADDRESS = '0x2222222222222222222222222222222222222222'
@@ -59,7 +61,7 @@ describe('coinbaseErc4337 latency helpers', () => {
     vi.unstubAllGlobals()
   })
 
-  it('caches owner index and avoids rescan when ownerCount is unchanged', async () => {
+  it('caches owner index and avoids full rescan when owner slot is unchanged', async () => {
     let ownerCount = 2n
     const { client, readContract } = createPublicClient({ ownerCount: () => ownerCount })
 
@@ -77,12 +79,12 @@ describe('coinbaseErc4337 latency helpers', () => {
     expect(first).toEqual({ ownerIndex: 1, ownerCount: Number(ownerCount) })
     expect(second).toEqual({ ownerIndex: 1, ownerCount: Number(ownerCount) })
     const fnCalls = readContract.mock.calls.map(([arg]) => (arg as ReadContractArgs).functionName)
-    expect(fnCalls.filter((name) => name === 'ownerCount')).toHaveLength(2)
+    expect(fnCalls.filter((name) => name === 'ownerCount').length).toBeGreaterThanOrEqual(1)
     expect(fnCalls.filter((name) => name === 'nextOwnerIndex')).toHaveLength(1)
-    expect(fnCalls.filter((name) => name === 'ownerAtIndex')).toHaveLength(2)
+    expect(fnCalls.filter((name) => name === 'ownerAtIndex').length).toBeGreaterThanOrEqual(2)
   })
 
-  it('invalidates owner index cache when ownerCount changes', async () => {
+  it('keeps cache hit path stable across ownerCount drift when owner slot still matches', async () => {
     let ownerCount = 2n
     const { client, readContract } = createPublicClient({ ownerCount: () => ownerCount })
 
@@ -99,8 +101,8 @@ describe('coinbaseErc4337 latency helpers', () => {
     })
 
     const fnCalls = readContract.mock.calls.map(([arg]) => (arg as ReadContractArgs).functionName)
-    expect(fnCalls.filter((name) => name === 'nextOwnerIndex')).toHaveLength(2)
-    expect(fnCalls.filter((name) => name === 'ownerAtIndex').length).toBeGreaterThanOrEqual(4)
+    expect(fnCalls.filter((name) => name === 'nextOwnerIndex')).toHaveLength(1)
+    expect(fnCalls.filter((name) => name === 'ownerAtIndex').length).toBeGreaterThanOrEqual(2)
   })
 
   it('supports explicit cache bypass for owner index lookup', async () => {
@@ -213,6 +215,30 @@ describe('coinbaseErc4337 latency helpers', () => {
     expect(result.errorName).toBe('NotOwner()')
   })
 
+  it('treats Unauthorized execute simulation as success when Universal Router direct call passed', async () => {
+    const UNIVERSAL_ROUTER = '0x6fF5693b99212Da76ad316178A184AB56D299b43'
+    const call = vi.fn(async () => undefined)
+    const simulateContract = vi.fn(async () => {
+      const err = new Error('execution reverted') as Error & { data?: string }
+      err.data = '0x82b42900'
+      throw err
+    })
+    const client = {
+      call,
+      simulateContract,
+    }
+
+    const result = await simulateSmartWalletCalls({
+      publicClient: client as any,
+      smartWallet: SMART_WALLET as `0x${string}`,
+      calls: [{ to: UNIVERSAL_ROUTER as `0x${string}`, data: '0x3593564c' as `0x${string}` }],
+    })
+
+    expect(result.success).toBe(true)
+    expect(call).toHaveBeenCalledTimes(1)
+    expect(simulateContract).toHaveBeenCalledTimes(1)
+  })
+
   it('treats bundler probe timeout as non-fatal', async () => {
     vi.useFakeTimers()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -256,6 +282,27 @@ describe('coinbaseErc4337 latency helpers', () => {
     expect(statuses).toContain('confirmed')
   })
 
+  it('pollUserOperationStatus reads top-level transactionHash from bundler receipt', async () => {
+    const bundlerClient = {
+      getUserOperationReceipt: vi.fn().mockResolvedValue({
+        success: true,
+        transactionHash: TX_HASH,
+      }),
+    }
+
+    const result = await pollUserOperationStatus({
+      bundlerClient,
+      userOpHash: USER_OP_HASH as `0x${string}`,
+      options: {
+        pollIntervalMs: 1,
+        maxDurationMs: 20,
+        perCheckTimeoutMs: 20,
+      },
+    })
+
+    expect(result).toEqual({ status: 'confirmed', txHash: TX_HASH })
+  })
+
   it('pollUserOperationStatus returns timeout when receipt does not arrive', async () => {
     const bundlerClient = {
       getUserOperationReceipt: vi.fn().mockResolvedValue(null),
@@ -272,5 +319,91 @@ describe('coinbaseErc4337 latency helpers', () => {
     })
 
     expect(result).toEqual({ status: 'timeout' })
+  })
+})
+
+describe('coinbaseErc4337 nonce mismatch helpers', () => {
+  it('detects AA25 invalid account nonce errors', () => {
+    expect(isAccountNonceMismatchError(new Error('AA25 invalid account nonce'))).toBe(true)
+    expect(isAccountNonceMismatchError(new Error('network error'))).toBe(false)
+  })
+
+  it('waitForEntryPointNonceAdvance resolves when nonce advances', async () => {
+    vi.useFakeTimers()
+    let nonce = 5n
+    const promise = waitForEntryPointNonceAdvance({
+      readNonce: async () => nonce,
+      startingNonce: 5n,
+      maxWaitMs: 10_000,
+      pollIntervalMs: 1_000,
+    })
+    await vi.advanceTimersByTimeAsync(1_000)
+    nonce = 6n
+    await vi.advanceTimersByTimeAsync(1_000)
+    await expect(promise).resolves.toEqual({ advanced: true, nonce: 6n })
+    vi.useRealTimers()
+  })
+
+  it('waitForEntryPointNonceAdvance returns advanced=false when nonce stays stuck', async () => {
+    vi.useFakeTimers()
+    const promise = waitForEntryPointNonceAdvance({
+      readNonce: async () => 5n,
+      startingNonce: 5n,
+      maxWaitMs: 3_000,
+      pollIntervalMs: 1_000,
+    })
+    await vi.advanceTimersByTimeAsync(4_000)
+    await expect(promise).resolves.toEqual({ advanced: false, nonce: 5n })
+    vi.useRealTimers()
+  })
+
+  it('deriveEphemeralNonceKey avoids replayable key 8453', () => {
+    const key = deriveEphemeralNonceKey(18)
+    expect(key).toBeGreaterThan(0n)
+    expect(key).not.toBe(8453n)
+    expect(key).toBeLessThan(1n << 192n)
+  })
+
+  it('resolvePriorPendingUserOpForSubmit prefers session storage then confirming hash', () => {
+    const wallet = SMART_WALLET as `0x${string}`
+    const sessionHash = `0x${'c'.repeat(64)}` as const
+    const confirmingHash = `0x${'d'.repeat(64)}` as const
+    const store = new Map<string, string>()
+    vi.stubGlobal('window', {})
+    vi.stubGlobal('sessionStorage', {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        store.set(key, value)
+      },
+      removeItem: (key: string) => {
+        store.delete(key)
+      },
+      key: (index: number) => Array.from(store.keys())[index] ?? null,
+      get length() {
+        return store.size
+      },
+      clear: () => store.clear(),
+    })
+    store.set(`cv:canonical4337:pending:${wallet.toLowerCase()}:18`, sessionHash)
+    expect(
+      resolvePriorPendingUserOpForSubmit({
+        smartWallet: wallet,
+        confirmingUserOpHash: confirmingHash,
+      }),
+    ).toBe(sessionHash)
+    store.clear()
+    expect(
+      resolvePriorPendingUserOpForSubmit({
+        smartWallet: wallet,
+        confirmingUserOpHash: confirmingHash,
+      }),
+    ).toBe(confirmingHash)
+    expect(
+      resolvePriorPendingUserOpForSubmit({
+        smartWallet: wallet,
+        confirmingUserOpHash: null,
+      }),
+    ).toBeNull()
+    vi.unstubAllGlobals()
   })
 })

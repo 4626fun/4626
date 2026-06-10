@@ -1,12 +1,12 @@
 /**
- * ChatBar — bottom-right conversation list panel (Facebook Messenger style).
+ * ChatBar — bottom-right conversation list panel.
  *
  * When collapsed: a small pill showing "Chat" + total unread count.
  * When expanded: a panel listing all conversations.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { MessageSquare, ChevronDown, Plus, Wifi, WifiOff, X } from 'lucide-react'
+import { MessageSquare, ChevronDown, Plus, Search, Wifi, WifiOff, X } from 'lucide-react'
 import { useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
 import { useIdentity } from '@/hooks/useIdentity'
 import { getAgentIdentity } from './agentIdentity'
@@ -88,9 +88,14 @@ function ConversationItem({
   const identity = useIdentity(convo.type === 'dm' ? peerAddress : null)
   const agentIdentity = convo.type === 'dm' ? getAgentIdentity(peerAddress) : null
   const basenamePreferredName = identity.basenameDisplayName ?? identity.basename
+  const identityDisplayName = identity.source !== 'address' ? identity.displayName : null
+  const conversationNameLabel =
+    convo.name && !/^0x[a-fA-F0-9]{4}(?:…|\.{3})[a-fA-F0-9]{4}$/i.test(convo.name.trim())
+      ? convo.name
+      : null
   const displayName =
     convo.type === 'dm' && peerAddress
-      ? (agentIdentity?.name ?? basenamePreferredName ?? identity.displayName)
+      ? (agentIdentity?.name ?? basenamePreferredName ?? identityDisplayName ?? conversationNameLabel ?? convo.name)
       : convo.name
   const displaySecondary =
     convo.type === 'dm' && peerAddress
@@ -113,10 +118,10 @@ function ConversationItem({
         peerAddress: peerAddress ?? convo.peerAddress,
         imageUrl: avatar ?? convo.imageUrl,
       })}
-      className="flex items-start gap-3 w-full px-4 py-3 text-left hover:bg-white/5 transition-colors border-b border-white/5 last:border-b-0"
+      className="group flex w-full items-start gap-3 border-b border-white/5 px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-white/[0.06]"
     >
       <div className="relative h-10 w-10 shrink-0">
-        <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-white/10 text-[11px] font-medium uppercase text-zinc-300">
+        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/10 text-[11px] font-semibold uppercase text-zinc-300">
           {avatar ? (
             <img src={avatar} alt="" className="h-full w-full object-cover" />
           ) : (
@@ -132,7 +137,7 @@ function ConversationItem({
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
           <span className="min-w-0">
-            <span className="block truncate text-sm font-medium text-zinc-200">
+            <span className="block truncate text-sm font-semibold text-zinc-100">
               {displayName}
             </span>
           </span>
@@ -141,16 +146,16 @@ function ConversationItem({
               {lensBadge}
             </span>
           )}
-          <span className="text-[10px] text-zinc-500 shrink-0">
+          <span className="shrink-0 text-[10px] text-zinc-500 group-hover:text-zinc-400">
             {formatTime(convo.lastMessageAt)}
           </span>
         </div>
-        <div className="flex items-center justify-between gap-2 mt-0.5">
-          <span className="text-xs text-zinc-500 truncate">
+        <div className="mt-0.5 flex items-center justify-between gap-2">
+          <span className="truncate text-[12px] text-zinc-300">
             {subtitle}
           </span>
           {convo.unreadCount > 0 && (
-            <span className="shrink-0 flex items-center justify-center min-w-[16px] h-[16px] rounded-full bg-brand-primary text-[9px] font-bold text-black px-1">
+            <span className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-[#2374e1] px-1 text-[10px] font-bold text-white">
               {convo.unreadCount}
             </span>
           )}
@@ -186,6 +191,22 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
 
   const isConnected = status === 'connected'
   const isLoading = status === 'signing' || status === 'connecting'
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const filteredConversations = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase()
+    const sorted = [...conversations].sort(
+      (a, b) =>
+        b.unreadCount - a.unreadCount ||
+        (b.lastMessageAt?.getTime() ?? 0) - (a.lastMessageAt?.getTime() ?? 0),
+    )
+    if (!normalizedQuery) return sorted
+    return sorted.filter((conversation) =>
+      (conversation.name ?? '').toLowerCase().includes(normalizedQuery) ||
+      (conversation.peerAddress ?? '').toLowerCase().includes(normalizedQuery) ||
+      (conversation.lastMessageText ?? '').toLowerCase().includes(normalizedQuery),
+    )
+  }, [conversations, searchQuery])
 
   if (variant === 'mobile' && !expanded) {
     return (
@@ -193,7 +214,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
         type="button"
         onClick={onToggle}
         className="relative flex items-center justify-center w-12 h-12 rounded-full bg-zinc-900 text-zinc-200 shadow-lg hover:bg-zinc-800 transition-colors"
-        aria-label="Open messenger"
+        aria-label="Open chats"
       >
         <MessageSquare className="w-5 h-5" />
         {totalUnread > 0 && (
@@ -211,7 +232,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
       : 'flex flex-col'
 
   return (
-    <div className={containerClasses} style={variant === 'desktop' ? { width: 292 } : undefined}>
+    <div className={containerClasses} style={variant === 'desktop' ? { width: 320 } : undefined}>
       {/* Header / toggle pill */}
       {variant === 'desktop' ? (
         <button
@@ -243,7 +264,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
         </button>
       ) : (
         <div className="flex items-center justify-between px-4 pt-4 pb-3">
-          <div className="text-2xl font-semibold tracking-tight">Messenger</div>
+          <div className="text-2xl font-semibold tracking-tight">Chats</div>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -257,7 +278,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
               type="button"
               onClick={onToggle}
               className="flex items-center justify-center w-9 h-9 rounded-full bg-white/10 text-zinc-100 hover:bg-white/20 transition-colors"
-              aria-label="Close messenger"
+              aria-label="Close chats"
             >
               <X className="w-4 h-4" />
             </button>
@@ -274,14 +295,6 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
               : 'flex flex-col bg-black/82 backdrop-blur-xl border border-white/10 border-t-0 rounded-b-2xl overflow-hidden max-h-[420px] shadow-[0_26px_72px_-36px_rgba(0,0,0,0.95)]'
           }
         >
-          {variant === 'mobile' && (
-            <div className="px-4 pb-3">
-              <div className="flex items-center gap-2 rounded-full bg-zinc-900 px-4 py-2 text-sm text-zinc-500">
-                <MessageSquare className="w-4 h-4 text-zinc-400" />
-                Ask Akita or Search
-              </div>
-            </div>
-          )}
           {/* Not connected state */}
           {!isConnected && !isLoading && (
             <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
@@ -302,7 +315,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
               {!localStateResetRequired ? (
                 <button
                   type="button"
-                  onClick={connect}
+                  onClick={() => void connect('user')}
                   className="px-4 py-2 rounded-lg bg-brand-primary/20 text-brand-primary text-sm font-medium hover:bg-brand-primary/30 transition-colors"
                 >
                   {hasWalletIdentity ? `Connect Messaging (${xmtpModeLabel})` : 'Connect Messaging'}
@@ -311,8 +324,9 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
               {localStateResetRequired ? (
                 <>
                   <div className="text-[11px] text-amber-200/80 leading-relaxed">
-                    This browser’s XMTP cache no longer validates against your inbox. Reset local messaging state,
-                    then sign once to create a fresh installation.
+                    This browser’s XMTP cache no longer validates against your inbox. Reset local messaging state to
+                    clear the cache and recreate this browser install. If reset says OPFS is locked with only one tab
+                    open, click Reset again — the page will reload once automatically to release the lock.
                   </div>
                   <button
                     type="button"
@@ -365,6 +379,28 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
           {/* Connected - conversation list */}
           {isConnected && (
             <>
+              <div className={`${variant === 'mobile' ? 'px-4 pb-2' : 'px-3 py-2 border-b border-white/5'}`}>
+                <label className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 text-zinc-400 transition-colors focus-within:border-brand-primary/40">
+                  <Search className="w-3.5 h-3.5" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search chats"
+                    className="min-w-0 flex-1 bg-transparent text-sm text-zinc-100 placeholder:text-zinc-500 outline-none"
+                  />
+                  {searchQuery ? (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="rounded-full p-0.5 text-zinc-500 transition-colors hover:text-zinc-300"
+                      aria-label="Clear chat search"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
+                </label>
+              </div>
               {/* New chat button */}
               {variant === 'desktop' && (
                 <button
@@ -381,9 +417,13 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
                 <div className="px-4 py-8 text-center text-xs text-zinc-500">
                   No conversations yet
                 </div>
+              ) : filteredConversations.length === 0 ? (
+                <div className="px-4 py-8 text-center text-xs text-zinc-500">
+                  No chats match that search
+                </div>
               ) : (
                 <div className="overflow-y-auto flex-1">
-                  {conversations.map((convo) => (
+                  {filteredConversations.map((convo) => (
                     <ConversationItem
                       key={convo.id}
                       convo={convo}

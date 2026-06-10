@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/v1/lottery/\_amoeBurnRefundCron
+[4626-web](../../../../index.md) / api/\_handlers/v1/lottery/\_amoeBurnRefundCron
 
 # api/\_handlers/v1/lottery/\_amoeBurnRefundCron
 

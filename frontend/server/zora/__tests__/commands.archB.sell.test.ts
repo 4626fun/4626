@@ -34,13 +34,14 @@ const attestationGateMock = vi.fn()
 const submitUserOpMock = vi.fn()
 const secp256k1SignHashMock = vi.fn()
 const wrapCswOwnerSignatureMock = vi.fn()
+const readCswReplaySafeHashMock = vi.fn()
 const warnMock = vi.fn()
 const walletRpcMock = vi.fn()
 const fetchMock = vi.fn()
 const checkRouterTargetMock = vi.fn()
 const readContractMock = vi.fn()
 
-vi.mock('../../_lib/wallet/commandIssuerContext.js', () => ({
+vi.mock('@4626/server-core', () => ({  // canonical import path
   resolveCommandIssuerContextByAddress: (...args: unknown[]) => resolveContextMock(...args),
   isExecutionReady: (resolution: { status: string }) => resolution.status === 'ready',
 }))
@@ -56,6 +57,7 @@ vi.mock('../../_lib/agent/teeAttestationGate.js', () => ({
 
 vi.mock('../../_lib/wallet/cswOwnerSignature.js', () => ({
   wrapCswOwnerSignature: (...args: unknown[]) => wrapCswOwnerSignatureMock(...args),
+  readCswReplaySafeHash: (...args: unknown[]) => readCswReplaySafeHashMock(...args),
 }))
 
 vi.mock('../../_lib/infra/logger.js', () => ({
@@ -227,6 +229,7 @@ describe('handleCoinCommand -- /coin sell via Architecture B', () => {
     })
     secp256k1SignHashMock.mockResolvedValue(OWNER_SIG_65)
     wrapCswOwnerSignatureMock.mockReturnValue(WRAPPED_SIG)
+    readCswReplaySafeHashMock.mockResolvedValue(('0x' + '11'.repeat(32)) as `0x${string}`)
     checkRouterTargetMock.mockReturnValue({ allowed: true })
     // Keep sell tests deterministic: force decimals() read down the fallback
     // branch instead of consuming the fetch mock queue.

@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / api/\_handlers/v1/agents/feedback/\_read
+[4626-web](../../../../../index.md) / api/\_handlers/v1/agents/feedback/\_read
 
 # api/\_handlers/v1/agents/feedback/\_read
 

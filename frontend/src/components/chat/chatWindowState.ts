@@ -17,6 +17,14 @@ export function shouldAttemptInactiveDmRecovery(params: {
   return /group is inactive/i.test(params.reason) || /conversation_not_found/i.test(params.reason)
 }
 
+export function shouldAttemptGroupConversationRecovery(params: {
+  reason: string
+  conversationType: ConversationType
+}): boolean {
+  if (params.conversationType !== 'group') return false
+  return /conversation_not_found/i.test(params.reason)
+}
+
 export function resolveCommandCenterVisibility(params: {
   isMobile: boolean
   showCommandCenter: boolean

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/features/waitlist/ReferrerGreetingBanner
+[4626-web](../../../index.md) / src/features/waitlist/ReferrerGreetingBanner
 
 # src/features/waitlist/ReferrerGreetingBanner
 

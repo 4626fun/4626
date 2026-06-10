@@ -101,6 +101,13 @@ export type UseArchBDelegationReturn = {
   error: ArchBDelegationError | null
   /** Trigger delegation consent + backend enroll. No-op if not ready. */
   enable: () => Promise<ArchBActionResult>
+  /**
+   * Ensure the Privy embedded EOA has delegated to the Arch B quorum.
+   * Skips the Privy modal when `/api/arch-b/status` already reports
+   * `delegated: true`. Does not call `/api/arch-b/enroll` — sub-account
+   * provisioning writes its own execution-context row.
+   */
+  ensureDelegation: () => Promise<ArchBActionResult>
   /** Backend revoke + Privy wallet revoke. No-op if not provisioned. */
   disable: () => Promise<ArchBActionResult>
   /** Manually refresh status (e.g. after returning from external browser). */
@@ -337,6 +344,53 @@ export function useArchBDelegation(): UseArchBDelegationReturn {
     }
   }, [authenticated, ownerEoa, delegateWallet, fetchStatus])
 
+  // ── ensureDelegation() ────────────────────────────────────────────────────
+
+  const ensureDelegation = useCallback(async (): Promise<ArchBActionResult> => {
+    if (!readyRef.current) return { ok: false, error: toArchBError('not_ready', 'Privy not ready.') }
+    if (!authenticated) return { ok: false, error: toArchBError('unauthenticated', 'Not signed in.') }
+
+    try {
+      const res = await apiFetch('/api/arch-b/status', { method: 'GET' })
+      if (res.ok) {
+        const json = (await res.json()) as {
+          success: boolean
+          data: { delegated: boolean | null } | null
+        }
+        if (json.success && json.data?.delegated === true) {
+          return { ok: true }
+        }
+      }
+    } catch {
+      // Fall through to delegateWallet — status fetch is best-effort.
+    }
+
+    dispatch({ type: 'ENABLE_START' })
+
+    const address = ownerEoa
+    if (!address) {
+      const error = toArchBError(
+        'no_embedded_wallet',
+        'No Privy embedded signer found. Sign in with email OTP first.',
+      )
+      dispatch({ type: 'ERROR', error })
+      return { ok: false, error }
+    }
+
+    try {
+      await delegateWallet({ address: address as `0x${string}`, chainType: 'ethereum' })
+      dispatch({ type: 'DELEGATED' })
+      await fetchStatus()
+      return { ok: true }
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Delegation declined or unavailable.'
+      const error = toArchBError('delegation_declined', message)
+      dispatch({ type: 'ERROR', error })
+      return { ok: false, error }
+    }
+  }, [authenticated, ownerEoa, delegateWallet, fetchStatus])
+
   // ── disable() ─────────────────────────────────────────────────────────────
 
   const disable = useCallback(async (): Promise<ArchBActionResult> => {
@@ -397,6 +451,7 @@ export function useArchBDelegation(): UseArchBDelegationReturn {
     caps: state.caps,
     error: state.error,
     enable,
+    ensureDelegation,
     disable,
     refresh: () => void fetchStatus(),
   }

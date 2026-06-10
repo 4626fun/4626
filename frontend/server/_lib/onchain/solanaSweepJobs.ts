@@ -1,6 +1,7 @@
 import { Connection, Keypair, PublicKey, SystemProgram, Transaction } from '@solana/web3.js'
 
 import { ensureCanonicalWalletsSchema } from '../wallet/canonicalWalletsSchema.js'
+import { ensureWalletOnchainOpsAuditSchema } from '../db/schemaBootstrap.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
@@ -87,40 +88,8 @@ function retryDelaySeconds(attempt: number): number {
 export async function ensureSolanaSweepJobsSchema(db: Db): Promise<void> {
   if (schemaEnsured) return
   await ensureCanonicalWalletsSchema(db)
-  try {
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS solana_sweep_jobs (
-        id BIGSERIAL PRIMARY KEY,
-        profile_id BIGINT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-        operational_wallet TEXT NOT NULL,
-        canonical_wallet TEXT NOT NULL,
-        min_lamports NUMERIC(78, 0) NOT NULL DEFAULT 0,
-        attempt_count INTEGER NOT NULL DEFAULT 0,
-        max_attempts INTEGER NOT NULL DEFAULT 5,
-        status TEXT NOT NULL DEFAULT 'pending',
-        tx_sig TEXT NULL,
-        last_error TEXT NULL,
-        next_retry_at TIMESTAMPTZ NULL,
-        idempotency_key TEXT NOT NULL UNIQUE,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        CHECK (status IN ('pending', 'retrying', 'processing', 'succeeded', 'failed', 'blocked', 'cancelled')),
-        CHECK (max_attempts >= 1)
-      );
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS solana_sweep_jobs_status_idx
-      ON solana_sweep_jobs (status, next_retry_at, created_at DESC);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS solana_sweep_jobs_profile_idx
-      ON solana_sweep_jobs (profile_id, created_at DESC);
-    `
-    schemaEnsured = true
-  } catch (err) {
-    schemaEnsured = false
-    throw err
-  }
+  await ensureWalletOnchainOpsAuditSchema(db as any)
+  schemaEnsured = true
 }
 
 export async function enqueueSolanaSweepJob(params: {

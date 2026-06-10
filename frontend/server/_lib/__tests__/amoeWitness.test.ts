@@ -5,7 +5,7 @@
 //   1. Each individual hash helper (walletAddrCommit, nonceCommit,
 //      pointsBurnNullifier, allowlistLeaf, ledgerLeaf) bit-exactly
 //      matches the canonical fixture from
-//      `circuits/amoe/build/input_v2.json`.
+//      `amoe/circuits/build/input_v2.json`.
 //   2. End-to-end `assembleAmoeWitness` produces:
 //      * Public commits matching the fixture's pre-baked values.
 //      * `allowlistRoot` and `pointsLedgerRoot` matching the fixture.

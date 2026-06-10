@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / src/features/home/vault-flow/model/flowProfile
+[4626-web](../../../../../index.md) / src/features/home/vault-flow/model/flowProfile
 
 # src/features/home/vault-flow/model/flowProfile
 

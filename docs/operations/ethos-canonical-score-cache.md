@@ -10,6 +10,7 @@ The pipeline writes and serves Ethos scores via local Postgres/Supabase tables:
 - `public.ethos_userkey_scores`
 - `public.canonical_ethos_scores`
 - `public.ethos_score_sync_state`
+- `public.creator_ethos_projection` (precomputed creator-score sort surface)
 
 User-facing request paths read local projections and do not need live Ethos API calls when canonical reads are enabled.
 
@@ -39,6 +40,7 @@ Deploy migration:
 
 - `frontend/db/migrations/040_ethos_canonical_score_cache.sql`
 - `frontend/db/migrations/044_schedule_zora_owner_ethos_projection.sql`
+- `frontend/db/migrations/047_creator_ethos_projection.sql`
 
 Verify tables exist:
 
@@ -47,6 +49,7 @@ select to_regclass('public.user_ethos_identity_keys');
 select to_regclass('public.ethos_userkey_scores');
 select to_regclass('public.canonical_ethos_scores');
 select to_regclass('public.ethos_score_sync_state');
+select to_regclass('public.creator_ethos_projection');
 ```
 
 ## 3) Dark launch sync
@@ -72,6 +75,7 @@ Expected response sections:
 - `synced`
 - `rollupAfterSync`
 - `updates`
+- `creatorProjection`
 
 ## 4) Validate first backfill
 
@@ -82,6 +86,7 @@ select count(*) from public.user_ethos_identity_keys;
 select count(*) from public.ethos_userkey_scores;
 select status, count(*) from public.ethos_userkey_scores group by 1 order by 2 desc;
 select count(*) from public.canonical_ethos_scores where score is not null;
+select count(*) from public.creator_ethos_projection where ethos_score is not null;
 ```
 
 Quality checks:
@@ -122,7 +127,89 @@ If projection results drift or sync fails:
 
 This returns reads to legacy request-time Ethos behavior without schema rollback.
 
-## 7) Zora owner projection automation
+## 7) Explore creators Ethos coverage
+
+Explore (`/explore/creators`) lists **creator coins**, not raw `zora_csw_owner_class` rows. Scores reach the UI through:
+
+1. `refreshCreatorEthosProjection` → `public.creator_ethos_projection` (cron: `/api/v1/chat/ethos-sync`, `/api/v1/chat/ethos-sync-hot`, keeper `/api/keeper/ethos-sync`)
+2. `GET /api/zora/explore` merges projection + live resolver (`resolveCreatorEthosByAddress`) per page
+3. `GET /api/zora/coin` attaches the same merged Ethos fields on creator/content detail pages
+4. `GET /api/zora/metrics?scope=creators` → `ethosScoredCreators` counts projection rows with `ethos_score IS NOT NULL`
+
+**Ops checks**
+
+```sql
+SELECT COUNT(*) FILTER (WHERE ethos_score IS NOT NULL) AS scored
+FROM public.creator_ethos_projection;
+```
+
+Compare to `ethosScoredCreators` on `/api/zora/metrics?scope=creators`.
+
+**Env (production `akita-llc/4626`)**
+
+- `ETHOS_CREATOR_PROJECTION_LIMIT` — full reconcile refresh size (recommend `50000`)
+- `ETHOS_CREATOR_PROJECTION_LIMIT_HOT` — hot lane refresh size (default `2000`)
+- `ETHOS_CREATOR_PROJECTION_ETHOS_PRIORITY_LIMIT` — extra creators pulled into refresh by high `zora_csw_owner_class` signal (default `5000`)
+- `ETHOS_CREATOR_PROJECTION_ETHOS_PRIORITY_MIN_SCORE` — minimum owner-class score for that priority lane (default `1200`)
+- `ETHOS_CREATOR_PROJECTION_FULL_EVERY_N` — how often main sync uses `mode: full` (default `4` slots ≈ hourly)
+- `ETHOS_CREATOR_PROJECTION_MODE` — optional force `full` or `fast` on all lanes
+
+Volume/mcap sorts attach `ethosScore` from projection when the creator is in `creator_coins` and has been refreshed; Ethos sort reads projection directly.
+
+**Explore Ethos sort UX:** `GET /api/zora/explore?sort=ETHOS_SCORE` defaults to `ethosMin=1`, so only creators with a non-null projection score are returned (no long tail of unscored rows with empty pills). The Explore UI passes `ethosMin=1` explicitly. To include unscored creators after the scored page (legacy behavior), pass `includeUnscored=1` or `ethosMin=0` with a resolver that allows nulls.
+
+After wallet backfill, expect on the order of **~10k** scored creators in projection for the top-volume cohort; the remaining ~20k+ Base creators need another backfill tranche (`--offset 10000`) or time for cron/Twitter refresh.
+
+**Single-address trace (ops)**
+
+```bash
+pnpm -C frontend exec tsx scripts/trace-creator-ethos-explore.ts \
+  --creator 0x<creatorAddress> \
+  --coin 0x<coinAddress> \
+  --base-url https://app.4626.fun
+```
+
+Checks projection row, merged resolver output, explore list match, and coin API payload.
+
+### Explore-targeted wallet backfill (recommended catch-up)
+
+For Explore sort coverage, prefer this over `ethos-zora-backfill.ts` (which scans all CSW owners):
+
+```bash
+pnpm -C frontend exec tsx scripts/ethos-creator-wallet-backfill.ts
+```
+
+The script:
+
+1. Selects top creators by `creator_coins.volume_24h_usd` (default top **10,000** on Base).
+2. Expands each batch to linked `zora_profiles` wallets and CSW owner EOAs (batch-scoped joins only).
+3. Calls Ethos bulk score sync for stale/missing `address:` userkeys (skips fresh matched rows by default).
+4. Re-runs `refreshCreatorEthosProjection` so `/explore` sort picks up new scores.
+
+Resume cursor: `ethos_score_sync_state.sync_key = ethos_creator_wallet_backfill_v1`.
+
+Useful env overrides:
+
+- `ETHOS_CREATOR_WALLET_BACKFILL_TOTAL_LIMIT=10000`
+- `ETHOS_CREATOR_WALLET_BACKFILL_BATCH_SIZE=500`
+- `ETHOS_CREATOR_WALLET_BACKFILL_SLEEP_MS=300`
+- `ETHOS_CREATOR_WALLET_BACKFILL_SKIP_FRESH=1`
+- `ETHOS_CREATOR_WALLET_BACKFILL_PROJECTION_LIMIT=50000`
+- `ETHOS_CREATOR_WALLET_BACKFILL_REFRESH_EACH_BATCH=0` (set `1` for per-batch projection; default runs once at end)
+- `ETHOS_CREATOR_WALLET_BACKFILL_RESET=1` or `--reset` to start from offset 0
+
+CLI overrides: `--offset 0`, `--total-limit 5000`, `--reset`.
+
+### Paid on-demand refresh ($0.10 USDC)
+
+Authenticated users can pay **$0.10 USDC** on Base to re-fetch Ethos for one creator and upsert `creator_ethos_projection`:
+
+- `GET /api/creator/ethos/refresh-config?creatorAddress=0x…` — price, treasury, cooldown
+- `POST /api/creator/ethos/refresh` — body `{ creatorAddress, paymentTxHash }`
+
+Orders are stored in `creator_ethos_refresh_orders` (migration `048` / `20260520130000`). Default cooldown: `ETHOS_PAID_REFRESH_COOLDOWN_MINUTES=5`.
+
+## 8) Zora owner projection automation
 
 `044_schedule_zora_owner_ethos_projection.sql` adds:
 

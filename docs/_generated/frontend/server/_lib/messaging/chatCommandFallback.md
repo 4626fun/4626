@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/messaging/chatCommandFallback
+[4626-web](../../../index.md) / server/\_lib/messaging/chatCommandFallback
 
 # server/\_lib/messaging/chatCommandFallback
 
@@ -34,7 +34,27 @@ Defined in: [server/\_lib/messaging/chatCommandFallback.ts:4](https://github.com
 
 Defined in: [server/\_lib/messaging/chatCommandFallback.ts:2](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L2)
 
+***
+
+### WelcomeMenuResolution
+
+> **WelcomeMenuResolution** = \{ `kind`: `"passthrough"`; \} \| \{ `kind`: `"command"`; `resolvedText`: `string`; \} \| \{ `kind`: `"ai_prompt"`; \} \| \{ `kind`: `"invalid"`; `selection`: `string`; \}
+
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L46)
+
 ## Functions
+
+### formatAiPromptGuidance()
+
+> **formatAiPromptGuidance**(): `string`
+
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L40)
+
+#### Returns
+
+`string`
+
+***
 
 ### formatNumberedCommandFallback()
 
@@ -69,3 +89,39 @@ Defined in: [server/\_lib/messaging/chatCommandFallback.ts:30](https://github.co
 #### Returns
 
 `string`
+
+***
+
+### resolveInboundMenuText()
+
+> **resolveInboundMenuText**(`input`): [`WelcomeMenuResolution`](#welcomemenuresolution)
+
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:63](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L63)
+
+#### Parameters
+
+##### input
+
+`string`
+
+#### Returns
+
+[`WelcomeMenuResolution`](#welcomemenuresolution)
+
+***
+
+### resolveWelcomeMenuSelection()
+
+> **resolveWelcomeMenuSelection**(`index`): [`WelcomeMenuResolution`](#welcomemenuresolution)
+
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:52](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L52)
+
+#### Parameters
+
+##### index
+
+`number`
+
+#### Returns
+
+[`WelcomeMenuResolution`](#welcomemenuresolution)

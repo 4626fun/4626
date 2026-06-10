@@ -1,0 +1,282 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { assertNoEmailPrivyCollision } from './identityRecovery'
+import { runWithWaitlistEmailCollisionAdoption, runWithWaitlistWalletCollisionAdoption } from './emailCollisionAdoption'
+
+const upsertLinkedMethodMock = vi.hoisted(() => vi.fn(async () => {}))
+
+vi.mock('./accountsIdentity.js', () => ({
+  upsertLinkedMethod: upsertLinkedMethodMock,
+}))
+
+type FakeDb = { sql: ReturnType<typeof vi.fn> }
+
+function recoveryError(email: string) {
+  return Object.assign(new Error('collision'), {
+    code: 'IDENTITY_RECOVERY_REQUIRED',
+    reason: 'EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER',
+    email,
+    requestedPrivyUserId: 'did:privy:new-user',
+    existingPrivyUserId: 'did:privy:old-user',
+  })
+}
+
+function createRebindDb(): FakeDb {
+  return {
+    sql: vi.fn(async (strings: TemplateStringsArray) => {
+      const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      if (text.includes('from profiles') && text.includes('where lower(email) = lower(')) {
+        return {
+          rows: [{ id: 42, privy_user_id: 'did:privy:old-user' }],
+        }
+      }
+      if (text.includes('update profiles') && text.includes('returning id')) {
+        return { rows: [{ id: 42 }] }
+      }
+      if (text.includes('where privy_user_id =')) {
+        return { rows: [] }
+      }
+      return { rows: [] }
+    }),
+  }
+}
+
+describe('runWithWaitlistEmailCollisionAdoption', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('rebinds when Privy verifies the same email on a new session', async () => {
+    const db = createRebindDb()
+    const action = vi
+      .fn()
+      .mockRejectedValueOnce(recoveryError('user@example.com'))
+      .mockResolvedValueOnce('ok')
+
+    const privyUser = {
+      id: 'did:privy:new-user',
+      email: { address: 'user@example.com', verified: true },
+    }
+
+    const result = await runWithWaitlistEmailCollisionAdoption({
+      db: db as any,
+      email: 'user@example.com',
+      privyUserId: 'did:privy:new-user',
+      privyUser,
+      action,
+    })
+
+    expect(result).toBe('ok')
+    expect(action).toHaveBeenCalledTimes(2)
+    expect(upsertLinkedMethodMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        privyUserId: 'did:privy:new-user',
+        type: 'email',
+        value: 'user@example.com',
+        verified: true,
+      }),
+    )
+  })
+
+  it('uses the collision email when the caller email is still hydrating', async () => {
+    const db = createRebindDb()
+    const action = vi
+      .fn()
+      .mockRejectedValueOnce(recoveryError('user@example.com'))
+      .mockResolvedValueOnce('ok')
+
+    const privyUser = {
+      id: 'did:privy:new-user',
+      linkedAccounts: [{ type: 'email', address: 'user@example.com', verified: true }],
+    }
+
+    const result = await runWithWaitlistEmailCollisionAdoption({
+      db: db as any,
+      email: null,
+      privyUserId: 'did:privy:new-user',
+      privyUser,
+      action,
+    })
+
+    expect(result).toBe('ok')
+    expect(action).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not rebind when Privy has not verified the email yet', async () => {
+    const db = createRebindDb()
+    const action = vi.fn().mockRejectedValueOnce(recoveryError('user@example.com'))
+
+    await expect(
+      runWithWaitlistEmailCollisionAdoption({
+        db: db as any,
+        email: 'user@example.com',
+        privyUserId: 'did:privy:new-user',
+        privyUser: {
+          id: 'did:privy:new-user',
+          email: { address: 'user@example.com', verified: false },
+        } as any,
+        action,
+      }),
+    ).rejects.toMatchObject({ code: 'IDENTITY_RECOVERY_REQUIRED' })
+
+    expect(action).toHaveBeenCalledTimes(1)
+    expect(upsertLinkedMethodMock).not.toHaveBeenCalled()
+  })
+
+  it('rebinds legacy profiles whose privy_user_id is still null', async () => {
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('from profiles') && text.includes('where lower(email) = lower(')) {
+          return {
+            rows: [{ id: 42, privy_user_id: null }],
+          }
+        }
+        if (text.includes('update profiles') && text.includes('returning id')) {
+          return { rows: [{ id: 42 }] }
+        }
+        return { rows: [] }
+      }),
+    }
+    const action = vi
+      .fn()
+      .mockRejectedValueOnce(recoveryError('user@example.com'))
+      .mockResolvedValueOnce('ok')
+
+    const result = await runWithWaitlistEmailCollisionAdoption({
+      db: db as any,
+      email: 'user@example.com',
+      privyUserId: 'did:privy:new-user',
+      privyUser: {
+        id: 'did:privy:new-user',
+        email: { address: 'user@example.com', verified: true },
+      } as any,
+      action,
+    })
+
+    expect(result).toBe('ok')
+    expect(action).toHaveBeenCalledTimes(2)
+  })
+
+  it('rebinds from a client bootstrap email hint when Privy server hydration lags', async () => {
+    const db = createRebindDb()
+    const action = vi
+      .fn()
+      .mockRejectedValueOnce(recoveryError('user@example.com'))
+      .mockResolvedValueOnce('ok')
+
+    const result = await runWithWaitlistEmailCollisionAdoption({
+      db: db as any,
+      email: null,
+      privyUserId: 'did:privy:new-user',
+      privyUser: { id: 'did:privy:new-user' },
+      bootstrapEmailHint: 'user@example.com',
+      action,
+    })
+
+    expect(result).toBe('ok')
+    expect(action).toHaveBeenCalledTimes(2)
+  })
+
+  it('delegates to assertNoEmailPrivyCollision without throwing when no collision exists', async () => {
+    const db: FakeDb = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase()
+        if (text.includes('from accounts') || text.includes('from profiles')) {
+          return { rows: [] }
+        }
+        return { rows: [] }
+      }),
+    }
+
+    await expect(
+      runWithWaitlistEmailCollisionAdoption({
+        db: db as any,
+        email: 'user@example.com',
+        privyUserId: 'did:privy:new-user',
+        privyUser: {
+          id: 'did:privy:new-user',
+          email: { address: 'user@example.com', verified: true },
+        } as any,
+        action: () => assertNoEmailPrivyCollision({ db: db as any, email: 'user@example.com', privyUserId: 'did:privy:new-user' }),
+      }),
+    ).resolves.toBeUndefined()
+  })
+})
+
+function walletRecoveryError(email: string) {
+  return Object.assign(new Error('wallet collision'), {
+    code: 'IDENTITY_RECOVERY_REQUIRED',
+    reason: 'WALLET_BOUND_TO_CANONICAL_EMAIL_PROFILE',
+    canonicalEmail: email,
+    canonicalProfileId: 710,
+    requestedPrivyUserId: 'did:privy:new-user',
+    wallet: '0x' + 'b'.repeat(40),
+  })
+}
+
+describe('runWithWaitlistWalletCollisionAdoption', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('seeds a privy alias when the incoming session owns canonical profile wallets', async () => {
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('from profiles') && text.includes('where id =')) {
+          return {
+            rows: [
+              {
+                id: 710,
+                privy_user_id: 'did:privy:old-user',
+                primary_wallet: '0x' + 'b'.repeat(40),
+                csw_address: '0x' + 'c'.repeat(40),
+              },
+            ],
+          }
+        }
+        if (text.includes('from profile_wallets')) {
+          return { rows: [] }
+        }
+        if (text.includes('insert into privy_user_aliases')) {
+          return { rows: [] }
+        }
+        return { rows: [] }
+      }),
+    }
+    const action = vi
+      .fn()
+      .mockRejectedValueOnce(walletRecoveryError('user@example.com'))
+      .mockResolvedValueOnce('ok')
+
+    const privyUser = {
+      id: 'did:privy:new-user',
+      linked_accounts: [
+        {
+          type: 'wallet',
+          address: '0x' + 'b'.repeat(40),
+          chain_type: 'ethereum',
+          wallet_client_type: 'coinbase_wallet',
+        },
+      ],
+    }
+
+    const result = await runWithWaitlistWalletCollisionAdoption({
+      db: db as any,
+      email: 'user@example.com',
+      privyUserId: 'did:privy:new-user',
+      privyUser,
+      bootstrapEmailHint: 'user@example.com',
+      action,
+    })
+
+    expect(result).toBe('ok')
+    expect(action).toHaveBeenCalledTimes(2)
+    expect(
+      db.sql.mock.calls.some((call) =>
+        String(call[0]?.join?.(' ') ?? call[0]).toLowerCase().includes('insert into privy_user_aliases'),
+      ),
+    ).toBe(true)
+  })
+})

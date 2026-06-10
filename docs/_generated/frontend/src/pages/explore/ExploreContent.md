@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/pages/explore/ExploreContent
+[4626-web](../../../index.md) / src/pages/explore/ExploreContent
 
 # src/pages/explore/ExploreContent
 
@@ -12,7 +12,7 @@
 
 > **ExploreContent**(): `Element`
 
-Defined in: [src/pages/explore/ExploreContent.tsx:35](https://github.com/wenakita/4626/blob/main/frontend/src/pages/explore/ExploreContent.tsx#L35)
+Defined in: [src/pages/explore/ExploreContent.tsx:37](https://github.com/wenakita/4626/blob/main/frontend/src/pages/explore/ExploreContent.tsx#L37)
 
 #### Returns
 

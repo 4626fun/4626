@@ -32,7 +32,39 @@
  * correctly.
  */
 
-import { getAddress, type Hex } from 'viem'
+import { getAddress, type Hex, type PublicClient } from 'viem'
+
+import { buildWalletSendCallsPayload } from '@/lib/wallet/walletSendCallsPayload'
+
+const DEFAULT_WALLET_SEND_CALLS_TIMEOUT_MS = 180_000
+
+export async function withWalletRequestTimeout<T>(
+  label: string,
+  timeoutMs: number,
+  run: () => Promise<T>,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      run(),
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(
+            new Error(
+              `${label} timed out after ${Math.round(timeoutMs / 1000)}s. Open Base App and confirm the passkey/sign prompt, then retry.`,
+            ),
+          )
+        }, timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+function isTxHash(value: unknown): value is `0x${string}` {
+  return typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)
+}
 
 export type CswSendCallsTelemetry = {
   step:
@@ -85,6 +117,8 @@ export type SubmitViaSendCallsParams = {
   chainId: number
   /** Optional. Defaults to true so Base App treats the calls as a single bundle. */
   atomicRequired?: boolean
+  /** When true, skip eth_accounts (Base App can hang on it after eth_requestAccounts). */
+  skipEthAccountsPreflight?: boolean
   onTelemetry?: (event: CswSendCallsTelemetry) => void
 }
 
@@ -112,10 +146,14 @@ export async function _submitOwnerViaSendCalls(
   // Sanity check: the wallet must be connected as the CSW (or as an owner)
   // for EIP-5792 to authorize the call against the CSW account.
   let accounts: string[] = []
-  try {
-    accounts = (await params.walletRequest({ method: 'eth_accounts' })) as string[]
-  } catch {
-    /* fall through */
+  if (!params.skipEthAccountsPreflight) {
+    try {
+      accounts = (await withWalletRequestTimeout('eth_accounts', 8_000, () =>
+        params.walletRequest({ method: 'eth_accounts' }),
+      )) as string[]
+    } catch {
+      /* fall through — upstream eth_requestAccounts may already have verified CSW */
+    }
   }
 
   const cswLower = params.csw.toLowerCase()
@@ -157,24 +195,25 @@ export async function _submitOwnerViaSendCalls(
     throw new Error('wallet_sendCalls: must provide at least one call.')
   }
 
-  const chainIdHex = `0x${params.chainId.toString(16)}`
-
-  // EIP-5792 wallet_sendCalls payload. Spec:
-  // https://eips.ethereum.org/EIPS/eip-5792
-  const payload = {
-    version: '1.0',
+  const payload = buildWalletSendCallsPayload({
     from: getAddress(params.csw),
-    chainId: chainIdHex,
-    atomicRequired: params.atomicRequired ?? true,
-    calls: normalizedCalls,
-  }
+    chainId: params.chainId,
+    // Single CSW self-calls match swap/deploy routing (atomic only when batching).
+    atomicRequired: params.atomicRequired ?? normalizedCalls.length > 1,
+    calls: normalizedCalls.map((call) => ({
+      to: call.to,
+      data: call.data,
+      value: call.value,
+    })),
+  })
 
   emit({
     step: 'prompt_sign',
     detail: {
       method: 'wallet_sendCalls',
       from: payload.from,
-      chainId: chainIdHex,
+      chainId: payload.chainId,
+      version: payload.version,
       callCount: normalizedCalls.length,
       calls: callsSummary,
     },
@@ -182,10 +221,15 @@ export async function _submitOwnerViaSendCalls(
 
   let result: unknown
   try {
-    result = await params.walletRequest({
-      method: 'wallet_sendCalls',
-      params: [payload],
-    })
+    result = await withWalletRequestTimeout(
+      'wallet_sendCalls',
+      DEFAULT_WALLET_SEND_CALLS_TIMEOUT_MS,
+      () =>
+        params.walletRequest({
+          method: 'wallet_sendCalls',
+          params: [payload],
+        }),
+    )
   } catch (error) {
     emit({
       step: 'broadcast_error',
@@ -229,7 +273,76 @@ export type WaitForCallsTxHashParams = {
   timeoutMs?: number
   /** Interval between polls in ms. Defaults to 1500. */
   intervalMs?: number
+  /** Optional RPC client to resolve UserOp hash → bundle tx via eth_getUserOperationReceipt. */
+  publicClient?: Pick<PublicClient, 'request'>
   onTelemetry?: (event: CswSendCallsTelemetry) => void
+}
+
+export type CallsStatusHashes = {
+  transactionHash: `0x${string}` | null
+  userOperationHash: `0x${string}` | null
+}
+
+export function extractCallsStatusHashes(raw: unknown): CallsStatusHashes {
+  if (!raw || typeof raw !== 'object') {
+    return { transactionHash: null, userOperationHash: null }
+  }
+  const obj = raw as Record<string, unknown>
+  const receipts = Array.isArray(obj.receipts) ? obj.receipts : []
+  let transactionHash: `0x${string}` | null = null
+  let userOperationHash: `0x${string}` | null = null
+
+  for (const r of receipts) {
+    if (!r || typeof r !== 'object') continue
+    const rec = r as Record<string, unknown>
+    if (!transactionHash && isTxHash(rec.transactionHash)) {
+      transactionHash = rec.transactionHash
+    }
+    for (const key of ['userOperationHash', 'userOpHash', 'userOperationReceiptHash'] as const) {
+      if (!userOperationHash && isTxHash(rec[key])) {
+        userOperationHash = rec[key]
+      }
+    }
+  }
+
+  if (!userOperationHash) {
+    for (const key of ['userOperationHash', 'userOpHash'] as const) {
+      if (isTxHash(obj[key])) {
+        userOperationHash = obj[key]
+      }
+    }
+  }
+
+  return { transactionHash, userOperationHash }
+}
+
+function readCallsStatusFailure(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'object') return null
+  const status = Number((raw as Record<string, unknown>).status)
+  if (Number.isFinite(status) && status >= 400) {
+    return `wallet_sendCalls failed with status ${status}`
+  }
+  const statusText = String((raw as Record<string, unknown>).status ?? '').toUpperCase()
+  if (statusText === 'FAILED' || statusText === 'ERROR') {
+    return `wallet_sendCalls reported status ${statusText}`
+  }
+  return null
+}
+
+async function resolveBundleTxFromUserOpHash(
+  publicClient: Pick<PublicClient, 'request'>,
+  userOpHash: `0x${string}`,
+): Promise<`0x${string}` | null> {
+  try {
+    const receipt = (await publicClient.request({
+      method: 'eth_getUserOperationReceipt' as any,
+      params: [userOpHash],
+    })) as { receipt?: { transactionHash?: string } } | null
+    const tx = receipt?.receipt?.transactionHash
+    return isTxHash(tx) ? tx : null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -263,7 +376,11 @@ export type WaitForCallsTxHashParams = {
  */
 export async function waitForCallsTxHash(
   params: WaitForCallsTxHashParams,
-): Promise<{ transactionHash: `0x${string}` | null; rawStatus: unknown }> {
+): Promise<{
+  transactionHash: `0x${string}` | null
+  userOperationHash: `0x${string}` | null
+  rawStatus: unknown
+}> {
   const emit = (event: CswSendCallsTelemetry) => {
     try {
       params.onTelemetry?.(event)
@@ -299,21 +416,40 @@ export async function waitForCallsTxHash(
           error: error instanceof Error ? error.message : String(error ?? ''),
         },
       })
-      return { transactionHash: null, rawStatus: { error } }
+      return { transactionHash: null, userOperationHash: null, rawStatus: { error } }
     }
 
-    const txHash = extractFirstTransactionHash(raw)
+    const failure = readCallsStatusFailure(raw)
+    if (failure) {
+      emit({ step: 'broadcast_error', detail: { error: failure, rawStatus: summarizeCallsStatus(raw) } })
+      throw new Error(failure)
+    }
+
+    const { transactionHash, userOperationHash } = extractCallsStatusHashes(raw)
+    let resolvedTxHash = transactionHash
+    if (!resolvedTxHash && userOperationHash && params.publicClient) {
+      resolvedTxHash = await resolveBundleTxFromUserOpHash(params.publicClient, userOperationHash)
+    }
+
     emit({
       step: 'status_poll',
       detail: {
         pollCount,
-        txHashFound: txHash != null,
+        txHashFound: resolvedTxHash != null,
+        userOpHashFound: userOperationHash != null,
         rawStatus: summarizeCallsStatus(raw),
       },
     })
-    if (txHash) {
-      emit({ step: 'status_resolved', detail: { transactionHash: txHash } })
-      return { transactionHash: txHash, rawStatus: raw }
+    if (resolvedTxHash || userOperationHash) {
+      emit({
+        step: 'status_resolved',
+        detail: { transactionHash: resolvedTxHash, userOperationHash },
+      })
+      return {
+        transactionHash: resolvedTxHash,
+        userOperationHash,
+        rawStatus: raw,
+      }
     }
 
     await new Promise((resolve) => setTimeout(resolve, interval))
@@ -327,30 +463,7 @@ export async function waitForCallsTxHash(
       lastStatus: summarizeCallsStatus(lastRaw),
     },
   })
-  return { transactionHash: null, rawStatus: lastRaw }
-}
-
-/**
- * Pull the first valid 32-byte hex `transactionHash` we can find on a
- * `wallet_getCallsStatus` response. Returns null when no receipt has one yet.
- */
-function extractFirstTransactionHash(raw: unknown): `0x${string}` | null {
-  if (!raw || typeof raw !== 'object') return null
-  const obj = raw as Record<string, unknown>
-  const receipts = obj.receipts
-  if (!Array.isArray(receipts)) return null
-  for (const r of receipts) {
-    if (!r || typeof r !== 'object') continue
-    const rec = r as Record<string, unknown>
-    const candidate = rec.transactionHash
-    if (
-      typeof candidate === 'string' &&
-      /^0x[0-9a-fA-F]{64}$/.test(candidate)
-    ) {
-      return candidate as `0x${string}`
-    }
-  }
-  return null
+  return { transactionHash: null, userOperationHash: null, rawStatus: lastRaw }
 }
 
 /**
@@ -372,6 +485,7 @@ function summarizeCallsStatus(raw: unknown): unknown {
       return {
         status: rec.status,
         transactionHash: rec.transactionHash,
+        userOperationHash: rec.userOperationHash ?? rec.userOpHash,
         blockNumber: rec.blockNumber,
       }
     }),

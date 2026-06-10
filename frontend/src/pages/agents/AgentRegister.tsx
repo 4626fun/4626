@@ -559,7 +559,7 @@ export function AgentRegister() {
               ? { retryWithLowGasContractSigner: args.retryWithLowGasContractSigner }
               : {}),
           })
-          return result.transactionHash
+          return result.transactionHash ?? result.userOpHash
         }
         const sendDirectOwnerFallback = async (): Promise<Hex> => {
           const executeBatchData = encodeFunctionData({

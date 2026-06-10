@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/zora/cswGateVerification
+[4626-web](../../../index.md) / server/\_lib/zora/cswGateVerification
 
 # server/\_lib/zora/cswGateVerification
 
@@ -164,7 +164,7 @@ Defined in: [server/\_lib/zora/cswGateVerification.ts:360](https://github.com/we
 
 ### consumeCswEntryChallenge()
 
-> **consumeCswEntryChallenge**(`params`): `Promise`\<\{ `ok`: `true`; `row`: [`CswEntryChallengeRow`](#cswentrychallengerow); \} \| \{ `ok`: `false`; `reason`: `"expired"` \| `"invalid"` \| `"mismatch"`; \}\>
+> **consumeCswEntryChallenge**(`params`): `Promise`\<\{ `ok`: `true`; `row`: [`CswEntryChallengeRow`](#cswentrychallengerow); \} \| \{ `ok`: `false`; `reason`: `"expired"` \| `"mismatch"` \| `"invalid"`; \}\>
 
 Defined in: [server/\_lib/zora/cswGateVerification.ts:423](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L423)
 
@@ -191,7 +191,7 @@ pattern is atomic against concurrent requests.
 
 #### Returns
 
-`Promise`\<\{ `ok`: `true`; `row`: [`CswEntryChallengeRow`](#cswentrychallengerow); \} \| \{ `ok`: `false`; `reason`: `"expired"` \| `"invalid"` \| `"mismatch"`; \}\>
+`Promise`\<\{ `ok`: `true`; `row`: [`CswEntryChallengeRow`](#cswentrychallengerow); \} \| \{ `ok`: `false`; `reason`: `"expired"` \| `"mismatch"` \| `"invalid"`; \}\>
 
 ***
 

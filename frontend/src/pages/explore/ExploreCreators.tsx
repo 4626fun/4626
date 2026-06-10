@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { PageMeta, META } from '@/components/seo/PageMeta'
 import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
@@ -7,21 +6,18 @@ import { ExplorePageShell } from '@/components/explore/ExplorePageShell'
 import { ExploreTableSurface } from '@/components/explore/ExploreTableSurface'
 import { TokenRow, TokenTableHeader, TokenRowSkeleton } from '@/components/explore/TokenRow'
 import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableMessage } from '@/components/explore/ExploreUiPrimitives'
-import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
 import { useExploreHorizontalTableSync } from '@/components/explore/useExploreHorizontalTableSync'
 import { getExploreColumns, getHorizontalScrollStops } from '@/components/explore/tableColumns'
 import { fetchZoraCoin, fetchZoraExplore, fetchZoraProfile, fetchZoraProfileCoins } from '@/lib/zora/client'
-import { apiFetch } from '@/lib/api/apiBase'
-import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
-import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { useMigratedCoins } from '@/hooks/useMigratedCoins'
 import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
 import type { ZoraCoin, ZoraExploreListType } from '@/lib/zora/types'
 import { getZoraExploreVolumeNote } from '@/lib/zora/exploreVolume'
 import { useScreenshotMode, useScreenshotReady } from '@/lib/ui/screenshotMode'
 import { buildEthosSocialUserkeyFromZoraProfile, getZoraCreatorProfileIdentifier } from '@/lib/ethos/zoraSocial'
-import { fetchEthosScoreForUserkey, getEthosScorePalette, type EthosScoreValue } from '@/components/chat/EthosScorePill'
+import { fetchEthosScoreForUserkey, type EthosScoreValue } from '@/components/chat/EthosScorePill'
 import {
+  dedupeExploreCoinsByCreatorIdentity,
   flattenExplorePagedNodes,
   matchesCoinSearchQuery,
   normalizeCoinSearchQuery,
@@ -29,42 +25,31 @@ import {
   useDebouncedValue,
   useExploreSubnavParams,
 } from '@/features/explore/exploreShared'
+import { shouldShowExploreTableLoading } from '@/features/explore/exploreListNavigation'
+import { useExploreCreatorsHeroMetrics } from '@/features/explore/useExploreCreatorsHeroMetrics'
+import { useExploreTableSparklines } from '@/features/explore/useExploreTableSparklines'
+import { resolveExploreRowTrend30d } from '@/features/explore/exploreTableSparklines'
 
 const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
   volume: 'TOP_VOLUME_CREATORS_24H',
   marketCap: 'MOST_VALUABLE_CREATORS',
-  priceChange: 'TOP_GAINERS',
+  // Keep creator-page sorts on creator-scoped lists for consistent candidate pools.
+  priceChange: 'TRENDING_CREATORS',
   new: 'NEW_CREATORS',
 }
 
 const PAGE_SIZE = 20
 const SEARCH_AUTO_FETCH_MAX_PAGES = 30
 const REMOTE_SEARCH_MIN_QUERY_LENGTH = 3
-const LIVE_METRICS_REFETCH_MS = 10_000
-const ONE_DAY_MS = 24 * 60 * 60 * 1000
-const V4_CUTOFF_DATE_MS = Date.parse('2025-06-06T00:00:00Z')
 const CREATORS_SORT_VALUES = ['volume', 'marketCap', 'priceChange', 'new', 'ethosScore'] as const
-const CREATORS_TIME_FILTER_VALUES = ['1d', '1w', '1y'] as const
-const ETHOS_FILTER_VALUES = ['all', '1200', '1600', '1800'] as const
-const ETHOS_FILTER_OPTIONS = [
-  { label: 'All', value: 'all' },
-  { label: '1200+', value: '1200' },
-  { label: '1600+', value: '1600' },
-  { label: '1800+', value: '1800' },
-] as const satisfies ReadonlyArray<{ label: string; value: (typeof ETHOS_FILTER_VALUES)[number] }>
+const CREATORS_TIME_FILTER_VALUES = ['1d'] as const
+const CREATORS_TIME_FILTERS = [{ label: '1D', value: '1d' }] as const
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/
 const CREATOR_SEARCH_MATCH_OPTIONS = {
   includeCreatorAddress: true,
   includePayoutAddress: true,
   includeQueryVariants: true,
   includeHandleBasenameVariant: true,
-} as const
-const SCREENSHOT_DEMO_METRICS = {
-  creatorsTotal: 12840,
-  creatorsNew24h: 184,
-  creatorCoinsMarketCapUsd: 14200000,
-  creatorCoinsVolume24hUsd: 845000,
-  creatorCoinsFees24hUsd: 25350,
 } as const
 const SCREENSHOT_DEMO_COINS: ZoraCoin[] = [
   {
@@ -115,57 +100,7 @@ type CreatorEthosRecord = {
   coinKey: string
   userkey: string | null
   score: EthosScoreValue | null
-}
-
-type ExploreMetrics = {
-  scope: 'creators'
-  updatedAt: string
-  exact: boolean
-  syncStatus: 'idle' | 'running' | 'error'
-  sync: {
-    backfillComplete: boolean
-    sampledCreators: number
-    lastSyncStartedAt: string | null
-    lastSyncFinishedAt: string | null
-    lastFullSyncAt: string | null
-    syncError: string | null
-    driftEstimateTotal: number | null
-    driftPct: number | null
-  }
-  totals: {
-    creatorsTotal: number | null
-    creatorsNew24h: number | null
-    creatorCoinsMarketCapUsd: number | null
-    creatorCoinsVolume24hUsd: number | null
-    creatorCoinsFees24hUsd: number | null
-    partial: boolean
-    sampledCreators: number
-  }
-  history30d: Array<{
-    date: string
-    creatorCoinsMarketCapUsd: number | null
-  }>
-}
-
-async function fetchExploreCreatorsMetrics(): Promise<ExploreMetrics | null> {
-  // Prefer server-side metrics (fast + cached) via apiFetch (alias-aware).
-  try {
-    const res = await apiFetch(`${API_ENDPOINTS.zora.metrics}?scope=creators`, { method: 'GET' })
-    const json = (await res.json().catch(() => null)) as ApiEnvelope<ExploreMetrics | null> | null
-    if (res.ok && json?.success) return json.data ?? null
-  } catch {
-    // ignore and return null below
-  }
-  return null
-}
-
-function formatCompactUsd(v: number | null): string {
-  if (v == null || !Number.isFinite(v)) return '—'
-  const n = v
-  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B`
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(2)}K`
-  return `$${n.toFixed(2)}`
+  source: string | null
 }
 
 function toFiniteNumber(value: unknown): number | null {
@@ -174,12 +109,42 @@ function toFiniteNumber(value: unknown): number | null {
   return n
 }
 
-function coalesceMetricValue(...values: Array<number | null | undefined>): number | null {
-  for (const value of values) {
-    if (value == null) continue
-    if (Number.isFinite(value)) return value
+function resolveBestEthosScore(...candidates: unknown[]): number | null {
+  let best: number | null = null
+  for (const candidate of candidates) {
+    const parsed = toFiniteNumber(candidate)
+    if (parsed == null || parsed <= 0) continue
+    if (best == null || parsed > best) best = parsed
   }
-  return null
+  return best
+}
+
+function resolveBestEthosValue(
+  serverValue: EthosScoreValue | null | undefined,
+  queryValue: EthosScoreValue | null | undefined,
+): EthosScoreValue | null {
+  const serverScore = toFiniteNumber(serverValue?.score)
+  const queryScore = toFiniteNumber(queryValue?.score)
+  const bestScore = resolveBestEthosScore(serverScore, queryScore)
+  if (bestScore == null) return null
+  if (queryScore != null && queryScore === bestScore) return queryValue ?? null
+  if (serverScore != null && serverScore === bestScore) return serverValue ?? null
+  return { score: bestScore, level: queryValue?.level ?? serverValue?.level ?? null }
+}
+
+function resolveBestEthosSource(
+  serverValue: EthosScoreValue | null | undefined,
+  serverSource: string | null | undefined,
+  queryValue: EthosScoreValue | null | undefined,
+  querySource: string | null,
+): string | null {
+  const serverScore = toFiniteNumber(serverValue?.score)
+  const queryScore = toFiniteNumber(queryValue?.score)
+  const bestScore = resolveBestEthosScore(serverScore, queryScore)
+  if (bestScore == null) return null
+  if (queryScore != null && queryScore === bestScore) return querySource
+  if (serverScore != null && serverScore === bestScore) return serverSource ?? null
+  return serverSource ?? querySource
 }
 
 function dedupeCoinsByAddress(coins: ZoraCoin[]): ZoraCoin[] {
@@ -203,21 +168,11 @@ function getCoinKey(coin: ZoraCoin, fallbackIndex?: number): string {
 }
 
 function deriveImmediateEthosUserkey(coin: ZoraCoin): string | null {
-  void coin
+  const creator = typeof coin.creatorAddress === 'string' ? coin.creatorAddress.trim().toLowerCase() : ''
+  if (/^0x[a-f0-9]{40}$/.test(creator)) return `address:${creator}`
   return null
 }
 
-function getEthosFilterMinimum(value: string): number | null {
-  if (value === 'all') return null
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-function getEthosFilterTone(value: (typeof ETHOS_FILTER_VALUES)[number]): string {
-  if (value === 'all') return 'border-white/12 bg-white/7 text-zinc-200'
-  const palette = getEthosScorePalette(Number(value))
-  return `${palette.borderClass} ${palette.bgClass} ${palette.textClass}`
-}
 
 function buildProfileIdentifierCandidates(query: string): string[] {
   const normalized = normalizeCoinSearchQuery(query)
@@ -301,18 +256,9 @@ async function resolveCreatorSearchCandidates(query: string): Promise<ZoraCoin[]
   return dedupeCoinsByAddress(results)
 }
 
-function inferFeeRate(coin: ZoraCoin, migratedCoins: Set<string> | null): number {
-  const address = typeof coin.address === 'string' ? coin.address.toLowerCase() : ''
-  if (address && migratedCoins?.has(address)) return 0.01
-  const createdAtMs = typeof coin.createdAt === 'string' ? Date.parse(coin.createdAt) : NaN
-  if (!Number.isFinite(createdAtMs)) return 0.01
-  return createdAtMs >= V4_CUTOFF_DATE_MS ? 0.01 : 0.03
-}
-
 export function ExploreCreators() {
   const [expandedFees, setExpandedFees] = useState<string | null>(null)
   const [collapseIdentity, setCollapseIdentity] = useState(false)
-  const [ethosFilter, setEthosFilter] = useState<(typeof ETHOS_FILTER_VALUES)[number]>('all')
   const screenshotMode = useScreenshotMode()
 
   const { currentTimeFilter, currentSort, searchQuery, handleSearchChange, handleTimeFilterChange, handleSortChange } =
@@ -324,55 +270,45 @@ export function ExploreCreators() {
     debugScope: 'explore-creators',
     })
 
-  const listType = SORT_TO_LIST_TYPE[currentSort] || 'TOP_VOLUME_CREATORS_24H'
+  const [ethosAnchorSort, setEthosAnchorSort] = useState<string>(
+    SORT_TO_LIST_TYPE[currentSort] ? currentSort : 'volume',
+  )
+  const handleCreatorSortChange = useCallback(
+    (nextSort: string) => {
+      if (nextSort !== 'ethosScore' && SORT_TO_LIST_TYPE[nextSort]) {
+        setEthosAnchorSort(nextSort)
+      }
+      handleSortChange(nextSort)
+    },
+    [handleSortChange],
+  )
+
+  const listSortKey = currentSort === 'ethosScore' ? ethosAnchorSort : currentSort
+  const listType = SORT_TO_LIST_TYPE[listSortKey] || 'TOP_VOLUME_CREATORS_24H'
   
   // Fetch migrated coins for accurate fee detection
   const { migratedCoins } = useMigratedCoins()
-
-  const metricsQuery = useQuery({
-    queryKey: ['explore', 'creators', 'metrics'],
-    queryFn: fetchExploreCreatorsMetrics,
-    staleTime: 10_000,
-    retry: 1,
-    refetchInterval: (query) => {
-      const data = (query.state.data as ExploreMetrics | null | undefined) ?? null
-      if (!data) return 5_000
-      if (data.exact) return 60_000
-      if (data.syncStatus === 'error') return 20_000
-      return 5_000
-    },
-    refetchIntervalInBackground: true,
-  })
-
-  // Fast-updating top-creator slice used for visibly-live metric cards.
-  const liveMetricsQuery = useQuery({
-    queryKey: ['explore', 'creators', 'live', 'top-volume-24h'],
-    queryFn: async () =>
-      fetchZoraExplore({
-        list: 'TOP_VOLUME_CREATORS_24H',
-        count: PAGE_SIZE,
-      }),
-    staleTime: LIVE_METRICS_REFETCH_MS,
-    refetchInterval: LIVE_METRICS_REFETCH_MS,
-    refetchIntervalInBackground: true,
-    retry: 1,
-  })
+  const { syncStatus, creatorsTotalCount } = useExploreCreatorsHeroMetrics()
 
   const {
     data,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isFetching,
     isLoading,
     isError,
     error,
   } = useInfiniteQuery({
-    queryKey: ['explore', 'creators', listType],
+    queryKey: ['explore', 'creators', listType, currentSort],
     queryFn: async ({ pageParam }) => {
       const result = await fetchZoraExplore({
         list: listType,
         count: PAGE_SIZE,
         after: pageParam,
+        ...(currentSort === 'ethosScore'
+          ? { sort: 'ETHOS_SCORE' as const, ethosMin: 1 }
+          : {}),
       })
       return result
     },
@@ -381,13 +317,17 @@ export function ExploreCreators() {
       if (!lastPage?.pageInfo?.hasNextPage) return undefined
       return lastPage.pageInfo.endCursor
     },
-    staleTime: 30_000,
+    staleTime: 120_000,
   })
 
   // Flatten all pages into a single array of coins
   const allCoins = useMemo(() => {
-    return flattenExplorePagedNodes(data?.pages)
-  }, [data?.pages])
+    const flattened = flattenExplorePagedNodes(data?.pages)
+    if (currentSort !== 'ethosScore') return flattened
+    return dedupeExploreCoinsByCreatorIdentity(flattened)
+  }, [data?.pages, currentSort])
+
+  const serverEthosSort = currentSort === 'ethosScore'
 
   const trimmedSearchQuery = searchQuery.trim()
   const debouncedSearchQuery = useDebouncedValue(trimmedSearchQuery, 250)
@@ -429,129 +369,31 @@ export function ExploreCreators() {
     return localFilteredCoins
   }, [allCoins, directSearchCoins, localFilteredCoins, trimmedSearchQuery])
 
-  const liveMetricCoins = useMemo(() => {
-    const edges = Array.isArray(liveMetricsQuery.data?.edges) ? liveMetricsQuery.data.edges : []
-    const nodes = edges
-      .map((edge) => edge?.node as ZoraCoin | undefined)
-      .filter((node): node is ZoraCoin => Boolean(node))
-    return nodes.length > 0 ? nodes : allCoins
-  }, [allCoins, liveMetricsQuery.data])
-
-  const localMetricsFallback = useMemo(() => {
-    const seenCoinKeys = new Set<string>()
-    const seenCreators = new Set<string>()
-    const creatorLatestCreatedAt = new Map<string, number>()
-    const createdAtSamples: number[] = []
-
-    let marketCapUsd = 0
-    let volume24hUsd = 0
-    let fees24hUsd = 0
-
-    for (const coin of liveMetricCoins) {
-      const coinAddress = typeof coin.address === 'string' ? coin.address.toLowerCase() : ''
-      const coinKey =
-        coinAddress ||
-        `${coin.creatorAddress ?? ''}:${coin.payoutRecipientAddress ?? ''}:${coin.symbol ?? ''}:${coin.createdAt ?? ''}`
-      if (seenCoinKeys.has(coinKey)) continue
-      seenCoinKeys.add(coinKey)
-
-      const creatorAddressRaw =
-        (typeof coin.creatorAddress === 'string' && coin.creatorAddress) ||
-        (typeof coin.payoutRecipientAddress === 'string' && coin.payoutRecipientAddress) ||
-        ''
-      const creatorAddress = creatorAddressRaw.toLowerCase()
-      if (creatorAddress) seenCreators.add(creatorAddress)
-
-      const createdAtMs = typeof coin.createdAt === 'string' ? Date.parse(coin.createdAt) : NaN
-      if (Number.isFinite(createdAtMs)) {
-        createdAtSamples.push(createdAtMs)
-      }
-      if (creatorAddress && Number.isFinite(createdAtMs)) {
-        const prevCreatedAt = creatorLatestCreatedAt.get(creatorAddress)
-        if (prevCreatedAt == null || createdAtMs > prevCreatedAt) {
-          creatorLatestCreatedAt.set(creatorAddress, createdAtMs)
-        }
-      }
-
-      const marketCapValue = toFiniteNumber(coin.marketCap)
-      if (marketCapValue != null) marketCapUsd += marketCapValue
-
-      const volumeValue = toFiniteNumber(coin.volume24h)
-      if (volumeValue != null) {
-        volume24hUsd += volumeValue
-        fees24hUsd += volumeValue * inferFeeRate(coin, migratedCoins)
-      }
-    }
-
-    const metricsUpdatedAtMs = Date.parse(metricsQuery.data?.updatedAt ?? '')
-    const fallbackNowMs =
-      Number.isFinite(metricsUpdatedAtMs) ? metricsUpdatedAtMs : createdAtSamples.length > 0 ? Math.max(...createdAtSamples) : null
-    const dayAgoMs = fallbackNowMs != null ? fallbackNowMs - ONE_DAY_MS : null
-    let creatorsNew24h = 0
-    if (dayAgoMs != null) {
-      for (const createdAtMs of creatorLatestCreatedAt.values()) {
-        if (createdAtMs >= dayAgoMs) creatorsNew24h += 1
-      }
-    }
-
-    return {
-      creatorsTotal: seenCreators.size > 0 ? seenCreators.size : seenCoinKeys.size,
-      creatorsNew24h,
-      creatorCoinsMarketCapUsd: marketCapUsd,
-      creatorCoinsVolume24hUsd: volume24hUsd,
-      creatorCoinsFees24hUsd: fees24hUsd,
-    }
-  }, [liveMetricCoins, metricsQuery.data?.updatedAt, migratedCoins])
-
-  const exactMetrics = metricsQuery.data?.exact === true
-  const syncStatus = metricsQuery.data?.syncStatus ?? 'running'
-  const syncMeta = metricsQuery.data?.sync ?? null
-  const metricsTotals = metricsQuery.data?.totals ?? null
-  const metricsUpdatedAtMs = Date.parse(metricsQuery.data?.updatedAt ?? '')
-  const metricsFreshnessRefMs = metricsQuery.dataUpdatedAt || metricsUpdatedAtMs
-  const metricsAgeMs =
-    Number.isFinite(metricsUpdatedAtMs) && Number.isFinite(metricsFreshnessRefMs)
-      ? metricsFreshnessRefMs - metricsUpdatedAtMs
-      : Number.POSITIVE_INFINITY
-  const canonicalMetricsStale = metricsAgeMs > LIVE_METRICS_REFETCH_MS * 3
-  const useLiveMetricCards = !exactMetrics || metricsTotals?.partial === true || canonicalMetricsStale
-  const preferLiveTotals = useLiveMetricCards && liveMetricCoins.length > 0
-  const creatorsTotalDisplay = preferLiveTotals
-    ? coalesceMetricValue(localMetricsFallback.creatorsTotal, metricsTotals?.creatorsTotal)
-    : coalesceMetricValue(metricsTotals?.creatorsTotal, localMetricsFallback.creatorsTotal)
-  const creatorsNew24hDisplay = preferLiveTotals
-    ? coalesceMetricValue(localMetricsFallback.creatorsNew24h, metricsTotals?.creatorsNew24h)
-    : coalesceMetricValue(metricsTotals?.creatorsNew24h, localMetricsFallback.creatorsNew24h)
-  const marketCapDisplay = preferLiveTotals
-    ? coalesceMetricValue(localMetricsFallback.creatorCoinsMarketCapUsd, metricsTotals?.creatorCoinsMarketCapUsd)
-    : coalesceMetricValue(metricsTotals?.creatorCoinsMarketCapUsd, localMetricsFallback.creatorCoinsMarketCapUsd)
-  const volume24hDisplay = preferLiveTotals
-    ? coalesceMetricValue(localMetricsFallback.creatorCoinsVolume24hUsd, metricsTotals?.creatorCoinsVolume24hUsd)
-    : coalesceMetricValue(metricsTotals?.creatorCoinsVolume24hUsd, localMetricsFallback.creatorCoinsVolume24hUsd)
-  const fees24hDisplay = preferLiveTotals
-    ? coalesceMetricValue(localMetricsFallback.creatorCoinsFees24hUsd, metricsTotals?.creatorCoinsFees24hUsd)
-    : coalesceMetricValue(metricsTotals?.creatorCoinsFees24hUsd, localMetricsFallback.creatorCoinsFees24hUsd)
-  const creatorsTotalCount = creatorsTotalDisplay ?? 0
   const useScreenshotFallback = screenshotMode.enabled && !trimmedSearchQuery && filteredCoins.length === 0
   const baseDisplayCoins = useScreenshotFallback ? SCREENSHOT_DEMO_COINS : filteredCoins
 
   const profileIdentifiers = useMemo(() => {
-    return baseDisplayCoins.map((coin) => ({
+    if (serverEthosSort) return []
+    return baseDisplayCoins
+      .filter((coin) => !(typeof coin.ethosScore === 'number' && Number.isFinite(coin.ethosScore)))
+      .filter((coin) => !deriveImmediateEthosUserkey(coin))
+      .map((coin) => ({
       coinKey: getCoinKey(coin),
       identifier: getZoraCreatorProfileIdentifier(coin),
       immediateUserkey: deriveImmediateEthosUserkey(coin),
-    }))
-  }, [baseDisplayCoins])
+      }))
+  }, [baseDisplayCoins, serverEthosSort])
 
   const profileQueries = useQueries({
-    queries: profileIdentifiers.map(({ coinKey, identifier, immediateUserkey }) => ({
+    queries: profileIdentifiers.map(({ coinKey, identifier }) => ({
       queryKey: ['explore', 'creators', 'ethos-profile-userkey', coinKey, identifier],
       queryFn: async () => {
         if (!identifier) return null
         const profile = await fetchZoraProfile(identifier)
         return buildEthosSocialUserkeyFromZoraProfile(profile)
       },
-      enabled: Boolean(identifier && !immediateUserkey),
+      // Prefer social userkeys when available; wallet-address userkeys are fallback only.
+      enabled: Boolean(identifier),
       staleTime: 6 * 60 * 60 * 1000,
       retry: 1,
     })),
@@ -560,85 +402,88 @@ export function ExploreCreators() {
   const coinEthosUserkeys = useMemo(() => {
     const out = new Map<string, string>()
     profileIdentifiers.forEach((entry, index) => {
-      const userkey = entry.immediateUserkey ?? profileQueries[index]?.data ?? null
+      const userkey = profileQueries[index]?.data ?? entry.immediateUserkey ?? null
       if (userkey) out.set(entry.coinKey, userkey)
     })
     return out
   }, [profileIdentifiers, profileQueries])
 
+  const coinsNeedingClientEthosLookup = useMemo(
+    () => {
+      if (serverEthosSort) return []
+      return baseDisplayCoins.filter(
+        (coin) => !(typeof coin.ethosScore === 'number' && Number.isFinite(coin.ethosScore)),
+      )
+    },
+    [baseDisplayCoins, serverEthosSort],
+  )
+
   const ethosScoreQueries = useQueries({
-    queries: Array.from(coinEthosUserkeys.entries()).map(([coinKey, userkey]) => ({
-      queryKey: ['explore', 'creators', 'ethos-score', coinKey, userkey],
-      queryFn: () => fetchEthosScoreForUserkey(userkey),
-      enabled: Boolean(userkey),
-      staleTime: 6 * 60 * 60 * 1000,
-      retry: 1,
-    })),
+    queries: coinsNeedingClientEthosLookup.map((coin) => {
+      const coinKey = getCoinKey(coin)
+      const userkey = coinEthosUserkeys.get(coinKey) ?? deriveImmediateEthosUserkey(coin)
+      return {
+        queryKey: ['explore', 'creators', 'ethos-score', coinKey, userkey],
+        queryFn: () => fetchEthosScoreForUserkey(userkey!),
+        enabled: Boolean(userkey),
+        staleTime: 6 * 60 * 60 * 1000,
+        retry: 1,
+      }
+    }),
   })
+
+  const clientEthosScoreByCoinKey = useMemo(() => {
+    const map = new Map<string, Awaited<ReturnType<typeof fetchEthosScoreForUserkey>> | null>()
+    coinsNeedingClientEthosLookup.forEach((coin, index) => {
+      map.set(getCoinKey(coin), ethosScoreQueries[index]?.data ?? null)
+    })
+    return map
+  }, [coinsNeedingClientEthosLookup, ethosScoreQueries])
 
   const ethosByCoinKey = useMemo(() => {
     const out = new Map<string, CreatorEthosRecord>()
-    const entries = Array.from(coinEthosUserkeys.entries())
-    entries.forEach(([coinKey, userkey], index) => {
+    for (const coin of baseDisplayCoins) {
+      const key = getCoinKey(coin)
+      const hasServerEthosScore = typeof coin.ethosScore === 'number' && Number.isFinite(coin.ethosScore)
+      if (!hasServerEthosScore) continue
+      out.set(key, {
+        coinKey: key,
+        userkey: coinEthosUserkeys.get(key) ?? deriveImmediateEthosUserkey(coin),
+        score: {
+          score: Number(coin.ethosScore),
+          level: typeof coin.ethosLevel === 'string' ? coin.ethosLevel : null,
+        },
+        source: typeof coin.ethosScoreSource === 'string' ? coin.ethosScoreSource : null,
+      })
+    }
+    for (const coin of coinsNeedingClientEthosLookup) {
+      const coinKey = getCoinKey(coin)
+      const userkey = coinEthosUserkeys.get(coinKey) ?? deriveImmediateEthosUserkey(coin)
+      if (!userkey) continue
+      const queryScore = clientEthosScoreByCoinKey.get(coinKey) ?? null
+      const existing = out.get(coinKey)
+      if (!existing) {
+        out.set(coinKey, {
+          coinKey,
+          userkey,
+          score: queryScore,
+          source: queryScore ? 'chat_bulk_userkey' : null,
+        })
+        continue
+      }
       out.set(coinKey, {
         coinKey,
-        userkey,
-        score: ethosScoreQueries[index]?.data ?? null,
+        userkey: existing.userkey ?? userkey,
+        score: resolveBestEthosValue(existing.score, queryScore),
+        source: resolveBestEthosSource(existing.score, existing.source, queryScore, 'chat_bulk_userkey'),
       })
-    })
+    }
     return out
-  }, [coinEthosUserkeys, ethosScoreQueries])
+  }, [baseDisplayCoins, clientEthosScoreByCoinKey, coinEthosUserkeys, coinsNeedingClientEthosLookup])
 
-  const displayCoins = useMemo(() => {
-    const minimumScore = getEthosFilterMinimum(ethosFilter)
-    const filtered =
-      minimumScore == null
-        ? baseDisplayCoins
-        : baseDisplayCoins.filter((coin) => {
-            const score = ethosByCoinKey.get(getCoinKey(coin))?.score?.score
-            return typeof score === 'number' && score >= minimumScore
-          })
-
-    if (currentSort !== 'ethosScore') return filtered
-
-    return [...filtered].sort((a, b) => {
-      const rawAScore = ethosByCoinKey.get(getCoinKey(a))?.score?.score
-      const rawBScore = ethosByCoinKey.get(getCoinKey(b))?.score?.score
-      const aScore = typeof rawAScore === 'number' && rawAScore > 0 ? rawAScore : Number.NEGATIVE_INFINITY
-      const bScore = typeof rawBScore === 'number' && rawBScore > 0 ? rawBScore : Number.NEGATIVE_INFINITY
-      return bScore - aScore
-    })
-  }, [baseDisplayCoins, currentSort, ethosByCoinKey, ethosFilter])
+  const displayCoins = baseDisplayCoins
 
   const hasScreenshotFallbackRows = useScreenshotFallback && displayCoins.length > 0
-  const creatorsTotalUi = useScreenshotFallback ? SCREENSHOT_DEMO_METRICS.creatorsTotal : creatorsTotalDisplay
-  const creatorsNew24hUi = useScreenshotFallback ? SCREENSHOT_DEMO_METRICS.creatorsNew24h : creatorsNew24hDisplay
-  const marketCapUi = useScreenshotFallback ? SCREENSHOT_DEMO_METRICS.creatorCoinsMarketCapUsd : marketCapDisplay
-  const volume24hUi = useScreenshotFallback ? SCREENSHOT_DEMO_METRICS.creatorCoinsVolume24hUsd : volume24hDisplay
-  const fees24hUi = useScreenshotFallback ? SCREENSHOT_DEMO_METRICS.creatorCoinsFees24hUsd : fees24hDisplay
-  const canonicalUpdatedAt = syncMeta?.lastFullSyncAt ?? null
-  const updatedTimeDisplay = canonicalUpdatedAt
-    ? new Date(canonicalUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : null
-  const indexedCreatorProgress =
-    !exactMetrics && creatorsTotalCount > 0
-      ? syncMeta?.driftEstimateTotal && syncMeta.driftEstimateTotal > creatorsTotalCount
-        ? `Indexed ${creatorsTotalCount.toLocaleString()} of ~${syncMeta.driftEstimateTotal.toLocaleString()} creators`
-        : `Indexed ${creatorsTotalCount.toLocaleString()} creators`
-      : null
-  const liveEstimateStatus = `Live estimate updates every ${Math.floor(LIVE_METRICS_REFETCH_MS / 1000)}s`
-  const metricsStatusLine =
-    syncStatus === 'error'
-      ? `${liveEstimateStatus} while canonical totals retry in background.`
-      : useLiveMetricCards
-        ? [liveEstimateStatus, indexedCreatorProgress ?? (updatedTimeDisplay ? `Canonical refreshed ${updatedTimeDisplay}` : null)]
-            .filter(Boolean)
-            .join(' | ')
-        : exactMetrics && updatedTimeDisplay
-          ? `Canonical totals refreshed ${updatedTimeDisplay}`
-          : indexedCreatorProgress
-  const creatorsLabel = exactMetrics ? 'Creators' : 'Indexed creators'
-  const marketLabel = 'Market Cap'
   const isSearchingDirectMatches =
     trimmedSearchQuery.length >= REMOTE_SEARCH_MIN_QUERY_LENGTH &&
     localFilteredCoins.length === 0 &&
@@ -662,6 +507,11 @@ export function ExploreCreators() {
 
   useScreenshotReady(screenshotReady)
 
+  const { sparklines: tableSparklines } = useExploreTableSparklines(
+    displayCoins.map((coin) => coin.address),
+    displayCoins,
+  )
+
   useWindowInfiniteScrollLoadMore({
     hasNextPage: Boolean(hasNextPage),
     isFetchingNextPage,
@@ -680,9 +530,8 @@ export function ExploreCreators() {
     setCollapseIdentity(overflow && !atLeftEdge && window.innerWidth <= 1024)
   }, [])
 
-  const { hasHorizontalOverflow, canScrollLeft, canScrollRight, handleHeaderScroll, handleBodyScroll, handleArrowClick } =
+  const { hasHorizontalOverflow, canScrollLeft, canScrollRight, handleBodyScroll, handleArrowClick } =
     useExploreHorizontalTableSync({
-      headerId: 'explore-creators-header',
       bodyId: 'explore-creators-body',
       onControlsChange: onHorizontalControlsChange,
     })
@@ -692,119 +541,51 @@ export function ExploreCreators() {
     return getHorizontalScrollStops(columns)
   }, [currentTimeFilter, collapseIdentity])
 
+  const tablePending = shouldShowExploreTableLoading({
+    isLoading,
+    isFetching,
+    hasRows: displayCoins.length > 0,
+    hasActiveSearch: trimmedSearchQuery.length > 0,
+  })
+
   return (
     <ExplorePageShell
-      leading={<PageMeta title={META.explore.title} description={META.explore.description} canonicalPath="/explore" />}
-      title="Top Creators on Base"
-      subtitle="Creator Coins ranked by volume, market cap, and more."
-      headerContent={
-        <>
-          {/* Metrics strip — compact 2x2 on mobile, 4-col on desktop */}
-          <div className="mt-4 sm:mt-6 grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-            <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
-              <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">{creatorsLabel}</div>
-              <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-                {creatorsTotalUi?.toLocaleString() ?? '—'}
-              </div>
-              <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
-                {creatorsNew24hUi != null
-                  ? `+${creatorsNew24hUi.toLocaleString()} today`
-                  : 'Tracking newly created creators'}
-              </div>
-            </div>
-
-            <div className="vault-surface-elevated vault-hover-lift rounded-xl sm:rounded-2xl border-blue-300/30 bg-blue-950/16 px-3 sm:px-4 py-2.5 sm:py-3">
-              <div className="text-[10px] sm:text-[11px] font-medium text-zinc-400">{marketLabel}</div>
-              <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-                {formatCompactUsd(marketCapUi)}
-              </div>
-              <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">Live market-cap snapshot</div>
-            </div>
-
-            <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
-              <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Vol</div>
-              <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-                {formatCompactUsd(volume24hUi)}
-              </div>
-              <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
-                24H trade volume across creator coins
-              </div>
-            </div>
-
-            <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
-              <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Fees</div>
-              <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-                {formatCompactUsd(fees24hUi)}
-              </div>
-              <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
-                24H fees from creator-coin trading
-              </div>
-            </div>
-          </div>
-
-          {metricsStatusLine ? <div className="app-meta-value mt-2 text-right text-zinc-500">{metricsStatusLine}</div> : null}
-          <div className="mt-3 flex justify-end">
-            <ExploreUnfurlDebugCopy path="/explore/creators" />
-          </div>
-        </>
-      }
+      variant="table"
+      tablePending={tablePending}
+      tablePendingLabel="Loading creators…"
       subnav={
         <ExploreSubnav
           searchPlaceholder="Search creators"
           searchValue={searchQuery}
           onSearch={handleSearchChange}
           onTimeFilterChange={handleTimeFilterChange}
-          onSortChange={handleSortChange}
+          onSortChange={handleCreatorSortChange}
           currentTimeFilter={currentTimeFilter}
           currentSort={currentSort}
+          timeFilters={CREATORS_TIME_FILTERS}
+          showTabs={false}
+          showSearch={false}
+          showMobileSortRow={false}
           sortOptions={[
             { label: 'Volume', value: 'volume' },
             { label: 'Market cap', value: 'marketCap' },
             { label: 'Price change', value: 'priceChange' },
-            { label: 'Ethos score', value: 'ethosScore' },
             { label: 'Recently added', value: 'new' },
           ]}
           volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
-          extraFilters={
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-zinc-500">Ethos</span>
-              <div className="flex h-8 items-center gap-0.5 rounded-full border border-white/12 bg-linear-to-b from-white/7 to-white/3 p-0.5">
-                {ETHOS_FILTER_OPTIONS.map((filter) => {
-                  const active = ethosFilter === filter.value
-                  const tone = getEthosFilterTone(filter.value)
-                  return (
-                    <button
-                      key={filter.value}
-                      type="button"
-                      onClick={() => setEthosFilter(filter.value as (typeof ETHOS_FILTER_VALUES)[number])}
-                      className={`h-6 rounded-full border px-2 text-[10px] font-medium leading-none transition-all duration-200 ${
-                        active
-                          ? tone
-                          : 'border-transparent text-zinc-400 hover:border-white/10 hover:bg-white/7 hover:text-white'
-                      }`}
-                    >
-                      {filter.label}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          }
         />
       }
       table={
         <>
           <ExploreTableSurface
-            headerId="explore-creators-header"
             bodyId="explore-creators-body"
-            onHeaderScroll={handleHeaderScroll}
             onBodyScroll={handleBodyScroll}
             header={
               <TokenTableHeader
                 timeframe={currentTimeFilter}
                 collapseIdentity={collapseIdentity}
                 currentSort={currentSort}
-                onSortChange={handleSortChange}
+                onSortChange={handleCreatorSortChange}
               />
             }
             body={
@@ -820,7 +601,7 @@ export function ExploreCreators() {
                   />
                 ) : trimmedSearchQuery.length > 0 && displayCoins.length === 0 && isSearchingDirectMatches ? (
                   <ExploreTableMessage title="Searching creators..." detail="Checking direct handle/profile matches." />
-                ) : trimmedSearchQuery.length > 0 && displayCoins.length === 0 && isFetchingNextPage ? (
+                ) : trimmedSearchQuery.length > 0 && displayCoins.length === 0 && (isFetchingNextPage || shouldAutoFetchForSearch) ? (
                   <ExploreTableMessage title="Searching more creators..." detail="Scanning additional pages for matches." />
                 ) : displayCoins.length === 0 ? (
                   <ExploreTableMessage title={trimmedSearchQuery ? 'No creators found matching your search' : 'No creators available'} />
@@ -833,7 +614,6 @@ export function ExploreCreators() {
                     return (
                       <TokenRow
                         key={coin.address || index}
-                        rank={index + 1}
                         coin={coin}
                         linkPrefix="/explore/creators"
                         timeframe={currentTimeFilter}
@@ -841,6 +621,7 @@ export function ExploreCreators() {
                         migratedCoins={migratedCoins ?? undefined}
                         ethosUserkey={ethos?.userkey ?? null}
                         ethosScore={ethos?.score ?? null}
+                        trend30d={resolveExploreRowTrend30d(coin, tableSparklines)}
                         isExpanded={isExpanded}
                         onToggleFees={() => setExpandedFees((prev) => (prev === rowId ? null : rowId))}
                       />
@@ -870,6 +651,7 @@ export function ExploreCreators() {
             onScrollRight={() => handleArrowClick('right', columnScrollStops)}
             leftAriaLabel="Scroll creators table left"
             rightAriaLabel="Scroll creators table right"
+            collapseIdentity={collapseIdentity}
           />
         </>
       }

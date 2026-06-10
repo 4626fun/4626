@@ -30,7 +30,7 @@ import {
   type TxRouterContext,
 } from '@/lib/tx/txRouter'
 import { payloadEndsWithDataSuffix } from '@/lib/base/baseBuilderCodes'
-import { TARGET_ALLOWED_OWNER_EOA_ADDRESSES, TARGET_CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
+import { CANONICAL_CSW_ALLOWED_OWNER_EOAS, CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
 
 const ADDRESS_A = '0x1111111111111111111111111111111111111111' as const
 const ADDRESS_B = '0x2222222222222222222222222222222222222222' as const
@@ -897,9 +897,9 @@ describe('txRouter', () => {
   it('blocks non-canonical execution address for enforced canonical policy account', () => {
     const context = makeContext({
       executionMode: 'canonical',
-      canonicalAddress: TARGET_CANONICAL_CSW_ADDRESS,
+      canonicalAddress: CANONICAL_CSW_ADDRESS,
       executionAddress: ADDRESS_A,
-      signerAddress: TARGET_ALLOWED_OWNER_EOA_ADDRESSES[0],
+      signerAddress: CANONICAL_CSW_ALLOWED_OWNER_EOAS[0],
       signerType: 'EOA',
       connectorId: 'injected',
       connectorName: 'Injected',
@@ -916,9 +916,9 @@ describe('txRouter', () => {
   it('returns canonical sender identity for policy-enforced ERC-4337 sends', async () => {
     const context = makeContext({
       executionMode: 'canonical',
-      canonicalAddress: TARGET_CANONICAL_CSW_ADDRESS,
-      executionAddress: TARGET_CANONICAL_CSW_ADDRESS,
-      signerAddress: TARGET_ALLOWED_OWNER_EOA_ADDRESSES[0],
+      canonicalAddress: CANONICAL_CSW_ADDRESS,
+      executionAddress: CANONICAL_CSW_ADDRESS,
+      signerAddress: CANONICAL_CSW_ALLOWED_OWNER_EOAS[0],
       signerType: 'EOA',
       connectorId: 'injected',
       connectorName: 'Injected',
@@ -933,7 +933,7 @@ describe('txRouter', () => {
       context,
       approvalTx: {
         to: ADDRESS_C,
-        from: TARGET_ALLOWED_OWNER_EOA_ADDRESSES[0],
+        from: CANONICAL_CSW_ALLOWED_OWNER_EOAS[0],
         data: '0x1234',
         value: '0',
         chainId: 8453,
@@ -942,17 +942,17 @@ describe('txRouter', () => {
 
     expect(result.routing.mode).toBe('canonical4337')
     expect(result.send.mode).toBe('canonical4337')
-    expect(result.send.sender).toBe(TARGET_CANONICAL_CSW_ADDRESS)
+    expect(result.send.sender).toBe(CANONICAL_CSW_ADDRESS)
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
-    expect(sendCoinbaseSmartWalletUserOperationMock.mock.calls[0]?.[0]?.smartWallet).toBe(TARGET_CANONICAL_CSW_ADDRESS)
-    expect(sendCoinbaseSmartWalletUserOperationMock.mock.calls[0]?.[0]?.ownerAddress).toBe(TARGET_ALLOWED_OWNER_EOA_ADDRESSES[0])
+    expect(sendCoinbaseSmartWalletUserOperationMock.mock.calls[0]?.[0]?.smartWallet).toBe(CANONICAL_CSW_ADDRESS)
+    expect(sendCoinbaseSmartWalletUserOperationMock.mock.calls[0]?.[0]?.ownerAddress).toBe(CANONICAL_CSW_ALLOWED_OWNER_EOAS[0])
   })
 
   it('blocks disallowed signer addresses for policy-enforced canonical account', async () => {
     const context = makeContext({
       executionMode: 'canonical',
-      canonicalAddress: TARGET_CANONICAL_CSW_ADDRESS,
-      executionAddress: TARGET_CANONICAL_CSW_ADDRESS,
+      canonicalAddress: CANONICAL_CSW_ADDRESS,
+      executionAddress: CANONICAL_CSW_ADDRESS,
       signerAddress: ADDRESS_B,
       signerType: 'EOA',
       connectorId: 'injected',
@@ -976,6 +976,48 @@ describe('txRouter', () => {
         },
       }),
     ).rejects.toThrow(/allowed owner signer/i)
+  })
+
+  it('allows the primary embedded signer for canonical CSW canonical4337 sends', async () => {
+    const context = makeContext({
+      executionMode: 'canonical',
+      canonicalAddress: CANONICAL_CSW_ADDRESS,
+      executionAddress: CANONICAL_CSW_ADDRESS,
+      signerAddress: CANONICAL_CSW_ALLOWED_OWNER_EOAS[3],
+      signerType: 'EOA',
+      connectorId: 'privy-embedded',
+      connectorName: 'Privy Embedded EOA',
+      capabilities: {
+        paymasterService: false,
+        atomicStatus: 'unknown',
+        supports5792: false,
+      },
+    })
+
+    const result = await buildAndSendApproval({
+      context,
+      approvalTx: {
+        to: ADDRESS_C,
+        from: CANONICAL_CSW_ALLOWED_OWNER_EOAS[3],
+        data: '0x1234',
+        value: '0',
+        chainId: 8453,
+      },
+    })
+
+    expect(result.routing.mode).toBe('canonical4337')
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
+    expect(sendCoinbaseSmartWalletUserOperationMock.mock.calls[0]?.[0]?.ownerAddress).toBe(
+      CANONICAL_CSW_ALLOWED_OWNER_EOAS[3],
+    )
+  })
+
+  it('normalizes unauthorized canonical signer errors into setup guidance', () => {
+    expect(
+      normalizeCanonicalSendError(
+        new Error('Canonical smart wallet execution requires an authorized owner signer.'),
+      ).message,
+    ).toContain('4626 signing setup')
   })
 
   it('normalizes unauthenticated paymaster errors into canonical session guidance', () => {

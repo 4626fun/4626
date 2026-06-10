@@ -2,11 +2,16 @@ import { createHash } from 'node:crypto'
 
 import { getDb } from '../db/postgres.js'
 import { ensureAlfaClubVigilanteSchema } from './schema.js'
+import { readCreatorLabels, type CreatorLabelMap } from './creatorDisplayLabels.js'
 import {
   getLatestSnapshotTs,
   getSnapshotAt,
   type MetricsSnapshotRow,
 } from './publicationLedger.js'
+import {
+  formatCreatorRoomLink,
+  resolveCreatorRoomLinks,
+} from './creatorRoomLinks.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -14,7 +19,6 @@ const DEFAULT_RADAR_TOP_N = 8
 const DEFAULT_RADAR_MOVERS_N = 6
 const DEFAULT_TELEGRAM_TIMEOUT_MS = 10_000
 const MAX_TELEGRAM_TEXT = 3500
-
 export type AlfaClubRadarFlags = {
   killSwitch: boolean
   enabled: boolean
@@ -50,6 +54,7 @@ export type SnapshotDelta = {
   pnlDelta: number | null
   isNew: boolean
 }
+
 
 function parseBool(value: string | undefined): boolean {
   const raw = (value ?? '').trim().toLowerCase()
@@ -223,6 +228,21 @@ function shortAddress(value: string): string {
   return `${value.slice(0, 6)}...${value.slice(-4)}`
 }
 
+function appendCreatorRoomLink(
+  line: string,
+  address: string,
+  roomIds: Map<string, string>,
+): string {
+  const link = formatCreatorRoomLink(address, roomIds)
+  return link ? `${line} ${link}` : line
+}
+
+function creatorLabel(delta: SnapshotDelta, labels: CreatorLabelMap): string {
+  const label = labels.get(delta.current.creatorAddress.toLowerCase())
+  if (label) return `${label} · #${delta.current.tokenId.toString()}`
+  return `#${delta.current.tokenId.toString()} ${shortAddress(delta.current.creatorAddress)}`
+}
+
 function formatSignedInt(value: number | bigint | null): string {
   if (value === null) return 'n/a'
   const n = typeof value === 'bigint' ? Number(value) : value
@@ -257,6 +277,26 @@ function formatRankDelta(delta: number | null): string {
   return 'flat'
 }
 
+function stakeRatio(row: MetricsSnapshotRow | null): number | null {
+  if (!row || row.totalSupply <= 0n) return null
+  const total = Number(row.totalSupply)
+  const staked = Number(row.stakedSupply)
+  if (!Number.isFinite(total) || !Number.isFinite(staked) || total <= 0) return null
+  return staked / total
+}
+
+function formatRatioPct(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return 'n/a'
+  return `${(value * 100).toFixed(1)}%`
+}
+
+function formatRatioDeltaPct(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return 'n/a'
+  const pct = value * 100
+  const sign = pct > 0 ? '+' : ''
+  return `${sign}${pct.toFixed(1)}pp`
+}
+
 function isMeaningfulMover(delta: SnapshotDelta, flags: AlfaClubRadarFlags): boolean {
   if (delta.isNew) return true
   const rankMove = Math.abs(delta.rankDelta ?? 0)
@@ -281,7 +321,37 @@ export function buildAlfaClubRadarText(params: {
   previousSnapshotTs: string | null
   deltas: SnapshotDelta[]
   flags: AlfaClubRadarFlags
+  labels: CreatorLabelMap
+  roomIds: Map<string, string>
 }): { text: string; highlighted: number; topRows: number } {
+  const breakoutCandidates = params.deltas
+    .filter((delta) => (delta.scoreDelta ?? 0) >= params.flags.minScoreDelta || (delta.rankDelta ?? 0) >= params.flags.minRankMove || delta.isNew)
+    .sort((a, b) => {
+      const aScore = (a.isNew ? 2 : 0) + Math.max(0, a.rankDelta ?? 0) * 0.8 + Math.max(0, a.scoreDelta ?? 0) * 20
+      const bScore = (b.isNew ? 2 : 0) + Math.max(0, b.rankDelta ?? 0) * 0.8 + Math.max(0, b.scoreDelta ?? 0) * 20
+      if (bScore !== aScore) return bScore - aScore
+      return a.current.rank - b.current.rank
+    })
+    .slice(0, 3)
+  const riskCandidates = params.deltas
+    .filter((delta) => (delta.scoreDelta ?? 0) <= -params.flags.minScoreDelta || (delta.rankDelta ?? 0) <= -params.flags.minRankMove)
+    .sort((a, b) => {
+      const aRisk = Math.abs(Math.min(0, a.rankDelta ?? 0)) * 0.8 + Math.abs(Math.min(0, a.scoreDelta ?? 0)) * 20
+      const bRisk = Math.abs(Math.min(0, b.rankDelta ?? 0)) * 0.8 + Math.abs(Math.min(0, b.scoreDelta ?? 0)) * 20
+      if (bRisk !== aRisk) return bRisk - aRisk
+      return a.current.rank - b.current.rank
+    })
+    .slice(0, 3)
+  const stakeShiftCandidates = params.deltas
+    .map((delta) => {
+      const nowRatio = stakeRatio(delta.current)
+      const prevRatio = stakeRatio(delta.previous)
+      const ratioDelta = nowRatio !== null && prevRatio !== null ? nowRatio - prevRatio : null
+      return { delta, nowRatio, ratioDelta }
+    })
+    .filter((entry) => entry.ratioDelta !== null && Math.abs(entry.ratioDelta) >= 0.05)
+    .sort((a, b) => Math.abs(b.ratioDelta ?? 0) - Math.abs(a.ratioDelta ?? 0))
+    .slice(0, 2)
   const currentTop = params.deltas
     .slice()
     .sort((a, b) => a.current.rank - b.current.rank)
@@ -292,17 +362,51 @@ export function buildAlfaClubRadarText(params: {
     .slice(0, params.flags.moversN)
 
   const lines = [
-    'Alfa Radar',
+    'Alfa Radar (Actionable)',
     `Snapshot: ${params.snapshotTs}`,
     params.previousSnapshotTs ? `Compared to: ${params.previousSnapshotTs}` : 'Compared to: first snapshot',
     '',
   ]
 
+  lines.push('What matters now')
+  if (breakoutCandidates.length === 0 && riskCandidates.length === 0 && stakeShiftCandidates.length === 0) {
+    lines.push('- No high-conviction breakouts or breakdowns crossed alert thresholds this cycle.')
+  } else {
+    for (const delta of breakoutCandidates) {
+      lines.push(
+        appendCreatorRoomLink(
+          `- Breakout: ${creatorLabel(delta, params.labels)} (${formatRankDelta(delta.rankDelta)}, score ${formatScoreDelta(delta.scoreDelta)}, pnl ${formatUsd(delta.current.pnl30dUsd)})`,
+          delta.current.creatorAddress,
+          params.roomIds,
+        ),
+      )
+    }
+    for (const delta of riskCandidates) {
+      lines.push(
+        appendCreatorRoomLink(
+          `- Risk: ${creatorLabel(delta, params.labels)} (${formatRankDelta(delta.rankDelta)}, score ${formatScoreDelta(delta.scoreDelta)}, pnl ${formatUsd(delta.current.pnl30dUsd)})`,
+          delta.current.creatorAddress,
+          params.roomIds,
+        ),
+      )
+    }
+    for (const entry of stakeShiftCandidates) {
+      lines.push(
+        appendCreatorRoomLink(
+          `- Positioning shift: ${creatorLabel(entry.delta, params.labels)} staked ratio ${formatRatioPct(entry.nowRatio)} (${formatRatioDeltaPct(entry.ratioDelta)})`,
+          entry.delta.current.creatorAddress,
+          params.roomIds,
+        ),
+      )
+    }
+  }
+  lines.push('')
+
   if (movers.length > 0) {
     lines.push('Movers')
     for (const delta of movers) {
       lines.push(
-        `${delta.current.rank}. ${shortAddress(delta.current.creatorAddress)} ` +
+        `${delta.current.rank}. ${creatorLabel(delta, params.labels)} ` +
           `(${formatRankDelta(delta.rankDelta)}, score ${formatScoreDelta(delta.scoreDelta)}) ` +
           `supply ${formatSignedInt(delta.supplyDelta)} staked ${formatSignedInt(delta.stakedDelta)} ` +
           `pnl ${formatUsd(delta.current.pnl30dUsd)} (${formatUsd(delta.pnlDelta)})`,
@@ -317,7 +421,7 @@ export function buildAlfaClubRadarText(params: {
   lines.push('Current Top')
   for (const delta of currentTop) {
     lines.push(
-      `${delta.current.rank}. ${shortAddress(delta.current.creatorAddress)} ` +
+      `${delta.current.rank}. ${creatorLabel(delta, params.labels)} ` +
         `score ${formatScore(delta.current.score)} supply ${delta.current.totalSupply.toString()} ` +
         `staked ${delta.current.stakedSupply.toString()} pnl ${formatUsd(delta.current.pnl30dUsd)}`,
     )
@@ -462,11 +566,26 @@ export async function runAlfaClubRadar(
     }
   }
 
+  const labelHintMap = new Map<string, string>()
+  for (const row of [...currentRows, ...previousRows]) {
+    labelHintMap.set(row.creatorAddress.toLowerCase(), row.tokenId.toString())
+  }
+  const labels = await readCreatorLabels(
+    [...labelHintMap.entries()].map(([address, tokenId]) => ({ address, tokenId })),
+  )
+  const tokenIdByAddress = labelHintMap
+  const roomLinkHints = [...tokenIdByAddress.entries()].map(([address, tokenId]) => ({
+    address,
+    tokenId,
+  }))
+  const roomIds = await resolveCreatorRoomLinks(roomLinkHints)
   const built = buildAlfaClubRadarText({
     snapshotTs,
     previousSnapshotTs,
     deltas: buildDeltas(currentRows, previousRows),
     flags,
+    labels,
+    roomIds,
   })
 
   if (opts.sendTelegram) {

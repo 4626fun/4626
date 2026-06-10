@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/telegram/\_link-complete
+[4626-web](../../../index.md) / api/\_handlers/telegram/\_link-complete
 
 # api/\_handlers/telegram/\_link-complete
 

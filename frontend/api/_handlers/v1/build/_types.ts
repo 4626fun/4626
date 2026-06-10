@@ -1,7 +1,9 @@
+import type { Address, Hex } from 'viem'
+
 export type BuildTxResponse = {
   chainId: number
-  to: `0x${string}`
-  data: `0x${string}`
+  to: Address
+  data: Hex
   value: string
   description: string
   warnings: string[]

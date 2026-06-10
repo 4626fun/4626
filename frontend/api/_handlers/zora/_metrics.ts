@@ -1,7 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getStringQuery, handleOptions, setCache, setCors } from '../../../server/zora/_shared.js'
-import { getDb } from '../../../packages/server-core/src/index.js'
-import { ensureCreatorMetricsSchema } from '../../../server/_lib/zora/creatorMetricsSync.js'
+import { getDb } from '@4626/server-core'
+import {
+  cachedTotalsMaxAgeMs,
+  ensureCreatorMetricsSchema,
+} from '../../../server/_lib/zora/creatorMetricsSync.js'
 
 type MetricsScope = 'creators'
 type SyncStatus = 'idle' | 'running' | 'error'
@@ -13,9 +16,11 @@ type MetricsResponse = {
   syncStatus: SyncStatus
   sync: {
     backfillComplete: boolean
+    exploreBackfillComplete: boolean
     sampledCreators: number
     lastSyncStartedAt: string | null
     lastSyncFinishedAt: string | null
+    lastHotRefreshAt: string | null
     lastFullSyncAt: string | null
     syncError: string | null
     driftEstimateTotal: number | null
@@ -27,6 +32,10 @@ type MetricsResponse = {
     creatorCoinsMarketCapUsd: number | null
     creatorCoinsVolume24hUsd: number | null
     creatorCoinsFees24hUsd: number | null
+    ethosScoredCreators: number | null
+    ethos1200Creators: number | null
+    ethos1600Creators: number | null
+    ethos1800Creators: number | null
     partial: boolean
     sampledCreators: number
   }
@@ -74,6 +83,24 @@ function isPoolAcquireTimeoutError(err: unknown): boolean {
   return msg.includes('timeout exceeded when trying to connect') || msg.includes('timeout acquiring a client')
 }
 
+function isDeployDryRunContext(): boolean {
+  if (String(process.env.DEPLOY_DRY_RUN_PORT ?? '').trim()) return true
+  const deploymentVersion = String(process.env.VITE_DEPLOYMENT_VERSION ?? '').toLowerCase()
+  return deploymentVersion.includes('dryrun')
+}
+
+function isLikelyDbConnectivityFailure(err: unknown): boolean {
+  const code = String((err as any)?.code ?? '').trim().toUpperCase()
+  if (code === '08006' || code === 'ETIMEDOUT') return true
+  const msg = String((err as any)?.message ?? err ?? '').toLowerCase()
+  return (
+    msg.includes('timeout') ||
+    msg.includes('failed to connect to database') ||
+    msg.includes('authentication did not complete') ||
+    msg.includes('unable to check out connection from the pool')
+  )
+}
+
 function toNumber(v: unknown): number | null {
   const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : NaN
   if (!Number.isFinite(n)) return null
@@ -108,17 +135,6 @@ function mapHistoryRows(rows: any[]): Array<{ date: string; creatorCoinsMarketCa
     .filter((entry): entry is { date: string; creatorCoinsMarketCapUsd: number | null } => entry != null)
 }
 
-function hasMeaningfulHistory(points: Array<{ date: string; creatorCoinsMarketCapUsd: number | null }>): boolean {
-  if (points.length < 7) return false
-  const unique = new Set<number>()
-  for (const point of points) {
-    if (typeof point.creatorCoinsMarketCapUsd !== 'number' || !Number.isFinite(point.creatorCoinsMarketCapUsd)) continue
-    unique.add(Number(point.creatorCoinsMarketCapUsd.toFixed(2)))
-    if (unique.size > 1) return true
-  }
-  return false
-}
-
 function errorSignature(err: unknown): string {
   const code = String((err as any)?.code ?? '').trim().toUpperCase()
   const msg = err instanceof Error ? err.message : String(err ?? '')
@@ -147,7 +163,13 @@ function noteRefreshFailure(err: unknown): void {
   staleRefreshBlockedUntilMs = now + backoffMs
   const signature = errorSignature(err)
   if (shouldLogRefreshError(signature, now)) {
-    console.error('[zora/metrics] background refresh failed', err)
+    if (isDeployDryRunContext() && isLikelyDbConnectivityFailure(err)) {
+      console.info(
+        `[zora/metrics] dry-run DB unavailable; skipping background refresh for ${Math.round(backoffMs / 1000)}s`,
+      )
+    } else {
+      console.error('[zora/metrics] background refresh failed', err)
+    }
   }
 }
 
@@ -161,9 +183,11 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       syncStatus: 'error',
       sync: {
         backfillComplete: false,
+        exploreBackfillComplete: false,
         sampledCreators: 0,
         lastSyncStartedAt: null,
         lastSyncFinishedAt: null,
+        lastHotRefreshAt: null,
         lastFullSyncAt: null,
         syncError: 'database_not_configured',
         driftEstimateTotal: null,
@@ -175,6 +199,10 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
         creatorCoinsMarketCapUsd: null,
         creatorCoinsVolume24hUsd: null,
         creatorCoinsFees24hUsd: null,
+        ethosScoredCreators: null,
+        ethos1200Creators: null,
+        ethos1600Creators: null,
+        ethos1800Creators: null,
         partial: true,
         sampledCreators: 0,
       },
@@ -189,19 +217,45 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
   const stateResult = await db.sql`
     SELECT
       backfill_complete,
+      explore_backfill_complete,
       sync_status,
       sync_error,
       sampled_creators,
       last_sync_started_at,
       last_sync_finished_at,
+      last_hot_refresh_at,
       last_full_sync_at,
       drift_estimate_total,
-      drift_pct
+      drift_pct,
+      cached_creators_total,
+      cached_market_cap_usd,
+      cached_volume_24h_usd,
+      cached_fees_24h_usd,
+      cached_totals_at
     FROM creator_metrics_state
     WHERE id = 1
     LIMIT 1;
   `
-  const totalsResult = await db.sql`
+  const state = stateResult.rows?.[0] ?? {}
+  const cachedTotalsAtMs = asIsoString(state.cached_totals_at)
+    ? Date.parse(String(state.cached_totals_at))
+    : NaN
+  const cachedTotalsFresh =
+    Number.isFinite(cachedTotalsAtMs) && Date.now() - cachedTotalsAtMs <= cachedTotalsMaxAgeMs()
+
+  const totalsResult = cachedTotalsFresh
+    ? {
+        rows: [
+          {
+            creators_total: state.cached_creators_total,
+            creators_new_24h: null,
+            market_cap_usd: state.cached_market_cap_usd,
+            volume_24h_usd: state.cached_volume_24h_usd,
+            fees_24h_usd: state.cached_fees_24h_usd,
+          },
+        ],
+      }
+    : await db.sql`
     SELECT
       (SELECT COUNT(*)::BIGINT FROM creators) AS creators_total,
       (
@@ -214,15 +268,25 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       (SELECT COALESCE(SUM(volume_24h_usd), 0)::NUMERIC FROM creator_coins WHERE chain_id = 8453) AS volume_24h_usd,
       (SELECT COALESCE(SUM(fees_24h_usd), 0)::NUMERIC FROM creator_coins WHERE chain_id = 8453) AS fees_24h_usd;
   `
+  if (cachedTotalsFresh) {
+    const newCreatorsResult = await db.sql`
+      SELECT COUNT(DISTINCT creator_address)::BIGINT AS creators_new_24h
+      FROM creator_coins
+      WHERE chain_id = 8453
+        AND created_at >= NOW() - INTERVAL '24 hours';
+    `
+    totalsResult.rows[0].creators_new_24h = newCreatorsResult.rows?.[0]?.creators_new_24h ?? null
+  }
 
-  const state = stateResult.rows?.[0] ?? {}
   const agg = totalsResult.rows?.[0] ?? {}
   const syncStatus = parseSyncStatus(state.sync_status)
   const backfillComplete = Boolean(state.backfill_complete)
+  const exploreBackfillComplete = Boolean(state.explore_backfill_complete)
   const sampledCreators = Math.max(0, Math.floor(toNumber(state.sampled_creators) ?? 0))
   const lastFullSyncAt = asIsoString(state.last_full_sync_at)
   const lastSyncFinishedAt = asIsoString(state.last_sync_finished_at)
   const lastSyncStartedAt = asIsoString(state.last_sync_started_at)
+  const lastHotRefreshAt = asIsoString(state.last_hot_refresh_at)
   const syncError = typeof state.sync_error === 'string' && state.sync_error.length > 0 ? state.sync_error : null
 
   // Canonical totals are considered exact only when backfill completed and no active/error sync.
@@ -234,8 +298,18 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
   const creatorCoinsVolume24hUsd = toNumber(agg.volume_24h_usd)
   const creatorCoinsFees24hUsd = toNumber(agg.fees_24h_usd)
 
-  // Persist one daily canonical snapshot and return the latest 30-day market-cap series.
-  // This keeps the dashboard trend independent from client-side sort/view state.
+  // Read sparkline history before optional snapshot write so the dashboard can paint sooner.
+  const historyResult = await db.sql`
+    SELECT day::text AS day, creator_coins_market_cap_usd
+    FROM creator_metrics_daily_snapshots
+    WHERE day >= CURRENT_DATE - INTERVAL '29 days'
+    ORDER BY day ASC;
+  `
+  const history30d = mapHistoryRows(
+    Array.isArray((historyResult as any)?.rows) ? (historyResult as any).rows : [],
+  )
+
+  // Persist one daily canonical snapshot (non-blocking for response assembly).
   await db.sql`
     INSERT INTO creator_metrics_daily_snapshots (
       day,
@@ -267,77 +341,24 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       OR creator_metrics_daily_snapshots.updated_at < NOW() - make_interval(secs => ${SNAPSHOT_WRITE_MIN_INTERVAL_SECONDS});
   `
 
-  const historyResult = await db.sql`
-    SELECT day::text AS day, creator_coins_market_cap_usd
-    FROM creator_metrics_daily_snapshots
-    WHERE day >= CURRENT_DATE - INTERVAL '29 days'
-    ORDER BY day ASC;
-  `
-  const snapshotHistory30d = mapHistoryRows(
-    Array.isArray((historyResult as any)?.rows) ? (historyResult as any).rows : [],
-  )
-  let history30d = snapshotHistory30d
-  if (!hasMeaningfulHistory(snapshotHistory30d)) {
-    // Bootstrap a non-flat, programmatic 30-day trend when daily snapshots are sparse.
-    // This uses creator coin creation dates + current market-cap state to derive a
-    // cumulative day-by-day series until enough canonical daily snapshots exist.
-    const derivedHistoryResult = await db.sql`
-      WITH bounds AS (
-        SELECT (CURRENT_DATE - INTERVAL '29 days')::date AS start_day
-      ),
-      days AS (
-        SELECT generate_series((SELECT start_day FROM bounds), CURRENT_DATE, INTERVAL '1 day')::date AS day
-      ),
-      base AS (
-        SELECT COALESCE(SUM(market_cap_usd), 0)::NUMERIC AS base_market_cap
-        FROM creator_coins
-        WHERE chain_id = 8453
-          AND market_cap_usd IS NOT NULL
-          AND (created_at IS NULL OR created_at::date < (SELECT start_day FROM bounds))
-      ),
-      by_day AS (
-        SELECT created_at::date AS day, COALESCE(SUM(market_cap_usd), 0)::NUMERIC AS day_market_cap
-        FROM creator_coins
-        WHERE chain_id = 8453
-          AND market_cap_usd IS NOT NULL
-          AND created_at::date >= (SELECT start_day FROM bounds)
-        GROUP BY created_at::date
-      ),
-      series AS (
-        SELECT
-          d.day,
-          (
-            (SELECT base_market_cap FROM base)
-            + COALESCE(
-                SUM(COALESCE(b.day_market_cap, 0)) OVER (
-                  ORDER BY d.day
-                  ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                ),
-                0
-              )
-          )::NUMERIC AS creator_coins_market_cap_usd
-        FROM days d
-        LEFT JOIN by_day b ON b.day = d.day
-      )
-      SELECT day::text AS day, creator_coins_market_cap_usd
-      FROM series
-      ORDER BY day ASC;
-    `
-    history30d = mapHistoryRows(
-      Array.isArray((derivedHistoryResult as any)?.rows) ? (derivedHistoryResult as any).rows : [],
-    )
-  }
+  const freshnessTimestamp =
+    lastHotRefreshAt ??
+    lastSyncFinishedAt ??
+    (Number.isFinite(cachedTotalsAtMs) ? new Date(cachedTotalsAtMs).toISOString() : null) ??
+    new Date().toISOString()
 
   return {
     scope,
-    updatedAt: lastFullSyncAt ?? lastSyncFinishedAt ?? new Date().toISOString(),
+    updatedAt: freshnessTimestamp,
     exact,
     syncStatus,
     sync: {
       backfillComplete,
+      exploreBackfillComplete,
       sampledCreators,
       lastSyncStartedAt,
       lastSyncFinishedAt,
+      lastHotRefreshAt,
       lastFullSyncAt,
       syncError,
       driftEstimateTotal: toNumber(state.drift_estimate_total),
@@ -350,6 +371,10 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       creatorCoinsMarketCapUsd,
       creatorCoinsVolume24hUsd,
       creatorCoinsFees24hUsd,
+      ethosScoredCreators: null,
+      ethos1200Creators: null,
+      ethos1600Creators: null,
+      ethos1800Creators: null,
       partial: !exact,
       sampledCreators,
     },

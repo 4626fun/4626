@@ -1,4 +1,5 @@
 import { apiFetch } from '@/lib/api/apiBase'
+import { clearWaitlistRecoveryGate } from '@/features/waitlist/waitlistRecoveryGate'
 
 const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
 const SESSION_TOKEN_CHANGED_EVENT = 'cv-siwe-session-token-change'
@@ -79,19 +80,13 @@ export function isAlreadyLoggedInAuthError(error: unknown): boolean {
   )
 }
 
-export function shouldStopWaitlistAutoAuthRetry(params: {
-  isSessionMismatch: boolean
-  isRecoveryRequired: boolean
-}): boolean {
-  return params.isSessionMismatch || params.isRecoveryRequired
-}
-
 export async function runWaitlistPrivyLogout(params: {
   logout: (() => Promise<void>) | null | undefined
   timeoutMs?: number
   shouldLogout?: boolean
 }): Promise<void> {
   clearStoredWaitlistSessionToken()
+  clearWaitlistRecoveryGate()
   const clearServerSessionPromise = clearServerWaitlistSession()
   const logout = params.logout
   const shouldLogout = params.shouldLogout !== false

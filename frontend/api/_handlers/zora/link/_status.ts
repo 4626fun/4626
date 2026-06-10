@@ -9,7 +9,7 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { extractZoraCrossAppAccounts, verifyPrivyForAccounts } from '../../../../server/_lib/identity/accountsIdentity.js'
 
 type ZoraLinkStatusResponse = {

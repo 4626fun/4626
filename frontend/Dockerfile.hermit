@@ -1,0 +1,120 @@
+# --------------------------------------------------------------------------
+# 4626 Hermit Agent — Dedicated Production Dockerfile
+# --------------------------------------------------------------------------
+# This is a minimal, dedicated image for the Hermit AlfaClub/Pinata creative
+# agent (hermit.4626.fun).
+#
+# It is intentionally separate from the general agent image (Dockerfile.agent)
+# to avoid complex entrypoint logic that has been causing repeated healthcheck
+# failures on Railway.
+#
+# Key features:
+# - Starts the health listener in bootstrap.ts as early as possible.
+# - Uses the same dependency and source layout as the main agent image.
+#
+# Build (from repo root):
+#   docker build -f frontend/Dockerfile.hermit -t 4626-hermit .
+#
+# Railway service configuration:
+#   - Root Directory: (leave as repo root or frontend if you prefer)
+#   - Dockerfile Path: frontend/Dockerfile.hermit
+#   - Environment Variables: AGENT_PROCESS=hermit (optional, not used in this image)
+#   - Recommended Start Command override (if you want to be extra safe):
+#       bash -lc 'exec gosu node npx tsx server/agents/hermit/bootstrap.ts'
+#
+# Healthcheck: /healthz (served by bootstrap.ts immediately on startup)
+# --------------------------------------------------------------------------
+
+FROM node:22-bookworm-slim AS base
+
+# Install OS deps for native modules (sharp, etc.) + gosu for dropping privileges
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ ca-certificates gosu git jq \
+    && rm -rf /var/lib/apt/lists/*
+
+# Enable corepack for pnpm
+RUN corepack enable && corepack prepare pnpm@10.15.1 --activate
+
+WORKDIR /app
+
+# --------------------------------------------------------------------------
+# Stage 1: Install dependencies
+# --------------------------------------------------------------------------
+FROM base AS deps
+
+# Copy package manifests + patch files
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+COPY frontend/patches/ ./patches/
+
+# Include @4626/server-core (required by command families and server/_lib)
+COPY frontend/packages/server-core/package.json ./packages/server-core/package.json
+COPY frontend/packages/server-core/tsconfig.json ./packages/server-core/tsconfig.json
+COPY frontend/packages/server-core/build.mjs ./packages/server-core/build.mjs
+COPY frontend/packages/server-core/src ./packages/server-core/src
+
+# server-core build.mjs re-exports compile server/_lib/*.ts siblings; those
+# sources (and their src/ imports) must exist before the deps-stage build.
+COPY frontend/server ./server
+COPY frontend/api/_handlers/token ./api/_handlers/token
+COPY frontend/src/config ./src/config
+COPY frontend/src/lib ./src/lib
+COPY frontend/src/wallet ./src/wallet
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile --ignore-scripts \
+    && pnpm rebuild
+
+# Build @4626/server-core so that dist/ is generated.
+# The package is imported by command families (e.g. alfaclub.ts) and many
+# server/_lib modules. tsx resolves the package.json "main" field to dist/.
+RUN cd packages/server-core && node build.mjs
+
+# --------------------------------------------------------------------------
+# Stage 2: Production image
+# --------------------------------------------------------------------------
+FROM base AS runner
+
+WORKDIR /app
+
+ARG DGCLAW_SKILL_REPO=https://github.com/Virtual-Protocol/dgclaw-skill.git
+ARG DGCLAW_SKILL_REF=main
+ARG ACP_CLI_REPO=https://github.com/Virtual-Protocol/acp-cli.git
+ARG ACP_CLI_REF=main
+
+# Copy installed node_modules and package.json
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/package.json ./package.json
+
+# Copy the server-core workspace package
+COPY --from=deps /app/packages/server-core ./packages/server-core
+
+# server tree includes build.mjs runtime siblings (e.g. renderPremiumTokenIcon.js)
+COPY --from=deps /app/server ./server
+COPY frontend/api ./api
+COPY frontend/src/config ./src/config
+COPY frontend/src/lib ./src/lib
+COPY frontend/src/wallet ./src/wallet
+COPY frontend/tsconfig.json frontend/tsconfig.node.json ./
+COPY frontend/shared ./shared
+
+# Arena runtime prerequisites:
+# - ACP CLI binary (`acp`)
+# - dgclaw-skill workspace containing `dgclaw.sh` + scripts/*
+# This keeps /arena commands functional in the Hermit Railway runtime.
+RUN npm install -g @virtuals-protocol/acp-cli \
+  && git clone --depth=1 --branch "${DGCLAW_SKILL_REF}" "${DGCLAW_SKILL_REPO}" /app/dgclaw-skill \
+  && cd /app/dgclaw-skill \
+  && npm install --omit=dev \
+  && git clone --depth=1 --branch "${ACP_CLI_REF}" "${ACP_CLI_REPO}" /app/acp-cli \
+  && cd /app/acp-cli \
+  && npm install --omit=dev
+
+# Health check port
+ENV PORT=8080
+ENV ACP_CLI_DIR=/app/acp-cli
+EXPOSE 8080
+
+# The absolute simplest possible startup for maximum reliability on Railway.
+# We use the local tsx binary directly (no npx) and exec so the process is PID 1.
+# bootstrap.ts starts the /healthz listener *before* any heavy module imports.
+CMD exec ./node_modules/.bin/tsx server/agents/hermit/bootstrap.ts

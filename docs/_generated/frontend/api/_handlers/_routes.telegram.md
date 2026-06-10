@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / api/\_handlers/\_routes.telegram
+[4626-web](../../index.md) / api/\_handlers/\_routes.telegram
 
 # api/\_handlers/\_routes.telegram
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/\_routes.telegram.ts:4](https://github.com/wenakita/
 
 > **getTelegramApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.telegram.ts:16](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.telegram.ts#L16)
+Defined in: [api/\_handlers/\_routes.telegram.ts:17](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.telegram.ts#L17)
 
 #### Parameters
 

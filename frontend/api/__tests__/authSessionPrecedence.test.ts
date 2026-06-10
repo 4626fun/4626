@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { COOKIE_SESSION, makeSessionToken, readSessionFromRequest } from '../../packages/server-core/src/index.js'
+import { COOKIE_SESSION, makeSessionToken, readSessionFromRequest } from '@4626/server-core'
 
 const BEARER_ADDRESS = '0x00000000000000000000000000000000000000aa'
 const COOKIE_ADDRESS = '0x00000000000000000000000000000000000000bb'

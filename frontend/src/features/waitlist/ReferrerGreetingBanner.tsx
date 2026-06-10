@@ -36,12 +36,12 @@ export function ReferrerGreetingBanner({ referralCode, className = '' }: Referre
           <Gift className="w-3.5 h-3.5" />
         </span>
         <div className="text-xs text-zinc-200 leading-tight">
-          <span className="text-zinc-500">Invited by</span>{' '}
+          <span className="text-zinc-400">Invited by</span>{' '}
           <span className="font-mono text-white" title={referrer.display}>
             {referrer.display}
           </span>
           {referrer.rank !== null ? (
-            <span className="ml-1 text-zinc-500">
+            <span className="ml-1 text-zinc-400">
               · rank #{referrer.rank.toLocaleString()}
             </span>
           ) : null}

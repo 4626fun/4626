@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/paymaster/customOwnerSponsorshipToken
+[4626-web](../../../index.md) / server/\_lib/paymaster/customOwnerSponsorshipToken
 
 # server/\_lib/paymaster/customOwnerSponsorshipToken
 
@@ -70,7 +70,7 @@ Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:60](https://g
 
 ###### ownerToAdd
 
-`` `0x${string}` ``
+`string`
 
 ###### profileId?
 
@@ -78,11 +78,11 @@ Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:60](https://g
 
 ###### sessionAddress
 
-`` `0x${string}` ``
+`string`
 
 ###### smartWalletAddress
 
-`` `0x${string}` ``
+`string`
 
 ###### ttlSeconds?
 

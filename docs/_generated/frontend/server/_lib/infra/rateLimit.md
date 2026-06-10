@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/infra/rateLimit
+[4626-web](../../../index.md) / server/\_lib/infra/rateLimit
 
 # server/\_lib/infra/rateLimit
 
@@ -354,54 +354,6 @@ Defined in: [server/\_lib/infra/rateLimit.ts:85](https://github.com/wenakita/462
 
 > `readonly` **windowMs**: `60000` = `60_000`
 
-##### creRuntimeDecisionsWrite
-
-> `readonly` **creRuntimeDecisionsWrite**: `object`
-
-###### creRuntimeDecisionsWrite.maxRequests
-
-> `readonly` **maxRequests**: `60` = `60`
-
-###### creRuntimeDecisionsWrite.windowMs
-
-> `readonly` **windowMs**: `60000` = `60_000`
-
-##### creRuntimeIngestRead
-
-> `readonly` **creRuntimeIngestRead**: `object`
-
-###### creRuntimeIngestRead.maxRequests
-
-> `readonly` **maxRequests**: `120` = `120`
-
-###### creRuntimeIngestRead.windowMs
-
-> `readonly` **windowMs**: `60000` = `60_000`
-
-##### creRuntimeIngestWrite
-
-> `readonly` **creRuntimeIngestWrite**: `object`
-
-###### creRuntimeIngestWrite.maxRequests
-
-> `readonly` **maxRequests**: `60` = `60`
-
-###### creRuntimeIngestWrite.windowMs
-
-> `readonly` **windowMs**: `60000` = `60_000`
-
-##### creRuntimeTriggerWrite
-
-> `readonly` **creRuntimeTriggerWrite**: `object`
-
-###### creRuntimeTriggerWrite.maxRequests
-
-> `readonly` **maxRequests**: `30` = `30`
-
-###### creRuntimeTriggerWrite.windowMs
-
-> `readonly` **windowMs**: `60000` = `60_000`
-
 ##### cswLink
 
 > `readonly` **cswLink**: `object`
@@ -522,6 +474,54 @@ Defined in: [server/\_lib/infra/rateLimit.ts:85](https://github.com/wenakita/462
 
 > `readonly` **windowMs**: `60000` = `60_000`
 
+##### keeperDecisionsWrite
+
+> `readonly` **keeperDecisionsWrite**: `object`
+
+###### keeperDecisionsWrite.maxRequests
+
+> `readonly` **maxRequests**: `60` = `60`
+
+###### keeperDecisionsWrite.windowMs
+
+> `readonly` **windowMs**: `60000` = `60_000`
+
+##### keeperIngestRead
+
+> `readonly` **keeperIngestRead**: `object`
+
+###### keeperIngestRead.maxRequests
+
+> `readonly` **maxRequests**: `120` = `120`
+
+###### keeperIngestRead.windowMs
+
+> `readonly` **windowMs**: `60000` = `60_000`
+
+##### keeperIngestWrite
+
+> `readonly` **keeperIngestWrite**: `object`
+
+###### keeperIngestWrite.maxRequests
+
+> `readonly` **maxRequests**: `60` = `60`
+
+###### keeperIngestWrite.windowMs
+
+> `readonly` **windowMs**: `60000` = `60_000`
+
+##### keeperTriggerWrite
+
+> `readonly` **keeperTriggerWrite**: `object`
+
+###### keeperTriggerWrite.maxRequests
+
+> `readonly` **maxRequests**: `30` = `30`
+
+###### keeperTriggerWrite.windowMs
+
+> `readonly` **windowMs**: `60000` = `60_000`
+
 ##### lotteryRead
 
 > `readonly` **lotteryRead**: `object`
@@ -555,6 +555,18 @@ Defined in: [server/\_lib/infra/rateLimit.ts:85](https://github.com/wenakita/462
 > `readonly` **maxRequests**: `120` = `120`
 
 ###### paymasterRpc.windowMs
+
+> `readonly` **windowMs**: `60000` = `60_000`
+
+##### relayIntentStatus
+
+> `readonly` **relayIntentStatus**: `object`
+
+###### relayIntentStatus.maxRequests
+
+> `readonly` **maxRequests**: `300` = `300`
+
+###### relayIntentStatus.windowMs
 
 > `readonly` **windowMs**: `60000` = `60_000`
 
@@ -769,7 +781,7 @@ Returns whether the request is allowed and remaining quota.
 
 > **getClientIp**(`req`): `string`
 
-Defined in: [server/\_lib/infra/rateLimit.ts:216](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L216)
+Defined in: [server/\_lib/infra/rateLimit.ts:218](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L218)
 
 Helper to get client IP from request headers.
 
@@ -804,7 +816,7 @@ feature flag that asserts Cloudflare is the true edge.
 
 > **rateLimitKey**(...`parts`): `string`
 
-Defined in: [server/\_lib/infra/rateLimit.ts:248](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L248)
+Defined in: [server/\_lib/infra/rateLimit.ts:250](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L250)
 
 Build a rate limit key from components.
 

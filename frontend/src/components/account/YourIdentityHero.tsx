@@ -5,7 +5,7 @@ import { useCanonicalIdentity } from '@/hooks/useCanonicalIdentity'
 import { useBasenameForAddress } from '@/hooks/useBasenameForAddress'
 import { useCreatorCoinBadge } from '@/hooks/useCreatorCoinBadge'
 import { JazziconAvatar } from '@/components/account/JazziconAvatar'
-import { CopyableAddress } from '@/components/account/CopyableAddress'
+import { CopyableAddress, InlineAddressCopyButton } from '@/components/account/CopyableAddress'
 
 /**
  * `/accounts` page hero — the primary "this is who you are onchain"
@@ -86,16 +86,17 @@ export function YourIdentityHero() {
         )}
 
         <div className="min-w-0 flex-1">
-          <div className="text-lg font-medium text-white truncate">{primaryLabel}</div>
-          <div className="mt-0.5 text-xs text-zinc-500">Coinbase Smart Wallet · Base</div>
-          <div className="mt-2">
-            <CopyableAddress address={identity.cswAddress} />
+          <div className="flex min-w-0 items-center gap-1">
+            <div className="truncate text-lg font-medium text-white">{primaryLabel}</div>
+            <InlineAddressCopyButton address={identity.cswAddress} />
           </div>
-          <div className="mt-3 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
-              Execution sub-account
-            </div>
-            {identity.executionSubAccountAddress ? (
+          <div className="mt-0.5 text-xs text-zinc-500">Coinbase Smart Wallet · Base</div>
+          {identity.accountChrome.mode === 'sub-account' && identity.executionSubAccountAddress ? (
+            <div className="mt-3 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+                {identity.accountChrome.executionLaneTitle}
+              </div>
+              <p className="mt-1 text-[11px] text-zinc-500">{identity.accountChrome.executionLaneDescription}</p>
               <div className="mt-1.5 flex items-center gap-2 text-xs text-zinc-300">
                 <CopyableAddress address={identity.executionSubAccountAddress} variant="muted" />
                 <a
@@ -107,14 +108,22 @@ export function YourIdentityHero() {
                   Basescan <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
-            ) : (
-              <div className="mt-1 text-[11px] text-zinc-500">
-                {identity.executionTrack === 'legacy-owner-install'
-                  ? 'Legacy owner path active — no sub-account registered.'
-                  : 'Not provisioned yet.'}
+            </div>
+          ) : identity.accountChrome.mode === 'parent-csw' ? (
+            <div className="mt-3 rounded-lg border border-emerald-400/15 bg-emerald-400/[0.04] px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-emerald-300/80 font-medium">
+                {identity.accountChrome.executionLaneTitle}
               </div>
-            )}
-          </div>
+              <p className="mt-1 text-[11px] text-zinc-400">{identity.accountChrome.executionLaneDescription}</p>
+            </div>
+          ) : identity.accountChrome.mode === 'none' ? (
+            <div className="mt-3 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+                {identity.accountChrome.executionLaneTitle}
+              </div>
+              <p className="mt-1 text-[11px] text-zinc-500">{identity.accountChrome.executionLaneDescription}</p>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -227,14 +236,14 @@ export function SignersSection({
               <JazziconAvatar address={identity.externalEoaAddress} size={36} />
             )}
             <div className="min-w-0 flex-1">
-              <div className="text-sm text-white truncate">
-                {externalBasename.displayName ?? formatShort(identity.externalEoaAddress)}
+              <div className="flex min-w-0 items-center gap-1">
+                <div className="truncate text-sm text-white">
+                  {externalBasename.displayName ?? formatShort(identity.externalEoaAddress)}
+                </div>
+                <InlineAddressCopyButton address={identity.externalEoaAddress} />
               </div>
               <div className="text-[11px] text-zinc-500">External wallet — signs on behalf of CSW</div>
             </div>
-          </div>
-          <div className="mt-2">
-            <CopyableAddress address={identity.externalEoaAddress} variant="muted" />
           </div>
         </div>
       ) : (
@@ -275,8 +284,11 @@ export function SignersSection({
               <JazziconAvatar address={identity.privyEmbeddedAddress} size={36} />
             )}
             <div className="min-w-0 flex-1">
-              <div className="text-sm text-white truncate">
-                {embeddedBasename.displayName ?? formatShort(identity.privyEmbeddedAddress)}
+              <div className="flex min-w-0 items-center gap-1">
+                <div className="truncate text-sm text-white">
+                  {embeddedBasename.displayName ?? formatShort(identity.privyEmbeddedAddress)}
+                </div>
+                <InlineAddressCopyButton address={identity.privyEmbeddedAddress} />
               </div>
               <div className="text-[11px] text-zinc-500">
                 {identity.activeSigner === 'embedded'
@@ -284,9 +296,6 @@ export function SignersSection({
                   : 'Idle — Privy-managed, available as fallback'}
               </div>
             </div>
-          </div>
-          <div className="mt-2">
-            <CopyableAddress address={identity.privyEmbeddedAddress} variant="muted" />
           </div>
         </div>
       ) : (

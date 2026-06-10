@@ -30,8 +30,19 @@ declare const process: { env: Record<string, string | undefined> }
 // Tunables
 // ---------------------------------------------------------------------------
 
-/** Deploy block for FriendKey on Base. Used as the initial `sinceBlock`. */
-const DEFAULT_DEPLOY_BLOCK = 20_000_000n
+/**
+ * Deploy-era floor for FriendKey mint scanning on Base.
+ *
+ * Direct onchain probe against the configured FriendKey contract
+ * (`0xAF0Bf8593dC6CA973DF2132731B0F9B5F974FA9F`) shows the first
+ * `TransferSingle(from=0x0)` mint around block ~40,462,900 and no
+ * `TransferBatch(from=0x0)` mints in the historical scan window.
+ *
+ * Using a floor near 40M avoids spending cron/runtime budget on a long
+ * pre-deploy range with guaranteed zero results while still leaving a
+ * safety buffer below the first observed mint.
+ */
+const DEFAULT_DEPLOY_BLOCK = 40_000_000n
 
 /** Max blocks per getLogs call — keep well under public-RPC ceilings. */
 const DEFAULT_CHUNK_BLOCKS = 9_900n

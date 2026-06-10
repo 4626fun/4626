@@ -2,6 +2,15 @@ import { useCallback, useMemo, useState } from 'react'
 
 import { sanitizeDecimalInput, sanitizeIntegerInput } from '@/lib/uniswap/swapUtils'
 
+/** UI slippage input may go higher on thin creator pools; policy may still cap via env. */
+export const SWAP_SLIPPAGE_UI_MAX_PCT = 50
+
+export function parseSwapSlippagePct(slippagePct: string): number {
+  const n = Number(slippagePct)
+  if (!Number.isFinite(n) || n <= 0) return 0.5
+  return Math.min(SWAP_SLIPPAGE_UI_MAX_PCT, n)
+}
+
 export function useSwapState(params: {
   initialTokenIn: string
   initialTokenOut: string
@@ -9,6 +18,7 @@ export function useSwapState(params: {
   const [tokenIn, setTokenIn] = useState<string>(params.initialTokenIn)
   const [tokenOut, setTokenOut] = useState<string>(params.initialTokenOut)
   const [amountInUnits, setAmountInUnitsState] = useState<string>('1')
+  const [slippageAuto, setSlippageAuto] = useState(true)
   const [slippagePct, setSlippagePctState] = useState<string>('0.5')
   const [activePanel, setActivePanel] = useState<'swap' | 'liquidity'>('swap')
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -19,18 +29,19 @@ export function useSwapState(params: {
   }, [])
 
   const setSlippagePct = useCallback((value: string) => {
+    setSlippageAuto(false)
     setSlippagePctState(sanitizeDecimalInput(value, 2))
+  }, [])
+
+  const enableSlippageAuto = useCallback(() => {
+    setSlippageAuto(true)
   }, [])
 
   const setDeadlineMinutes = useCallback((value: string) => {
     setDeadlineMinutesState(sanitizeIntegerInput(value, 3))
   }, [])
 
-  const parsedSlippage = useMemo(() => {
-    const n = Number(slippagePct)
-    if (!Number.isFinite(n) || n <= 0) return 0.5
-    return Math.min(5, n)
-  }, [slippagePct])
+  const parsedSlippage = useMemo(() => parseSwapSlippagePct(slippagePct), [slippagePct])
 
   const parsedDeadlineMinutes = useMemo(() => {
     const n = Number(deadlineMinutes)
@@ -50,6 +61,8 @@ export function useSwapState(params: {
     setTokenOut,
     amountInUnits,
     setAmountInUnits,
+    slippageAuto,
+    setSlippageAuto: enableSlippageAuto,
     slippagePct,
     setSlippagePct,
     activePanel,

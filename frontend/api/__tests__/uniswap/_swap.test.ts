@@ -37,6 +37,14 @@ describe('validateSwapTransactionPayload', () => {
     ).toBe('Uniswap swap response contains conflicting gas fields')
   })
 
+  it('accepts numeric swap.value and normalizes to string', () => {
+    const payload = {
+      swap: { ...BASE_SWAP.swap, value: 0 },
+    }
+    expect(validateSwapTransactionPayload(payload)).toBeNull()
+    expect((payload.swap as { value: unknown }).value).toBe('0')
+  })
+
   it('rejects invalid recipient/sender addresses', () => {
     expect(validateSwapTransactionPayload({ swap: { ...BASE_SWAP.swap, to: '0x1234' } })).toBe(
       'Uniswap swap response contains invalid recipient address',

@@ -73,6 +73,7 @@ import {
   upsertAlfaClubPrivyAccessToken,
   upsertAlfaClubPrivyRefreshToken,
 } from './chatTokenStore.js'
+import { recordRetiredRefreshToken } from './refreshTokenRetirement.js'
 import {
   buildRefreshFailurePayload,
   buildRefreshSuccessPayload,
@@ -340,6 +341,7 @@ function resolveDeps(
         }
       }
       if (inbound && bundle.refreshToken !== inbound.refreshToken) {
+        await recordRetiredRefreshToken(inbound.refreshToken).catch(() => undefined)
         const refreshOk = await upsertAlfaClubPrivyRefreshToken({
           refreshToken: bundle.refreshToken,
           updatedBy,
@@ -350,12 +352,25 @@ function resolveDeps(
           )
         }
       }
-      const chatMeta = await upsertAlfaClubChatToken({
-        jwt: bundle.identityToken,
-        updatedBy,
-      })
-      if (!chatMeta?.hasToken) {
-        throw new Error('token_persistence_failed:identity_token')
+      // Defensive write: only persist the new identity token if it actually
+      // has a later expiry than what is currently in the DB. This reduces
+      // thrashing when multiple refreshers are briefly active.
+      const current = await readAlfaClubChatToken().catch(() => null)
+      const currentExp = current?.expiresAt ? Date.parse(current.expiresAt) : 0
+      const newExp = Date.parse(
+        extractJwtExpiryIso(bundle.identityToken) || '1970-01-01',
+      )
+
+      if (newExp > currentExp) {
+        const chatMeta = await upsertAlfaClubChatToken({
+          jwt: bundle.identityToken,
+          updatedBy,
+        })
+        if (!chatMeta?.hasToken) {
+          throw new Error('token_persistence_failed:identity_token')
+        }
+      } else {
+        log.info?.('[alfaclub-refresher] skipping identity token write — current token has equal or later expiry')
       }
     })
   const refresh =
@@ -539,16 +554,15 @@ export interface AlfaClubRefresherHandle {
 
 /**
  * Reads the long-lived-host opt-in flag for the in-process Privy token
- * refresher. Default OFF: the canonical refresher is the Vercel cron at
- * `/api/v1/alfaclub/chat-token-refresh`, which calls
- * `runAlfaClubPrivyRefreshOnce` directly. A second writer running on a
- * Railway-hosted agent would race the cron and overwrite the
- * `alfaclub_runtime_secret.chat_jwt` slot under a different `updated_by`,
- * masking the source of truth.
+ * refresher.
  *
- * Set `ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED=1` (or `true`) to opt the
- * long-lived host back in — only do this if you're intentionally retiring
- * the Vercel cron path for this environment.
+ * For most Railway services (Keepr primary, etc.): leave this OFF. Vercel cron
+ * remains the canonical writer.
+ *
+ * For the dedicated Hermit creative service (hermit.4626.fun): set to `1`.
+ * This service is the primary long-lived consumer of the AlfaClub bridge
+ * (especially for 1659 theatrical marketing). It is now the recommended owner
+ * of the token rotation loop.
  */
 function isInProcessRefresherEnabled(): boolean {
   const raw = String(process.env.ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED ?? '').trim().toLowerCase()

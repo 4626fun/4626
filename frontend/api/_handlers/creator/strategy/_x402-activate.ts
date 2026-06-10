@@ -13,10 +13,15 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../../packages/server-core/src/index.js'
+  runInTransaction,
+} from '@4626/server-core'
 import { getAddress, isAddress, type Address, type Hex } from 'viem'
 
-import { getCreatorStrategyFeature } from '../../../../server/_lib/creatorStrategy/catalog.js'
+import {
+  getCreatorStrategyFeature,
+  getRetiredCreatorStrategyFeatureMessage,
+} from '../../../../server/_lib/creatorStrategy/catalog.js'
+import { getAlacarteDeployPurchaseBlockedMessage } from '../../../../server/_lib/creatorStrategy/bundleEntitlements.js'
 import {
   insertPendingActivation,
   toCreatorStrategyFeatureDto as toActivationDto,
@@ -36,6 +41,13 @@ import {
   validateX402Authorization,
 } from '../../../../server/_lib/creatorStrategy/x402.js'
 import { dispatchProvisioning } from '../../../../server/_lib/creatorStrategy/provisioner.js'
+import { recordPaymentEvent } from '../../../../server/_lib/creatorStrategy/paymentLedger.js'
+import { upsertPaymentOrder } from '../../../../server/_lib/creatorStrategy/paymentOrders.js'
+import {
+  recordPaymentActivationQueued,
+  recordPaymentProvisioningDispatch,
+  type RecordPaymentActivationQueuedResult,
+} from '../../../../server/_lib/controlPlane/paymentControlPlane.js'
 
 const REQUEST_BODY_MAX_BYTES = 4_096
 
@@ -112,11 +124,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const creatorToken = getAddress(creatorTokenRaw as Address)
 
   const featureKey = typeof body.featureKey === 'string' ? body.featureKey.trim() : ''
+  const retiredMessage = getRetiredCreatorStrategyFeatureMessage(featureKey)
+  if (retiredMessage) {
+    return res
+      .status(410)
+      .json({ success: false, error: retiredMessage } satisfies ApiEnvelope<never>)
+  }
   const feature = getCreatorStrategyFeature(featureKey)
   if (!feature) {
     return res
       .status(400)
       .json({ success: false, error: `Unknown featureKey "${featureKey}"` } satisfies ApiEnvelope<never>)
+  }
+  const alacarteBlocked = getAlacarteDeployPurchaseBlockedMessage(featureKey)
+  if (alacarteBlocked) {
+    return res
+      .status(410)
+      .json({ success: false, error: alacarteBlocked } satisfies ApiEnvelope<never>)
   }
 
   if (!isDbConfigured()) {
@@ -158,9 +182,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ─── X-PAYMENT present: parse, validate, settle. ───
   const parsed = parseXPaymentHeader(paymentHeaderStr)
   if (!parsed.ok) {
-    return res
-      .status(400)
-      .json({ success: false, error: `x402 header parse failed: ${parsed.reason}` } satisfies ApiEnvelope<never>)
+    return res.status(400).json({
+      success: false,
+      error: 'x402_header_parse_failed',
+      reason: parsed.reason,
+    } satisfies ApiEnvelope<never>)
   }
 
   const staticValidation = validateX402Authorization({
@@ -172,7 +198,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!staticValidation.ok) {
     return res.status(400).json({
       success: false,
-      error: `x402 authorization invalid: ${staticValidation.reason}`,
+      error: 'x402_authorization_invalid',
+      reason: staticValidation.reason,
     } satisfies ApiEnvelope<never>)
   }
 
@@ -187,63 +214,166 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const status = statusByReason[settlement.reason] ?? 500
     return res.status(status).json({
       success: false,
-      error: `x402 settlement failed (${settlement.reason}): ${settlement.message}`,
+      error: 'x402_settlement_failed',
+      reason: settlement.reason,
+      message: settlement.message,
     } satisfies ApiEnvelope<never>)
   }
 
-  const insertResult = await insertPendingActivation(db as any, {
-    creatorToken,
-    featureKey: feature.key,
-    priceUsdcPaid: settlement.value,
-    paymentTxHash: settlement.txHash,
-    paymentFrom: settlement.from,
-    paymentTo: settlement.to,
-    paymentVerifiedAt: new Date(),
-    status: 'pending',
-    metadata: {
-      sessionAddress,
-      provisionerTag: feature.provisionerTag,
-      blockNumber: settlement.blockNumber.toString(),
-      paymentSource: 'x402_base',
-      x402Nonce: parsed.payment.payload.authorization.nonce,
-      catalogPriceUsdc: feature.priceUsdc.toString(),
-      effectivePriceUsdc: pricing.effectivePriceUsdc.toString(),
-      priceOverrideId: pricing.appliedOverrideId,
-      discountBps: pricing.discountBps,
-    },
-  })
+  const persistedActivation = await (async () => {
+    try {
+      return await runInTransaction(async (txDb) => {
+        const insertResult = await insertPendingActivation(txDb as any, {
+          creatorToken,
+          featureKey: feature.key,
+          priceUsdcPaid: settlement.value,
+          paymentTxHash: settlement.txHash,
+          paymentFrom: settlement.from,
+          paymentTo: settlement.to,
+          paymentVerifiedAt: new Date(),
+          status: 'pending',
+          metadata: {
+            sessionAddress,
+            provisionerTag: feature.provisionerTag,
+            blockNumber: settlement.blockNumber.toString(),
+            paymentSource: 'x402_base',
+            x402Nonce: parsed.payment.payload.authorization.nonce,
+            catalogPriceUsdc: feature.priceUsdc.toString(),
+            effectivePriceUsdc: pricing.effectivePriceUsdc.toString(),
+            priceOverrideId: pricing.appliedOverrideId,
+            discountBps: pricing.discountBps,
+          },
+        })
+        if (!insertResult.ok) return { ok: false as const, insertResult }
 
-  if (!insertResult.ok) {
+        await upsertPaymentOrder({
+          db: txDb as any,
+          orderId: `activation:${insertResult.row.id}`,
+          status: 'provisioning_queued',
+          amountAtomic: settlement.value,
+          currency: 'USDC',
+          metadata: {
+            provider: 'x402',
+            txHash: settlement.txHash,
+            creatorToken,
+            featureKey: feature.key,
+          },
+        })
+        await recordPaymentEvent({
+          db: txDb as any,
+          provider: 'x402',
+          providerEventId: settlement.txHash,
+          orderId: `activation:${insertResult.row.id}`,
+          eventType: 'x402.authorization_settled',
+          amountAtomic: settlement.value,
+          currency: 'USDC',
+          payload: {
+            creatorToken,
+            featureKey: feature.key,
+            treasury,
+            blockNumber: settlement.blockNumber.toString(),
+          },
+        })
+        return { ok: true as const, row: insertResult.row }
+      })
+    } catch (error) {
+      return {
+        ok: false as const,
+        reason: 'db_error' as const,
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  })()
+
+  if (!persistedActivation) {
+    return res
+      .status(503)
+      .json({ success: false, error: 'Activation persistence unavailable' } satisfies ApiEnvelope<never>)
+  }
+
+  if (!persistedActivation.ok && 'insertResult' in persistedActivation) {
     const statusByReason: Record<string, number> = {
       live_activation_exists: 409,
       payment_already_used: 409,
       db_error: 500,
     }
-    const status = statusByReason[insertResult.reason] ?? 500
+    const status = statusByReason[persistedActivation.insertResult.reason] ?? 500
     return res.status(status).json({
       success: false,
-      error: `Activation failed (${insertResult.reason}): ${insertResult.message}`,
+      error: 'activation_insert_failed',
+      reason: persistedActivation.insertResult.reason,
+      message: persistedActivation.insertResult.message,
     } satisfies ApiEnvelope<never>)
   }
 
+  if (!persistedActivation.ok) {
+    return res.status(500).json({
+      success: false,
+      error: `Activation persistence failed (${persistedActivation.reason}): ${persistedActivation.message}`,
+    } satisfies ApiEnvelope<never>)
+  }
+  const activationRow = persistedActivation.row
+
+  let paymentControlPlane: RecordPaymentActivationQueuedResult | null = null
+  try {
+    paymentControlPlane = await recordPaymentActivationQueued({
+      orderId: `activation:${activationRow.id}`,
+      activationId: activationRow.id,
+      provider: 'x402',
+      providerEventId: settlement.txHash,
+      creatorToken,
+      featureKey: feature.key,
+      paymentSource: 'x402_base',
+      amountAtomic: settlement.value,
+      currency: 'USDC',
+      requestedBy: sessionAddress,
+      metadata: { txHash: settlement.txHash },
+    })
+  } catch (error) {
+    console.warn('[creator-strategy/x402] control-plane activation queue write failed', {
+      txHash: settlement.txHash,
+      activationId: activationRow.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+
   let provisionerNote: string | null = null
+  let provisionOk = false
   try {
     const provision = await dispatchProvisioning({
       creatorToken,
       featureKey: feature.key,
-      activationId: insertResult.row.id,
+      activationId: activationRow.id,
       paymentSource: 'x402_base',
       paymentRef: settlement.txHash,
     })
+    provisionOk = provision.ok
     provisionerNote = provision.ok ? provision.note : `dispatch failed: ${provision.reason}`
   } catch (error) {
     provisionerNote = `dispatch threw: ${error instanceof Error ? error.message : String(error)}`
   }
 
+  if (paymentControlPlane?.stageId) {
+    try {
+      await recordPaymentProvisioningDispatch({
+        operationId: paymentControlPlane.operationId,
+        stageId: paymentControlPlane.stageId,
+        ok: provisionOk,
+        note: provisionerNote ?? 'dispatch completed',
+        actor: sessionAddress,
+      })
+    } catch (error) {
+      console.warn('[creator-strategy/x402] control-plane dispatch tracking failed', {
+        operationId: paymentControlPlane.operationId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
   return res.status(200).json({
     success: true,
     data: {
-      activation: toActivationDto(insertResult.row),
+      activation: toActivationDto(activationRow),
       featureKey: feature.key,
       paymentSource: 'x402_base' as const,
       priceUsdc: feature.priceUsdc.toString(),

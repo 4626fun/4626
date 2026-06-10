@@ -5,6 +5,7 @@ import { useWalletClient } from 'wagmi'
 
 import { apiFetch } from '@/lib/api/apiBase'
 
+import { useArchBDelegation } from '@/features/archB/useArchBDelegation'
 import { useCswOwnerSigner } from './useCswOwnerSigner'
 
 /**
@@ -63,7 +64,7 @@ export type ReprovisionResult =
 
 export type UseReprovisionReturn = {
   busy: boolean
-  phase: 'idle' | 'preparing' | 'signing' | 'committing' | 'done' | 'error'
+  phase: 'idle' | 'delegating' | 'preparing' | 'signing' | 'committing' | 'done' | 'error'
   error: string | null
   reprovision: (caps?: { perTxCapWei?: string; dailyCapWei?: string }) => Promise<ReprovisionResult>
 }
@@ -71,6 +72,7 @@ export type UseReprovisionReturn = {
 export function useReprovisionSubAccount(): UseReprovisionReturn {
   const { data: walletClient } = useWalletClient()
   const { client: smartWalletClient } = useSmartWallets()
+  const { ensureDelegation } = useArchBDelegation()
   const ownerCheck = useCswOwnerSigner()
   const [phase, setPhase] = useState<UseReprovisionReturn['phase']>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -85,8 +87,9 @@ export function useReprovisionSubAccount(): UseReprovisionReturn {
       // Decide up-front which signer path we'll use so we can log the
       // choice + surface it in telemetry when the commit succeeds.
       // Priority order is enforced by `pickOwnerSigner` in
-      // `cswOwnerCheck.ts`: smart_wallet > external > embedded.
-      const signerPath = ownerCheck.preferredSigner?.label ?? null
+      // `cswOwnerCheck.ts`: external > embedded > smart_wallet.
+      const preferredSigner = ownerCheck.preferredSigner
+      const signerPath = preferredSigner?.label ?? null
 
       if (!signerPath) {
         const msg =
@@ -109,6 +112,22 @@ export function useReprovisionSubAccount(): UseReprovisionReturn {
         setError(msg)
         setPhase('error')
         return { ok: false, code: 'no_wallet_client', message: msg }
+      }
+
+      // ─── 0. Privy delegation ───────────────────────────────────────
+      // Commit verifies the embedded EOA has delegated to the Arch B quorum
+      // before accepting the signed SpendPermission. Run this before prepare
+      // so users see the Privy consent modal first, then the CSW-owner sign.
+      setPhase('delegating')
+      const delegationResult = await ensureDelegation()
+      if (!delegationResult.ok) {
+        const message = humanizeDelegationError(
+          delegationResult.error.code,
+          delegationResult.error.message,
+        )
+        setError(message)
+        setPhase('error')
+        return { ok: false, code: delegationResult.error.code, message }
       }
 
       // ─── 1. Prepare ────────────────────────────────────────────────
@@ -179,8 +198,9 @@ export function useReprovisionSubAccount(): UseReprovisionReturn {
           })
         } else {
           const client = walletClient as unknown as NonNullable<typeof walletClient>
+          const signerAddress = preferredSigner?.address ?? (client.account?.address as Address)
           const signArgs = {
-            account: client.account?.address as Address,
+            account: signerAddress,
             domain: prep.eip712.domain,
             types: prep.eip712.types,
             primaryType: prep.eip712.primaryType,
@@ -243,11 +263,15 @@ export function useReprovisionSubAccount(): UseReprovisionReturn {
     // react-compiler preserve-manual-memoization: the callback body reads
     // `smartWalletClient` (line 99) and `ownerCheck.preferredSigner?.label`
     // (line 89), so both must be in the deps array alongside `walletClient`.
-    [walletClient, smartWalletClient, ownerCheck.preferredSigner?.label],
+    [walletClient, smartWalletClient, ownerCheck.preferredSigner, ensureDelegation],
   )
 
   return {
-    busy: phase === 'preparing' || phase === 'signing' || phase === 'committing',
+    busy:
+      phase === 'delegating' ||
+      phase === 'preparing' ||
+      phase === 'signing' ||
+      phase === 'committing',
     phase,
     error,
     reprovision,
@@ -269,9 +293,9 @@ function humanizeProvisionError(code: string): string {
       return 'The connected wallet is not a current owner of your CSW. Switch to an owner wallet and retry.'
     case 'invalid_signature':
     case 'signature_verification_failed':
-      return "We couldn't verify your signature. Please retry — if it persists, try a different wallet."
+      return "We couldn't verify your signature. If you use an external wallet, connect it and retry. Otherwise try a different owner wallet."
     case 'privy_delegation_missing':
-      return 'Privy delegation to 4626 is missing. Enable in-chat spending from the setup flow first.'
+      return '4626 agent signing is not delegated on your Privy embedded wallet yet. Click Enable again and approve the Privy delegation prompt first.'
     case 'db_unavailable':
       return 'Database is temporarily unavailable. Please try again in a minute.'
     default:
@@ -285,4 +309,21 @@ function rejectionMessage(raw: string): string {
     return 'Signature was rejected in your wallet. No changes made.'
   }
   return `Signing failed: ${raw}`
+}
+
+function humanizeDelegationError(code: string, fallbackMessage: string): string {
+  switch (code) {
+    case 'not_ready':
+      return 'Privy is still initializing. Refresh the page and try again.'
+    case 'unauthenticated':
+      return 'Sign in with your 4626 account before enabling XMTP chat commands.'
+    case 'no_embedded_wallet':
+      return 'No Privy embedded signer found. Sign in with email OTP on the waitlist flow first.'
+    case 'delegation_declined':
+      return fallbackMessage.includes('declined') || fallbackMessage.includes('cancel')
+        ? 'Delegation was declined in Privy. No changes were made.'
+        : fallbackMessage
+    default:
+      return fallbackMessage || `Delegation failed (${code}). Please retry.`
+  }
 }

@@ -89,7 +89,8 @@ introduce new on-chain code; the audited contract surface is unchanged.
 - `frontend/api/__tests__/lotteryAmoeRelayKeyScope.test.ts` — A1/A2/A3/A4
   regression suites updated to mock `buildProcessAmoeEntryCall` and stub
   viem on the success paths. The A4 key-isolation invariant (no fall-through
-  to `KEEPR_PRIVATE_KEY` / `PRIVATE_KEY` / `CRE_ERC4337_OWNER_PRIVATE_KEY`)
+  to `KPR_PRIVATE_KEY` / `PRIVATE_KEY` / `KPR_ERC4337_OWNER_PRIVATE_KEY`
+  (legacy alias: `KPR_ERC4337_OWNER_PRIVATE_KEY`))
   is preserved bit-for-bit.
 
 ---
@@ -168,7 +169,7 @@ Pre-mainnet (still required, copied from PR 1 + new):
 - [ ] Owner sets `setAuthorizedAmoeRelayer(<scoped-key-address>)` only
       after counsel sign-off; until then the AMOE path is disabled.
 - [ ] `LOTTERY_AMOE_RELAY_PRIVATE_KEY` provisioned to its own scoped
-      KMS-backed env (NOT shared with `KEEPR_PRIVATE_KEY` / `PRIVATE_KEY`
+      KMS-backed env (NOT shared with `KPR_PRIVATE_KEY` / `PRIVATE_KEY`
       — see `amoe-relay-key-scope.md` for the A4 invariant).
 - [ ] Frontend feature flag for the slider can be left on by default; the
       server enforces the 100 / 1M bounds regardless.

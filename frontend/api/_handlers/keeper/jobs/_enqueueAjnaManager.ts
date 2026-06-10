@@ -5,7 +5,7 @@ import {
   handleOptions,
   setCors,
   setNoStore,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { isAuthorizedCron } from '../../../../server/_lib/lottery/cronAuth.js'
 import { enqueueKeeperJob, type KeeperJob } from '../../../../server/_lib/keeperJobs/keeperJobs.js'
 import { listAjnaVaultRegistryEntries } from '../../../../server/_lib/ajnaVaultManager/registry.js'

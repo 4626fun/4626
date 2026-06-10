@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
+import { ensureAuthNonceHandoffSchema } from '../_lib/db/schemaBootstrap.js'
 
 type DbWithSql = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
@@ -100,28 +101,8 @@ export function decryptPrivyToken(stored: string): string | null {
 
 export async function ensureHandoffSchema(db: DbWithSql): Promise<void> {
   if (handoffSchemaEnsured) return
-  try {
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS auth_handoffs (
-        code_hash TEXT PRIMARY KEY,
-        address TEXT NOT NULL,
-        privy_token TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        expires_at TIMESTAMPTZ NOT NULL,
-        consumed_at TIMESTAMPTZ
-      );
-    `
-    // Index on expires_at omitted: table is tiny (ephemeral rows, purged by pg_cron nightly)
-    // and seq scan is faster than index maintenance overhead at this scale.
-    // Backfill column for existing tables.
-    await db.sql`
-      ALTER TABLE auth_handoffs ADD COLUMN IF NOT EXISTS privy_token TEXT;
-    `
-    handoffSchemaEnsured = true
-  } catch (err) {
-    handoffSchemaEnsured = false
-    throw err
-  }
+  await ensureAuthNonceHandoffSchema(db as any)
+  handoffSchemaEnsured = true
 }
 
 export async function createHandoffCode(db: DbWithSql, params: { address: string; privyToken?: string | null; now?: number }): Promise<{ code: string; expiresAt: string }> {

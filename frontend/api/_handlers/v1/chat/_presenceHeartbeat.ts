@@ -10,7 +10,7 @@ import {
   readBoundedJsonObjectBody,
   setCors,
   setNoStore,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { normalizeChatAddress, recordPresenceHeartbeat } from '../../../../server/_lib/chat/presence.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

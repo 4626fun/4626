@@ -1,8 +1,13 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
+<!-- Single /favicon.ico (Base App domain bar; avoids multi-tag icon flicker). -->
+    <link rel="icon" href="/favicon.ico?v=20" sizes="any" />
+<meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#020204">
+  <meta name="msapplication-config" content="/browserconfig.xml">
   <title>Security | 4626.fun</title>
   <meta name="description" content="Security status and responsible disclosure information for 4626.fun. Experimental software. Vaults are not live yet.">
   <link rel="canonical" href="https://4626.fun/security">
@@ -11,26 +16,20 @@
   <meta property="og:title" content="Security | 4626.fun">
   <meta property="og:description" content="Security status, audit status, responsible disclosure, and official contact details for 4626.fun.">
   <meta property="og:url" content="https://4626.fun/security">
-  <meta property="og:image" content="https://4626.fun/assets/og-image.png?v=2">
+  <meta property="og:image" content="https://4626.fun/assets/og-image.png?v=20">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:site" content="@4626fun">
   <meta name="twitter:creator" content="@4626fun">
   <meta name="twitter:title" content="Security | 4626.fun">
   <meta name="twitter:description" content="Responsible disclosure and security status for 4626.fun.">
-  <meta name="twitter:image" content="https://4626.fun/assets/twitter-card.png?v=2">
+  <meta name="twitter:image" content="https://4626.fun/assets/twitter-card.png?v=20">
   <link rel="stylesheet" href="/trust-page.css">
 </head>
-<body>
+<body data-trust-page="security">
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <a class="brand" href="/"><img src="/assets/logo-mark.svg" alt="">4626.fun</a>
-    <nav class="nav" aria-label="Primary">
-      <a href="/">Home</a>
-      <a href="/risks">Risks</a>
-      <a href="/about">About</a>
-      <a href="/terms">Terms</a>
-      <a href="/privacy">Privacy</a>
-    </nav>
+    <nav class="nav" data-trust-nav aria-label="Primary"></nav>
   </header>
   <main id="main" class="wrap">
     <section class="page-hero">
@@ -81,5 +80,6 @@
     <div class="footer-links"><a href="/">Website</a><a href="https://docs.4626.fun">Docs</a><a href="https://x.com/4626fun">X</a><a href="mailto:hello@4626.fun">Email</a></div>
     <div>4626.fun will never DM you first asking for seed phrases, private keys, or deposits.</div>
   </footer>
+  <script src="/trust-nav.js"></script>
 </body>
 </html>

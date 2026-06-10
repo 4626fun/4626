@@ -25,6 +25,9 @@ import type { Address, Hex } from 'viem'
 import { isAddress } from 'viem'
 import { base } from 'viem/chains'
 
+import { getSubAccountAppDomain } from '@/lib/env/host'
+import { installEmbeddedOwnerOnSubAccount } from '@/lib/wallet/subAccountOwnerInstall'
+
 // ── Types ──────────────────────────────────────────────────────────
 
 export type SubAccount = {
@@ -42,6 +45,7 @@ export type SubAccountSetupResult = {
 export type SubAccountSetupStage =
   | 'check_existing'
   | 'create_sub_account'
+  | 'install_embedded_owner'
   | 'configure_signer'
   | 'done'
 
@@ -79,6 +83,35 @@ async function getProviderFromWallet(wallet: {
   throw new Error('Cannot get EIP-1193 provider from wallet.')
 }
 
+type SubAccountRpcProvider = {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+}
+
+/**
+ * Base App injects sub-account RPCs on the Base Account SDK provider
+ * (`baseAccountSdk.getProvider()` → `window.ethereum.isCoinbaseBrowser`).
+ * Privy's ConnectedWallet provider does not forward `wallet_addSubAccount`,
+ * which surfaces as `-32604 method not supported` inside Base App.
+ */
+export async function resolveSubAccountProvider(params: SubAccountWalletBundle): Promise<SubAccountRpcProvider> {
+  const sdk = params.baseAccountSdk as SubAccountWalletBundle['baseAccountSdk'] & {
+    getProvider?: () => SubAccountRpcProvider
+  }
+
+  if (typeof sdk.getProvider === 'function') {
+    try {
+      const sdkProvider = sdk.getProvider()
+      if (sdkProvider && typeof sdkProvider.request === 'function') {
+        return sdkProvider
+      }
+    } catch {
+      /* fall through to Privy wallet provider */
+    }
+  }
+
+  return getProviderFromWallet(params.baseAccountWallet)
+}
+
 // ── Core Functions ─────────────────────────────────────────────────
 
 /**
@@ -96,7 +129,7 @@ export async function getExistingSubAccount(params: {
     params: [
       {
         account: parentAddress,
-        domain: typeof window !== 'undefined' ? window.location.origin : '',
+        domain: getSubAccountAppDomain(),
       },
     ],
   })
@@ -122,26 +155,33 @@ export async function getExistingSubAccount(params: {
 export async function createSubAccount(params: {
   provider: any
   embeddedWalletAddress: Address
+  baseAccountSdk?: SubAccountWalletBundle['baseAccountSdk']
 }): Promise<SubAccount> {
-  const { provider, embeddedWalletAddress } = params
+  const { provider, embeddedWalletAddress, baseAccountSdk } = params
 
-  const result = await provider.request({
-    method: 'wallet_addSubAccount',
-    params: [
+  const accountParam = {
+    type: 'create' as const,
+    keys: [
       {
-        version: '1',
-        account: {
-          type: 'create',
-          keys: [
-            {
-              type: 'address',
-              publicKey: embeddedWalletAddress,
-            },
-          ],
-        },
+        type: 'address' as const,
+        publicKey: embeddedWalletAddress,
       },
     ],
-  })
+  }
+
+  const sdkCreate = baseAccountSdk?.subAccount?.create
+  const result =
+    typeof sdkCreate === 'function'
+      ? await sdkCreate(accountParam)
+      : await provider.request({
+          method: 'wallet_addSubAccount',
+          params: [
+            {
+              version: '1',
+              account: accountParam,
+            },
+          ],
+        })
 
   if (!result || typeof result !== 'object' || !('address' in result)) {
     throw new Error('wallet_addSubAccount did not return a valid sub-account.')
@@ -164,7 +204,12 @@ export async function createSubAccount(params: {
  */
 export function configureSubAccountSigner(params: {
   baseAccountSdk: {
+    getProvider?: () => SubAccountRpcProvider
     subAccount: {
+      create?: (account: {
+        type: 'create'
+        keys: Array<{ type: 'address'; publicKey: Address }>
+      }) => Promise<SubAccount>
       setToOwnerAccount: (fn: () => Promise<{ account: any }>) => void
     }
   }
@@ -179,63 +224,69 @@ export function configureSubAccountSigner(params: {
   })
 }
 
-// ── Main Orchestrator ──────────────────────────────────────────────
-
-/**
- * Full sub-account setup flow:
- *   1. Get CSW provider from the Base Account wallet
- *   2. Check for existing sub-account
- *   3. Create one if needed (one-time passkey popup)
- *   4. Configure Privy embedded wallet as signer
- *
- * Returns the sub-account address for use as the app's execution address.
- */
-export async function setupSubAccount(params: {
-  /** The Privy ConnectedWallet for the Base Account (CSW). */
+type SubAccountWalletBundle = {
   baseAccountWallet: {
     address: string
     getEthereumProvider?: () => Promise<any>
     provider?: any
     switchChain?: (chainId: number) => Promise<void>
   }
-  /** The Privy ConnectedWallet for the embedded EOA. */
   embeddedWallet: {
     address: string
     getEthereumProvider?: () => Promise<any>
     provider?: any
   }
-  /** The Base Account SDK instance from `useBaseAccountSdk()`. */
   baseAccountSdk: {
+    getProvider?: () => SubAccountRpcProvider
     subAccount: {
+      create?: (account: {
+        type: 'create'
+        keys: Array<{ type: 'address'; publicKey: Address }>
+      }) => Promise<SubAccount>
       setToOwnerAccount: (fn: () => Promise<{ account: any }>) => void
     }
   }
-  /** The `toViemAccount` utility from `@privy-io/react-auth`. */
   toViemAccountFn: (args: { wallet: any }) => Promise<any>
-  /** Optional callback for stage events. */
   onStageEvent?: (event: SubAccountSetupStageEvent) => void
-}): Promise<SubAccountSetupResult> {
-  const {
-    baseAccountWallet,
-    embeddedWallet,
-    baseAccountSdk,
-    toViemAccountFn,
-    onStageEvent,
-  } = params
+}
 
-  const parentAddress = baseAccountWallet.address as Address
-  const embeddedAddress = embeddedWallet.address as Address
+/** Wallet + SDK bundle ready for sub-account RPCs (no create/provision side effects). */
+export async function resolveSubAccountSetupContext(params: SubAccountWalletBundle): Promise<{
+  parentAddress: Address
+  embeddedAddress: Address
+  provider: any
+}> {
+  const parentAddress = params.baseAccountWallet.address as Address
+  const embeddedAddress = params.embeddedWallet.address as Address
   assertIsAddress(parentAddress, 'Base Account address')
   assertIsAddress(embeddedAddress, 'Embedded wallet address')
 
-  // Ensure we're on Base
-  if (typeof baseAccountWallet.switchChain === 'function') {
-    await baseAccountWallet.switchChain(base.id)
+  if (typeof params.baseAccountWallet.switchChain === 'function') {
+    await params.baseAccountWallet.switchChain(base.id)
   }
 
-  const provider = await getProviderFromWallet(baseAccountWallet)
+  const provider = await resolveSubAccountProvider(params)
 
-  // Step 1: Check for existing sub-account
+  // Base App returns 4100 when sub-account RPC runs before account authorization.
+  try {
+    await provider.request({ method: 'eth_requestAccounts' })
+  } catch {
+    /* best-effort — proceed if the wallet already authorized this session */
+  }
+
+  return { parentAddress, embeddedAddress, provider }
+}
+
+/**
+ * Phase 1 — discover or create the per-app sub-account (one passkey prompt
+ * when creating). Does not install on-chain owner or configure the SDK signer.
+ */
+export async function provisionSubAccount(
+  params: SubAccountWalletBundle,
+): Promise<SubAccountSetupResult & { provider: any }> {
+  const { onStageEvent } = params
+  const { parentAddress, embeddedAddress, provider } = await resolveSubAccountSetupContext(params)
+
   onStageEvent?.({ stage: 'check_existing', status: 'start', parentAddress })
   let subAccount: SubAccount | null = null
   let created = false
@@ -255,16 +306,15 @@ export async function setupSubAccount(params: {
       parentAddress,
       message: err instanceof Error ? err.message : String(err),
     })
-    // Non-fatal: if we can't check, try creating
   }
 
-  // Step 2: Create sub-account if none exists
   if (!subAccount) {
     onStageEvent?.({ stage: 'create_sub_account', status: 'start', parentAddress })
     try {
       subAccount = await createSubAccount({
         provider,
         embeddedWalletAddress: embeddedAddress,
+        baseAccountSdk: params.baseAccountSdk,
       })
       created = true
       onStageEvent?.({
@@ -286,31 +336,97 @@ export async function setupSubAccount(params: {
     }
   }
 
-  // Step 3: Configure the embedded wallet as the sub-account signer
+  return {
+    subAccountAddress: subAccount.address,
+    parentAddress,
+    created,
+    provider,
+  }
+}
+
+/**
+ * Phase 2 — user signs `addOwnerAddress(privyEmbeddedEoa)` on the sub-account.
+ */
+export async function confirmSubAccountEmbeddedOwner(params: {
+  provider: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }
+  parentAddress: Address
+  subAccountAddress: Address
+  embeddedEoaAddress: Address
+  onStageEvent?: (event: SubAccountSetupStageEvent) => void
+}): Promise<{ alreadyOwner: boolean; transactionHash: Hex | null }> {
+  const { onStageEvent, parentAddress, subAccountAddress, embeddedEoaAddress, provider } = params
+
+  onStageEvent?.({
+    stage: 'install_embedded_owner',
+    status: 'start',
+    parentAddress,
+    subAccountAddress,
+  })
+
+  try {
+    const result = await installEmbeddedOwnerOnSubAccount({
+      provider,
+      subAccountAddress,
+      embeddedEoaAddress,
+    })
+    onStageEvent?.({
+      stage: 'install_embedded_owner',
+      status: 'success',
+      parentAddress,
+      subAccountAddress,
+      message: result.alreadyOwner ? 'already_owner' : 'installed',
+    })
+    return {
+      alreadyOwner: result.alreadyOwner,
+      transactionHash: result.transactionHash,
+    }
+  } catch (err) {
+    onStageEvent?.({
+      stage: 'install_embedded_owner',
+      status: 'error',
+      parentAddress,
+      subAccountAddress,
+      message: err instanceof Error ? err.message : String(err),
+    })
+    throw new Error(
+      `Failed to enable 4626 signing on your app wallet: ${err instanceof Error ? err.message : String(err)}`,
+    )
+  }
+}
+
+/**
+ * Phase 3 — route future sub-account sends through the Privy embedded EOA (silent).
+ */
+export async function finalizeSubAccountSigner(params: SubAccountWalletBundle & {
+  subAccountAddress: Address
+  parentAddress: Address
+}): Promise<void> {
+  const { onStageEvent, subAccountAddress, parentAddress } = params
+
   onStageEvent?.({
     stage: 'configure_signer',
     status: 'start',
-    subAccountAddress: subAccount.address,
+    subAccountAddress,
     parentAddress,
   })
 
   try {
     configureSubAccountSigner({
-      baseAccountSdk,
-      toViemAccountFn,
-      embeddedWallet,
+      baseAccountSdk: params.baseAccountSdk,
+      toViemAccountFn: params.toViemAccountFn,
+      embeddedWallet: params.embeddedWallet,
     })
     onStageEvent?.({
       stage: 'configure_signer',
       status: 'success',
-      subAccountAddress: subAccount.address,
+      subAccountAddress,
       parentAddress,
     })
   } catch (err) {
     onStageEvent?.({
       stage: 'configure_signer',
       status: 'error',
-      subAccountAddress: subAccount.address,
+      subAccountAddress,
       parentAddress,
       message: err instanceof Error ? err.message : String(err),
     })
@@ -322,13 +438,78 @@ export async function setupSubAccount(params: {
   onStageEvent?.({
     stage: 'done',
     status: 'success',
-    subAccountAddress: subAccount.address,
+    subAccountAddress,
     parentAddress,
   })
+}
 
+// ── Main Orchestrator ──────────────────────────────────────────────
+
+/**
+ * Full sub-account setup flow (all phases in one call):
+ *   1. Discover or create sub-account (passkey only when creating)
+ *   2. Install Privy embedded EOA as on-chain owner via addOwnerAddress on the sub-account
+ *   3. Configure Privy embedded wallet as SDK signer (silent)
+ *
+ * Parent CSW owner mutation from third-party dapps remains blocked; owner install
+ * targets the per-app sub-account only.
+ */
+export async function setupSubAccount(params: {
+  /** The Privy ConnectedWallet for the Base Account (CSW). */
+  baseAccountWallet: {
+    address: string
+    getEthereumProvider?: () => Promise<any>
+    provider?: any
+    switchChain?: (chainId: number) => Promise<void>
+  }
+  /** The Privy ConnectedWallet for the embedded EOA. */
+  embeddedWallet: {
+    address: string
+    getEthereumProvider?: () => Promise<any>
+    provider?: any
+  }
+  /** The Base Account SDK instance from `useBaseAccountSdk()`. */
+  baseAccountSdk: {
+    getProvider?: () => SubAccountRpcProvider
+    subAccount: {
+      create?: (account: {
+        type: 'create'
+        keys: Array<{ type: 'address'; publicKey: Address }>
+      }) => Promise<SubAccount>
+      setToOwnerAccount: (fn: () => Promise<{ account: any }>) => void
+    }
+  }
+  /** The `toViemAccount` utility from `@privy-io/react-auth`. */
+  toViemAccountFn: (args: { wallet: any }) => Promise<any>
+  /** Optional callback for stage events. */
+  onStageEvent?: (event: SubAccountSetupStageEvent) => void
+}): Promise<SubAccountSetupResult> {
+  const provisioned = await provisionSubAccount(params)
+  await finalizeSubAccountSigner({
+    ...params,
+    parentAddress: provisioned.parentAddress,
+    subAccountAddress: provisioned.subAccountAddress,
+  })
+  try {
+    await confirmSubAccountEmbeddedOwner({
+      provider: provisioned.provider,
+      parentAddress: provisioned.parentAddress,
+      subAccountAddress: provisioned.subAccountAddress,
+      embeddedEoaAddress: params.embeddedWallet.address as Address,
+      onStageEvent: params.onStageEvent,
+    })
+  } catch (err) {
+    params.onStageEvent?.({
+      stage: 'install_embedded_owner',
+      status: 'error',
+      parentAddress: provisioned.parentAddress,
+      subAccountAddress: provisioned.subAccountAddress,
+      message: err instanceof Error ? err.message : String(err),
+    })
+  }
   return {
-    subAccountAddress: subAccount.address,
-    parentAddress,
-    created,
+    subAccountAddress: provisioned.subAccountAddress,
+    parentAddress: provisioned.parentAddress,
+    created: provisioned.created,
   }
 }

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/seo/pageMetaContent
+[4626-web](../../../index.md) / src/lib/seo/pageMetaContent
 
 # src/lib/seo/pageMetaContent
 
@@ -80,7 +80,7 @@ Defined in: [src/lib/seo/pageMetaContent.ts:3](https://github.com/wenakita/4626/
 
 ###### deploy.description
 
-> `readonly` **description**: `"Launch your ERC-4626 creator vault on Base."` = `'Launch your ERC-4626 creator vault on Base.'`
+> `readonly` **description**: `"Launch an ERC-4626 creator coin vault on Base."` = `'Launch an ERC-4626 creator coin vault on Base.'`
 
 ###### deploy.title
 
@@ -92,7 +92,7 @@ Defined in: [src/lib/seo/pageMetaContent.ts:3](https://github.com/wenakita/4626/
 
 ###### explore.description
 
-> `readonly` **description**: `"Discover and invest in creator vaults on Base."` = `'Discover and invest in creator vaults on Base.'`
+> `readonly` **description**: `"Discover creator-vault previews and creator activity on Base."` = `'Discover creator-vault previews and creator activity on Base.'`
 
 ###### explore.title
 
@@ -128,11 +128,11 @@ Defined in: [src/lib/seo/pageMetaContent.ts:3](https://github.com/wenakita/4626/
 
 ###### home.description
 
-> `readonly` **description**: `"Deposit your creator coin once. Earn trading fees, yield, and lottery rewards — shared with every holder."` = `'Deposit your creator coin once. Earn trading fees, yield, and lottery rewards — shared with every holder.'`
+> `readonly` **description**: `"Creator coin vaults on Base. Wrap creator coins into ERC-4626 vaults, launch fairly, earn fees, and compose with DeFi."` = `'Creator coin vaults on Base. Wrap creator coins into ERC-4626 vaults, launch fairly, earn fees, and compose with DeFi.'`
 
 ###### home.title
 
-> `readonly` **title**: `"4626.fun — Creator Vaults on Base"` = `'4626.fun — Creator Vaults on Base'`
+> `readonly` **title**: `"4626.fun — ERC-4626 Creator Vaults on Base"` = `'4626.fun — ERC-4626 Creator Vaults on Base'`
 
 ##### leaderboard
 
@@ -198,7 +198,7 @@ Defined in: [src/lib/seo/pageMetaContent.ts:3](https://github.com/wenakita/4626/
 
 ###### waitlist.description
 
-> `readonly` **description**: `"Get early access to Creator Vaults on Base. Deposit once. Earn from every trade, forever."` = `'Get early access to Creator Vaults on Base. Deposit once. Earn from every trade, forever.'`
+> `readonly` **description**: `"Get early access to ERC-4626 creator vaults on Base."` = `'Get early access to ERC-4626 creator vaults on Base.'`
 
 ###### waitlist.title
 

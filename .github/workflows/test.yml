@@ -63,16 +63,17 @@ jobs:
           forge build --skip test --sizes
         id: build
 
-      - name: CreatorLotteryManager size warn-guard (76B headroom)
+      - name: CreatorLotteryManager size warn-guard
         # Defence-in-depth on top of the EIP-170 hard gate above.
         # This step is WARN-ONLY: it never fails the build. It prints a
-        # heads-up when CreatorLotteryManager.sol crosses 24,500 bytes,
-        # giving 76 bytes of advance notice before the EIP-170 cap
-        # (24,576 B) makes the next deploy impossible. The hard gate
-        # remains the primary enforcer; this step exists to give
-        # engineers a chance to plan a module split BEFORE the cap is
-        # actually hit. See docs/operations/contract-size-gate.md.
-        run: tools/ci/check_manager_size_warn.sh
+        # heads-up when CreatorLotteryManager.sol crosses the warn threshold
+        # (currently 24,450 B, targeting ~126 B lead time) before the
+        # EIP-170 cap (24,576 B) makes the next deploy impossible.
+        # The hard gate remains the primary enforcer.
+        # PR policy: changes touching this contract must include a
+        # "size budget review" note (see x-ray/contract-audit-pass-2026-06.md
+        # and the script header). See docs/operations/contract-size-gate.md.
+        run: amoe/tools/ci/check_manager_size_warn.sh
         id: manager_size_warn
         continue-on-error: true
 
@@ -106,6 +107,15 @@ jobs:
 
       - name: Guard server-core boundary for API runtime
         run: pnpm --dir frontend guard:server-core-boundary
+
+      - name: Guard no raw schema DDL (condensation regression prevention)
+        run: pnpm --dir frontend guard:schema
+
+      - name: Guard canonical CSW env and legacy address regressions
+        run: pnpm --dir frontend guard:canonical-csw
+
+      - name: Guard output contract stability (guards + ops scripts)
+        run: pnpm --dir frontend guard:output-contract
 
       - name: Frontend ESLint
         run: pnpm --dir frontend lint
@@ -310,3 +320,43 @@ jobs:
             cat coverage.txt >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
+
+  strategy-reallocator-guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: kpr/pnpm-lock.yaml
+
+      - name: Install KPR dependencies
+        run: pnpm -C kpr install --frozen-lockfile
+
+      - name: Guard vault strategy reallocator wiring
+        run: node scripts/check-vault-strategy-reallocator-wiring.mjs
+
+      - name: KPR planner + pass-loop tests
+        run: |
+          pnpm -C kpr test vault-strategy-reallocator
+          pnpm -C kpr test vault-strategy-reallocator-pass-loop
+          pnpm -C kpr test strategyAllocation.fuzz
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
+        with:
+          version: v1.7.0
+
+      - name: Foundry cross-strategy rebalance tests
+        run: forge test --match-path "test/vault/strategies/CreatorOVaultStrategies.Rebalance*"
+        env:
+          FOUNDRY_PROFILE: ci

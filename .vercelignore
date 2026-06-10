@@ -71,7 +71,7 @@ target
 !/apps/docs-site
 !/apps/docs-site/**
 /contracts
-/cre
+/kpr
 /design
 /deployments
 /docs
@@ -84,6 +84,7 @@ target
 /target
 /test
 /tests
+/test-ledger
 /tmp
 /tools
 

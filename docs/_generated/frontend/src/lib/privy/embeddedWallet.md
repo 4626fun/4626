@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/privy/embeddedWallet
+[4626-web](../../../index.md) / src/lib/privy/embeddedWallet
 
 # src/lib/privy/embeddedWallet
 
@@ -28,9 +28,9 @@ Defined in: [src/lib/privy/embeddedWallet.ts:62](https://github.com/wenakita/462
 
 ### pickPrivyEmbeddedEoaAddressFromUser()
 
-> **pickPrivyEmbeddedEoaAddressFromUser**(`user`): `` `0x${string}` `` \| `null`
+> **pickPrivyEmbeddedEoaAddressFromUser**(`user`): `string` \| `null`
 
-Defined in: [src/lib/privy/embeddedWallet.ts:122](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/embeddedWallet.ts#L122)
+Defined in: [src/lib/privy/embeddedWallet.ts:282](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/embeddedWallet.ts#L282)
 
 #### Parameters
 
@@ -40,15 +40,15 @@ Defined in: [src/lib/privy/embeddedWallet.ts:122](https://github.com/wenakita/46
 
 #### Returns
 
-`` `0x${string}` `` \| `null`
+`string` \| `null`
 
 ***
 
 ### pickPrivyEmbeddedEoaAddressFromWallets()
 
-> **pickPrivyEmbeddedEoaAddressFromWallets**(`wallets`): `` `0x${string}` `` \| `null`
+> **pickPrivyEmbeddedEoaAddressFromWallets**(`wallets`, `excludedWalletAddresses`): `string` \| `null`
 
-Defined in: [src/lib/privy/embeddedWallet.ts:112](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/embeddedWallet.ts#L112)
+Defined in: [src/lib/privy/embeddedWallet.ts:255](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/embeddedWallet.ts#L255)
 
 #### Parameters
 
@@ -56,9 +56,13 @@ Defined in: [src/lib/privy/embeddedWallet.ts:112](https://github.com/wenakita/46
 
 `unknown`
 
+##### excludedWalletAddresses
+
+readonly `string`[] = `[]`
+
 #### Returns
 
-`` `0x${string}` `` \| `null`
+`string` \| `null`
 
 ***
 
@@ -66,7 +70,7 @@ Defined in: [src/lib/privy/embeddedWallet.ts:112](https://github.com/wenakita/46
 
 > **useEnsurePrivyEmbeddedWallet**(): `object`
 
-Defined in: [src/lib/privy/embeddedWallet.ts:157](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/embeddedWallet.ts#L157)
+Defined in: [src/lib/privy/embeddedWallet.ts:350](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/embeddedWallet.ts#L350)
 
 #### Returns
 
@@ -74,15 +78,15 @@ Defined in: [src/lib/privy/embeddedWallet.ts:157](https://github.com/wenakita/46
 
 ##### embeddedEoaAddress
 
-> **embeddedEoaAddress**: `` `0x${string}` `` \| `null`
+> **embeddedEoaAddress**: `string` \| `null`
 
 ##### ensureEmbeddedWallet()
 
-> **ensureEmbeddedWallet**: () => `Promise`\<\{ `address`: `` `0x${string}` ``; `created`: `boolean`; \}\>
+> **ensureEmbeddedWallet**: () => `Promise`\<\{ `address`: `string`; `created`: `boolean`; \}\>
 
 ###### Returns
 
-`Promise`\<\{ `address`: `` `0x${string}` ``; `created`: `boolean`; \}\>
+`Promise`\<\{ `address`: `string`; `created`: `boolean`; \}\>
 
 ##### isCreatingEmbeddedWallet
 

@@ -9,7 +9,7 @@ import {
   rateLimitKey,
   setCors,
   setNoStore,
-} from '../../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { joinVaultChat } from '../../../../../server/_lib/chat/vaultChatPolicy.js'
 import { normalizeChatAddress } from '../../../../../server/_lib/chat/presence.js'
 import { normalizeVaultAddressFromQuery } from '../../workspace/_shared.js'

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/layout/AppLoadingState
+[4626-web](../../../index.md) / src/components/layout/AppLoadingState
 
 # src/components/layout/AppLoadingState
 
@@ -12,27 +12,43 @@
 
 > **AppLoadingStateProps** = `object`
 
-Defined in: [src/components/layout/AppLoadingState.tsx:6](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/AppLoadingState.tsx#L6)
+Defined in: [src/components/layout/AppLoadingState.tsx:10](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/AppLoadingState.tsx#L10)
 
 #### Properties
+
+##### fillContainer?
+
+> `optional` **fillContainer**: `boolean`
+
+Defined in: [src/components/layout/AppLoadingState.tsx:17](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/AppLoadingState.tsx#L17)
+
+Fill a relative overlay shell instead of creating a second fixed layer.
 
 ##### intent?
 
 > `optional` **intent**: [`LoadingIntent`](appLoadingIntents.md#loadingintent)
 
-Defined in: [src/components/layout/AppLoadingState.tsx:7](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/AppLoadingState.tsx#L7)
+Defined in: [src/components/layout/AppLoadingState.tsx:11](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/AppLoadingState.tsx#L11)
 
 ##### labelOverride?
 
 > `optional` **labelOverride**: `string`
 
-Defined in: [src/components/layout/AppLoadingState.tsx:8](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/AppLoadingState.tsx#L8)
+Defined in: [src/components/layout/AppLoadingState.tsx:12](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/AppLoadingState.tsx#L12)
 
 ##### srStatusOverride?
 
 > `optional` **srStatusOverride**: `string`
 
-Defined in: [src/components/layout/AppLoadingState.tsx:9](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/AppLoadingState.tsx#L9)
+Defined in: [src/components/layout/AppLoadingState.tsx:13](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/AppLoadingState.tsx#L13)
+
+##### stabilizePattern?
+
+> `optional` **stabilizePattern**: `boolean`
+
+Defined in: [src/components/layout/AppLoadingState.tsx:15](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/AppLoadingState.tsx#L15)
+
+When true, session/page handoffs keep the same loader pattern (no animation reset).
 
 ## Functions
 
@@ -40,7 +56,7 @@ Defined in: [src/components/layout/AppLoadingState.tsx:9](https://github.com/wen
 
 > **AppLoadingState**(`props`): `Element`
 
-Defined in: [src/components/layout/AppLoadingState.tsx:17](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/AppLoadingState.tsx#L17)
+Defined in: [src/components/layout/AppLoadingState.tsx:25](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/AppLoadingState.tsx#L25)
 
 #### Parameters
 

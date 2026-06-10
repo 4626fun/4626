@@ -4,7 +4,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { buildAgentRegistration } from './agentRegistration.js'
-import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
+import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
 
 const ENV_KEYS = [
   'ERC8004_AGENT_REGISTRATION_JSON',
@@ -12,14 +12,14 @@ const ENV_KEYS = [
   'ERC8004_AGENT_CHAIN_ID',
   'ERC8004_AGENT_ID',
   'ERC8004_REPUTATION_REGISTRY',
-  'XMTP_AGENT_CSW_ADDRESS',
+  'CANONICAL_CSW_ADDRESS',
 ] as const
 
 const STATIC_REGISTRATION_PATH = path.resolve(process.cwd(), 'public/.well-known/agent-registration.json')
-const CANONICAL_AGENT_WALLET = `eip155:8453:${TARGET_CANONICAL_CSW_ADDRESS}`
+const CANONICAL_AGENT_WALLET = `eip155:8453:${CANONICAL_CSW_ADDRESS}`
 const CANONICAL_REGISTRY = 'eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432'
 const CANONICAL_REPUTATION_REGISTRY = 'eip155:8453:0x8004baa17c55a88189ae136b182e5fda19de9b63'
-const CANONICAL_AGENT_WALLET_EXPLORER = `https://basescan.org/address/${TARGET_CANONICAL_CSW_ADDRESS}`
+const CANONICAL_AGENT_WALLET_EXPLORER = `https://basescan.org/address/${CANONICAL_CSW_ADDRESS}`
 
 const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]])) as Record<
   (typeof ENV_KEYS)[number],
@@ -75,7 +75,7 @@ describe('buildAgentRegistration', () => {
     delete process.env.ERC8004_AGENT_CHAIN_ID
     delete process.env.ERC8004_AGENT_ID
     delete process.env.ERC8004_REPUTATION_REGISTRY
-    delete process.env.XMTP_AGENT_CSW_ADDRESS
+    delete process.env.CANONICAL_CSW_ADDRESS
 
     const staticRegistration = JSON.parse(fs.readFileSync(STATIC_REGISTRATION_PATH, 'utf8')) as {
       registrations?: Array<{ agentId?: number; agentRegistry?: string }>

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/alfaclub/creators
+[4626-web](../../../index.md) / server/\_lib/alfaclub/creators
 
 # server/\_lib/alfaclub/creators
 
@@ -12,7 +12,7 @@
 
 > **AlfaClubCreator** = `object`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:51](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L51)
+Defined in: [server/\_lib/alfaclub/creators.ts:62](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L62)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [server/\_lib/alfaclub/creators.ts:51](https://github.com/wenakita/4
 
 > **creatorAddress**: `Address`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:53](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L53)
+Defined in: [server/\_lib/alfaclub/creators.ts:64](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L64)
 
 ##### mintedAtBlock
 
 > **mintedAtBlock**: `bigint`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:54](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L54)
+Defined in: [server/\_lib/alfaclub/creators.ts:65](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L65)
 
 ##### stakingPool
 
 > **stakingPool**: `Address` \| `null`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:55](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L55)
+Defined in: [server/\_lib/alfaclub/creators.ts:66](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L66)
 
 ##### tokenId
 
 > **tokenId**: `bigint`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:52](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L52)
+Defined in: [server/\_lib/alfaclub/creators.ts:63](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L63)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [server/\_lib/alfaclub/creators.ts:52](https://github.com/wenakita/4
 
 > **IndexerReport** = `object`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:58](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L58)
+Defined in: [server/\_lib/alfaclub/creators.ts:69](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L69)
 
 #### Properties
 
@@ -54,43 +54,43 @@ Defined in: [server/\_lib/alfaclub/creators.ts:58](https://github.com/wenakita/4
 
 > **dbConfigured**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:61](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L61)
+Defined in: [server/\_lib/alfaclub/creators.ts:72](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L72)
 
 ##### newCreators
 
 > **newCreators**: `number`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:64](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L64)
+Defined in: [server/\_lib/alfaclub/creators.ts:75](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L75)
 
 ##### ok
 
 > **ok**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:59](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L59)
+Defined in: [server/\_lib/alfaclub/creators.ts:70](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L70)
 
 ##### reason?
 
 > `optional` **reason**: `string`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:60](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L60)
+Defined in: [server/\_lib/alfaclub/creators.ts:71](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L71)
 
 ##### scannedFromBlock
 
 > **scannedFromBlock**: `bigint`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:62](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L62)
+Defined in: [server/\_lib/alfaclub/creators.ts:73](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L73)
 
 ##### scannedToBlock
 
 > **scannedToBlock**: `bigint`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:63](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L63)
+Defined in: [server/\_lib/alfaclub/creators.ts:74](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L74)
 
 ##### totalKnownCreators
 
 > **totalKnownCreators**: `number` \| `null`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:65](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L65)
+Defined in: [server/\_lib/alfaclub/creators.ts:76](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L76)
 
 ***
 
@@ -98,7 +98,7 @@ Defined in: [server/\_lib/alfaclub/creators.ts:65](https://github.com/wenakita/4
 
 > **RunIndexerOptions** = `object`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:303](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L303)
+Defined in: [server/\_lib/alfaclub/creators.ts:314](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L314)
 
 #### Properties
 
@@ -106,31 +106,31 @@ Defined in: [server/\_lib/alfaclub/creators.ts:303](https://github.com/wenakita/
 
 > `optional` **client**: [`AlfaClubPublicClientLike`](../wallet/alfaclub.md#alfaclubpublicclientlike)
 
-Defined in: [server/\_lib/alfaclub/creators.ts:304](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L304)
+Defined in: [server/\_lib/alfaclub/creators.ts:315](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L315)
 
 ##### fromBlock?
 
 > `optional` **fromBlock**: `bigint`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:305](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L305)
+Defined in: [server/\_lib/alfaclub/creators.ts:316](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L316)
 
 ##### maxChunks?
 
 > `optional` **maxChunks**: `number`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:307](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L307)
+Defined in: [server/\_lib/alfaclub/creators.ts:318](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L318)
 
 ##### skipSchemaBootstrap?
 
 > `optional` **skipSchemaBootstrap**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:308](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L308)
+Defined in: [server/\_lib/alfaclub/creators.ts:319](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L319)
 
 ##### toBlock?
 
 > `optional` **toBlock**: `bigint`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:306](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L306)
+Defined in: [server/\_lib/alfaclub/creators.ts:317](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L317)
 
 ## Functions
 
@@ -138,7 +138,7 @@ Defined in: [server/\_lib/alfaclub/creators.ts:306](https://github.com/wenakita/
 
 > **getAlfaClubDeployBlock**(): `bigint`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:127](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L127)
+Defined in: [server/\_lib/alfaclub/creators.ts:138](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L138)
 
 Returns the configured deploy-block floor.
 
@@ -152,7 +152,7 @@ Returns the configured deploy-block floor.
 
 > **getAlfaClubMaxChunks**(): `number`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:137](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L137)
+Defined in: [server/\_lib/alfaclub/creators.ts:148](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L148)
 
 Returns the max chunks per run.
 
@@ -166,7 +166,7 @@ Returns the max chunks per run.
 
 > **getAlfaClubScanChunk**(): `bigint`
 
-Defined in: [server/\_lib/alfaclub/creators.ts:132](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L132)
+Defined in: [server/\_lib/alfaclub/creators.ts:143](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L143)
 
 Returns the scan chunk size.
 
@@ -180,7 +180,7 @@ Returns the scan chunk size.
 
 > **listAllCreators**(): `Promise`\<[`AlfaClubCreator`](#alfaclubcreator)[]\>
 
-Defined in: [server/\_lib/alfaclub/creators.ts:234](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L234)
+Defined in: [server/\_lib/alfaclub/creators.ts:245](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L245)
 
 Return all known (tokenId, creator) pairs, lowercased.
 
@@ -194,7 +194,7 @@ Return all known (tokenId, creator) pairs, lowercased.
 
 > **runCreatorIndexer**(`opts`): `Promise`\<[`IndexerReport`](#indexerreport)\>
 
-Defined in: [server/\_lib/alfaclub/creators.ts:316](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L316)
+Defined in: [server/\_lib/alfaclub/creators.ts:327](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/creators.ts#L327)
 
 Scan FriendKey for new creators between the stored cursor (or deploy block)
 and the chain head. Persists newly-discovered creators in Supabase and

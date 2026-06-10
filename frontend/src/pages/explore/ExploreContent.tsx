@@ -3,11 +3,9 @@ import { useInfiniteQuery } from '@tanstack/react-query'
 
 import { ExplorePageShell } from '@/components/explore/ExplorePageShell'
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
-import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDashboard'
 import { ExploreTableSurface } from '@/components/explore/ExploreTableSurface'
 import { PoolRow, PoolTableHeader, PoolRowSkeleton } from '@/components/explore/PoolRow'
 import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableMessage } from '@/components/explore/ExploreUiPrimitives'
-import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
 import { useExploreHorizontalTableSync } from '@/components/explore/useExploreHorizontalTableSync'
 import { getExploreColumns, getHorizontalScrollStops } from '@/components/explore/tableColumns'
 import { fetchZoraExplore } from '@/lib/zora/client'
@@ -20,6 +18,9 @@ import {
   matchesCoinSearchQuery,
   useExploreSubnavParams,
 } from '@/features/explore/exploreShared'
+import { shouldShowExploreTableLoading } from '@/features/explore/exploreListNavigation'
+import { useExploreTableSparklines } from '@/features/explore/useExploreTableSparklines'
+import { resolveExploreRowTrend30d } from '@/features/explore/exploreTableSparklines'
 
 const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
   volume: 'TOP_VOLUME_24H',
@@ -30,7 +31,8 @@ const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
 
 const PAGE_SIZE = 20
 const CONTENT_SORT_VALUES = ['volume', 'marketCap', 'priceChange', 'new'] as const
-const CONTENT_TIME_FILTER_VALUES = ['1d', '1w', '1y'] as const
+const CONTENT_TIME_FILTER_VALUES = ['1d'] as const
+const CONTENT_TIME_FILTERS = [{ label: '1D', value: '1d' }] as const
 
 export function ExploreContent() {
   const [expandedFees, setExpandedFees] = useState<string | null>(null)
@@ -54,6 +56,7 @@ export function ExploreContent() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isFetching,
     isLoading,
     isError,
     error,
@@ -88,15 +91,19 @@ export function ExploreContent() {
     return allCoins.filter((coin) => matchesCoinSearchQuery(coin, searchQuery))
   }, [allCoins, searchQuery])
 
+  const { sparklines: tableSparklines } = useExploreTableSparklines(
+    filteredCoins.map((coin) => coin.address),
+    filteredCoins,
+  )
+
   useWindowInfiniteScrollLoadMore({
     hasNextPage: Boolean(hasNextPage),
     isFetchingNextPage,
     onLoadMore: fetchNextPage,
   })
 
-  const { hasHorizontalOverflow, canScrollLeft, canScrollRight, handleHeaderScroll, handleBodyScroll, handleArrowClick } =
+  const { hasHorizontalOverflow, canScrollLeft, canScrollRight, handleBodyScroll, handleArrowClick } =
     useExploreHorizontalTableSync({
-      headerId: 'explore-content-header',
       bodyId: 'explore-content-body',
     })
 
@@ -105,18 +112,18 @@ export function ExploreContent() {
     return getHorizontalScrollStops(columns)
   }, [currentTimeFilter])
 
+  const tablePending = shouldShowExploreTableLoading({
+    isLoading,
+    isFetching,
+    hasRows: filteredCoins.length > 0,
+    hasActiveSearch: searchQuery.trim().length > 0,
+  })
+
   return (
     <ExplorePageShell
-      title="Top Content on Base"
-      subtitle="Content Coins ranked by volume, market cap, and more."
-      headerContent={
-        <>
-          <div className="mt-3 flex justify-end">
-            <ExploreUnfurlDebugCopy path="/explore/content" />
-          </div>
-          <ExploreMetricsDashboard className="mt-4 sm:mt-6" />
-        </>
-      }
+      variant="table"
+      tablePending={tablePending}
+      tablePendingLabel="Loading content…"
       subnav={
         <ExploreSubnav
           searchPlaceholder="Search content"
@@ -126,15 +133,17 @@ export function ExploreContent() {
           onSortChange={handleSortChange}
           currentTimeFilter={currentTimeFilter}
           currentSort={currentSort}
+          timeFilters={CONTENT_TIME_FILTERS}
+          showTabs={false}
+          showSearch={false}
+          showMobileSortRow={false}
           volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
         />
       }
       table={
         <>
           <ExploreTableSurface
-            headerId="explore-content-header"
             bodyId="explore-content-body"
-            onHeaderScroll={handleHeaderScroll}
             onBodyScroll={handleBodyScroll}
             header={<PoolTableHeader timeframe={currentTimeFilter} currentSort={currentSort} onSortChange={handleSortChange} />}
             body={
@@ -152,10 +161,10 @@ export function ExploreContent() {
                     return (
                       <PoolRow
                         key={coin.address || index}
-                        rank={index + 1}
                         coin={coin}
                         timeframe={currentTimeFilter}
                         migratedCoins={migratedCoins ?? undefined}
+                        trend30d={resolveExploreRowTrend30d(coin, tableSparklines)}
                         isExpanded={isExpanded}
                         onToggleFees={() => setExpandedFees((prev) => (prev === rowId ? null : rowId))}
                       />

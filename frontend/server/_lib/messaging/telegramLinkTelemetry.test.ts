@@ -19,6 +19,10 @@ vi.mock('../infra/logger.js', () => ({
   },
 }))
 
+vi.mock('../infra/telemetrySampling.js', () => ({
+  shouldSampleEvent: () => true,
+}))
+
 describe('telegram link telemetry persistence', () => {
   beforeEach(() => {
     vi.resetModules()

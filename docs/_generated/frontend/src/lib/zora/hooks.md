@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/zora/hooks
+[4626-web](../../../index.md) / src/lib/zora/hooks
 
 # src/lib/zora/hooks
 
@@ -18,7 +18,7 @@ Defined in: [src/lib/zora/hooks.ts:15](https://github.com/wenakita/4626/blob/mai
 
 ##### address?
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 

@@ -107,10 +107,10 @@ release/v1.10.1-broadcast-evidence PR.
 cat docs/operations/deployment/releases/v1.10.1-mainnet.md | head -60
 confirms address table is filled in (no <TBD> placeholders).
 
-tools/ci/check_no_orphan_addresses.sh exits 0 (the sweep guard
+amoe/tools/ci/check_no_orphan_addresses.sh exits 0 (the sweep guard
 from cleanup prompt §6 must already be passing on main).
 
-tools/ci/check_manager_amoe_surface.sh <NEW_V1.10.1_MANAGER> https://mainnet.base.org
+amoe/tools/ci/check_manager_amoe_surface.sh <NEW_V1.10.1_MANAGER> https://mainnet.base.org
 exits 0 with all 3 selectors found. Capture the new manager
 address from v1.10.1-mainnet.md — call it $NEW_MANAGER for
 the rest of this prompt.
@@ -503,7 +503,7 @@ confirmations.
 §8 finds a third-party test or workflow depending on
 v183-release-target-guard.sh that we didn't already account for.
 
-The post-PR tools/ci/check_no_orphan_addresses.sh run on this
+The post-PR amoe/tools/ci/check_no_orphan_addresses.sh run on this
 branch surfaces a NEW orphan reference — meaning §3 or §4
 introduced one rather than removing.
 

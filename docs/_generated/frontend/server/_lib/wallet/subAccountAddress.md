@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/wallet/subAccountAddress
+[4626-web](../../../index.md) / server/\_lib/wallet/subAccountAddress
 
 # server/\_lib/wallet/subAccountAddress
 
@@ -31,7 +31,7 @@ factory's `bytes[] owners` input — a 32-byte ABI-encoded `address`.
 
 ###### owner
 
-`` `0x${string}` ``
+`string`
 
 ###### Returns
 
@@ -51,7 +51,7 @@ Coinbase Smart Wallet v1 factory on Base mainnet.
 
 ### computeSubAccountAddress()
 
-> **computeSubAccountAddress**(`params`): `Promise`\<`` `0x${string}` ``\>
+> **computeSubAccountAddress**(`params`): `Promise`\<`string`\>
 
 Defined in: [server/\_lib/wallet/subAccountAddress.ts:76](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountAddress.ts#L76)
 
@@ -67,11 +67,11 @@ safest way to get the exact value that the first-op initCode will produce.
 
 ###### ownerEoa
 
-`` `0x${string}` ``
+`string`
 
 ###### parentCsw
 
-`` `0x${string}` ``
+`string`
 
 ###### profileId
 
@@ -83,7 +83,7 @@ safest way to get the exact value that the first-op initCode will produce.
 
 #### Returns
 
-`Promise`\<`` `0x${string}` ``\>
+`Promise`\<`string`\>
 
 ***
 
@@ -102,7 +102,7 @@ attempts so an interrupted flow resumes to the same counterfactual address.
 
 ###### parentCsw
 
-`` `0x${string}` ``
+`string`
 
 ###### profileId
 

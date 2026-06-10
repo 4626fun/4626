@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/zora/\_explore
+[4626-web](../../../index.md) / api/\_handlers/zora/\_explore
 
 # api/\_handlers/zora/\_explore
 
@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/zora/\_explore.ts:64](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/_explore.ts#L64)
+Defined in: [api/\_handlers/zora/\_explore.ts:821](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/_explore.ts#L821)
 
 #### Parameters
 

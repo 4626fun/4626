@@ -41,7 +41,7 @@ pnpm -C frontend dev:deploy-dry-run
 What it does:
 
 - starts an Anvil Base fork on `127.0.0.1:8545`
-- deploys a local `DeploymentBatcher` copy onto that fork and points `/deploy` at the local batcher by default
+- deploys a local `DeploymentBatcher` + `Phase1Module` onto that fork and points `/deploy` at the local batcher by default (`DEPLOY_DRY_RUN_USE_LOCAL_BATCHER=1`; set `0` to use the live batcher on the fork)
 - exports `BASE_RPC_URL` and `VITE_BASE_RPC` to that local fork for the process
 - enables the `Run dry-run` action in `/deploy` (only when `VITE_BASE_RPC` is localhost/127.0.0.1)
 - forces `VITE_ALLOW_CONTRACT_OVERRIDES=0` and `ALLOW_API_CONTRACT_OVERRIDES=0`
@@ -163,7 +163,7 @@ Guardrails:
 
 - Vercel hosts the SPA plus request/response API handlers.
 - The long-lived XMTP / Eliza primary runtime does not run on Vercel in production.
-- Production XMTP consumes from exactly one Railway primary using `frontend/Dockerfile.agent` and `frontend/server/agent/eliza/index.ts`.
+- Production XMTP consumes from exactly one Railway primary using `frontend/Dockerfile.agent` and `frontend/server/agents/eliza/index.ts`.
 - Do not add or re-enable a Vercel cron for `/api/agent/process`; that path is not part of the production Vercel topology.
 
 ## Pages

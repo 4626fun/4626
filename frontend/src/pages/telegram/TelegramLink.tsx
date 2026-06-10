@@ -136,7 +136,7 @@ const TG_VIEWPORT_STYLE: CSSProperties = {
 }
 
 const PRIMARY_ACTION_BUTTON_CLASS =
-  'inline-flex h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-[16px] bg-[#0052FF] px-4 text-sm font-semibold text-white transition hover:bg-[#004AD9] disabled:cursor-not-allowed disabled:bg-[#1E3A8A] disabled:text-white/70'
+  'inline-flex h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-[16px] bg-[rgb(var(--brand-primary))] px-4 text-sm font-semibold text-white transition hover:bg-[rgb(var(--brand-hover))] disabled:cursor-not-allowed disabled:bg-[rgb(var(--brand-primary)/0.48)] disabled:text-white/70'
 const SECONDARY_ACTION_BUTTON_CLASS =
   'inline-flex h-11 w-full touch-manipulation items-center justify-center rounded-[16px] border border-white/[0.06] bg-transparent px-4 text-sm font-medium text-[#EDEDED] transition hover:border-white/15 hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-55'
 const TELEGRAM_LINK_PROGRESS_STEPS = [
@@ -1315,7 +1315,7 @@ export function TelegramLink() {
         mainButton.setText?.('Send Code')
         mainButton.setParams?.({
           text: 'Send Code',
-          color: '#0052FF',
+          color: '#1C5CF2',
           text_color: '#FFFFFF',
           is_active: !emailSubmitDisabled,
           is_visible: true,
@@ -1338,7 +1338,7 @@ export function TelegramLink() {
         mainButton.setText?.('Sending Code…')
         mainButton.setParams?.({
           text: 'Sending Code…',
-          color: '#1E3A8A',
+          color: '#163A8F',
           text_color: '#FFFFFF',
           is_active: false,
           is_visible: true,
@@ -1502,7 +1502,7 @@ export function TelegramLink() {
                 submitEmail('enter')
               }}
               placeholder="name@example.com"
-              className="block h-11 w-full rounded-[16px] border border-white/[0.06] bg-white/[0.025] px-4 text-[15px] text-[#EDEDED] outline-none transition focus:border-[#0052FF]/75 focus:bg-white/[0.04] focus:ring-0"
+              className="block h-11 w-full rounded-[16px] border border-white/[0.06] bg-white/[0.025] px-4 text-[15px] text-[#EDEDED] outline-none transition focus:border-[rgb(var(--brand-primary)/0.75)] focus:bg-white/[0.04] focus:ring-0"
             />
             {state.emailError ? <InlineError message={state.emailError} /> : null}
             {emailSubmitHelperText ? <p className="text-[12px] leading-[1.4] text-[#666666]">{emailSubmitHelperText}</p> : null}
@@ -1530,7 +1530,7 @@ export function TelegramLink() {
                 value={state.code}
                 onChange={(event) => dispatch({ type: 'CODE_CHANGED', code: event.target.value.replace(/\s+/g, '').slice(0, 6) })}
                 placeholder="000000"
-                className="h-11 w-full rounded-[16px] border border-white/[0.06] bg-white/[0.025] px-4 text-center font-mono text-[18px] tracking-[0.34em] text-[#EDEDED] outline-none transition focus:border-[#0052FF]/75 focus:bg-white/[0.04] focus:ring-0"
+                className="h-11 w-full rounded-[16px] border border-white/[0.06] bg-white/[0.025] px-4 text-center font-mono text-[18px] tracking-[0.34em] text-[#EDEDED] outline-none transition focus:border-[rgb(var(--brand-primary)/0.75)] focus:bg-white/[0.04] focus:ring-0"
               />
               {state.codeError ? <InlineError message={state.codeError} /> : null}
             </div>
@@ -1576,7 +1576,7 @@ export function TelegramLink() {
               body={`Telegram linked to ${state.account.email}. Your Telegram account is attached to your 4626 account.`}
             />
             {walletSetupPending ? (
-              <div className="rounded-[18px] border border-[#0052FF]/20 bg-[#0052FF]/8 px-3.5 py-3 text-[13px] leading-5 text-[#EDEDED] space-y-1.5">
+              <div className="rounded-[18px] border border-[rgb(var(--brand-primary)/0.2)] bg-[rgb(var(--brand-primary)/0.08)] px-3.5 py-3 text-[13px] leading-5 text-[#EDEDED] space-y-1.5">
                 <div>
                   Wallet setup pending. Telegram is linked, but wallet and trading actions unlock after your 4626 execution setup is complete.
                 </div>
@@ -1622,7 +1622,7 @@ export function TelegramLink() {
                     : `Email verified for ${handoffEmail}. Continue on your phone or desktop to finish 4626 signing setup on your Zora Coinbase Smart Wallet.`
                 }
               />
-              <div className="rounded-[18px] border border-[#0052FF]/20 bg-[#0052FF]/8 px-4 py-3 text-sm leading-6 text-[#EDEDED] space-y-2">
+              <div className="rounded-[18px] border border-[rgb(var(--brand-primary)/0.2)] bg-[rgb(var(--brand-primary)/0.08)] px-4 py-3 text-sm leading-6 text-[#EDEDED] space-y-2">
                 <div>
                   {linkedHandoffCopy
                     ? 'Mini App account sync timed out after verification, but you can finish owner setup from Accounts on a phone or desktop browser.'
@@ -1865,7 +1865,7 @@ export function TelegramLink() {
     >
       <PageMeta title={META.telegramLink.title} description={META.telegramLink.description} canonicalPath="/telegram/link" />
       <div data-testid="telegram-link-decorative-overlay" className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute left-[-12%] top-[-8%] h-72 w-72 rounded-full bg-[#0052FF]/18 blur-3xl" />
+        <div className="absolute left-[-12%] top-[-8%] h-72 w-72 rounded-full bg-[rgb(var(--brand-primary)/0.18)] blur-3xl" />
         <div className="absolute right-[-10%] top-[8%] h-80 w-80 rounded-full bg-[#3B82F6]/12 blur-3xl" />
         <div className="absolute bottom-[-14%] left-[18%] h-72 w-72 rounded-full bg-white/[0.035] blur-3xl" />
       </div>
@@ -1928,9 +1928,9 @@ function FlowProgress(props: { currentTag: TelegramLinkState['tag']; compact?: b
               : 'upcoming'
         const statusClasses =
           status === 'complete'
-            ? 'border-[#0052FF] bg-[#0052FF] text-white'
+            ? 'border-[rgb(var(--brand-primary))] bg-[rgb(var(--brand-primary))] text-white'
             : status === 'active'
-              ? 'border-[#0052FF] bg-[#0052FF]/15 text-[#EDEDED]'
+              ? 'border-[rgb(var(--brand-primary))] bg-[rgb(var(--brand-primary)/0.15)] text-[#EDEDED]'
               : 'border-white/[0.08] bg-white/[0.03] text-[#666666]'
 
         return (
@@ -1965,7 +1965,7 @@ function StatusBlock(props: {
       ? 'border-[#22c55e]/25 bg-[#22c55e]/10 text-[#EDEDED]'
       : props.tone === 'error'
         ? 'border-[#ef4444]/25 bg-[#ef4444]/10 text-[#EDEDED]'
-        : 'border-[#0052FF]/25 bg-[#0052FF]/10 text-[#EDEDED]'
+        : 'border-[rgb(var(--brand-primary)/0.25)] bg-[rgb(var(--brand-primary)/0.1)] text-[#EDEDED]'
   const Icon = props.icon
 
   return (

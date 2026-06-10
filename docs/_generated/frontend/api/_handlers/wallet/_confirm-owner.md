@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/wallet/\_confirm-owner
+[4626-web](../../../index.md) / api/\_handlers/wallet/\_confirm-owner
 
 # api/\_handlers/wallet/\_confirm-owner
 

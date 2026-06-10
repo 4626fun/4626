@@ -1,14 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { isAddress } from 'viem'
 
-import { checkRateLimit, getClientIp, rateLimitKey, RATE_LIMITS } from '../../../packages/server-core/src/index.js'
+import { checkRateLimit, getClientIp, rateLimitKey, RATE_LIMITS } from '@4626/server-core'
 import { getImageApiActor, parseRequiredString, prepareImageApiAuthenticated, readBody } from './_shared.js'
 import { getImageGenerationProject, setImageProjectVaultAddress } from '../../../server/_lib/image/imageProjects.js'
 import { resolveCoinPartiesAndOwner } from '../../../server/_lib/onchain/coinParties.js'
 import {
   resolveAuthorizedRequestPrincipal,
   isAdminAddress,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 

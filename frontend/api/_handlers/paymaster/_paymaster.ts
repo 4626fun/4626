@@ -30,7 +30,7 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 import { DEPLOY_BYTECODE } from '../../../shared/deploy/bytecode.generated.js'
@@ -60,6 +60,8 @@ import {
   resolveCreatorStrategyPlan,
 } from '../../../server/_lib/creatorStrategy/resolveWeights.js'
 import { deploymentBatcherNotConfiguredMessage } from '../../../server/_lib/onchain/deploymentBatcherConfigError.js'
+import { assertFinalizeShareBridgeCallValue } from '../../../src/lib/deploy/finalizeShareBridgeFee.js'
+import { resolveProtocolAjnaKeeperAddress } from '../../../server/_lib/wallet/protocolTreasurySafe.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -90,6 +92,9 @@ const PAYMASTER_MAX_BODY_BYTES = 512_000
 
 const ENTRYPOINT_V06 = getAddress(`0x${'5ff137d4b0fdcd49dca30c7cf57e578a026d2789'}`)
 const BASE_CHAIN_ID = 8453
+const BASE_CHAIN_ID_HEX = `0x${BASE_CHAIN_ID.toString(16)}`
+const RELAY_DEPOSITORY_BASE = getAddress('0x4cd00e387622c35bddb9b4c962c136462338bc31')
+const RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR = '0x49290c1c'
 const ERC8004_IDENTITY_REGISTRY_DEFAULT = getAddress('0x8004A169FB4a3325136EB29fA0ceB6D2e539a432')
 
 // Coinbase Smart Wallet callData
@@ -513,7 +518,7 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
   {
     type: 'function',
     name: 'finalizePhase2',
-    stateMutability: 'nonpayable',
+    stateMutability: 'payable',
     inputs: [
       {
         name: 'params',
@@ -550,7 +555,7 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
   {
     type: 'function',
     name: 'finalizePhase2WithPermit2',
-    stateMutability: 'nonpayable',
+    stateMutability: 'payable',
     inputs: [
       {
         name: 'params',
@@ -734,6 +739,7 @@ const SELECTOR_COIN_SET_PAYOUT_RECIPIENT = '0x46bb5954'
 const SELECTOR_OWNABLE_TRANSFER_OWNERSHIP = '0xf2fde38b'
 const SELECTOR_PERMIT2_PERMIT_TRANSFER_FROM = '0x30f28b7a'
 const SELECTOR_SWAP_ROUTER_EXECUTE = '0x3593564c' // execute(bytes,bytes[],uint256)
+const SELECTOR_ZORA_SWAP_ROUTER_EXECUTE = '0x24856bc3' // execute(bytes,bytes[]) — Zora trade quotes on Universal Router
 const SELECTOR_SWAP_PROXY_EXECUTE = '0x2894adf9' // execute(address,address,uint256,bytes,bytes[],uint256)
 const SELECTOR_V3_SWAP_ROUTER_EXACT_INPUT_NO_DEADLINE = '0xb858183f'
 const SELECTOR_V3_SWAP_ROUTER_EXACT_INPUT_SINGLE_NO_DEADLINE = '0x04e45aaf'
@@ -778,6 +784,7 @@ const SELECTOR_ACTIVATION_BATCH_ACTIVATE = '0xc5c1e920'
 const SELECTOR_ACTIVATION_BATCH_ACTIVATE_WITH_PERMIT2_FOR = '0xdc5de72c'
 
 const SELECTOR_VAULT_SET_BURN_STREAM = '0xf3a1c8b6' // setBurnStream(address)
+const SELECTOR_VAULT_SET_BURN_STREAM_AUTHORIZED_QUEUER = '0x7972e9ff' // setBurnStreamAuthorizedQueuer(address,bool)
 const SELECTOR_VAULT_SET_WHITELIST = '0x53d6fd59' // setWhitelist(address,bool)
 const SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE = '0x8212fd43' // setMinimumTotalIdle(uint256)
 const SELECTOR_VAULT_DEPLOY_TO_STRATEGIES = '0x355aa867' // deployToStrategies()
@@ -1025,6 +1032,7 @@ const ZERO_BYTES32 = `0x${'0'.repeat(64)}` as const
 const ZERO_ADDRESS = getAddress(`0x${'0'.repeat(40)}`)
 
 const BASE_WETH = getAddress(`0x${'4200000000000000000000000000000000000006'}`)
+const BASE_USDC = getAddress(`0x${'833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'}`)
 // 4626-audit-2026-04-25 review: Zora ProtocolRewards canonical singleton on Base.
 // Mirrors PayoutRouter.DEFAULT_PROTOCOL_REWARDS — see contracts/utilities/routers/PayoutRouter.sol.
 // PayoutRouter accepts either `address(0)` (sentinel -> DEFAULT_PROTOCOL_REWARDS)
@@ -1319,6 +1327,31 @@ function normalizeSponsoredInnerCalls(
   }))
 }
 
+function isRelayPart1DepositoryInnerCall(call: InnerCall): boolean {
+  return (
+    getAddress(call.target) === RELAY_DEPOSITORY_BASE &&
+    getSelector(call.data) === RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR &&
+    call.value > 0n
+  )
+}
+
+function assertRelayOwnerInstallPart1InnerCalls(params: {
+  sender: Address
+  innerCalls: InnerCall[]
+  customOwnerSponsorship: {
+    smartWalletAddress: Address
+  }
+}): void {
+  if (getAddress(params.sender) !== getAddress(params.customOwnerSponsorship.smartWalletAddress)) {
+    throw new Error('custom_owner_policy_sender_mismatch')
+  }
+  if (params.innerCalls.length !== 1) throw new Error('relay_part1_call_count_invalid')
+  const only = params.innerCalls[0]
+  if (!only || !isRelayPart1DepositoryInnerCall(only)) {
+    throw new Error('relay_part1_call_shape_invalid')
+  }
+}
+
 function decodeSmartWalletInnerCalls(callData: Hex): Array<{ to: Address; value: bigint; data: Hex }> {
   const decoded = decodeFunctionData({ abi: COINBASE_SMART_WALLET_ABI, data: callData })
   if (decoded.functionName === 'execute') {
@@ -1404,15 +1437,29 @@ export async function validateSponsoredSmartWalletCalls(params: {
     if (customOwnerSponsorship.smartWalletAddress !== params.sender) {
       throw new Error('custom_owner_policy_sender_mismatch')
     }
+    const relayPart1Only =
+      innerCalls.length === 1 && isRelayPart1DepositoryInnerCall(innerCalls[0]!)
+    if (relayPart1Only) {
+      assertRelayOwnerInstallPart1InnerCalls({
+        sender: params.sender,
+        innerCalls,
+        customOwnerSponsorship,
+      })
+      const client = await getBaseClient()
+      await assertSenderCoinbaseSmartWalletProvenance({ client, sender: params.sender })
+      return { expectedCreatorToken: null, mode: 'relay_owner_install_part1' }
+    }
   }
 
-  await assertSessionOwnsSender({
-    sender: params.sender,
-    sessionAddress: params.sessionAddress,
-    initCode: params.initCode ?? null,
-    factory: params.factory ?? null,
-    factoryData: params.factoryData ?? null,
-  })
+  if (!customOwnerSponsorship) {
+    await assertSessionOwnsSender({
+      sender: params.sender,
+      sessionAddress: params.sessionAddress,
+      initCode: params.initCode ?? null,
+      factory: params.factory ?? null,
+      factoryData: params.factoryData ?? null,
+    })
+  }
 
   if (deploySessionOwner) {
     const client = await getBaseClient()
@@ -1452,7 +1499,11 @@ export async function validateSponsoredSmartWalletCalls(params: {
     customOwnerSponsorship,
     debug: params.debug,
   })
-  if (validated.mode !== 'deploy_session_setup') {
+  if (
+    validated.mode !== 'deploy_session_setup' &&
+    validated.mode !== 'relay_owner_install_part1' &&
+    validated.mode !== 'swap'
+  ) {
     await assertCreatorAllowlisted({
       sessionAddress: params.sessionAddress,
       creatorToken: validated.expectedCreatorToken,
@@ -1565,15 +1616,9 @@ function assertCanonicalSwapRouterExecuteEncoding(data: Hex): void {
     throw new Error('swap_router_selector_not_allowed')
   }
 
-  const canonicalData = encodeFunctionData({
-    abi: UNISWAP_UNIVERSAL_ROUTER_ABI,
-    functionName: 'execute',
-    args: decoded.args,
-  })
-
-  if (canonicalData.toLowerCase() !== data.toLowerCase()) {
-    throw new Error('swap_router_non_canonical_encoding')
-  }
+  // Uniswap Trading API payloads may ABI-encode dynamic arrays with padding that
+  // differs from viem's minimal re-encode. Opcode + token checks after decode are
+  // the safety layer — do not require byte-identical calldata here.
 }
 
 // Universal Router command opcodes allowed for paymaster-sponsored swaps.
@@ -1581,11 +1626,14 @@ function assertCanonicalSwapRouterExecuteEncoding(data: Hex): void {
 const ALLOWED_SWAP_COMMAND_OPCODES = new Set<number>([
   0x00, // V3_SWAP_EXACT_IN
   0x01, // V3_SWAP_EXACT_OUT
+  0x02, // PERMIT2_TRANSFER_FROM
+  0x03, // PERMIT2_PERMIT_BATCH
   0x08, // V2_SWAP_EXACT_IN
   0x09, // V2_SWAP_EXACT_OUT
-  0x10, // V4_SWAP
+  0x0a, // PERMIT2_PERMIT
   0x0b, // WRAP_ETH
-  0x0c, // UNWRAP_ETH
+  0x0c, // UNWRAP_WETH
+  0x10, // V4_SWAP
 ])
 
 function assertSwapRouterPayloadReferencesToken(data: Hex, token: Address): void {
@@ -1632,6 +1680,21 @@ function assertSwapRouterPayloadReferencesToken(data: Hex, token: Address): void
 function assertRawSwapPayloadReferencesToken(data: Hex, token: Address): void {
   const tokenNeedle = token.slice(2).toLowerCase()
   if (!data.toLowerCase().includes(tokenNeedle)) throw new Error('swap_router_token_not_referenced')
+}
+
+function resolveSwapInputTokenFromRouterCalldata(
+  data: Hex,
+  candidates: Address[],
+): Address | null {
+  for (const token of candidates) {
+    try {
+      assertRawSwapPayloadReferencesToken(data, token)
+      return token
+    } catch {
+      // try next candidate
+    }
+  }
+  return null
 }
 
 function summarizeSmartWalletCallData(callData: Hex): {
@@ -1818,11 +1881,71 @@ function parseChainId(chainIdRaw: unknown): number | null {
 function extractUserOpAndEntryPoint(method: string, params: unknown): { userOp: UserOperation; entryPoint: Address; chainId: number | null } | null {
   if (!Array.isArray(params) || params.length < 2) return null
   const userOp = (params[0] ?? {}) as UserOperation
-  const entryPointRaw = params[1]
-  const chainIdRaw = method === 'pm_getPaymasterStubData' || method === 'pm_getPaymasterData' ? params[2] : null
+  const isPaymasterMethod = method === 'pm_getPaymasterStubData' || method === 'pm_getPaymasterData'
+  const second = params[1]
+  const third = params[2]
+
+  let entryPointRaw: unknown = second
+  let chainIdRaw: unknown = isPaymasterMethod ? third : null
+
+  // Tolerate alternate ordering from some clients: [userOp, chainId, entryPoint, context?].
+  // Keep bundler methods strict to [userOp, entryPoint].
+  if (
+    isPaymasterMethod &&
+    (typeof second !== 'string' || !isAddress(second)) &&
+    typeof third === 'string' &&
+    isAddress(third)
+  ) {
+    entryPointRaw = third
+    chainIdRaw = second
+  }
+
+  // Tolerate clients that send only [userOp, entryPoint] for paymaster methods.
+  if (
+    isPaymasterMethod &&
+    (chainIdRaw == null || parseChainId(chainIdRaw) == null) &&
+    params.length >= 2 &&
+    typeof params[1] === 'string' &&
+    isAddress(params[1])
+  ) {
+    chainIdRaw = null
+  }
+
   const chainId = parseChainId(chainIdRaw)
   if (typeof entryPointRaw !== 'string' || !isAddress(entryPointRaw)) return null
   return { userOp, entryPoint: getAddress(entryPointRaw), chainId }
+}
+
+function normalizePaymasterRpcParams(method: string, params: unknown): unknown {
+  if (method !== 'pm_getPaymasterStubData' && method !== 'pm_getPaymasterData') return params
+  if (!Array.isArray(params)) return params
+  if (params.length < 2) return params
+
+  const normalized = [...params]
+  const chainIdRaw = normalized[2]
+  const parsedChainId = parseChainId(chainIdRaw)
+  if (typeof parsedChainId === 'number') return normalized
+
+  // Some clients omit chainId and pass context as the 3rd arg.
+  // CDP expects [userOp, entryPoint, chainId, context?], so normalize here.
+  if (normalized.length === 2) {
+    normalized.push(BASE_CHAIN_ID_HEX)
+    return normalized
+  }
+
+  if (chainIdRaw == null) {
+    normalized[2] = BASE_CHAIN_ID_HEX
+    return normalized
+  }
+
+  if (typeof chainIdRaw === 'object') {
+    normalized.splice(2, 0, BASE_CHAIN_ID_HEX)
+    return normalized
+  }
+
+  // Keep caller-provided arg in case it's context-like but still ensure a valid chain slot.
+  normalized.splice(2, 0, BASE_CHAIN_ID_HEX)
+  return normalized
 }
 
 async function readAllowedCoinbaseSmartWalletImplementations(client: Awaited<ReturnType<typeof getBaseClient>>): Promise<Set<Address>> {
@@ -1987,6 +2110,7 @@ async function validateInnerCalls(params: {
   const expectedWethToken = contracts.weth && isAddress(contracts.weth) ? getAddress(contracts.weth) : BASE_WETH
   const expectedProtocolTreasury =
     contracts.protocolTreasury && isAddress(contracts.protocolTreasury) ? getAddress(contracts.protocolTreasury) : null
+  const expectedProtocolAjnaKeeper = resolveProtocolAjnaKeeperAddress()
   if (!contracts.creatorVaultBatcher) throw new Error(deploymentBatcherNotConfiguredMessage())
   const creatorVaultBatcher = getAddress(contracts.creatorVaultBatcher)
   const vaultAuxiliaryDeployBatcher =
@@ -2034,7 +2158,16 @@ async function validateInnerCalls(params: {
     if (c.value === 0n) continue
     const selector = getSelector(c.data)
     const isWethDeposit = c.target === expectedWethToken && selector === SELECTOR_WETH_DEPOSIT
-    if (!isWethDeposit) throw new Error('value_transfer_not_allowed')
+    if (isWethDeposit) {
+      if (c.value <= 0n) throw new Error('weth_deposit_value_invalid')
+      continue
+    }
+    const isFinalizeShareBridge =
+      c.target === creatorVaultBatcher &&
+      (selector === SELECTOR_BATCHER_FINALIZE_PHASE2 ||
+        selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2)
+    if (isFinalizeShareBridge) continue
+    throw new Error('value_transfer_not_allowed')
   }
 
   const erc8004Registry = getErc8004RegistryAddress()
@@ -2139,8 +2272,9 @@ async function validateInnerCalls(params: {
           if (creatorTreasuryArg !== expectedProtocolTreasury && creatorTreasuryArg !== ZERO_ADDRESS) {
             throw new Error('batcher_creator_treasury_mismatch')
           }
-          // Payout recipient policy is enforced explicitly through router wiring + policy controller handoff.
-          if (payoutRecipientArg !== ZERO_ADDRESS) throw new Error('batcher_payout_recipient_must_be_zero')
+          // creatorCoinPayoutRecipient (external earnings lane) policy is enforced explicitly through router wiring + policy controller handoff (see canonical lanes doc).
+          // In greenfield deploys the batcher forces this to zero; the owner sets the actual creatorCoinPayoutRecipient (external earnings lane) post-deploy.
+          if (payoutRecipientArg !== ZERO_ADDRESS) throw new Error('batcher_creator_coin_payout_recipient_must_be_zero')
 
           const expectedPhase2CodeIds = {
             vault: CREATOR_OVAULT_CODE_ID,
@@ -2244,8 +2378,13 @@ async function validateInnerCalls(params: {
           if (solanaWeightBpsBig !== 0n && !solanaKeeperArg) {
             throw new Error('batcher_phase3_keeper_decode_failed')
           }
-          if (ajnaKeeperArg && ajnaKeeperArg !== expectedProtocolTreasury) {
-            throw new Error('batcher_ajna_keeper_mismatch')
+          if (ajnaWeightBpsBig !== 0n) {
+            if (!expectedProtocolAjnaKeeper) {
+              throw new Error('protocol_ajna_keeper_not_configured')
+            }
+            if (ajnaKeeperArg && ajnaKeeperArg !== expectedProtocolAjnaKeeper) {
+              throw new Error('batcher_ajna_keeper_mismatch')
+            }
           }
           if (solanaKeeperArg && solanaKeeperArg !== expectedProtocolTreasury) {
             throw new Error('batcher_solana_keeper_mismatch')
@@ -2382,7 +2521,7 @@ async function validateInnerCalls(params: {
         let wrappedToken: Address | null = null
         let swapRouterCallData: Hex | null = null
         let swapRouterTarget: Address | null = null
-        let swapRouterKind: 'universal' | 'swap-proxy' | 'v3' | null = null
+        let swapRouterKind: 'universal' | 'swap-proxy' | 'v3' | 'zora-universal' | null = null
         let approvalSpender: Address | null = null
         for (const c of innerCalls) {
           const selector = getSelector(c.data)
@@ -2395,9 +2534,11 @@ async function validateInnerCalls(params: {
           }
 
           const isUniversalRouterCall = allowedUniversalSwapRouters.has(c.target) && selector === SELECTOR_SWAP_ROUTER_EXECUTE
+          const isZoraUniversalRouterCall =
+            allowedUniversalSwapRouters.has(c.target) && selector === SELECTOR_ZORA_SWAP_ROUTER_EXECUTE
           const isSwapProxyCall = allowedSwapProxyRouters.has(c.target) && selector === SELECTOR_SWAP_PROXY_EXECUTE
           const isV3RouterCall = allowedPayoutRouterV3Routers.has(c.target) && ALLOWED_V3_SWAP_ROUTER_SELECTORS.has(selector)
-          if (isUniversalRouterCall || isSwapProxyCall || isV3RouterCall) {
+          if (isUniversalRouterCall || isZoraUniversalRouterCall || isSwapProxyCall || isV3RouterCall) {
             if (c.value !== 0n) throw new Error('swap_router_value_not_allowed')
             if (isUniversalRouterCall) assertCanonicalSwapRouterExecuteEncoding(c.data)
             sawSwapRouter = true
@@ -2405,7 +2546,13 @@ async function validateInnerCalls(params: {
             if (swapRouterCalls > 1) throw new Error('swap_router_call_count_not_allowed')
             swapRouterCallData = c.data
             swapRouterTarget = c.target
-            swapRouterKind = isUniversalRouterCall ? 'universal' : isSwapProxyCall ? 'swap-proxy' : 'v3'
+            swapRouterKind = isUniversalRouterCall
+              ? 'universal'
+              : isZoraUniversalRouterCall
+                ? 'zora-universal'
+                : isSwapProxyCall
+                  ? 'swap-proxy'
+                  : 'v3'
             continue
           }
 
@@ -2437,17 +2584,55 @@ async function validateInnerCalls(params: {
           return { matched: false, creatorToken: null as Address | null }
         }
 
-        const swapInputToken = approvedToken ?? wrappedToken
+        const configuredUsdc =
+          contracts.usdc && isAddress(contracts.usdc) ? getAddress(contracts.usdc) : BASE_USDC
+        let swapInputToken = approvedToken ?? wrappedToken
+        if (
+          !swapInputToken &&
+          (swapRouterKind === 'zora-universal' || swapRouterKind === 'universal') &&
+          swapRouterCallData &&
+          approvalCalls === 0
+        ) {
+          // Trading API / Zora quotes embed Permit2 in router calldata (no separate approve inner call).
+          const candidates = [configuredUsdc, expectedZoraToken, expectedWethToken, permit2].filter(
+            (token): token is Address => Boolean(token),
+          )
+          swapInputToken = resolveSwapInputTokenFromRouterCalldata(swapRouterCallData, candidates)
+          // Permit2 payloads may not repeat the sell token as a bare 20-byte needle; still
+          // sponsor the known Zora single-call lane with USDC policy when shape matches.
+          if (!swapInputToken && swapRouterKind === 'zora-universal' && swapRouterCalls === 1) {
+            swapInputToken = configuredUsdc
+          }
+          if (
+            !swapInputToken &&
+            swapRouterKind === 'universal' &&
+            swapRouterCalls === 1 &&
+            swapRouterCallData?.toLowerCase().includes(configuredUsdc.slice(2).toLowerCase())
+          ) {
+            swapInputToken = configuredUsdc
+          }
+        }
+
         if (sawSwapRouter && swapInputToken && swapRouterCallData) {
           if (swapRouterKind === 'universal') {
             assertSwapRouterPayloadReferencesToken(swapRouterCallData, swapInputToken)
           } else {
+            // Zora quotes use execute(bytes,bytes[]) without deadline; validate via raw calldata.
             assertRawSwapPayloadReferencesToken(swapRouterCallData, swapInputToken)
           }
         }
 
+        const zoraPermitEmbeddedSwap =
+          (swapRouterKind === 'zora-universal' || swapRouterKind === 'universal') &&
+          approvalCalls === 0 &&
+          swapRouterCalls === 1
+
         return {
-          matched: sawSwapRouter && approvalCalls <= 1 && swapRouterCalls === 1 && !!swapInputToken,
+          matched:
+            sawSwapRouter &&
+            swapRouterCalls === 1 &&
+            !!swapInputToken &&
+            (approvalCalls <= 1 || zoraPermitEmbeddedSwap),
           creatorToken: swapInputToken,
         }
       })()
@@ -2807,6 +2992,22 @@ async function validateInnerCalls(params: {
       if (!shareVault || getAddress(shareVault) !== expectedVault) throw new Error('shareoft_vault_mismatch')
       if (wrapperOwner && getAddress(wrapperOwner) !== creatorVaultBatcher) throw new Error('wrapper_owner_mismatch')
       if (shareOwner && getAddress(shareOwner) !== creatorVaultBatcher) throw new Error('shareoft_owner_mismatch')
+      for (const c of innerCalls) {
+        if (c.target !== creatorVaultBatcher) continue
+        const selector = getSelector(c.data)
+        if (
+          selector !== SELECTOR_BATCHER_FINALIZE_PHASE2 &&
+          selector !== SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2
+        ) {
+          continue
+        }
+        await assertFinalizeShareBridgeCallValue({
+          publicClient: client,
+          batcherAddress: creatorVaultBatcher,
+          callData: c.data,
+          value: c.value,
+        })
+      }
     }
     const [vaultName, vaultSymbol] = (await Promise.all([
       client.readContract({ address: expectedVault, abi: ERC20_METADATA_ABI, functionName: 'name' }),
@@ -3199,6 +3400,7 @@ async function validateInnerCalls(params: {
         (selector === SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE || selector === SELECTOR_VAULT_DEPLOY_TO_STRATEGIES)
       if (
         selector !== SELECTOR_VAULT_SET_BURN_STREAM &&
+        selector !== SELECTOR_VAULT_SET_BURN_STREAM_AUTHORIZED_QUEUER &&
         selector !== SELECTOR_VAULT_SET_WHITELIST &&
         !phase3RuntimeSelectorAllowed
       ) {
@@ -3219,6 +3421,11 @@ async function validateInnerCalls(params: {
           })
           throw new Error('vault_burn_stream_mismatch')
         }
+      } else if (selector === SELECTOR_VAULT_SET_BURN_STREAM_AUTHORIZED_QUEUER) {
+        const queuerArg = decodeAddressArgFromCalldata(c.data, 0)
+        const authorizedArg = decodeBoolArgFromCalldata(c.data, 1)
+        if (!queuerArg || queuerArg !== expectedPayoutRouter) throw new Error('vault_burn_stream_queuer_mismatch')
+        if (authorizedArg !== true) throw new Error('vault_burn_stream_queuer_status_mismatch')
       } else if (selector === SELECTOR_VAULT_SET_WHITELIST) {
         const accountArg = decodeAddressArgFromCalldata(c.data, 0)
         const statusArg = decodeBoolArgFromCalldata(c.data, 1)
@@ -3266,6 +3473,16 @@ async function validateInnerCalls(params: {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  try {
+    return await handlePaymasterRequest(req, res)
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    logger.error('[paymaster-proxy] unhandled handler error', { msg: msg || 'unknown_error' })
+    return res.status(200).json(jsonRpcError(null, -32000, 'paymaster_proxy_internal_error'))
+  }
+}
+
+async function handlePaymasterRequest(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
   if (handleOptions(req, res)) return
@@ -3357,6 +3574,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!ALLOWED_METHODS.has(method)) {
       return res.status(200).json(jsonRpcError((r as any)?.id ?? null, -32601, `Method not allowed: ${method}`))
     }
+    r.params = normalizePaymasterRpcParams(method, r.params)
   }
 
   try {

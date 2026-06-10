@@ -11,8 +11,8 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
-import { getElizaLlmService } from '../../../server/agent/eliza/llm.js'
+} from '@4626/server-core'
+import { getElizaLlmService } from '../../../server/agents/eliza/llm.js'
 import { prepareRemoteAiJsonPayload } from '../../../server/_lib/agentControl/remoteAi.js'
 
 type AlertSeverity = 'info' | 'warning' | 'critical'
@@ -148,7 +148,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const limiter = checkRateLimit(
     rateLimitKey('keeper-ai-assess', getClientIp(req)),
-    RATE_LIMITS.creRuntimeTriggerWrite,
+    RATE_LIMITS.keeperTriggerWrite,
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
@@ -216,7 +216,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       systemPrompt,
       vaultContext: '',
       correlationId: `keeper-ai-assess-${Date.now()}`,
-      preferredModel: process.env.CRE_AI_MODEL?.trim() || undefined,
+      preferredModel: process.env.KPR_AI_MODEL?.trim() || undefined,
     })
 
     const raw = parseAssessmentJson(result.text ?? '')

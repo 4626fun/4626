@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url'
 
 import { logAdminAction } from '../server/_lib/admin/adminAudit.js'
 import {
-  executeProfileMerge,
+  executeProfileMergeInTransaction,
   planProfileMerge,
   ProfileMergeValidationError,
 } from '../server/_lib/identity/profileMerge.js'
@@ -122,7 +122,7 @@ async function main(): Promise<void> {
     }
 
     console.log('\nExecuting…')
-    const result = await executeProfileMerge(db as any, plan)
+    const result = await executeProfileMergeInTransaction(plan)
     console.log('\n── Result ──')
     console.log(JSON.stringify(result, null, 2))
 

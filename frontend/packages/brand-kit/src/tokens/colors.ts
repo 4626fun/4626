@@ -1,7 +1,7 @@
 export const brandTokens = {
-  primary: '#0052FF',
-  hover: '#004AD9',
-  accent: '#3B82F6',
+  primary: '#1C5CF2',
+  hover: '#3F81FF',
+  accent: '#F59E0B',
 } as const
 
 export const vaultTokens = {
@@ -16,20 +16,20 @@ export const vaultTokens = {
 } as const
 export const brandColors = {
   brand: {
-    primary: '#0052FF',
-    hover: '#004AD9',
-    accent: '#3B82F6',
-    glow: 'rgba(0, 82, 255, 0.15)',
+    primary: '#1C5CF2',
+    hover: '#3F81FF',
+    accent: '#F59E0B',
+    glow: 'rgba(28, 92, 242, 0.15)',
     50: '#eff6ff',
     100: '#dbeafe',
     200: '#bfdbfe',
     300: '#93c5fd',
-    400: '#3B82F6',
-    500: '#0052FF',
-    600: '#004AD9',
-    700: '#0033CC',
-    800: '#0029A3',
-    900: '#001F7A',
+    400: '#5B93FF',
+    500: '#1C5CF2',
+    600: '#174ACE',
+    700: '#123BA4',
+    800: '#0E2E82',
+    900: '#0B2464',
     950: '#172554',
   },
   vault: {

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/creator-access/\_allowlist
+[4626-web](../../../index.md) / api/\_handlers/creator-access/\_allowlist
 
 # api/\_handlers/creator-access/\_allowlist
 

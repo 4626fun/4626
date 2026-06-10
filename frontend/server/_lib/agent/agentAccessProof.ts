@@ -11,6 +11,7 @@ import {
   type RoomCapability,
 } from '../../../api/_handlers/v1/agents/_accessSchemas.js'
 import { getDb } from '../db/postgres.js'
+import { ensureAgentAccessProofSchema } from '../db/schemaBootstrap.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -140,43 +141,7 @@ function createAccessTokenFromClaims(claims: Omit<AgentRoomAccessToken, 'accessT
 
 async function ensureAgentAccessSchema(db: Db): Promise<void> {
   if (agentAccessSchemaEnsured) return
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS agent_access_nonces (
-      nonce TEXT PRIMARY KEY,
-      wallet_address TEXT NOT NULL,
-      chain_id INTEGER NOT NULL,
-      share_token TEXT NOT NULL,
-      room_key TEXT NOT NULL,
-      message_hash TEXT NOT NULL,
-      issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      expires_at TIMESTAMPTZ NOT NULL,
-      consumed_at TIMESTAMPTZ NULL,
-      signer TEXT NULL,
-      signature TEXT NULL
-    );
-  `
-  await db.sql`CREATE INDEX IF NOT EXISTS agent_access_nonces_expires_idx ON agent_access_nonces (expires_at);`
-  await db.sql`
-    CREATE INDEX IF NOT EXISTS agent_access_nonces_lookup_idx
-    ON agent_access_nonces (wallet_address, share_token, room_key, consumed_at, expires_at);
-  `
-
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS agent_room_access_tokens (
-      jti TEXT PRIMARY KEY,
-      sub TEXT NOT NULL,
-      chain_id INTEGER NOT NULL,
-      share_token TEXT NOT NULL,
-      room_key TEXT NOT NULL,
-      issued_at TIMESTAMPTZ NOT NULL,
-      expires_at TIMESTAMPTZ NOT NULL,
-      revoked_at TIMESTAMPTZ NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `
-  await db.sql`CREATE INDEX IF NOT EXISTS agent_room_access_tokens_expires_idx ON agent_room_access_tokens (expires_at);`
-  await db.sql`CREATE INDEX IF NOT EXISTS agent_room_access_tokens_sub_idx ON agent_room_access_tokens (sub, expires_at);`
-
+  await ensureAgentAccessProofSchema(db as any)
   agentAccessSchemaEnsured = true
 }
 

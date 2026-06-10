@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / api/\_handlers/deploy/v2/session/\_continueCore
+[4626-web](../../../../../index.md) / api/\_handlers/deploy/v2/session/\_continueCore
 
 # api/\_handlers/deploy/v2/session/\_continueCore
 
@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `null` \| `undefined`\>
 
-Defined in: [api/\_handlers/deploy/v2/session/\_continueCore.ts:672](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_continueCore.ts#L672)
+Defined in: [api/\_handlers/deploy/v2/session/\_continueCore.ts:686](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/v2/session/_continueCore.ts#L686)
 
 #### Parameters
 

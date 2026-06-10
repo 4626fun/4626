@@ -13,7 +13,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-PATHS=(frontend/src frontend/api frontend/server contracts programs cre docs apps/docs-site .cursor)
+PATHS=(frontend/src frontend/api frontend/server contracts programs kpr docs apps/docs-site .cursor)
 EXISTING=()
 for p in "${PATHS[@]}"; do
   [[ -e "$p" ]] && EXISTING+=("$p")

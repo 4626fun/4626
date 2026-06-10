@@ -1,5 +1,5 @@
 import { apiFetch } from '@/lib/api/apiBase'
-import type { ApiEnvelope } from '@/lib/wallet/onboardingWallet'
+import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
 import { writeStoredSessionToken } from '@/hooks/useSiweAuth'
 
 /**
@@ -37,6 +37,27 @@ export async function bridgePrivySession(privyToken: string | null): Promise<boo
       Accept: 'application/json',
     },
   }).catch(() => null)
+
+  const payload = authRes
+    ? ((await authRes.json().catch(() => null)) as ApiEnvelope<unknown> | null)
+    : null
+
+  if (authRes?.status === 409) {
+    const code = typeof (payload as any)?.code === 'string' ? String((payload as any).code) : ''
+    const recoveryRequired =
+      (payload as any)?.recoveryRequired === true ||
+      code.toUpperCase().includes('RECOVERY_REQUIRED')
+    if (recoveryRequired) {
+      const err = new Error(
+        typeof (payload as any)?.error === 'string'
+          ? String((payload as any).error)
+          : 'Recovery required',
+      ) as Error & { recoveryRequired?: boolean; code?: string }
+      err.recoveryRequired = true
+      err.code = code || 'RECOVERY_REQUIRED_EMAIL_BOUND'
+      throw err
+    }
+  }
 
   const ok = Boolean(authRes?.ok)
   if (ok) {

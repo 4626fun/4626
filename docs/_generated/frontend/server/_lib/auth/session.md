@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/auth/session
+[4626-web](../../../index.md) / server/\_lib/auth/session
 
 # server/\_lib/auth/session
 
@@ -10,7 +10,7 @@
 
 ### RuntimeSessionContext
 
-> **RuntimeSessionContext** = [`AgentSessionContext`](../../agent/core/resolveIdentityContext.md#agentsessioncontext)
+> **RuntimeSessionContext** = [`AgentSessionContext`](../../agents/core/resolveIdentityContext.md#agentsessioncontext)
 
 Defined in: [server/\_lib/auth/session.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/auth/session.ts#L9)
 
@@ -18,7 +18,7 @@ Defined in: [server/\_lib/auth/session.ts:9](https://github.com/wenakita/4626/bl
 
 ### buildRuntimeSessionContext()
 
-> **buildRuntimeSessionContext**(`address`): [`AgentSessionContext`](../../agent/core/resolveIdentityContext.md#agentsessioncontext) \| `null`
+> **buildRuntimeSessionContext**(`address`): [`AgentSessionContext`](../../agents/core/resolveIdentityContext.md#agentsessioncontext) \| `null`
 
 Defined in: [server/\_lib/auth/session.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/auth/session.ts#L22)
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/auth/session.ts:22](https://github.com/wenakita/4626/b
 
 #### Returns
 
-[`AgentSessionContext`](../../agent/core/resolveIdentityContext.md#agentsessioncontext) \| `null`
+[`AgentSessionContext`](../../agents/core/resolveIdentityContext.md#agentsessioncontext) \| `null`
 
 ***
 

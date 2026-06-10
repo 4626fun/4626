@@ -19,6 +19,7 @@ watchPatterns = [
   "/frontend/tsconfig.json",
   "/frontend/tsconfig.node.json",
   "/patches/**",
+  "/frontend/shared/**",
   "/railway.toml"
 ]
 
@@ -38,7 +39,7 @@ restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
 
 # Start command intentionally omitted so Railway uses Dockerfile CMD.
-# Docker CMD handles volume permission fixups before launching runtime.
+# Docker CMD runs eliza/bootstrap.ts (health listener before heavy imports).
 
 # Persistent volume for XMTP local database.
 # CRITICAL: Without this, every deploy creates a new XMTP installation

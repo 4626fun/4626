@@ -35,8 +35,15 @@ import {
   resolvePrivyCoinbaseSmartWalletOwnerContext,
 } from '../_lib/wallet/privyCoinbaseSmartWallet.js'
 import { createPrivyScwSigner } from '../_lib/wallet/privyXmtpSigner.js'
+import { readCanonicalCswOwnerIndexEnv } from '../_lib/wallet/canonicalCswEnv.js'
 import { ensureKeeprSchema } from '../_lib/keepr/keeprSchema.js'
 import { isOfficialCharmVault, officialCharmVaultError } from '../_lib/deploy/charmVaults.js'
+import {
+  executeKeeprStrategyAction,
+  isStrategyActionType,
+  loadStrategyQueueAgentRow,
+  type StrategyActionType,
+} from './strategyActionExecutor.js'
 
 declare const process: { env: Record<string, string | undefined>; cwd(): string }
 
@@ -51,10 +58,6 @@ type XmtpActionType =
   | 'xmtp.group.remove_member'
   | 'xmtp.group.send_message'
   | 'xmtp.group.sync_members'
-
-type StrategyActionType =
-  | 'strategy.ajna.rebucket'
-  | 'strategy.charm.rebalance'
 
 type SupportedActionType = XmtpActionType | StrategyActionType
 
@@ -162,7 +165,7 @@ function getDbEncryptionKey(): `0x${string}` | undefined {
  * agent identity, not a vault address, otherwise one inbox fans out into
  * multiple DBs and multiple XMTP installations.
  */
-const KEEPR_XMTP_DB_DIR = resolveXmtpDbDirectory()
+const KPR_XMTP_DB_DIR = resolveXmtpDbDirectory()
 const XMTP_DB_FORCE_ENCRYPTED_MIGRATION_REQUESTED = (() => {
   const raw = (process.env.XMTP_DB_FORCE_ENCRYPTED_MIGRATION ?? '0').trim().toLowerCase()
   return raw === '1' || raw === 'true' || raw === 'yes'
@@ -238,10 +241,10 @@ function resolveKeeprDbIdentityKey(row: QueueAgentRow): string {
 }
 
 function makeKeeprDbPath(identityKey: string): string {
-  fs.mkdirSync(KEEPR_XMTP_DB_DIR, { recursive: true, mode: 0o700 })
+  fs.mkdirSync(KPR_XMTP_DB_DIR, { recursive: true, mode: 0o700 })
   const env = parseXmtpEnv()
   const safe = identityKey.toLowerCase().replace(/[^a-z0-9]/g, '')
-  const p = path.join(KEEPR_XMTP_DB_DIR, `keepr-${env}-${safe}.db3`)
+  const p = path.join(KPR_XMTP_DB_DIR, `keepr-${env}-${safe}.db3`)
   rotateLegacyPlaintextDbIfNeeded(p)
   logger.info(`[keepr/xmtp-queue] Using local database: ${p}`)
   return p
@@ -249,10 +252,6 @@ function makeKeeprDbPath(identityKey: string): string {
 
 function isXmtpActionType(actionType: SupportedActionType): actionType is XmtpActionType {
   return actionType.startsWith('xmtp.group.')
-}
-
-function isStrategyActionType(actionType: SupportedActionType): actionType is StrategyActionType {
-  return actionType.startsWith('strategy.')
 }
 
 function isAddressLike(value: unknown): value is `0x${string}` {
@@ -294,7 +293,7 @@ function getBaseRpcUrl(): string {
 }
 
 function getKeeperAccount() {
-  const pk = (process.env.KEEPR_PRIVATE_KEY ?? '').trim()
+  const pk = (process.env.KPR_PRIVATE_KEY ?? '').trim()
   if (!pk || !/^0x[0-9a-fA-F]{64}$/.test(pk)) {
     throw new KeeprQueueError('keeper_private_key_missing', false)
   }
@@ -473,49 +472,8 @@ function getEthereumAddressFromMember(member: any): `0x${string}` | null {
   return null
 }
 
-async function loadQueueAgentRow(vaultAddress: `0x${string}`): Promise<QueueAgentRow | null> {
-  const db = await getDb()
-  if (!db) throw new KeeprQueueError('db_not_configured', false)
-
-  await ensureKeeprSchema()
-  await ensureCreatorXmtpAgentsSchema(db as any)
-
-  const q = await db.sql`
-    SELECT
-      v.vault_address,
-      v.group_id,
-      v.canonical_owner_address,
-      a.creator_address,
-      a.xmtp_agent_address,
-      a.agent_type,
-      a.privy_wallet_id,
-      a.csw_address,
-      a.encrypted_private_key_b64,
-      a.encrypted_private_key_iv_b64,
-      a.encrypted_private_key_tag_b64
-    FROM keepr_vaults v
-    LEFT JOIN creator_xmtp_agents a
-      ON LOWER(a.creator_address) = LOWER(v.canonical_owner_address)
-    WHERE LOWER(v.vault_address) = ${vaultAddress}
-    LIMIT 1;
-  `
-
-  const row = (q.rows ?? [])[0] as any
-  if (!row) return null
-
-  return {
-    vaultAddress: String(row.vault_address).toLowerCase(),
-    groupId: String(row.group_id),
-    canonicalOwnerAddress: String(row.canonical_owner_address).toLowerCase(),
-    creatorAddress: row.creator_address ? String(row.creator_address).toLowerCase() : null,
-    xmtpAgentAddress: row.xmtp_agent_address ? String(row.xmtp_agent_address).toLowerCase() : null,
-    agentType: row.agent_type ? String(row.agent_type).toLowerCase() : null,
-    privyWalletId: row.privy_wallet_id ? String(row.privy_wallet_id) : null,
-    cswAddress: row.csw_address ? String(row.csw_address).toLowerCase() : null,
-    encryptedPrivateKeyB64: row.encrypted_private_key_b64 ? String(row.encrypted_private_key_b64) : null,
-    encryptedPrivateKeyIvB64: row.encrypted_private_key_iv_b64 ? String(row.encrypted_private_key_iv_b64) : null,
-    encryptedPrivateKeyTagB64: row.encrypted_private_key_tag_b64 ? String(row.encrypted_private_key_tag_b64) : null,
-  }
+async function loadQueueAgentRow(vaultAddress: `0x${string}`) {
+  return loadStrategyQueueAgentRow(vaultAddress)
 }
 
 function isLikelyNonRetryableExecutionError(message: string): boolean {
@@ -630,250 +588,6 @@ async function bootstrapMissingGroupForVault(params: {
   }
 }
 
-async function executeStrategyAction(
-  actionType: StrategyActionType,
-  action: Record<string, unknown>,
-  options?: { queueRow?: QueueAgentRow | null; vaultAddress?: `0x${string}` },
-): Promise<Record<string, unknown>> {
-  const rpcUrl = getBaseRpcUrl()
-  const publicClient = createPublicClient({ chain: base, transport: http(rpcUrl, { timeout: 30_000 }) }) as any
-
-  if (actionType === 'strategy.ajna.rebucket') {
-    const targetBucket = parseUintLikeFromAction(action, 'targetBucket')
-    assertAjnaMinBucketIndex(targetBucket, 'targetBucket')
-    const methodRaw = typeof action.method === 'string' ? action.method.trim() : ''
-    if (methodRaw && methodRaw !== 'setMinBucketIndex') {
-      throw new KeeprQueueError('invalid_method', false)
-    }
-    const authAddress = normalizeAddress(action.authAddress ?? action.targetAddress, 'authAddress')
-    const strategyAddress =
-      action.strategyAddress == null ? null : normalizeAddress(action.strategyAddress, 'strategyAddress')
-    const automationRow =
-      options?.vaultAddress ? await getKeeprVaultAutomationByVaultAddress(options.vaultAddress) : null
-    if (options?.vaultAddress && !automationRow) {
-      const db = await getDb()
-      if (!db) {
-        throw new KeeprQueueError('ajna_automation_backend_unavailable', true)
-      }
-    }
-    const automation = getAjnaAutomationContextOrThrow(automationRow)
-
-    let authAdminRaw: unknown
-    try {
-      authAdminRaw = await publicClient.readContract({
-        address: authAddress,
-        abi: AJNA_VAULT_AUTH_VIEW_ABI,
-        functionName: 'admin',
-      })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      throw new KeeprQueueError(`ajna_auth_admin_read_failed:${message}`, isLikelyRetryableRpcError(message))
-    }
-    if (!isAddressLike(authAdminRaw)) {
-      throw new KeeprQueueError('ajna_auth_admin_unreadable', false)
-    }
-    const authAdmin = normalizeAddress(authAdminRaw, 'authAdmin')
-    if (authAdmin !== automation.canonicalCswAddress) {
-      logger.warn('[keepr/xmtp-queue] canonical CSW cannot rebucket Ajna auth', {
-        authAddress,
-        authAdmin,
-        canonicalCswAddress: automation.canonicalCswAddress,
-      })
-      throw new KeeprQueueError(
-        `ajna_auth_admin_mismatch:canonical=${automation.canonicalCswAddress}:admin=${authAdmin}`,
-        false,
-      )
-    }
-
-    const rebucketCalldata = encodeFunctionData({
-      abi: AJNA_VAULT_AUTH_ADMIN_ABI as unknown as Abi,
-      functionName: 'setMinBucketIndex',
-      args: [targetBucket],
-    })
-
-    let ownerContext: { ownerAddress: `0x${string}`; ownerIndex: number }
-    try {
-      ownerContext = await resolvePrivyCoinbaseSmartWalletOwnerContext({
-        publicClient,
-        walletId: automation.privyWalletId,
-        smartWallet: automation.canonicalCswAddress,
-        expectedOwnerAddress: automation.embeddedEoaAddress,
-        maxScan: 512,
-      })
-    } catch (err) {
-      const helperError = toKeeprQueueErrorFromCoinbaseSmartWalletHelper(
-        err,
-        'ajna_owner_revalidation_failed',
-      )
-      if (helperError) throw helperError
-      const message = err instanceof Error ? err.message : String(err)
-      throw new KeeprQueueError(`ajna_owner_revalidation_failed:${message}`, false)
-    }
-
-    let viaUserOp: {
-      userOpHash: `0x${string}`
-      txHash: `0x${string}`
-      smartWallet: `0x${string}`
-      ownerAddress: `0x${string}`
-      ownerIndex: number
-    }
-    try {
-      viaUserOp = await sendPrivyCoinbaseSmartWalletUserOperation({
-        publicClient,
-        bundlerUrl: getBundlerAndPaymasterUrl(),
-        walletId: automation.privyWalletId,
-        smartWallet: automation.canonicalCswAddress,
-        ownerAddress: ownerContext.ownerAddress,
-        ownerIndex: ownerContext.ownerIndex,
-        calls: [{ to: authAddress, value: 0n, data: rebucketCalldata }],
-        simulate: true,
-      })
-    } catch (err) {
-      const helperError = toKeeprQueueErrorFromCoinbaseSmartWalletHelper(err, 'ajna_userop_failed')
-      if (helperError) throw helperError
-      const message = err instanceof Error ? err.message : String(err)
-      if (message === 'transaction_reverted') {
-        throw new KeeprQueueError(message, false)
-      }
-      throw new KeeprQueueError(`ajna_userop_failed:${message}`, isLikelyRetryableRpcError(message))
-    }
-
-    return {
-      txHash: viaUserOp.txHash,
-      userOpHash: viaUserOp.userOpHash,
-      sender: viaUserOp.smartWallet,
-      ownerAddress: viaUserOp.ownerAddress,
-      ownerIndex: viaUserOp.ownerIndex,
-      mode: 'erc4337_privy',
-      strategyAddress,
-      authAddress,
-      targetAddress: authAddress,
-      method: 'setMinBucketIndex',
-      targetBucket: targetBucket.toString(),
-    }
-  }
-
-  const account = getKeeperAccount()
-  const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl, { timeout: 30_000 }) })
-  const charmVaultAddress = normalizeAddress(
-    action.charmVaultAddress ?? action.strategyAddress,
-    'charmVaultAddress',
-  )
-  const isOfficialVault = await isOfficialCharmVault({
-    charmVaultAddress,
-    publicClient,
-  })
-  if (!isOfficialVault) {
-    throw new KeeprQueueError(officialCharmVaultError(charmVaultAddress), false)
-  }
-
-  const keeperAddress = normalizeAddress(account.address, 'keeperAddress')
-  const [managerRaw, delegateRaw] = (await Promise.all([
-    publicClient
-      .readContract({
-        address: charmVaultAddress,
-        abi: CHARM_VAULT_AUTH_VIEW_ABI,
-        functionName: 'manager',
-      })
-      .catch(() => null),
-    publicClient
-      .readContract({
-        address: charmVaultAddress,
-        abi: CHARM_VAULT_AUTH_VIEW_ABI,
-        functionName: 'rebalanceDelegate',
-      })
-      .catch(() => null),
-  ])) as [unknown, unknown]
-
-  const managerAddress = isAddressLike(managerRaw) ? normalizeAddress(managerRaw, 'manager') : null
-  const delegateAddress = isAddressLike(delegateRaw) ? normalizeAddress(delegateRaw, 'rebalanceDelegate') : null
-  const rowCswAddress =
-    options?.queueRow?.cswAddress && isAddressLike(options.queueRow.cswAddress)
-      ? normalizeAddress(options.queueRow.cswAddress, 'cswAddress')
-      : null
-
-  const cswCandidates = Array.from(
-    new Set(
-      [rowCswAddress, delegateAddress, managerAddress].filter(
-        (addr): addr is `0x${string}` => Boolean(addr && addr !== ZERO_ADDRESS && addr !== keeperAddress),
-      ),
-    ),
-  )
-
-  let lastUserOpError: unknown = null
-  let retryableUserOpError: unknown = null
-  for (const cswAddress of cswCandidates) {
-    try {
-      const viaUserOp = await executeCharmRebalanceViaCswUserOperation({
-        publicClient,
-        ownerAccount: account,
-        charmVaultAddress,
-        cswAddress,
-      })
-      return {
-        txHash: viaUserOp.txHash,
-        userOpHash: viaUserOp.userOpHash,
-        sender: viaUserOp.smartWallet,
-        ownerIndex: viaUserOp.ownerIndex,
-        mode: 'erc4337_paymaster',
-        charmVaultAddress,
-      }
-    } catch (err) {
-      lastUserOpError = err
-      const message = err instanceof Error ? err.message : String(err)
-      const retryable = err instanceof KeeprQueueError ? err.retryable : isLikelyRetryableRpcError(message)
-      if (!retryableUserOpError && retryable) {
-        retryableUserOpError = err
-      }
-      logger.warn('[keepr/xmtp-queue] charm rebalance userop path failed', {
-        charmVaultAddress,
-        cswAddress,
-        error: message,
-      })
-    }
-  }
-
-  const keeperCanDirectlyRebalance =
-    (delegateAddress && delegateAddress === keeperAddress) || (managerAddress && managerAddress === keeperAddress)
-
-  if (keeperCanDirectlyRebalance) {
-    const txHash = await walletClient.writeContract({
-      address: charmVaultAddress,
-      abi: CHARM_VAULT_ADMIN_ABI as unknown as Abi,
-      functionName: 'rebalance',
-      args: [],
-      chain: base,
-      account,
-    })
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 })
-    if (receipt.status !== 'success') {
-      throw new KeeprQueueError('transaction_reverted', false)
-    }
-    return {
-      txHash,
-      charmVaultAddress,
-      mode: 'direct_eoa',
-    }
-  }
-
-  if (retryableUserOpError instanceof KeeprQueueError) throw retryableUserOpError
-  if (retryableUserOpError) {
-    const msg =
-      retryableUserOpError instanceof Error ? retryableUserOpError.message : String(retryableUserOpError)
-    throw new KeeprQueueError(`charm_rebalance_userop_failed:${msg}`, true)
-  }
-  if (lastUserOpError instanceof KeeprQueueError) throw lastUserOpError
-  if (lastUserOpError) {
-    const msg = lastUserOpError instanceof Error ? lastUserOpError.message : String(lastUserOpError)
-    throw new KeeprQueueError(`charm_rebalance_userop_failed:${msg}`, isLikelyRetryableRpcError(msg))
-  }
-  throw new KeeprQueueError('charm_rebalance_not_authorized_for_keeper', false)
-
-  return {
-    charmVaultAddress,
-    mode: 'unknown',
-  }
-}
 
 async function executeNormalizedAction(
   actionType: XmtpActionType,
@@ -961,23 +675,19 @@ export async function executeKeeprAction(input: ExecuteKeeprActionInput): Promis
     }
   }
 
+  if (isStrategyActionType(normalizedActionType)) {
+    return executeKeeprStrategyAction({
+      vaultAddress: input.vaultAddress,
+      actionType: input.actionType,
+      action: input.action ?? {},
+    })
+  }
+
   let agent: Agent | null = null
   try {
     const row = await loadQueueAgentRow(normalizedVaultAddress)
     if (!row) {
       return { success: false, retryable: false, actionType: normalizedActionType, error: 'vault_not_configured' }
-    }
-    if (isStrategyActionType(normalizedActionType)) {
-      const details = await executeStrategyAction(normalizedActionType, input.action ?? {}, {
-        queueRow: row,
-        vaultAddress: normalizedVaultAddress,
-      })
-      return {
-        success: true,
-        retryable: false,
-        actionType: normalizedActionType,
-        details,
-      }
     }
 
     const requestedGroupId = String(input.groupId)
@@ -999,7 +709,7 @@ export async function executeKeeprAction(input: ExecuteKeeprActionInput): Promis
 
     let signer: any
     if (row.agentType === 'csw' && row.privyWalletId && row.cswAddress) {
-      const ownerIndexEnv = (process.env.XMTP_AGENT_CSW_OWNER_INDEX ?? '').trim()
+      const ownerIndexEnv = readCanonicalCswOwnerIndexEnv()
       const ownerIndexRaw = ownerIndexEnv ? Number(ownerIndexEnv) : Number.NaN
       const ownerIndex =
         Number.isFinite(ownerIndexRaw) && ownerIndexRaw >= 0

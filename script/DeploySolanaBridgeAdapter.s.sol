@@ -29,9 +29,9 @@ interface ILotteryManagerAdmin {
  */
 contract DeploySolanaBridgeAdapter is Script {
     // Base mainnet CreatorRegistry (see deployments/base/contracts/core/CreatorRegistry.json)
-    address constant DEFAULT_CREATOR_REGISTRY = 0xa6216Ea21f4a4d190EdD453A51e4e015A44e60C4;
+    address constant DEFAULT_CREATOR_REGISTRY = 0x3f64087dc361Ad52300409E5873b26941D6418B6;
 
-    // v1.11.0+ requires explicit lottery manager env when wiring the adapter.
+    // v1.11.1+ requires explicit lottery manager env when wiring the adapter.
     address constant DEFAULT_LOTTERY_MANAGER = address(0);
 
     function run() external {

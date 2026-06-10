@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  isWaitlistStepTwoSigningComplete,
   mergeCanonicalWaitlistAccount,
   resolveWaitlistStep,
-  shouldAutoBootstrapWaitlistSession,
+  resolveWaitlistAccordionOpenStep,
+  shouldFocusWaitlistBaseAppConnect,
+  shouldForceBaseAppConnectStep,
+  shouldShowBaseAppConnectPanel,
+  shouldShowParentCswAddOwnerPanel,
 } from './waitlistFlowState'
 import { isPrivyLoginBootstrapError } from './WaitlistFlow'
 
@@ -19,135 +24,83 @@ describe('resolveWaitlistStep', () => {
     ).toBe('auth')
   })
 
-  it('routes verified-email accounts directly into done state', () => {
+  it('routes verified-email accounts to the setup workspace', () => {
     expect(
       resolveWaitlistStep({
         account: {
           emailVerified: true,
-          appAccessStatus: null,
         },
-      }),
-    ).toBe('done')
-  })
-
-  it('keeps verified-but-unapproved accounts in done state', () => {
-    expect(
-      resolveWaitlistStep({
-        account: {
-          emailVerified: true,
-          appAccessStatus: null,
-        },
-      }),
-    ).toBe('done')
-  })
-
-  it('routes approved, fully linked accounts into done state', () => {
-    expect(
-      resolveWaitlistStep({
-        account: {
-          emailVerified: true,
-          appAccessStatus: 'approved',
-        },
-      }),
-    ).toBe('done')
-  })
-
-  it('routes approved accounts into done regardless of wallet-readiness details', () => {
-    expect(
-      resolveWaitlistStep({
-        account: {
-          emailVerified: true,
-          appAccessStatus: 'approved',
-        },
-      }),
-    ).toBe('done')
-
-    expect(
-      resolveWaitlistStep({
-        account: {
-          emailVerified: true,
-          appAccessStatus: 'approved',
-        },
-      }),
-    ).toBe('done')
-  })
-
-  it('Track C2 — routes verified accounts to connect-base-app when flag enabled and embedded EOA exists', () => {
-    expect(
-      resolveWaitlistStep({
-        account: { emailVerified: true, appAccessStatus: null },
-        subAccountFlowEnabled: true,
-        embeddedEoaAvailable: true,
-        subAccountStepCompleted: false,
-      }),
-    ).toBe('connect-base-app')
-  })
-
-  it('Track C2 — does not route to connect-base-app when flag is off', () => {
-    expect(
-      resolveWaitlistStep({
-        account: { emailVerified: true, appAccessStatus: null },
-        subAccountFlowEnabled: false,
-        embeddedEoaAvailable: true,
-        subAccountStepCompleted: false,
-      }),
-    ).toBe('done')
-  })
-
-  it('Track C2 — does not route to connect-base-app when embedded EOA is missing', () => {
-    expect(
-      resolveWaitlistStep({
-        account: { emailVerified: true, appAccessStatus: null },
-        subAccountFlowEnabled: true,
-        embeddedEoaAvailable: false,
-        subAccountStepCompleted: false,
-      }),
-    ).toBe('done')
-  })
-
-  it('Track C2 — once the connect-base-app step is completed, falls through to done', () => {
-    expect(
-      resolveWaitlistStep({
-        account: { emailVerified: true, appAccessStatus: 'approved' },
-        subAccountFlowEnabled: true,
-        embeddedEoaAvailable: true,
-        subAccountStepCompleted: true,
       }),
     ).toBe('done')
   })
 })
 
-describe('shouldAutoBootstrapWaitlistSession', () => {
-  it('bootstraps whenever an auth-step Privy session exists', () => {
+describe('resolveWaitlistAccordionOpenStep', () => {
+  it('opens step 2 for Base App connect focus even before step 1 completes', () => {
     expect(
-      shouldAutoBootstrapWaitlistSession({
-        step: 'auth',
-        privyAuthed: true,
-        recoveryRequired: false,
+      resolveWaitlistAccordionOpenStep({
+        manualOpenStep: null,
+        ownerInstallRequested: false,
+        stepOneComplete: false,
+        focusBaseAppConnect: true,
+      }),
+    ).toBe(2)
+  })
+
+  it('respects manual step selection', () => {
+    expect(
+      resolveWaitlistAccordionOpenStep({
+        manualOpenStep: 1,
+        ownerInstallRequested: false,
+        stepOneComplete: true,
+        focusBaseAppConnect: true,
+      }),
+    ).toBe(1)
+  })
+
+  it('prefers Base App connect focus over owner-install deep links', () => {
+    expect(
+      resolveWaitlistAccordionOpenStep({
+        manualOpenStep: null,
+        ownerInstallRequested: true,
+        stepOneComplete: false,
+        focusBaseAppConnect: true,
+      }),
+    ).toBe(2)
+  })
+})
+
+describe('shouldFocusWaitlistBaseAppConnect', () => {
+  const account = {
+    emailVerified: true,
+    accountSignals: {
+      executionTrack: 'none-yet' as const,
+      canonicalCswAddress: '0x1234567890123456789012345678901234567890',
+    },
+  }
+
+  it('focuses Base App connect in-app when the panel is ready', () => {
+    expect(
+      shouldFocusWaitlistBaseAppConnect({
+        inBaseApp: true,
+        showBaseAppConnectPanel: true,
+        signingStepComplete: false,
+        setupIntent: null,
+        subAccountFlowEnabled: true,
+        account,
       }),
     ).toBe(true)
+  })
 
+  it('does not focus after signing is complete', () => {
     expect(
-      shouldAutoBootstrapWaitlistSession({
-        step: 'auth',
-        privyAuthed: true,
-        recoveryRequired: true,
-      }),
-    ).toBe(false)
-
-    expect(
-      shouldAutoBootstrapWaitlistSession({
-        step: 'auth',
-        privyAuthed: true,
-        recoveryRequired: false,
-      }),
-    ).toBe(true)
-
-    expect(
-      shouldAutoBootstrapWaitlistSession({
-        step: 'done',
-        privyAuthed: true,
-        recoveryRequired: false,
+      shouldFocusWaitlistBaseAppConnect({
+        inBaseApp: true,
+        showBaseAppConnectPanel: true,
+        signingStepComplete: true,
+        setupIntent: null,
+        subAccountFlowEnabled: true,
+        account,
       }),
     ).toBe(false)
   })
@@ -190,6 +143,179 @@ describe('mergeCanonicalWaitlistAccount', () => {
     )
 
     expect(merged.accountSignals.canonicalCswAddress).toBe('0x1111111111111111111111111111111111111111')
+  })
+})
+
+describe('isWaitlistStepTwoSigningComplete', () => {
+  it('completes only when embedded EOA is on-chain parent CSW owner', () => {
+    expect(
+      isWaitlistStepTwoSigningComplete({
+        ownerInstallRequested: true,
+        accountSignals: {
+          executionTrack: 'none-yet',
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+        },
+        parentEmbeddedOwnerOnChain: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('does not complete from server owner flag without on-chain confirmation', () => {
+    expect(
+      isWaitlistStepTwoSigningComplete({
+        ownerInstallRequested: true,
+        accountSignals: {
+          executionTrack: 'none-yet',
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+        },
+        parentEmbeddedOwnerOnChain: false,
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('shouldShowBaseAppConnectPanel', () => {
+  const canonicalSignals = {
+    executionTrack: 'none-yet' as const,
+    canonicalCswAddress: '0x1234567890123456789012345678901234567890',
+    privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+  }
+
+  it('shows Base App connect when sub-account flow is enabled and signing is incomplete', () => {
+    expect(
+      shouldShowBaseAppConnectPanel({
+        subAccountFlowEnabled: true,
+        signingStepComplete: false,
+        embeddedEoaAvailable: true,
+        accountSignals: canonicalSignals,
+      }),
+    ).toBe(true)
+  })
+
+  it('hides Base App connect for Zora users with an on-chain EOA owner path', () => {
+    expect(
+      shouldShowBaseAppConnectPanel({
+        subAccountFlowEnabled: true,
+        signingStepComplete: false,
+        embeddedEoaAvailable: true,
+        zoraLinked: true,
+        onchainEoaOwnerCount: 1,
+        accountSignals: canonicalSignals,
+      }),
+    ).toBe(false)
+  })
+
+  it('hides Base App connect when embedded EOA is parent CSW owner on-chain', () => {
+    expect(
+      shouldShowBaseAppConnectPanel({
+        subAccountFlowEnabled: true,
+        signingStepComplete: false,
+        embeddedEoaAvailable: true,
+        parentEmbeddedOwnerOnChain: true,
+        accountSignals: {
+          ...canonicalSignals,
+          executionTrack: 'sub-account',
+          baseSubAccount: {
+            address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            registered: true,
+            isDistinctFromCsw: true,
+          },
+        },
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('shouldShowParentCswAddOwnerPanel', () => {
+  it('shows the Zora EOA-owner panel when signing is incomplete and EOA owners exist', () => {
+    expect(
+      shouldShowParentCswAddOwnerPanel({
+        zoraLinked: true,
+        ownerInstallRequested: false,
+        signingStepComplete: false,
+        executionTrack: 'none-yet',
+        accountSignals: {
+          executionTrack: 'none-yet',
+          canonicalCswAddress: '0x1234567890123456789012345678901234567890',
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+        },
+        parentEmbeddedOwnerOnChain: false,
+        onchainEoaOwnerCount: 1,
+      }),
+    ).toBe(true)
+  })
+
+  it('hides the panel for passkey-only Zora CSWs without EOA owners', () => {
+    expect(
+      shouldShowParentCswAddOwnerPanel({
+        zoraLinked: true,
+        ownerInstallRequested: false,
+        signingStepComplete: false,
+        executionTrack: 'none-yet',
+        accountSignals: {
+          executionTrack: 'none-yet',
+          canonicalCswAddress: '0x1234567890123456789012345678901234567890',
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+        },
+        parentEmbeddedOwnerOnChain: false,
+        onchainEoaOwnerCount: 0,
+      }),
+    ).toBe(false)
+  })
+
+  it('hides the panel when signing is already complete on-chain', () => {
+    expect(
+      shouldShowParentCswAddOwnerPanel({
+        zoraLinked: true,
+        ownerInstallRequested: true,
+        signingStepComplete: true,
+        executionTrack: 'legacy-owner-install',
+        accountSignals: {
+          executionTrack: 'legacy-owner-install',
+          canonicalCswAddress: '0x1234567890123456789012345678901234567890',
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+        },
+        parentEmbeddedOwnerOnChain: true,
+        onchainEoaOwnerCount: 1,
+      }),
+    ).toBe(false)
+  })
+
+  it('allows owner-install resume without Zora link when EOA owners exist', () => {
+    expect(
+      shouldShowParentCswAddOwnerPanel({
+        zoraLinked: false,
+        ownerInstallRequested: true,
+        signingStepComplete: false,
+        executionTrack: 'none-yet',
+        accountSignals: {
+          executionTrack: 'none-yet',
+          canonicalCswAddress: '0x1234567890123456789012345678901234567890',
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+        },
+        parentEmbeddedOwnerOnChain: false,
+        onchainEoaOwnerCount: 1,
+      }),
+    ).toBe(true)
+  })
+})
+
+describe('shouldForceBaseAppConnectStep', () => {
+  it('does not force base-app setup for population c accounts', () => {
+    expect(
+      shouldForceBaseAppConnectStep({
+        setupIntent: 'base-app',
+        subAccountFlowEnabled: true,
+        parentEmbeddedOwnerOnChain: true,
+        account: {
+          emailVerified: true,
+          accountSignals: {
+            executionTrack: 'sub-account',
+            canonicalCswAddress: '0x1234567890123456789012345678901234567890',
+          },
+        },
+      }),
+    ).toBe(false)
   })
 })
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/onboarding/waitlistSchema
+[4626-web](../../../index.md) / server/\_lib/onboarding/waitlistSchema
 
 # server/\_lib/onboarding/waitlistSchema
 
@@ -12,7 +12,7 @@
 
 > **ensureWaitlistSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/onboarding/waitlistSchema.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistSchema.ts#L10)
+Defined in: [server/\_lib/onboarding/waitlistSchema.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistSchema.ts#L29)
 
 #### Parameters
 

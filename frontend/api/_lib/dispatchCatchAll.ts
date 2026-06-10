@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { enforceCookieSessionTrustedOrigin, setNoStore } from '../../packages/server-core/src/auth.js'
+import { enforceCookieSessionTrustedOrigin, setNoStore } from '@4626/server-core/auth'
 
 type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
 const MAX_API_SUBPATH_LENGTH = 256

@@ -41,6 +41,29 @@ function addressFromPrivateKey(rawKey: string | undefined): Address | null {
   }
 }
 
+const PAYOUT_ROUTER_KEEPER_PRIVATE_KEY_ENVS = [
+  'KPR_PRIVATE_KEY',
+  '4626_KEEPER_AUTOMATION_PRIVATE_KEY',
+  'PROTOCOL_TREASURY_SAFE_OWNER_PK',
+  'PRIVATE_KEY',
+] as const
+
+export function resolvePayoutRouterKeeperPrivateKey(
+  env: Record<string, string | undefined> = process.env,
+): `0x${string}` | null {
+  const expectedKeeper = resolvePayoutRouterKeeperAddress()
+  for (const key of PAYOUT_ROUTER_KEEPER_PRIVATE_KEY_ENVS) {
+    const raw = String(env[key] ?? '').trim()
+    if (!/^0x[0-9a-fA-F]{64}$/.test(raw)) continue
+    const derived = addressFromPrivateKey(raw)
+    if (!expectedKeeper) return raw as `0x${string}`
+    if (derived && derived.toLowerCase() === expectedKeeper.toLowerCase()) {
+      return raw as `0x${string}`
+    }
+  }
+  return null
+}
+
 function parseAddressListFromEnv(keys: string[]): Address[] {
   const out: Address[] = []
   const seen = new Set<string>()
@@ -92,17 +115,21 @@ export function resolvePayoutRouterZoraToken(fallback?: Address | null): Address
 export function resolvePayoutRouterKeeperAddress(): Address | null {
   const explicit =
     normalizeAddress(process.env.PAYOUT_ROUTER_KEEPER) ??
-    normalizeAddress(process.env.CRE_KEEPER_ADDRESS) ??
-    normalizeAddress(process.env.KEEPR_ADDRESS)
+    normalizeAddress(process.env.KPR_KEEPER_ADDRESS) ??
+    normalizeAddress(process.env.KPR_ADDRESS) ??
+    null
   if (explicit) return explicit
 
-  const erc4337Enabled = String(process.env.CRE_ERC4337_ENABLED ?? '').trim().toLowerCase() === 'true'
+  const erc4337EnabledRaw = process.env.KPR_ERC4337_ENABLED
+  const erc4337Enabled = String(erc4337EnabledRaw ?? '').trim().toLowerCase() === 'true'
   if (erc4337Enabled) {
-    const smartWallet = normalizeAddress(process.env.CRE_ERC4337_SMART_WALLET)
+    const smartWallet = normalizeAddress(
+      process.env.KPR_ERC4337_SMART_WALLET,
+    )
     if (smartWallet) return smartWallet
   }
 
-  return addressFromPrivateKey(process.env.KEEPR_PRIVATE_KEY)
+  return addressFromPrivateKey(process.env.KPR_PRIVATE_KEY)
 }
 
 export function resolvePayoutRouterExternalSwapApprovals(): PayoutRouterExternalSwapApprovals {

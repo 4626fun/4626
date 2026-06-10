@@ -1,4 +1,4 @@
-import type { OwnerAuthorityState, ProviderRow, ZoraResolveResponse } from './types'
+import type { OwnerAuthorityState, ProviderRow, ZoraResolveResponse, ConnectedOwnerState } from './types'
 
 export const PROVIDER_ROWS: ProviderRow[] = [
   { provider: 'email', label: 'Email', hint: 'Notification channel' },
@@ -9,12 +9,6 @@ export const PROVIDER_ROWS: ProviderRow[] = [
   { provider: 'tiktok', label: 'TikTok', hint: 'Creator social signal' },
   { provider: 'external_eoa', label: 'Wallet connect (EOA)', hint: 'External signer wallet' },
 ]
-
-export function normalizeAddress(value: string): string | null {
-  const raw = value.trim()
-  if (!/^0x[a-fA-F0-9]{40}$/.test(raw)) return null
-  return raw.toLowerCase()
-}
 
 export function shortValue(value: string | null | undefined): string {
   if (!value) return '—'
@@ -42,7 +36,7 @@ export function deriveOwnerAuthorityState(input: {
   canonicalCswAddress: string | null
   connectedAddress: string | null | undefined
   connectedCanonicalWalletSelected: boolean
-  connectedOwnerState: { value: boolean | null; reason: 'idle' | 'ok' | 'network_mismatch' | 'missing_params' | 'read_failed' }
+  connectedOwnerState: ConnectedOwnerState
 }): OwnerAuthorityState {
   if (!input.canonicalCswAddress) {
     return {
@@ -57,10 +51,11 @@ export function deriveOwnerAuthorityState(input: {
   if (input.connectedCanonicalWalletSelected) {
     return {
       phase: 'canonical_wallet',
-      label: 'Canonical wallet',
-      hint: `Same wallet detected: ${shortValue(input.connectedAddress)}`,
-      detail: 'This is the same Coinbase Smart Wallet detected from Zora/Base. 4626 will approve embedded signing on this canonical smart wallet.',
-      badgeClass: 'border border-brand-primary/30 bg-brand-primary/10 text-brand-200',
+      label: 'CSW connected',
+      hint: `Connected as ${shortValue(input.connectedAddress)} — not an owner key`,
+      detail:
+        'This is your smart wallet address, not an owner wallet. Connect one of the listed EOA owners below to approve the one-time signing install.',
+      badgeClass: 'border border-amber-400/20 bg-amber-500/10 text-amber-200',
     }
   }
 

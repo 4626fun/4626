@@ -4,10 +4,18 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 import { ExploreCreators } from './ExploreCreators'
 
-const { useQueryMock, useInfiniteQueryMock, useQueriesMock } = vi.hoisted(() => ({
-  useQueryMock: vi.fn(),
+const { useInfiniteQueryMock, useQueriesMock, useQueryMock, searchParamsMock } = vi.hoisted(() => ({
   useInfiniteQueryMock: vi.fn(),
   useQueriesMock: vi.fn(),
+  useQueryMock: vi.fn(),
+  searchParamsMock: { value: new URLSearchParams() },
+}))
+
+vi.mock('@/features/explore/useExploreCreatorsHeroMetrics', () => ({
+  useExploreCreatorsHeroMetrics: () => ({
+    syncStatus: 'running',
+    creatorsTotalCount: 1507,
+  }),
 }))
 
 vi.mock('framer-motion', () => ({
@@ -29,8 +37,8 @@ vi.mock('framer-motion', () => ({
 }))
 
 vi.mock('react-router-dom', () => ({
-  useSearchParams: () => [new URLSearchParams(), vi.fn()],
-  useLocation: () => ({ pathname: '/', search: '', hash: '', state: null }),
+  useSearchParams: () => [searchParamsMock.value, vi.fn()],
+  useLocation: () => ({ pathname: '/explore/creators', search: searchParamsMock.value.toString(), hash: '', state: null }),
 }))
 
 vi.mock('@tanstack/react-query', () => ({
@@ -54,10 +62,15 @@ vi.mock('@/components/explore/TokenRow', () => ({
   TokenRowSkeleton: () => React.createElement('div', null, 'skeleton'),
 }))
 
-vi.mock('@/components/explore/tableColumns', () => ({
-  getExploreColumns: () => [],
-  getHorizontalScrollStops: () => [0],
-}))
+vi.mock('@/components/explore/tableColumns', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/components/explore/tableColumns')>()
+  return {
+    ...actual,
+    getExploreColumns: () => [],
+    getHorizontalScrollStops: () => [0],
+    EXPLORE_COLLAPSED_IDENTITY_WIDTH_PX: actual.EXPLORE_COLLAPSED_IDENTITY_WIDTH_PX ?? 280,
+  }
+})
 
 vi.mock('@/hooks/useMigratedCoins', () => ({
   useMigratedCoins: () => ({ migratedCoins: new Set<string>() }),
@@ -75,87 +88,41 @@ const BASE_COIN = {
 }
 
 function configureQueries(params?: {
-  metrics?: {
-    exact: boolean
-    creatorsTotal: number
-    creatorsNew24h: number
-    marketCap: number
-    volume24h: number
-    fees24h: number
-  }
-  liveEdges?: any[]
   pageEdges?: any[]
+  isFetching?: boolean
+  isFetchingNextPage?: boolean
+  hasNextPage?: boolean
+  searchQuery?: string
 }) {
-  const metrics = params?.metrics ?? {
-    exact: false,
-    creatorsTotal: 1507,
-    creatorsNew24h: 12,
-    marketCap: 6260000,
-    volume24h: 5720,
-    fees24h: 57.17,
-  }
-  const liveEdges = params?.liveEdges ?? []
   const pageEdges = params?.pageEdges ?? []
+  searchParamsMock.value = params?.searchQuery
+    ? new URLSearchParams({ q: params.searchQuery })
+    : new URLSearchParams()
 
   useInfiniteQueryMock.mockReturnValue({
     data: {
       pages: [
         {
           edges: pageEdges,
-          pageInfo: { hasNextPage: false, endCursor: null },
+          pageInfo: { hasNextPage: params?.hasNextPage ?? false, endCursor: null },
         },
       ],
     },
     fetchNextPage: vi.fn(),
-    hasNextPage: false,
-    isFetchingNextPage: false,
+    hasNextPage: params?.hasNextPage ?? false,
+    isFetchingNextPage: params?.isFetchingNextPage ?? false,
+    isFetching: params?.isFetching ?? false,
     isLoading: false,
     isError: false,
     error: null,
   })
 
-  useQueryMock.mockImplementation((opts: any) => {
-    const queryKey = Array.isArray(opts?.queryKey) ? opts.queryKey : []
-    const queryType = String(queryKey[2] ?? '')
-
-    if (queryType === 'metrics') {
-      return {
-        data: {
-          exact: metrics.exact,
-          syncStatus: 'running',
-          updatedAt: '2025-01-01T00:00:00.000Z',
-          sync: {
-            lastFullSyncAt: null,
-            driftEstimateTotal: null,
-          },
-          totals: {
-            creatorsTotal: metrics.creatorsTotal,
-            creatorsNew24h: metrics.creatorsNew24h,
-            creatorCoinsMarketCapUsd: metrics.marketCap,
-            creatorCoinsVolume24hUsd: metrics.volume24h,
-            creatorCoinsFees24hUsd: metrics.fees24h,
-            partial: !metrics.exact,
-            sampledCreators: 100,
-          },
-        },
-      }
-    }
-
-    if (queryType === 'live') {
-      return {
-        data: {
-          edges: liveEdges,
-          pageInfo: { hasNextPage: false, endCursor: null },
-        },
-      }
-    }
-
-    return {
-      data: [],
-      isLoading: false,
-      isFetching: false,
-    }
+  useQueryMock.mockReturnValue({
+    data: [],
+    isLoading: false,
+    isFetching: false,
   })
+
   useQueriesMock.mockImplementation((opts: any) => {
     const queries = Array.isArray(opts?.queries) ? opts.queries : []
     return queries.map(() => ({
@@ -169,37 +136,35 @@ function configureQueries(params?: {
 }
 
 describe('ExploreCreators', () => {
-  it('uses partial-sync copy and includes live estimate status', () => {
+  it('shows syncing empty state when indexed totals exist but rows are empty', () => {
     configureQueries()
     const html = renderToStaticMarkup(React.createElement(ExploreCreators))
 
-    expect(html).toContain('Indexed creators')
-    expect(html).toContain('1,507')
     expect(html).toContain('Creator list is still syncing')
-    expect(html).toContain('Live estimate updates every 10s')
     expect(html).not.toContain('No creators available')
   })
 
-  it('prefers live metric cards when canonical totals are partial', () => {
+  it('renders loaded creator rows', () => {
     configureQueries({
-      metrics: {
-        exact: false,
-        creatorsTotal: 2000,
-        creatorsNew24h: 25,
-        marketCap: 100,
-        volume24h: 200,
-        fees24h: 2,
-      },
-      liveEdges: [{ node: BASE_COIN }],
       pageEdges: [{ node: BASE_COIN }],
     })
 
     const html = renderToStaticMarkup(React.createElement(ExploreCreators))
 
-    expect(html).toContain('Live estimate updates every 10s')
-    expect(html).toContain('Indexed 1 creators')
-    expect(html).toContain('$5.73K')
-    expect(html).toContain('$57.30')
-    expect(html).not.toContain('$100.00')
+    expect(html).toContain('token-row')
+    expect(html).toContain('Showing 1 creators')
+  })
+
+  it('does not stack loading overlay on empty search results while list refetches', () => {
+    configureQueries({
+      isFetching: true,
+      searchQuery: 'zzzznotfound',
+    })
+
+    const html = renderToStaticMarkup(React.createElement(ExploreCreators))
+
+    expect(html).toContain('No creators found matching your search')
+    expect(html).not.toContain('Loading creators')
+    expect(html).not.toContain('aria-busy="true"')
   })
 })

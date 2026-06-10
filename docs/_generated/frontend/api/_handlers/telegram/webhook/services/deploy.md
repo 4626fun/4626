@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / api/\_handlers/telegram/webhook/services/deploy
+[4626-web](../../../../../index.md) / api/\_handlers/telegram/webhook/services/deploy
 
 # api/\_handlers/telegram/webhook/services/deploy
 

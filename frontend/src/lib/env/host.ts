@@ -251,3 +251,14 @@ export function getWaitlistReferralBaseUrl(): string {
   if (!override) return getMarketingBaseUrl()
   return override
 }
+
+/**
+ * Base Account sub-accounts are scoped to the marketing app domain
+ * (`4626.fun`), not the app subdomain. Use this origin for
+ * `wallet_getSubAccounts` / provisioning on both hosts.
+ */
+export function getSubAccountAppDomain(): string {
+  if (typeof window === 'undefined') return MARKETING_ORIGIN
+  if (isLoopbackHostname(window.location.hostname)) return window.location.origin
+  return MARKETING_ORIGIN
+}

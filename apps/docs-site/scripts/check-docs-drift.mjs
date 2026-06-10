@@ -34,7 +34,7 @@ const docsSensitivePrefixes = [
   'script/agent-runtime/skills/',
   'apps/docs-site/',
   '.github/workflows/',
-  'cre/',
+  'kpr/',
   'src/',
   'contracts/',
   // Root-level docs pipeline / guard scripts. Changes here must rerun the
@@ -56,7 +56,7 @@ const manualDocsPrefixes = [
   'deployments/',
   'script/agent-runtime/skills/',
   'frontend/docs/',
-  'cre/',
+  'kpr/',
 ];
 
 const manualDocsExactMatches = new Set([

@@ -148,7 +148,7 @@ Concrete next step for whoever picks this up: extract the JSON artifact (`gh run
 
 ## 3. Gitleaks (full history)
 
-**Status after this PR:** 26 → 25. The `cre/secrets.example.env` family is now allowlisted (this PR's `gitleaks.toml` change). 25 historical findings remain — most in files that no longer exist on `main`, but several look like real keys committed in early commits and need rotation, not just allowlisting.
+**Status after this PR:** 26 → 25. The `kpr/secrets.example.env` family is now allowlisted (this PR's `gitleaks.toml` change). 25 historical findings remain — most in files that no longer exist on `main`, but several look like real keys committed in early commits and need rotation, not just allowlisting.
 
 ### Remaining inventory (full-history walk)
 
@@ -172,7 +172,7 @@ All of these except the bAlanciaga set are deleted on current `main` but still i
 | File | RuleID | What it really is |
 |---|---|---|
 | `docs/llms/developers-ethos-network.md` | `generic-api-key` | Firebase Storage URL token in an `<img>` tag |
-| `circuits/amoe/ceremony/v2/ceremony_transcript_v2.txt` ×4 | `generic-api-key` | zkey SHA-256 hashes (these are *intended* to be public) |
+| `amoe/circuits/ceremony/v2/ceremony_transcript_v2.txt` ×4 | `generic-api-key` | zkey SHA-256 hashes (these are *intended* to be public) |
 | `docs/_internal/audits/internal-monorepo-audit-2026-03-30.md` | `generic-api-key` | Matched on the literal text "REDACTED gates" — false positive on prose |
 | `docs/LAYERZERO_SOLANA_SETUP.md` | `generic-api-key` | SPL token mint address (public, not a secret) |
 
@@ -180,7 +180,7 @@ All five still exist on `main` and should be allowlisted by path or stopword.
 
 ### What this PR does
 
-Adds path-allowlist entries to `gitleaks.toml` for the `cre/secrets.example.env` family — both global `[allowlist]` and rule-scoped `generic-api-key` paths, plus a broader `[A-Za-z0-9_-]+\.example\.env$` pattern so any future `*.example.env` file is automatically covered. This drops the count from 26 → 25 and is verifiable via the artifact attached to the failed run.
+Adds path-allowlist entries to `gitleaks.toml` for the `kpr/secrets.example.env` family — both global `[allowlist]` and rule-scoped `generic-api-key` paths, plus a broader `[A-Za-z0-9_-]+\.example\.env$` pattern so any future `*.example.env` file is automatically covered. This drops the count from 26 → 25 and is verifiable via the artifact attached to the failed run.
 
 ### What it does NOT do (follow-up work)
 
@@ -192,7 +192,7 @@ Once (1) and (2) are done, gitleaks-full-history can become a hard CI gate.
 
 ### Original incorrect summary
 
-A prior version of this doc said "26 findings, all in `cre/secrets.example.env`." That was a misread — `cre/secrets.example.env` was the largest single family but not the only one. Corrected above with the full breakdown from the failed `Gitleaks (full history)` run on PR #476.
+A prior version of this doc said "26 findings, all in `kpr/secrets.example.env`." That was a misread — `kpr/secrets.example.env` was the largest single family but not the only one. Corrected above with the full breakdown from the failed `Gitleaks (full history)` run on PR #476.
 
 ---
 
@@ -206,7 +206,7 @@ Failure cause: `lib/liquidity-launcher` submodule appears "dirty" because the su
 
 ### Sprint A — quick wins (~½ day)
 - Fix Forge buckets A / F / G / I.1 (≤2h total)
-- Allowlist `cre/secrets.example.env` in `gitleaks.toml` ← **done in this PR**
+- Allowlist `kpr/secrets.example.env` in `gitleaks.toml` ← **done in this PR**
 - Allowlist gitleaks false-positive family B (docs/circuits) — follow-up PR
 - Fix Forge bucket B / I.2 (oracle / reentry harness)
 

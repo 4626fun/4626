@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / server/zora/trendFunnel
+[4626-web](../../index.md) / server/zora/trendFunnel
 
 # server/zora/trendFunnel
 

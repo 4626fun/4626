@@ -35,9 +35,19 @@ export {
   requireOptionalHeaderEnvAuth,
 } from './machine-auth.js'
 export { createCorrelationId, logger } from './observability.js'
-export { ensureCreatorAccessSchema, getDb, getDbInitError, isDbConfigured } from './db.js'
+export {
+  ensureCreatorAccessSchema,
+  getDb,
+  getDbForCron,
+  getDbInitError,
+  isDbConfigured,
+  isPostgresPoolSaturatedError,
+  runInTransaction,
+} from './db.js'
+export type { DbPool } from './db.js'
 export { RATE_LIMITS, checkRateLimit, checkDurableRateLimit, getClientIp, rateLimitKey, type DurableRateLimitResult } from './rate-limit.js'
 export { readRequestPrincipal, readRequestPrincipalAddress, resolveAuthorizedRequestPrincipal } from './principal.js'
 export { getSessionAddress, isAdminAddress, isAdminEmail } from './session.js'
 export * from './messaging.js'
 export * from './wallet.js'
+export * from './identity.js'

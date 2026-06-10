@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/features/executionScope/ExecutionScopeCard
+[4626-web](../../../index.md) / src/features/executionScope/ExecutionScopeCard
 
 # src/features/executionScope/ExecutionScopeCard
 
@@ -12,12 +12,12 @@
 
 > **ExecutionScopeCard**(): `Element` \| `null`
 
-Defined in: [src/features/executionScope/ExecutionScopeCard.tsx:28](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/ExecutionScopeCard.tsx#L28)
+Defined in: [src/features/executionScope/ExecutionScopeCard.tsx:29](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/ExecutionScopeCard.tsx#L29)
 
 `/accounts` "Execution scopes" card.
 
 Surfaces the Arch B sub-account that the 4626 backend uses to execute
-in-chat commands (`/coin buy`, `/coin sell`, `/keepr send`,
+XMTP chat commands (`/coin buy`, `/coin sell`, `/keepr send`,
 `/coin trend reserve`) on behalf of the creator. The sub-account is
 funded by the parent CSW via a signed SpendPermission with per-tx +
 per-period caps enforced by the SpendPermissionManager contract.

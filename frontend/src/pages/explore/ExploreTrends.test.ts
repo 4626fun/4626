@@ -80,7 +80,8 @@ describe('ExploreTrends', () => {
     })
 
     const html = renderToStaticMarkup(React.createElement(ExploreTrends))
-    expect(html).toContain('Top Trends on Base')
+    expect(html).toContain('explore-trends-body')
+    expect(html).toContain('No trends available')
   })
 
   it('maps default sort to TOP_VOLUME_TRENDS_24H and requests that list', async () => {

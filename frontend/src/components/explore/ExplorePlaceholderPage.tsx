@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
 import { PageMeta } from '@/components/seo/PageMeta'
+import { Button } from '@/components/ui/Button'
 
 type ExplorePlaceholderAction = {
   to: string
@@ -25,11 +26,6 @@ type ExplorePlaceholderPageProps = {
     description: string
     canonicalPath?: string
   }
-}
-
-const ACTION_CLASS_BY_TONE: Record<'primary' | 'accent', string> = {
-  primary: 'btn-primary',
-  accent: 'btn-accent',
 }
 
 export function ExplorePlaceholderPage(props: ExplorePlaceholderPageProps) {
@@ -65,15 +61,16 @@ export function ExplorePlaceholderPage(props: ExplorePlaceholderPageProps) {
             <div className="mt-8 flex flex-col sm:flex-row gap-3">
               {props.actions.map((action) => {
                 const tone = action.tone ?? 'primary'
-                const toneClass = ACTION_CLASS_BY_TONE[tone]
                 return (
-                  <Link
+                  <Button
                     key={`${action.to}:${action.label}`}
-                    to={action.to}
-                    className={`${toneClass} btn-compact inline-flex items-center justify-center rounded-full text-xs`}
+                    variant={tone === 'accent' ? 'primary' : 'primary'}
+                    size="sm"
+                    className="btn-compact rounded-full text-xs"
+                    asChild
                   >
-                    {action.label}
-                  </Link>
+                    <Link to={action.to}>{action.label}</Link>
+                  </Button>
                 )
               })}
             </div>

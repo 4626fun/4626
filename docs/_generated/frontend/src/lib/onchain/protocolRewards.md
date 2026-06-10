@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/onchain/protocolRewards
+[4626-web](../../../index.md) / src/lib/onchain/protocolRewards
 
 # src/lib/onchain/protocolRewards
 
@@ -18,7 +18,7 @@ Defined in: [src/lib/onchain/protocolRewards.ts:46](https://github.com/wenakita/
 
 ##### account
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
@@ -36,7 +36,7 @@ Defined in: [src/lib/onchain/protocolRewards.ts:56](https://github.com/wenakita/
 
 ##### accounts
 
-`` `0x${string}` ``[]
+`string`[]
 
 #### Returns
 
@@ -54,7 +54,7 @@ Defined in: [src/lib/onchain/protocolRewards.ts:73](https://github.com/wenakita/
 
 ##### accounts
 
-`` `0x${string}` ``[]
+`string`[]
 
 #### Returns
 
@@ -72,7 +72,7 @@ Defined in: [src/lib/onchain/protocolRewards.ts:108](https://github.com/wenakita
 
 ##### accounts
 
-`` `0x${string}` ``[]
+`string`[]
 
 #### Returns
 

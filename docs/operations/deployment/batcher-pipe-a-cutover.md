@@ -1,0 +1,197 @@
+# Batcher Pipe A cutover (payable finalize + ShareOFT auto-bridge)
+
+Operator runbook for greenfield vault deploys that auto-bridge **30% of ShareOFT** to Solana during `finalizePhase2` (Pipe A). Policy: [solana-share-mesh-lottery-policy.md](../solana-share-mesh-lottery-policy.md). Budget paths: [solana-share-mesh-budget-paths.md](../solana-share-mesh-budget-paths.md).
+
+## What “ready” means
+
+Pipe A finalize requires the **live** `DeploymentBatcher` bytecode to include:
+
+- `payable finalizePhase2` / `finalizePhase2WithPermit2`
+- Phase 2 split **30/30/30/10** with LZ `send{value}` on the 30% Solana allocation
+- `solanaShareOftPeer()` storage + `setSolanaShareOftPeer(bytes32)`
+- OVault runtime enabled with Solana EID `30168`
+- Non-zero `solanaBridgeAdapter` + `solanaDestination`
+- Phase-1 `*WithSalt` path accepts non-zero `shareOftSaltOverride` (for independent ShareOFT vanity mining)
+
+Registry peer OR batcher default peer must resolve before finalize; the module seeds registry from `batcher.solanaShareOftPeer()` when registry peer is unset.
+
+## Readiness gate (no mutations)
+
+```bash
+pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
+  --batcher 0xa99058f424FB3ACC639F59355C65C40149030651
+```
+
+Exit `0` = ready. Exit `2` = blocked (typical failure: `solana_share_oft_peer_selector` on pre-Pipe-A batcher).
+
+The readiness output now includes:
+
+- `phase1_salt_override_enabled` — PASS means `deployPhase1CoreWithSalt` accepts non-zero overrides (non-salt reverts are expected on probe).
+
+## Cutover paths
+
+### A. Full batcher epoch (preferred for greenfield)
+
+1. Bump `DEPLOYMENT_EPOCH_TAG` and run `script/DeployBaseMainnetDeployer.s.sol` with fresh CREATE2 salts.
+2. Set env on broadcast (treasury signer):
+   - `CONFIGURE_SOLANA=1` + `SOLANA_BRIDGE_ADAPTER` + `SOLANA_DESTINATION`
+   - `CONFIGURE_OVAULT_RUNTIME=1` + `OVAULT_HUB_COMPOSER` + `OVAULT_SOLANA_EID=30168`
+   - `CONFIGURE_SOLANA_SHARE_OFT_PEER=1` + `SOLANA_SHARE_OFT_PEER=0x<mesh-peer>`
+3. Authorize new batcher on `UniversalCreate2DeployerFromStore` (script does this inline).
+4. Update `SPLIT_PHASE1_DEPLOYMENT_BATCHER` in `frontend/src/config/contracts.defaults.ts` + Vercel `CREATOR_VAULT_BATCHER*`.
+5. Redeploy production (`vercel deploy --prod --archive=tgz`).
+6. Re-run readiness gate + `bash test/current-release-target-guard.sh`.
+
+### B. Phase 2 module hot-swap (same batcher address)
+
+When batcher outer shell already has `setSolanaShareOftPeer` but Phase 2 module bytecode is stale:
+
+```bash
+forge script script/UpgradeDeploymentBatcherPhase2Module.s.sol:UpgradeDeploymentBatcherPhase2Module \
+  --rpc-url "$BASE_RPC_URL" --broadcast
+```
+
+Requires `PRIVATE_KEY` = `protocolTreasury()`.
+
+### C. Safe config only (existing Pipe-A batcher)
+
+Dry-run then propose:
+
+```bash
+pnpm -C frontend exec tsx scripts/ops/propose-batcher-solana-config-safe.ts \
+  --batcher 0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8 \
+  --include-share-oft-peer \
+  --share-oft-peer 0x<mesh-peer>
+
+pnpm -C frontend exec tsx scripts/ops/propose-batcher-solana-config-safe.ts --propose ...
+pnpm -C frontend exec tsx scripts/ops/execute-pending-safe-txs.ts <safeTxHash>
+```
+
+Or Foundry treasury broadcast:
+
+```bash
+CONFIGURE_SOLANA_SHARE_OFT_PEER=1 SOLANA_SHARE_OFT_PEER=0x<mesh-peer> \
+  forge script script/ConfigureDeploymentBatcherSolana.s.sol:ConfigureDeploymentBatcherSolana \
+  --rpc-url "$BASE_RPC_URL" --broadcast
+```
+
+## Default mesh peer
+
+`SOLANA_SHARE_OFT_PEER` is the platform fallback when per-creator registry peer is unset at finalize. Coordinate with OVault mesh provisioning — it must match the Solana share-mesh OFT peer for EID `30168`, not bridge-wrapped creator SPL mints.
+
+## Post-cutover verification
+
+| Check | Command |
+|-------|---------|
+| Readiness script | `verify-batcher-pipe-a-readiness.ts` → exit 0 |
+| Salt override support | `phase1_salt_override_enabled` must be `ok: true` |
+| OVault runtime | `cast call $BATCHER "getOVaultRuntimeConfig()(address,uint32,bool)"` |
+| Default peer | `cast call $BATCHER "solanaShareOftPeer()(bytes32)"` |
+| Deploy UI | `/deploy/vault` → Pipe A wiring panel shows peer + quoted LZ fee |
+| Dry-run | `pnpm -C frontend run dev:deploy-dry-run` → phase2 finalize passes |
+
+## Known live state
+
+### Pre-cutover (deprecated)
+
+Batcher `0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8` (v1.11.1) had OVault runtime + Solana adapter/destination configured, but **`solanaShareOftPeer()` reverts** on pre–Pipe-A bytecode. Do not use for greenfield deploys.
+
+### v1.11.2-pipe-a epoch (2026-05-26)
+
+CREATE2 infra + helpers + batcher shell deployed at epoch `v1.11.2-pipe-a`:
+
+| Contract | Address |
+|----------|---------|
+| UniversalBytecodeStoreV2 | `0x8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4` |
+| UniversalCreate2DeployerFromStore | `0x4760216AFd59B843671E0FdFCe6498Ec8CFf38a7` |
+| DeploymentBatcher (shell) | `0xa99058f424FB3ACC639F59355C65C40149030651` |
+| DeploymentBatcherPhase1Module | `0xf3b20557ef8173510693A13EF71F884DB835E8c0` |
+| DeploymentBatcherPhase2Module | `0x67FD8A34E5b26F875a9513DFf37521A1ca92d80f` |
+| DeploymentBatcherPhase3Helper | `0x3c89e20AbccE3d8F6344AFf6c63c82F5619EFFCB` |
+| DeploymentBatcherUniV4Helper | `0xF71a6236586077CD29C971443D2cce37B543DcBB` |
+| DeploymentBatcherUtilsHelper | `0xD71C4910C7bB38FB1089Cca42b0883F1BFFfa28D` |
+
+Safe queue on protocol treasury (`0x7d429e…`):
+
+| Nonce | Action | Status |
+|-------|--------|--------|
+| 76 | `setOVaultRuntimeConfig` on old batcher | Executed (no-op) |
+| 77 | `setSolanaShareOftPeer` on **old** batcher | **Cancel** — pre–Pipe-A bytecode |
+| 78 | `wireDeploymentHelpers` on **new** batcher | **Executed** — `0xdef6356c…328a7` (direct Safe exec, bypassed stale queue) |
+| 79 | `setPhase1Module` | **Executed** — `0x3717c916…0fd1a` |
+| 80 | `setSolanaConfig` | **Executed** — `0x5294eabc…5e53` |
+| 81 | `setOVaultRuntimeConfig` | **Executed** — `0xe572a78d…d7c6`; stale tx-service row **rejected** at nonce 81 (`0xfc1d6780…48ee`) |
+
+Clear stale Safe queue rows after direct on-chain exec:
+
+```bash
+pnpm -C frontend exec tsx scripts/ops/reject-stale-safe-transactions.ts --list
+pnpm -C frontend exec tsx scripts/ops/reject-stale-safe-transactions.ts --nonces 81
+```
+
+**Pipe A batcher readiness: PASS (2026-05-27).** Platform default share-mesh peer wired on batcher `0xa99058…`.
+
+| Item | Value |
+|------|--------|
+| Solana LZ OFT program | `6ste36Y7fcbzJXkVQj3ApEqYb3wFZsZX63gT6wymhy3s` |
+| OFT store (peer source) | `G3rfXFKvARH8emUVkiu6RrdSkXZQFGfsqKbF9P7EqXeN` |
+| Share mesh SPL mint | `5puVV8bQZp4YoEfGq4RitQFRVC3SJiHBSydFuFZUXHQv` |
+| `solanaShareOftPeer` bytes32 | `0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f` |
+| Safe `setSolanaShareOftPeer` tx | `0xe3c4687a1878202c796f571e4becc85fe0e1c06413c2ba8c6652ba0198610537` (block `46542482`) |
+
+Verify:
+
+```bash
+pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
+  --batcher 0xa99058f424FB3ACC639F59355C65C40149030651
+# exit 0
+```
+
+**LZ Base↔Solana wire (2026-05-27) — operator correction required**
+
+Solana share-mesh infra (oftStore `G3rfXFKv…`, mint `5puVV8…`, batcher `solanaShareOftPeer` bytes32) is live. **Do not treat legacy `wsAKITA` (`0x4df30fFf…`) as the Base mesh wire target** — it is the grandfathered vault ShareOFT (old bytecode, `totalSupply = 0`). A mistaken scaffold stub (`AkitaShareOFT.json` → that address) caused `lz:oapp:wire` to run ULN + `setPeer(30168)` against the legacy token. That peer set is **not** the intended Pipe A mesh leg.
+
+| Item | Status |
+|------|--------|
+| Solana oftStore + mint + batcher default peer bytes32 | ✅ Platform infra |
+| Solana ULN 6-of-9 on oftStore | ✅ (init-config + wire touched Solana side) |
+| Solana mint metadata `■AKITA` | ✅ |
+| Base wire target | ❌ **Wrong** — legacy `wsAKITA` `0x4df30…`; use a **new** Base mesh OFT (scaffold `MyOFT` at `0x60F44…` or fresh deploy with `■AKITA` naming), not grandfathered ShareOFT |
+| Legacy `wsAKITA` `peers(30168)` | ⚠️ Set by mistake — do not bridge from this token; greenfield finalize uses **new** `CreatorShareOFT` per vault |
+| Registry `getRemoteOFTPeerBytes32(AKITA, 30168)` | Zero until AKITA registered on registry |
+| `configureCreatorMesh` | Blocked — grandfathered wrapper lacks beneficiary-operator wiring |
+
+**Correct Base-side next step:** point `layerzero.config.ts` at scaffold `MyOFT` (`0x60F44d0C9ceF94064e15aFf241912091ee92239E` or redeploy with proper name/symbol), re-run `init-config` + `wire` for **that** contract only. Greenfield vaults get their own CREATE2 `CreatorShareOFT` at phase 1; finalize calls `setPeer(30168, batcherDefault)` on **that** address, not `0x4df30…`.
+
+**Still before first live greenfield finalize bridge:** explicit registry peer (per creator), composer mesh (wrapper upgrade), and correct Base mesh OFT wire. See [solana-share-mesh-creator-provisioning.md](../solana-share-mesh-creator-provisioning.md).
+
+Mainnet OFT scaffold (operator-local, not committed): `/tmp/4626-oft-mainnet`. Rebuild with `OFT_ID=6ste36Y7fcbzJXkVQj3ApEqYb3wFZsZX63gT6wymhy3s anchor build` before program upgrade. If Hardhat `setAuthority` CU simulation fails on public RPC, use `spl-token authorize` (documented in creator provisioning Step 1).
+
+When the Solana share-mesh peer bytes32 exists (done for platform default):
+
+Safe wiring dry-run:
+
+```bash
+pnpm -C frontend exec tsx scripts/ops/propose-batcher-solana-config-safe.ts \\
+  --batcher 0xa99058f424FB3ACC639F59355C65C40149030651 \\
+  --include-wire-helpers \\
+  --include-ovault-runtime \\
+  --ovault-hub-composer 0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1 \\
+  --ovault-solana-eid 30168
+```
+
+### Failed v1.11.2-pipe-a attempt (2026-05-26, initcode fix)
+
+First attempt predicted batcher `0x1C29A839386Bac0fD65B23ae9173D1623bFa9C24` — **no code** (EIP-3860 initcode limit). Infra salts from that attempt are superseded by the successful redeploy above; do not reuse failed batcher address.
+
+## Test gate (repo)
+
+Before cutover promotion or doc claims:
+
+```bash
+npx vitest run frontend/src/lib/deploy/finalizeShareBridgeFee.test.ts frontend/src/lib/deploy/shareBridgeOftWiring.test.ts
+forge test --match-path test/DeploymentBatcher.ShareOftPeerWiring.t.sol
+pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts
+```
+
+Vitest suites include **1000+ iteration** stress loops for fee attach + OFT wiring preflight.

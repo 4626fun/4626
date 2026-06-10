@@ -33,7 +33,36 @@ const {
   rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
   getDbMock: vi.fn(),
   getBytecodeMock: vi.fn(async (_args: { address: `0x${string}` }) => '0x'),
-  readContractMock: vi.fn(async () => ({ amount: 1n })),
+  readContractMock: vi.fn(async (args: any) => {
+    const fn = String(args?.functionName ?? '')
+    if (fn === 'owner') return '0x0000000000000000000000000000000000000f01'
+    if (fn === 'authorizedDeployers') return true
+    if (fn === 'pointers') return '0x0000000000000000000000000000000000000000'
+    if (fn === 'chunkCount') return 0n
+    if (fn === 'phase1SplitStates') {
+      return {
+        oftBootstrapRegistry: '0x0000000000000000000000000000000000000000',
+        vault: '0x0000000000000000000000000000000000000000',
+        wrapper: '0x0000000000000000000000000000000000000000',
+        shareOFT: '0x0000000000000000000000000000000000000000',
+        shareOftSalt: `0x${'0'.repeat(64)}`,
+        paramsHash: `0x${'0'.repeat(64)}`,
+        codeIdsHash: `0x${'0'.repeat(64)}`,
+        coreDone: false,
+        finalized: false,
+      }
+    }
+    if (fn === 'pendingAuctions') {
+      return {
+        shareOFT: '0x0000000000000000000000000000000000000000',
+        ccaStrategy: '0x0000000000000000000000000000000000000000',
+        amount: 0n,
+        lpReserveAmount: 0n,
+      }
+    }
+    if (fn === 'balanceOf') return 0n
+    return '0x0000000000000000000000000000000000000000'
+  }),
   callMock: vi.fn(async () => '0x'),
   requestMock: vi.fn(async () => null),
   sendTransactionMock: vi.fn(async () => `0x${'1'.repeat(64)}`),
@@ -50,7 +79,7 @@ const {
   })),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   handleOptions: vi.fn(() => false),
   readBoundedJsonObjectBody: readJsonBodyMock,
   setCors: vi.fn(),
@@ -116,6 +145,35 @@ vi.mock('../../server/_lib/wallet/canonicalWalletsSchema.js', () => ({
 
 vi.mock('../../server/_lib/deploy/erc7712Permissions.js', () => ({
   buildDeployPermissionGrant: vi.fn(() => ({ version: 'erc7712-v1' })),
+}))
+
+vi.mock('../../server/_lib/deploy/ensurePhase3DryRunForkPrep.js', () => ({
+  ensurePhase3DryRunForkPrep: vi.fn(async () => ({
+    helperEnsured: false,
+    create2Ensured: false,
+    auxiliaryEnsured: false,
+    auxiliaryCreate2Ensured: false,
+    batcher: '0x0000000000000000000000000000000000000011',
+    phase3Helper: '0x0000000000000000000000000000000000000012',
+    create2Deployer: '0x0000000000000000000000000000000000000013',
+    previousAuxiliaryBatcher: '0x0000000000000000000000000000000000000014',
+    auxiliaryBatcher: '0x0000000000000000000000000000000000000014',
+  })),
+}))
+
+vi.mock('../../server/_lib/deploy/ensurePhase3HelperCreate2Authorization.js', () => ({
+  assertPhase3HelperCreate2Authorization: vi.fn(async () => {}),
+}))
+
+vi.mock('../../src/lib/deploy/phase1ModuleDeploy.js', () => ({
+  resolveAlignedPhase1DeployDeps: vi.fn(async () => ({
+    ok: true,
+    create2Deployer: '0x0000000000000000000000000000000000000c21',
+    bytecodeStore: '0x0000000000000000000000000000000000000b17',
+  })),
+  resolveBytecodeStoreForBatcher: vi.fn(async () => '0x0000000000000000000000000000000000000b17'),
+  resolveCreate2DeployerForBatcher: vi.fn(async () => '0x0000000000000000000000000000000000000c21'),
+  resolveWiredCreatorOvaultModules: vi.fn(async () => null),
 }))
 
 vi.mock('../../server/_lib/onchain/solanaOvaultCompatibility.js', () => ({

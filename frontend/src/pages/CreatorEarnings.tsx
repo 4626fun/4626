@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import { formatEther, formatUnits, isAddress } from 'viem'
 import type { Address } from 'viem'
 
+import { Button } from '@/components/ui/Button'
 import { useZoraProfileCoins } from '@/lib/zora/hooks'
 import type { ZoraCoin, ZoraEarnings, ZoraProfile } from '@/lib/zora/types'
 import {
@@ -366,10 +367,9 @@ export function CreatorEarnings() {
           >
             <div className="space-y-3">
               <span className="label">Creator</span>
-              <h1 className="headline text-4xl sm:text-6xl">Creator earnings</h1>
+              <h1 className="headline text-4xl sm:text-6xl">Creator coin external earnings</h1>
               <p className="text-zinc-600 text-sm font-light max-w-2xl">
-                Lifetime creator earnings from Zora coin trades. Paid to the coin’s
-                <span className="font-mono"> payoutRecipient</span>.
+                Lifetime creator coin external earnings (the <span className="font-mono">creatorCoinPayoutRecipient</span> lane per the canonical reference). Paid to the coin’s payoutRecipient. See <a href="/docs/audits/creatorvault-business-logic-core-structure-audit" className="underline">canonical lanes doc</a>.
               </p>
             </div>
 
@@ -386,13 +386,15 @@ export function CreatorEarnings() {
                   placeholder={address ? String(address) : 'handle-or-0x...'}
                   className="flex-1 bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none focus:border-cyan-500/50 transition-colors font-mono"
                 />
-                <button
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="btn-compact px-6"
                   onClick={load}
-                  className="btn-primary btn-compact btn-no-icon px-6"
                   disabled={!input.trim()}
                 >
                   Load
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -627,7 +629,7 @@ export function CreatorEarnings() {
 
                             <div className="flex flex-col sm:items-end gap-2 shrink-0">
                               <div className="text-right">
-                                <div className="text-xs text-zinc-600">Creator earnings</div>
+                                <div className="text-xs text-zinc-600">Creator coin external earnings (creatorCoinPayoutRecipient lane)</div>
                                 <div className="text-sm font-mono text-zinc-200">{earningsText}</div>
                               </div>
                               <div className="flex items-center gap-3">

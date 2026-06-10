@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/image/\_vault-image-get
+[4626-web](../../../index.md) / api/\_handlers/image/\_vault-image-get
 
 # api/\_handlers/image/\_vault-image-get
 

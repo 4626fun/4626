@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / src/pages/GaugeVoting
+[4626-web](../../index.md) / src/pages/GaugeVoting
 
 # src/pages/GaugeVoting
 

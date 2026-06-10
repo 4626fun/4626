@@ -16,7 +16,7 @@ import { base } from 'viem/chains'
 import {
   makeSessionToken,
   getApiContracts,
-} from '../../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { deploymentBatcherNotConfiguredMessage } from '../../../../../server/_lib/onchain/deploymentBatcherConfigError.js'
 
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/telegram/webhook/types
+[4626-web](../../../../index.md) / api/\_handlers/telegram/webhook/types
 
 # api/\_handlers/telegram/webhook/types
 
@@ -12,7 +12,7 @@
 
 > **CcaAuctionQuote** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:158](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L158)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:159](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L159)
 
 #### Properties
 
@@ -20,67 +20,67 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:158](https://github.com/we
 
 > **amountEth**: `number`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:168](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L168)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:169](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L169)
 
 ##### amountWei
 
 > **amountWei**: `bigint`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:167](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L167)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:168](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L168)
 
 ##### auctionAddress
 
 > **auctionAddress**: `` `0x${string}` ``
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:159](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L159)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:160](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L160)
 
 ##### ccaStrategyAddress
 
 > **ccaStrategyAddress**: `` `0x${string}` ``
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:160](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L160)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:161](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L161)
 
 ##### clearingPriceQ96
 
 > **clearingPriceQ96**: `bigint`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:161](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L161)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:162](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L162)
 
 ##### clearingPriceWeiPerToken
 
 > **clearingPriceWeiPerToken**: `bigint`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:165](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L165)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:166](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L166)
 
 ##### maxPriceQ96
 
 > **maxPriceQ96**: `bigint`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:162](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L162)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:163](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L163)
 
 ##### maxPriceWeiPerToken
 
 > **maxPriceWeiPerToken**: `bigint`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:166](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L166)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:167](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L167)
 
 ##### tokenDecimals
 
 > **tokenDecimals**: `number`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:163](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L163)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:164](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L164)
 
 ##### tokenSymbol
 
 > **tokenSymbol**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:164](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L164)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:165](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L165)
 
 ##### usdIntent
 
 > **usdIntent**: `number`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:169](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L169)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:170](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L170)
 
 ***
 
@@ -88,7 +88,7 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:169](https://github.com/we
 
 > **CommandCoinCurrency** = `"ETH"` \| `"ZORA"` \| `"CREATOR_COIN"`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:141](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L141)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:142](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L142)
 
 ***
 
@@ -96,7 +96,7 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:141](https://github.com/we
 
 > **DeployCurrencyInput** = `"ETH"` \| `"ZORA"` \| `"CREATOR_COIN"` \| `"CONTENT_COIN"`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:139](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L139)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:140](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L140)
 
 ***
 
@@ -104,7 +104,7 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:139](https://github.com/we
 
 > **DeployWizardType** = `"trend"` \| `"content"` \| `"creator"`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:137](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L137)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:138](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L138)
 
 ***
 
@@ -112,7 +112,7 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:137](https://github.com/we
 
 > **InteractiveTradeAction** = `"buy"` \| `"sell"` \| `"bid"`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:135](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L135)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:136](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L136)
 
 ***
 
@@ -120,7 +120,7 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:135](https://github.com/we
 
 > **ParsedTelegramDeployIntent** = \{ `kind`: `"menu"`; \} \| \{ `kind`: `"zora"`; \} \| \{ `kind`: `"usage"`; `text`: `string`; \} \| \{ `kind`: `"trend"`; `ticker`: `string`; \} \| \{ `coinType`: `Exclude`\<[`DeployWizardType`](#deploywizardtype), `"trend"`\>; `commandCurrency`: [`CommandCoinCurrency`](#commandcoincurrency); `currencyInput`: [`DeployCurrencyInput`](#deploycurrencyinput); `kind`: `"coin"`; `metadataUri`: `string`; `name`: `string`; `symbol`: `string`; \}
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:143](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L143)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:144](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L144)
 
 ***
 
@@ -128,7 +128,7 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:143](https://github.com/we
 
 > **ParsedTelegramTradeIntent** = \{ `actionType`: `"buy"` \| `"sell"`; `amount`: `number`; `amountInput`: `string`; `amountUnit`: `"ETH"` \| `"SHARE"`; `identifier`: `string`; \} \| \{ `actionType`: `"bid"`; `amount`: `number`; `amountInput`: `string`; `amountUnit`: `"USD"`; `identifier`: `string`; \}
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:119](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L119)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:120](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L120)
 
 ***
 
@@ -136,7 +136,7 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:119](https://github.com/we
 
 > **PrivyWalletOwnerContext** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:172](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L172)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:173](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L173)
 
 #### Properties
 
@@ -144,13 +144,13 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:172](https://github.com/we
 
 > **ownerAddress**: `` `0x${string}` ``
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:174](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L174)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:175](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L175)
 
 ##### walletId
 
 > **walletId**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:173](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L173)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:174](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L174)
 
 ***
 
@@ -158,7 +158,7 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:173](https://github.com/we
 
 > **ScopedVaultRow** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:177](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L177)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:178](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L178)
 
 #### Properties
 
@@ -166,37 +166,37 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:177](https://github.com/we
 
 > **ccaStrategyAddress**: `` `0x${string}` ``
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:183](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L183)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:184](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L184)
 
 ##### chainId
 
 > **chainId**: `number`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:180](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L180)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:181](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L181)
 
 ##### creatorCoinAddress
 
 > **creatorCoinAddress**: `` `0x${string}` ``
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:179](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L179)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:180](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L180)
 
 ##### groupId
 
 > **groupId**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:181](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L181)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:182](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L182)
 
 ##### isSettled
 
 > **isSettled**: `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:182](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L182)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:183](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L183)
 
 ##### vaultAddress
 
 > **vaultAddress**: `` `0x${string}` ``
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:178](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L178)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:179](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L179)
 
 ***
 
@@ -204,7 +204,7 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:178](https://github.com/we
 
 > **TelegramCallbackQuery** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:78](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L78)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:79](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L79)
 
 #### Properties
 
@@ -212,31 +212,31 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:78](https://github.com/wen
 
 > `optional` **data**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:80](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L80)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:81](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L81)
 
 ##### from?
 
 > `optional` **from**: [`TelegramFrom`](#telegramfrom)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:81](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L81)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:82](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L82)
 
 ##### id?
 
 > `optional` **id**: `string` \| `number`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:79](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L79)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:80](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L80)
 
 ##### inline\_message\_id?
 
 > `optional` **inline\_message\_id**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:83](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L83)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:84](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L84)
 
 ##### message?
 
 > `optional` **message**: [`TelegramMessage`](#telegrammessage)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:82](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L82)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:83](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L83)
 
 ***
 
@@ -294,7 +294,7 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:35](https://github.com/wen
 
 > **TelegramChosenInlineResult** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:70](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L70)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:71](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L71)
 
 #### Properties
 
@@ -302,31 +302,31 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:70](https://github.com/wen
 
 > `optional` **from**: [`TelegramFrom`](#telegramfrom)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:72](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L72)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:73](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L73)
 
 ##### inline\_message\_id?
 
 > `optional` **inline\_message\_id**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:74](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L74)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:75](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L75)
 
 ##### location?
 
 > `optional` **location**: [`TelegramLocation`](#telegramlocation)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:73](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L73)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:74](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L74)
 
 ##### query?
 
 > `optional` **query**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:75](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L75)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:76](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L76)
 
 ##### result\_id?
 
 > `optional` **result\_id**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:71](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L71)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:72](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L72)
 
 ***
 
@@ -334,7 +334,7 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:71](https://github.com/wen
 
 > **TelegramCommandResponse** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:111](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L111)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:112](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L112)
 
 #### Properties
 
@@ -342,31 +342,31 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:111](https://github.com/we
 
 > `optional` **callbackToast**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:116](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L116)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:117](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L117)
 
 ##### replyMarkup?
 
 > `optional` **replyMarkup**: `Record`\<`string`, `unknown`\>
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:113](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L113)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:114](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L114)
 
 ##### signalReplyMarkup?
 
 > `optional` **signalReplyMarkup**: `Record`\<`string`, `unknown`\>
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:115](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L115)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:116](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L116)
 
 ##### signalText?
 
 > `optional` **signalText**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:114](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L114)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:115](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L115)
 
 ##### text
 
 > **text**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:112](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L112)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:113](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L113)
 
 ***
 
@@ -402,7 +402,7 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:4](https://github.com/wena
 
 > **TelegramInlineQuery** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:50](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L50)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:51](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L51)
 
 #### Properties
 
@@ -410,37 +410,37 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:50](https://github.com/wen
 
 > `optional` **chat\_type**: [`TelegramInlineQueryChatType`](#telegraminlinequerychattype)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:54](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L54)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:55](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L55)
 
 ##### from?
 
 > `optional` **from**: [`TelegramFrom`](#telegramfrom)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:55](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L55)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:56](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L56)
 
 ##### id?
 
 > `optional` **id**: `string` \| `number`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:51](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L51)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:52](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L52)
 
 ##### location?
 
 > `optional` **location**: [`TelegramLocation`](#telegramlocation)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:56](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L56)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:57](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L57)
 
 ##### offset?
 
 > `optional` **offset**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:53](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L53)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:54](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L54)
 
 ##### query?
 
 > `optional` **query**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:52](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L52)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:53](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L53)
 
 ***
 
@@ -448,7 +448,7 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:52](https://github.com/wen
 
 > **TelegramInlineQueryChatType** = `"sender"` \| `"private"` \| `"group"` \| `"supergroup"` \| `"channel"`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:59](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L59)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:60](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L60)
 
 ***
 
@@ -456,7 +456,7 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:59](https://github.com/wen
 
 > **TelegramLocation** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:61](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L61)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:62](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L62)
 
 #### Properties
 
@@ -464,37 +464,37 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:61](https://github.com/wen
 
 > `optional` **heading**: `number`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:66](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L66)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:67](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L67)
 
 ##### horizontal\_accuracy?
 
 > `optional` **horizontal\_accuracy**: `number`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:64](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L64)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:65](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L65)
 
 ##### latitude?
 
 > `optional` **latitude**: `number`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:62](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L62)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:63](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L63)
 
 ##### live\_period?
 
 > `optional` **live\_period**: `number`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:65](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L65)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:66](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L66)
 
 ##### longitude?
 
 > `optional` **longitude**: `number`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:63](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L63)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:64](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L64)
 
 ##### proximity\_alert\_radius?
 
 > `optional` **proximity\_alert\_radius**: `number`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:67](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L67)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:68](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L68)
 
 ***
 
@@ -516,19 +516,19 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:41](https://github.com/wen
 
 > `optional` **chat**: [`TelegramChat`](#telegramchat)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:43](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L43)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:44](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L44)
 
 ##### chat\_shared?
 
 > `optional` **chat\_shared**: [`TelegramChatShared`](#telegramchatshared)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:47](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L47)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:48](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L48)
 
 ##### from?
 
 > `optional` **from**: [`TelegramFrom`](#telegramfrom)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:42](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L42)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:43](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L43)
 
 ##### message\_id?
 
@@ -536,17 +536,23 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:42](https://github.com/wen
 
 Defined in: [api/\_handlers/telegram/webhook/types.ts:39](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L39)
 
+##### message\_thread\_id?
+
+> `optional` **message\_thread\_id**: `number`
+
+Defined in: [api/\_handlers/telegram/webhook/types.ts:42](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L42)
+
 ##### reply\_to\_message?
 
 > `optional` **reply\_to\_message**: [`TelegramMessage`](#telegrammessage)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:44](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L44)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:45](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L45)
 
 ##### successful\_payment?
 
 > `optional` **successful\_payment**: [`TelegramSuccessfulPayment`](#telegramsuccessfulpayment)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:45](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L45)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:46](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L46)
 
 ##### text?
 
@@ -558,7 +564,7 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:40](https://github.com/wen
 
 > `optional` **users\_shared**: [`TelegramUsersShared`](#telegramusersshared)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:46](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L46)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:47](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L47)
 
 ***
 
@@ -566,7 +572,7 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:46](https://github.com/wen
 
 > **TelegramPreCheckoutQuery** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:86](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L86)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:87](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L87)
 
 #### Properties
 
@@ -574,31 +580,31 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:86](https://github.com/wen
 
 > `optional` **currency**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:89](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L89)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:90](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L90)
 
 ##### from?
 
 > `optional` **from**: [`TelegramFrom`](#telegramfrom)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:88](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L88)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:89](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L89)
 
 ##### id?
 
 > `optional` **id**: `string` \| `number`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:87](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L87)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:88](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L88)
 
 ##### invoice\_payload?
 
 > `optional` **invoice\_payload**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:91](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L91)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:92](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L92)
 
 ##### total\_amount?
 
 > `optional` **total\_amount**: `number`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:90](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L90)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:91](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L91)
 
 ***
 
@@ -680,7 +686,7 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:13](https://github.com/wen
 
 > **TelegramUpdate** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:94](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L94)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:95](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L95)
 
 #### Properties
 
@@ -688,49 +694,49 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:94](https://github.com/wen
 
 > `optional` **callback\_query**: [`TelegramCallbackQuery`](#telegramcallbackquery)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:101](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L101)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:102](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L102)
 
 ##### channel\_post?
 
 > `optional` **channel\_post**: [`TelegramMessage`](#telegrammessage)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:98](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L98)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:99](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L99)
 
 ##### chosen\_inline\_result?
 
 > `optional` **chosen\_inline\_result**: [`TelegramChosenInlineResult`](#telegramchoseninlineresult)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:100](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L100)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:101](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L101)
 
 ##### edited\_message?
 
 > `optional` **edited\_message**: [`TelegramMessage`](#telegrammessage)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:97](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L97)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:98](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L98)
 
 ##### inline\_query?
 
 > `optional` **inline\_query**: [`TelegramInlineQuery`](#telegraminlinequery)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:99](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L99)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:100](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L100)
 
 ##### message?
 
 > `optional` **message**: [`TelegramMessage`](#telegrammessage)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:96](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L96)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:97](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L97)
 
 ##### pre\_checkout\_query?
 
 > `optional` **pre\_checkout\_query**: [`TelegramPreCheckoutQuery`](#telegramprecheckoutquery)
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:102](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L102)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:103](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L103)
 
 ##### update\_id?
 
 > `optional` **update\_id**: `number`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:95](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L95)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:96](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L96)
 
 ***
 
@@ -760,7 +766,7 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:28](https://github.com/wen
 
 > **TelegramWebhookOk** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:105](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L105)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:106](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L106)
 
 #### Properties
 
@@ -768,16 +774,16 @@ Defined in: [api/\_handlers/telegram/webhook/types.ts:105](https://github.com/we
 
 > `optional` **ignored**: `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:107](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L107)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:108](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L108)
 
 ##### ok
 
 > **ok**: `true`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:106](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L106)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:107](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L107)
 
 ##### updateId?
 
 > `optional` **updateId**: `number` \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/types.ts:108](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L108)
+Defined in: [api/\_handlers/telegram/webhook/types.ts:109](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/types.ts#L109)

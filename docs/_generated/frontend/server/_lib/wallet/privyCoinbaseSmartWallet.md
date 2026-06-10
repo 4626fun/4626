@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/wallet/privyCoinbaseSmartWallet
+[4626-web](../../../index.md) / server/\_lib/wallet/privyCoinbaseSmartWallet
 
 # server/\_lib/wallet/privyCoinbaseSmartWallet
 
@@ -111,7 +111,7 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:249](https://github
 
 ##### ownerAddress
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
@@ -131,7 +131,7 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:418](https://github
 
 ###### address
 
-`` `0x${string}` ``
+`string`
 
 ###### walletId
 
@@ -159,7 +159,7 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:253](https://github
 
 ###### ownerAddress
 
-`` `0x${string}` ``
+`string`
 
 ###### publicClient
 
@@ -167,7 +167,7 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:253](https://github
 
 ###### smartWallet
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
@@ -213,7 +213,7 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:83](https://github.
 
 ### resolvePrivyCoinbaseSmartWalletOwnerContext()
 
-> **resolvePrivyCoinbaseSmartWalletOwnerContext**(`params`): `Promise`\<\{ `ownerAddress`: `` `0x${string}` ``; `ownerIndex`: `number`; \}\>
+> **resolvePrivyCoinbaseSmartWalletOwnerContext**(`params`): `Promise`\<\{ `ownerAddress`: `string`; `ownerIndex`: `number`; \}\>
 
 Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:316](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L316)
 
@@ -231,7 +231,7 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:316](https://github
 
 ###### expectedOwnerAddress?
 
-`` `0x${string}` `` \| `null`
+`string` \| `null`
 
 ###### maxScan?
 
@@ -243,7 +243,7 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:316](https://github
 
 ###### smartWallet
 
-`` `0x${string}` ``
+`string`
 
 ###### walletId
 
@@ -251,7 +251,7 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:316](https://github
 
 #### Returns
 
-`Promise`\<\{ `ownerAddress`: `` `0x${string}` ``; `ownerIndex`: `number`; \}\>
+`Promise`\<\{ `ownerAddress`: `string`; `ownerIndex`: `number`; \}\>
 
 ***
 
@@ -291,7 +291,7 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:450](https://github
 
 ###### smartWallet
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
@@ -319,7 +319,7 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:551](https://github
 
 ###### ownerAddress
 
-`` `0x${string}` ``
+`string`
 
 ###### ownerIndex
 
@@ -335,7 +335,7 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:551](https://github
 
 ###### smartWallet
 
-`` `0x${string}` ``
+`string`
 
 ###### walletId
 

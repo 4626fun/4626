@@ -7,6 +7,7 @@ import { ChainSelector } from '@/components/trade/ChainSelector'
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import type { SupportedChainId } from '@/config/chains'
+import type { SwapRouteLeg } from '@/lib/swap/swapQuoteDetails'
 import type { TokenDisplay } from '@/lib/uniswap/swapUtils'
 
 type SwapCardProps = {
@@ -15,7 +16,9 @@ type SwapCardProps = {
   tokenInIdentityLoading: boolean
   tokenOutIdentityLoading: boolean
   amountInUnits: string
+  amountInUsd?: string | null
   estimatedOut: string
+  buyQuoteLoading?: boolean
   estimatedOutUsd: string | null
   tokenInSymbol: string
   tokenOutSymbol: string
@@ -31,6 +34,7 @@ type SwapCardProps = {
   tokenInAddress: string
   tokenOutAddress: string
   routeSummary: string | null
+  routeLegs?: SwapRouteLeg[]
   gasEstimateLabel: string | null
   priceImpactLabel: string | null
   lpFeeUsd?: string | null
@@ -39,19 +43,18 @@ type SwapCardProps = {
   walletChainId?: number | null
   onSelectChain: (chainId: SupportedChainId) => void
   slippagePct: string
+  slippageIsAuto?: boolean
+  onSetSlippageAuto?: () => void
   onOpenTokenSelector: (side: 'input' | 'output') => void
   onAmountChange: (value: string) => void
   onQuickPercent: (pct: number, tokenBalance?: string | null) => void
   onSwitchTokens: () => void
   onReviewTrade: () => void
   onSetSlippagePct: (pct: string) => void
-  onConfirmUnverified: () => void
   executionMode: 'canonical' | 'eoa'
   fallbackActive: boolean
-  swapProviderLabel: 'Uniswap' | 'CDP'
-  needsUnverifiedConfirmation: boolean
-  unverifiedTokenLabel?: string | null
-  onResetUnverified: () => void
+  swapProviderLabel: 'Uniswap' | 'CDP' | 'Zora'
+  quoteAggregatorLabel?: 'Uniswap' | 'CDP' | 'Zora'
   primaryActionLabel?: string
   onPrimaryAction?: () => void
   forcePrimaryActionEnabled?: boolean
@@ -62,12 +65,8 @@ export function SwapCard(props: SwapCardProps) {
   const showUniswapBranding = props.swapProviderLabel === 'Uniswap'
   const primaryActionLabel =
     props.primaryActionLabel ??
-    (props.busy
-      ? 'Preparing…'
-      : props.needsUnverifiedConfirmation
-        ? 'Confirm unverified token to swap'
-        : 'Swap now')
-  const primaryAction = props.onPrimaryAction ?? (props.needsUnverifiedConfirmation ? props.onConfirmUnverified : props.onReviewTrade)
+    (props.busy ? 'Preparing…' : 'Swap now')
+  const primaryAction = props.onPrimaryAction ?? props.onReviewTrade
   const defaultPrimaryDisabled = !props.isReady || !props.isConnected || props.busy !== null
   const primaryDisabled = props.forcePrimaryActionEnabled ? props.busy !== null : defaultPrimaryDisabled
   return (
@@ -100,6 +99,7 @@ export function SwapCard(props: SwapCardProps) {
         <TokenInput
           label="Sell"
           amount={props.amountInUnits}
+          amountUsd={props.amountInUsd || undefined}
           token={props.tokenInDisplay}
           tokenAddress={props.tokenInAddress}
           isLoadingToken={props.tokenInIdentityLoading}
@@ -131,6 +131,7 @@ export function SwapCard(props: SwapCardProps) {
           label="Buy"
           amount={props.estimatedOut}
           readOnly
+          amountLoading={props.buyQuoteLoading}
           amountUsd={props.estimatedOutUsd || undefined}
           balanceLabel={props.tokenOutBalanceLabel}
           token={props.tokenOutDisplay}
@@ -143,27 +144,12 @@ export function SwapCard(props: SwapCardProps) {
         />
       </div>
 
-      {props.unverifiedTokenLabel ? (
-        <Alert variant="warning" className="mt-3">
-          Unverified token selected: {props.unverifiedTokenLabel}. Confirm before you swap.
-          <div className="mt-2">
-            <button
-              type="button"
-              className="text-xs text-zinc-300 underline"
-              onClick={props.onResetUnverified}
-            >
-              Re-verify token selection
-            </button>
-          </div>
-        </Alert>
-      ) : null}
-
       <Button
         variant="primary"
         size="lg"
-        className="mt-3 h-12 w-full rounded-xl shadow-[0_12px_34px_-14px_rgba(0,82,255,0.9)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-3 h-12 w-full rounded-xl shadow-[0_12px_34px_-14px_rgb(var(--brand-primary)/0.9)] disabled:cursor-not-allowed disabled:opacity-60"
         onClick={primaryAction}
-        loading={props.busy === 'pending'}
+        loading={props.busy !== null}
         disabled={primaryDisabled}
       >
         {primaryActionLabel}
@@ -171,18 +157,31 @@ export function SwapCard(props: SwapCardProps) {
       {props.primaryActionHint ? <div className="mt-2 text-xs text-vault-subtext">{props.primaryActionHint}</div> : null}
 
       {props.error ? <Alert variant="error" className="mt-3">{props.error}</Alert> : null}
-      {props.status && <div className="mt-2 text-xs text-vault-subtext">{props.status}</div>}
+      {props.status && !props.error ? <div className="mt-2 text-xs text-vault-subtext">{props.status}</div> : null}
 
       <SwapDetails
         routeSummary={props.routeSummary}
+        routeLegs={props.routeLegs}
+        amountIn={props.amountInUnits}
+        tokenInSymbol={props.tokenInSymbol}
+        amountOut={props.estimatedOut}
+        tokenOutSymbol={props.tokenOutSymbol}
+        tokenInAddress={props.tokenInAddress}
+        tokenOutAddress={props.tokenOutAddress}
+        tokenInLogoUrl={props.tokenInDisplay.logoUrl}
+        tokenOutLogoUrl={props.tokenOutDisplay.logoUrl}
         slippagePct={props.slippagePct}
+        slippageIsAuto={props.slippageIsAuto}
+        onSetSlippageAuto={props.onSetSlippageAuto}
         onSetSlippagePct={props.onSetSlippagePct}
-        aggregator={props.routeSummary ? props.swapProviderLabel : undefined}
+        aggregator={props.quoteAggregatorLabel ?? props.swapProviderLabel}
         gasEstimateLabel={props.gasEstimateLabel}
         priceImpactLabel={props.priceImpactLabel}
         lpFeeUsd={props.lpFeeUsd ?? null}
         protocolFeeUsd={props.protocolFeeUsd ?? null}
         quoteUpdatedAt={props.quoteUpdatedAt ?? null}
+        sponsoredExecution={props.executionMode === 'canonical'}
+        showUniswapBranding={showUniswapBranding}
       />
     </div>
   )

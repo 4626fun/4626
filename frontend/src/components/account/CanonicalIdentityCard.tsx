@@ -7,6 +7,11 @@ import { useCreatorCoinBadge } from '@/hooks/useCreatorCoinBadge'
 import { JazziconAvatar } from '@/components/account/JazziconAvatar'
 import { CopyableAddress } from '@/components/account/CopyableAddress'
 
+const BASE_CHAIN_LOGO = '/base/base-chain-light.svg'
+const RABBY_LOGO_URL = 'https://raw.githubusercontent.com/RabbyHub/logo/master/symbol.svg'
+const METAMASK_LOGO_URL = 'https://raw.githubusercontent.com/MetaMask/metamask-mobile/main/app/images/fox.svg'
+const COINBASE_WALLET_LOGO_URL = 'https://gist.githubusercontent.com/taycaldwell/2291907115c0bb5589bc346661435007/raw/cbw.svg'
+
 /**
  * Top-right identity surface for authenticated users.
  *
@@ -26,11 +31,15 @@ export function CanonicalIdentityCard({
   onToggle,
   menuOpen,
   variant = 'nav',
+  activeNetworkLabel: _activeNetworkLabel = 'Base',
+  activeNetworkUsd = null,
 }: {
   identity: CanonicalIdentity
   onToggle: () => void
   menuOpen: boolean
   variant?: 'nav' | 'compact'
+  activeNetworkLabel?: string | null
+  activeNetworkUsd?: number | null
 }) {
   const cswBasename = useBasenameForAddress(identity.cswAddress)
   const externalEoaBasename = useBasenameForAddress(identity.externalEoaAddress)
@@ -46,6 +55,36 @@ export function CanonicalIdentityCard({
 
   const avatarAddress = identity.cswAddress ?? identity.externalEoaAddress ?? identity.privyEmbeddedAddress
   const avatarSize = variant === 'compact' ? 20 : 24
+
+  if (variant === 'nav') {
+    return (
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        className="group flex min-h-[50px] items-center gap-2.5 rounded-2xl bg-white/[0.02] px-2.5 py-1.5 text-left transition-colors hover:bg-white/[0.045]"
+      >
+        <span
+          className="inline-flex h-6 w-6 shrink-0 items-center justify-center"
+          aria-hidden="true"
+        >
+          <img
+            src={BASE_CHAIN_LOGO}
+            alt=""
+            className="h-3.5 w-3.5 object-contain"
+            loading="lazy"
+          />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[12px] font-semibold tabular-nums text-white">
+            {formatUsdCompact(activeNetworkUsd)}
+          </span>
+        </span>
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-zinc-500 transition-colors group-hover:text-zinc-300" />
+      </button>
+    )
+  }
 
   return (
     <button
@@ -116,21 +155,29 @@ export function CanonicalIdentityCard({
 
 /**
  * Dropdown body content — canonical smart wallet first, then signer lanes.
- * The app-scoped sub-account is intentionally not surfaced here unless a
- * future route actively uses it as the transaction sender.
+ * Sub-account is surfaced only for population (b) when it is the effective swap lane.
  */
 export function CanonicalIdentityDropdown({
   identity,
   onRequestConnectWallet,
+  onRequestSignOut,
+  signingOut,
+  onRequestDisconnectMainWallet,
+  disconnectingMainWallet,
 }: {
   identity: CanonicalIdentity
   onRequestConnectWallet?: () => void
+  onRequestSignOut?: () => void
+  signingOut?: boolean
+  onRequestDisconnectMainWallet?: () => void
+  disconnectingMainWallet?: boolean
 }) {
   const cswBasename = useBasenameForAddress(identity.cswAddress)
   const externalEoaBasename = useBasenameForAddress(identity.externalEoaAddress)
   const privyBasename = useBasenameForAddress(identity.privyEmbeddedAddress)
   const coinBadge = useCreatorCoinBadge(identity.creatorCoinAddress)
   const embeddedAddress = identity.privyEmbeddedAddress
+  const sectionClassName = 'px-4 py-3'
 
   return (
     <div className="flex flex-col">
@@ -139,7 +186,7 @@ export function CanonicalIdentityDropdown({
           loading / missing-CSW copy when the canonical address hasn't
           resolved yet. */}
       {identity.cswAddress ? (
-        <div className="px-4 pt-3 pb-2">
+        <div className={sectionClassName}>
           <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Primary identity</div>
           <div className="mt-1.5 flex items-center gap-2.5">
             {cswBasename.avatar ? (
@@ -177,7 +224,7 @@ export function CanonicalIdentityDropdown({
           ) : null}
         </div>
       ) : identity.loadingCsw ? (
-        <div className="px-4 pt-3 pb-2">
+        <div className={sectionClassName}>
           <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
             Primary identity
           </div>
@@ -193,56 +240,149 @@ export function CanonicalIdentityDropdown({
           </div>
         </div>
       ) : identity.cswMissing ? (
-        <div className="px-4 pt-3 pb-2">
+        <div className={sectionClassName}>
           <div className="text-[10px] uppercase tracking-wider text-amber-300/80 font-medium">
             Primary identity · needs setup
           </div>
-          <div className="mt-1.5 text-xs text-zinc-300">
-            No Coinbase Smart Wallet linked to this profile yet.
-          </div>
-          <div className="mt-1 text-[11px] text-zinc-500">
-            Finish the Zora / Base App handoff in{' '}
-            <span className="underline decoration-dotted">Accounts</span> to link your CSW.
-          </div>
-        </div>
-      ) : null}
-
-      {(identity.cswAddress && (identity.externalEoaAddress || identity.privyEmbeddedAddress)) ? (
-        <div className="mx-4 my-2 h-px bg-white/8" />
-      ) : null}
-
-      {/* Privy embedded (auto-provisioned) */}
-      {embeddedAddress ? (
-        <div className="px-4 pb-2">
-          <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
-            Embedded signer
-          </div>
           <div className="mt-1.5 flex items-center gap-2.5">
-            {privyBasename.avatar ? (
-              <img
-                src={privyBasename.avatar}
-                alt=""
-                width={24}
-                height={24}
-                className="rounded-full flex-shrink-0 object-cover"
-                style={{ width: 24, height: 24 }}
-              />
-            ) : (
-              <JazziconAvatar address={embeddedAddress} size={24} />
-            )}
+            <IdentityAvatarPlaceholder size={32} />
             <div className="min-w-0 flex-1">
-              <AddressWithBasescan address={embeddedAddress} variant="muted" className="text-xs text-zinc-300" />
-              <div className="text-[10px] text-zinc-600 truncate">Signs sponsored actions for your smart wallet</div>
+              <div className="text-xs text-zinc-300">
+                No Coinbase Smart Wallet linked to this profile yet.
+              </div>
+              <div className="mt-1 text-[11px] text-zinc-500">
+                Finish the Zora / Base App handoff in{' '}
+                <span className="underline decoration-dotted">Accounts</span> to link your CSW.
+              </div>
             </div>
           </div>
         </div>
       ) : null}
 
+      {identity.accountChrome.showSubAccountInTray && identity.executionSubAccountAddress ? (
+        <>
+          <div className="mx-4 my-2 h-px bg-white/8" />
+          <div className={sectionClassName}>
+            <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+              {identity.accountChrome.executionLaneTitle}
+            </div>
+            <div className="mt-1.5 flex items-center gap-2.5">
+              <JazziconAvatar address={identity.executionSubAccountAddress} size={24} />
+              <div className="min-w-0 flex-1">
+                <AddressWithBasescan
+                  address={identity.executionSubAccountAddress}
+                  variant="muted"
+                  className="text-xs text-zinc-300"
+                />
+                <div className="text-[10px] text-zinc-600 truncate">
+                  {identity.accountChrome.executionLaneDescription}
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      {(identity.cswAddress && (
+        // Keep the primary->signer divider when a distinct main wallet lane
+        // exists, or when embedded-owner authorization is not yet confirmed.
+        identity.externalEoaAddress ||
+        (identity.privyEmbeddedAddress && identity.embeddedSignerAuthorizedOnCsw !== true)
+      )) ? (
+        <div className="mx-4 my-2 h-px bg-white/8" />
+      ) : null}
+
+      {/* Privy embedded (auto-provisioned) */}
+      {embeddedAddress ? (
+        <div className={sectionClassName}>
+          {(() => {
+            const embeddedSignerStatusClass =
+              identity.embeddedSignerAuthorizedOnCsw === true
+                ? 'bg-emerald-400'
+                : identity.embeddedSignerAuthorizedOnCsw === false
+                  ? 'bg-amber-400'
+                  : 'bg-zinc-500'
+            const embeddedSignerStatusLabel =
+              identity.embeddedSignerAuthorizedOnCsw === true
+                ? 'Embedded signer is authorized on the smart wallet'
+                : identity.embeddedSignerAuthorizedOnCsw === false
+                  ? 'Embedded signer is not authorized on the smart wallet yet'
+                  : 'Embedded signer authorization status is loading'
+
+            return (
+              <>
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+              Embedded signer
+            </div>
+            {onRequestSignOut ? (
+              <button
+                type="button"
+                onClick={onRequestSignOut}
+                disabled={signingOut === true}
+                className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-60"
+              >
+                {signingOut ? 'Signing out…' : 'Sign out'}
+              </button>
+            ) : null}
+          </div>
+          <div className="mt-1.5 flex items-center gap-2.5">
+            <div className="relative flex-shrink-0" title={embeddedSignerStatusLabel}>
+              {privyBasename.avatar ? (
+                <img
+                  src={privyBasename.avatar}
+                  alt=""
+                  width={24}
+                  height={24}
+                  className="rounded-full object-cover"
+                  style={{ width: 24, height: 24 }}
+                />
+              ) : (
+                <div className="rounded-full overflow-hidden">
+                  <JazziconAvatar address={embeddedAddress} size={24} />
+                </div>
+              )}
+              <span
+                className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border border-[rgb(8,8,8)] ${embeddedSignerStatusClass}`}
+                aria-label={embeddedSignerStatusLabel}
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <AddressWithBasescan address={embeddedAddress} variant="muted" className="text-xs text-zinc-300" />
+              <div className="text-[10px] text-zinc-600 truncate">Signs sponsored actions for your smart wallet</div>
+            </div>
+          </div>
+              </>
+            )
+          })()}
+        </div>
+      ) : (
+        <div className={sectionClassName}>
+          <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+            Embedded signer
+          </div>
+          <div className="mt-1.5 flex items-center gap-2.5">
+            <IdentityAvatarPlaceholder size={24} />
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-zinc-300">Not connected</div>
+              <div className="text-[10px] text-zinc-600 truncate">
+                Signs sponsored actions for your smart wallet
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Separate embedded signer from external main wallet lane. */}
+      {(embeddedAddress && identity.externalEoaAddress) ? (
+        <div className="mx-4 my-2 h-px bg-white/8" />
+      ) : null}
+
       {/* Active external signer (Rabby / MetaMask / CBW) */}
       {identity.externalEoaAddress ? (
-        <div className="px-4 pt-2 pb-3">
+        <div className={sectionClassName}>
           <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
-            External signer
+            Main wallet
           </div>
           <div className="mt-1.5 flex items-center gap-2.5">
             {externalEoaBasename.avatar ? (
@@ -264,7 +404,17 @@ export function CanonicalIdentityDropdown({
                 variant="muted"
                 className="text-xs text-zinc-300"
               />
-              <div className="text-[10px] text-zinc-600 truncate">Fallback / recovery wallet</div>
+              <div className="text-[10px] text-zinc-600 truncate">Used to approve smart wallet setup</div>
+              {onRequestDisconnectMainWallet ? (
+                <button
+                  type="button"
+                  onClick={onRequestDisconnectMainWallet}
+                  disabled={disconnectingMainWallet === true}
+                  className="mt-1 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-60"
+                >
+                  {disconnectingMainWallet ? 'Disconnecting…' : 'Disconnect main wallet'}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -272,18 +422,56 @@ export function CanonicalIdentityDropdown({
         <button
           type="button"
           onClick={onRequestConnectWallet}
-          className="w-full text-left px-4 py-3 hover:bg-white/4 transition-colors"
+          className={`w-full text-left ${sectionClassName} hover:bg-white/4 transition-colors`}
         >
           <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
-            External signer
+            Main wallet
           </div>
-          <div className="mt-1 text-xs text-zinc-300">Connect an external wallet</div>
-          <div className="text-[10px] text-zinc-600 mt-0.5 truncate" title="Optional — use Rabby / MetaMask / Coinbase Wallet as a fallback wallet">
-            Optional fallback wallet (Rabby / MetaMask / Coinbase Wallet)
+          <div className="mt-1.5 flex items-center gap-2.5">
+            <IdentityAvatarPlaceholder size={24} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 text-xs text-zinc-300">
+                <span>Connect</span>
+                <WalletLogoBadge name="Rabby" src={RABBY_LOGO_URL} />
+                <WalletLogoBadge name="MetaMask" src={METAMASK_LOGO_URL} />
+                <WalletLogoBadge name="Coinbase Wallet" src={COINBASE_WALLET_LOGO_URL} />
+              </div>
+              <div
+                className="text-[10px] text-zinc-600 mt-0.5 truncate"
+                title="After you connect, 4626 finishes smart wallet setup."
+              >
+                After you connect, 4626 finishes setup.
+              </div>
+            </div>
           </div>
         </button>
       ) : null}
     </div>
+  )
+}
+
+function WalletLogoBadge({ name, src }: { name: string; src: string }) {
+  return (
+    <span className="inline-flex items-center justify-center">
+      <img
+        src={src}
+        alt={name}
+        className="h-4 w-4 object-contain"
+        loading="lazy"
+      />
+    </span>
+  )
+}
+
+function IdentityAvatarPlaceholder({ size }: { size: number }) {
+  return (
+    <span
+      className="inline-flex shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]"
+      style={{ width: size, height: size }}
+      aria-hidden="true"
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-zinc-500" />
+    </span>
   )
 }
 
@@ -364,27 +552,7 @@ function AddressWithBasescan({
 
 function BasescanIcon() {
   return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 16 16"
-      className="h-3.5 w-3.5"
-      fill="none"
-    >
-      <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.5" opacity="0.35" />
-      <path
-        d="M4.25 9.1a4.35 4.35 0 0 1 7.5-3.05"
-        stroke="currentColor"
-        strokeWidth="1.9"
-        strokeLinecap="round"
-      />
-      <path
-        d="M9.45 5.2h2.65v2.65"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <img src="/base/basescan-logo-symbol-light.svg" alt="" className="h-3.5 w-3.5 object-contain" />
   )
 }
 
@@ -392,4 +560,13 @@ function formatShort(value: string | null | undefined): string {
   if (!value) return ''
   if (value.length <= 10) return value
   return `${value.slice(0, 6)}…${value.slice(-4)}`
+}
+
+function formatUsdCompact(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '--'
+  const amount = Number(value)
+  if (amount >= 1_000_000_000) return `$${(amount / 1_000_000_000).toFixed(2)}B`
+  if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(2)}M`
+  if (amount >= 1_000) return `$${(amount / 1_000).toFixed(2)}K`
+  return `$${amount.toFixed(2)}`
 }

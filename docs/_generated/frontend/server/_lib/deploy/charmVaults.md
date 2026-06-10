@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/deploy/charmVaults
+[4626-web](../../../index.md) / server/\_lib/deploy/charmVaults
 
 # server/\_lib/deploy/charmVaults
 
@@ -18,7 +18,7 @@ Defined in: [server/\_lib/deploy/charmVaults.ts:160](https://github.com/wenakita
 
 ##### poolAddress
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/deploy/charmVaults.ts:67](https://github.com/wenakita/
 
 ### extractCharmCreateVaultPool()
 
-> **extractCharmCreateVaultPool**(`call`): `` `0x${string}` `` \| `null`
+> **extractCharmCreateVaultPool**(`call`): `string` \| `null`
 
 Defined in: [server/\_lib/deploy/charmVaults.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/charmVaults.ts#L95)
 
@@ -58,19 +58,19 @@ Defined in: [server/\_lib/deploy/charmVaults.ts:95](https://github.com/wenakita/
 
 #### Returns
 
-`` `0x${string}` `` \| `null`
+`string` \| `null`
 
 ***
 
 ### getCharmFactoryAddress()
 
-> **getCharmFactoryAddress**(): `` `0x${string}` ``
+> **getCharmFactoryAddress**(): `string`
 
 Defined in: [server/\_lib/deploy/charmVaults.ts:51](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/charmVaults.ts#L51)
 
 #### Returns
 
-`` `0x${string}` ``
+`string`
 
 ***
 
@@ -118,7 +118,7 @@ Defined in: [server/\_lib/deploy/charmVaults.ts:116](https://github.com/wenakita
 
 ###### poolAddress
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
@@ -138,7 +138,7 @@ Defined in: [server/\_lib/deploy/charmVaults.ts:74](https://github.com/wenakita/
 
 ###### charmVaultAddress
 
-`` `0x${string}` ``
+`string`
 
 ###### publicClient?
 
@@ -164,7 +164,7 @@ Defined in: [server/\_lib/deploy/charmVaults.ts:156](https://github.com/wenakita
 
 ##### charmVaultAddress
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 

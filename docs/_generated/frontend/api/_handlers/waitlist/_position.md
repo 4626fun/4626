@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/waitlist/\_position
+[4626-web](../../../index.md) / api/\_handlers/waitlist/\_position
 
 # api/\_handlers/waitlist/\_position
 
@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/waitlist/\_position.ts:71](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/waitlist/_position.ts#L71)
+Defined in: [api/\_handlers/waitlist/\_position.ts:67](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/waitlist/_position.ts#L67)
 
 #### Parameters
 

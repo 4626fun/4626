@@ -5,14 +5,13 @@ export type ExploreSortKey = 'volume' | 'marketCap' | 'priceChange' | 'new' | 'e
 export type ExploreTableGroupId = 'identity' | 'market' | 'fees' | 'payout'
 
 export type ExploreTableColumnId =
-  | 'rank'
   | 'name'
-  | 'feeBadge'
   | 'holders'
   | 'ethosScore'
   | 'marketCap'
   | 'volume'
   | 'priceChange'
+  | 'trend30d'
   | 'totalFees'
   | 'payoutTo'
 
@@ -27,7 +26,7 @@ export type ExploreTableColumn = {
   align?: ExploreColumnAlign
   /** If set, clicking the header should map to this sort key. */
   sortKey?: ExploreSortKey
-  /** Sticky-left column (rank/name only). */
+  /** Sticky-left column (name only). */
   sticky?: boolean
 }
 
@@ -42,6 +41,9 @@ export const EXPLORE_TABLE_GROUPS = [
   { id: 'fees', label: 'Fees' },
   { id: 'payout', label: 'Payout' },
 ] as const satisfies ReadonlyArray<ExploreTableGroup>
+
+/** Sticky identity column width when horizontal scroll collapses token labels (avatar + Ethos badge). */
+export const EXPLORE_COLLAPSED_IDENTITY_WIDTH_PX = 72
 
 function getVolumeLabel(timeframe: string): string {
   switch (timeframe) {
@@ -62,26 +64,30 @@ export function getExploreColumns(opts: { variant: ExploreTableVariant; timefram
   const collapseIdentity = Boolean(opts.collapseIdentity)
   const centerMarket = opts.variant === 'creators'
   const holdersWidth = opts.variant === 'creators' ? 88 : 96
-  const ethosWidth = opts.variant === 'creators' ? 86 : 0
   const marketCapWidth = opts.variant === 'creators' ? 112 : 120
   const volumeWidth = opts.variant === 'creators' ? 112 : 120
   const deltaWidth = opts.variant === 'creators' ? 102 : 110
+  const trend30dWidth = 88
 
   // A DeFiLlama-like table is intentionally dense and fixed-width, with horizontal scroll.
   return [
-    { id: 'rank', label: '#', group: 'identity', widthPx: 48, align: 'right', sticky: true },
-    { id: 'name', label: nameLabel, group: 'identity', widthPx: collapseIdentity ? 56 : 208, align: 'left', sticky: true },
+    {
+      id: 'name',
+      label: nameLabel,
+      group: 'identity',
+      widthPx: collapseIdentity ? EXPLORE_COLLAPSED_IDENTITY_WIDTH_PX : 208,
+      align: 'left',
+      sticky: true,
+      ...(opts.variant === 'creators' ? { sortKey: 'ethosScore' as const } : {}),
+    },
 
     { id: 'holders', label: 'Holders', group: 'market', widthPx: holdersWidth, align: centerMarket ? 'center' : 'right' },
-    ...(opts.variant === 'creators'
-      ? [{ id: 'ethosScore' as const, label: 'Ethos', group: 'market' as const, widthPx: ethosWidth, align: 'center' as const, sortKey: 'ethosScore' as const }]
-      : []),
     { id: 'marketCap', label: 'MCap', group: 'market', widthPx: marketCapWidth, align: centerMarket ? 'center' : 'right', sortKey: 'marketCap' },
     { id: 'priceChange', label: 'MCap Δ 24H', group: 'market', widthPx: deltaWidth, align: centerMarket ? 'center' : 'right', sortKey: 'priceChange' },
+    { id: 'trend30d', label: '30D', group: 'market', widthPx: trend30dWidth, align: centerMarket ? 'center' : 'right' },
     { id: 'volume', label: getVolumeLabel(timeframe), group: 'market', widthPx: volumeWidth, align: centerMarket ? 'center' : 'right', sortKey: 'volume' },
 
-    { id: 'feeBadge', label: 'Fee %', group: 'fees', widthPx: 72, align: 'center' },
-    { id: 'totalFees', label: 'Fees', group: 'fees', widthPx: 110, align: 'center' },
+    { id: 'totalFees', label: 'Fees (24h)', group: 'fees', widthPx: 118, align: 'center' },
 
     { id: 'payoutTo', label: 'Payout To', group: 'payout', widthPx: 132, align: 'center' },
   ]

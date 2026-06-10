@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/swap/VaultCard
+[4626-web](../../../index.md) / src/components/swap/VaultCard
 
 # src/components/swap/VaultCard
 
@@ -12,7 +12,7 @@
 
 > **VaultCard**(`__namedParameters`): `Element`
 
-Defined in: [src/components/swap/VaultCard.tsx:124](https://github.com/wenakita/4626/blob/main/frontend/src/components/swap/VaultCard.tsx#L124)
+Defined in: [src/components/swap/VaultCard.tsx:121](https://github.com/wenakita/4626/blob/main/frontend/src/components/swap/VaultCard.tsx#L121)
 
 #### Parameters
 

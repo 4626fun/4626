@@ -1,9 +1,10 @@
 import { Suspense, lazy, useEffect, type ComponentType, type ReactNode } from 'react'
 import { Route, Routes, useLocation } from 'react-router-dom'
-import { APP_ORIGIN, getHostMode, isCurrentWindowUrl } from '@/lib/env/host'
+import { APP_ORIGIN, MARKETING_ORIGIN, getHostMode, isCurrentWindowUrl } from '@/lib/env/host'
 import { isAppOnlyPath } from '@/lib/auth/appOnlyPaths'
-import { AppLoadingState } from '@/components/layout/AppLoadingState'
-import { getLoadingIntentFromPath } from '@/components/layout/appLoadingIntents'
+import { MarketingWaitlistRoute } from '@/app/routeGuards'
+import { AppCanvas } from '@/components/layout/AppCanvas'
+import { AppLoadingOverlay, AppLoadingProvider, AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { Layout } from '@/components/layout/Layout'
 import App from './App'
 import { AppQueryProvider } from './web3/Web3Providers'
@@ -19,9 +20,7 @@ function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof T
 }
 
 function LazyRouteBoundary(props: { children: ReactNode }) {
-  const location = useLocation()
-  const intent = getLoadingIntentFromPath(location.pathname)
-  return <Suspense fallback={<AppLoadingState intent={intent} />}>{props.children}</Suspense>
+  return <Suspense fallback={<AppLoadingRegistrar />}>{props.children}</Suspense>
 }
 
 const Home = lazyNamed(() => import('./pages/Home'), 'Home')
@@ -47,7 +46,7 @@ function StandaloneDocumentRedirect(props: { htmlPath: '/telegram-link.html' }) 
     window.location.replace(`${props.htmlPath}${location.search}${location.hash}`)
   }, [location.hash, location.search, props.htmlPath])
 
-  return <AppLoadingState intent="redirect" />
+  return <AppLoadingRegistrar />
 }
 
 function AppHostRedirect(props: { target: string }) {
@@ -57,7 +56,7 @@ function AppHostRedirect(props: { target: string }) {
     window.location.replace(props.target)
   }, [props.target])
 
-  return <AppLoadingState intent="redirect" />
+  return <AppLoadingRegistrar />
 }
 
 function MarketingLayout() {
@@ -66,22 +65,40 @@ function MarketingLayout() {
 
 export function RootRouter() {
   const location = useLocation()
-  const isMarketingHost = getHostMode() === 'marketing'
+  const hostMode = getHostMode()
+  const isMarketingHost = hostMode === 'marketing'
   const appRedirectTarget = `${APP_ORIGIN}${location.pathname}${location.search}${location.hash}`
   const shouldRouteToApp =
     isMarketingHost &&
     isAppOnlyPath(location.pathname) &&
     !isCurrentWindowUrl(appRedirectTarget)
+  const marketingHomeTarget = `${MARKETING_ORIGIN}${location.pathname}${location.search}${location.hash}`
+  const shouldRouteAppHostRootToMarketing =
+    hostMode === 'app' &&
+    location.pathname === '/' &&
+    !isCurrentWindowUrl(marketingHomeTarget)
 
   return (
     <>
-      {shouldRouteToApp ? (
+      <AppLoadingProvider>
+        <AppCanvas />
+        <AppLoadingOverlay />
+        {shouldRouteAppHostRootToMarketing ? (
+        <AppHostRedirect target={marketingHomeTarget} />
+      ) : shouldRouteToApp ? (
         <AppHostRedirect target={appRedirectTarget} />
       ) : (
         <Routes>
           <Route element={<MarketingLayout />}>
             <Route path="/" element={<Home />} />
-            <Route path="/waitlist" element={<Waitlist />} />
+            <Route
+              path="/waitlist"
+              element={
+                <MarketingWaitlistRoute>
+                  <Waitlist />
+                </MarketingWaitlistRoute>
+              }
+            />
             <Route path="/r/:referralCode" element={<WaitlistInviteEntry />} />
           </Route>
 
@@ -103,6 +120,7 @@ export function RootRouter() {
           />
         </Routes>
       )}
+      </AppLoadingProvider>
     </>
   )
 }

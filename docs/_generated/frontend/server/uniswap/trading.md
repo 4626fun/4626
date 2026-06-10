@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / server/uniswap/trading
+[4626-web](../../index.md) / server/uniswap/trading
 
 # server/uniswap/trading
 
@@ -82,7 +82,7 @@ Defined in: [server/uniswap/trading.ts:33](https://github.com/wenakita/4626/blob
 
 > **uniswapTradeFetch**(`params`): `Promise`\<\{ `payload`: `unknown`; `status`: `number`; \}\>
 
-Defined in: [server/uniswap/trading.ts:56](https://github.com/wenakita/4626/blob/main/frontend/server/uniswap/trading.ts#L56)
+Defined in: [server/uniswap/trading.ts:72](https://github.com/wenakita/4626/blob/main/frontend/server/uniswap/trading.ts#L72)
 
 #### Parameters
 

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { createMockReq, createMockRes } from './helpers'
-import { requireAdminApiToken } from '../../packages/server-core/src/machine-auth.js'
+import { requireAdminApiToken } from '@4626/server-core/machine-auth'
 
 /**
  * M-06 (audit 2026-04-25) regression coverage. The audit flagged that

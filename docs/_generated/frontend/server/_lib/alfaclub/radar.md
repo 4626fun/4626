@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/alfaclub/radar
+[4626-web](../../../index.md) / server/\_lib/alfaclub/radar
 
 # server/\_lib/alfaclub/radar
 
@@ -12,7 +12,7 @@
 
 > **AlfaClubRadarDispatchResult** = `object`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L31)
+Defined in: [server/\_lib/alfaclub/radar.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L36)
 
 #### Properties
 
@@ -20,55 +20,55 @@ Defined in: [server/\_lib/alfaclub/radar.ts:31](https://github.com/wenakita/4626
 
 > **chatId**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L40)
+Defined in: [server/\_lib/alfaclub/radar.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L45)
 
 ##### highlighted
 
 > **highlighted**: `number`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L38)
+Defined in: [server/\_lib/alfaclub/radar.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L43)
 
 ##### ok
 
 > **ok**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L32)
+Defined in: [server/\_lib/alfaclub/radar.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L37)
 
 ##### previousSnapshotTs
 
 > **previousSnapshotTs**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L35)
+Defined in: [server/\_lib/alfaclub/radar.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L40)
 
 ##### reason?
 
 > `optional` **reason**: `string`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L33)
+Defined in: [server/\_lib/alfaclub/radar.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L38)
 
 ##### sent
 
 > **sent**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L36)
+Defined in: [server/\_lib/alfaclub/radar.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L41)
 
 ##### skippedDuplicate
 
 > **skippedDuplicate**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L37)
+Defined in: [server/\_lib/alfaclub/radar.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L42)
 
 ##### snapshotTs
 
 > **snapshotTs**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L34)
+Defined in: [server/\_lib/alfaclub/radar.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L39)
 
 ##### topRows
 
 > **topRows**: `number`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L39)
+Defined in: [server/\_lib/alfaclub/radar.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L44)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [server/\_lib/alfaclub/radar.ts:39](https://github.com/wenakita/4626
 
 > **AlfaClubRadarFlags** = `object`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L18)
+Defined in: [server/\_lib/alfaclub/radar.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L23)
 
 #### Properties
 
@@ -84,61 +84,61 @@ Defined in: [server/\_lib/alfaclub/radar.ts:18](https://github.com/wenakita/4626
 
 > **enabled**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L20)
+Defined in: [server/\_lib/alfaclub/radar.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L25)
 
 ##### forceSend
 
 > **forceSend**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L28)
+Defined in: [server/\_lib/alfaclub/radar.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L33)
 
 ##### killSwitch
 
 > **killSwitch**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L19)
+Defined in: [server/\_lib/alfaclub/radar.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L24)
 
 ##### minRankMove
 
 > **minRankMove**: `number`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L26)
+Defined in: [server/\_lib/alfaclub/radar.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L31)
 
 ##### minScoreDelta
 
 > **minScoreDelta**: `number`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L27)
+Defined in: [server/\_lib/alfaclub/radar.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L32)
 
 ##### moversN
 
 > **moversN**: `number`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L25)
+Defined in: [server/\_lib/alfaclub/radar.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L30)
 
 ##### telegramBotToken
 
 > **telegramBotToken**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L21)
+Defined in: [server/\_lib/alfaclub/radar.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L26)
 
 ##### telegramChatId
 
 > **telegramChatId**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L22)
+Defined in: [server/\_lib/alfaclub/radar.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L27)
 
 ##### telegramThreadId
 
 > **telegramThreadId**: `number` \| `null`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L23)
+Defined in: [server/\_lib/alfaclub/radar.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L28)
 
 ##### topN
 
 > **topN**: `number`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L24)
+Defined in: [server/\_lib/alfaclub/radar.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L29)
 
 ***
 
@@ -146,7 +146,7 @@ Defined in: [server/\_lib/alfaclub/radar.ts:24](https://github.com/wenakita/4626
 
 > **SnapshotDelta** = `object`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L43)
+Defined in: [server/\_lib/alfaclub/radar.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L48)
 
 #### Properties
 
@@ -154,49 +154,49 @@ Defined in: [server/\_lib/alfaclub/radar.ts:43](https://github.com/wenakita/4626
 
 > **current**: [`MetricsSnapshotRow`](publicationLedger.md#metricssnapshotrow)
 
-Defined in: [server/\_lib/alfaclub/radar.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L44)
+Defined in: [server/\_lib/alfaclub/radar.ts:49](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L49)
 
 ##### isNew
 
 > **isNew**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:51](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L51)
+Defined in: [server/\_lib/alfaclub/radar.ts:56](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L56)
 
 ##### pnlDelta
 
 > **pnlDelta**: `number` \| `null`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:50](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L50)
+Defined in: [server/\_lib/alfaclub/radar.ts:55](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L55)
 
 ##### previous
 
 > **previous**: [`MetricsSnapshotRow`](publicationLedger.md#metricssnapshotrow) \| `null`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L45)
+Defined in: [server/\_lib/alfaclub/radar.ts:50](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L50)
 
 ##### rankDelta
 
 > **rankDelta**: `number` \| `null`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L46)
+Defined in: [server/\_lib/alfaclub/radar.ts:51](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L51)
 
 ##### scoreDelta
 
 > **scoreDelta**: `number` \| `null`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L47)
+Defined in: [server/\_lib/alfaclub/radar.ts:52](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L52)
 
 ##### stakedDelta
 
 > **stakedDelta**: `bigint` \| `null`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:49](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L49)
+Defined in: [server/\_lib/alfaclub/radar.ts:54](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L54)
 
 ##### supplyDelta
 
 > **supplyDelta**: `bigint` \| `null`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L48)
+Defined in: [server/\_lib/alfaclub/radar.ts:53](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L53)
 
 ## Functions
 
@@ -204,7 +204,7 @@ Defined in: [server/\_lib/alfaclub/radar.ts:48](https://github.com/wenakita/4626
 
 > **buildAlfaClubRadarText**(`params`): `object`
 
-Defined in: [server/\_lib/alfaclub/radar.ts:279](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L279)
+Defined in: [server/\_lib/alfaclub/radar.ts:369](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L369)
 
 #### Parameters
 
@@ -218,9 +218,17 @@ Defined in: [server/\_lib/alfaclub/radar.ts:279](https://github.com/wenakita/462
 
 [`AlfaClubRadarFlags`](#alfaclubradarflags)
 
+###### labels
+
+`CreatorLabelMap`
+
 ###### previousSnapshotTs
 
 `string` \| `null`
+
+###### roomIds
+
+`Map`\<`string`, `string`\>
 
 ###### snapshotTs
 
@@ -248,7 +256,7 @@ Defined in: [server/\_lib/alfaclub/radar.ts:279](https://github.com/wenakita/462
 
 > **readAlfaClubRadarFlags**(): [`AlfaClubRadarFlags`](#alfaclubradarflags)
 
-Defined in: [server/\_lib/alfaclub/radar.ts:91](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L91)
+Defined in: [server/\_lib/alfaclub/radar.ts:98](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L98)
 
 #### Returns
 
@@ -260,7 +268,7 @@ Defined in: [server/\_lib/alfaclub/radar.ts:91](https://github.com/wenakita/4626
 
 > **runAlfaClubRadar**(`opts`): `Promise`\<[`AlfaClubRadarDispatchResult`](#alfaclubradardispatchresult)\>
 
-Defined in: [server/\_lib/alfaclub/radar.ts:366](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L366)
+Defined in: [server/\_lib/alfaclub/radar.ts:520](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/radar.ts#L520)
 
 #### Parameters
 

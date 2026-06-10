@@ -1,4 +1,5 @@
 import { getDb } from '../db/postgres.js'
+import { ensureTelemetryCreativeLogsSchema } from '../db/schemaBootstrap.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
@@ -115,35 +116,7 @@ export function applyTrendStatusTransition(
 export async function ensureZoraTrendOpsSchema(db: Db): Promise<void> {
   if (trendOpsSchemaEnsured) return
   try {
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS zora_trend_ops (
-        id BIGSERIAL PRIMARY KEY,
-        ticker TEXT NOT NULL,
-        ticker_hash TEXT NOT NULL UNIQUE,
-        predicted_coin_address TEXT NOT NULL,
-        deployed_coin_address TEXT NULL,
-        tx_hash TEXT NULL,
-        actor_wallet TEXT NULL,
-        group_id TEXT NULL,
-        vault_address TEXT NULL,
-        status TEXT NOT NULL DEFAULT 'predicted',
-        last_error TEXT NULL,
-        funnel_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        routeability JSONB NOT NULL DEFAULT '{}'::jsonb,
-        funnel_metrics JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        CHECK (status IN ('predicted', 'deploying', 'deployed', 'funnel_pending', 'funnel_completed', 'failed'))
-      );
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS zora_trend_ops_status_idx
-      ON zora_trend_ops (status, updated_at DESC);
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS zora_trend_ops_ticker_idx
-      ON zora_trend_ops (ticker, created_at DESC);
-    `
+    await ensureTelemetryCreativeLogsSchema(db as any)
     trendOpsSchemaEnsured = true
   } catch (error) {
     trendOpsSchemaEnsured = false

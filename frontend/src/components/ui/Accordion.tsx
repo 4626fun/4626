@@ -1,17 +1,8 @@
-/**
- * CDS Accordion wrapper.
- *
- * Wraps CDS Accordion + AccordionItem to support both single-open and
- * multi-open modes, since the FAQ page needs multi-open for search results.
- *
- * Usage:
- * ```tsx
- * <FaqAccordion items={items} openKeys={openKeys} onToggle={onToggle} />
- * ```
- */
+import { type ReactNode, useMemo } from 'react'
+import * as AccordionPrimitive from '@radix-ui/react-accordion'
+import { ChevronDown } from 'lucide-react'
 
-import { type ReactNode, useCallback } from 'react'
-import { Accordion as CdsAccordion, AccordionItem as CdsAccordionItem } from '@coinbase/cds-web/accordion'
+import { cn } from '@/lib/shared/utils'
 
 export interface AccordionItemData {
   key: string
@@ -19,54 +10,61 @@ export interface AccordionItemData {
   children: ReactNode
 }
 
+function AccordionChevron({ className }: { className?: string }) {
+  return (
+    <ChevronDown
+      className={cn('size-4 shrink-0 text-zinc-500 transition-transform duration-200', className)}
+      aria-hidden
+    />
+  )
+}
+
 interface AccordionProps {
   items: AccordionItemData[]
-  /** Set of currently open item keys. Supports multi-open. */
   openKeys: Set<string> | Record<string, boolean>
-  /** Toggle callback for a single item key. */
   onToggle: (key: string) => void
   className?: string
 }
 
-/**
- * Multi-open accordion backed by CDS AccordionItem.
- *
- * Each item is wrapped in its own CDS Accordion so multiple items can be
- * independently expanded — CDS Accordion's native mode only supports
- * single-open.
- */
 export function FaqAccordion({ items, openKeys, onToggle, className }: AccordionProps) {
-  const isOpen = useCallback(
-    (key: string) => {
-      if (openKeys instanceof Set) return openKeys.has(key)
-      return Boolean((openKeys as Record<string, boolean>)[key])
-    },
-    [openKeys],
-  )
+  const value = useMemo(() => {
+    if (openKeys instanceof Set) return Array.from(openKeys)
+    return Object.entries(openKeys)
+      .filter(([, open]) => open)
+      .map(([key]) => key)
+  }, [openKeys])
 
   return (
-    <div className={className}>
-      {items.map((item) => {
-        const open = isOpen(item.key)
-        return (
-          <CdsAccordion
-            key={item.key}
-            activeKey={open ? item.key : null}
-            onChange={() => onToggle(item.key)}
-          >
-            <CdsAccordionItem itemKey={item.key} title={item.title}>
-              {item.children}
-            </CdsAccordionItem>
-          </CdsAccordion>
-        )
-      })}
-    </div>
+    <AccordionPrimitive.Root
+      type="multiple"
+      value={value}
+      onValueChange={(next) => {
+        const nextSet = new Set(next)
+        for (const item of items) {
+          const wasOpen = value.includes(item.key)
+          const isOpen = nextSet.has(item.key)
+          if (wasOpen !== isOpen) onToggle(item.key)
+        }
+      }}
+      className={cn('divide-y divide-white/10', className)}
+    >
+      {items.map((item) => (
+        <AccordionPrimitive.Item key={item.key} value={item.key} className="border-0">
+          <AccordionPrimitive.Header>
+            <AccordionPrimitive.Trigger className="group flex w-full items-center justify-between gap-3 px-6 py-4 text-left text-sm font-medium text-zinc-100 transition hover:bg-white/[0.03]">
+              {item.title}
+              <AccordionChevron className="group-data-[state=open]:rotate-180" />
+            </AccordionPrimitive.Trigger>
+          </AccordionPrimitive.Header>
+          <AccordionPrimitive.Content className="overflow-hidden">
+            <div className="px-6 pb-4 text-sm leading-relaxed text-zinc-400">{item.children}</div>
+          </AccordionPrimitive.Content>
+        </AccordionPrimitive.Item>
+      ))}
+    </AccordionPrimitive.Root>
   )
 }
 
-/**
- * Single-open accordion backed by CDS Accordion (standard mode).
- */
 export function SingleAccordion({
   items,
   activeKey,
@@ -79,14 +77,26 @@ export function SingleAccordion({
   className?: string
 }) {
   return (
-    <div className={className}>
-      <CdsAccordion activeKey={activeKey} onChange={onChange}>
-        {items.map((item) => (
-          <CdsAccordionItem key={item.key} itemKey={item.key} title={item.title}>
-            {item.children}
-          </CdsAccordionItem>
-        ))}
-      </CdsAccordion>
-    </div>
+    <AccordionPrimitive.Root
+      type="single"
+      collapsible
+      value={activeKey ?? ''}
+      onValueChange={(value) => onChange(value || null)}
+      className={cn('divide-y divide-white/10', className)}
+    >
+      {items.map((item) => (
+        <AccordionPrimitive.Item key={item.key} value={item.key}>
+          <AccordionPrimitive.Header>
+            <AccordionPrimitive.Trigger className="group flex w-full items-center justify-between gap-3 px-6 py-4 text-left text-sm font-medium text-zinc-100 transition hover:bg-white/[0.03]">
+              {item.title}
+              <AccordionChevron className="group-data-[state=open]:rotate-180" />
+            </AccordionPrimitive.Trigger>
+          </AccordionPrimitive.Header>
+          <AccordionPrimitive.Content className="overflow-hidden">
+            <div className="px-6 pb-4">{item.children}</div>
+          </AccordionPrimitive.Content>
+        </AccordionPrimitive.Item>
+      ))}
+    </AccordionPrimitive.Root>
   )
 }

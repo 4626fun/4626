@@ -1,19 +1,169 @@
-import { defineConfig, type Plugin } from 'vite'
+import { createLogger, defineConfig, type Logger, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 import fs from 'fs'
 import path from 'path'
 import { createRequire } from 'module'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { URL } from 'url'
 import type { IncomingMessage, ServerResponse } from 'http'
 
 import { classifyManualChunk } from './src/lib/viteManualChunks'
 import { zoraCliRoutePaths } from './api/_handlers/zora/cli/_routes'
+import { applyLocalDevServerEnv } from './server/_lib/dev/localDevEnv.ts'
+
+const ESBUILD_DEAD_RE =
+  /The service is no longer running|The service was stopped|write EPIPE/i
+
+/** WalletConnect / Coinbase SDK packages ship incomplete sourcemaps — Vite warns on every file. */
+function createDevLogger(failFastOnEsbuildDeath: boolean): Logger {
+  const logger = createLogger('info')
+  const isMissingSourcemapNoise = (msg: string) => msg.includes('points to missing source files')
+  let esbuildExitScheduled = false
+
+  const scheduleEsbuildRestartExit = (msg: string) => {
+    if (!failFastOnEsbuildDeath || esbuildExitScheduled || !ESBUILD_DEAD_RE.test(msg)) return
+    esbuildExitScheduled = true
+    logger.warn(
+      'esbuild transform service died (often WSL memory pressure). Exiting so deploy dry-run can restart Vite...',
+    )
+    setTimeout(() => process.exit(1), 300)
+  }
+
+  const wrap =
+    (fn: Logger['warn']) =>
+    (msg: string, options?: Parameters<Logger['warn']>[1]) => {
+      if (isMissingSourcemapNoise(msg)) return
+      scheduleEsbuildRestartExit(msg)
+      fn(msg, options)
+    }
+  logger.warn = wrap(logger.warn)
+  logger.warnOnce = wrap(logger.warnOnce)
+  logger.error = wrap(logger.error)
+  return logger
+}
+
+function resolveFrontendRoot(): string {
+  const fromMeta = path.dirname(fileURLToPath(import.meta.url))
+  if (fs.existsSync(path.join(fromMeta, 'api', '_handlers'))) return fromMeta
+
+  const fromCwd = process.cwd()
+  if (fs.existsSync(path.join(fromCwd, 'api', '_handlers'))) return fromCwd
+  if (fs.existsSync(path.join(fromCwd, 'frontend', 'api', '_handlers'))) {
+    return path.join(fromCwd, 'frontend')
+  }
+
+  return fromMeta
+}
+
+const frontendRoot = resolveFrontendRoot()
+
+function resolveApiModulePath(relativePath: string): string {
+  const normalized = relativePath.replace(/^\.\//, '')
+  const basePath = path.join(frontendRoot, normalized)
+  if (fs.existsSync(basePath)) return basePath
+
+  for (const ext of ['.ts', '.tsx', '.js', '.mjs']) {
+    const candidate = `${basePath}${ext}`
+    if (fs.existsSync(candidate)) return candidate
+  }
+
+  throw new Error(`[vite] apiImport: module not found for ${relativePath} (resolved ${basePath})`)
+}
+
+let tsxLoader: typeof import('tsx/esm/api') | null = null
+type ApiModuleCacheEntry = {
+  mtimeMs: number
+  promise: Promise<{
+    default: (req: any, res: any) => any
+  }>
+}
+const apiModuleCache = new Map<string, ApiModuleCacheEntry>()
+
+async function loadApiModule(absPath: string) {
+  let mtimeMs = 0
+  try {
+    mtimeMs = fs.statSync(absPath).mtimeMs
+  } catch {
+    apiModuleCache.delete(absPath)
+    throw new Error(`[vite] apiImport: cannot stat ${absPath}`)
+  }
+
+  const cached = apiModuleCache.get(absPath)
+  if (cached && cached.mtimeMs === mtimeMs) {
+    return cached.promise
+  }
+
+  if (!tsxLoader) {
+    tsxLoader = await import('tsx/esm/api')
+  }
+  // Bust tsx/Node ESM module cache when the handler file changes (api/ is excluded from HMR).
+  const importUrl = `${pathToFileURL(absPath).href}?v=${mtimeMs}`
+  const pending = tsxLoader.tsImport(importUrl, import.meta.url) as Promise<{
+    default: (req: any, res: any) => any
+  }>
+  apiModuleCache.set(absPath, { mtimeMs, promise: pending })
+  try {
+    return await pending
+  } catch (error) {
+    apiModuleCache.delete(absPath)
+    throw error
+  }
+}
+
+/** Keep local API handler paths out of Vite configFileDependencies (avoids full server restart + esbuild crash on every api/ edit). */
+function apiImport(relativePath: string) {
+  const absPath = resolveApiModulePath(relativePath)
+  return () => loadApiModule(absPath)
+}
 
 const buildTelegramLinkStandalone = process.env.TELEGRAM_LINK_STANDALONE_BUILD === '1'
+const deployDryRunDev = Boolean(String(process.env.DEPLOY_DRY_RUN_PORT ?? '').trim())
+// Opt-in only: skip optimizeDeps discovery when WSL/RAM is tight (export VITE_LOW_MEMORY=1).
+const lowMemoryDev = process.env.VITE_LOW_MEMORY === '1'
+// CJS packages that break in the browser when low-memory skips full dep discovery.
+const alwaysOptimizeInclude = [
+  'buffer',
+  'cookie',
+  'set-cookie-parser',
+  'ox',
+  'ox/erc8010',
+  'viem',
+] as const
 const nodeRequire = createRequire(import.meta.url)
 const dotenvLoadedKeys = new Set<string>()
+
+function buildDevWatchIgnored(): string[] {
+  const repoRoot = path.resolve(frontendRoot, '..')
+  return [
+    '**/node_modules/**',
+    '**/.git/**',
+    '**/dist/**',
+    '**/.vite/**',
+    // Local API handlers run via tsx at request time — not part of the client HMR graph.
+    path.join(frontendRoot, 'api'),
+    path.join(frontendRoot, 'server'),
+    // Monorepo siblings outside the SPA dev graph (Forge submodules, keepers, etc.).
+    path.join(repoRoot, 'contracts'),
+    path.join(repoRoot, 'lib'),
+    path.join(repoRoot, 'kpr'),
+    path.join(repoRoot, 'programs'),
+    path.join(repoRoot, 'indexer'),
+    path.join(repoRoot, 'apps'),
+    path.join(repoRoot, '.worktrees'),
+  ]
+}
+
+function resolveDevServerWatch() {
+  const usePolling = deployDryRunDev
+    ? process.env.VITE_WATCH_POLLING !== '0'
+    : process.env.VITE_WATCH_POLLING === '1'
+  return {
+    ignored: buildDevWatchIgnored(),
+    ...(usePolling ? { usePolling: true, interval: 1000 } : {}),
+  }
+}
 
 function loadDotEnvFile(filePath: string) {
   if (!fs.existsSync(filePath)) return
@@ -175,11 +325,12 @@ function localApiRoutesPlugin(): Plugin {
       // - Also load frontend/.env if present.
       loadDotEnvFile(path.resolve(__dirname, '../.env'))
       loadDotEnvFile(path.resolve(__dirname, './.env'))
+      applyLocalDevServerEnv()
 
       // Local dev note:
-      // Our API handlers use `server/_lib/postgres.ts`, which treats `POSTGRES_URL*` as Vercel Postgres.
-      // In local dev we typically want to use `DATABASE_URL` (e.g. Supabase) via `pg`.
-      // Clear Vercel-specific envs so local API routing doesn't accidentally use @vercel/postgres.
+      // Our API handlers now prefer Supabase (via DATABASE_URL + pg driver).
+      // Clear any lingering legacy Vercel Postgres envs (POSTGRES_URL*) so local dev
+      // doesn't accidentally take a deprecated path. Supabase is the single production DB.
       try {
         delete (process.env as any).POSTGRES_URL
         delete (process.env as any).POSTGRES_URL_NON_POOLING
@@ -212,128 +363,135 @@ function localApiRoutesPlugin(): Plugin {
       // Keep this loosely typed: API handlers often return `VercelResponse`, and we don't want
       // Vite's config TS project to type-check every function signature.
       const routes: Record<string, () => Promise<{ default: (req: any, res: any) => any }>> = {
-        '/api/robots.txt': () => import('./api/robots.txt'),
-        '/api/sitemap.xml': () => import('./api/sitemap.xml'),
-        '/api/social-preview': () => import('./api/social-preview'),
-        '/api/social-preview-debug': () => import('./api/social-preview-debug'),
-        '/api/creator-allowlist': () => import('./api/_handlers/creator-access/_allowlist'),
-        '/api/flags/discover': () => import('./api/_handlers/flags/_discover'),
-        '/api/flags/evaluate': () => import('./api/_handlers/flags/_evaluate'),
-        '/api/waitlist/bootstrap': () => import('./api/_handlers/waitlist/_bootstrap'),
-        '/api/waitlist/lead': () => import('./api/_handlers/waitlist/_lead'),
-        '/api/waitlist/me': () => import('./api/_handlers/waitlist/_me'),
-        '/api/waitlist/leaderboard': () => import('./api/_handlers/waitlist/_leaderboard'),
-        '/api/waitlist/position': () => import('./api/_handlers/waitlist/_position'),
-        '/api/analytics/event': () => import('./api/_handlers/analytics/_event'),
-        '/api/onchain/coinTradeRewardsBatch': () => import('./api/_handlers/onchain/_coinTradeRewardsBatch'),
-        '/api/token/metadata': () => import('./api/_handlers/token/_metadata'),
-        '/api/token/image': () => import('./api/_handlers/token/_image'),
-        '/api/zora/coin': () => import('./api/_handlers/zora/_coin'),
-        '/api/zora/coinHistory': () => import('./api/_handlers/zora/_coinHistory'),
-        '/api/zora/csw-entry': () => import('./api/_handlers/zora/_cswEntry'),
-        '/api/zora/csw-entry/telegram-verify': () => import('./api/_handlers/zora/_cswEntryTelegramVerify'),
-        [zoraCliRoutePaths.authStatus]: () => import('./api/_handlers/zora/cli/_authStatus'),
-        [zoraCliRoutePaths.explore]: () => import('./api/_handlers/zora/cli/_explore'),
-        [zoraCliRoutePaths.get]: () => import('./api/_handlers/zora/cli/_get'),
-        [zoraCliRoutePaths.priceHistory]: () => import('./api/_handlers/zora/cli/_priceHistory'),
-        [zoraCliRoutePaths.profile]: () => import('./api/_handlers/zora/cli/_profile'),
-        '/api/zora/explore': () => import('./api/_handlers/zora/_explore'),
-        '/api/zora/link/status': () => import('./api/_handlers/zora/link/_status'),
-        '/api/zora/metrics': () => import('./api/_handlers/zora/_metrics'),
-        '/api/zora/refresh': () => import('./api/_handlers/zora/_refresh'),
-        '/api/zora/profile': () => import('./api/_handlers/zora/_profile'),
-        '/api/zora/profileCoins': () => import('./api/_handlers/zora/_profileCoins'),
-        '/api/zora/resolve': () => import('./api/_handlers/zora/_resolve'),
-        '/api/zora/topCreators': () => import('./api/_handlers/zora/_topCreators'),
-        '/api/debank/totalBalanceBatch': () => import('./api/_handlers/debank/_totalBalanceBatch'),
-        '/api/debank/tokenList': () => import('./api/_handlers/debank/_tokenList'),
-        '/api/status/protocolReport': () => import('./api/_handlers/status/_protocolReport'),
-        '/api/status/vaultReport': () => import('./api/_handlers/status/_vaultReport'),
-        '/api/auth/admin': () => import('./api/_handlers/auth/_admin'),
-        '/api/auth/agent-nonce': () => import('./api/_handlers/auth/_agent-nonce'),
-        '/api/auth/agent-verify': () => import('./api/_handlers/auth/_agent-verify'),
-        '/api/auth/nonce': () => import('./api/_handlers/auth/_nonce'),
-        '/api/auth/privy': () => import('./api/_handlers/auth/_privy'),
-        '/api/auth/verify': () => import('./api/_handlers/auth/_verify'),
-        '/api/auth/me': () => import('./api/_handlers/auth/_me'),
-        '/api/auth/logout': () => import('./api/_handlers/auth/_logout'),
-        '/api/onboarding/bootstrap': () => import('./api/_handlers/onboarding/_bootstrap'),
-        '/api/accounts/me': () => import('./api/_handlers/accounts/_me'),
-        '/api/accounts/link': () => import('./api/_handlers/accounts/_link'),
-        '/api/accounts/unlink': () => import('./api/_handlers/accounts/_unlink'),
-        '/api/image/projects/create': () => import('./api/_handlers/image/_projects-create'),
-        '/api/image/projects/assets/upload': () => import('./api/_handlers/image/_assets-upload'),
-        '/api/image/projects/generate': () => import('./api/_handlers/image/_generate'),
-        '/api/image/projects/refine': () => import('./api/_handlers/image/_refine'),
-        '/api/image/jobs/status': () => import('./api/_handlers/image/_jobs-status'),
-        '/api/image/projects/get': () => import('./api/_handlers/image/_projects-get'),
-        '/api/image/projects/associate-vault': () => import('./api/_handlers/image/_associate-vault'),
-        '/api/image/projects/auto-assets': () => import('./api/_handlers/image/_auto-assets'),
-        '/api/image/projects/direct-compose': () => import('./api/_handlers/image/_direct-compose'),
-        '/api/image/projects/vault-image': () => import('./api/_handlers/image/_vault-image-get'),
-        '/api/image/external': () => import('./api/_handlers/image/_external-proxy'),
-        '/api/deploy/config': () => import('./api/_handlers/deploy/_config'),
-        '/api/deploy/smartWalletOwner': () => import('./api/_handlers/deploy/_smartWalletOwner'),
-        '/api/deploy/v2/session/cancel': () => import('./api/_handlers/deploy/v2/session/_cancel'),
-        '/api/deploy/v2/session/create': () => import('./api/_handlers/deploy/v2/session/_create'),
-        '/api/deploy/v2/session/dry-run': () => import('./api/_handlers/deploy/v2/session/_dryRun'),
-        '/api/deploy/v2/session/resume': () => import('./api/_handlers/deploy/v2/session/_resume'),
-        '/api/deploy/v2/session/start': () => import('./api/_handlers/deploy/v2/session/_start'),
-        '/api/deploy/v2/session/status': () => import('./api/_handlers/deploy/v2/session/_status'),
-        '/api/v1/vault/chat/status': () => import('./api/_handlers/v1/vault/chat/_status'),
-        '/api/v1/vault/chat/join': () => import('./api/_handlers/v1/vault/chat/_join'),
-        '/api/v1/vault/chat/policy': () => import('./api/_handlers/v1/vault/chat/_policy'),
-        '/api/v1/vault/chat/recheck': () => import('./api/_handlers/v1/vault/chat/_recheck'),
-        '/api/deploy/solanaInfraStatus': () => import('./api/[...path]'),
-        '/api/deploy/provisionSolanaRoute': () => import('./api/[...path]'),
-        '/api/deploy/registerSolanaBridgeToken': () => import('./api/[...path]'),
-        '/api/wallet/prepare-add-privy-owner': () => import('./api/_handlers/wallet/_prepare-add-privy-owner'),
-        '/api/wallet/confirm-owner': () => import('./api/_handlers/wallet/_confirm-owner'),
-        '/api/wallet/prepare-add-rabby-owner': () => import('./api/_handlers/wallet/_prepare-add-rabby-owner'),
-        '/api/wallet/solana/setCanonical': () => import('./api/[...path]'),
-        '/api/wallet/solana/sweep/enqueue': () => import('./api/[...path]'),
-        '/api/wallet/solana/sweep/process': () => import('./api/[...path]'),
-        '/api/telegram/webhook': () => import('./api/_handlers/telegram/_webhook'),
-        '/api/rpc': () => import('./api/_handlers/rpc/_proxy'),
+        '/api/robots.txt': apiImport('./api/robots.txt'),
+        '/api/sitemap.xml': apiImport('./api/sitemap.xml'),
+        '/api/social-preview': apiImport('./api/social-preview'),
+        '/api/social-preview-debug': apiImport('./api/social-preview-debug'),
+        '/api/creator-allowlist': apiImport('./api/_handlers/creator-access/_allowlist'),
+        '/api/flags/discover': apiImport('./api/_handlers/flags/_discover'),
+        '/api/flags/evaluate': apiImport('./api/_handlers/flags/_evaluate'),
+        '/api/waitlist/bootstrap': apiImport('./api/_handlers/waitlist/_bootstrap'),
+        '/api/waitlist/lead': apiImport('./api/_handlers/waitlist/_lead'),
+        '/api/waitlist/me': apiImport('./api/_handlers/waitlist/_me'),
+        '/api/waitlist/leaderboard': apiImport('./api/_handlers/waitlist/_leaderboard'),
+        '/api/waitlist/position': apiImport('./api/_handlers/waitlist/_position'),
+        '/api/waitlist/points-activity': apiImport('./api/_handlers/waitlist/_pointsActivity'),
+        '/api/waitlist/xmtp-join': apiImport('./api/_handlers/waitlist/_xmtpJoin'),
+        '/api/waitlist/xmtp-status': apiImport('./api/_handlers/waitlist/_xmtpStatus'),
+        '/api/analytics/event': apiImport('./api/_handlers/analytics/_event'),
+        '/api/analytics/dune': apiImport('./api/_handlers/analytics/_dune'),
+        '/api/onchain/coinTradeRewardsBatch': apiImport('./api/_handlers/onchain/_coinTradeRewardsBatch'),
+        '/api/token/metadata': apiImport('./api/_handlers/token/_metadata'),
+        '/api/token/image': apiImport('./api/_handlers/token/_image'),
+        '/api/zora/coin': apiImport('./api/_handlers/zora/_coin'),
+        '/api/zora/coinHistory': apiImport('./api/_handlers/zora/_coinHistory'),
+        '/api/zora/csw-entry': apiImport('./api/_handlers/zora/_cswEntry'),
+        '/api/zora/csw-entry/telegram-verify': apiImport('./api/_handlers/zora/_cswEntryTelegramVerify'),
+        [zoraCliRoutePaths.authStatus]: apiImport('./api/_handlers/zora/cli/_authStatus'),
+        [zoraCliRoutePaths.explore]: apiImport('./api/_handlers/zora/cli/_explore'),
+        [zoraCliRoutePaths.get]: apiImport('./api/_handlers/zora/cli/_get'),
+        [zoraCliRoutePaths.priceHistory]: apiImport('./api/_handlers/zora/cli/_priceHistory'),
+        [zoraCliRoutePaths.profile]: apiImport('./api/_handlers/zora/cli/_profile'),
+        '/api/zora/exploreSparklines': apiImport('./api/_handlers/zora/_exploreSparklines'),
+        '/api/zora/explore': apiImport('./api/_handlers/zora/_explore'),
+        '/api/zora/link/status': apiImport('./api/_handlers/zora/link/_status'),
+        '/api/zora/metrics': apiImport('./api/_handlers/zora/_metrics'),
+        '/api/zora/migratedCoins': apiImport('./api/_handlers/zora/_migratedCoins'),
+        '/api/zora/refresh': apiImport('./api/_handlers/zora/_refresh'),
+        '/api/zora/profile': apiImport('./api/_handlers/zora/_profile'),
+        '/api/zora/profileCoins': apiImport('./api/_handlers/zora/_profileCoins'),
+        '/api/zora/resolve': apiImport('./api/_handlers/zora/_resolve'),
+        '/api/zora/topCreators': apiImport('./api/_handlers/zora/_topCreators'),
+        '/api/debank/totalBalanceBatch': apiImport('./api/_handlers/debank/_totalBalanceBatch'),
+        '/api/debank/tokenList': apiImport('./api/_handlers/debank/_tokenList'),
+        '/api/debank/walletPortfolioBatch': apiImport('./api/_handlers/debank/_walletPortfolioBatch'),
+        '/api/wallet/trayPortfolio': apiImport('./api/_handlers/wallet/_trayPortfolio'),
+        '/api/wallet/zora-holdings': apiImport('./api/_handlers/wallet/_zoraHoldings'),
+        '/api/status/protocolReport': apiImport('./api/_handlers/status/_protocolReport'),
+        '/api/status/vaultReport': apiImport('./api/_handlers/status/_vaultReport'),
+        '/api/auth/admin': apiImport('./api/_handlers/auth/_admin'),
+        '/api/auth/agent-nonce': apiImport('./api/_handlers/auth/_agent-nonce'),
+        '/api/auth/agent-verify': apiImport('./api/_handlers/auth/_agent-verify'),
+        '/api/auth/nonce': apiImport('./api/_handlers/auth/_nonce'),
+        '/api/auth/privy': apiImport('./api/_handlers/auth/_privy'),
+        '/api/auth/verify': apiImport('./api/_handlers/auth/_verify'),
+        '/api/auth/me': apiImport('./api/_handlers/auth/_me'),
+        '/api/auth/logout': apiImport('./api/_handlers/auth/_logout'),
+        '/api/onboarding/bootstrap': apiImport('./api/_handlers/onboarding/_bootstrap'),
+        '/api/accounts/me': apiImport('./api/_handlers/accounts/_me'),
+        '/api/accounts/me/points': apiImport('./api/_handlers/accounts/_mePoints'),
+        '/api/accounts/link': apiImport('./api/_handlers/accounts/_link'),
+        '/api/accounts/unlink': apiImport('./api/_handlers/accounts/_unlink'),
+        '/api/image/projects/create': apiImport('./api/_handlers/image/_projects-create'),
+        '/api/image/projects/assets/upload': apiImport('./api/_handlers/image/_assets-upload'),
+        '/api/image/projects/generate': apiImport('./api/_handlers/image/_generate'),
+        '/api/image/projects/refine': apiImport('./api/_handlers/image/_refine'),
+        '/api/image/jobs/status': apiImport('./api/_handlers/image/_jobs-status'),
+        '/api/image/projects/get': apiImport('./api/_handlers/image/_projects-get'),
+        '/api/image/projects/associate-vault': apiImport('./api/_handlers/image/_associate-vault'),
+        '/api/image/projects/auto-assets': apiImport('./api/_handlers/image/_auto-assets'),
+        '/api/image/projects/direct-compose': apiImport('./api/_handlers/image/_direct-compose'),
+        '/api/image/projects/vault-image': apiImport('./api/_handlers/image/_vault-image-get'),
+        '/api/image/external': apiImport('./api/_handlers/image/_external-proxy'),
+        '/api/deploy/config': apiImport('./api/_handlers/deploy/_config'),
+        '/api/deploy/smartWalletOwner': apiImport('./api/_handlers/deploy/_smartWalletOwner'),
+        '/api/deploy/v2/session/cancel': apiImport('./api/_handlers/deploy/v2/session/_cancel'),
+        '/api/deploy/v2/session/create': apiImport('./api/_handlers/deploy/v2/session/_create'),
+        '/api/deploy/v2/session/dry-run': apiImport('./api/_handlers/deploy/v2/session/_dryRun'),
+        '/api/deploy/v2/session/resume': apiImport('./api/_handlers/deploy/v2/session/_resume'),
+        '/api/deploy/v2/session/start': apiImport('./api/_handlers/deploy/v2/session/_start'),
+        '/api/deploy/v2/session/status': apiImport('./api/_handlers/deploy/v2/session/_status'),
+        '/api/v1/vault/chat/status': apiImport('./api/_handlers/v1/vault/chat/_status'),
+        '/api/v1/vault/chat/join': apiImport('./api/_handlers/v1/vault/chat/_join'),
+        '/api/v1/vault/chat/policy': apiImport('./api/_handlers/v1/vault/chat/_policy'),
+        '/api/v1/vault/chat/recheck': apiImport('./api/_handlers/v1/vault/chat/_recheck'),
+        '/api/deploy/solanaInfraStatus': apiImport('./api/[...path]'),
+        '/api/deploy/provisionSolanaRoute': apiImport('./api/[...path]'),
+        '/api/deploy/registerSolanaBridgeToken': apiImport('./api/[...path]'),
+        '/api/wallet/solana/setCanonical': apiImport('./api/[...path]'),
+        '/api/wallet/solana/sweep/enqueue': apiImport('./api/[...path]'),
+        '/api/wallet/solana/sweep/process': apiImport('./api/[...path]'),
+        '/api/telegram/webhook': apiImport('./api/_handlers/telegram/_webhook'),
+        '/api/rpc': apiImport('./api/_handlers/rpc/_proxy'),
 
         // Keepr (local dev)
-        '/api/keepr/nonce': () => import('./api/_handlers/keepr/_nonce'),
-        '/api/keepr/join': () => import('./api/_handlers/keepr/_join'),
-        '/api/keepr/vault/upsert': () => import('./api/_handlers/keepr/vault/_upsert'),
+        '/api/keepr/nonce': apiImport('./api/_handlers/keepr/_nonce'),
+        '/api/keepr/join': apiImport('./api/_handlers/keepr/_join'),
+        '/api/keepr/vault/upsert': apiImport('./api/_handlers/keepr/vault/_upsert'),
 
-        '/api/onchain/protocolRewardsClaimable': () => import('./api/_handlers/onchain/_protocolRewardsClaimable'),
-        '/api/onchain/protocolRewardsWithdrawn': () => import('./api/_handlers/onchain/_protocolRewardsWithdrawn'),
-        '/api/uniswap/query': () => import('./api/_handlers/uniswap/_query'),
-        '/api/uniswap/poolHistory': () => import('./api/_handlers/uniswap/_poolHistory'),
-        '/api/uniswap/quote': () => import('./api/_handlers/uniswap/_quote'),
-        '/api/uniswap/swap': () => import('./api/_handlers/uniswap/_swap'),
-        '/api/uniswap/order': () => import('./api/_handlers/uniswap/_order'),
-        '/api/uniswap/checkApproval': () => import('./api/_handlers/uniswap/_checkApproval'),
-        '/api/uniswap/checkDelegation': () => import('./api/_handlers/uniswap/_checkDelegation'),
-        '/api/uniswap/swap5792': () => import('./api/_handlers/uniswap/_swap5792'),
-        '/api/uniswap/swap7702': () => import('./api/_handlers/uniswap/_swap7702'),
-        '/api/uniswap/plan': () => import('./api/_handlers/uniswap/_plan'),
-        '/api/uniswap/liquidity': () => import('./api/_handlers/uniswap/_liquidity'),
-        '/api/cdp/swap/price': () => import('./api/_handlers/cdp/swap/_price'),
-        '/api/cdp/swap/execute': () => import('./api/_handlers/cdp/swap/_execute'),
-        '/api/agent/creative': () => import('./api/_handlers/agent/_creative'),
-        '/api/lens/share-token-metadata': () => import('./api/_handlers/lens/_share-token-metadata'),
-        '/api/lens/agent-registration': () => import('./api/_handlers/lens/_agent-registration'),
-        '/api/lens/reputation-graph': () => import('./api/_handlers/lens/_reputation-graph'),
-        '/api/lens/feedback-payload': () => import('./api/_handlers/lens/_feedback-payload'),
+        '/api/onchain/protocolRewardsClaimable': apiImport('./api/_handlers/onchain/_protocolRewardsClaimable'),
+        '/api/onchain/protocolRewardsWithdrawn': apiImport('./api/_handlers/onchain/_protocolRewardsWithdrawn'),
+        '/api/uniswap/query': apiImport('./api/_handlers/uniswap/_query'),
+        '/api/uniswap/poolHistory': apiImport('./api/_handlers/uniswap/_poolHistory'),
+        '/api/uniswap/quote': apiImport('./api/_handlers/uniswap/_quote'),
+        '/api/uniswap/swap': apiImport('./api/_handlers/uniswap/_swap'),
+        '/api/uniswap/order': apiImport('./api/_handlers/uniswap/_order'),
+        '/api/uniswap/checkApproval': apiImport('./api/_handlers/uniswap/_checkApproval'),
+        '/api/uniswap/checkDelegation': apiImport('./api/_handlers/uniswap/_checkDelegation'),
+        '/api/uniswap/swap5792': apiImport('./api/_handlers/uniswap/_swap5792'),
+        '/api/uniswap/swap7702': apiImport('./api/_handlers/uniswap/_swap7702'),
+        '/api/uniswap/plan': apiImport('./api/_handlers/uniswap/_plan'),
+        '/api/uniswap/liquidity': apiImport('./api/_handlers/uniswap/_liquidity'),
+        '/api/cdp/swap/price': apiImport('./api/_handlers/cdp/swap/_price'),
+        '/api/cdp/swap/execute': apiImport('./api/_handlers/cdp/swap/_execute'),
+        '/api/agent/creative': apiImport('./api/_handlers/agent/_creative'),
+        '/api/lens/share-token-metadata': apiImport('./api/_handlers/lens/_share-token-metadata'),
+        '/api/lens/agent-registration': apiImport('./api/_handlers/lens/_agent-registration'),
+        '/api/lens/reputation-graph': apiImport('./api/_handlers/lens/_reputation-graph'),
+        '/api/lens/feedback-payload': apiImport('./api/_handlers/lens/_feedback-payload'),
         // ERC-8004 feedback
-        '/api/v1/agents/feedback': () => import('./api/_handlers/v1/agents/feedback/_read'),
-        '/api/v1/agents/feedback/submit': () => import('./api/_handlers/v1/agents/feedback/_submit'),
-        '/api/v1/agents/wallet-intelligence': () => import('./api/_handlers/v1/agents/_wallet-intelligence'),
+        '/api/v1/agents/feedback': apiImport('./api/_handlers/v1/agents/feedback/_read'),
+        '/api/v1/agents/feedback/submit': apiImport('./api/_handlers/v1/agents/feedback/_submit'),
+        '/api/v1/agents/wallet-intelligence': apiImport('./api/_handlers/v1/agents/_wallet-intelligence'),
         // Social proxies
-        '/api/social/recipient': () => import('./api/_handlers/social/_recipient'),
-        '/api/social/talent': () => import('./api/_handlers/social/_talent'),
-        '/api/v1/chat/command-preflight': () => import('./api/_handlers/v1/chat/_commandPreflight'),
-        '/api/v1/chat/availability': () => import('./api/_handlers/v1/chat/_availability'),
-        '/api/v1/chat/presence/heartbeat': () => import('./api/_handlers/v1/chat/_presenceHeartbeat'),
-        '/api/v1/chat/search': () => import('./api/_handlers/v1/chat/_search'),
-        '/api/v1/chat/agents': () => import('./api/_handlers/v1/chat/_agents'),
-        '/api/v1/chat/telemetry': () => import('./api/_handlers/v1/chat/_telemetry'),
+        '/api/social/recipient': apiImport('./api/_handlers/social/_recipient'),
+        '/api/social/talent': apiImport('./api/_handlers/social/_talent'),
+        '/api/v1/chat/command-preflight': apiImport('./api/_handlers/v1/chat/_commandPreflight'),
+        '/api/v1/chat/availability': apiImport('./api/_handlers/v1/chat/_availability'),
+        '/api/v1/chat/presence/heartbeat': apiImport('./api/_handlers/v1/chat/_presenceHeartbeat'),
+        '/api/v1/chat/search': apiImport('./api/_handlers/v1/chat/_search'),
+        '/api/v1/chat/agents': apiImport('./api/_handlers/v1/chat/_agents'),
+        '/api/v1/chat/telemetry': apiImport('./api/_handlers/v1/chat/_telemetry'),
       }
       const patternRoutes: Array<{
         pattern: RegExp
@@ -342,7 +500,7 @@ function localApiRoutesPlugin(): Plugin {
       }> = [
         {
           pattern: /^\/api\/v1\/token\/([a-fA-F0-9x]+)\/image$/,
-          load: () => import('./api/_handlers/token/_image'),
+          load: apiImport('./api/_handlers/token/_image'),
           applyQuery: (match, req) => {
             req.query = req.query ?? Object.create(null)
             if (!req.query.address) req.query.address = match[1]
@@ -350,7 +508,7 @@ function localApiRoutesPlugin(): Plugin {
         },
         {
           pattern: /^\/api\/v1\/token\/([a-fA-F0-9x]+)\/logo\.(png|svg)$/,
-          load: () => import('./api/_handlers/token/_image'),
+          load: apiImport('./api/_handlers/token/_image'),
           applyQuery: (match, req) => {
             req.query = req.query ?? Object.create(null)
             if (!req.query.address) req.query.address = match[1]
@@ -359,7 +517,7 @@ function localApiRoutesPlugin(): Plugin {
           },
         },
       ]
-      const catchAllApiRoute = () => import('./api/[...path]')
+      const catchAllApiRoute = apiImport('./api/[...path]')
 
       server.middlewares.use(async (req, res, next) => {
         try {
@@ -480,13 +638,18 @@ function localMarketingLandingPlugin(): Plugin {
   }
 }
 
-function resolveOxCjsPlugin(): Plugin {
+function resolveOxModulePlugin(): Plugin {
   return {
-    name: '4626-resolve-ox-cjs',
+    name: '4626-resolve-ox-esm',
     enforce: 'pre',
     resolveId(source) {
       if (source !== 'ox' && !source.startsWith('ox/')) return null
-      return nodeRequire.resolve(source, { paths: [__dirname] })
+      const resolved = nodeRequire.resolve(source, { paths: [frontendRoot] })
+      const cjsSegment = `${path.sep}_cjs${path.sep}`
+      const esmSegment = `${path.sep}_esm${path.sep}`
+      if (!resolved.includes(cjsSegment)) return resolved
+      const esmPath = resolved.replace(cjsSegment, esmSegment)
+      return fs.existsSync(esmPath) ? esmPath : resolved
     },
   }
 }
@@ -529,8 +692,12 @@ export default defineConfig(({ command }) => {
 
   return {
     cacheDir: viteCacheDir,
+    customLogger:
+      command === 'serve'
+        ? createDevLogger(deployDryRunDev || process.env.VITE_ESBUILD_FAIL_FAST === '1')
+        : undefined,
     plugins: [
-      resolveOxCjsPlugin(),
+      resolveOxModulePlugin(),
       react(),
       tailwindcss(),
       ...(command === 'serve' ? [localMarketingLandingPlugin(), localApiRoutesPlugin()] : []),
@@ -540,6 +707,7 @@ export default defineConfig(({ command }) => {
       host: devServerHost,
       port: devServerPort,
       strictPort: true,
+      watch: resolveDevServerWatch(),
     },
   resolve: {
     alias: [
@@ -555,7 +723,10 @@ export default defineConfig(({ command }) => {
     global: 'globalThis',
   },
   optimizeDeps: {
-    include: ['buffer'],
+    // WSL/low-RAM dev: skip esbuild pre-bundling to avoid OOM-killed esbuild (EPIPE overlay).
+    ...(lowMemoryDev && command === 'serve'
+      ? { noDiscovery: true, include: [...alwaysOptimizeInclude] }
+      : { include: [...alwaysOptimizeInclude] }),
     // @xmtp/browser-sdk uses Web Workers (workers/client) that Vite's dep optimizer cannot handle
     exclude: ['@xmtp/browser-sdk'],
     esbuildOptions: {
@@ -571,6 +742,9 @@ export default defineConfig(({ command }) => {
     modulePreload: buildTelegramLinkStandalone ? false : undefined,
     minify: buildTelegramLinkStandalone ? false : 'esbuild',
     sourcemap: enableSourcemap,
+    // The app intentionally ships a few large route chunks (wallet/auth/deploy).
+    // Keep the warning threshold aligned with the current split strategy so CI logs stay actionable.
+    chunkSizeWarningLimit: 4000,
     rollupOptions: {
       input: buildInputs,
       output: {

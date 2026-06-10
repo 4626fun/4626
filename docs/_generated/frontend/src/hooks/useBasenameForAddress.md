@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / src/hooks/useBasenameForAddress
+[4626-web](../../index.md) / src/hooks/useBasenameForAddress
 
 # src/hooks/useBasenameForAddress
 
@@ -58,17 +58,37 @@ Resolved name with `.base.eth` / `.eth` suffix, or null.
 
 ## Functions
 
+### prefetchBasenameForAddresses()
+
+> **prefetchBasenameForAddresses**(`addresses`): `void`
+
+Defined in: [src/hooks/useBasenameForAddress.ts:65](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useBasenameForAddress.ts#L65)
+
+Warm the session cache as soon as wallet addresses are known (e.g. at app launch).
+
+#### Parameters
+
+##### addresses
+
+(`string` \| `null` \| `undefined`)[]
+
+#### Returns
+
+`void`
+
+***
+
 ### useBasenameForAddress()
 
 > **useBasenameForAddress**(`address`): [`BasenameResult`](#basenameresult)
 
-Defined in: [src/hooks/useBasenameForAddress.ts:64](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useBasenameForAddress.ts#L64)
+Defined in: [src/hooks/useBasenameForAddress.ts:72](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useBasenameForAddress.ts#L72)
 
 #### Parameters
 
 ##### address
 
-`` `0x${string}` `` | `null` | `undefined`
+`string` | `null` | `undefined`
 
 #### Returns
 

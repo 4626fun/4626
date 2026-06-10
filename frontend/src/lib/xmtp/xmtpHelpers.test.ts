@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { shouldFallbackToOriginalXmtpRecipient } from './xmtpHelpers'
+import { isLocalXmtpStateInvalidError, isTransientXmtpStreamNetworkError, isXmtpRateLimitError, shouldFallbackToOriginalXmtpRecipient } from './xmtpHelpers'
+import { resetXmtpSyncCoordinatorForTests } from './xmtpSyncCoordinator'
+
+beforeEach(() => {
+  resetXmtpSyncCoordinatorForTests()
+})
 
 describe('shouldFallbackToOriginalXmtpRecipient', () => {
   const original = '0xb05cf01231cf2ff99499682e64d3780d57c80fdd' as const
@@ -48,5 +53,99 @@ describe('shouldFallbackToOriginalXmtpRecipient', () => {
         originalCanMessage: true,
       }),
     ).toBe(false)
+  })
+})
+
+describe('isLocalXmtpStateInvalidError', () => {
+  it('detects inbox validation and partial sync failures', () => {
+    expect(
+      isLocalXmtpStateInvalidError(
+        'InboxValidationFailed("f1cb93da12e9fb6935084c613638d4005e5c5fd91b02e9ef0355add7309ae673")',
+      ),
+    ).toBe(true)
+    expect(isLocalXmtpStateInvalidError('synced 12 messages, 3 failed 9 succeeded')).toBe(true)
+    expect(isLocalXmtpStateInvalidError('conversation_not_found')).toBe(false)
+  })
+})
+
+
+describe('resolveConversationById', () => {
+  it('matches conversation ids case-insensitively', async () => {
+    const { conversationIdsEqual, resolveConversationById } = await import('./xmtpHelpers')
+    expect(conversationIdsEqual('AbC', 'abc')).toBe(true)
+
+    const convo = { id: 'GroupABC', sync: vi.fn(async () => undefined) }
+    const api = {
+      sync: vi.fn(async () => undefined),
+      getConversationById: vi.fn(async () => null),
+      list: vi.fn(async () => [convo]),
+    }
+    const resolved = await resolveConversationById(api, 'groupabc')
+    expect(resolved?.id).toBe('GroupABC')
+  })
+
+  it('uses syncAll and listGroups when resolving waitlist group memberships', async () => {
+    const { ConsentEntityType, ConsentState } = await import('@xmtp/browser-sdk')
+    const { resolveConversationById } = await import('./xmtpHelpers')
+
+    const group = {
+      id: 'ed6fbda34f2614536df5cec08dff2266',
+      sync: vi.fn(async () => undefined),
+      consentState: vi.fn(async () => ConsentState.Unknown),
+      updateConsentState: vi.fn(async () => undefined),
+    }
+    const list = vi.fn(async () => [])
+    const listGroups = vi.fn(async () => [group])
+    const api = {
+      sync: vi.fn(async () => undefined),
+      syncAll: vi.fn(async () => undefined),
+      getConversationById: vi.fn(async () => null),
+      list,
+      listGroups,
+    }
+    const preferencesApi = {
+      setConsentStates: vi.fn(async () => undefined),
+    }
+
+    const resolved = await resolveConversationById(api, 'ed6fbda34f2614536df5cec08dff2266', {
+      preferencesApi,
+      forceSync: true,
+    })
+    expect(resolved?.id).toBe(group.id)
+    expect(preferencesApi.setConsentStates).toHaveBeenCalledWith([
+      {
+        entityType: ConsentEntityType.GroupId,
+        entity: group.id,
+        state: ConsentState.Allowed,
+      },
+    ])
+    expect(api.syncAll).toHaveBeenCalled()
+    expect(list).toHaveBeenCalledWith({ consentStates: [ConsentState.Unknown, ConsentState.Allowed] })
+    expect(listGroups).toHaveBeenCalledWith({ consentStates: [ConsentState.Unknown, ConsentState.Allowed] })
+    expect(group.updateConsentState).toHaveBeenCalledWith(ConsentState.Allowed)
+  })
+})
+
+describe('isTransientXmtpStreamNetworkError', () => {
+  it('matches welcome-stream network blips from the browser worker', () => {
+    expect(
+      isTransientXmtpStreamNetworkError(
+        "api client at endpoint \"/xmtp.mls.api.v1.MlsApi/SubscribeWelcomeMessages\" has error status: 'Unknown error', self: \"js api error: TypeError: network error\"",
+      ),
+    ).toBe(true)
+  })
+
+  it('ignores unrelated validation failures', () => {
+    expect(isTransientXmtpStreamNetworkError('InboxValidationFailed: inbox mismatch')).toBe(false)
+  })
+})
+
+describe('isXmtpRateLimitError', () => {
+  it('matches QueryWelcomeMessages exhaustion errors', () => {
+    expect(
+      isXmtpRateLimitError(
+        "api client at endpoint \"/xmtp.mls.api.v1.MlsApi/QueryWelcomeMessages\" has error status: 'Some resource has been exhausted'",
+      ),
+    ).toBe(true)
   })
 })

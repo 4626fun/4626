@@ -1,17 +1,22 @@
 import type { ReactNode } from 'react'
-import { Route } from 'react-router-dom'
+import { Navigate, Route } from 'react-router-dom'
 
 import {
   AccountsPage,
-  AddOwnerPage,
-  RemoveOwnerPage,
-  CswFundingPage,
+  AddOwnerBaseApp,
+  Arena,
+  ArenaChartPage,
+  ArenaGettingStartedPage,
+  ArenaIntroductionPage,
+  ArenaStatusPage,
+  AmoeQuickTasks,
   AdminAgentSetup,
   AdminCreatorAccess,
   AdminCreatorStrategyProvisioning,
   AdminDeployStrategies,
   AdminImageGeneration,
   AdminOps,
+  AdminControlPlane,
   AdminUserOpHealth,
   AlfaClubVigilante,
   AdminWaitlist,
@@ -25,8 +30,8 @@ import {
   CompleteAuction,
   CreatorEarnings,
   CreatorStrategyFeatures,
-  CswSignatureProbe,
-  ToshiProbe,
+  MetaballOsProbe,
+  TacticalTokenMap,
   Deploy,
   DeployCoin,
   DeployVault,
@@ -38,41 +43,66 @@ import {
   ExploreCreatorDetail,
   ExploreCreators,
   ExploreCreatorTransactions,
+  ExploreListLayout,
   ExploreTransactions,
   ExploreTrends,
   ExploreVaults,
   Faq,
   FaqHowItWorks,
   GaugeVoting,
-  Portfolio,
   Positions,
+  RemoveOwnerPage,
   Status,
   Swap,
   Vault,
-  ZoraConnectorProbe,
 } from './lazyRoutes'
 import { SmartWalletRoute } from './routeGuards'
 
-export type PathRouteDef = { path: string; element: ReactNode }
+export type PathRouteDef = {
+  path: string
+  element: ReactNode
+  index?: boolean
+  children?: PathRouteDef[]
+}
 
 export function renderPathRoutes(
   routes: PathRouteDef[],
   transformElement?: (element: ReactNode) => ReactNode,
 ) {
-  return routes.map(({ path, element }) => (
-    <Route
-      key={path}
-      path={path}
-      element={transformElement ? transformElement(element) : element}
-    />
-  ))
+  return routes.map(({ path, element, index, children }) => {
+    const rendered = transformElement ? transformElement(element) : element
+    const childRoutes = children ? renderPathRoutes(children, transformElement) : null
+    if (index) {
+      return <Route key={`${path}:index`} index element={rendered} />
+    }
+    return (
+      <Route key={path} path={path} element={rendered}>
+        {childRoutes}
+      </Route>
+    )
+  })
 }
 
 export const MARKETING_ONLY_ROUTES: PathRouteDef[] = [
+  {
+    path: '/arena',
+    element: <Arena />,
+    children: [
+      { path: '', index: true, element: <Navigate to="/arena/introduction" replace /> },
+      { path: 'introduction', element: <ArenaIntroductionPage /> },
+      { path: 'getting-started', element: <ArenaGettingStartedPage /> },
+      { path: 'view-status', element: <ArenaStatusPage /> },
+      { path: 'view-chart', element: <ArenaChartPage /> },
+      { path: 'positions', element: <Positions /> },
+    ],
+  },
   { path: '/faq', element: <Faq /> },
   { path: '/faq/how-it-works', element: <FaqHowItWorks /> },
+  { path: '/positions', element: <Positions /> },
   { path: '/cca', element: <DistributeCcaLaunch /> },
   { path: '/status', element: <Status /> },
+  { path: '/dev/metaball-os', element: <MetaballOsProbe /> },
+  { path: '/dev/tactical-map', element: <TacticalTokenMap /> },
 ]
 
 /**
@@ -101,25 +131,22 @@ export const ACCOUNT_ROUTES: PathRouteDef[] = [
       </SmartWalletRoute>
     ),
   },
-  // `/add-owner` is a single-purpose surface that installs the user's Privy
-  // embedded EOA onto their canonical Coinbase Smart Wallet via the
-  // `prepare-add-privy-owner` lane. The address is resolved server-side from
-  // the user's authenticated Privy session — the user never has to obtain or
-  // paste an EOA address. Same passkey-via-prepareCalls submission lane that
-  // the waitlist setup uses for owner installs.
   {
-    path: '/add-owner',
+    path: '/add',
     element: (
       <SmartWalletRoute>
-        <AddOwnerPage />
+        <AddOwnerBaseApp />
       </SmartWalletRoute>
     ),
   },
-  // `/remove-owner` is the sibling surface for removing an owner from the
-  // canonical CSW. Routes through _submitOwnerViaSelfBuiltUserOp directly
-  // (bypassing sendPreparedOwnerTx) so the submission goes through Relay's
-  // /execute/call endpoint. Surfaces live on-chain owner-slot diagnostics
-  // so users can see whether the signing path will validate before signing.
+  {
+    path: '/add-owner',
+    element: <Navigate to="/waitlist" replace />,
+  },
+  // `/remove-owner` removes an owner from the canonical CSW. Primary lane is
+  // the keys.coinbase.com paste flow (passkey signs the chain-id-agnostic
+  // userOpHash directly); submission goes through Relay's /execute/call via
+  // /api/relay/execute. Surfaces live on-chain owner-slot diagnostics.
   {
     path: '/remove-owner',
     element: (
@@ -128,47 +155,27 @@ export const ACCOUNT_ROUTES: PathRouteDef[] = [
       </SmartWalletRoute>
     ),
   },
-  // `/csw-funding` shows the three funding sources for CSW UserOps on Base
-  // (native ETH, EntryPoint deposit, RelayDepository total) and lets anyone
-  // top up the EntryPoint deposit via depositTo(csw) payable. Pure
-  // diagnostics + a single self-contained top-up form; no owner mutation.
   {
     path: '/csw-funding',
-    element: (
-      <SmartWalletRoute>
-        <CswFundingPage />
-      </SmartWalletRoute>
-    ),
-  },
-  // Dev probe for Privy Connect-mode cross-app capability with Zora.
-  // The connector itself is flag-gated in `wagmi.ts`; the page renders a
-  // "probe disabled" panel when the flag is off, so it's safe to leave this
-  // route live even in production.
-  {
-    path: '/dev/zora-connector-probe',
-    element: <ZoraConnectorProbe />,
-  },
-  {
-    path: '/dev/csw-signature-probe',
-    element: <CswSignatureProbe />,
-  },
-  // `/dev/toshi-probe` — minimal mobile diagnostic for /add-owner failures.
-  // Runs each candidate wallet method (capabilities, signTypedData,
-  // prepareCalls, sendCalls+paymaster, eth_sendTransaction) one tap at a time
-  // against the connected provider so we can identify exactly which lane
-  // Toshi/Base App accepts vs rejects without rebuilding the production page.
-  {
-    path: '/dev/toshi-probe',
-    element: <ToshiProbe />,
+    element: <Navigate to="/waitlist" replace />,
   },
 ]
 
+export const EXPLORE_LIST_CHILD_ROUTES: PathRouteDef[] = [
+  { path: 'creators', index: true, element: <Navigate to="/explore/creators" replace /> },
+  { path: 'creators', element: <ExploreCreators /> },
+  { path: 'content', element: <ExploreContent /> },
+  { path: 'vaults', element: <ExploreVaults /> },
+  { path: 'trends', element: <ExploreTrends /> },
+  { path: 'transactions', element: <ExploreTransactions /> },
+]
+
 export const EXPLORE_ROUTES: PathRouteDef[] = [
-  { path: '/explore/creators', element: <ExploreCreators /> },
-  { path: '/explore/content', element: <ExploreContent /> },
-  { path: '/explore/vaults', element: <ExploreVaults /> },
-  { path: '/explore/trends', element: <ExploreTrends /> },
-  { path: '/explore/transactions', element: <ExploreTransactions /> },
+  {
+    path: '/explore',
+    element: <ExploreListLayout />,
+    children: EXPLORE_LIST_CHILD_ROUTES,
+  },
   { path: '/explore/creators/:chain/:tokenAddress', element: <ExploreCreatorDetail /> },
   {
     path: '/explore/creators/:chain/:tokenAddress/transactions',
@@ -183,13 +190,11 @@ export const EXPLORE_ROUTES: PathRouteDef[] = [
     path: '/explore/content/:chain/pool/:poolIdOrPoolKeyHash',
     element: <ExploreContentPoolAlias />,
   },
-  { path: '/positions', element: <Positions /> },
 ]
 
 export const APP_ACCEPTED_ROUTES: PathRouteDef[] = [
+  { path: '/amoe/tasks', element: <AmoeQuickTasks /> },
   { path: '/swap', element: <Swap /> },
-  { path: '/portfolio', element: <Portfolio /> },
-  { path: '/portfolio/:address', element: <Portfolio /> },
   {
     path: '/deploy',
     element: (
@@ -261,6 +266,7 @@ export const ADMIN_CHILD_ROUTES: PathRouteDef[] = [
     ),
   },
   { path: 'userop-health', element: <AdminUserOpHealth /> },
+  { path: 'control-plane', element: <AdminControlPlane /> },
   {
     path: 'alfaclub-vigilante',
     element: (

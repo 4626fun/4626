@@ -17,14 +17,82 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { createPublicClient, createWalletClient, http, type Abi } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
+import { evaluateKeeperStrategyHealthGate } from '../../../server/_lib/keeper/strategyHealthGate.js'
 
 const VAULT_ABI = [
   { type: 'function', name: 'tend', inputs: [], outputs: [], stateMutability: 'nonpayable' },
 ] as const
+
+function isKnownKeeperTendGasRejection(error: unknown): boolean {
+  const visited = new Set<unknown>()
+  const stack: unknown[] = [error]
+  const text: string[] = []
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current || visited.has(current)) continue
+    visited.add(current)
+    if (typeof current === 'string') {
+      text.push(current)
+      continue
+    }
+    if (current instanceof Error) {
+      text.push(current.message)
+      stack.push((current as Error & { cause?: unknown }).cause)
+      continue
+    }
+    if (typeof current === 'object') {
+      const candidate = current as { message?: unknown; shortMessage?: unknown; details?: unknown; cause?: unknown }
+      text.push(String(candidate.message ?? ''))
+      text.push(String(candidate.shortMessage ?? ''))
+      text.push(String(candidate.details ?? ''))
+      stack.push(candidate.cause)
+    }
+  }
+  const message = text.join(' ').toLowerCase()
+  return (
+    message.includes('gas required exceeds allowance (0)') ||
+    message.includes('insufficient funds for gas') ||
+    message.includes('estimate gas execution reverted') ||
+    message.includes('insufficient funds') ||
+    message.includes('intrinsic gas too low')
+  )
+}
+
+function isKnownKeeperTendAuthorizationRejection(error: unknown): boolean {
+  const visited = new Set<unknown>()
+  const stack: unknown[] = [error]
+  const text: string[] = []
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current || visited.has(current)) continue
+    visited.add(current)
+    if (typeof current === 'string') {
+      text.push(current)
+      continue
+    }
+    if (current instanceof Error) {
+      text.push(current.message)
+      stack.push((current as Error & { cause?: unknown }).cause)
+      continue
+    }
+    if (typeof current === 'object') {
+      const candidate = current as { message?: unknown; shortMessage?: unknown; details?: unknown; cause?: unknown }
+      text.push(String(candidate.message ?? ''))
+      text.push(String(candidate.shortMessage ?? ''))
+      text.push(String(candidate.details ?? ''))
+      stack.push(candidate.cause)
+    }
+  }
+  const message = text.join(' ').toLowerCase()
+  return (
+    message.includes('0x82b42900') ||
+    message.includes('unauthorized()')
+  )
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -39,7 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const limiter = checkRateLimit(
     rateLimitKey('keeper-tend', getClientIp(req)),
-    RATE_LIMITS.creRuntimeTriggerWrite,
+    RATE_LIMITS.keeperTriggerWrite,
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
@@ -52,9 +120,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid vaultAddress' } satisfies ApiEnvelope<never>)
   }
 
-  const keeperPk = process.env.KEEPR_PRIVATE_KEY
+  const healthGate = await evaluateKeeperStrategyHealthGate(vaultAddress)
+  if (healthGate.blocked) {
+    return res.status(200).json({
+      success: false,
+      error: 'keeper_tend_strategy_health_blocked',
+      data: {
+        status: 'skipped',
+        reason: healthGate.reason ?? 'strategy_health_blocked',
+      },
+    } satisfies ApiEnvelope<{ status: string; reason: string }>)
+  }
+
+  const keeperPk = process.env.KPR_PRIVATE_KEY
   if (!keeperPk) {
-    return res.status(500).json({ success: false, error: 'KEEPR_PRIVATE_KEY not configured' } satisfies ApiEnvelope<never>)
+    return res.status(500).json({ success: false, error: 'KPR_PRIVATE_KEY not configured' } satisfies ApiEnvelope<never>)
   }
 
   try {
@@ -62,6 +142,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const account = privateKeyToAccount(keeperPk as `0x${string}`)
     const publicClient = createPublicClient({ chain: base, transport: http(rpcUrl, { timeout: 30_000 }) }) as any
     const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl, { timeout: 30_000 }) })
+    const keeperBalanceWei = await publicClient.getBalance({ address: account.address })
+    if (keeperBalanceWei <= 0n) {
+      console.warn('[keeper/tend] skipped: keeper wallet has zero native balance', {
+        keeper: account.address,
+        vaultAddress,
+      })
+      return res.status(200).json({
+        success: false,
+        error: 'keeper_tend_wallet_unfunded',
+        data: {
+          status: 'skipped',
+          reason: 'wallet_unfunded',
+          keeper: account.address,
+          vaultAddress,
+        },
+      } satisfies ApiEnvelope<{ status: string; reason: string; keeper: string; vaultAddress: string }>)
+    }
 
     const txHash = await walletClient.writeContract({
       address: vaultAddress as `0x${string}`,
@@ -81,6 +178,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     } satisfies ApiEnvelope<{ txHash: string; status: string }>)
   } catch (err) {
+    if (isKnownKeeperTendGasRejection(err)) {
+      console.warn('[keeper/tend] known gas rejection', {
+        message: err instanceof Error ? err.message : String(err),
+      })
+      return res.status(200).json({
+        success: false,
+        error: 'keeper_tend_gas_rejected',
+        data: {
+          status: 'skipped',
+          reason: 'gas_rejected',
+        },
+      } satisfies ApiEnvelope<{ status: string; reason: string }>)
+    }
+    if (isKnownKeeperTendAuthorizationRejection(err)) {
+      console.warn('[keeper/tend] known authorization rejection', {
+        message: err instanceof Error ? err.message : String(err),
+      })
+      return res.status(200).json({
+        success: false,
+        error: 'keeper_tend_unauthorized',
+        data: {
+          status: 'skipped',
+          reason: 'unauthorized',
+        },
+      } satisfies ApiEnvelope<{ status: string; reason: string }>)
+    }
     console.error('[keeper/tend] Error:', err)
     return res.status(500).json({
       success: false,

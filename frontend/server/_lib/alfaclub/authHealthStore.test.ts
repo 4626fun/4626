@@ -4,6 +4,7 @@ import {
   buildRefreshFailurePayload,
   buildRefreshSuccessPayload,
   classifyRefreshError,
+  evaluateDbEnvStaleness,
   evaluateWriterAnomaly,
   redactTokenMaterial,
 } from './authHealthStore.js'
@@ -19,6 +20,7 @@ describe('evaluateWriterAnomaly', () => {
   it('accepts admin.api and computer-token-restore', () => {
     expect(evaluateWriterAnomaly('admin.api').isAnomalous).toBe(false)
     expect(evaluateWriterAnomaly('computer-token-restore').isAnomalous).toBe(false)
+    expect(evaluateWriterAnomaly('cron-token-bootstrap').isAnomalous).toBe(false)
   })
 
   it('accepts admin EVM-address writers (lowercase 0x + 40 hex)', () => {
@@ -55,6 +57,38 @@ describe('evaluateWriterAnomaly', () => {
     expect(evaluateWriterAnomaly(undefined).reason).toBe('empty_writer')
   })
 })
+
+describe('evaluateDbEnvStaleness', () => {
+  it('returns null when env and db expiries align', () => {
+    const exp = '2026-05-01T14:00:00.000Z'
+    expect(
+      evaluateDbEnvStaleness({
+        dbIdentityExpiresAt: exp,
+        envIdentityJwt: makeJwtWithExp(exp),
+        dbAccessExpiresAt: null,
+        envAccessJwt: null,
+      }),
+    ).toBeNull()
+  })
+
+  it('warns when env identity JWT expires later than DB', () => {
+    const warning = evaluateDbEnvStaleness({
+      dbIdentityExpiresAt: '2026-05-01T12:00:00.000Z',
+      envIdentityJwt: makeJwtWithExp('2026-05-01T15:00:00.000Z'),
+      dbAccessExpiresAt: null,
+      envAccessJwt: null,
+      slackMs: 0,
+    })
+    expect(warning?.kind).toBe('db_lags_env')
+    expect(warning?.identity?.envExpiresAt).toBe('2026-05-01T15:00:00.000Z')
+  })
+})
+
+function makeJwtWithExp(iso: string): string {
+  const exp = Math.floor(Date.parse(iso) / 1000)
+  const payload = Buffer.from(JSON.stringify({ exp }), 'utf8').toString('base64url')
+  return `hdr.${payload}.sig`
+}
 
 describe('redactTokenMaterial', () => {
   it('strips JWT-shaped substrings (3 base64url segments)', () => {

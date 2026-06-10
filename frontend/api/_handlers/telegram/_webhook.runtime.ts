@@ -42,8 +42,13 @@ import {
   upsertTelegramOnboardingSession,
   upsertTelegramTradePercentPrompt,
   upsertHolderRoomMember,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
+import {
+  resolveTelegramWebhookIngressLane,
+  shouldRelayTelegramToAlfaclubOnCanonicalWebhook,
+} from './webhook/ingress.js'
+import { handleHermitTelegramWebhookIngress } from './webhook/hermitWebhookIngress.js'
 import { checkSharesEligibility } from '../../../server/_lib/keepr/keeprGating.js'
 import { ensureAccountsIdentitySchema, fetchCreatorCoinSummary } from '../../../server/_lib/identity/accountsIdentity.js'
 import { getKeeprVaultByGroupId, getKeeprVaultByVaultAddress } from '../../../server/_lib/keepr/keeprRegistry.js'
@@ -67,10 +72,10 @@ import {
 import {
   resolveTelegramIdentityContext,
   type TelegramSenderWalletSource as SenderWalletSource,
-} from '../../../server/agent/core/resolveIdentityContext.js'
-import { executeDeterministicCommand } from '../../../server/agent/core/executeDeterministicCommand.js'
+} from '../../../server/agents/core/resolveIdentityContext.js'
+import { executeDeterministicCommand } from '../../../server/agents/core/executeDeterministicCommand.js'
 import { evaluateGroupAdminGate } from '../../../server/commands/telegramGroupAdminGate.js'
-import { processTelegramAgentInput } from '../../../server/agent/core/processTelegramAgentInput.js'
+import { processTelegramAgentInput } from '../../../server/agents/core/processTelegramAgentInput.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 
 import { getTelegramWebhookConfig } from './webhook/config.js'
@@ -185,7 +190,7 @@ const TELEGRAM_MENU_LABELS = {
   wallet: '■ Wallet',
   trade: 'Trade',
   explore: 'Explore',
-  cre: 'CRE Ops',
+  keeper: 'Keeper Ops',
   solana: 'Solana',
   help: 'Help',
   vaults: 'Vaults',
@@ -249,6 +254,7 @@ type TelegramChatShared = {
 
 type TelegramMessage = {
   message_id?: number
+  message_thread_id?: number
   text?: string
   caption?: string
   from?: TelegramFrom
@@ -313,6 +319,7 @@ type TelegramWebhookOk = {
   ok: true
   ignored?: boolean
   updateId?: number | null
+  alfaclubRelay?: { roomId: string; lane: string }
 }
 
 function asTrimmed(value: unknown): string {
@@ -1653,11 +1660,15 @@ function shouldShowOperatorMenus(params: { isAdmin: boolean }): boolean {
 
 function isOperatorCallbackToken(rawData: string): boolean {
   const token = asTrimmed(rawData).toLowerCase()
-  return token === 'menu:cre' || token === 'menu:solana' || token.startsWith('cre:')
+  return token === 'menu:keeper' || token === 'menu:solana' || token.startsWith('keeper:')
 }
 
 function isOperatorCommand(rawText: string): boolean {
-  return asTrimmed(rawText).toLowerCase().startsWith('/cre')
+  const normalized = asTrimmed(rawText).toLowerCase()
+  if (normalized === '/keepr' || normalized === '/keepr help' || normalized === '/keepr commands') {
+    return false
+  }
+  return normalized.startsWith('/keepr')
 }
 
 function buildOperatorAccessDeniedResponse(params: {
@@ -1666,7 +1677,7 @@ function buildOperatorAccessDeniedResponse(params: {
 }): TelegramCommandResponse {
   return {
     text: [
-      `${menuLabel('cre')} and ${menuLabel('solana')} are only available to configured bot operators.`,
+      `${menuLabel('keeper')} and ${menuLabel('solana')} are only available to configured bot operators.`,
       '',
       'Use /start for regular wallet, trade, and discovery actions.',
     ].join('\n'),
@@ -1674,22 +1685,22 @@ function buildOperatorAccessDeniedResponse(params: {
   }
 }
 
-function buildCreReplyMarkup(): Record<string, unknown> {
+function buildKeeperReplyMarkup(): Record<string, unknown> {
   return {
     inline_keyboard: [
       [
-        { text: 'Status', callback_data: 'cre:status' },
-        { text: 'Auctions', callback_data: 'cre:auction' },
+        { text: 'Status', callback_data: 'keeper:status' },
+        { text: 'Auctions', callback_data: 'keeper:auction' },
       ],
       [
-        { text: 'Health', callback_data: 'cre:health' },
+        { text: 'Health', callback_data: 'keeper:health' },
         { text: menuLabel('solana'), callback_data: 'menu:solana' },
       ],
       [
-        { text: 'Tend All', callback_data: 'cre:tend' },
-        { text: 'Report All', callback_data: 'cre:report' },
+        { text: 'Tend All', callback_data: 'keeper:tend' },
+        { text: 'Report All', callback_data: 'keeper:report' },
       ],
-      [{ text: 'Ask AI About CRE', switch_inline_query_current_chat: 'ai summarize current CRE status, auctions, health, and next operator actions' }],
+      [{ text: 'Ask AI About Keeper', switch_inline_query_current_chat: 'ai summarize current keeper status, auctions, health, and next operator actions' }],
       [{ text: menuLabel('back'), callback_data: 'menu:start' }],
     ],
   }
@@ -1699,16 +1710,16 @@ function buildSolanaReplyMarkup(): Record<string, unknown> {
   return {
     inline_keyboard: [
       [
-        { text: 'Status', callback_data: 'cre:solana' },
-        { text: 'Health', callback_data: 'cre:health' },
+        { text: 'Status', callback_data: 'keeper:solana' },
+        { text: 'Health', callback_data: 'keeper:health' },
       ],
       [
-        { text: 'Settle Fees', callback_data: 'cre:settle-fees' },
-        { text: 'Relay Entries', callback_data: 'cre:relay-entries' },
+        { text: 'Settle Fees', callback_data: 'keeper:settle-fees' },
+        { text: 'Relay Entries', callback_data: 'keeper:relay-entries' },
       ],
       [{ text: 'Ask AI About Solana', switch_inline_query_current_chat: 'ai summarize current Solana health, pending entries, and fee settlement status' }],
       [
-        { text: menuLabel('cre'), callback_data: 'menu:cre' },
+        { text: menuLabel('keeper'), callback_data: 'menu:keeper' },
         { text: menuLabel('back'), callback_data: 'menu:start' },
       ],
     ],
@@ -1717,15 +1728,15 @@ function buildSolanaReplyMarkup(): Record<string, unknown> {
 
 function resolveOperatorReplyMarkup(commandText: string): Record<string, unknown> | undefined {
   const normalized = asTrimmed(commandText).toLowerCase()
-  if (!normalized.startsWith('/cre')) return undefined
+  if (!normalized.startsWith('/keepr')) return undefined
   if (
-    normalized === '/cre solana' ||
-    normalized === '/cre settle-fees' ||
-    normalized === '/cre relay-entries'
+    normalized === '/keepr solana' ||
+    normalized === '/keepr settle-fees' ||
+    normalized === '/keepr relay-entries'
   ) {
     return buildSolanaReplyMarkup()
   }
-  return buildCreReplyMarkup()
+  return buildKeeperReplyMarkup()
 }
 
 function resolveHelpCallbackCommand(rawData: string): string | null {
@@ -1779,7 +1790,7 @@ function resolveStaticMenuCallbackResponse(params: {
       replyMarkup: buildTradeMenuReplyMarkup(),
     }
   }
-  if (token === 'menu:cre') {
+  if (token === 'menu:keeper') {
     if (!shouldShowOperatorMenus({ isAdmin: params.isAdmin })) {
       return buildOperatorAccessDeniedResponse({
         chatId: params.chatId,
@@ -1787,8 +1798,8 @@ function resolveStaticMenuCallbackResponse(params: {
       })
     }
     return {
-      text: [menuLabel('cre'), '', 'Tap an operator action to inspect or run keeper flows.'].join('\n'),
-      replyMarkup: buildCreReplyMarkup(),
+      text: [menuLabel('keeper'), '', 'Tap an operator action to inspect or run keeper flows.'].join('\n'),
+      replyMarkup: buildKeeperReplyMarkup(),
     }
   }
   if (token === 'menu:solana') {
@@ -3577,7 +3588,7 @@ async function executeTelegramNativeCommand(params: {
       }
     }
 
-    const creatorToken = getAddress('0x5b674196812451B7cEC024FE9d22D2c0b172fa75')
+    const creatorToken = getAddress('0x5b674196812451B7cEC024FE9d22D2c0b172fa75') as `0x${string}`
     const intentPayload: Record<string, unknown> = {
       deployType: 'vault',
       token: vaultDeployIntent.token,
@@ -5136,7 +5147,7 @@ function resolveVaultDeployContractsFromIntent(params: {
   const normalize = (value: unknown): `0x${string}` | null => {
     if (typeof value !== 'string') return null
     try {
-      return getAddress(value as Address)
+      return getAddress(value as Address) as `0x${string}`
     } catch {
       return null
     }
@@ -5416,7 +5427,7 @@ async function handleTelegramVaultDeployCallback(params: {
   }
 
   const intent = consumed.intentPayload ?? {}
-  const version = asTrimmed(String(intent.version ?? 'v1.11.0')) || 'v1.11.0'
+  const version = asTrimmed(String(intent.version ?? 'v1.13.0')) || 'v1.13.0'
 
   if (callback.kind === 'decline') {
     await logTelegramActionAudit({
@@ -5466,7 +5477,7 @@ async function handleTelegramVaultDeployCallback(params: {
         '',
         `- status: ${started.status}`,
         `- reason: ${started.error}`,
-        '- retry `/vaultdeploy akita v1.11.0`',
+        '- retry `/vaultdeploy akita v1.13.0`',
       ].join('\n'),
       callbackToast: 'Vault deploy failed',
     }
@@ -5720,10 +5731,10 @@ async function handleTelegramDeployCallback(params: {
 function buildPremiumObservedCommandText(commandText: string, responseText: string): string | null {
   const normalized = asTrimmed(commandText).toLowerCase()
   const detailLines = responseText.split('\n').map((line) => line.trimEnd())
-  if (normalized === '/cre status') {
+  if (normalized === '/keepr status') {
     return buildTelegramCommandChrome({
-      title: 'AKITA | CRE STATUS',
-      command: '/cre status',
+      title: 'AKITA | KEEPER STATUS',
+      command: '/keepr status',
       summaryLines: [
         'Vault keeper snapshot.',
         'Idle funds, tend cadence, and latest report state.',
@@ -5732,10 +5743,10 @@ function buildPremiumObservedCommandText(commandText: string, responseText: stri
       expandableDetails: true,
     })
   }
-  if (normalized === '/cre auction') {
+  if (normalized === '/keepr auction') {
     return buildTelegramCommandChrome({
-      title: 'AKITA | CRE AUCTIONS',
-      command: '/cre auction',
+      title: 'AKITA | KEEPER AUCTIONS',
+      command: '/keepr auction',
       summaryLines: [
         'CCA auction snapshot.',
         'Settlement and graduation state across scoped vaults.',
@@ -5744,10 +5755,10 @@ function buildPremiumObservedCommandText(commandText: string, responseText: stri
       expandableDetails: true,
     })
   }
-  if (normalized === '/cre solana') {
+  if (normalized === '/keepr solana') {
     return buildTelegramCommandChrome({
       title: 'AKITA | SOLANA',
-      command: '/cre solana',
+      command: '/keepr solana',
       summaryLines: [
         'Solana bridge and relay snapshot.',
         'Price deviation, entries, and fee path health.',
@@ -5756,10 +5767,10 @@ function buildPremiumObservedCommandText(commandText: string, responseText: stri
       expandableDetails: true,
     })
   }
-  if (normalized === '/cre health') {
+  if (normalized === '/keepr health') {
     return buildTelegramCommandChrome({
-      title: 'AKITA | CRE HEALTH',
-      command: '/cre health',
+      title: 'AKITA | KEEPER HEALTH',
+      command: '/keepr health',
       summaryLines: [
         'Combined keeper health check.',
         'Cross-chain readiness and operator attention points.',
@@ -7194,14 +7205,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
+  if (resolveTelegramWebhookIngressLane(req) === 'hermit') {
+    return handleHermitTelegramWebhookIngress(req, res)
+  }
+
   const webhookConfig = getTelegramWebhookConfig()
   const botToken = webhookConfig.botToken
   if (!botToken) {
+    if (!shouldRelayTelegramToAlfaclubOnCanonicalWebhook()) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          ok: true,
+          ignored: true,
+        },
+      } satisfies ApiEnvelope<TelegramWebhookOk>)
+    }
     return res.status(503).json({ success: false, error: 'Telegram bot is not configured' } satisfies ApiEnvelope<never>)
   }
 
   const configuredSecret = webhookConfig.webhookSecret
   if (!configuredSecret) {
+    if (!shouldRelayTelegramToAlfaclubOnCanonicalWebhook()) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          ok: true,
+          ignored: true,
+        },
+      } satisfies ApiEnvelope<TelegramWebhookOk>)
+    }
     return res.status(503).json({
       success: false,
       error: 'Telegram webhook secret is not configured',
@@ -7464,7 +7497,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await answerTelegramCallbackQuery({
         botToken,
         callbackQueryId,
-        text: 'Only configured bot operators can use CRE Ops and Solana actions.',
+        text: 'Only configured bot operators can use Keeper Ops and Solana actions.',
         showAlert: true,
       }).catch(() => {})
       return res.status(200).json({
@@ -7810,6 +7843,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
     } satisfies ApiEnvelope<TelegramWebhookOk>)
+  }
+
+  if (shouldRelayTelegramToAlfaclubOnCanonicalWebhook()) {
+    const relayText = asTrimmed(message.text ?? message.caption ?? '')
+    const relayThreadId =
+      typeof message.message_thread_id === 'number' && Number.isFinite(message.message_thread_id)
+        ? message.message_thread_id
+        : null
+    try {
+      const { relayTelegramMessageToAlfaClub } = await import(
+        '../../../server/_lib/alfaclub/telegramToAlfaclubRelay.js'
+      )
+      const relayResult = await relayTelegramMessageToAlfaClub({
+        chatId,
+        messageId,
+        messageThreadId: relayThreadId,
+        text: relayText,
+        username: message.from?.username ?? null,
+        userId,
+      })
+      if (relayResult.status === 'relayed') {
+        return res.status(200).json({
+          success: true,
+          data: {
+            ok: true,
+            updateId: update.update_id ?? null,
+            alfaclubRelay: { roomId: relayResult.roomId, lane: relayResult.lane },
+          } satisfies TelegramWebhookOk,
+        } satisfies ApiEnvelope<TelegramWebhookOk>)
+      }
+    } catch (relayError) {
+      console.warn('[telegram/webhook] alfaclub relay hook failed', {
+        updateId: update.update_id ?? null,
+        chatId,
+        err: relayError instanceof Error ? relayError.message : String(relayError),
+      })
+    }
   }
 
   if (sharedSelection) {

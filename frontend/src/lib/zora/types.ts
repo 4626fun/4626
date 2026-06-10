@@ -46,7 +46,7 @@ export type ZoraCoin = {
   description?: string
   address?: string
   symbol?: string
-  coinType?: 'CREATOR' | 'CONTENT' | string
+  coinType?: 'CREATOR' | 'CONTENT' | 'TREND' | string
   totalSupply?: string
   totalVolume?: string
   volume24h?: string
@@ -58,12 +58,20 @@ export type ZoraCoin = {
   tokenPrice?: ZoraTokenPrice
   marketCap?: string
   marketCapDelta24h?: string
+  fees24hUsd?: string | null
   chainId?: number
   uniqueHolders?: number
   tokenUri?: string
   platformReferrerAddress?: string
   payoutRecipientAddress?: string
   mediaContent?: ZoraMediaContent
+  ethosScore?: number | null
+  ethosLevel?: string | null
+  ethosScoreSource?: string | null
+  trend30d?: {
+    values: number[]
+    changePercent?: number | null
+  }
 }
 
 export type ZoraEdge<T> = { node?: T; cursor?: string }

@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / server/zora/routerAllowlist
+[4626-web](../../index.md) / server/zora/routerAllowlist
 
 # server/zora/routerAllowlist
 
@@ -37,7 +37,7 @@ track new router addresses in preview.
 
 ##### target
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 

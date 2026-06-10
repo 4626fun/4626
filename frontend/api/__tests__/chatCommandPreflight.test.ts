@@ -5,14 +5,14 @@ import { createMockReq, createMockRes } from './helpers'
 
 const {
   getKeeprVaultByGroupIdMock,
-  isCreWriteCommandTextMock,
+  isKeeperWriteCommandTextMock,
   readSessionFromRequestMock,
   checkRateLimitMock,
   getClientIpMock,
   rateLimitKeyMock,
 } = vi.hoisted(() => ({
   getKeeprVaultByGroupIdMock: vi.fn(),
-  isCreWriteCommandTextMock: vi.fn(),
+  isKeeperWriteCommandTextMock: vi.fn(),
   readSessionFromRequestMock: vi.fn(),
   checkRateLimitMock: vi.fn(() => ({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })),
   getClientIpMock: vi.fn(() => '127.0.0.1'),
@@ -23,8 +23,8 @@ vi.mock('../../server/_lib/keepr/keeprRegistry.js', () => ({
   getKeeprVaultByGroupId: getKeeprVaultByGroupIdMock,
 }))
 
-vi.mock('../../server/agent/eliza/plugins/cre/index.js', () => ({
-  isCreWriteCommandText: isCreWriteCommandTextMock,
+vi.mock('../../server/agents/eliza/plugins/keeperOps/index.js', () => ({
+  isKeeperWriteCommandText: isKeeperWriteCommandTextMock,
 }))
 
 vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
@@ -37,7 +37,7 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
 }))
 
 vi.mock('../../server/auth/_shared.js', async () => {
-  const actual = await vi.importActual<typeof import('../../packages/server-core/src/index.js')>('../../server/auth/_shared.js')
+  const actual = await vi.importActual<typeof import('@4626/server-core')>('../../server/auth/_shared.js')
   return {
     ...actual,
     readSessionFromRequest: readSessionFromRequestMock,
@@ -49,7 +49,7 @@ describe('POST /api/v1/chat/command-preflight', () => {
     vi.clearAllMocks()
     delete process.env.HERMIT_ALLOWED_USERS
     checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })
-    isCreWriteCommandTextMock.mockReturnValue(false)
+    isKeeperWriteCommandTextMock.mockReturnValue(false)
     getKeeprVaultByGroupIdMock.mockResolvedValue({
       canonicalOwnerAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       config: {
@@ -70,7 +70,7 @@ describe('POST /api/v1/chat/command-preflight', () => {
       body: {
         conversationId: 'group-1',
         senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        command: '/cre tend',
+        command: '/keepr tend',
       },
     })
     const res = createMockRes()
@@ -182,12 +182,12 @@ describe('POST /api/v1/chat/command-preflight', () => {
   })
 
   it('rejects write preflight when sender wallet is missing', async () => {
-    isCreWriteCommandTextMock.mockReturnValueOnce(true)
+    isKeeperWriteCommandTextMock.mockReturnValueOnce(true)
     const req = createMockReq({
       method: 'POST',
       body: {
         conversationId: 'group-1',
-        command: '/cre tend',
+        command: '/keepr tend',
       },
     })
     const res = createMockRes()
@@ -200,14 +200,14 @@ describe('POST /api/v1/chat/command-preflight', () => {
   })
 
   it('rejects write preflight when auth session is missing', async () => {
-    isCreWriteCommandTextMock.mockReturnValueOnce(true)
+    isKeeperWriteCommandTextMock.mockReturnValueOnce(true)
     readSessionFromRequestMock.mockReturnValueOnce(null)
     const req = createMockReq({
       method: 'POST',
       body: {
         conversationId: 'group-1',
         senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        command: '/cre tend',
+        command: '/keepr tend',
       },
     })
     const res = createMockRes()
@@ -220,7 +220,7 @@ describe('POST /api/v1/chat/command-preflight', () => {
   })
 
   it('rejects write preflight when sender wallet mismatches session wallet', async () => {
-    isCreWriteCommandTextMock.mockReturnValueOnce(true)
+    isKeeperWriteCommandTextMock.mockReturnValueOnce(true)
     readSessionFromRequestMock.mockReturnValueOnce({
       address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     })
@@ -229,7 +229,7 @@ describe('POST /api/v1/chat/command-preflight', () => {
       body: {
         conversationId: 'group-1',
         senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        command: '/cre tend',
+        command: '/keepr tend',
       },
     })
     const res = createMockRes()
@@ -242,7 +242,7 @@ describe('POST /api/v1/chat/command-preflight', () => {
   })
 
   it('rejects write preflight for member role', async () => {
-    isCreWriteCommandTextMock.mockReturnValueOnce(true)
+    isKeeperWriteCommandTextMock.mockReturnValueOnce(true)
     readSessionFromRequestMock.mockReturnValueOnce({
       address: '0xcccccccccccccccccccccccccccccccccccccccc',
     })
@@ -251,7 +251,7 @@ describe('POST /api/v1/chat/command-preflight', () => {
       body: {
         conversationId: 'group-1',
         senderWallet: '0xcccccccccccccccccccccccccccccccccccccccc',
-        command: '/cre tend',
+        command: '/keepr tend',
       },
     })
     const res = createMockRes()
@@ -263,14 +263,14 @@ describe('POST /api/v1/chat/command-preflight', () => {
     expect(res.body?.data?.guardCategory).toBe('role_denied')
   })
 
-  it('allows CRE writes when role checks pass', async () => {
-    isCreWriteCommandTextMock.mockReturnValueOnce(true)
+  it('allows keeper writes when role checks pass', async () => {
+    isKeeperWriteCommandTextMock.mockReturnValueOnce(true)
     const req = createMockReq({
       method: 'POST',
       body: {
         conversationId: 'group-1',
         senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        command: '/cre tend',
+        command: '/keepr tend',
       },
     })
     const res = createMockRes()
@@ -284,14 +284,14 @@ describe('POST /api/v1/chat/command-preflight', () => {
   })
 
   it('fails closed when backend checks throw', async () => {
-    isCreWriteCommandTextMock.mockReturnValueOnce(true)
+    isKeeperWriteCommandTextMock.mockReturnValueOnce(true)
     getKeeprVaultByGroupIdMock.mockRejectedValueOnce(new Error('db unavailable'))
     const req = createMockReq({
       method: 'POST',
       body: {
         conversationId: 'group-1',
         senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        command: '/cre tend',
+        command: '/keepr tend',
       },
     })
     const res = createMockRes()

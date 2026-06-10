@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/layout/appLoadingIntents
+[4626-web](../../../index.md) / src/components/layout/appLoadingIntents
 
 # src/components/layout/appLoadingIntents
 
@@ -70,17 +70,19 @@ Defined in: [src/components/layout/appLoadingIntents.ts:116](https://github.com/
 
 ***
 
-### getLoadingIntentFromPath()
+### resolveOverlayPatternIntent()
 
-> **getLoadingIntentFromPath**(`pathname`): [`LoadingIntent`](#loadingintent)
+> **resolveOverlayPatternIntent**(`intent`): [`LoadingIntent`](#loadingintent)
 
-Defined in: [src/components/layout/appLoadingIntents.ts:120](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/appLoadingIntents.ts#L120)
+Defined in: [src/components/layout/appLoadingIntents.ts:121](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/appLoadingIntents.ts#L121)
+
+Keep the wave loader animation stable while bootstrap intents hand off.
 
 #### Parameters
 
-##### pathname
+##### intent
 
-`string`
+[`LoadingIntent`](#loadingintent)
 
 #### Returns
 

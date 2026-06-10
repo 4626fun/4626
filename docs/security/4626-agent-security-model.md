@@ -20,6 +20,11 @@ This rollout does not introduce a separate secure-agent service. The control pla
 - [`frontend/server/_lib/agentControl/remoteAi.ts`](../../frontend/server/_lib/agentControl/remoteAi.ts)
 - [`frontend/server/_lib/agentControl/telegramTradeControl.ts`](../../frontend/server/_lib/agentControl/telegramTradeControl.ts)
 
+For mutable write surfaces and periodic drift checks, use:
+
+- [Mutable Surface Inventory](./mutable-surface-inventory.md)
+- [Historical Risk Review Checklist](./historical-risk-review.md)
+
 ## Repo-Verified Map
 
 ### User-facing approval surfaces
@@ -46,11 +51,11 @@ This rollout does not introduce a separate secure-agent service. The control pla
 ### Automation, scheduling, and execution
 
 - Local runner:
-  - [`cre/runner.ts`](../../cre/runner.ts)
+  - [`kpr/runner.ts`](../../kpr/runner.ts)
 - Main workflow:
-  - [`cre/workflows/4626.workflow.ts`](../../cre/workflows/4626.workflow.ts)
+  - [`kpr/workflows/4626.workflow.ts`](../../kpr/workflows/4626.workflow.ts)
 - Additional workflow packages:
-  - [`cre/cre-workflows`](../../cre/cre-workflows)
+  - [`kpr/kpr-workflows`](../../kpr/kpr-workflows)
 - Keepr queue APIs:
   - [`frontend/api/_handlers/keepr/actions/_enqueue.ts`](../../frontend/api/_handlers/keepr/actions/_enqueue.ts)
   - [`frontend/api/_handlers/keepr/actions/_pending.ts`](../../frontend/api/_handlers/keepr/actions/_pending.ts)
@@ -81,14 +86,14 @@ Signing and execution split across two distinct tracks — see [4626 Connection 
   - [`frontend/api/_handlers/deploy/_registerSolanaBridgeToken.ts`](../../frontend/api/_handlers/deploy/_registerSolanaBridgeToken.ts)
   - [`frontend/server/solana-provisioner/index.ts`](../../frontend/server/solana-provisioner/index.ts)
 - Payout processor:
-  - [`cre/actions/payout-router-harvest.action.ts`](../../cre/actions/payout-router-harvest.action.ts)
+  - [`kpr/actions/payout-router-harvest.action.ts`](../../kpr/actions/payout-router-harvest.action.ts)
 
 ### Outbound remote-AI call sites
 
 - Multi-provider chat completions:
-  - [`frontend/server/agent/eliza/llm.ts`](../../frontend/server/agent/eliza/llm.ts)
+  - [`frontend/server/agents/eliza/llm.ts`](../../frontend/server/agents/eliza/llm.ts)
 - Embeddings:
-  - [`frontend/server/agent/eliza/embeddings.ts`](../../frontend/server/agent/eliza/embeddings.ts)
+  - [`frontend/server/agents/eliza/embeddings.ts`](../../frontend/server/agents/eliza/embeddings.ts)
 - OpenAI image generation and evaluation:
   - [`frontend/server/_lib/image/openaiImage.ts`](../../frontend/server/_lib/image/openaiImage.ts)
 - Keeper AI assessment:
@@ -165,19 +170,19 @@ For keepr enqueue, execute, and queue execution, the effective action type is de
 
 ### Auth layering
 
-- `KEEPR_API_KEY`
+- `KPR_API_KEY`
   - Coarse machine auth for backward compatibility.
-- `KEEPR_ZONE_KEY_FINANCIAL_EXECUTION`
-- `KEEPR_ZONE_KEY_MARKET_MAINTENANCE`
-- `KEEPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING`
+- `KPR_ZONE_KEY_FINANCIAL_EXECUTION`
+- `KPR_ZONE_KEY_MARKET_MAINTENANCE`
+- `KPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING`
 
 When a zone-specific key is configured, the corresponding request must also supply `x-keepr-zone-key`.
 
 ### Kill switches
 
-- `KEEPR_ZONE_DISABLE_FINANCIAL_EXECUTION`
-- `KEEPR_ZONE_DISABLE_MARKET_MAINTENANCE`
-- `KEEPR_ZONE_DISABLE_QUEUE_MESSAGING_MONITORING`
+- `KPR_ZONE_DISABLE_FINANCIAL_EXECUTION`
+- `KPR_ZONE_DISABLE_MARKET_MAINTENANCE`
+- `KPR_ZONE_DISABLE_QUEUE_MESSAGING_MONITORING`
 
 Kill switches are enforced at:
 
@@ -212,8 +217,8 @@ Remote-AI egress is intentionally centralized around [`frontend/server/_lib/agen
 
 ### Current call sites using the shared wrapper
 
-- [`frontend/server/agent/eliza/llm.ts`](../../frontend/server/agent/eliza/llm.ts)
-- [`frontend/server/agent/eliza/embeddings.ts`](../../frontend/server/agent/eliza/embeddings.ts)
+- [`frontend/server/agents/eliza/llm.ts`](../../frontend/server/agents/eliza/llm.ts)
+- [`frontend/server/agents/eliza/embeddings.ts`](../../frontend/server/agents/eliza/embeddings.ts)
 - [`frontend/server/_lib/image/openaiImage.ts`](../../frontend/server/_lib/image/openaiImage.ts)
 - [`frontend/api/_handlers/keeper/_aiAssess.ts`](../../frontend/api/_handlers/keeper/_aiAssess.ts)
 
@@ -243,24 +248,24 @@ These are known follow-ups, not accidental omissions.
 ### Safe rollout order
 
 1. Deploy code with the shared helpers and correlation ID support.
-2. Leave `KEEPR_API_KEY` in place during the transition.
+2. Leave `KPR_API_KEY` in place during the transition.
 3. Configure zone-specific keys per automation boundary.
 4. Turn on zone kill switches only when operators understand the execution impact for that zone.
 
 ### Backward compatibility
 
-- Existing coarse `KEEPR_API_KEY` auth still works unless operators configure a stricter zone key.
+- Existing coarse `KPR_API_KEY` auth still works unless operators configure a stricter zone key.
 - Existing Telegram callback tokens and audit tables are preserved.
 - Existing remote-AI call sites keep their provider behavior while now sharing a consistent egress gate.
 
 ## Rollback and Kill-Switch Guidance
 
 - To stop financial writes immediately:
-  - Set `KEEPR_ZONE_DISABLE_FINANCIAL_EXECUTION=true`
+  - Set `KPR_ZONE_DISABLE_FINANCIAL_EXECUTION=true`
 - To stop messaging and queue-side writes:
-  - Set `KEEPR_ZONE_DISABLE_QUEUE_MESSAGING_MONITORING=true`
+  - Set `KPR_ZONE_DISABLE_QUEUE_MESSAGING_MONITORING=true`
 - To remove extra per-zone auth during a staged rollback:
-  - Unset the corresponding `KEEPR_ZONE_KEY_*` variable
+  - Unset the corresponding `KPR_ZONE_KEY_*` variable
 - If remote-AI egress causes unexpected behavior:
   - disable the specific provider API key at the environment layer
   - keep the shared egress wrapper in place rather than bypassing redaction ad hoc

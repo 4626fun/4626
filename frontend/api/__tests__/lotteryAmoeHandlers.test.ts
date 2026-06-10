@@ -17,6 +17,9 @@ const checkRateLimitMock = vi.fn()
 const getClientIpMock = vi.fn()
 const rateLimitKeyMock = vi.fn()
 const checkDurableRateLimitMock = vi.fn()
+const verifyPrivyForAccountsMock = vi.fn()
+const extractTweetIdFromInputMock = vi.fn()
+const verifyTweetForAmoeMock = vi.fn()
 const PROTOCOL_AMOE_CREATOR_COIN = '0x5b674196812451b7cec024fe9d22d2c0b172fa75'
 
 vi.mock('../../server/_lib/agent/agentApiGuard.js', () => ({
@@ -39,6 +42,19 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
 
 vi.mock('../../server/_lib/wallet/canonicalWalletResolver.js', () => ({
   resolveAuthorizedWalletProfile: resolveAuthorizedWalletProfileMock,
+}))
+
+vi.mock('../../server/_lib/identity/accountsIdentity.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../server/_lib/identity/accountsIdentity.js')>()
+  return {
+    ...actual,
+    verifyPrivyForAccounts: verifyPrivyForAccountsMock,
+  }
+})
+
+vi.mock('../../server/twitter/verifyTweet.js', () => ({
+  extractTweetIdFromInput: extractTweetIdFromInputMock,
+  verifyTweetForAmoe: verifyTweetForAmoeMock,
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -80,10 +96,12 @@ describe('AMOE lottery routes', () => {
     const creditsHandler = await getV1ApiHandler('lottery/amoe/credits')
     const submitHandler = await getV1ApiHandler('lottery/amoe/submit')
     const checkinHandler = await getV1ApiHandler('lottery/amoe/twitter-checkin')
+    const xmtpCheckinHandler = await getV1ApiHandler('lottery/amoe/xmtp-checkin')
     expect(typeof nonceHandler).toBe('function')
     expect(typeof creditsHandler).toBe('function')
     expect(typeof submitHandler).toBe('function')
     expect(typeof checkinHandler).toBe('function')
+    expect(typeof xmtpCheckinHandler).toBe('function')
   })
 })
 
@@ -682,6 +700,26 @@ describe('AMOE daily Twitter checkin handler', () => {
       auth: { type: 'session', address: '0x000000000000000000000000000000000000cafe' },
     })
     resolveAuthorizedWalletProfileMock.mockResolvedValue(null)
+    verifyPrivyForAccountsMock.mockResolvedValue({
+      privyUserId: 'did:privy:test',
+      privyUser: {
+        linkedAccounts: [
+          {
+            type: 'twitter_oauth',
+            username: '4626fun',
+            subject: '2012061207927406592',
+          },
+        ],
+      },
+    })
+    extractTweetIdFromInputMock.mockReturnValue('1899868323524294692')
+    verifyTweetForAmoeMock.mockResolvedValue({
+      tweetId: '1899868323524294692',
+      canonicalUrl: 'https://x.com/i/web/status/1899868323524294692',
+      text: 'Checking in for 4626 Alternative Method of Entry. No purchase necessary. Earn points through eligible actions and use them for free jackpot entries. Join me: https://4626.fun',
+      authorId: '2012061207927406592',
+      authorUsername: '4626fun',
+    })
     claimDailyTwitterCheckinMock.mockResolvedValue({
       wallet: '0x000000000000000000000000000000000000cafe',
       awarded: true,
@@ -702,13 +740,14 @@ describe('AMOE daily Twitter checkin handler', () => {
 
   it('returns daily checkin credit grant response', async () => {
     const { default: handler } = await import('../_handlers/v1/lottery/_amoeTwitterCheckin')
-    const req = createMockReq({ method: 'POST', body: {} })
+    const req = createMockReq({ method: 'POST', body: { tweetUrl: 'https://x.com/4626fun/status/1899868323524294692' } })
     const res = createMockRes()
     await handler(req, res)
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
     expect(res.body?.data?.awardedCredits).toBe(1)
     expect(res.body?.data?.creditsPerEntry).toBe(100)
+    expect(verifyTweetForAmoeMock).toHaveBeenCalledTimes(1)
     expect(claimDailyTwitterCheckinMock).toHaveBeenCalledTimes(1)
   })
 
@@ -725,14 +764,58 @@ describe('AMOE daily Twitter checkin handler', () => {
     })
 
     const { default: handler } = await import('../_handlers/v1/lottery/_amoeTwitterCheckin')
-    const req = createMockReq({ method: 'POST', body: {} })
+    const req = createMockReq({ method: 'POST', body: { tweetId: '1899868323524294692' } })
     const res = createMockRes()
 
     await handler(req, res)
 
     expect(claimDailyTwitterCheckinMock).toHaveBeenCalledWith({
       wallet: '0x000000000000000000000000000000000000cafe',
+      verifiedTweet: {
+        tweetId: '1899868323524294692',
+        tweetUrl: 'https://x.com/i/web/status/1899868323524294692',
+        authorUsername: '4626fun',
+        authorId: '2012061207927406592',
+      },
     })
     expect(res.statusCode).toBe(200)
+  })
+
+  it('rejects missing or invalid tweet reference payload', async () => {
+    extractTweetIdFromInputMock.mockReturnValueOnce(null)
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeTwitterCheckin')
+    const req = createMockReq({ method: 'POST', body: {} })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.error).toBe('invalid_tweet_reference')
+  })
+
+  it('rejects when twitter is not linked on the authenticated Privy profile', async () => {
+    verifyPrivyForAccountsMock.mockResolvedValueOnce({
+      privyUserId: 'did:privy:test',
+      privyUser: { linkedAccounts: [] },
+    })
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeTwitterCheckin')
+    const req = createMockReq({ method: 'POST', body: { tweetId: '1899868323524294692' } })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(403)
+    expect(res.body?.error).toBe('twitter_not_linked')
+  })
+})
+
+describe('AMOE daily XMTP checkin handler', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('returns gone for deprecated manual claim path', async () => {
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeXmtpCheckin')
+    const req = createMockReq({ method: 'POST', body: { messageId: 'msg-1' } })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(410)
+    expect(res.body?.error).toBe('xmtp_checkin_auto_only')
   })
 })

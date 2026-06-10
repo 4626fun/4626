@@ -116,5 +116,5 @@ When triaging this issue, capture:
 
 ## Related docs
 
-- `/operations/canonical-csw-owner-approval`
+- `/operations/owner-install-reference-methods`
 - `/guides/troubleshooting/userop-signature-errors`

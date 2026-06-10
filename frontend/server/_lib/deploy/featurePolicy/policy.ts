@@ -6,6 +6,7 @@ import {
   type CreatorStrategyFeatureKey,
 } from '../../creatorStrategy/catalog.js'
 import { hasLiveActivationForFeature, listActivationsForCreator } from '../../creatorStrategy/activations.js'
+import { expandCreatorFeatureKeys } from '../../creatorStrategy/bundleEntitlements.js'
 
 type DbLike = { sql?: unknown }
 
@@ -20,7 +21,7 @@ export const DEPLOY_FEATURE_POLICY_MATRIX: DeployFeaturePolicy[] = [
   {
     key: 'solana_ovault_mesh',
     stages: ['create', 'phase2b'],
-    requiresAnyOf: ['solana_bridge_strategy', 'solana_ovault_mesh', 'solana_meteora_alpha_vault'],
+    requiresAnyOf: ['solana_ovault_mesh', 'solana_meteora_alpha_vault'],
     failureCode: 'feature_policy:ovault_mesh_entitlement_missing',
   },
   {
@@ -40,12 +41,6 @@ export const DEPLOY_FEATURE_POLICY_MATRIX: DeployFeaturePolicy[] = [
     stages: ['phase3'],
     requiresAnyOf: ['ajna_sleeve'],
     failureCode: 'feature_policy:phase3_ajna_missing',
-  },
-  {
-    key: 'solana_bridge_strategy',
-    stages: ['phase3'],
-    requiresAnyOf: ['solana_bridge_strategy'],
-    failureCode: 'feature_policy:phase3_solana_missing',
   },
 ]
 
@@ -122,14 +117,13 @@ export async function listActiveCreatorFeatureKeys(params: {
   creatorToken: Address
 }): Promise<CreatorStrategyFeatureKey[]> {
   const rows = await listActivationsForCreator(params.db as any, params.creatorToken)
-  const out = new Set<CreatorStrategyFeatureKey>()
+  const rawKeys: string[] = []
   for (const row of rows) {
     if (row.status !== 'active' && row.status !== 'pending') continue
     const raw = String(row.featureKey ?? '').trim()
-    if (!raw) continue
-    out.add(raw as CreatorStrategyFeatureKey)
+    if (raw) rawKeys.push(raw)
   }
-  return Array.from(out)
+  return Array.from(expandCreatorFeatureKeys(rawKeys))
 }
 
 export function validateFeatureCompatibility(activeFeatureKeys: readonly CreatorStrategyFeatureKey[]): {
@@ -139,13 +133,13 @@ export function validateFeatureCompatibility(activeFeatureKeys: readonly Creator
   code: string
   message: string
 } {
-  const set = new Set(activeFeatureKeys)
-  if (set.has('solana_meteora_alpha_vault') && !set.has('solana_bridge_strategy')) {
+  const set = expandCreatorFeatureKeys(activeFeatureKeys)
+  if (set.has('solana_meteora_alpha_vault') && !set.has('solana_ovault_mesh')) {
     return {
       ok: false,
-      code: 'feature_policy:meteora_requires_solana_bridge',
+      code: 'feature_policy:meteora_requires_ovault_mesh',
       message:
-        'Meteora Alpha Vault requires Solana bridge strategy to be active first. Activate `solana_bridge_strategy` and retry.',
+        'Meteora Alpha Vault requires Solana OVault mesh to be active first. Activate `solana_ovault_mesh` and retry.',
     }
   }
   return { ok: true }

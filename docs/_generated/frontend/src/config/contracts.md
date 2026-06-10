@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / src/config/contracts
+[4626-web](../../index.md) / src/config/contracts
 
 # src/config/contracts
 
@@ -12,7 +12,7 @@
 
 > `const` **AKITA**: `object`
 
-Defined in: [src/config/contracts.ts:118](https://github.com/wenakita/4626/blob/main/frontend/src/config/contracts.ts#L118)
+Defined in: [src/config/contracts.ts:120](https://github.com/wenakita/4626/blob/main/frontend/src/config/contracts.ts#L120)
 
 #### Type Declaration
 
@@ -130,6 +130,10 @@ Defined in: [src/config/contracts.ts:41](https://github.com/wenakita/4626/blob/m
 
 > `readonly` **poolManager**: `` `0x${string}` ``
 
+##### protocolAutomation
+
+> `readonly` **protocolAutomation**: `` `0x${string}` `` \| `undefined`
+
 ##### protocolTreasury
 
 > `readonly` **protocolTreasury**: `` `0x${string}` ``
@@ -174,6 +178,10 @@ Defined in: [src/config/contracts.ts:41](https://github.com/wenakita/4626/blob/m
 
 > `readonly` **vaultActivationBatcher**: `` `0x${string}` `` \| `undefined`
 
+##### vaultAuxiliaryDeployBatcher
+
+> `readonly` **vaultAuxiliaryDeployBatcher**: `` `0x${string}` `` \| `undefined`
+
 ##### vaultGaugeVoting
 
 > `readonly` **vaultGaugeVoting**: `` `0x${string}` `` \| `undefined`
@@ -216,7 +224,7 @@ Defined in: [src/config/contracts.ts:41](https://github.com/wenakita/4626/blob/m
 
 > `const` **ERC4626**: `object`
 
-Defined in: [src/config/contracts.ts:135](https://github.com/wenakita/4626/blob/main/frontend/src/config/contracts.ts#L135)
+Defined in: [src/config/contracts.ts:137](https://github.com/wenakita/4626/blob/main/frontend/src/config/contracts.ts#L137)
 
 #### Type Declaration
 

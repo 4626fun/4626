@@ -12,7 +12,7 @@ import {
   setNoStore,
   getDb,
   readRequestPrincipalAddress,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { resolveOnchainIdentityProfile } from '../../../server/_lib/identity/onchainIdentityProfile.js'
 

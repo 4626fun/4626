@@ -12,9 +12,18 @@ import {
   type ExecutionTrack,
 } from './executionTrack.js'
 import { sanitizePersistedSubAccountAddress } from './sanitizeBaseSubAccount.js'
+import { resolveServerBaseRpcUrls } from '../onchain/baseRpcUrl.js'
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
-import { classifyLinkedAccounts, type PrivyUserLike } from './walletMapping.js'
+import {
+  classifyLinkedAccounts,
+  collectPrivyServerManagedWalletAddresses,
+  collectPrivySmartWalletAddresses,
+  extractPrivyEmbeddedEoaAddress,
+  type PrivyUserLike,
+} from './walletMapping.js'
 import { syncUserWallets } from './walletSync.js'
+import { resolveStoredCanonicalCswAddress } from './canonicalCswPersistence.js'
+import { resolvePrimaryProfileIdForPrivyUser } from '@4626/server-core'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -54,7 +63,6 @@ type StructuredDelegationError = Error & {
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
 const TX_HASH_RE = /^0x[a-fA-F0-9]{64}$/
-const DEFAULT_BASE_RPCS = ['https://mainnet.base.org'] as const
 const BLOCKED_DELEGATION_RPC_HOSTS = new Set(['base.llamarpc.com'])
 
 let delegationColumnsEnsured = false
@@ -119,26 +127,14 @@ function normalizeCanonicalSource(value: unknown, fallback: string): string {
   return raw || fallback
 }
 
-function normalizeDelegationRpcUrl(value: string): string | null {
-  const raw = value.trim()
-  if (!raw) return null
-  try {
-    const url = new URL(raw)
-    if (BLOCKED_DELEGATION_RPC_HOSTS.has(url.hostname.toLowerCase())) return null
-    return url.pathname === '/' && !url.search && !url.hash ? url.origin : url.toString()
-  } catch {
-    return raw
-  }
-}
-
 export function getBaseRpcUrls(): string[] {
-  const raw = String(process.env.BASE_RPC_URL ?? '').trim()
-  if (!raw) return [...DEFAULT_BASE_RPCS]
-  const urls = raw
-    .split(',')
-    .map(normalizeDelegationRpcUrl)
-    .filter((value): value is string => Boolean(value))
-  return [...new Set([...urls, ...DEFAULT_BASE_RPCS])]
+  return resolveServerBaseRpcUrls().filter((url) => {
+    try {
+      return !BLOCKED_DELEGATION_RPC_HOSTS.has(new URL(url).hostname.toLowerCase())
+    } catch {
+      return true
+    }
+  })
 }
 
 function createBasePublicClient(rpcUrl: string) {
@@ -149,15 +145,7 @@ function createBasePublicClient(rpcUrl: string) {
 }
 
 async function readProfileIdByPrivyUserId(db: Db, privyUserId: string): Promise<number | null> {
-  const result = await db.sql`
-    SELECT id
-    FROM profiles
-    WHERE privy_user_id = ${privyUserId}
-    LIMIT 1;
-  `
-  const idRaw = result.rows?.[0]?.id
-  const id = typeof idRaw === 'number' ? idRaw : Number(idRaw)
-  return Number.isFinite(id) && id > 0 ? id : null
+  return resolvePrimaryProfileIdForPrivyUser(db, privyUserId)
 }
 
 async function readProfileIdByEmail(db: Db, email: string): Promise<number | null> {
@@ -469,16 +457,26 @@ export async function resolveCanonicalCsw(params: {
     const persistedFromHints = profileId ? await readPersistedDelegationState(db, profileId) : null
     const fallbackPersisted = persistedFromHints?.canonicalCswAddress ? persistedFromHints : persisted
     if (fallbackPersisted?.canonicalCswAddress && profileId) {
+      const canonicalCswAddress =
+        resolveStoredCanonicalCswAddress({
+          candidate: fallbackPersisted.canonicalCswAddress,
+          embeddedEoa: extractPrivyEmbeddedEoaAddress(privyUser),
+        }) ?? fallbackPersisted.canonicalCswAddress
       return {
         profileId,
-        canonicalCswAddress: fallbackPersisted.canonicalCswAddress,
+        canonicalCswAddress,
         canonicalSource: normalizeCanonicalSource(fallbackPersisted.canonicalSource, 'wallet_sync'),
       }
     }
     if (persisted?.canonicalCswAddress && profileId) {
+      const canonicalCswAddress =
+        resolveStoredCanonicalCswAddress({
+          candidate: persisted.canonicalCswAddress,
+          embeddedEoa: extractPrivyEmbeddedEoaAddress(privyUser),
+        }) ?? persisted.canonicalCswAddress
       return {
         profileId,
-        canonicalCswAddress: persisted.canonicalCswAddress,
+        canonicalCswAddress,
         canonicalSource: normalizeCanonicalSource(persisted.canonicalSource, 'wallet_sync'),
       }
     }
@@ -495,7 +493,15 @@ export async function resolveCanonicalCsw(params: {
   // Once a canonical CSW is persisted, it remains the product source of truth
   // for asset custody. Fresh Privy payloads can include app-scoped or
   // counterfactual smart wallets; those must not displace the canonical CSW.
-  const canonical = persisted?.canonicalCswAddress ?? syncedCanonical ?? null
+  const rawCanonical = persisted?.canonicalCswAddress ?? syncedCanonical ?? null
+  const canonical = resolveStoredCanonicalCswAddress({
+    candidate: rawCanonical,
+    embeddedEoa: syncResult?.embeddedEoa?.address ?? null,
+    activeOwnerEoa:
+      syncResult?.primaryWalletAddress ??
+      syncResult?.activeOwnerWallet?.address ??
+      extractPrivyEmbeddedEoaAddress(privyUser),
+  })
   if (!canonical) {
     throw buildStructuredError('No canonical Coinbase Smart Wallet is linked to this account yet.', {
       needsBaseAppSetup: true,
@@ -545,14 +551,41 @@ export function resolveConfirmOwnerCanonicalCsw(params: {
   return requestedCanonical ?? persistedCanonical
 }
 
+function rejectNonEmbeddedOwnerCandidate(params: {
+  address: string | null
+  smartWalletAddresses: Set<string>
+  serverManagedWalletAddresses: Set<string>
+  canonicalCswAddress?: string | null
+  baseSubAccountAddress?: string | null
+}): string | null {
+  const normalized = normalizeAddress(params.address)
+  if (!normalized) return null
+  if (params.smartWalletAddresses.has(normalized)) return null
+  if (params.serverManagedWalletAddresses.has(normalized)) return null
+  const canonical = normalizeAddress(params.canonicalCswAddress ?? null)
+  if (canonical && normalized === canonical) return null
+  const subAccount = normalizeAddress(params.baseSubAccountAddress ?? null)
+  if (subAccount && normalized === subAccount) return null
+  return normalized
+}
+
 export async function getPrivyEmbeddedEOA(params: {
   db: Db
   profileId: number
   privyUser: PrivyUserLike
+  canonicalCswAddress?: string | null
+  baseSubAccountAddress?: string | null
 }): Promise<string> {
-  const classification = classifyLinkedAccounts(params.privyUser)
-  const embedded = normalizeAddress(classification.embeddedEoa?.address ?? null)
-  if (embedded) return embedded
+  const smartWalletAddresses = collectPrivySmartWalletAddresses(params.privyUser)
+  const serverManagedWalletAddresses = collectPrivyServerManagedWalletAddresses(params.privyUser)
+  const extracted = rejectNonEmbeddedOwnerCandidate({
+    address: extractPrivyEmbeddedEoaAddress(params.privyUser),
+    smartWalletAddresses,
+    serverManagedWalletAddresses,
+    canonicalCswAddress: params.canonicalCswAddress,
+    baseSubAccountAddress: params.baseSubAccountAddress,
+  })
+  if (extracted) return extracted
 
   const result = await params.db.sql`
     SELECT primary_embedded_eoa, embedded_wallet
@@ -561,7 +594,13 @@ export async function getPrivyEmbeddedEOA(params: {
     LIMIT 1;
   `
   const row = result.rows?.[0] ?? null
-  const persisted = normalizeAddress(row?.primary_embedded_eoa) ?? normalizeAddress(row?.embedded_wallet)
+  const persisted = rejectNonEmbeddedOwnerCandidate({
+    address: normalizeAddress(row?.primary_embedded_eoa) ?? normalizeAddress(row?.embedded_wallet),
+    smartWalletAddresses,
+    serverManagedWalletAddresses,
+    canonicalCswAddress: params.canonicalCswAddress,
+    baseSubAccountAddress: params.baseSubAccountAddress,
+  })
   if (persisted) return persisted
 
   throw buildStructuredError('Privy embedded EOA is not ready for this account yet. Retry in a moment.', {
@@ -634,10 +673,22 @@ export async function bootstrapCanonicalDelegationState(params: {
     privyUserId: context.privyUserId,
     privyUser: context.privyUser,
   })
+  const subAccountPrefetch = await db.sql`
+    SELECT base_sub_account
+    FROM profiles
+    WHERE id = ${canonical.profileId}
+    LIMIT 1;
+  `
+  const rawSubAccountPrefetch =
+    typeof subAccountPrefetch.rows?.[0]?.base_sub_account === 'string'
+      ? subAccountPrefetch.rows[0].base_sub_account
+      : null
   const privyEmbeddedEoaAddress = await getPrivyEmbeddedEOA({
     db,
     profileId: canonical.profileId,
     privyUser: context.privyUser,
+    canonicalCswAddress: canonical.canonicalCswAddress,
+    baseSubAccountAddress: rawSubAccountPrefetch,
   })
 
   await ensureCanonicalWalletRow({
@@ -670,8 +721,8 @@ export async function bootstrapCanonicalDelegationState(params: {
   await db.sql`
     UPDATE profiles
     SET
-      primary_embedded_eoa = COALESCE(primary_embedded_eoa, ${privyEmbeddedEoaAddress}),
-      embedded_wallet = COALESCE(embedded_wallet, ${privyEmbeddedEoaAddress}),
+      primary_embedded_eoa = ${privyEmbeddedEoaAddress},
+      embedded_wallet = ${privyEmbeddedEoaAddress},
       updated_at = NOW()
     WHERE id = ${canonical.profileId};
   `

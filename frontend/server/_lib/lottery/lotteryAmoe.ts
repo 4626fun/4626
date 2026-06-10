@@ -2,6 +2,9 @@ import { createHash, randomBytes } from 'node:crypto'
 
 import { getDb } from '../db/postgres.js'
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
+import { ensureMigrationApplied, ensureAmoeSchema as ensureAmoeSchemaBootstrap } from '../db/schemaBootstrap.js'
+import { readWaitlistPointsBreakdown } from '../onboarding/waitlistScoring.js'
+import { resolveAmoePointsProfileId } from './amoeProfileResolve.js'
 import { awardAmoeCheckinPoints } from './amoeWaitlistPoints.js'
 import {
   AmoeBadRequestError,
@@ -33,6 +36,7 @@ const AMOE_NONCE_TTL_SECONDS = 10 * 60 // 10m
 const AMOE_MESSAGE_TITLE = '4626 Lottery AMOE Entry' as const
 export const AMOE_CREDITS_PER_ENTRY = 100
 export const AMOE_DAILY_TWITTER_CREDIT = 1
+export const AMOE_DAILY_XMTP_CREDIT = 1
 
 // PR 2 — AMOE Linear Parity (variable points amount).
 //
@@ -50,11 +54,11 @@ export const AMOE_POINTS_TO_USD1E6_FACTOR = 10_000
 // PR 4 — PLONK ZK path: public-input slot layout.
 //
 // Locked by IAmoePlonkVerifier and verified bit-for-bit in the patch guard
-// (tools/ci/check_amoe_plonk_patch.sh + the on-chain verifier's own
+// (amoe/tools/ci/check_amoe_plonk_patch.sh + the on-chain verifier's own
 // checkField loop). Any change here MUST also be reflected in:
 //   * contracts/utilities/lottery/zk/IAmoePlonkVerifier.sol
 //   * contracts/utilities/lottery/zk/AmoePlonkVerifier.sol (banner)
-//   * the circuit (circuits/amoe/amoe_eligibility.circom)
+//   * the circuit (amoe/circuits/amoe_eligibility.circom)
 // otherwise valid proofs will silently fail to verify on-chain.
 export const AMOE_PLONK_PROOF_LEN = 24 as const
 export const AMOE_PLONK_PUB_INPUTS_LEN = 8 as const
@@ -135,6 +139,8 @@ type AmoeNonceRecord = {
 const memNonces = new Map<string, AmoeNonceRecord>()
 const memCredits = new Map<string, number>()
 const memDailyTwitterCheckins = new Set<string>()
+const memTwitterClaimedTweetIds = new Set<string>()
+const memXmtpClaimedMessageIds = new Set<string>()
 let amoeSchemaEnsured = false
 
 const eip1271Abi = [
@@ -273,51 +279,17 @@ function nowIso(): string {
 async function ensureAmoeSchema(db: Db): Promise<void> {
   if (amoeSchemaEnsured) return
   await ensureWaitlistSchema(db as any)
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS lottery_amoe_nonces (
-      nonce TEXT PRIMARY KEY,
-      wallet_address TEXT NOT NULL,
-      creator_coin TEXT NOT NULL,
-      issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      expires_at TIMESTAMPTZ NOT NULL,
-      consumed_at TIMESTAMPTZ
-    );
-  `
-  await db.sql`CREATE INDEX IF NOT EXISTS lottery_amoe_nonces_wallet_creator_idx ON lottery_amoe_nonces (wallet_address, creator_coin, expires_at);`
 
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS lottery_amoe_entries (
-      id BIGSERIAL PRIMARY KEY,
-      nonce_hash TEXT NOT NULL UNIQUE,
-      nonce TEXT NOT NULL,
-      wallet_address TEXT NOT NULL,
-      creator_coin TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'attested',
-      attestation_deadline BIGINT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS lottery_amoe_daily_twitter_checkins (
-      wallet_address TEXT NOT NULL,
-      checkin_date DATE NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (wallet_address, checkin_date)
-    );
-  `
+  // Condensed path — all core AMOE lottery tables are now in
+  // `supabase/migrations/20260527000000_amoe_lottery_tables.sql`
+  // (and earlier AMOE migrations) via ensureAmoeSchema().
+  await ensureAmoeSchemaBootstrap(db as any)
 
-  // AMOE-eligibility view. Mirrors
-  // `supabase/migrations/20260427180000_amoe_eligible_points_view.sql`.
-  // Bootstrap parity matters because dev/preview envs may not have the
-  // migration applied yet — without this CREATE OR REPLACE here, the
-  // first AMOE submit on a fresh DB would fail with `relation does not
-  // exist`. The migration remains the source of truth in CI / prod; this
-  // is the runtime safety net.
-  //
-  // KEEP THIS BLOCK BYTE-FOR-BYTE IDENTICAL TO THE MIGRATION. If you
-  // change one, update the other.
+  // AMOE-eligibility view — intentionally kept as a runtime safety net
+  // for dev/preview environments (mirrors the migration).
+  // KEEP THIS BLOCK BYTE-FOR-BYTE IDENTICAL TO THE MIGRATION.
   await db.sql`
-    CREATE OR REPLACE VIEW points_amoe_eligible_balance AS
+    CREATE OR REPLACE VIEW points_amoe_eligible_balance WITH (security_invoker = true) AS
     SELECT
       signup_id,
       COALESCE(
@@ -327,6 +299,7 @@ async function ensureAmoeSchema(db: Db): Promise<void> {
               WHEN source = 'amoe_entry_spend'    THEN amount
               WHEN source = 'amoe_entry_refund'   THEN amount
               WHEN source = 'amoe_twitter_daily'  THEN amount * 1.00
+              WHEN source = 'amoe_xmtp_daily'     THEN amount * 1.00
               WHEN source = 'amoe_checkin'        THEN amount * 1.00
               WHEN source = 'waitlist_signup'     THEN amount * 1.00
               WHEN source = 'csw_link'            THEN amount * 1.00
@@ -360,104 +333,12 @@ async function ensureAmoeSchema(db: Db): Promise<void> {
     GROUP BY signup_id;
   `
 
-  // Burn-credits intents — forward marker the burn-credits handler writes
-  // into one row per (signup_id, spend_ref_id) immediately after a phase-A
-  // points debit. The PR 6c refund cron requires a matching intent row
-  // before emitting an `amoe_entry_refund`, scoping refunds strictly to
-  // phase-A burns and excluding legacy `/api/v1/lottery/amoe/submit`
-  // debits that share the same `source='amoe_entry_spend'`.
-  //
-  // KEEP THIS BLOCK BYTE-FOR-BYTE IDENTICAL TO THE MIGRATION at
-  // `frontend/db/migrations/035_amoe_entry_refund_source.sql` (and its
-  // Supabase mirror). If you change one, update the other.
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS public.amoe_burn_credits_intents (
-      signup_id     BIGINT      NOT NULL,
-      spend_ref_id  TEXT        NOT NULL,
-      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (signup_id, spend_ref_id)
-    );
-  `
-
   amoeSchemaEnsured = true
 }
 
 function normalizeRefId(value: string | null | undefined): string | null {
   const raw = typeof value === 'string' ? value.trim() : ''
   return raw.length > 0 ? raw.slice(0, 190) : null
-}
-
-async function resolveOrCreateProfileForWallet(db: Db, wallet: `0x${string}`): Promise<number> {
-  const normalizedWallet = wallet.toLowerCase()
-  // Tombstone-aware: if the wallet matches a merged-away profile, follow
-  // `merged_into_profile_id` to the canonical survivor. Prefer profiles
-  // with a real (non-synthetic) email so AMOE claims always attach to
-  // the canonical account when one exists — satisfies the AGENTS.md
-  // identity invariant that verified email wins.
-  const existing = await db.sql`
-    WITH matched AS (
-      SELECT p.id, p.merged_into_profile_id, p.email, p.updated_at, p.created_at
-      FROM profiles p
-      WHERE LOWER(p.primary_wallet) = ${normalizedWallet}
-         OR LOWER(p.embedded_wallet) = ${normalizedWallet}
-         OR LOWER(p.primary_embedded_eoa) = ${normalizedWallet}
-         OR LOWER(p.csw_address) = ${normalizedWallet}
-         OR LOWER(p.primary_smart_wallet) = ${normalizedWallet}
-         OR LOWER(p.base_sub_account) = ${normalizedWallet}
-         OR EXISTS (
-           SELECT 1
-           FROM profile_wallets pw
-           WHERE pw.profile_id = p.id
-             AND LOWER(pw.address) = ${normalizedWallet}
-         )
-    ),
-    resolved AS (
-      SELECT p2.id, p2.email,
-             -- Score: canonical (real email) first, then most-recently-updated.
-             CASE
-               WHEN p2.email IS NOT NULL AND p2.email <> ''
-                 AND LOWER(p2.email) NOT LIKE '%@wallet.4626.fun'
-                 AND LOWER(p2.email) NOT LIKE '%@noemail.4626.fun'
-               THEN 0
-               ELSE 1
-             END AS bucket,
-             COALESCE(p2.updated_at, p2.created_at) AS ranked_at
-      FROM matched m
-      JOIN profiles p2 ON p2.id = COALESCE(m.merged_into_profile_id, m.id)
-      WHERE p2.merged_into_profile_id IS NULL
-    )
-    SELECT id
-    FROM (
-      SELECT DISTINCT id, bucket, ranked_at
-      FROM resolved
-    ) deduped
-    ORDER BY bucket ASC, ranked_at DESC NULLS LAST
-    LIMIT 1;
-  `
-  const existingIdRaw = existing.rows?.[0]?.id
-  const existingId = typeof existingIdRaw === 'number' ? existingIdRaw : Number(existingIdRaw)
-  if (Number.isFinite(existingId) && existingId > 0) return Math.floor(existingId)
-
-  const syntheticEmail = `amoe-${sha256Hex(normalizedWallet).slice(0, 24)}@wallet.4626.fun`
-  await db.sql`
-    INSERT INTO profiles (email, primary_wallet, created_at, updated_at)
-    VALUES (${syntheticEmail}, ${normalizedWallet}, NOW(), NOW())
-    ON CONFLICT (email) DO UPDATE
-      SET primary_wallet = COALESCE(profiles.primary_wallet, EXCLUDED.primary_wallet),
-          updated_at = NOW();
-  `
-  const created = await db.sql`
-    SELECT id
-    FROM profiles
-    WHERE email = ${syntheticEmail}
-    LIMIT 1;
-  `
-  const createdIdRaw = created.rows?.[0]?.id
-  const createdId = typeof createdIdRaw === 'number' ? createdIdRaw : Number(createdIdRaw)
-  if (!Number.isFinite(createdId) || createdId <= 0) {
-    throw new Error('amoe_profile_resolve_failed')
-  }
-  return Math.floor(createdId)
 }
 
 /**
@@ -476,6 +357,7 @@ async function readUnifiedPointsForSignup(db: Db, signupId: number): Promise<num
           CASE
             WHEN source = 'amoe_entry_spend' THEN amount
             WHEN source = 'amoe_twitter_daily' THEN amount * 1.00
+            WHEN source = 'amoe_xmtp_daily' THEN amount * 1.00
             -- amoe_checkin must mirror the AMOE eligibility view's 1.00x
             -- weight; otherwise unified points (leaderboard/tier) would
             -- under-count and AMOE-eligible credits could exceed unified
@@ -503,30 +385,13 @@ async function readUnifiedPointsForSignup(db: Db, signupId: number): Promise<num
   return Math.max(0, value)
 }
 
-/**
- * AMOE-eligible weighted points for a signup — the strict-allowlist
- * subset of `readUnifiedPointsForSignup` that excludes paid-action and
- * tainted sources. Used to gate free lottery entries.
- *
- * Compliance contract: the underlying `points_amoe_eligible_balance`
- * view's source allowlist is the database-level enforcement of the
- * "no purchase necessary" wall on the AMOE path. See
- * `docs/security/amoe-points-source-audit.md` for the per-source
- * rationale.
- */
+/** Public points total — same weighted sum as waitlist score and leaderboard. */
 async function readAmoeEligibleCreditsForSignup(
   db: Db,
   signupId: number,
 ): Promise<number> {
-  const result = await db.sql`
-    SELECT credits
-    FROM points_amoe_eligible_balance
-    WHERE signup_id = ${signupId}
-    LIMIT 1;
-  `
-  const valueRaw = Number(result.rows?.[0]?.credits ?? 0)
-  const value = Number.isFinite(valueRaw) ? Math.floor(valueRaw) : 0
-  return Math.max(0, value)
+  const breakdown = await readWaitlistPointsBreakdown(db as any, signupId)
+  return breakdown.total
 }
 
 function normalizeWallet(wallet: `0x${string}`): `0x${string}` {
@@ -567,12 +432,23 @@ export async function getAmoeCreditSnapshot(params: { wallet: `0x${string}` }): 
   }
 
   await ensureAmoeSchema(db)
-  const signupId = await resolveOrCreateProfileForWallet(db, wallet)
+  const signupId = await resolveAmoePointsProfileId(db, wallet, 'verified_privy_only')
+  if (signupId === null) {
+    throw new AmoeBadRequestError('amoe_requires_verified_privy_account')
+  }
   const credits = await readAmoeEligibleCreditsForSignup(db, signupId)
   return toCreditSnapshot(wallet, credits)
 }
 
-export async function claimDailyTwitterCheckin(params: { wallet: `0x${string}` }): Promise<{
+export async function claimDailyTwitterCheckin(params: {
+  wallet: `0x${string}`
+  verifiedTweet: {
+    tweetId: string
+    tweetUrl: string
+    authorUsername: string | null
+    authorId: string | null
+  }
+}): Promise<{
   wallet: `0x${string}`
   awarded: boolean
   awardedCredits: number
@@ -583,13 +459,20 @@ export async function claimDailyTwitterCheckin(params: { wallet: `0x${string}` }
   const wallet = normalizeWallet(params.wallet)
   const now = Date.now()
   const dayKey = dayKeyUtc(now)
+  const tweetId = String(params.verifiedTweet.tweetId ?? '').trim()
+  const tweetUrl = String(params.verifiedTweet.tweetUrl ?? '').trim()
+  if (!tweetId) throw new AmoeBadRequestError('invalid_tweet_reference')
 
   const db = await getDb()
   if (!db) {
+    if (memTwitterClaimedTweetIds.has(tweetId)) {
+      throw new Error('tweet_already_claimed')
+    }
     const memKey = `${wallet}:${dayKey}`
     const alreadyClaimed = memDailyTwitterCheckins.has(memKey)
     if (!alreadyClaimed) {
       memDailyTwitterCheckins.add(memKey)
+      memTwitterClaimedTweetIds.add(tweetId)
       memCredits.set(wallet, (memCredits.get(wallet) ?? 0) + AMOE_DAILY_TWITTER_CREDIT)
     }
     const snapshot = toCreditSnapshot(wallet, memCredits.get(wallet) ?? 0)
@@ -604,14 +487,40 @@ export async function claimDailyTwitterCheckin(params: { wallet: `0x${string}` }
   }
 
   await ensureAmoeSchema(db)
-  const inserted = await db.sql`
-    INSERT INTO lottery_amoe_daily_twitter_checkins (wallet_address, checkin_date)
-    VALUES (${wallet}, ${dayKey})
-    ON CONFLICT (wallet_address, checkin_date) DO NOTHING
-    RETURNING wallet_address;
-  `
+  let inserted: { rows: any[] }
+  try {
+    inserted = await db.sql`
+      INSERT INTO lottery_amoe_daily_twitter_checkins (
+        wallet_address,
+        checkin_date,
+        tweet_id,
+        tweet_url,
+        tweet_author_username,
+        tweet_author_id
+      )
+      VALUES (
+        ${wallet},
+        ${dayKey},
+        ${tweetId},
+        ${tweetUrl || null},
+        ${params.verifiedTweet.authorUsername},
+        ${params.verifiedTweet.authorId}
+      )
+      ON CONFLICT (wallet_address, checkin_date) DO NOTHING
+      RETURNING wallet_address;
+    `
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error ?? '')
+    if (message.toLowerCase().includes('lottery_amoe_daily_twitter_tweet_id_unique')) {
+      throw new Error('tweet_already_claimed')
+    }
+    throw error
+  }
   const awarded = Boolean(inserted.rows?.[0]?.wallet_address)
-  const signupId = await resolveOrCreateProfileForWallet(db, wallet)
+  const signupId = await resolveAmoePointsProfileId(db, wallet, 'verified_privy_only')
+  if (signupId === null) {
+    throw new AmoeBadRequestError('amoe_requires_verified_privy_account')
+  }
 
   if (awarded) {
     await db.sql`
@@ -637,6 +546,106 @@ export async function claimDailyTwitterCheckin(params: { wallet: `0x${string}` }
     wallet,
     awarded,
     awardedCredits: awarded ? AMOE_DAILY_TWITTER_CREDIT : 0,
+    credits: snapshot.credits,
+    creditsPerEntry: snapshot.creditsPerEntry,
+    entriesAvailable: snapshot.entriesAvailable,
+  }
+}
+
+export async function claimDailyXmtpCheckin(params: {
+  wallet: `0x${string}`
+  evidence: {
+    messageId: string
+    recipientAddress: `0x${string}`
+  }
+}): Promise<{
+  wallet: `0x${string}`
+  awarded: boolean
+  awardedCredits: number
+  credits: number
+  creditsPerEntry: number
+  entriesAvailable: number
+}> {
+  const wallet = normalizeWallet(params.wallet)
+  const now = Date.now()
+  const dayKey = dayKeyUtc(now)
+  const messageId = String(params.evidence.messageId ?? '').trim()
+  if (!messageId) throw new AmoeBadRequestError('xmtp_message_id_required')
+
+  const db = await getDb()
+  if (!db) {
+    if (memXmtpClaimedMessageIds.has(messageId)) {
+      throw new Error('xmtp_message_already_claimed')
+    }
+    const memKey = `${wallet}:xmtp:${dayKey}`
+    const alreadyClaimed = memDailyTwitterCheckins.has(memKey)
+    if (!alreadyClaimed) {
+      memDailyTwitterCheckins.add(memKey)
+      memXmtpClaimedMessageIds.add(messageId)
+      memCredits.set(wallet, (memCredits.get(wallet) ?? 0) + AMOE_DAILY_XMTP_CREDIT)
+    }
+    const snapshot = toCreditSnapshot(wallet, memCredits.get(wallet) ?? 0)
+    return {
+      wallet,
+      awarded: !alreadyClaimed,
+      awardedCredits: alreadyClaimed ? 0 : AMOE_DAILY_XMTP_CREDIT,
+      credits: snapshot.credits,
+      creditsPerEntry: snapshot.creditsPerEntry,
+      entriesAvailable: snapshot.entriesAvailable,
+    }
+  }
+
+  await ensureAmoeSchema(db)
+  let inserted: { rows: any[] }
+  try {
+    inserted = await db.sql`
+      INSERT INTO lottery_amoe_daily_xmtp_checkins (
+        wallet_address,
+        checkin_date,
+        message_id,
+        recipient_address
+      )
+      VALUES (
+        ${wallet},
+        ${dayKey},
+        ${messageId},
+        ${params.evidence.recipientAddress}
+      )
+      ON CONFLICT (wallet_address, checkin_date) DO NOTHING
+      RETURNING wallet_address;
+    `
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error ?? '')
+    if (message.toLowerCase().includes('lottery_amoe_daily_xmtp_message_id_unique')) {
+      throw new Error('xmtp_message_already_claimed')
+    }
+    throw error
+  }
+  const awarded = Boolean(inserted.rows?.[0]?.wallet_address)
+  const signupId = await resolveAmoePointsProfileId(db, wallet, 'lottery_ledger')
+  if (signupId === null) {
+    throw new AmoeServerError('amoe_profile_resolve_failed')
+  }
+
+  if (awarded) {
+    await db.sql`
+      INSERT INTO points (signup_id, source, source_id, amount, created_at)
+      VALUES (${signupId}, ${'amoe_xmtp_daily'}, ${dayKey}, ${AMOE_DAILY_XMTP_CREDIT}, NOW())
+      ON CONFLICT DO NOTHING;
+    `
+    try {
+      await awardAmoeCheckinPoints({ db, wallet, dayKey: `xmtp:${dayKey}` })
+    } catch {
+      // swallow — points are additive
+    }
+  }
+
+  const credits = await readAmoeEligibleCreditsForSignup(db, signupId)
+  const snapshot = toCreditSnapshot(wallet, credits)
+  return {
+    wallet,
+    awarded,
+    awardedCredits: awarded ? AMOE_DAILY_XMTP_CREDIT : 0,
     credits: snapshot.credits,
     creditsPerEntry: snapshot.creditsPerEntry,
     entriesAvailable: snapshot.entriesAvailable,
@@ -722,16 +731,15 @@ export async function consumeAmoeCreditsForEntry(params: {
   }
 
   await ensureAmoeSchema(db)
-  const signupId = await resolveOrCreateProfileForWallet(db, wallet)
+  const signupId = await resolveAmoePointsProfileId(db, wallet, 'lottery_ledger')
+  if (signupId === null) {
+    throw new AmoeServerError('amoe_profile_resolve_failed')
+  }
   const spendRefId =
     normalizeRefId(params.refId) ??
     `amoe-spend:${wallet}:${Date.now().toString(36)}:${randomBytes(6).toString('hex')}`
 
-  // AMOE eligibility: spend is gated on the AMOE-eligible balance only.
-  // The `points_amoe_eligible_balance` view enforces the strict allowlist —
-  // paid-action sources (e.g. has_creator_coin) and referral_* contribute 0,
-  // so they cannot fund AMOE entries even though they still count toward
-  // tier/leaderboard via `readUnifiedPointsForSignup`.
+  // Spend is gated on the same weighted public points total as waitlist/leaderboard.
   //
   // We `RETURNING created_at` from the INSERT so the new-insert path can
   // surface the actual persisted burn time (Fix #2 from PR #457 review).
@@ -745,9 +753,30 @@ export async function consumeAmoeCreditsForEntry(params: {
   // skip. See docs/security/amoe-burn-then-submit-design.md §5.1.1.
   const spendAttempt = await db.sql`
     WITH current AS (
-      SELECT COALESCE(credits, 0)::bigint AS credits
-      FROM points_amoe_eligible_balance
-      WHERE signup_id = ${signupId}
+      SELECT COALESCE(
+        (
+          SELECT ROUND(
+            SUM(
+              CASE
+                WHEN source IN ('amoe_entry_spend', 'amoe_twitter_daily', 'amoe_xmtp_daily', 'amoe_entry_refund') THEN 0
+                WHEN source IN ('waitlist_signup', 'referral_passthrough', 'csw_link', 'amoe_checkin') THEN amount * 1.00
+                WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
+                WHEN source LIKE 'social_%' THEN amount * 0.50
+                WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
+                WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
+                WHEN source IN (
+                  'link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram',
+                  'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin'
+                ) THEN amount * 0.60
+                ELSE 0
+              END
+            )
+          )::bigint
+          FROM points
+          WHERE signup_id = ${signupId}
+        ),
+        0
+      ) AS credits
     ),
     ins AS (
       INSERT INTO points (signup_id, source, source_id, amount, created_at)

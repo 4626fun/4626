@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
-import { Outlet, Link, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { ArrowLeftRight, Mail, Search, ShieldCheck, Vault, Wallet } from 'lucide-react'
 import {
   buildCanonicalMarketingWaitlistUrl,
@@ -8,19 +8,17 @@ import {
 } from '@/lib/auth/waitlistEntry'
 import { isPublicSiteMode } from '@/lib/flags/flags'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
-import { AppLoadingState } from '@/components/layout/AppLoadingState'
+import { PageTransitionOutlet } from '@/components/layout/PageTransition'
 import { FlagToolbarBridge } from '@/components/flags/FlagToolbarBridge'
 import { XmtpChatProvider } from '@/lib/xmtp/provider'
 import { VaultNavBar } from '@/components/brand/VaultNavBar'
+import { requestOpenAccountTray } from '@/components/account/trayEvents'
+import { useAccountTrayPortfolio } from '@/components/account/useAccountTrayPortfolio'
+import { useSiweAuth } from '@/hooks/useSiweAuth'
 
 const LazyChatSurface = lazy(async () => {
   const mod = await import('../chat/ChatSurface')
   return { default: mod.ChatSurface }
-})
-
-const LazyAccountWalletRail = lazy(async () => {
-  const mod = await import('../account/AccountWalletRail')
-  return { default: mod.AccountWalletRail }
 })
 
 type MobileNavItem = {
@@ -34,7 +32,7 @@ const navItems: MobileNavItem[] = [
   { path: '/swap', icon: ArrowLeftRight, label: 'Trade', activePrefixes: ['/swap'] },
   { path: '/explore/creators', icon: Search, label: 'Explore', activePrefixes: ['/explore'] },
   { path: '/deploy', icon: Vault, label: 'Deploy', activePrefixes: ['/deploy', '/status', '/vault'] },
-  { path: '/portfolio', icon: Wallet, label: 'Wallet', activePrefixes: ['/portfolio'] },
+  { path: '/wallet', icon: Wallet, label: 'Wallet', activePrefixes: [] },
 ]
 
 const navItemsPublic: MobileNavItem[] = [
@@ -67,6 +65,31 @@ function isBaseInAppBrowser(): boolean {
   )
 }
 
+function formatUsdCompact(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '--'
+  const amount = Number(value)
+  if (amount >= 1_000_000_000) return `$${(amount / 1_000_000_000).toFixed(2)}B`
+  if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(2)}M`
+  if (amount >= 1_000) return `$${(amount / 1_000).toFixed(2)}K`
+  return `$${amount.toFixed(2)}`
+}
+
+const mobileNavItemClass = (isActive: boolean) =>
+  [
+    'relative flex flex-1 flex-col items-center justify-center gap-0.5 min-h-12 max-w-[5.5rem] px-2 py-2 rounded-2xl transition-all duration-300 ease-out active:scale-[0.96]',
+    isActive ? 'text-white' : 'text-zinc-500 hover:text-zinc-300',
+  ].join(' ')
+
+const mobileNavIconClass = (isActive: boolean) =>
+  `relative h-[1.125rem] w-[1.125rem] transition-all duration-300 ${
+    isActive ? 'text-white' : 'text-current'
+  }`
+
+const mobileNavLabelClass = (isActive: boolean) =>
+  `relative text-[10px] leading-none tracking-wide transition-colors duration-300 ${
+    isActive ? 'font-semibold text-white' : 'font-medium text-current'
+  }`
+
 function hasCoinbaseInjectedProvider(): boolean {
   if (typeof window === 'undefined') return false
   const ethereum = (window as any).ethereum
@@ -97,9 +120,52 @@ function findScrollableAncestor(target: EventTarget | null): HTMLElement | null 
   return null
 }
 
+type LayoutSessionChrome = {
+  hasSession: boolean
+  mobileWalletUsd: number | null
+  mobileWalletLoading: boolean
+}
+
 export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) {
   const interactive = props.interactive ?? true
+  const hostMode = getHostMode()
+  if (interactive && hostMode === 'app') {
+    return <LayoutWithSessionChrome {...props} />
+  }
+  return <LayoutFrame {...props} sessionChrome={null} />
+}
+
+function LayoutWithSessionChrome(props: { interactive?: boolean; chatEnabled?: boolean }) {
+  const interactive = props.interactive ?? true
+  const hostMode = getHostMode()
+  const auth = useSiweAuth()
+  const location = useLocation()
+  const isWaitlistSurface = isMarketingWaitlistEntryLocation(location)
+  const { trayHoldings, isLoading: mobileWalletLoading } = useAccountTrayPortfolio({
+    enabled: interactive && hostMode === 'app' && !isWaitlistSurface,
+  })
+  const mobileWalletUsd = auth.hasSession ? trayHoldings.activeNetworkUsd : null
+
+  return (
+    <LayoutFrame
+      {...props}
+      sessionChrome={{
+        hasSession: auth.hasSession,
+        mobileWalletUsd,
+        mobileWalletLoading,
+      }}
+    />
+  )
+}
+
+function LayoutFrame(props: {
+  interactive?: boolean
+  chatEnabled?: boolean
+  sessionChrome: LayoutSessionChrome | null
+}) {
+  const interactive = props.interactive ?? true
   const chatEnabled = props.chatEnabled ?? true
+  const sessionChrome = props.sessionChrome
   const location = useLocation()
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
@@ -109,21 +175,14 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
       : buildCanonicalMarketingWaitlistUrl(getMarketingBaseUrl())
   const [isMobileChatOverlayActive, setIsMobileChatOverlayActive] = useState(false)
   const [hideMobileNavForBaseApp] = useState(() => isBaseInAppContext())
+  const isWaitlistSurface = isMarketingWaitlistEntryLocation(location)
+  const showWaitlistFocusedShell = isWaitlistSurface
   const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
   const isAdminRoute = location.pathname.startsWith('/admin')
-  const showTopNavBar = true
-  const showAccountMode =
-    interactive &&
-    hostMode !== 'marketing' &&
-    !publicMode &&
-    (
-      location.pathname.startsWith('/deploy') ||
-      location.pathname.startsWith('/accounts') ||
-      location.pathname.startsWith('/status')
-    )
-  const baseItems = publicMode || hostMode === 'marketing' ? navItemsPublic : navItems
+  const showTopNavBar = !showWaitlistFocusedShell
+  const baseItems = publicMode || hostMode === 'marketing' || isWaitlistSurface ? navItemsPublic : navItems
   const items = isAdminRoute && hostMode !== 'marketing' ? [...baseItems, adminNavItem] : baseItems
-  const shouldEnableChat = interactive && chatEnabled && hostMode === 'app'
+  const shouldEnableChat = interactive && chatEnabled && hostMode === 'app' && !isWaitlistSurface
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -138,7 +197,10 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
   }, [])
 
   const hideMobileNavForMarketingHost = hostMode === 'marketing'
-  const hideMobileNav = isMobileChatOverlayActive || hideMobileNavForBaseApp || hideMobileNavForMarketingHost
+  const hideMobileNav =
+    isMobileChatOverlayActive ||
+    hideMobileNavForMarketingHost ||
+    isWaitlistSurface
 
   useEffect(() => {
     if (typeof document === 'undefined') return
@@ -238,22 +300,8 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
   }, [])
 
   return (
-    <div className="vault-shell min-h-screen flex flex-col bg-vault-bg">
-      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute -left-36 -top-40 h-104 w-104 rounded-full bg-brand-primary/16 blur-[120px] motion-safe:animate-float" />
-        <div
-          className="absolute -right-44 top-8 h-96 w-96 rounded-full bg-blue-400/10 blur-[120px] motion-safe:animate-float"
-          style={{ animationDelay: '700ms' }}
-        />
-        <div className="absolute inset-0 bg-[radial-gradient(120%_70%_at_50%_-10%,rgba(255,255,255,0.06),transparent_62%)]" />
-      </div>
-      <div aria-hidden="true" className="noise-overlay" />
+    <div className={`vault-shell relative flex min-h-0 flex-1 flex-col bg-transparent ${showWaitlistFocusedShell ? 'min-h-dvh' : ''}`}>
       {showTopNavBar ? <VaultNavBar interactive={interactive} /> : null}
-      {showAccountMode ? (
-        <Suspense fallback={null}>
-          <LazyAccountWalletRail />
-        </Suspense>
-      ) : null}
 
       {/* Skip to content link */}
       <a
@@ -266,10 +314,8 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
       {shouldEnableChat ? (
         <XmtpChatProvider>
           {/* Main */}
-          <main id="main-content" className={`flex-1 ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
-            <Suspense fallback={<AppLoadingState intent="page" />}>
-              <Outlet />
-            </Suspense>
+          <main id="main-content" className={`flex min-h-0 flex-1 flex-col overflow-x-clip ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
+            <PageTransitionOutlet />
           </main>
 
           {/* Chat discovery and dock — app domain only (XMTP installations are per-origin; avoid 4626.fun) */}
@@ -278,46 +324,33 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
           </Suspense>
         </XmtpChatProvider>
       ) : (
-        <main id="main-content" className={`flex-1 ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
-          <Suspense fallback={<AppLoadingState intent="page" />}>
-            <Outlet />
-          </Suspense>
+        <main id="main-content" className={`flex min-h-0 flex-1 flex-col overflow-x-clip ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
+          <PageTransitionOutlet />
         </main>
       )}
 
       {/* Vercel Flags Explorer bridge — exposes flag state to the Toolbar */}
       <FlagToolbarBridge />
 
-      {/* Mobile Nav - Minimal */}
+      {/* Mobile Nav — floating dock */}
       <nav
         aria-label="Mobile navigation"
-        className={`md:hidden fixed bottom-0 left-0 right-0 z-70 border-t border-white/8 bg-linear-to-t from-black/85 to-vault-bg/78 backdrop-blur-xl shadow-[0_-10px_30px_-18px_rgba(0,0,0,0.95)] ${
+        className={`md:hidden fixed inset-x-0 bottom-0 z-70 pointer-events-none pb-[max(0.625rem,env(safe-area-inset-bottom))] px-3 ${
           hideMobileNav ? 'hidden' : ''
         }`}
       >
-        <div className="mx-auto flex max-w-[540px] items-center justify-center gap-1.5 overflow-x-auto scrollbar-hide py-2.5 px-2 sm:py-3 sm:px-4" role="list">
+        <div className="pointer-events-auto mx-auto flex max-w-md items-stretch justify-between gap-0.5 overflow-x-auto scrollbar-hide rounded-[1.35rem] border border-white/[0.06] bg-zinc-950/55 px-1.5 py-1 shadow-[0_12px_40px_-16px_rgba(0,0,0,0.92),inset_0_1px_0_0_rgba(255,255,255,0.07)] backdrop-blur-2xl backdrop-saturate-150">
           {items.map((item) => {
             const { path, icon: Icon, label } = item
             const isActive = isActiveLink(location, item)
             if (path === getCanonicalMarketingWaitlistPath()) {
               const content = (
                 <>
-                  <Icon
-                    aria-hidden="true"
-                    className={`h-4 w-4 transition-colors ${
-                      isActive ? 'text-vault-text' : 'text-vault-subtext group-hover:text-vault-text'
-                    }`}
-                  />
-                  <span className={`text-[8px] font-medium uppercase tracking-[0.08em] ${isActive ? 'text-vault-text' : 'text-vault-subtext'}`}>
-                    {label}
-                  </span>
+                  <Icon aria-hidden="true" className={mobileNavIconClass(isActive)} />
+                  <span className={mobileNavLabelClass(isActive)}>{label}</span>
                 </>
               )
-              const className = `flex flex-col items-center justify-center gap-1 group min-h-10 min-w-[48px] sm:min-w-[52px] px-2 rounded-xl border transition-all duration-200 active:scale-[0.97] ${
-                isActive
-                  ? 'border-brand-primary/35 bg-brand-primary/12 shadow-[0_10px_22px_-16px_rgba(0,82,255,0.9)]'
-                  : 'border-transparent hover:-translate-y-px hover:border-white/10 hover:bg-white/6'
-              }`
+              const className = mobileNavItemClass(isActive)
               return hostMode === 'marketing' ? (
                 <Link
                   key={path}
@@ -325,7 +358,6 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
                   aria-label={label}
                   aria-current={isActive ? 'page' : undefined}
                   className={className}
-                  role="listitem"
                 >
                   {content}
                 </Link>
@@ -336,10 +368,42 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
                   aria-label={label}
                   aria-current={isActive ? 'page' : undefined}
                   className={className}
-                  role="listitem"
                 >
                   {content}
                 </a>
+              )
+            }
+            if (path === '/wallet' && interactive && hostMode === 'app') {
+              return (
+                <button
+                  key={path}
+                  type="button"
+                  aria-label={label}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={mobileNavItemClass(isActive)}
+                  onClick={() => requestOpenAccountTray({ section: 'portfolio', tab: 'tokens', source: 'mobile-nav' })}
+                >
+                  <img
+                    src="/base/base-chain-light.svg"
+                    alt=""
+                    aria-hidden="true"
+                    className={`relative z-10 h-[1.125rem] w-[1.125rem] object-contain transition-opacity duration-300 ${
+                      isActive ? 'opacity-100' : 'opacity-80'
+                    }`}
+                    loading="lazy"
+                  />
+                  <span
+                    className={`relative z-10 text-[10px] tabular-nums leading-none tracking-wide transition-colors duration-300 ${
+                      isActive ? 'font-semibold text-white' : 'font-medium text-current'
+                    }`}
+                  >
+                    {sessionChrome?.mobileWalletLoading && sessionChrome.hasSession
+                      ? '…'
+                      : sessionChrome?.mobileWalletUsd != null
+                        ? formatUsdCompact(sessionChrome.mobileWalletUsd)
+                        : 'Wallet'}
+                  </span>
+                </button>
               )
             }
             return (
@@ -348,22 +412,10 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
                 to={path}
                 aria-label={label}
                 aria-current={isActive ? 'page' : undefined}
-                className={`flex flex-col items-center justify-center gap-1 group min-h-10 min-w-[48px] sm:min-w-[52px] px-2 rounded-xl border transition-all duration-200 active:scale-[0.97] ${
-                  isActive
-                    ? 'border-brand-primary/35 bg-brand-primary/12 shadow-[0_10px_22px_-16px_rgba(0,82,255,0.9)]'
-                    : 'border-transparent hover:-translate-y-px hover:border-white/10 hover:bg-white/6'
-                }`}
-                role="listitem"
+                className={mobileNavItemClass(isActive)}
               >
-                <Icon
-                  aria-hidden="true"
-                  className={`h-4 w-4 transition-colors ${
-                    isActive ? 'text-vault-text' : 'text-vault-subtext group-hover:text-vault-text'
-                  }`}
-                />
-                <span className={`text-[8px] font-medium uppercase tracking-[0.08em] ${isActive ? 'text-vault-text' : 'text-vault-subtext'}`}>
-                  {label}
-                </span>
+                <Icon aria-hidden="true" className={mobileNavIconClass(isActive)} />
+                <span className={mobileNavLabelClass(isActive)}>{label}</span>
               </Link>
             )
           })}

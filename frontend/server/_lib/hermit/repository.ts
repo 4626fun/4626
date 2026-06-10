@@ -1,4 +1,5 @@
 import { getDb } from '../db/postgres.js'
+import { ensureTelemetryCreativeLogsSchema } from '../db/schemaBootstrap.js'
 
 type DbRow = Record<string, unknown>
 
@@ -52,31 +53,7 @@ export async function ensureHermitSchema(): Promise<boolean> {
   if (!db) return false
   if (hermitSchemaEnsured) return true
 
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS hermit_memes (
-      id BIGSERIAL PRIMARY KEY,
-      owner_address TEXT NOT NULL,
-      room_id TEXT NOT NULL,
-      cid TEXT,
-      url TEXT NOT NULL,
-      caption TEXT NOT NULL,
-      tags JSONB NOT NULL DEFAULT '[]'::jsonb,
-      created_by TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      deleted_at TIMESTAMPTZ
-    );
-  `
-  await db.sql`
-    CREATE INDEX IF NOT EXISTS hermit_memes_room_created_idx
-      ON hermit_memes (room_id, created_at DESC)
-      WHERE deleted_at IS NULL;
-  `
-  await db.sql`
-    CREATE INDEX IF NOT EXISTS hermit_memes_owner_created_idx
-      ON hermit_memes (owner_address, created_at DESC)
-      WHERE deleted_at IS NULL;
-  `
-
+  await ensureTelemetryCreativeLogsSchema(db as any)
   hermitSchemaEnsured = true
   return true
 }

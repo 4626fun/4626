@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/agent/erc8004OperatorStatus
+[4626-web](../../../index.md) / server/\_lib/agent/erc8004OperatorStatus
 
 # server/\_lib/agent/erc8004OperatorStatus
 

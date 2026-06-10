@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/token/\_managedTokenList
+[4626-web](../../../index.md) / api/\_handlers/token/\_managedTokenList
 
 # api/\_handlers/token/\_managedTokenList
 
@@ -44,7 +44,7 @@ Defined in: [api/\_handlers/token/\_managedTokenList.ts:85](https://github.com/w
 
 ##### shareOft
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 

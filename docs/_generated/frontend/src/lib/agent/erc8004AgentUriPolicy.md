@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/agent/erc8004AgentUriPolicy
+[4626-web](../../../index.md) / src/lib/agent/erc8004AgentUriPolicy
 
 # src/lib/agent/erc8004AgentUriPolicy
 

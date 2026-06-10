@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/wallet/coinbaseSmartWalletOwner
+[4626-web](../../../index.md) / server/\_lib/wallet/coinbaseSmartWalletOwner
 
 # server/\_lib/wallet/coinbaseSmartWalletOwner
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/wallet/coinbaseSmartWalletOwner.ts:5](https://github.c
 
 > **isOwner**(`publicClient`, `cswAddress`, `ownerAddress`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/wallet/coinbaseSmartWalletOwner.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/coinbaseSmartWalletOwner.ts#L30)
+Defined in: [server/\_lib/wallet/coinbaseSmartWalletOwner.ts:50](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/coinbaseSmartWalletOwner.ts#L50)
 
 #### Parameters
 
@@ -42,11 +42,37 @@ Defined in: [server/\_lib/wallet/coinbaseSmartWalletOwner.ts:30](https://github.
 
 ***
 
+### isOwnerIfDeployed()
+
+> **isOwnerIfDeployed**(`publicClient`, `cswAddress`, `ownerAddress`): `Promise`\<`boolean` \| `null`\>
+
+Defined in: [server/\_lib/wallet/coinbaseSmartWalletOwner.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/coinbaseSmartWalletOwner.ts#L34)
+
+#### Parameters
+
+##### publicClient
+
+`Pick`\<`PublicClient`, `"readContract"` \| `"getBytecode"`\>
+
+##### cswAddress
+
+`string`
+
+##### ownerAddress
+
+`string`
+
+#### Returns
+
+`Promise`\<`boolean` \| `null`\>
+
+***
+
 ### prepareAddOwnerTx()
 
 > **prepareAddOwnerTx**(`cswAddress`, `ownerToAdd`): `object`
 
-Defined in: [server/\_lib/wallet/coinbaseSmartWalletOwner.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/coinbaseSmartWalletOwner.ts#L46)
+Defined in: [server/\_lib/wallet/coinbaseSmartWalletOwner.ts:66](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/coinbaseSmartWalletOwner.ts#L66)
 
 #### Parameters
 
@@ -72,7 +98,7 @@ Defined in: [server/\_lib/wallet/coinbaseSmartWalletOwner.ts:46](https://github.
 
 ##### to
 
-> **to**: `` `0x${string}` ``
+> **to**: `string`
 
 ##### value
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/deploy/deploySessions
+[4626-web](../../../index.md) / server/\_lib/deploy/deploySessions
 
 # server/\_lib/deploy/deploySessions
 

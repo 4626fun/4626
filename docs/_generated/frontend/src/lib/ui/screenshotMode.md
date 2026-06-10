@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/ui/screenshotMode
+[4626-web](../../../index.md) / src/lib/ui/screenshotMode
 
 # src/lib/ui/screenshotMode
 

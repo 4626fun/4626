@@ -117,8 +117,8 @@ export function getLoadingIntentConfig(intent: LoadingIntent): LoadingIntentConf
   return LOADING_INTENT_CONFIG[intent]
 }
 
-export function getLoadingIntentFromPath(pathname: string): LoadingIntent {
-  if (pathname.startsWith('/deploy')) return 'deploy'
-  if (pathname === '/waitlist' || pathname.startsWith('/r/')) return 'session'
-  return 'page'
+/** Keep the wave loader animation stable while bootstrap intents hand off. */
+export function resolveOverlayPatternIntent(intent: LoadingIntent): LoadingIntent {
+  if (intent === 'session' || intent === 'redirect' || intent === 'deploy') return 'page'
+  return intent
 }

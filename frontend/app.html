@@ -2,23 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- Favicons -->
-    <link rel="icon" href="/assets/favicon.ico?v=2" sizes="any" />
-    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=2" />
-    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-64x64.png" />
-    <link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-48x48.png" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png?v=2" />
-    <link rel="mask-icon" href="/assets/safari-pinned-tab-v2.svg" color="#0000FF" />
-    <meta name="msapplication-TileColor" content="#020204" />
+    <!-- Single /favicon.ico on the app origin — avoids Base App icon tag races on signature modals. -->
+    <link rel="icon" href="https://app.4626.fun/favicon.ico?v=20" sizes="any" />
+    <meta name="msapplication-TileColor" content="#000000" />
     <meta name="msapplication-config" content="/browserconfig.xml" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="canonical" href="https://4626.fun/" />
-    <title>4626.fun - ERC-4626 Creator Vaults on Base</title>
+    <link rel="canonical" href="https://app.4626.fun/" />
+    <title>4626.fun — ERC-4626 Creator Vaults on Base</title>
     <meta name="application-name" content="4626.fun" />
     <meta name="apple-mobile-web-app-title" content="4626.fun" />
-    <meta name="description" content="ERC-4626 creator vaults on Base." />
+    <meta name="description" content="Creator coin vaults on Base. Wrap creator coins into ERC-4626 vaults, launch fairly, earn fees, and compose with DeFi." />
     <meta name="keywords" content="ERC-4626 creator vaults, creator coin vaults, creator coin yield, Base creator coins, creator vaults on Base" />
     <meta name="author" content="4626.fun" />
     <!-- Robots: default noindex until SSR/prerender is available for crawlable routes -->
@@ -26,32 +19,32 @@
     <!-- Open Graph baseline (overridden per-page by PageMeta component) -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="4626.fun" />
-    <meta property="og:title" content="4626.fun - ERC-4626 Creator Vaults on Base" />
-    <meta property="og:description" content="Creator coin vaults, yield, and fair launches on Base." />
-    <meta property="og:url" content="https://4626.fun/" />
-    <meta property="og:image" content="https://4626.fun/assets/og-image.png?v=2" />
-    <meta property="og:image:secure_url" content="https://4626.fun/assets/og-image.png?v=2" />
+    <meta property="og:title" content="4626.fun — ERC-4626 Creator Vaults on Base" />
+    <meta property="og:description" content="Creator coin vaults on Base. Deposit. Compound. Withdraw. Onchain." />
+    <meta property="og:url" content="https://app.4626.fun/" />
+    <meta property="og:image" content="https://4626.fun/assets/og-image.png?v=20" />
+    <meta property="og:image:secure_url" content="https://4626.fun/assets/og-image.png?v=20" />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="4626.fun - ERC-4626 creator vaults on Base" />
+    <meta property="og:image:alt" content="4626.fun — ERC-4626 creator vaults on Base" />
     <!-- Twitter Card baseline -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@4626fun" />
     <meta name="twitter:creator" content="@wenakita" />
-    <meta name="twitter:title" content="4626.fun - ERC-4626 Creator Vaults on Base" />
-    <meta name="twitter:description" content="Creator coin vaults, yield, and fair launches on Base." />
-    <meta name="twitter:image" content="https://4626.fun/assets/twitter-card.png?v=2" />
-    <meta name="twitter:image:alt" content="4626.fun - ERC-4626 creator vaults on Base" />
-    <!-- Base App verification uses the app origin, not the marketing domain. -->
+    <meta name="twitter:title" content="4626.fun — ERC-4626 Creator Vaults on Base" />
+    <meta name="twitter:description" content="Creator coin vaults on Base. Deposit. Compound. Withdraw. Onchain." />
+    <meta name="twitter:image" content="https://4626.fun/assets/twitter-card.png?v=20" />
+    <meta name="twitter:image:alt" content="4626.fun — ERC-4626 creator vaults on Base" />
+    <!-- Base Build verification reads base:app_id from app.4626.fun; user entry stays on 4626.fun. -->
     <meta name="base:app_id" content="695a49dc4d3a403912ed8ca5" />
     <meta
       name="fc:miniapp"
-      content='{"version":"next","imageUrl":"https://4626.fun/assets/og-image.png?v=2","button":{"title":"Open 4626.fun","action":{"type":"launch_miniapp","name":"4626.fun","url":"https://4626.fun/","splashImageUrl":"https://4626.fun/assets/logo-mark-1024.png?v=2","splashBackgroundColor":"#020204"}}}'
+      content='{"version":"next","imageUrl":"https://4626.fun/assets/base-app-icon-1024.png?v=20","button":{"title":"Open 4626.fun","action":{"type":"launch_miniapp","name":"4626.fun","url":"https://4626.fun/","splashImageUrl":"https://app.4626.fun/assets/base-miniapp-icon-v20-200.png?v=20","splashBackgroundColor":"#000000"}}}'
     />
     <meta
       name="fc:frame"
-      content='{"version":"next","imageUrl":"https://4626.fun/assets/og-image.png?v=2","button":{"title":"Open 4626.fun","action":{"type":"launch_frame","name":"4626.fun","url":"https://4626.fun/","splashImageUrl":"https://4626.fun/assets/logo-mark-1024.png?v=2","splashBackgroundColor":"#020204"}}}'
+      content='{"version":"next","imageUrl":"https://4626.fun/assets/base-app-icon-1024.png?v=20","button":{"title":"Open 4626.fun","action":{"type":"launch_frame","name":"4626.fun","url":"https://4626.fun/","splashImageUrl":"https://app.4626.fun/assets/base-miniapp-icon-v20-200.png?v=20","splashBackgroundColor":"#000000"}}}'
     />
     <meta
       name="talentapp:project_verification"
@@ -205,11 +198,13 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="theme-color" content="#020204" />
+    <meta name="theme-color" content="#000000" />
     <!-- Include credentials for protected preview deployments (e.g. Vercel auth) -->
     <link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials" />
     <style>
       :root {
+        --trust-page-bg: #000000;
+        --trust-page-bg-rgb: 0 0 0;
         --vault-bg: 248 250 252;
         --vault-card: 255 255 255;
         --vault-border: 226 232 240;
@@ -217,42 +212,48 @@
         --vault-subtext: 71 85 105;
       }
       html.dark {
-        --vault-bg: 2 2 2;
+        --vault-bg: var(--trust-page-bg-rgb);
         --vault-card: 10 10 10;
         --vault-border: 31 31 31;
         --vault-text: 237 237 237;
         --vault-subtext: 102 102 102;
       }
-      html, body {
-        background-color: rgb(var(--vault-bg)); /* Vault background */
-        color: rgb(var(--vault-text));
+      html, body, #root {
         margin: 0;
         padding: 0;
-        height: 100%;
+        min-height: 100dvh;
+      }
+      #root {
+        display: flex;
+        flex-direction: column;
+      }
+      html:not(.dark) body {
+        background-color: rgb(var(--vault-bg));
+        color: rgb(var(--vault-text));
+      }
+      html.dark body {
+        background-color: var(--trust-page-bg);
+        color: rgb(var(--vault-text));
+      }
+      html.dark #root,
+      html.dark .vault-shell,
+      html.dark main {
+        background-color: transparent;
       }
     </style>
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebApplication",
+      "@type": "WebSite",
       "name": "4626.fun",
-      "alternateName": "4626.fun",
       "url": "https://4626.fun",
       "description": "ERC-4626 creator vaults on Base.",
-      "applicationCategory": "FinanceApplication",
-      "operatingSystem": "Web",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-      },
-      "creator": {
+      "publisher": {
         "@type": "Organization",
         "name": "4626.fun",
         "url": "https://4626.fun",
-        "email": "hello@4626.fun"
-      },
-      "image": "https://4626.fun/assets/og-image.png?v=2"
+        "logo": "https://4626.fun/assets/logo-mark-1024.png?v=20"
+      }
     }
     </script>
     <script type="application/ld+json">
@@ -261,17 +262,8 @@
       "@type": "Organization",
       "name": "4626.fun",
       "url": "https://4626.fun",
-      "logo": "https://4626.fun/assets/logo-mark-1024.png?v=2",
-      "description": "ERC-4626 creator vaults on Base."
-    }
-    </script>
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebSite",
-      "name": "4626.fun",
-      "url": "https://4626.fun",
-      "description": "ERC-4626 creator vaults on Base."
+      "logo": "https://4626.fun/assets/logo-mark-1024.png?v=20",
+      "description": "Creator coin vaults on Base. Wrap creator coins into ERC-4626 vaults, launch fairly, earn fees, and compose with DeFi."
     }
     </script>
   </head>

@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  assertSwapSpendBalancePreflight,
   deriveSwapExecutionReadiness,
   evaluateCanonicalSubmitSession,
   evaluateSwapSessionGate,
   resolveCanonicalSubmitSession,
   shouldDisablePermit2ForSwap,
+  shouldSimulateSwapBuild,
+  shouldSimulateSwapTransaction,
 } from './useSwapExecution'
 import { requiresCanonicalExecutionForSwapMode } from '@/lib/swap/providerConfig'
 
@@ -305,7 +308,17 @@ describe('deriveSwapExecutionReadiness', () => {
 })
 
 describe('shouldDisablePermit2ForSwap', () => {
-  it('disables Permit2 for canonical execution mode', () => {
+  it('keeps Permit2 enabled for parent canonical CSW execution', () => {
+    expect(
+      shouldDisablePermit2ForSwap({
+        executionMode: 'canonical',
+        canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        executionAddress: '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5',
+      }),
+    ).toBe(false)
+  })
+
+  it('disables Permit2 for non-CSW canonical execution lanes', () => {
     expect(
       shouldDisablePermit2ForSwap({
         executionMode: 'canonical',
@@ -315,14 +328,14 @@ describe('shouldDisablePermit2ForSwap', () => {
     ).toBe(true)
   })
 
-  it('disables Permit2 whenever the parent canonical CSW is the execution address', () => {
+  it('keeps Permit2 enabled when the parent canonical CSW is the execution address in EOA mode', () => {
     expect(
       shouldDisablePermit2ForSwap({
         executionMode: 'eoa',
         canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
         executionAddress: '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5',
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('keeps Permit2 available for normal external EOA swaps', () => {
@@ -333,5 +346,93 @@ describe('shouldDisablePermit2ForSwap', () => {
         executionAddress: '0x3333333333333333333333333333333333333333',
       }),
     ).toBe(false)
+  })
+})
+
+describe('shouldSimulateSwapTransaction', () => {
+  it('skips simulation when approval or native wrap batching is required', () => {
+    expect(shouldSimulateSwapTransaction(true, false)).toBe(false)
+    expect(shouldSimulateSwapTransaction(false, true)).toBe(false)
+    expect(shouldSimulateSwapTransaction(true, true)).toBe(false)
+  })
+
+  it('allows simulation only for standalone swap builds', () => {
+    expect(shouldSimulateSwapTransaction(false, false)).toBe(true)
+  })
+})
+
+describe('shouldSimulateSwapBuild', () => {
+  it('never simulates canonical CSW or Zora quote builds', () => {
+    expect(
+      shouldSimulateSwapBuild({
+        executionMode: 'canonical',
+        isZoraQuote: false,
+        requiresApprovalTx: false,
+        wrapsNativeEthForCanonical: false,
+      }),
+    ).toBe(false)
+    expect(
+      shouldSimulateSwapBuild({
+        executionMode: 'eoa',
+        isZoraQuote: true,
+        requiresApprovalTx: false,
+        wrapsNativeEthForCanonical: false,
+      }),
+    ).toBe(false)
+  })
+
+  it('simulates external EOA Uniswap builds when no batching is required', () => {
+    expect(
+      shouldSimulateSwapBuild({
+        executionMode: 'eoa',
+        isZoraQuote: false,
+        requiresApprovalTx: false,
+        wrapsNativeEthForCanonical: false,
+      }),
+    ).toBe(true)
+    expect(
+      shouldSimulateSwapBuild({
+        executionMode: 'eoa',
+        isZoraQuote: false,
+        requiresApprovalTx: true,
+        wrapsNativeEthForCanonical: false,
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('assertSwapSpendBalancePreflight', () => {
+  const wallet = '0x1111111111111111111111111111111111111111' as const
+
+  it('rejects native ETH sells above wallet balance', async () => {
+    await expect(
+      assertSwapSpendBalancePreflight({
+        publicClient: {
+          getBalance: async () => 1_000_000_000_000_000n,
+          readContract: async () => 0n,
+        },
+        executionAddress: wallet,
+        tokenIn: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+        amountInUnits: '0.01',
+        wrapNativeEthForCanonical: true,
+        getTokenDecimals: async () => 18,
+      }),
+    ).rejects.toThrow(/Insufficient ETH/)
+  })
+
+  it('allows native ETH sells within wallet balance', async () => {
+    await expect(
+      assertSwapSpendBalancePreflight({
+        publicClient: {
+          getBalance: async () => 10_000_000_000_000_000_000n,
+          readContract: async () => 0n,
+        },
+        executionAddress: wallet,
+        tokenIn: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+        amountInUnits: '0.01',
+        wrapNativeEthForCanonical: true,
+        getTokenDecimals: async () => 18,
+      }),
+    ).resolves.toBeUndefined()
   })
 })

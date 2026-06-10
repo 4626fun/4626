@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/creator/creator-coin-resolver
+[4626-web](../../../index.md) / src/lib/creator/creator-coin-resolver
 
 # src/lib/creator/creator-coin-resolver
 
@@ -10,7 +10,7 @@
 
 ### getAllOwners()
 
-> **getAllOwners**(`coinAddress`): `Promise`\<`` `0x${string}` ``[]\>
+> **getAllOwners**(`coinAddress`): `Promise`\<`string`[]\>
 
 Defined in: [src/lib/creator/creator-coin-resolver.ts:123](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creator/creator-coin-resolver.ts#L123)
 
@@ -20,17 +20,17 @@ Get all owners of a CreatorCoin (capped to prevent DoS from malicious contracts)
 
 ##### coinAddress
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
-`Promise`\<`` `0x${string}` ``[]\>
+`Promise`\<`string`[]\>
 
 ***
 
 ### getCreatorCoinPayoutRecipient()
 
-> **getCreatorCoinPayoutRecipient**(`coinAddress`): `Promise`\<`` `0x${string}` `` \| `null`\>
+> **getCreatorCoinPayoutRecipient**(`coinAddress`): `Promise`\<`string` \| `null`\>
 
 Defined in: [src/lib/creator/creator-coin-resolver.ts:79](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creator/creator-coin-resolver.ts#L79)
 
@@ -40,17 +40,17 @@ Resolve CreatorCoin payoutRecipient.
 
 ##### coinAddress
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
-`Promise`\<`` `0x${string}` `` \| `null`\>
+`Promise`\<`string` \| `null`\>
 
 ***
 
 ### getOwnerAt()
 
-> **getOwnerAt**(`coinAddress`, `index`): `Promise`\<`` `0x${string}` `` \| `null`\>
+> **getOwnerAt**(`coinAddress`, `index`): `Promise`\<`string` \| `null`\>
 
 Defined in: [src/lib/creator/creator-coin-resolver.ts:101](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creator/creator-coin-resolver.ts#L101)
 
@@ -63,7 +63,7 @@ Index 2: Main EOA (Externally Owned Account)
 
 ##### coinAddress
 
-`` `0x${string}` ``
+`string`
 
 ##### index
 
@@ -71,7 +71,7 @@ Index 2: Main EOA (Externally Owned Account)
 
 #### Returns
 
-`Promise`\<`` `0x${string}` `` \| `null`\>
+`Promise`\<`string` \| `null`\>
 
 ***
 
@@ -87,7 +87,7 @@ Check if an address is a CreatorCoin contract
 
 ##### address
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
@@ -97,7 +97,7 @@ Check if an address is a CreatorCoin contract
 
 ### resolveCreatorAddress()
 
-> **resolveCreatorAddress**(`addressOrCoin`): `Promise`\<`` `0x${string}` ``\>
+> **resolveCreatorAddress**(`addressOrCoin`): `Promise`\<`string`\>
 
 Defined in: [src/lib/creator/creator-coin-resolver.ts:155](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creator/creator-coin-resolver.ts#L155)
 
@@ -111,8 +111,8 @@ Priority:
 
 ##### addressOrCoin
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
-`Promise`\<`` `0x${string}` ``\>
+`Promise`\<`string`\>

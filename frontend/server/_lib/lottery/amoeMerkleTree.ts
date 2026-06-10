@@ -15,7 +15,7 @@
 // Both trees are conceptually padded to `2^DEPTH` with zero-leaves so the
 // circuit's `pathElements` / `pathIndices` arrays line up regardless of
 // how many real leaves were inserted. DEPTH is locked at 20 by the .circom
-// file (see `circuits/amoe/amoe_eligibility.circom::component main`).
+// file (see `amoe/circuits/amoe_eligibility.circom::component main`).
 //
 // IMPLEMENTATION — SPARSE WITH LITERAL-ZERO SIBLINGS
 // ===================================================
@@ -27,7 +27,7 @@
 // The AMOE circuit uses a non-standard convention (see
 // `AMOE_MERKLE_ZERO_HASHES` below): empty siblings at *every* level are
 // the literal field-element `0`, not the zero-subtree hash. This is
-// what `circuits/amoe/build/input_v2.json` encodes and what we must
+// what `amoe/circuits/build/input_v2.json` encodes and what we must
 // match bit-exactly.
 //
 // We exploit that by materializing only the nodes on the path from each
@@ -54,7 +54,7 @@
 // We use `poseidon-lite` (no WASM, no async init, ~10 KB). It is
 // bit-exactly compatible with circomlib's Poseidon spec on BN254 — this
 // has been validated end-to-end against the production circuit using the
-// canonical witness fixture in `circuits/amoe/build/input_v2.json`. Every
+// canonical witness fixture in `amoe/circuits/build/input_v2.json`. Every
 // hash in this module reproduces bit-exactly the circuit's output for
 // that input.
 //
@@ -83,7 +83,7 @@ import { AmoeProofGenerationError } from './proveAmoeEntryPlonk.js'
 
 /**
  * Locked Merkle tree depth (DEPTH=20) from
- * `circuits/amoe/amoe_eligibility.circom::component main = AmoeEligibility(20)`.
+ * `amoe/circuits/amoe_eligibility.circom::component main = AmoeEligibility(20)`.
  * Bumping this requires regenerating the circuit + zkey.
  */
 export const AMOE_MERKLE_TREE_DEPTH = 20 as const
@@ -112,7 +112,7 @@ export const AMOE_MERKLE_ZERO_LEAF = 0n
  * would be `Poseidon(Z[L-1], Z[L-1])`. The AMOE circuit, however,
  * consumes `pathElements[i]` directly as the sibling — there is no
  * "is this an empty subtree?" flag — and the canonical fixture
- * (`circuits/amoe/build/input_v2.json`) encodes a single-leaf root with
+ * (`amoe/circuits/build/input_v2.json`) encodes a single-leaf root with
  * `pathElements = [0, 0, ..., 0]` at every level. The circuit therefore
  * commits to a root computed by hashing `leaf` against literal `0` at
  * every level, NOT against zero-subtree hashes.

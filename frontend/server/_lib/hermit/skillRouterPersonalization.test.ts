@@ -30,8 +30,8 @@ describe('executeHermitCommand — per-user personalization', () => {
     } as Response)
     ;(globalThis as unknown as { fetch: typeof fetch }).fetch = fetchMock as unknown as typeof fetch
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
     })
   })
 
@@ -205,7 +205,7 @@ describe('executeHermitCommand — per-user personalization', () => {
     })
 
     expect(result.kind).toBe('hermit')
-    expect(result.provider).toBe('pinata')
+    expect(result.provider).toBe('hermit')
     expect(persistPreference).toHaveBeenCalledTimes(1)
   })
 

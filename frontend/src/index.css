@@ -1,10 +1,22 @@
 @import "tailwindcss";
+@import "./styles/trust-page-background.css";
 @config "../tailwind.config.js";
 
 @layer base {
   html {
     position: relative;
     scrollbar-gutter: stable;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100dvh;
+  }
+
+  #root {
+    display: flex;
+    flex-direction: column;
   }
 
   html.telegram-link-html-lock {
@@ -15,15 +27,16 @@
   }
 
   body {
-    @apply bg-vault-bg text-vault-text antialiased font-sans;
+    @apply text-vault-text antialiased font-sans;
     font-weight: 300;
     position: relative;
-    min-height: 100vh;
-    background-image:
-      radial-gradient(58% 42% at 15% -8%, rgba(0, 0, 255, 0.16), transparent 72%),
-      radial-gradient(46% 30% at 82% -4%, rgba(30, 89, 255, 0.12), transparent 74%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(0, 0, 0, 0));
-    background-attachment: fixed;
+    background-color: transparent;
+  }
+
+  html.dark #root,
+  html.dark .vault-shell,
+  html.dark main {
+    background-color: transparent;
   }
 
   body.telegram-link-body-lock {
@@ -46,6 +59,17 @@
   body.baseapp-scroll-lock #root {
     overscroll-behavior-y: none;
   }
+
+  /* Full-screen bootstrap overlay: lock document scroll to avoid gutter flicker. */
+  html.app-loading-scroll-lock,
+  body.app-loading-scroll-lock {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  body.app-loading-scroll-lock #root {
+    overflow: hidden;
+  }
   
   /* Cinematic Typography */
   .headline {
@@ -66,18 +90,25 @@
 }
 
 @layer components {
+  /* Force react-three-fiber wrapper chain to inherit parent height.
+     Without this, an internal wrapper can collapse and canvas falls back to 150px. */
+  .r3f-force-fill,
+  .r3f-force-fill > div,
+  .r3f-force-fill > div > div {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+
+  .r3f-force-fill canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block !important;
+  }
+
   /* Creator Vaults Brand Kit utilities */
   .noise-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 35;
-    opacity: 0.028;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-    mix-blend-mode: soft-light;
+    display: none;
   }
 
   .border-glass {
@@ -137,6 +168,60 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
 
+  /* Explore list tables: flat on the shared canvas — no card gradient (avoids row banding). */
+  .explore-table-panel {
+    @apply relative overflow-visible bg-transparent;
+  }
+
+  .explore-table-sticky-bar {
+    background: transparent;
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+
+  .explore-table-row-wrap,
+  .explore-table-row {
+    @apply bg-transparent transition-colors;
+  }
+
+  .explore-table-sticky-cell {
+    background: transparent;
+  }
+
+  /* Horizontal scroll: blur sticky identity columns so scrolled cells do not bleed through. */
+  #explore-creators-body[data-scrolled='1'] .explore-table-sticky-cell,
+  #explore-content-body[data-scrolled='1'] .explore-table-sticky-cell {
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+
+  .group:hover .explore-table-row,
+  .group:hover .explore-table-sticky-cell {
+    background: rgb(255 255 255 / 0.025);
+  }
+
+  .explore-table-header-shell {
+    @apply w-max max-w-none border-b border-white/8 bg-transparent;
+  }
+
+  .explore-table-scroll {
+    @apply w-full;
+  }
+
+  .explore-table-grid {
+    @apply grid w-max max-w-none;
+  }
+
+  .explore-activity-grid {
+    grid-template-columns: 80px 220px 112px 100px 120px 44px;
+  }
+
+  @media (max-width: 639px) {
+    .explore-activity-grid {
+      grid-template-columns: 64px 180px 88px 88px;
+    }
+  }
+
   .vault-hover-lift {
     transition:
       transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1),
@@ -150,7 +235,7 @@
     border-color: rgb(var(--vault-border-strong) / 0.74);
     box-shadow:
       0 22px 58px -28px rgba(0, 0, 0, 0.82),
-      0 0 0 1px rgba(59, 130, 246, 0.1),
+      0 0 0 1px rgb(var(--brand-gold) / 0.14),
       inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
 
@@ -167,6 +252,11 @@
        container (unlike overflow-x: hidden which forces overflow-y: auto and
        breaks position:sticky and scroll-tracking inside the shell). */
     overflow-x: clip;
+  }
+
+  /* Explore immersive pages inherit the shared trust-page body background. */
+  .explore-page-canvas {
+    display: none;
   }
 
   .bv-panel {
@@ -238,7 +328,7 @@
   }
   
   .glow-brand {
-    text-shadow: 0 0 40px rgba(0, 82, 255, 0.35);
+    text-shadow: 0 0 40px rgb(var(--brand-primary) / 0.35);
   }
   
   /* Shared primary CTA — refined, flat with subtle inset bezel */
@@ -247,11 +337,11 @@
     @apply relative inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-[13.5px] font-medium text-white transition-[background,box-shadow,transform] duration-150 ease-out;
     min-height: 42px;
     letter-spacing: -0.005em;
-    background: linear-gradient(180deg, #1563ff 0%, #0050f8 100%);
+    background: linear-gradient(180deg, rgb(var(--brand-hover)) 0%, rgb(var(--brand-primary)) 100%);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.16),
       inset 0 -1px 0 rgba(0, 0, 0, 0.18),
-      0 0 0 1px rgba(0, 82, 255, 0.35),
+      0 0 0 1px rgb(var(--brand-primary) / 0.35),
       0 1px 2px rgba(0, 0, 0, 0.28);
   }
 
@@ -271,11 +361,11 @@
 
   .btn-primary:hover,
   .btn-accent:hover {
-    background: linear-gradient(180deg, #2a74ff 0%, #0f59ff 100%);
+    background: linear-gradient(180deg, rgb(var(--brand-hover)) 0%, rgb(var(--brand-hover)) 100%);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.22),
       inset 0 -1px 0 rgba(0, 0, 0, 0.16),
-      0 0 0 1px rgba(0, 82, 255, 0.45),
+      0 0 0 1px rgb(var(--brand-primary) / 0.45),
       0 2px 6px rgba(0, 0, 0, 0.3);
   }
 
@@ -284,8 +374,8 @@
     outline: none;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.18),
-      0 0 0 2px rgba(0, 82, 255, 0.5),
-      0 0 0 4px rgba(0, 82, 255, 0.18);
+      0 0 0 2px rgb(var(--brand-primary) / 0.5),
+      0 0 0 4px rgb(var(--brand-primary) / 0.18);
   }
 
   .btn-primary:active,
@@ -294,7 +384,7 @@
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.12),
       inset 0 -1px 0 rgba(0, 0, 0, 0.24),
-      0 0 0 1px rgba(0, 82, 255, 0.4);
+      0 0 0 1px rgb(var(--brand-primary) / 0.4);
   }
 
   .btn-primary:disabled,
@@ -304,7 +394,7 @@
     transform: none;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.1),
-      0 0 0 1px rgba(0, 82, 255, 0.2);
+      0 0 0 1px rgb(var(--brand-primary) / 0.2);
   }
 
   .btn-compact {
@@ -373,7 +463,7 @@
   .fc-authkit-signin-button button:focus-visible,
   .fc-authkit-signin-button > button:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px rgba(0, 82, 255, 0.25);
+    box-shadow: 0 0 0 2px rgb(var(--brand-primary) / 0.25);
   }
   
   /* Input - Terminal style */
@@ -409,7 +499,7 @@
     animation-fill-mode: both;
     transform-origin: center;
     will-change: opacity, transform, filter;
-    filter: drop-shadow(0 0 0 rgba(0, 82, 255, 0));
+    filter: drop-shadow(0 0 0 rgb(var(--brand-primary) / 0));
   }
 }
 
@@ -453,7 +543,7 @@
   100% {
     opacity: 0.12;
     transform: scale(calc(var(--dotm-wave-scale, 1) * 0.9));
-    filter: drop-shadow(0 0 0 rgba(0, 82, 255, 0));
+    filter: drop-shadow(0 0 0 rgb(var(--brand-primary) / 0));
   }
   36% {
     opacity: 0.32;
@@ -462,7 +552,7 @@
   54% {
     opacity: 1;
     transform: scale(calc(var(--dotm-wave-scale, 1) * 1.18));
-    filter: drop-shadow(0 0 6px rgba(0, 82, 255, 0.35));
+    filter: drop-shadow(0 0 6px rgb(var(--brand-primary) / 0.35));
   }
   68% {
     opacity: 0.4;
@@ -515,9 +605,13 @@
 
 /* Default: light */
 :root {
-  --brand-primary: 0 82 255;
-  --brand-hover: 26 102 255;
-  --brand-glow: 0 82 255;
+  --brand-primary: 28 92 242;
+  --brand-hover: 63 129 255;
+  --brand-glow: 28 92 242;
+  --brand-accent-rgb: 245 158 11;
+  /* 4626.fun marketing gold — Explore accent lane (immersive --gold / --gold-2) */
+  --brand-gold: 232 185 100;
+  --brand-gold-light: 245 209 130;
   --vault-bg: 248 250 252;      /* slate-50 */
   --vault-card: 255 255 255;    /* white */
   --vault-card-raised: 241 245 249;
@@ -530,7 +624,8 @@
 
 /* Dark */
 html.dark {
-  --vault-bg: 2 2 2;            /* #020202 */
+  --vault-bg: var(--trust-page-bg-rgb);
+  --explore-canvas: var(--trust-page-bg);
   --vault-card: 10 10 10;       /* #0A0A0A */
   --vault-card-raised: 15 16 20; /* #0F1014 */
   --vault-border: 31 31 31;     /* #1F1F1F */
@@ -538,6 +633,54 @@ html.dark {
   --vault-text: 237 237 237;    /* #EDEDED */
   --vault-subtext: 102 102 102; /* #666666 */
   --vault-muted: 109 114 129;   /* #6D7281 */
+
+  /* shadcn/ui semantic tokens — bridged to vault + brand (do not duplicate hex) */
+  --background: var(--vault-bg);
+  --foreground: var(--vault-text);
+  --card: var(--vault-card);
+  --card-foreground: var(--vault-text);
+  --popover: var(--vault-card-raised);
+  --popover-foreground: var(--vault-text);
+  --primary: var(--brand-primary);
+  --primary-foreground: 255 255 255;
+  --secondary: var(--vault-card-raised);
+  --secondary-foreground: var(--vault-text);
+  --muted: var(--vault-card-raised);
+  --muted-foreground: var(--vault-subtext);
+  --accent: var(--vault-card-raised);
+  --accent-foreground: var(--vault-text);
+  --destructive: 239 68 68;
+  --destructive-foreground: 255 255 255;
+  --border: var(--vault-border-strong);
+  --input: var(--vault-border);
+  --ring: var(--brand-primary);
+  --radius: 1rem;
+}
+
+@theme inline {
+  --color-background: rgb(var(--background) / <alpha-value>);
+  --color-foreground: rgb(var(--foreground) / <alpha-value>);
+  --color-card: rgb(var(--card) / <alpha-value>);
+  --color-card-foreground: rgb(var(--card-foreground) / <alpha-value>);
+  --color-popover: rgb(var(--popover) / <alpha-value>);
+  --color-popover-foreground: rgb(var(--popover-foreground) / <alpha-value>);
+  --color-primary: rgb(var(--primary) / <alpha-value>);
+  --color-primary-foreground: rgb(var(--primary-foreground) / <alpha-value>);
+  --color-secondary: rgb(var(--secondary) / <alpha-value>);
+  --color-secondary-foreground: rgb(var(--secondary-foreground) / <alpha-value>);
+  --color-muted: rgb(var(--muted) / <alpha-value>);
+  --color-muted-foreground: rgb(var(--muted-foreground) / <alpha-value>);
+  --color-accent: rgb(var(--accent) / <alpha-value>);
+  --color-accent-foreground: rgb(var(--accent-foreground) / <alpha-value>);
+  --color-destructive: rgb(var(--destructive) / <alpha-value>);
+  --color-destructive-foreground: rgb(var(--destructive-foreground) / <alpha-value>);
+  --color-border: rgb(var(--border) / <alpha-value>);
+  --color-input: rgb(var(--input) / <alpha-value>);
+  --color-ring: rgb(var(--ring) / <alpha-value>);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
 /* Privy modal theming */
@@ -674,54 +817,59 @@ body {
 
 /* Tablet/mobile: keep Explore tables scrollable (show all columns) */
 @media (max-width: 1024px) {
-  #explore-creators-header,
-  #explore-content-header {
-    display: block;
-  }
-
   #explore-creators-body,
-  #explore-content-body {
+  #explore-content-body,
+  #explore-transactions-body {
     overflow-x: auto;
   }
 
-  #explore-creators-body > .min-w-max,
-  #explore-content-body > .min-w-max {
+  #explore-creators-body .w-max,
+  #explore-content-body .w-max,
+  #explore-transactions-body .w-max {
     min-width: max-content;
   }
 
-  /* Hide token name when the table is horizontally scrolled to improve column visibility. */
   #explore-creators-body[data-scrolled="1"] .explore-token-name,
   #explore-content-body[data-scrolled="1"] .explore-token-name {
     display: none;
   }
 
-  /* Collapse sticky identity cell width while scrolling right on mobile. */
   #explore-creators-body[data-scrolled="1"] .explore-sticky-name-cell,
   #explore-content-body[data-scrolled="1"] .explore-sticky-name-cell {
-    width: 56px;
-    max-width: 56px;
-    min-width: 56px;
-    overflow: hidden;
+    width: var(--explore-collapsed-identity-width, 72px);
+    max-width: var(--explore-collapsed-identity-width, 72px);
+    min-width: var(--explore-collapsed-identity-width, 72px);
+    overflow: visible;
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-bottom: 10px;
   }
 
-  #explore-creators-header[data-scrolled="1"] .explore-sticky-name-header-cell,
-  #explore-content-header[data-scrolled="1"] .explore-sticky-name-header-cell {
-    width: 56px;
-    max-width: 56px;
-    min-width: 56px;
-    overflow: hidden;
+  #explore-creators-body[data-scrolled="1"] .explore-sticky-name-cell .flex,
+  #explore-content-body[data-scrolled="1"] .explore-sticky-name-cell .flex {
+    justify-content: center;
   }
 
-  #explore-creators-header[data-scrolled="1"] .explore-token-header-label,
-  #explore-content-header[data-scrolled="1"] .explore-token-header-label {
+  #explore-creators-body[data-scrolled="1"] .explore-sticky-name-header-cell,
+  #explore-content-body[data-scrolled="1"] .explore-sticky-name-header-cell {
+    width: var(--explore-collapsed-identity-width, 72px);
+    max-width: var(--explore-collapsed-identity-width, 72px);
+    min-width: var(--explore-collapsed-identity-width, 72px);
+    overflow: visible;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  #explore-creators-body[data-scrolled="1"] .explore-token-header-label,
+  #explore-content-body[data-scrolled="1"] .explore-token-header-label {
     display: none;
   }
 
-  #explore-creators-header[data-scrolled="1"] .explore-sticky-identity-group-header,
-  #explore-content-header[data-scrolled="1"] .explore-sticky-identity-group-header {
-    width: 104px;
-    max-width: 104px;
-    min-width: 104px;
-    overflow: hidden;
+  #explore-creators-body[data-scrolled="1"] .explore-sticky-identity-group-header,
+  #explore-content-body[data-scrolled="1"] .explore-sticky-identity-group-header {
+    width: var(--explore-collapsed-identity-width, 72px);
+    max-width: var(--explore-collapsed-identity-width, 72px);
+    min-width: var(--explore-collapsed-identity-width, 72px);
+    overflow: visible;
   }
 }

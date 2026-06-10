@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/creatorStrategy/priceOverrides
+[4626-web](../../../index.md) / server/\_lib/creatorStrategy/priceOverrides
 
 # server/\_lib/creatorStrategy/priceOverrides
 
@@ -136,7 +136,7 @@ applies — the caller must then fall back to catalog price.
 
 ###### creatorToken
 
-`` `0x${string}` ``
+`string`
 
 ###### featureKey
 
@@ -144,7 +144,7 @@ applies — the caller must then fall back to catalog price.
 
 ###### walletAddress
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 

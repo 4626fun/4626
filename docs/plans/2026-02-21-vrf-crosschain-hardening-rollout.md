@@ -5,7 +5,7 @@ This rollout note covers deploying and wiring the hardened VRF hub (`CreatorVRFC
 - Spoke VRF requests are permissioned (including payable variants)
 - Hub request keys are scoped by `(srcEid, sequence)` and `_lzReceive` is idempotent (no revert on duplicate)
 - Remote price piggybacking is disabled by default and aggregation staleness uses oracle timestamps
-- Hub relayer/view APIs now take `(srcEid, sequence)`
+- Hub amoe/relayer/view APIs now take `(srcEid, sequence)`
 
 ## Deploy: Spoke Integrator
 

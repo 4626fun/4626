@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/token/\_tokenlist
+[4626-web](../../../index.md) / api/\_handlers/token/\_tokenlist
 
 # api/\_handlers/token/\_tokenlist
 

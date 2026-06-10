@@ -14,12 +14,13 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import {
   getAjnaVaultRegistryEntry,
   recordAjnaVaultManagerRun,
   type AjnaVaultRegistryRow,
 } from '../../../server/_lib/ajnaVaultManager/registry.js'
+import { resolveKeeperAutomationPrivateKey } from '../../../server/_lib/wallet/protocolTreasurySafe.js'
 
 const AJNA_INNER_VAULT_REBALANCE_ABI = [
   { type: 'function', name: 'bufferAssets', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -80,12 +81,22 @@ function parseChainId(value: unknown): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : base.id
 }
 
+function resolveChainContext(chainId: number): { chain: typeof base; rpcUrl: string } | null {
+  if (chainId !== base.id) return null
+  const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org'
+  return { chain: base, rpcUrl }
+}
+
 async function loadRebalanceConfig(params: {
   publicClient: any
   row: AjnaVaultRegistryRow
 }): Promise<{ bufferRatioBps: number; minBucketIndex: number }> {
   let bufferRatioBps = params.row.bufferRatioBps
   let minBucketIndex = params.row.minBucketIndex
+  if (typeof minBucketIndex === 'number' && Number.isFinite(minBucketIndex) && minBucketIndex <= 0) {
+    // `0` is an unset/invalid sentinel for Ajna bucket index.
+    minBucketIndex = null
+  }
 
   if (bufferRatioBps === null || minBucketIndex === null) {
     const [bufferRatioRaw, minBucketRaw] = await Promise.all([
@@ -128,7 +139,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (!requireKeeprApiKey(req, res)) return
 
-  const limiter = checkRateLimit(rateLimitKey('keeper-ajna-rebalance', getClientIp(req)), RATE_LIMITS.creRuntimeTriggerWrite)
+  const limiter = checkRateLimit(rateLimitKey('keeper-ajna-rebalance', getClientIp(req)), RATE_LIMITS.keeperTriggerWrite)
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
@@ -173,9 +184,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<RebalanceResponse>)
   }
 
-  const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org'
-  const publicClient = createPublicClient({ chain: base, transport: http(rpcUrl, { timeout: 30_000 }) }) as any
+  const chainContext = resolveChainContext(chainId)
+  if (!chainContext) {
+    return res.status(400).json({
+      success: false,
+      error: `unsupported_chain:${chainId}`,
+    } satisfies ApiEnvelope<never>)
+  }
+
+  const { chain, rpcUrl } = chainContext
+  const publicClient = createPublicClient({ chain, transport: http(rpcUrl, { timeout: 30_000 }) }) as any
   const { bufferRatioBps, minBucketIndex } = await loadRebalanceConfig({ publicClient, row })
+  if (minBucketIndex < 1) {
+    await recordAjnaVaultManagerRun({
+      chainId,
+      creatorToken,
+      strategyAdapter,
+      error: 'ajna_invalid_min_bucket_index',
+      metadataPatch: {
+        lastAction: 'none',
+        reason: 'invalid_min_bucket_index',
+      },
+    })
+    return res.status(200).json({
+      success: true,
+      data: {
+        mode: 'skipped',
+        action: 'none',
+        reason: 'invalid_min_bucket_index',
+        chainId,
+        creatorToken,
+        strategyAdapter,
+        innerAjnaVault: row.innerAjnaVault,
+        auth: row.ajnaAuth,
+        plan: {
+          minBucketIndex,
+          bufferRatioBps,
+          bufferAssets: '0',
+          totalAssets: '0',
+          targetBufferAssets: '0',
+          moveAssets: '0',
+        },
+      } satisfies RebalanceResponse,
+    } satisfies ApiEnvelope<RebalanceResponse>)
+  }
   const [bufferAssetsRaw, totalAssetsRaw] = await Promise.all([
     publicClient.readContract({
       address: row.innerAjnaVault,
@@ -190,7 +242,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   ])
   const bufferAssets = BigInt(bufferAssetsRaw ?? 0n)
   const totalAssets = BigInt(totalAssetsRaw ?? 0n)
-  const targetBufferAssets = (totalAssets * BigInt(bufferRatioBps)) / 10_000n
+  const targetBufferAssets = (totalAssets * BigInt(bufferRatioBps) + 9_999n) / 10_000n
   const excessBufferAssets = bufferAssets > targetBufferAssets ? bufferAssets - targetBufferAssets : 0n
   const maxAssetsPerMove = row.maxAssetsPerMove ?? excessBufferAssets
   const moveAssets = excessBufferAssets > maxAssetsPerMove ? maxAssetsPerMove : excessBufferAssets
@@ -232,9 +284,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<RebalanceResponse>)
   }
 
-  const keeperPk = process.env.KEEPR_PRIVATE_KEY
+  const keeperPk = resolveKeeperAutomationPrivateKey()
   if (!keeperPk) {
-    return res.status(500).json({ success: false, error: 'KEEPR_PRIVATE_KEY not configured' } satisfies ApiEnvelope<never>)
+    return res.status(500).json({
+      success: false,
+      error: '4626_KEEPER_AUTOMATION_PRIVATE_KEY not configured',
+    } satisfies ApiEnvelope<never>)
   }
   const account = privateKeyToAccount(keeperPk as `0x${string}`)
 
@@ -273,13 +328,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl, { timeout: 30_000 }) })
+    const walletClient = createWalletClient({ account, chain, transport: http(rpcUrl, { timeout: 30_000 }) })
     const txHash = await walletClient.writeContract({
       address: row.innerAjnaVault,
       abi: AJNA_INNER_VAULT_REBALANCE_ABI as unknown as Abi,
       functionName: 'moveFromBuffer',
       args: [BigInt(minBucketIndex), moveAssets],
-      chain: base,
+      chain,
       account,
     })
     await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 })

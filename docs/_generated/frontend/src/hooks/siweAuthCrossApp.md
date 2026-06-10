@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / src/hooks/siweAuthCrossApp
+[4626-web](../../index.md) / src/hooks/siweAuthCrossApp
 
 # src/hooks/siweAuthCrossApp
 

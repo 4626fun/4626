@@ -7,11 +7,12 @@ import {
   setNoStore,
   getDb,
   resolveAuthorizedRequestPrincipal,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
+import { resolveStoredCanonicalCswAddress } from '../../../server/_lib/wallet/canonicalCswPersistence.js'
 
 type ConnectedAccount = {
   address: string
@@ -183,6 +184,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ success: true, data: null } satisfies ApiEnvelope<WaitlistMeResponse | null>)
   }
 
+  const delegationWallet = await db.sql`
+    SELECT canonical_csw_address, privy_embedded_eoa_address
+    FROM profile_wallets
+    WHERE profile_id = ${profileId}
+      AND is_canonical_smart_wallet = true
+    ORDER BY last_checked_at DESC NULLS LAST, verified_at DESC NULLS LAST
+    LIMIT 1;
+  `.catch(() => ({ rows: [] as Array<{ canonical_csw_address?: unknown; privy_embedded_eoa_address?: unknown }> }))
+  const delegationCanonical = normalizeAddress(delegationWallet.rows?.[0]?.canonical_csw_address)
+  const delegationEmbedded = normalizeAddress(delegationWallet.rows?.[0]?.privy_embedded_eoa_address)
+
   const accountMap = new Map<string, ConnectedAccount>()
   const cswAddressKey = toAccountKey(row.csw_address || row.primary_smart_wallet)
   const rawBaseSubAccountKey = toAccountKey(row.base_sub_account)
@@ -293,6 +305,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return rank(b) - rank(a) || a.address.localeCompare(b.address)
   })
 
+  const rawCswAddress =
+    delegationCanonical ||
+    (typeof row.csw_address === 'string' && row.csw_address.trim()) ||
+    (typeof row.primary_smart_wallet === 'string' && row.primary_smart_wallet.trim()) ||
+    null
+  const resolvedCswAddress =
+    resolveStoredCanonicalCswAddress({
+      candidate: rawCswAddress,
+      embeddedEoa:
+        delegationEmbedded ||
+        (typeof row.primary_embedded_eoa === 'string' ? row.primary_embedded_eoa : null),
+      activeOwnerEoa: typeof row.primary_wallet === 'string' ? row.primary_wallet : null,
+    }) ?? rawCswAddress
+
   const data: WaitlistMeResponse = {
     profileId,
     email: typeof row.email === 'string' ? row.email : null,
@@ -304,7 +330,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     embeddedWallet: typeof row.embedded_wallet === 'string' ? row.embedded_wallet : null,
     embeddedWalletChain: typeof row.embedded_wallet_chain === 'string' ? row.embedded_wallet_chain : null,
     embeddedWalletClientType: typeof row.embedded_wallet_client_type === 'string' ? row.embedded_wallet_client_type : null,
-    cswAddress: typeof row.csw_address === 'string' ? row.csw_address : null,
+    cswAddress: resolvedCswAddress,
     canonicalSolanaWallet:
       typeof row.canonical_solana_wallet === 'string'
         ? row.canonical_solana_wallet

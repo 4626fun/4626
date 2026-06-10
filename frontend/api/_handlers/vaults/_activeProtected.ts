@@ -1,8 +1,8 @@
 /**
  * GET /api/vaults/active
  *
- * Returns all registered vaults with their contract addresses for CRE workflows.
- * Protected by KEEPR_API_KEY Bearer token.
+ * Returns all registered vaults with their contract addresses for keeper workflows.
+ * Protected by KPR_API_KEY Bearer token.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
@@ -14,12 +14,12 @@ import {
   setNoStore,
   getDb,
   isDbConfigured,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { listKeeprVaultAutomationByVaultAddresses } from '../../../server/_lib/keepr/keeprAutomation.js'
 
 import { ensureKeeprSchema } from '../../../server/_lib/keepr/keeprSchema.js'
-import { validateCreatorRegistryBinding } from '../../../server/_lib/onchain/creatorRegistryVerification.js'
+import { validateKeeperVaultListing } from '../../../server/_lib/onchain/creatorRegistryVerification.js'
 
 export interface VaultAutomationConfig {
   automationEnabled: boolean
@@ -155,7 +155,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       let registryValidation
       try {
-        registryValidation = await validateCreatorRegistryBinding({
+        registryValidation = await validateKeeperVaultListing({
           creatorCoinAddress: String(row.creator_coin_address ?? ''),
           vaultAddress: String(row.vault_address ?? ''),
           shareTokenAddress,

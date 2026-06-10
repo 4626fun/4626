@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/arch-b/\_subAccountProvisionPrepare
+[4626-web](../../../index.md) / api/\_handlers/arch-b/\_subAccountProvisionPrepare
 
 # api/\_handlers/arch-b/\_subAccountProvisionPrepare
 

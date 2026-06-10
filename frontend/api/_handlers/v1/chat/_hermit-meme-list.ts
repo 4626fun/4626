@@ -10,7 +10,7 @@ import {
   RATE_LIMITS,
   checkRateLimit,
   rateLimitKey,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { listHermitMemes } from '../../../../server/_lib/hermit/repository.js'
 import { getHermitOwnerAddress, isHermitRoomAllowedForOwner } from '../../../../server/_lib/hermit/policy.js'
 

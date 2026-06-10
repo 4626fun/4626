@@ -10,13 +10,13 @@ production-relevant code paths.
 
 Four additive pieces, all on top of `main`:
 
-1. `relayer/zkproof/` — Swift target wrapping `zkMetal.Groth16Prover` plus
+1. `amoe/relayer/zkproof/` — Swift target wrapping `zkMetal.Groth16Prover` plus
    `R1CSParser` / `WitnessParser`. Replaces the snarkjs prover invocation
    on the relayer host.
 2. `amoe-prover emit-verifier` — uses `zkMetal.generateSolidityVerifier`
    to re-emit `AmoeGroth16Verifier.sol`. This drops the snarkjs-emitted
    GPL-3.0 verifier we were previously shipping.
-3. `relayer/drand/Sources/DrandRelay/DrandPairingPrecheck.swift` — runs
+3. `amoe/relayer/drand/Sources/DrandRelay/DrandPairingPrecheck.swift` — runs
    the BLS12-381 pairing check off-chain via `GPUBLSSignatureEngine`
    before the relayer broadcasts `submitRound`. Catches malformed beacons
    without burning gas.
@@ -70,23 +70,23 @@ New:
 
 ```
 amoe-prover prove \
-  --zkey   circuits/amoe/build/amoe_final.zkey \
-  --r1cs   circuits/amoe/build/amoe_eligibility.r1cs \
+  --zkey   amoe/circuits/build/amoe_final.zkey \
+  --r1cs   amoe/circuits/build/amoe_eligibility.r1cs \
   --input  input.json \
   --proof-out proof.json --public-out public.json --profile
 
-tools/zk/emit_amoe_verifier.sh
+amoe/tools/zk/emit_amoe_verifier.sh
 ```
 
-`tools/zk/regen_amoe_fixture.sh` still works — it's the Linux fallback for
+`amoe/tools/zk/regen_amoe_fixture.sh` still works — it's the Linux fallback for
 contributors without Apple Silicon. Both paths produce the same on-chain
 verifier shape; only the license header and the prover speed differ.
 
 ## Pre-merge checklist
 
-- [ ] Build `relayer/zkproof` on macOS 14 + M-series.
-- [ ] Run `swift test` in `relayer/zkproof` and `relayer/drand`.
-- [ ] Confirm `tools/zk/emit_amoe_verifier.sh` produces a contract that
+- [ ] Build `amoe/relayer/zkproof` on macOS 14 + M-series.
+- [ ] Run `swift test` in `amoe/relayer/zkproof` and `amoe/relayer/drand`.
+- [ ] Confirm `amoe/tools/zk/emit_amoe_verifier.sh` produces a contract that
       verifies the existing AMOE fixture proof in
-      `test/zk/AmoeGroth16Verifier.t.sol`.
-- [ ] CI guard `tools/ci/check_amoe_vk.sh` still passes.
+      `amoe/tests/zk/AmoeGroth16Verifier.t.sol`.
+- [ ] CI guard `amoe/tools/ci/check_amoe_vk.sh` still passes.

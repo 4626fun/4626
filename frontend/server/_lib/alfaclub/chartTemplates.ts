@@ -139,7 +139,7 @@ function buildShell(input: ShellInput): SatoriNode {
             lineHeight: 1.05,
             display: 'flex',
           },
-          'hermit4626bot',
+          'Agent Hermit 4626',
         ),
         h(
           'div',

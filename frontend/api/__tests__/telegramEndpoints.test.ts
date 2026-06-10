@@ -179,6 +179,7 @@ describe('telegram endpoint handlers', () => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({
       TELEGRAM_LINK_API_SECRET: TELEGRAM_LINK_SECRET,
+      TELEGRAM_BOT_CONFIG_SECRET: TELEGRAM_LINK_SECRET,
       TELEGRAM_MINI_APP_URL: 'https://app.4626.fun',
       TELEGRAM_BOT_TOKEN: 'test-bot-token',
       TELEGRAM_FUNNEL_METRICS_ENABLED: 'true',
@@ -802,6 +803,7 @@ describe('telegram endpoint handlers', () => {
     const { default: handler } = await import('../_handlers/telegram/_bot-config.ts')
     const req = createMockReq({
       method: 'POST',
+      headers: { 'x-telegram-link-secret': TELEGRAM_LINK_SECRET },
       body: {},
     })
     const res = createMockRes()
@@ -824,6 +826,7 @@ describe('telegram endpoint handlers', () => {
     const { default: handler } = await import('../_handlers/telegram/_bot-config.ts')
     const req = createMockReq({
       method: 'POST',
+      headers: { 'x-telegram-link-secret': TELEGRAM_LINK_SECRET },
       body: {
         menuText: 'x'.repeat(40_000),
       },
@@ -840,6 +843,7 @@ describe('telegram endpoint handlers', () => {
     const { default: handler } = await import('../_handlers/telegram/_bot-config.ts')
     const req = createMockReq({
       method: 'POST',
+      headers: { 'x-telegram-link-secret': TELEGRAM_LINK_SECRET },
       body: {
         menuMode: 'web_app',
         menuText: 'Open 4626 v2',

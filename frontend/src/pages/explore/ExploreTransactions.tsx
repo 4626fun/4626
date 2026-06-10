@@ -1,12 +1,13 @@
 import { useMemo } from 'react'
-import { motion } from 'framer-motion'
 import { ArrowUpRight, ArrowDownLeft, ExternalLink } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useInfiniteQuery } from '@tanstack/react-query'
 
+import { ExplorePageShell } from '@/components/explore/ExplorePageShell'
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
-import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDashboard'
+import { ExploreTableSurface } from '@/components/explore/ExploreTableSurface'
 import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableMessage } from '@/components/explore/ExploreUiPrimitives'
+import { useExploreHorizontalTableSync } from '@/components/explore/useExploreHorizontalTableSync'
 import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
 import { fetchZoraExplore } from '@/lib/zora/client'
 import type { ZoraCoin } from '@/lib/zora/types'
@@ -21,6 +22,7 @@ import {
   matchesCoinSearchQuery,
   useExploreSubnavParams,
 } from '@/features/explore/exploreShared'
+import { shouldShowExploreTableLoading } from '@/features/explore/exploreListNavigation'
 
 function formatTimeAgo(dateStr: string | undefined): string {
   if (!dateStr) return '-'
@@ -92,13 +94,22 @@ const TRANSACTIONS_SORT_OPTIONS = [
 ] as const
 
 const TRANSACTIONS_SORT_VALUES = ['new', 'volume', 'marketCap', 'priceChange'] as const
-const TRANSACTIONS_TIME_FILTER_VALUES = ['1d', '1w', '1y'] as const
+const TRANSACTIONS_TIME_FILTER_VALUES = ['1d'] as const
+const TRANSACTIONS_TIME_FILTERS = [{ label: '1D', value: '1d' }] as const
 const TRANSACTIONS_SEARCH_MATCH_OPTIONS = {
   includeCreatorAddress: true,
   includePayoutAddress: true,
   includeQueryVariants: true,
   includeHandleBasenameVariant: true,
 } as const
+
+const TRANSACTIONS_BODY_ID = 'explore-transactions-body'
+
+/** Cumulative column offsets for horizontal scroll arrows (desktop grid). */
+const TRANSACTIONS_SCROLL_STOPS = [80, 300, 412, 512, 632]
+
+const activityRowClassName =
+  'group explore-table-row explore-activity-grid explore-table-grid items-center text-sm transition-colors'
 
 function toNumber(value: string | undefined): number {
   if (!value) return 0
@@ -122,7 +133,7 @@ function ActivityRow({ coin, timeframe }: { coin: ZoraCoin; timeframe: string })
   const rowContent = (
     <>
       {/* Type indicator */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 px-3 py-2">
         <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isBuy ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
           {isBuy ? (
             <ArrowDownLeft className="w-3 h-3 text-green-500" />
@@ -136,7 +147,7 @@ function ActivityRow({ coin, timeframe }: { coin: ZoraCoin; timeframe: string })
       </div>
 
       {/* Token */}
-      <div className="flex items-center gap-3 min-w-0 justify-center sm:justify-start">
+      <div className="flex items-center gap-3 min-w-0 px-3 py-2 justify-start">
         {avatarUrl ? (
           <img src={avatarUrl} alt={name} className="w-8 h-8 rounded-full object-cover shrink-0" />
         ) : (
@@ -151,22 +162,22 @@ function ActivityRow({ coin, timeframe }: { coin: ZoraCoin; timeframe: string })
       </div>
 
       {/* Volume */}
-      <div className="flex flex-col items-end">
+      <div className="flex flex-col items-end px-3 py-2 sm:items-center">
         <span className="text-[10px] uppercase tracking-[0.16em] text-zinc-500 sm:hidden">Vol</span>
         <span className="text-sm text-white tabular-nums">{volume}</span>
       </div>
 
       {/* Time */}
-      <div className="flex flex-col items-end">
+      <div className="flex flex-col items-end px-3 py-2 sm:items-center">
         <span className="text-[10px] uppercase tracking-[0.16em] text-zinc-500 sm:hidden">Time</span>
         <span className="text-sm text-zinc-500">{time}</span>
       </div>
 
       {/* Account */}
-      <span className="hidden sm:block text-sm text-zinc-400">{formatShortAddress(creatorAddress)}</span>
+      <span className="hidden sm:block px-3 py-2 text-sm text-zinc-400 tabular-nums">{formatShortAddress(creatorAddress)}</span>
 
       {/* External link */}
-      <span className="hidden sm:block text-zinc-500">
+      <span className="hidden sm:flex px-3 py-2 justify-center text-zinc-500">
         {hasAddress ? (
           <a
             href={`https://basescan.org/address/${address}`}
@@ -184,17 +195,12 @@ function ActivityRow({ coin, timeframe }: { coin: ZoraCoin; timeframe: string })
     </>
   )
 
-  const rowClassName = 'grid grid-cols-[64px_56px_minmax(0,1fr)_minmax(0,1fr)] sm:grid-cols-[80px_minmax(150px,2fr)_minmax(100px,1fr)_minmax(80px,1fr)_minmax(100px,1fr)_50px] gap-4 items-center px-4 py-3 transition-colors text-sm'
-
   if (!hasAddress) {
-    return <div className={`${rowClassName} opacity-90`}>{rowContent}</div>
+    return <div className={`${activityRowClassName} opacity-90`}>{rowContent}</div>
   }
 
   return (
-    <Link
-      to={`/explore/creators/base/${address}`}
-      className={`${rowClassName} hover:bg-zinc-800/30`}
-    >
+    <Link to={`/explore/creators/base/${address}`} className={activityRowClassName}>
       {rowContent}
     </Link>
   )
@@ -203,20 +209,20 @@ function ActivityRow({ coin, timeframe }: { coin: ZoraCoin; timeframe: string })
 function ActivityTableHeader({ timeframe }: { timeframe: string }) {
   const volLabel = getZoraExploreVolumeHeaderLabel(timeframe)
   return (
-    <div className="hidden sm:grid grid-cols-[80px_minmax(150px,2fr)_minmax(100px,1fr)_minmax(80px,1fr)_minmax(100px,1fr)_50px] gap-4 items-center px-4 py-3 text-[10px] text-zinc-500 uppercase tracking-wider border-b border-white/8 bg-vault-card/50">
-      <span>Type</span>
-      <span>Token</span>
-      <span className="text-center">{volLabel}</span>
-      <span className="text-center">Time ↓</span>
-      <span>Creator</span>
-      <span></span>
+    <div className={`${activityRowClassName} text-[10px] text-zinc-500 uppercase tracking-wider`}>
+      <span className="px-3 py-2">Type</span>
+      <span className="px-3 py-2">Token</span>
+      <span className="px-3 py-2 text-center">{volLabel}</span>
+      <span className="px-3 py-2 text-center">Time ↓</span>
+      <span className="hidden px-3 py-2 sm:block">Creator</span>
+      <span className="hidden px-3 py-2 sm:block" aria-hidden="true" />
     </div>
   )
 }
 
 function ActivityRowSkeleton() {
   return (
-    <div className="grid grid-cols-[64px_56px_minmax(0,1fr)_minmax(0,1fr)] sm:grid-cols-[80px_minmax(150px,2fr)_minmax(100px,1fr)_minmax(80px,1fr)_minmax(100px,1fr)_50px] gap-4 items-center px-4 py-3">
+    <div className={activityRowClassName}>
       <div className="flex items-center gap-2">
         <div className="w-6 h-6 rounded-full bg-zinc-800 animate-pulse" />
         <div className="hidden sm:block h-4 w-8 bg-zinc-800 rounded animate-pulse" />
@@ -256,6 +262,7 @@ export function ExploreTransactions() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isFetching,
     isLoading,
     isError,
     error,
@@ -336,112 +343,99 @@ export function ExploreTransactions() {
     onLoadMore: fetchNextPage,
   })
 
+  const { hasHorizontalOverflow, canScrollLeft, canScrollRight, handleBodyScroll, handleArrowClick } =
+    useExploreHorizontalTableSync({
+      bodyId: TRANSACTIONS_BODY_ID,
+    })
+
+  const tablePending = shouldShowExploreTableLoading({
+    isLoading,
+    isFetching,
+    hasRows: filteredActivity.length > 0,
+    hasActiveSearch: trimmedSearchQuery.length > 0,
+  })
+
   return (
-    <div className="relative pb-24 md:pb-0 min-h-screen">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="mb-8"
-        >
-          <h1 className="text-3xl sm:text-4xl font-medium text-white mb-2">
-            Recent activity
-          </h1>
-          <p className="text-zinc-400 text-sm">
-            Recently traded coins across the Zora ecosystem.
-          </p>
+    <ExplorePageShell
+      variant="table"
+      tablePending={tablePending}
+      tablePendingLabel="Loading activity…"
+      subnav={
+        <ExploreSubnav
+          searchPlaceholder="Filter by token"
+          searchValue={searchQuery}
+          onSearch={handleSearchChange}
+          onTimeFilterChange={handleTimeFilterChange}
+          onSortChange={handleSortChange}
+          currentTimeFilter={currentTimeFilter}
+          currentSort={currentSort}
+          timeFilters={TRANSACTIONS_TIME_FILTERS}
+          volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
+          sortOptions={TRANSACTIONS_SORT_OPTIONS}
+          disableUniswapTimeGating
+          showTabs={false}
+          showSearch={false}
+          showMobileSortRow={false}
+        />
+      }
+      table={
+        <ExploreTableSurface
+          bodyId={TRANSACTIONS_BODY_ID}
+          onBodyScroll={handleBodyScroll}
+          hasHorizontalOverflow={hasHorizontalOverflow}
+          canScrollLeft={canScrollLeft}
+          canScrollRight={canScrollRight}
+          onScrollLeft={() => handleArrowClick('left', TRANSACTIONS_SCROLL_STOPS)}
+          onScrollRight={() => handleArrowClick('right', TRANSACTIONS_SCROLL_STOPS)}
+          leftAriaLabel="Scroll activity table left"
+          rightAriaLabel="Scroll activity table right"
+          header={<ActivityTableHeader timeframe={currentTimeFilter} />}
+          body={
+            <>
+              <div className="divide-y divide-white/6">
+                {isLoading ? (
+                  Array.from({ length: 10 }).map((_, i) => <ActivityRowSkeleton key={i} />)
+                ) : isError ? (
+                  <ExploreTableMessage title="Failed to load activity" detail={(error as Error)?.message || 'Unknown error'} />
+                ) : filteredActivity.length === 0 ? (
+                  <ExploreTableMessage
+                    title={searchQuery ? 'No activity found matching your search' : 'No recent activity'}
+                    icon={
+                      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-zinc-800">
+                        <ArrowUpRight className="h-6 w-6 text-zinc-600" />
+                      </div>
+                    }
+                    className="px-6 py-16 text-center"
+                    titleClassName="text-zinc-400 text-sm"
+                  />
+                ) : (
+                  filteredActivity.map((coin, index) => (
+                    <ActivityRow key={`${coin.address}-${index}`} coin={coin} timeframe={currentTimeFilter} />
+                  ))
+                )}
 
-          <ExploreMetricsDashboard className="mt-4 sm:mt-6" />
-        </motion.div>
+                <ExploreLoadingMoreRows
+                  isFetchingNextPage={isFetchingNextPage}
+                  renderSkeletonRow={() => <ActivityRowSkeleton />}
+                />
+              </div>
 
-        {/* Navigation & Filters */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="mb-6"
-        >
-          <ExploreSubnav
-            searchPlaceholder="Filter by token"
-            searchValue={searchQuery}
-            onSearch={handleSearchChange}
-            onTimeFilterChange={handleTimeFilterChange}
-            onSortChange={handleSortChange}
-            currentTimeFilter={currentTimeFilter}
-            currentSort={currentSort}
-            volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
-            sortOptions={TRANSACTIONS_SORT_OPTIONS}
-            disableUniswapTimeGating
-          />
-        </motion.div>
-
-        {/* Activity Table */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.2 }}
-          className="vault-surface overflow-hidden"
-        >
-          {/* Sticky header */}
-          <div className="hidden sm:block sticky top-24 z-50 border-b border-white/8 bg-vault-bg shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
-            <ActivityTableHeader timeframe={currentTimeFilter} />
-          </div>
-
-          {/* Table Body */}
-          <div className="divide-y divide-white/6">
-            {isLoading ? (
-              // Loading skeletons
-              Array.from({ length: 10 }).map((_, i) => <ActivityRowSkeleton key={i} />)
-            ) : isError ? (
-              // Error state
-              <ExploreTableMessage title="Failed to load activity" detail={(error as Error)?.message || 'Unknown error'} />
-            ) : filteredActivity.length === 0 ? (
-              // Empty state
-              <ExploreTableMessage
-                title={searchQuery ? 'No activity found matching your search' : 'No recent activity'}
-                icon={
-                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-zinc-800">
-                    <ArrowUpRight className="h-6 w-6 text-zinc-600" />
-                  </div>
-                }
-                className="px-6 py-16 text-center"
-                titleClassName="text-zinc-400 text-sm"
+              <ExploreLoadMoreButton
+                hasNextPage={Boolean(hasNextPage)}
+                isFetchingNextPage={isFetchingNextPage}
+                onLoadMore={() => {
+                  void fetchNextPage()
+                }}
               />
-            ) : (
-              // Activity rows
-              filteredActivity.map((coin, index) => (
-                <ActivityRow key={`${coin.address}-${index}`} coin={coin} timeframe={currentTimeFilter} />
-              ))
-            )}
-
-            {/* Loading more indicator */}
-            <ExploreLoadingMoreRows
-              isFetchingNextPage={isFetchingNextPage}
-              renderSkeletonRow={() => <ActivityRowSkeleton />}
-            />
-          </div>
-
-          <ExploreLoadMoreButton
-            hasNextPage={Boolean(hasNextPage)}
-            isFetchingNextPage={isFetchingNextPage}
-            onLoadMore={() => {
-              void fetchNextPage()
-            }}
-          />
-        </motion.div>
-
-        {/* Info footer */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.4, delay: 0.3 }}
-          className="mt-4 text-center text-xs text-zinc-600"
-        >
-          Showing {filteredActivity.length} recently traded tokens on Base
-        </motion.div>
-      </div>
-    </div>
+            </>
+          }
+        />
+      }
+      footer={
+        !isLoading && !isError && filteredActivity.length > 0
+          ? `Showing ${filteredActivity.length} recently traded tokens on Base`
+          : null
+      }
+    />
   )
 }

@@ -2,15 +2,17 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
   type ApiEnvelope,
-  getDb,
+  getDbForCron,
   handleOptions,
   isDbConfigured,
   setCors,
   setNoStore,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { ensureKeeprSchema } from '../../../../server/_lib/keepr/keeprSchema.js'
 import { isAuthorizedCron } from '../../../../server/_lib/lottery/cronAuth.js'
 import { enqueueKeeperJob, type KeeperJob } from '../../../../server/_lib/keeperJobs/keeperJobs.js'
+import { validateKeeperVaultListing } from '../../../../server/_lib/onchain/creatorRegistryVerification.js'
+import { parseMinDeviationBps } from '../../../../server/_lib/keeper/strategyReallocEnv.js'
 
 type ActiveVaultEnqueueResponse = {
   enabled: boolean
@@ -29,7 +31,7 @@ type ActiveVaultRow = {
   config_json: Record<string, unknown> | string | null
 }
 
-const VALID_WORKFLOWS = new Set(['sweep', 'tend', 'report', 'payout'])
+const VALID_WORKFLOWS = new Set(['sweep', 'tend', 'report', 'payout', 'payout-router', 'rebalance'])
 
 function env(name: string): string {
   return String(process.env[name] ?? '').trim()
@@ -98,10 +100,39 @@ function maxVaults(): number {
   return Number.isInteger(parsed) ? Math.min(50, Math.max(1, parsed)) : 5
 }
 
+function validateListingBeforeEnqueue(): boolean {
+  return env('KEEPER_ACTIVE_VAULT_VALIDATE_LISTING').toLowerCase() !== 'false'
+}
+
+async function rowPassesKeeperListing(row: ActiveVaultRow): Promise<boolean> {
+  const vaultAddress = normalizeAddress(row.vault_address)
+  const creatorCoinAddress = normalizeAddress(row.creator_coin_address)
+  if (!vaultAddress || !creatorCoinAddress) return false
+
+  const vaultCfg = vaultFromConfig(row.config_json)
+  const shareTokenAddress =
+    normalizeAddress(vaultCfg.shareTokenAddress) ?? normalizeAddress(row.share_token_address)
+
+  try {
+    const validation = await validateKeeperVaultListing({
+      creatorCoinAddress,
+      vaultAddress,
+      shareTokenAddress,
+    })
+    return validation.ok
+  } catch (error) {
+    console.warn('[keeper/enqueue-active-vaults] listing validation unavailable', {
+      vaultAddress,
+      message: error instanceof Error ? error.message : String(error),
+    })
+    return false
+  }
+}
+
 async function readVaultRows(): Promise<ActiveVaultRow[]> {
   if (!isDbConfigured()) throw new Error('db_not_configured')
   await ensureKeeprSchema()
-  const db = await getDb()
+  const db = await getDbForCron()
   if (!db) throw new Error('db_unavailable')
   const chainId = chainIdFilter()
   const limit = maxVaults()
@@ -183,21 +214,40 @@ function vaultActionPayload(row: ActiveVaultRow, action: 'tend' | 'report'): Rec
   }
 }
 
+function rebalancePayload(row: ActiveVaultRow): Record<string, unknown> | null {
+  const vaultAddress = normalizeAddress(row.vault_address)
+  if (!vaultAddress) return null
+  const minDeviationBps = String(parseMinDeviationBps(env('VAULT_STRATEGY_REALLOC_MIN_DEVIATION_BPS') || undefined))
+  return {
+    path: '/api/keeper/rebalance-strategies',
+    body: { vaultAddress, minDeviationBps },
+  }
+}
+
 function payoutPayload(row: ActiveVaultRow): Record<string, unknown> | null {
   const contracts = contractsFromConfig(row.config_json)
   const payoutRouterAddress = normalizeAddress(contracts.payoutRouter)
+  const burnStreamAddress = normalizeAddress(contracts.burnStream)
   const creatorCoinAddress = normalizeAddress(row.creator_coin_address)
+  const vaultAddress = normalizeAddress(row.vault_address)
   if (!payoutRouterAddress || !creatorCoinAddress) return null
   return {
     path: '/api/keeper/payout-router-harvest',
     body: {
       payoutRouterAddress,
       creatorCoinAddress,
+      burnStreamAddress: burnStreamAddress ?? undefined,
+      vaultAddress: vaultAddress ?? undefined,
       includeZora: true,
       includeWeth: true,
       claimProtocolRewards: true,
+      dripBurnStream: true,
     },
   }
+}
+
+function workflowIncludesPayout(workflows: string[]): boolean {
+  return workflows.includes('payout') || workflows.includes('payout-router')
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -230,7 +280,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const rows = await readVaultRows()
   const jobs: KeeperJob[] = []
+  const shouldValidateListing = validateListingBeforeEnqueue()
   for (const row of rows) {
+    if (shouldValidateListing) {
+      const listingOk = await rowPassesKeeperListing(row)
+      if (!listingOk) {
+        console.warn('[keeper/enqueue-active-vaults] skipping vault — keeper listing validation failed', {
+          vaultAddress: normalizeAddress(row.vault_address),
+        })
+        continue
+      }
+    }
     if (workflows.includes('sweep')) {
       const payload = sweepPayload(row)
       const strategy = normalizeAddress((payload?.body as Record<string, unknown> | undefined)?.ccaStrategyAddress)
@@ -258,7 +318,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }))
       }
     }
-    if (workflows.includes('payout')) {
+    if (workflows.includes('rebalance')) {
+      const payload = rebalancePayload(row)
+      const vaultAddress = normalizeAddress(row.vault_address)
+      if (payload && vaultAddress) {
+        jobs.push(await enqueueKeeperJob({
+          kind: 'internal_api',
+          dedupeKey: `active-rebalance:${vaultAddress}`,
+          source: 'keeper-active-vaults',
+          payload,
+          maxAttempts: 3,
+        }))
+      }
+    }
+    if (workflowIncludesPayout(workflows)) {
       const payload = payoutPayload(row)
       const vaultAddress = normalizeAddress(row.vault_address)
       if (payload && vaultAddress) {

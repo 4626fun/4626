@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / api/\_handlers/\_routes.waitlist
+[4626-web](../../index.md) / api/\_handlers/\_routes.waitlist
 
 # api/\_handlers/\_routes.waitlist
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/\_routes.waitlist.ts:4](https://github.com/wenakita/
 
 > **getWaitlistApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.waitlist.ts:13](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.waitlist.ts#L13)
+Defined in: [api/\_handlers/\_routes.waitlist.ts:19](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.waitlist.ts#L19)
 
 #### Parameters
 

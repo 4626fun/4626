@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / api/\_handlers/deploy/v2/session/\_resume
+[4626-web](../../../../../index.md) / api/\_handlers/deploy/v2/session/\_resume
 
 # api/\_handlers/deploy/v2/session/\_resume
 

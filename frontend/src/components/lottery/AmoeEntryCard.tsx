@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ExternalLink, Gift } from 'lucide-react'
+import { ExternalLink, Gift, MessageCircle } from 'lucide-react'
 import type { Address, Hex } from 'viem'
 import { base } from 'viem/chains'
 import { usePublicClient, useWalletClient } from 'wagmi'
@@ -7,7 +7,9 @@ import { usePublicClient, useWalletClient } from 'wagmi'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { Spinner } from '@/components/ui/Spinner'
+import { requestOpenChat } from '@/lib/chat/openChat'
 import { getMarketingBaseUrl } from '@/lib/env/host'
+import { resolveClientAgentXmtpAddress } from '@/lib/xmtp/agentXmtpAddress'
 
 // PR 2 — AMOE Linear Parity. Mirrors the server-side constants in
 // `frontend/server/_lib/lottery/lotteryAmoe.ts` and the on-chain math in
@@ -16,7 +18,15 @@ import { getMarketingBaseUrl } from '@/lib/env/host'
 // here is for display only.
 const AMOE_MIN_POINTS = 100
 const AMOE_MAX_POINTS = 1_000_000
+// Mirrors `AMOE_DAILY_*_CREDIT` in `frontend/server/_lib/lottery/lotteryAmoe.ts`.
+const AMOE_DAILY_TWITTER_CREDIT = 1
+const AMOE_DAILY_XMTP_CREDIT = 1
+
+function formatDailyCreditLabel(credits: number): string {
+  return credits === 1 ? '1 point' : `${credits} points`
+}
 const BASE_CEILING_PPM = 40_000 // 4%, hard ceiling at $10K-equivalent
+const AMOE_CANONICAL_CSW_INBOX = resolveClientAgentXmtpAddress() as Address
 
 function estimateWinChancePPM(pointsBurned: number): number {
   if (!Number.isFinite(pointsBurned) || pointsBurned < AMOE_MIN_POINTS) return 0
@@ -74,6 +84,14 @@ type SubmitResponse = {
   entriesAvailable: number
 }
 
+type BurnCreditsResponse = {
+  spendRefId: string
+  consumed: number
+  creditsRemaining: number
+  creditsPerEntry: number
+  entriesAvailable: number
+}
+
 type CheckinResponse = {
   awarded: boolean
   awardedCredits: number
@@ -84,6 +102,11 @@ type CheckinResponse = {
 
 export type AmoeSigningWalletClient = {
   signMessage: (args: { message: string }) => Promise<Hex | string>
+}
+
+function deriveAmoeTwitterHandleFallback(wallet: Address): string {
+  const compact = wallet.toLowerCase().replace(/^0x/, '')
+  return `wallet_${compact.slice(0, 12)}`
 }
 
 function toErrorMessage(error: unknown, fallback: string): string {
@@ -168,6 +191,7 @@ export function AmoeEntryCard(props: {
   const [jackpotUsd, setJackpotUsd] = useState<string | null>(null)
   const [loadingCredits, setLoadingCredits] = useState(false)
   const [checkinBusy, setCheckinBusy] = useState(false)
+  const [tweetProofUrl, setTweetProofUrl] = useState('')
   const [entryBusy, setEntryBusy] = useState(false)
   const [txHash, setTxHash] = useState<Hex | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
@@ -229,7 +253,11 @@ export function AmoeEntryCard(props: {
       setErrorMessage('Connect your wallet first')
       return
     }
-    openXPost()
+    const trimmedTweetUrl = tweetProofUrl.trim()
+    if (!trimmedTweetUrl) {
+      setErrorMessage('Paste your posted X link first')
+      return
+    }
     setCheckinBusy(true)
     setErrorMessage(null)
     setStatusMessage(null)
@@ -237,7 +265,7 @@ export function AmoeEntryCard(props: {
       const res = await apiFetch('/api/v1/lottery/amoe/twitter-checkin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ tweetUrl: trimmedTweetUrl }),
         withCredentials: true,
       })
       const json = parseJsonSafe<CheckinResponse>(await res.json().catch(() => null))
@@ -251,16 +279,31 @@ export function AmoeEntryCard(props: {
       setNextEntryAtCredits(Math.max(Number(json.data.creditsPerEntry ?? 100), Number(json.data.credits ?? 0)))
       setStatusMessage(
         json.data.awarded
-          ? `Daily X check-in complete (+${json.data.awardedCredits} point)`
+          ? `Daily X check-in complete (+${formatDailyCreditLabel(json.data.awardedCredits)})`
           : 'Daily check-in already claimed today',
       )
+      setTweetProofUrl('')
       await refreshCredits()
     } catch (error: unknown) {
       setErrorMessage(toErrorMessage(error, 'X check-in failed'))
     } finally {
       setCheckinBusy(false)
     }
-  }, [protocolEntryMode, refreshCredits, walletAddress])
+  }, [protocolEntryMode, refreshCredits, tweetProofUrl, walletAddress])
+
+  const handleXmtpCheckin = useCallback(async () => {
+    if (!walletAddress && !protocolEntryMode) {
+      setErrorMessage('Connect your wallet first')
+      return
+    }
+    setErrorMessage(null)
+    setStatusMessage('Send a DM to agent 4626 in chat. Points are awarded after the message is sent.')
+    requestOpenChat({
+      kind: 'dm',
+      peerAddress: AMOE_CANONICAL_CSW_INBOX,
+      nameHint: 'agent 4626',
+    })
+  }, [protocolEntryMode, walletAddress])
 
   const handleEnterForFree = useCallback(async () => {
     if (!walletAddress && !protocolEntryMode) {
@@ -314,12 +357,13 @@ export function AmoeEntryCard(props: {
         message: nonceData.message,
       })) as Hex
 
-      // PR 2 — server-relay only. The previous client-relay fallback was
-      // dropped: PR 1's `processAmoeEntry` is gated to a single relayer
-      // key on-chain, so client-signed transactions cannot succeed. The
-      // signed message above remains the off-chain auth + anti-replay
-      // artifact (verified server-side).
-      const submitRes = await apiFetch('/api/v1/lottery/amoe/submit', {
+      const twitterHandle = deriveAmoeTwitterHandleFallback(nonceData.wallet)
+      const spendRefId = `amoe-ui:${nonceData.creatorCoin}:${nonceData.nonce}`
+
+      // ZK flow phase A: burn points and register burn intent.
+      // If the endpoint is disabled in an environment, we still attempt
+      // submit-zk below so legacy single-call mode can continue to work.
+      const burnRes = await apiFetch('/api/v1/lottery/amoe/burn-credits', {
         method: 'POST',
         withCredentials: true,
         headers: { 'Content-Type': 'application/json' },
@@ -328,17 +372,43 @@ export function AmoeEntryCard(props: {
           message: nonceData.message,
           signature,
           pointsBurned: requestedPoints,
+          nonce: nonceData.nonce,
+          twitterHandle,
+          spendRefId,
+        }),
+      })
+      const burnJson = parseJsonSafe<BurnCreditsResponse>(await burnRes.json().catch(() => null))
+      if (!burnRes.ok) {
+        const burnError = burnJson?.error || 'Burn credits failed'
+        if (burnError !== 'burn_credits_disabled') {
+          throw new Error(burnError)
+        }
+      }
+
+      // ZK flow phase B: submit proof-backed entry.
+      const submitRes = await apiFetch('/api/v1/lottery/amoe/submit-zk', {
+        method: 'POST',
+        withCredentials: true,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          creatorCoin: nonceData.creatorCoin,
+          message: nonceData.message,
+          signature,
+          pointsBurned: requestedPoints,
+          nonce: nonceData.nonce,
+          twitterHandle,
+          spendRefId,
         }),
       })
       const submitJson = parseJsonSafe<SubmitResponse>(await submitRes.json().catch(() => null))
       if (!submitRes.ok || !submitJson?.success || !submitJson.data) {
-        throw new Error(submitJson?.error || 'Failed to submit AMOE entry')
+        throw new Error(submitJson?.error || 'Failed to submit AMOE ZK entry')
       }
 
       const tx = submitJson.data
       const hash = tx.txHash
       setTxHash(hash)
-      setStatusMessage('AMOE entry relayed by protocol. Waiting for confirmation…')
+      setStatusMessage('AMOE ZK entry relayed by protocol. Waiting for confirmation…')
 
       // Receipt confirmation is best-effort — if no public client is
       // configured we still surface the txHash so the user can follow up.
@@ -382,12 +452,15 @@ export function AmoeEntryCard(props: {
   }, [sliderMax])
 
   const canEnter = Boolean(
-    (walletAddress || protocolEntryMode) && hasEnoughForFloor && !entryBusy && !checkinBusy,
+    (walletAddress || protocolEntryMode) &&
+      hasEnoughForFloor &&
+      !entryBusy &&
+      !checkinBusy,
   )
   const selectedPoints = clampPoints(pointsBurned, sliderMax)
 
   return (
-    <div className="relative overflow-hidden rounded-[28px] bg-[linear-gradient(145deg,rgb(var(--vault-card-raised)/0.88),rgb(var(--vault-card)/0.66))] p-5 shadow-[0_28px_80px_-42px_rgba(0,82,255,0.8),0_18px_42px_-34px_rgba(0,0,0,0.95)] ring-1 ring-white/[0.07] sm:p-6">
+    <div className="relative overflow-hidden rounded-[28px] bg-[linear-gradient(145deg,rgb(var(--vault-card-raised)/0.88),rgb(var(--vault-card)/0.66))] p-5 shadow-[0_28px_80px_-42px_rgb(var(--brand-primary)/0.8),0_18px_42px_-34px_rgba(0,0,0,0.95)] ring-1 ring-white/[0.07] sm:p-6">
       <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-linear-to-r from-transparent via-blue-300/35 to-transparent" />
       <div className="pointer-events-none absolute -right-16 -top-24 h-48 w-48 rounded-full bg-blue-500/12 blur-3xl" />
       <div className="relative space-y-3.5">
@@ -496,7 +569,7 @@ export function AmoeEntryCard(props: {
               type="button"
               onClick={() => void handleEnterForFree()}
               disabled={!canEnter}
-              className="col-span-2 h-10 rounded-xl bg-brand-primary px-3 text-xs font-semibold text-white shadow-[0_12px_26px_-16px_rgba(0,82,255,0.95)] hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+              className="col-span-2 h-10 rounded-xl bg-brand-primary px-3 text-xs font-semibold text-white shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)] hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {entryBusy ? (
                 <span className="inline-flex items-center justify-center gap-1.5"><Spinner size="sm" /> Submitting…</span>
@@ -507,28 +580,74 @@ export function AmoeEntryCard(props: {
           ) : null}
           <button
             type="button"
-            onClick={() => void handleTwitterCheckin()}
+            onClick={() => openXPost()}
             disabled={(!walletAddress && !protocolEntryMode) || checkinBusy || entryBusy}
-            className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl ${hasEnoughForFloor ? 'border border-white/12 bg-white/[0.03] text-zinc-100' : 'bg-brand-primary text-white shadow-[0_12px_26px_-16px_rgba(0,82,255,0.95)]'} px-3 text-xs font-medium transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
+            className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl ${hasEnoughForFloor ? 'border border-white/12 bg-white/[0.03] text-zinc-100' : 'bg-brand-primary text-white shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)]'} px-3 text-xs font-medium transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
           >
             {checkinBusy ? (
               <span className="inline-flex items-center justify-center gap-1.5"><Spinner size="sm" /> Claiming…</span>
             ) : (
               <span className="inline-flex items-center justify-center gap-1.5">
-                <XIcon className="h-3.5 w-3.5" /> {hasEnoughForFloor ? 'Post on X for a point' : 'Earn more points'}
+                <XIcon className="h-3.5 w-3.5" />{' '}
+                {hasEnoughForFloor ? 'Open X composer' : 'Open X'}
               </span>
             )}
+          </button>
+          <input
+            type="url"
+            value={tweetProofUrl}
+            onChange={(event) => setTweetProofUrl(event.target.value)}
+            placeholder="Paste posted tweet URL"
+            disabled={checkinBusy || entryBusy}
+            className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl border border-white/12 bg-white/[0.03] px-3 text-xs text-zinc-100 placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:opacity-50`}
+            aria-label="Tweet URL proof"
+          />
+          <button
+            type="button"
+            onClick={() => void handleTwitterCheckin()}
+            disabled={
+              (!walletAddress && !protocolEntryMode) ||
+              checkinBusy ||
+              entryBusy ||
+              tweetProofUrl.trim().length === 0
+            }
+            className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl border border-white/12 bg-white/[0.03] px-3 text-xs font-medium text-zinc-100 transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
+          >
+            {checkinBusy
+              ? 'Verifying tweet…'
+              : `Verify posted tweet for ${formatDailyCreditLabel(AMOE_DAILY_TWITTER_CREDIT)}`}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleXmtpCheckin()}
+            disabled={(!walletAddress && !protocolEntryMode) || entryBusy || checkinBusy}
+            className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl ${hasEnoughForFloor ? 'border border-white/12 bg-white/[0.03] text-zinc-100' : 'bg-brand-primary text-white shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)]'} px-3 text-xs font-medium transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
+          >
+            <span className="inline-flex items-center justify-center gap-1.5">
+              <MessageCircle className="h-3.5 w-3.5" />
+              {hasEnoughForFloor
+                ? `Message Akita on XMTP for ${formatDailyCreditLabel(AMOE_DAILY_XMTP_CREDIT)}`
+                : 'Earn via XMTP task'}
+            </span>
           </button>
           {hasEnoughForFloor ? (
             <button
               type="button"
               onClick={() => void refreshCredits()}
-              disabled={(!walletAddress && !protocolEntryMode) || loadingCredits || checkinBusy || entryBusy}
+              disabled={
+                (!walletAddress && !protocolEntryMode) ||
+                loadingCredits ||
+                checkinBusy ||
+                entryBusy
+              }
               className="h-9 rounded-xl bg-white/[0.03] px-3 text-xs font-medium text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loadingCredits ? 'Refreshing…' : 'Refresh'}
             </button>
           ) : null}
+        </div>
+        <div className="text-[11px] text-zinc-500">
+          X reward requires tweet verification, and XMTP reward is granted only after a real DM send.
         </div>
 
       {statusMessage ? <div className="text-xs text-emerald-300">{statusMessage}</div> : null}

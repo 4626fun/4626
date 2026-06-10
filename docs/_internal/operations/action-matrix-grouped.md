@@ -154,14 +154,14 @@ Generated from `docs/operations/action-matrix.csv`.
 | `keepr_lock`         | `/keepr lock`                              | OWNER                          | manual | Lock joins                                 | `frontend/server/commands/families/keepr.ts` |
 | `keepr_unlock`       | `/keepr unlock`                            | OWNER                          | manual | Unlock joins                               | `frontend/server/commands/families/keepr.ts` |
 | `keepr_sync`         | `/keepr sync`                              | ADMIN/OWNER                    | manual | Request sync                               | `frontend/server/commands/families/keepr.ts` |
-| `cre_status`         | `/cre status`                              | configured group               | manual | Runtime status summary                     | `frontend/server/commands/families/keepr.ts` |
-| `cre_auction`        | `/cre auction`                             | configured group               | manual | Auction operational status                 | `frontend/server/commands/families/keepr.ts` |
-| `cre_solana`         | `/cre solana`                              | configured group               | manual | Solana health summary                      | `frontend/server/commands/families/keepr.ts` |
-| `cre_health`         | `/cre health`                              | configured group               | manual | Combined health                            | `frontend/server/commands/families/keepr.ts` |
-| `cre_tend`           | `/cre tend [vault]`                        | ADMIN/OWNER                    | manual | Operational command                        | `frontend/server/commands/families/keepr.ts` |
-| `cre_report`         | `/cre report [vault]`                      | ADMIN/OWNER                    | manual | Operational command                        | `frontend/server/commands/families/keepr.ts` |
-| `cre_settle_fees`    | `/cre settle-fees`                         | ADMIN/OWNER                    | manual | Operational command                        | `frontend/server/commands/families/keepr.ts` |
-| `cre_relay_entries`  | `/cre relay-entries`                       | ADMIN/OWNER                    | manual | Operational command                        | `frontend/server/commands/families/keepr.ts` |
+| `keepr_status`         | `/keepr status`                              | configured group               | manual | Runtime status summary                     | `frontend/server/commands/families/keepr.ts` |
+| `keepr_auction`        | `/keepr auction`                             | configured group               | manual | Auction operational status                 | `frontend/server/commands/families/keepr.ts` |
+| `keepr_solana`         | `/keepr solana`                              | configured group               | manual | Solana health summary                      | `frontend/server/commands/families/keepr.ts` |
+| `keepr_health`         | `/keepr health`                              | configured group               | manual | Combined health                            | `frontend/server/commands/families/keepr.ts` |
+| `keepr_tend`           | `/keepr tend [vault]`                        | ADMIN/OWNER                    | manual | Operational command                        | `frontend/server/commands/families/keepr.ts` |
+| `keepr_report`         | `/keepr report [vault]`                      | ADMIN/OWNER                    | manual | Operational command                        | `frontend/server/commands/families/keepr.ts` |
+| `keepr_settle_fees`    | `/keepr settle-fees`                         | ADMIN/OWNER                    | manual | Operational command                        | `frontend/server/commands/families/keepr.ts` |
+| `keepr_relay_entries`  | `/keepr relay-entries`                       | ADMIN/OWNER                    | manual | Operational command                        | `frontend/server/commands/families/keepr.ts` |
 
 
 ## queue_api
@@ -169,10 +169,10 @@ Generated from `docs/operations/action-matrix.csv`.
 
 | Action          | Endpoint / Method                      | Permission           | Mode          | Notes                          | Source                                             |
 | --------------- | -------------------------------------- | -------------------- | ------------- | ------------------------------ | -------------------------------------------------- |
-| `enqueue`       | `POST /api/keepr/actions/enqueue`      | Bearer KEEPR_API_KEY | manual/hybrid | Adds action to queue           | `frontend/api/_handlers/keepr/actions/_enqueue.ts` |
-| `pending`       | `GET /api/keepr/actions/pending`       | Bearer KEEPR_API_KEY | automated     | Reads pending/retry actions    | `frontend/api/_handlers/_routes.keepr.ts`          |
-| `execute`       | `POST /api/keepr/actions/execute`      | Bearer KEEPR_API_KEY | automated     | Executes single action         | `frontend/api/_handlers/keepr/actions/_execute.ts` |
-| `update_status` | `POST /api/keepr/actions/updateStatus` | Bearer KEEPR_API_KEY | automated     | Updates action lifecycle state | `frontend/api/_handlers/_routes.keepr.ts`          |
+| `enqueue`       | `POST /api/keepr/actions/enqueue`      | Bearer KPR_API_KEY | manual/hybrid | Adds action to queue           | `frontend/api/_handlers/keepr/actions/_enqueue.ts` |
+| `pending`       | `GET /api/keepr/actions/pending`       | Bearer KPR_API_KEY | automated     | Reads pending/retry actions    | `frontend/api/_handlers/_routes.keepr.ts`          |
+| `execute`       | `POST /api/keepr/actions/execute`      | Bearer KPR_API_KEY | automated     | Executes single action         | `frontend/api/_handlers/keepr/actions/_execute.ts` |
+| `update_status` | `POST /api/keepr/actions/updateStatus` | Bearer KPR_API_KEY | automated     | Updates action lifecycle state | `frontend/api/_handlers/_routes.keepr.ts`          |
 
 
 ## queue_action
@@ -193,14 +193,14 @@ Generated from `docs/operations/action-matrix.csv`.
 
 | Action                    | Endpoint / Method                       | Permission           | Mode      | Notes                         | Source                                         |
 | ------------------------- | --------------------------------------- | -------------------- | --------- | ----------------------------- | ---------------------------------------------- |
-| `list_active_vaults`      | `GET /api/vaults/active`                | Bearer KEEPR_API_KEY | automated | Vault registry view           | `frontend/api/_handlers/_routes.ts`            |
-| `keeper_tend`             | `POST /api/keeper/tend`                 | Bearer KEEPR_API_KEY | automated | Tend write bridge             | `frontend/api/_handlers/keeper/_tend.ts`       |
-| `keeper_report`           | `POST /api/keeper/report`               | Bearer KEEPR_API_KEY | automated | Report write bridge           | `frontend/api/_handlers/keeper/_report.ts`     |
-| `keeper_sweep`            | `POST /api/keeper/sweep`                | Bearer KEEPR_API_KEY | automated | Settlement write bridge       | `frontend/api/_handlers/keeper/_sweep.ts`      |
-| `keeper_mark_settled`     | `POST /api/keeper/mark-settled`         | Bearer KEEPR_API_KEY | automated | Marks settlement stage        | `frontend/api/_handlers/_routes.ts`            |
-| `keeper_alert`            | `POST /api/keeper/alert`                | Bearer KEEPR_API_KEY | automated | Alert forwarding              | `frontend/api/_handlers/_routes.ts`            |
-| `keeper_ai_assess`        | `POST /api/keeper/aiAssess`             | Bearer KEEPR_API_KEY | automated | Assessment hook               | `frontend/api/_handlers/_routes.ts`            |
-| `keeper_solana_reconcile` | `POST /api/keeper/solana/reconcile`     | Bearer KEEPR_API_KEY | automated | Solana reconcile hook         | `frontend/api/_handlers/_routes.ts`            |
+| `list_active_vaults`      | `GET /api/vaults/active`                | Bearer KPR_API_KEY | automated | Vault registry view           | `frontend/api/_handlers/_routes.ts`            |
+| `keeper_tend`             | `POST /api/keeper/tend`                 | Bearer KPR_API_KEY | automated | Tend write bridge             | `frontend/api/_handlers/keeper/_tend.ts`       |
+| `keeper_report`           | `POST /api/keeper/report`               | Bearer KPR_API_KEY | automated | Report write bridge           | `frontend/api/_handlers/keeper/_report.ts`     |
+| `keeper_sweep`            | `POST /api/keeper/sweep`                | Bearer KPR_API_KEY | automated | Settlement write bridge       | `frontend/api/_handlers/keeper/_sweep.ts`      |
+| `keeper_mark_settled`     | `POST /api/keeper/mark-settled`         | Bearer KPR_API_KEY | automated | Marks settlement stage        | `frontend/api/_handlers/_routes.ts`            |
+| `keeper_alert`            | `POST /api/keeper/alert`                | Bearer KPR_API_KEY | automated | Alert forwarding              | `frontend/api/_handlers/_routes.ts`            |
+| `keeper_ai_assess`        | `POST /api/keeper/aiAssess`             | Bearer KPR_API_KEY | automated | Assessment hook               | `frontend/api/_handlers/_routes.ts`            |
+| `keeper_solana_reconcile` | `POST /api/keeper/solana/reconcile`     | Bearer KPR_API_KEY | automated | Solana reconcile hook         | `frontend/api/_handlers/_routes.ts`            |
 
 
 ## workflow
@@ -221,7 +221,7 @@ Generated from `docs/operations/action-matrix.csv`.
 | `solana_settle_fees`       | `workflows/keepr-solana-settle-fees.workflow.ts`   | solana+base creds                      | automated | Settle fees to Base gauge               | `workflows/keepr-solana-settle-fees.workflow.ts`   |
 | `solana_winner_relay`      | `workflows/keepr-solana-winner-relay.workflow.ts`  | solana+base creds                      | automated | Relay winners Base to Solana            | `workflows/keepr-solana-winner-relay.workflow.ts`  |
 | `solana_graduation_sync`   | `workflows/keepr-solana-graduation.workflow.ts`    | solana+base creds                      | automated | Close Alpha vault after graduation      | `workflows/keepr-solana-graduation.workflow.ts`    |
-| `solana_price_monitor`     | `cre/workflows/keepr-solana-price-monitor.workflow.ts` | solana+base creds                      | automated | Price deviation monitor/recenter        | `cre/workflows/keepr-solana-price-monitor.workflow.ts` |
+| `solana_price_monitor`     | `kpr/workflows/keepr-solana-price-monitor.workflow.ts` | solana+base creds                      | automated | Price deviation monitor/recenter        | `kpr/workflows/keepr-solana-price-monitor.workflow.ts` |
 
 
 ## onchain_method
@@ -229,16 +229,16 @@ Generated from `docs/operations/action-matrix.csv`.
 
 | Action                     | Endpoint / Method                                | Permission                      | Mode      | Notes                           | Source                                             |
 | -------------------------- | ------------------------------------------------ | ------------------------------- | --------- | ------------------------------- | -------------------------------------------------- |
-| `vault_tend`               | `CreatorOVault.tend()`                           | keeper                          | automated | Idle funds deployment           | `cre/actions/vault-keeper.action.ts`               |
-| `vault_report`             | `CreatorOVault.report()`                         | keeper                          | automated | Harvest/report yields           | `cre/actions/vault-keeper.action.ts`               |
-| `payout_convert_and_queue` | `PayoutRouter.convertAndQueue()`                 | keeper/owner path               | automated | Routes payout balances          | `cre/actions/payout-router-harvest.action.ts`    |
-| `payout_claim_rewards`     | `PayoutRouter.claimAllProtocolRewards()`         | keeper/owner path               | automated | Optional protocol rewards claim | `cre/actions/payout-router-harvest.action.ts`    |
-| `ajna_set_min_bucket`      | `AjnaVaultAuth.setMinBucketIndex()`              | canonical CSW admin             | automated | Ajna rebucket execution         | `cre/actions/ajna-bucket-manager.action.ts`        |
-| `charm_rebalance`          | `CharmVault.rebalance()`                         | manager/delegate/keeper context | automated | Charm rebalance                 | `cre/actions/charm-rebalance-manager.action.ts`    |
-| `auction_sweep_currency`   | `CCAStrategy.sweepCurrency()`                    | permissionless                  | automated | Settlement phase                | `cre/actions/cca-finalization.action.ts`         |
-| `auction_migrate`          | `CCAStrategy.migrate()`                          | permissionless                  | automated | Settlement phase                | `cre/actions/cca-finalization.action.ts`         |
-| `auction_sweep_unsold`     | `CCAStrategy.sweepUnsoldTokens()`                | permissionless                  | automated | Settlement phase                | `cre/actions/cca-finalization.action.ts`         |
-| `auction_finalize_failed`  | `CCAStrategy.finalizeFailedAuction()`            | as configured                   | automated | Failure handling path           | `cre/actions/cca-finalization.action.ts`         |
-| `solana_process_entry`     | `LotteryManager.processLotteryEntryFromSolana()` | bridge relay authority          | automated | Solana entry relay write        | `cre/actions/keepr-solana-relay-entries.action.ts` |
-| `solana_receive_fee`       | `...receiveFeeFromSolana()`                      | bridge relay authority          | automated | Solana fee settlement write     | `cre/actions/keepr-solana-settle-fees.action.ts`   |
+| `vault_tend`               | `CreatorOVault.tend()`                           | keeper                          | automated | Idle funds deployment           | `kpr/actions/vault-keeper.action.ts`               |
+| `vault_report`             | `CreatorOVault.report()`                         | keeper                          | automated | Harvest/report yields           | `kpr/actions/vault-keeper.action.ts`               |
+| `payout_convert_and_queue` | `PayoutRouter.convertAndQueue()`                 | keeper/owner path               | automated | Routes payout balances          | `kpr/actions/payout-router-harvest.action.ts`    |
+| `payout_claim_rewards`     | `PayoutRouter.claimAllProtocolRewards()`         | keeper/owner path               | automated | Optional protocol rewards claim | `kpr/actions/payout-router-harvest.action.ts`    |
+| `ajna_set_min_bucket`      | `AjnaVaultAuth.setMinBucketIndex()`              | canonical CSW admin             | automated | Ajna rebucket execution         | `kpr/actions/ajna-bucket-manager.action.ts`        |
+| `charm_rebalance`          | `CharmVault.rebalance()`                         | manager/delegate/keeper context | automated | Charm rebalance                 | `kpr/actions/charm-rebalance-manager.action.ts`    |
+| `auction_sweep_currency`   | `CCAStrategy.sweepCurrency()`                    | permissionless                  | automated | Settlement phase                | `kpr/actions/cca-finalization.action.ts`         |
+| `auction_migrate`          | `CCAStrategy.migrate()`                          | permissionless                  | automated | Settlement phase                | `kpr/actions/cca-finalization.action.ts`         |
+| `auction_sweep_unsold`     | `CCAStrategy.sweepUnsoldTokens()`                | permissionless                  | automated | Settlement phase                | `kpr/actions/cca-finalization.action.ts`         |
+| `auction_finalize_failed`  | `CCAStrategy.finalizeFailedAuction()`            | as configured                   | automated | Failure handling path           | `kpr/actions/cca-finalization.action.ts`         |
+| `solana_process_entry`     | `LotteryManager.processLotteryEntryFromSolana()` | bridge relay authority          | automated | Solana entry relay write        | `kpr/actions/keepr-solana-relay-entries.action.ts` |
+| `solana_receive_fee`       | `...receiveFeeFromSolana()`                      | bridge relay authority          | automated | Solana fee settlement write     | `kpr/actions/keepr-solana-settle-fees.action.ts`   |
 

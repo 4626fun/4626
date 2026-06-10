@@ -6,6 +6,8 @@ import {
   MODULE_MISMATCH_DEPLOYMENT_BATCHER,
   PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER,
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
+  SPLIT_PHASE1_SALT_DISABLED_BATCHER,
+  isShareOftSaltOverrideDisabledBatcher,
   normalizeCreatorVaultBatcherAddress,
 } from '../../src/config/contracts.defaults.ts'
 import { getApiContracts } from '../../server/_lib/onchain/contracts.ts'
@@ -36,6 +38,12 @@ describe('creatorVaultBatcher config normalization', () => {
 
   it('normalizeCreatorVaultBatcherAddress keeps canonical batcher', () => {
     expect(normalizeCreatorVaultBatcherAddress(SPLIT_PHASE1_DEPLOYMENT_BATCHER)).toBe(SPLIT_PHASE1_DEPLOYMENT_BATCHER)
+  })
+
+  it('isShareOftSaltOverrideDisabledBatcher includes known salt-disabled split batchers', () => {
+    expect(isShareOftSaltOverrideDisabledBatcher(SPLIT_PHASE1_SALT_DISABLED_BATCHER)).toBe(true)
+    expect(isShareOftSaltOverrideDisabledBatcher(PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER)).toBe(true)
+    expect(isShareOftSaltOverrideDisabledBatcher(LEGACY_DEPLOYMENT_BATCHER)).toBe(false)
   })
 
   it('getApiContracts falls back to canonical default for deprecated env override in local/dev mode', () => {

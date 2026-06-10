@@ -14,8 +14,9 @@ import {
 import { base } from 'viem/chains'
 
 import { detectSignatureShape, type SignatureShape } from './signatureShape'
+import { encodeExecuteWithoutChainIdValidation } from './cswOwnerMutationEncode'
 
-const ENTRY_POINT_V06_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789' as const
+export const ENTRY_POINT_V06_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789' as const
 const REPLAYABLE_NONCE_KEY = 8453n
 const ADD_OWNER_ADDRESS_SELECTOR = '0x0f0f3f24'
 
@@ -56,6 +57,14 @@ export type V06UserOpFields = {
   maxPriorityFeePerGas: bigint
   paymasterAndData: `0x${string}`
   signature: `0x${string}`
+}
+
+export type RelayExecuteRequestBody = {
+  chainId: number
+  to: `0x${string}`
+  data: `0x${string}`
+  value: '0'
+  user: `0x${string}`
 }
 
 type PreflightOutcome =
@@ -224,7 +233,7 @@ function hashUserOpV06WithoutChainId(op: V06UserOpFields): `0x${string}` {
   return keccak256(packed)
 }
 
-function getUserOpHashWithoutChainIdLocal(
+export function getUserOpHashWithoutChainIdLocal(
   op: V06UserOpFields,
   entryPoint: `0x${string}`,
 ): `0x${string}` {
@@ -531,22 +540,90 @@ export async function preflightOwnerKeyMismatch(params: {
   }
 }
 
-export function encodeExecuteWithoutChainIdValidation(
-  innerCallData: `0x${string}`,
-): `0x${string}` {
-  return encodeFunctionData({
-    abi: [
-      {
-        type: 'function',
-        name: 'executeWithoutChainIdValidation',
-        inputs: [{ name: 'calls', type: 'bytes[]' }],
-        outputs: [],
-        stateMutability: 'payable',
-      },
-    ] as const,
-    functionName: 'executeWithoutChainIdValidation',
-    args: [[innerCallData]],
-  })
+export { encodeExecuteWithoutChainIdValidation } from './cswOwnerMutationEncode'
+
+export async function prepareReplayableOwnerUserOpForExternalSignature(params: {
+  csw: `0x${string}`
+  innerCallData: `0x${string}`
+  rpcUrl?: string
+  onTelemetry?: (event: SelfBuiltUserOpLaneTelemetry) => void
+}): Promise<{
+  userOp: V06UserOpFields
+  hashToSign: `0x${string}`
+}> {
+  const emit = (event: SelfBuiltUserOpLaneTelemetry) => {
+    try {
+      params.onTelemetry?.(event)
+    } catch {}
+  }
+
+  const innerSelector = params.innerCallData.slice(0, 10).toLowerCase()
+  if (!REPLAYABLE_INNER_SELECTORS.has(innerSelector)) {
+    throw new Error(
+      `Inner selector ${innerSelector} is not in canSkipChainIdValidation. Only addOwnerAddress / addOwnerPublicKey / removeOwnerAtIndex / removeLastOwner / upgradeToAndCall are valid for the replayable lane.`,
+    )
+  }
+
+  const wrappedData = encodeExecuteWithoutChainIdValidation(params.innerCallData)
+  emit({ step: 'wrap', detail: { innerSelector, innerCallData: params.innerCallData, wrappedData } })
+
+  const rpcUrl = params.rpcUrl ?? 'https://mainnet.base.org'
+  const nonce = await readReplayableNonce(params.csw, rpcUrl)
+  emit({ step: 'read_nonce', detail: { nonce: `0x${nonce.toString(16)}` } })
+
+  const userOp: V06UserOpFields = {
+    sender: params.csw,
+    nonce,
+    initCode: '0x',
+    callData: wrappedData,
+    callGasLimit: 150_000n,
+    verificationGasLimit: 1_000_000n,
+    preVerificationGas: 0n,
+    maxFeePerGas: 0n,
+    maxPriorityFeePerGas: 0n,
+    paymasterAndData: '0x',
+    signature: '0x',
+  }
+  emit({ step: 'build_userop', detail: { userOp: serializeUserOpForLog(userOp) } })
+
+  const hashToSign = getUserOpHashWithoutChainIdLocal(userOp, ENTRY_POINT_V06_ADDRESS)
+  emit({ step: 'compute_hash', detail: { hashToSign } })
+
+  return { userOp, hashToSign }
+}
+
+export function finalizeReplayableOwnerUserOp(params: {
+  userOp: V06UserOpFields
+  signature: `0x${string}`
+  beneficiary: `0x${string}`
+}): {
+  signedUserOp: V06UserOpFields
+  handleOpsCalldata: `0x${string}`
+} {
+  const signedUserOp: V06UserOpFields = {
+    ...params.userOp,
+    signature: params.signature,
+  }
+
+  return {
+    signedUserOp,
+    handleOpsCalldata: encodeHandleOpsV06(signedUserOp, params.beneficiary),
+  }
+}
+
+export function buildRelayExecuteRequestBody(params: {
+  chainId: number
+  csw: `0x${string}`
+  handleOpsCalldata: `0x${string}`
+  entryPoint?: `0x${string}`
+}): RelayExecuteRequestBody {
+  return {
+    chainId: params.chainId,
+    to: params.entryPoint ?? ENTRY_POINT_V06_ADDRESS,
+    data: params.handleOpsCalldata,
+    value: '0',
+    user: params.csw,
+  }
 }
 
 /**
@@ -615,7 +692,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
    * If true, sign and encode the handleOps calldata but do NOT submit to
    * `/api/relay/execute`. The returned `txHash` is `null` and `relayResponse`
    * is `null`. Use this when a separate funder wallet will broadcast the tx
-   * (see RELAY_OWNER_MUTATION_FLOW.md) so the CSW's owner signature is
+   * (see docs/operations/relay-sponsored-owner-mutation-flow.md) so the CSW's owner signature is
    * captured client-side and handed off to a different wallet session.
    */
   signOnly?: boolean
@@ -671,33 +748,19 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
       )
     }
   }
-  const wrappedData = encodeExecuteWithoutChainIdValidation(params.innerCallData)
+  const prepareResult = await prepareReplayableOwnerUserOpForExternalSignature({
+    csw: params.csw,
+    innerCallData: params.innerCallData,
+    rpcUrl: params.rpcUrl,
+    onTelemetry: params.onTelemetry,
+  })
+  const wrappedData = prepareResult.userOp.callData
   emit({ step: 'wrap', detail: { innerSelector, innerCallData: params.innerCallData, addOwnerTarget, wrappedData } })
   const requireWebAuthnOwnerSignature =
     Boolean(params.requireWebAuthnOwnerSignature) ||
     (params.sessionKind === 'self_auth' && innerSelector === ADD_OWNER_ADDRESS_SELECTOR)
-
-  const rpcUrl = params.rpcUrl ?? 'https://mainnet.base.org'
-  const nonce = await readReplayableNonce(params.csw, rpcUrl)
-  emit({ step: 'read_nonce', detail: { nonce: `0x${nonce.toString(16)}` } })
-
-  const userOp: V06UserOpFields = {
-    sender: params.csw,
-    nonce,
-    initCode: '0x',
-    callData: wrappedData,
-    callGasLimit: 150_000n,
-    verificationGasLimit: 1_000_000n,
-    preVerificationGas: 0n,
-    maxFeePerGas: 0n,
-    maxPriorityFeePerGas: 0n,
-    paymasterAndData: '0x',
-    signature: '0x',
-  }
-  emit({ step: 'build_userop', detail: { userOp: serializeUserOpForLog(userOp) } })
-
-  const hashToSign = getUserOpHashWithoutChainIdLocal(userOp, ENTRY_POINT_V06_ADDRESS)
-  emit({ step: 'compute_hash', detail: { hashToSign } })
+  const userOp: V06UserOpFields = prepareResult.userOp
+  const hashToSign = prepareResult.hashToSign
 
   // ───────────────────────────────────────────────────────────────────
   // PRE-SIGNED SHORT-CIRCUIT
@@ -989,11 +1052,15 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
       intendedAddOwnerTarget: addOwnerTarget,
     },
   })
-  const signedUserOp: V06UserOpFields = { ...userOp, signature }
-  emit({ step: 'splice', detail: { signedUserOp: serializeUserOpForLog(signedUserOp) } })
-
   const beneficiary = params.beneficiary ?? params.csw
-  const handleOpsCalldata = encodeHandleOpsV06(signedUserOp, beneficiary)
+  const finalized = finalizeReplayableOwnerUserOp({
+    userOp,
+    signature,
+    beneficiary,
+  })
+  const signedUserOp = finalized.signedUserOp
+  emit({ step: 'splice', detail: { signedUserOp: serializeUserOpForLog(signedUserOp) } })
+  const handleOpsCalldata = finalized.handleOpsCalldata
   emit({
     step: 'encode_handle_ops',
     detail: {
@@ -1004,13 +1071,11 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
     },
   })
 
-  const relayBody = {
+  const relayBody = buildRelayExecuteRequestBody({
     chainId: params.chainId,
-    to: ENTRY_POINT_V06_ADDRESS,
-    data: handleOpsCalldata,
-    value: '0',
-    user: params.csw,
-  }
+    csw: params.csw,
+    handleOpsCalldata,
+  })
   let relayQuoteResponse: unknown = null
   if (params.quoteRelayBeforeSubmit) {
     emit({ step: 'quote_relay', detail: { stage: 'request', relayBody } })

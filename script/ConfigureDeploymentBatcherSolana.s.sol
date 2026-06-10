@@ -9,8 +9,10 @@ interface IDeploymentBatcherSolanaConfig {
     function solanaBridgeAdapter() external view returns (address);
     function solanaDestination() external view returns (bytes32);
     function setSolanaConfig(address _adapter, bytes32 _destination) external;
+    function setSolanaShareOftPeer(bytes32 _peer) external;
     function setOVaultRuntimeConfig(address _hubComposer, uint32 _solanaEid, bool _enabled) external;
     function getOVaultRuntimeConfig() external view returns (address hubComposer, uint32 solanaEid, bool enabled);
+    function solanaShareOftPeer() external view returns (bytes32);
 }
 
 interface ICreatorLotteryManagerAuth {
@@ -34,9 +36,11 @@ interface ICreatorLotteryManagerAuth {
  * - CONFIGURE_OVAULT_RUNTIME=1|0 (default 0)
  * - OVAULT_HUB_COMPOSER (required when CONFIGURE_OVAULT_RUNTIME=1)
  * - OVAULT_SOLANA_EID (required when CONFIGURE_OVAULT_RUNTIME=1)
+ * - CONFIGURE_SOLANA_SHARE_OFT_PEER=1|0 (default 0)
+ * - SOLANA_SHARE_OFT_PEER (bytes32 default mesh peer; required when CONFIGURE_SOLANA_SHARE_OFT_PEER=1)
  */
 contract ConfigureDeploymentBatcherSolana is Script {
-    address constant DEFAULT_DEPLOYMENT_BATCHER = 0x32403a647e73E04aE42b02bdd1Ade9C88698FD0c;
+    address constant DEFAULT_DEPLOYMENT_BATCHER = 0xa99058f424FB3ACC639F59355C65C40149030651;
 
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");
@@ -53,6 +57,8 @@ contract ConfigureDeploymentBatcherSolana is Script {
         address lotteryManager = vm.envOr("LOTTERY_MANAGER", deployer.lotteryManager());
         bool authorizeOnLottery = vm.envOr("AUTHORIZE_ADAPTER_ON_LOTTERY", uint256(1)) == 1;
         bool configureOvaultRuntime = vm.envOr("CONFIGURE_OVAULT_RUNTIME", uint256(0)) == 1;
+        bool configureSolanaShareOftPeer = vm.envOr("CONFIGURE_SOLANA_SHARE_OFT_PEER", uint256(0)) == 1;
+        bytes32 solanaShareOftPeer = vm.envOr("SOLANA_SHARE_OFT_PEER", bytes32(0));
         address ovaultHubComposer = vm.envOr("OVAULT_HUB_COMPOSER", address(0));
         uint32 ovaultSolanaEid = uint32(vm.envOr("OVAULT_SOLANA_EID", uint256(0)));
 
@@ -64,9 +70,13 @@ contract ConfigureDeploymentBatcherSolana is Script {
         console2.log("LotteryManager:", lotteryManager);
         console2.log("Authorize adapter on lottery:", authorizeOnLottery);
         console2.log("Configure OVault runtime:", configureOvaultRuntime);
+        console2.log("Configure Solana ShareOFT default peer:", configureSolanaShareOftPeer);
         if (configureOvaultRuntime) {
             console2.log("OVault hub composer:", ovaultHubComposer);
             console2.log("OVault Solana EID:", ovaultSolanaEid);
+        }
+        if (configureSolanaShareOftPeer) {
+            console2.logBytes32(solanaShareOftPeer);
         }
 
         vm.startBroadcast(pk);
@@ -100,6 +110,16 @@ contract ConfigureDeploymentBatcherSolana is Script {
             }
         }
 
+        if (configureSolanaShareOftPeer) {
+            require(solanaShareOftPeer != bytes32(0), "SOLANA_SHARE_OFT_PEER required");
+            if (deployer.solanaShareOftPeer() != solanaShareOftPeer) {
+                deployer.setSolanaShareOftPeer(solanaShareOftPeer);
+                console2.log("setSolanaShareOftPeer: updated");
+            } else {
+                console2.log("setSolanaShareOftPeer: already correct");
+            }
+        }
+
         vm.stopBroadcast();
 
         require(deployer.solanaBridgeAdapter() == adapter, "solana adapter mismatch");
@@ -110,6 +130,10 @@ contract ConfigureDeploymentBatcherSolana is Script {
             require(finalHubComposer == ovaultHubComposer, "ovault hub composer mismatch");
             require(finalSolanaEid == ovaultSolanaEid, "ovault solana eid mismatch");
             require(finalEnabled, "ovault runtime not enabled");
+        }
+
+        if (configureSolanaShareOftPeer) {
+            require(deployer.solanaShareOftPeer() == solanaShareOftPeer, "solana share oft peer mismatch");
         }
 
         if (authorizeOnLottery) {

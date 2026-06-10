@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/base/baseAppInvite
+[4626-web](../../../index.md) / src/lib/base/baseAppInvite
 
 # src/lib/base/baseAppInvite
 

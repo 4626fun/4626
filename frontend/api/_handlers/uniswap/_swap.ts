@@ -9,13 +9,17 @@ import {
   getClientIp,
   rateLimitKey,
   readRequestPrincipalAddress,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 
 import { validateQuoteTokenPolicy, validateRoutePolicy } from '../../../server/uniswap/guards.js'
 import { isObject, readJsonObjectBody, toCleanErrorMessage, uniswapTradeFetch } from '../../../server/uniswap/trading.js'
-import { validateSwapTransactionPayload } from '../../../server/uniswap/swapPayloadValidation.js'
+import { sanitizeCreateSwapRequestPayload } from '../../../src/lib/uniswap/swapQuoteSanitize.js'
+import {
+  normalizeSwapApiResponsePayload,
+  validateSwapTransactionPayload,
+} from '../../../server/uniswap/swapPayloadValidation.js'
 
 function isPermit2Disabled(value: unknown): boolean {
   if (typeof value === 'boolean') return value
@@ -98,8 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   }
 
-  const payload: Record<string, unknown> = { ...effectiveBody }
-  delete payload.permit2Disabled
+  const payload = sanitizeCreateSwapRequestPayload(effectiveBody)
   const headers: Record<string, string> = {}
   if (permit2Disabled) {
     headers['x-permit2-disabled'] = 'true'
@@ -120,10 +123,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   }
 
-  const txValidationError = validateSwapTransactionPayload(upstream.payload)
+  const normalizedPayload = normalizeSwapApiResponsePayload(upstream.payload)
+  const txValidationError = validateSwapTransactionPayload(normalizedPayload)
   if (txValidationError) {
     return res.status(502).json({ success: false, error: txValidationError })
   }
 
-  return res.status(200).json({ success: true, data: upstream.payload })
+  return res.status(200).json({ success: true, data: normalizedPayload })
 }

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/trade/ChainSelector
+[4626-web](../../../index.md) / src/components/trade/ChainSelector
 
 # src/components/trade/ChainSelector
 
@@ -54,4 +54,4 @@ Defined in: [src/components/trade/ChainSelector.tsx:7](https://github.com/wenaki
 
 > `const` **ChainSelector**: `NamedExoticComponent`\<[`ChainSelectorProps`](#chainselectorprops)\>
 
-Defined in: [src/components/trade/ChainSelector.tsx:41](https://github.com/wenakita/4626/blob/main/frontend/src/components/trade/ChainSelector.tsx#L41)
+Defined in: [src/components/trade/ChainSelector.tsx:43](https://github.com/wenakita/4626/blob/main/frontend/src/components/trade/ChainSelector.tsx#L43)

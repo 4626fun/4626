@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/pages/status/StatusFixPanel
+[4626-web](../../../index.md) / src/pages/status/StatusFixPanel
 
 # src/pages/status/StatusFixPanel
 
@@ -12,7 +12,7 @@
 
 > **default**(`props`): `Element`
 
-Defined in: [src/pages/status/StatusFixPanel.tsx:82](https://github.com/wenakita/4626/blob/main/frontend/src/pages/status/StatusFixPanel.tsx#L82)
+Defined in: [src/pages/status/StatusFixPanel.tsx:84](https://github.com/wenakita/4626/blob/main/frontend/src/pages/status/StatusFixPanel.tsx#L84)
 
 #### Parameters
 

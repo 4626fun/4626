@@ -1,3 +1,5 @@
+import { ensureWalletOnchainOpsAuditSchema } from '../db/schemaBootstrap.js'
+
 type Db = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
 }
@@ -46,89 +48,7 @@ function normalizeNullableString(value: unknown): string | null {
 export async function ensureCswOwnerLinkStatusSchema(db: Db): Promise<void> {
   if (schemaEnsured) return
   try {
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS csw_owner_link_status (
-        profile_id BIGINT PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
-        privy_user_id TEXT NULL,
-        embedded_eoa TEXT NULL,
-        canonical_smart_wallet TEXT NULL,
-        owner_linked BOOLEAN NOT NULL DEFAULT false,
-        status TEXT NOT NULL,
-        reason TEXT NULL,
-        suggested_canonical_smart_wallet TEXT NULL,
-        metadata JSONB NULL,
-        checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-
-    await db.sql`ALTER TABLE csw_owner_link_status ADD COLUMN IF NOT EXISTS privy_user_id TEXT NULL;`
-    await db.sql`ALTER TABLE csw_owner_link_status ADD COLUMN IF NOT EXISTS embedded_eoa TEXT NULL;`
-    await db.sql`ALTER TABLE csw_owner_link_status ADD COLUMN IF NOT EXISTS canonical_smart_wallet TEXT NULL;`
-    await db.sql`ALTER TABLE csw_owner_link_status ADD COLUMN IF NOT EXISTS owner_linked BOOLEAN NOT NULL DEFAULT false;`
-    await db.sql`ALTER TABLE csw_owner_link_status ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'owner_link_missing';`
-    await db.sql`ALTER TABLE csw_owner_link_status ADD COLUMN IF NOT EXISTS reason TEXT NULL;`
-    await db.sql`ALTER TABLE csw_owner_link_status ADD COLUMN IF NOT EXISTS suggested_canonical_smart_wallet TEXT NULL;`
-    await db.sql`ALTER TABLE csw_owner_link_status ADD COLUMN IF NOT EXISTS metadata JSONB NULL;`
-    await db.sql`ALTER TABLE csw_owner_link_status ADD COLUMN IF NOT EXISTS checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`
-    await db.sql`ALTER TABLE csw_owner_link_status ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`
-    try {
-      await db.sql`ALTER TABLE csw_owner_link_status ENABLE ROW LEVEL SECURITY;`
-    } catch {
-      // Ignore if RLS cannot be enabled in this runtime.
-    }
-    try {
-      await db.sql`
-        DO $$
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1
-            FROM pg_policies
-            WHERE schemaname = 'public'
-              AND tablename = 'csw_owner_link_status'
-              AND policyname = 'csw_owner_link_status_deny_all'
-          ) THEN
-            CREATE POLICY csw_owner_link_status_deny_all
-              ON csw_owner_link_status
-              FOR ALL
-              TO public
-              USING (false)
-              WITH CHECK (false);
-          END IF;
-        END
-        $$;
-      `
-    } catch {
-      // Ignore if policy creation is unavailable in this runtime.
-    }
-
-    try {
-      await db.sql`
-        ALTER TABLE csw_owner_link_status
-        ADD CONSTRAINT csw_owner_link_status_status_check
-        CHECK (
-          status IN (
-            'linked_ok',
-            'linked_mapping_mismatch',
-            'owner_link_missing',
-            'canonical_wallet_mismatch',
-            'canonical_wallet_missing',
-            'embedded_eoa_missing',
-            'rpc_error'
-          )
-        );
-      `
-    } catch {
-      // Constraint likely already exists.
-    }
-
-    await db.sql`CREATE INDEX IF NOT EXISTS csw_owner_link_status_status_idx ON csw_owner_link_status (status);`
-    await db.sql`CREATE INDEX IF NOT EXISTS csw_owner_link_status_checked_idx ON csw_owner_link_status (checked_at DESC);`
-    await db.sql`CREATE INDEX IF NOT EXISTS csw_owner_link_status_privy_user_idx ON csw_owner_link_status (privy_user_id);`
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS csw_owner_link_status_owner_linked_idx
-      ON csw_owner_link_status (owner_linked, checked_at DESC);
-    `
+    await ensureWalletOnchainOpsAuditSchema(db as any)
     schemaEnsured = true
   } catch {
     schemaEnsured = false

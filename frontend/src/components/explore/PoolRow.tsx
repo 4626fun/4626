@@ -10,16 +10,21 @@ import {
   formatFeeAmount,
   formatMarketCapDeltaPercent,
   getCoinFeeStatus,
+  getMarketCapDeltaToneClass,
+  resolveExploreFees24hDisplay,
   shortAddress,
 } from './rowFormatting'
 import { useIdentity } from '@/hooks/useIdentity'
+import { ExploreFeeInfoHint, EXPLORE_FEE_VERSION_HEADER_HINT } from '@/components/explore/ExploreFeeInfoHint'
+import { ExploreTableSparkline } from '@/components/explore/ExploreTableSparkline'
+import type { ExploreTableSparkline as ExploreTableSparklineData } from '@/features/explore/exploreTableSparklines'
 
 type PoolRowProps = {
-  rank: number
   coin: ZoraCoin
   timeframe?: string
   /** Set of migrated coin addresses (lowercase) for accurate fee detection */
   migratedCoins?: Set<string>
+  trend30d?: ExploreTableSparklineData | null
   isExpanded?: boolean
   onToggleFees?: () => void
 }
@@ -31,10 +36,10 @@ type PoolTableHeaderProps = {
 }
 
 export function PoolRow({
-  rank,
   coin,
   timeframe = '1d',
   migratedCoins,
+  trend30d,
   isExpanded,
   onToggleFees,
 }: PoolRowProps) {
@@ -49,6 +54,7 @@ export function PoolRow({
   const payoutTo = coin.payoutRecipientAddress
   const marketCap = coin.marketCap
   const change = formatMarketCapDeltaPercent(coin.marketCapDelta24h, marketCap)
+  const deltaToneClass = getMarketCapDeltaToneClass(change)
   const payoutIdentity = useIdentity(payoutTo ?? null)
   const payoutResolved = payoutIdentity.source !== 'address'
   const payoutDisplay = payoutTo
@@ -63,18 +69,11 @@ export function PoolRow({
     : undefined
 
   // Determine fee structure (checks migration status first, then creation date)
-  const { isV4, isMigrated, feeRates } = getCoinFeeStatus(coin.address, coin.createdAt, migratedCoins)
+  const { feeRates } = getCoinFeeStatus(coin.address, coin.createdAt, migratedCoins)
 
   const detailPath = `/explore/content/${chain}/${address}`
 
-  // Fee badge tooltip
-  const feeTooltip = isMigrated
-    ? '1% fee (Migrated to V4)'
-    : isV4
-      ? '1% fee (V4 - after June 2025)'
-      : '3% fee (Legacy - before June 2025)'
-
-  const totalFees = formatFeeAmount(volumeForFees, feeRates.total, 1)
+  const totalFees = resolveExploreFees24hDisplay(coin.fees24hUsd, volumeForFees, feeRates.total)
   const feeBreakdown = [
     `Creator ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.creator)}`,
     `Platform ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.platform)}`,
@@ -88,28 +87,19 @@ export function PoolRow({
   const stickyLeft = getStickyLeftMap(columns)
   const feeGroupSpan = useMemo(() => buildGroupSpans(columns).find((g) => g.id === 'fees') ?? null, [columns])
   const stickyCellClass =
-    'sticky bg-vault-bg/70 backdrop-blur-sm group-hover:bg-white/4 border-r border-white/8'
+    'sticky explore-table-sticky-cell'
 
   const canToggleFees = typeof onToggleFees === 'function'
 
   return (
-    <>
+    <div className="group explore-table-row-wrap">
     <Link
       to={detailPath}
-      className="group grid items-center text-xs hover:bg-white/4 transition-colors cursor-pointer min-w-max"
+      className="explore-table-row explore-table-grid items-center text-xs cursor-pointer"
       style={{ gridTemplateColumns }}
     >
-      {/* Rank */}
-      <span className={`${stickyCellClass} z-20 text-zinc-500 tabular-nums px-3 py-2 text-center sm:text-right`} style={{ left: stickyLeft.rank }}>
-        {rank}
-      </span>
-
       {/* Content Name */}
       <div className={`${stickyCellClass} explore-sticky-name-cell relative z-30 px-3 py-2`} style={{ left: stickyLeft.name }}>
-        <div
-          className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-linear-to-r from-transparent to-zinc-950 opacity-80"
-          aria-hidden="true"
-        />
         <div className="flex items-center gap-2 min-w-0 justify-start">
           {avatarUrl ? (
             <img src={avatarUrl} alt={name} className="w-7 h-7 rounded-lg object-cover shrink-0" />
@@ -132,23 +122,21 @@ export function PoolRow({
       <span className="text-white tabular-nums px-3 py-2 text-right">{formatCompactNumber(marketCap)}</span>
 
       {/* Δ 24H */}
-      <span className={`tabular-nums px-3 py-2 text-right ${change.positive ? 'text-emerald-300' : 'text-rose-300'}`}>
+      <span className={`tabular-nums px-3 py-2 text-right ${deltaToneClass}`}>
         {change.text}
       </span>
 
+      {/* 30D trend */}
+      <div className="px-3 py-2 flex items-center justify-center">
+        {trend30d ? (
+          <ExploreTableSparkline values={trend30d.values} changePercent={trend30d.changePercent} />
+        ) : (
+          <span className="text-zinc-600">—</span>
+        )}
+      </div>
+
       {/* Volume */}
       <span className="text-white tabular-nums px-3 py-2 text-right">{formatCompactNumber(volumeDisplay)}</span>
-
-      {/* Fee % */}
-      <div className="px-3 py-2 text-center">
-        <span
-          className="inline-flex items-center rounded-md border border-white/10 bg-white/3 px-2 py-0.5 text-[10px] font-medium text-zinc-300"
-          title={feeTooltip}
-        >
-          {isV4 ? '1%' : '3%'}
-          {isMigrated ? <span className="ml-0.5 text-zinc-500">*</span> : null}
-        </span>
-      </div>
 
       {/* Total Fees */}
       <div className="px-3 py-2 text-center flex items-center justify-center gap-1 text-zinc-200 tabular-nums" title={feeBreakdown}>
@@ -171,13 +159,13 @@ export function PoolRow({
       </div>
 
       {/* Payout To */}
-      <span className={`truncate px-3 py-2 text-center app-meta-value ${payoutResolved ? 'text-zinc-200' : 'text-zinc-400'}`} title={payoutTitle}>
+      <span className={`truncate px-3 py-2 text-center app-meta-value ${payoutResolved ? 'text-zinc-200' : 'text-zinc-300'}`} title={payoutTitle}>
         {payoutDisplay}
       </span>
     </Link>
     {isExpanded ? (
-      <div className="app-meta-value border-b border-white/8 bg-vault-bg/40 min-w-max text-zinc-400">
-        <div className="grid" style={{ gridTemplateColumns }}>
+      <div className="app-meta-value min-w-max border-b border-white/8 text-zinc-400">
+        <div className="explore-table-grid" style={{ gridTemplateColumns }}>
           <div
             className="px-3 py-3"
             style={{
@@ -214,7 +202,7 @@ export function PoolRow({
         </div>
       </div>
     ) : null}
-    </>
+    </div>
   )
 }
 
@@ -224,13 +212,13 @@ export function PoolTableHeader({ timeframe = '1d', currentSort, onSortChange }:
   const gridTemplateColumns = getGridTemplateColumns(columns)
   const stickyLeft = getStickyLeftMap(columns)
   const groupSpans = buildGroupSpans(columns)
-  const stickyHeaderCellClass = 'sticky z-50 bg-vault-bg border-r border-white/8'
-  const stickyGroupClass = 'sticky z-40 bg-vault-bg border-r border-white/8'
+  const stickyHeaderCellClass = 'sticky z-50 explore-table-sticky-cell border-r border-white/8'
+  const stickyGroupClass = 'sticky z-40 explore-table-sticky-cell border-r border-white/8'
 
   return (
-    <div className="bg-vault-bg border-b border-white/8">
+    <div className="explore-table-header-shell">
       {/* Group labels */}
-      <div className="grid" style={{ gridTemplateColumns }}>
+      <div className="explore-table-grid" style={{ gridTemplateColumns }}>
         {groupSpans.map((g) => {
           const slice = columns.slice(g.start, g.end + 1)
           const hasSticky = slice.some((c) => c.sticky)
@@ -254,7 +242,7 @@ export function PoolTableHeader({ timeframe = '1d', currentSort, onSortChange }:
       </div>
 
       {/* Column labels */}
-      <div className="grid text-[10px] text-zinc-500 font-medium" style={{ gridTemplateColumns }}>
+      <div className="explore-table-grid text-[10px] text-zinc-500 font-medium" style={{ gridTemplateColumns }}>
         {columns.map((c) => {
           const isSticky = Boolean(c.sticky)
           const left = isSticky ? stickyLeft[c.id] : undefined
@@ -262,12 +250,15 @@ export function PoolTableHeader({ timeframe = '1d', currentSort, onSortChange }:
           const align = c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left'
 
           const labelNode =
-            c.id === 'feeBadge' ? (
-              <span title="Fee version: 1% (V4, after June 2025) or 3% (Legacy)">{c.label}</span>
-            ) : c.id === 'priceChange' ? (
+            c.id === 'priceChange' ? (
               <span title="Market cap % change over 24H">{c.label}</span>
+            ) : c.id === 'trend30d' ? (
+              <span title="30-day price trend from indexed Zora swap activity">{c.label}</span>
             ) : c.id === 'totalFees' ? (
-              <span title="Total fees (volume × fee %)">{c.label}</span>
+              <span className="inline-flex items-center justify-center gap-0.5" title={EXPLORE_FEE_VERSION_HEADER_HINT}>
+                {c.label}
+                <ExploreFeeInfoHint title={EXPLORE_FEE_VERSION_HEADER_HINT} />
+              </span>
             ) : (
               <span>{c.label}</span>
             )
@@ -320,13 +311,10 @@ export function PoolRowSkeleton() {
   const columns = getExploreColumns({ variant: 'content', timeframe: '1d' })
   const gridTemplateColumns = getGridTemplateColumns(columns)
   const stickyLeft = getStickyLeftMap(columns)
-  const stickyCellClass = 'sticky z-10 bg-vault-card/70 backdrop-blur-sm'
+  const stickyCellClass = 'sticky z-10 explore-table-sticky-cell'
 
   return (
-    <div className="grid items-center min-w-max" style={{ gridTemplateColumns }}>
-      <div className={`${stickyCellClass} px-3 py-2`} style={{ left: stickyLeft.rank }}>
-        <div className="h-3 w-6 bg-white/8 rounded animate-pulse ml-auto" />
-      </div>
+    <div className="explore-table-row explore-table-grid items-center" style={{ gridTemplateColumns }}>
       <div className={`${stickyCellClass} explore-sticky-name-cell px-3 py-2 shadow-[6px_0_16px_-12px_rgba(0,0,0,0.9)]`} style={{ left: stickyLeft.name }}>
         <div className="flex items-center gap-2 justify-start">
           <div className="w-7 h-7 rounded-lg bg-zinc-800 animate-pulse" />
@@ -338,7 +326,7 @@ export function PoolRowSkeleton() {
       </div>
 
       {columns
-        .filter((c) => c.id !== 'rank' && c.id !== 'name')
+        .filter((c) => c.id !== 'name')
         .map((c) => (
           <div key={c.id} className="px-3 py-2">
             <div className={`h-3 bg-white/8 rounded animate-pulse ${c.align === 'right' ? 'ml-auto' : ''}`} style={{ width: c.widthPx > 100 ? 56 : 40 }} />

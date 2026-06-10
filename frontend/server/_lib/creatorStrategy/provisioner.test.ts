@@ -46,7 +46,7 @@ describe('dispatchProvisioning', () => {
     expect(res.note).toContain('activate-strategy-post-deploy')
   })
 
-  it('enqueues solana_bridge_strategy', async () => {
+  it('rejects retired solana_bridge_strategy as unknown', async () => {
     const res = await dispatchProvisioning({
       creatorToken: CREATOR,
       featureKey: 'solana_bridge_strategy',
@@ -54,9 +54,9 @@ describe('dispatchProvisioning', () => {
       paymentSource: 'x402_base',
       paymentRef: '0xabc',
     })
-    expect(res.ok).toBe(true)
-    if (!res.ok) return
-    expect(res.outcome).toBe('enqueued')
+    expect(res.ok).toBe(false)
+    if (res.ok) return
+    expect(res.reason).toBe('unknown_feature')
   })
 
   it('enqueues solana_meteora_alpha_vault with Meteora-specific note', async () => {
@@ -70,8 +70,23 @@ describe('dispatchProvisioning', () => {
     expect(res.ok).toBe(true)
     if (!res.ok) return
     expect(res.outcome).toBe('enqueued')
-    expect(res.note).toContain('Meteora')
-    expect(res.note).toContain('solana-provisioner')
+    expect(res.note).toContain('share-mesh')
+    expect(res.note).toContain('solana:create-dlmm-pool')
+  })
+
+  it('enqueues vault_full_deploy with Solana share-mesh keeper job note', async () => {
+    const res = await dispatchProvisioning({
+      creatorToken: CREATOR,
+      featureKey: 'vault_full_deploy',
+      activationId: 10,
+      paymentSource: 'stripe',
+      paymentRef: 'cs_bundle',
+    })
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.outcome).toBe('enqueued')
+    expect(res.note).toContain('share-mesh')
+    expect(res.note).toMatch(/keeper job|Solana queue skipped/)
   })
 
   it('fails clean on unknown feature keys', async () => {

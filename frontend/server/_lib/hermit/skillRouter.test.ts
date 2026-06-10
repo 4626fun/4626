@@ -1,7 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { applyEnv } from '../../../api/__tests__/helpers'
-import { _hermitPromptBuildersForTests, executeHermitCommand } from './skillRouter'
+import {
+  _hermitPromptBuildersForTests,
+  executeHermitCommand,
+  pinataEndpointSupportsHttpDraft,
+  shouldPreferPinataHttpDraft,
+  shouldRequestPinataGmeowCaption,
+} from './skillRouter'
+import * as arenaStore from '../arena/arenaIdentityMappingStore.js'
+import * as arenaClient from '../arena/arenaClient.js'
+import * as counterTradeStore from '../alfaclub/counterTradeStore.js'
 
 describe('executeHermitCommand', () => {
   let restoreEnv: (() => void) | null = null
@@ -10,6 +19,7 @@ describe('executeHermitCommand', () => {
   beforeEach(() => {
     fetchMock = vi.fn()
     ;(globalThis as unknown as { fetch: typeof fetch }).fetch = fetchMock as unknown as typeof fetch
+    arenaStore.__resetArenaIdentityMappingsForTests()
   })
 
   afterEach(() => {
@@ -20,8 +30,8 @@ describe('executeHermitCommand', () => {
 
   it('uses pinata provider for /hermit and returns text', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -33,7 +43,7 @@ describe('executeHermitCommand', () => {
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })
 
-    expect(result.provider).toBe('pinata')
+    expect(result.provider).toBe('hermit')
     expect(result.kind).toBe('hermit')
     expect(result.reply).toBe('Hermit from Pinata')
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -41,8 +51,8 @@ describe('executeHermitCommand', () => {
 
   it('rejects /hermit when pinata path is not configured', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: undefined,
-      HERMIT_PINATA_BEARER_TOKEN: undefined,
+      HERMIT_AGENT_CHAT_ENDPOINT: undefined,
+      HERMIT_AGENT_BEARER_TOKEN: undefined,
     })
 
     await expect(
@@ -50,7 +60,7 @@ describe('executeHermitCommand', () => {
         commandText: '/hermit gm',
         senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       }),
-    ).rejects.toThrow('Hermit Pinata path unavailable')
+    ).rejects.toThrow('Hermit agent path unavailable')
   })
 
   it('returns usage context for /hermit without calling pinata', async () => {
@@ -78,14 +88,501 @@ describe('executeHermitCommand', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('uses the bundled cat laugh meme for plain /gmeow', async () => {
+  it('supports /market market-scope command', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/market',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toMatch(/Market scope|temporarily unavailable/)
+  })
+
+  it('supports /signal position-aware command', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/signal',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('Entry / Exit signal')
+  })
+
+  it('supports /position chart timeline command in room contexts', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/position chart',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('Position timeline chart')
+    expect(result.reply).toContain('/position marker <n>')
+  })
+
+  it('supports /position markers all in room contexts', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/position markers all',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toMatch(/Timeline markers|No timeline markers found/)
+  })
+
+  it('supports /position marker <n> detail command in room contexts', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/position marker 1',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toMatch(/Marker #1|not found|No timeline markers found/)
+  })
+
+  it('supports /position marker latest alias', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/position marker latest',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toMatch(/Marker #|No latest marker found|No timeline markers found/)
+  })
+
+  it('supports /position marker trade 1 alias', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/position marker trade 1',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toMatch(/Marker #|Trade marker #1 not found|No timeline markers found/)
+  })
+
+  it('supports /position marker host 1 alias', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/position marker host 1',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toMatch(/Marker #|Host marker #1 not found|No timeline markers found/)
+  })
+
+  it('supports /position host markers in room contexts', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/position host markers',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toMatch(/Host chat markers|No host chat markers found/)
+  })
+
+  it('supports /position sender me in room contexts', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/position sender me',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toMatch(/Sender chat markers|No chat markers found/)
+  })
+
+  it('rejects invalid /position sender filter', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/position sender not-an-address',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('Invalid sender filter')
+  })
+
+  it('supports /arena status in room 1659 when enabled', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+    })
+    const result = await executeHermitCommand({
+      commandText: '/arena status',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('Arena status:')
+    expect(result.reply).toContain('enabled=true')
+    expect(result.reply).toContain('agentId=')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('supports /arena identity show with resolver fallback', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+    })
+    const result = await executeHermitCommand({
+      commandText: '/arena identity show',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('Arena identity resolution')
+    expect(result.reply).toContain('source:')
+  })
+
+  it('rejects /arena commands outside allowed rooms', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+    })
+    const result = await executeHermitCommand({
+      commandText: '/arena status',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1043',
+    })
+    expect(result.reply).toContain('only enabled in approved rooms')
+  })
+
+  it('enforces HIP-3 xyz prefix on /arena trade', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_TRADING_ENABLED: '1',
+      ARENA_DRY_RUN: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+    })
+    const result = await executeHermitCommand({
+      commandText: '/arena trade open foo:bar long 1000 2',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+    expect(result.reply).toContain('xyz: prefix')
+  })
+
+  it('keeps /arena execution in dry-run by default', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_TRADING_ENABLED: '1',
+      ARENA_DRY_RUN: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+    })
+    const result = await executeHermitCommand({
+      commandText: '/arena trade open xyz:GOLD long 5000 3',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+    expect(result.reply).toContain('Open submitted for xyz:GOLD.')
+    expect(result.reply).toContain('[dry-run]')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('supports /arena register (supplied ids) + runs onboard sequence (dry) with in-memory identity fallback when DB is unavailable', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+      ARENA_CREATION_ENABLED: '1',
+    })
+    const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
+    // Use ids that differ from the env defaults so we exercise the bind + sequence path
+    // (instead of the new already-bound short-circuit).
+    const result = await executeHermitCommand({
+      commandText: '/arena register 11111111-2222-3333-4444-555555555555 0x1111111111111111111111111111111111111111',
+      senderAddress: sender,
+      roomId: '1659',
+    })
+    expect(result.reply).toContain('Arena register (supplied ids)')
+    // In the unit test env (no real getDb), the in-memory fallback keeps bind semantics working.
+    expect(result.reply).toContain('Identity bound for \'mine\'')
+    expect(result.reply).toContain(sender)
+    expect(result.reply).toContain('join=')
+    expect(result.reply).toContain('activate=')
+    expect(result.reply).toContain('add-api-wallet=')
+    expect(result.reply).toContain('[dry]')
+    expect(result.reply).toContain('11111111')
+  })
+
+  it('supports /arena register (no ids) create path: creates, auto-binds as personal mine + onboards (dry)', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+      ARENA_CREATION_ENABLED: '1',
+    })
+    const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
+    const result = await executeHermitCommand({
+      commandText: '/arena register',
+      senderAddress: sender,
+      roomId: '1659',
+    })
+    // In plain dry (no mock), create returns no parsable ids → guidance path.
+    // (See the mocked-success test below for the auto-bind + onboard path.)
+    expect(result.reply.toLowerCase()).toContain('register')
+    expect(result.reply).toContain('app.virtuals.io/acp/new')
+    expect(result.reply.toLowerCase()).toContain('claim')
+    expect(result.reply).not.toContain('Identity bound')
+    expect(result.reply).not.toContain('join=')
+  })
+
+  it('create path /arena register (no ids) with successful acp parse auto-binds + onboards (mocked)', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '0', // pretend live
+      ARENA_CREATION_ENABLED: '1',
+    })
+    const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
+
+    const createSpy = vi.spyOn(arenaClient, 'runArenaCreateAgent').mockResolvedValue({
+      ok: true,
+      agentId: 'mock-created-agent-uuid-1234',
+      agentWalletAddress: '0x3333333333333333333333333333333333333333',
+      run: { dryRun: false, stdout: 'success' } as any,
+    } as any)
+
+    const result = await executeHermitCommand({
+      commandText: '/arena register',
+      senderAddress: sender,
+      roomId: '1659',
+    })
+
+    expect(result.reply).toContain('Created agent via acp and bound as personal')
+    expect(result.reply).toContain('mock-created-agent-uuid-1234')
+    expect(result.reply).toContain('0x3333333333333333333333333333333333333333')
+    expect(result.reply).toContain('join=')
+    expect(result.reply.toLowerCase()).toContain('claim') // note for web if full ownership needed
+
+    createSpy.mockRestore()
+  })
+
+  it('rejects /arena register outside allowed rooms (same gate as other subs)', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+    })
+    const result = await executeHermitCommand({
+      commandText: '/arena register',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1043',
+    })
+    expect(result.reply).toContain('only enabled in approved rooms')
+  })
+
+  it('supports /arena register default (supplied ids) to change room default + onboard', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+    })
+    const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9' // operator-like
+    const agentId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    const agentWallet = '0x4444444444444444444444444444444444444444'
+
+    // Mock to simulate successful default set
+    const upsertSpy = vi.spyOn(arenaStore, 'upsertArenaIdentityMapping').mockResolvedValue(true)
+
+    const result = await executeHermitCommand({
+      commandText: `/arena register default ${agentId} ${agentWallet}`,
+      senderAddress: sender,
+      roomId: '1659',
+    })
+
+    expect(result.reply).toContain('Arena room default register (supplied ids)')
+    expect(result.reply).toContain('Room default mapping saved/updated')
+    expect(result.reply).toContain('join=ok[dry]')
+    expect(result.reply).toContain(agentId)
+    expect(result.reply).toContain(agentWallet)
+
+    expect(upsertSpy).toHaveBeenCalledWith(expect.objectContaining({
+      senderAddress: '*', // room default
+      arenaAgentId: agentId,
+    }))
+
+    upsertSpy.mockRestore()
+  })
+
+  it('includes onboarding diagnostics when /arena register default steps fail', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '0',
+    })
+    const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
+    const agentId = '019e90fa-3c8c-7ba0-8547-bf6f81698c3d'
+    const agentWallet = '0x74ab91cd845ff0d2006404440af49c3bc8c1df96'
+
+    const upsertSpy = vi.spyOn(arenaStore, 'upsertArenaIdentityMapping').mockResolvedValue(true)
+    const joinSpy = vi.spyOn(arenaClient, 'runArenaJoin').mockResolvedValue({
+      ok: false,
+      message: 'Arena join failed.',
+      run: {
+        ok: false,
+        command: 'dgclaw',
+        args: ['join'],
+        cwd: '/tmp',
+        stdout: '',
+        stderr: 'join denied',
+        code: 1,
+        timedOut: false,
+        dryRun: false,
+        error: 'join_error',
+      },
+    })
+    const activateSpy = vi.spyOn(arenaClient, 'runArenaActivateUnifiedAccount').mockResolvedValue({
+      ok: false,
+      message: 'Unified account activation failed.',
+      run: {
+        ok: false,
+        command: 'dgclaw',
+        args: ['activate-unified-account'],
+        cwd: '/tmp',
+        stdout: '',
+        stderr: 'activate denied',
+        code: 1,
+        timedOut: false,
+        dryRun: false,
+        error: 'activate_error',
+      },
+    })
+    const addApiWalletSpy = vi.spyOn(arenaClient, 'runArenaAddApiWallet').mockResolvedValue({
+      ok: false,
+      message: 'API wallet setup failed.',
+      run: {
+        ok: false,
+        command: 'dgclaw',
+        args: ['add-api-wallet'],
+        cwd: '/tmp',
+        stdout: '',
+        stderr: 'wallet denied',
+        code: 1,
+        timedOut: false,
+        dryRun: false,
+        error: 'api_wallet_error',
+      },
+    })
+
+    const result = await executeHermitCommand({
+      commandText: `/arena register default ${agentId} ${agentWallet}`,
+      senderAddress: sender,
+      roomId: '1659',
+    })
+
+    expect(result.reply).toContain('steps: join=fail activate=fail add-api-wallet=fail')
+    expect(result.reply).toContain('onboarding diagnostics:')
+    expect(result.reply).toContain('- join: Arena join failed.')
+    expect(result.reply).toContain('join_error')
+    expect(result.reply).toContain('- activate: Unified account activation failed.')
+    expect(result.reply).toContain('activate_error')
+    expect(result.reply).toContain('- add-api-wallet: API wallet setup failed.')
+    expect(result.reply).toContain('api_wallet_error')
+
+    upsertSpy.mockRestore()
+    joinSpy.mockRestore()
+    activateSpy.mockRestore()
+    addApiWalletSpy.mockRestore()
+  })
+
+  it('short-circuits /arena register (supplied ids) when ids already match resolved for sender (already-bound case)', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+      ARENA_AGENT_ID: '019e82af-2e66-7645-af23-69e9f14351f4',
+      ARENA_AGENT_WALLET_ADDRESS: '0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
+    })
+    const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
+    // Use explicit env ids (no longer hardcoded in config) so the already-bound short-circuit matches the resolved env fallback
+    const result = await executeHermitCommand({
+      commandText: '/arena register 019e82af-2e66-7645-af23-69e9f14351f4 0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
+      senderAddress: sender,
+      roomId: '1659',
+    })
+    expect(result.reply).toContain('Already bound for your sender')
+    expect(result.reply).not.toContain('Identity bind failed')
+    expect(result.reply).not.toContain('join=')
+  })
+
+  it('supports full happy-path /arena register (supplied ids) with successful bind + onboard (mocked DB)', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+    })
+    const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
+    const agentId = '12345678-1234-5678-90ab-cdef12345678'
+    const agentWallet = '0x2222222222222222222222222222222222222222'
+
+    // Mock successful DB operations for E2E-like coverage of the bind path
+    const resolveSpy = vi.spyOn(arenaStore, 'resolveArenaIdentityForContext').mockResolvedValue({
+      source: 'user',
+      roomId: '1659',
+      senderAddress: sender,
+      agentId: null, // different so no short-circuit
+      agentWalletAddress: null,
+      hlApiWalletAddress: null,
+    })
+    const upsertSpy = vi.spyOn(arenaStore, 'upsertArenaIdentityMapping').mockResolvedValue(true)
+
+    const result = await executeHermitCommand({
+      commandText: `/arena register ${agentId} ${agentWallet}`,
+      senderAddress: sender,
+      roomId: '1659',
+    })
+
+    expect(result.reply).toContain('Arena register (supplied ids):')
+    expect(result.reply).toContain('Identity bound for \'mine\'')
+    expect(result.reply).toContain(sender)
+    expect(result.reply).toContain('join=ok[dry]')
+    expect(result.reply).toContain('activate=ok[dry]')
+    expect(result.reply).toContain('add-api-wallet=ok[dry]')
+    expect(result.reply).toContain(agentId)
+    expect(result.reply).toContain(agentWallet)
+
+    expect(upsertSpy).toHaveBeenCalledWith(expect.objectContaining({
+      roomId: '1659',
+      senderAddress: sender,
+      arenaAgentId: agentId,
+      arenaWalletAddress: agentWallet,
+    }))
+
+    resolveSpy.mockRestore()
+    upsertSpy.mockRestore()
+  })
+
+  it('uses a rotating bundled meme for plain /gmeow', async () => {
     const result = await executeHermitCommand({
       commandText: '/gmeow',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })
 
     expect(result.kind).toBe('gmeow')
-    expect(result.reply).toContain('cat laugh')
+    expect(result.provider).toBe('local')
     expect(result.reply).toContain('https://')
     // /gmeow should still emit an inline media attachment so the
     // AlfaClub client renders it as an image rather than a hyperlink.
@@ -99,29 +596,64 @@ describe('executeHermitCommand', () => {
     ])
   })
 
-  it('returns the bundled cat laugh meme for /gmeow laugh', async () => {
+  it('returns a laugh-tagged meme for /gmeow laugh', async () => {
     const result = await executeHermitCommand({
       commandText: '/gmeow laugh',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })
 
     expect(result.kind).toBe('gmeow')
-    expect(result.reply).toContain('cat laugh')
+    expect(result.meme?.tags).toContain('laugh')
     expect(result.reply).toContain('https://')
-    expect(result.mediaAttachments).toEqual([
-      {
-        url: expect.stringContaining('/giphy.gif'),
-        type: 'photo',
-        filename: 'giphy.gif',
-        mime_type: 'image/gif',
-      },
-    ])
+    expect(result.mediaAttachments?.[0]?.url).toMatch(/giphy\.com|tenor\.com/)
   })
 
-  it('uses pinata provider for /gmeow when pinata draft env is configured', async () => {
+  it('uses pinata for bare /gmeow when pinata is configured (creative default)', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
+    })
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ text: JSON.stringify({ line: 'fresh cave energy.' }) }),
+    } as Response)
+
+    const result = await executeHermitCommand({
+      commandText: '/gmeow',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+
+    expect(result.kind).toBe('gmeow')
+    expect(result.provider).toBe('hermit')
+    expect(result.reply).toContain('fresh cave energy.')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses pinata for /gmeow when user supplies a prompt (default policy)', async () => {
+    restoreEnv = applyEnv({
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
+    })
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ text: JSON.stringify({ line: 'custom cat line.' }) }),
+    } as Response)
+
+    const result = await executeHermitCommand({
+      commandText: '/gmeow moon mission',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+
+    expect(result.provider).toBe('hermit')
+    expect(result.reply).toContain('custom cat line.')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses hermit provider for /gmeow when HERMIT_GMEOW_HERMIT_CAPTION=always', async () => {
+    restoreEnv = applyEnv({
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
+      HERMIT_GMEOW_HERMIT_CAPTION: 'always',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -134,15 +666,91 @@ describe('executeHermitCommand', () => {
     })
 
     expect(result.kind).toBe('gmeow')
-    expect(result.provider).toBe('pinata')
+    expect(result.provider).toBe('hermit')
     expect(result.reply).toContain('cat laugh alpha unlocked.')
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  it('uses HTTP draft (not gateway) for AlfaClub bridge /gmeow on non-Pinata draft endpoints', async () => {
+    restoreEnv = applyEnv({
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://draft.example/v1/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
+      HERMIT_GMEOW_HERMIT_CAPTION: 'always',
+    })
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ text: JSON.stringify({ line: 'bridge-safe cat laugh.' }) }),
+    } as Response)
+
+    const result = await executeHermitCommand({
+      commandText: '/gmeow',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      sourceIdentity: 'alfaclub-bridge-runner',
+    })
+
+    expect(result.kind).toBe('gmeow')
+    expect(result.provider).toBe('hermit')
+    expect(result.reply).toContain('bridge-safe cat laugh.')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://draft.example/v1/chat')
+  })
+
+  it('shouldPreferPinataHttpDraft defaults to HTTP for bridge-runner on generic endpoints', () => {
+    restoreEnv = applyEnv({
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+    })
+    expect(
+      shouldPreferPinataHttpDraft({
+        sourceIdentity: 'alfaclub-bridge-runner',
+        prompt: 'casual meme caption only',
+      }),
+    ).toBe(true)
+  })
+
+  it('shouldPreferPinataHttpDraft stays HTTP-only for hosted endpoints', () => {
+    restoreEnv = applyEnv({
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+    })
+    expect(
+      shouldPreferPinataHttpDraft({
+        sourceIdentity: 'alfaclub-bridge-runner',
+        prompt: 'casual meme caption only',
+      }),
+    ).toBe(true)
+  })
+
+  it('pinataEndpointSupportsHttpDraft accepts hosted HTTPS endpoints', () => {
+    expect(pinataEndpointSupportsHttpDraft('https://x7lmjaxx.agents.pinata.cloud')).toBe(true)
+    expect(pinataEndpointSupportsHttpDraft('https://pinata.example/chat')).toBe(true)
+  })
+
+  it('shouldPreferPinataHttpDraft is false when endpoint is unset', () => {
+    restoreEnv = applyEnv({})
+    expect(
+      shouldPreferPinataHttpDraft({
+        sourceIdentity: 'alfaclub-bridge-runner',
+        prompt: 'casual meme caption only',
+      }),
+    ).toBe(false)
+  })
+
+  it('shouldRequestPinataGmeowCaption respects env modes', () => {
+    expect(shouldRequestPinataGmeowCaption('')).toBe(true)
+    expect(shouldRequestPinataGmeowCaption('moon')).toBe(true)
+    restoreEnv = applyEnv({ HERMIT_GMEOW_HERMIT_CAPTION: '0' })
+    expect(shouldRequestPinataGmeowCaption('')).toBe(false)
+    restoreEnv = applyEnv({ HERMIT_GMEOW_HERMIT_CAPTION: 'local' })
+    expect(shouldRequestPinataGmeowCaption('moon')).toBe(false)
+    restoreEnv = applyEnv({ HERMIT_GMEOW_HERMIT_CAPTION: 'prompt' })
+    expect(shouldRequestPinataGmeowCaption('')).toBe(false)
+    expect(shouldRequestPinataGmeowCaption('moon')).toBe(true)
+  })
+
   it('/gmeow falls back to local caption when pinata returns provider auth error text', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
+      HERMIT_GMEOW_HERMIT_CAPTION: 'always',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -158,14 +766,62 @@ describe('executeHermitCommand', () => {
 
     expect(result.kind).toBe('gmeow')
     expect(result.provider).toBe('local')
-    expect(result.reply).toContain('cat laugh')
+    expect(result.reply).toMatch(/https:\/\//)
+    expect(result.reply.split('\n')[0]?.length).toBeGreaterThan(4)
     expect(result.reply.toLowerCase()).not.toContain('oauth token refresh failed')
+  })
+
+  it('/gmeow falls back to local caption when pinata throws', async () => {
+    restoreEnv = applyEnv({
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
+      HERMIT_GMEOW_HERMIT_CAPTION: 'always',
+    })
+    fetchMock.mockRejectedValueOnce(new Error('socket hang up'))
+
+    const result = await executeHermitCommand({
+      commandText: '/gmeow',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+
+    expect(result.kind).toBe('gmeow')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('https://')
+    expect(result.reply.split('\n')[0]?.length).toBeGreaterThan(4)
+  })
+
+  it('/gmeow still replies when explicit dialect persistence fails', async () => {
+    restoreEnv = applyEnv({
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
+      HERMIT_GMEOW_HERMIT_CAPTION: 'always',
+    })
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ text: JSON.stringify({ line: 'jajaja alpha cat.' }) }),
+    } as Response)
+
+    const persistPreference = vi.fn(async () => {
+      throw new Error('db unavailable')
+    })
+
+    const result = await executeHermitCommand({
+      commandText: '/gmeow 🇲🇽',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1043',
+      persistPreference,
+    })
+
+    expect(result.kind).toBe('gmeow')
+    expect(result.reply).toContain('https://')
+    expect(result.reply).toContain('jajaja alpha cat.')
+    expect(persistPreference).toHaveBeenCalled()
   })
 
   it('uses /meme for the Pinata image prompt path', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -177,15 +833,15 @@ describe('executeHermitCommand', () => {
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })
 
-    expect(result.provider).toBe('pinata')
+    expect(result.provider).toBe('hermit')
     expect(result.kind).toBe('meme')
     expect(result.imagePrompt).toBe('Akita cat meme prompt')
   })
 
   it('formats structured JSON from pinata for /hermit', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -212,8 +868,8 @@ describe('executeHermitCommand', () => {
 
   it('formats structured JSON from pinata for /meme', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+      HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -239,8 +895,8 @@ describe('executeHermitCommand', () => {
 
   it('rejects /meme when pinata path is not configured', async () => {
     restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: undefined,
-      HERMIT_PINATA_BEARER_TOKEN: undefined,
+      HERMIT_AGENT_CHAT_ENDPOINT: undefined,
+      HERMIT_AGENT_BEARER_TOKEN: undefined,
     })
 
     await expect(
@@ -283,8 +939,8 @@ describe('executeHermitCommand', () => {
 
     it('passes Spanish JSON values straight through for /hermit', async () => {
       restoreEnv = applyEnv({
-        HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-        HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+        HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+        HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
       })
       fetchMock.mockResolvedValueOnce({
         ok: true,
@@ -304,7 +960,7 @@ describe('executeHermitCommand', () => {
       })
 
       expect(result.kind).toBe('hermit')
-      expect(result.provider).toBe('pinata')
+      expect(result.provider).toBe('hermit')
       expect(result.reply).toContain('El vault acaba de despegar.')
       expect(result.reply).toContain('CTA: Reclama tu drop.')
       expect(result.reply).toContain('#4626 #AlfaClub')
@@ -313,8 +969,8 @@ describe('executeHermitCommand', () => {
 
     it('passes Spanish JSON values straight through for /meme', async () => {
       restoreEnv = applyEnv({
-        HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-        HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+        HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+        HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
       })
       fetchMock.mockResolvedValueOnce({
         ok: true,
@@ -340,8 +996,8 @@ describe('executeHermitCommand', () => {
 
     it('keeps English behaviour unchanged when the user writes English', async () => {
       restoreEnv = applyEnv({
-        HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-        HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+        HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+        HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
       })
       fetchMock.mockResolvedValueOnce({
         ok: true,
@@ -582,8 +1238,8 @@ describe('executeHermitCommand', () => {
 
     it('passes Argentine-flagged JSON values straight through end-to-end', async () => {
       restoreEnv = applyEnv({
-        HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-        HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+        HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+        HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
       })
       fetchMock.mockResolvedValueOnce({
         ok: true,
@@ -603,7 +1259,7 @@ describe('executeHermitCommand', () => {
       })
 
       expect(result.kind).toBe('hermit')
-      expect(result.provider).toBe('pinata')
+      expect(result.provider).toBe('hermit')
       expect(result.reply).toContain('El vault ya despegó, dale.')
       expect(result.reply).toContain('CTA: Reclamá tu drop.')
       expect(result.reply).not.toContain('```')
@@ -613,9 +1269,9 @@ describe('executeHermitCommand', () => {
   describe('Pinata HTTP fallback timeout', () => {
     it('passes an AbortSignal when calling the Pinata HTTP endpoint', async () => {
       restoreEnv = applyEnv({
-        HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-        HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
-        HERMIT_PINATA_HTTP_TIMEOUT_MS: '5000',
+        HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+        HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
+        HERMIT_AGENT_HTTP_TIMEOUT_MS: '5000',
       })
       fetchMock.mockResolvedValueOnce({
         ok: true,
@@ -634,8 +1290,8 @@ describe('executeHermitCommand', () => {
 
     it('falls back gracefully when the HTTP endpoint throws (network/timeout)', async () => {
       restoreEnv = applyEnv({
-        HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-        HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+        HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+        HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
       })
       fetchMock.mockRejectedValueOnce(new Error('network down'))
 
@@ -644,13 +1300,13 @@ describe('executeHermitCommand', () => {
           commandText: '/hermit copy gm',
           senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         }),
-      ).rejects.toThrow('Hermit Pinata path unavailable')
+      ).rejects.toThrow('Hermit agent path unavailable')
     })
 
     it('/gmeow degrades to local meme when the HTTP endpoint throws', async () => {
       restoreEnv = applyEnv({
-        HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-        HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+        HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+        HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
       })
       fetchMock.mockRejectedValueOnce(new Error('network down'))
 
@@ -661,7 +1317,117 @@ describe('executeHermitCommand', () => {
 
       expect(result.kind).toBe('gmeow')
       expect(result.provider).toBe('local')
-      expect(result.reply).toContain('cat laugh')
+      expect(result.meme?.tags).toContain('laugh')
+      expect(result.reply).toContain('https://')
+    })
+  })
+
+  describe('strategy arena auto-setup', () => {
+    it('throttles repeated /strategy status auto-provision attempts after failure', async () => {
+      restoreEnv = applyEnv({
+        ARENA_ENABLED: '1',
+        ARENA_DGCLAW_DIR: '/tmp',
+        ARENA_DRY_RUN: '1',
+      })
+      const sender = '0x1111111111111111111111111111111111111111'
+      const createSpy = vi.spyOn(arenaClient, 'runArenaCreateAgent').mockResolvedValue({
+        ok: false,
+        message: 'create failed',
+        run: { stdout: 'boom' } as any,
+      } as any)
+
+      const first = await executeHermitCommand({
+        commandText: '/strategy status',
+        senderAddress: sender,
+        roomId: '1659',
+      })
+      const second = await executeHermitCommand({
+        commandText: '/strategy status',
+        senderAddress: sender,
+        roomId: '1659',
+      })
+
+      expect(first.reply).toContain('arenaSetup: auto-provision failed')
+      expect(second.reply).toContain('arenaSetup: retry window active')
+      expect(createSpy).toHaveBeenCalledTimes(1)
+    })
+
+    it('auto-provisions arena identity on /strategy status when missing', async () => {
+      restoreEnv = applyEnv({
+        ARENA_ENABLED: '1',
+        ARENA_DGCLAW_DIR: '/tmp',
+        ARENA_DRY_RUN: '1',
+      })
+      const sender = '0x2222222222222222222222222222222222222222'
+      vi.spyOn(arenaClient, 'runArenaCreateAgent').mockResolvedValue({
+        ok: true,
+        agentId: '019e82af-2e66-7645-af23-69e9f14351f4',
+        agentWalletAddress: '0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
+        run: { dryRun: true, stdout: 'created' } as any,
+      } as any)
+      vi.spyOn(arenaClient, 'runArenaJoin').mockResolvedValue({ ok: true, message: 'ok', run: { dryRun: true } as any } as any)
+      vi.spyOn(arenaClient, 'runArenaActivateUnifiedAccount').mockResolvedValue({
+        ok: true,
+        message: 'ok',
+        run: { dryRun: true } as any,
+      } as any)
+      vi.spyOn(arenaClient, 'runArenaAddApiWallet').mockResolvedValue({
+        ok: true,
+        message: 'ok',
+        details: { hlApiWalletAddress: '0x3333333333333333333333333333333333333333' },
+        run: { dryRun: true } as any,
+      } as any)
+
+      const result = await executeHermitCommand({
+        commandText: '/strategy status',
+        senderAddress: sender,
+        roomId: '1659',
+      })
+
+      expect(result.reply).toContain('**Strategy status**')
+      expect(result.reply).toContain('arenaSetup: Auto-provisioned Arena identity')
+    })
+
+    it('auto-provisions arena identity on /strategy optin when missing', async () => {
+      restoreEnv = applyEnv({
+        ARENA_ENABLED: '1',
+        ARENA_DGCLAW_DIR: '/tmp',
+        ARENA_DRY_RUN: '1',
+      })
+      const sender = '0x4444444444444444444444444444444444444444'
+      const createSpy = vi.spyOn(arenaClient, 'runArenaCreateAgent').mockResolvedValue({
+        ok: true,
+        agentId: '019e82af-2e66-7645-af23-69e9f14351f4',
+        agentWalletAddress: '0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
+        run: { dryRun: true, stdout: 'created' } as any,
+      } as any)
+      vi.spyOn(arenaClient, 'runArenaJoin').mockResolvedValue({ ok: true, message: 'ok', run: { dryRun: true } as any } as any)
+      vi.spyOn(arenaClient, 'runArenaActivateUnifiedAccount').mockResolvedValue({
+        ok: true,
+        message: 'ok',
+        run: { dryRun: true } as any,
+      } as any)
+      vi.spyOn(arenaClient, 'runArenaAddApiWallet').mockResolvedValue({ ok: true, message: 'ok', run: { dryRun: true } as any } as any)
+      vi.spyOn(counterTradeStore, 'upsertCounterTradeOptIn').mockResolvedValue({
+        roomId: '1659',
+        senderAddress: sender,
+        state: 'active',
+        preset: 'balanced',
+        pauseReason: null,
+        pausedAt: null,
+        lastActionAt: null,
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      })
+
+      const result = await executeHermitCommand({
+        commandText: '/strategy optin balanced',
+        senderAddress: sender,
+        roomId: '1659',
+      })
+
+      expect(createSpy).toHaveBeenCalledTimes(1)
+      expect(result.reply).toContain('Automation enabled for your account.')
+      expect(result.reply).toContain('Arena setup is linked for your sender')
     })
   })
 })

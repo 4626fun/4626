@@ -12,6 +12,7 @@ This lane is for token holders and community members using 4626 products.
 ## Start Here
 
 - [Getting Started](/getting-started)
+- [Explore analytics](/users/explore-analytics) — how indexed totals and charts are built
 - [Launch Token](/guides/launch-token)
 - [Deploy Vault](/guides/deploy-vault)
 - [Activate Vault](/guides/activate-vault)

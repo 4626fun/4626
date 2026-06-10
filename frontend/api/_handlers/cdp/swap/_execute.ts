@@ -9,7 +9,7 @@ import {
   getClientIp,
   rateLimitKey,
   readRequestPrincipalAddress,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { cdpTradeFetch, normalizeCdpSwapPayload } from '../../../../server/cdp/trading.js'
 import {

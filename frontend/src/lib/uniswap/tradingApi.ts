@@ -5,7 +5,25 @@ import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import { APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/env/host'
 import { buildCdpPriceRequest, executeCdpSwap, fetchCdpSwapPrice } from '@/lib/swap/cdpApi'
-import { resolveSwapProviderSelection, shouldFallbackToUniswap, type SwapProvider } from '@/lib/swap/providerConfig'
+import {
+  resolveSwapProviderSelection,
+  shouldFallbackToUniswap,
+  shouldFallbackToZoraTrade,
+  type SwapProvider,
+} from '@/lib/swap/providerConfig'
+import {
+  buildSwapFromZoraQuote,
+  fetchZoraTradeQuoteFromApi,
+  readZoraCallFromQuote,
+  shouldUseZoraTradeRoute,
+  zoraTradeQuoteToResponse,
+} from '@/lib/zora/zoraTradeApi'
+import {
+  coerceSwapTransactionValue,
+  normalizeSwapApiResponsePayload,
+  sanitizeClassicQuoteForSwap,
+  sanitizePermitDataForSwapApi,
+} from '@/lib/uniswap/swapQuoteSanitize'
 
 const DEFAULT_RETRIES = 2
 const RETRY_BASE_DELAY_MS = 500
@@ -13,6 +31,11 @@ const RETRYABLE_STATUS = new Set([503, 502, 429])
 const QUOTE_CACHE_TTL_MS = 8_000
 const quoteCache = new Map<string, { at: number; data: TradeQuoteResponse }>()
 const quoteInFlight = new Map<string, Promise<TradeQuoteResponse>>()
+
+/** Drop cached quotes before review/submit refresh so Uniswap API returns fresh routes. */
+export function invalidateTradeQuoteCache(): void {
+  quoteCache.clear()
+}
 
 export type Routing = components['schemas']['Routing']
 export type QuoteRequest = components['schemas']['QuoteRequest']
@@ -34,6 +57,8 @@ export type TradeQuoteRequest = QuoteRequest & {
   xChainedActionsEnabled?: boolean
   chainedActionsEnabled?: boolean
   providerOverride?: 'uniswap' | 'cdp'
+  /** When true and pair is on Base, quote via Zora coins SDK (creator-coin pools). */
+  useZoraTradeRoute?: boolean
 }
 
 export type TradeQuoteResponse = QuoteResponse & Record<string, unknown>
@@ -268,7 +293,7 @@ function extractCdpSwapTransaction(payload: Record<string, unknown>): Transactio
     to,
     from,
     data,
-    value: typeof transaction.value === 'string' && transaction.value.trim() ? transaction.value : '0',
+    value: coerceSwapTransactionValue(transaction.value),
     chainId: (Number.isFinite(Number(transaction.chainId)) && Number(transaction.chainId) > 0
       ? Number(transaction.chainId)
       : 8453) as TransactionRequest['chainId'],
@@ -283,6 +308,80 @@ function extractCdpSwapTransaction(payload: Record<string, unknown>): Transactio
 async function fetchTradeQuoteFromUniswap(body: TradeQuoteRequest): Promise<TradeQuoteResponse> {
   const { walletModeKey: _wm, providerOverride: _providerOverride, ...upstreamBody } = body
   return await post<TradeQuoteResponse>(API_ENDPOINTS.uniswap.quote, upstreamBody)
+}
+
+function isPrimaryQuoteWithoutRoute(quote: TradeQuoteResponse): boolean {
+  const providerRaw =
+    typeof (quote as { provider?: unknown }).provider === 'string'
+      ? String((quote as { provider?: string }).provider).trim().toLowerCase()
+      : ''
+  if (providerRaw === 'zora') return false
+  if ((quote as { liquidityAvailable?: boolean }).liquidityAvailable === false) return true
+
+  const picked = pickQuote(quote)
+  const outputAmount =
+    (picked?.output as { amount?: unknown } | undefined)?.amount ??
+    (quote as { toAmount?: unknown }).toAmount ??
+    picked?.amountOut
+  const normalizedOut = String(outputAmount ?? '').trim()
+  return !normalizedOut || normalizedOut === '0'
+}
+
+async function fetchZoraTradeQuoteForRequest(
+  body: TradeQuoteRequest,
+  normalizedAmount: string,
+): Promise<TradeQuoteResponse> {
+  const swapper = String(body.swapper ?? '').trim()
+  if (!swapper) throw new Error('Swapper address is required for Zora trade quotes')
+  const zoraPayload = await fetchZoraTradeQuoteFromApi({
+    tokenIn: body.tokenIn,
+    tokenOut: body.tokenOut,
+    amountIn: normalizedAmount,
+    sender: swapper,
+    slippagePct: Number(body.slippageTolerance ?? 0.5),
+  })
+  return zoraTradeQuoteToResponse({
+    tokenIn: body.tokenIn,
+    tokenOut: body.tokenOut,
+    amountIn: normalizedAmount,
+    payload: zoraPayload,
+  })
+}
+
+async function fetchUniswapFallbackQuote(
+  body: TradeQuoteRequest,
+  preferredProvider: SwapProvider,
+): Promise<TradeQuoteResponse> {
+  const fallbackQuote = await fetchTradeQuoteFromUniswap(body)
+  return attachProviderMetadata(fallbackQuote, 'uniswap', {
+    fallbackUsed: true,
+    preferredProvider,
+  })
+}
+
+async function fetchPrimaryProviderQuote(
+  body: TradeQuoteRequest,
+  effectivePrimary: SwapProvider,
+  effectiveFallback: SwapProvider | null,
+): Promise<TradeQuoteResponse> {
+  if (effectivePrimary === 'uniswap') {
+    const quote = await fetchTradeQuoteFromUniswap(body)
+    return attachProviderMetadata(quote, 'uniswap')
+  }
+  try {
+    const cdpQuote = await fetchTradeQuoteFromCdp(body)
+    const withMeta = attachProviderMetadata(cdpQuote, 'cdp')
+    // CDP can return HTTP 200 with no liquidity — try Uniswap before Zora fallback.
+    if (effectiveFallback === 'uniswap' && isPrimaryQuoteWithoutRoute(withMeta)) {
+      return await fetchUniswapFallbackQuote(body, 'cdp')
+    }
+    return withMeta
+  } catch (error) {
+    if (effectiveFallback !== 'uniswap' || !shouldFallbackToUniswap(error)) {
+      throw error
+    }
+    return await fetchUniswapFallbackQuote(body, 'cdp')
+  }
 }
 
 async function fetchTradeQuoteFromCdp(body: TradeQuoteRequest): Promise<TradeQuoteResponse> {
@@ -438,23 +537,27 @@ export async function fetchTradeQuote(body: TradeQuoteRequest): Promise<TradeQuo
   const pending = quoteInFlight.get(key)
   if (pending) return pending
 
+  const zoraEligible = shouldUseZoraTradeRoute(normalizedBody, Boolean(normalizedBody.useZoraTradeRoute))
+
   const request = (async () => {
-    if (effectivePrimary === 'uniswap') {
-      const quote = await fetchTradeQuoteFromUniswap(normalizedBody)
-      return attachProviderMetadata(quote, 'uniswap')
-    }
     try {
-      const cdpQuote = await fetchTradeQuoteFromCdp(normalizedBody)
-      return attachProviderMetadata(cdpQuote, 'cdp')
+      const quote = await fetchPrimaryProviderQuote(normalizedBody, effectivePrimary, effectiveFallback)
+      if (zoraEligible && isPrimaryQuoteWithoutRoute(quote)) {
+        throw new Error('No route for pair')
+      }
+      return quote
     } catch (error) {
-      if (effectiveFallback !== 'uniswap' || !shouldFallbackToUniswap(error)) {
+      if (!zoraEligible || !shouldFallbackToZoraTrade(error)) {
         throw error
       }
-      const fallbackQuote = await fetchTradeQuoteFromUniswap(normalizedBody)
-      return attachProviderMetadata(fallbackQuote, 'uniswap', {
+      const preferredProvider =
+        effectivePrimary === 'cdp' && effectiveFallback === 'uniswap' ? 'cdp' : effectivePrimary
+      const zoraQuote = await fetchZoraTradeQuoteForRequest(normalizedBody, normalizedAmount)
+      return {
+        ...zoraQuote,
         fallbackUsed: true,
-        preferredProvider: 'cdp',
-      })
+        preferredProvider,
+      } as TradeQuoteResponse
     }
   })()
     .then((data) => {
@@ -490,12 +593,37 @@ export type BuildSwapParams = Omit<CreateSwapRequest, 'quote' | 'permitData'> & 
   permit2Disabled?: boolean
 }
 
-export async function buildSwap(body: BuildSwapParams): Promise<CreateSwapResponse> {
+export async function buildSwap(
+  body: BuildSwapParams & { executionAddress?: string; chainId?: number },
+): Promise<CreateSwapResponse> {
   const normalizedBody = body.permit2Disabled ? (stripPermit2Fields(body) as BuildSwapParams) : body
   const hasSignature = typeof normalizedBody.signature === 'string' && normalizedBody.signature.trim().length > 0
   const hasPermitData = typeof normalizedBody.permitData === 'object' && normalizedBody.permitData !== null
   if (hasSignature !== hasPermitData) {
     throw new Error('Permit2 signature and permitData must be provided together.')
+  }
+
+  const quoteRecord = normalizedBody.quote as Record<string, unknown>
+  const isZoraClassicQuote =
+    quoteRecord._provider === 'zora' ||
+    (isPlainObject(quoteRecord._zoraCall) &&
+      typeof (quoteRecord._zoraCall as Record<string, unknown>).target === 'string')
+  if (isZoraClassicQuote) {
+    const executionAddress = String(body.executionAddress ?? '').trim()
+    const chainId = Number(body.chainId ?? 8453)
+    if (!executionAddress) {
+      throw new Error('Execution address is required to build a Zora swap transaction')
+    }
+    return buildSwapFromZoraQuote({
+      quote: {
+        routing: 'CLASSIC',
+        provider: 'zora',
+        zoraCall: quoteRecord._zoraCall ?? readZoraCallFromQuote({ quote: quoteRecord } as TradeQuoteResponse),
+        quote: quoteRecord,
+      } as unknown as TradeQuoteResponse,
+      executionAddress,
+      chainId,
+    })
   }
 
   const cdpParams = buildCdpExecuteParamsFromQuote(normalizedBody)
@@ -509,9 +637,17 @@ export async function buildSwap(body: BuildSwapParams): Promise<CreateSwapRespon
     return { swap: tx } as CreateSwapResponse
   }
 
-  const response = await post<CreateSwapResponse>(API_ENDPOINTS.uniswap.swap, normalizedBody)
-  assertValidSwapTransaction(response.swap)
-  return response
+  const swapBody: Record<string, unknown> = {
+    ...normalizedBody,
+    quote: sanitizeClassicQuoteForSwap(normalizedBody.quote as Record<string, unknown>),
+  }
+  if (isPlainObject(swapBody.permitData)) {
+    swapBody.permitData = sanitizePermitDataForSwapApi(swapBody.permitData)
+  }
+  const response = await post<CreateSwapResponse>(API_ENDPOINTS.uniswap.swap, swapBody)
+  const normalized = normalizeSwapApiResponsePayload(response) as CreateSwapResponse
+  assertValidSwapTransaction(normalized.swap)
+  return normalized
 }
 
 export type CreateOrderParams = Omit<OrderRequest, 'quote'> & {
@@ -540,6 +676,8 @@ export function assertValidSwapTransaction(tx: TransactionRequest): void {
   if (tx.maxFeePerGas && tx.gasPrice) {
     throw new Error('Invalid swap transaction: cannot set both maxFeePerGas and gasPrice')
   }
+  const raw = tx as TransactionRequest & { value?: unknown }
+  raw.value = coerceSwapTransactionValue(raw.value) as TransactionRequest['value']
 }
 
 export async function buildSwap5792(body: Record<string, unknown>): Promise<Record<string, unknown>> {

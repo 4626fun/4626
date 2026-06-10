@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/chat/commandCenter
+[4626-web](../../../index.md) / src/components/chat/commandCenter
 
 # src/components/chat/commandCenter
 
@@ -32,7 +32,7 @@ Defined in: [src/components/chat/commandCenter.ts:12](https://github.com/wenakit
 
 ### ChatCommandCategoryId
 
-> **ChatCommandCategoryId** = `"vault"` \| `"cre"` \| `"wallet"` \| `"knowledge"` \| `"advanced"`
+> **ChatCommandCategoryId** = `"vault"` \| `"keeper"` \| `"wallet"` \| `"knowledge"` \| `"advanced"`
 
 Defined in: [src/components/chat/commandCenter.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/commandCenter.ts#L3)
 

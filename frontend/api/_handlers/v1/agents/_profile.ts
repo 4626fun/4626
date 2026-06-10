@@ -10,7 +10,7 @@ import {
   buildWalletIntelligence,
   queryFeedbackIndex,
   type FeedbackIndexEntry,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { buildAgentRegistration } from '../../../../server/_lib/agent/agentRegistration.js'
 import { getErc8004PublicOrigin } from '../../../../server/_lib/infra/origin.js'

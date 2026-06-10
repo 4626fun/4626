@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/onchain/solanaWrappedMintPda
+[4626-web](../../../index.md) / server/\_lib/onchain/solanaWrappedMintPda
 
 # server/\_lib/onchain/solanaWrappedMintPda
 

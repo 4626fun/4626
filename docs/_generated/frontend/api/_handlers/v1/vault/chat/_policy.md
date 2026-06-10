@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / api/\_handlers/v1/vault/chat/\_policy
+[4626-web](../../../../../index.md) / api/\_handlers/v1/vault/chat/\_policy
 
 # api/\_handlers/v1/vault/chat/\_policy
 

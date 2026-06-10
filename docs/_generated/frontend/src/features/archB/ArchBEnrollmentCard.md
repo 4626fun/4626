@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/features/archB/ArchBEnrollmentCard
+[4626-web](../../../index.md) / src/features/archB/ArchBEnrollmentCard
 
 # src/features/archB/ArchBEnrollmentCard
 

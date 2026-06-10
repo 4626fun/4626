@@ -1317,6 +1317,7 @@ describe('PR 6b — burn-then-submit pre-flight reader', () => {
     const restoreBurnFlag = setBurnThenSubmitEnv()
     // Defensive: ensure no Postgres URL is leaking from CI env so
     // `getDb()` resolves to null and the handler hits the 503 branch.
+    // (We clear legacy Vercel Postgres vars too; Supabase is the canonical DB.)
     const priorDbUrl = process.env.DATABASE_URL
     const priorPgUrl = process.env.POSTGRES_URL
     const priorPgUrlNp = process.env.POSTGRES_URL_NON_POOLING

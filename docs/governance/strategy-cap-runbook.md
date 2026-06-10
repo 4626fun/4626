@@ -45,7 +45,7 @@ cap = max(intended debt ceiling, current strategy NAV) + safety buffer
 
 The safety buffer is strategy-specific and must be justified in the proposal. It should account for expected NAV drift, yield, normal rebalances, oracle confidence, keeper reconciliation confidence, and the maximum pricing error governance is willing to tolerate before another review.
 
-First launch example only: if a paid strategy initially receives about 30% of a 50,000,000 creator-token principal, its intended debt ceiling is about 15,000,000 creator-token-equivalent units. A first cap might be 20,000,000 to 25,000,000 creator-token-equivalent units depending on strategy risk and reconciliation confidence. That number is a starting risk limit, not a static allocation target.
+First launch example only: with **`vault_full_deploy`**, each Phase 3 strategy (Charm, Ajna) initially receives **45%** of productive allocation (4_500 bps of 10_000). On a 50,000,000 creator-token principal that is about 22,500,000 creator-token-equivalent units per strategy before idle reserve. A first cap might be 25,000,000 to 30,000,000 per strategy depending on risk and reconciliation confidence. That number is a starting trust ceiling, not a static allocation target.
 
 ## Cap re-review triggers
 

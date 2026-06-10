@@ -4,10 +4,15 @@ const {
   getKeeprVaultByGroupIdMock,
   getTelegramWebhookConfigMock,
   readChatMemberRoleMock,
+  executeWhoisCommandFamilyMock,
 } = vi.hoisted(() => ({
   getKeeprVaultByGroupIdMock: vi.fn(),
   getTelegramWebhookConfigMock: vi.fn(),
   readChatMemberRoleMock: vi.fn(),
+  executeWhoisCommandFamilyMock: vi.fn(() => ({
+    ok: true,
+    response: 'whois mocked',
+  })),
 }))
 
 vi.mock('../../_lib/keepr/keeprRegistry.js', () => ({
@@ -25,6 +30,10 @@ vi.mock('../../../api/_handlers/telegram/webhook/telegramApi/chats.js', () => ({
   createTelegramHolderRoomInviteLink: vi.fn(),
   __resetTelegramChatMemberRoleCache: vi.fn(),
   TELEGRAM_GROUP_ANONYMOUS_BOT_ID: '1087968824',
+}))
+
+vi.mock('../../commands/families/whois.js', () => ({
+  executeWhoisCommandFamily: executeWhoisCommandFamilyMock,
 }))
 
 const TEST_WALLET = '0x1111111111111111111111111111111111111111' as const

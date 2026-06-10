@@ -2,6 +2,8 @@
 
 Source-of-truth list of every strategy considered for `CreatorOVault`. Each row pins the valuation mode (per [the onboarding checklist](./strategy-onboarding-checklist.md)) and the cap rationale, if any.
 
+**Greenfield deploy:** creators pay **`vault_full_deploy`** ($499), which bundles Charm + Ajna Phase 3 strategies (45%/45%) plus Solana mesh / Meteora entitlements. Individual feature keys below are resolver/DB identifiers, not separate public SKUs.
+
 `solana_ovault_mesh` is not a `CreatorOVault` strategy. It is a Phase 2b routing entitlement for Solana OVault compose/peer wiring and must not be included in `addStrategy` or `strategyMaxAssets` cap batches.
 
 Update this file in the same PR that adds, classifies, or re-caps a strategy.
@@ -10,13 +12,18 @@ Update this file in the same PR that adds, classifies, or re-caps a strategy.
 | --- | --- | --- | --- | --- |
 | AJNA 4626 sleeve | `ajna_sleeve` | `capped` unless valuation is verified as internal-accounting or oracle-backed | TBD on activation: `max(intended debt ceiling, current strategy NAV) + safety buffer` | AJNA can grow if more creator coins are deposited/lent; cap is a trust ceiling until the valuation path is validated |
 | Charm Alpha LP | `charm_active_lp` | `capped` | TBD on activation: cap total trusted NAV, not just creator-token inventory | LP inventory can shift between creator token and USDC; valuation is market-state sensitive and needs active review after large rebalances |
-| Solana bridge strategy | `solana_bridge_strategy` | `capped` unless keeper/oracle reconciliation is verified as safe enough for another class | TBD on activation: start tighter than local strategies unless reconciliation confidence is high | Cross-chain inventory; keeper/reconciliation trust is part of the valuation path |
 
 ## Non-strategy entitlements
 
 | Entitlement | Feature flag | Classification | Cap handling |
 | --- | --- | --- | --- |
 | Solana OVault mesh | `solana_ovault_mesh` | Phase 2b routing entitlement, not a Phase 3 strategy allocation | No `setStrategyMaxAssets` or `addStrategy` calldata applies. Track route/peer/config risk in the deploy runbook, not the strategy cap register. |
+
+## Retired (do not activate for new vaults)
+
+| Strategy | Feature flag | Notes |
+| --- | --- | --- |
+| Solana bridge strategy | `solana_bridge_strategy` | Retired — replaced by Pipe A 30% ShareOFT finalize bridge. Historical AKITA vaults may still have on-chain `SolanaBridgeStrategy`. |
 
 ## How to update
 

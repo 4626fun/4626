@@ -4,7 +4,10 @@ import {
   CREATOR_STRATEGY_FEATURE_CATALOG,
   DEFAULT_CREATOR_STRATEGY_PRICE_USDC,
   getCreatorStrategyFeature,
+  FULL_VAULT_DEPLOY_PRICE_USDC,
+  getRetiredCreatorStrategyFeatureMessage,
   listCreatorStrategyFeatures,
+  listCreatorStrategyFeaturesForPurchase,
   toCreatorStrategyFeatureDto,
 } from './catalog'
 
@@ -23,11 +26,36 @@ describe('creator strategy catalog', () => {
     expect(feature.priceUsdc).toBe(100_000_000n)
   })
 
+  it('getRetiredCreatorStrategyFeatureMessage explains solana_bridge_strategy retirement', () => {
+    const message = getRetiredCreatorStrategyFeatureMessage('solana_bridge_strategy')
+    expect(message).toContain('retired')
+    expect(message).toContain('solana_ovault_mesh')
+  })
+
   it('getCreatorStrategyFeature returns null for unknown keys and the entry for known keys', () => {
     expect(getCreatorStrategyFeature('bogus')).toBe(null)
+    expect(getCreatorStrategyFeature('solana_bridge_strategy')).toBe(null)
     const known = getCreatorStrategyFeature('solana_meteora_alpha_vault')
     expect(known).not.toBe(null)
     expect(known?.key).toBe('solana_meteora_alpha_vault')
+  })
+
+  it('vault_full_deploy is priced at $499', () => {
+    const feature = CREATOR_STRATEGY_FEATURE_CATALOG.vault_full_deploy
+    expect(feature.priceUsdc).toBe(FULL_VAULT_DEPLOY_PRICE_USDC)
+    expect(feature.priceUsdc).toBe(499_000_000n)
+  })
+
+  it('listCreatorStrategyFeaturesForPurchase exposes bundle + vanity only', () => {
+    const keys = listCreatorStrategyFeaturesForPurchase().map((f) => f.key)
+    expect(keys).toContain('vault_full_deploy')
+    expect(keys).not.toContain('charm_active_lp')
+    expect(keys.some((k) => k.startsWith('deploy_vanity_'))).toBe(true)
+  })
+
+  it('listCreatorStrategyFeatures excludes retired keys', () => {
+    const keys = listCreatorStrategyFeatures().map((f) => f.key)
+    expect(keys).not.toContain('solana_bridge_strategy')
   })
 
   it('keys are stable identifiers (never include whitespace or non-ascii)', () => {

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/pages/deploy/deployVaultHelpers
+[4626-web](../../../index.md) / src/pages/deploy/deployVaultHelpers
 
 # src/pages/deploy/deployVaultHelpers
 
@@ -42,7 +42,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:103](https://github.com/wena
 
 ##### tokens
 
-`` `0x${string}` ``[]
+`string`[]
 
 ##### fees
 
@@ -66,7 +66,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:148](https://github.com/wena
 
 ###### create2Deployer
 
-`` `0x${string}` ``
+`string`
 
 ###### initCode
 
@@ -136,7 +136,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:23](https://github.com/wenak
 
 ### normalizeAddressArray()
 
-> **normalizeAddressArray**(`value`): `` `0x${string}` ``[]
+> **normalizeAddressArray**(`value`): `string`[]
 
 Defined in: [src/pages/deploy/deployVaultHelpers.ts:51](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultHelpers.ts#L51)
 
@@ -148,13 +148,13 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:51](https://github.com/wenak
 
 #### Returns
 
-`` `0x${string}` ``[]
+`string`[]
 
 ***
 
 ### normalizeAddressLike()
 
-> **normalizeAddressLike**(`value`): `` `0x${string}` `` \| `null`
+> **normalizeAddressLike**(`value`): `string` \| `null`
 
 Defined in: [src/pages/deploy/deployVaultHelpers.ts:41](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultHelpers.ts#L41)
 
@@ -166,7 +166,7 @@ Defined in: [src/pages/deploy/deployVaultHelpers.ts:41](https://github.com/wenak
 
 #### Returns
 
-`` `0x${string}` `` \| `null`
+`string` \| `null`
 
 ***
 

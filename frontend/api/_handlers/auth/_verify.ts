@@ -22,7 +22,7 @@ import {
   checkDurableRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { isCswOwner } from '../../../server/_lib/wallet/cswOwner.js'
 
 import { getTrustedRequestOrigins, isAddressLike, normalizeOrigin } from '../../../server/_lib/infra/trust.js'

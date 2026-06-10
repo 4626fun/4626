@@ -76,7 +76,7 @@ Options:
   --help                     Show this help
 
 Required env:
-  KEEPR_API_KEY              Bearer token for /api/vaults/active
+  KPR_API_KEY              Bearer token for /api/vaults/active
 
 Example (dry-run):
   pnpm -C frontend exec tsx scripts/ops/ajna-admin-backfill-safe.ts --origin https://4626.fun --only-enabled
@@ -358,7 +358,7 @@ async function main() {
   const propose = hasFlag('--propose')
   const vaultFilter = normalizeAddress(getArg('--vault', process.env.VAULT_ADDRESS || ''))
   const maxRows = asPositiveInt(getArg('--max', process.env.MAX_ROWS || '0'), 0)
-  const keeprApiKey = requireEnv('KEEPR_API_KEY')
+  const keeprApiKey = requireEnv('KPR_API_KEY')
 
   const collected = await collectMigrationCandidates({
     origin,

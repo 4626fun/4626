@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/zora/\_metrics
+[4626-web](../../../index.md) / api/\_handlers/zora/\_metrics
 
 # api/\_handlers/zora/\_metrics
 
@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/zora/\_metrics.ts:360](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/_metrics.ts#L360)
+Defined in: [api/\_handlers/zora/\_metrics.ts:374](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/_metrics.ts#L374)
 
 #### Parameters
 

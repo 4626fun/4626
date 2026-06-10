@@ -1,12 +1,30 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/privy/privyEmbeddedEoa
+[4626-web](../../../index.md) / src/lib/privy/privyEmbeddedEoa
 
 # src/lib/privy/privyEmbeddedEoa
 
 ## Functions
+
+### collectPrivySmartWalletAddressesFromWallets()
+
+> **collectPrivySmartWalletAddressesFromWallets**(`wallets`): `string`[]
+
+Defined in: [src/lib/privy/privyEmbeddedEoa.ts:91](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/privyEmbeddedEoa.ts#L91)
+
+#### Parameters
+
+##### wallets
+
+readonly `WalletLike`[] | `null` | `undefined`
+
+#### Returns
+
+`string`[]
+
+***
 
 ### getWalletClientType()
 
@@ -48,6 +66,24 @@ Defined in: [src/lib/privy/privyEmbeddedEoa.ts:34](https://github.com/wenakita/4
 
 ***
 
+### isPrivyServerManagedWallet()
+
+> **isPrivyServerManagedWallet**(`wallet`): `boolean`
+
+Defined in: [src/lib/privy/privyEmbeddedEoa.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/privyEmbeddedEoa.ts#L81)
+
+#### Parameters
+
+##### wallet
+
+`WalletLike` | `null` | `undefined`
+
+#### Returns
+
+`boolean`
+
+***
+
 ### isSmartWalletLikeType()
 
 > **isSmartWalletLikeType**(`walletType`): `boolean`
@@ -70,7 +106,7 @@ Defined in: [src/lib/privy/privyEmbeddedEoa.ts:29](https://github.com/wenakita/4
 
 > **pickPrivyEmbeddedEoaWallet**\<`T`\>(`wallets`, `excludedWalletAddress?`): `T` \| `null`
 
-Defined in: [src/lib/privy/privyEmbeddedEoa.ts:49](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/privyEmbeddedEoa.ts#L49)
+Defined in: [src/lib/privy/privyEmbeddedEoa.ts:108](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/privyEmbeddedEoa.ts#L108)
 
 #### Type Parameters
 

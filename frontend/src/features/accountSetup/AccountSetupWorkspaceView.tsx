@@ -1,90 +1,53 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { encodeFunctionData, getAddress } from 'viem'
 import {
-  Apple,
+  type KeyboardEvent,
+  type ReactNode,
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import {
   CheckCircle2,
   ChevronRight,
   ExternalLink,
-  Mail,
-  Music,
-  Send,
-  Twitter,
-  Wallet,
-  type LucideIcon,
 } from 'lucide-react'
 import { toast } from '@/components/ui/Toast'
+import { useSearchParams } from 'react-router-dom'
 
+import { Button } from '@/components/ui/Button'
 import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { LoadingText } from '@/components/ui/LoadingState'
-import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
+import { LinkedIdentitiesSection } from '@/features/accountSetup/LinkedIdentitiesSection'
+import { AccountsManagementPanel } from '@/features/accountSetup/AccountsManagementPanel'
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
-import { buildBaseAppProlinkUrl, encodeSingleCallSendCallsProlink } from '@/lib/base/prolink'
+import { shouldShowParentCswAddOwnerPanel, shouldShowBaseAppConnectPanel, shouldFocusWaitlistBaseAppConnect, resolveWaitlistAccordionOpenStep } from '@/features/waitlist/waitlistFlowState'
+import { WaitlistBaseAppWalletNudge } from '@/features/waitlist/WaitlistBaseAppWalletNudge'
+import { inferWaitlistEoaOwnerRoutingHint } from '@/lib/wallet/userExecutionTrack'
+import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
+import { useWaitlistSigningStepComplete } from '@/features/waitlist/useWaitlistSigningStepComplete'
+import { WaitlistModernParentOwnerInstall } from './WaitlistModernParentOwnerInstall'
+import { WaitlistAccountStatusCard } from '@/features/waitlist/WaitlistAccountStatusCard'
+import { usePrivyClientStatus } from '@/lib/privy/client'
+import { readWaitlistSetupIntent } from '@/lib/auth/waitlistEntry'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { shortValue } from './shared'
-import type { AccountLinkProvider } from './types'
 import type { useAccountSetupController } from './useAccountSetupController'
-
-const PROVIDER_ICON: Record<AccountLinkProvider, LucideIcon | null> = {
-  email: Mail,
-  apple: Apple,
-  twitter: Twitter,
-  telegram: Send,
-  tiktok: Music,
-  external_eoa: Wallet,
-  // No official google icon in lucide — fall back to a styled letter badge.
-  google: null,
-  zora_cross_app: null,
-}
-
-function ProviderIconBadge({ provider }: { provider: AccountLinkProvider }) {
-  const Icon = PROVIDER_ICON[provider]
-  const commonClass =
-    'flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.03] text-zinc-400'
-  if (Icon) {
-    return (
-      <span className={commonClass} aria-hidden="true">
-        <Icon className="h-3 w-3" strokeWidth={1.75} />
-      </span>
-    )
-  }
-  // Letter fallback for providers without a clean lucide glyph (currently Google).
-  const letter = provider === 'google' ? 'G' : provider.charAt(0).toUpperCase()
-  return (
-    <span
-      className={`${commonClass} font-semibold text-[10px] text-zinc-300`}
-      aria-hidden="true"
-    >
-      {letter}
-    </span>
-  )
-}
 
 const BASESCAN_BASE = 'https://basescan.org/address/'
 const ZORA_PROFILE_BASE = 'https://zora.co/'
-const CSW_OWNER_MGMT_ABI = [
-  {
-    type: 'function',
-    name: 'addOwnerAddress',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'owner', type: 'address' }],
-    outputs: [],
-  },
-] as const
 
+function handleAccordionToggleKeyboard(event: KeyboardEvent, toggle: () => void) {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    toggle()
+  }
+}
 function shortAddr(addr: string): string {
   if (addr.length <= 10) return addr
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
-}
-
-function isAddressLike(value: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/i.test(value.trim())
-}
-
-function formatEth(value: bigint): string {
-  const asEth = Number(value) / 1e18
-  if (!Number.isFinite(asEth)) return '0'
-  if (asEth >= 0.01) return asEth.toFixed(4).replace(/\.?0+$/, '')
-  return asEth.toFixed(6).replace(/\.?0+$/, '')
 }
 
 function extractSponsorshipDiagnostic(errorMessage: string | null | undefined): string | null {
@@ -131,33 +94,63 @@ function extractOwnerApprovalDebugDiagnostic(errorMessage: string | null | undef
 
 type AccountSetupWorkspaceController = ReturnType<typeof useAccountSetupController>
 
+const LazyWaitlistConnectBaseApp = lazy(async () => {
+  const mod = await import('@/features/waitlist/WaitlistConnectBaseApp')
+  return { default: mod.WaitlistConnectBaseApp }
+})
+
+function WaitlistConnectBaseAppLazy(
+  props: Parameters<typeof import('@/features/waitlist/WaitlistConnectBaseApp').WaitlistConnectBaseApp>[0],
+) {
+  return (
+    <Suspense
+      fallback={
+        <div className="text-xs text-zinc-500">
+          <LoadingText intent="processing" size="sm" labelOverride="Loading Base App setup..." />
+        </div>
+      }
+    >
+      <LazyWaitlistConnectBaseApp {...props} />
+    </Suspense>
+  )
+}
+
 export function AccountSetupWorkspaceView(props: {
   context: 'accounts' | 'waitlist'
   controller: AccountSetupWorkspaceController
   summaryActions?: ReactNode
+  waitlistFooter?: ReactNode
+  onSigningStepCompleteChange?: (complete: boolean) => void
 }) {
-  const { context, controller, summaryActions } = props
+  const { context, controller, summaryActions, waitlistFooter, onSigningStepCompleteChange } = props
+  const privyClientStatus = usePrivyClientStatus()
+  void privyClientStatus
+  const [searchParams] = useSearchParams()
+  const inBaseApp = useMemo(() => isBaseAppInAppContext(), [])
   // openStep: null = auto (first incomplete), 1/2/3 = manually opened
   const [openStep, setOpenStep] = useState<1 | 2 | 3 | null>(null)
+  const goToWaitlistStepTwo = useCallback(() => {
+    setOpenStep(2)
+  }, [])
   const {
     advancedBusy,
     baseAppUrl,
     busyProvider,
     canonicalCswAddress,
     connectedOwnerReady,
+    connectedCanonicalWalletSelected: _connectedCanonicalWalletSelected,
     connectedSignerDetail,
     connectedSignerLabel,
     connectOwnerWallet,
     cswOwnersState,
     error,
     inTelegramMiniApp,
+    loadMe,
     loading,
     me,
-    needsBaseAccountReconnect,
     needsBaseAppSetup,
     needsEmbeddedWallet,
     notice,
-    onEnable4626Signing,
     onLinkZora,
     onRefreshZora,
     onResetOwnerApproval,
@@ -168,12 +161,18 @@ export function AccountSetupWorkspaceView(props: {
     ownerInstallResumeState,
     ownerInstallSectionRef,
     ownerPrimaryCtaLabel,
+    onchainEoaOwnerCandidates,
+    pendingOwnerInstallHash,
+    setPendingOwnerInstallHash,
+    ownerInstallPhase,
+    setOwnerInstallPhase,
+    ownerInstallInProgress,
     providerCollision,
     readableCswOwners,
     zoraCrossAppCount,
-    zoraHandoffUrl,
     zoraLinked,
   } = controller
+  void _connectedCanonicalWalletSelected
   const copyAddress = useCallback((addr: string) => {
     void navigator.clipboard.writeText(addr)
   }, [])
@@ -187,48 +186,24 @@ export function AccountSetupWorkspaceView(props: {
     }
   }, [notice])
 
-  // ── Waitlist auto-trigger for 4626 signing install ──────────────────
-  // Once Step 1 (Zora link + canonical CSW) is satisfied AND the user has a
-  // connected signer that is a current owner of the canonical CSW, kick off
-  // `onEnable4626Signing` automatically so the user does not have to expand
-  // Step 2 / Advanced settings and click a button. We fire at most once per
-  // mounted session (`autoSignTriggeredRef`); user can still trigger manually
-  // via the button or clear via Reset, which re-mounts state in the controller
-  // but keeps this ref so we don't immediately re-fire after a deliberate
-  // reset. The guard set is intentionally conservative — we never auto-fire
-  // when there is an active error, when an embedded wallet is still settling,
-  // when a Base App reconnect is required, or when the controller is busy.
-  const autoSignTriggeredRef = useRef(false)
   const zoraStepComplete = zoraLinked
   const walletStepComplete = Boolean(canonicalCswAddress)
   const stepOneComplete = zoraStepComplete && walletStepComplete
-  const signingStepCompleteForAuto =
-    me?.accountSignals.executionTrack === 'legacy-owner-install' ||
-    me?.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true ||
-    /4626 signing is enabled|already enabled/i.test(notice ?? '')
+  const ownerInstallPathActive = ownerInstallResumeState.requested
+  const {
+    signingStepComplete,
+    embeddedEoaAddress,
+    parentEmbeddedOwnerOnChain,
+    refreshParentEmbeddedOwner,
+  } = useWaitlistSigningStepComplete({
+    accountSignals: me?.accountSignals,
+    canonicalCswAddress,
+    ownerInstallRequested: ownerInstallPathActive,
+  })
+
   useEffect(() => {
-    if (context !== 'waitlist') return
-    if (autoSignTriggeredRef.current) return
-    if (!stepOneComplete) return
-    if (signingStepCompleteForAuto) return
-    if (!connectedOwnerReady) return
-    if (advancedBusy) return
-    if (needsBaseAccountReconnect) return
-    if (needsEmbeddedWallet) return
-    if (error) return
-    autoSignTriggeredRef.current = true
-    void onEnable4626Signing()
-  }, [
-    advancedBusy,
-    connectedOwnerReady,
-    context,
-    error,
-    needsBaseAccountReconnect,
-    needsEmbeddedWallet,
-    onEnable4626Signing,
-    signingStepCompleteForAuto,
-    stepOneComplete,
-  ])
+    onSigningStepCompleteChange?.(signingStepComplete)
+  }, [onSigningStepCompleteChange, signingStepComplete])
 
   if (loading && !me) {
     return (
@@ -240,42 +215,98 @@ export function AccountSetupWorkspaceView(props: {
 
   if (!me) return null
 
+  if (context === 'accounts') {
+    return <AccountsManagementPanel controller={controller} summaryActions={summaryActions} />
+  }
+
   // `zoraStepComplete`, `walletStepComplete`, and `stepOneComplete` are
   // hoisted above the `if (!me) return null` guard so the auto-trigger effect
   // can depend on them. `signingStepComplete` is the canonical (post-`me`)
   // form used by the rendered step UI — it shadows the auto-trigger
   // helper `signingStepCompleteForAuto` once `me` is available.
   const executionTrack = me.accountSignals.executionTrack
-  const signingStepComplete =
-    executionTrack === 'legacy-owner-install' ||
-    me.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true ||
-    /4626 signing is enabled|already enabled/i.test(notice ?? '')
+  const subAccountFlowEnabled = waitlistSubAccountFlowFlag()
+  const resolvedOnchainEoaOwnerCount = Math.max(
+    onchainEoaOwnerCandidates.length,
+    inferWaitlistEoaOwnerRoutingHint({
+      parentEmbeddedOwnerOnChain,
+      accountSignals: me.accountSignals,
+    }),
+  )
+  const showParentCswAddOwnerPanel = shouldShowParentCswAddOwnerPanel({
+    zoraLinked,
+    ownerInstallRequested: ownerInstallPathActive,
+    signingStepComplete,
+    executionTrack,
+    accountSignals: me.accountSignals,
+    parentEmbeddedOwnerOnChain,
+    onchainEoaOwnerCount: resolvedOnchainEoaOwnerCount,
+    subAccountFlowEnabled,
+  })
+  const showBaseAppConnectPanel = shouldShowBaseAppConnectPanel({
+    subAccountFlowEnabled,
+    signingStepComplete,
+    embeddedEoaAvailable: Boolean(embeddedEoaAddress),
+    parentEmbeddedOwnerOnChain,
+    zoraLinked,
+    onchainEoaOwnerCount: resolvedOnchainEoaOwnerCount,
+    accountSignals: me.accountSignals,
+  })
+  const stepTwoDoneSubtitle = signingStepComplete
+    ? parentEmbeddedOwnerOnChain || executionTrack === 'legacy-owner-install'
+      ? 'Embedded signer installed on your parent smart wallet'
+      : executionTrack === 'sub-account'
+        ? 'Base App sub-account connected for swaps'
+        : '4626 signing enabled'
+    : ownerInstallInProgress || pendingOwnerInstallHash
+      ? ownerInstallPhase === 'awaiting_signature'
+        ? 'Waiting for Base App signature…'
+        : 'Owner install in progress…'
+      : showBaseAppConnectPanel
+        ? 'Connect Base App to enable sponsored swaps'
+        : showParentCswAddOwnerPanel
+          ? 'Connect a CSW owner wallet and enable 4626 signing'
+          : 'Optional — trade at /swap with an external wallet (EOA mode) if you skip this step'
   const sponsorshipDiagnostic = extractSponsorshipDiagnostic(error)
   const ownerApprovalDiagnostic = extractOwnerApprovalDebugDiagnostic(error)
+
+  // Prefer the modern validated Base App self-call path (EntryPoint handleOps)
+  // for parent-CSW owner install whenever we're in a Base App context or the
+  // older sub-account connect panel is not the active one. This makes the
+  // proven 2026 direction the primary experience inside the waitlist.
+  const useModernParentOwnerInstallInWaitlist =
+    showParentCswAddOwnerPanel && (inBaseApp || !showBaseAppConnectPanel)
   // Zora-controlled CBSWs are passkey-owned (P256 keys held in Coinbase
   // Wallet / Base Account), not EOA-owned. The cross-app login surfaces the
   // CBSW address but cannot expose a transactional signer, so we steer users
   // to Base Account before they burn a connection attempt on an unrelated EOA.
   const hasConnectedSigner = Boolean(connectedSignerLabel) && !/no wallet connected/i.test(connectedSignerLabel)
   const shouldHintBaseAccountForZora =
-    zoraLinked && Boolean(canonicalCswAddress) && !connectedOwnerReady && !needsBaseAccountReconnect && !hasConnectedSigner
+    zoraLinked && Boolean(canonicalCswAddress) && !connectedOwnerReady && !hasConnectedSigner
 
   if (context === 'waitlist') {
+    const setupIntent = readWaitlistSetupIntent(searchParams.get('setup'))
+    const focusBaseAppConnect = shouldFocusWaitlistBaseAppConnect({
+      inBaseApp,
+      showBaseAppConnectPanel,
+      signingStepComplete,
+      setupIntent,
+      subAccountFlowEnabled,
+      parentEmbeddedOwnerOnChain,
+      zoraLinked,
+      onchainEoaOwnerCount: resolvedOnchainEoaOwnerCount,
+      account: {
+        emailVerified: me.emailVerified === true,
+        accountSignals: me.accountSignals,
+      },
+    })
     // Which top-level step is expanded: null = auto
-    const resolvedOpen: 1 | 2 =
-      openStep === 1 || openStep === 2 ? openStep : stepOneComplete ? 2 : 1
-    const ownerWalletConnecting = busyProvider === 'owner_wallet'
-    const primarySigningLabel = needsBaseAccountReconnect
-      ? 'Reconnect via Base Account'
-      : connectedOwnerReady
-        ? 'Approve signing access'
-        : hasConnectedSigner
-          ? 'Switch wallet to current owner'
-        : ownerWalletConnecting
-          ? 'Connecting wallet…'
-          : 'Connect owner wallet'
-    const primarySigningActionLabel = advancedBusy ? 'Working…' : primarySigningLabel
-
+    const resolvedOpen = resolveWaitlistAccordionOpenStep({
+      manualOpenStep: openStep === 1 || openStep === 2 ? openStep : null,
+      ownerInstallRequested: ownerInstallResumeState.requested,
+      stepOneComplete,
+      focusBaseAppConnect,
+    })
     const toggleStep = (n: 1 | 2) => {
       setOpenStep(openStep === n ? null : n)
     }
@@ -283,21 +314,156 @@ export function AccountSetupWorkspaceView(props: {
     // Shared classes
     const stepBase = 'border-b border-white/[0.06] last:border-0 transition-colors duration-150 cursor-pointer'
     const doneRow = `${stepBase} bg-white/[0.015] hover:bg-white/[0.03]`
-    const activeRow = `${stepBase} bg-brand-primary/[0.12] border-l-2 border-l-brand-primary/70`
+    const activeRow = `${stepBase} bg-brand-primary/[0.16] border-l-2 border-l-brand-primary/85 ring-1 ring-inset ring-brand-primary/25`
     const badgeDone = 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/[0.12] text-[11px] font-bold text-emerald-400'
     const badgeActive = 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-brand-primary/22 bg-brand-primary/[0.14] text-[11px] font-bold text-brand-200'
 
     const stepOneStatus: 'done' | 'active' | 'upcoming' =
-      stepOneComplete ? 'done' : resolvedOpen === 1 ? 'active' : 'upcoming'
+      stepOneComplete ? 'done' : focusBaseAppConnect ? 'upcoming' : resolvedOpen === 1 ? 'active' : 'upcoming'
     const stepTwoStatus: 'done' | 'active' | 'upcoming' =
-      signingStepComplete ? 'done' : stepOneComplete && resolvedOpen === 2 ? 'active' : 'upcoming'
+      signingStepComplete
+        ? 'done'
+        : ownerInstallPathActive || focusBaseAppConnect || (stepOneComplete && resolvedOpen === 2)
+          ? 'active'
+          : 'upcoming'
 
-    const allDone = zoraStepComplete && walletStepComplete && signingStepComplete
+    const allDone = zoraStepComplete && walletStepComplete
     const rawZoraHandle = me.accountSignals.zoraHandle?.trim() ?? ''
     const normalizedZoraHandle = rawZoraHandle
       ? (rawZoraHandle.startsWith('@') || rawZoraHandle.startsWith('$') ? rawZoraHandle : `@${rawZoraHandle}`)
       : null
     const zoraProfileUrl = normalizedZoraHandle ? `${ZORA_PROFILE_BASE}${normalizedZoraHandle}` : null
+    const baseAppConnectProps = {
+      onSkip: () => undefined,
+      onComplete: () => {
+        void loadMe()
+        void refreshParentEmbeddedOwner()
+      },
+      parentAddress: canonicalCswAddress,
+      subAccountAddress: me.accountSignals.baseSubAccount?.address ?? me.baseSubAccount ?? null,
+      embeddedEoaAddress: embeddedEoaAddress ?? null,
+      autoConnectOnMount: focusBaseAppConnect,
+      requireBaseAppConnect: inBaseApp,
+      compact: focusBaseAppConnect && inBaseApp,
+    } as const
+
+    if (allDone) {
+      return (
+        <div className="w-full space-y-4">
+          {error ? (
+            <div role="alert" aria-live="assertive" className="rounded-xl border border-rose-500/20 bg-rose-500/[0.08] px-4 py-3 text-sm text-rose-300">
+              <div>{error}</div>
+              {import.meta.env.DEV && sponsorshipDiagnostic ? (
+                <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-200/90">
+                  Sponsorship diagnostics: <span className="font-mono">{sponsorshipDiagnostic}</span>
+                </div>
+              ) : null}
+              {import.meta.env.DEV && ownerApprovalDiagnostic ? (
+                <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-200/90">
+                  Owner approval diagnostics: <span className="font-mono">{ownerApprovalDiagnostic}</span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <WaitlistAccountStatusCard
+            zoraHandle={normalizedZoraHandle}
+            zoraProfileUrl={zoraProfileUrl}
+            canonicalCswAddress={canonicalCswAddress}
+            signingStepComplete={signingStepComplete}
+            resetBusy={busyProvider === 'email'}
+            onCopyAddress={copyAddress}
+            onReset={() => void onSwitchAccount()}
+          />
+
+          {summaryActions ? <div className="space-y-4">{summaryActions}</div> : null}
+
+          <WaitlistAdvancedSection controller={controller} label="Account settings" />
+
+          {waitlistFooter ? <div className="flex justify-center pt-1">{waitlistFooter}</div> : null}
+        </div>
+      )
+    }
+
+    if (focusBaseAppConnect && showBaseAppConnectPanel && !signingStepComplete) {
+      return (
+        <div className="mx-auto w-full max-w-[640px] space-y-4">
+          {error ? (
+            <div role="alert" aria-live="assertive" className="rounded-xl border border-rose-500/20 bg-rose-500/[0.08] px-4 py-3 text-sm text-rose-300">
+              <div>{error}</div>
+            </div>
+          ) : null}
+
+          {/* Pending owner install banner also shown in the focused Base App connect path for consistency. */}
+          {(ownerInstallInProgress || pendingOwnerInstallHash) ? (
+            <div className="mb-4 rounded-xl border border-sky-400/30 bg-sky-500/10 p-4 space-y-3 text-xs text-sky-100">
+              <div>
+                <div className="font-semibold">
+                  {ownerInstallPhase === 'awaiting_signature'
+                    ? 'Waiting for Base App signature…'
+                    : 'Owner install in progress — waiting for bundle'}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard?.writeText(pendingOwnerInstallHash || '')}
+                  className="mt-1 block w-full text-left font-mono text-[10px] text-sky-200/80 break-all hover:text-sky-100 active:text-white"
+                >
+                  {pendingOwnerInstallHash || '—'}
+                </button>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={async () => {
+                  await Promise.all([loadMe({ showSpinner: false }), refreshParentEmbeddedOwner?.()])
+                  if (signingStepComplete) {
+                    setPendingOwnerInstallHash?.(null)
+                    setOwnerInstallPhase?.(null)
+                  }
+                }}
+              >
+                Check now (also refresh)
+              </Button>
+            </div>
+          ) : null}
+
+          <div className="space-y-1">
+            <h2 className="text-2xl font-semibold tracking-tight text-white">Connect your wallet</h2>
+            <p className="text-sm text-zinc-500">One approval in Base App unlocks swaps and chat. Zora is optional.</p>
+          </div>
+
+          <WaitlistConnectBaseAppLazy {...baseAppConnectProps} />
+
+          {!stepOneComplete ? (
+            <details className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-sm text-zinc-400">
+              <summary className="cursor-pointer select-none text-zinc-300">Link Zora later (optional)</summary>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busyProvider === 'zora_cross_app'}
+                  onClick={() => void onLinkZora()}
+                  className="inline-flex h-9 items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+                >
+                  {busyProvider === 'zora_cross_app' ? 'Connecting…' : 'Connect Zora'}
+                </button>
+                <button
+                  type="button"
+                  disabled={busyProvider === 'zora_cross_app'}
+                  onClick={() => void onRefreshZora()}
+                  className="inline-flex h-9 items-center rounded-lg border border-white/10 px-4 text-sm font-medium text-zinc-400 hover:bg-white/[0.04] disabled:opacity-50"
+                >
+                  Already linked? Refresh
+                </button>
+              </div>
+            </details>
+          ) : null}
+
+          {summaryActions ? <div className="pt-1">{summaryActions}</div> : null}
+          {waitlistFooter ? <div className="flex justify-center pt-2">{waitlistFooter}</div> : null}
+        </div>
+      )
+    }
 
     return (
       <div className="mx-auto w-full max-w-[640px] space-y-5">
@@ -305,12 +471,12 @@ export function AccountSetupWorkspaceView(props: {
         {error ? (
           <div role="alert" aria-live="assertive" className="rounded-xl border border-rose-500/20 bg-rose-500/[0.08] px-4 py-3 text-sm text-rose-300">
             <div>{error}</div>
-            {sponsorshipDiagnostic ? (
+            {import.meta.env.DEV && sponsorshipDiagnostic ? (
               <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-200/90">
                 Sponsorship diagnostics: <span className="font-mono">{sponsorshipDiagnostic}</span>
               </div>
             ) : null}
-            {ownerApprovalDiagnostic ? (
+            {import.meta.env.DEV && ownerApprovalDiagnostic ? (
               <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-200/90">
                 Owner approval diagnostics: <span className="font-mono">{ownerApprovalDiagnostic}</span>
               </div>
@@ -318,11 +484,51 @@ export function AccountSetupWorkspaceView(props: {
           </div>
         ) : null}
 
+        {ownerInstallResumeState.requested && !inBaseApp && !showBaseAppConnectPanel ? (
+          <div className="rounded-2xl bg-[linear-gradient(180deg,rgba(37,99,235,0.16),rgba(37,99,235,0.05))] px-5 py-4 text-sm text-brand-50 ring-1 ring-brand-primary/20">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-brand-200">
+              <span className="inline-flex rounded-full bg-brand-primary/15 px-2.5 py-1">Desktop signing setup</span>
+              <span className="text-brand-100/70">Owner install required</span>
+            </div>
+            <div className="mt-2 text-base font-medium text-white">
+              Enable signing on your parent smart wallet from this browser.
+            </div>
+            <p className="mt-1 text-sm leading-relaxed text-brand-50/85">
+              Wallet signing setup is paused in this build. Link Zora and confirm your smart wallet, then use{' '}
+              <a href="/swap" className="font-mono text-brand-50 underline underline-offset-2">
+                /swap
+              </a>{' '}
+              with an external wallet (EOA mode) if canonical signing is unavailable.
+            </p>
+          </div>
+        ) : null}
+
+        {inBaseApp && !signingStepComplete && !focusBaseAppConnect ? (
+          <WaitlistBaseAppWalletNudge
+            stepOneComplete={stepOneComplete}
+            showConnectPanel={showBaseAppConnectPanel}
+            onGoToStepTwo={goToWaitlistStepTwo}
+          />
+        ) : null}
+
         {/* Heading — single line */}
         <div className="flex items-start justify-between gap-3">
           <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-white">{allDone ? 'Account activated' : 'Activate your account'}</h2>
-          <p className="mt-1 text-sm text-zinc-500">{allDone ? 'All steps completed' : `Step ${resolvedOpen} of 2`}</p>
+          <h2 className="text-2xl font-semibold tracking-tight text-white">
+            {allDone ? 'Account activated' : focusBaseAppConnect ? 'Connect your wallet' : 'Activate your account'}
+          </h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            {allDone
+              ? 'All steps completed'
+              : focusBaseAppConnect
+                ? 'Link Base App to enable swaps and chat. Zora is optional.'
+                : 'Complete both steps to unlock app access'}
+          </p>
+          {!allDone ? (
+            <div className="mt-2 inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[11px] text-zinc-300">
+              {focusBaseAppConnect ? 'Step 2 · Base App' : `Step ${resolvedOpen} of 2`}
+            </div>
+          ) : null}
           </div>
         </div>
 
@@ -335,11 +541,15 @@ export function AccountSetupWorkspaceView(props: {
             const isOpen = s === 'active'
             const addr = canonicalCswAddress
             return (
-              <div
-                className={s === 'done' ? doneRow : s === 'active' ? activeRow : stepBase}
-                onClick={() => toggleStep(1)}
-              >
-                <div className="flex items-center gap-3 px-4 py-3.5">
+              <div className={s === 'done' ? doneRow : s === 'active' ? activeRow : stepBase}>
+                <div
+                  className="flex items-center gap-3 px-4 py-3.5"
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isOpen}
+                  onClick={() => toggleStep(1)}
+                  onKeyDown={(event) => handleAccordionToggleKeyboard(event, () => toggleStep(1))}
+                >
                   {/* Number / check badge */}
                   <div className={`shrink-0 ${s === 'done' ? badgeDone : s === 'active' ? badgeActive : 'flex h-[26px] w-[26px] items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[11px] font-bold text-zinc-600'}`}>
                     {s === 'done' ? <CheckCircle2 className="h-3.5 w-3.5" /> : '1'}
@@ -349,6 +559,9 @@ export function AccountSetupWorkspaceView(props: {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <img src="/brands/zora-token.svg" alt="" aria-hidden="true" className="h-3.5 w-3.5 shrink-0 rounded-full object-cover opacity-80" />
+                      <span className="rounded-full border border-white/[0.1] bg-white/[0.04] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-zinc-400">
+                        Step 1
+                      </span>
                       <span className="text-sm font-medium text-white">Link your Zora identity</span>
                     </div>
 
@@ -392,18 +605,32 @@ export function AccountSetupWorkspaceView(props: {
                       </div>
                     ) : null}
                   </div>
+
+                  {s === 'done' ? (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        void onSwitchAccount()
+                      }}
+                      disabled={busyProvider === 'email'}
+                      className="shrink-0 text-xs font-medium text-rose-900/80 transition-colors hover:text-rose-700 disabled:opacity-50"
+                    >
+                      {busyProvider === 'email' ? 'Resetting…' : 'Reset'}
+                    </button>
+                  ) : null}
                 </div>
 
                 {/* Expanded body */}
                 {isOpen ? (
-                  <div className="space-y-3 px-4 pb-4 pl-[52px]" onClick={(e) => e.stopPropagation()}>
+                  <div className="space-y-3 px-4 pb-4 pl-[52px]">
                     {/* Primary actions */}
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         disabled={busyProvider === 'zora_cross_app'}
                         onClick={() => void onLinkZora()}
-                        className="inline-flex h-9 items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(0,82,255,0.22)] hover:bg-brand-hover disabled:opacity-50"
+                        className="inline-flex h-9 items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgb(var(--brand-primary)/0.22)] hover:bg-brand-hover disabled:opacity-50"
                       >
                         {busyProvider === 'zora_cross_app' ? 'Connecting…' : 'Connect Zora'}
                       </button>
@@ -426,10 +653,7 @@ export function AccountSetupWorkspaceView(props: {
                     </div>
 
                     {/* Wallet detection sub-section */}
-                    <div
-                      className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5"
-                      onClick={(e) => e.stopPropagation()}
-                    >
+                    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
                       <div className="flex items-center gap-2 text-[11px] text-zinc-500">
                         <WalletProviderIcon provider="coinbase" size={11} />
                         <span>Coinbase Smart Wallet detection</span>
@@ -498,71 +722,127 @@ export function AccountSetupWorkspaceView(props: {
             const s = stepTwoStatus
             const isOpen = s === 'active'
             return (
-              <div
-                className={s === 'done' ? doneRow : s === 'active' ? activeRow : stepBase}
-                onClick={() => toggleStep(2)}
-              >
-                <div className="flex items-center gap-3 px-4 py-3.5">
+              <div className={s === 'done' ? doneRow : s === 'active' ? activeRow : stepBase}>
+                <div
+                  className="flex items-center gap-3 px-4 py-3.5"
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isOpen}
+                  onClick={() => toggleStep(2)}
+                  onKeyDown={(event) => handleAccordionToggleKeyboard(event, () => toggleStep(2))}
+                >
                   <div className={`shrink-0 ${s === 'done' ? badgeDone : s === 'active' ? badgeActive : 'flex h-[26px] w-[26px] items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[11px] font-bold text-zinc-600'}`}>
                     {s === 'done' ? <CheckCircle2 className="h-3.5 w-3.5" /> : '2'}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="text-sm font-medium text-white">Finish 4626 signing setup</span>
+                    <div className="mb-0.5">
+                      <span className="rounded-full border border-white/[0.1] bg-white/[0.04] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-zinc-400">
+                        Step 2
+                      </span>
+                    </div>
+                    <span className="text-sm font-medium text-white">Enable 4626 signing</span>
                     {s === 'done' ? (
-                      <p className="mt-0.5 text-[11px] text-zinc-500">Signing access approved</p>
+                      <p className="mt-0.5 text-[11px] text-zinc-500">{stepTwoDoneSubtitle}</p>
                     ) : null}
                   </div>
                 </div>
 
                 {isOpen ? (
-                  <div className="space-y-2.5 px-4 pb-4 pl-[52px]" onClick={(e) => e.stopPropagation()}>
-                    {shouldHintBaseAccountForZora ? (
-                      <div className="rounded-lg bg-brand-primary/10 px-3 py-2.5 text-xs leading-relaxed text-brand-100 ring-1 ring-brand-primary/25">
-                        <span className="font-semibold">Pick &ldquo;Base Account&rdquo;</span>{' '}
-                        in the wallet connector. Your Zora smart wallet is passkey-controlled,
-                        so 4626 can approve embedded signing on the canonical smart wallet.
+                  <div className="space-y-2.5 px-4 pb-4 pl-[52px]">
+                    {/* Pending owner install banner — shows the same high-quality waiting UX
+                        as the dedicated /add Base App flow while the user is still on the waitlist page.
+                        Uses the stabilized pendingOwnerInstallHash / ownerInstallInProgress from the controller
+                        (set by the modern hook when it enters awaiting_signature / broadcasting etc.). */}
+                    {(ownerInstallInProgress || pendingOwnerInstallHash) ? (
+                      <div className="rounded-xl border border-sky-400/30 bg-sky-500/10 p-4 space-y-3 text-xs text-sky-100">
+                        <div>
+                          <div className="font-semibold">
+                            {ownerInstallPhase === 'awaiting_signature'
+                              ? 'Waiting for Base App signature…'
+                              : ownerInstallPhase === 'broadcasting' || ownerInstallPhase === 'confirming'
+                                ? 'UserOp submitted — waiting for bundle confirmation'
+                                : 'Owner install in progress'}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => navigator.clipboard?.writeText(pendingOwnerInstallHash || '')}
+                            className="mt-1 block w-full text-left font-mono text-[10px] text-sky-200/80 break-all hover:text-sky-100 active:text-white"
+                            title="Click to copy full UserOp hash"
+                          >
+                            {pendingOwnerInstallHash || '—'}
+                          </button>
+                        </div>
+                        <p className="leading-relaxed text-sky-100/90">
+                          {ownerInstallPhase === 'awaiting_signature'
+                            ? 'Confirm the add-owner request in Base App (passkey or device sign). This step can take up to 3 minutes.'
+                            : 'This can take 1–3 minutes. Keep this tab open. You can safely refresh or come back later.'}
+                        </p>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={async () => {
+                              await Promise.all([
+                                loadMe({ showSpinner: false }),
+                                refreshParentEmbeddedOwner?.(),
+                              ])
+                              // Auto-clear the pending banner once the owner install has landed
+                              // and the signing step reports complete (mirrors the "hide raw errors
+                              // when pending hash present" pattern from the dedicated flow).
+                              if (signingStepComplete) {
+                                setPendingOwnerInstallHash?.(null)
+                                setOwnerInstallPhase?.(null)
+                              }
+                            }}
+                          >
+                            Check now (also refresh)
+                          </Button>
+                          <button
+                            type="button"
+                            className="text-[11px] text-sky-200/70 underline underline-offset-2 hover:text-sky-100"
+                            onClick={() => {
+                              setPendingOwnerInstallHash?.(null)
+                              setOwnerInstallPhase?.(null)
+                            }}
+                          >
+                            Dismiss
+                          </button>
+                        </div>
                       </div>
                     ) : null}
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={advancedBusy || ownerWalletConnecting || needsEmbeddedWallet}
-                        onClick={() => (needsBaseAccountReconnect ? connectOwnerWallet() : connectedOwnerReady ? void onEnable4626Signing() : connectOwnerWallet())}
-                        className="inline-flex h-9 items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(0,82,255,0.22)] hover:bg-brand-hover disabled:opacity-50"
-                      >
-                        {primarySigningActionLabel}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void onResetOwnerApproval()}
-                        className="inline-flex h-9 items-center text-xs font-medium text-rose-900/80 transition-colors hover:text-rose-700 disabled:opacity-50"
-                      >
-                        Reset
-                      </button>
-                    </div>
 
-                    {/* Contextual status — only rendered when relevant */}
-                    {!connectedOwnerReady && (!connectedSignerLabel || /no wallet connected/i.test(connectedSignerLabel)) ? (
-                      <p className="text-xs text-zinc-500">Signer not detected, please connect wallet.</p>
-                    ) : !connectedOwnerReady && hasConnectedSigner ? (
-                      <p className="text-xs text-amber-300/90">
-                        This signer is connected, but it is not a current CSW owner. Switch wallet in the connector to one of the owner addresses listed below.
-                      </p>
-                    ) : connectedSignerLabel ? (
+                    {/* While a modern owner install is in-flight (pending hash present), suppress the
+                        normal action buttons/panels to prevent the user from starting a second operation
+                        during the long signature + bundle window. The banner above is the single source
+                        of truth and action surface. */}
+                    {(ownerInstallInProgress || pendingOwnerInstallHash) ? (
                       <p className="text-xs text-zinc-500">
-                        Connected signer: <span className="font-mono text-zinc-300">{connectedSignerLabel}</span>
-                        {connectedSignerDetail ? <span className="ml-1 text-zinc-600">— {connectedSignerDetail}</span> : null}
+                        Owner install in progress. Use the status card above to monitor or check progress.
                       </p>
-                    ) : null}
-                    {needsEmbeddedWallet ? (
-                      <p className="text-xs text-amber-300/80">Embedded wallet is still settling. Retry in a moment.</p>
-                    ) : null}
-                    {inTelegramMiniApp ? (
-                      <p className="text-xs text-amber-300/80">Owner signatures are more reliable in an external browser tab.</p>
-                    ) : null}
-                    {providerCollision.shouldDisableInjectedConnector ? (
-                      <p className="text-xs text-zinc-600">Coinbase/Base is the most reliable option when a wallet collision is detected.</p>
-                    ) : null}
+                    ) : signingStepComplete ? (
+                      <p className="text-xs text-zinc-400 leading-relaxed">
+                        Your embedded signer is confirmed as an on-chain owner of your parent smart wallet.
+                      </p>
+                    ) : showBaseAppConnectPanel ? (
+                      <WaitlistConnectBaseAppLazy {...baseAppConnectProps} />
+                    ) : useModernParentOwnerInstallInWaitlist ? (
+                      <WaitlistModernParentOwnerInstall
+                        controller={controller}
+                        embeddedEoaAddress={embeddedEoaAddress}
+                        onOwnerInstallSuccess={() => refreshParentEmbeddedOwner?.()}
+                      />
+                    ) : (
+                      <p className="text-xs text-zinc-400 leading-relaxed">
+                        Modern Base App owner install (validated self-call) is the primary path for parent-CSW signing.
+                        The older Zora EOA-relay option is available as a fallback when needed.
+                        You can still trade at{' '}
+                        <a href="/swap" className="text-brand-100 underline underline-offset-2">
+                          /swap
+                        </a>{' '}
+                        with an external wallet (EOA mode).
+                      </p>
+                    )}
                   </div>
                 ) : null}
               </div>
@@ -570,16 +850,18 @@ export function AccountSetupWorkspaceView(props: {
           })()}
         </div>
 
-        {/* Arch B enrollment — delegation consent card. Shown after linking, before execution-ready. */}
-        <ArchBEnrollmentCard hasCanonicalCsw={Boolean(canonicalCswAddress)} />
+        {/* Optional post-activation delegation consent. Keep out of core setup flow. */}
+        {allDone ? <ArchBEnrollmentCard hasCanonicalCsw={Boolean(canonicalCswAddress)} /> : null}
 
         {/* Advanced — identities + co-owner management. Collapsed by default. */}
         <WaitlistAdvancedSection controller={controller} />
 
-        {/* Enter App — only after all 3 steps */}
-        {allDone && summaryActions ? (
+        {/* Enter App / waitlist actions — approval-gated, not setup-gated */}
+        {summaryActions ? (
           <div className="pt-1">{summaryActions}</div>
         ) : null}
+
+        {waitlistFooter ? <div className="flex justify-center pt-2">{waitlistFooter}</div> : null}
       </div>
     )
   }
@@ -608,12 +890,12 @@ export function AccountSetupWorkspaceView(props: {
           className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"
         >
           <div>{error}</div>
-          {sponsorshipDiagnostic ? (
+          {import.meta.env.DEV && sponsorshipDiagnostic ? (
             <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-100/90">
               Sponsorship diagnostics: <span className="font-mono">{sponsorshipDiagnostic}</span>
             </div>
           ) : null}
-          {ownerApprovalDiagnostic ? (
+          {import.meta.env.DEV && ownerApprovalDiagnostic ? (
             <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-100/90">
               Owner approval diagnostics: <span className="font-mono">{ownerApprovalDiagnostic}</span>
             </div>
@@ -634,15 +916,22 @@ export function AccountSetupWorkspaceView(props: {
         <div className="rounded-2xl bg-[linear-gradient(180deg,rgba(37,99,235,0.16),rgba(37,99,235,0.05))] px-5 py-4 text-sm text-brand-50 ring-1 ring-brand-primary/20">
           <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-brand-200">
             <span className="inline-flex rounded-full bg-brand-primary/15 px-2.5 py-1">
-              {ownerInstallResumeState.source === 'telegram' ? 'Continue from Telegram' : 'Continue setup'}
+              {ownerInstallResumeState.source === 'telegram' ? 'Continue from Telegram' : 'Desktop signing setup'}
             </span>
             <span className="text-brand-100/70">Owner install required</span>
           </div>
           <div className="mt-2 text-base font-medium text-white">
-            Your Telegram account is linked. Finish wallet setup here.
+            {ownerInstallResumeState.source === 'telegram'
+              ? 'Your Telegram account is linked. Finish wallet setup here.'
+              : 'Enable signing on your parent smart wallet from this browser.'}
           </div>
           <div className="mt-1 max-w-3xl text-sm leading-relaxed text-brand-50/85">
-            4626 detected your Zora Coinbase Smart Wallet. The next step is to connect one of that wallet&apos;s current owners, verify authority on Base, and approve one transaction so 4626 can act through the same wallet.
+            Finish Zora linking and enable 4626 signing on your parent smart wallet from this browser.
+            If signing is unavailable here, use{' '}
+            <a href="/swap" className="font-mono text-brand-50 underline underline-offset-2">
+              /swap
+            </a>{' '}
+            with an external wallet (EOA mode).
           </div>
         </div>
       ) : null}
@@ -693,7 +982,7 @@ export function AccountSetupWorkspaceView(props: {
                     <div className="text-[11px] uppercase tracking-[0.18em] text-brand-200">Step 1</div>
                     <div className="text-base font-medium text-white">Link your Zora identity</div>
                     <p className="text-sm leading-relaxed text-zinc-400">
-                      Start with Zora so we can recover your creator identity and map your canonical smart wallet with fewer retries.
+                      Connect with Zora through Privy cross-app auth (read-only) so we can recover your creator identity and map your canonical smart wallet.
                     </p>
                   </div>
                   <div className={`rounded-full px-2.5 py-1 text-xs ${
@@ -704,32 +993,26 @@ export function AccountSetupWorkspaceView(props: {
                 </div>
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   {zoraLinked ? (
-                    <button
+                    <Button
                       type="button"
+                      variant="primary"
                       disabled={busyProvider === 'zora_cross_app'}
                       onClick={() => void onRefreshZora()}
-                      className="btn-accent btn-no-icon inline-flex"
+                      className="inline-flex"
                     >
                       {busyProvider === 'zora_cross_app' ? 'Refreshing...' : 'Refresh Zora signals'}
-                    </button>
+                    </Button>
                   ) : (
-                    <button
+                    <Button
                       type="button"
+                      variant="primary"
                       disabled={busyProvider === 'zora_cross_app'}
                       onClick={() => void onLinkZora()}
-                      className="btn-accent btn-no-icon inline-flex"
+                      className="inline-flex"
                     >
-                      {busyProvider === 'zora_cross_app' ? 'Linking...' : 'Link Zora'}
-                    </button>
+                      {busyProvider === 'zora_cross_app' ? 'Connecting…' : 'Connect with Zora'}
+                    </Button>
                   )}
-                  <a
-                    href={zoraHandoffUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn-secondary btn-no-icon inline-flex"
-                  >
-                    Open Zora
-                  </a>
                   {!zoraLinked ? (
                     <button
                       type="button"
@@ -764,14 +1047,11 @@ export function AccountSetupWorkspaceView(props: {
                 </div>
                 {needsBaseAppSetup && baseAppUrl ? (
                   <div className="mt-4 flex flex-wrap items-center gap-3">
-                    <a
-                      href={baseAppUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn-secondary btn-no-icon inline-flex"
-                    >
-                      Open Base app
-                    </a>
+                    <Button variant="secondary" asChild>
+                      <a href={baseAppUrl} target="_blank" rel="noreferrer">
+                        Open Base app
+                      </a>
+                    </Button>
                     <span className="text-xs text-zinc-500">
                       Create or connect your CSW there, then return here.
                     </span>
@@ -792,9 +1072,13 @@ export function AccountSetupWorkspaceView(props: {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-1.5">
                     <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Step 3</div>
-                    <div className="text-base font-medium text-white">Enable 4626 smart-wallet signing</div>
+                    <div className="text-base font-medium text-white">Wallet signing</div>
                     <p className="text-sm leading-relaxed text-zinc-400">
-                      Your canonical CSW stays primary. 4626 confirms embedded signing for sponsored user actions and one-time server signing for deploy and agent flows.
+                      {signingStepComplete
+                        ? 'Your embedded signer is confirmed as an on-chain owner of your parent smart wallet.'
+                        : showParentCswAddOwnerPanel
+                          ? 'Connect an on-chain CSW owner and add your Privy embedded signer so sponsored swaps can run from your canonical wallet.'
+                          : 'In-app owner setup is paused in this build. You can still trade at /swap with an external wallet (EOA mode).'}
                     </p>
                   </div>
                   <div className={`rounded-full px-2.5 py-1 text-xs ${
@@ -807,7 +1091,8 @@ export function AccountSetupWorkspaceView(props: {
                 </div>
                 {ownerInstallResumeState.requested ? (
                   <div className="mt-4 rounded-xl bg-brand-primary/10 px-3 py-3 text-xs leading-5 text-brand-50/90 ring-1 ring-brand-primary/20">
-                    This step was resumed from another surface. Connect a current owner of the detected CSW, verify the signer, then approve the Base transaction below.
+                    This step was resumed from another surface. Connect a CSW owner wallet below and enable 4626
+                    signing, or use /swap with an external wallet (EOA mode).
                   </div>
                 ) : null}
                 <details className="mt-4 rounded-xl bg-white/[0.02] px-3 py-3 ring-1 ring-white/10">
@@ -908,57 +1193,65 @@ export function AccountSetupWorkspaceView(props: {
                     </p>
                   </div>
                 ) : null}
+                {showBaseAppConnectPanel ? (
+                  <WaitlistConnectBaseAppLazy
+                    onSkip={() => undefined}
+                    onComplete={() => {
+                      void loadMe()
+                      void refreshParentEmbeddedOwner()
+                    }}
+                    parentAddress={canonicalCswAddress}
+                    subAccountAddress={me.accountSignals.baseSubAccount?.address ?? me.baseSubAccount ?? null}
+                    embeddedEoaAddress={embeddedEoaAddress ?? null}
+                  />
+                ) : useModernParentOwnerInstallInWaitlist ? (
+                  <WaitlistModernParentOwnerInstall
+                    controller={controller}
+                    embeddedEoaAddress={embeddedEoaAddress}
+                    onOwnerInstallSuccess={() => refreshParentEmbeddedOwner?.()}
+                    className="mt-4"
+                  />
+                ) : (
+                  <p className="mt-4 text-xs text-zinc-500 leading-relaxed">
+                    {signingStepComplete
+                      ? executionTrack === 'sub-account'
+                        ? '4626 swaps can route through your Base App sub-account.'
+                        : '4626 signing is enabled on your canonical wallet.'
+                      : subAccountFlowEnabled
+                        ? 'Connect Base App for sponsored swaps, or use the modern Base App owner install path (recommended for parent-CSW signing).'
+                        : 'Modern Base App owner install (validated self-call) is the primary way to enable parent-CSW signing. The older Zora EOA-relay option is the legacy fallback.'}
+                  </p>
+                )}
                 <div className="mt-4 flex flex-wrap items-start gap-3">
-                  {needsBaseAccountReconnect ? (
-                    <button
+                  {!connectedOwnerReady ? (
+                    <Button
                       type="button"
+                      variant="primary"
                       onClick={() => connectOwnerWallet()}
-                      className="btn-accent btn-no-icon inline-flex"
-                    >
-                      {ownerPrimaryCtaLabel}
-                    </button>
-                  ) : connectedOwnerReady ? (
-                    <button
-                      type="button"
-                      disabled={advancedBusy || !canonicalCswAddress || !ownerApprovalReady}
-                      onClick={() => void onEnable4626Signing()}
-                      className="btn-primary btn-no-icon inline-flex"
-                    >
-                      {advancedBusy ? 'Preparing...' : ownerPrimaryCtaLabel}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => connectOwnerWallet()}
-                      className="btn-accent btn-no-icon inline-flex"
+                      className="inline-flex"
                     >
                       Connect owner wallet
-                    </button>
-                  )}
-                  {connectedOwnerReady ? (
-                    <button
-                      type="button"
-                      disabled={advancedBusy}
-                      onClick={() => connectOwnerWallet()}
-                      className="btn-secondary btn-no-icon inline-flex"
-                    >
-                      Switch owner wallet
-                    </button>
+                    </Button>
                   ) : (
-                    <button
-                      type="button"
-                      disabled={advancedBusy || busyProvider === 'owner_wallet'}
-                      onClick={() => void onResetOwnerApproval()}
-                      className="rounded-lg bg-white/5 px-3 py-2 text-xs text-zinc-300 transition hover:bg-white/10 hover:text-zinc-100"
-                    >
-                      Retry owner check
-                    </button>
+                    <>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={advancedBusy}
+                        onClick={() => connectOwnerWallet()}
+                      >
+                        Switch owner wallet
+                      </Button>
+                      <button
+                        type="button"
+                        disabled={advancedBusy || busyProvider === 'owner_wallet'}
+                        onClick={() => void onResetOwnerApproval()}
+                        className="rounded-lg bg-white/5 px-3 py-2 text-xs text-zinc-300 transition hover:bg-white/10 hover:text-zinc-100"
+                      >
+                        Retry owner check
+                      </button>
+                    </>
                   )}
-                  <span className="max-w-xl text-xs leading-relaxed text-zinc-500">
-                    {connectedOwnerReady
-                      ? 'Server prepares the transaction. If the canonical CSW is selected, 4626 submits the one-time Base smart-wallet approval for embedded signing and deploy/agent server signing.'
-                      : 'Connect a current CSW owner first, then approve 4626 signing for deploy/agent server flows.'}
-                  </span>
                 </div>
                 {!connectedOwnerReady ? (
                   <div className="mt-3 text-xs text-zinc-500">
@@ -1018,6 +1311,7 @@ export function AccountSetupWorkspaceView(props: {
               </div>
               {summaryActions ? <div className="flex flex-wrap items-center gap-2">{summaryActions}</div> : null}
             </section>
+            <WaitlistAdvancedSection controller={controller} label="Account settings" />
           </div>
         </div>
       </section>
@@ -1036,84 +1330,15 @@ export function AccountSetupWorkspaceView(props: {
  */
 function WaitlistAdvancedSection({
   controller,
+  label = 'Advanced',
 }: {
   controller: AccountSetupWorkspaceController
+  label?: string
 }) {
   const [open, setOpen] = useState(false)
-  const [rabbyOpen, setRabbyOpen] = useState(false)
-  const [rabbyAddress, setRabbyAddress] = useState('')
-  const {
-    advancedBusy,
-    busyProvider,
-    canShowAdvanced,
-    canonicalCswAddress,
-    customOwnerGasPreflight,
-    customOwnerPreparedAddress,
-    customOwnerPreparedTxRequest,
-    ownerInstallIntent,
-    providerCards,
-    onLinkProvider,
-    onUnlinkProvider,
-    onAddRabbyCoOwner,
-    telegramLaunchParamsAvailable,
-  } = controller
-  const normalizedRabbyAddress = useMemo(() => {
-    const raw = rabbyAddress.trim()
-    return isAddressLike(raw) ? raw.toLowerCase() : null
-  }, [rabbyAddress])
-  const rabbyOwnerAddCalldata = useMemo(() => {
-    if (!normalizedRabbyAddress) return null
-    try {
-      return encodeFunctionData({
-        abi: CSW_OWNER_MGMT_ABI,
-        functionName: 'addOwnerAddress',
-        args: [getAddress(normalizedRabbyAddress) as `0x${string}`],
-      })
-    } catch {
-      return null
-    }
-  }, [normalizedRabbyAddress])
-  const preparedOwnerTxForAddress = useMemo(() => {
-    if (!customOwnerPreparedTxRequest || !customOwnerPreparedAddress || !normalizedRabbyAddress) return null
-    if (customOwnerPreparedAddress.toLowerCase() !== normalizedRabbyAddress.toLowerCase()) return null
-    return customOwnerPreparedTxRequest
-  }, [customOwnerPreparedAddress, customOwnerPreparedTxRequest, normalizedRabbyAddress])
-  const prolinkCallTarget = preparedOwnerTxForAddress?.to ?? canonicalCswAddress ?? null
-  const prolinkCallData = preparedOwnerTxForAddress?.data ?? rabbyOwnerAddCalldata
-  const prolinkCallValue = preparedOwnerTxForAddress?.value ?? '0x0'
-  const rabbyProlinkSourceLabel = preparedOwnerTxForAddress
-    ? 'Base App prolink (exact backend-prepared call)'
-    : 'Base App prolink (local preview call)'
-  const rabbyOwnerAddProlinkQuery = useQuery({
-    queryKey: [
-      'waitlist-advanced',
-      'custom-owner-prolink',
-      prolinkCallTarget,
-      normalizedRabbyAddress,
-      prolinkCallData,
-      prolinkCallValue,
-      preparedOwnerTxForAddress ? 'prepared' : 'preview',
-    ],
-    queryFn: async () => {
-      if (!prolinkCallTarget || !prolinkCallData) return null
-      return await encodeSingleCallSendCallsProlink({
-        to: prolinkCallTarget,
-        data: prolinkCallData,
-        value: prolinkCallValue,
-      })
-    },
-    enabled: Boolean(rabbyOpen && prolinkCallTarget && normalizedRabbyAddress && prolinkCallData),
-    staleTime: Number.POSITIVE_INFINITY,
-    retry: false,
-  })
-  const rabbyOwnerAddProlinkUrl = useMemo(() => {
-    if (!rabbyOwnerAddProlinkQuery.data) return null
-    try {
-      return buildBaseAppProlinkUrl(rabbyOwnerAddProlinkQuery.data)
-    } catch {
-      return null
-    }
-  }, [rabbyOwnerAddProlinkQuery.data])
+  const { canShowAdvanced } = controller
+
+  if (!canShowAdvanced) return null
 
   return (
     <div className="w-full">
@@ -1123,7 +1348,7 @@ function WaitlistAdvancedSection({
         className="group flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[11.5px] uppercase tracking-[0.14em] text-zinc-500 transition-colors hover:text-zinc-300"
         aria-expanded={open}
       >
-        <span>Advanced</span>
+        <span>{label}</span>
         <ChevronRight
           className={`h-3.5 w-3.5 transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
           aria-hidden="true"
@@ -1131,172 +1356,8 @@ function WaitlistAdvancedSection({
       </button>
 
       {open ? (
-        <div className="mt-2 space-y-4">
-          {/* Linked identities — icon + status + points reward + action, per row */}
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
-                Earn points by linking
-              </span>
-              <span className="text-[10px] uppercase tracking-[0.14em] text-zinc-600">
-                {providerCards.filter((p) => p.linked).length}/{providerCards.length}
-              </span>
-            </div>
-            <ul className="divide-y divide-white/[0.04]">
-              {providerCards.map((provider) => {
-                const busy = busyProvider === provider.provider
-                const telegramBlocked =
-                  provider.provider === 'telegram' && !provider.linked && !telegramLaunchParamsAvailable
-                const points = PROVIDER_POINTS[provider.provider] ?? null
-                return (
-                  <li
-                    key={provider.provider}
-                    className="flex items-center gap-2.5 py-2 text-[11.5px] transition-colors"
-                  >
-                    <ProviderIconBadge provider={provider.provider} />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-zinc-200">{provider.label}</div>
-                      <div
-                        className={`truncate text-[10.5px] ${
-                          provider.linked ? 'text-emerald-400/80' : 'text-zinc-600'
-                        }`}
-                      >
-                        {provider.linked
-                          ? provider.values.length > 0
-                            ? provider.values.map((value) => shortValue(value)).join(', ')
-                            : 'Linked'
-                          : telegramBlocked
-                            ? 'Open from Telegram'
-                            : 'Not linked'}
-                      </div>
-                    </div>
-                    {points !== null && !provider.linked ? (
-                      <span className="shrink-0 rounded-md border border-white/[0.06] bg-white/[0.02] px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-zinc-400">
-                        +{points}
-                      </span>
-                    ) : null}
-                    {provider.linked ? (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void onUnlinkProvider(provider.provider)}
-                        className="shrink-0 text-[10.5px] text-zinc-600 transition-colors hover:text-rose-300 disabled:opacity-50"
-                      >
-                        {busy ? '…' : 'Unlink'}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={busy || telegramBlocked}
-                        onClick={() => void onLinkProvider(provider.provider)}
-                        className="shrink-0 rounded-md border border-brand-primary/25 bg-brand-primary/[0.08] px-2 py-0.5 text-[10.5px] font-medium text-brand-200 transition-colors hover:border-brand-primary/40 hover:bg-brand-primary/[0.14] disabled:opacity-40"
-                      >
-                        {busy ? '…' : 'Link'}
-                      </button>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
-
-          {/* Advanced owner actions — nested disclosure, gated on canonical CSW */}
-          {canShowAdvanced ? (
-            <div className="border-t border-white/[0.05] pt-3">
-              <button
-                type="button"
-                onClick={() => setRabbyOpen((prev) => !prev)}
-                className="group flex w-full items-center justify-between gap-2 text-[11px] uppercase tracking-[0.14em] text-zinc-500 transition-colors hover:text-zinc-300"
-                aria-expanded={rabbyOpen}
-              >
-                <span>Advanced owner actions</span>
-                <ChevronRight
-                  className={`h-3.5 w-3.5 transition-transform duration-150 ${rabbyOpen ? 'rotate-90' : ''}`}
-                  aria-hidden="true"
-                />
-              </button>
-              {rabbyOpen ? (
-                <div className="mt-2.5 space-y-2">
-                  <p className="text-[11px] leading-relaxed text-zinc-500">
-                    Add a second owner to your canonical CSW (e.g. a Rabby EOA). 4626 will use sponsored
-                    smart-wallet approval when policy context is available.
-                  </p>
-                  {ownerInstallIntent === 'customCoOwner' && customOwnerGasPreflight ? (
-                    <div className="rounded-md border border-white/10 bg-black/20 px-2.5 py-2 text-[10.5px] text-zinc-300">
-                      <div>Signer: <span className="font-mono text-zinc-200">{shortAddr(customOwnerGasPreflight.payerAddress)}</span></div>
-                      <div className="mt-0.5">Estimated gas: <span className="font-mono text-zinc-200">{customOwnerGasPreflight.estimatedGas.toString()}</span></div>
-                      <div className="mt-0.5">
-                        Required: <span className="font-mono text-zinc-200">{formatEth(customOwnerGasPreflight.requiredWei)} ETH</span>
-                        {' '}| Balance: <span className="font-mono text-zinc-200">{formatEth(customOwnerGasPreflight.balanceWei)} ETH</span>
-                      </div>
-                    </div>
-                  ) : null}
-                  <p className="text-[10.5px] leading-relaxed text-zinc-500">
-                    {ownerInstallIntent === 'customCoOwner' && customOwnerGasPreflight
-                      ? 'Fallback path is direct transaction approval. If Base App shows insufficient funds, fund the signer wallet on Base and retry Add co-owner.'
-                      : 'If sponsorship is denied, the error will include diagnostics so you can retry with the same signed-in wallet session.'}
-                  </p>
-                  <input
-                    value={rabbyAddress}
-                    onChange={(event) => setRabbyAddress(event.target.value)}
-                    placeholder="0x…"
-                    className="w-full rounded-md border border-white/10 bg-black/30 px-2.5 py-1.5 font-mono text-[11.5px] text-white placeholder:text-zinc-700 outline-none focus:border-brand-primary/40"
-                  />
-                  {rabbyOwnerAddProlinkQuery.isLoading ? (
-                    <div className="text-[10.5px] text-zinc-500">Encoding Base App prolink…</div>
-                  ) : rabbyOwnerAddProlinkQuery.data ? (
-                    <div className="rounded-md border border-white/10 bg-black/20 px-2.5 py-2 space-y-2">
-                      <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
-                        {rabbyProlinkSourceLabel}
-                      </div>
-                      {rabbyOwnerAddProlinkUrl ? (
-                        <a
-                          href={rabbyOwnerAddProlinkUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 rounded-md border border-brand-primary/30 bg-brand-primary/10 px-2 py-1 text-[10px] text-brand-100 hover:bg-brand-primary/20"
-                        >
-                          Open in Base App <ExternalLink className="h-3 w-3" />
-                        </a>
-                      ) : null}
-                      <div className="flex items-start gap-2">
-                        <span className="font-mono text-[10px] break-all text-zinc-300">{rabbyOwnerAddProlinkQuery.data}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void (async () => {
-                              try {
-                                if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-                                  await navigator.clipboard.writeText(rabbyOwnerAddProlinkQuery.data ?? '')
-                                }
-                              } catch {
-                                // ignore
-                              }
-                            })()
-                          }}
-                          className="shrink-0 rounded-md border border-white/10 bg-black/25 px-2 py-1 text-[10px] text-zinc-300 hover:bg-black/40"
-                        >
-                          Copy
-                        </button>
-                      </div>
-                    </div>
-                  ) : rabbyOwnerAddProlinkQuery.error ? (
-                    <div className="text-[10.5px] text-amber-300">
-                      Prolink unavailable: {(rabbyOwnerAddProlinkQuery.error as Error)?.message}
-                    </div>
-                  ) : null}
-                  <button
-                    type="button"
-                    disabled={advancedBusy || rabbyAddress.trim().length === 0}
-                    onClick={() => void onAddRabbyCoOwner(rabbyAddress)}
-                    className="inline-flex h-8 items-center rounded-md border border-white/10 bg-white/[0.03] px-3 text-[11.5px] text-zinc-300 transition-colors hover:bg-white/[0.06] disabled:opacity-40"
-                  >
-                    {advancedBusy ? 'Preparing…' : 'Add co-owner'}
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+        <div className="mt-2">
+          <LinkedIdentitiesSection controller={controller} />
         </div>
       ) : null}
     </div>

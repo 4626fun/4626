@@ -2,10 +2,10 @@
   "contractName": "UniversalCreate2DeployerFromStore",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x24c80676E03f4c160bfa769589280fE9f9509eCb",
+  "address": "0xF6538d7D18AfFe5057C6f109DBEd33c851A70c7E",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
   "deployedAt": "2026-05-05T07:51:45Z",
-  "deploymentTx": "0x6fee5bb15e8f1e02bf72b62fef49fb348ed5485f94e10e42fba419611968a0b7",
+  "deploymentTx": "0xd55d8626963a5b8d73cd36be8659da73ca656b55009398b535e06920cd42c7b9",
   "abi": [
     {
       "type": "constructor",

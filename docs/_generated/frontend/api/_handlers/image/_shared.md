@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/image/\_shared
+[4626-web](../../../index.md) / api/\_handlers/image/\_shared
 
 # api/\_handlers/image/\_shared
 

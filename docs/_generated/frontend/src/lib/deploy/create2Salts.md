@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/deploy/create2Salts
+[4626-web](../../../index.md) / src/lib/deploy/create2Salts
 
 # src/lib/deploy/create2Salts
 
@@ -44,11 +44,11 @@ Defined in: [shared/deploy/create2Salts.ts:20](https://github.com/wenakita/4626/
 
 ###### creatorToken
 
-`` `0x${string}` ``
+`string`
 
 ###### owner
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
@@ -68,11 +68,11 @@ Defined in: [shared/deploy/create2Salts.ts:8](https://github.com/wenakita/4626/b
 
 ###### creatorToken
 
-`` `0x${string}` ``
+`string`
 
 ###### owner
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
@@ -92,11 +92,11 @@ Defined in: [shared/deploy/create2Salts.ts:14](https://github.com/wenakita/4626/
 
 ###### creatorToken
 
-`` `0x${string}` ``
+`string`
 
 ###### owner
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 

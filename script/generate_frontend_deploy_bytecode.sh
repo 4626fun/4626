@@ -22,13 +22,53 @@ echo "Generating deploy bytecode → frontend/src/deploy/bytecode.generated.ts"
 # (e.g. constructor arg changes) and shouldn't block regenerating frontend deploy bytecode.
 forge build --skip test --skip script >/dev/null
 
+artifact_path() {
+  local contract="$1"
+  case "$contract" in
+    DeploymentBatcher|DeploymentBatcherPhase1Module|DeploymentBatcherPhase2Module|DeploymentBatcherPhase3Helper|DeploymentBatcherUniV4Helper|DeploymentBatcherUtilsHelper)
+      printf "%s/out/DeploymentBatcher.sol/%s.json" "$ROOT_DIR" "$contract"
+      ;;
+    *)
+      printf "%s/out/%s.sol/%s.json" "$ROOT_DIR" "$contract" "$contract"
+      ;;
+  esac
+}
+
 bytecode() {
   # Prints creation bytecode without the leading "0x" (we add it in TS as `'0x' + '...'`
   # to avoid naive scanners misclassifying onchain bytecode as secrets).
-  local bc
-  bc="$(forge inspect "$1" bytecode | tail -n 1)"
-  bc="${bc#0x}"
-  printf "%s" "$bc"
+  local contract="$1"
+  local artifact
+  artifact="$(artifact_path "$contract")"
+  if [[ ! -f "$artifact" ]]; then
+    echo "Missing artifact: $artifact (run forge build --skip test --skip script first)" >&2
+    exit 1
+  fi
+  python3 - "$artifact" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as fh:
+    obj = fh.read().strip()
+decoder = json.JSONDecoder()
+bytecode_obj = None
+idx = 0
+while idx < len(obj):
+    value, end = decoder.raw_decode(obj, idx)
+    if isinstance(value, dict) and "bytecode" in value:
+        bytecode_obj = value["bytecode"]
+    idx = end
+if bytecode_obj is None or not bytecode_obj.get("object"):
+    raise SystemExit(f"bytecode.object missing in {path}")
+bc = bytecode_obj["object"]
+if bc.startswith("0x"):
+    bc = bc[2:]
+import re
+m = re.match(r"^([0-9a-fA-F]+)", bc)
+if not m:
+    raise SystemExit(f"no hex bytecode in {path}")
+bc = m.group(1).lower()
+print(bc, end="")
+PY
 }
 
 cat >"$OUT_FILE" <<'EOF'

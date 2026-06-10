@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/wallet/alfaclub
+[4626-web](../../../index.md) / server/\_lib/wallet/alfaclub
 
 # server/\_lib/wallet/alfaclub
 
@@ -154,15 +154,15 @@ Defined in: [server/\_lib/wallet/alfaclub.ts:28](https://github.com/wenakita/462
 
 ##### friendKey
 
-> `readonly` **friendKey**: `` `0x${string}` ``
+> `readonly` **friendKey**: `string`
 
 ##### friendPool
 
-> `readonly` **friendPool**: `` `0x${string}` ``
+> `readonly` **friendPool**: `string`
 
 ##### friendStakeBeacon
 
-> `readonly` **friendStakeBeacon**: `` `0x${string}` ``
+> `readonly` **friendStakeBeacon**: `string`
 
 ***
 
@@ -226,7 +226,7 @@ Returns null if no mint event is found for the address.
 
 ##### creator
 
-`` `0x${string}` ``
+`string`
 
 ##### client
 
@@ -268,7 +268,7 @@ Returns an empty result on any RPC error (fail-open; labeling is optional).
 
 ##### address
 
-`` `0x${string}` ``
+`string`
 
 ##### client
 
@@ -320,7 +320,7 @@ Does not guarantee current balance > 0; caller must filter with balanceOf.
 
 ##### address
 
-`` `0x${string}` ``
+`string`
 
 ##### client
 

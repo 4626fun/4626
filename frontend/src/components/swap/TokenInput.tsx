@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 
 import { TokenAvatar } from '@/components/swap/TokenAvatar'
 import { LoadingText } from '@/components/ui/LoadingState'
+import { formatSwapDisplayAmount } from '@/lib/swap/swapDisplayAmount'
 import { cn } from '@/lib/shared/utils'
 import type { TokenDisplay } from '@/lib/uniswap/swapUtils'
 
@@ -10,6 +11,7 @@ type TokenInputVariant = {
   label: 'Sell' | 'Buy'
   amount: string
   amountUsd?: string
+  amountLoading?: boolean
   balanceLabel?: string
   readOnly?: boolean
   token: TokenDisplay
@@ -27,6 +29,7 @@ export function TokenInput({
   label,
   amount,
   amountUsd,
+  amountLoading = false,
   balanceLabel,
   readOnly = false,
   token,
@@ -38,14 +41,18 @@ export function TokenInput({
   tokenIdentityLoading = false,
   inputAriaLabel = 'token amount',
 }: TokenInputVariant) {
-  const tokenBalanceValue = useMemo(() => {
+  const balanceAmountToken = useMemo(() => {
     const raw = typeof balanceLabel === 'string' ? balanceLabel.trim() : ''
     if (!raw) return null
-    const amountToken = raw.split(/\s+/)[0] ?? ''
-    const normalized = amountToken.replace(/,/g, '').replace(/^</, '')
+    return raw.split(/\s+/)[0] ?? null
+  }, [balanceLabel])
+
+  const tokenBalanceValue = useMemo(() => {
+    if (!balanceAmountToken) return null
+    const normalized = balanceAmountToken.replace(/,/g, '').replace(/^</, '')
     const parsed = Number(normalized)
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
-  }, [balanceLabel])
+  }, [balanceAmountToken])
 
   const sliderPercent = useMemo(() => {
     if (tokenBalanceValue == null || tokenBalanceValue <= 0) return 0
@@ -55,30 +62,26 @@ export function TokenInput({
   }, [amount, tokenBalanceValue])
 
   const sliderTrackBackground = useMemo(() => {
-    const active = 'rgb(var(--brand-primary) / 0.9)'
+    const active = 'rgb(var(--brand-primary) / 0.85)'
     const inactive = 'rgb(var(--vault-border-strong) / 0.35)'
     return `linear-gradient(90deg, ${active} 0%, ${active} ${sliderPercent}%, ${inactive} ${sliderPercent}%, ${inactive} 100%)`
   }, [sliderPercent])
 
-  const shellBackground =
-    label === 'Sell'
-      ? 'linear-gradient(165deg, rgb(var(--vault-card-raised) / 0.66), rgb(var(--vault-card) / 0.5))'
-      : 'linear-gradient(165deg, rgb(var(--vault-card-raised) / 0.66), rgba(0, 82, 255, 0.13))'
-  const metaValueTextClass = 'app-meta-value'
+  const showSlider = !readOnly && tokenIdentityLoading === false && tokenBalanceValue !== null
+
+  const displayAmount = useMemo(() => {
+    if (readOnly && !amountLoading) {
+      return formatSwapDisplayAmount(amount, token.symbol)
+    }
+    return amount
+  }, [amount, amountLoading, readOnly, token.symbol])
 
   return (
-    <div
-      className="rounded-2xl p-4 backdrop-blur-sm"
-      style={{
-        background: shellBackground,
-      }}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="bv-kicker">{label}</div>
-      </div>
+    <div className="rounded-[20px] border border-white/[0.08] bg-[rgb(var(--vault-card-raised)/0.72)] p-4">
+      <span className="text-[14px] font-medium leading-none text-zinc-400">{label}</span>
 
-      <div className="mt-2 flex gap-2.5">
-        <div className="min-h-14 flex-1">
+      <div className="mt-2 flex items-start gap-3">
+        <div className="min-w-0 flex-1">
           <label htmlFor={`${label}-amount`} className="sr-only">
             {label} amount
           </label>
@@ -87,74 +90,99 @@ export function TokenInput({
             aria-label={inputAriaLabel}
             type="text"
             inputMode="decimal"
-            value={amount}
+            value={amountLoading && readOnly ? '' : displayAmount}
             readOnly={readOnly}
             onChange={(event) => onAmountChange(event.target.value)}
-            placeholder={readOnly ? '—' : '0.0'}
+            placeholder={readOnly ? (amountLoading ? '' : '0') : '0'}
+            aria-busy={amountLoading || undefined}
             className={cn(
-              'w-full border-b border-transparent bg-transparent font-display text-[2.45rem] leading-tight font-medium tracking-[-0.02em] text-vault-text outline-none',
-              'placeholder:text-vault-muted',
-              'focus:border-[rgb(var(--vault-border-strong)/0.8)]',
+              'w-full border-0 bg-transparent p-0 font-sans text-[36px] leading-[44px] font-medium tabular-nums tracking-[-0.02em] outline-none',
+              readOnly ? 'cursor-default text-zinc-300' : 'text-white',
+              'placeholder:text-zinc-600',
+              amountLoading && readOnly ? 'text-zinc-500' : null,
             )}
           />
-          {amountUsd ? <div className="app-meta-value mt-1 text-vault-muted">{amountUsd}</div> : null}
+          {amountLoading && readOnly ? (
+            <div className="mt-1 text-[14px] text-zinc-500">
+              <LoadingText intent="processing" size="sm" labelOverride="Fetching quote…" />
+            </div>
+          ) : amountUsd ? (
+            <div className="mt-0.5 text-[14px] font-normal tabular-nums text-zinc-500">{amountUsd}</div>
+          ) : null}
         </div>
-        <button
-          type="button"
-          onClick={onSelectToken}
-          className="inline-flex h-10 min-w-[104px] items-center gap-1.5 rounded-xl px-2.5 py-1.5 transition-all duration-200 hover:-translate-y-px hover:bg-white/10"
-          style={{
-            background: 'rgb(var(--vault-card) / 0.58)',
-          }}
-          aria-label={`Select ${label} token`}
-        >
-          <TokenAvatar
-            token={{
-              address: tokenAddress,
-              symbol: token.symbol,
-              logoUrl: token.logoUrl ?? undefined,
-              logoUrls: token.logoUrls,
-            }}
-            symbol={token.symbol}
-            size={28}
-          />
-          <span className="text-[13px] font-medium text-vault-text">
-            {tokenIdentityLoading ? <LoadingText intent="processing" size="sm" labelOverride="Loading..." /> : token.symbol}
-          </span>
-          <ChevronDown className="h-3.5 w-3.5 text-vault-subtext" />
-        </button>
+
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <button
+            type="button"
+            onClick={onSelectToken}
+            className="inline-flex h-11 items-center gap-2 rounded-full bg-[rgb(var(--vault-card)/0.95)] px-3 py-2 transition-colors hover:bg-white/[0.08]"
+            aria-label={`Select ${label} token`}
+          >
+            <TokenAvatar
+              token={{
+                address: tokenAddress,
+                symbol: token.symbol,
+                logoUrl: token.logoUrl ?? undefined,
+                logoUrls: token.logoUrls,
+              }}
+              symbol={token.symbol}
+              size={24}
+              noFallback
+            />
+            <span className="max-w-[5.5rem] truncate text-[16px] font-semibold leading-none text-white">
+              {tokenIdentityLoading ? (
+                <LoadingText intent="processing" size="sm" labelOverride="…" />
+              ) : (
+                token.symbol
+              )}
+            </span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400" />
+          </button>
+
+          {balanceLabel ? (
+            <div className="flex max-w-full items-center justify-end gap-2">
+              <span
+                className="truncate text-right text-[13px] font-normal tabular-nums text-zinc-500"
+                aria-live="polite"
+                title={balanceLabel}
+              >
+                {balanceLabel}
+              </span>
+              {showSlider && onQuickPercent ? (
+                <button
+                  type="button"
+                  onClick={() => onQuickPercent(100, balanceAmountToken)}
+                  className="shrink-0 text-[13px] font-medium text-brand-primary transition-colors hover:text-brand-200"
+                >
+                  Max
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
 
-      {balanceLabel ? (
-        <div className={`mt-0.5 flex justify-end ${metaValueTextClass}`} aria-live="polite">
-          {balanceLabel}
-        </div>
-      ) : null}
-
-      {!readOnly && tokenIdentityLoading === false && tokenBalanceValue !== null ? (
-        <div className="mt-1">
+      {showSlider ? (
+        <div className="mt-4 px-0.5">
           <input
             type="range"
             min={0}
             max={100}
             step={1}
             value={sliderPercent}
-            onChange={(event) =>
-              onQuickPercent?.(Number(event.target.value), balanceLabel ? balanceLabel.split(' ')[0] : null)
-            }
+            onChange={(event) => onQuickPercent?.(Number(event.target.value), balanceAmountToken)}
             className="bv-amount-slider h-1 w-full cursor-pointer appearance-none rounded-full accent-brand-primary"
             style={{ background: sliderTrackBackground }}
             aria-label={`${label} amount percentage`}
           />
-          <div className={`mt-1 flex justify-end ${metaValueTextClass}`}>
-            {sliderPercent}%
-          </div>
         </div>
       ) : null}
 
-      <div className="mt-2 text-[10px] text-vault-muted">
-        {isLoadingToken ? <LoadingText intent="processing" size="sm" labelOverride="Resolving token metadata..." /> : null}
-      </div>
+      {isLoadingToken ? (
+        <div className="mt-2 text-xs text-zinc-500">
+          <LoadingText intent="processing" size="sm" labelOverride="Resolving token metadata..." />
+        </div>
+      ) : null}
     </div>
   )
 }

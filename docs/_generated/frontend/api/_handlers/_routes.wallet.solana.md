@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / api/\_handlers/\_routes.wallet.solana
+[4626-web](../../index.md) / api/\_handlers/\_routes.wallet.solana
 
 # api/\_handlers/\_routes.wallet.solana
 

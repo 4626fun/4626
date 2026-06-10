@@ -108,6 +108,10 @@ function createPositionDb(params: { id: string | number; email: string }) {
         }
       }
 
+      if (text.includes('from points_amoe_eligible_balance')) {
+        return { rows: [{ credits: 99 }] }
+      }
+
       if (text.includes('from points')) {
         return {
           rows: [{ total: 150, invite: 50, signup: 100, tasks: 0, csw: 0, social: 0, bonus: 0 }],
@@ -120,6 +124,23 @@ function createPositionDb(params: { id: string | number; email: string }) {
 
       if (text.includes('from referral_conversions') && text.includes('not (status = \'csw_linked\'')) {
         return { rows: [{ c: 1 }] }
+      }
+
+      if (
+        text.includes('from profiles') &&
+        text.includes('where id =') &&
+        text.includes('referral_code') &&
+        text.includes('border_tier')
+      ) {
+        return {
+          rows: [
+            {
+              referral_code: 'AKITA',
+              profile_completed_at: '2026-02-25T00:00:00.000Z',
+              border_tier: 1,
+            },
+          ],
+        }
       }
 
       if (text.includes('count(*)::int as c') && text.includes('from profiles')) {
@@ -186,6 +207,10 @@ function createPositionDbHistoricalLinkedWallet(params: { id: string | number; e
         return { rows: [{ exists: 1 }] }
       }
 
+      if (text.includes('from points_amoe_eligible_balance')) {
+        return { rows: [{ credits: 99 }] }
+      }
+
       if (text.includes('from points')) {
         return {
           rows: [{ total: 150, invite: 50, signup: 100, tasks: 0, csw: 0, social: 0, bonus: 0 }],
@@ -198,6 +223,23 @@ function createPositionDbHistoricalLinkedWallet(params: { id: string | number; e
 
       if (text.includes('from referral_conversions') && text.includes('not (status = \'csw_linked\'')) {
         return { rows: [{ c: 1 }] }
+      }
+
+      if (
+        text.includes('from profiles') &&
+        text.includes('where id =') &&
+        text.includes('referral_code') &&
+        text.includes('border_tier')
+      ) {
+        return {
+          rows: [
+            {
+              referral_code: 'AKITA',
+              profile_completed_at: '2026-02-25T00:00:00.000Z',
+              border_tier: 1,
+            },
+          ],
+        }
       }
 
       if (text.includes('count(*)::int as c') && text.includes('from profiles')) {

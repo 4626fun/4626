@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import { useMemo } from 'react'
 
+import { Button } from '@/components/ui/Button'
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { siteAssets, siteConfig } from '@/config/site'
 import { VaultFlowRoot } from '@/features/home/vault-flow/VaultFlowRoot'
@@ -23,7 +24,7 @@ export function Home() {
   const showJoinWaitlistCta = hostMode === 'marketing'
   const showExploreCreatorsCta = hostMode === 'app'
   const heroCtaClass =
-    'btn-primary inline-flex items-center justify-center min-h-[52px] px-6 py-3.5 text-[15px]'
+    'min-h-[52px] px-6 py-3.5 text-[15px]'
   const homeStructuredData = useMemo(
     () => ({
       '@context': 'https://schema.org',
@@ -102,7 +103,7 @@ export function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.7, delay: 0.55 }}
-            className="mx-auto max-w-lg text-[15px] font-light leading-relaxed text-zinc-500 sm:text-lg"
+            className="mx-auto max-w-lg text-[15px] font-light leading-relaxed text-zinc-400 sm:text-lg"
           >
             Turn creator coins into redeemable vault shares. Experimental software. Vaults are not live yet.
           </motion.p>
@@ -114,10 +115,12 @@ export function Home() {
               transition={{ duration: 0.7, delay: 0.75 }}
               className="pt-2 sm:pt-4"
             >
-              <Link to="/waitlist" className={heroCtaClass}>
-                Join waitlist
-                <ArrowRight className="h-4 w-4" />
-              </Link>
+              <Button variant="primary" size="lg" className={heroCtaClass} asChild>
+                <Link to="/waitlist">
+                  Join waitlist
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
             </motion.div>
           ) : null}
 
@@ -128,10 +131,12 @@ export function Home() {
               transition={{ duration: 0.7, delay: 0.75 }}
               className="pt-2 sm:pt-4"
             >
-              <Link to="/explore/creators" className={heroCtaClass}>
-                Explore Creators
-                <ArrowRight className="h-4 w-4" />
-              </Link>
+              <Button variant="primary" size="lg" className={heroCtaClass} asChild>
+                <Link to="/explore/creators">
+                  Explore Creators
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
             </motion.div>
           ) : null}
         </div>
@@ -180,12 +185,12 @@ export function Home() {
                 transition={{ duration: 0.5, delay: i * 0.10 }}
                 className="flex flex-col gap-2.5"
               >
-                <span className="font-mono text-[9px] tracking-[0.22em] text-zinc-700">
+                <span className="font-mono text-[9px] tracking-[0.22em] text-zinc-500">
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <h3 className="text-sm font-medium text-white">{step.label}</h3>
                 <div className="h-px w-6 bg-white/10" />
-                <p className="text-[11px] leading-relaxed text-zinc-600 font-light">{step.sub}</p>
+                <p className="text-[11px] leading-relaxed text-zinc-400 font-light">{step.sub}</p>
               </motion.div>
             ))}
           </div>
@@ -197,13 +202,12 @@ export function Home() {
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.45 }}
           >
-            <Link
-              to="/faq/how-it-works"
-              className="btn-secondary btn-no-icon inline-flex items-center gap-2 text-xs"
-            >
-              Learn more about the launch flow
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
+            <Button variant="secondary" size="sm" className="inline-flex items-center gap-2 text-xs" asChild>
+              <Link to="/faq/how-it-works">
+                Learn more about the launch flow
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
           </motion.div>
 
         </div>

@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { encodeAbiParameters, parseAbiParameters } from 'viem'
 
 const mockGetBlockNumber = vi.hoisted(() => vi.fn(async () => 31_250_001n))
 type MockRpcResult = '0x' | '0x2105' | Array<{ address: string; data: `0x${string}` }>
@@ -9,6 +8,16 @@ const mockRequest = vi.hoisted(() =>
     if (args?.method === 'eth_chainId') return '0x2105'
     return '0x'
   }),
+)
+const mockFetch = vi.hoisted(() =>
+  vi.fn(async () =>
+    Response.json({
+      success: true,
+      addresses: [],
+      count: 0,
+      lastUpdated: Date.now(),
+    }),
+  ),
 )
 
 vi.mock('viem', async () => {
@@ -22,15 +31,12 @@ vi.mock('viem', async () => {
   }
 })
 
-const MIGRATION_DATA_ABI = parseAbiParameters(
-  '(address,address,uint24,int24,address),bytes32,(address,address,uint24,int24,address),bytes32',
-)
-
 describe('fetchMigratedCoins single-flight behavior', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
     globalThis.localStorage?.clear()
+    vi.stubGlobal('fetch', mockFetch as unknown as typeof fetch)
     try {
       delete (globalThis as Record<string, unknown>).window
     } catch {
@@ -46,30 +52,36 @@ describe('fetchMigratedCoins single-flight behavior', () => {
     expect(mockGetBlockNumber).toHaveBeenCalledTimes(1)
   })
 
-  it('runs eth_getCode trust checks in browser by default', async () => {
+  it('uses the migrated coins API in browser instead of eth_getLogs', async () => {
     ;(globalThis as Record<string, unknown>).window = {}
-    const coin = '0x1de553883334a880e7149597f3d67ffdf2e0fa85'
-    const data = encodeAbiParameters(MIGRATION_DATA_ABI, [
-      ['0x1111111111166b7fe7bd91427724b487980afc69', coin, 30_000, 200, '0xfff800b76768da8ab6aab527021e4a6a91219040'],
-      '0xcf4efcb82f84ae2cd6542c959d4c50f2e304124d3797eb808324ab6d45d76ef4',
-      ['0x1111111111166b7fe7bd91427724b487980afc69', coin, 30_000, 200, '0x5e5d19d22c85a4aef7c1fdf25fb22a5a38f71040'],
-      '0x30ce7b1bccbca555d6e51fa6154ec739c74a1ece444cf5d0e4f6bdf6e5be2136',
-    ])
-
-    mockRequest.mockImplementation(async (args: { method?: string }) => {
-      if (args?.method === 'eth_getLogs') {
-        return [{ address: coin, data }]
-      }
-      if (args?.method === 'eth_chainId') return '0x2105'
-      if (args?.method === 'eth_getCode') return '0x'
-      return '0x'
-    })
-
     const { fetchMigratedCoins } = await import('./migrations')
+
     await fetchMigratedCoins()
 
-    const getCodeCalls = mockRequest.mock.calls.filter(([args]) => args?.method === 'eth_getCode')
-    expect(getCodeCalls.length).toBeGreaterThan(0)
+    expect(mockFetch).toHaveBeenCalledWith('/api/zora/migratedCoins', expect.objectContaining({
+      method: 'GET',
+      credentials: 'same-origin',
+    }))
+    expect(mockRequest.mock.calls.some(([args]) => args?.method === 'eth_getLogs')).toBe(false)
+  })
+
+  it('runs eth_getCode trust checks in browser by default via server API payload', async () => {
+    ;(globalThis as Record<string, unknown>).window = {}
+    const coin = '0x1de553883334a880e7149597f3d67ffdf2e0fa85'
+    mockFetch.mockResolvedValueOnce(
+      Response.json({
+        success: true,
+        addresses: [coin],
+        count: 1,
+        lastUpdated: Date.now(),
+      }),
+    )
+
+    const { fetchMigratedCoins } = await import('./migrations')
+    const migrated = await fetchMigratedCoins()
+
+    expect(migrated.has(coin.toLowerCase())).toBe(true)
+    expect(mockRequest.mock.calls.filter(([args]) => args?.method === 'eth_getCode')).toHaveLength(0)
   })
 
   it('backs off and retries the same log range when the rpc returns 429', async () => {
@@ -97,8 +109,12 @@ describe('fetchMigratedCoins single-flight behavior', () => {
     })
 
     try {
-      const { fetchMigratedCoins } = await import('./migrations')
-      const fetchPromise = fetchMigratedCoins()
+      const { scanMigratedCoinsWithClient } = await import('./migrationScan')
+      const client = {
+        getBlockNumber: mockGetBlockNumber,
+        request: mockRequest,
+      }
+      const fetchPromise = scanMigratedCoinsWithClient(client, { initialChunkDelta: 1n })
 
       await vi.runAllTimersAsync()
       const migratedCoins = await fetchPromise
@@ -112,5 +128,25 @@ describe('fetchMigratedCoins single-flight behavior', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('aborts log scanning when the rpc reports pruned history', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockGetBlockNumber.mockResolvedValue(31_250_001n)
+    mockRequest.mockRejectedValue(new Error('pruned history unavailable'))
+
+    const { scanMigratedCoinsWithClient } = await import('./migrationScan')
+    const migratedCoins = await scanMigratedCoinsWithClient(
+      {
+        getBlockNumber: mockGetBlockNumber,
+        request: mockRequest,
+      },
+      { initialChunkDelta: 1n },
+    )
+
+    expect(migratedCoins.size).toBe(0)
+    expect(mockRequest).toHaveBeenCalledTimes(1)
+    expect(warnSpy).toHaveBeenCalledWith('[migrations] RPC does not retain log history; aborting on-chain migration scan.')
+    warnSpy.mockRestore()
   })
 })

@@ -3,7 +3,9 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
+import {ICreatorRegistry} from "../contracts/interfaces/core/ICreatorRegistry.sol";
 import "../contracts/helpers/batchers/DeploymentBatcher.sol";
+import "./helpers/DeploymentBatcherFixture.sol";
 
 contract MockUniswapV3PoolForPhase3 {
     uint160 public lastSqrtPriceX96;
@@ -68,9 +70,37 @@ contract MockOwnableTransferForPhase3 {
 
 contract MockCharmStrategyForPhase3 is MockOwnableTransferForPhase3 {
     bool public approvalsInitialized;
+    address public creatorOracle;
+    address public ajnaPool;
+    bool public ajnaBorrowEnabled;
+    uint256 public ajnaMaxDebt;
+    uint256 public ajnaMaxBorrowPerWithdraw;
+    uint256 public ajnaMinCollateralRatioBps;
 
     function initializeApprovals() external {
         approvalsInitialized = true;
+    }
+
+    function setCreatorOracle(address _creatorOracle) external {
+        creatorOracle = _creatorOracle;
+    }
+
+    function setAjnaPool(address _ajnaPool) external {
+        ajnaPool = _ajnaPool;
+    }
+
+    function setAjnaBorrowConfig(
+        bool _enabled,
+        uint256 _maxDebt,
+        uint256 _maxBorrowPerWithdraw,
+        uint256 _minCollateralRatioBps,
+        uint256,
+        uint256
+    ) external {
+        ajnaBorrowEnabled = _enabled;
+        ajnaMaxDebt = _maxDebt;
+        ajnaMaxBorrowPerWithdraw = _maxBorrowPerWithdraw;
+        ajnaMinCollateralRatioBps = _minCollateralRatioBps;
     }
 }
 
@@ -127,17 +157,21 @@ contract MockVaultStrategyManagerForPhase3 {
     uint256[] public weights;
     bool public autoAllocate;
 
+    error Unauthorized();
+
     constructor(address owner_) {
         owner = owner_;
         managementAddress = owner_;
     }
 
     function addStrategy(address strategy, uint256 weight) external {
+        if (msg.sender != managementAddress && msg.sender != owner) revert Unauthorized();
         strategies.push(strategy);
         weights.push(weight);
     }
 
     function setAutoAllocate(bool enabled) external {
+        if (msg.sender != managementAddress && msg.sender != owner) revert Unauthorized();
         autoAllocate = enabled;
     }
 
@@ -208,19 +242,23 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
     MockOwnableTransferForPhase3 internal solanaStrategy;
 
     address internal protocolTreasury;
+    address internal protocolAutomation;
     address internal creatorToken;
     address internal solanaKeeper;
     address internal solanaBridge;
     address internal ajnaKeeper;
+    address internal creatorOracle;
 
     function setUp() public {
         vm.chainId(8453);
 
         protocolTreasury = makeAddr("protocolTreasury");
+        protocolAutomation = makeAddr("protocolAutomation");
         creatorToken = makeAddr("creatorToken");
         solanaKeeper = makeAddr("solanaKeeper");
         solanaBridge = makeAddr("solanaBridge");
         ajnaKeeper = makeAddr("ajnaKeeper");
+        creatorOracle = makeAddr("creatorOracle");
 
         create2Deployer = new MockCreate2DeployerForPhase3();
         uniswapFactory = new MockUniswapV3FactoryForPhase3();
@@ -240,37 +278,28 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         create2Deployer.setDeployment(AJNA_ADAPTER_CODE_ID, address(ajnaStrategy));
         create2Deployer.setDeployment(SOLANA_STRATEGY_CODE_ID, address(solanaStrategy));
 
-        DeploymentBatcherPhase2Module phase2Fixture = new DeploymentBatcherPhase2Module(
-            address(create2Deployer),
-            makeAddr("registry"),
-            makeAddr("chainlinkEthUsd"),
-            makeAddr("poolManager"),
-            makeAddr("taxHook"),
-            protocolTreasury,
-            makeAddr("lotteryManager"),
-            makeAddr("vaultActivationBatcher"),
-            makeAddr("batcher")
-        );
-        batcher = new DeploymentBatcher(
-            makeAddr("registry"),
-            makeAddr("bytecodeStore"),
-            address(create2Deployer),
-            protocolTreasury,
-            makeAddr("poolManager"),
-            makeAddr("taxHook"),
-            makeAddr("chainlinkEthUsd"),
-            makeAddr("vaultActivationBatcher"),
-            makeAddr("lotteryManager"),
-            makeAddr("permit2"),
-            makeAddr("usdc"),
-            address(uniswapFactory),
-            makeAddr("uniswapRouter"),
-            address(ajnaFactory),
-            makeAddr("vaultCoreModule"),
-            makeAddr("vaultStrategiesModule"),
-            makeAddr("vaultAdminModule"),
-            address(phase2Fixture)
-        );
+        DeploymentBatcherFixture deployerLib = new DeploymentBatcherFixture();
+        DeploymentBatcherFixture.BatcherConfig memory cfg = DeploymentBatcherFixture.BatcherConfig({
+            registry: makeAddr("registry"),
+            bytecodeStore: makeAddr("bytecodeStore"),
+            create2Deployer: address(create2Deployer),
+            protocolTreasury: protocolTreasury,
+            protocolAutomation: protocolAutomation,
+            poolManager: makeAddr("poolManager"),
+            taxHook: makeAddr("taxHook"),
+            chainlinkEthUsd: makeAddr("chainlinkEthUsd"),
+            vaultActivationBatcher: makeAddr("vaultActivationBatcher"),
+            lotteryManager: makeAddr("lotteryManager"),
+            permit2: makeAddr("permit2"),
+            usdc: makeAddr("usdc"),
+            uniswapV3Factory: address(uniswapFactory),
+            uniswapRouter: makeAddr("uniswapRouter"),
+            ajnaFactory: address(ajnaFactory),
+            vaultCoreModule: makeAddr("vaultCoreModule"),
+            vaultStrategiesModule: makeAddr("vaultStrategiesModule"),
+            vaultAdminModule: makeAddr("vaultAdminModule")
+        });
+        (batcher,) = deployerLib.deployBatcher(cfg);
         vault.setManagement(address(batcher));
 
         vm.mockCall(
@@ -282,7 +311,18 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         vm.mockCall(
             CHARM_FACTORY,
             abi.encodeWithSelector(CREATE_VAULT_SELECTOR),
-            abi.encode(address(new MockCharmVaultForPhase3(protocolTreasury)))
+            abi.encode(address(new MockCharmVaultForPhase3(protocolAutomation)))
+        );
+        _mockCreatorOracle(creatorOracle);
+    }
+
+    function _mockCreatorOracle(address oracle) internal {
+        ICreatorRegistry.CreatorCoinInfo memory info;
+        info.oracle = oracle;
+        vm.mockCall(
+            address(batcher.registry()),
+            abi.encodeWithSelector(ICreatorRegistry.getCreatorCoin.selector, creatorToken),
+            abi.encode(info)
         );
     }
 
@@ -297,9 +337,9 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
             charmVaultSymbol: "CHRM",
             ajnaVaultName: "Ajna Inner Vault",
             ajnaVaultSymbol: "AIV",
-            charmWeightBps: 6_000,
-            ajnaWeightBps: 2_500,
-            solanaWeightBps: 1_000,
+            charmWeightBps: 4_500,
+            ajnaWeightBps: 4_500,
+            solanaWeightBps: 0,
             ajnaBufferRatioBps: 1_500,
             ajnaMinBucketIndex: 4_156,
             ajnaKeeper: ajnaKeeper,
@@ -331,26 +371,27 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         assertEq(out.ajnaVaultAuth, address(ajnaAuth), "ajna auth mismatch");
         assertEq(out.ajnaVault, ajnaVault, "ajna vault mismatch");
         assertEq(out.ajnaStrategy, address(ajnaStrategy), "ajna adapter mismatch");
-        assertEq(out.solanaStrategy, address(solanaStrategy), "solana strategy mismatch");
+        assertEq(out.solanaStrategy, address(0), "solana strategy removed from Phase 3");
 
-        assertEq(vault.strategyCount(), 3, "expected three registered strategies");
+        assertEq(vault.strategyCount(), 2, "expected two registered strategies");
         assertEq(vault.strategies(0), address(charmStrategy), "first strategy should be charm");
-        assertEq(vault.weights(0), 6_000, "charm weight mismatch");
+        assertEq(vault.weights(0), 4_500, "charm weight mismatch");
         assertEq(vault.strategies(1), address(ajnaStrategy), "second strategy should be ajna adapter");
-        assertEq(vault.weights(1), 2_500, "ajna weight mismatch");
-        assertEq(vault.strategies(2), address(solanaStrategy), "third strategy should be solana");
-        assertEq(vault.weights(2), 1_000, "solana weight mismatch");
+        assertEq(vault.weights(1), 4_500, "ajna weight mismatch");
         assertTrue(vault.autoAllocate(), "auto-allocate should be enabled");
 
         assertTrue(charmStrategy.approvalsInitialized(), "charm strategy approvals not initialized");
         assertEq(charmStrategy.lastOwner(), protocolTreasury, "charm strategy ownership not transferred");
+        assertTrue(charmStrategy.ajnaBorrowEnabled(), "charm ajna borrow backstop should be enabled");
+        assertEq(charmStrategy.ajnaPool(), makeAddr("ajnaPool"), "charm ajna pool mismatch");
+        assertEq(charmStrategy.creatorOracle(), creatorOracle, "charm creator oracle mismatch");
+        assertEq(charmStrategy.ajnaMinCollateralRatioBps(), 12_500, "charm min collateral ratio mismatch");
         assertEq(ajnaStrategy.lastOwner(), protocolTreasury, "ajna adapter ownership not transferred");
-        assertEq(solanaStrategy.lastOwner(), protocolTreasury, "solana strategy ownership not transferred");
         assertEq(ajnaStrategy.idleBufferBps(), 0, "adapter idle buffer should be disabled");
         assertEq(ajnaAuth.bufferRatio(), 1_500, "ajna buffer ratio mismatch");
         assertEq(ajnaAuth.minBucketIndex(), 4_156, "ajna min bucket mismatch");
         assertTrue(ajnaAuth.keepers(ajnaKeeper), "ajna keeper should be configured");
-        assertEq(ajnaAuth.admin(), protocolTreasury, "ajna auth admin should transfer to treasury");
+        assertEq(ajnaAuth.admin(), protocolAutomation, "ajna auth admin should transfer to automation Safe");
     }
 
     function test_deployPhase3Strategies_callsCharmFactoryWithExpectedManagerFeePips() public {
@@ -358,9 +399,9 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         address v3Pool = uniswapFactory.pool();
         ICharmFactory.VaultParams memory expectedVaultParams = ICharmFactory.VaultParams({
             pool: v3Pool,
-            manager: protocolTreasury,
+            manager: protocolAutomation,
             managerFee: CHARM_MANAGER_FEE_PIPS,
-            rebalanceDelegate: protocolTreasury,
+            rebalanceDelegate: params.owner,
             maxTotalSupply: type(uint256).max,
             baseThreshold: 3000,
             limitThreshold: 6000,
@@ -413,14 +454,12 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         batcher.deployPhase3Strategies(_phase3Params(), codeIds);
     }
 
-    function test_deployPhase3Strategies_revertsWhenSolanaWeightSetWithoutCodeId() public {
-        // When the creator has paid for `solana_bridge_strategy` the deploy
-        // passes a nonzero solanaWeightBps, so the codeId is still required.
-        DeploymentBatcher.StrategyCodeIds memory codeIds = _strategyCodeIds();
-        codeIds.solanaStrategy = bytes32(0);
+    function test_deployPhase3Strategies_revertsWhenSolanaWeightIsNonZero() public {
+        DeploymentBatcher.Phase3Params memory params = _phase3Params();
+        params.solanaWeightBps = 1_000;
 
-        vm.expectRevert(DeploymentBatcher.InvalidCodeId.selector);
-        batcher.deployPhase3Strategies(_phase3Params(), codeIds);
+        vm.expectRevert(DeploymentBatcher.InvalidWeight.selector);
+        batcher.deployPhase3Strategies(params, _strategyCodeIds());
     }
 
     function test_deployPhase3Strategies_skipsAjnaWhenWeightIsZero() public {
@@ -429,7 +468,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         // everything else and leave Ajna fields empty instead of reverting.
         DeploymentBatcher.Phase3Params memory params = _phase3Params();
         params.ajnaWeightBps = 0;
-        // Charm + Solana weights continue to sum to <= 10_000 so idle fills the gap.
+        params.solanaWeightBps = 0;
 
         DeploymentBatcher.Phase3Result memory out =
             batcher.deployPhase3Strategies(params, _strategyCodeIds());
@@ -438,7 +477,16 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         assertEq(out.ajnaVaultAuth, address(0), "ajnaVaultAuth should be zero when skipped");
         assertEq(out.ajnaStrategy, address(0), "ajnaStrategy should be zero when skipped");
         assertTrue(out.charmStrategy != address(0), "charm should still deploy");
-        assertTrue(out.solanaStrategy != address(0), "solana should still deploy");
+        assertEq(out.solanaStrategy, address(0), "solana strategy removed from Phase 3");
+        assertFalse(charmStrategy.ajnaBorrowEnabled(), "charm-only deploy should not wire ajna backstop");
+        assertEq(charmStrategy.ajnaPool(), address(0), "charm-only deploy should not set ajna pool");
+    }
+
+    function test_deployPhase3Strategies_revertsWhenSynergyOracleMissing() public {
+        _mockCreatorOracle(address(0));
+
+        vm.expectRevert(DeploymentBatcherPhase3Helper.MissingCreatorOracleForSynergy.selector);
+        batcher.deployPhase3Strategies(_phase3Params(), _strategyCodeIds());
     }
 
     function test_deployPhase3Strategies_skipsCharmWhenWeightIsZero() public {
@@ -452,49 +500,26 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         assertEq(out.charmVault, address(0), "charmVault should be zero when skipped");
         assertEq(out.charmStrategy, address(0), "charmStrategy should be zero when skipped");
         assertTrue(out.ajnaStrategy != address(0), "ajna should still deploy");
-        assertTrue(out.solanaStrategy != address(0), "solana should still deploy");
+        assertEq(out.solanaStrategy, address(0), "solana strategy removed from Phase 3");
     }
 
-    function test_deployPhase3Strategies_skipsCharmAndAjnaWhenBothWeightsZero() public {
-        // Solana-only deploy: creator paid only for `solana_bridge_strategy`.
-        // Charm and Ajna are skipped entirely; the productive budget goes to
-        // Solana (9_900 bps in this fixture). Asserts (a) zero-weight
-        // strategies leave no artifacts on the vault and (b) their codeIds
-        // may be zero in the StrategyCodeIds payload.
+    function test_deployPhase3Strategies_revertsWhenOnlySolanaWeightRequested() public {
         DeploymentBatcher.Phase3Params memory params = _phase3Params();
         params.charmWeightBps = 0;
         params.ajnaWeightBps = 0;
         params.solanaWeightBps = 100;
 
-        DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
-            charmAlphaVaultDeploy: bytes32(0),
-            creatorCharmStrategy: bytes32(0),
-            ajnaVaultAuth: bytes32(0),
-            ajnaVault: bytes32(0),
-            erc4626StrategyAdapter: bytes32(0),
-            solanaStrategy: SOLANA_STRATEGY_CODE_ID
-        });
-
-        DeploymentBatcher.Phase3Result memory out = batcher.deployPhase3Strategies(params, codeIds);
-
-        assertEq(out.charmVault, address(0));
-        assertEq(out.charmStrategy, address(0));
-        assertEq(out.ajnaVault, address(0));
-        assertEq(out.ajnaVaultAuth, address(0));
-        assertEq(out.ajnaStrategy, address(0));
-        assertTrue(out.solanaStrategy != address(0), "solana should still deploy when paid");
+        vm.expectRevert(DeploymentBatcher.InvalidWeight.selector);
+        batcher.deployPhase3Strategies(params, _strategyCodeIds());
     }
 
-    function test_deployPhase3Strategies_skipsSolanaWhenWeightIsZero() public {
-        // Solana is now also OPT-IN (`solana_bridge_strategy`, $100 USDC).
-        // Same skip pattern as Charm/Ajna.
+    function test_deployPhase3Strategies_alwaysSkipsSolanaStrategy() public {
         DeploymentBatcher.Phase3Params memory params = _phase3Params();
-        params.solanaWeightBps = 0;
 
         DeploymentBatcher.Phase3Result memory out =
             batcher.deployPhase3Strategies(params, _strategyCodeIds());
 
-        assertEq(out.solanaStrategy, address(0), "solanaStrategy should be zero when skipped");
+        assertEq(out.solanaStrategy, address(0), "solanaStrategy should always be zero");
         assertTrue(out.charmStrategy != address(0), "charm should still deploy");
         assertTrue(out.ajnaStrategy != address(0), "ajna should still deploy");
     }
@@ -552,7 +577,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         );
 
         vm.expectRevert(
-            abi.encodeWithSelector(DeploymentBatcher.CharmVaultManagerMismatch.selector, protocolTreasury, wrongManager)
+            abi.encodeWithSelector(DeploymentBatcher.CharmVaultManagerMismatch.selector, protocolAutomation, wrongManager)
         );
         batcher.deployPhase3Strategies(_phase3Params(), _strategyCodeIds());
     }

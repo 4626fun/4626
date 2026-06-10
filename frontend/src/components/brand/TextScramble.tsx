@@ -102,7 +102,7 @@ export function TextScramble({
           style = {
             ...style,
             transform: `translateY(${yOffset}px) rotate(${rotate}deg) scale(${scale})`,
-            color: rand() > 0.8 ? '#0052FF' : 'inherit',
+            color: rand() > 0.8 ? 'rgb(var(--brand-primary))' : 'inherit',
           }
         }
 

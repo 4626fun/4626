@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/agentControl/types
+[4626-web](../../../index.md) / server/\_lib/agentControl/types
 
 # server/\_lib/agentControl/types
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/agents/\_agents
+[4626-web](../../../index.md) / api/\_handlers/agents/\_agents
 
 # api/\_handlers/agents/\_agents
 
@@ -17,7 +17,7 @@ Defined in: [api/\_handlers/agents/\_agents.ts:98](https://github.com/wenakita/4
 GET /api/agents
 
 Directory-compatible agent listing endpoint (XMTP Agent Directory shape).
-If XMTP_AGENT_ADDRESS is configured, returns a single 4626 agent entry.
+If CANONICAL_CSW_ADDRESS is configured, returns a single 4626 agent entry.
 
 #### Parameters
 

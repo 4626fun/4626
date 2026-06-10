@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createPublicClient, encodeAbiParameters, getAddress, http, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 
+import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import {
   handleOptions,
   readBoundedJsonObjectBody,
@@ -11,7 +12,7 @@ import {
   checkRateLimit,
   RATE_LIMITS,
   rateLimitKey,
-} from '../../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { getCanonicalOrigin } from '../../../../../server/_lib/infra/origin.js'
 import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
 
@@ -43,7 +44,7 @@ function asOwnerBytes(owner: Address): Hex {
 async function isOwnerInstalled(params: { smartWallet: Address; ownerAddress: Address; maxScan?: number }): Promise<boolean> {
   const publicClient = createPublicClient({
     chain: base,
-    transport: http((process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim(), { timeout: 12_000 }),
+    transport: http(resolveDeploySessionRpcUrl(), { timeout: 12_000 }),
   })
 
   const countRaw = (await publicClient.readContract({

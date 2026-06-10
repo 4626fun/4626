@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/ui/Input
+[4626-web](../../../index.md) / src/components/ui/Input
 
 # src/components/ui/Input
 
@@ -10,7 +10,7 @@
 
 ### InputProps
 
-Defined in: [src/components/ui/Input.tsx:4](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Input.tsx#L4)
+Defined in: [src/components/ui/Input.tsx:6](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Input.tsx#L6)
 
 #### Extends
 
@@ -22,25 +22,25 @@ Defined in: [src/components/ui/Input.tsx:4](https://github.com/wenakita/4626/blo
 
 > `optional` **error**: `string`
 
-Defined in: [src/components/ui/Input.tsx:7](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Input.tsx#L7)
+Defined in: [src/components/ui/Input.tsx:9](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Input.tsx#L9)
 
 ##### helperText?
 
 > `optional` **helperText**: `string`
 
-Defined in: [src/components/ui/Input.tsx:6](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Input.tsx#L6)
+Defined in: [src/components/ui/Input.tsx:8](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Input.tsx#L8)
 
 ##### label?
 
 > `optional` **label**: `string`
 
-Defined in: [src/components/ui/Input.tsx:5](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Input.tsx#L5)
+Defined in: [src/components/ui/Input.tsx:7](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Input.tsx#L7)
 
 ##### rightSlot?
 
 > `optional` **rightSlot**: `ReactNode`
 
-Defined in: [src/components/ui/Input.tsx:8](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Input.tsx#L8)
+Defined in: [src/components/ui/Input.tsx:10](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Input.tsx#L10)
 
 ## Variables
 
@@ -48,4 +48,4 @@ Defined in: [src/components/ui/Input.tsx:8](https://github.com/wenakita/4626/blo
 
 > `const` **Input**: `ForwardRefExoticComponent`\<[`InputProps`](#inputprops) & `RefAttributes`\<`HTMLInputElement`\>\>
 
-Defined in: [src/components/ui/Input.tsx:11](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Input.tsx#L11)
+Defined in: [src/components/ui/Input.tsx:13](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Input.tsx#L13)

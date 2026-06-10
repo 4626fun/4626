@@ -64,7 +64,7 @@ const {
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   handleOptions: vi.fn(() => false),
   readBoundedJsonObjectBody: readJsonBodyMock,
   setCors: vi.fn(),
@@ -349,6 +349,7 @@ describe('deploy session ownership guardrails', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     delete process.env.DEPLOY_SESSION_TTL_MINUTES
+    delete process.env.DEPLOY_SESSION_PERSIST_OWNER
     process.env.DEPLOY_SESSION_TOKEN_HMAC_SECRET = 'test-deploy-session-hmac-secret'
     isDbConfiguredMock.mockReturnValue(true)
     readDeployAuthFromRequestMock.mockReturnValue({
@@ -802,12 +803,31 @@ describe('deploy session ownership guardrails', () => {
             {
               id: 1,
               creator_token: '0x0000000000000000000000000000000000000003',
-              feature_key: 'solana_bridge_strategy',
+              feature_key: 'solana_ovault_mesh',
               status: 'active',
               price_usdc_paid: '0',
               payment_tx_hash: null,
               payment_from: null,
               payment_to: null,
+              payment_verified_at: new Date().toISOString(),
+              provisioned_at: null,
+              failed_at: null,
+              refunded_at: null,
+              provisioner_ref: null,
+              failure_reason: null,
+              metadata: {},
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            {
+              id: 2,
+              creator_token: '0x0000000000000000000000000000000000000003',
+              feature_key: 'vault_full_deploy',
+              status: 'active',
+              price_usdc_paid: '499000000',
+              payment_tx_hash: '0xpay',
+              payment_from: '0x0000000000000000000000000000000000000002',
+              payment_to: '0x00000000000000000000000000000000000000aa',
               payment_verified_at: new Date().toISOString(),
               provisioned_at: null,
               failed_at: null,
@@ -836,7 +856,8 @@ describe('deploy session ownership guardrails', () => {
             data: makeFinalizePhase2Data(),
           },
         ],
-        phase3Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x12345678' }],
+        phase3Calls: [],
+        phase4Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x12345678' }],
         solanaOvault: {
           enabled: true,
           assetMintOrigin: 'existing',

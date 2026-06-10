@@ -12,6 +12,7 @@ import {
   RATE_LIMITS,
   logger,
 } from '../../../packages/server-core/src/index.js'
+import { RELAY_OWNER_MUTATION_ORIGIN_GAS_OVERHEAD } from '../../../server/_lib/relay/getQuote.js'
 
 const RELAY_QUOTE_BODY_MAX_BYTES = 262_144
 const RELAY_QUOTE_URL = 'https://api.relay.link/quote/v2'
@@ -33,7 +34,8 @@ type RelayQuoteRequest = {
    * Optional. When omitted, defaults to `user` (the legacy single-wallet
    * shape used by /remove-owner's earlier prepareCalls lane). When provided,
    * forwarded to Relay so the quote uses a distinct recipient (e.g. funder
-   * EOA pays, CSW receives the executed call). See RELAY_OWNER_MUTATION_FLOW.md
+   * EOA pays, CSW receives the executed call). See
+   * docs/operations/relay-sponsored-owner-mutation-flow.md
    * for the two-wallet architecture.
    */
   recipient?: unknown
@@ -115,13 +117,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!isAddressString(body.user)) {
     return res.status(400).json({ success: false, error: 'user must be the CSW address' } satisfies ApiEnvelope<never>)
   }
-  const amountRaw = typeof body.amount === 'string' && body.amount.trim() ? body.amount.trim() : valueRaw
+  const amountRaw =
+    typeof body.amount === 'string' && body.amount.trim() !== ''
+      ? body.amount.trim()
+      : '0'
   if (!/^[0-9]+$/.test(amountRaw)) {
     return res.status(400).json({ success: false, error: 'amount must be a decimal integer string' } satisfies ApiEnvelope<never>)
   }
 
   // recipient defaults to user (legacy single-wallet behavior). When the
-  // caller wants the funder/recipient split (see RELAY_OWNER_MUTATION_FLOW.md),
+  // caller wants the funder/recipient split (see
+  // docs/operations/relay-sponsored-owner-mutation-flow.md),
   // they pass `recipient` explicitly and we forward it. Validate it's a real
   // address before trusting it.
   let recipient: string = body.user
@@ -154,6 +160,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     amount: amountRaw,
     tradeType: 'EXACT_OUTPUT',
     explicitDeposit: true,
+    subsidizeFees: true,
+    originGasOverhead: RELAY_OWNER_MUTATION_ORIGIN_GAS_OVERHEAD,
+    source: '4626-owner-mutation',
     txs: [{ to: body.to, data: body.data, value: valueRaw }],
   }
 

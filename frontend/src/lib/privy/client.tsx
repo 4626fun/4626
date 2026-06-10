@@ -4,7 +4,9 @@ import { getPrivyAppId, getPrivyClientId, isPrivyClientEnabled } from '@/lib/fla
 import { CONFIGURED_APP_ORIGIN, resolveAuthRedirectOrigin } from '@/lib/env/host'
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
+import { AppLoadingBootstrapGate } from '@/components/layout/AppLoadingOverlay'
 import { createPrivyAppearance } from './clientAppearance'
+import { PrivyWalletHooksContextProvider } from './walletHooksContext'
 
 type PrivyClientStatus = 'disabled' | 'loading' | 'ready'
 export const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
@@ -99,24 +101,36 @@ export function PrivyClientProvider(props: {
     }),
     [],
   )
-  const externalWallets = useMemo(
-    () => ({
-      // Some extension stacks expose a getter-only `window.ethereum`, and EIP-6963
-      // provider discovery can trigger extension-side assignment crashes. Keep waitlist
-      // auth email-first, but do not disable connectors entirely because Step 3 owner
-      // install requires external wallet connection on this page.
+  const externalWallets = useMemo(() => {
+    // Some extension stacks expose a getter-only `window.ethereum`, and EIP-6963
+    // provider discovery can trigger extension-side assignment crashes.
+    const sharedWalletConnectors = {
       walletConnect: { enabled: true },
       coinbaseWallet: { connectionOptions: 'all' as const },
+      solana: { connectors: solanaConnectors },
+    }
+
+    // Waitlist auth is intentionally email-only. Keep wallet connectors available
+    // for account-setup surfaces, but skip cross-app smart-wallet init here to
+    // avoid popup opener requirements (`window.opener`) in constrained browsers.
+    if (mode === 'waitlist-email-only') {
+      return sharedWalletConnectors
+    }
+
+    return {
+      ...sharedWalletConnectors,
       crossApp: {
         providerAppIds: [ZORA_PRIVY_APP_ID],
       },
-      solana: { connectors: solanaConnectors },
-    }),
-    [solanaConnectors],
-  )
+    }
+  }, [mode, solanaConnectors])
 
   if (!hasRuntimeConfig || !appId) {
-    return <PrivyClientContext.Provider value={ctx}>{children}</PrivyClientContext.Provider>
+    return (
+      <PrivyClientContext.Provider value={ctx}>
+        <PrivyWalletHooksContextProvider enabled={false}>{children}</PrivyWalletHooksContextProvider>
+      </PrivyClientContext.Provider>
+    )
   }
 
   const appearance = createPrivyAppearance({
@@ -169,7 +183,9 @@ export function PrivyClientProvider(props: {
     <PrivyClientContext.Provider value={ctx}>
       <PrivyProviderSafetyBoundary appId={appId} clientId={clientId} baseConfig={baseConfig} safeConfig={safeConfig}>
         <PrivyStatusObserver onStatus={handleRuntimeStatus} />
-        {children}
+        <AppLoadingBootstrapGate active={runtimeStatus === 'loading'}>
+          <PrivyWalletHooksContextProvider enabled>{children}</PrivyWalletHooksContextProvider>
+        </AppLoadingBootstrapGate>
       </PrivyProviderSafetyBoundary>
     </PrivyClientContext.Provider>
   )

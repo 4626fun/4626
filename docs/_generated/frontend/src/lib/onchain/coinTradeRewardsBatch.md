@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/onchain/coinTradeRewardsBatch
+[4626-web](../../../index.md) / src/lib/onchain/coinTradeRewardsBatch
 
 # src/lib/onchain/coinTradeRewardsBatch
 
@@ -24,7 +24,7 @@ Defined in: [src/lib/onchain/coinTradeRewardsBatch.ts:4](https://github.com/wena
 
 ###### recipient
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 

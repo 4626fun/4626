@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import handler from '../_handlers/auth/_privy.ts'
+import { classifyLinkedAccounts as realClassifyLinkedAccounts } from '../../server/_lib/wallet/walletMapping.ts'
 import { applyEnv, createMockReq, createMockRes, readSetCookies } from './helpers'
 
 const {
@@ -35,7 +36,7 @@ const {
   })),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   COOKIE_SESSION: '__Host-4626_session',
   handleOptions: vi.fn(() => false),
   setCors: vi.fn(),
@@ -62,22 +63,7 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
   checkDurableRateLimit: checkDurableRateLimitMock,
   getClientIp: getClientIpMock,
   rateLimitKey: rateLimitKeyMock,
-  classifyLinkedAccounts: vi.fn((user: any) => {
-    const linkedAccounts = Array.isArray(user?.linkedAccounts) ? user.linkedAccounts : []
-    const smartWallet = linkedAccounts.find((entry: any) => entry?.type === 'smart_wallet' && typeof entry?.address === 'string')
-    const allWallets = linkedAccounts
-      .filter((entry: any) => typeof entry?.address === 'string')
-      .map((entry: any) => ({
-        address: String(entry.address),
-        chain: entry?.chainType === 'solana' ? 'solana' : 'evm',
-      }))
-    return {
-      allWallets,
-      canonicalSmartWallet: smartWallet ? { address: String(smartWallet.address) } : null,
-      activeOwnerWallet: null,
-      primaryWalletAddress: smartWallet ? String(smartWallet.address) : null,
-    }
-  }),
+  classifyLinkedAccounts: vi.fn((user: any) => realClassifyLinkedAccounts(user)),
   syncUserWallets: syncUserWalletsMock,
 }))
 
@@ -361,11 +347,11 @@ describe('auth privy wallet sync', () => {
   })
 
   it('returns 400 when no Privy wallet is ready yet', async () => {
-    getUserByIdMock.mockResolvedValueOnce({
+    getUserByIdMock.mockResolvedValue({
       id: 'did:privy:test-user',
       linkedAccounts: [],
     })
-    syncUserWalletsMock.mockResolvedValueOnce({
+    syncUserWalletsMock.mockResolvedValue({
       profileId: 1,
       canonicalSmartWallet: null,
       activeOwnerWallet: null,
@@ -383,6 +369,31 @@ describe('auth privy wallet sync', () => {
 
     expect(res.statusCode).toBe(400)
     expect(res.body?.error).toContain('No Privy wallet is ready yet')
+  })
+
+  it('mints a session for base_account linked accounts when connector identity is on type', async () => {
+    getUserByIdMock.mockResolvedValue({
+      id: 'did:privy:test-user',
+      linkedAccounts: [{ type: 'base_account', address: '0x00000000000000000000000000000000000000aa' }],
+    })
+    syncUserWalletsMock.mockResolvedValue({
+      profileId: 1,
+      canonicalSmartWallet: { address: '0x00000000000000000000000000000000000000aa', provider: 'coinbase_wallet' },
+      activeOwnerWallet: null as any,
+      embeddedEoa: null as any,
+      connectedWallets: [],
+      primaryWalletAddress: '0x00000000000000000000000000000000000000aa',
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.address).toBe('0x00000000000000000000000000000000000000aa')
   })
 
 })

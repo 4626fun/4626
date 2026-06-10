@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/onboarding/\_bootstrap
+[4626-web](../../../index.md) / api/\_handlers/onboarding/\_bootstrap
 
 # api/\_handlers/onboarding/\_bootstrap
 

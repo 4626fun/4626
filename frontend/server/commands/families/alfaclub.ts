@@ -8,7 +8,22 @@ import {
   type MetricsSnapshotRow,
   type PublicationRecord,
 } from '../../_lib/alfaclub/publicationLedger.js'
+import { formatAlfaClubCommandHelp } from '../../_lib/alfaclub/alfaclubChatHelp.js'
+import { formatAlfaClubStatusForChat } from '../../_lib/alfaclub/alfaclubChatStatus.js'
 import { buildAlfaRoomChart } from '../../_lib/alfaclub/roomCharts.js'
+import {
+  buildAlfaClubBriefContext,
+  formatAlfaClubDailyBrief,
+  formatAlfaClubLeaderboardChat,
+  listDailyBriefCommandRoomIds,
+  readAlfaClubDailyBriefFlags,
+  runAlfaClubDailyBrief,
+} from '../../_lib/alfaclub/dailyBrief.js'
+import {
+  buildAlfaClubRoomUrl,
+  resolveCreatorRoomLinks,
+  resolveRoomIdFromFriendKeyTokenId,
+} from '../../_lib/alfaclub/creatorRoomLinks.js'
 import { SCORECARD_DISCLAIMER } from '../../_lib/alfaclub/scorecard.js'
 import {
   readVigilanteFlags,
@@ -20,7 +35,7 @@ import { ALFACLUB, FRIEND_KEY_ABI } from '../../_lib/wallet/alfaclub.js'
 import {
   isExecutionReady,
   resolveCommandIssuerContextByAddress,
-} from '../../_lib/wallet/commandIssuerContext.js'
+} from '@4626/server-core'
 import type { CoinbaseSmartWalletCall } from '../../_lib/wallet/privyCoinbaseSmartWallet.js'
 import { submitUserOpOrRefuse } from '../../_lib/wallet/userOperationSubmitter.js'
 import { getBasePreflightPublicClient } from '../../_lib/wallet/walletBalancePreflight.js'
@@ -190,9 +205,22 @@ function parseCreateRoomPayload(rawPayload: string): ParsedCreateRoomPayload | n
   }
 }
 
+function stripAlfaClubCommandPrefix(text: string): { bridge: boolean; cleaned: string } {
+  const trimmed = text.trim()
+  if (/^\/bridge(?:\s|$)/i.test(trimmed)) {
+    return { bridge: true, cleaned: trimmed.replace(/^\/bridge\s*/i, '').trim() }
+  }
+  return {
+    bridge: false,
+    cleaned: trimmed.replace(/^\/alfa(?:club)?\s*/i, '').trim(),
+  }
+}
+
 function parseSubcommand(text: string): {
   sub:
     | 'leaderboard'
+    | 'brief'
+    | 'brief-post'
     | 'creator'
     | 'status'
     | 'help'
@@ -207,10 +235,10 @@ function parseSubcommand(text: string): {
   chartKindRaw: string | null
   limit: number | null
 } {
-  const cleaned = text.trim().replace(/^\/alfa(?:club)?\s*/i, '').trim()
+  const { bridge, cleaned } = stripAlfaClubCommandPrefix(text)
   if (!cleaned) {
     return {
-      sub: 'leaderboard',
+      sub: bridge ? 'status' : 'leaderboard',
       address: null,
       tokenId: null,
       amount: null,
@@ -223,6 +251,19 @@ function parseSubcommand(text: string): {
   const parts = cleaned.split(/\s+/)
   const first = (parts[0] ?? '').toLowerCase()
 
+  if (first === 'brief' || first === 'digest' || first === 'daily') {
+    const second = (parts[1] ?? '').toLowerCase()
+    const sub = second === 'post' || second === 'send' ? 'brief-post' : 'brief'
+    return {
+      sub,
+      address: null,
+      tokenId: null,
+      amount: null,
+      payloadRaw: null,
+      chartKindRaw: null,
+      limit: null,
+    }
+  }
   if (first === 'leaderboard' || first === 'top' || first === 'ranking') {
     return {
       sub: 'leaderboard',
@@ -364,41 +405,8 @@ function formatFlagsLine(flags: VigilanteFlags): string {
   return bits.join(' · ')
 }
 
-function formatStatus(flags: VigilanteFlags): string {
-  const lines: string[] = [
-    '**AlfaClub Vigilante — Pipeline Status**',
-    '',
-    `KILL_SWITCH: ${flags.killSwitch ? 'ON' : 'off'}`,
-    `READ_ENABLED: ${flags.readEnabled ? 'on' : 'off'}`,
-    `POST_ENABLED: ${flags.postEnabled ? 'on' : 'off'}`,
-    `FEEDBACK_ENABLED: ${flags.feedbackEnabled ? 'on' : 'off'}`,
-    `TOP_N: ${flags.topN}`,
-    `COOLDOWN: ${flags.cooldownHours}h`,
-    '',
-    SCORECARD_DISCLAIMER,
-  ]
-  return lines.join('\n')
-}
-
 function formatHelp(): string {
-  return [
-    '**/alfa** — AlfaClub Integrity Vigilante',
-    '',
-    '  `/alfa` — top-N leaderboard',
-    '  `/alfa <address>` — detail for a specific creator address',
-    '  `/alfa creator <address>` — same, explicit form',
-    '  `/alfa chart [kind] [limit]` — render a room analytics chart',
-    '  `/alfa status` — pipeline phase flag status',
-    '  `/alfa quote-key <tokenId> [amount]` — preview room key cost',
-    '  `/alfa buy-key <tokenId> [amount]` — buy a room key through your CSW',
-    '  `/alfa create-room <json-or-base64>` — register a room using signed payload',
-    '',
-    'Chart kinds:',
-    '  `top-volume` · `tier-mix` · `pnl-distribution`',
-    '  charts render natively and serve from the 4626 IPFS gateway',
-    '',
-    SCORECARD_DISCLAIMER,
-  ].join('\n')
+  return `${formatAlfaClubCommandHelp()}\n\n${SCORECARD_DISCLAIMER}`
 }
 
 function formatLeaderboard(params: {
@@ -460,8 +468,9 @@ function formatCreatorDetail(params: {
   address: string
   row: MetricsSnapshotRow | null
   publications: PublicationRecord[]
+  roomUrl?: string | null
 }): string {
-  const { flags, snapshotTs, address, row, publications } = params
+  const { flags, snapshotTs, address, row, publications, roomUrl } = params
   const lines: string[] = [
     `**AlfaClub Creator** \`${address}\``,
     `**Flags:** ${formatFlagsLine(flags)}`,
@@ -494,6 +503,14 @@ function formatCreatorDetail(params: {
   lines.push('')
   lines.push(`**Rank:** ${row.rank}`)
   lines.push(`**Room (FriendKey tokenId):** ${row.tokenId.toString()}`)
+  if (roomUrl) {
+    lines.push(`**AlfaClub room:** ${roomUrl}`)
+  } else {
+    const fallbackRoomId = resolveRoomIdFromFriendKeyTokenId(row.tokenId.toString())
+    if (fallbackRoomId) {
+      lines.push(`**AlfaClub room (token match):** ${buildAlfaClubRoomUrl(fallbackRoomId)}`)
+    }
+  }
   lines.push(`**Supply:** ${row.totalSupply.toString()} (staked ${row.stakedSupply.toString()})`)
   lines.push(
     `**Hyperliquid:** account=${formatUsd(row.hlAccountValueUsd ?? null)} · pnl30d=${formatUsd(row.pnl30dUsd ?? null)}`,
@@ -1058,7 +1075,8 @@ export async function executeAlfaclubCommandFamily(params: {
   const flags = readVigilanteFlags()
 
   if (parsed.sub === 'status') {
-    return { ok: true, response: formatStatus(flags) }
+    const response = await formatAlfaClubStatusForChat(flags)
+    return { ok: true, response: `${response}\n\n${SCORECARD_DISCLAIMER}` }
   }
   if (parsed.sub === 'quote-key') {
     return executeQuoteKey({
@@ -1104,9 +1122,45 @@ export async function executeAlfaclubCommandFamily(params: {
   if (parsed.sub === 'help') {
     return { ok: true, response: formatHelp() }
   }
+  if (parsed.sub === 'brief') {
+    const built = await buildAlfaClubBriefContext({ fetchMarkets: true })
+    if (!built.ok) {
+      const hint =
+        built.reason === 'no_snapshot'
+          ? 'No AlfaClub snapshot yet — run the snapshot cron first.'
+          : 'Latest AlfaClub snapshot is empty.'
+      return { ok: false, response: hint }
+    }
+    return { ok: true, response: formatAlfaClubDailyBrief(built.formatInput) }
+  }
+  if (parsed.sub === 'brief-post') {
+    const result = await runAlfaClubDailyBrief({
+      flags: { ...readAlfaClubDailyBriefFlags(), forceSend: true },
+    })
+    if (!result.ok || !result.sent) {
+      const reason = result.reason ?? 'not_sent'
+      const rooms = listDailyBriefCommandRoomIds().join(', ')
+      return {
+        ok: false,
+        response: `Digest post failed (${reason}). Command rooms: ${rooms}.`,
+      }
+    }
+    return {
+      ok: true,
+      response: `Daily digest posted to rooms **${result.roomId}**.`,
+    }
+  }
   if (parsed.sub === 'creator') {
     const address = parsed.address ?? params.senderWallet.toLowerCase()
     const loaded = await loadCreator(flags, address)
+    let roomUrl: string | null = null
+    if (loaded.row) {
+      const roomIds = await resolveCreatorRoomLinks([
+        { address: loaded.row.creatorAddress, tokenId: loaded.row.tokenId.toString() },
+      ])
+      const roomId = roomIds.get(address.toLowerCase())
+      roomUrl = roomId ? buildAlfaClubRoomUrl(roomId) : null
+    }
     return {
       ok: true,
       response: formatCreatorDetail({
@@ -1115,18 +1169,26 @@ export async function executeAlfaclubCommandFamily(params: {
         address,
         row: loaded.row,
         publications: loaded.publications,
+        roomUrl,
       }),
     }
   }
 
-  const loaded = await loadLeaderboard(flags)
+  const limit = parsed.limit ?? flags.topN
+  const built = await buildAlfaClubBriefContext({
+    topRows: limit,
+    fetchMarkets: false,
+    compact: true,
+  })
+  if (!built.ok) {
+    const hint =
+      built.reason === 'no_snapshot'
+        ? 'No AlfaClub snapshot yet — the daily cron populates scores and room links.'
+        : 'Latest AlfaClub snapshot is empty.'
+    return { ok: false, response: hint }
+  }
   return {
     ok: true,
-    response: formatLeaderboard({
-      flags,
-      snapshotTs: loaded.snapshotTs,
-      rows: loaded.rows,
-      pubsByAddress: loaded.pubsByAddress,
-    }),
+    response: formatAlfaClubLeaderboardChat(built.formatInput, SCORECARD_DISCLAIMER),
   }
 }

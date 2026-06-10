@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/wallet/spendPermissionPeriodRead
+[4626-web](../../../index.md) / server/\_lib/wallet/spendPermissionPeriodRead
 
 # server/\_lib/wallet/spendPermissionPeriodRead
 

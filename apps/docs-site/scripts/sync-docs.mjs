@@ -4,7 +4,7 @@
  * Merges documentation from multiple first-party sources:
  * 1. docs/              - Manual documentation (source of truth)
  * 2. docs/_generated/   - Auto-generated API docs (forge doc, typedoc)
- * 3. cre/               - automation workflows (README + docs)
+ * 3. kpr/               - automation workflows (README + docs)
  * 4. frontend/docs/     - Frontend design docs & guides
  * 5. frontend/README.md - Frontend overview
  * 6. repo root docs      - Root README/security/deployment docs
@@ -32,7 +32,13 @@ const REPO_ROOT = process.env.DOCS_REPO_ROOT
 const DEST_DIR = path.resolve(__dirname, '../docs');
 const STATIC_DIR = path.resolve(__dirname, '../static');
 const BRAND_SOURCE = path.join(REPO_ROOT, 'frontend/public/brand');
+const BRAND_ASSET_SOURCE = path.join(REPO_ROOT, 'frontend/public/assets');
 const BRAND_DEST = path.join(STATIC_DIR, 'brand');
+
+const DOCS_BRAND_CANONICAL_COPIES = [
+  ['logo-mark.svg', 'logo.svg'],
+  ['favicon.svg', 'favicon.svg'],
+];
 
 // Source directories
 const SOURCES = {
@@ -54,13 +60,13 @@ const SOURCES = {
     exclude: [],
     label: 'Frontend API (typedoc)',
   },
-  cre: {
-    dir: path.join(REPO_ROOT, 'cre'),
-    destPrefix: 'operations/cre',
+  kpr: {
+    dir: path.join(REPO_ROOT, 'kpr'),
+    destPrefix: 'operations/kpr',
     exclude: [
-      'node_modules/**', 'cre-workflows/**/node_modules/**',
+      'node_modules/**', 'kpr-workflows/**/node_modules/**',
       '**/*.ts', '**/*.js', '**/*.mjs', '**/*.json', '**/*.yaml', '**/*.yml',
-      '**/*.env*', '**/patches/**', '**/dist/**', '**/.cre/**', '**/*.wasm',
+      '**/*.env*', '**/patches/**', '**/dist/**', '**/.kpr/**', '**/*.wasm',
     ],
     label: 'Automation workflows',
   },
@@ -111,7 +117,7 @@ const stats = {
     manual: 0,
     contracts: 0,
     frontend: 0,
-    cre: 0,
+    kpr: 0,
     frontendDocs: 0,
     rootMeta: 0,
     runtimeSkills: 0,
@@ -122,12 +128,12 @@ const stats = {
 const GIT_DATE_PATHS = [
   'docs',
   'frontend/docs',
-  'cre',
+  'kpr',
   'script/agent-runtime/skills',
   'README.md',
   'SECURITY.md',
   'deployments/README.md',
-  'frontend/server/agent/eliza/README.md',
+  'frontend/server/agents/eliza/README.md',
   'frontend/server/solana-provisioner/README.md',
   'docs/_generated/contracts',
   'docs/_generated/frontend',
@@ -406,8 +412,8 @@ function normalizeFrontmatter(content, relativePath, sidebarPosition, sourceType
   // Mark workspace-sourced docs
   if (sourceType === 'manual') {
     ensureManualMetadata(parsed.data, relativePath, sourceMetadata);
-  } else if (sourceType === 'cre' || sourceType === 'frontendDocs' || sourceType === 'rootMeta' || sourceType === 'runtimeSkills' || sourceType === 'serviceReadmes') {
-    if (sourceType === 'cre') parsed.data.synced_from = 'cre/';
+  } else if (sourceType === 'kpr' || sourceType === 'frontendDocs' || sourceType === 'rootMeta' || sourceType === 'runtimeSkills' || sourceType === 'serviceReadmes') {
+    if (sourceType === 'kpr') parsed.data.synced_from = 'kpr/';
     if (sourceType === 'frontendDocs') parsed.data.synced_from = 'frontend/';
     if (sourceType === 'rootMeta') parsed.data.synced_from = 'repo-root';
     if (sourceType === 'runtimeSkills') parsed.data.synced_from = 'script/agent-runtime/skills/';
@@ -455,7 +461,7 @@ async function sourceExists(sourceDir) {
  * Keys are sourceKey, values are maps of original filename -> destination filename.
  */
 const RENAME_MAP = {
-  cre: {
+  kpr: {
     'README.md': 'index.md',
   },
   frontendDocs: {
@@ -680,6 +686,25 @@ async function syncBrandAssets() {
   for (const file of copiedFiles) {
     console.log(`     - ${file}`);
   }
+
+  for (const [assetFile, brandFile] of DOCS_BRAND_CANONICAL_COPIES) {
+    const sourcePath = path.resolve(BRAND_ASSET_SOURCE, assetFile);
+    const destPath = path.resolve(BRAND_DEST, brandFile);
+
+    if (!(await sourceExists(sourcePath))) {
+      stats.warnings.push(`Brand assets: missing canonical source ${assetFile}`);
+      continue;
+    }
+
+    try {
+      await fs.mkdir(BRAND_DEST, { recursive: true });
+      await fs.copyFile(sourcePath, destPath);
+      console.log(`     - ${brandFile} (from assets/${assetFile})`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      stats.warnings.push(`Brand asset ${brandFile}: ${message}`);
+    }
+  }
 }
 
 /**
@@ -759,7 +784,7 @@ async function sync() {
   console.log(`   Manual docs:     ${stats.bySource.manual}`);
   console.log(`   Contract API:    ${stats.bySource.contracts}`);
   console.log(`   Frontend API:    ${stats.bySource.frontend}`);
-  console.log(`   Automation flows: ${stats.bySource.cre}`);
+  console.log(`   Automation flows: ${stats.bySource.kpr}`);
   console.log(`   Frontend docs:   ${stats.bySource.frontendDocs}`);
   console.log(`   Repository docs: ${stats.bySource.rootMeta}`);
   console.log(`   Runtime skills:  ${stats.bySource.runtimeSkills}`);

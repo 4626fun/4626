@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/v1/agents/\_wallet-intelligence
+[4626-web](../../../../index.md) / api/\_handlers/v1/agents/\_wallet-intelligence
 
 # api/\_handlers/v1/agents/\_wallet-intelligence
 

@@ -20,7 +20,7 @@ vi.mock('../../server/zora/_shared.js', () => ({
   setCors: vi.fn(),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   readBoundedJsonObjectBody: vi.fn(async (req: any, opts?: { maxBytes?: number }) => {
     const body = req.body
     if (typeof body === 'string') {

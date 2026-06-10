@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/commands/families/coin
+[4626-web](../../../index.md) / server/commands/families/coin
 
 # server/commands/families/coin
 
@@ -28,7 +28,7 @@ Defined in: [server/commands/families/coin.ts:7](https://github.com/wenakita/462
 
 ###### senderWallet
 
-`` `0x${string}` ``
+`string`
 
 ###### text
 

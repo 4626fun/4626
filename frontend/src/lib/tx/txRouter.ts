@@ -1,16 +1,19 @@
-import { encodeFunctionData } from 'viem'
+import { encodeFunctionData, getAddress } from 'viem'
 
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { recordUserOpTelemetry } from '@/lib/aa/coinbaseErc4337Telemetry'
 import { appendBuilderSuffixToHex } from '@/lib/base/baseBuilderCodes'
 import type { TransactionRequest } from '@/lib/uniswap/tradingApi'
+import { buildWalletSendCallsPayload } from '@/lib/wallet/walletSendCallsPayload'
 import type { AccountCapabilities, SignerType } from '@/wallet/accountContext'
 import {
+  isAllowedCanonicalCswExecutionSigner,
   isAllowedCanonicalSigner,
-  isTargetCanonicalCsw,
+  isCanonicalCsw,
   resolvePolicyCanonicalAddress,
   shouldApplyCanonicalEnforcement,
+  CANONICAL_CSW_ADDRESS,
 } from '@/wallet/canonicalWalletPolicy'
 
 const COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI = [
@@ -59,6 +62,13 @@ export type TxRouterContext = {
   connectorName?: string | null
   capabilities?: AccountCapabilities | null
   debug?: (event: TxRouterDebugEvent) => void
+  onSubmissionStatus?: (message: string) => void
+  /** Canonical4337 only: return after bundler accept; poll receipt separately when false. */
+  waitForOnChainReceipt?: boolean
+  /** Canonical4337 only: start on a fresh EntryPoint nonce key (swap AA25 avoidance). */
+  preferEphemeralNonceLane?: boolean
+  /** Zora CSW path: submit-time prepare already production-simulated router calldata. */
+  zoraRouterValidatedBeforeSend?: boolean
 }
 
 export type TxRoutingDecision = {
@@ -83,6 +93,11 @@ export type TxRouterDebugEvent = {
   smartWalletDetected?: boolean
   supportsSendCallsHint?: boolean
   txHash?: string | null
+  userOpHash?: string | null
+  /** Wall time from `send_attempt` to `send_success` / `send_error` for this send leg. */
+  durationMs?: number
+  /** True when submit succeeded but on-chain bundle tx is not resolved yet (canonical fast return). */
+  confirmingOnChain?: boolean
   callsId?: string | null
   error?: string
 }
@@ -92,6 +107,7 @@ export type TxRouterSendResult = {
   method: TxMethod
   sender: `0x${string}` | null
   transactionHash: string | null
+  userOpHash?: string | null
   callsId: string | null
   txHashes: string[]
 }
@@ -120,10 +136,6 @@ function asOptionalBigInt(value: unknown): bigint | undefined {
 
 function toHex(value: bigint): `0x${string}` {
   return `0x${value.toString(16)}` as `0x${string}`
-}
-
-function toChainHex(chainId: number): `0x${string}` {
-  return `0x${Math.floor(chainId).toString(16)}` as `0x${string}`
 }
 
 function isTxHash(value: unknown): value is `0x${string}` {
@@ -256,6 +268,15 @@ export function normalizeCanonicalSendError(error: unknown): Error {
     return new Error('Privy embedded wallet is not an owner on the canonical smart wallet.')
   }
 
+  if (
+    lower.includes('unauthorized signer for canonical csw') ||
+    lower.includes('authorized owner signer')
+  ) {
+    return new Error(
+      'Connect a wallet that is an on-chain owner of your smart wallet, or finish 4626 signing setup in account settings.',
+    )
+  }
+
   return error instanceof Error ? error : new Error(message || 'Canonical swap send failed.')
 }
 
@@ -352,12 +373,12 @@ function assertCanonicalPolicyContext(context: TxRouterContext): void {
   }
 
   const canonicalIdentity = resolveCanonicalIdentityAddress(context)
-  if (!isTargetCanonicalCsw(canonicalIdentity)) {
+  if (!isCanonicalCsw(canonicalIdentity)) {
     throw new Error('Canonical CSW policy requires the configured canonical smart wallet identity')
   }
   if (
     context.executionAddress &&
-    !isTargetCanonicalCsw(context.executionAddress) &&
+    !isCanonicalCsw(context.executionAddress) &&
     !isSubAccountCanonicalExecution(context)
   ) {
     throw new Error('Canonical CSW policy blocked non-canonical execution address')
@@ -368,7 +389,7 @@ function assertCanonicalPolicyContext(context: TxRouterContext): void {
   if (
     !isSubAccountCanonicalExecution(context) &&
     context.signerType === 'SMART_WALLET' &&
-    !isTargetCanonicalCsw(context.signerAddress)
+    !isCanonicalCsw(context.signerAddress)
   ) {
     throw new Error('Canonical CSW policy blocks non-canonical smart-wallet signers')
   }
@@ -587,21 +608,22 @@ async function sendViaSendCalls(params: {
   let telemetryErrorCode: string | null = null
   let fellBackToAnotherMode = false
   try {
+    if (!sender) {
+      throw new Error('wallet_sendCalls requires a connected sender address')
+    }
+    const sendCallsPayload = buildWalletSendCallsPayload({
+      from: sender as `0x${string}`,
+      chainId: context.chainId,
+      atomicRequired: calls.length > 1,
+      calls: calls.map((call) => ({
+        to: call.to,
+        data: call.data,
+        value: call.value,
+      })),
+    })
     const response = await wallet.request({
       method: 'wallet_sendCalls',
-      params: [
-        {
-          chainId: toChainHex(context.chainId),
-          from: sender ?? undefined,
-          calls: calls.map((call) => ({
-            to: call.to,
-            data: call.data,
-            value: toHex(call.value),
-          })),
-          atomicRequired: calls.length > 1,
-          version: '2.0.0',
-        },
-      ],
+      params: [sendCallsPayload],
     })
     const callsId =
       typeof response === 'string'
@@ -630,6 +652,7 @@ async function sendViaSendCalls(params: {
       callTargets: calls.map((call) => call.to),
       txHash: status.txHash,
       callsId,
+      durationMs: Math.max(0, Date.now() - startedAt),
     })
     return {
       mode: decision.mode,
@@ -702,6 +725,23 @@ async function sendViaCanonical4337(params: {
   if (!canonicalIdentity || !context.signerAddress || !context.publicClient || !context.walletClient) {
     throw new Error('Canonical smart wallet or owner signer is not ready for ERC-4337 execution')
   }
+
+  // Early hard block: reject signers that are not on the canonical CSW execution allowlist.
+  if (getAddress(canonicalIdentity) === getAddress(CANONICAL_CSW_ADDRESS)) {
+    if (!isAllowedCanonicalCswExecutionSigner(context.signerAddress)) {
+      const msg =
+        'Canonical smart wallet execution requires an authorized owner signer. Finish 4626 signing setup or connect a wallet that owns your smart wallet.'
+      context.debug?.({
+        event: 'send_error',
+        mode: decision.mode,
+        reason: 'canonical-csw-unauthorized-signer',
+        sender: canonicalIdentity,
+        callTargets: calls.map((c) => c.to),
+        chainId: context.chainId,
+      })
+      throw new Error(msg)
+    }
+  }
   const sender = canonicalIdentity
   if (shouldBypassCanonical4337ForSwapRouterValue(calls)) {
     const reason = 'swap-router native-value call is not eligible for the current paymaster path'
@@ -743,6 +783,7 @@ async function sendViaCanonical4337(params: {
     sender,
     callTargets: calls.map((call) => call.to),
   })
+  const startedAt = Date.now()
   const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
   const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
   let result: Awaited<ReturnType<typeof sendCoinbaseSmartWalletUserOperation>>
@@ -753,6 +794,10 @@ async function sendViaCanonical4337(params: {
       bundlerUrl,
       smartWallet: canonicalIdentity,
       ownerAddress: context.signerAddress,
+      onSubmissionStatus: context.onSubmissionStatus,
+      waitForOnChainReceipt: context.waitForOnChainReceipt ?? true,
+      preferEphemeralNonceLane: context.preferEphemeralNonceLane ?? false,
+      zoraRouterValidatedBeforeSend: context.zoraRouterValidatedBeforeSend === true,
       // Let the ERC-4337 helper handle attribution so it can preserve canonical
       // calldata for strict paymaster policies (e.g. Universal Router execute).
       calls: calls.map((call) => ({
@@ -797,6 +842,7 @@ async function sendViaCanonical4337(params: {
     }
     throw normalized
   }
+  const durationMs = Math.max(0, Date.now() - startedAt)
   context.debug?.({
     event: 'send_success',
     mode: decision.mode,
@@ -806,14 +852,18 @@ async function sendViaCanonical4337(params: {
     sender,
     callTargets: calls.map((call) => call.to),
     txHash: result.transactionHash,
+    userOpHash: result.userOpHash,
+    durationMs,
+    confirmingOnChain: !result.transactionHash && Boolean(result.userOpHash),
   })
   return {
     mode: decision.mode,
     method: 'eth_sendUserOperation',
     sender,
     transactionHash: result.transactionHash,
+    userOpHash: result.userOpHash,
     callsId: null,
-    txHashes: [result.transactionHash],
+    txHashes: result.transactionHash ? [result.transactionHash] : [],
   }
 }
 

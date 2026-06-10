@@ -130,7 +130,7 @@ describe('zora-csw/scan-cron handler', () => {
     expect(typeof handler).toBe('function')
   })
 
-  it('returns 503 when feature flag is missing', async () => {
+  it('returns skipped tick when feature flag is missing', async () => {
     const cleanup = applyEnv({ ZORA_CSW_INDEXER_ENABLED: undefined })
     try {
       const handler = await getV1ApiHandler('zora-csw/scan-cron')
@@ -140,8 +140,13 @@ describe('zora-csw/scan-cron handler', () => {
       })
       const res = createMockRes()
       await handler!(req, res)
-      expect(res.statusCode).toBe(503)
-      expect(res.body).toMatchObject({ ok: false, error: 'feature_disabled' })
+      expect(res.statusCode).toBe(200)
+      expect(res.body).toMatchObject({
+        ok: true,
+        tick: 'skipped',
+        reason: 'feature_disabled',
+        new_csws: 0,
+      })
     } finally {
       cleanup()
     }

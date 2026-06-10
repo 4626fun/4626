@@ -14,7 +14,7 @@ import {
   getCachedWalletIntelligence,
   cacheWalletIntelligence,
   type WalletIntelligenceOptions,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { tryUploadImmutableJson } from '../../../../server/_lib/lens/lensGrove.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }

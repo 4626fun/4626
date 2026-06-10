@@ -1,5 +1,7 @@
 declare const process: { env: Record<string, string | undefined> }
 
+let legacyVercelPostgresWarned = false
+
 function isProbablyPostgresUrl(value: string | null | undefined): boolean {
   const v = typeof value === 'string' ? value.trim() : ''
   if (!v) return false
@@ -17,30 +19,43 @@ function isSupabaseDatabaseUrl(value: string | null | undefined): boolean {
   }
 }
 
-type DbSource = 'vercel_postgres' | 'database_url'
-
-function getDbConfig(): { source: DbSource; connectionString: string } | null {
+/**
+ * Database configuration resolution.
+ *
+ * Policy (as of 2026 cleanup): Supabase is the single source of truth for all
+ * production data. Vercel Postgres (Neon) attachment is legacy and should not
+ * be used for new work. Generic POSTGRES_URL is still accepted for Railway,
+ * local dev, scripts, and older environments, but always uses the standard
+ * `pg` driver (never the deprecated @vercel/postgres path).
+ */
+function getDbConfig(): { source: 'supabase' | 'generic_postgres'; connectionString: string } | null {
   const fromDatabaseUrl = process.env.DATABASE_URL
   const hasSupabaseEnv = Boolean(process.env.SUPABASE_URL || process.env.SUPABASE_SERVICE_ROLE_KEY)
-  const preferDatabaseUrl = isSupabaseDatabaseUrl(fromDatabaseUrl) && hasSupabaseEnv
-  // In production on Vercel, do NOT read DATABASE_URL by default.
-  // - Many projects set DATABASE_URL for external providers (e.g. Supabase) that are incompatible with @vercel/postgres.
-  // - Vercel Postgres sets POSTGRES_URL / POSTGRES_URL_NON_POOLING automatically.
-  // Exception: if DATABASE_URL looks like Supabase and Supabase envs are set, prefer it.
-  const isVercel = Boolean(process.env.VERCEL) || Boolean(process.env.VERCEL_ENV)
-  const fromVercelPool = process.env.POSTGRES_URL
-  if (preferDatabaseUrl && isProbablyPostgresUrl(fromDatabaseUrl)) {
-    return { source: 'database_url', connectionString: (fromDatabaseUrl ?? '').trim() }
+  const looksLikeSupabase = isSupabaseDatabaseUrl(fromDatabaseUrl)
+
+  // Strong Supabase preference: if we have Supabase envs + a Supabase-shaped DATABASE_URL, use it.
+  if (looksLikeSupabase && hasSupabaseEnv && isProbablyPostgresUrl(fromDatabaseUrl)) {
+    return { source: 'supabase', connectionString: (fromDatabaseUrl ?? '').trim() }
   }
-  if (isProbablyPostgresUrl(fromVercelPool)) return { source: 'vercel_postgres', connectionString: (fromVercelPool ?? '').trim() }
 
-  const fromVercelDirect = process.env.POSTGRES_URL_NON_POOLING
-  if (isProbablyPostgresUrl(fromVercelDirect)) return { source: 'vercel_postgres', connectionString: (fromVercelDirect ?? '').trim() }
+  // Legacy Vercel Postgres vars (POSTGRES_URL / POSTGRES_URL_NON_POOLING) are still
+  // accepted as a generic Postgres connection string for Railway / local / scripts.
+  // They are treated as "generic_postgres" and will use the standard `pg` driver.
+  const fromLegacyPool = process.env.POSTGRES_URL
+  if (isProbablyPostgresUrl(fromLegacyPool)) {
+    return { source: 'generic_postgres', connectionString: (fromLegacyPool ?? '').trim() }
+  }
 
-  // Fallback: if Vercel Postgres is not configured, accept DATABASE_URL even on Vercel.
-  // This enables running against external Postgres providers (e.g. Supabase) without requiring POSTGRES_URL.
-  // Only accept actual Postgres connection strings; it's common for other providers to set DATABASE_URL.
-  if (isProbablyPostgresUrl(fromDatabaseUrl)) return { source: 'database_url', connectionString: (fromDatabaseUrl ?? '').trim() }
+  const fromLegacyDirect = process.env.POSTGRES_URL_NON_POOLING
+  if (isProbablyPostgresUrl(fromLegacyDirect)) {
+    return { source: 'generic_postgres', connectionString: (fromLegacyDirect ?? '').trim() }
+  }
+
+  // Final fallback: plain DATABASE_URL (may be Supabase or any other Postgres).
+  if (isProbablyPostgresUrl(fromDatabaseUrl)) {
+    const source: 'supabase' | 'generic_postgres' = looksLikeSupabase ? 'supabase' : 'generic_postgres'
+    return { source, connectionString: (fromDatabaseUrl ?? '').trim() }
+  }
 
   return null
 }
@@ -126,15 +141,68 @@ function isSelfSignedCertChainError(err: unknown): boolean {
   return message.includes('self-signed certificate in certificate chain')
 }
 
-type DbResult = { rows: any[]; rowCount?: number }
+type DbResult<T = any> = { rows: T[]; rowCount?: number }
 type DbPool = {
-  sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<DbResult>
+  sql: <T = any>(strings: TemplateStringsArray, ...values: any[]) => Promise<DbResult<T>>
   // Preferred: explicit query API (helps satisfy scanners and is unambiguous parameterization).
   query?: (text: string, params?: any[]) => Promise<DbResult>
 }
 
+export type { DbPool }
+
+function buildClientDb(client: { query: (text: string, params?: any[]) => Promise<any> }): DbPool {
+  return {
+    sql: async (strings: TemplateStringsArray, ...values: any[]) => {
+      let text = ''
+      for (let i = 0; i < strings.length; i++) {
+        text += strings[i]
+        if (i < values.length) text += `$${i + 1}`
+      }
+      const res = await client.query(text, values)
+      const rows = res.rows ?? []
+      return {
+        rows,
+        rowCount: Number.isFinite(Number(res.rowCount)) ? Number(res.rowCount) : rows.length,
+      }
+    },
+    query: async (text: string, params?: any[]) => {
+      const res = await client.query(text, params)
+      const rows = res.rows ?? []
+      return {
+        rows,
+        rowCount: Number.isFinite(Number(res.rowCount)) ? Number(res.rowCount) : rows.length,
+      }
+    },
+  }
+}
+
+export async function runInTransaction<T>(fn: (db: DbPool) => Promise<T>): Promise<T | null> {
+  const db = await getDb()
+  if (!db) return null
+  const pool = cachedRawPool
+  if (!pool || typeof pool.connect !== 'function') {
+    return fn(db)
+  }
+
+  const client = await pool.connect()
+  const txDb = buildClientDb(client)
+  try {
+    await client.query('BEGIN')
+    const result = await fn(txDb)
+    await client.query('COMMIT')
+    return result
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
 let cachedDb: DbPool | null = null
 let cachedRawPool: any = null
+/** Bumped when the pool is reset so stale DbPool handles re-bind via getDb(). */
+let activePoolGeneration = 0
 let initError: string | null = null
 let initPromise: Promise<DbPool | null> | null = null
 let initErrorAtMs = 0
@@ -167,7 +235,17 @@ function isPoolAcquireTimeoutError(err: unknown): boolean {
   return lc.includes('timeout exceeded when trying to connect') || lc.includes('timeout acquiring a client')
 }
 
+/** True when Supabase session pool or a torn-down pg pool rejected the connection. */
+export function isPostgresPoolSaturatedError(err: unknown): boolean {
+  if (isSessionModeMaxClientsError(err) || isPoolAcquireTimeoutError(err)) return true
+  const msg = err instanceof Error ? err.message : String(err ?? '')
+  return /pool after calling end/i.test(msg)
+}
+
 function getInitRetryWindowMs(): number {
+  if (isDeployDryRunContext()) {
+    return parsePositiveInt(process.env.POSTGRES_INIT_RETRY_MS) ?? 3_000
+  }
   return parsePositiveInt(process.env.POSTGRES_INIT_RETRY_MS) ?? 10_000
 }
 
@@ -177,6 +255,23 @@ function getSessionSaturationRetryWindowMs(): number {
 
 function getAuthInitRetryWindowMs(): number {
   return parsePositiveInt(process.env.POSTGRES_INIT_RETRY_MS_AUTH) ?? 300_000
+}
+
+import {
+  isDeployDryRunContext,
+  isDeployDryRunDbDisabled,
+} from '../dev/localDevEnv.js'
+import { ensureCreatorAccessSchema as ensureCreatorAccessSchemaFromBootstrap } from './schemaBootstrap.js'
+
+function isLikelyConnectivityTimeout(err: unknown): boolean {
+  const code = String((err as any)?.code ?? '').trim().toUpperCase()
+  if (code === 'ETIMEDOUT') return true
+  const message = String((err as any)?.message ?? err ?? '').toLowerCase()
+  return (
+    message.includes('timeout') ||
+    message.includes('authentication did not complete') ||
+    message.includes('failed to connect to database')
+  )
 }
 
 function isDbAuthConfigError(err: unknown): boolean {
@@ -208,6 +303,7 @@ function shouldLogInitError(signature: string, throttleMs: number): boolean {
 }
 
 function resetCachedPool(): void {
+  activePoolGeneration += 1
   cachedDb = null
   initPromise = null
   initError = null
@@ -219,7 +315,26 @@ function resetCachedPool(): void {
   }
 }
 
+async function runOnCurrentDb<T>(
+  generation: number,
+  run: (db: DbPool) => Promise<T>,
+): Promise<T> {
+  if (generation !== activePoolGeneration) {
+    const fresh = await getDb()
+    if (!fresh) throw new Error('db_unavailable')
+    return run(fresh)
+  }
+  if (!cachedDb) {
+    const fresh = await getDb()
+    if (!fresh) throw new Error('db_unavailable')
+    return run(fresh)
+  }
+  return run(cachedDb)
+}
+
 const QUERY_RETRY_BASE_MS = 250
+let lastPoolAcquireTimeoutWarnAtMs = Number.NEGATIVE_INFINITY
+const POOL_ACQUIRE_TIMEOUT_WARN_THROTTLE_MS = 5 * 60_000
 
 function getQueryRetryCount(): number {
   return parsePositiveInt(process.env.POSTGRES_QUERY_RETRY_COUNT) ?? 2
@@ -247,9 +362,19 @@ async function withSessionRetry<T>(
         const jitter = 0.5 + Math.random() * 0.5
         const delayMs = QUERY_RETRY_BASE_MS * Math.pow(2, attempt) * jitter
         const reason = sessionModeMaxClients ? 'MaxClientsInSessionMode' : 'pool acquire timeout'
-        console.warn(
-          `[postgres] ${reason} on query; retrying (${attempt + 1}/${maxRetries}) after ${Math.round(delayMs)}ms`,
-        )
+        if (sessionModeMaxClients) {
+          console.warn(
+            `[postgres] ${reason} on query; retrying (${attempt + 1}/${maxRetries}) after ${Math.round(delayMs)}ms`,
+          )
+        } else {
+          const now = Date.now()
+          if (now - lastPoolAcquireTimeoutWarnAtMs >= POOL_ACQUIRE_TIMEOUT_WARN_THROTTLE_MS) {
+            lastPoolAcquireTimeoutWarnAtMs = now
+            console.info(
+              `[postgres] ${reason} on query; retrying (${attempt + 1}/${maxRetries}) after ${Math.round(delayMs)}ms`,
+            )
+          }
+        }
         await sleep(delayMs)
       }
     }
@@ -270,7 +395,38 @@ export function getDbInitError(): string | null {
   return initError
 }
 
+/**
+ * Cron handlers should use this instead of bare `getDb()` so a saturated Supabase pool
+ * (or any slow Postgres connection) does not hold the Vercel function until maxDuration.
+ * Connection acquire can retry for tens of seconds per query under load.
+ */
+export async function getDbForCron(deadlineMs?: number): Promise<DbPool | null> {
+  const ms =
+    deadlineMs ??
+    parsePositiveInt(process.env.CRON_DB_CONNECT_DEADLINE_MS) ??
+    8_000
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const db = await Promise.race([
+      getDb(),
+      new Promise<DbPool | null>((resolve) => {
+        timer = setTimeout(() => resolve(null), ms)
+      }),
+    ])
+    if (!db) {
+      console.warn('[postgres] cron db connect deadline exceeded', {
+        deadlineMs: ms,
+        initError: getDbInitError(),
+      })
+    }
+    return db
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 export async function getDb(): Promise<DbPool | null> {
+  if (isDeployDryRunDbDisabled()) return null
   if (cachedDb) return cachedDb
   if (initError) {
     const retryAfterMs = initRetryWindowMs > 0 ? initRetryWindowMs : getInitRetryWindowMs()
@@ -295,58 +451,30 @@ export async function getDb(): Promise<DbPool | null> {
         if (!cfg2 || !cs) return null
         const ssl = sslOptionsForConnection(cs)
 
-        // Vercel Postgres (Neon): use @vercel/postgres.
-        if (cfg2.source === 'vercel_postgres') {
-          const mod: any = await import('@vercel/postgres')
-          const createPool: any = mod?.createPool
-          const createClient: any = mod?.createClient
-          if (typeof createPool !== 'function' && typeof createClient !== 'function') {
-            initError = 'Missing createPool/createClient exports from @vercel/postgres'
-            return null
-          }
+        const isLegacyVercelPostgres = process.env.POSTGRES_URL || process.env.POSTGRES_URL_NON_POOLING
 
-          // Prefer pooled connections when possible (recommended for serverless),
-          // but fall back to a direct client if the provided connection string is direct-only.
-          try {
-            if (typeof createPool === 'function') {
-              const pool = createPool({ connectionString: cs, ssl })
-              // Some drivers only surface "invalid_connection_string" on first query.
-              // If this happens, fall back to createClient() below.
-              try {
-                await pool.sql`SELECT 1;`
-                cachedDb = pool
-                return cachedDb
-              } catch (e: any) {
-                const msg = e?.message ? String(e.message) : ''
-                const isDirectOnly =
-                  msg.toLowerCase().includes('invalid_connection_string') && msg.toLowerCase().includes('direct connection')
-                if (!isDirectOnly) throw e
-                console.warn('Pool connection string appears to be direct-only; falling back to createClient')
-              }
-            }
-          } catch (e: any) {
-            const msg = e?.message ? String(e.message) : ''
-            // fall through to createClient
-            console.warn('createPool failed, trying createClient', msg)
+        if (isLegacyVercelPostgres && !isSupabaseDatabaseUrl(cs)) {
+          // Legacy path: someone still has Vercel Postgres / Neon vars set but the
+          // connection does not look like Supabase. We now treat it as a generic
+          // Postgres URL and use the standard `pg` driver (the @vercel/postgres
+          // package is deprecated per its own npm deprecation notice).
+          // A loud one-time warning is emitted below so operators notice during deprecation.
+          if (!legacyVercelPostgresWarned) {
+            legacyVercelPostgresWarned = true
+            const isVercelProd = Boolean(process.env.VERCEL) || Boolean(process.env.VERCEL_ENV)
+            console.warn(
+              '[postgres] DEPRECATION: POSTGRES_URL / POSTGRES_URL_NON_POOLING detected without Supabase configuration. ' +
+                'All production data must live on Supabase (qajpnuvqlcfseghnldkl). ' +
+                'The special @vercel/postgres driver path has been removed. Using standard pg driver. ' +
+                (isVercelProd ? 'This is running in Vercel prod — the Vercel Postgres attachment should be removed from the project. ' : '') +
+                'See docs/operations/vercel-cron-production-fixes.md and AGENTS.md for Supabase pooler guidance.'
+            )
           }
-
-          if (typeof createClient !== 'function') {
-            initError = 'createPool failed and createClient is unavailable'
-            return null
-          }
-
-          const client = createClient({ connectionString: cs, ssl })
-          try {
-            if (typeof client?.connect === 'function') await client.connect()
-          } catch {
-            // ignore connect errors here; first query will surface it.
-          }
-
-          cachedDb = client
-          return cachedDb
         }
 
-        // External Postgres (e.g. Supabase): use node-postgres (pg), not @vercel/postgres.
+        // All paths now use node-postgres (pg). Supabase transaction pooler (6543) is the
+        // recommended production configuration. The old @vercel/postgres special case
+        // for Vercel Postgres attachments is retired.
         const pg: any = await import('pg')
         const Pool: any = pg?.Pool
         if (typeof Pool !== 'function') {
@@ -360,6 +488,8 @@ export async function getDb(): Promise<DbPool | null> {
         //
         // We strip sslmode from the URL and rely on the explicit `ssl` option instead, which is
         // consistent and controlled via POSTGRES_SSL_REJECT_UNAUTHORIZED.
+        //
+        // All connections (Supabase or generic) now go through this pg path.
         const poolConnectionString = stripQueryParams(cs, ['sslmode', 'ssl', 'sslrootcert'])
         const isVercelRuntime = Boolean(process.env.VERCEL) || Boolean(process.env.VERCEL_ENV)
         const isSupabaseTarget = isSupabaseDatabaseUrl(poolConnectionString)
@@ -372,7 +502,7 @@ export async function getDb(): Promise<DbPool | null> {
         const idleTimeoutMillis = parsePositiveInt(process.env.POSTGRES_POOL_IDLE_TIMEOUT_MS) ?? (useConservativeServerlessPool ? 1_000 : 5_000)
         const connectionTimeoutMillis =
           parsePositiveInt(process.env.POSTGRES_POOL_CONNECT_TIMEOUT_MS) ??
-          (useConservativeServerlessPool ? 10_000 : 8_000)
+          (isDeployDryRunContext() ? 3_000 : useConservativeServerlessPool ? 10_000 : 8_000)
         const maxUses = parsePositiveInt(process.env.POSTGRES_POOL_MAX_USES) ?? 7_500
         const createPgDb = async (sslForPool: any): Promise<DbPool> => {
           const pool = new Pool({
@@ -390,18 +520,21 @@ export async function getDb(): Promise<DbPool | null> {
           // unhandled error and crashes the process — which is exactly what
           // takes down the hermit Railway service. Attach a handler that logs
           // the failure and lets the pool reconnect on the next query.
-          pool.on('error', (err: unknown) => {
-            const message = err instanceof Error ? err.message : String(err)
-            const code = String((err as any)?.code ?? '').trim() || undefined
-            console.warn('[postgres] pool client error (background)', { code, message })
-            // If the pool has been emitting failures for an idle client,
-            // drop the cached pool so the next getDb() call rebuilds it.
-            if (cachedRawPool === pool) {
-              resetCachedPool()
-            }
-          })
+          if (typeof (pool as { on?: unknown }).on === 'function') {
+            pool.on('error', (err: unknown) => {
+              const message = err instanceof Error ? err.message : String(err)
+              const code = String((err as any)?.code ?? '').trim() || undefined
+              console.warn('[postgres] pool client error (background)', { code, message })
+              // If the pool has been emitting failures for an idle client,
+              // drop the cached pool so the next getDb() call rebuilds it.
+              if (cachedRawPool === pool) {
+                resetCachedPool()
+              }
+            })
+          }
           cachedRawPool = pool
           const queryRetries = getQueryRetryCount()
+          const poolGeneration = activePoolGeneration
           const db: DbPool = {
             sql: async (strings: TemplateStringsArray, ...values: any[]) => {
               let text = ''
@@ -409,40 +542,69 @@ export async function getDb(): Promise<DbPool | null> {
                 text += strings[i]
                 if (i < values.length) text += `$${i + 1}`
               }
-              return withSessionRetry(
-                async () => {
-                  const res = await pool.query(text, values)
-                  const rows = res.rows ?? []
-                  return {
-                    rows,
-                    rowCount: Number.isFinite(Number(res.rowCount))
-                      ? Number(res.rowCount)
-                      : rows.length,
-                  }
-                },
-                db,
-                queryRetries,
+              return runOnCurrentDb(poolGeneration, async (activeDb) =>
+                withSessionRetry(
+                  async () => {
+                    const activePool = cachedRawPool
+                    if (!activePool || poolGeneration !== activePoolGeneration) {
+                      const rebound = await getDb()
+                      if (!rebound) throw new Error('db_unavailable')
+                      return rebound.sql(strings, ...values)
+                    }
+                    const res = await activePool.query(text, values)
+                    const rows = res.rows ?? []
+                    return {
+                      rows,
+                      rowCount: Number.isFinite(Number(res.rowCount))
+                        ? Number(res.rowCount)
+                        : rows.length,
+                    }
+                  },
+                  activeDb,
+                  queryRetries,
+                ),
               )
             },
-            query: async (text: string, params?: any[]) => {
-              return withSessionRetry(
-                async () => {
-                  const res = await pool.query(text, params)
-                  const rows = res.rows ?? []
-                  return {
-                    rows,
-                    rowCount: Number.isFinite(Number(res.rowCount))
-                      ? Number(res.rowCount)
-                      : rows.length,
-                  }
-                },
-                db,
-                queryRetries,
-              )
-            },
+            query: async (text: string, params?: any[]) =>
+              runOnCurrentDb(poolGeneration, async (activeDb) =>
+                withSessionRetry(
+                  async () => {
+                    const activePool = cachedRawPool
+                    if (!activePool || poolGeneration !== activePoolGeneration) {
+                      const rebound = await getDb()
+                      if (!rebound?.query) throw new Error('db_unavailable')
+                      return rebound.query(text, params)
+                    }
+                    const res = await activePool.query(text, params)
+                    const rows = res.rows ?? []
+                    return {
+                      rows,
+                      rowCount: Number.isFinite(Number(res.rowCount))
+                        ? Number(res.rowCount)
+                        : rows.length,
+                    }
+                  },
+                  activeDb,
+                  queryRetries,
+                ),
+              ),
           }
-          // Sanity check connectivity (retried via withSessionRetry above).
-          await db.sql`SELECT 1;`
+          // Sanity check connectivity on the raw pool (avoid runOnCurrentDb → getDb during init).
+          let initCheckErr: unknown
+          for (let attempt = 0; attempt <= queryRetries; attempt += 1) {
+            try {
+              await pool.query('SELECT 1')
+              initCheckErr = null
+              break
+            } catch (err) {
+              initCheckErr = err
+              const sessionModeMaxClients = isSessionModeMaxClientsError(err)
+              const poolAcquireTimeout = isPoolAcquireTimeoutError(err)
+              if ((!sessionModeMaxClients && !poolAcquireTimeout) || attempt >= queryRetries) break
+              await sleep(QUERY_RETRY_BASE_MS * Math.pow(2, attempt))
+            }
+          }
+          if (initCheckErr) throw initCheckErr
           return db
         }
 
@@ -485,13 +647,21 @@ export async function getDb(): Promise<DbPool | null> {
           }
         } else if (authLike) {
           if (shouldLogInitError(signature, retryWindow)) {
-            console.error(
-              `Postgres auth/config error; backing off retries for ${Math.round(retryWindow / 1000)}s`,
-              {
-                code: code || undefined,
-                message,
-              },
-            )
+            if (isDeployDryRunContext() && isLikelyConnectivityTimeout(err)) {
+              console.info(
+                `[postgres] dry-run DB auth/connectivity unavailable; continuing without DB for now (retry in ${Math.round(
+                  retryWindow / 1000,
+                )}s)`,
+              )
+            } else {
+              console.error(
+                `Postgres auth/config error; backing off retries for ${Math.round(retryWindow / 1000)}s`,
+                {
+                  code: code || undefined,
+                  message,
+                },
+              )
+            }
           }
         } else {
           if (
@@ -504,7 +674,15 @@ export async function getDb(): Promise<DbPool | null> {
             )
           }
           if (shouldLogInitError(signature, retryWindow)) {
-            console.error('Failed to initialize Postgres pool', err)
+            if (isDeployDryRunContext() && isLikelyConnectivityTimeout(err)) {
+              console.info(
+                `[postgres] dry-run DB connectivity timeout; continuing without DB for now (retry in ${Math.round(
+                  retryWindow / 1000,
+                )}s)`,
+              )
+            } else {
+              console.error('Failed to initialize Postgres pool', err)
+            }
           }
         }
         initError = message || 'Failed to initialize Postgres pool'
@@ -526,90 +704,43 @@ export async function ensureCreatorAccessSchema(): Promise<void> {
   if (creatorAccessSchemaEnsured) return
   creatorAccessSchemaEnsured = true
 
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS allowlist (
-      address TEXT PRIMARY KEY,
-      csw_address TEXT,
-      approved_by TEXT,
-      approved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      revoked_at TIMESTAMPTZ,
-      note TEXT
-    );
-  `
+  // Condensed path — delegate to central implementation in schemaBootstrap
+  await ensureCreatorAccessSchemaFromBootstrap(db)
+}
 
+/**
+ * Helper for tagging monitoring / chart queries so they are easy to identify
+ * in pg_stat_statements, Query Performance, and logs.
+ *
+ * Usage:
+ *   const chartDb = await withChartContext(db, 'ethos-leaderboard');
+ *   await chartDb.sql`SELECT ...`;
+ *
+ * Or for raw queries:
+ *   await setApplicationName(db, 'supabase-chart:ethos-distribution');
+ */
+export async function setApplicationName(db: DbPool, name: string): Promise<void> {
+  if (!db || !name) return;
   try {
-    // Remove historical duplicate index name.
-    await db.sql`DROP INDEX IF EXISTS creator_allowlist_revoked_at_idx;`
-  } catch {
-    // ignore (already dropped or insufficient permissions)
-  }
-  
-  // Add csw_address column if it doesn't exist (migration for existing tables)
-  try {
-    await db.sql`ALTER TABLE allowlist ADD COLUMN IF NOT EXISTS csw_address TEXT;`
-  } catch {
-    // Column may already exist
-  }
-
-  await db.sql`
-    CREATE INDEX IF NOT EXISTS allowlist_address_active_lc_idx
-      ON allowlist ((LOWER(address)))
-      WHERE revoked_at IS NULL;
-  `
-  await db.sql`
-    CREATE INDEX IF NOT EXISTS allowlist_csw_active_lc_idx
-      ON allowlist ((LOWER(csw_address)))
-      WHERE csw_address IS NOT NULL AND revoked_at IS NULL;
-  `
-  
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS access_requests (
-      id BIGSERIAL PRIMARY KEY,
-      wallet_address TEXT NOT NULL,
-      coin_address TEXT,
-      status TEXT NOT NULL DEFAULT 'pending',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      reviewed_at TIMESTAMPTZ,
-      reviewed_by TEXT,
-      decision_note TEXT
-    );
-  `
-
-  // Keep it simple: don't create a postgres enum; enforce via a CHECK constraint.
-  // If it already exists, Postgres will throw; that's fine.
-  try {
-    await db.sql`
-      ALTER TABLE access_requests
-        ADD CONSTRAINT access_requests_status_check
-        CHECK (status IN ('pending', 'approved', 'denied'));
-    `
-  } catch {
-    // ignore
-  }
-
-  await db.sql`CREATE INDEX IF NOT EXISTS access_requests_status_created_idx ON access_requests (status, created_at DESC);`
-  await db.sql`
-    CREATE INDEX IF NOT EXISTS access_requests_wallet_lc_created_idx
-      ON access_requests ((LOWER(wallet_address)), created_at DESC);
-  `
-  try {
-    // Remove historical duplicate index names.
-    await db.sql`DROP INDEX IF EXISTS creator_access_requests_wallet_idx;`
-  } catch {
-    // ignore (already dropped or insufficient permissions)
-  }
-
-  // Prevent multiple concurrent pending requests per wallet.
-  await db.sql`
-    CREATE UNIQUE INDEX IF NOT EXISTS access_requests_wallet_pending_unique
-      ON access_requests (wallet_address)
-      WHERE status = 'pending';
-  `
-  try {
-    // Remove historical duplicate unique index name.
-    await db.sql`DROP INDEX IF EXISTS creator_access_requests_wallet_pending_unique;`
-  } catch {
-    // ignore (already dropped or insufficient permissions)
+    await db.sql`SET application_name = ${name}`;
+  } catch (e) {
+    // Non-fatal — tagging is best-effort for observability
   }
 }
+
+export function withChartContext(db: DbPool, chartId: string): DbPool {
+  // Returns a thin wrapper that sets application_name before queries.
+  // In practice, call setApplicationName once per request/session for charts.
+  return {
+    ...db,
+    sql: async (strings, ...values) => {
+      await setApplicationName(db, `supabase-chart:${chartId}`);
+      return db.sql(strings, ...values);
+    },
+    query: db.query ? async (text, params) => {
+      await setApplicationName(db, `supabase-chart:${chartId}`);
+      return db.query!(text, params);
+    } : undefined,
+  };
+}
+

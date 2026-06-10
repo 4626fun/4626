@@ -3,6 +3,7 @@ import { getAddress } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 
 import { getDb, isDbConfigured } from '../db/postgres.js'
+import { ensureTelemetryCreativeLogsSchema } from '../db/schemaBootstrap.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -47,30 +48,7 @@ export function decryptPrivateKey(params: { ciphertextB64: string; ivB64: string
 export async function ensureCreatorXmtpAgentsSchema(db: Db): Promise<void> {
   if (schemaEnsured) return
   schemaEnsured = true
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS creator_xmtp_agents (
-      creator_address TEXT PRIMARY KEY,
-      xmtp_agent_address TEXT NOT NULL,
-      encrypted_private_key_b64 TEXT NOT NULL,
-      encrypted_private_key_iv_b64 TEXT NOT NULL,
-      encrypted_private_key_tag_b64 TEXT NOT NULL,
-      listed_publicly BOOLEAN NOT NULL DEFAULT TRUE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `
-  await db.sql`CREATE INDEX IF NOT EXISTS creator_xmtp_agents_listed_idx ON creator_xmtp_agents (listed_publicly, created_at DESC);`
-  await db.sql`CREATE INDEX IF NOT EXISTS creator_xmtp_agents_updated_idx ON creator_xmtp_agents (updated_at DESC);`
-
-  // Migration: add CSW support columns
-  try {
-    await db.sql`ALTER TABLE creator_xmtp_agents ADD COLUMN IF NOT EXISTS agent_type TEXT NOT NULL DEFAULT 'eoa';`
-    await db.sql`ALTER TABLE creator_xmtp_agents ADD COLUMN IF NOT EXISTS privy_wallet_id TEXT;`
-    await db.sql`ALTER TABLE creator_xmtp_agents ADD COLUMN IF NOT EXISTS csw_address TEXT;`
-    await db.sql`ALTER TABLE creator_xmtp_agents ADD COLUMN IF NOT EXISTS last_processed_message_at TIMESTAMPTZ;`
-  } catch {
-    // Columns may already exist
-  }
+  await ensureTelemetryCreativeLogsSchema(db as any)
 }
 
 export type AgentType = 'eoa' | 'csw'

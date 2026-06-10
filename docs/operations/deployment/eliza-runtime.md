@@ -5,7 +5,7 @@ sidebar_position: 7
 
 # Eliza Runtime Deployment Runbook
 
-This runbook covers deploy, rollback, and on-call triage for the long-lived Eliza XMTP runtime (`frontend/server/agent/eliza/index.ts`).
+This runbook covers deploy, rollback, and on-call triage for the long-lived Eliza XMTP runtime (`frontend/server/agents/eliza/index.ts`).
 
 ## Scope
 
@@ -56,7 +56,7 @@ Before shipping, verify these values are configured:
   - `TEE_VALIDATOR_ADDRESSES` includes trusted validators
 - One runtime mode is configured:
   - Multi-agent: `DATABASE_URL` + `XMTP_AGENT_KEY_ENCRYPTION_KEY`
-  - Single CSW: `XMTP_AGENT_CSW_ADDRESS` + `XMTP_AGENT_PRIVY_WALLET_ID`
+  - Single CSW: `CANONICAL_CSW_ADDRESS` + `CANONICAL_CSW_PRIVY_WALLET_ID`
   - Single EOA (dev only): `XMTP_AGENT_PRIVATE_KEY`
 - At least one LLM key for conversational fallback (`GROQ_API_KEY`, `OPENAI_API_KEY`, etc)
 

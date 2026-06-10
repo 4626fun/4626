@@ -32,6 +32,21 @@ async function readCursor(db: Awaited<ReturnType<typeof getDb>>): Promise<string
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
+/** Progress denominator only — avoids a full-table COUNT(*) on zora_csw_owners. */
+async function estimateZoraCswOwnerRowCount(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+): Promise<number> {
+  const result = await db.sql`
+    SELECT COALESCE(NULLIF(c.reltuples, -1), 0)::bigint AS estimate
+    FROM pg_class c
+    INNER JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relname = 'zora_csw_owners';
+  `
+  const estimate = Number(result.rows?.[0]?.estimate ?? 0)
+  return Number.isFinite(estimate) && estimate > 0 ? Math.floor(estimate) : 0
+}
+
 async function writeCursor(db: Awaited<ReturnType<typeof getDb>>, cursor: string | null): Promise<void> {
   await db!.sql`
     INSERT INTO ethos_score_sync_state (
@@ -62,18 +77,14 @@ async function main(): Promise<void> {
   const maxBatches = readIntEnv('ETHOS_ZORA_BACKFILL_MAX_BATCHES', 1000000, 1, 1000000)
   const sleepMs = readIntEnv('ETHOS_ZORA_BACKFILL_SLEEP_MS', 0, 0, 10000)
 
-  const totalResult = await db.sql`
-    SELECT COUNT(*)::bigint AS total
-    FROM zora_csw_owners;
-  `
-  const totalRows = Number(totalResult.rows?.[0]?.total ?? 0)
+  const estimatedTotalRows = await estimateZoraCswOwnerRowCount(db)
   let cursor = await readCursor(db)
   let processedRows = 0
   let processedAddresses = 0
   let syncedKeys = 0
 
   console.info('[ethos-zora-backfill] start', {
-    totalRows,
+    estimatedTotalRows,
     rowBatchSize,
     maxBatches,
     resumeCursor: cursor,
@@ -102,7 +113,7 @@ async function main(): Promise<void> {
     }>
     if (rows.length === 0) {
       console.info('[ethos-zora-backfill] complete', {
-        totalRows,
+        estimatedTotalRows,
         processedRows,
         processedAddresses,
         syncedKeys,
@@ -136,7 +147,10 @@ async function main(): Promise<void> {
     cursor = rows[rows.length - 1]?.csw_address ?? cursor
     await writeCursor(db, cursor)
 
-    const pct = totalRows > 0 ? ((processedRows / totalRows) * 100).toFixed(2) : '0.00'
+    const pct =
+      estimatedTotalRows > 0
+        ? ((processedRows / estimatedTotalRows) * 100).toFixed(2)
+        : 'n/a'
     console.info('[ethos-zora-backfill] batch', {
       batch,
       rows: rows.length,
@@ -145,8 +159,8 @@ async function main(): Promise<void> {
       updated: syncResult.updated,
       failed: syncResult.failed,
       processedRows,
-      totalRows,
-      progressPct: pct,
+      estimatedTotalRows,
+      progressPctApprox: pct,
       cursor,
     })
 

@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Routes, Route, Navigate, Outlet, useLocation, Link } from 'react-router-dom'
 
+import { Button } from '@/components/ui/Button'
 import { APP_ORIGIN, getHostMode } from '@/lib/env/host'
 
 import { useOptionalAccessContext, waitlistEntryHref } from './app/accessShared'
@@ -15,7 +16,6 @@ import {
 import {
   AuthenticatedAppLayout,
   HostGuard,
-  PublicAppLayout,
   SessionAcceptedRoute,
   getGenericNotFoundCta,
   marketingOnlyElement,
@@ -74,7 +74,7 @@ function NotFoundPage() {
     appCta.href.startsWith('http://') || appCta.href.startsWith('https://')
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="relative min-h-0 w-full bg-transparent text-white">
       <div className="max-w-3xl mx-auto px-6 py-16">
         <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500 mb-4">4626</div>
         <div className="card rounded-xl p-8 space-y-4">
@@ -87,13 +87,13 @@ function NotFoundPage() {
             <div className="text-xs text-zinc-500">{appCta.hint}</div>
             <div className="flex flex-wrap gap-3">
               {isExternalHref ? (
-                <a className="btn-accent btn-no-icon inline-flex" href={appCta.href}>
-                  {appCta.label}
-                </a>
+                <Button variant="primary" asChild>
+                  <a href={appCta.href}>{appCta.label}</a>
+                </Button>
               ) : (
-                <Link className="btn-accent btn-no-icon inline-flex" to={appCta.href}>
-                  {appCta.label}
-                </Link>
+                <Button variant="primary" asChild>
+                  <Link to={appCta.href}>{appCta.label}</Link>
+                </Button>
               )}
             </div>
           </div>
@@ -132,7 +132,7 @@ function App() {
         <Route
           element={<LazyGuardedOutlet guard={LazyAccessBoundary} />}
         >
-          <Route element={<PublicAppLayout />}>
+          <Route element={<AuthenticatedAppLayout />}>
             <Route element={<SessionAcceptedRoute />}>
               {renderPathRoutes(EXPLORE_ROUTES)}
             </Route>

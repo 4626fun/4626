@@ -7,6 +7,7 @@
     "noUncheckedIndexedAccess": true
   },
   "include": [
-    "src"
+    "src",
+    "scripts/**/*.d.ts"
   ]
 }

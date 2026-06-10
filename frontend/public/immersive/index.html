@@ -1,7 +1,9 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
+<!-- Single /favicon.ico (Base App domain bar; avoids multi-tag icon flicker). -->
+    <link rel="icon" href="/favicon.ico?v=20" sizes="any" />
+<meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <!-- Served from /immersive/ on 4626.fun (per frontend/vercel.json route).
          The base href makes every relative URL (./assets/, ./styles.css, etc.)
@@ -17,26 +19,23 @@
       property="og:description"
       content="ERC-4626 creator vaults. Deposit alongside the strategists you trust."
     />
-    <!-- theme-color matches the immersive page's actual --bg (#06070d), so
-         the mobile browser chrome blends with the rendered page background.
-         The manifest's theme_color (#020204) governs the PWA shell, which
-         is a separate surface. -->
-    <meta name="theme-color" content="#06070d" />
-    <meta name="msapplication-TileColor" content="#020204" />
+    <!-- theme-color matches --bg (#000000) so mobile browser chrome blends with the page. -->
+    <meta name="theme-color" content="#000000" />
+    <meta name="msapplication-TileColor" content="#000000" />
 
-    <!-- Favicon set from the v2 brand kit. NB: this page declares
-         <base href="/immersive/">, so we use root-relative paths
-         ("/assets/...") to bypass the base and hit the canonical asset
-         locations under /assets/. -->
-    <link rel="icon" href="/assets/favicon.ico?v=2" sizes="any" />
-    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=2" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png" />
-    <link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-48x48.png" />
-    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-64x64.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png?v=2" />
-    <link rel="mask-icon" href="/assets/safari-pinned-tab-v2.svg" color="#0000FF" />
-    <link rel="manifest" href="/site.webmanifest" />
+    <!-- @4626/base-app-head:start -->
+    <meta name="base:app_id" content="695a49dc4d3a403912ed8ca5" />
+    <meta
+      name="fc:miniapp"
+      content='{"version":"next","imageUrl":"https://4626.fun/assets/base-app-icon-1024.png?v=20","button":{"title":"Open 4626.fun","action":{"type":"launch_miniapp","name":"4626.fun","url":"https://4626.fun/","splashImageUrl":"https://4626.fun/assets/base-miniapp-icon-v20-200.png?v=20","splashBackgroundColor":"#000000"}}}'
+    />
+    <meta
+      name="fc:frame"
+      content='{"version":"next","imageUrl":"https://4626.fun/assets/base-app-icon-1024.png?v=20","button":{"title":"Open 4626.fun","action":{"type":"launch_frame","name":"4626.fun","url":"https://4626.fun/","splashImageUrl":"https://4626.fun/assets/base-miniapp-icon-v20-200.png?v=20","splashBackgroundColor":"#000000"}}}'
+    />
+<!-- @4626/base-app-head:end -->
+
+<link rel="manifest" href="/site.webmanifest" />
     <meta name="msapplication-config" content="/browserconfig.xml" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -45,7 +44,7 @@
       href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=942b97e6535f" />
 
     <!-- Three.js v0.183.0 is vendored locally under vendor/three/ so all
          module sources stay 'self' under the production CSP. The import
@@ -75,8 +74,9 @@
       </a>
 
       <nav class="nav__links" aria-label="Primary">
-        <a href="/#how">How it works</a>
+        <a href="/#lifecycle">How it works</a>
         <a href="/#features">Features</a>
+        <a href="/arena">Arena</a>
         <a href="/risks">Risks</a>
         <a href="/security">Security</a>
         <a href="https://docs.4626.fun" target="_blank" rel="noopener noreferrer">Docs</a>
@@ -134,13 +134,14 @@
           </button>
         </div>
         <nav class="nav-drawer__links" aria-label="Mobile primary">
-          <a href="/#how">How it works</a>
+          <a href="/#lifecycle">How it works</a>
           <a href="/#features">Features</a>
+          <a href="/arena">Arena</a>
           <a href="/risks">Risks</a>
           <a href="/security">Security</a>
           <a href="https://docs.4626.fun" target="_blank" rel="noopener noreferrer">Docs</a>
         </nav>
-        <a href="/waitlist" class="btn btn--gold nav-drawer__cta">
+        <a href="/waitlist?start=1" class="btn btn--gold nav-drawer__cta">
           <span>Join the waitlist</span>
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
             <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -170,7 +171,11 @@
         </div>
 
         <!-- 3D cube perfectly centered — hero focal point -->
-        <div id="vault-canvas" class="hero__cube" aria-hidden="true"></div>
+        <div
+          id="vault-canvas"
+          class="hero__cube"
+          aria-hidden="true"
+        ></div>
 
         <!-- Animated lightning strikes (procedural SVG — sits between bg and clouds) -->
         <svg class="hero__lightning" id="hero-lightning" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -228,20 +233,15 @@
             <span class="hero__title-phrase"><em>Earn Together.</em></span>
           </h1>
 
-          <p class="hero__sub">
-            On-chain strategy vaults, deployed by creators, deposited into by their
-            community. One standard. One engine. Shared yield.
-          </p>
-
           <div class="hero__ctas">
-            <a href="/#cta" class="btn btn--primary">
-              <span>Request access</span>
+            <a href="/waitlist?start=1" class="btn btn--primary">
+              <span>Join the waitlist</span>
               <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
                 <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </a>
-            <a href="/#how" class="btn btn--ghost">
-              <span>Read the standard</span>
+            <a href="/#lifecycle" class="btn btn--ghost">
+              <span>How it works</span>
             </a>
           </div>
         </div>
@@ -255,7 +255,7 @@
            lead word, then the section concludes with a small caption
            that cues the product details below.
            ==================================================== -->
-      <section class="reveal" aria-label="What 4626 is">
+      <section class="reveal page-flow-section" aria-label="What 4626 is">
         <div class="reveal__starfield" aria-hidden="true">
           <div class="reveal__starlayer reveal__starlayer--far"></div>
           <div class="reveal__starlayer reveal__starlayer--mid"></div>
@@ -290,470 +290,293 @@
         </div>
       </section>
 
-      <!-- =====================================================
-           ANATOMY — What "two tokens, one vault" actually means.
-           Two paired comparison cards (Underlying vs Share)
-           followed by the allocation-flow diagram. This is the
-           payoff to the typography reveal above.
-           ===================================================== -->
-      <section id="anatomy" class="anatomy">
-        <header class="section__head">
-          <span class="section__eyebrow">// Anatomy</span>
-          <h2 class="section__title">Every deposit creates <em>two</em> tokens.</h2>
-          <p class="section__sub">
-            One you give. One you keep. The vault is the contract that binds
-            them — priced by the strategy, redeemable by the chain.
-          </p>
-        </header>
-
-        <!-- Token cards — paired comparison -->
-        <div class="anatomy__cards">
-          <article class="tokencard tokencard--underlying" data-anim="left">
-            <div class="tokencard__head">
-              <span class="tokencard__role">Deposited</span>
-              <span class="tokencard__chip">Underlying Asset</span>
-            </div>
-            <div class="tokencard__avatar tokencard__avatar--circle">
-              <img src="./assets/tokens/akita_source.png" alt="AKITA token" />
-            </div>
-            <div class="tokencard__name">
-              <span class="tokencard__amount">1</span>
-              <span class="tokencard__ticker">AKITA</span>
-            </div>
-            <p class="tokencard__copy">
-              The asset you put in. Strategy outcomes are variable.
-              The vault holds it, deploys it, and tracks every cent on-chain.
-            </p>
-            <ul class="tokencard__meta">
-              <li><span>Standard</span><b>ERC-20</b></li>
-              <li><span>Custody</span><b>Vault contract</b></li>
-              <li><span>Receipt</span><b>Burned on deposit</b></li>
-            </ul>
-          </article>
-
-          <!-- Bridge — thin animated connector that links the two cards -->
-          <div class="anatomy__bridge" aria-hidden="true">
-            <svg viewBox="0 0 200 80" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="bridgeGrad" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stop-color="#9bb4ff" stop-opacity=".0"/>
-                  <stop offset="30%" stop-color="#9bb4ff" stop-opacity=".55"/>
-                  <stop offset="50%" stop-color="#fbe5a3" stop-opacity=".95"/>
-                  <stop offset="70%" stop-color="#d8a64a" stop-opacity=".55"/>
-                  <stop offset="100%" stop-color="#d8a64a" stop-opacity=".0"/>
-                </linearGradient>
-              </defs>
-              <path class="anatomy__bridge-path"
-                    d="M0 40 Q 100 8, 200 40"
-                    stroke="url(#bridgeGrad)" stroke-width="1.4" fill="none"/>
-              <path class="anatomy__bridge-path anatomy__bridge-path--down"
-                    d="M0 40 Q 100 72, 200 40"
-                    stroke="url(#bridgeGrad)" stroke-width="1.4" fill="none"/>
-              <circle class="anatomy__bridge-pulse" r="3" fill="#fbe5a3"/>
-            </svg>
-            <span class="anatomy__bridge-label">ERC&#8209;4626</span>
-          </div>
-
-          <article class="tokencard tokencard--share" data-anim="right">
-            <div class="tokencard__head">
-              <span class="tokencard__role">Issued</span>
-              <span class="tokencard__chip tokencard__chip--gold">Vault Share</span>
-            </div>
-            <div class="tokencard__avatar tokencard__avatar--square">
-              <img src="./assets/tokens/akita_share.png" alt="vAKITA share token" />
-            </div>
-            <div class="tokencard__name">
-              <span class="tokencard__amount">1</span>
-              <span class="tokencard__ticker tokencard__ticker--gold">▪AKITA</span>
-            </div>
-            <p class="tokencard__copy">
-              Your claim on the vault. Held by you. Redeemability depends
-              on available liquidity and strategy unwinding — transparent and on-chain.
-            </p>
-            <ul class="tokencard__meta">
-              <li><span>Standard</span><b>ERC-4626</b></li>
-              <li><span>Custody</span><b>Your wallet</b></li>
-              <li><span>Receipt</span><b>Minted on deposit</b></li>
-            </ul>
-          </article>
-        </div>
-
-        <!-- Allocation Flow — the math of where the money goes -->
-        <div class="flow" data-anim="flow">
-          <div class="flow__head">
-            <span class="flow__eyebrow">Allocation Engine</span>
-            <h3 class="flow__title">
-              <span class="flow__deposit" data-count="50000000">0</span>
-              <span class="flow__deposit-unit">AKITA</span>
-              <span class="flow__deposit-meta">deposited &mdash; routed in real time</span>
-            </h3>
-          </div>
-
-          <!-- The diagram: source on the left, vault in the middle, destinations on the right -->
-          <div class="flow__diagram">
-            <!-- LEFT: source side (share-token issuance) -->
-            <div class="flow__column flow__column--left">
-              <span class="flow__column-title">Share Token Distribution</span>
-              <div class="flow__node" data-pct="40">
-                <div class="flow__node-pct"><span data-count="40">0</span><i>%</i></div>
-                <div class="flow__node-body">
-                  <span class="flow__node-label">CCA Auction</span>
-                  <span class="flow__node-meta">Continuous price discovery</span>
-                </div>
-                <span class="flow__node-logo flow__node-logo--mark" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>
-                </span>
-              </div>
-              <div class="flow__node" data-pct="40">
-                <div class="flow__node-pct"><span data-count="40">0</span><i>%</i></div>
-                <div class="flow__node-body">
-                  <span class="flow__node-label">Creator Vesting</span>
-                  <span class="flow__node-meta">Linear unlock, on-chain</span>
-                </div>
-                <span class="flow__node-logo flow__node-logo--mark" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-                </span>
-              </div>
-              <div class="flow__node" data-pct="20">
-                <div class="flow__node-pct"><span data-count="20">0</span><i>%</i></div>
-                <div class="flow__node-body">
-                  <span class="flow__node-label">Liquidity Pool</span>
-                  <span class="flow__node-meta">Uniswap V3 pair</span>
-                </div>
-                <span class="flow__node-logo" aria-hidden="true">
-                  <img src="./assets/logos/uniswap-official-pink.svg" alt="" />
-                </span>
-              </div>
-            </div>
-
-            <!-- CENTER: vault hub -->
-            <div class="flow__hub">
-              <div class="flow__hub-ring flow__hub-ring--outer"></div>
-              <div class="flow__hub-ring flow__hub-ring--inner"></div>
-              <div class="flow__hub-core">
-                <span class="flow__hub-tag">ERC-4626</span>
-                <span class="flow__hub-name">Vault</span>
-              </div>
-            </div>
-
-            <!-- RIGHT: destination side (deployed strategies) -->
-            <div class="flow__column flow__column--right">
-              <span class="flow__column-title">Underlying Deployment</span>
-              <div class="flow__node" data-pct="30">
-                <span class="flow__node-logo" aria-hidden="true">
-                  <img src="./assets/logos/ajna-official.svg" alt="" />
-                </span>
-                <div class="flow__node-body">
-                  <span class="flow__node-label">Ajna Protocol</span>
-                  <span class="flow__node-meta">Lend-side credit</span>
-                </div>
-                <div class="flow__node-pct"><span data-count="30">0</span><i>%</i></div>
-              </div>
-              <div class="flow__node" data-pct="30">
-                <span class="flow__node-logo" aria-hidden="true">
-                  <img src="./assets/logos/charm.png" alt="" />
-                </span>
-                <div class="flow__node-body">
-                  <span class="flow__node-label">Charm Finance</span>
-                  <span class="flow__node-meta">Concentrated LP</span>
-                </div>
-                <div class="flow__node-pct"><span data-count="30">0</span><i>%</i></div>
-              </div>
-              <div class="flow__node" data-pct="30">
-                <span class="flow__node-logo" aria-hidden="true">
-                  <img src="./assets/logos/solana-mark.svg" alt="" />
-                </span>
-                <div class="flow__node-body">
-                  <span class="flow__node-label">Solana Bridge</span>
-                  <span class="flow__node-meta">Cross-chain yield</span>
-                </div>
-                <div class="flow__node-pct"><span data-count="30">0</span><i>%</i></div>
-              </div>
-              <div class="flow__node flow__node--idle" data-pct="10">
-                <span class="flow__node-logo flow__node-logo--mark" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7" stroke-dasharray="2 3"/><circle cx="12" cy="12" r="2"/></svg>
-                </span>
-                <div class="flow__node-body">
-                  <span class="flow__node-label">Idle Buffer</span>
-                  <span class="flow__node-meta">Instant redemptions</span>
-                </div>
-                <div class="flow__node-pct"><span data-count="10">0</span><i>%</i></div>
-              </div>
-            </div>
-
-            <!-- SVG connectors layer (sits behind the columns, above bg) -->
-            <svg class="flow__lines" aria-hidden="true" viewBox="0 0 1200 600" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="flowGradLeft" x1="1" y1="0" x2="0" y2="0">
-                  <stop offset="0%" stop-color="#fbe5a3" stop-opacity=".75"/>
-                  <stop offset="100%" stop-color="#9bb4ff" stop-opacity=".05"/>
-                </linearGradient>
-                <linearGradient id="flowGradRight" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stop-color="#fbe5a3" stop-opacity=".75"/>
-                  <stop offset="100%" stop-color="#9bb4ff" stop-opacity=".05"/>
-                </linearGradient>
-              </defs>
-              <!-- Left side: 3 lines from left nodes to hub -->
-              <path class="flow__line" d="M 280 110 C 460 110, 480 300, 600 300" stroke="url(#flowGradLeft)" stroke-width="1.2" fill="none"/>
-              <path class="flow__line" d="M 280 300 C 440 300, 480 300, 600 300" stroke="url(#flowGradLeft)" stroke-width="1.2" fill="none"/>
-              <path class="flow__line" d="M 280 490 C 460 490, 480 300, 600 300" stroke="url(#flowGradLeft)" stroke-width="1.2" fill="none"/>
-              <!-- Right side: 4 lines from hub to right nodes -->
-              <path class="flow__line flow__line--right" d="M 600 300 C 720 300, 740 80, 920 80" stroke="url(#flowGradRight)" stroke-width="1.2" fill="none"/>
-              <path class="flow__line flow__line--right" d="M 600 300 C 720 300, 740 240, 920 240" stroke="url(#flowGradRight)" stroke-width="1.2" fill="none"/>
-              <path class="flow__line flow__line--right" d="M 600 300 C 720 300, 740 400, 920 400" stroke="url(#flowGradRight)" stroke-width="1.2" fill="none"/>
-              <path class="flow__line flow__line--right" d="M 600 300 C 720 300, 740 540, 920 540" stroke="url(#flowGradRight)" stroke-width="1.2" fill="none"/>
-            </svg>
-          </div>
-        </div>
-      </section>
-
-      <!-- =====================================================
-           LIVE VAULTS — cloth-physics fabric slider showcasing
-           creator vaults. Each panel is a draped fabric mesh
-           rendered with verlet-integrated cloth physics in Three.js.
-           Navigate left/right and the current panel falls / folds
-           away while the next drapes into place.
-           ===================================================== -->
-      <section id="vaults" class="vaults">
-        <header class="section__head">
-          <span class="section__eyebrow">// Live Vaults</span>
-          <h2 class="section__title">Creator vaults, <em>draped</em> in code.</h2>
-          <p class="section__sub">
-            Real strategies. Real depositors. Real on-chain receipts. A glimpse
-            of the vaults already running on Base.
-          </p>
-        </header>
-
-        <div class="vaults__stage" id="vaults-stage" aria-label="Creator vault showcase">
-          <!-- Three.js cloth-physics canvas mounts here -->
-          <div class="vaults__scene" id="vaults-scene" aria-hidden="true"></div>
-
-          <!-- HTML overlay: vault metadata that matches the current panel -->
-          <div class="vaults__meta" id="vaults-meta">
-            <div class="vaults__meta-inner" data-vault="0">
-              <span class="vaults__creator">Akita Inu</span>
-              <h3 class="vaults__name">Akita Strategy Vault</h3>
-              <p class="vaults__pitch">
-                Memecoin treasury deployed across Ajna lend markets,
-                Charm concentrated LPs, and a Solana cross-chain leg.
+      <!-- HOW IT WORKS — scroll-story timeline (full detail at /faq/how-it-works) -->
+      <section id="lifecycle" class="mkt-section mkt-scrollstory page-flow-section">
+        <div class="mkt-scrollstory__pin">
+          <div class="mkt-wrap">
+            <header class="mkt-intro">
+              <span class="mkt-label">How it works</span>
+              <h2 class="mkt-headline">Deposit. Mint.<br class="mkt-br-sm" /> Distribute. Earn.</h2>
+              <p class="mkt-lede">
+                The complete creator vault lifecycle — four steps from first deposit to ongoing yield.
               </p>
-              <ul class="vaults__stats">
-                <li><span>TVL</span><b>$2.4M</b></li>
-                <li><span>APY (30d)</span><b>11.4%</b></li>
-                <li><span>Holders</span><b>1,283</b></li>
-                <li><span>Ticker</span><b>▪AKITA</b></li>
-              </ul>
-            </div>
-          </div>
+            </header>
 
-          <!-- Slider controls -->
-          <div class="vaults__controls">
-            <button class="vaults__nav vaults__nav--prev" type="button" id="vaults-prev" aria-label="Previous vault">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-            </button>
-            <div class="vaults__pager">
-              <span class="vaults__pager-current" id="vaults-current">01</span>
-              <span class="vaults__pager-rule"></span>
-              <span class="vaults__pager-total" id="vaults-total">03</span>
+            <div class="mkt-scrollstory__stage">
+              <div class="mkt-timeline mkt-scrollstory__track">
+                <div class="mkt-timeline__rail" aria-hidden="true"></div>
+
+                <article class="mkt-step" data-story-step="1">
+              <div class="mkt-step__badge" aria-hidden="true">01</div>
+              <div class="mkt-glass mkt-step__panel">
+                <span class="mkt-label">Deposit</span>
+                <h3 class="mkt-step__title">Open the vault</h3>
+                <p class="mkt-copy">
+                  To deploy a vault, the creator makes a single one-time deposit of
+                  <strong>50,000,000</strong> creator coins — exactly 5% of total supply.
+                  This commitment activates the vault and sets the initial share price.
+                </p>
+                <div class="mkt-stat">
+                  <span class="mkt-stat__num">50,000,000</span>
+                  <span class="mkt-stat__meta">creator coins required = 5% of supply</span>
+                </div>
+                <div class="mkt-token-flow" aria-hidden="true">
+                  <img class="mkt-token-flow__img mkt-token-flow__img--round" src="./assets/tokens/akita_source.png" alt="" />
+                  <span class="mkt-token-flow__line"></span>
+                  <img class="mkt-token-flow__mark" src="/assets/logo-mark.svg" alt="" />
+                  <span class="mkt-token-flow__line"></span>
+                  <img class="mkt-token-flow__img mkt-token-flow__img--square" src="./assets/tokens/akita_share.png" alt="" />
+                </div>
+                <p class="mkt-hint">Creator coin → vault → ■ share token</p>
+              </div>
+            </article>
+
+                <article class="mkt-step" data-story-step="2">
+                  <div class="mkt-step__badge" aria-hidden="true">02</div>
+              <div class="mkt-glass mkt-step__panel">
+                <span class="mkt-label">Mint</span>
+                <h3 class="mkt-step__title">Receive <span class="mkt-accent">■AKITA</span></h3>
+                <p class="mkt-copy">
+                  <strong>50,000,000 ■AKITA</strong> vault share tokens are minted.
+                  These represent proportional ownership of everything the vault earns — for the creator
+                  and all future depositors alike. The share price can rise or fall as vault assets change.
+                </p>
+                <ul class="mkt-checks">
+                  <li>Holding ■AKITA = pro-rata claim on vault assets + yield</li>
+                  <li>Transferable and usable across the app like any token</li>
+                  <li>Redeemable — burn ■AKITA to get back the underlying creator coin</li>
+                </ul>
+              </div>
+            </article>
+
+                <article class="mkt-step" data-story-step="3">
+                  <div class="mkt-step__badge" aria-hidden="true">03</div>
+              <div class="mkt-glass mkt-step__panel">
+                <span class="mkt-label">CCA distribution</span>
+                <h3 class="mkt-step__title">Public price discovery</h3>
+                <p class="mkt-copy">
+                  Only during the initial deposit, the <strong>50,000,000 ■AKITA</strong> are split
+                  across three destinations. A portion runs through Uniswap's Continuous Clearing Auction
+                  over <strong>7 days</strong> — no fixed presale price, no insider advantage.
+                </p>
+                <ul class="mkt-alloc">
+                  <li>
+                    <div class="mkt-alloc__head">
+                      <span class="mkt-alloc__name"><img src="./assets/logos/uniswap-official-pink.svg" alt="" width="14" height="14" /> CCA Launch</span>
+                      <span class="mkt-alloc__meta"><b>20,000,000</b> 40%</span>
+                    </div>
+                    <span class="mkt-bar" style="--pct: 40%"><i></i></span>
+                    <p>Price discovery that benefits early supporters.</p>
+                  </li>
+                  <li>
+                    <div class="mkt-alloc__head">
+                      <span class="mkt-alloc__name"><img src="./assets/tokens/akita_share.png" alt="" width="14" height="14" /> Creator vesting</span>
+                      <span class="mkt-alloc__meta"><b>20,000,000</b> 40%</span>
+                    </div>
+                    <span class="mkt-bar" style="--pct: 40%"><i></i></span>
+                    <p>The creator earns alongside participants — on a one-year schedule.</p>
+                  </li>
+                  <li>
+                    <div class="mkt-alloc__head">
+                      <span class="mkt-alloc__name"><img src="./assets/logos/uniswap-official-pink.svg" alt="" width="14" height="14" /> LP reserve</span>
+                      <span class="mkt-alloc__meta"><b>10,000,000</b> 20%</span>
+                    </div>
+                    <span class="mkt-bar" style="--pct: 20%"><i></i></span>
+                    <p>Liquidity for anyone who wants to exit.</p>
+                  </li>
+                </ul>
+              </div>
+            </article>
+
+                <article class="mkt-step" data-story-step="4">
+                  <div class="mkt-step__badge" aria-hidden="true">04</div>
+              <div class="mkt-glass mkt-step__panel">
+                <span class="mkt-label">Earn</span>
+                <h3 class="mkt-step__title">Tokens go to work</h3>
+                <p class="mkt-copy">
+                  The deposited creator coins are immediately allocated across four yield strategies.
+                  As the vault earns, the <span class="mkt-accent">■AKITA</span> share price rises —
+                  benefiting every holder proportionally, including the creator.
+                </p>
+                <div class="mkt-strategy-grid">
+                  <div class="mkt-strategy">
+                    <div class="mkt-alloc__head">
+                      <span class="mkt-alloc__name"><img src="./assets/logos/charm.png" alt="" width="14" height="14" /> Charm</span>
+                      <span class="mkt-alloc__meta">30%</span>
+                    </div>
+                    <span class="mkt-bar" style="--pct: 30%"><i></i></span>
+                    <p>Active Uniswap V3 LP — managed for range efficiency.</p>
+                  </div>
+                  <div class="mkt-strategy">
+                    <div class="mkt-alloc__head">
+                      <span class="mkt-alloc__name"><img src="./assets/logos/ajna-official.svg" alt="" width="14" height="14" /> Ajna</span>
+                      <span class="mkt-alloc__meta">30%</span>
+                    </div>
+                    <span class="mkt-bar" style="--pct: 30%"><i></i></span>
+                    <p>Permissionless lending. Yield without counterparty risk.</p>
+                  </div>
+                  <div class="mkt-strategy">
+                    <div class="mkt-alloc__head">
+                      <span class="mkt-alloc__name"><img src="./assets/logos/solana-mark.svg" alt="" width="14" height="14" /> Solana</span>
+                      <span class="mkt-alloc__meta">30%</span>
+                    </div>
+                    <span class="mkt-bar" style="--pct: 30%"><i></i></span>
+                    <p>Cross-chain yield — same principal, different market.</p>
+                  </div>
+                  <div class="mkt-strategy">
+                    <div class="mkt-alloc__head">
+                      <span class="mkt-alloc__name">Idle Reserve</span>
+                      <span class="mkt-alloc__meta">10%</span>
+                    </div>
+                    <span class="mkt-bar" style="--pct: 10%"><i></i></span>
+                    <p>Always available for withdrawals. The liquidity floor.</p>
+                  </div>
+                </div>
+                <div class="mkt-blend">
+                  <span class="mkt-label">Blended APR</span>
+                  <b>1–99%+</b>
+                  <i>not guaranteed</i>
+                </div>
+              </div>
+                </article>
+              </div>
             </div>
-            <button class="vaults__nav vaults__nav--next" type="button" id="vaults-next" aria-label="Next vault">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
-            </button>
+
+            <footer class="mkt-more mkt-scrollstory__footer">
+              <a href="/faq/how-it-works" class="mkt-link">
+                Explore the full walkthrough
+                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </a>
+              <p class="mkt-disclaimer">
+                Nothing here is financial advice. APR ranges are variable and not guarantees — the vault can make or lose money.
+                Smart contracts can fail. Treat this as experimental unless you have independently verified the deployed contracts.
+              </p>
+            </footer>
           </div>
         </div>
-
-        <!-- Hidden source data — read by vaults.js -->
-        <script type="application/json" id="vaults-data">
-        [
-          {
-            "creator": "Akita Inu",
-            "name": "Akita Strategy Vault",
-            "pitch": "Memecoin treasury deployed across Ajna lend markets, Charm concentrated LPs, and a Solana cross-chain leg.",
-            "avatar": "./assets/creators/akita.webp",
-            "ticker": "▪AKITA",
-            "tvl": "$2.4M",
-            "apy": "11.4%",
-            "holders": "1,283",
-            "accent": "#4d7eff"
-          },
-          {
-            "creator": "Jesse Pollak",
-            "name": "Onchain Summer Vault",
-            "pitch": "Long-Base thesis. Deposits route to Aerodrome LPs and Base-native lending markets, with a 30-day async settlement window.",
-            "avatar": "./assets/creators/jesse.webp",
-            "ticker": "▪OCS",
-            "tvl": "$8.7M",
-            "apy": "14.2%",
-            "holders": "4,902",
-            "accent": "#0052ff"
-          },
-          {
-            "creator": "Gabriel Haines",
-            "name": "DeFi Researcher Vault",
-            "pitch": "High-water-mark performance fee. Quant-driven rotation between Ajna, Charm, and idle Base reserves.",
-            "avatar": "./assets/creators/gabrielhaines.webp",
-            "ticker": "▪GABE",
-            "tvl": "$1.1M",
-            "apy": "9.8%",
-            "holders": "412",
-            "accent": "#d8a64a"
-          }
-        ]
-        </script>
       </section>
 
-      <!-- HOW IT WORKS -->
-      <section id="how" class="how">
-        <header class="section__head">
-          <span class="section__eyebrow">// How it works</span>
-          <h2 class="section__title">Three steps. One vault. Shared yield.</h2>
-          <p class="section__sub">
-            The ERC-4626 standard turns any strategy into a tokenized share. Creators
-            run the strategy, depositors hold the shares, the chain settles the math.
-          </p>
-        </header>
-
-        <ol class="steps">
-          <li class="step">
-            <span class="step__num">01</span>
-            <div class="step__icon" aria-hidden="true">
-              <!-- Wand / deploy -->
-              <svg viewBox="0 0 48 48" fill="none">
-                <path d="M14 34 34 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-                <path d="M30 10l4 4M10 30l4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-                <circle cx="36" cy="12" r="2" fill="currentColor"/>
-                <circle cx="12" cy="36" r="2" fill="currentColor"/>
-                <path d="M22 22l4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-                <rect x="6" y="6" width="36" height="36" rx="3" stroke="currentColor" stroke-opacity=".25" stroke-width="1" stroke-dasharray="2 3"/>
-              </svg>
-            </div>
-            <h3 class="step__title">Creator deploys a vault</h3>
-            <p class="step__copy">
-              Pick a strategy, set fees, mint a tokenized 4626 vault on Base in one
-              transaction. Your vault, your rules, your on-chain reputation.
+      <!-- EXAMPLE VAULTS — demo previews in FAQ glass style -->
+      <section id="vaults" class="mkt-section page-flow-section">
+        <div class="mkt-wrap">
+          <header class="mkt-intro mkt-reveal">
+            <span class="mkt-label">Example vaults</span>
+            <h2 class="mkt-headline">Creator vaults, <em class="mkt-em">previewed</em>.</h2>
+            <p class="mkt-lede">
+              Illustrative previews of how creator coins become ERC-4626 vaults on Base.
+              Demo only — vaults are not live yet.
             </p>
-          </li>
+          </header>
 
-          <li class="step">
-            <span class="step__num">02</span>
-            <div class="step__icon" aria-hidden="true">
-              <!-- Community deposit -->
-              <svg viewBox="0 0 48 48" fill="none">
-                <rect x="10" y="18" width="28" height="22" rx="2" stroke="currentColor" stroke-width="1.6"/>
-                <path d="M10 24h28" stroke="currentColor" stroke-width="1.6"/>
-                <circle cx="24" cy="32" r="3" stroke="currentColor" stroke-width="1.6"/>
-                <path d="M16 14l8-6 8 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M20 14h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-              </svg>
-            </div>
-            <h3 class="step__title">Community deposits in</h3>
-            <p class="step__copy">
-              Fans, friends, and strangers deposit USDC, ETH or any supported asset and
-              receive 4626 shares. One vault, one position, one shared engine.
-            </p>
-          </li>
+          <div class="mkt-vaults mkt-reveal" id="vaults-stage" aria-label="Example creator vault showcase">
+            <article class="mkt-glass mkt-vault" id="vault-card">
+              <span class="mkt-vault__badge">Demo preview · illustrative only</span>
+              <div class="mkt-vault__hero">
+                <img class="mkt-vault__avatar" id="vault-avatar" src="./assets/creators/akita.webp" alt="" width="56" height="56" />
+                <div>
+                  <span class="mkt-vault__creator" id="vault-creator">$akita</span>
+                  <h3 class="mkt-vault__name" id="vault-name">Akita Vault</h3>
+                </div>
+              </div>
+              <p class="mkt-copy" id="vault-pitch">
+                Illustrative strategy mix across Ajna lend markets, Charm concentrated LPs, and a Solana cross-chain leg.
+              </p>
+              <dl class="mkt-vault__stats">
+                <div><dt>Status</dt><dd class="mkt-accent" id="vault-status">Demo preview</dd></div>
+                <div><dt>Stage</dt><dd id="vault-stage">Vaults not live</dd></div>
+                <div><dt>Share</dt><dd class="mkt-mono" id="vault-ticker">■AKITA</dd></div>
+              </dl>
+              <p class="mkt-hint"><a href="/risks">Read risks</a> · Outcomes vary and may be zero.</p>
+            </article>
 
-          <li class="step">
-            <span class="step__num">03</span>
-            <div class="step__icon" aria-hidden="true">
-              <!-- Yield flow -->
-              <svg viewBox="0 0 48 48" fill="none">
-                <circle cx="24" cy="24" r="10" stroke="currentColor" stroke-width="1.6"/>
-                <path d="M24 19v10M19 24h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-                <path d="M8 24a16 16 0 0 1 16-16M40 24a16 16 0 0 1-16 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="2 3"/>
-                <path d="M22 6l2 2-2 2M26 42l-2-2 2-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
+            <div class="mkt-vaults__nav">
+              <button class="mkt-vaults__btn" type="button" id="vaults-prev" aria-label="Previous vault">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <span class="mkt-vaults__pager">
+                <span id="vaults-current">01</span>
+                <span class="mkt-vaults__rule"></span>
+                <span id="vaults-total">03</span>
+              </span>
+              <button class="mkt-vaults__btn" type="button" id="vaults-next" aria-label="Next vault">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+              </button>
             </div>
-            <h3 class="step__title">Yield flows back, together</h3>
-            <p class="step__copy">
-              Strategy gains accrue to the share price. Depositors redeem any time,
-              creators earn a transparent performance fee. Everyone settles on-chain.
-            </p>
-          </li>
-        </ol>
+          </div>
+
+          <script type="application/json" id="vaults-data">
+          [
+            {
+              "creator": "$akita",
+              "name": "Akita Vault",
+              "pitch": "Illustrative strategy mix across Ajna lend markets, Charm concentrated LPs, and a Solana cross-chain leg.",
+              "avatar": "./assets/creators/akita.webp",
+              "ticker": "■AKITA",
+              "accent": "#4d7eff"
+            },
+            {
+              "creator": "$jesse",
+              "name": "Jesse Vault",
+              "pitch": "Illustrative Base-native strategy mix across lending and LP venues.",
+              "avatar": "./assets/creators/jesse.webp",
+              "ticker": "■JESSE",
+              "accent": "#0052ff"
+            },
+            {
+              "creator": "$gabrielhaines",
+              "name": "Gabriel Haines Vault",
+              "pitch": "Illustrative rotation between Ajna, Charm, and idle Base reserves.",
+              "avatar": "./assets/creators/gabrielhaines.webp",
+              "ticker": "■GABRIELHAINES",
+              "accent": "#d8a64a"
+            }
+          ]
+          </script>
+        </div>
       </section>
 
       <!-- FEATURES -->
-      <section id="features" class="features">
-        <header class="section__head">
-          <span class="section__eyebrow">// Features</span>
-          <h2 class="section__title">A protocol for <em>shared</em> upside.</h2>
-          <p class="section__sub">
-            Built on the ERC-4626 tokenized vault standard. Every action is composable,
-            inspectable, and replicable on-chain — by design.
-          </p>
-        </header>
+      <section id="features" class="mkt-section page-flow-section">
+        <div class="mkt-wrap">
+          <header class="mkt-intro mkt-reveal">
+            <span class="mkt-label">Features</span>
+            <h2 class="mkt-headline">A protocol for <em class="mkt-em">shared</em> upside.</h2>
+            <p class="mkt-lede">
+              Built on the ERC-4626 tokenized vault standard. Every action is composable,
+              inspectable, and replicable on-chain — by design.
+            </p>
+          </header>
 
-        <div class="grid">
-          <article class="card">
-            <div class="card__icon" data-tone="gold" aria-hidden="true">
-              <svg viewBox="0 0 32 32" fill="none">
-                <rect x="5" y="5" width="22" height="22" rx="3" stroke="currentColor" stroke-width="1.6"/>
-                <path d="M10 16h12M10 12h12M10 20h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-              </svg>
-            </div>
-            <h3>ERC-4626 native</h3>
-            <p>Every vault is a tokenized share. Composable across DeFi by default — wallets, aggregators, and analytics all speak the same standard.</p>
-          </article>
-
-          <article class="card">
-            <div class="card__icon" data-tone="blue" aria-hidden="true">
-              <svg viewBox="0 0 32 32" fill="none">
-                <path d="M6 16h6l3-8 4 16 3-8h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <h3>Async deposits &amp; withdrawals</h3>
-            <p>Strategies can settle on their own cadence using EIP-7540 async flows. No forced liquidity. No mismatched timing.</p>
-          </article>
-
-          <article class="card">
-            <div class="card__icon" data-tone="gold" aria-hidden="true">
-              <svg viewBox="0 0 32 32" fill="none">
-                <circle cx="16" cy="16" r="10" stroke="currentColor" stroke-width="1.6"/>
-                <path d="M11 16l4 4 7-8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <h3>Verifiable on-chain</h3>
-            <p>Holdings, P&amp;L, fees, depositors — every byte readable on Base. No black boxes. The chain is the audit log.</p>
-          </article>
-
-          <article class="card">
-            <div class="card__icon" data-tone="blue" aria-hidden="true">
-              <svg viewBox="0 0 32 32" fill="none">
-                <path d="M16 4v24M8 10h12a4 4 0 0 1 0 8H12a4 4 0 0 0 0 8h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <h3>Creator performance fees</h3>
-            <p>Set a high-water-mark performance fee in basis points. Creators only earn when depositors earn. Aligned by code.</p>
-          </article>
-
-          <article class="card">
-            <div class="card__icon" data-tone="gold" aria-hidden="true">
-              <svg viewBox="0 0 32 32" fill="none">
-                <circle cx="11" cy="13" r="3.5" stroke="currentColor" stroke-width="1.6"/>
-                <circle cx="22" cy="11" r="2.5" stroke="currentColor" stroke-width="1.6"/>
-                <path d="M5 25c1.5-4 4-6 6-6s4.5 2 6 6M17 23c1.2-2.4 3-3.5 5-3.5s3.8 1.1 5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-              </svg>
-            </div>
-            <h3>Social leaderboard</h3>
-            <p>Vaults ranked by APY, TVL, and follow count. Discover strategists by track record, not promises.</p>
-          </article>
-
-          <article class="card">
-            <div class="card__icon" data-tone="blue" aria-hidden="true">
-              <svg viewBox="0 0 32 32" fill="none">
-                <path d="M16 4 6 9v7c0 7 5 11 10 12 5-1 10-5 10-12V9l-10-5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-                <path d="M12 16l3 3 6-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <h3>Base-native &amp; gas-light</h3>
-            <p>Deployed on Base for cheap, fast settlement. Account-abstraction friendly so depositors can join in one click.</p>
-          </article>
+          <div class="mkt-feature-grid">
+            <article class="mkt-glass mkt-feature mkt-reveal">
+              <h3>ERC-4626 native</h3>
+              <p>Every vault is a tokenized share. Composable across DeFi by default — wallets, aggregators, and analytics all speak the same standard.</p>
+            </article>
+            <article class="mkt-glass mkt-feature mkt-reveal">
+              <h3>Async deposits &amp; withdrawals</h3>
+              <p>Strategies can settle on their own cadence using EIP-7540 async flows. No forced liquidity. No mismatched timing.</p>
+            </article>
+            <article class="mkt-glass mkt-feature mkt-reveal">
+              <h3>Verifiable on-chain</h3>
+              <p>Holdings, P&amp;L, fees, depositors — every byte readable on Base. No black boxes. The chain is the audit log.</p>
+            </article>
+            <article class="mkt-glass mkt-feature mkt-reveal">
+              <h3>Creator performance fees</h3>
+              <p>Set a high-water-mark performance fee in basis points. Creators only earn when depositors earn. Aligned by code.</p>
+            </article>
+            <article class="mkt-glass mkt-feature mkt-reveal">
+              <h3>Social leaderboard</h3>
+              <p>Discover creators by track record and community — not promised returns.</p>
+            </article>
+            <article class="mkt-glass mkt-feature mkt-reveal">
+              <h3>Base-native &amp; gas-light</h3>
+              <p>Deployed on Base for cheap, fast settlement. Account-abstraction friendly so depositors can join in one click.</p>
+            </article>
+          </div>
         </div>
       </section>
-
       <!-- CTA -->
-      <section id="cta" class="cta">
+      <section id="cta" class="cta page-flow-section">
         <div class="cta__inner">
           <!-- Wordmark lockup, Renaissance-style -->
           <div class="cta__lockup" aria-hidden="true">
@@ -761,27 +584,17 @@
             <span class="cta__sub-lockup">Creator Vaults on Base</span>
           </div>
 
-          <h2 class="cta__title">Earn beside the people you<br /><em>actually trust.</em></h2>
-          <p class="cta__sub">
-            4626.fun is in private beta. Get the keys, deploy a vault, or just deposit
-            with a creator you follow.
-          </p>
+          <h2 class="cta__title">Where Creators &amp; Fans <em>Earn Together.</em></h2>
+          <p class="cta__sub">Private beta on Base. Join for early access.</p>
 
-          <!-- Hand-off to the existing /waitlist React flow rather than
-               capturing a lead inline. Keeps a single source of truth for
-               waitlist signups (referral codes, role picker, wallet link
-               step, points, etc. all live there). -->
           <div class="cta__form cta__form--waitlist">
-            <a href="/waitlist" class="btn btn--gold">
+            <a href="/waitlist?start=1" class="btn btn--gold">
               <span>Join the waitlist</span>
               <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
                 <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </a>
           </div>
-          <p class="cta__caption">
-            <em>Base-native &middot; ERC-4626 &middot; Built for creators and builders.</em>
-          </p>
 
           <!-- BUILT WITH lockup -->
           <div class="cta__builtwith" aria-label="Built with">
@@ -812,6 +625,7 @@
           <a href="https://github.com/4626fun" target="_blank" rel="noopener noreferrer" aria-label="GitHub">GitHub</a>
           <a href="https://discord.com/invite/4626" target="_blank" rel="noopener noreferrer" aria-label="Discord">Discord</a>
           <a href="https://t.me/fun4626" target="_blank" rel="noopener noreferrer" aria-label="Telegram">Telegram</a>
+          <a href="/arena">Arena</a>
           <a href="/risks">Risks</a>
           <a href="/security">Security</a>
           <a href="/about">About</a>
@@ -831,7 +645,7 @@
           Reserve a spot — the first 200 get a vault deployer credit.
         </p>
         <div class="fold__form">
-          <a href="/waitlist" class="btn btn--gold">
+          <a href="/waitlist?start=1" class="btn btn--gold">
             <span>Reserve access</span>
           </a>
         </div>
@@ -841,8 +655,23 @@
       </div>
     </div>
 
-    <script type="module" src="./vault.js"></script>
-    <script type="module" src="./vaults-cloth.js"></script>
+    <!-- Obsidian vault: R3F island (default). ?hero=legacy → vanilla vault.js -->
+    <script type="module">
+      (async () => {
+        const immersive = '/immersive/';
+        const loadLegacy = () => import(`${immersive}vault.js?v=e92cf98c0fdb`);
+        if (new URLSearchParams(location.search).get('hero') === 'legacy') {
+          await loadLegacy();
+          return;
+        }
+        try {
+          await import(`${immersive}vault-hero/vault-hero.js?v=3a8071a1c284`);
+        } catch (err) {
+          console.warn('[vault-hero] R3F bundle failed, falling back to vault.js', err);
+          await loadLegacy();
+        }
+      })();
+    </script>
 
     <!-- Page-fold transition: when Launch App is clicked, the entire site
          folds away in 3D (skewed perspective + rotation) and reveals the
@@ -1308,18 +1137,58 @@
         setTimeout(() => { strike(); schedule(); }, 1500);
       })();
 
-      // Card cursor glow
-      document.querySelectorAll('.card').forEach((c) => {
-        c.addEventListener('mousemove', (e) => {
-          const r = c.getBoundingClientRect();
-          c.style.setProperty('--mx', e.clientX - r.left + 'px');
-          c.style.setProperty('--my', e.clientY - r.top + 'px');
-        });
-      });
+      // Example vault carousel
+      (function () {
+        const dataEl = document.getElementById('vaults-data');
+        const card = document.getElementById('vault-card');
+        if (!dataEl || !card) return;
+        const vaults = JSON.parse(dataEl.textContent);
+        let idx = 0;
+        const prevBtn = document.getElementById('vaults-prev');
+        const nextBtn = document.getElementById('vaults-next');
+        const currentEl = document.getElementById('vaults-current');
+        const totalEl = document.getElementById('vaults-total');
+        if (totalEl) totalEl.textContent = String(vaults.length).padStart(2, '0');
+
+        function render(i) {
+          const v = vaults[i];
+          const avatar = document.getElementById('vault-avatar');
+          if (avatar) { avatar.src = v.avatar; avatar.alt = v.name; }
+          const creator = document.getElementById('vault-creator');
+          if (creator) creator.textContent = v.creator;
+          const name = document.getElementById('vault-name');
+          if (name) name.textContent = v.name;
+          const pitch = document.getElementById('vault-pitch');
+          if (pitch) pitch.textContent = v.pitch;
+          const ticker = document.getElementById('vault-ticker');
+          if (ticker) ticker.textContent = v.ticker;
+          if (currentEl) currentEl.textContent = String(i + 1).padStart(2, '0');
+          card.style.setProperty('--vault-accent', v.accent);
+        }
+
+        function go(delta) {
+          if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            idx = (idx + delta + vaults.length) % vaults.length;
+            render(idx);
+            return;
+          }
+          card.classList.add('is-switching');
+          setTimeout(() => {
+            idx = (idx + delta + vaults.length) % vaults.length;
+            render(idx);
+            card.classList.remove('is-switching');
+          }, 180);
+        }
+
+        prevBtn?.addEventListener('click', () => go(-1));
+        nextBtn?.addEventListener('click', () => go(1));
+        render(0);
+      })();
 
       // Reveal on scroll — use rootMargin so elements reveal slightly before entering viewport
       (function () {
-        const els = document.querySelectorAll('.reveal, .step, .card, .section__head, .cta__inner, .hero__stats, .tokencard, .anatomy__bridge, .flow');
+        const els = document.querySelectorAll('.reveal, .cta__inner, .hero__stats, .mkt-reveal');
+        const scrollStorySteps = document.querySelectorAll('.mkt-scrollstory .mkt-step');
         if (!('IntersectionObserver' in window)) {
           els.forEach((e) => e.classList.add('is-in'));
           return;
@@ -1336,6 +1205,7 @@
           { threshold: 0.01, rootMargin: '0px 0px -10% 0px' }
         );
         els.forEach((e) => {
+          if (scrollStorySteps.length && e.closest('.mkt-scrollstory')) return;
           io.observe(e);
           // If element is already on screen at load, reveal immediately
           const r = e.getBoundingClientRect();
@@ -1344,7 +1214,12 @@
           }
         });
         // Safety net: reveal everything after 1.2s in case IO never fires (e.g. printing/screenshots)
-        setTimeout(() => els.forEach((e) => e.classList.add('is-in')), 1200);
+        setTimeout(() => {
+          els.forEach((e) => {
+            if (scrollStorySteps.length && e.closest('.mkt-scrollstory')) return;
+            e.classList.add('is-in');
+          });
+        }, 1200);
       })();
     </script>
 
@@ -1430,6 +1305,123 @@
         function onScroll() { if (!raf) raf = requestAnimationFrame(update); }
         window.addEventListener('scroll', onScroll, { passive: true });
         window.addEventListener('resize', onScroll, { passive: true });
+        update();
+      })();
+    </script>
+
+    <!-- How it works scroll-story: steps accumulate as user scrolls through #lifecycle -->
+    <script>
+      (function () {
+        const section = document.querySelector('.mkt-scrollstory');
+        if (!section) return;
+
+        const track = section.querySelector('.mkt-scrollstory__track');
+        const stage = section.querySelector('.mkt-scrollstory__stage');
+        const steps = Array.from(section.querySelectorAll('.mkt-step[data-story-step]'));
+
+        const storyClasses = ['is-story-1', 'is-story-2', 'is-story-3', 'is-story-4', 'is-story-done'];
+
+        if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          storyClasses.forEach((cls) => section.classList.add(cls));
+          return;
+        }
+
+        const mobileMq = matchMedia('(max-width: 720px)');
+        function isMobileView() {
+          return mobileMq.matches;
+        }
+        function getStops() {
+          return isMobileView()
+            ? [
+                { p: 0.06, step: 1 },
+                { p: 0.28, step: 2 },
+                { p: 0.50, step: 3 },
+                { p: 0.72, step: 4 },
+                { p: 0.88, done: true },
+              ]
+            : [
+                { p: 0, step: 1 },
+                { p: 0.28, step: 2 },
+                { p: 0.50, step: 3 },
+                { p: 0.72, step: 4 },
+                { p: 0.88, done: true },
+              ];
+        }
+
+        let raf = null;
+        let lastActiveStep = -1;
+
+        function measureOffset(activeStep) {
+          if (!track || !stage || activeStep < 1 || isMobileView()) {
+            section.style.setProperty('--story-offset', '0px');
+            section.style.setProperty('--story-rail-height', '72px');
+            return;
+          }
+
+          const gap = parseFloat(getComputedStyle(track).gap) || 16;
+          let heightThroughActive = 0;
+          for (let i = 0; i < activeStep; i++) {
+            const el = steps[i];
+            if (el) heightThroughActive += el.offsetHeight + (i > 0 ? gap : 0);
+          }
+
+          const stageHeight = stage.clientHeight;
+          const targetBottom = stageHeight * 0.78;
+          let offset = 0;
+          if (heightThroughActive > targetBottom) {
+            offset = -(heightThroughActive - targetBottom);
+          }
+          if (heightThroughActive > stageHeight) {
+            offset = Math.min(offset, -(heightThroughActive - stageHeight));
+          }
+
+          section.style.setProperty('--story-offset', offset + 'px');
+          section.style.setProperty('--story-rail-height', Math.max(72, heightThroughActive - 32) + 'px');
+        }
+
+        function update() {
+          raf = null;
+          const rect = section.getBoundingClientRect();
+          const vh = window.innerHeight || document.documentElement.clientHeight;
+          const total = rect.height - vh;
+          if (total <= 0) return;
+
+          const progress = Math.max(0, Math.min(1, (-rect.top) / total));
+          let activeStep = 0;
+          let done = false;
+
+          getStops().forEach(({ p, step, done: isDone }) => {
+            if (step && progress >= p) activeStep = step;
+            if (isDone && progress >= p) done = true;
+          });
+
+          storyClasses.forEach((cls) => section.classList.remove(cls));
+          if (activeStep >= 1) section.classList.add('is-story-' + activeStep);
+          if (done) section.classList.add('is-story-done');
+
+          if (activeStep !== lastActiveStep) {
+            lastActiveStep = activeStep;
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => measureOffset(activeStep));
+            });
+          } else if (activeStep > 0) {
+            measureOffset(activeStep);
+          }
+        }
+
+        function onScroll() {
+          if (!raf) raf = requestAnimationFrame(update);
+        }
+
+        window.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('resize', () => {
+          lastActiveStep = -1;
+          onScroll();
+        }, { passive: true });
+        mobileMq.addEventListener('change', () => {
+          lastActiveStep = -1;
+          onScroll();
+        });
         update();
       })();
     </script>
@@ -1532,8 +1524,8 @@
               fadeTo(TARGET_VOL, FADE_IN_MS);
               started = true;
               setUI(true);
-            } catch (err) {
-              console.warn('audio play blocked', err);
+            } catch (_) {
+              /* autoplay blocked until user gesture */
             }
           }
         });

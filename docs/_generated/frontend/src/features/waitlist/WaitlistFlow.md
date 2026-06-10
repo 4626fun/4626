@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/features/waitlist/WaitlistFlow
+[4626-web](../../../index.md) / src/features/waitlist/WaitlistFlow
 
 # src/features/waitlist/WaitlistFlow
 
@@ -12,7 +12,7 @@
 
 > **isPrivyLoginBootstrapError**(`error`): `boolean`
 
-Defined in: [src/features/waitlist/WaitlistFlow.tsx:113](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/WaitlistFlow.tsx#L113)
+Defined in: [src/features/waitlist/WaitlistFlow.tsx:94](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/WaitlistFlow.tsx#L94)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/features/waitlist/WaitlistFlow.tsx:113](https://github.com/wena
 
 > **WaitlistFlow**(`props`): `Element`
 
-Defined in: [src/features/waitlist/WaitlistFlow.tsx:445](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/WaitlistFlow.tsx#L445)
+Defined in: [src/features/waitlist/WaitlistFlow.tsx:315](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/WaitlistFlow.tsx#L315)
 
 #### Parameters
 

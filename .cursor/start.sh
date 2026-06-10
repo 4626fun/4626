@@ -11,4 +11,4 @@ git submodule update --init --recursive
 # Refresh JS dependencies
 pnpm install --frozen-lockfile
 pnpm -C frontend install --frozen-lockfile
-cd cre && npm ci && cd ..
+pnpm -C kpr install --frozen-lockfile

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/zora/\_resolve
+[4626-web](../../../index.md) / api/\_handlers/zora/\_resolve
 
 # api/\_handlers/zora/\_resolve
 

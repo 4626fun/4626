@@ -13,7 +13,7 @@ import {
   getClientIp,
   checkRateLimit,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { consumeHandoffCode, ensureHandoffSchema } from '../../../server/auth/_handoff.js'
 

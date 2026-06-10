@@ -37,7 +37,7 @@ const mocks = vi.hoisted(() => ({
   PrivyClientGetUserById: vi.fn(),
 }))
 
-vi.mock('../../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   handleOptions: mocks.handleOptions,
   setCors: mocks.setCors,
   setNoStore: mocks.setNoStore,
@@ -48,12 +48,9 @@ vi.mock('../../../packages/server-core/src/index.js', () => ({
   checkRateLimit: mocks.checkRateLimit,
   rateLimitKey: mocks.rateLimitKey,
   resolveAuthorizedRequestPrincipal: mocks.resolveAuthorizedRequestPrincipal,
-  RATE_LIMITS: { adminAction: { windowMs: 60_000, maxRequests: 30 } },
-}))
-
-vi.mock('../../../server/_lib/wallet/commandIssuerContext.js', () => ({
   provisionCommandIssuerContext: mocks.provisionCommandIssuerContext,
   envBigInt: mocks.envBigInt,
+  RATE_LIMITS: { adminAction: { windowMs: 60_000, maxRequests: 30 } },
 }))
 
 vi.mock('../../../server/_lib/wallet/privyWalletApi.js', () => ({

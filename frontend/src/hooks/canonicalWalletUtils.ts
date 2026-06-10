@@ -1,6 +1,8 @@
 import { getAddress } from 'viem'
 
 export type WaitlistMeData = {
+  appAccessStatus?: string | null
+  primaryEmbeddedEoa?: string | null
   cswAddress?: string | null
   primarySmartWallet?: string | null
   baseSubAccount?: string | null
@@ -45,6 +47,24 @@ export function pickCanonicalSmartWalletAddress(row: WaitlistMeData | null | und
   for (const value of candidates) {
     if (!isAddressLike(value)) continue
     return getAddress(value).toLowerCase()
+  }
+  return null
+}
+
+export function pickExecutionSubAccountAddress(row: WaitlistMeData | null | undefined): string | null {
+  if (!row) return null
+
+  const canonical = pickCanonicalSmartWalletAddress(row)
+  const fromAccount = (row.connectedAccounts ?? []).find(
+    (item) => item?.isExecutionSubAccount && isAddressLike(item?.address),
+  )?.address
+
+  const candidates: Array<string | null | undefined> = [fromAccount, row.baseSubAccount]
+  for (const value of candidates) {
+    if (!isAddressLike(value)) continue
+    const normalized = getAddress(value).toLowerCase()
+    if (canonical && normalized === canonical) continue
+    return normalized
   }
   return null
 }

@@ -11,7 +11,7 @@ import { apiFetch } from '@/lib/api/apiBase'
 import {
   _submitOwnerViaSelfBuiltUserOp,
   computeReplayableUserOpHash,
-} from '@/lib/wallet/onboardingWallet'
+} from '@/lib/wallet/onboardingWalletReplayable'
 import { _submitOwnerViaFunderEoa } from '@/lib/wallet/relayFunderEoaSubmit'
 import { _submitOwnerViaSendCalls, waitForCallsTxHash } from '@/lib/wallet/cswSendCalls'
 import {
@@ -1248,6 +1248,7 @@ export function RemoveOwnerPage() {
                           CSW with canSkipChainIdValidation selectors through its
                           internal replayable-UserOp builder. */}
                       <label
+                        aria-label={`Raw mode ${rawMode ? 'on' : 'off'}: bypass Relay and send the raw mutation call directly to the CSW via wallet_sendCalls`}
                         className={`mt-2 flex items-start gap-2 cursor-pointer rounded-md border px-2.5 py-2 text-[11px] ${
                           rawMode
                             ? 'border-amber-500/50 bg-amber-500/10 text-amber-200'
@@ -1274,7 +1275,10 @@ export function RemoveOwnerPage() {
 
                   <div className="space-y-3">
                     <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-[11px] text-zinc-300 space-y-2">
-                      <label className="flex items-start gap-2 cursor-pointer">
+                      <label
+                        aria-label="Sign with passkey (owner index 0)"
+                        className="flex items-start gap-2 cursor-pointer"
+                      >
                         <input
                           type="checkbox"
                           className="mt-0.5"

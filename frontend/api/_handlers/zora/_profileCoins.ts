@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { DEFAULT_CHAIN_ID, getNumberQuery, getStringQuery, handleOptions, requireServerKey, setCache, setCors } from '../../../server/zora/_shared.js'
-import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../packages/server-core/src/index.js'
+import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '@4626/server-core'
 
 const PAGE_LIMIT = 50
 const MAX_TOTAL_COUNT = 250

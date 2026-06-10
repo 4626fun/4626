@@ -56,7 +56,7 @@ const {
   retrySubmissionByIdMock: vi.fn(),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   handleOptions: handleOptionsMock,
   readBoundedJsonObjectBody: readBoundedJsonObjectBodyMock,
   guardAgentApiRequest: guardMock,
@@ -105,13 +105,37 @@ const LOTTERY_ROUTER = '0x000000000000000000000000000000000000abcd'
 function setEnabledEnv(): () => void {
   const prior = process.env.AMOE_ZK_SUBMIT_ENABLED
   const priorRouter = process.env.LOTTERY_AMOE_ROUTER
+  const priorRelayPk = process.env.LOTTERY_AMOE_RELAY_PRIVATE_KEY
+  const priorRelayOwnerPk = process.env.LOTTERY_AMOE_RELAY_OWNER_PRIVATE_KEY
+  const priorRelaySmartWallet = process.env.LOTTERY_AMOE_RELAY_SMART_WALLET
+  const priorRelayBundler = process.env.LOTTERY_AMOE_RELAY_BUNDLER_URL
+  const priorKprPk = process.env.KPR_PRIVATE_KEY
+  const priorPrivatePk = process.env.PRIVATE_KEY
   process.env.AMOE_ZK_SUBMIT_ENABLED = '1'
   process.env.LOTTERY_AMOE_ROUTER = LOTTERY_ROUTER
+  delete process.env.LOTTERY_AMOE_RELAY_PRIVATE_KEY
+  delete process.env.LOTTERY_AMOE_RELAY_OWNER_PRIVATE_KEY
+  delete process.env.LOTTERY_AMOE_RELAY_SMART_WALLET
+  delete process.env.LOTTERY_AMOE_RELAY_BUNDLER_URL
+  delete process.env.KPR_PRIVATE_KEY
+  delete process.env.PRIVATE_KEY
   return () => {
     if (prior === undefined) delete process.env.AMOE_ZK_SUBMIT_ENABLED
     else process.env.AMOE_ZK_SUBMIT_ENABLED = prior
     if (priorRouter === undefined) delete process.env.LOTTERY_AMOE_ROUTER
     else process.env.LOTTERY_AMOE_ROUTER = priorRouter
+    if (priorRelayPk === undefined) delete process.env.LOTTERY_AMOE_RELAY_PRIVATE_KEY
+    else process.env.LOTTERY_AMOE_RELAY_PRIVATE_KEY = priorRelayPk
+    if (priorRelayOwnerPk === undefined) delete process.env.LOTTERY_AMOE_RELAY_OWNER_PRIVATE_KEY
+    else process.env.LOTTERY_AMOE_RELAY_OWNER_PRIVATE_KEY = priorRelayOwnerPk
+    if (priorRelaySmartWallet === undefined) delete process.env.LOTTERY_AMOE_RELAY_SMART_WALLET
+    else process.env.LOTTERY_AMOE_RELAY_SMART_WALLET = priorRelaySmartWallet
+    if (priorRelayBundler === undefined) delete process.env.LOTTERY_AMOE_RELAY_BUNDLER_URL
+    else process.env.LOTTERY_AMOE_RELAY_BUNDLER_URL = priorRelayBundler
+    if (priorKprPk === undefined) delete process.env.KPR_PRIVATE_KEY
+    else process.env.KPR_PRIVATE_KEY = priorKprPk
+    if (priorPrivatePk === undefined) delete process.env.PRIVATE_KEY
+    else process.env.PRIVATE_KEY = priorPrivatePk
   }
 }
 
@@ -461,17 +485,11 @@ describe('auth / profile gating', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Relay-missing short-circuit (Codex review on PR #444 — fix #1)
+// Relay availability
 // ---------------------------------------------------------------------------
 
 describe('relay-missing short-circuit', () => {
-  // Codex review on PR #444 found the previous handler always passed
-  // `relay: __testHooks.relay` (undefined in production) which made
-  // `retrySubmissionById` throw `amoe_retry_relay_missing` → 500.
-  // The fix is to short-circuit with a 200 `state: no_relay_configured`
-  // — same shape as the cron handler — so ops gets an actionable
-  // metric instead of a hard error.
-  it('returns 200 no_relay_configured when no relay is configured', async () => {
+  it('returns 503 amoe_retry_relay_missing when no relay is configured', async () => {
     const restore = setEnabledEnv()
     try {
       // Default `beforeEach` installs a stub relay; clear it for this
@@ -481,15 +499,9 @@ describe('relay-missing short-circuit', () => {
       const req = createMockReq({ method: 'POST', body: validBody() })
       const res = createMockRes()
       await handler(req, res)
-      expect(res.statusCode).toBe(200)
-      expect(res.body?.success).toBe(true)
-      expect(res.body?.data).toMatchObject({
-        submissionId: VALID_SUBMISSION_ID,
-        state: 'no_relay_configured',
-      })
-      // Critically, the orchestrator must NOT have been entered —
-      // otherwise we'd be re-incurring the original `amoe_retry_relay_missing`
-      // 500 inside `retrySubmissionById`.
+      expect(res.statusCode).toBe(503)
+      expect(res.body?.success).toBe(false)
+      expect(res.body?.error).toBe('amoe_retry_relay_missing')
       expect(retrySubmissionByIdMock).not.toHaveBeenCalled()
     } finally {
       restore()

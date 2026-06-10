@@ -14,7 +14,7 @@ import {
   rateLimitKey,
   ensureTelegramTradingSchema,
   upsertHolderRoomPolicy,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 import { enqueueKeeprAction } from '../../../../server/_lib/keepr/keeprRegistry.js'

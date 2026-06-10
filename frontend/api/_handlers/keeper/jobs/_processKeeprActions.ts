@@ -5,7 +5,7 @@ import {
   handleOptions,
   setCors,
   setNoStore,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { processKeeprActions, type KeeprActionProcessResult } from '../../../../server/_lib/keeperJobs/keeperJobRunner.js'
 import { isAuthorizedCron } from '../../../../server/_lib/lottery/cronAuth.js'
 
@@ -14,7 +14,7 @@ function env(name: string): string {
 }
 
 function enabled(): boolean {
-  return ['1', 'true', 'yes'].includes(env('KEEPER_PROCESS_KEEPR_ACTIONS_ENABLED').toLowerCase())
+  return ['1', 'true', 'yes'].includes(env('KEEPER_PROCESS_KPR_ACTIONS_ENABLED').toLowerCase())
 }
 
 function getBaseUrl(req: VercelRequest): string {
@@ -49,9 +49,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const result = await processKeeprActions({
       baseUrl: getBaseUrl(req),
-      apiKey: env('KEEPR_API_KEY'),
-      limit: Number(env('KEEPER_PROCESS_KEEPR_ACTIONS_LIMIT') || 1),
-      retryDelaySeconds: Number(env('KEEPER_PROCESS_KEEPR_ACTIONS_RETRY_DELAY_SECONDS') || 60),
+      apiKey: env('KPR_API_KEY'),
+      limit: Number(env('KEEPER_PROCESS_KPR_ACTIONS_LIMIT') || 1),
+      retryDelaySeconds: Number(env('KEEPER_PROCESS_KPR_ACTIONS_RETRY_DELAY_SECONDS') || 60),
     })
     return res.status(200).json({
       success: true,

@@ -23,7 +23,7 @@ const {
   logAdminActionMock: vi.fn(async () => {}),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   handleOptions: vi.fn(() => false),
   readJsonBody: readJsonBodyMock,
   readBoundedJsonObjectBody: readBoundedJsonObjectBodyMock,

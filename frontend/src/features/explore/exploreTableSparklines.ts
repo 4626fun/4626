@@ -1,0 +1,147 @@
+import { apiFetch } from '@/lib/api/apiBase'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import type { ZoraCoin } from '@/lib/zora/types'
+
+export type ExploreTableSparkline = {
+  values: number[]
+  changePercent: number | null
+}
+
+export type ExploreTableSparklinesResponse = {
+  sparklines: Record<string, ExploreTableSparkline>
+}
+
+const STORAGE_KEY = '4626:explore:table-sparklines:v1'
+const STORAGE_MAX_AGE_MS = 6 * 60 * 60_000
+const SPARKLINE_FETCH_CHUNK_SIZE = 25
+
+function isValidSparkline(
+  entry: { values: number[]; changePercent?: number | null } | null | undefined,
+): entry is ExploreTableSparkline {
+  return Boolean(entry && Array.isArray(entry.values) && entry.values.length >= 2)
+}
+
+function toExploreTableSparkline(
+  entry: { values: number[]; changePercent?: number | null } | null | undefined,
+): ExploreTableSparkline | null {
+  if (!isValidSparkline(entry)) return null
+  return { values: entry.values, changePercent: entry.changePercent ?? null }
+}
+
+export function resolveExploreRowTrend30d(
+  coin: Pick<ZoraCoin, 'address' | 'trend30d'> | null | undefined,
+  sparklines: ReadonlyMap<string, ExploreTableSparkline>,
+): ExploreTableSparkline | null {
+  const address = typeof coin?.address === 'string' ? coin.address.toLowerCase() : ''
+  if (!address) return null
+  const cached = sparklines.get(address)
+  if (isValidSparkline(cached)) return cached
+  return toExploreTableSparkline(coin?.trend30d)
+  return null
+}
+
+type PersistedSparklineEntry = ExploreTableSparkline & { savedAt: number }
+
+export function seedSparklinesFromCoins(
+  coins: ReadonlyArray<Pick<ZoraCoin, 'address' | 'trend30d'>>,
+): Map<string, ExploreTableSparkline> {
+  const map = new Map<string, ExploreTableSparkline>()
+  for (const coin of coins) {
+    const address = typeof coin.address === 'string' ? coin.address.toLowerCase() : ''
+    const sparkline = toExploreTableSparkline(coin.trend30d)
+    if (!address || !sparkline) continue
+    map.set(address, sparkline)
+  }
+  return map
+}
+
+export function readPersistedExploreTableSparklines(): Map<string, ExploreTableSparkline> {
+  if (typeof window === 'undefined') return new Map()
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY)
+    if (!raw) return new Map()
+    const parsed = JSON.parse(raw) as Record<string, PersistedSparklineEntry> | null
+    if (!parsed || typeof parsed !== 'object') return new Map()
+
+    const now = Date.now()
+    const map = new Map<string, ExploreTableSparkline>()
+    for (const [address, entry] of Object.entries(parsed)) {
+      if (!entry || typeof entry.savedAt !== 'number') continue
+      if (now - entry.savedAt > STORAGE_MAX_AGE_MS) continue
+      if (!isValidSparkline(entry)) continue
+      map.set(address.toLowerCase(), {
+        values: [...entry.values],
+        changePercent: entry.changePercent ?? null,
+      })
+    }
+    return map
+  } catch {
+    return new Map()
+  }
+}
+
+export function writePersistedExploreTableSparklines(
+  entries: ReadonlyMap<string, ExploreTableSparkline>,
+): void {
+  if (typeof window === 'undefined' || entries.size === 0) return
+  try {
+    const existing = readPersistedExploreTableSparklines()
+    const savedAt = Date.now()
+    for (const [address, sparkline] of entries) {
+      if (!isValidSparkline(sparkline)) continue
+      existing.set(address.toLowerCase(), {
+        values: [...sparkline.values],
+        changePercent: sparkline.changePercent ?? null,
+      })
+    }
+
+    const payload: Record<string, PersistedSparklineEntry> = {}
+    for (const [address, sparkline] of existing) {
+      payload[address] = {
+        values: [...sparkline.values],
+        changePercent: sparkline.changePercent ?? null,
+        savedAt,
+      }
+    }
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+  } catch {
+    // Quota/private mode — skip persistence.
+  }
+}
+
+export function mergeExploreTableSparklineMaps(
+  ...sources: ReadonlyArray<ReadonlyMap<string, ExploreTableSparkline> | undefined>
+): Map<string, ExploreTableSparkline> {
+  const merged = new Map<string, ExploreTableSparkline>()
+  for (const source of sources) {
+    if (!source) continue
+    for (const [address, sparkline] of source) {
+      if (!isValidSparkline(sparkline)) continue
+      merged.set(address.toLowerCase(), sparkline)
+    }
+  }
+  return merged
+}
+
+export async function fetchExploreTableSparklines(
+  coinAddresses: string[],
+): Promise<Map<string, ExploreTableSparkline>> {
+  const normalized = [...new Set(coinAddresses.map((address) => address.toLowerCase()).filter(Boolean))]
+  if (normalized.length === 0) return new Map()
+
+  async function fetchChunk(chunk: string[]): Promise<Map<string, ExploreTableSparkline>> {
+    const query = new URLSearchParams({ coins: chunk.join(',') })
+    const res = await apiFetch(`/api/zora/exploreSparklines?${query.toString()}`, { method: 'GET' })
+    const json = (await res.json().catch(() => null)) as ApiEnvelope<ExploreTableSparklinesResponse> | null
+    if (!res.ok || !json?.success || !json.data?.sparklines) return new Map()
+    return new Map(Object.entries(json.data.sparklines))
+  }
+
+  const chunks: string[][] = []
+  for (let i = 0; i < normalized.length; i += SPARKLINE_FETCH_CHUNK_SIZE) {
+    chunks.push(normalized.slice(i, i + SPARKLINE_FETCH_CHUNK_SIZE))
+  }
+
+  const chunkResults = await Promise.all(chunks.map((chunk) => fetchChunk(chunk)))
+  return mergeExploreTableSparklineMaps(...chunkResults)
+}

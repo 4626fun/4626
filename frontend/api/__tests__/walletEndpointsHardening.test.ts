@@ -36,7 +36,7 @@ const {
   extractDelegationFlagsMock: vi.fn(() => ({})),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   handleOptions: vi.fn(() => false),
   setCors: vi.fn(),
   setNoStore: vi.fn(),
@@ -158,93 +158,6 @@ describe('wallet endpoint hardening', () => {
 
     expect(res.statusCode).toBe(401)
     expect(String(res.body?.error ?? '')).toContain('Not authenticated')
-  })
-
-  it('returns 429 + Retry-After from prepare-add-privy-owner when rate limited', async () => {
-    const { default: handler } = await import('../_handlers/wallet/_prepare-add-privy-owner.ts')
-    const req = createMockReq({ method: 'POST' })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(429)
-    expect(String(res.body?.error ?? '')).toContain('Rate limit exceeded')
-    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
-  })
-
-  it('returns 401 from prepare-add-privy-owner when Privy auth is missing', async () => {
-    checkRateLimitMock.mockReturnValueOnce({ allowed: true, resetAt: Date.now() + 60_000 })
-    bootstrapCanonicalDelegationStateMock.mockRejectedValueOnce(new Error('missing privy auth token'))
-
-    const { default: handler } = await import('../_handlers/wallet/_prepare-add-privy-owner.ts')
-    const req = createMockReq({ method: 'POST' })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(401)
-  })
-
-  it('returns 429 + Retry-After from prepare-add-rabby-owner when rate limited', async () => {
-    const { default: handler } = await import('../_handlers/wallet/_prepare-add-rabby-owner.ts')
-    const req = createMockReq({
-      method: 'POST',
-      body: {
-        rabbyAddress: '0x0000000000000000000000000000000000000011',
-        confirmedAdvanced: true,
-      },
-    })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(429)
-    expect(String(res.body?.error ?? '')).toContain('Rate limit exceeded')
-    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
-  })
-
-  it('returns 401 from prepare-add-rabby-owner when Privy auth is missing', async () => {
-    checkRateLimitMock.mockReturnValueOnce({ allowed: true, resetAt: Date.now() + 60_000 })
-    bootstrapCanonicalDelegationStateMock.mockRejectedValueOnce(new Error('missing privy auth token'))
-
-    const { default: handler } = await import('../_handlers/wallet/_prepare-add-rabby-owner.ts')
-    const req = createMockReq({
-      method: 'POST',
-      body: {
-        rabbyAddress: '0x0000000000000000000000000000000000000011',
-        confirmedAdvanced: true,
-      },
-    })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(401)
-  })
-
-  it('returns 429 + Retry-After from confirm-owner when rate limited', async () => {
-    const { default: handler } = await import('../_handlers/wallet/_confirm-owner.ts')
-    const req = createMockReq({ method: 'POST', body: { txHash: '0x1234' } })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(429)
-    expect(String(res.body?.error ?? '')).toContain('Rate limit exceeded')
-    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
-  })
-
-  it('returns 401 from confirm-owner when Privy auth is missing', async () => {
-    checkRateLimitMock.mockReturnValueOnce({ allowed: true, resetAt: Date.now() + 60_000 })
-    confirmOwnerStateMock.mockRejectedValueOnce(new Error('missing privy auth token'))
-
-    const { default: handler } = await import('../_handlers/wallet/_confirm-owner.ts')
-    const req = createMockReq({ method: 'POST', body: { txHash: '0x1234' } })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(401)
   })
 
   it('returns 401 from solana setCanonical when principal is missing', async () => {

@@ -7,7 +7,7 @@ import {
   readRequestPrincipalAddress,
   setCors,
   setNoStore,
-} from '../../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { isServerAdminAddress } from '../../../../../server/_lib/infra/trust.js'
 import { resolveCoinPartiesAndOwner } from '../../../../../server/_lib/onchain/coinParties.js'
 import { getAjnaVaultRegistryEntry } from '../../../../../server/_lib/ajnaVaultManager/registry.js'
@@ -63,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  const parties = await resolveCoinPartiesAndOwner(creatorToken)
+  const parties = await resolveCoinPartiesAndOwner(creatorToken as `0x${string}`)
   const creatorCoinOwner = normalizeAddress(parties.owner)
   const normalizedPrincipal = getAddress(principalAddress as Address)
   const isAdmin = isServerAdminAddress(normalizedPrincipal)

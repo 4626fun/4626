@@ -4,6 +4,7 @@ import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteCont
 import type { Address } from 'viem'
 import { formatUnits, isAddress, parseEther, parseEventLogs } from 'viem'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Button } from '@/components/ui/Button'
 import { apiFetch } from '@/lib/api/apiBase'
 
 import {
@@ -215,7 +216,7 @@ export function CcaAuctionPanel({
   const tokenImageSrc = useMemo(() => {
     if (auctionTokenImageUrl) return auctionTokenImageUrl
     if (auctionTokenAddress && isAddress(auctionTokenAddress)) {
-      return `/api/v1/token/${String(auctionTokenAddress).toLowerCase()}/image?chain=8453&format=png`
+      return `https://dd.dexscreener.com/ds-data/tokens/base/${String(auctionTokenAddress).toLowerCase()}.png`
     }
     return '/assets/logo-mark.svg'
   }, [auctionTokenAddress, auctionTokenImageUrl])
@@ -418,7 +419,7 @@ export function CcaAuctionPanel({
               <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10 bg-black/50 shrink-0">
                 <img
                   src={tokenImageBroken ? '/assets/logo-mark.svg' : tokenImageSrc}
-                  alt={`${tokenSymbol} token image`}
+                  alt={tokenSymbol}
                   className="w-full h-full object-cover"
                   loading="lazy"
                   onError={() => setTokenImageBroken(true)}
@@ -456,12 +457,14 @@ export function CcaAuctionPanel({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Link 
-              to="/auction-demo"
-              className="btn-primary btn-compact btn-no-icon text-sm whitespace-nowrap hover:scale-105 transition-transform"
+            <Button
+              variant="primary"
+              size="sm"
+              className="btn-compact text-sm whitespace-nowrap hover:scale-105 transition-transform"
+              asChild
             >
-              View Demo
-            </Link>
+              <Link to="/auction-demo">View Demo</Link>
+            </Button>
             {isGraduated && (
               <Link 
                 to={`/complete-auction/${ccaStrategy}`} 
@@ -673,12 +676,13 @@ export function CcaAuctionPanel({
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                     {/* Amount input */}
                     <div className="space-y-2">
-                      <label className="label flex items-center justify-between">
+                      <label htmlFor="cca-spend-eth" className="label flex items-center justify-between">
                         <span>Amount to Spend</span>
                         <span className="text-[9px] text-zinc-600">ETH</span>
                       </label>
                       <div className="relative">
                         <input
+                          id="cca-spend-eth"
                           value={spendEth}
                           onChange={(e) => {
                             setSpendEth(e.target.value)
@@ -709,10 +713,10 @@ export function CcaAuctionPanel({
 
                     {/* Estimated tokens */}
                     <div className="space-y-2">
-                      <label className="label flex items-center justify-between">
+                      <p className="label flex items-center justify-between">
                         <span>You'll Receive (Est.)</span>
                         <span className="text-[9px] text-zinc-600">{wsSymbol}</span>
-                      </label>
+                      </p>
                       <div className="bg-black/80 border border-white/5 rounded-lg p-4 h-[72px] flex flex-col justify-center">
                         <AnimatePresence mode="wait">
                           {estTokensText ? (
@@ -747,12 +751,13 @@ export function CcaAuctionPanel({
                         transition={{ duration: 0.3 }}
                       >
                         <div className="space-y-2">
-                          <label className="label flex items-center justify-between">
+                          <label htmlFor="cca-max-price" className="label flex items-center justify-between">
                             <span>Max Price (ETH per {wsSymbol})</span>
                             <span className="text-[9px] text-brand-400">CUSTOM</span>
                           </label>
                           <div className="relative">
                             <input
+                              id="cca-max-price"
                               value={maxPriceEthPerToken}
                               onChange={(e) => {
                                 setMaxPriceEthPerToken(e.target.value)
@@ -790,7 +795,7 @@ export function CcaAuctionPanel({
                         </div>
 
                         <div className="space-y-2">
-                          <label className="label">Effective Max Price</label>
+                          <p className="label">Effective Max Price</p>
                           <div className="bg-black/80 border border-white/5 rounded-lg p-4 h-[72px] flex flex-col justify-center">
                             <div className="value mono text-2xl text-brand-400">
                               {maxPriceText} ETH

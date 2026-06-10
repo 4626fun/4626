@@ -94,14 +94,14 @@ describe('agent/process checkpoints', () => {
 
   it('generates explicit fallback reply when handler returns empty response', () => {
     const resolved = resolveFallbackCommandReply({
-      text: '/cre status',
+      text: '/keepr status',
       result: {
         ok: false,
         response: '',
       },
     })
     expect(resolved.fallbackGenerated).toBe(true)
-    expect(resolved.replyText).toContain('/cre')
+    expect(resolved.replyText).toContain('/keepr')
     expect(resolved.replyText).toContain('fallback mode')
   })
 

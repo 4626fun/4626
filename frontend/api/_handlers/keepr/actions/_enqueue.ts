@@ -14,18 +14,21 @@ import {
   getClientIp,
   rateLimitKey,
   RATE_LIMITS,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { getKeeprVaultAutomationByVaultAddress } from '../../../../server/_lib/keepr/keeprAutomation.js'
 
 import { enqueueKeeprAction } from '../../../../server/_lib/keepr/keeprRegistry.js'
 import {
-  KEEPR_TRUST_ZONE_KEY_HEADER,
+  KPR_TRUST_ZONE_HEADER,
+  KPR_TRUST_ZONE_KEY_HEADER,
+  formatTrustZoneMismatchError,
   formatTrustZoneDisabledError,
   resolveKeeprEffectiveActionType,
   getKeeprTrustZoneEnvKey,
   isKeeprTrustZoneWriteEnabled,
   resolveKeeprTrustZone,
+  validateRequestedKeeprTrustZone,
 } from '../../../../server/_lib/agentControl/trustZones.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -43,7 +46,7 @@ type EnqueueResponse = {
   trustZone: string
 }
 
-const KEEPR_ENQUEUE_BODY_MAX_BYTES = 65_536
+const KPR_ENQUEUE_BODY_MAX_BYTES = 65_536
 
 const AJNA_AUTOMATION_SCOPE = 'ajna_min_bucket_only'
 const AJNA_ACTION_TYPES = new Set([
@@ -94,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
-  const limiter = checkRateLimit(rateLimitKey('keepr:actions:enqueue', getClientIp(req)), RATE_LIMITS.creRuntimeDecisionsWrite)
+  const limiter = checkRateLimit(rateLimitKey('keepr:actions:enqueue', getClientIp(req)), RATE_LIMITS.keeperDecisionsWrite)
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
@@ -102,7 +105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!requireKeeprApiKey(req, res, { missingSecretError: 'Server misconfigured' })) return
 
-  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: KEEPR_ENQUEUE_BODY_MAX_BYTES })) as EnqueueBody
+  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: KPR_ENQUEUE_BODY_MAX_BYTES })) as EnqueueBody
   const vaultAddressRaw = typeof body.vaultAddress === 'string' ? body.vaultAddress.trim().toLowerCase() : ''
   const groupId = typeof body.groupId === 'string' ? body.groupId.trim() : ''
   const actionType = typeof body.actionType === 'string' ? body.actionType.trim() : null
@@ -130,11 +133,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const effectiveActionType = resolveKeeprEffectiveActionType(actionType, action) ?? actionType
   const trustZone = resolveKeeprTrustZone(effectiveActionType)
+  const trustZoneMismatch = validateRequestedKeeprTrustZone({
+    requestedHeaderValue: req.headers[KPR_TRUST_ZONE_HEADER],
+    actionType: effectiveActionType,
+  })
+  if (trustZoneMismatch) {
+    return res.status(400).json({
+      success: false,
+      error: formatTrustZoneMismatchError(trustZoneMismatch.requested, trustZoneMismatch.resolved),
+    } satisfies ApiEnvelope<never>)
+  }
   const trustZoneEnvKey = getKeeprTrustZoneEnvKey(trustZone)
   if (
     !requireOptionalHeaderEnvAuth(req, res, {
       envKey: trustZoneEnvKey,
-      headerName: KEEPR_TRUST_ZONE_KEY_HEADER,
+      headerName: KPR_TRUST_ZONE_KEY_HEADER,
       unauthorizedError: `Unauthorized trust zone: ${trustZone}`,
     })
   ) {

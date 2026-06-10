@@ -1,0 +1,19 @@
+# KPR build artifacts
+*.wasm
+.kpr/
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Local scratch
+tmp.js
+.kpr_build_tmp.js
+
+# Dependencies
+node_modules/
+bun.lockb
+
+# OS
+.DS_Store

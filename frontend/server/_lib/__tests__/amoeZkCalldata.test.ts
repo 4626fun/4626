@@ -3,7 +3,7 @@
 // Locks in the contract between the off-chain proof-generation pipeline (out
 // of scope here — see issue #403 §2) and the on-chain `submitAmoeEntryZK`
 // entrypoint. The fixture is the SAME 24-element proof + 8 public inputs
-// used in `test/zk/AmoePlonkVerifier.t.sol::_fixture()` so a regression in
+// used in `amoe/tests/zk/AmoePlonkVerifier.t.sol::_fixture()` so a regression in
 // this builder OR in the slot layout will fail at least one of the two
 // tests.
 //
@@ -19,7 +19,7 @@
 //
 // What it does NOT test:
 //   * Actual PLONK validity. That is the job of
-//     `test/zk/AmoePlonkVerifier.t.sol`. We assert SHAPE, BOUNDS, and
+//     `amoe/tests/zk/AmoePlonkVerifier.t.sol`. We assert SHAPE, BOUNDS, and
 //     ENCODING here — proof correctness is on-chain's responsibility.
 
 import { describe, expect, it } from 'vitest'
@@ -37,7 +37,7 @@ import {
 import { AmoeBadRequestError } from '../lottery/lotteryAmoeErrors.js'
 
 // ---------------------------------------------------------------------------
-// Fixture — must mirror `test/zk/AmoePlonkVerifier.t.sol::_fixture()` exactly.
+// Fixture — must mirror `amoe/tests/zk/AmoePlonkVerifier.t.sol::_fixture()` exactly.
 // ---------------------------------------------------------------------------
 
 const FIXTURE_PROOF: readonly bigint[] = [

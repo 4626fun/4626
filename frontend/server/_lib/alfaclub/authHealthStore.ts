@@ -41,7 +41,10 @@
 import { logger } from '../infra/logger.js'
 import { getDb } from '../db/postgres.js'
 import { ensureAlfaClubVigilanteSchema } from './schema.js'
-import { extractJwtExpiryIso } from './chatTokenStore.js'
+import {
+  extractJwtExpiryIso,
+  readAlfaClubPrivyAccessToken,
+} from './chatTokenStore.js'
 
 const HEALTH_KEY_LAST_SUCCESS = 'chat_auth_health:last_success' as const
 const HEALTH_KEY_LAST_FAILURE = 'chat_auth_health:last_failure' as const
@@ -54,6 +57,8 @@ export type AlfaClubBridgeAuthHealthSnapshot = {
   lastCfChallengeAt: string | null
   consecutiveCfChallenges: number
   cfChallengeSustained: boolean
+  proxyFallbackDirectCount: number
+  lastProxyFallbackDirectAt: string | null
   suppressedSocketAttempts: number
   socketBackoffMs: number
 }
@@ -73,11 +78,15 @@ const bridgeAuthHealth: AlfaClubBridgeAuthHealthSnapshot = {
   lastCfChallengeAt: null,
   consecutiveCfChallenges: 0,
   cfChallengeSustained: false,
+  proxyFallbackDirectCount: 0,
+  lastProxyFallbackDirectAt: null,
   suppressedSocketAttempts: 0,
   socketBackoffMs: 0,
 }
 
 let bridgeStorageWarnLogged = false
+let lastHealthWriteWarnByKey: Partial<Record<HealthRowKey, number>> = {}
+const HEALTH_WRITE_WARN_THROTTLE_MS = 10 * 60_000
 
 /**
  * Writer names that the auth path is allowed to produce. Anything else is
@@ -99,6 +108,7 @@ const KNOWN_WRITERS: ReadonlySet<string> = new Set([
   'privy-token-refresher',
   'admin.api',
   'computer-token-restore',
+  'cron-token-bootstrap',
 ])
 
 const EVM_ADDRESS_PATTERN = /^0x[0-9a-f]{40}$/
@@ -384,10 +394,16 @@ async function writeHealthRow(
     // even if the health row write is rejected (e.g. RLS quirk on the
     // runtime role). Log code only, not the value.
     const code = (err as { code?: string } | null)?.code
-    logger.warn('[alfaclub-auth-health] health row write failed; continuing', {
-      key,
-      code: typeof code === 'string' ? code : null,
-    })
+    const now = Date.now()
+    const lastWarnAt = lastHealthWriteWarnByKey[key] ?? Number.NEGATIVE_INFINITY
+    if (now - lastWarnAt >= HEALTH_WRITE_WARN_THROTTLE_MS) {
+      lastHealthWriteWarnByKey[key] = now
+      const emit = key === HEALTH_KEY_BRIDGE ? logger.info.bind(logger) : logger.warn.bind(logger)
+      emit('[alfaclub-auth-health] health row write failed; continuing', {
+        key,
+        code: typeof code === 'string' ? code : null,
+      })
+    }
     return false
   }
 }
@@ -454,6 +470,12 @@ export function recordBridgeSocketBackoff(socketBackoffMs: number): void {
   void persistBridgeSnapshot()
 }
 
+export function recordBridgeProxyFallbackDirect(at = new Date().toISOString()): void {
+  bridgeAuthHealth.proxyFallbackDirectCount += 1
+  bridgeAuthHealth.lastProxyFallbackDirectAt = at
+  void persistBridgeSnapshot()
+}
+
 /**
  * Synchronous, in-memory snapshot. Used by the bridge itself (same
  * process as the writes) and by tests. Cross-process readers should use
@@ -484,6 +506,15 @@ function isAlfaClubBridgeAuthHealthSnapshot(
       v.cfChallengeSustained === undefined ||
       typeof v.cfChallengeSustained === 'boolean'
     ) &&
+    (
+      v.proxyFallbackDirectCount === undefined ||
+      typeof v.proxyFallbackDirectCount === 'number'
+    ) &&
+    (
+      v.lastProxyFallbackDirectAt === undefined ||
+      v.lastProxyFallbackDirectAt === null ||
+      typeof v.lastProxyFallbackDirectAt === 'string'
+    ) &&
     typeof v.suppressedSocketAttempts === 'number' &&
     typeof v.socketBackoffMs === 'number'
   )
@@ -509,6 +540,11 @@ export async function readBridgeAuthHealthSnapshotFromStorage(): Promise<AlfaClu
         Math.floor(parsed.consecutiveCfChallenges ?? 0),
       ),
       cfChallengeSustained: parsed.cfChallengeSustained ?? false,
+      proxyFallbackDirectCount: Math.max(
+        0,
+        Math.floor(parsed.proxyFallbackDirectCount ?? 0),
+      ),
+      lastProxyFallbackDirectAt: parsed.lastProxyFallbackDirectAt ?? null,
       suppressedSocketAttempts: Math.max(0, Math.floor(parsed.suppressedSocketAttempts)),
       socketBackoffMs: Math.max(0, Math.floor(parsed.socketBackoffMs)),
     }
@@ -523,7 +559,76 @@ export async function readBridgeAuthHealthSnapshotFromStorage(): Promise<AlfaClu
   return { ...bridgeAuthHealth }
 }
 
+export type DbEnvStalenessWarning = {
+  kind: 'db_lags_env'
+  identity: {
+    dbExpiresAt: string | null
+    envExpiresAt: string | null
+    envConfigured: boolean
+  } | null
+  access: {
+    dbExpiresAt: string | null
+    envExpiresAt: string | null
+    envConfigured: boolean
+  } | null
+  hint: string
+}
+
+const DEFAULT_DB_ENV_STALENESS_SLACK_MS = 5 * 60_000
+
+/**
+ * Surfaces when Vercel env bootstrap JWTs expire later than the DB rows the
+ * refresher actually reads (postmortem #16).
+ */
+export function evaluateDbEnvStaleness(params: {
+  dbIdentityExpiresAt: string | null
+  envIdentityJwt: string | null
+  dbAccessExpiresAt: string | null
+  envAccessJwt: string | null
+  slackMs?: number
+}): DbEnvStalenessWarning | null {
+  const slackMs = params.slackMs ?? DEFAULT_DB_ENV_STALENESS_SLACK_MS
+  const envIdentityExp = params.envIdentityJwt
+    ? extractJwtExpiryIso(params.envIdentityJwt)
+    : null
+  const envAccessExp = params.envAccessJwt ? extractJwtExpiryIso(params.envAccessJwt) : null
+
+  const identity = {
+    dbExpiresAt: params.dbIdentityExpiresAt,
+    envExpiresAt: envIdentityExp,
+    envConfigured: Boolean(params.envIdentityJwt?.trim()),
+  }
+  const access = {
+    dbExpiresAt: params.dbAccessExpiresAt,
+    envExpiresAt: envAccessExp,
+    envConfigured: Boolean(params.envAccessJwt?.trim()),
+  }
+
+  const identityLags =
+    identity.envConfigured &&
+    identity.dbExpiresAt &&
+    identity.envExpiresAt &&
+    Date.parse(identity.envExpiresAt) > Date.parse(identity.dbExpiresAt) + slackMs
+
+  const accessLags =
+    access.envConfigured &&
+    access.dbExpiresAt &&
+    access.envExpiresAt &&
+    Date.parse(access.envExpiresAt) > Date.parse(access.dbExpiresAt) + slackMs
+
+  if (!identityLags && !accessLags) return null
+
+  return {
+    kind: 'db_lags_env',
+    identity: identity.envConfigured || identity.dbExpiresAt ? identity : null,
+    access: access.envConfigured || access.dbExpiresAt ? access : null,
+    hint:
+      'Vercel env bootstrap tokens expire later than DB rows — update alfaclub_runtime_secret (POST /api/v1/alfaclub/chat-token) before relying on env-only changes.',
+  }
+}
+
 export type AlfaClubAuthHealthSnapshot = {
+  dbEnvStaleness: DbEnvStalenessWarning | null
   lastSuccess:
     | (RefreshSuccessPayload & {
         writerAnomaly: WriterAnomaly
@@ -577,10 +682,14 @@ export async function readAuthHealthSnapshot(params?: {
   now?: () => number
 }): Promise<AlfaClubAuthHealthSnapshot> {
   const now = params?.now ?? Date.now
-  const [successRow, failureRow, bridgeSnapshot] = await Promise.all([
+  const envIdentityJwt = (process.env.ALFACLUB_CHAT_JWT ?? '').trim() || null
+  const envAccessJwt = (process.env.ALFACLUB_PRIVY_ACCESS_TOKEN ?? '').trim() || null
+
+  const [successRow, failureRow, bridgeSnapshot, dbAccess] = await Promise.all([
     readHealthRow(HEALTH_KEY_LAST_SUCCESS),
     readHealthRow(HEALTH_KEY_LAST_FAILURE),
     readBridgeAuthHealthSnapshotFromStorage(),
+    readAlfaClubPrivyAccessToken().catch(() => null),
   ])
 
   const lastSuccessPayload = safeParse<RefreshSuccessPayload>(successRow?.secret_value)
@@ -620,7 +729,15 @@ export async function readAuthHealthSnapshot(params?: {
     }
   }
 
+  const dbEnvStaleness = evaluateDbEnvStaleness({
+    dbIdentityExpiresAt: liveSnapshot?.expiresAt ?? null,
+    envIdentityJwt,
+    dbAccessExpiresAt: dbAccess?.expiresAt ?? null,
+    envAccessJwt,
+  })
+
   return {
+    dbEnvStaleness,
     lastSuccess,
     lastFailure,
     liveChatJwt: liveSnapshot,
@@ -634,9 +751,12 @@ export function _resetBridgeAuthHealthForTests(): void {
   bridgeAuthHealth.lastCfChallengeAt = null
   bridgeAuthHealth.consecutiveCfChallenges = 0
   bridgeAuthHealth.cfChallengeSustained = false
+  bridgeAuthHealth.proxyFallbackDirectCount = 0
+  bridgeAuthHealth.lastProxyFallbackDirectAt = null
   bridgeAuthHealth.suppressedSocketAttempts = 0
   bridgeAuthHealth.socketBackoffMs = 0
   bridgeStorageWarnLogged = false
+  lastHealthWriteWarnByKey = {}
 }
 
 /** For tests only — health row keys. */

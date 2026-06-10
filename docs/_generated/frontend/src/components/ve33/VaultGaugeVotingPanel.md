@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/ve33/VaultGaugeVotingPanel
+[4626-web](../../../index.md) / src/components/ve33/VaultGaugeVotingPanel
 
 # src/components/ve33/VaultGaugeVotingPanel
 

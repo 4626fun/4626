@@ -113,6 +113,8 @@ export const RATE_LIMITS = {
   adminAction: { windowMs: 60_000, maxRequests: 30 },
   // Creative generation API: 30 per minute per IP
   agentCreative: { windowMs: 60_000, maxRequests: 30 },
+  // Generic read for v1 handlers (legacy)
+  read: { windowMs: 60_000, maxRequests: 120 },
   // Agent access proof request minting: 40 per minute per principal
   agentAccessProofRequest: { windowMs: 60_000, maxRequests: 40 },
   // Agent access proof verification: 40 per minute per principal
@@ -135,14 +137,16 @@ export const RATE_LIMITS = {
   workspaceRead: { windowMs: 60_000, maxRequests: 120 },
   // Creator quickstart onboarding: 20 per minute per principal
   creatorQuickstart: { windowMs: 60_000, maxRequests: 20 },
-  // CRE runtime ingest reads: 120 per minute per client IP
-  creRuntimeIngestRead: { windowMs: 60_000, maxRequests: 120 },
-  // CRE runtime ingest writes: 60 per minute per client IP
-  creRuntimeIngestWrite: { windowMs: 60_000, maxRequests: 60 },
-  // CRE runtime decisions writes: 60 per minute per client IP
-  creRuntimeDecisionsWrite: { windowMs: 60_000, maxRequests: 60 },
-  // CRE runtime trigger writes: 30 per minute per client IP
-  creRuntimeTriggerWrite: { windowMs: 60_000, maxRequests: 30 },
+  // Relay owner-mutation status polling: up to ~30 polls/min for 8 minutes
+  relayIntentStatus: { windowMs: 60_000, maxRequests: 300 },
+  // Keeper machine-auth ingest reads: 120 per minute per client IP
+  keeperIngestRead: { windowMs: 60_000, maxRequests: 120 },
+  // Keeper machine-auth ingest writes: 60 per minute per client IP
+  keeperIngestWrite: { windowMs: 60_000, maxRequests: 60 },
+  // Keeper job / keepr-actions writes: 60 per minute per client IP
+  keeperDecisionsWrite: { windowMs: 60_000, maxRequests: 60 },
+  // Keeper onchain trigger endpoints: 30 per minute per client IP
+  keeperTriggerWrite: { windowMs: 60_000, maxRequests: 30 },
   // Ajna calldata build endpoints: 120 per minute per principal
   buildAjnaCalldata: { windowMs: 60_000, maxRequests: 120 },
   // Auction submitBid calldata build endpoint: 80 per minute per principal

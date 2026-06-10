@@ -1,5 +1,6 @@
 import { Wallet } from 'lucide-react'
 
+import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import type { SwapConnectGateResult } from '@/lib/swap/connectGate'
 
@@ -29,7 +30,7 @@ export function SwapConnectGate(props: SwapConnectGateProps) {
       data-swap-gate={gate.state}
     >
       <div
-        className="flex h-12 w-12 items-center justify-center rounded-full bg-[linear-gradient(135deg,rgba(0,82,255,0.95),rgba(90,138,255,0.7))] text-white ring-1 ring-white/15"
+        className="flex h-12 w-12 items-center justify-center rounded-full bg-[linear-gradient(135deg,rgb(var(--brand-primary)/0.95),rgb(var(--brand-hover)/0.7))] text-white ring-1 ring-white/15"
         aria-hidden="true"
       >
         <Wallet className="h-5 w-5" />
@@ -45,14 +46,15 @@ export function SwapConnectGate(props: SwapConnectGateProps) {
           <Spinner className="text-white/80" size="lg" />
         </div>
       ) : (
-        <button
+        <Button
           type="button"
-          className="btn-accent btn-no-icon mt-1 w-full max-w-[260px] disabled:opacity-50 disabled:grayscale"
+          variant="primary"
+          className="mt-1 w-full max-w-[260px] disabled:grayscale"
           disabled={props.busy || !gate.actionLabel}
           onClick={props.onPrimaryAction}
         >
           {props.busy ? 'Connecting…' : gate.actionLabel}
-        </button>
+        </Button>
       )}
 
       {props.errorMessage ? (

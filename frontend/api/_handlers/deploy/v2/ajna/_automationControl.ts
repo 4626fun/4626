@@ -8,10 +8,12 @@ import {
   readRequestPrincipalAddress,
   setCors,
   setNoStore,
-} from '../../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { isServerAdminAddress } from '../../../../../server/_lib/infra/trust.js'
-import { resolveCoinPartiesAndOwner } from '../../../../../server/_lib/onchain/coinParties.js'
-import { updateAjnaVaultAutomationConfig } from '../../../../../server/_lib/ajnaVaultManager/registry.js'
+import {
+  getAjnaVaultRegistryEntry,
+  updateAjnaVaultAutomationConfig,
+} from '../../../../../server/_lib/ajnaVaultManager/registry.js'
 
 type ControlRequest = {
   chainId?: number | string
@@ -85,11 +87,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  const parties = await resolveCoinPartiesAndOwner(creatorToken)
-  const creatorCoinOwner = normalizeAddress(parties.owner)
+  const registryRow = await getAjnaVaultRegistryEntry({ chainId, creatorToken, strategyAdapter })
+  if (!registryRow) {
+    return res.status(404).json({ success: false, error: 'Ajna vault registry entry not found' } satisfies ApiEnvelope<never>)
+  }
+
+  const chainScopedOwner = normalizeAddress(registryRow.ownerAddress)
   const normalizedPrincipal = getAddress(principalAddress as Address)
   const isAdmin = isServerAdminAddress(normalizedPrincipal)
-  if (!isAdmin && (!creatorCoinOwner || creatorCoinOwner.toLowerCase() !== normalizedPrincipal.toLowerCase())) {
+  if (!isAdmin && (!chainScopedOwner || chainScopedOwner.toLowerCase() !== normalizedPrincipal.toLowerCase())) {
     return res.status(403).json({
       success: false,
       error: 'Creator owner access required for Ajna automation control',
@@ -123,9 +129,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       lastControlUpdatedAt: new Date().toISOString(),
     },
   })
-  if (!row) {
-    return res.status(404).json({ success: false, error: 'Ajna vault registry entry not found' } satisfies ApiEnvelope<never>)
-  }
+  if (!row) return res.status(500).json({ success: false, error: 'Ajna vault registry update failed' } satisfies ApiEnvelope<never>)
 
   const data: ControlResponse = {
     chainId,

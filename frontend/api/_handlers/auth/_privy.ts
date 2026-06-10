@@ -16,7 +16,7 @@ import {
   classifyLinkedAccounts,
   syncUserWallets,
   type ClassifiedLinkedAccounts,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identity/identityRecovery.js'
 import { PrivyClient } from '@privy-io/server-auth'
@@ -92,9 +92,50 @@ function pickPrivySessionAddress(params: {
     if (candidate && currentLinked.has(candidate)) return candidate
   }
 
+  // Prefer canonical smart wallets, then owner signers, then any linked EVM wallet.
+  const smartWallet = params.classified.allWallets.find(
+    (wallet) => wallet.chain === 'evm' && wallet.walletType === 'smart_wallet',
+  )
+  const smartAddress = normalizeEvmAddress(smartWallet?.address)
+  if (smartAddress && currentLinked.has(smartAddress)) return smartAddress
+
+  const ownerAddress = normalizeEvmAddress(
+    params.classified.activeOwnerWallet?.address ?? params.classified.embeddedEoa?.address,
+  )
+  if (ownerAddress && currentLinked.has(ownerAddress)) return ownerAddress
+
+  for (const wallet of params.classified.allWallets) {
+    if (wallet.chain !== 'evm') continue
+    const linked = normalizeEvmAddress(wallet.address)
+    if (linked && currentLinked.has(linked)) return linked
+  }
+
   // Fail closed for production safety: never mint a session for an address that
   // is not currently linked on the verified Privy user object.
   return null
+}
+
+const PRIVY_USER_WALLET_LINK_RETRY_ATTEMPTS = 4
+const PRIVY_USER_WALLET_LINK_RETRY_DELAY_MS = 200
+
+async function loadPrivyUserWithWalletLinkRetry(
+  client: PrivyClient,
+  userId: string,
+): Promise<{ user: any; classified: ClassifiedLinkedAccounts }> {
+  let user = await client.getUserById(userId)
+  let classified = classifyLinkedAccounts(user as any)
+
+  for (
+    let attempt = 1;
+    attempt < PRIVY_USER_WALLET_LINK_RETRY_ATTEMPTS && classified.allWallets.length === 0;
+    attempt += 1
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, PRIVY_USER_WALLET_LINK_RETRY_DELAY_MS))
+    user = await client.getUserById(userId)
+    classified = classifyLinkedAccounts(user as any)
+  }
+
+  return { user, classified }
 }
 
 function shouldBypassWalletSyncThrottle(params: {
@@ -208,9 +249,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const client = new PrivyClient(auth.appId, auth.appSecret)
     const claims = await client.verifyAuthToken(token)
-    const user = await client.getUserById(claims.userId)
-
-    const classified = classifyLinkedAccounts(user as any)
+    const loaded = await loadPrivyUserWithWalletLinkRetry(client, claims.userId)
+    let user = loaded.user
+    let classified = loaded.classified
     // Session principal should prefer the active owner signer used for canonical execution.
     // This keeps paymaster ownership checks and canonical submit guards aligned.
     const classifiedSessionAddress =

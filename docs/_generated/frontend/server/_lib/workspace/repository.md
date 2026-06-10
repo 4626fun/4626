@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/workspace/repository
+[4626-web](../../../index.md) / server/\_lib/workspace/repository
 
 # server/\_lib/workspace/repository
 
@@ -1381,7 +1381,7 @@ Defined in: [server/\_lib/workspace/repository.ts:662](https://github.com/wenaki
 
 ###### status
 
-`"approved"` \| `"cancelled"` \| `"executed"` \| `"rejected"`
+`"executed"` \| `"approved"` \| `"cancelled"` \| `"rejected"`
 
 #### Returns
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/commands/families/whois
+[4626-web](../../../index.md) / server/commands/families/whois
 
 # server/commands/families/whois
 

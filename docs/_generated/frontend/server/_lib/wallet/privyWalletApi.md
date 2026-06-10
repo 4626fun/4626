@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/wallet/privyWalletApi
+[4626-web](../../../index.md) / server/\_lib/wallet/privyWalletApi
 
 # server/\_lib/wallet/privyWalletApi
 
@@ -197,7 +197,7 @@ Optional for raw signing methods (`secp256k1_sign`, `personal_sign`,
 
 ###### chainType?
 
-`"ethereum"` \| `"solana"`
+`"solana"` \| `"ethereum"`
 
 ###### idempotencyKey?
 

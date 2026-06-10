@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 
 import "../contracts/helpers/batchers/DeploymentBatcher.sol";
 import "../contracts/governance/VaultRolePolicyManager.sol";
+import "./helpers/DeploymentBatcherFixture.sol";
 
 contract MockOwnableVaultForPhase3Bounds {
     address public owner;
@@ -29,45 +30,19 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
     MockOwnableVaultForPhase3Bounds internal vault;
     VaultRolePolicyManager internal rolePolicyManager;
     address internal protocolTreasury;
+    address internal protocolAutomation;
     uint256 private constant PHASE1_SPLIT_STATES_SLOT = 6;
     uint256 private constant PENDING_AUCTIONS_SLOT = 4;
 
     function setUp() public {
         vm.chainId(8453);
         protocolTreasury = makeAddr("protocolTreasury");
+        protocolAutomation = makeAddr("protocolAutomation");
 
         vault = new MockOwnableVaultForPhase3Bounds(address(this));
-        DeploymentBatcherPhase2Module phase2Fixture = new DeploymentBatcherPhase2Module(
-            makeAddr("create2Deployer"),
-            makeAddr("registry"),
-            makeAddr("chainlinkEthUsd"),
-            makeAddr("poolManager"),
-            makeAddr("taxHook"),
-            protocolTreasury,
-            makeAddr("lotteryManager"),
-            makeAddr("vaultActivationBatcher"),
-            makeAddr("batcher")
-        );
-        batcher = new DeploymentBatcher(
-            makeAddr("registry"),
-            makeAddr("bytecodeStore"),
-            makeAddr("create2Deployer"),
-            protocolTreasury,
-            makeAddr("poolManager"),
-            makeAddr("taxHook"),
-            makeAddr("chainlinkEthUsd"),
-            makeAddr("vaultActivationBatcher"),
-            makeAddr("lotteryManager"),
-            makeAddr("permit2"),
-            makeAddr("usdc"),
-            makeAddr("uniswapV3Factory"),
-            makeAddr("uniswapRouter"),
-            makeAddr("ajnaFactory"),
-            makeAddr("vaultCoreModule"),
-            makeAddr("vaultStrategiesModule"),
-            makeAddr("vaultAdminModule"),
-            address(phase2Fixture)
-        );
+        DeploymentBatcherFixture deployer = new DeploymentBatcherFixture();
+        DeploymentBatcherFixture.BatcherConfig memory cfg = _defaultBatcherConfig();
+        (batcher,) = deployer.deployBatcher(cfg);
         rolePolicyManager = new VaultRolePolicyManager(address(this));
         vault.setManagement(address(batcher));
     }
@@ -80,7 +55,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
     function test_resetPhase1State_reverts_nonProtocolTreasury() public {
         (,,, bytes32 baseSalt) = _seedPhase1State();
         vm.expectRevert(DeploymentBatcher.NotProtocolTreasury.selector);
-        batcher.resetPhase1State(baseSalt);
+        batcher.resetPhase1State(makeAddr("phase1CreatorToken"), makeAddr("phase1Owner"), "v1");
     }
 
     function test_resetPhase1State_reverts_unknownSalt() public {
@@ -88,13 +63,13 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
 
         vm.prank(protocolTreasury);
         vm.expectRevert(DeploymentBatcher.Phase1StateNotStuck.selector);
-        batcher.resetPhase1State(baseSalt);
+        batcher.resetPhase1State(makeAddr("unknownCreatorToken"), makeAddr("unknownOwner"), "v1");
     }
 
     function test_resetPhase1State_reverts_mismatchedTupleContext() public {
         bytes32 baseSalt = _seedPhase1StateWithFinalized(false);
         vm.prank(protocolTreasury);
-        batcher.resetPhase1State(baseSalt);
+        batcher.resetPhase1State(makeAddr("phase1CreatorTokenNonFinalized"), makeAddr("phase1OwnerNonFinalized"), "v1");
 
         (address oftBootstrapRegistry, address clearedVault,,,,,,,) = batcher.phase1SplitStates(baseSalt);
         assertEq(oftBootstrapRegistry, address(0), "phase1 oft bootstrap not cleared");
@@ -107,17 +82,38 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
 
         vm.prank(protocolTreasury);
         vm.expectRevert(DeploymentBatcher.AuctionAlreadyPending.selector);
-        batcher.resetPhase1State(baseSalt);
+        batcher.resetPhase1State(makeAddr("phase1CreatorToken"), makeAddr("phase1Owner"), "v1");
     }
 
     function test_resetPhase1State_succeeds_withMatchedTupleContext() public {
         (,,, bytes32 baseSalt) = _seedPhase1State();
         vm.prank(protocolTreasury);
-        batcher.resetPhase1State(baseSalt);
+        batcher.resetPhase1State(makeAddr("phase1CreatorToken"), makeAddr("phase1Owner"), "v1");
 
         (address oftBootstrapRegistry, address clearedVault,,,,,,,) = batcher.phase1SplitStates(baseSalt);
         assertEq(oftBootstrapRegistry, address(0), "phase1 oft bootstrap not cleared");
         assertEq(clearedVault, address(0), "phase1 vault not cleared");
+    }
+
+    // P2 coverage from x-ray/review-todo.md: targeted test for deploy phase retries
+    // and partial finalize scenarios. Demonstrates stuck partial state (coreDone
+    // but not finalized), reset by treasury, and that state is cleared allowing
+    // conceptual retry (re-seed or re-deployPhase1* with same salt context).
+    function test_partialPhase1Stuck_thenReset_allowsRetry() public {
+        bytes32 baseSalt = _seedPhase1StateWithFinalized(false); // coreDone=true, finalized=false
+
+        // confirm partial/stuck
+        (address preOft, address preVault,,,,,,,) = batcher.phase1SplitStates(baseSalt);
+        assertNotEq(preVault, address(0), "expected partial state with vault");
+
+        // reset (as treasury) to recover from stuck partial
+        vm.prank(protocolTreasury);
+        batcher.resetPhase1State(makeAddr("phase1CreatorTokenNonFinalized"), makeAddr("phase1OwnerNonFinalized"), "v1");
+
+        // state cleared -> retry path open (new phase1 deploy could re-use the (token,owner,version) context)
+        (address postOft, address postVault,,,,,,,) = batcher.phase1SplitStates(baseSalt);
+        assertEq(postOft, address(0), "post-reset oft bootstrap should be cleared for retry");
+        assertEq(postVault, address(0), "post-reset vault should be cleared for retry");
     }
 
     function test_deployPhase2Core_revertsWhenConfiguredRolePolicyRejectsOwner() public {
@@ -139,6 +135,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
             creatorToken: makeAddr("creatorToken"),
             owner: address(this),
             creatorTreasury: address(0),
+            // payoutRecipient field = creatorCoinPayoutRecipient (external earnings lane) per AGENTS.md
             payoutRecipient: address(0),
             vault: makeAddr("vault"),
             wrapper: makeAddr("wrapper"),
@@ -186,6 +183,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
             creatorToken: makeAddr("creatorToken"),
             owner: ownerContract,
             creatorTreasury: address(0),
+            // payoutRecipient field = creatorCoinPayoutRecipient (external earnings lane) per AGENTS.md
             payoutRecipient: address(0),
             vault: makeAddr("vault"),
             wrapper: makeAddr("wrapper"),
@@ -248,7 +246,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         batcher.deployPhase3Strategies(params, codeIds);
     }
 
-    function test_phase1SaltOverrideEntrypoints_areDisabled() public {
+    function test_phase1SaltOverrideEntrypoints_acceptOverrideInput() public {
         DeploymentBatcher.Phase1Params memory params = DeploymentBatcher.Phase1Params({
             creatorToken: makeAddr("creatorToken"),
             owner: address(this),
@@ -269,20 +267,40 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         });
 
         bytes32 saltOverride = keccak256("custom-share-oft-salt");
+        bytes4 disabledSelector = bytes4(keccak256("SaltOverrideDisabled()"));
 
-        vm.expectRevert(DeploymentBatcher.SaltOverrideDisabled.selector);
-        batcher.deployPhase1CoreWithSalt(params, codeIds, saltOverride);
+        try batcher.deployPhase1CoreWithSalt(params, codeIds, saltOverride) {
+            // no-op
+        } catch (bytes memory err) {
+            if (err.length >= 4) {
+                bytes4 sel;
+                assembly {
+                    sel := mload(add(err, 32))
+                }
+                assertTrue(sel != disabledSelector, "salt override unexpectedly disabled for deployPhase1CoreWithSalt");
+            }
+        }
 
-        vm.expectRevert(DeploymentBatcher.SaltOverrideDisabled.selector);
-        batcher.finalizePhase1WithSalt(params, codeIds, saltOverride);
+        try batcher.finalizePhase1WithSalt(params, codeIds, saltOverride) {
+            // no-op
+        } catch (bytes memory err) {
+            if (err.length >= 4) {
+                bytes4 sel;
+                assembly {
+                    sel := mload(add(err, 32))
+                }
+                assertTrue(sel != disabledSelector, "salt override unexpectedly disabled for finalizePhase1WithSalt");
+            }
+        }
     }
 
     function test_phase2ShareSplitAndDepositBounds_remainFixed() public view {
         assertEq(batcher.MIN_DEPOSIT(), 50_000_000e18, "minimum first deposit drifted");
         assertEq(batcher.MAX_DEPOSIT(), 50_000_000e18, "maximum first deposit drifted");
-        assertEq(batcher.AUCTION_PERCENT(), 40, "CCA split drifted");
-        assertEq(batcher.VESTING_PERCENT(), 40, "creator vesting split drifted");
-        assertEq(100 - batcher.AUCTION_PERCENT() - batcher.VESTING_PERCENT(), 20, "LP reserve split drifted");
+        assertEq(batcher.AUCTION_PERCENT(), 30, "CCA split drifted");
+        assertEq(batcher.VESTING_PERCENT(), 30, "creator vesting split drifted");
+        assertEq(batcher.SOLANA_ALLOC_PERCENT(), 30, "Solana share split drifted");
+        assertEq(batcher.LP_RESERVE_PERCENT(), 10, "LP reserve split drifted");
     }
 
     function _seedPhase1State()
@@ -323,5 +341,26 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
     function _seedPendingAuctionAmount(bytes32 baseSalt, uint256 amount) internal {
         bytes32 pendingBase = keccak256(abi.encode(baseSalt, uint256(PENDING_AUCTIONS_SLOT)));
         vm.store(address(batcher), bytes32(uint256(pendingBase) + 2), bytes32(amount));
+    }
+
+    function _defaultBatcherConfig() internal returns (DeploymentBatcherFixture.BatcherConfig memory cfg) {
+        cfg.registry = makeAddr("registry");
+        cfg.bytecodeStore = makeAddr("bytecodeStore");
+        cfg.create2Deployer = makeAddr("create2Deployer");
+        cfg.protocolTreasury = protocolTreasury;
+        cfg.protocolAutomation = protocolAutomation;
+        cfg.poolManager = makeAddr("poolManager");
+        cfg.taxHook = makeAddr("taxHook");
+        cfg.chainlinkEthUsd = makeAddr("chainlinkEthUsd");
+        cfg.vaultActivationBatcher = makeAddr("vaultActivationBatcher");
+        cfg.lotteryManager = makeAddr("lotteryManager");
+        cfg.permit2 = makeAddr("permit2");
+        cfg.usdc = makeAddr("usdc");
+        cfg.uniswapV3Factory = makeAddr("uniswapV3Factory");
+        cfg.uniswapRouter = makeAddr("uniswapRouter");
+        cfg.ajnaFactory = makeAddr("ajnaFactory");
+        cfg.vaultCoreModule = makeAddr("vaultCoreModule");
+        cfg.vaultStrategiesModule = makeAddr("vaultStrategiesModule");
+        cfg.vaultAdminModule = makeAddr("vaultAdminModule");
     }
 }

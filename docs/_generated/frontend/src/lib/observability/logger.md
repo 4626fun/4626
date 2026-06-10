@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/observability/logger
+[4626-web](../../../index.md) / src/lib/observability/logger
 
 # src/lib/observability/logger
 

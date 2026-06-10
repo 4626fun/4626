@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/account/CopyableAddress
+[4626-web](../../../index.md) / src/components/account/CopyableAddress
 
 # src/components/account/CopyableAddress
 
@@ -42,6 +42,33 @@ short hex shifts to a subtle secondary slot.
 ###### variant?
 
 `"default"` \| `"muted"` \| `"pill"` = `'default'`
+
+#### Returns
+
+`Element`
+
+***
+
+### InlineAddressCopyButton()
+
+> **InlineAddressCopyButton**(`__namedParameters`): `Element`
+
+Defined in: [src/components/account/CopyableAddress.tsx:76](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/CopyableAddress.tsx#L76)
+
+Compact copy control for placing next to a primary address label.
+Copies the full address; shows a brief check after success.
+
+#### Parameters
+
+##### \_\_namedParameters
+
+###### address
+
+`string`
+
+###### className?
+
+`string`
 
 #### Returns
 

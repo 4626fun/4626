@@ -8,6 +8,7 @@ import { ExternalLink, CheckCircle2, ArrowRight, Wallet, BarChart3, Sparkles, Sh
 import type { DeploymentRecord } from '@/hooks/useDeploymentTracker'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { Button } from '@/components/ui/Button'
 import { ShareVaultButton } from '@/components/share/ShareVaultButton'
 
 const shortAddress = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`
@@ -194,10 +195,11 @@ export function AjnaAutomationOptInCard({
 
       {showVaultInput ? (
         <div>
-          <label className="block text-[10px] uppercase tracking-[0.18em] text-zinc-500 mb-1.5">
+          <label htmlFor="ajna-vault-address" className="block text-[10px] uppercase tracking-[0.18em] text-zinc-400 mb-1.5">
             Vault Address For Ajna Automation
           </label>
           <input
+            id="ajna-vault-address"
             aria-label="Ajna vault address"
             type="text"
             value={vaultAddress}
@@ -369,11 +371,11 @@ export function DeploymentSuccess({
     
     steps.push({
       icon: <Wallet className="w-5 h-5" />,
-      title: 'Check Your Portfolio',
-      description: 'View all your holdings, wallet addresses, and deployed contracts.',
+      title: 'Review Wallet Setup',
+      description: 'Open account settings for wallet lanes, signing status, and linked identities.',
       action: {
-        label: 'View Portfolio',
-        to: '/portfolio',
+        label: 'Open Accounts',
+        to: '/accounts',
       },
     })
     
@@ -626,18 +628,12 @@ export function DeploymentSuccess({
 
       {/* Primary CTAs */}
       <div className="grid grid-cols-2 gap-3">
-        <Link
-          to={`/vault/${deployment.contracts.vault}`}
-          className="btn-accent rounded-xl py-3 text-center text-sm font-medium"
-        >
-          View Your Vault
-        </Link>
-        <Link
-          to="/portfolio"
-          className="btn-secondary rounded-xl py-3 text-center text-sm font-medium"
-        >
-          Go to Portfolio
-        </Link>
+        <Button variant="primary" className="rounded-xl py-3 text-center text-sm font-medium" asChild>
+          <Link to={`/vault/${deployment.contracts.vault}`}>View Your Vault</Link>
+        </Button>
+        <Button variant="secondary" className="rounded-xl py-3 text-center text-sm font-medium" asChild>
+          <Link to="/accounts">Open Accounts</Link>
+        </Button>
       </div>
     </motion.div>
   )
@@ -675,10 +671,10 @@ export function AlreadyDeployedBanner({ deployment, tokenSymbol }: { deployment:
               <ArrowRight className="w-4 h-4" />
             </Link>
             <Link
-              to="/portfolio"
+              to="/accounts"
               className="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-300 transition-colors"
             >
-              Go to Portfolio
+              Open Accounts
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>

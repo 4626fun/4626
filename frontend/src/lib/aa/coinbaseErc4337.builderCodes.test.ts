@@ -83,6 +83,33 @@ describe('applyBuilderDataSuffixToCalls', () => {
     expect(payloadEndsWithDataSuffix(result[0]!.data as Hex, dataSuffix as Hex)).toBe(false)
   })
 
+  it('preserves Zora execute calldata byte-for-byte (no decode/re-encode)', () => {
+    expect(dataSuffix).toBeDefined()
+    const universalRouterTarget = '0x6ff5693b99212da76ad316178a184ab56d299b43' as Address
+    const zoraExecuteAbi = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'payable',
+        inputs: [
+          { name: 'commands', type: 'bytes' },
+          { name: 'inputs', type: 'bytes[]' },
+        ],
+        outputs: [],
+      },
+    ] as const
+    const zoraData = encodeFunctionData({
+      abi: zoraExecuteAbi,
+      functionName: 'execute',
+      args: ['0x0a0201', ['0xdeadbeef']],
+    }) as Hex
+    const trailingByteVariant = `${zoraData}00` as Hex
+    const universalRouterCall = [{ to: universalRouterTarget, value: 0n, data: trailingByteVariant }]
+    const result = applyBuilderDataSuffixToCalls(universalRouterCall, 8453, dataSuffix)
+    expect(result[0]!.data).toBe(trailingByteVariant)
+    expect(payloadEndsWithDataSuffix(result[0]!.data as Hex, dataSuffix as Hex)).toBe(false)
+  })
+
   it('returns canonicalized Universal Router execute calldata when input has trailing bytes', () => {
     expect(dataSuffix).toBeDefined()
     const universalRouterTarget = '0x6ff5693b99212da76ad316178a184ab56d299b43' as Address

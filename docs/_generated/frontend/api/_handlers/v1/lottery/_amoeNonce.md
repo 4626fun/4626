@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/v1/lottery/\_amoeNonce
+[4626-web](../../../../index.md) / api/\_handlers/v1/lottery/\_amoeNonce
 
 # api/\_handlers/v1/lottery/\_amoeNonce
 
@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeNonce.ts:35](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeNonce.ts#L35)
+Defined in: [api/\_handlers/v1/lottery/\_amoeNonce.ts:36](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeNonce.ts#L36)
 
 #### Parameters
 

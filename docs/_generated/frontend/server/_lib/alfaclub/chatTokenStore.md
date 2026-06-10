@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/alfaclub/chatTokenStore
+[4626-web](../../../index.md) / server/\_lib/alfaclub/chatTokenStore
 
 # server/\_lib/alfaclub/chatTokenStore
 

@@ -2,7 +2,7 @@ import type { AgentCapabilityResponse, AgentMembership, MembershipStatusReason }
 import { checkSharesEligibility } from '../keepr/keeprGating.js'
 import { ensureKeeprSchema } from '../keepr/keeprSchema.js'
 import { getDb } from '../db/postgres.js'
-import { ensureTelegramTradingSchema } from '../messaging/telegramTrading.js'
+import { ensureTelegramTradingSchema } from '../db/schemaBootstrap.js'
 
 type Db = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>

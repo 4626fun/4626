@@ -18,6 +18,7 @@ import { resolveBaseAppInviteUrl } from '@/lib/base/baseAppInvite'
 import { buildBaseAppProlinkUrl, encodeSingleCallSendCallsProlink } from '@/lib/base/prolink'
 import { getAppBaseUrl } from '@/lib/env/host'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
+import { CSW_OWNER_INSTALL_ABI } from '@/lib/wallet/cswOwnerAbi'
 import { AgentOperatorStatus, type AgentOperatorStatusData } from './AgentOperatorStatus'
 import { AgentPublishStatus, type AgentPublishData } from './AgentPublishStatus'
 import { LoadingText } from '@/components/ui/LoadingState'
@@ -270,23 +271,6 @@ function CopyButton({ text }: { text: string }) {
 // Component
 // ---------------------------------------------------------------------------
 
-// Coinbase Smart Wallet ABI for addOwnerAddress + isOwnerAddress
-const CSW_ABI = [
-  {
-    type: 'function' as const,
-    name: 'addOwnerAddress',
-    stateMutability: 'nonpayable' as const,
-    inputs: [{ name: 'owner', type: 'address' as const }],
-    outputs: [],
-  },
-  {
-    type: 'function' as const,
-    name: 'isOwnerAddress',
-    stateMutability: 'view' as const,
-    inputs: [{ name: 'account', type: 'address' as const }],
-    outputs: [{ name: '', type: 'bool' as const }],
-  },
-] as const
 export function AdminAgentSetup() {
   const manualQueryParams = useMemo(() => {
     if (typeof window === 'undefined') return new URLSearchParams('')
@@ -400,7 +384,7 @@ export function AdminAgentSetup() {
       try {
         const result = await publicClient.readContract({
           address: getAddress(canonicalCswAddress) as `0x${string}`,
-          abi: CSW_ABI,
+          abi: CSW_OWNER_INSTALL_ABI,
           functionName: 'isOwnerAddress',
           args: [getAddress(serverWalletQuery.data.address) as `0x${string}`],
         })
@@ -475,7 +459,7 @@ export function AdminAgentSetup() {
     if (!canonicalCswAddress || !serverWalletAddress) return null
     try {
       return encodeFunctionData({
-        abi: CSW_ABI,
+        abi: CSW_OWNER_INSTALL_ABI,
         functionName: 'addOwnerAddress',
         args: [getAddress(serverWalletAddress) as `0x${string}`],
       })
@@ -501,7 +485,7 @@ export function AdminAgentSetup() {
     if (!manualOwnerToAdd) return null
     try {
       return encodeFunctionData({
-        abi: CSW_ABI,
+        abi: CSW_OWNER_INSTALL_ABI,
         functionName: 'addOwnerAddress',
         args: [getAddress(manualOwnerToAdd) as `0x${string}`],
       })
@@ -520,6 +504,7 @@ export function AdminAgentSetup() {
     queryFn: async (): Promise<string | null> => {
       if (!manualCswAddress || !manualOwnerToAdd || !manualAddOwnerCalldata) return null
       const payload = await encodeSingleCallSendCallsProlink({
+        from: manualCswAddress,
         to: manualCswAddress,
         data: manualAddOwnerCalldata as `0x${string}`,
       })
@@ -535,6 +520,7 @@ export function AdminAgentSetup() {
     queryFn: async (): Promise<string | null> => {
       if (!canonicalCswAddress || !serverWalletAddress || !serverOwnerAddCalldata) return null
       const payload = await encodeSingleCallSendCallsProlink({
+        from: canonicalCswAddress,
         to: canonicalCswAddress,
         data: serverOwnerAddCalldata as `0x${string}`,
       })
@@ -760,7 +746,7 @@ export function AdminAgentSetup() {
       if (!ownerReady) {
         if (!walletClient) throw new Error('Connect an owner wallet to approve one onchain transaction')
         const data = encodeFunctionData({
-          abi: CSW_ABI,
+          abi: CSW_OWNER_INSTALL_ABI,
           functionName: 'addOwnerAddress',
           args: [getAddress(wallet.address) as `0x${string}`],
         })
@@ -775,7 +761,7 @@ export function AdminAgentSetup() {
           try {
             const result = await publicClient.readContract({
               address: getAddress(canonicalCswAddress) as `0x${string}`,
-              abi: CSW_ABI,
+              abi: CSW_OWNER_INSTALL_ABI,
               functionName: 'isOwnerAddress',
               args: [getAddress(wallet.address) as `0x${string}`],
             })
@@ -1360,8 +1346,9 @@ export function AdminAgentSetup() {
             <>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Vault Address</label>
+                  <label htmlFor="agent-vault-address" className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Vault Address</label>
                   <input
+                    id="agent-vault-address"
                     type="text"
                     value={vaultAddress}
                     onChange={(e) => setVaultAddress(e.target.value)}
@@ -1373,8 +1360,9 @@ export function AdminAgentSetup() {
                   )}
                 </div>
                 <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Creator Coin Address</label>
+                  <label htmlFor="agent-creator-coin-address" className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Creator Coin Address</label>
                   <input
+                    id="agent-creator-coin-address"
                     type="text"
                     value={creatorCoinAddress}
                     onChange={(e) => setCreatorCoinAddress(e.target.value)}
@@ -1388,8 +1376,9 @@ export function AdminAgentSetup() {
               </div>
 
               <div>
-                <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">XMTP Group ID</label>
+                <label htmlFor="agent-xmtp-group-id" className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">XMTP Group ID</label>
                 <input
+                  id="agent-xmtp-group-id"
                   type="text"
                   value={groupId}
                   onChange={(e) => setGroupId(e.target.value)}
@@ -1403,8 +1392,9 @@ export function AdminAgentSetup() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Lens Group Address (optional)</label>
+                  <label htmlFor="agent-lens-group-address" className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Lens Group Address (optional)</label>
                   <input
+                    id="agent-lens-group-address"
                     type="text"
                     value={lensGroupAddress}
                     onChange={(e) => setLensGroupAddress(e.target.value)}
@@ -1416,8 +1406,9 @@ export function AdminAgentSetup() {
                   )}
                 </div>
                 <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Lens Group Metadata URI (optional)</label>
+                  <label htmlFor="agent-lens-metadata-uri" className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Lens Group Metadata URI (optional)</label>
                   <input
+                    id="agent-lens-metadata-uri"
                     type="text"
                     value={lensMetadataUri}
                     onChange={(e) => setLensMetadataUri(e.target.value)}
@@ -1451,24 +1442,26 @@ export function AdminAgentSetup() {
             <p className="text-xs text-zinc-500">Enable your agent first.</p>
           ) : (
             <>
-              <div className="flex items-center gap-3">
-                <label className="relative inline-flex items-center cursor-pointer">
+              <label htmlFor="agent-gating-enabled" className="flex items-center gap-3 cursor-pointer">
+                <span className="relative inline-flex items-center">
                   <input
+                    id="agent-gating-enabled"
                     type="checkbox"
                     checked={gatingEnabled}
                     onChange={(e) => setGatingEnabled(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-500/60" />
-                </label>
+                  <span className="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-500/60" />
+                </span>
                 <span className="text-xs text-zinc-300">Require vault shares to join</span>
-              </div>
+              </label>
 
               {gatingEnabled && (
                 <div className="grid gap-4 sm:grid-cols-2 pl-12">
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Gating Mode</label>
+                    <label htmlFor="agent-gating-mode" className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Gating Mode</label>
                     <select
+                      id="agent-gating-mode"
                       value={gatingMode}
                       onChange={(e) => setGatingMode(e.target.value as 'shares' | 'none')}
                       className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-violet-500/30"
@@ -1478,8 +1471,9 @@ export function AdminAgentSetup() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Min Shares</label>
+                    <label htmlFor="agent-min-shares" className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Min Shares</label>
                     <input
+                      id="agent-min-shares"
                       type="text"
                       value={minShares}
                       onChange={(e) => setMinShares(e.target.value)}
@@ -1490,21 +1484,26 @@ export function AdminAgentSetup() {
                 </div>
               )}
 
-              <div className="flex items-center gap-3">
-                <label className="relative inline-flex items-center cursor-pointer">
+              <label
+                htmlFor="agent-join-locked"
+                aria-label="Lock joins. Prevent new members from joining even if they pass gating checks."
+                className="flex items-center gap-3 cursor-pointer"
+              >
+                <span className="relative inline-flex items-center">
                   <input
+                    id="agent-join-locked"
                     type="checkbox"
                     checked={joinLocked}
                     onChange={(e) => setJoinLocked(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500/60" />
-                </label>
-                <div>
+                  <span className="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500/60" />
+                </span>
+                <span>
                   <span className="text-xs text-zinc-300">Lock joins</span>
                   <p className="app-meta-value text-zinc-600">Prevent new members from joining even if they pass gating checks</p>
-                </div>
-              </div>
+                </span>
+              </label>
             </>
           )}
         </div>

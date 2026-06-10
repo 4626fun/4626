@@ -11,6 +11,7 @@ import { extractPrivyVerifiedEmail } from '../infra/trust.js'
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
 import { classifyLinkedAccounts, type PrivyUserLike } from '../wallet/walletMapping.js'
 import { resolveCanonicalCsw } from '../wallet/canonicalCswDelegation.js'
+import { resolveStoredCanonicalCswAddress } from '../wallet/canonicalCswPersistence.js'
 import {
   resolveExecutionTrack,
   summarizeBaseSubAccount,
@@ -19,6 +20,16 @@ import {
 } from '../wallet/executionTrack.js'
 import { sanitizePersistedSubAccountAddress } from '../wallet/sanitizeBaseSubAccount.js'
 import { fetchZoraProfile } from '../zora/zoraProfile.js'
+import { buildAccountScoreFromBreakdown } from '../onboarding/accountScore.js'
+import {
+  readWaitlistPointsBreakdown,
+} from '../onboarding/waitlistScoring.js'
+// Canonical implementation lives in @4626/server-core (profileIdForPrivyUser.ts).
+// This local re-export is transitional; new code should import directly from the package.
+import {
+  listProfileIdsForPrivyUser,
+  resolvePrimaryProfileIdForPrivyUser,
+} from './profileIdForPrivyUser.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -35,6 +46,7 @@ export type AccountLinkProvider =
   | 'zora_cross_app'
 
 export type AccountScore = {
+  /** Canonical public points (waitlist, leaderboard, tray, lottery). */
   points: number
   tier: number
   multipliers?: Record<string, number>
@@ -47,8 +59,8 @@ export type AccountsMePayload = {
   appAccessStatus: string | null
   /**
    * Raw `profiles.base_sub_account` column. May legitimately mirror the
-   * canonical CSW for legacy accounts; prefer `accountSignals.baseSubAccount`
-   * for distinctness + registration signal.
+   * canonical CSW for older accounts created before sub-account support;
+   * prefer `accountSignals.baseSubAccount` for distinctness + registration signal.
    */
   baseSubAccount: string | null
   linkedMethods: Record<string, string[]>
@@ -68,14 +80,16 @@ export type AccountsMePayload = {
      * `migration-pending`, `none-yet`. See `executionTrack.ts` for the
      * classification rules. Prefer this field over deriving the track from
      * individual signals on the client.
+     *
+     * Note: "legacy-owner-install" refers to the parent CSW + embedded EOA
+     * owner path (the main supported track as of 2026). The name is historical.
      */
     executionTrack: ExecutionTrack
     /**
-     * Cached legacy-track signal. True iff the Privy embedded EOA is
-     * installed as a direct owner of the parent CSW. Read from
-     * `profile_wallets.privy_is_owner` (populated by
-     * `/api/onboarding/bootstrap`). Null when the cache has not been
-     * primed yet or the account has no canonical CSW.
+     * Whether the Privy embedded EOA is recorded as a direct owner of the
+     * parent canonical CSW. Read from `profile_wallets.privy_is_owner`
+     * (populated by `/api/onboarding/bootstrap`). Null when the cache has
+     * not been primed yet or the account has no canonical CSW.
      */
     privyEmbeddedEoaIsOwnerOfCanonicalCsw: boolean | null
   }
@@ -167,13 +181,6 @@ function isPrivyUserIdUniqueViolation(error: unknown): boolean {
     lower.includes('profiles_privy_user_id_unique') ||
     (lower.includes('duplicate key value') && lower.includes('privy_user_id'))
   )
-}
-
-function toScoreTier(points: number): number {
-  if (points >= 250) return 3
-  if (points >= 120) return 2
-  if (points >= 40) return 1
-  return 0
 }
 
 function linkedAccounts(user: unknown): any[] {
@@ -473,45 +480,6 @@ export async function removeLinkedMethod(params: {
   `
 }
 
-async function listProfileIdsForPrivyUser(db: Db, privyUserId: string): Promise<number[]> {
-  // Resolver cascade:
-  //   1. `privy_user_aliases` is the post-merge authoritative mapping.
-  //   2. Direct `profiles.privy_user_id` catches rows from envs that
-  //      haven't run the alias migration yet.
-  //   3. Tombstoned rows (merged_into_profile_id IS NOT NULL) are chased
-  //      through to their canonical target so a stale alias pointing at a
-  //      tombstone still returns the correct live profile.
-  const rows = await db.sql`
-    WITH direct AS (
-      SELECT p.id, p.merged_into_profile_id, p.updated_at, p.created_at
-      FROM profiles p
-      WHERE p.id IN (SELECT profile_id FROM privy_user_aliases WHERE privy_user_id = ${privyUserId})
-         OR p.privy_user_id = ${privyUserId}
-    ),
-    resolved AS (
-      SELECT p2.id, p2.updated_at, p2.created_at
-      FROM direct d
-      JOIN profiles p2
-        ON p2.id = COALESCE(d.merged_into_profile_id, d.id)
-      WHERE p2.merged_into_profile_id IS NULL
-    )
-    SELECT DISTINCT id, updated_at, created_at FROM resolved
-    ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC;
-  `
-  const ids: number[] = []
-  const seen = new Set<number>()
-  for (const row of rows.rows ?? []) {
-    const idRaw = row?.id
-    const id = typeof idRaw === 'number' ? idRaw : Number(idRaw)
-    if (!Number.isFinite(id) || id <= 0) continue
-    const floored = Math.floor(id)
-    if (seen.has(floored)) continue
-    seen.add(floored)
-    ids.push(floored)
-  }
-  return ids
-}
-
 async function resolveOrCreateCanonicalProfileIdForPrivyUser(db: Db, privyUserId: string): Promise<number> {
   const existing = await listProfileIdsForPrivyUser(db, privyUserId)
   if (existing.length > 0) return existing[0]
@@ -544,31 +512,11 @@ async function resolveOrCreateCanonicalProfileIdForPrivyUser(db: Db, privyUserId
 
 async function readUnifiedScore(db: Db, privyUserId: string): Promise<AccountScore> {
   await ensureWaitlistSchema(db)
-  const profileIds = await listProfileIdsForPrivyUser(db, privyUserId)
-  if (profileIds.length === 0) return { points: 0, tier: 0 }
+  const profileId = await resolvePrimaryProfileIdForPrivyUser(db, privyUserId)
+  if (!profileId) return { points: 0, tier: 0 }
 
-  const totalResult = await db.sql`
-    SELECT COALESCE(SUM(b.credits), 0)::INT AS points
-    FROM points_amoe_eligible_balance b
-    WHERE b.signup_id IN (
-      -- Resolver mirrors listProfileIdsForPrivyUser: alias first, then
-      -- direct privy_user_id, chased through tombstone pointers.
-      WITH direct AS (
-        SELECT p3.id, p3.merged_into_profile_id
-        FROM profiles p3
-        WHERE p3.id IN (SELECT profile_id FROM privy_user_aliases WHERE privy_user_id = ${privyUserId})
-           OR p3.privy_user_id = ${privyUserId}
-      )
-      SELECT p4.id
-      FROM direct d
-      JOIN profiles p4
-        ON p4.id = COALESCE(d.merged_into_profile_id, d.id)
-      WHERE p4.merged_into_profile_id IS NULL
-    );
-  `
-  const total = Number(totalResult.rows?.[0]?.points ?? 0) || 0
-  const tier = toScoreTier(total)
-  return { points: total, tier }
+  const breakdown = await readWaitlistPointsBreakdown(db, profileId)
+  return buildAccountScoreFromBreakdown(breakdown)
 }
 
 async function refreshScore(db: Db, privyUserId: string): Promise<AccountScore> {
@@ -830,6 +778,13 @@ export async function resolveAndPersistZoraSignals(params: {
   }
 
   const classification = classifyLinkedAccounts(privyUser)
+  canonical =
+    resolveStoredCanonicalCswAddress({
+      candidate: canonical,
+      embeddedEoa: classification.embeddedEoa?.address ?? null,
+      activeOwnerEoa: classification.primaryWalletAddress ?? null,
+    }) ?? canonical
+
   const allEvmEoas = classification.allWallets
     .filter((w) => w.chain === 'evm' && w.walletType === 'external_eoa')
     .map((w) => w.address)
@@ -928,13 +883,22 @@ export async function buildAccountsMePayload(params: {
     LIMIT 1;
   `
   const accountRow = accountRowResult.rows?.[0] ?? null
-  const profileStatusResult = await db.sql`
-    SELECT id, app_access_status, base_sub_account
-    FROM profiles
-    WHERE privy_user_id = ${privyUserId}
-    ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
-    LIMIT 1;
-  `
+  const profileId = await resolvePrimaryProfileIdForPrivyUser(db, privyUserId)
+  const profileStatusResult = profileId
+    ? await db.sql`
+        SELECT
+          id,
+          app_access_status,
+          base_sub_account,
+          csw_address,
+          primary_smart_wallet,
+          primary_embedded_eoa,
+          primary_wallet
+        FROM profiles
+        WHERE id = ${profileId}
+        LIMIT 1;
+      `
+    : { rows: [] }
   const profileStatusRow = profileStatusResult.rows?.[0] ?? null
   const dbMethods = await readLinkedMethods(db, privyUserId)
   const derivedMethods = privyUser ? deriveLinkedMethodsFromPrivyUser(privyUser) : {}
@@ -944,7 +908,23 @@ export async function buildAccountsMePayload(params: {
   const delegationState = await loadCanonicalDelegationState({ db, privyUserId }).catch(() => null)
 
   const rawBaseSubAccount = normalizeString(profileStatusRow?.base_sub_account)
-  const canonicalCswAddressForTrack = delegationState?.canonicalCswAddress ?? zoraRow.canonicalCswAddress
+  const profileCswAddress = normalizeEvmAddress(profileStatusRow?.csw_address)
+  const profilePrimarySmartWallet = normalizeEvmAddress(profileStatusRow?.primary_smart_wallet)
+  const profileEmbeddedEoa =
+    normalizeEvmAddress(delegationState?.privyEmbeddedEoaAddress) ??
+    normalizeEvmAddress(profileStatusRow?.primary_embedded_eoa)
+  const profilePrimaryWallet = normalizeEvmAddress(profileStatusRow?.primary_wallet)
+  const rawCanonicalCswAddress =
+    delegationState?.canonicalCswAddress ??
+    zoraRow.canonicalCswAddress ??
+    profileCswAddress ??
+    profilePrimarySmartWallet
+  const canonicalCswAddressForTrack =
+    resolveStoredCanonicalCswAddress({
+      candidate: rawCanonicalCswAddress,
+      embeddedEoa: profileEmbeddedEoa,
+      activeOwnerEoa: profilePrimaryWallet ?? profileEmbeddedEoa,
+    }) ?? rawCanonicalCswAddress
   const profileIdForTrack = (() => {
     const raw = profileStatusRow?.id ?? delegationState?.profileId ?? null
     const numeric = Number(raw)
@@ -981,7 +961,7 @@ export async function buildAccountsMePayload(params: {
     linkedMethods,
     accountSignals: {
       linked: zoraRow.zoraLinked,
-      canonicalCswAddress: zoraRow.canonicalCswAddress,
+      canonicalCswAddress: canonicalCswAddressForTrack ?? zoraRow.canonicalCswAddress,
       creatorCoin: zoraRow.creatorCoinAddress ? { address: zoraRow.creatorCoinAddress } : null,
       zoraHandle: zoraRow.zoraHandle,
       lastResolvedAt: zoraRow.lastResolvedAt,

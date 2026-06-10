@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/deploy/permit2
+[4626-web](../../../index.md) / src/lib/deploy/permit2
 
 # src/lib/deploy/permit2
 
@@ -134,15 +134,15 @@ Defined in: [src/lib/deploy/permit2.ts:48](https://github.com/wenakita/4626/blob
 
 ###### permit2
 
-`` `0x${string}` ``
+`string`
 
 ###### spender
 
-`` `0x${string}` ``
+`string`
 
 ###### token
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 

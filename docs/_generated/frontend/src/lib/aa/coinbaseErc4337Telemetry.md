@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/aa/coinbaseErc4337Telemetry
+[4626-web](../../../index.md) / src/lib/aa/coinbaseErc4337Telemetry
 
 # src/lib/aa/coinbaseErc4337Telemetry
 

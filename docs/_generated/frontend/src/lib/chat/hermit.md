@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/chat/hermit
+[4626-web](../../../index.md) / src/lib/chat/hermit
 
 # src/lib/chat/hermit
 

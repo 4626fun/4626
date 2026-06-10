@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / src/app/routeGuards
+[4626-web](../../index.md) / src/app/routeGuards
 
 # src/app/routeGuards
 
@@ -12,7 +12,7 @@
 
 > **AuthenticatedAppLayout**(): `Element`
 
-Defined in: [src/app/routeGuards.tsx:104](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeGuards.tsx#L104)
+Defined in: [src/app/routeGuards.tsx:109](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeGuards.tsx#L109)
 
 #### Returns
 
@@ -24,7 +24,7 @@ Defined in: [src/app/routeGuards.tsx:104](https://github.com/wenakita/4626/blob/
 
 > **getGenericNotFoundCta**(`hostMode`): `object`
 
-Defined in: [src/app/routeGuards.tsx:132](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeGuards.tsx#L132)
+Defined in: [src/app/routeGuards.tsx:137](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeGuards.tsx#L137)
 
 #### Parameters
 
@@ -68,7 +68,7 @@ Redirect from 4626.fun to app.4626.fun when user hits app-only routes.
 
 > **marketingOnlyElement**(`element`): `Element`
 
-Defined in: [src/app/routeGuards.tsx:100](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeGuards.tsx#L100)
+Defined in: [src/app/routeGuards.tsx:105](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeGuards.tsx#L105)
 
 #### Parameters
 
@@ -104,11 +104,33 @@ Restrict route content to marketing domain; app host redirects cross-origin.
 
 ***
 
+### MarketingWaitlistRoute()
+
+> **MarketingWaitlistRoute**(`props`): `Element`
+
+Defined in: [src/app/routeGuards.tsx:101](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeGuards.tsx#L101)
+
+Waitlist onboarding must run on 4626.fun so sub-accounts bind to the marketing domain.
+
+#### Parameters
+
+##### props
+
+###### children
+
+`ReactNode`
+
+#### Returns
+
+`Element`
+
+***
+
 ### PublicAppLayout()
 
 > **PublicAppLayout**(): `Element`
 
-Defined in: [src/app/routeGuards.tsx:112](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeGuards.tsx#L112)
+Defined in: [src/app/routeGuards.tsx:117](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeGuards.tsx#L117)
 
 #### Returns
 
@@ -120,7 +142,7 @@ Defined in: [src/app/routeGuards.tsx:112](https://github.com/wenakita/4626/blob/
 
 > **SessionAcceptedRoute**(`props`): `Element`
 
-Defined in: [src/app/routeGuards.tsx:120](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeGuards.tsx#L120)
+Defined in: [src/app/routeGuards.tsx:125](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeGuards.tsx#L125)
 
 #### Parameters
 
@@ -140,7 +162,7 @@ Defined in: [src/app/routeGuards.tsx:120](https://github.com/wenakita/4626/blob/
 
 > **SmartWalletRoute**(`props`): `Element`
 
-Defined in: [src/app/routeGuards.tsx:116](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeGuards.tsx#L116)
+Defined in: [src/app/routeGuards.tsx:121](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeGuards.tsx#L121)
 
 #### Parameters
 

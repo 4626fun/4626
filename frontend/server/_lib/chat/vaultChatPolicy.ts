@@ -3,7 +3,7 @@ import type { Address } from 'viem'
 import { getDb } from '../db/postgres.js'
 import { checkSharesEligibility } from '../keepr/keeprGating.js'
 import { enqueueKeeprAction, getKeeprVaultByVaultAddress } from '../keepr/keeprRegistry.js'
-import { ensureChatSchema } from './schema.js'
+import { ensureChatSchema } from '../db/schemaBootstrap.js'
 import { normalizeChatAddress } from './presence.js'
 
 export type VaultChatPolicy = {
@@ -64,7 +64,7 @@ function mapMembership(row: any): VaultChatMembership | null {
 export async function readVaultChatPolicy(vaultAddress: `0x${string}`): Promise<VaultChatPolicy | null> {
   const db = await getDb()
   if (!db) return null
-  await ensureChatSchema()
+  await ensureChatSchema(db)
   const normalized = String(vaultAddress).toLowerCase() as `0x${string}`
   const res = await db.sql`SELECT * FROM vault_chat_policies WHERE vault_address = ${normalized} LIMIT 1;`
   const direct = res.rows?.[0] ? mapPolicy(res.rows[0]) : null
@@ -95,7 +95,7 @@ export async function upsertVaultChatPolicy(params: {
 }): Promise<VaultChatPolicy> {
   const db = await getDb()
   if (!db) throw new Error('db_not_configured')
-  await ensureChatSchema()
+  await ensureChatSchema(db)
 
   const vaultAddress = String(params.vaultAddress).toLowerCase() as `0x${string}`
   const minHoldingRaw = String(params.minHoldingRaw ?? '0').trim()
@@ -148,7 +148,7 @@ export async function readVaultChatMembership(params: {
 }): Promise<VaultChatMembership | null> {
   const db = await getDb()
   if (!db) return null
-  await ensureChatSchema()
+  await ensureChatSchema(db)
   const res = await db.sql`
     SELECT * FROM vault_chat_memberships
     WHERE vault_address = ${String(params.vaultAddress).toLowerCase()}
@@ -169,7 +169,7 @@ async function writeMembership(params: {
 }): Promise<VaultChatMembership> {
   const db = await getDb()
   if (!db) throw new Error('db_not_configured')
-  await ensureChatSchema()
+  await ensureChatSchema(db)
 
   await db.sql`
     INSERT INTO vault_chat_memberships (
@@ -275,7 +275,7 @@ export async function recheckVaultChatMemberships(params: {
   }
   const db = await getDb()
   if (!db) throw new Error('db_not_configured')
-  await ensureChatSchema()
+  await ensureChatSchema(db)
 
   const limit = Math.max(1, Math.min(250, Math.floor(params.limit ?? 100)))
   const members = await db.sql`

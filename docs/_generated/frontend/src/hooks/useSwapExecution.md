@@ -1,18 +1,98 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / src/hooks/useSwapExecution
+[4626-web](../../index.md) / src/hooks/useSwapExecution
 
 # src/hooks/useSwapExecution
 
+## Type Aliases
+
+### SwapCompletion
+
+> **SwapCompletion** = `object`
+
+Defined in: [src/hooks/useSwapExecution.ts:76](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L76)
+
+#### Properties
+
+##### amountInUnits
+
+> **amountInUnits**: `string`
+
+Defined in: [src/hooks/useSwapExecution.ts:79](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L79)
+
+##### completedAt
+
+> **completedAt**: `number`
+
+Defined in: [src/hooks/useSwapExecution.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L81)
+
+##### estimatedOut
+
+> **estimatedOut**: `string`
+
+Defined in: [src/hooks/useSwapExecution.ts:80](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L80)
+
+##### txHash
+
+> **txHash**: `string` \| `null`
+
+Defined in: [src/hooks/useSwapExecution.ts:77](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L77)
+
+##### userOpHash?
+
+> `optional` **userOpHash**: `string` \| `null`
+
+Defined in: [src/hooks/useSwapExecution.ts:78](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L78)
+
 ## Functions
+
+### assertSwapSpendBalancePreflight()
+
+> **assertSwapSpendBalancePreflight**(`params`): `Promise`\<`void`\>
+
+Defined in: [src/hooks/useSwapExecution.ts:380](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L380)
+
+#### Parameters
+
+##### params
+
+###### amountInUnits
+
+`string`
+
+###### executionAddress
+
+`` `0x${string}` `` \| `null`
+
+###### getTokenDecimals
+
+(`token`) => `Promise`\<`number`\>
+
+###### publicClient
+
+\{ `getBalance`: (`args`) => `Promise`\<`bigint`\>; `readContract?`: (`args`) => `Promise`\<`unknown`\>; \} \| `null` \| `undefined`
+
+###### tokenIn
+
+`string`
+
+###### wrapNativeEthForCanonical
+
+`boolean`
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
 
 ### deriveSwapExecutionReadiness()
 
 > **deriveSwapExecutionReadiness**(`params`): `boolean`
 
-Defined in: [src/hooks/useSwapExecution.ts:193](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L193)
+Defined in: [src/hooks/useSwapExecution.ts:218](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L218)
 
 #### Parameters
 
@@ -60,7 +140,7 @@ Defined in: [src/hooks/useSwapExecution.ts:193](https://github.com/wenakita/4626
 
 > **evaluateCanonicalSubmitSession**(`input`): `CanonicalSubmitSessionResult`
 
-Defined in: [src/hooks/useSwapExecution.ts:258](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L258)
+Defined in: [src/hooks/useSwapExecution.ts:283](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L283)
 
 #### Parameters
 
@@ -78,7 +158,7 @@ Defined in: [src/hooks/useSwapExecution.ts:258](https://github.com/wenakita/4626
 
 > **evaluateSwapSessionGate**(`input`): `SwapSessionGateResult`
 
-Defined in: [src/hooks/useSwapExecution.ts:169](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L169)
+Defined in: [src/hooks/useSwapExecution.ts:194](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L194)
 
 #### Parameters
 
@@ -96,7 +176,7 @@ Defined in: [src/hooks/useSwapExecution.ts:169](https://github.com/wenakita/4626
 
 > **resolveCanonicalSubmitSession**(`input`, `ensureCanonicalSession?`): `Promise`\<`CanonicalSubmitSessionResult`\>
 
-Defined in: [src/hooks/useSwapExecution.ts:136](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L136)
+Defined in: [src/hooks/useSwapExecution.ts:161](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L161)
 
 #### Parameters
 
@@ -118,7 +198,7 @@ Defined in: [src/hooks/useSwapExecution.ts:136](https://github.com/wenakita/4626
 
 > **shouldDisablePermit2ForSwap**(`params`): `boolean`
 
-Defined in: [src/hooks/useSwapExecution.ts:216](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L216)
+Defined in: [src/hooks/useSwapExecution.ts:241](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L241)
 
 #### Parameters
 
@@ -142,11 +222,35 @@ Defined in: [src/hooks/useSwapExecution.ts:216](https://github.com/wenakita/4626
 
 ***
 
+### shouldSimulateSwapTransaction()
+
+> **shouldSimulateSwapTransaction**(`requiresApprovalTx`, `wrapsNativeEthForCanonical`): `boolean`
+
+Defined in: [src/hooks/useSwapExecution.ts:371](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L371)
+
+Uniswap simulateTransaction runs the swap tx alone; skip when approval or WETH wrap is batched later.
+
+#### Parameters
+
+##### requiresApprovalTx
+
+`boolean`
+
+##### wrapsNativeEthForCanonical
+
+`boolean`
+
+#### Returns
+
+`boolean`
+
+***
+
 ### useSwapExecution()
 
 > **useSwapExecution**(`params`): `object`
 
-Defined in: [src/hooks/useSwapExecution.ts:379](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L379)
+Defined in: [src/hooks/useSwapExecution.ts:487](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L487)
 
 #### Parameters
 
@@ -220,6 +324,10 @@ Defined in: [src/hooks/useSwapExecution.ts:379](https://github.com/wenakita/4626
 
 `number`
 
+###### preferZoraTradeRoute?
+
+`boolean`
+
 ###### privyDebug?
 
 `PrivyDebugState` \| `null`
@@ -279,6 +387,14 @@ Defined in: [src/hooks/useSwapExecution.ts:379](https://github.com/wenakita/4626
 ##### canonicalSubmitSession
 
 > **canonicalSubmitSession**: `CanonicalSubmitSessionResult`
+
+##### clearSwapCompletion()
+
+> **clearSwapCompletion**: () => `void`
+
+###### Returns
+
+`void`
 
 ##### closeConfirm()
 
@@ -449,6 +565,10 @@ Defined in: [src/hooks/useSwapExecution.ts:379](https://github.com/wenakita/4626
 ##### status
 
 > **status**: `string`
+
+##### swapCompletion
+
+> **swapCompletion**: [`SwapCompletion`](#swapcompletion) \| `null`
 
 ##### swapProvider
 

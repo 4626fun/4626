@@ -8,7 +8,7 @@ import {
   getDb,
   getSessionAddress,
   isAdminAddress,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 /**
  * Admin-only aggregate view of ERC-4337 UserOp telemetry submitted by the
@@ -277,7 +277,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!db) {
     return res.status(500).json({
       success: false,
-      error: 'Database not configured (set POSTGRES_URL/DATABASE_URL).',
+      error: 'Database not configured (set DATABASE_URL for Supabase, or legacy POSTGRES_URL).',
     } satisfies ApiEnvelope<never>)
   }
 

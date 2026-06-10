@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/chat/ChatBar
+[4626-web](../../../index.md) / src/components/chat/ChatBar
 
 # src/components/chat/ChatBar
 
@@ -12,7 +12,7 @@
 
 > **ChatBar**(`__namedParameters`): `Element`
 
-Defined in: [src/components/chat/ChatBar.tsx:163](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/ChatBar.tsx#L163)
+Defined in: [src/components/chat/ChatBar.tsx:168](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/ChatBar.tsx#L168)
 
 #### Parameters
 

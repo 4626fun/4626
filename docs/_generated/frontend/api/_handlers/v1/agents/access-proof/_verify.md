@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / api/\_handlers/v1/agents/access-proof/\_verify
+[4626-web](../../../../../index.md) / api/\_handlers/v1/agents/access-proof/\_verify
 
 # api/\_handlers/v1/agents/access-proof/\_verify
 

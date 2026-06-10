@@ -8,21 +8,26 @@ const { ensureKeeprSchemaMock, getDbMock, normalizeKeeprActionStatusForWorkspace
   normalizeKeeprActionStatusForWorkspaceMock: vi.fn(async () => undefined),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', () => ({
+vi.mock('@4626/server-core', () => ({
   handleOptions: () => false,
   readJsonBody: async (req: any) => req.body,
   readBoundedJsonObjectBody: async (req: any) => (typeof req.body === 'object' && req.body !== null ? req.body : null),
   setCors: () => undefined,
   setNoStore: () => undefined,
   getDb: getDbMock,
+  runInTransaction: async (fn: (db: any) => Promise<any>) => {
+    const db = await getDbMock()
+    if (!db) return null
+    return fn(db)
+  },
   getClientIp: () => '127.0.0.1',
   rateLimitKey: (...parts: string[]) => parts.join(':'),
   checkRateLimit: () => ({ allowed: true, remaining: 100, resetAt: Date.now() + 60_000 }),
   RATE_LIMITS: {
-    creRuntimeDecisionsWrite: { windowMs: 60_000, maxRequests: 60 },
+    keeperDecisionsWrite: { windowMs: 60_000, maxRequests: 60 },
   },
   requireKeeprApiKey: (req: any, res: any, opts?: { missingSecretError?: string }) => {
-    const expected = String(process.env.KEEPR_API_KEY ?? '').trim()
+    const expected = String(process.env.KPR_API_KEY ?? '').trim()
     if (!expected) {
       res.status(500).json({ success: false, error: opts?.missingSecretError ?? 'Server misconfigured' })
       return false
@@ -63,9 +68,9 @@ describe('keepr/actions/updateStatus', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({
-      KEEPR_API_KEY: 'test-keepr-key',
-      KEEPR_ZONE_KEY_FINANCIAL_EXECUTION: 'zone-financial-secret',
-      KEEPR_ZONE_KEY_MARKET_MAINTENANCE: 'zone-market-secret',
+      KPR_API_KEY: 'test-keepr-key',
+      KPR_ZONE_KEY_FINANCIAL_EXECUTION: 'zone-financial-secret',
+      KPR_ZONE_KEY_MARKET_MAINTENANCE: 'zone-market-secret',
     })
   })
 
@@ -118,6 +123,49 @@ describe('keepr/actions/updateStatus', () => {
     expect(res.body?.data).toEqual({
       id: 11,
       status: 'executing',
+      trustZone: 'financial_execution',
+      updated: true,
+    })
+  })
+
+  it('marks retry as failed when attempts exceed max', async () => {
+    const sqlMock = vi.fn(async (strings: TemplateStringsArray) => {
+      const query = strings.join(' ')
+      if (query.includes('SELECT action_type')) {
+        return {
+          rows: [{ action_type: 'strategy.ajna.rebucket', action: { action: 'strategy.ajna.rebucket' } }],
+        }
+      }
+      if (query.includes('SELECT attempt_count')) {
+        return { rows: [{ attempt_count: 5 }] }
+      }
+      if (query.includes('UPDATE keepr_actions')) {
+        return { rows: [{ id: 22 }] }
+      }
+      return { rows: [] }
+    })
+    getDbMock.mockResolvedValue({ sql: sqlMock })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer test-keepr-key',
+        'x-keepr-zone-key': 'zone-financial-secret',
+      },
+      body: {
+        id: 22,
+        status: 'retry',
+        error: 'temporary',
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data).toEqual({
+      id: 22,
+      status: 'failed',
       trustZone: 'financial_execution',
       updated: true,
     })

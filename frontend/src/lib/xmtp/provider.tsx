@@ -15,19 +15,23 @@ import {
   type ReactNode,
 } from 'react'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
+import { wagmiConfig } from '@/config/wagmi'
 import { xmtpDebugFlag } from '@/lib/flags/featureFlags'
 import { APP_ORIGIN } from '@/lib/env/host'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { shouldBlockSelfDm } from '@/lib/xmtp/dmGuard'
-import { getBasenameName } from '@/lib/xmtp/socialIdentity'
+import { resolvePeerChatPresentation } from '@/lib/xmtp/socialIdentity'
+import { prefetchBasenameForAddresses } from '@/hooks/useBasenameForAddress'
+import { prefetchIdentities } from '@/hooks/useIdentity'
 import { resolveModePreferredIdentity, shouldRequireAuthBackedXmtpIdentity } from '@/lib/xmtp/identityResolver'
 import { useAccountContext } from '@/wallet/accountContext'
 import {
-  TARGET_CANONICAL_CSW_ADDRESS,
-  isTargetCanonicalCsw,
+  CANONICAL_CSW_ADDRESS,
+  isCanonicalCsw,
   shouldApplyCanonicalEnforcement,
 } from '@/wallet/canonicalWalletPolicy'
+import { resolveClientAgentXmtpAddress } from '@/lib/xmtp/agentXmtpAddress'
 import { CANONICAL_SCW_CHAIN_ID, decideXmtpSignerType, resolveXmtpChainId } from '@/lib/xmtp/signerUtils'
 import {
   buildNotRegisteredDmMessage,
@@ -37,8 +41,11 @@ import {
   formatXmtpEnvLabel,
   hexToBytes,
   isInstallationLimitError,
+  isLocalXmtpStateInvalidError,
   isOpfsAccessHandleError,
   isScwSignatureValidationError,
+  isTransientXmtpStreamNetworkError,
+  isXmtpRateLimitError,
   isWrongChainIdError,
   isXmtpEnvironmentMismatchError,
   isXmtpNotRegisteredError,
@@ -46,12 +53,47 @@ import {
   parseWireContent,
   shouldFallbackToOriginalXmtpRecipient,
   truncateAddress,
+  conversationIdsEqual,
+  resolveConversationByIdWithSyncRetries,
+  syncConversationsForGroupDiscovery,
+  groupMembershipListOptions,
 } from '@/lib/xmtp/xmtpHelpers'
+import {
+  markXmtpRateLimited,
+  xmtpSyncBlockedRemainingMs,
+} from '@/lib/xmtp/xmtpSyncCoordinator'
+import {
+  buildXmtpDbPath,
+  clearInstallationProvisioned,
+  clearStoredEncKeyHex as clearStoredEncKeyHexForEnv,
+  clearStoredInstallationMeta,
+  hasKnownXmtpInstallation,
+  readStoredEncKeyHex as readStoredEncKeyHexForEnv,
+  readStoredInstallationMeta,
+  writeInstallationProvisioned,
+  writeStoredEncKeyHex as writeStoredEncKeyHexForEnv,
+  writeStoredInstallationMeta,
+} from '@/lib/xmtp/xmtpLocalInstallStorage'
+import {
+  shouldAllowFirstTimeCreate,
+  shouldAttemptXmtpRestore,
+  shouldRefuseAutoCreateAfterFailedRestore,
+} from '@/lib/xmtp/xmtpConnectPolicy'
+import { buildWrongOriginConnectError, evaluateXmtpConnectPrecheck } from '@/lib/xmtp/xmtpConnectGuard'
+import {
+  isWaitlistMessagingWagmiConnector,
+  waitForMessagingWallet,
+} from '@/lib/xmtp/waitForMessagingWallet'
+import { finishRestoredXmtpClient } from '@/lib/xmtp/xmtpConnectOrchestrator'
+import { registerBuiltClientInboxViaCreate } from '@/lib/xmtp/xmtpBuiltClientRegistration'
 import {
   Client,
   LogLevel,
   Opfs,
-  toSafeSigner,
+  encodeText,
+  isActions,
+  isReaction,
+  isTextReply,
   type Signer,
   type Conversation,
   type Dm,
@@ -60,13 +102,14 @@ import {
   type AsyncStreamProxy,
 } from '@xmtp/browser-sdk'
 import { IdentifierKind } from '@xmtp/browser-sdk'
-import { encodeAbiParameters, recoverMessageAddress, hashMessage } from 'viem'
+import { encodeAbiParameters, getAddress, hashMessage, isAddress, recoverMessageAddress, type Address } from 'viem'
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 export type XmtpStatus = 'idle' | 'signing' | 'connecting' | 'connected' | 'error'
+type ConnectIntent = 'auto' | 'user'
 
 export type ChatMessageStatus = 'sending' | 'sent' | 'failed'
 export type ChatMessageContentType = 'text' | 'json' | 'code'
@@ -83,6 +126,18 @@ export type ChatConversation = {
   unreadCount: number
 }
 
+export type ChatMessageActionButton = {
+  id: string
+  label: string
+  style?: 'primary' | 'secondary' | 'danger'
+}
+
+export type ChatMessageActions = {
+  promptId: string
+  description: string
+  buttons: ChatMessageActionButton[]
+}
+
 export type ChatMessage = {
   id: string
   conversationId: string
@@ -91,6 +146,8 @@ export type ChatMessage = {
   contentType: ChatMessageContentType
   richPreview?: string
   replyToId?: string | null
+  actions?: ChatMessageActions | null
+  reactionEmoji?: string | null
   status: ChatMessageStatus
   error: string | null
   sentAt: Date
@@ -99,6 +156,7 @@ export type ChatMessage = {
 
 export type SendChatMessageOptions = {
   replyToId?: string | null
+  replyToSenderInboxId?: string | null
 }
 
 export type StartDmOptions = {
@@ -134,7 +192,7 @@ type XmtpContextValue = {
   installationLimitInboxId: string | null
   /** True when the local XMTP OPFS installation is no longer accepted by the network. */
   localStateResetRequired: boolean
-  connect: () => Promise<void>
+  connect: (intent?: ConnectIntent) => Promise<void>
   /** Emergency recovery: revoke installations to free a slot, then reconnect. */
   resetInstallations: () => Promise<void>
   /** Clears only this browser's local XMTP database and reconnects with a fresh installation. */
@@ -147,11 +205,22 @@ type XmtpContextValue = {
     text: string,
     options?: SendChatMessageOptions,
   ) => Promise<ChatMessage>
+  sendIntent: (
+    conversationId: string,
+    params: { promptId: string; actionId: string },
+  ) => Promise<void>
   startDm: (peerAddress: `0x${string}`, options?: StartDmOptions) => Promise<StartDmResult>
   startDmByInbox: (peerInboxId: string, options?: StartDmOptions) => Promise<string | null>
   subscribeToMessages: (conversationId: string, cb: (msg: ChatMessage) => void) => () => void
   /** Resolve an XMTP inboxId to an Ethereum address (cached). */
   resolveInboxAddress: (inboxId: string) => Promise<string | null>
+  /** Re-sync the local conversation index from XMTP (safe while connected). */
+  refreshConversations: (options?: { force?: boolean }) => Promise<ChatConversation[]>
+  /** Sync + list, then fetch a single conversation by id if still missing. */
+  ensureConversationById: (
+    conversationId: string,
+    options?: { forceSync?: boolean },
+  ) => Promise<ChatConversation | null>
 }
 
 type WaitlistMeData = {
@@ -204,8 +273,14 @@ async function findCswOwnerIndex(
     [{ type: 'address' }],
     [signerAddress as `0x${string}`],
   ).toLowerCase()
-  const hints = [10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-  for (const i of hints) {
+  // Scan a wide range. CSW owner slots can be sparse (high indices are normal
+  // after multiple addOwnerAddress calls, e.g. owner at slot 25+ or higher).
+  // ownerAtIndex reverts for out-of-range indices (often with custom errors like
+  // ResolverError or similar), so we catch per-probe.
+  // 256 is more than enough for any realistic wallet; the result is cached per
+  // (csw, signer) pair.
+  const MAX_SCAN = 256
+  for (let i = 0; i < MAX_SCAN; i++) {
     try {
       const raw = (await pub.readContract({
         address: cswAddress as `0x${string}`,
@@ -215,7 +290,8 @@ async function findCswOwnerIndex(
       })) as string
       if (raw.toLowerCase() === target) return i
     } catch {
-      // ownerAtIndex reverts when index is out of bounds
+      // ownerAtIndex reverts when index is out of bounds (or other transient).
+      // Continue scanning; we do not early-exit because slots can be sparse.
     }
   }
   return null
@@ -287,6 +363,7 @@ const XmtpContext = createContext<XmtpContextValue>({
     sentAt: new Date(),
     isSelf: true,
   }),
+  sendIntent: async () => {},
   startDm: async () => ({
     ok: false,
     reason: 'not_connected',
@@ -295,6 +372,8 @@ const XmtpContext = createContext<XmtpContextValue>({
   startDmByInbox: async () => null,
   subscribeToMessages: () => noop,
   resolveInboxAddress: async () => null,
+  refreshConversations: async () => [],
+  ensureConversationById: async () => null,
 })
 
 export function useXmtp() {
@@ -312,11 +391,80 @@ const XMTP_ENV: 'production' | 'dev' | 'local' =
     : 'production'
 const XMTP_APP_VERSION = '4626.fun-web'
 const XMTP_CONNECT_FAILURE_COOLDOWN_MS = 5_000
-const ENC_KEY_HEX_RE = /^0x[0-9a-fA-F]{64}$/
-const inMemoryEncKeys = new Map<string, string>()
+const XMTP_STREAM_RECONNECT_COOLDOWN_MS = 15_000
+const XMTP_TAB_LOCK_STALE_MS = 20_000
+const XMTP_TAB_LOCK_HEARTBEAT_MS = 5_000
+const XMTP_TAB_RELEASE_STORAGE_KEY = `cv:xmtp:tabRelease:${XMTP_ENV}`
+const XMTP_PEER_RELEASE_WAIT_MS = 1_200
+const XMTP_CLIENT_SHUTDOWN_DELAYS_MS = [0, 250, 500, 900, 1_400] as const
+const XMTP_OPFS_DELETE_RETRY_DELAYS_MS = [0, 400, 900, 1_800, 3_000, 5_000, 8_000] as const
+const XMTP_PENDING_LOCAL_RESET_KEY = `cv:xmtp:pendingLocalReset:${XMTP_ENV}`
 
-function encKeyStorageKey(address: string): string {
-  return `cv:xmtp:encKey:${XMTP_ENV}:${address.toLowerCase()}`
+type PendingLocalResetRecord = {
+  identity: string
+  targetInboxId: string | null
+  phase: 'delete_opfs' | 'connect'
+  updatedAt: number
+}
+
+function readPendingLocalReset(): PendingLocalResetRecord | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(XMTP_PENDING_LOCAL_RESET_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<PendingLocalResetRecord> | null
+    if (!parsed || typeof parsed !== 'object') return null
+    if (typeof parsed.identity !== 'string' || !parsed.identity.trim()) return null
+    if (parsed.phase !== 'delete_opfs' && parsed.phase !== 'connect') return null
+    return {
+      identity: parsed.identity.trim().toLowerCase(),
+      targetInboxId: typeof parsed.targetInboxId === 'string' ? parsed.targetInboxId.trim() : null,
+      phase: parsed.phase,
+      updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : Date.now(),
+    }
+  } catch {
+    return null
+  }
+}
+
+function writePendingLocalReset(record: PendingLocalResetRecord): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(XMTP_PENDING_LOCAL_RESET_KEY, JSON.stringify(record))
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function clearPendingLocalReset(): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.removeItem(XMTP_PENDING_LOCAL_RESET_KEY)
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function forceClearTabLock(): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(tabLockStorageKey())
+  } catch {
+    // ignore storage errors
+  }
+}
+
+async function waitMs(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function broadcastPeerTabXmtpRelease(): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(XMTP_TAB_RELEASE_STORAGE_KEY, String(Date.now()))
+  } catch {
+    // ignore storage errors
+  }
 }
 
 function autoConnectStorageKey(address: string): string {
@@ -325,6 +473,48 @@ function autoConnectStorageKey(address: string): string {
 
 function signerTypeStorageKey(address: string): string {
   return `cv:xmtp:signerType:${XMTP_ENV}:${address.toLowerCase()}`
+}
+
+function tabLockStorageKey(): string {
+  return `cv:xmtp:tabLock:${XMTP_ENV}`
+}
+
+type XmtpTabLockRecord = {
+  owner: string
+  ts: number
+  address: string
+}
+
+function readTabLockRecord(): XmtpTabLockRecord | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(tabLockStorageKey())
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<XmtpTabLockRecord> | null
+    if (!parsed || typeof parsed !== 'object') return null
+    if (typeof parsed.owner !== 'string' || typeof parsed.ts !== 'number' || typeof parsed.address !== 'string') {
+      return null
+    }
+    return {
+      owner: parsed.owner,
+      ts: parsed.ts,
+      address: parsed.address,
+    }
+  } catch {
+    return null
+  }
+}
+
+function isTabLockStale(lock: XmtpTabLockRecord | null): boolean {
+  if (!lock) return true
+  return Date.now() - lock.ts > XMTP_TAB_LOCK_STALE_MS
+}
+
+function formatActiveTabLockHint(): string | null {
+  const lock = readTabLockRecord()
+  if (!lock || isTabLockStale(lock)) return null
+  const ageSec = Math.max(1, Math.floor((Date.now() - lock.ts) / 1000))
+  return `Another tab may still hold messaging (lock refreshed ${ageSec}s ago). Close every app.4626.fun tab, then retry.`
 }
 
 function readStoredSignerType(address: string): 'SCW' | 'EOA' | null {
@@ -356,19 +546,20 @@ function clearStoredSignerType(address: string): void {
   }
 }
 
+function clearLocalInstallMarkers(identity: string): void {
+  clearAutoConnect(identity)
+  clearStoredSignerType(identity)
+  clearStoredEncKeyHexForEnv(XMTP_ENV, identity)
+  clearInstallationProvisioned(XMTP_ENV, identity)
+  clearStoredInstallationMeta(XMTP_ENV, identity)
+}
+
 export function readStoredEncKeyHex(address: string): string | null {
-  const raw = inMemoryEncKeys.get(encKeyStorageKey(address)) ?? null
-  if (!raw || !ENC_KEY_HEX_RE.test(raw)) return null
-  return raw
+  return readStoredEncKeyHexForEnv(XMTP_ENV, address)
 }
 
 export function writeStoredEncKeyHex(address: string, encKeyHex: string): void {
-  if (!ENC_KEY_HEX_RE.test(encKeyHex)) return
-  inMemoryEncKeys.set(encKeyStorageKey(address), encKeyHex)
-}
-
-function clearStoredEncKeyHex(address: string): void {
-  inMemoryEncKeys.delete(encKeyStorageKey(address))
+  writeStoredEncKeyHexForEnv(XMTP_ENV, address, encKeyHex)
 }
 
 function closeClientSafe(client: Client | null | undefined): void {
@@ -380,21 +571,117 @@ function closeClientSafe(client: Client | null | undefined): void {
   }
 }
 
+function endTrackedStreams(input: {
+  convoStream: AsyncStreamProxy<any> | null
+  msgStream: AsyncStreamProxy<any> | null
+  perConvoStreams: Map<string, AsyncStreamProxy<any>>
+}): void {
+  try { input.convoStream?.end() } catch {}
+  try { input.msgStream?.end() } catch {}
+  for (const stream of input.perConvoStreams.values()) {
+    try { stream.end() } catch {}
+  }
+  input.perConvoStreams.clear()
+}
+
+async function shutdownClientForOpfsReset(input: {
+  getClient: () => Client | null
+  endStreams: () => void
+  clearClient: () => void
+}): Promise<void> {
+  for (const delayMs of XMTP_CLIENT_SHUTDOWN_DELAYS_MS) {
+    if (delayMs > 0) await waitMs(delayMs)
+    input.endStreams()
+    closeClientSafe(input.getClient())
+    input.clearClient()
+  }
+  await waitMs(XMTP_PEER_RELEASE_WAIT_MS)
+}
+
 /**
- * Get or create a random XMTP DB encryption key for this address.
- * Kept in memory only for the current page session.
+ * Get or create a stable XMTP DB encryption key for this identity.
+ * Persisted in localStorage so Client.build can reopen the same OPFS DB
+ * after refresh instead of falling through to Client.create.
  */
 function getOrCreateEncKeyHex(address: string): string {
-  // 1. Return existing key (works for both old sig-derived and new random keys)
-  const existing = readStoredEncKeyHex(address)
+  const existing = readStoredEncKeyHexForEnv(XMTP_ENV, address)
   if (existing) return existing
 
-  // 2. Generate a random 32-byte key
   const bytes = new Uint8Array(32)
   crypto.getRandomValues(bytes)
   const hex = `0x${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}` as `0x${string}`
-  writeStoredEncKeyHex(address, hex)
+  writeStoredEncKeyHexForEnv(XMTP_ENV, address, hex)
   return hex
+}
+
+function buildClientRestoreOptions(
+  baseOptions: Record<string, unknown>,
+  encKeyBytes: Uint8Array,
+  storedInstallationMeta: ReturnType<typeof readStoredInstallationMeta>,
+  includeEncryptionKey: boolean,
+): Record<string, unknown> {
+  const options: Record<string, unknown> = {
+    ...baseOptions,
+    ...(includeEncryptionKey ? { dbEncryptionKey: encKeyBytes } : {}),
+  }
+  if (storedInstallationMeta?.inboxId) {
+    options.dbPath = buildXmtpDbPath(XMTP_ENV, storedInstallationMeta.inboxId)
+  }
+  return options
+}
+
+async function tryRestoreClientFromLocalState(input: {
+  identifier: { identifier: `0x${string}`; identifierKind: IdentifierKind }
+  baseOptions: Record<string, unknown>
+  encKeyBytes: Uint8Array
+  storedInstallationMeta: ReturnType<typeof readStoredInstallationMeta>
+  onCloseActiveClient?: () => void
+}): Promise<{ client: Client | null; failureMessage: string | null; failureKind: 'installation_limit' | 'opfs_lock' | null }> {
+  let restoreFailureMessage: string | null = null
+  let restoreFailureKind: 'installation_limit' | 'opfs_lock' | null = null
+
+  const attempts: Array<{ includeEncryptionKey: boolean; label: string }> = [
+    { includeEncryptionKey: true, label: 'stored key' },
+    { includeEncryptionKey: false, label: 'no key' },
+  ]
+
+  for (const attempt of attempts) {
+    let buildClient: Client | null = null
+    try {
+      xmtpDebug(
+        `[xmtp] Attempting Client.build restore (${attempt.label})…`,
+        input.storedInstallationMeta?.inboxId
+          ? `dbPath=${buildXmtpDbPath(XMTP_ENV, input.storedInstallationMeta.inboxId)}`
+          : 'dbPath=auto',
+      )
+      buildClient = await Client.build(
+        input.identifier,
+        buildClientRestoreOptions(
+          input.baseOptions,
+          input.encKeyBytes,
+          input.storedInstallationMeta,
+          attempt.includeEncryptionKey,
+        ) as any,
+      )
+      if (buildClient?.inboxId) {
+        xmtpDebug('[xmtp] Client.build succeeded — reusing installation', buildClient.installationId)
+        return { client: buildClient, failureMessage: null, failureKind: null }
+      }
+      xmtpDebug('[xmtp] Client.build returned no inboxId')
+      closeClientSafe(buildClient)
+    } catch (buildErr) {
+      const buildMsg = buildErr instanceof Error ? buildErr.message : String(buildErr)
+      console.warn(`[xmtp] Client.build failed (${attempt.label}):`, buildMsg)
+      restoreFailureMessage = buildMsg
+      if (isInstallationLimitError(buildMsg)) restoreFailureKind = 'installation_limit'
+      else if (isOpfsAccessHandleError(buildMsg)) restoreFailureKind = 'opfs_lock'
+      closeClientSafe(buildClient)
+      input.onCloseActiveClient?.()
+      await new Promise((resolve) => setTimeout(resolve, 200))
+    }
+  }
+
+  return { client: null, failureMessage: restoreFailureMessage, failureKind: restoreFailureKind }
 }
 
 export function setAutoConnectEnabled(address: string): void {
@@ -403,6 +690,15 @@ export function setAutoConnectEnabled(address: string): void {
     window.localStorage.setItem(autoConnectStorageKey(address), '1')
   } catch {
     // ignore storage errors
+  }
+}
+
+function readAutoConnectEnabled(address: string): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem(autoConnectStorageKey(address)) === '1'
+  } catch {
+    return false
   }
 }
 
@@ -479,7 +775,6 @@ function pickCanonicalSmartWalletAddress(row: WaitlistMeData | null): string | n
   const candidates: Array<string | null | undefined> = [
     row.cswAddress,
     row.primarySmartWallet,
-    row.baseSubAccount,
   ]
   for (const c of candidates) {
     const normalized = normalizeEvmAddress(c)
@@ -521,62 +816,6 @@ function xmtpDebug(...args: unknown[]): void {
   console.log(...args)
 }
 
-/**
- * Auto-revoke the single oldest XMTP installation to free exactly 1 slot.
- *
- * IMPORTANT: each revocation consumes 1 of the inbox's 256 lifetime updates.
- * We revoke only the minimum needed (1) to stay as frugal as possible.
- * Uses the static `Client.revokeInstallations` — no live client required.
- */
-async function autoRevokeOldestInstallation(
-  signer: Signer,
-  inboxId: string,
-): Promise<void> {
-  xmtpDebug('[xmtp] Fetching installations for inbox', inboxId)
-  const states = await (Client as any).fetchInboxStates(
-    [inboxId],
-    XMTP_ENV as any,
-  ) as any[]
-  const state = Array.isArray(states) ? states[0] : null
-  const installsRaw = Array.isArray(state?.installations)
-    ? state.installations
-    : []
-  const installs = installsRaw
-    .map((i: any) => {
-      const bytes = i?.bytes ?? i
-      const createdAt =
-        typeof i?.createdAt === 'string' && i.createdAt
-          ? Date.parse(i.createdAt)
-          : Number.NaN
-      return {
-        bytes,
-        createdAt: Number.isFinite(createdAt) ? createdAt : null,
-      }
-    })
-    .filter((i: any) => Boolean(i.bytes))
-
-  if (installs.length === 0) return
-
-  // Pick just the single oldest installation to revoke — 1 update spent.
-  const sorted = [...installs].sort((a, b) => {
-    const aa = a.createdAt ?? 0
-    const bb = b.createdAt ?? 0
-    return aa - bb // oldest first
-  })
-  const toRevoke = [sorted[0].bytes]
-
-  xmtpDebug(
-    `[xmtp] Revoking 1 oldest of ${installs.length} installation(s) (256-update budget)…`,
-  )
-  await (Client as any).revokeInstallations(
-    signer,
-    inboxId,
-    toRevoke,
-    XMTP_ENV as any,
-  )
-  xmtpDebug('[xmtp] Auto-revocation complete — freed 1 slot')
-}
-
 // ---------------------------------------------------------------------------
 // OPFS / Storage persistence
 // ---------------------------------------------------------------------------
@@ -607,8 +846,9 @@ async function requestPersistentStorage(): Promise<void> {
 /**
  * Check whether an XMTP database file exists in OPFS for the given env.
  * Returns true if at least one `xmtp-{env}-*.db3` file is present.
- * When no database exists, Client.build cannot possibly succeed so callers
- * should skip directly to Client.create.
+ * When no database exists and there is no known installation marker,
+ * callers should skip Client.build and require explicit user intent
+ * before Client.create.
  */
 async function hasOpfsDatabase(): Promise<boolean> {
   try {
@@ -635,12 +875,19 @@ async function hasOpfsDatabase(): Promise<boolean> {
   }
 }
 
-async function deleteXmtpOpfsDatabaseFiles(): Promise<number> {
+async function deleteXmtpOpfsDatabaseFiles(targetInboxId?: string | null): Promise<number> {
   const opfs = await Opfs.create()
   try {
     const files = await opfs.listFiles()
     const prefix = `xmtp-${XMTP_ENV}-`
-    const candidates = files.filter((file) => file.startsWith(prefix))
+    const scopedDbPath = targetInboxId?.trim()
+      ? buildXmtpDbPath(XMTP_ENV, targetInboxId.trim())
+      : null
+    const candidates = files.filter((file) => {
+      if (!file.startsWith(prefix)) return false
+      if (!scopedDbPath) return true
+      return file === scopedDbPath || file.startsWith(`${scopedDbPath}-`)
+    })
     let deleted = 0
     for (const file of candidates) {
       const ok = await opfs.deleteFile(file)
@@ -653,11 +900,40 @@ async function deleteXmtpOpfsDatabaseFiles(): Promise<number> {
   }
 }
 
-function isLocalXmtpStateInvalidError(message: string): boolean {
-  return (
-    /InboxValidationFailed/i.test(message) ||
-    /synced \d+ messages?, \d+ failed \d+ succeeded/i.test(message)
-  )
+async function deleteXmtpOpfsDatabaseFilesWithRetry(targetInboxId?: string | null): Promise<number> {
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < XMTP_OPFS_DELETE_RETRY_DELAYS_MS.length; attempt += 1) {
+    const delayMs = XMTP_OPFS_DELETE_RETRY_DELAYS_MS[attempt] ?? 0
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+    try {
+      return await deleteXmtpOpfsDatabaseFiles(targetInboxId)
+    } catch (err) {
+      lastError = err
+      const msg = err instanceof Error ? err.message : String(err)
+      if (!isOpfsAccessHandleError(msg)) throw err
+      if (attempt === XMTP_OPFS_DELETE_RETRY_DELAYS_MS.length - 1) throw err
+      xmtpDebug(`[xmtp] OPFS cleanup attempt ${attempt + 1} failed due active lock; retrying...`)
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(String(lastError ?? 'Failed to clear local OPFS files'))
+}
+
+function installationBytesMatchId(bytes: unknown, installationId: string): boolean {
+  const target = installationId.trim().toLowerCase().replace(/^0x/, '')
+  if (!target) return false
+  if (typeof bytes === 'string') {
+    const normalized = bytes.trim().toLowerCase().replace(/^0x/, '')
+    return normalized === target
+  }
+  if (bytes instanceof Uint8Array) {
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+    return hex === target
+  }
+  return false
 }
 
 function getEthereumAddressFromInboxState(state: any): string | null {
@@ -699,7 +975,16 @@ function showNotification(title: string, body: string) {
 // Provider
 // ---------------------------------------------------------------------------
 
-export function XmtpChatProvider({ children }: { children: ReactNode }) {
+export function XmtpChatProvider({
+  children,
+  identityHintAddress = null,
+  manualConnectOnly = false,
+}: {
+  children: ReactNode
+  identityHintAddress?: string | null
+  /** When true, skip auto-connect and stream-driven reconnect (waitlist embedded chat). */
+  manualConnectOnly?: boolean
+}) {
   const { address, isConnected, connector } = useAccount()
   const accountContext = useAccountContext()
   const xmtpModeOverride: 'EOA' | 'SMART_WALLET' | null =
@@ -728,12 +1013,143 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   const conversationsRef = useRef<ChatConversation[]>([])
   const mountedRef = useRef(true)
   const connectInFlightRef = useRef(false)
+  const connectEpochRef = useRef(0)
+  const resetLocalStateInFlightRef = useRef(false)
   const connectCooldownUntilRef = useRef(0)
+  const streamReconnectCooldownUntilRef = useRef(0)
+  const handleStreamErrorRef = useRef<(error: Error) => void>(() => {})
+  const handleStreamFailRef = useRef<() => void>(() => {})
+  const tabLockOwnerRef = useRef<string>(
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  )
+  const tabLockAddressRef = useRef<string | null>(null)
+  const tabLockHeartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const resolvedIdentityByWalletRef = useRef<
     Map<string, { identityAddress: string; isCanonicalSmartWallet: boolean }>
   >(new Map())
   const cswOwnerIndexCache = useRef<Map<string, number | null>>(new Map())
   const identityAddressRef = useRef<string | null>(null)
+  const identityHintAddressRef = useRef<string | null>(null)
+  const manualConnectOnlyRef = useRef(manualConnectOnly)
+  const statusRef = useRef(status)
+  const refreshConversationsRef = useRef<(() => Promise<ChatConversation[]>) | null>(null)
+  const pendingLocalResetHandledRef = useRef(false)
+
+  useEffect(() => {
+    identityHintAddressRef.current = normalizeEvmAddress(identityHintAddress) ?? null
+  }, [identityHintAddress])
+
+  useEffect(() => {
+    manualConnectOnlyRef.current = manualConnectOnly
+  }, [manualConnectOnly])
+
+  useEffect(() => {
+    statusRef.current = status
+  }, [status])
+
+  const endActiveStreams = useCallback((): void => {
+    endTrackedStreams({
+      convoStream: convoStreamRef.current,
+      msgStream: msgStreamRef.current,
+      perConvoStreams: perConvoStreamsRef.current,
+    })
+    convoStreamRef.current = null
+    msgStreamRef.current = null
+  }, [])
+
+  const shutdownForOpfsReset = useCallback(async (): Promise<void> => {
+    await shutdownClientForOpfsReset({
+      getClient: () => clientRef.current,
+      endStreams: endActiveStreams,
+      clearClient: () => {
+        clientRef.current = null
+        perConvoCbRef.current.clear()
+        conversationsRef.current = []
+        identityAddressRef.current = null
+      },
+    })
+  }, [endActiveStreams])
+
+  const stopTabLockHeartbeat = useCallback((): void => {
+    if (tabLockHeartbeatRef.current) {
+      clearInterval(tabLockHeartbeatRef.current)
+      tabLockHeartbeatRef.current = null
+    }
+  }, [])
+
+  const writeTabLock = useCallback((address: string): void => {
+    if (typeof window === 'undefined') return
+    const payload: XmtpTabLockRecord = {
+      owner: tabLockOwnerRef.current,
+      ts: Date.now(),
+      address,
+    }
+    try {
+      window.localStorage.setItem(tabLockStorageKey(), JSON.stringify(payload))
+      tabLockAddressRef.current = address
+    } catch {
+      // ignore storage errors
+    }
+  }, [])
+
+  const releaseTabLock = useCallback((): void => {
+    if (typeof window === 'undefined') return
+    const existing = readTabLockRecord()
+    if (!existing) return
+    if (existing.owner !== tabLockOwnerRef.current) return
+    try {
+      window.localStorage.removeItem(tabLockStorageKey())
+    } catch {
+      // ignore storage errors
+    }
+    tabLockAddressRef.current = null
+  }, [])
+
+  const acquireTabLock = useCallback((address: string): { ok: true } | { ok: false; holder: XmtpTabLockRecord | null } => {
+    if (typeof window === 'undefined') return { ok: true }
+    const existing = readTabLockRecord()
+    const selfOwner = tabLockOwnerRef.current
+    const canTake =
+      !existing ||
+      isTabLockStale(existing) ||
+      existing.owner === selfOwner
+    if (!canTake) {
+      return { ok: false, holder: existing }
+    }
+    writeTabLock(address)
+    const confirmed = readTabLockRecord()
+    if (confirmed && confirmed.owner === selfOwner) {
+      return { ok: true }
+    }
+    return { ok: false, holder: confirmed }
+  }, [writeTabLock])
+
+  const startTabLockHeartbeat = useCallback((address: string): void => {
+    stopTabLockHeartbeat()
+    writeTabLock(address)
+    tabLockHeartbeatRef.current = setInterval(() => {
+      const existing = readTabLockRecord()
+      if (!existing || existing.owner !== tabLockOwnerRef.current) {
+        stopTabLockHeartbeat()
+        return
+      }
+      writeTabLock(address)
+    }, XMTP_TAB_LOCK_HEARTBEAT_MS)
+  }, [stopTabLockHeartbeat, writeTabLock])
+
+  // ------- cleanup -------
+  const cleanup = useCallback(async () => {
+    endActiveStreams()
+    closeClientSafe(clientRef.current)
+    clientRef.current = null
+    perConvoCbRef.current.clear()
+    conversationsRef.current = []
+    identityAddressRef.current = null
+    stopTabLockHeartbeat()
+    releaseTabLock()
+  }, [endActiveStreams, releaseTabLock, stopTabLockHeartbeat])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -742,7 +1158,39 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       mountedRef.current = false
       void cleanup()
     }
-  }, [])
+  }, [cleanup])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onUnload = () => {
+      stopTabLockHeartbeat()
+      releaseTabLock()
+    }
+    window.addEventListener('beforeunload', onUnload)
+    window.addEventListener('pagehide', onUnload)
+    return () => {
+      window.removeEventListener('beforeunload', onUnload)
+      window.removeEventListener('pagehide', onUnload)
+    }
+  }, [releaseTabLock, stopTabLockHeartbeat])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== XMTP_TAB_RELEASE_STORAGE_KEY) return
+      void (async () => {
+        await cleanup()
+        if (mountedRef.current) {
+          setStatus('idle')
+          setError(null)
+        }
+      })()
+    }
+    window.addEventListener('storage', onStorage)
+    return () => {
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [cleanup])
 
   // Reset when wallet changes
   useEffect(() => {
@@ -758,33 +1206,15 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       setInstallationLimitInboxId(null)
       setLocalStateResetRequired(false)
     }
-  }, [isConnected, address])
-
-  // ------- cleanup -------
-  async function cleanup() {
-    try { convoStreamRef.current?.end() } catch {}
-    try { msgStreamRef.current?.end() } catch {}
-    for (const s of perConvoStreamsRef.current.values()) {
-      try { s.end() } catch {}
-    }
-    perConvoStreamsRef.current.clear()
-    perConvoCbRef.current.clear()
-      try { clientRef.current?.close() } catch {}
-      clientRef.current = null
-      conversationsRef.current = []
-      identityAddressRef.current = null
-  }
+  }, [isConnected, address, cleanup])
 
   const markLocalStateInvalid = useCallback((errorMessage: string): void => {
-    try { convoStreamRef.current?.end() } catch {}
-    try { msgStreamRef.current?.end() } catch {}
-    for (const s of perConvoStreamsRef.current.values()) {
-      try { s.end() } catch {}
-    }
-    perConvoStreamsRef.current.clear()
-    perConvoCbRef.current.clear()
-    try { clientRef.current?.close() } catch {}
+    connectEpochRef.current += 1
+    connectInFlightRef.current = false
+    endActiveStreams()
+    closeClientSafe(clientRef.current)
     clientRef.current = null
+    perConvoCbRef.current.clear()
     setStatus('error')
     setError(
       'XMTP local messaging state is out of sync with the network. Reset local messaging state, then reconnect.',
@@ -794,33 +1224,40 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     setConversations([])
     conversationsRef.current = []
     identityAddressRef.current = null
+    stopTabLockHeartbeat()
+    releaseTabLock()
     console.warn('[xmtp] local state reset required:', errorMessage)
-  }, [])
+  }, [endActiveStreams, releaseTabLock, stopTabLockHeartbeat])
 
-  // ------- resolve address → display name (Basename / truncated) -------
-  const nameCache = useRef<Map<string, string>>(new Map())
+  // ------- resolve address → chat presentation (Basename + avatar / truncated) -------
+  const peerPresentationCache = useRef<Map<string, { name: string; imageUrl?: string }>>(new Map())
 
-  const resolveDisplayName = useCallback(async (address: string): Promise<string> => {
+  const resolvePeerPresentation = useCallback(async (address: string): Promise<{ name: string; imageUrl?: string }> => {
     const lower = address.toLowerCase()
-    const cached = nameCache.current.get(lower)
+    const cached = peerPresentationCache.current.get(lower)
     if (cached) return cached
 
-    const basename = await getBasenameName(address).catch(() => null)
-    if (basename) {
-      const short = basename.replace(/\.base\.eth$/i, '')
-      nameCache.current.set(lower, short)
-      return short
-    }
+    const presentation = await resolvePeerChatPresentation(address, truncateAddress)
+    peerPresentationCache.current.set(lower, presentation)
+    return presentation
+  }, [])
 
-    const truncated = truncateAddress(address)
-    nameCache.current.set(lower, truncated)
-    return truncated
+  const warmChatPeerIdentities = useCallback((summaries: ChatConversation[]): void => {
+    const peerAddresses = summaries
+      .map((summary) => summary.peerAddress)
+      .filter((addr): addr is string => Boolean(addr))
+    if (peerAddresses.length === 0) return
+    prefetchBasenameForAddresses(
+      peerAddresses.filter((addr): addr is Address => isAddress(addr)).map((addr) => getAddress(addr)),
+    )
+    prefetchIdentities(peerAddresses)
   }, [])
 
   // ------- build conversation summary -------
-  const buildConvoSummary = useCallback(async (convo: Conversation | Dm | Group): Promise<ChatConversation> => {
+  const buildConvoSummary = useCallback(async (convo: Conversation<unknown> | Dm<unknown> | Group<unknown>): Promise<ChatConversation> => {
     const isDm = 'peerInboxId' in convo
     let name = ''
+    let imageUrl: string | undefined
     let peerInboxId: string | undefined
     let peerAddress: string | undefined
 
@@ -830,15 +1267,19 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         const states = await clientRef.current?.preferences.fetchInboxStates([peerInboxId])
         const resolved = getEthereumAddressFromInboxState(states?.[0])
         peerAddress = resolved ?? undefined
-        // Resolve to Basename / ENS name, falling back to truncated address
-        name = resolved
-          ? await resolveDisplayName(resolved)
-          : truncateAddress(peerInboxId)
+        if (resolved) {
+          const presentation = await resolvePeerPresentation(resolved)
+          name = presentation.name
+          imageUrl = presentation.imageUrl
+        } else {
+          name = truncateAddress(peerInboxId)
+        }
       } catch {
         name = 'DM'
       }
     } else {
       name = (convo as Group).name ?? 'Group'
+      imageUrl = (convo as Group).imageUrl
     }
 
     let lastMessageText: string | undefined
@@ -857,14 +1298,139 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       id: convo.id,
       type: isDm ? 'dm' : 'group',
       name,
-      imageUrl: isDm ? undefined : (convo as Group).imageUrl,
+      imageUrl,
       peerInboxId,
       peerAddress,
       lastMessageText,
       lastMessageAt,
       unreadCount: 0,
     }
-  }, [resolveDisplayName])
+  }, [resolvePeerPresentation])
+
+  const applyConversationSummaries = useCallback((summaries: ChatConversation[]): ChatConversation[] => {
+    const sorted = [...summaries].sort(
+      (a, b) => (b.lastMessageAt?.getTime() ?? 0) - (a.lastMessageAt?.getTime() ?? 0),
+    )
+    let normalizedSummaries: ChatConversation[] = []
+    for (let i = sorted.length - 1; i >= 0; i -= 1) {
+      normalizedSummaries = upsertConversationSummary(normalizedSummaries, sorted[i]!)
+    }
+    conversationsRef.current = normalizedSummaries
+    if (mountedRef.current) setConversations(normalizedSummaries)
+    warmChatPeerIdentities(normalizedSummaries)
+    return normalizedSummaries
+  }, [warmChatPeerIdentities])
+
+  const evictConversationFromCache = useCallback((conversationId: string): void => {
+    const normalizedId = conversationId.trim()
+    if (!normalizedId) return
+    const next = conversationsRef.current.filter(
+      (conversation) => !conversationIdsEqual(conversation.id, normalizedId),
+    )
+    if (next.length === conversationsRef.current.length) return
+    conversationsRef.current = next
+    if (mountedRef.current) setConversations(next)
+  }, [])
+
+  const refreshConversations = useCallback(async (options?: { force?: boolean }): Promise<ChatConversation[]> => {
+    const client = clientRef.current
+    if (!client) return conversationsRef.current
+    const conversationsApi = client.conversations as {
+      sync: () => Promise<unknown>
+      syncAll?: (consentStates?: import('@xmtp/browser-sdk').ConsentState[]) => Promise<unknown>
+      getConversationById?: (id: string) => Promise<Conversation | Dm | Group | null>
+      list: (options?: ReturnType<typeof groupMembershipListOptions>) => Promise<Array<Conversation | Dm | Group>>
+      listGroups?: (options?: ReturnType<typeof groupMembershipListOptions>) => Promise<Array<Conversation | Dm | Group>>
+    }
+    await syncConversationsForGroupDiscovery(conversationsApi as unknown as import('@/lib/xmtp/xmtpHelpers').ConversationsApiLike, {
+      force: options?.force,
+      lightweight: manualConnectOnlyRef.current && !options?.force,
+    })
+    const listOptions = groupMembershipListOptions()
+    const convos = await client.conversations.list(listOptions)
+    let mergedConvos: Array<Conversation<unknown> | Dm<unknown> | Group<unknown>> = [...convos]
+    if (typeof conversationsApi.listGroups === 'function') {
+      try {
+        const groups = await conversationsApi.listGroups(listOptions)
+        for (const group of groups) {
+          if (!mergedConvos.some((convo) => conversationIdsEqual(convo.id, group.id))) {
+            mergedConvos.push(group)
+          }
+        }
+      } catch {
+        // best effort
+      }
+    }
+    const summaries = await Promise.all(mergedConvos.map(buildConvoSummary))
+    return applyConversationSummaries(summaries)
+  }, [applyConversationSummaries, buildConvoSummary])
+
+  useEffect(() => {
+    refreshConversationsRef.current = refreshConversations
+  }, [refreshConversations])
+
+  const ensureConversationById = useCallback(async (
+    conversationId: string,
+    options?: { forceSync?: boolean },
+  ): Promise<ChatConversation | null> => {
+    const normalizedId = conversationId.trim()
+    if (!normalizedId) return null
+
+    const client = clientRef.current
+    const cached =
+      conversationsRef.current.find((conversation) => conversationIdsEqual(conversation.id, normalizedId)) ??
+      null
+    if (cached && client) {
+      try {
+        const live = await client.conversations.getConversationById(normalizedId)
+        if (live) return cached
+      } catch {
+        // stale React cache — fall through to sync/resolve
+      }
+      evictConversationFromCache(normalizedId)
+    } else if (cached) {
+      return cached
+    }
+
+    const summaries = await refreshConversations({ force: options?.forceSync })
+    const fromList =
+      summaries.find((conversation) => conversationIdsEqual(conversation.id, normalizedId)) ?? null
+    if (fromList) return fromList
+
+    if (!client) return null
+
+    const conversationsApi = client.conversations as {
+      sync: () => Promise<unknown>
+      syncAll?: (consentStates?: import('@xmtp/browser-sdk').ConsentState[]) => Promise<unknown>
+      getConversationById: (id: string) => Promise<Conversation | Dm | Group | null>
+      list: () => Promise<Array<Conversation | Dm | Group>>
+      listGroups?: () => Promise<Array<Conversation | Dm | Group>>
+    }
+
+    const convo = await resolveConversationByIdWithSyncRetries(conversationsApi, normalizedId, {
+      rounds: identityHintAddressRef.current ? 5 : 3,
+      delayMs: 500,
+      preferencesApi: client.preferences,
+      forceSync: options?.forceSync,
+    })
+    if (!convo) return null
+
+    try {
+      const summary = await buildConvoSummary(convo as Conversation | Dm | Group)
+      if (mountedRef.current) {
+        setConversations((prev) => {
+          const next = upsertConversationSummary(prev, summary)
+          conversationsRef.current = next
+          return next
+        })
+      } else {
+        conversationsRef.current = upsertConversationSummary(conversationsRef.current, summary)
+      }
+      return summary
+    } catch {
+      return null
+    }
+  }, [buildConvoSummary, evictConversationFromCache, refreshConversations])
 
   // ------- connect -------
   const resolveXmtpIdentityAddress = useCallback(async (
@@ -876,6 +1442,16 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   }> => {
     const connected = normalizeEvmAddress(connectedAddress)
     if (!connected) return { identityAddress: connectedAddress.toLowerCase(), isCanonicalSmartWallet: false }
+
+    const identityHint = identityHintAddressRef.current
+    if (identityHint && identityHint !== connected) {
+      const resolved = {
+        identityAddress: identityHint,
+        isCanonicalSmartWallet: true,
+      }
+      resolvedIdentityByWalletRef.current.set(`${connected}:${modeOverride ?? 'auto'}`, resolved)
+      return resolved
+    }
 
     const cacheKey = `${connected}:${modeOverride ?? 'auto'}`
     const cached = resolvedIdentityByWalletRef.current.get(cacheKey)
@@ -903,11 +1479,13 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       ) ?? null
 
     let waitlistCanonicalAddress: string | null = null
+    let waitlistXmtpMemberAddress: string | null = null
     let preferredSelection = resolveModePreferredIdentity({
       connectedAddress: connected,
       modeOverride,
       accountContextSmartAddress,
       waitlistCanonicalAddress: null,
+      waitlistXmtpMemberAddress: null,
     })
 
     let preferred = preferredSelection.preferredAddress
@@ -915,29 +1493,51 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     let policyApplies = enforceCanonicalForConnectedSigner
     let waitlistResolved = false
     try {
-      const res = await apiFetch('/api/waitlist/me', {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      })
-      const json = (await res.json().catch(() => null)) as ApiEnvelope<WaitlistMeData | null> | null
-      const row = res.ok && json?.success ? (json.data ?? null) : null
-      waitlistResolved = Boolean(res.ok && json?.success)
+      const [meRes, statusRes] = await Promise.all([
+        apiFetch('/api/waitlist/me', {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+        }),
+        apiFetch('/api/waitlist/xmtp-status', {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+        }),
+      ])
+      const json = (await meRes.json().catch(() => null)) as ApiEnvelope<WaitlistMeData | null> | null
+      const row = meRes.ok && json?.success ? (json.data ?? null) : null
+      waitlistResolved = Boolean(meRes.ok && json?.success)
       const canonical = pickCanonicalSmartWalletAddress(row)
       waitlistCanonicalAddress = canonical
+
+      const statusJson = (await statusRes.json().catch(() => null)) as {
+        success?: boolean
+        data?: { xmtpMemberAddress?: string | null }
+      } | null
+      waitlistXmtpMemberAddress =
+        statusRes.ok && statusJson?.success
+          ? normalizeEvmAddress(statusJson.data?.xmtpMemberAddress ?? null)
+          : null
 
       preferredSelection = resolveModePreferredIdentity({
         connectedAddress: connected,
         modeOverride,
         accountContextSmartAddress,
         waitlistCanonicalAddress: canonical,
+        waitlistXmtpMemberAddress,
       })
       preferred = preferredSelection.preferredAddress
       isCanonicalSmartWallet = preferredSelection.isSmartWalletIdentity
 
-      policyApplies = shouldApplyCanonicalEnforcement({
-        canonicalAddress: canonical,
-        signerAddress: connected,
-      })
+      if (waitlistXmtpMemberAddress) {
+        preferred = waitlistXmtpMemberAddress
+        isCanonicalSmartWallet = waitlistXmtpMemberAddress !== connected
+        policyApplies = false
+      } else {
+        policyApplies = shouldApplyCanonicalEnforcement({
+          canonicalAddress: canonical,
+          signerAddress: connected,
+        })
+      }
     } catch {
       waitlistResolved = false
     }
@@ -947,6 +1547,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       modeOverride,
       accountContextSmartAddress,
       waitlistCanonicalAddress,
+      waitlistXmtpMemberAddress,
       enforceCanonicalForConnectedSigner: policyApplies,
     })
 
@@ -972,7 +1573,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         )
       }
 
-      const expectedAuthAddress = normalizeEvmAddress(policyApplies ? TARGET_CANONICAL_CSW_ADDRESS : preferred)
+      const expectedAuthAddress = normalizeEvmAddress(policyApplies ? CANONICAL_CSW_ADDRESS : preferred)
       if (expectedAuthAddress && authAddress !== expectedAuthAddress) {
         throw new Error(
           'XMTP session identity does not match the smart wallet selected for messaging. Reconnect wallet, sign in again, and retry.',
@@ -981,13 +1582,13 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     }
 
     if (policyApplies) {
-      if (preferred !== TARGET_CANONICAL_CSW_ADDRESS) {
+      if (preferred !== CANONICAL_CSW_ADDRESS) {
         console.warn('[xmtp] canonical policy overriding identity resolution to target CSW', {
           connected,
           resolvedBeforeOverride: preferred,
         })
       }
-      preferred = TARGET_CANONICAL_CSW_ADDRESS
+      preferred = CANONICAL_CSW_ADDRESS
       isCanonicalSmartWallet = true
     }
 
@@ -1031,7 +1632,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    if (isCanonicalSmartWallet && !isTargetCanonicalCsw(preferred) && policyApplies) {
+    if (isCanonicalSmartWallet && !isCanonicalCsw(preferred) && policyApplies) {
       console.warn('[xmtp] canonical policy detected non-target smart wallet identity', {
         preferred,
       })
@@ -1042,47 +1643,102 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     return resolved
   }, [accountContext.activeAccount, accountContext.activeAccountType, accountContext.cswAddress, publicClient])
 
-  const connect = useCallback(async () => {
-    if (!address || !walletClient) return
-    if (clientRef.current) return // already connected
-    if (connectInFlightRef.current) return
-    const now = Date.now()
-    if (connectCooldownUntilRef.current > now) {
-      const retryIn = Math.max(1, Math.ceil((connectCooldownUntilRef.current - now) / 1000))
+  const connect = useCallback(async (intent: ConnectIntent = 'auto') => {
+    const canonicalAppOrigin = APP_ORIGIN.replace(/\/+$/, '')
+    const currentOrigin = typeof window !== 'undefined' ? window.location.origin : ''
+    const hostname = typeof window !== 'undefined' ? (window.location.hostname ?? '').toLowerCase() : ''
+
+    let connectWalletAddress = address ?? null
+    let connectWalletClient = walletClient ?? null
+    let connectWalletConnector = connector ?? null
+
+    if (!connectWalletAddress || !connectWalletClient) {
+      const settled = await waitForMessagingWallet(wagmiConfig, {
+        timeoutMs: intent === 'user' ? 8_000 : 500,
+        connectorPredicate: isWaitlistMessagingWagmiConnector,
+      })
+      if (settled) {
+        connectWalletAddress = settled.address
+        connectWalletClient = settled.walletClient as typeof connectWalletClient
+        connectWalletConnector = settled.connector ?? connectWalletConnector
+      }
+    }
+
+    const precheck = evaluateXmtpConnectPrecheck({
+      walletAddress: connectWalletAddress,
+      walletClientReady: Boolean(connectWalletClient),
+      alreadyHasClient: Boolean(clientRef.current),
+      connectInFlight: connectInFlightRef.current,
+      resetLocalStateInFlight: resetLocalStateInFlightRef.current,
+      connectCooldownUntilMs: connectCooldownUntilRef.current,
+      nowMs: Date.now(),
+      currentOrigin,
+      canonicalAppOrigin,
+      hostname,
+    })
+    if (!precheck.allowed) {
+      if (
+        precheck.reason === 'already_connected' &&
+        intent === 'user' &&
+        clientRef.current
+      ) {
+        try {
+          await refreshConversations()
+          if (mountedRef.current) {
+            setStatus('connected')
+            setError(null)
+          }
+        } catch (err) {
+          if (mountedRef.current) {
+            setStatus('error')
+            setError(err instanceof Error ? err.message : String(err))
+          }
+        }
+        return
+      }
       if (mountedRef.current) {
-        setStatus('error')
-        setError(`XMTP reconnect is cooling down. Retry in ${retryIn}s.`)
+        if (precheck.reason === 'cooldown') {
+          setStatus('error')
+          setError(`XMTP reconnect is cooling down. Retry in ${precheck.retryInSeconds ?? 1}s.`)
+        } else if (precheck.reason === 'wrong_origin') {
+          setStatus('error')
+          setError(buildWrongOriginConnectError(currentOrigin, canonicalAppOrigin))
+        } else if (precheck.reason === 'no_wallet') {
+          setStatus('error')
+          setError(
+            'Messaging signer is not ready yet. Use Connect messaging on the waitlist panel, or restore Privy email sign-in and retry.',
+          )
+        }
       }
       return
     }
 
-    // XMTP installations are scoped to a browser origin. Allowing messaging on
-    // preview/staging origins would create additional installations and can
-    // quickly hit 10/10 for users. We restrict to the canonical app origin.
-    const canonicalAppOrigin = APP_ORIGIN.replace(/\/+$/, '')
-    const currentOrigin = typeof window !== 'undefined' ? window.location.origin : ''
-    const hostname = typeof window !== 'undefined' ? (window.location.hostname ?? '').toLowerCase() : ''
-    const isLocalDev = hostname === 'localhost' || hostname === '127.0.0.1'
-    const isCanonicalOrigin = currentOrigin === canonicalAppOrigin
-    if (!isCanonicalOrigin && !isLocalDev) {
-      const msg =
-        `Messaging is disabled on ${currentOrigin || 'this origin'} to prevent XMTP installation churn. ` +
-        `Open ${canonicalAppOrigin} to use chat.`
-      if (mountedRef.current) {
-        setStatus('error')
-        setError(msg)
-      }
+    if (!connectWalletAddress || !connectWalletClient) {
       return
     }
 
     connectInFlightRef.current = true
-    let xmtpIdentityAddress = String(address).toLowerCase()
+    const connectEpoch = connectEpochRef.current
+    let tabLockAcquired = false
+    let xmtpIdentityAddress = String(connectWalletAddress).toLowerCase()
     try {
       setError(null)
       setInstallationLimitInboxId(null)
-      const resolved = await resolveXmtpIdentityAddress(address, xmtpModeOverride)
+      setLocalStateResetRequired(false)
+      const resolved = await resolveXmtpIdentityAddress(connectWalletAddress, xmtpModeOverride)
+      if (connectEpoch !== connectEpochRef.current) return
       xmtpIdentityAddress = resolved.identityAddress
       const normalizedIdentity = normalizeEvmAddress(xmtpIdentityAddress) ?? xmtpIdentityAddress.toLowerCase()
+      const lockResult = acquireTabLock(normalizedIdentity)
+      if (!lockResult.ok) {
+        setStatus('error')
+        setError(
+          'Messaging is active in another tab/window for this browser profile. ' +
+            'Close the other chat tab or wait for its lock to expire, then retry.',
+        )
+        return
+      }
+      tabLockAcquired = true
       identityAddressRef.current = normalizedIdentity
       if (mountedRef.current) setIdentityAddress(normalizedIdentity)
       xmtpDebug('[xmtp] Using identity for connect:', xmtpIdentityAddress)
@@ -1091,6 +1747,8 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         identifier: xmtpIdentityAddress as `0x${string}`,
         identifierKind: IdentifierKind.Ethereum,
       }
+      const storedInstallationMeta = readStoredInstallationMeta(XMTP_ENV, xmtpIdentityAddress)
+      const installationAlreadyProvisioned = hasKnownXmtpInstallation(XMTP_ENV, xmtpIdentityAddress)
       const baseOptions = {
         env: XMTP_ENV as any,
         appVersion: XMTP_APP_VERSION,
@@ -1109,7 +1767,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       const getSignerSelection = async (): Promise<SignerSelection> => {
         if (signerSelectionPromise) return signerSelectionPromise
         signerSelectionPromise = (async () => {
-          const walletChainId = resolveXmtpChainId(walletClient.chain?.id)
+          const walletChainId = resolveXmtpChainId(connectWalletClient!.chain?.id)
           const storedSignerType = readStoredSignerType(xmtpIdentityAddress)
 
           let hasContractCode: boolean | null = null
@@ -1125,14 +1783,14 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           const signerDecision = decideXmtpSignerType({
             isCanonicalSmartWallet: resolved.isCanonicalSmartWallet,
             storedSignerType,
-            connector,
+            connector: connectWalletConnector,
             hasContractCode,
             walletChainId,
             modeOverride: xmtpModeOverride ?? undefined,
           })
 
           const signMessageFn = async (message: string) => {
-            const s = await walletClient.signMessage({ message })
+            const s = await connectWalletClient!.signMessage({ message })
             return hexToBytes(s)
           }
 
@@ -1142,7 +1800,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           //    via signTypedData (EIP-712) to produce a signature ecrecover can verify
           // 3. Wrap in the tuple-struct SignatureWrapper the CSW expects
           const scwSignMessageFn = async (message: string) => {
-            const s = await walletClient.signMessage({ message })
+            const s = await connectWalletClient!.signMessage({ message })
             const sigBytes = hexToBytes(s)
             if (sigBytes.length !== 65 || !publicClient) return sigBytes
             let signerAddr: string
@@ -1157,12 +1815,13 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
               cswOwnerIndexCache.current.set(ck, idx)
             }
             if (idx === null) {
-              console.warn('[xmtp] Could not resolve CSW owner index for', signerAddr)
-              return sigBytes
+              throw new Error(
+                'Smart contract wallet signature validation failed: could not resolve CSW owner index for XMTP signing',
+              )
             }
             const msgHash = hashMessage(message)
             try {
-              const typedSig = await walletClient.signTypedData({
+              const typedSig = await connectWalletClient!.signTypedData({
                 domain: {
                   name: 'Coinbase Smart Wallet',
                   version: '1',
@@ -1205,30 +1864,50 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         return signerSelectionPromise
       }
 
-      const registerRestoredInstallation = async (client: Client, activeSigner: Signer): Promise<void> => {
-        const alreadyRegistered = await client.isRegistered()
-        if (alreadyRegistered) return
-
-        const { signatureText, signatureRequestId } = await client.unsafe_createInboxSignatureText()
-        if (!signatureText || !signatureRequestId) return
-
-        const signature = await activeSigner.signMessage(signatureText)
-        const safeSigner = await toSafeSigner(activeSigner, signature)
-        await client.unsafe_applySignatureRequest(safeSigner, signatureRequestId)
+      const registerRestoredInstallationWithFallback = async (
+        client: Client,
+        signers: Signer[],
+        restoreOptions: Record<string, unknown>,
+      ): Promise<{ client: Client; signer: Signer }> => {
+        return registerBuiltClientInboxViaCreate({
+          buildClient: client,
+          signers,
+          restoreOptions,
+        })
       }
 
       // Shared setup: sync conversations, start streams, mark connected.
       const setupConversations = async (client: Client) => {
-        await client.conversations.sync()
-        const convos = await client.conversations.list()
-        const summaries = await Promise.all(convos.map(buildConvoSummary))
-        summaries.sort((a, b) => (b.lastMessageAt?.getTime() ?? 0) - (a.lastMessageAt?.getTime() ?? 0))
-        let normalizedSummaries: ChatConversation[] = []
-        for (let i = summaries.length - 1; i >= 0; i -= 1) {
-          normalizedSummaries = upsertConversationSummary(normalizedSummaries, summaries[i]!)
+        const conversationsApi = client.conversations as {
+          sync: () => Promise<unknown>
+          syncAll?: (consentStates?: import('@xmtp/browser-sdk').ConsentState[]) => Promise<unknown>
+          getConversationById?: (id: string) => Promise<Conversation | Dm | Group | null>
+          list: (options?: ReturnType<typeof groupMembershipListOptions>) => Promise<Array<Conversation | Dm | Group>>
+          listGroups?: (
+            options?: ReturnType<typeof groupMembershipListOptions>,
+          ) => Promise<Array<Conversation | Dm | Group>>
         }
-        conversationsRef.current = normalizedSummaries
-        if (mountedRef.current) setConversations(normalizedSummaries)
+        await syncConversationsForGroupDiscovery(conversationsApi as unknown as import('@/lib/xmtp/xmtpHelpers').ConversationsApiLike, {
+          force: manualConnectOnlyRef.current,
+          lightweight: !manualConnectOnlyRef.current,
+        })
+        const listOptions = groupMembershipListOptions()
+        const convos = await conversationsApi.list(listOptions)
+        let mergedConvos: Array<Conversation<unknown> | Dm<unknown> | Group<unknown>> = [...convos]
+        if (typeof conversationsApi.listGroups === 'function') {
+          try {
+            const groups = await conversationsApi.listGroups(listOptions)
+            for (const group of groups) {
+              if (!mergedConvos.some((convo) => conversationIdsEqual(convo.id, group.id))) {
+                mergedConvos.push(group)
+              }
+            }
+          } catch {
+            // best effort
+          }
+        }
+        const summaries = await Promise.all(mergedConvos.map(buildConvoSummary))
+        const normalizedSummaries = applyConversationSummaries(summaries)
         const convoStream = await client.conversations.stream({
           onValue: async (convo: any) => {
             if (!mountedRef.current) return
@@ -1239,6 +1918,8 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
               return next
             })
           },
+          onError: (error) => handleStreamErrorRef.current(error),
+          onFail: () => handleStreamFailRef.current(),
         })
         convoStreamRef.current = convoStream
         const allMsgStream = await client.conversations.streamAllMessages({
@@ -1268,6 +1949,8 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
             const cbs = perConvoCbRef.current.get(convoId)
             if (cbs) for (const cb of cbs) cb(chatMsg)
           },
+          onError: (error) => handleStreamErrorRef.current(error),
+          onFail: () => handleStreamFailRef.current(),
         })
         msgStreamRef.current = allMsgStream
         void requestNotificationPermission()
@@ -1278,12 +1961,20 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           setInstallationLimitInboxId(null)
           setLocalStateResetRequired(false)
         }
+        startTabLockHeartbeat(xmtpIdentityAddress)
+        writeInstallationProvisioned(XMTP_ENV, xmtpIdentityAddress)
+        if (client.inboxId && client.installationId) {
+          writeStoredInstallationMeta(XMTP_ENV, xmtpIdentityAddress, {
+            inboxId: client.inboxId,
+            installationId: client.installationId,
+          })
+        }
 
         // Auto-create a DM conversation with the Keepr agent so it appears
         // in the user's chat list.  We do NOT send any message on behalf of
         // the user — the agent will greet them when they send their first message.
-        const agentAddr = (import.meta.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim()
-        if (agentAddr && /^0x[a-fA-F0-9]{40}$/.test(agentAddr)) {
+        const agentAddr = resolveClientAgentXmtpAddress()
+        if (/^0x[a-fA-F0-9]{40}$/.test(agentAddr)) {
           void (async () => {
             try {
               const alreadyExists = normalizedSummaries.some(
@@ -1331,89 +2022,41 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       let buildClient: Client | null = null
       let buildSucceeded = false
 
-      // Pre-check: does an OPFS database even exist?
-      // If not, Client.build will always fail.  Skip straight to Client.create
-      // to avoid confusing error logs and wasted time.
       const dbExists = await hasOpfsDatabase()
+      const shouldAttemptRestore = shouldAttemptXmtpRestore({
+        opfsDatabaseExists: dbExists,
+        hasKnownInstallation: installationAlreadyProvisioned,
+      })
 
-      if (dbExists) {
-        let restoreFailureMessage: string | null = null
-        let restoreFailureKind: 'installation_limit' | 'opfs_lock' | null = null
-
-        // Attempt 1: try with the stored encryption key
-        try {
-          xmtpDebug('[xmtp] OPFS database found — attempting Client.build restore…')
-          buildClient = await Client.build(identifier, {
-            ...baseOptions,
-            dbEncryptionKey: encKeyBytes,
-          })
-          if (buildClient?.inboxId) {
-            buildSucceeded = true
-            xmtpDebug(
-              '[xmtp] Client.build succeeded — reusing installation',
-              buildClient.installationId,
-            )
-          } else {
-            xmtpDebug('[xmtp] Client.build returned no inboxId')
-            try { buildClient?.close() } catch {}
-            buildClient = null
-          }
-        } catch (buildErr) {
-          const buildMsg = buildErr instanceof Error ? buildErr.message : String(buildErr)
-          console.warn('[xmtp] Client.build failed with stored key:', buildMsg)
-          restoreFailureMessage = buildMsg
-          if (isInstallationLimitError(buildMsg)) restoreFailureKind = 'installation_limit'
-          else if (isOpfsAccessHandleError(buildMsg)) restoreFailureKind = 'opfs_lock'
-          closeClientSafe(buildClient)
-          buildClient = null
-          closeClientSafe(clientRef.current)
-          clientRef.current = null
-          await new Promise((r) => setTimeout(r, 200))
-        }
-
-        // Attempt 2: try without encryption key — the Browser SDK doesn't use
-        // it for encryption, so the DB may be openable without one (or with a
-        // different one) if the key in localStorage drifted.
-        if (!buildSucceeded) {
-          try {
-            xmtpDebug('[xmtp] Retrying Client.build without dbEncryptionKey…')
-            buildClient = await Client.build(identifier, { ...baseOptions })
-            if (buildClient?.inboxId) {
-              buildSucceeded = true
-              restoreFailureMessage = null
-              restoreFailureKind = null
-              xmtpDebug(
-                '[xmtp] Client.build succeeded (no key) — reusing installation',
-                buildClient.installationId,
-              )
-            } else {
-              try { buildClient?.close() } catch {}
-              buildClient = null
-            }
-          } catch (buildErr2) {
-            const buildMsg2 = buildErr2 instanceof Error ? buildErr2.message : String(buildErr2)
-            console.warn('[xmtp] Client.build without key also failed:', buildErr2)
-            restoreFailureMessage = buildMsg2
-            if (isInstallationLimitError(buildMsg2)) restoreFailureKind = 'installation_limit'
-            else if (isOpfsAccessHandleError(buildMsg2)) restoreFailureKind = 'opfs_lock'
-            closeClientSafe(buildClient)
-            buildClient = null
+      if (shouldAttemptRestore) {
+        const restoreResult = await tryRestoreClientFromLocalState({
+          identifier,
+          baseOptions,
+          encKeyBytes,
+          storedInstallationMeta,
+          onCloseActiveClient: () => {
             closeClientSafe(clientRef.current)
             clientRef.current = null
-            await new Promise((r) => setTimeout(r, 200))
-          }
+          },
+        })
+        buildClient = restoreResult.client
+        buildSucceeded = Boolean(buildClient?.inboxId)
+
+        if (connectEpoch !== connectEpochRef.current) {
+          closeClientSafe(buildClient)
+          return
         }
 
-        // If an OPFS DB already exists, never auto-create a new installation.
-        // This guarantees we reuse an existing installation or fail explicitly
-        // instead of churning through new registrations/revocations.
         if (!buildSucceeded) {
+          const restoreFailureMessage = restoreResult.failureMessage
+          const restoreFailureKind = restoreResult.failureKind
+
           if (restoreFailureKind === 'installation_limit') {
             const limitInboxId = extractInstallationLimitInboxId(restoreFailureMessage ?? '')
             if (limitInboxId) setInstallationLimitInboxId(limitInboxId)
             setStatus('error')
             setError(
-              'XMTP restore found an existing local database but could not reopen it before hitting the 10/10 installation cap. ' +
+              'XMTP could not reopen your existing installation before hitting the 10/10 installation cap. ' +
               'Refusing to auto-create another installation. Close other 4626 chat tabs/windows and retry, or use Reset XMTP installations if needed.',
             )
             return
@@ -1427,15 +2070,48 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
             return
           }
 
-          setStatus('error')
+          if (
+            shouldRefuseAutoCreateAfterFailedRestore({
+              restoreSucceeded: false,
+              hasKnownInstallation: installationAlreadyProvisioned,
+              opfsDatabaseExists: dbExists,
+            })
+          ) {
+            if (installationAlreadyProvisioned) {
+              setStatus('error')
+              setLocalStateResetRequired(true)
+              setError(
+                'XMTP found a previously provisioned installation for this wallet but could not restore local state. ' +
+                'Refusing to auto-create a new installation to avoid revoke/grant churn. ' +
+                'Retry after closing other tabs/windows, or use "Reset local messaging state" only if you intentionally want a fresh browser installation.',
+              )
+              return
+            }
+
+            setStatus('error')
+            setError(
+              'XMTP found an existing local database but could not restore the previous installation. ' +
+              'Refusing to create a new installation to avoid churn. Retry after closing other tabs/windows.',
+            )
+            return
+          }
+        }
+      } else {
+        xmtpDebug('[xmtp] No known local XMTP installation — first use on this browser')
+        if (
+          !shouldAllowFirstTimeCreate({
+            intent,
+            hasKnownInstallation: installationAlreadyProvisioned,
+            opfsDatabaseExists: dbExists,
+            restoreSucceeded: false,
+          })
+        ) {
+          setStatus('idle')
           setError(
-            'XMTP found an existing local database but could not restore the previous installation. ' +
-            'Refusing to create a new installation to avoid churn. Retry after closing other tabs/windows.',
+            'Messaging is not enabled on this browser yet. Use "Connect Messaging" to create your first XMTP installation.',
           )
           return
         }
-      } else {
-        xmtpDebug('[xmtp] No OPFS database found — first use, will create new installation')
       }
 
       // ── Phase 1b: Client.build succeeded — set up conversations ──
@@ -1443,138 +2119,143 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       // or an "Uninitialized identity" error.  Do NOT fall through to
       // Client.create for transient failures — that would burn an installation.
       if (buildSucceeded && buildClient) {
-        try {
-          clientRef.current = buildClient
-          setInboxId(buildClient.inboxId ?? null)
-          await setupConversations(buildClient)
-          return // fully connected via restore — done, zero updates consumed
-        } catch (syncErr) {
-          const syncMsg = syncErr instanceof Error ? syncErr.message : String(syncErr)
-          const isUninitialized = syncMsg.toLowerCase().includes('uninitialized')
-          console.warn('[xmtp] Client.build restored but setupConversations failed:', syncMsg)
+        if (connectEpoch !== connectEpochRef.current) {
+          closeClientSafe(buildClient)
+          return
+        }
 
-          if (isLocalXmtpStateInvalidError(syncMsg)) {
-            markLocalStateInvalid(syncMsg)
+        let activeClient = buildClient
+        const restoreOptionsForCreate = buildClientRestoreOptions(
+          baseOptions,
+          encKeyBytes,
+          storedInstallationMeta,
+          true,
+        )
+
+        if (!(await activeClient.isRegistered())) {
+          xmtpDebug('[xmtp] Built client is not registered — registering via Client.create on stored OPFS path')
+          const signerSelection = await getSignerSelection()
+          const registered = await registerRestoredInstallationWithFallback(
+            activeClient,
+            [signerSelection.signer, signerSelection.scwSigner, signerSelection.eoaSigner],
+            restoreOptionsForCreate,
+          )
+          activeClient = registered.client
+          writeStoredSignerType(xmtpIdentityAddress, registered.signer.type)
+        }
+
+        clientRef.current = activeClient
+        setInboxId(activeClient.inboxId ?? null)
+
+        const finishResult = await finishRestoredXmtpClient({
+          setupConversations: () => setupConversations(activeClient),
+          isRegistered: () => activeClient.isRegistered(),
+          registerWithFallback: async () => {
+            const signerSelection = await getSignerSelection()
+            const registered = await registerRestoredInstallationWithFallback(
+              activeClient,
+              [signerSelection.signer, signerSelection.scwSigner, signerSelection.eoaSigner],
+              restoreOptionsForCreate,
+            )
+            activeClient = registered.client
+            clientRef.current = activeClient
+            setInboxId(activeClient.inboxId ?? null)
+            writeStoredSignerType(xmtpIdentityAddress, registered.signer.type)
+          },
+          isLocalStateInvalidError: isLocalXmtpStateInvalidError,
+        })
+
+        if (finishResult.ok) {
+          return
+        }
+
+        console.warn('[xmtp] Client.build restored but finishRestoredXmtpClient failed:', finishResult.message)
+        try {
+          activeClient.close()
+        } catch {}
+        clientRef.current = null
+
+        if (finishResult.kind === 'invalid_local') {
+          markLocalStateInvalid(finishResult.message)
+          return
+        }
+
+        if (finishResult.kind === 'register_failed') {
+          if (finishResult.stillUninitialized) {
+            setStatus('error')
+            setLocalStateResetRequired(true)
+            setError(
+              'XMTP restored local state but identity registration failed. ' +
+              `${finishResult.message} ` +
+              'Refusing to auto-create a replacement installation to avoid revoke/grant churn. ' +
+              'Approve the wallet signature when prompted, or use "Reset local messaging state" if this browser install should be recreated.',
+            )
             return
           }
 
-          if (isUninitialized) {
-            // Critical anti-churn path: register the restored installation in-place.
-            // Do NOT fall through to Client.create here — that would burn a new
-            // installation each retry and quickly hit 10/10.
-            xmtpDebug(
-              '[xmtp] Uninitialized identity on restored installation — attempting in-place register (no new installation)…',
-            )
-            try {
-              const signerSelection = await getSignerSelection()
-              let registrationSigner = signerSelection.signer
-              try {
-                await registerRestoredInstallation(buildClient, registrationSigner)
-                writeStoredSignerType(xmtpIdentityAddress, registrationSigner.type)
-              } catch (registerErr) {
-                const registerMsg = registerErr instanceof Error ? registerErr.message : String(registerErr)
-                if (registrationSigner.type === 'EOA' && isWrongChainIdError(registerMsg)) {
-                  console.warn(
-                    '[xmtp] Wrong chain id while registering restored installation with EOA; retrying SCW on Base (8453)…',
-                  )
-                  registrationSigner = signerSelection.scwSigner
-                  await registerRestoredInstallation(buildClient, registrationSigner)
-                  writeStoredSignerType(xmtpIdentityAddress, 'SCW')
-                } else if (
-                  registrationSigner.type === 'SCW' &&
-                  isScwSignatureValidationError(registerMsg)
-                ) {
-                  console.warn(
-                    '[xmtp] SCW signature validation failed while registering restored installation; retrying EOA…',
-                  )
-                  registrationSigner = signerSelection.eoaSigner
-                  await registerRestoredInstallation(buildClient, registrationSigner)
-                  writeStoredSignerType(xmtpIdentityAddress, 'EOA')
-                } else {
-                  throw registerErr
-                }
-              }
-
-              await setupConversations(buildClient)
-              return
-            } catch (registerErr) {
-              const regMsg = registerErr instanceof Error ? registerErr.message : String(registerErr)
-              console.error('[xmtp] In-place registration for restored installation failed:', registerErr)
-              try { buildClient.close() } catch {}
-              clientRef.current = null
-
-              if (regMsg.toLowerCase().includes('uninitialized')) {
-                console.warn(
-                  '[xmtp] Restored installation cannot be registered (stale OPFS state). ' +
-                  'Clearing OPFS database and falling through to Client.create for a fresh installation.',
-                )
-                try {
-                  const opfs = await Opfs.create()
-                  try {
-                    const files = await opfs.listFiles()
-                    for (const f of files) {
-                      if (f.endsWith('.db3')) {
-                        const ok = await opfs.deleteFile(f)
-                        xmtpDebug(`[xmtp] Deleted stale OPFS file: ${f} (${ok})`)
-                      }
-                    }
-                  } finally { opfs.close() }
-                } catch (opfsErr) {
-                  console.warn('[xmtp] OPFS cleanup failed:', opfsErr)
-                }
-                // Fall through — execution will exit the catch/if blocks and
-                // reach the Client.create path below with a clean OPFS.
-              } else {
-                setStatus('error')
-                setError(
-                  'XMTP restored your local installation but identity registration failed. ' +
-                  'Refusing to create a new installation to avoid churn. Retry after reconnecting wallet, or use Reset XMTP installations.',
-                )
-                return
-              }
-            }
-          } else {
-            // Transient error (network timeout, server error, etc.).
-            // Retry once — do NOT fall through to Client.create.
-            xmtpDebug('[xmtp] Retrying setupConversations once…')
-            try {
-              await setupConversations(buildClient)
-              return // retry succeeded
-            } catch (retryErr) {
-              console.error('[xmtp] setupConversations retry also failed:', retryErr)
-              try { buildClient.close() } catch {}
-              clientRef.current = null
-              throw retryErr
-            }
-          }
+          setStatus('error')
+          setLocalStateResetRequired(true)
+          const regHint = /reject|denied|cancel/i.test(finishResult.message)
+            ? 'Approve the wallet signature when prompted, then click Connect Messaging again.'
+            : 'Reconnect your wallet, approve the signing prompt, then click Connect Messaging again. If it keeps failing, use Reset local XMTP state — not Reset XMTP installations unless you are at the 10/10 cap.'
+          setError(
+            `XMTP restored your local installation but identity registration failed (${finishResult.message}). ` +
+            'Refusing to create a new installation to avoid churn. ' +
+            regHint,
+          )
+          return
         }
+
+        throw new Error(finishResult.message)
       }
 
       setStatus('connecting')
 
       const signerSelection = await getSignerSelection()
+      if (connectEpoch !== connectEpochRef.current) return
       const { signer, scwSigner, eoaSigner } = signerSelection
       if (signer.type === 'SCW') writeStoredSignerType(xmtpIdentityAddress, 'SCW')
       else writeStoredSignerType(xmtpIdentityAddress, 'EOA')
 
       xmtpDebug('[xmtp] No reusable local installation found — falling through to Client.create (will require wallet signature)')
 
-      // Helper: attempt Client.create, auto-revoking stale installations on 10/10.
+      if (installationAlreadyProvisioned) {
+        setStatus('error')
+        setLocalStateResetRequired(true)
+        setError(
+          'XMTP could not restore a previously provisioned local installation. ' +
+          'Refusing to auto-create a new installation to avoid revoke/grant churn. ' +
+          'Use "Reset local messaging state" if you intentionally want to recreate this browser installation.',
+        )
+        return
+      }
+      if (
+        !shouldAllowFirstTimeCreate({
+          intent,
+          hasKnownInstallation: installationAlreadyProvisioned,
+          opfsDatabaseExists: dbExists,
+          restoreSucceeded: buildSucceeded,
+        })
+      ) {
+        setStatus('idle')
+        setError(
+          'Messaging is not enabled on this browser yet. Use "Connect Messaging" to create your first XMTP installation.',
+        )
+        return
+      }
+
+      // Helper: attempt Client.create without auto-revoking installations.
+      // Revoke operations consume finite inbox update budget (max 256 lifetime),
+      // so we only allow revocation through explicit user-triggered resetInstallations().
       const tryCreate = async (activeSigner: Signer, dbKey: Uint8Array): Promise<Client> => {
         try {
           return await Client.create(activeSigner, { ...baseOptions, dbEncryptionKey: dbKey })
         } catch (createErr) {
           const errMsg = createErr instanceof Error ? createErr.message : String(createErr)
           if (!isInstallationLimitError(errMsg)) throw createErr
-
-          // 10/10 hit — auto-revoke stale installations and retry once.
-          const limitInboxId = extractInstallationLimitInboxId(errMsg)
-          if (!limitInboxId) throw createErr
-
-          xmtpDebug('[xmtp] 10/10 installation limit hit — revoking oldest installation to free 1 slot…')
-          setStatus('connecting')
-          await autoRevokeOldestInstallation(activeSigner, limitInboxId)
-          return await Client.create(activeSigner, { ...baseOptions, dbEncryptionKey: dbKey })
+          throw new Error(
+            `${errMsg} Automatic XMTP installation revocation is disabled to protect the inbox update budget. Use "Reset XMTP installations" to revoke manually if needed.`,
+          )
         }
       }
 
@@ -1614,6 +2295,13 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
       clientRef.current = client
       setInboxId(client.inboxId ?? null)
+      writeInstallationProvisioned(XMTP_ENV, xmtpIdentityAddress)
+      if (client.inboxId && client.installationId) {
+        writeStoredInstallationMeta(XMTP_ENV, xmtpIdentityAddress, {
+          inboxId: client.inboxId,
+          installationId: client.installationId,
+        })
+      }
       try {
         await setupConversations(client)
       } catch (setupErr) {
@@ -1625,16 +2313,23 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         throw setupErr
       }
 
-      // NOTE: we intentionally do NOT call revokeAllOtherInstallations() here.
-      // Each revocation consumes 1 of the inbox's 256 lifetime updates.
-      // Proactive bulk revocation would burn updates far too fast. Instead we
-      // revoke only on-demand: when the 10/10 limit is actually hit (inside
-      // tryCreate above) or via the manual resetInstallations() escape hatch.
+      // NOTE: we intentionally do NOT call revokeAllOtherInstallations() here,
+      // and we do not auto-revoke on 10/10 during connect.
+      // Each revocation consumes 1 of the inbox's 256 lifetime updates, so
+      // revocation is only allowed via manual resetInstallations().
     } catch (e) {
       connectCooldownUntilRef.current = Date.now() + XMTP_CONNECT_FAILURE_COOLDOWN_MS
       console.error('[xmtp] connect error:', e)
       if (mountedRef.current) {
         const msg = e instanceof Error ? e.message : 'Failed to connect to XMTP'
+        if (isOpfsAccessHandleError(msg)) {
+          setStatus('error')
+          setError(
+            'XMTP local storage is locked by another active tab/window. ' +
+              'Close other 4626 tabs/windows using chat, then retry.',
+          )
+          return
+        }
         if (isLocalXmtpStateInvalidError(msg)) {
           markLocalStateInvalid(msg)
           return
@@ -1652,8 +2347,172 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       }
     } finally {
       connectInFlightRef.current = false
+      if (!clientRef.current && tabLockAcquired) {
+        stopTabLockHeartbeat()
+        releaseTabLock()
+      }
     }
-  }, [address, connector, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary, xmtpModeOverride, markLocalStateInvalid])
+  }, [address, connector, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary, applyConversationSummaries, xmtpModeOverride, markLocalStateInvalid, acquireTabLock, startTabLockHeartbeat, releaseTabLock, stopTabLockHeartbeat, refreshConversations])
+
+  const reconnectFromLocalInstall = useCallback(async (): Promise<void> => {
+    if (manualConnectOnlyRef.current) return
+    if (connectInFlightRef.current || resetLocalStateInFlightRef.current) return
+    const now = Date.now()
+    if (streamReconnectCooldownUntilRef.current > now) return
+    streamReconnectCooldownUntilRef.current = now + XMTP_STREAM_RECONNECT_COOLDOWN_MS
+
+    connectEpochRef.current += 1
+    connectInFlightRef.current = false
+    await cleanup()
+    if (!mountedRef.current) return
+    setStatus('connecting')
+    setError(null)
+    await connect('auto')
+  }, [cleanup, connect])
+
+  useEffect(() => {
+    const recoverSoftly = async (): Promise<void> => {
+      if (xmtpSyncBlockedRemainingMs() > 0) return
+      const refresh = refreshConversationsRef.current
+      if (!refresh || !clientRef.current) return
+      try {
+        await refresh()
+      } catch {
+        // best effort — stream may recover on next SDK retry
+      }
+    }
+
+    handleStreamErrorRef.current = (error: Error) => {
+      const msg = error.message
+      if (isLocalXmtpStateInvalidError(msg)) {
+        markLocalStateInvalid(msg)
+        return
+      }
+      if (isXmtpRateLimitError(msg)) {
+        markXmtpRateLimited()
+        return
+      }
+      if (isTransientXmtpStreamNetworkError(msg)) {
+        return
+      }
+      console.warn('[xmtp] stream error (sdk may retry):', msg)
+    }
+    handleStreamFailRef.current = () => {
+      if (manualConnectOnlyRef.current) {
+        void recoverSoftly()
+        return
+      }
+
+      if (clientRef.current && statusRef.current === 'connected') {
+        void recoverSoftly()
+        return
+      }
+
+      console.warn('[xmtp] stream failed after retries; attempting restore reconnect')
+      void reconnectFromLocalInstall()
+    }
+  }, [markLocalStateInvalid, reconnectFromLocalInstall])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (manualConnectOnly) return
+    const onAutoConnectRequest = () => {
+      if (localStateResetRequired) return
+      if (status === 'idle' || status === 'error') {
+        void connect('auto')
+      }
+    }
+    window.addEventListener('cv:xmtp:autoConnectRequest', onAutoConnectRequest)
+    return () => {
+      window.removeEventListener('cv:xmtp:autoConnectRequest', onAutoConnectRequest)
+    }
+  }, [connect, localStateResetRequired, manualConnectOnly, status])
+
+  useEffect(() => {
+    if (manualConnectOnly) return
+    if (!address || !walletClient) return
+    if (readPendingLocalReset()) return
+    if (connectInFlightRef.current || clientRef.current) return
+    if (localStateResetRequired) return
+    if (status !== 'idle') return
+
+    let cancelled = false
+    void (async () => {
+      try {
+        const resolved = await resolveXmtpIdentityAddress(address, xmtpModeOverride)
+        if (cancelled) return
+        if (!readAutoConnectEnabled(resolved.identityAddress)) return
+        await connect('auto')
+      } catch {
+        // ignore auto-connect bootstrap failures
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    address,
+    manualConnectOnly,
+    walletClient,
+    status,
+    localStateResetRequired,
+    connect,
+    resolveXmtpIdentityAddress,
+    xmtpModeOverride,
+  ])
+
+  useEffect(() => {
+    if (pendingLocalResetHandledRef.current) return
+    if (!address || !walletClient) return
+    const pending = readPendingLocalReset()
+    if (!pending) return
+    pendingLocalResetHandledRef.current = true
+
+    let cancelled = false
+    void (async () => {
+      resetLocalStateInFlightRef.current = true
+      connectInFlightRef.current = true
+      connectEpochRef.current += 1
+      try {
+        if (cancelled) return
+        setStatus('connecting')
+        setError(null)
+        setLocalStateResetRequired(false)
+        stopTabLockHeartbeat()
+        forceClearTabLock()
+        await waitMs(XMTP_PEER_RELEASE_WAIT_MS)
+
+        if (pending.phase === 'delete_opfs') {
+          await deleteXmtpOpfsDatabaseFilesWithRetry(pending.targetInboxId)
+        }
+
+        clearPendingLocalReset()
+        clearLocalInstallMarkers(pending.identity)
+        connectInFlightRef.current = false
+        await connect('user')
+      } catch (err) {
+        if (cancelled) return
+        clearPendingLocalReset()
+        pendingLocalResetHandledRef.current = false
+        const msg = err instanceof Error ? err.message : String(err)
+        setStatus('error')
+        setLocalStateResetRequired(true)
+        setError(
+          isOpfsAccessHandleError(msg)
+            ? 'XMTP reset could not clear the local database after reload. Close every 4626 tab, hard-refresh once, then retry Reset local XMTP state.'
+            : `Could not finish XMTP reset after reload: ${msg}`,
+        )
+      } finally {
+        resetLocalStateInFlightRef.current = false
+        connectInFlightRef.current = false
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [address, walletClient, connect, stopTabLockHeartbeat])
 
   const resetInstallations = useCallback(async () => {
     if (!address || !walletClient) throw new Error('Connect wallet first.')
@@ -1710,7 +2569,11 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         idx = await findCswOwnerIndex(publicClient, xmtpIdentityAddress, signerAddr)
         cswOwnerIndexCache.current.set(ck, idx)
       }
-      if (idx === null) return sigBytes
+      if (idx === null) {
+        throw new Error(
+          'Smart contract wallet signature validation failed: could not resolve CSW owner index for XMTP signing',
+        )
+      }
       const msgHash = hashMessage(message)
       try {
         const typedSig = await walletClient.signTypedData({
@@ -1827,7 +2690,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
       setInstallationLimitInboxId(null)
       setError(null)
-      await connect()
+      await connect('user')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to reset XMTP installations'
       setStatus('error')
@@ -1838,37 +2701,171 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
   const resetLocalState = useCallback(async () => {
     if (!address || !walletClient) throw new Error('Connect wallet first.')
-    const targetIdentity = identityAddressRef.current ?? identityAddress ?? address
-
-    setStatus('connecting')
-    setError(null)
-    setInstallationLimitInboxId(null)
-    setLocalStateResetRequired(false)
-    connectCooldownUntilRef.current = 0
-    connectInFlightRef.current = false
-
-    clearAutoConnect(targetIdentity)
-    clearStoredSignerType(targetIdentity)
-    clearStoredEncKeyHex(targetIdentity)
-    await cleanup()
-
+    if (resetLocalStateInFlightRef.current) {
+      throw new Error('Local XMTP reset already in progress. Please wait.')
+    }
+    resetLocalStateInFlightRef.current = true
+    connectInFlightRef.current = true
     try {
-      const deleted = await deleteXmtpOpfsDatabaseFiles()
+      const targetIdentity = identityAddressRef.current ?? identityAddress ?? address
+      const storedMetaBeforeReset = readStoredInstallationMeta(XMTP_ENV, targetIdentity)
+
+      setStatus('connecting')
+      setError(null)
+      setInstallationLimitInboxId(null)
+      setLocalStateResetRequired(false)
+      connectCooldownUntilRef.current = 0
+      streamReconnectCooldownUntilRef.current = 0
+      connectEpochRef.current += 1
+
+      stopTabLockHeartbeat()
+      forceClearTabLock()
+      await shutdownForOpfsReset()
+      broadcastPeerTabXmtpRelease()
+      await waitMs(XMTP_PEER_RELEASE_WAIT_MS)
+
+      let deleted = 0
+      try {
+        deleted = await deleteXmtpOpfsDatabaseFilesWithRetry(storedMetaBeforeReset?.inboxId ?? null)
+      } catch (deleteErr) {
+        const deleteMsg = deleteErr instanceof Error ? deleteErr.message : String(deleteErr)
+        if (isOpfsAccessHandleError(deleteMsg)) {
+          writePendingLocalReset({
+            identity: targetIdentity.toLowerCase(),
+            targetInboxId: storedMetaBeforeReset?.inboxId ?? null,
+            phase: 'delete_opfs',
+            updatedAt: Date.now(),
+          })
+          clearLocalInstallMarkers(targetIdentity)
+          setStatus('connecting')
+          setError('Reloading once to release the local XMTP database lock…')
+          if (typeof window !== 'undefined') {
+            window.location.reload()
+          }
+          return
+        }
+        throw deleteErr
+      }
       xmtpDebug(`[xmtp] Reset local XMTP state, deleted ${deleted} OPFS file(s)`)
+
+      if (storedMetaBeforeReset?.inboxId && storedMetaBeforeReset.installationId) {
+        try {
+          const resolved = await resolveXmtpIdentityAddress(address, xmtpModeOverride)
+          const xmtpIdentityAddress = resolved.identityAddress
+          const walletChainId = resolveXmtpChainId(walletClient.chain?.id)
+          const storedSignerType = readStoredSignerType(xmtpIdentityAddress)
+          let hasContractCode: boolean | null = null
+          if (publicClient) {
+            try {
+              const code = await publicClient.getCode({ address: xmtpIdentityAddress as `0x${string}` })
+              hasContractCode = typeof code === 'string' ? (code !== '0x' && code.length > 2) : null
+            } catch {
+              hasContractCode = null
+            }
+          }
+          const signerDecision = decideXmtpSignerType({
+            isCanonicalSmartWallet: resolved.isCanonicalSmartWallet,
+            storedSignerType,
+            connector,
+            hasContractCode,
+            walletChainId,
+            modeOverride: xmtpModeOverride ?? undefined,
+          })
+          const signMessageFn = async (message: string) => {
+            const s = await walletClient.signMessage({ message })
+            return hexToBytes(s)
+          }
+          const scwSigner: Signer = {
+            type: 'SCW',
+            getIdentifier: () => ({
+              identifier: xmtpIdentityAddress as `0x${string}`,
+              identifierKind: IdentifierKind.Ethereum,
+            }),
+            signMessage: signMessageFn,
+            getChainId: () => BigInt(signerDecision.scwChainId),
+          }
+          const eoaSigner: Signer = {
+            type: 'EOA',
+            getIdentifier: () => ({
+              identifier: xmtpIdentityAddress as `0x${string}`,
+              identifierKind: IdentifierKind.Ethereum,
+            }),
+            signMessage: signMessageFn,
+          }
+          const signer: Signer = signerDecision.signerType === 'SCW' ? scwSigner : eoaSigner
+          const states = (await (Client as any).fetchInboxStates(
+            [storedMetaBeforeReset.inboxId],
+            XMTP_ENV as any,
+          )) as any[]
+          const installsRaw = Array.isArray(states?.[0]?.installations) ? states[0].installations : []
+          const staleInstall = installsRaw.find((entry: any) =>
+            installationBytesMatchId(entry?.bytes ?? entry, storedMetaBeforeReset.installationId),
+          )
+          const staleBytes = staleInstall?.bytes ?? staleInstall
+          if (staleBytes) {
+            xmtpDebug('[xmtp] Revoking abandoned browser installation before recreate')
+            try {
+              await (Client as any).revokeInstallations(
+                signer,
+                storedMetaBeforeReset.inboxId,
+                [staleBytes],
+                XMTP_ENV as any,
+              )
+            } catch (revokeErr) {
+              const revokeMsg = revokeErr instanceof Error ? revokeErr.message : String(revokeErr)
+              if (signer.type === 'EOA' && isWrongChainIdError(revokeMsg)) {
+                await (Client as any).revokeInstallations(
+                  scwSigner,
+                  storedMetaBeforeReset.inboxId,
+                  [staleBytes],
+                  XMTP_ENV as any,
+                )
+              } else if (signer.type === 'SCW' && isScwSignatureValidationError(revokeMsg)) {
+                await (Client as any).revokeInstallations(
+                  eoaSigner,
+                  storedMetaBeforeReset.inboxId,
+                  [staleBytes],
+                  XMTP_ENV as any,
+                )
+              } else {
+                console.warn('[xmtp] could not revoke abandoned installation (non-fatal):', revokeMsg)
+              }
+            }
+          }
+        } catch (revokePrepErr) {
+          console.warn('[xmtp] skipped abandoned-installation revoke (non-fatal):', revokePrepErr)
+        }
+      }
+
+      // Only clear local installation/signer state after OPFS cleanup succeeds.
+      clearLocalInstallMarkers(targetIdentity)
+
+      connectInFlightRef.current = false
+      await connect('user')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to clear local XMTP state'
+      const isOpfsLock = isOpfsAccessHandleError(msg)
+      const tabLockHint = isOpfsLock ? formatActiveTabLockHint() : null
       setStatus('error')
-      setError(`Could not clear local XMTP state: ${msg}`)
+      setError(
+        isOpfsLock
+          ? 'Could not clear local XMTP state because the browser still holds the XMTP database lock. ' +
+            'If you only have one tab open, click Reset again — we will reload once to release the lock automatically.' +
+            (tabLockHint ? ` ${tabLockHint}` : '')
+          : `Could not clear local XMTP state: ${msg}`,
+      )
       setLocalStateResetRequired(true)
       throw err
+    } finally {
+      resetLocalStateInFlightRef.current = false
+      connectInFlightRef.current = false
     }
-
-    await connect()
-  }, [address, walletClient, identityAddress, connect])
+  }, [address, walletClient, identityAddress, connect, connector, publicClient, resolveXmtpIdentityAddress, shutdownForOpfsReset, stopTabLockHeartbeat, xmtpModeOverride])
 
   // ------- disconnect -------
   const disconnect = useCallback(() => {
     void cleanup()
+    resolvedIdentityByWalletRef.current.clear()
     setStatus('idle')
     setError(null)
     setLocalStateResetRequired(false)
@@ -1877,10 +2874,76 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     conversationsRef.current = []
     identityAddressRef.current = null
     setInboxId(null)
-  }, [])
+  }, [cleanup])
 
   // ------- decode message helper -------
   function decodedToChat(msg: DecodedMessage, selfInboxId: string): ChatMessage {
+    if (isActions(msg)) {
+      const payload = msg.content
+      const buttons = Array.isArray(payload?.actions)
+        ? payload.actions
+            .map((entry) => ({
+              id: String(entry?.id ?? '').trim(),
+              label: String(entry?.label ?? '').trim(),
+              style: entry?.style as ChatMessageActionButton['style'] | undefined,
+            }))
+            .filter((entry) => entry.id && entry.label)
+        : []
+      return {
+        id: msg.id,
+        conversationId: msg.conversationId,
+        senderInboxId: msg.senderInboxId,
+        content: String(payload?.description ?? 'Choose an action'),
+        contentType: 'text',
+        actions: {
+          promptId: String(payload?.id ?? msg.id),
+          description: String(payload?.description ?? 'Choose an action'),
+          buttons,
+        },
+        replyToId: null,
+        status: 'sent',
+        error: null,
+        sentAt: msg.sentAt,
+        isSelf: msg.senderInboxId === selfInboxId,
+      }
+    }
+
+    if (isTextReply(msg)) {
+      const replyPayload = msg.content
+      const replyText = typeof replyPayload?.content === 'string' ? replyPayload.content : ''
+      const parsed = parseWireContent(replyText)
+      return {
+        id: msg.id,
+        conversationId: msg.conversationId,
+        senderInboxId: msg.senderInboxId,
+        content: parsed.content,
+        contentType: parsed.contentType,
+        richPreview: parsed.richPreview,
+        replyToId: String(replyPayload?.referenceId ?? '').trim() || parsed.replyToId,
+        status: 'sent',
+        error: null,
+        sentAt: msg.sentAt,
+        isSelf: msg.senderInboxId === selfInboxId,
+      }
+    }
+
+    if (isReaction(msg)) {
+      const reaction = msg.content
+      return {
+        id: msg.id,
+        conversationId: msg.conversationId,
+        senderInboxId: msg.senderInboxId,
+        content: String(reaction?.content ?? '👍'),
+        contentType: 'text',
+        replyToId: String(reaction?.reference ?? '').trim() || null,
+        reactionEmoji: String(reaction?.content ?? '👍'),
+        status: 'sent',
+        error: null,
+        sentAt: msg.sentAt,
+        isSelf: msg.senderInboxId === selfInboxId,
+      }
+    }
+
     const parsed = parseWireContent(
       typeof msg.content === 'string' ? msg.content : (msg.fallback ?? '[unsupported]'),
     )
@@ -1892,6 +2955,8 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       contentType: parsed.contentType,
       richPreview: parsed.richPreview,
       replyToId: parsed.replyToId,
+      actions: parsed.actions ?? null,
+      reactionEmoji: parsed.reactionEmoji ?? null,
       status: 'sent',
       error: null,
       sentAt: msg.sentAt,
@@ -1904,7 +2969,29 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     const client = clientRef.current
     if (!client) return []
     try {
-      const convo = await client.conversations.getConversationById(conversationId)
+      let convo: Conversation | Dm | Group | null | undefined =
+        await client.conversations.getConversationById(conversationId)
+      if (!convo) {
+        const conversationsApi = client.conversations as {
+          sync: () => Promise<unknown>
+          syncAll?: (consentStates?: import('@xmtp/browser-sdk').ConsentState[]) => Promise<unknown>
+          getConversationById: (id: string) => Promise<Conversation | Dm | Group | null>
+          list: (options?: { consentStates?: import('@xmtp/browser-sdk').ConsentState[] }) => Promise<
+            Array<Conversation | Dm | Group>
+          >
+          listGroups?: (options?: { consentStates?: import('@xmtp/browser-sdk').ConsentState[] }) => Promise<
+            Array<Conversation | Dm | Group>
+          >
+        }
+        const resolved = await resolveConversationByIdWithSyncRetries(conversationsApi, conversationId, {
+          rounds: 5,
+          delayMs: 500,
+          preferencesApi: client.preferences,
+        })
+        if (resolved) {
+          convo = resolved as Conversation | Dm | Group
+        }
+      }
       if (!convo) return []
       await convo.sync()
       const msgs = await convo.messages()
@@ -1933,12 +3020,47 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     if (!client || !trimmed) {
       throw new Error('not_connected')
     }
+    const replyToId = options?.replyToId?.trim() || null
+    const replyToSenderInboxId = options?.replyToSenderInboxId?.trim() || null
     const wireContent = encodeWireContent(trimmed, options)
     const optimisticParsed = parseWireContent(wireContent)
     try {
-      const convo = await client.conversations.getConversationById(conversationId)
+      const conversationsApi = client.conversations as {
+        sync: () => Promise<unknown>
+        syncAll?: (consentStates?: import('@xmtp/browser-sdk').ConsentState[]) => Promise<unknown>
+        getConversationById: (id: string) => Promise<Conversation | Dm | Group | null>
+        list: (options?: { consentStates?: import('@xmtp/browser-sdk').ConsentState[] }) => Promise<
+          Array<Conversation | Dm | Group>
+        >
+        listGroups?: (options?: { consentStates?: import('@xmtp/browser-sdk').ConsentState[] }) => Promise<
+          Array<Conversation | Dm | Group>
+        >
+      }
+
+      let convo: Conversation | Dm | Group | null | undefined =
+        await client.conversations.getConversationById(conversationId)
+      if (!convo) {
+        evictConversationFromCache(conversationId)
+        const resolved = await resolveConversationByIdWithSyncRetries(conversationsApi, conversationId, {
+          rounds: 8,
+          delayMs: 600,
+          preferencesApi: client.preferences,
+        })
+        if (resolved) {
+          convo = resolved as Conversation | Dm | Group
+        }
+      }
       if (!convo) throw new Error('conversation_not_found')
-      const sent = (await convo.sendText(wireContent)) as unknown
+      let sent: unknown
+      if (replyToId && replyToSenderInboxId) {
+        sent = await convo.sendReply({
+          reference: replyToId,
+          referenceInboxId: replyToSenderInboxId,
+          content: await encodeText(trimmed),
+        })
+      } else {
+        sent = await convo.sendText(wireContent)
+      }
       const sentRecord =
         sent && typeof sent === 'object'
           ? (sent as { sentAt?: unknown; id?: unknown })
@@ -1958,7 +3080,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         content: optimisticParsed.content,
         contentType: optimisticParsed.contentType,
         richPreview: optimisticParsed.richPreview,
-        replyToId: optimisticParsed.replyToId,
+        replyToId: replyToId ?? optimisticParsed.replyToId,
+        actions: null,
+        reactionEmoji: null,
         status: 'sent',
         error: null,
         sentAt,
@@ -1975,7 +3099,21 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       console.error('[xmtp] sendMessage error:', e)
       throw e
     }
-  }, [markLocalStateInvalid])
+  }, [evictConversationFromCache, markLocalStateInvalid])
+
+  const sendIntent = useCallback(async (
+    conversationId: string,
+    params: { promptId: string; actionId: string },
+  ): Promise<void> => {
+    const client = clientRef.current
+    if (!client) throw new Error('not_connected')
+    const promptId = String(params.promptId ?? '').trim()
+    const actionId = String(params.actionId ?? '').trim()
+    if (!promptId || !actionId) throw new Error('invalid_intent')
+    const convo = await client.conversations.getConversationById(conversationId)
+    if (!convo) throw new Error('conversation_not_found')
+    await convo.sendIntent({ id: promptId, actionId })
+  }, [])
 
   // ------- start DM -------
   const startDm = useCallback(async (
@@ -2060,6 +3198,15 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.error('[xmtp] startDm error:', e)
       const errMsg = e instanceof Error && e.message ? e.message : 'Could not start conversation'
+      if (isLocalXmtpStateInvalidError(errMsg)) {
+        markLocalStateInvalid(errMsg)
+        return {
+          ok: false,
+          reason: 'create_failed',
+          message:
+            'XMTP local messaging state is out of sync. Reset local messaging state, then reconnect.',
+        }
+      }
       if (isXmtpEnvironmentMismatchError(errMsg)) {
         return {
           ok: false,
@@ -2086,7 +3233,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         message: errMsg,
       }
     }
-  }, [buildConvoSummary])
+  }, [buildConvoSummary, markLocalStateInvalid])
 
   const startDmByInbox = useCallback(async (
     peerInboxId: string,
@@ -2111,10 +3258,15 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       })
       return dm.id
     } catch (e) {
-      console.error('[xmtp] startDmByInbox error:', e)
+      const errMsg = e instanceof Error ? e.message : String(e)
+      if (isLocalXmtpStateInvalidError(errMsg)) {
+        markLocalStateInvalid(errMsg)
+      } else {
+        console.error('[xmtp] startDmByInbox error:', e)
+      }
       return null
     }
-  }, [buildConvoSummary])
+  }, [buildConvoSummary, markLocalStateInvalid])
 
   // ------- subscribe to per-conversation messages -------
   const subscribeToMessages = useCallback(
@@ -2171,10 +3323,13 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         conversations,
         loadMessages,
         sendMessage,
+        sendIntent,
         startDm,
         startDmByInbox,
         subscribeToMessages,
         resolveInboxAddress,
+        refreshConversations,
+        ensureConversationById,
       }}
     >
       {children}

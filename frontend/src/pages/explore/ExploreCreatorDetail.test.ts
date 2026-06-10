@@ -14,6 +14,49 @@ vi.mock('@/components/seo/PageMeta', () => ({
   PageMeta: () => null,
 }))
 
+vi.mock('@/components/explore/CreatorEthosAvatar', () => ({
+  CreatorEthosAvatar: () => React.createElement('div', { 'data-testid': 'creator-ethos-avatar' }),
+}))
+
+vi.mock('@/components/explore/ethosPageTheme', () => ({
+  useCreatorEthosPageTheme: () => ({
+    ethosUserkey: null,
+    ethosScore: null,
+    theme: {
+      isActive: false,
+      accentTextClass: 'text-zinc-400',
+      accentStrongTextClass: 'text-white',
+      levelLabel: 'Neutral',
+      dividerStyle: {},
+      outlineCtaClass: 'border-white/20 text-white hover:bg-white/10',
+    },
+    hasPositiveScore: false,
+    isLoading: false,
+  }),
+}))
+
+vi.mock('@/components/explore/EthosPageAmbience', () => ({
+  EthosPageAmbience: () => null,
+  EthosHeroScoreWash: () => null,
+  EthosBlurOrbs: () => null,
+}))
+
+vi.mock('@/components/explore/CreatorImmersiveStatsBeat', () => ({
+  CreatorImmersiveStatsBeat: () =>
+    React.createElement(
+      'div',
+      { 'data-testid': 'creator-immersive-stats-beat' },
+      React.createElement('span', null, '24H volume'),
+      React.createElement('span', null, 'Market cap'),
+      React.createElement('span', null, 'Ethos score'),
+    ),
+}))
+
+vi.mock('@/components/explore/CreatorVaultReserveBeat', () => ({
+  CreatorVaultReserveBeat: () =>
+    React.createElement('div', { 'data-testid': 'creator-vault-reserve-beat' }, 'Creator vaults & strategies.'),
+}))
+
 vi.mock('@/lib/zora/client', () => ({
   fetchZoraCoin: vi.fn(async () => ({
     address: '0x1111111111111111111111111111111111111111',
@@ -47,6 +90,7 @@ vi.mock('@/lib/zora/hooks', () => ({
             coinType: index === 0 ? 'CREATOR' : 'CONTENT',
             name: `Coin ${index}`,
             symbol: `C${index}`,
+            createdAt: `2026-${String((index % 12) + 1).padStart(2, '0')}-${String((index % 27) + 1).padStart(2, '0')}T00:00:00.000Z`,
           },
         })),
       },
@@ -130,10 +174,13 @@ describe('ExploreCreatorDetail', () => {
   it('renders recent creator transactions and a creator chat CTA', () => {
     const html = renderToStaticMarkup(React.createElement(ExploreCreatorDetail))
 
-    expect(html).toContain('Recent transactions')
-    expect(html).toContain('Latest swaps from the primary pool')
+    expect(html).toContain('Recent Activity')
+    expect(html).toContain('Latest swaps from the highest-liquidity pool')
     expect(html).toContain('$125.00')
-    expect(html).toContain('Chat with Creator')
-    expect(html).toContain('chatPeer=')
+    expect(html).toContain('Message Creator')
+    expect(html).toContain('data-testid="creator-immersive-stats-beat"')
+    expect(html).toContain('24H volume')
+    expect(html).toContain('Market cap')
+    expect(html).toContain('data-testid="creator-vault-reserve-beat"')
   })
 })

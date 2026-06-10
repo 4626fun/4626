@@ -27,7 +27,7 @@
 // reusable for other circuits and keeps this file's surface area
 // strictly about AMOE.
 //
-// HASH SCHEMA (mirrors `circuits/amoe/amoe_eligibility.circom`)
+// HASH SCHEMA (mirrors `amoe/circuits/amoe_eligibility.circom`)
 // =============================================================
 //   walletAddrCommit    = Poseidon2(wallet, twitterCreditNullifier)
 //   nonceCommit         = Poseidon3(nonce, wallet, creatorCoinAddr)
@@ -51,7 +51,7 @@
 // CROSS-VALIDATION
 // ================
 // The companion test file (`amoeWitness.test.ts`) loads the canonical
-// `circuits/amoe/build/input_v2.json` fixture and asserts that the
+// `amoe/circuits/build/input_v2.json` fixture and asserts that the
 // witness this module produces, given the *raw* inputs (wallet, nonce,
 // twitterCreditNullifier, signupIdHash, spendRefIdHash, pointsBurnedAsUSD,
 // epoch, creatorCoinAddr) bit-exactly matches the fixture's expected

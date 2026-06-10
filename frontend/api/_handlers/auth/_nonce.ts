@@ -16,7 +16,7 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { getCanonicalOrigin } from '../../../server/_lib/infra/origin.js'
 type NonceResponse = {
   nonce: string

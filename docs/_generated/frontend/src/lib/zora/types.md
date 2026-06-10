@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/zora/types
+[4626-web](../../../index.md) / src/lib/zora/types
 
 # src/lib/zora/types
 
@@ -26,11 +26,11 @@ Defined in: [src/lib/zora/types.ts:47](https://github.com/wenakita/4626/blob/mai
 
 > `optional` **chainId**: `number`
 
-Defined in: [src/lib/zora/types.ts:61](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L61)
+Defined in: [src/lib/zora/types.ts:62](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L62)
 
 ##### coinType?
 
-> `optional` **coinType**: `"CREATOR"` \| `"CONTENT"` \| `string`
+> `optional` **coinType**: `"CREATOR"` \| `"CONTENT"` \| `"TREND"` \| `string`
 
 Defined in: [src/lib/zora/types.ts:49](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L49)
 
@@ -64,6 +64,30 @@ Defined in: [src/lib/zora/types.ts:55](https://github.com/wenakita/4626/blob/mai
 
 Defined in: [src/lib/zora/types.ts:46](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L46)
 
+##### ethosLevel?
+
+> `optional` **ethosLevel**: `string` \| `null`
+
+Defined in: [src/lib/zora/types.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L69)
+
+##### ethosScore?
+
+> `optional` **ethosScore**: `number` \| `null`
+
+Defined in: [src/lib/zora/types.ts:68](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L68)
+
+##### ethosScoreSource?
+
+> `optional` **ethosScoreSource**: `string` \| `null`
+
+Defined in: [src/lib/zora/types.ts:70](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L70)
+
+##### fees24hUsd?
+
+> `optional` **fees24hUsd**: `string` \| `null`
+
+Defined in: [src/lib/zora/types.ts:61](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L61)
+
 ##### id?
 
 > `optional` **id**: `string`
@@ -86,7 +110,7 @@ Defined in: [src/lib/zora/types.ts:60](https://github.com/wenakita/4626/blob/mai
 
 > `optional` **mediaContent**: [`ZoraMediaContent`](#zoramediacontent)
 
-Defined in: [src/lib/zora/types.ts:66](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L66)
+Defined in: [src/lib/zora/types.ts:67](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L67)
 
 ##### name?
 
@@ -98,7 +122,7 @@ Defined in: [src/lib/zora/types.ts:45](https://github.com/wenakita/4626/blob/mai
 
 > `optional` **payoutRecipientAddress**: `string`
 
-Defined in: [src/lib/zora/types.ts:65](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L65)
+Defined in: [src/lib/zora/types.ts:66](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L66)
 
 ##### platformBlocked?
 
@@ -110,7 +134,7 @@ Defined in: [src/lib/zora/types.ts:44](https://github.com/wenakita/4626/blob/mai
 
 > `optional` **platformReferrerAddress**: `string`
 
-Defined in: [src/lib/zora/types.ts:64](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L64)
+Defined in: [src/lib/zora/types.ts:65](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L65)
 
 ##### poolCurrencyToken?
 
@@ -134,7 +158,7 @@ Defined in: [src/lib/zora/types.ts:58](https://github.com/wenakita/4626/blob/mai
 
 > `optional` **tokenUri**: `string`
 
-Defined in: [src/lib/zora/types.ts:63](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L63)
+Defined in: [src/lib/zora/types.ts:64](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L64)
 
 ##### totalSupply?
 
@@ -148,11 +172,25 @@ Defined in: [src/lib/zora/types.ts:50](https://github.com/wenakita/4626/blob/mai
 
 Defined in: [src/lib/zora/types.ts:51](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L51)
 
+##### trend30d?
+
+> `optional` **trend30d**: `object`
+
+Defined in: [src/lib/zora/types.ts:71](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L71)
+
+###### changePercent?
+
+> `optional` **changePercent**: `number` \| `null`
+
+###### values
+
+> **values**: `number`[]
+
 ##### uniqueHolders?
 
 > `optional` **uniqueHolders**: `number`
 
-Defined in: [src/lib/zora/types.ts:62](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L62)
+Defined in: [src/lib/zora/types.ts:63](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L63)
 
 ##### volume24h?
 
@@ -166,7 +204,7 @@ Defined in: [src/lib/zora/types.ts:52](https://github.com/wenakita/4626/blob/mai
 
 > **ZoraConnection**\<`T`\> = `object`
 
-Defined in: [src/lib/zora/types.ts:76](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L76)
+Defined in: [src/lib/zora/types.ts:84](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L84)
 
 #### Type Parameters
 
@@ -180,13 +218,13 @@ Defined in: [src/lib/zora/types.ts:76](https://github.com/wenakita/4626/blob/mai
 
 > `optional` **edges**: [`ZoraEdge`](#zoraedge)\<`T`\>[]
 
-Defined in: [src/lib/zora/types.ts:77](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L77)
+Defined in: [src/lib/zora/types.ts:85](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L85)
 
 ##### pageInfo?
 
 > `optional` **pageInfo**: [`ZoraPageInfo`](#zorapageinfo)
 
-Defined in: [src/lib/zora/types.ts:78](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L78)
+Defined in: [src/lib/zora/types.ts:86](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L86)
 
 ***
 
@@ -260,7 +298,7 @@ Defined in: [src/lib/zora/types.ts:27](https://github.com/wenakita/4626/blob/mai
 
 > **ZoraEdge**\<`T`\> = `object`
 
-Defined in: [src/lib/zora/types.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L69)
+Defined in: [src/lib/zora/types.ts:77](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L77)
 
 #### Type Parameters
 
@@ -274,13 +312,13 @@ Defined in: [src/lib/zora/types.ts:69](https://github.com/wenakita/4626/blob/mai
 
 > `optional` **cursor**: `string`
 
-Defined in: [src/lib/zora/types.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L69)
+Defined in: [src/lib/zora/types.ts:77](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L77)
 
 ##### node?
 
 > `optional` **node**: `T`
 
-Defined in: [src/lib/zora/types.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L69)
+Defined in: [src/lib/zora/types.ts:77](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L77)
 
 ***
 
@@ -288,7 +326,7 @@ Defined in: [src/lib/zora/types.ts:69](https://github.com/wenakita/4626/blob/mai
 
 > **ZoraExploreList** = [`ZoraConnection`](#zoraconnection)\<[`ZoraCoin`](#zoracoin)\> & `object`
 
-Defined in: [src/lib/zora/types.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L81)
+Defined in: [src/lib/zora/types.ts:89](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L89)
 
 #### Type Declaration
 
@@ -302,7 +340,7 @@ Defined in: [src/lib/zora/types.ts:81](https://github.com/wenakita/4626/blob/mai
 
 > **ZoraExploreListType** = `"TOP_GAINERS"` \| `"TOP_VOLUME_24H"` \| `"MOST_VALUABLE"` \| `"NEW"` \| `"LAST_TRADED"` \| `"LAST_TRADED_UNIQUE"` \| `"MOST_VALUABLE_TRENDS"` \| `"NEW_TRENDS"` \| `"TOP_VOLUME_TRENDS_24H"` \| `"TRENDING_TRENDS"` \| `"NEW_CREATORS"` \| `"MOST_VALUABLE_CREATORS"` \| `"TOP_VOLUME_CREATORS_24H"` \| `"FEATURED_CREATORS"` \| `"TRENDING_CREATORS"` \| `"FEATURED_VIDEOS"` \| `"TRENDING_POSTS"` \| `"TRENDING_ALL"` \| `"TOP_VOLUME_ALL_24H"` \| `"NEW_ALL"` \| `"MOST_VALUABLE_ALL"`
 
-Defined in: [src/lib/zora/types.ts:116](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L116)
+Defined in: [src/lib/zora/types.ts:124](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L124)
 
 ***
 
@@ -310,7 +348,7 @@ Defined in: [src/lib/zora/types.ts:116](https://github.com/wenakita/4626/blob/ma
 
 > **ZoraLinkedWallet** = `object`
 
-Defined in: [src/lib/zora/types.ts:83](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L83)
+Defined in: [src/lib/zora/types.ts:91](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L91)
 
 #### Properties
 
@@ -318,13 +356,13 @@ Defined in: [src/lib/zora/types.ts:83](https://github.com/wenakita/4626/blob/mai
 
 > `optional` **walletAddress**: `string`
 
-Defined in: [src/lib/zora/types.ts:85](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L85)
+Defined in: [src/lib/zora/types.ts:93](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L93)
 
 ##### walletType?
 
 > `optional` **walletType**: `string`
 
-Defined in: [src/lib/zora/types.ts:84](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L84)
+Defined in: [src/lib/zora/types.ts:92](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L92)
 
 ***
 
@@ -360,7 +398,7 @@ Defined in: [src/lib/zora/types.ts:10](https://github.com/wenakita/4626/blob/mai
 
 > **ZoraPageInfo** = `object`
 
-Defined in: [src/lib/zora/types.ts:71](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L71)
+Defined in: [src/lib/zora/types.ts:79](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L79)
 
 #### Properties
 
@@ -368,13 +406,13 @@ Defined in: [src/lib/zora/types.ts:71](https://github.com/wenakita/4626/blob/mai
 
 > `optional` **endCursor**: `string`
 
-Defined in: [src/lib/zora/types.ts:73](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L73)
+Defined in: [src/lib/zora/types.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L81)
 
 ##### hasNextPage?
 
 > `optional` **hasNextPage**: `boolean`
 
-Defined in: [src/lib/zora/types.ts:72](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L72)
+Defined in: [src/lib/zora/types.ts:80](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L80)
 
 ***
 
@@ -438,7 +476,7 @@ Defined in: [src/lib/zora/types.ts:2](https://github.com/wenakita/4626/blob/main
 
 > **ZoraProfile** = `object`
 
-Defined in: [src/lib/zora/types.ts:88](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L88)
+Defined in: [src/lib/zora/types.ts:96](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L96)
 
 #### Properties
 
@@ -446,7 +484,7 @@ Defined in: [src/lib/zora/types.ts:88](https://github.com/wenakita/4626/blob/mai
 
 > `optional` **avatar**: `object`
 
-Defined in: [src/lib/zora/types.ts:101](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L101)
+Defined in: [src/lib/zora/types.ts:109](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L109)
 
 ###### blurhash?
 
@@ -464,13 +502,13 @@ Defined in: [src/lib/zora/types.ts:101](https://github.com/wenakita/4626/blob/ma
 
 > `optional` **bio**: `string`
 
-Defined in: [src/lib/zora/types.ts:93](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L93)
+Defined in: [src/lib/zora/types.ts:101](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L101)
 
 ##### createdCoins?
 
 > `optional` **createdCoins**: [`ZoraConnection`](#zoraconnection)\<[`ZoraCoin`](#zoracoin)\> & `object`
 
-Defined in: [src/lib/zora/types.ts:113](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L113)
+Defined in: [src/lib/zora/types.ts:121](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L121)
 
 ###### Type Declaration
 
@@ -482,7 +520,7 @@ Defined in: [src/lib/zora/types.ts:113](https://github.com/wenakita/4626/blob/ma
 
 > `optional` **creatorCoin**: `object`
 
-Defined in: [src/lib/zora/types.ts:108](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L108)
+Defined in: [src/lib/zora/types.ts:116](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L116)
 
 ###### address?
 
@@ -500,37 +538,37 @@ Defined in: [src/lib/zora/types.ts:108](https://github.com/wenakita/4626/blob/ma
 
 > `optional` **displayName**: `string`
 
-Defined in: [src/lib/zora/types.ts:92](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L92)
+Defined in: [src/lib/zora/types.ts:100](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L100)
 
 ##### handle?
 
 > `optional` **handle**: `string`
 
-Defined in: [src/lib/zora/types.ts:90](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L90)
+Defined in: [src/lib/zora/types.ts:98](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L98)
 
 ##### id?
 
 > `optional` **id**: `string`
 
-Defined in: [src/lib/zora/types.ts:89](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L89)
+Defined in: [src/lib/zora/types.ts:97](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L97)
 
 ##### linkedWallets?
 
 > `optional` **linkedWallets**: [`ZoraConnection`](#zoraconnection)\<[`ZoraLinkedWallet`](#zoralinkedwallet)\>
 
-Defined in: [src/lib/zora/types.ts:107](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L107)
+Defined in: [src/lib/zora/types.ts:115](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L115)
 
 ##### platformBlocked?
 
 > `optional` **platformBlocked**: `boolean`
 
-Defined in: [src/lib/zora/types.ts:91](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L91)
+Defined in: [src/lib/zora/types.ts:99](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L99)
 
 ##### publicWallet?
 
 > `optional` **publicWallet**: `object`
 
-Defined in: [src/lib/zora/types.ts:106](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L106)
+Defined in: [src/lib/zora/types.ts:114](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L114)
 
 ###### walletAddress?
 
@@ -540,19 +578,19 @@ Defined in: [src/lib/zora/types.ts:106](https://github.com/wenakita/4626/blob/ma
 
 > `optional` **socialAccounts**: \{ `instagram?`: \{ `displayName?`: `string`; `followerCount?`: `number`; `id?`: `string` \| `null`; `username?`: `string`; \} \| `null`; `tiktok?`: \{ `displayName?`: `string`; `followerCount?`: `number`; `id?`: `string` \| `null`; `username?`: `string`; \} \| `null`; `twitter?`: \{ `displayName?`: `string`; `followerCount?`: `number`; `id?`: `string` \| `null`; `username?`: `string`; \} \| `null`; \} \| `null`
 
-Defined in: [src/lib/zora/types.ts:96](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L96)
+Defined in: [src/lib/zora/types.ts:104](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L104)
 
 ##### username?
 
 > `optional` **username**: `string`
 
-Defined in: [src/lib/zora/types.ts:94](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L94)
+Defined in: [src/lib/zora/types.ts:102](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L102)
 
 ##### website?
 
 > `optional` **website**: `string`
 
-Defined in: [src/lib/zora/types.ts:95](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L95)
+Defined in: [src/lib/zora/types.ts:103](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/types.ts#L103)
 
 ***
 

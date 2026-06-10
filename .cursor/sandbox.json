@@ -1,7 +1,7 @@
 {
   "$schema": "https://cursor.com/schemas/sandbox.json",
   "name": "4626-dev",
-  "description": "4626 (4626.fun) — Vite frontend + Foundry contracts + CRE keepers",
+  "description": "4626 (4626.fun) — Vite frontend + Foundry contracts + KPR keepers",
   "services": {
     "frontend": {
       "command": "cd frontend && pnpm dev",
@@ -9,8 +9,8 @@
       "readyPattern": "ready in",
       "healthCheck": "http://localhost:5173/"
     },
-    "cre": {
-      "command": "cd cre && npm run start",
+    "kpr": {
+      "command": "cd kpr && pnpm start",
       "port": 3000,
       "optional": true
     }

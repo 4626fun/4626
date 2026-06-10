@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/admin/creator-access/\_revoke
+[4626-web](../../../../index.md) / api/\_handlers/admin/creator-access/\_revoke
 
 # api/\_handlers/admin/creator-access/\_revoke
 

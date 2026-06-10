@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/arch-b/\_enroll
+[4626-web](../../../index.md) / api/\_handlers/arch-b/\_enroll
 
 # api/\_handlers/arch-b/\_enroll
 

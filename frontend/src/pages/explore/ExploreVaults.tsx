@@ -1,15 +1,13 @@
 import { useMemo } from 'react'
-import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { useInfiniteQuery } from '@tanstack/react-query'
 
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { apiFetch } from '@/lib/api/apiBase'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
+import { ExplorePageShell } from '@/components/explore/ExplorePageShell'
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
-import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDashboard'
 import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableRowMessage } from '@/components/explore/ExploreUiPrimitives'
-import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
 import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
 import {
   formatDateLabel,
@@ -19,6 +17,7 @@ import {
   useDebouncedValue,
   useExploreSubnavParams,
 } from '@/features/explore/exploreShared'
+import { shouldShowExploreTableLoading } from '@/features/explore/exploreListNavigation'
 
 type ExploreVaultItem = {
   vaultAddress: `0x${string}` | null
@@ -133,6 +132,7 @@ export function ExploreVaults() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isFetching,
     isLoading,
     isError,
     error,
@@ -164,58 +164,41 @@ export function ExploreVaults() {
     onLoadMore: fetchNextPage,
   })
 
+  const tablePending = shouldShowExploreTableLoading({
+    isLoading,
+    isFetching,
+    hasRows: vaults.length > 0,
+    hasActiveSearch: searchQuery.trim().length > 0,
+  })
+
   return (
-    <div className="relative min-h-screen pt-1 sm:pt-2">
-      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 pt-2 sm:pt-4 pb-4 sm:pb-8">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="mb-4 sm:mb-6"
-        >
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-medium text-white mb-1 sm:mb-2">
-            Vaults on Base
-          </h1>
-          <p className="text-zinc-400 text-[13px] sm:text-sm">
-            Discover active, graduated, and settled vaults with live creator coin metrics.
-          </p>
-
-          <div className="mt-3 flex justify-end">
-            <ExploreUnfurlDebugCopy path="/explore/vaults" />
-          </div>
-          <ExploreMetricsDashboard className="mt-4 sm:mt-6" />
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="mb-6"
-        >
-          <ExploreSubnav
-            searchPlaceholder="Search vault, creator coin, or group"
-            searchValue={searchQuery}
-            onSearch={handleSearchChange}
-            onTimeFilterChange={handleTimeFilterChange}
-            onSortChange={handleSortChange}
-            currentTimeFilter={currentTimeFilter}
-            currentSort={currentSort}
-            volumeColumnNote="24h volume/fees come from creator coin snapshots; market cap reflects latest sampled value."
-            sortOptions={VAULT_SORT_OPTIONS}
-            timeFilters={VAULT_TIME_FILTERS}
-            disableUniswapTimeGating
-          />
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.2 }}
-          className="vault-surface overflow-hidden"
-        >
+    <ExplorePageShell
+      variant="table"
+      tablePending={tablePending}
+      tablePendingLabel="Loading vaults…"
+      subnav={
+        <ExploreSubnav
+          searchPlaceholder="Search vault, creator coin, or group"
+          searchValue={searchQuery}
+          onSearch={handleSearchChange}
+          onTimeFilterChange={handleTimeFilterChange}
+          onSortChange={handleSortChange}
+          currentTimeFilter={currentTimeFilter}
+          currentSort={currentSort}
+          showTabs={false}
+          showSearch={false}
+          showMobileSortRow={false}
+          volumeColumnNote="24h volume/fees come from creator coin snapshots; market cap reflects latest sampled value."
+          sortOptions={VAULT_SORT_OPTIONS}
+          timeFilters={VAULT_TIME_FILTERS}
+          disableUniswapTimeGating
+        />
+      }
+      table={
+        <>
           <div className="overflow-x-auto scrollbar-hide">
             <table className="w-full min-w-[1080px] text-sm">
-              <thead className="sticky top-0 z-20 border-b border-white/8 bg-vault-bg/95 backdrop-blur">
+              <thead className="explore-table-sticky-bar sticky top-0 z-20 border-b border-white/8">
                 <tr className="text-left text-[11px] uppercase tracking-[0.16em] text-zinc-500">
                   <th className="px-3 py-3 font-medium">#</th>
                   <th className="px-3 py-3 font-medium">Vault</th>
@@ -313,19 +296,9 @@ export function ExploreVaults() {
             label="Load more vaults"
             buttonClassName="px-6 py-2 rounded-full text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/7 transition-colors"
           />
-        </motion.div>
-
-        {!isLoading && vaults.length > 0 ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.4, delay: 0.3 }}
-            className="mt-4 text-center text-xs text-zinc-600"
-          >
-            Showing {vaults.length} vaults
-          </motion.div>
-        ) : null}
-      </div>
-    </div>
+        </>
+      }
+      footer={!isLoading && vaults.length > 0 ? `Showing ${vaults.length} vaults` : null}
+    />
   )
 }

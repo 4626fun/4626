@@ -54,7 +54,7 @@ describe('GET /api/zora/metrics', () => {
     ensureCreatorMetricsSchemaMock.mockResolvedValue(undefined)
   })
 
-  it('returns usable aggregate totals even while canonical sync is partial', async () => {
+  it('returns indexed Supabase aggregate totals while canonical sync is partial', async () => {
     const { default: handler } = await import('../_handlers/zora/_metrics.ts')
     const req = createMockReq({
       method: 'GET',
@@ -76,6 +76,26 @@ describe('GET /api/zora/metrics', () => {
       partial: true,
       sampledCreators: 24,
     })
+  })
+
+  it('does not blend live Zora explore financials into partial headline totals', async () => {
+    const { default: handler } = await import('../_handlers/zora/_metrics.ts')
+    const req = createMockReq({
+      method: 'GET',
+      query: { scope: 'creators' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.totals).toMatchObject({
+      creatorCoinsMarketCapUsd: 1250000.25,
+      creatorCoinsVolume24hUsd: 83000.55,
+      creatorCoinsFees24hUsd: 1250.1,
+      partial: true,
+    })
+    expect(res.body?.data?.totals?.usingZoraExploreFinancials).toBeUndefined()
   })
 
   it('serves stale cache and swallows background refresh failures', async () => {

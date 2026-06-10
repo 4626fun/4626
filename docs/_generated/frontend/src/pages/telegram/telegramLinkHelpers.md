@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/pages/telegram/telegramLinkHelpers
+[4626-web](../../../index.md) / src/pages/telegram/telegramLinkHelpers
 
 # src/pages/telegram/telegramLinkHelpers
 
@@ -20,7 +20,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:185](https://github.com/w
 
 > **ExpiredOrErrorState** = `Extract`\<[`TelegramLinkState`](../../features/telegram-link/telegramLinkFlow.md#telegramlinkstate), \{ `tag`: `"expired_or_error"`; \}\>
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:399](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L399)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:427](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L427)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:399](https://github.com/w
 
 > **FlowStateDescriptor** = `object`
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:458](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L458)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:486](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L486)
 
 #### Properties
 
@@ -36,19 +36,19 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:458](https://github.com/w
 
 > **errorCode**: `string` \| `null`
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:461](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L461)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:489](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L489)
 
 ##### step
 
 > **step**: `string` \| `null`
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:460](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L460)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:488](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L488)
 
 ##### tag
 
 > **tag**: [`TelegramLinkState`](../../features/telegram-link/telegramLinkFlow.md#telegramlinkstate)\[`"tag"`\]
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:459](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L459)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:487](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L487)
 
 ***
 
@@ -98,7 +98,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:40](https://github.com/we
 
 > **OwnerSetupHandoffState** = [`ExpiredOrErrorState`](#expiredorerrorstate) & `object`
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:400](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L400)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:428](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L428)
 
 #### Type Declaration
 
@@ -292,7 +292,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:74](https://github.com/we
 
 > **buildBindFailure**(`message?`, `recoverable?`): [`FlowError`](../../features/telegram-link/telegramLinkFlow.md#flowerror)
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:279](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L279)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:289](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L289)
 
 #### Parameters
 
@@ -314,7 +314,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:279](https://github.com/w
 
 > **buildLaunchParamFailure**(): [`FlowError`](../../features/telegram-link/telegramLinkFlow.md#flowerror)
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:287](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L287)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:297](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L297)
 
 #### Returns
 
@@ -362,7 +362,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:241](https://github.com/w
 
 > **buildPrivySyncFailure**(`message?`, `recoverable?`): [`FlowError`](../../features/telegram-link/telegramLinkFlow.md#flowerror)
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:271](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L271)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:281](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L281)
 
 #### Parameters
 
@@ -446,7 +446,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:173](https://github.com/w
 
 > **describeFlowState**(`state`): [`FlowStateDescriptor`](#flowstatedescriptor)
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:464](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L464)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:492](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L492)
 
 #### Parameters
 
@@ -500,7 +500,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:106](https://github.com/w
 
 > **formatFlowStateDescriptor**(`value`): `string`
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:486](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L486)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:514](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L514)
 
 #### Parameters
 
@@ -518,7 +518,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:486](https://github.com/w
 
 > **formatTelegramHandle**(`username`, `userId`): `string`
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:414](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L414)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:442](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L442)
 
 #### Parameters
 
@@ -570,11 +570,29 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:187](https://github.com/w
 
 ***
 
+### getErrorGuidance()
+
+> **getErrorGuidance**(`error`): `string`
+
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:411](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L411)
+
+#### Parameters
+
+##### error
+
+[`FlowError`](../../features/telegram-link/telegramLinkFlow.md#flowerror)
+
+#### Returns
+
+`string`
+
+***
+
 ### getErrorTitle()
 
 > **getErrorTitle**(`error`): `string`
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:380](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L380)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:390](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L390)
 
 #### Parameters
 
@@ -592,7 +610,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:380](https://github.com/w
 
 > **getFlowDescription**(`tag`): `string`
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:337](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L337)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:347](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L347)
 
 #### Parameters
 
@@ -610,7 +628,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:337](https://github.com/w
 
 > **getFlowHeadline**(`tag`): `string`
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:314](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L314)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:324](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L324)
 
 #### Parameters
 
@@ -628,7 +646,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:314](https://github.com/w
 
 > **getFlowProgressIndex**(`tag`): `number`
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:360](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L360)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:370](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L370)
 
 #### Parameters
 
@@ -646,7 +664,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:360](https://github.com/w
 
 > **getTelemetryLinkContext**(`state`): [`TelegramMiniAppLinkContext`](../../lib/telegram/telegramMiniAppLink.md#telegramminiapplinkcontext) \| `null`
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:439](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L439)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:467](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L467)
 
 #### Parameters
 
@@ -664,7 +682,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:439](https://github.com/w
 
 > **getTelemetryPhase**(`state`): `string`
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:449](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L449)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:477](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L477)
 
 #### Parameters
 
@@ -682,7 +700,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:449](https://github.com/w
 
 > **getTelemetryProof**(`state`): [`TelegramSessionProof`](../../features/telegram-link/telegramLinkFlow.md#telegramsessionproof) \| `null`
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:422](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L422)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:450](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L450)
 
 #### Parameters
 
@@ -700,7 +718,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:422](https://github.com/w
 
 > **isOwnerSetupHandoffState**(`state`): `state is OwnerSetupHandoffState`
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:404](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L404)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:432](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L432)
 
 #### Parameters
 
@@ -772,7 +790,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:60](https://github.com/we
 
 > **parseTelegramLinkReadyAccount**(`data`, `expectedEmail`): [`TelegramLinkReadyAccount`](../../features/telegram-link/telegramLinkFlow.md#telegramlinkreadyaccount) \| `null`
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:294](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L294)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:304](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L304)
 
 #### Parameters
 
@@ -794,7 +812,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:294](https://github.com/w
 
 > **prefersLinkedHandoffCopy**(`state`): `boolean`
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:410](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L410)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:438](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L438)
 
 #### Parameters
 
@@ -830,7 +848,7 @@ Defined in: [src/pages/telegram/telegramLinkHelpers.ts:159](https://github.com/w
 
 > **shortAddress**(`value`): `string`
 
-Defined in: [src/pages/telegram/telegramLinkHelpers.ts:418](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L418)
+Defined in: [src/pages/telegram/telegramLinkHelpers.ts:446](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/telegramLinkHelpers.ts#L446)
 
 #### Parameters
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / src/wallet/canonicalWalletPolicy
+[4626-web](../../index.md) / src/wallet/canonicalWalletPolicy
 
 # src/wallet/canonicalWalletPolicy
 
@@ -36,7 +36,7 @@ Defined in: [src/wallet/canonicalWalletPolicy.ts:14](https://github.com/wenakita
 
 > **hasContractBytecode**(`value`): `boolean`
 
-Defined in: [src/wallet/canonicalWalletPolicy.ts:76](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L76)
+Defined in: [src/wallet/canonicalWalletPolicy.ts:83](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L83)
 
 #### Parameters
 
@@ -90,7 +90,7 @@ Defined in: [src/wallet/canonicalWalletPolicy.ts:44](https://github.com/wenakita
 
 > **isEoaAddressByCode**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [src/wallet/canonicalWalletPolicy.ts:82](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L82)
+Defined in: [src/wallet/canonicalWalletPolicy.ts:89](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L89)
 
 #### Parameters
 
@@ -110,9 +110,9 @@ Defined in: [src/wallet/canonicalWalletPolicy.ts:82](https://github.com/wenakita
 
 ***
 
-### isTargetCanonicalCsw()
+### isCanonicalCsw()
 
-> **isTargetCanonicalCsw**(`value`): `boolean`
+> **isCanonicalCsw**(`value`): `boolean`
 
 Defined in: [src/wallet/canonicalWalletPolicy.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L40)
 

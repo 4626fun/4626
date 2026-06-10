@@ -1,112 +1,82 @@
-import { useEffect, useState } from 'react'
-import { ArrowUpRight, Check } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { useMemo, useState } from 'react'
+import { Sparkles } from 'lucide-react'
 
 import type { AccountScore } from '@/features/accountSetup/types'
-import { apiFetch } from '@/lib/api/apiBase'
-import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
-import { ReferralShareBlock } from './ReferralShareBlock'
+import { getMarketingWaitlistReferralUrl } from '@/lib/auth/waitlistEntry'
+import { WaitlistDailyActionsHub } from './WaitlistDailyActionsHub'
 import { useMyReferralCode } from './useMyReferralCode'
-import { computeProgress } from './waitlistTiers'
 
 type WaitlistUnlocksPanelProps = {
   score: AccountScore | null | undefined
   email?: string | null
+  linkedMethods?: Record<string, string[]>
+  busyProvider?: string | null
+  onLinkProvider?: (provider: string) => void | Promise<void>
   className?: string
 }
+
+const TELEGRAM_GROUP_URL = 'https://t.me/fun4626'
+const TELEGRAM_DAILY_PROMPT =
+  'Daily 4626 check-in complete. I shared today and invited one friend. #4626'
 
 export function WaitlistUnlocksPanel({
   score,
   email,
+  linkedMethods = {},
+  busyProvider = null,
+  onLinkProvider,
   className = '',
 }: WaitlistUnlocksPanelProps) {
-  const [amoeEligiblePoints, setAmoeEligiblePoints] = useState<number | null>(null)
-  const fallbackPoints = typeof score?.points === 'number' ? score.points : 0
-  const points = amoeEligiblePoints ?? fallbackPoints
-  const progress = computeProgress(points)
   const referral = useMyReferralCode(email)
+  const [copiedPrompt, setCopiedPrompt] = useState(false)
+  const shareUrl = useMemo(
+    () => getMarketingWaitlistReferralUrl(referral.data?.referralCode ?? null),
+    [referral.data?.referralCode],
+  )
 
-  useEffect(() => {
-    let cancelled = false
-    const loadAmoePoints = async () => {
-      try {
-        // Keep waitlist points in sync with `/swap` by using the same
-        // AMOE eligibility endpoint and weighting rules.
-        const response = await apiFetch('/api/v1/lottery/amoe/credits', {
-          method: 'GET',
-          withCredentials: true,
-        })
-        const payload = (await response.json().catch(() => null)) as ApiEnvelope<{ credits?: number }> | null
-        if (!response.ok || !payload?.success) return
-        const credits = Number(payload.data?.credits ?? 0)
-        if (!Number.isFinite(credits)) return
-        if (!cancelled) setAmoeEligiblePoints(Math.max(0, Math.floor(credits)))
-      } catch {
-        // Fall back to unified waitlist score when credits are unavailable.
-      }
+  const copyTelegramPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(TELEGRAM_DAILY_PROMPT)
+      setCopiedPrompt(true)
+      window.setTimeout(() => setCopiedPrompt(false), 1500)
+    } catch {
+      // best-effort
     }
-    void loadAmoePoints()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  }
 
   return (
-    <div className={`space-y-3.5 ${className}`}>
-      {/* Points + tier, single row. Tier label links to the leaderboard
-          so users can compare their position without adding a standalone
-          CTA elsewhere on the page. */}
-      <div className="flex items-baseline justify-between gap-3">
-        <div className="flex items-baseline gap-2">
-          <span className="font-display text-xl leading-none text-white tabular-nums">
-            {progress.points.toLocaleString()}
-          </span>
-          <span className="text-[11px] text-zinc-500">
-            {progress.points === 1 ? 'point' : 'points'}
-          </span>
-        </div>
-        <Link
-          to="/leaderboard"
-          className="group inline-flex items-center gap-1 text-[11px] text-zinc-400 transition-colors hover:text-zinc-200"
-        >
-          <span>
-            Tier {progress.currentTier.id} · <span className="text-zinc-200">{progress.currentTier.name}</span>
-          </span>
-          <ArrowUpRight className="h-3 w-3 text-zinc-600 transition-colors group-hover:text-brand-200" aria-hidden="true" />
-        </Link>
-      </div>
-
-      {/* Progress line */}
-      {progress.nextTier ? (
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-[11px] text-zinc-500">
-            <span>Next: {progress.nextTier.name}</span>
-            <span className="tabular-nums">{progress.pointsToNext} to go</span>
+    <div className={`space-y-4 ${className}`}>
+      <section className="rounded-xl border border-brand-primary/20 bg-brand-primary/[0.08] px-3.5 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-brand-200">
+              <Sparkles className="h-3 w-3" aria-hidden="true" />
+              Daily
+            </p>
+            <p className="mt-1 text-xs text-zinc-300">Connect → action → reward.</p>
           </div>
-          <div className="h-1 w-full rounded-full bg-white/[0.06] overflow-hidden">
-            <div
-              className="h-full rounded-full bg-brand-primary/80 transition-[width] duration-500 ease-out"
-              style={{ width: `${progress.progressPercent}%` }}
-              aria-hidden="true"
-            />
+          <div className="shrink-0 rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-right">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Current</p>
+            <p className="text-sm font-semibold text-white tabular-nums">
+              {(score?.points ?? 0).toLocaleString()} pts
+            </p>
+            <p className="text-[10px] text-zinc-400">Tier {score?.tier ?? 0}</p>
           </div>
         </div>
-      ) : (
-        <div className="flex items-center gap-1.5 text-[11px] text-emerald-300">
-          <Check className="w-3 h-3" /> Top tier reached.
-        </div>
-      )}
+      </section>
 
-      {/* Referral — borderless, separated by a thin rule. */}
-      {referral.data?.referralCode ? (
-        <div className="border-t border-white/[0.05] pt-3">
-          <ReferralShareBlock
-            referralCode={referral.data.referralCode}
-            qualifiedCount={referral.data.referrals.qualifiedCount}
-            pendingCount={referral.data.referrals.pendingCount}
-          />
-        </div>
-      ) : null}
+      <WaitlistDailyActionsHub
+        linkedMethods={linkedMethods}
+        busyProvider={busyProvider}
+        onLinkProvider={onLinkProvider}
+        shareUrl={shareUrl}
+        telegramGroupUrl={TELEGRAM_GROUP_URL}
+        copiedPrompt={copiedPrompt}
+        onCopyTelegramPrompt={copyTelegramPrompt}
+        referralCode={referral.data?.referralCode ?? null}
+        qualifiedCount={referral.data?.referrals.qualifiedCount ?? 0}
+        pendingCount={referral.data?.referrals.pendingCount ?? 0}
+      />
     </div>
   )
 }

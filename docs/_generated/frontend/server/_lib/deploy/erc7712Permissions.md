@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/deploy/erc7712Permissions
+[4626-web](../../../index.md) / server/\_lib/deploy/erc7712Permissions
 
 # server/\_lib/deploy/erc7712Permissions
 

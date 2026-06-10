@@ -168,7 +168,7 @@ export function AgentDirectory() {
             </span>
             <button
               type="button"
-              onClick={connect}
+              onClick={() => void connect('user')}
               className="ml-auto px-3 py-1.5 rounded-lg bg-brand-primary/20 text-brand-primary text-xs font-medium hover:bg-brand-primary/30 transition-colors"
             >
               Enable Chat

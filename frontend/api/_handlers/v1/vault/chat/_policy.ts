@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { guardAgentApiRequest, handleOptions, readBoundedJsonObjectBody, setCors, setNoStore } from '../../../../../packages/server-core/src/index.js'
+import { guardAgentApiRequest, handleOptions, readBoundedJsonObjectBody, setCors, setNoStore, checkRateLimit, rateLimitKey, RATE_LIMITS, getClientIp } from '@4626/server-core'
 import { normalizeChatAddress } from '../../../../../server/_lib/chat/presence.js'
 import { upsertVaultChatPolicy } from '../../../../../server/_lib/chat/vaultChatPolicy.js'
 import { normalizeVaultAddressFromQuery, requireWorkspaceAccess } from '../../workspace/_shared.js'
@@ -13,6 +13,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/vault/chat/policy', kind: 'write' })
   if (!g.ok) return
+
+  const limiter = checkRateLimit(
+    rateLimitKey('v1/vault/chat/policy', (g.auth?.address ?? 'anon').toLowerCase(), getClientIp(req)),
+    RATE_LIMITS.adminAction,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
+  }
 
   const vaultAddress = normalizeVaultAddressFromQuery(req)
   if (!vaultAddress) return res.status(400).json({ success: false, error: 'vault is required' })

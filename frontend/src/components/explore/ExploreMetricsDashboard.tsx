@@ -1,52 +1,12 @@
-import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
-
-import { apiFetch } from '@/lib/api/apiBase'
-import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
-import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { ExploreAnalyticsSyncBadge } from '@/components/explore/ExploreAnalyticsSyncBadge'
+import { ExploreHeroMetric } from '@/components/explore/ExploreUiPrimitives'
+import { ExploreHeroSparkline } from '@/components/explore/ExploreHeroSparkline'
 import { LoadingText } from '@/components/ui/LoadingState'
-
-type ExploreMetricHistoryPoint = {
-  date: string
-  creatorCoinsMarketCapUsd: number | null
-}
-
-type ExploreMetrics = {
-  scope: 'creators'
-  updatedAt: string
-  exact: boolean
-  syncStatus: 'idle' | 'running' | 'error'
-  totals: {
-    creatorsTotal: number | null
-    creatorsNew24h: number | null
-    creatorCoinsMarketCapUsd: number | null
-    creatorCoinsVolume24hUsd: number | null
-    creatorCoinsFees24hUsd: number | null
-  }
-  history30d: ExploreMetricHistoryPoint[]
-}
+import { formatCompactUsd } from '@/features/explore/exploreShared'
+import { useExploreCreatorsHeroMetrics } from '@/features/explore/useExploreCreatorsHeroMetrics'
 
 type ExploreMetricsDashboardProps = {
   className?: string
-}
-
-async function fetchExploreCreatorsMetrics(): Promise<ExploreMetrics | null> {
-  try {
-    const res = await apiFetch(`${API_ENDPOINTS.zora.metrics}?scope=creators`, { method: 'GET' })
-    const json = (await res.json().catch(() => null)) as ApiEnvelope<ExploreMetrics | null> | null
-    if (res.ok && json?.success) return json.data ?? null
-  } catch {
-    // Non-blocking metrics card.
-  }
-  return null
-}
-
-function formatCompactUsd(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return '—'
-  if (v >= 1_000_000_000) return `$${(v / 1_000_000_000).toFixed(2)}B`
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}M`
-  if (v >= 1_000) return `$${(v / 1_000).toFixed(2)}K`
-  return `$${v.toFixed(2)}`
 }
 
 function joinClasses(...parts: Array<string | undefined | null | false>): string {
@@ -54,80 +14,85 @@ function joinClasses(...parts: Array<string | undefined | null | false>): string
 }
 
 export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardProps) {
-  const metricsQuery = useQuery({
-    queryKey: ['explore', 'creators', 'metrics', 'shared-dashboard'],
-    queryFn: fetchExploreCreatorsMetrics,
-    staleTime: 10_000,
-    refetchInterval: 20_000,
-    refetchIntervalInBackground: true,
-    retry: 1,
-  })
+  const {
+    creatorsLabel,
+    creatorsTotal,
+    creatorsNew24h,
+    marketCap,
+    volume24h,
+    fees24h,
+    statusLine,
+    partial,
+    history30d,
+    isLoading,
+    isRefreshing,
+    exact,
+    syncStatus,
+  } = useExploreCreatorsHeroMetrics()
 
-  const totals = metricsQuery.data?.totals
-  const updatedAt = metricsQuery.data?.updatedAt ?? null
-  const status = metricsQuery.data?.syncStatus ?? 'idle'
-  const exact = metricsQuery.data?.exact === true
+  const creatorsMetricHint =
+    creatorsNew24h != null && creatorsNew24h > 0
+      ? `+${creatorsNew24h.toLocaleString()} today`
+      : 'Tracking newly created creators'
 
-  const statusLine = useMemo(() => {
-    if (!updatedAt) return 'Loading canonical market totals...'
-    const time = new Date(updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    if (status === 'error') return `Metrics refresh error — showing last known values (${time})`
-    if (status === 'running' || !exact) return `Estimated totals refreshed ${time}`
-    return `Canonical totals refreshed ${time}`
-  }, [exact, status, updatedAt])
-
-  const creatorsTotal = totals?.creatorsTotal
-  const creatorsNew24h = totals?.creatorsNew24h
-  const marketCap = totals?.creatorCoinsMarketCapUsd
-  const volume24h = totals?.creatorCoinsVolume24hUsd
-  const fees24h = totals?.creatorCoinsFees24hUsd
+  const financialHint = partial ? 'Sum of indexed coins' : 'All Base creator coins'
+  const financialTitleSuffix = partial ? ' (indexed coins only)' : ''
 
   return (
     <div className={joinClasses('space-y-2', className)}>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-        <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
-          <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">Creators</div>
-          <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-            {creatorsTotal != null ? creatorsTotal.toLocaleString() : '—'}
-          </div>
-          <div className="app-meta-value mt-0.5 hidden sm:block">
-            {creatorsNew24h != null ? `+${creatorsNew24h.toLocaleString()} today` : 'Tracking newly created creators'}
-          </div>
-        </div>
-
-        <div className="vault-surface-elevated vault-hover-lift rounded-xl sm:rounded-2xl border-blue-300/30 bg-blue-950/16 px-3 sm:px-4 py-2.5 sm:py-3">
-          <div className="text-[10px] sm:text-[11px] font-medium text-zinc-400">Market Cap</div>
-          <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-            {formatCompactUsd(marketCap)}
-          </div>
-          <div className="app-meta-value mt-0.5 hidden sm:block">
-            Live market-cap snapshot
-          </div>
-        </div>
-
-        <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
-          <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Vol</div>
-          <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-            {formatCompactUsd(volume24h)}
-          </div>
-          <div className="app-meta-value mt-0.5 hidden sm:block">
-            24H trade volume across creator coins
-          </div>
-        </div>
-
-        <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
-          <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Fees</div>
-          <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-            {formatCompactUsd(fees24h)}
-          </div>
-          <div className="app-meta-value mt-0.5 hidden sm:block">
-            24H fees from creator-coin trading
-          </div>
-        </div>
+        <ExploreHeroMetric
+          label={creatorsLabel}
+          value={creatorsTotal != null ? creatorsTotal.toLocaleString() : '—'}
+          hint={creatorsMetricHint}
+          title={
+            creatorsNew24h != null && creatorsNew24h > 0
+              ? `+${creatorsNew24h.toLocaleString()} new in the last 24 hours`
+              : 'Canonical creator-coin index size'
+          }
+        />
+        <ExploreHeroMetric
+          label="Market Cap"
+          value={formatCompactUsd(marketCap)}
+          hint={financialHint}
+          accent
+          title={`Indexed creator-coin market cap${financialTitleSuffix} · 30D trend uses daily Supabase snapshots`}
+          background={
+            <ExploreHeroSparkline
+              fill
+              history={history30d}
+              title={`Indexed creator-coin market cap trend · last ${history30d.length} daily snapshots`}
+            />
+          }
+        />
+        <ExploreHeroMetric
+          label="1D Vol"
+          value={formatCompactUsd(volume24h)}
+          hint={financialHint}
+          title={`24H trade volume${financialTitleSuffix}`}
+        />
+        <ExploreHeroMetric
+          label="1D Fees"
+          value={formatCompactUsd(fees24h)}
+          hint={financialHint}
+          title={`24H fees from creator-coin trading${financialTitleSuffix}`}
+        />
       </div>
 
-      <div className="app-meta-value text-right text-zinc-500/90">
-        {!updatedAt ? <LoadingText intent="processing" size="sm" labelOverride="Loading canonical market totals..." /> : statusLine}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="app-meta-value text-zinc-500/90 sm:flex-1">
+          {isLoading ? (
+            <LoadingText intent="processing" size="sm" labelOverride="Loading explore metrics…" />
+          ) : (
+            <>
+              {statusLine}
+              {isRefreshing ? <span className="ml-2 text-zinc-600">Updating…</span> : null}
+            </>
+          )}
+        </div>
+        {!isLoading && syncStatus === 'error' ? (
+          <ExploreAnalyticsSyncBadge exact={exact} syncStatus={syncStatus} />
+        ) : null}
       </div>
     </div>
   )

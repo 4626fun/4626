@@ -3,7 +3,7 @@
  *
  * POST /api/arch-b/sub-account/baseapp/register
  *
- * Called by the (still-to-be-built) waitlist `connect-base-app` step
+ * Called by the waitlist `connect-base-app` step and account-setup Step 2
  * after the browser SDK has run `wallet_addSubAccount` and
  * `setToOwnerAccount()`. Persists the (parent CSW, sub-account, embedded
  * EOA) triple so future requests resolve the right execution context.
@@ -42,7 +42,7 @@
  *
  * Responses:
  *   200 { success: true, data: { profileId, parentAddress, subAccountAddress, embeddedEoaAddress, ownerIndex, provisioningSource } }
- *   400 invalid_body | invalid_address | embedded_eoa_mismatch
+ *   400 invalid_body | invalid_address | embedded_eoa_mismatch | sub_account_not_distinct
  *   401 unauthenticated
  *   409 parent_csw_conflict | profile_not_ready
  *   429 too_many_requests
@@ -53,6 +53,7 @@
 import type { Address } from 'viem'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
+import { isWaitlistSubaccountFlowEnabled } from '../../../server/_lib/wallet/waitlistSubaccountFlowEnv.js'
 import {
   type ApiEnvelope,
   handleOptions,
@@ -65,11 +66,12 @@ import {
   readBoundedJsonObjectBody,
   getDb,
   isDbConfigured,
+  runInTransaction,
   resolveAuthorizedRequestPrincipal,
   logger,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { getBasePublicClient } from '../../../server/_lib/wallet/subAccountProvisionVerify.js'
-import { envBigInt } from '../../../server/_lib/wallet/commandIssuerContext.js'
+import { envBigInt } from '@4626/server-core'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -119,7 +121,7 @@ export function __resetHandlerHooksForTest(): void {
 }
 
 function isFeatureEnabled(): boolean {
-  return String(process.env.WAITLIST_SUBACCOUNT_FLOW_ENABLED ?? '').trim() === '1'
+  return isWaitlistSubaccountFlowEnabled()
 }
 
 function lowerAddress(input: unknown): Address | null {
@@ -253,6 +255,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .status(400)
       .json({ success: false, error: 'invalid_address' } satisfies ApiEnvelope<never>)
   }
+  if (subAccountAddress === parentAddress) {
+    return res
+      .status(400)
+      .json({ success: false, error: 'sub_account_not_distinct' } satisfies ApiEnvelope<never>)
+  }
 
   if (!isDbConfigured()) {
     return res
@@ -338,18 +345,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // env values, so misconfiguration can't re-introduce the zero-value bug.
   const perTxCapWei = envBigInt('ARCH_B_DEFAULT_PER_TX_CAP_WEI', DEFAULT_PER_TX_CAP_WEI)
   const dailyCapWei = envBigInt('ARCH_B_DEFAULT_DAILY_CAP_WEI', DEFAULT_DAILY_CAP_WEI)
+
   let resultRow: { ownerIndex: number } | null = null
   try {
-    await db.sql`BEGIN`
-    try {
+    resultRow = await runInTransaction(async (txDb) => {
       // 1. Upsert command_issuer_execution_context (sub-account triple).
       // owner_index = 0: per spec, the SDK has not yet been instrumented
       // to log the actual returned index. Track C2 wires up the SDK
       // and may revise to whatever wallet_addSubAccount returns.
-      // TODO(track-c2): record the actual ownerIndex from the SDK
-      // response and update both this default and ACCOUNT_MODEL.md
-      // §5.3.
-      await db.sql`
+      // track-c2: record the actual ownerIndex from the SDK response and
+      // update both this default and ACCOUNT_MODEL.md §5.3.
+      await txDb.sql`
         INSERT INTO command_issuer_execution_context (
           profile_id, smart_wallet_address, privy_owner_wallet_id, owner_eoa_address,
           owner_index, paymaster_policy, per_tx_cap_wei, daily_cap_wei,
@@ -378,7 +384,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // 2. Ensure both wallets exist in `wallets` (referenced by
       // profile_wallets.address FK). Use ON CONFLICT DO NOTHING so we
       // don't overwrite provider/wallet_type for pre-existing rows.
-      await db.sql`
+      await txDb.sql`
         INSERT INTO wallets (address, chain, wallet_type, provider)
         VALUES
           (${parentAddress}, 'evm', 'smart_wallet', 'coinbase'),
@@ -389,7 +395,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // 3. Clear is_canonical_smart_wallet from any prior canonical
       // row so the partial unique index `profile_wallets_one_canonical`
       // doesn't trip when we set the parent CSW row.
-      await db.sql`
+      await txDb.sql`
         UPDATE profile_wallets
         SET is_canonical_smart_wallet = false,
             updated_at = now()
@@ -399,7 +405,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `
 
       // 4. Upsert the parent CSW as canonical.
-      await db.sql`
+      await txDb.sql`
         INSERT INTO profile_wallets (
           profile_id, address, is_canonical_smart_wallet, is_embedded_eoa,
           verified_at, created_at, updated_at
@@ -418,7 +424,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // recorded, clear it first. (Defense in depth: the
       // embedded_eoa_mismatch check above should already have
       // protected us, but the index is hard, so be explicit.)
-      await db.sql`
+      await txDb.sql`
         UPDATE profile_wallets
         SET is_embedded_eoa = false,
             updated_at      = now()
@@ -426,7 +432,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           AND lower(address) <> ${embeddedEoaAddress}
           AND is_embedded_eoa = true
       `
-      await db.sql`
+      await txDb.sql`
         INSERT INTO profile_wallets (
           profile_id, address, is_canonical_smart_wallet, is_embedded_eoa,
           verified_at, created_at, updated_at
@@ -439,26 +445,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           updated_at      = now()
       `
 
-      // 6. Mirror the embedded EOA on profiles.primary_embedded_eoa
-      // (idempotent — same value as we just validated).
-      await db.sql`
+      // 6. Mirror profile columns used by accounts/me executionTrack.
+      await txDb.sql`
         UPDATE profiles
-        SET primary_embedded_eoa = ${embeddedEoaAddress}
+        SET
+          primary_embedded_eoa = ${embeddedEoaAddress},
+          csw_address = ${parentAddress},
+          base_sub_account = ${subAccountAddress},
+          updated_at = now()
         WHERE id = ${principal.profileId}
-          AND (primary_embedded_eoa IS NULL OR lower(primary_embedded_eoa) <> ${embeddedEoaAddress})
       `
 
-      await db.sql`COMMIT`
-      resultRow = { ownerIndex: 0 }
-    } catch (innerErr) {
-      // Roll back the whole transaction so an upsert mid-flight does
-      // not leave us with an orphan CIEC row pointing at a parent
-      // wallet whose canonical flag never flipped.
-      try {
-        await db.sql`ROLLBACK`
-      } catch {}
-      throw innerErr
-    }
+      return { ownerIndex: 0 }
+    })
   } catch (err) {
     logger.warn('[arch-b/baseapp/register] DB upsert failed', {
       profileId: principal.profileId,
@@ -471,8 +470,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!resultRow) {
     return res
-      .status(500)
-      .json({ success: false, error: 'unexpected_error' } satisfies ApiEnvelope<never>)
+      .status(503)
+      .json({ success: false, error: 'db_unavailable' } satisfies ApiEnvelope<never>)
   }
 
   logger.info('[arch-b/baseapp/register] registered', {

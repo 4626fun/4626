@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / api/\_handlers/telegram/webhook/trade/fsm
+[4626-web](../../../../../index.md) / api/\_handlers/telegram/webhook/trade/fsm
 
 # api/\_handlers/telegram/webhook/trade/fsm
 

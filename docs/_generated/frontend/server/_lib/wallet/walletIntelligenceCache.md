@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/wallet/walletIntelligenceCache
+[4626-web](../../../index.md) / server/\_lib/wallet/walletIntelligenceCache
 
 # server/\_lib/wallet/walletIntelligenceCache
 

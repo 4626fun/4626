@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / server/uniswap/agentSkills
+[4626-web](../../index.md) / server/uniswap/agentSkills
 
 # server/uniswap/agentSkills
 

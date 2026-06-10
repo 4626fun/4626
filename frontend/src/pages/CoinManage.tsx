@@ -9,8 +9,13 @@ import { ArrowLeft } from 'lucide-react'
 import { isLensGroveEnabled } from '@/lib/flags/flags'
 import { fetchLensJson, resolveLensUri, uploadImmutableBlob, uploadImmutableJson } from '@/lib/lens/grove'
 import { useZoraCoin } from '@/lib/zora/hooks'
+import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 
+// On-chain CreatorCoin function is named `payoutRecipient` (ABI compatibility).
+// Per AGENTS.md "Canonical Lane Terminology", this represents the
+// creatorCoinPayoutRecipient (external earnings lane) — distinct from tradeFeeCollector.
+// See docs/audits/creatorvault-business-logic-core-structure-audit.md.
 const ZORA_COIN_READ_ABI = [
   {
     name: 'payoutRecipient',
@@ -280,23 +285,24 @@ export function CoinManage() {
                   )}
                 </div>
 
-                {/* CreatorCoin payout recipient */}
+                {/* creatorCoinPayoutRecipient (external earnings lane) */}
                 <div className="card p-8 space-y-4">
                   <div className="flex items-start justify-between gap-6">
                     <div>
-                      <div className="label">CreatorCoin payout recipient</div>
+                      <div className="label">Creator coin payout recipient (external earnings lane)</div>
                       <div className="text-sm text-zinc-500 mt-2">
                         Current:{' '}
                         <span className="font-mono text-zinc-300">
-                          {payoutRecipient ? shortAddress(String(payoutRecipient)) : '—'}
+                          {payoutRecipient ? shortAddress(String(payoutRecipient)) : '—'} {/* creatorCoinPayoutRecipient (external earnings lane) */}
                         </span>
                       </div>
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="label">New CreatorCoin payout recipient</label>
+                    <label htmlFor="coin-manage-payout-recipient" className="label">New creator coin payout recipient (external earnings lane)</label>
                     <input
+                      id="coin-manage-payout-recipient"
                       value={newPayoutRecipient}
                       onChange={(e) => setNewPayoutRecipient(e.target.value)}
                       placeholder="0x..."
@@ -304,10 +310,12 @@ export function CoinManage() {
                     />
                   </div>
 
-                  <button
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="w-full"
                     onClick={updatePayout}
                     disabled={busy !== null || !newPayoutIsValid}
-                    className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {busy === 'payout' ? (
                       <>
@@ -317,7 +325,7 @@ export function CoinManage() {
                     ) : (
                       'Update payout recipient'
                     )}
-                  </button>
+                  </Button>
                 </div>
 
                 {/* Metadata URI */}
@@ -325,8 +333,9 @@ export function CoinManage() {
                   <div className="label">Metadata</div>
 
                   <div className="space-y-2">
-                    <label className="label">New metadata URI</label>
+                    <label htmlFor="coin-manage-metadata-uri" className="label">New metadata URI</label>
                     <input
+                      id="coin-manage-metadata-uri"
                       value={newUri}
                       onChange={(e) => setNewUri(e.target.value)}
                       placeholder="ipfs://… or https://… (must return JSON)"
@@ -337,10 +346,12 @@ export function CoinManage() {
                     </div>
                   </div>
 
-                  <button
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="w-full"
                     onClick={updateUri}
                     disabled={busy !== null || !uriLooksValid}
-                    className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {busy === 'uri' ? (
                       <>
@@ -350,7 +361,7 @@ export function CoinManage() {
                     ) : (
                       'Update coin URI'
                     )}
-                  </button>
+                  </Button>
 
                   <div className="pt-6 border-t border-zinc-900/50 space-y-3">
                     <div className="label">Build metadata JSON (upload to IPFS)</div>
@@ -395,35 +406,39 @@ export function CoinManage() {
                         className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none focus:border-cyan-500/50 transition-colors"
                       />
                       <div className="sm:col-span-1 flex gap-2">
-                        <button
+                        <Button
+                          type="button"
+                          variant="primary"
+                          className="flex-1"
                           onClick={() => {
                             try {
                               navigator.clipboard.writeText(JSON.stringify(metadataJson, null, 2))
                             } catch {}
                           }}
                           disabled={!canBuildMetadataJson}
-                          className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                          type="button"
                           title="Copies JSON (does not upload)"
                         >
                           Copy JSON
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="primary"
+                          className="flex-1"
                           onClick={downloadMetadataJson}
                           disabled={!canBuildMetadataJson}
-                          className="btn-accent flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                          type="button"
                           title="Downloads metadata.json (upload it to IPFS)"
                         >
                           Download
-                        </button>
+                        </Button>
                       </div>
                     </div>
 
-                    <button
+                    <Button
+                      type="button"
+                      variant="primary"
+                      className="w-full"
                       onClick={copyMetadataJson}
                       disabled={busy !== null || !canBuildMetadataJson}
-                      className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {busy === 'upload' ? (
                         <>
@@ -433,7 +448,7 @@ export function CoinManage() {
                       ) : (
                         'Validate + copy JSON'
                       )}
-                    </button>
+                    </Button>
                     {lensEnabled ? (
                       <div className="rounded-lg border border-zinc-900/60 p-3 space-y-3">
                         <div className="text-xs text-zinc-500">Lens Grove uploads (optional)</div>
@@ -444,23 +459,25 @@ export function CoinManage() {
                             onChange={(e) => setMetaImageFile(e.target.files?.[0] ?? null)}
                             className="text-[11px] text-zinc-400"
                           />
-                          <button
+                          <Button
+                            type="button"
+                            variant="primary"
+                            className="w-full"
                             onClick={() => void uploadMetaImageToGrove()}
                             disabled={busy !== null || !metaImageFile}
-                            className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                            type="button"
                           >
                             {busy === 'grove-image' ? 'Uploading image…' : 'Upload image to Lens Grove'}
-                          </button>
+                          </Button>
                         </div>
-                        <button
+                        <Button
+                          type="button"
+                          variant="primary"
+                          className="w-full"
                           onClick={() => void uploadMetadataJsonToGrove()}
                           disabled={busy !== null || !canBuildMetadataJson}
-                          className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                          type="button"
                         >
                           {busy === 'grove-metadata' ? 'Uploading metadata…' : 'Upload metadata JSON to Lens Grove'}
-                        </button>
+                        </Button>
                         <input
                           value={metadataLensUri}
                           onChange={(e) => setMetadataLensUri(e.target.value)}
@@ -487,14 +504,15 @@ export function CoinManage() {
                             Open metadata via gateway: {metadataGatewayUrl}
                           </a>
                         ) : null}
-                        <button
+                        <Button
+                          type="button"
+                          variant="primary"
+                          className="w-full"
                           onClick={() => void previewLensMetadata()}
                           disabled={busy !== null || !metadataLensUri.trim()}
-                          className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                          type="button"
                         >
                           {busy === 'grove-preview' ? 'Fetching metadata…' : 'Preview Lens metadata'}
-                        </button>
+                        </Button>
                         {lensMetadataPreview ? (
                           <pre className="max-h-44 overflow-auto rounded-md border border-zinc-800 bg-black/60 p-2 text-[10px] text-zinc-300">
                             {JSON.stringify(lensMetadataPreview, null, 2)}

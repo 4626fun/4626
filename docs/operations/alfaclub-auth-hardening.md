@@ -5,6 +5,8 @@ work in this PR. Read it together with:
 
 - [`docs/operations/alfaclub-creative-architecture.md`](./alfaclub-creative-architecture.md) —
   the canonical creative-vs-auth boundary (PR #463).
+- [`docs/operations/alfaclub-token-rotation.md`](./alfaclub-token-rotation.md) —
+  mint browser triplet → DB + Vercel env → cron smoke (P0 recovery).
 - [`docs/operations/deployment/eliza-runtime.md`](./deployment/eliza-runtime.md) —
   PR #458's gate on the in-process refresher (`ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED`).
 
@@ -176,6 +178,11 @@ Or via the web UI: **Repo → Settings → Secrets and variables → Actions
 → New repository secret**, name `ALFACLUB_HEALTH_CRON_SECRET`, value
 the same `CRON_SECRET` configured on Vercel for
 `/api/v1/alfaclub/chat-auth-health`.
+
+**If the workflow fails with `http_status_401`:** the GitHub secret no longer
+matches Vercel Production `CRON_SECRET`. Re-sync using the command above,
+then `gh workflow run "AlfaClub auth-health monitor"`. `vercel env pull` often
+does not include `CRON_SECRET` — copy from the Vercel dashboard instead.
 
 ## Quick `/gmeow` smoke check
 

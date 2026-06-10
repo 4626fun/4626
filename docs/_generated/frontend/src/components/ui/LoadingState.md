@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/ui/LoadingState
+[4626-web](../../../index.md) / src/components/ui/LoadingState
 
 # src/components/ui/LoadingState
 
@@ -12,7 +12,7 @@
 
 > **BaseLoadingProps** = `object`
 
-Defined in: [src/components/ui/LoadingState.tsx:26](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L26)
+Defined in: [src/components/ui/LoadingState.tsx:25](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L25)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/components/ui/LoadingState.tsx:26](https://github.com/wenakita/
 
 > `optional` **className**: `string`
 
-Defined in: [src/components/ui/LoadingState.tsx:29](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L29)
+Defined in: [src/components/ui/LoadingState.tsx:28](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L28)
 
 ##### intent?
 
 > `optional` **intent**: [`LoadingIntent`](../layout/appLoadingIntents.md#loadingintent)
 
-Defined in: [src/components/ui/LoadingState.tsx:27](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L27)
+Defined in: [src/components/ui/LoadingState.tsx:26](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L26)
 
 ##### labelOverride?
 
 > `optional` **labelOverride**: `string`
 
-Defined in: [src/components/ui/LoadingState.tsx:28](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L28)
+Defined in: [src/components/ui/LoadingState.tsx:27](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L27)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/components/ui/LoadingState.tsx:28](https://github.com/wenakita/
 
 > **LoadingBlockProps** = [`BaseLoadingProps`](#baseloadingprops) & `object`
 
-Defined in: [src/components/ui/LoadingState.tsx:58](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L58)
+Defined in: [src/components/ui/LoadingState.tsx:57](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L57)
 
 #### Type Declaration
 
@@ -58,7 +58,7 @@ Defined in: [src/components/ui/LoadingState.tsx:58](https://github.com/wenakita/
 
 > **LoadingInlineProps** = [`BaseLoadingProps`](#baseloadingprops) & `object`
 
-Defined in: [src/components/ui/LoadingState.tsx:32](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L32)
+Defined in: [src/components/ui/LoadingState.tsx:31](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L31)
 
 #### Type Declaration
 
@@ -76,7 +76,7 @@ Defined in: [src/components/ui/LoadingState.tsx:32](https://github.com/wenakita/
 
 > **LoadingTextProps** = [`BaseLoadingProps`](#baseloadingprops) & `object`
 
-Defined in: [src/components/ui/LoadingState.tsx:50](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L50)
+Defined in: [src/components/ui/LoadingState.tsx:49](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L49)
 
 #### Type Declaration
 
@@ -90,7 +90,7 @@ Defined in: [src/components/ui/LoadingState.tsx:50](https://github.com/wenakita/
 
 > **LoadingBlock**(`props`): `Element`
 
-Defined in: [src/components/ui/LoadingState.tsx:63](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L63)
+Defined in: [src/components/ui/LoadingState.tsx:62](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L62)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [src/components/ui/LoadingState.tsx:63](https://github.com/wenakita/
 
 > **LoadingInline**(`props`): `Element`
 
-Defined in: [src/components/ui/LoadingState.tsx:37](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L37)
+Defined in: [src/components/ui/LoadingState.tsx:36](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L36)
 
 #### Parameters
 
@@ -126,7 +126,7 @@ Defined in: [src/components/ui/LoadingState.tsx:37](https://github.com/wenakita/
 
 > **LoadingText**(`props`): `Element`
 
-Defined in: [src/components/ui/LoadingState.tsx:54](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L54)
+Defined in: [src/components/ui/LoadingState.tsx:53](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L53)
 
 #### Parameters
 

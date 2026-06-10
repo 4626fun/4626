@@ -401,6 +401,8 @@ export async function insertMetricsSnapshot(rows: readonly MetricsSnapshotRow[])
   let inserted = 0
   for (const r of rows) {
     try {
+      // Scoring snapshots are canonical product data (not telemetry).
+      // Never sample this table; dropping rows can freeze latest snapshot resolution.
       await db.sql`
         INSERT INTO alfaclub_metrics_snapshot (
           snapshot_ts, creator_address, token_id,

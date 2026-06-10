@@ -1,4 +1,25 @@
-import type { Hex } from 'viem'
+import { decodeErrorResult, type Hex } from 'viem'
+
+import { isHexString } from '@/lib/aa/coinbaseErc4337Signature'
+import {
+  PERMIT2_INVALID_NONCE_MESSAGE,
+  ZORA_SWAP_SIMULATION_FAILED_MESSAGE,
+} from '@/lib/swap/swapStatusCopy'
+
+/** Permit2 `InvalidNonce()` — stale or already-consumed permit nonce in swap calldata. */
+export const PERMIT2_INVALID_NONCE_SELECTOR = '0x756688fe'
+
+/** Bundlers vary receipt shape — read tx hash from nested or top-level fields. */
+export function extractUserOpReceiptTxHash(receipt: unknown): Hex | null {
+  if (!receipt || typeof receipt !== 'object') return null
+  const r = receipt as Record<string, unknown>
+  const nested = r.receipt as Record<string, unknown> | undefined
+  const candidates = [nested?.transactionHash, nested?.txHash, r.transactionHash, r.txHash]
+  for (const candidate of candidates) {
+    if (isHexString(candidate)) return candidate
+  }
+  return null
+}
 
 // Known error selectors for decoding revert reasons.
 const KNOWN_ERROR_SELECTORS: Record<string, string> = {
@@ -25,11 +46,33 @@ const KNOWN_ERROR_SELECTORS: Record<string, string> = {
   // UniversalCreate2DeployerFromStore
   '0x8164ae93': 'NotAuthorizedDeployer()',
   '0xb4f54111': 'DeployFailed()',
+  '0x2c4029e9': 'ExecutionFailed(uint256,bytes)',
+  '0xb0669cbc': 'InvalidContractSignature()',
+  '0x756688fe': 'InvalidNonce()',
+  '0x3b99b53d': 'SliceOutOfBounds()',
+}
+
+export function isAccountNonceMismatchError(error: unknown): boolean {
+  const lower = getErrorDiagnosticMessage(error).toLowerCase()
+  return lower.includes('aa25') || lower.includes('invalid account nonce')
+}
+
+export function isRpcRateLimitError(error: unknown): boolean {
+  const code = (error as { code?: number })?.code
+  if (code === -32016 || code === -32011 || code === 429) return true
+  const lower = getErrorDiagnosticMessage(error).toLowerCase()
+  return (
+    lower.includes('429') ||
+    lower.includes('too many requests') ||
+    lower.includes('over rate limit') ||
+    lower.includes('rate limit')
+  )
 }
 
 export function classifyUserOpErrorCode(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error ?? '')
   const lower = message.toLowerCase()
+  if (isAccountNonceMismatchError(error)) return 'aa25_nonce'
   if (lower.includes('aa23')) return 'aa23_validation'
   if (lower.includes('signtypeddata') && lower.includes('timed out')) return 'typed_data_timeout'
   if (lower.includes('paymaster')) return 'paymaster_error'
@@ -38,15 +81,75 @@ export function classifyUserOpErrorCode(error: unknown): string {
   return 'unknown'
 }
 
+function findHexRevertCandidates(value: unknown, depth = 0, out: Hex[] = []): Hex[] {
+  if (depth > 12 || value == null) return out
+  if (typeof value === 'string') {
+    const matches = value.match(/0x[a-fA-F0-9]{8,}/g)
+    if (matches) {
+      for (const match of matches) out.push(match as Hex)
+    }
+    return out
+  }
+  if (typeof value !== 'object') return out
+  const node = value as Record<string, unknown>
+  for (const key of ['data', 'revertData', 'returnData'] as const) {
+    const candidate = node[key]
+    if (typeof candidate === 'string' && candidate.startsWith('0x') && candidate.length >= 10) {
+      out.push(candidate as Hex)
+    }
+  }
+  if (node.cause) findHexRevertCandidates(node.cause, depth + 1, out)
+  if (Array.isArray(node.metaMessages)) {
+    for (const entry of node.metaMessages) findHexRevertCandidates(entry, depth + 1, out)
+  }
+  if (Array.isArray(node)) {
+    for (const entry of node) findHexRevertCandidates(entry, depth + 1, out)
+  } else {
+    for (const entry of Object.values(node)) findHexRevertCandidates(entry, depth + 1, out)
+  }
+  return out
+}
+
+function pickBestRevertData(candidates: Hex[]): Hex | undefined {
+  if (candidates.length === 0) return undefined
+  const executionFailed = candidates.find((c) => c.slice(0, 10).toLowerCase() === '0x2c4029e9')
+  if (executionFailed) return executionFailed
+  return [...candidates].sort((a, b) => b.length - a.length)[0]
+}
+
+function findNestedRevertData(value: unknown, depth = 0): Hex | undefined {
+  const fromScan = pickBestRevertData(findHexRevertCandidates(value))
+  if (fromScan) return fromScan
+  if (depth > 8 || value == null || typeof value !== 'object') return undefined
+  const node = value as Record<string, unknown>
+  for (const key of ['data', 'revertData', 'returnData'] as const) {
+    const candidate = node[key]
+    if (typeof candidate === 'string' && candidate.startsWith('0x') && candidate.length >= 10) {
+      return candidate as Hex
+    }
+  }
+  if (node.cause) {
+    const nested = findNestedRevertData(node.cause, depth + 1)
+    if (nested) return nested
+  }
+  if (Array.isArray(node.metaMessages)) {
+    for (const entry of node.metaMessages) {
+      if (typeof entry !== 'string') continue
+      const match = entry.match(/0x[a-fA-F0-9]{8,}/)
+      if (match?.[0]) return match[0] as Hex
+    }
+  }
+  return undefined
+}
+
 export function extractRevertInfo(e: unknown): { error: string; revertData?: Hex; errorName?: string } {
   const errAny = e as any
   const msg = e instanceof Error ? e.message : String(e ?? '')
   const result: { error: string; revertData?: Hex; errorName?: string } = { error: msg }
 
-  // Extract revert data from various error structures.
-  const revertData = errAny?.cause?.cause?.data ?? errAny?.cause?.data ?? errAny?.data
-  if (revertData && typeof revertData === 'string' && revertData.startsWith('0x')) {
-    result.revertData = revertData as Hex
+  const revertData = findNestedRevertData(errAny)
+  if (revertData) {
+    result.revertData = revertData
     const selector = revertData.slice(0, 10).toLowerCase()
     if (KNOWN_ERROR_SELECTORS[selector]) {
       result.errorName = KNOWN_ERROR_SELECTORS[selector]
@@ -167,6 +270,7 @@ export function isPaymasterUnavailableError(error: unknown): boolean {
   // as "paymaster unavailable" and trigger unwanted no-paymaster fallback.
   // Only match our own specific error strings that indicate genuine unavailability.
   return (
+    isPaymasterInternalProxyError(error) ||
     lc.includes('cdp paymaster endpoint is not configured') ||
     lc.includes('server misconfigured') ||
     lc.includes('upstream request failed') ||
@@ -175,6 +279,7 @@ export function isPaymasterUnavailableError(error: unknown): boolean {
 }
 
 export function isPaymasterPolicyError(error: unknown): boolean {
+  if (isPaymasterInternalProxyError(error)) return false
   const msg = getErrorDiagnosticMessage(error)
   const lc = msg.toLowerCase()
   return (
@@ -210,6 +315,501 @@ export function isImmediateUserOpRetrySuppressedError(error: unknown): boolean {
   )
 }
 
+/** Bundler/EntryPoint failures that will not succeed on immediate retry. */
+export function isDeterministicUserOpExecutionError(error: unknown): boolean {
+  if (isRpcRateLimitError(error)) return false
+  const revertInfo = extractRevertInfo(error)
+  if (revertInfo.errorName === 'ExecutionFailed(uint256,bytes)') return true
+  const selector = revertInfo.revertData?.slice(0, 10).toLowerCase()
+  if (selector === '0x2c4029e9') return true
+  const lc = getErrorDiagnosticMessage(error).toLowerCase()
+  return (
+    lc.includes('0x2c4029e9') ||
+    lc.includes('transfer_from_failed') ||
+    lc.includes('execution reverted') ||
+    lc.includes('reverted for an unknown reason')
+  )
+}
+
+/** Broad match for bundler/RPC errors that will not succeed on immediate retry. */
+export function isExecutionRevertedLikeError(error: unknown): boolean {
+  if (isDeterministicUserOpExecutionError(error)) return true
+  try {
+    const blob = JSON.stringify(error).toLowerCase()
+    return (
+      blob.includes('execution reverted') ||
+      blob.includes('reverted for an unknown reason')
+    )
+  } catch {
+    return false
+  }
+}
+
+const ZORA_UNIVERSAL_ROUTER_BASE = '0x6ff5693b99212da76ad316178a184ab56d299b43'
+
+/** Coinbase Smart Wallet `execute(address,uint256,bytes)` — bundlers often echo full UserOp callData in RPC errors. */
+const CSW_EXECUTE_SELECTOR = '0xb61d27f6'
+/** Coinbase Smart Wallet `executeBatch((address,uint256,bytes)[])` — same echo behavior for batched swaps. */
+const CSW_EXECUTE_BATCH_SELECTOR = '0x34fcd5be'
+
+const ACTIONABLE_BUNDLER_REVERT_SELECTORS = new Set([
+  '0x2c4029e9', // ExecutionFailed(uint256,bytes)
+  '0xb0669cbc', // InvalidContractSignature()
+  '0x3b99b53d', // SliceOutOfBounds()
+  '0x08c379a0', // Error(string)
+  '0x4e487b71', // Panic(uint256)
+  '0x82b42900', // Unauthorized()
+])
+
+/** Long CSW execute/executeBatch payloads are echoed callData, not a decodable on-chain revert. */
+export function isEchoedBundlerUserOpCallData(revertData: Hex | undefined): boolean {
+  if (!revertData || revertData.length < 200) return false
+  const selector = revertData.slice(0, 10).toLowerCase()
+  return selector === CSW_EXECUTE_SELECTOR || selector === CSW_EXECUTE_BATCH_SELECTOR
+}
+
+export function isActionableBundlerSimulationRevert(revertData: Hex | undefined): boolean {
+  if (!revertData || revertData.length < 10) return false
+  const selector = revertData.slice(0, 10).toLowerCase()
+  if (isEchoedBundlerUserOpCallData(revertData)) return false
+  return ACTIONABLE_BUNDLER_REVERT_SELECTORS.has(selector)
+}
+
+export function isRpcInvalidParametersEstimateError(error: unknown): boolean {
+  const lower = getErrorDiagnosticMessage(error).toLowerCase()
+  return (
+    lower.includes('invalid parameters were provided') ||
+    lower.includes('missing or invalid parameters')
+  )
+}
+
+export function isPaymasterInternalProxyError(error: unknown): boolean {
+  const lower = getErrorDiagnosticMessage(error).toLowerCase()
+  return (
+    lower.includes('paymaster proxy internal error') ||
+    lower.includes('paymaster_proxy_internal_error')
+  )
+}
+
+/** Bundler stub signatures can false-positive InvalidContractSignature during estimate (not ExecutionFailed). */
+export function isBundlerStubSignatureSimulationArtifact(
+  revertData: Hex | undefined,
+  preflightDirectCallSucceeded: boolean,
+): boolean {
+  if (!preflightDirectCallSucceeded || !revertData || revertData.length < 10) return false
+  return revertData.slice(0, 10).toLowerCase() === '0xb0669cbc'
+}
+
+/**
+ * Bundler gas estimate can fail while eth_call preflight still passes (stub sig, paymaster stub, state drift).
+ * When a swap-router floor callGasLimit is configured, proceed with that floor only for non-actionable estimate noise
+ * (invalid RPC params + echoed UserOp callData). Real execution reverts must block send.
+ */
+export function shouldAdvisorySkipBundlerGasEstimate(params: {
+  error: unknown
+  firstCallTo?: string
+  floorCallGasLimit?: bigint | null
+  preflightDirectCallSucceeded?: boolean
+}): boolean {
+  const floor = params.floorCallGasLimit
+  if (typeof floor !== 'bigint' || floor <= 0n) return false
+  const revertInfo = extractRevertInfo(params.error)
+  if (isActionableBundlerSimulationRevert(revertInfo.revertData)) {
+    return isBundlerStubSignatureSimulationArtifact(
+      revertInfo.revertData,
+      params.preflightDirectCallSucceeded === true,
+    )
+  }
+  const lower = String(revertInfo.error ?? getErrorDiagnosticMessage(params.error)).toLowerCase()
+  if (isRpcInvalidParametersEstimateError(params.error)) {
+    return isEchoedBundlerUserOpCallData(revertInfo.revertData) || !revertInfo.revertData
+  }
+  if (isEchoedBundlerUserOpCallData(revertInfo.revertData)) return true
+  return (
+    lower.includes('execution reverted') ||
+    lower.includes('reverted for an unknown reason')
+  )
+}
+
+export function buildUserOpGasEstimateFailureError(
+  error: unknown,
+  firstCallTo?: string,
+): Error {
+  const revertInfo = extractRevertInfo(error)
+  const directCallResult = {
+    success: false as const,
+    error: revertInfo.error,
+    revertData: revertInfo.revertData,
+    errorName: revertInfo.errorName,
+  }
+  const callTo = String(firstCallTo ?? '').toLowerCase()
+  if (revertInfo.revertData?.slice(0, 10).toLowerCase() === '0x3b99b53d') {
+    return buildPreflightSimulationRejectionError({
+      simResult: { directCallResult },
+      firstCallTo,
+    })
+  }
+
+  if (
+    callTo === ZORA_UNIVERSAL_ROUTER_BASE ||
+    revertInfo.errorName === 'ExecutionFailed(uint256,bytes)' ||
+    revertInfo.revertData?.slice(0, 10).toLowerCase() === '0x2c4029e9'
+  ) {
+    return buildPreflightSimulationRejectionError({
+      simResult: { directCallResult },
+      firstCallTo,
+    })
+  }
+  const detail = getErrorDiagnosticMessage(error)
+  return new Error(
+    `Bundler could not simulate this smart-wallet transaction (${detail}). Refresh the quote and try again.`,
+  )
+}
+
+export class PreflightSimulationRejectionError extends Error {
+  override readonly name = 'PreflightSimulationRejectionError'
+}
+
+export function isPreflightSimulationRejection(error: unknown): error is PreflightSimulationRejectionError {
+  return error instanceof PreflightSimulationRejectionError
+}
+
+function revertDataStartsWithSelector(revertData: string | undefined, selector: string): boolean {
+  if (!revertData) return false
+  return revertData.toLowerCase().startsWith(selector.toLowerCase())
+}
+
+export function isPermit2InvalidNonceRevert(params: {
+  revertData?: Hex | string | null
+  innerSelector?: string | null
+  errorMessage?: string | null
+}): boolean {
+  const selector = PERMIT2_INVALID_NONCE_SELECTOR.toLowerCase()
+  if (params.innerSelector?.toLowerCase() === selector) return true
+  if (revertDataStartsWithSelector(String(params.revertData ?? ''), selector)) return true
+  const msg = String(params.errorMessage ?? '').toLowerCase()
+  return msg.includes('invalidnonce') || msg.includes(selector.slice(2))
+}
+
+export function isPermit2InvalidNonceError(error: unknown): boolean {
+  if (error instanceof PreflightSimulationRejectionError) {
+    return (
+      error.message === PERMIT2_INVALID_NONCE_MESSAGE ||
+      error.message.toLowerCase().includes('nonce already used')
+    )
+  }
+  const msg = getErrorDiagnosticMessage(error).toLowerCase()
+  return (
+    msg.includes('invalidnonce') ||
+    msg.includes('756688fe') ||
+    msg.includes('permit2 authorization is stale')
+  )
+}
+
+/** True when a fresh quote + higher slippage may fix a CSW preflight revert (not Permit2/auth). */
+export function isSwapPreflightSimulationRetryable(error: unknown): boolean {
+  if (isPermit2InvalidNonceError(error)) {
+    return true
+  }
+  const topLevelMsg = getErrorDiagnosticMessage(error).toLowerCase()
+  if (
+    topLevelMsg.includes('approve_only_not_allowed') ||
+    topLevelMsg.includes('approval transaction instead of a swap')
+  ) {
+    return true
+  }
+  if (isPreflightSimulationRejection(error)) {
+    const msg = error.message.toLowerCase()
+    if (
+      msg.includes('permit2 rejected') ||
+      msg.includes('permit2 approval is missing') ||
+      msg.includes('malformed or stale') ||
+      msg.includes('transfer_from_failed') ||
+      msg.includes('not an on-chain owner') ||
+      msg.includes('embedded signer is not')
+    ) {
+      return false
+    }
+    return (
+      msg.includes('allowance is missing') ||
+      msg.includes('insufficient allowance') ||
+      msg.includes('exceeds allowance') ||
+      msg.includes('slippage') ||
+      msg.includes('would fail on-chain') ||
+      msg.includes('would revert') ||
+      msg.includes('stale') ||
+      msg.includes('too tight') ||
+      msg.includes('liquidity')
+    )
+  }
+  const msg = getErrorDiagnosticMessage(error).toLowerCase()
+  if (
+    msg.includes('permit2 rejected') ||
+    msg.includes('0xb0669cbc') ||
+    msg.includes('invalidcontractsignature') ||
+    msg.includes('not an on-chain owner')
+  ) {
+    return false
+  }
+  return (
+    msg.includes('allowance is missing') ||
+    msg.includes('insufficient allowance') ||
+    msg.includes('exceeds allowance') ||
+    msg.includes('would fail on-chain') ||
+    msg.includes('would revert') ||
+    msg.includes('0x2c4029e9') ||
+    msg.includes('slippage') ||
+    msg.includes('stale quote') ||
+    msg.includes('756688fe') ||
+    msg.includes('invalidnonce') ||
+    msg.includes('liquidity')
+  )
+}
+
+export function parseUserOpGasLimitField(value: unknown): bigint | null {
+  if (typeof value === 'bigint' && value > 0n) return value
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return BigInt(Math.floor(value))
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    try {
+      const parsed = trimmed.startsWith('0x') ? BigInt(trimmed) : BigInt(trimmed)
+      return parsed > 0n ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+/** Prefer bundler-estimated call gas (buffered) over a static Zora floor when both exist. */
+export function resolveUserOpCallGasLimit(params: {
+  estimatedCallGasLimit?: bigint | null
+  floorCallGasLimit?: bigint | null
+  bufferNumerator?: bigint
+  bufferDenominator?: bigint
+}): bigint | undefined {
+  const numerator = params.bufferNumerator ?? 130n
+  const denominator = params.bufferDenominator ?? 100n
+  const estimated = params.estimatedCallGasLimit
+  const floor = params.floorCallGasLimit
+  let buffered: bigint | undefined
+  if (typeof estimated === 'bigint' && estimated > 0n) {
+    buffered = (estimated * numerator) / denominator
+  }
+  if (buffered && floor) return buffered > floor ? buffered : floor
+  return buffered ?? floor ?? undefined
+}
+
+export function mapUserOpExecutionFailureMessage(
+  error: unknown,
+  context?: { firstCallTo?: string },
+): Error | null {
+  const revertInfo = extractRevertInfo(error)
+  if (!revertInfo.revertData && !revertInfo.errorName) {
+    const lc = getErrorDiagnosticMessage(error).toLowerCase()
+    if (!lc.includes('execution reverted') && !lc.includes('reverted for an unknown reason')) {
+      return null
+    }
+  }
+  return buildPreflightSimulationRejectionError({
+    simResult: {
+      success: false,
+      error: revertInfo.error,
+      revertData: revertInfo.revertData,
+      errorName: revertInfo.errorName,
+      directCallResult: {
+        success: false,
+        error: revertInfo.error,
+        revertData: revertInfo.revertData,
+        errorName: revertInfo.errorName,
+      },
+    },
+    firstCallTo: context?.firstCallTo,
+  })
+}
+
+const KNOWN_INNER_REVERT_SELECTORS = [
+  '486aa621',
+  '8199f5f3',
+  'b0669cbc',
+  '3b99b53d',
+  '849eaf98',
+  '756688fe',
+  '7939f424',
+  '86aa6210',
+] as const
+
+function readInnerRevertSelector(inner: unknown): string | null {
+  if (inner == null) return null
+  let hex = ''
+  if (typeof inner === 'string') {
+    hex = inner.startsWith('0x') ? inner.slice(2) : inner
+  } else if (inner instanceof Uint8Array) {
+    hex = Array.from(inner, (byte) => byte.toString(16).padStart(2, '0')).join('')
+  } else {
+    return null
+  }
+  const lower = hex.toLowerCase()
+  for (const selector of KNOWN_INNER_REVERT_SELECTORS) {
+    if (lower.includes(selector)) {
+      if (selector === '86aa6210') return '0x486aa621'
+      return `0x${selector}`
+    }
+  }
+  if (lower.length >= 8) {
+    return `0x${lower.slice(0, 8)}`
+  }
+  return null
+}
+
+export function extractExecutionFailedInnerSelector(revertData?: Hex): string | null {
+  if (!revertData || !revertData.startsWith('0x2c4029e9')) return null
+  try {
+    const decoded = decodeErrorResult({
+      abi: [
+        {
+          type: 'error',
+          name: 'ExecutionFailed',
+          inputs: [
+            { name: 'commandIndex', type: 'uint256' },
+            { name: 'message', type: 'bytes' },
+          ],
+        },
+      ],
+      data: revertData,
+    })
+    const inner = decoded.args?.[1]
+    const fromInner = readInnerRevertSelector(inner)
+    if (fromInner) return fromInner
+  } catch {
+    // Fall through — some RPC simulators return partially encoded nested reverts.
+  }
+  const lower = revertData.toLowerCase()
+  for (const selector of [
+    '0x486aa621',
+    '0x8199f5f3',
+    '0xb0669cbc',
+    '0x3b99b53d',
+    '0x849eaf98',
+    PERMIT2_INVALID_NONCE_SELECTOR,
+  ]) {
+    if (lower.includes(selector.slice(2))) return selector
+  }
+  return null
+}
+
+export function buildPreflightSimulationRejectionError(params: {
+  simResult: {
+    success?: boolean
+    error?: string
+    revertData?: Hex
+    errorName?: string
+    directCallResult?: { success?: boolean; error?: string; revertData?: Hex; errorName?: string }
+  }
+  firstCallTo?: string
+}): Error {
+  const direct = params.simResult.directCallResult
+  const errorName = direct?.errorName ?? params.simResult.errorName
+  const revertData = (direct?.revertData ?? params.simResult.revertData)?.toLowerCase()
+  const callTo = String(params.firstCallTo ?? '').toLowerCase()
+
+  const directRevert = (direct?.revertData ?? params.simResult.revertData)?.toLowerCase()
+  if (directRevert?.startsWith('0x3b99b53d')) {
+    return new PreflightSimulationRejectionError(
+      'Swap route data from Zora is malformed or stale. Refresh the quote and try again.',
+    )
+  }
+  if (directRevert?.startsWith(PERMIT2_INVALID_NONCE_SELECTOR)) {
+    return new PreflightSimulationRejectionError(PERMIT2_INVALID_NONCE_MESSAGE)
+  }
+
+  const innerSelector = extractExecutionFailedInnerSelector(direct?.revertData ?? params.simResult.revertData)
+  const detail = direct?.error ?? params.simResult.error ?? 'Underlying call would revert'
+  const detailLc = String(detail).toLowerCase()
+  const detailSignatureSelector =
+    detailLc.match(/signature:\s*(0x[0-9a-f]{8})/)?.[1] ?? null
+  const effectiveSelector = innerSelector ?? detailSignatureSelector
+
+  if (effectiveSelector === '0xb0669cbc') {
+    return new PreflightSimulationRejectionError(
+      'Permit2 rejected the smart-wallet signature. Refresh the quote, sign again when prompted, then retry the swap.',
+    )
+  }
+
+  if (
+    isPermit2InvalidNonceRevert({
+      innerSelector: effectiveSelector,
+      revertData: direct?.revertData ?? params.simResult.revertData,
+      errorMessage: detail,
+    })
+  ) {
+    return new PreflightSimulationRejectionError(PERMIT2_INVALID_NONCE_MESSAGE)
+  }
+
+  const slippageInnerSelectors = new Set(['0x486aa621', '0x8199f5f3', '0x86aa6210', '0x849eaf98'])
+  const likelySlippageFailure =
+    (effectiveSelector != null && slippageInnerSelectors.has(effectiveSelector)) ||
+    detailLc.includes('slippage') ||
+    detailLc.includes('too little') ||
+    detailLc.includes('toolittle') ||
+    detailLc.includes('minimum output') ||
+    detailLc.includes('minout') ||
+    detailLc.includes('stf')
+
+  if (likelySlippageFailure) {
+    return new PreflightSimulationRejectionError(
+      'Slippage tolerance is too tight for this pool. If Auto mode is enabled, the app will retry with higher slippage; you can also raise slippage manually and refresh the quote.',
+    )
+  }
+
+  const allowanceFailure =
+    effectiveSelector === '0x7939f424' ||
+    detailLc.includes('transfer_from_failed') ||
+    detailLc.includes('transfer_from') ||
+    detailLc.includes('insufficient allowance') ||
+    detailLc.includes('exceeds allowance') ||
+    detailLc.includes('insufficient funds')
+
+  if (allowanceFailure) {
+    return new PreflightSimulationRejectionError(
+      'Token allowance is missing for this swap. If approval is still confirming, wait ~30 seconds, refresh the quote, then retry.',
+    )
+  }
+
+  if (
+    errorName === 'ExecutionFailed(uint256,bytes)' ||
+    revertData?.startsWith('0x2c4029e9') ||
+    callTo === ZORA_UNIVERSAL_ROUTER_BASE
+  ) {
+    if (effectiveSelector) {
+      return new PreflightSimulationRejectionError(
+        `${ZORA_SWAP_SIMULATION_FAILED_MESSAGE} (revert ${effectiveSelector})`,
+      )
+    }
+    const compactDetail = String(detail ?? '')
+      .replace(/\s+/g, ' ')
+      .trim()
+    const shouldAppendDetail =
+      compactDetail.length > 0 &&
+      !compactDetail.toLowerCase().includes('execution reverted') &&
+      !compactDetail.toLowerCase().includes('requested resource not available')
+    return new PreflightSimulationRejectionError(
+      shouldAppendDetail
+        ? `${ZORA_SWAP_SIMULATION_FAILED_MESSAGE} (${compactDetail.slice(0, 160)})`
+        : ZORA_SWAP_SIMULATION_FAILED_MESSAGE,
+    )
+  }
+  if (detailLc.includes('transfer_from_failed')) {
+    return new PreflightSimulationRejectionError(
+      'Permit2 approval is missing for this smart-wallet swap. Refresh the quote, sign the Permit2 prompt when asked, then retry.',
+    )
+  }
+  return new PreflightSimulationRejectionError(
+    `This transaction would revert on your smart wallet (${detail}). Refresh and try again.`,
+  )
+}
+
 export function isPaymasterAuthPolicyError(error: unknown): boolean {
   const msg = getErrorDiagnosticMessage(error)
   const lc = msg.toLowerCase()
@@ -224,7 +824,18 @@ export function isPaymasterAuthPolicyError(error: unknown): boolean {
 export function isPaymasterRoutingPolicyError(error: unknown): boolean {
   const msg = getErrorDiagnosticMessage(error)
   const lc = msg.toLowerCase()
-  return lc.includes('unsupported chainid') || lc.includes('unsupported entrypoint')
+  if (lc.includes('unsupported chainid') || lc.includes('unsupported entrypoint')) return true
+  // Swap UserOps misclassified as deploy hit the same proxy on self-funded retry.
+  if (
+    lc.includes('missing_primary_call') &&
+    lc.includes('6ff5693b99212da76ad316178a184ab56d299b43')
+  ) {
+    return true
+  }
+  if (lc.includes('swap_router_non_canonical_encoding') || lc.includes('swap_router_command_not_allowed')) {
+    return true
+  }
+  return false
 }
 
 export function formatMetaMessages(error: unknown): string | null {

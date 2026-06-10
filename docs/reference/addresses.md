@@ -14,32 +14,34 @@ Deployed contract addresses for 4626.
 
 ## Base (Hub Chain)
 
-### Current Live Infrastructure (`v1.11.0` protocol contract release target)
+### Current Live Infrastructure (`v1.14.0` greenfield deploy target)
 
 | Contract | Address |
 |----------|---------|
-| CreatorRegistry | `0xa6216Ea21f4a4d190EdD453A51e4e015A44e60C4` |
-| CreatorOVaultFactory | `0x183b8825Bbe7d92be8F54F811EfF9C0dFe854F6E` |
-| VaultActivationBatcher | `0x681DC69607f6E8848a56819ce8C6d591E764187a` |
-| CreatorLotteryManager | `0x04CADE6FDf564A5005FF80930d8e8784cb1A7Cf8` |
-| CreatorVRFConsumerV2_5 | `0xd62D561A48dCe00D9913206Bfce060F8960B57b5` |
-| SolanaBridgeAdapter | `0x3a9dC0b2c11b348E4bD60D9605dc3D4Be9bB6cf5` |
-| UniversalBytecodeStoreV2 | `0xBd21c58f3D59c6E90a6bCCe462c68670F124a792` |
-| UniversalCreate2DeployerFromStore | `0x24c80676E03f4c160bfa769589280fE9f9509eCb` |
-| CreatorOVaultCoreModule | `0x7818AA425a22D9892b33773ccF60CA22D07446E0` |
-| CreatorOVaultStrategiesModule | `0x8370c2190e8FB9f9A82D213e1f00240374F1Fd9D` |
-| CreatorOVaultAdminModule | `0x493FdDC8dd670EDaCC9b8C94842AfFedbf6E31F7` |
-| DeploymentBatcher | `0x271Ab2C53D79d52ddB14506a44133Fe3FA395332` |
-| DeploymentBatcherPhase2Module | `0x81D70248eB4276a6Db7E7DaB9c3B202e52c87593` |
-| DeploymentBatcherPhase3Helper | `0xC2270DA64Cb6ab39e9361926529AA8462c7d3770` |
-| DeploymentBatcherUniV4Helper | `0xbE953c5Da2Cf31C22087F528615bB8e2079b33A4` |
-| DeploymentBatcherUtilsHelper | `0x9D811694842D3d67Af243bc140961fb9a9ad4040` |
+| CreatorRegistry | `0x3f64087dc361Ad52300409E5873b26941D6418B6` |
+| CreatorOVaultFactory | `0x09a2fd817F30D2599fb13520d06751259b6AdcFE` |
+| VaultActivationBatcher | `0x5036FB536f53b15307825eB2006B21E22f0F3193` |
+| CreatorLotteryManager | `0x5c0115589d7F4930A0dc93417aE409f44186f4E7` |
+| CreatorVRFConsumerV2_5 | `0xE4AcDD5316EcF4D98301509968F0728EEDaaB68E` |
+| SolanaBridgeAdapter | `0x700b4BBAf965c013123bAd02a6562FBa487aC0f1` |
+| UniversalBytecodeStoreV2 | `0x8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4` |
+| UniversalCreate2DeployerFromStore | `0x4760216AFd59B843671E0FdFCe6498Ec8CFf38a7` |
+| CreatorOVaultCoreModule | `0x72689fB2243ff247F3A59b431C2C9E95AeFE8A2B` |
+| CreatorOVaultStrategiesModule | `0xF1430f5E10B4C73De06de37ADa6bC77C51DA8157` |
+| CreatorOVaultAdminModule | `0x702DB3176493D79Ee47ac746AA9865113e667aD1` |
+| DeploymentBatcher | `0xa99058f424FB3ACC639F59355C65C40149030651` |
+| DeploymentBatcherPhase1Module | `0xE83876c67E1E845A199f64fb33D76ADC62EAaB9D` |
+| DeploymentBatcherPhase2Module | `0x67FD8A34E5b26F875a9513DFf37521A1ca92d80f` |
+| DeploymentBatcherPhase3Helper | `0x674a2D5EE33e184e2120B373a9AcB3fef640885c` |
+| DeploymentBatcherUniV4Helper | `0xF71a6236586077CD29C971443D2cce37B543DcBB` |
+| DeploymentBatcherUtilsHelper | `0xD71C4910C7bB38FB1089Cca42b0883F1BFFfa28D` |
 
 Notes:
-- Shared/global and split Phase-1 infra were redeployed in the v1.11.0 protocol cutover.
-- The repo's canonical release target is `v1.11.0` for the active protocol contract stack used by user vault deployments.
-- `DeploymentBatcherPhase2Module`, `DeploymentBatcherPhase3Helper`, `DeploymentBatcherUniV4Helper`, and `DeploymentBatcherUtilsHelper` are constructor-created by `DeploymentBatcher`.
-- `DeploymentBatcher` is forensically matched to the live CREATE2 deployment payload; explorer verification for that deployment path still mismatches.
+- Shared/global and split Phase-1 infra shell remain from v1.11.2-pipe-a; **v1.14.0** pairs the CreatorOVault `CreatorOVaultModuleStorage.v3` impairment module stack with store-seeded deploy bytecode.
+- `DeploymentBatcher` deploys as a slim shell; helpers and `DeploymentBatcherPhase1Module` wire post-deploy via protocol treasury Safe (`wireDeploymentHelpers` + `setPhase1Module`).
+- Greenfield Phase 1 reads **Phase1Module immutables** (`phase1Module()` → `0xE838…`), not batcher-shell module getters (shell may still expose legacy `.current` modules).
+- Retired v1.13.0 v2 Phase1Module (`0x19Bd8…`) is for grandfathered vaults only — do not restore for new greenfield deploys after the v1.14.0 cutover.
+- Pre-Pipe-A batcher `0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8` is deprecated — do not use for greenfield deploys.
 
 ### Per-Creator Deployments
 

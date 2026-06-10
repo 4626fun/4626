@@ -2,10 +2,10 @@
   "contractName": "DeploymentBatcher",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x271Ab2C53D79d52ddB14506a44133Fe3FA395332",
+  "address": "0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
   "deployedAt": "2026-05-05T07:51:45Z",
-  "deploymentTx": "0x70fef40db10e85aece6296433fdf85628571d6da234d3a6281ff9df0cefe1556",
+  "deploymentTx": "0x4cecc55f20967621682fb2525df27a175beb791d02fdd80c1c30c3851021f3f6",
   "abi": [
     {
       "type": "constructor",
@@ -2422,9 +2422,9 @@
     }
   ],
   "notes": [
-    "Deterministic live v1.11.0 deployment batcher for the Base full release.",
-    "Constructor dependencies: UniversalBytecodeStoreV2=0xBd21c58f3D59c6E90a6bCCe462c68670F124a792, UniversalCreate2DeployerFromStore=0x24c80676E03f4c160bfa769589280fE9f9509eCb, CreatorOVaultCoreModule=0x7818AA425a22D9892b33773ccF60CA22D07446E0, CreatorOVaultStrategiesModule=0x8370c2190e8FB9f9A82D213e1f00240374F1Fd9D, CreatorOVaultAdminModule=0x493FdDC8dd670EDaCC9b8C94842AfFedbf6E31F7.",
+    "Deterministic live v1.11.1 deployment batcher for the Base full release.",
+    "Constructor dependencies: UniversalBytecodeStoreV2=0x9C3e2A7bd73690d5b5DC0C47f8dB74c4dc5D1c69, UniversalCreate2DeployerFromStore=0xF6538d7D18AfFe5057C6f109DBEd33c851A70c7E, CreatorOVaultCoreModule=0x5f6b5E9044179BF3C4d2f38AB5EC5c60b4B6657b, CreatorOVaultStrategiesModule=0x6048eC7103Ce9090Ad3B650931A6113a5369A164, CreatorOVaultAdminModule=0xDBC68d78D2961e4d2ca156D9F0e489B149cb7d73.",
     "Constructor-created helpers: DeploymentBatcherPhase2Module=0x81D70248eB4276a6Db7E7DaB9c3B202e52c87593, DeploymentBatcherPhase3Helper=0xC2270DA64Cb6ab39e9361926529AA8462c7d3770, DeploymentBatcherUniV4Helper=0xbE953c5Da2Cf31C22087F528615bB8e2079b33A4, DeploymentBatcherUtilsHelper=0x9D811694842D3d67Af243bc140961fb9a9ad4040.",
-    "BaseScan verification still mismatches deployment bytecode for DeploymentBatcher and DeploymentBatcherPhase2Module after the live v1.11.0 CREATE2 deployment. Runtime wiring checks remain canonical."
+    "BaseScan verification still mismatches deployment bytecode for DeploymentBatcher and DeploymentBatcherPhase2Module after the live v1.11.1 CREATE2 deployment. Runtime wiring checks remain canonical."
   ]
 }

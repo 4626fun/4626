@@ -11,7 +11,7 @@ describe('token logo known seeds', () => {
       symbol: 'ZORA',
     })
 
-    expect(lookup.preferred).toBe('https://zora.co/assets/favicon/apple-touch-icon.png')
+    expect(lookup.preferred).toBe('/brands/zora-token.svg')
   })
 })
 

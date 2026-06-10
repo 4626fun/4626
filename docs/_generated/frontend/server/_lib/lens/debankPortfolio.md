@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/lens/debankPortfolio
+[4626-web](../../../index.md) / server/\_lib/lens/debankPortfolio
 
 # server/\_lib/lens/debankPortfolio
 
@@ -197,6 +197,33 @@ Top token holdings sorted by USD value.
 Defined in: [server/\_lib/lens/debankPortfolio.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L42)
 
 ## Functions
+
+### getTrayWalletPortfolioDebank()
+
+> **getTrayWalletPortfolioDebank**(`address`, `options`): `Promise`\<[`WalletPortfolio`](#walletportfolio) \| `null`\>
+
+Defined in: [server/\_lib/lens/debankPortfolio.ts:224](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L224)
+
+Lighter DeBank fetch for the account tray (2 API calls vs 4).
+Skips used_chain_list and complex_protocol_list to conserve compute units.
+
+#### Parameters
+
+##### address
+
+`string`
+
+##### options
+
+###### topTokenCount?
+
+`number`
+
+#### Returns
+
+`Promise`\<[`WalletPortfolio`](#walletportfolio) \| `null`\>
+
+***
 
 ### getWalletPortfolio()
 

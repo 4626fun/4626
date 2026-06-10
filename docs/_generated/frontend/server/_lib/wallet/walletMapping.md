@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/wallet/walletMapping
+[4626-web](../../../index.md) / server/\_lib/wallet/walletMapping
 
 # server/\_lib/wallet/walletMapping
 
@@ -160,7 +160,7 @@ Defined in: [server/\_lib/wallet/walletMapping.ts:1](https://github.com/wenakita
 
 > **classifyLinkedAccounts**(`user`): [`ClassifiedLinkedAccounts`](#classifiedlinkedaccounts)
 
-Defined in: [server/\_lib/wallet/walletMapping.ts:143](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletMapping.ts#L143)
+Defined in: [server/\_lib/wallet/walletMapping.ts:345](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletMapping.ts#L345)
 
 #### Parameters
 
@@ -171,3 +171,75 @@ Defined in: [server/\_lib/wallet/walletMapping.ts:143](https://github.com/wenaki
 #### Returns
 
 [`ClassifiedLinkedAccounts`](#classifiedlinkedaccounts)
+
+***
+
+### collectPrivyServerManagedWalletAddresses()
+
+> **collectPrivyServerManagedWalletAddresses**(`user`): `Set`\<`string`\>
+
+Defined in: [server/\_lib/wallet/walletMapping.ts:167](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletMapping.ts#L167)
+
+#### Parameters
+
+##### user
+
+[`PrivyUserLike`](#privyuserlike)
+
+#### Returns
+
+`Set`\<`string`\>
+
+***
+
+### collectPrivySmartWalletAddresses()
+
+> **collectPrivySmartWalletAddresses**(`user`): `Set`\<`string`\>
+
+Defined in: [server/\_lib/wallet/walletMapping.ts:103](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletMapping.ts#L103)
+
+#### Parameters
+
+##### user
+
+[`PrivyUserLike`](#privyuserlike)
+
+#### Returns
+
+`Set`\<`string`\>
+
+***
+
+### extractPrivyEmbeddedEoaAddress()
+
+> **extractPrivyEmbeddedEoaAddress**(`user`): `string` \| `null`
+
+Defined in: [server/\_lib/wallet/walletMapping.ts:214](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletMapping.ts#L214)
+
+#### Parameters
+
+##### user
+
+[`PrivyUserLike`](#privyuserlike)
+
+#### Returns
+
+`string` \| `null`
+
+***
+
+### isPrivyServerManagedWalletRecord()
+
+> **isPrivyServerManagedWalletRecord**(`raw`): `boolean`
+
+Defined in: [server/\_lib/wallet/walletMapping.ts:156](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletMapping.ts#L156)
+
+#### Parameters
+
+##### raw
+
+`any`
+
+#### Returns
+
+`boolean`

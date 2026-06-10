@@ -8,10 +8,14 @@
  *
  * Why this exists (2026-05-11):
  *
- * The May 5 owner[3] add (UserOp 0xa9a06340…9a36, tx 0xa6b54357…b4c3) was a
- * two-part Relay flow that landed in the same Base block 45,600,637:
- *   PART 1 — CSW.executeBatch → RelayDepository.depositNative(self, id=0x8cc5…797a)
+ * The May 5 owner[3] add (UserOp 0xa9a06340…9a36, bundle 0x34edd28…2aadf) was a
+ * two-part Relay **same-chain intent** (originChainId = destinationChainId = 8453)
+ * that landed in block 45,600,637:
+ *   PART 1 — CSW UserOp → executeBatch → RelayDepository.depositNative(self, id=0x8cc5…797a)
  *   PART 2 — CSW.executeWithoutChainIdValidation → addOwnerAddress(...)
+ *
+ * Relay's explorer may still label Part 1 as a "same chain cross chain transaction"
+ * (~0.000019 ETH on Base). That is intent-settlement UI, not an L2 bridge.
  *
  * The depository orderId 0x8cc5…797a is produced by Relay's solver as part of a
  * /quote response (steps[].requestId OR protocol.v2.orderId, depending on
@@ -23,9 +27,59 @@
  */
 
 import { logger } from '../../../packages/server-core/src/index.js'
+import {
+  MAX_OWNER_MUTATION_RELAY_DEPOSIT_SEED_WEI,
+  MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI,
+  RELAY_DEPOSITORY_BASE,
+} from '../../../src/lib/wallet/cswOwnerAbi.js'
 
 const RELAY_QUOTE_URL = 'https://api.relay.link/quote/v2'
-const NATIVE_CURRENCY = '0x0000000000000000000000000000000000000000'
+export const NATIVE_CURRENCY = '0x0000000000000000000000000000000000000000' as const
+/** Forwarded on owner-mutation `/quote/v2` requests (Relay pricing hint). */
+export const RELAY_OWNER_MUTATION_ORIGIN_GAS_OVERHEAD = 300_000
+/** Base mainnet USDC — owner-mutation Part 1 must never use this lane. */
+export const BASE_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as const
+
+export function isNativeRelayCurrency(address: unknown): boolean {
+  if (typeof address !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(address)) return false
+  return address.toLowerCase() === NATIVE_CURRENCY.toLowerCase()
+}
+
+export function relayQuoteCurrencyInAddress(extract: RelayQuoteExtract): `0x${string}` | null {
+  const rawObj =
+    extract.raw && typeof extract.raw === 'object' ? (extract.raw as Record<string, unknown>) : null
+  if (!rawObj) return null
+  const details = rawObj.details as Record<string, unknown> | undefined
+  const currencyIn = details?.currencyIn as Record<string, unknown> | undefined
+  const currencyInObj = currencyIn?.currency as Record<string, unknown> | undefined
+  return asAddress(currencyInObj?.address ?? null)
+}
+
+export function relayQuoteCurrencyInSymbol(extract: RelayQuoteExtract): string | null {
+  const rawObj =
+    extract.raw && typeof extract.raw === 'object' ? (extract.raw as Record<string, unknown>) : null
+  if (!rawObj) return null
+  const details = rawObj.details as Record<string, unknown> | undefined
+  const currencyIn = details?.currencyIn as Record<string, unknown> | undefined
+  const currencyInObj = currencyIn?.currency as Record<string, unknown> | undefined
+  const symbol = currencyInObj?.symbol
+  return typeof symbol === 'string' && symbol.trim() ? symbol.trim() : null
+}
+
+/** True when Relay quoted ERC-20 / USDC input for Part 1 (must fail closed for add-owner). */
+export function relayQuoteUsesNonNativeInput(extract: RelayQuoteExtract): boolean {
+  const currencyInAddress = relayQuoteCurrencyInAddress(extract)
+  if (!currencyInAddress) return false
+  return !isNativeRelayCurrency(currencyInAddress)
+}
+
+export function resolveNonNativeRelayQuoteError(extract: RelayQuoteExtract): string | null {
+  if (!relayQuoteUsesNonNativeInput(extract)) return null
+  const symbol = relayQuoteCurrencyInSymbol(extract)
+  const address = relayQuoteCurrencyInAddress(extract)
+  const label = symbol ?? address ?? 'ERC-20'
+  return `Relay quoted non-native Part 1 currency (${label}). Owner mutations require native ETH Depository.depositNative only — rebuild preview.`
+}
 
 export type RelayDestinationCall = {
   to: `0x${string}`
@@ -44,15 +98,14 @@ export type GetRelayQuoteParams = {
   /** Destination chain id. For same-chain Base flows this is 8453. */
   destinationChainId: number
   /**
-   * Amount in the smallest origin-chain unit (wei for ETH). When tradeType is
-   * EXACT_OUTPUT this is the amount Relay's solver must deliver to the
-   * destination. The depositor pays slightly more (the quote includes fees).
+   * Swap base amount in wei. For owner-mutation EXACT_OUTPUT quotes this should
+   * match `txs[0].value` (typically `"0"`). Relay prices the Part 1 deposit in
+   * `protocol.v2.paymentDetails.amount` — that response field is authoritative.
    */
   amount: string
   /**
-   * Currently always 'EXACT_OUTPUT' for owner-mutation flows: we know exactly
-   * how much value (typically 0 wei) the destination call needs, and let Relay
-   * compute the deposit amount including its fees.
+   * Owner mutations use `EXACT_OUTPUT` with zero destination value so Relay
+   * computes the native deposit for the wrapped CSW mutation call.
    */
   tradeType?: 'EXACT_INPUT' | 'EXACT_OUTPUT'
   /** Array of destination calls. For owner mutations this is the one mutation call. */
@@ -63,6 +116,8 @@ export type GetRelayQuoteParams = {
    * solver uses, ~250k is sufficient for a removeOwner mutation.
    */
   txsGasLimit?: number
+  /** Relay dashboard source tag for attribution (optional). */
+  source?: string
 }
 
 /**
@@ -87,6 +142,13 @@ export type RelayUserTransaction = {
   chainId: number
 }
 
+export type RelayPaymentDetails = {
+  chainId: number | null
+  depository: `0x${string}` | null
+  currency: `0x${string}` | null
+  amount: string | null
+}
+
 export type RelayQuoteExtract = {
   /**
    * The Relay request id. Used by Relay's solver to match the deposit event
@@ -94,6 +156,10 @@ export type RelayQuoteExtract = {
    * polling (Relay's /intents/status?requestId=... endpoint).
    */
   requestId: `0x${string}` | null
+  /** Protocol v2 order id (same semantic id as requestId when present). */
+  orderId: `0x${string}` | null
+  /** Protocol v2 payment details used for request-bound deposits. */
+  paymentDetails: RelayPaymentDetails | null
   /**
    * The single on-chain transaction the user must submit (Part 1). Sending
    * this via wallet_sendCalls executes the deposit; Relay's solver handles
@@ -144,19 +210,182 @@ function asHexString(value: unknown): `0x${string}` | null {
     : null
 }
 
+function collectCandidateObjects(root: unknown): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = []
+  const seen = new Set<unknown>()
+  const stack: unknown[] = [root]
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current || typeof current !== 'object' || seen.has(current)) continue
+    seen.add(current)
+    const obj = current as Record<string, unknown>
+    out.push(obj)
+    for (const value of Object.values(obj)) {
+      if (value && typeof value === 'object') stack.push(value)
+    }
+  }
+  return out
+}
+
+function normalizePaymentDetailsCandidate(
+  candidate: Record<string, unknown> | null | undefined,
+): RelayPaymentDetails | null {
+  if (!candidate) return null
+  const depository = asAddress(
+    candidate.depository ??
+      candidate.depositoryAddress ??
+      candidate.depositAddress ??
+      candidate.to ??
+      null,
+  )
+  const currency = asAddress(candidate.currency ?? candidate.token ?? null)
+  const amount = asDecimalString(candidate.amount)
+  const chainCandidate = candidate.chainId ?? candidate.chain ?? candidate.destinationChainId
+  const chainId =
+    typeof chainCandidate === 'number' && Number.isFinite(chainCandidate)
+      ? chainCandidate
+      : typeof chainCandidate === 'string' && chainCandidate.trim()
+        ? Number(chainCandidate)
+        : null
+  if (!depository && !amount) return null
+  if (currency && !isNativeRelayCurrency(currency)) return null
+  return {
+    chainId: Number.isFinite(chainId as number) ? (chainId as number) : null,
+    depository,
+    currency,
+    amount,
+  }
+}
+
+function parsePositiveDecimalWei(value: unknown): bigint | null {
+  if (typeof value !== 'string' || !/^[1-9][0-9]*$/.test(value)) return null
+  try {
+    const wei = BigInt(value)
+    return wei > 0n ? wei : null
+  } catch {
+    return null
+  }
+}
+
+function resolveRelayQuoteFeesGasWei(extract: RelayQuoteExtract): bigint | null {
+  const raw =
+    extract.raw && typeof extract.raw === 'object' ? (extract.raw as Record<string, unknown>) : null
+  if (!raw) return null
+  const fees = raw.fees as Record<string, unknown> | undefined
+  const gas = fees?.gas as Record<string, unknown> | undefined
+  return parsePositiveDecimalWei(gas?.amount ?? gas?.minimumAmount)
+}
+
+function clampOwnerMutationDepositQuoteSeedWei(seed: bigint): bigint {
+  if (seed < MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI) return MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI
+  if (seed > MAX_OWNER_MUTATION_RELAY_DEPOSIT_SEED_WEI) return MAX_OWNER_MUTATION_RELAY_DEPOSIT_SEED_WEI
+  return seed
+}
+
+/**
+ * Relay EXACT_OUTPUT owner-mutation quotes with `amount: "0"` do not return native
+ * `paymentDetails`. A follow-up quote must pass a positive native seed; Relay echoes
+ * that seed back as the Part 1 deposit. Use zero-quote `fees.gas.amount` when present,
+ * clamped to MIN/MAX; otherwise fall back to MIN.
+ */
+export function deriveRelayOwnerMutationDepositQuoteSeedWei(params: {
+  zeroQuoteExtract: RelayQuoteExtract
+}): bigint {
+  const feesGasWei = resolveRelayQuoteFeesGasWei(params.zeroQuoteExtract)
+  if (feesGasWei != null) {
+    return clampOwnerMutationDepositQuoteSeedWei(feesGasWei)
+  }
+  return MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI
+}
+
+/**
+ * Resolves the native ETH Part 1 deposit Relay expects for owner-mutation quotes.
+ * Rejects USDC/ERC-20 currencyIn or paymentDetails — Part 1 must stay
+ * Depository.depositNative with native value only.
+ */
+export function resolveQuotedNativeDepositWei(extract: RelayQuoteExtract): bigint | null {
+  if (relayQuoteUsesNonNativeInput(extract)) return null
+
+  const raw = extract.raw
+  const rawObj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null
+  const protocolV2 = rawObj?.protocol as Record<string, unknown> | undefined
+  const paymentFromProtocol = (protocolV2?.v2 as Record<string, unknown> | undefined)
+    ?.paymentDetails as Record<string, unknown> | undefined
+
+  if (
+    extract.paymentDetails?.amount &&
+    (extract.paymentDetails.currency == null ||
+      isNativeRelayCurrency(extract.paymentDetails.currency))
+  ) {
+    const wei = parsePositiveDecimalWei(extract.paymentDetails.amount)
+    if (wei) return wei
+  }
+
+  if (
+    paymentFromProtocol?.amount &&
+    isNativeRelayCurrency(paymentFromProtocol.currency)
+  ) {
+    const wei = parsePositiveDecimalWei(paymentFromProtocol.amount)
+    if (wei) return wei
+  }
+
+  if (rawObj) {
+    const details = rawObj.details as Record<string, unknown> | undefined
+    const currencyIn = details?.currencyIn as Record<string, unknown> | undefined
+    const currencyInObj = currencyIn?.currency as Record<string, unknown> | undefined
+    const currencyInAddress = asAddress(currencyInObj?.address ?? null)
+    if (currencyInAddress && isNativeRelayCurrency(currencyInAddress)) {
+      for (const key of ['amount', 'minimumAmount'] as const) {
+        const wei = parsePositiveDecimalWei(currencyIn?.[key])
+        if (wei) return wei
+      }
+      const userTxValue = extract.userTransaction?.value
+      if (userTxValue) {
+        const wei = parsePositiveDecimalWei(userTxValue)
+        if (wei) return wei
+      }
+    }
+  }
+
+  return null
+}
+
+function findPaymentDetailsInRaw(raw: unknown): RelayPaymentDetails | null {
+  if (!raw || typeof raw !== 'object') return null
+  const objects = collectCandidateObjects(raw)
+  for (const obj of objects) {
+    const keyHit = Object.keys(obj).some((k) =>
+      ['paymentdetails', 'depository', 'depositaddress'].includes(k.toLowerCase()),
+    )
+    if (!keyHit) continue
+    const normalized = normalizePaymentDetailsCandidate(obj)
+    if (
+      normalized?.amount &&
+      normalized.depository &&
+      parsePositiveDecimalWei(normalized.amount) &&
+      isNativeRelayCurrency(normalized.currency)
+    ) {
+      return normalized
+    }
+  }
+  return null
+}
+
 /**
  * Extracts the fields we care about from a Relay /quote/v2 response:
  *   - requestId (for status polling and matching)
  *   - the single user transaction (the deposit tx the wallet must submit)
  *   - fee info for display
  *
- * The user transaction comes from steps[0].items[0].data and represents the
- * complete Part 1 of the two-part flow (deposit-to-RelayRouter, which the
- * router multicalls into RelayDepository.depositNative + cleanupNative).
+ * The user transaction comes from steps[0].items[0].data when Relay returns a
+ * router multicall for EOA funders. CSW self-auth Part 1 ignores that step and
+ * builds Depository.depositNative from protocol.v2 paymentDetails instead.
  */
 export function extractFromRelayQuoteResponse(raw: unknown): RelayQuoteExtract {
   const extract: RelayQuoteExtract = {
     requestId: null,
+    orderId: null,
+    paymentDetails: null,
     userTransaction: null,
     feeUsd: null,
     raw,
@@ -198,12 +427,64 @@ export function extractFromRelayQuoteResponse(raw: unknown): RelayQuoteExtract {
 
   // Fallback: protocol.v2.orderId. Older quote shapes used this instead of
   // steps[].requestId; carry it through as the requestId for diagnostics.
-  if (!extract.requestId) {
+  if (!extract.requestId || !extract.orderId || !extract.paymentDetails) {
     const protocol = obj.protocol as Record<string, unknown> | undefined
     const v2 = protocol?.v2 as Record<string, unknown> | undefined
     if (v2) {
       const v2OrderId = asHex32(v2.orderId)
-      if (v2OrderId) extract.requestId = v2OrderId
+      if (v2OrderId) {
+        if (!extract.requestId) extract.requestId = v2OrderId
+        extract.orderId = v2OrderId
+      }
+
+      const paymentRaw = v2.paymentDetails as Record<string, unknown> | undefined
+      const normalized = normalizePaymentDetailsCandidate(paymentRaw)
+      if (
+        normalized &&
+        parsePositiveDecimalWei(normalized.amount) &&
+        isNativeRelayCurrency(normalized.currency)
+      ) {
+        extract.paymentDetails = normalized
+      }
+    }
+  }
+
+  if (!extract.paymentDetails) {
+    const fromRaw = findPaymentDetailsInRaw(raw)
+    if (fromRaw) {
+      extract.paymentDetails = fromRaw
+    }
+  }
+
+  // Some quote shapes expose only details.currencyIn.amount (no explicit
+  // paymentDetails block). Use that amount as a conservative fallback so
+  // request-bound submissions can still surface required funding in UI.
+  if (!extract.paymentDetails?.amount) {
+    const details = obj.details as Record<string, unknown> | undefined
+    const currencyIn = details?.currencyIn as Record<string, unknown> | undefined
+    const currencyInObj = currencyIn?.currency as Record<string, unknown> | undefined
+    const currencyInAddress = asAddress(currencyInObj?.address ?? null)
+    const amountFromCurrencyIn = asDecimalString(currencyIn?.amount)
+    if (
+      amountFromCurrencyIn &&
+      parsePositiveDecimalWei(amountFromCurrencyIn) &&
+      currencyInAddress &&
+      currencyInAddress.toLowerCase() === NATIVE_CURRENCY.toLowerCase()
+    ) {
+      extract.paymentDetails = {
+        chainId: extract.paymentDetails?.chainId ?? 8453,
+        depository: extract.paymentDetails?.depository ?? RELAY_DEPOSITORY_BASE,
+        currency: extract.paymentDetails?.currency ?? currencyInAddress,
+        amount: amountFromCurrencyIn,
+      }
+    }
+  }
+
+  if (extract.paymentDetails?.amount && !extract.paymentDetails.depository) {
+    extract.paymentDetails = {
+      ...extract.paymentDetails,
+      chainId: extract.paymentDetails.chainId ?? 8453,
+      depository: RELAY_DEPOSITORY_BASE,
     }
   }
 
@@ -232,10 +513,12 @@ export async function getRelayQuote(
     destinationCurrency: NATIVE_CURRENCY,
     amount: params.amount,
     tradeType: params.tradeType ?? 'EXACT_OUTPUT',
-    // explicitDeposit=true ensures the quote produces a depositNative step
-    // (rather than a direct transfer), which is what the CSW needs to call
-    // for Part 1 of the owner-mutation flow.
+    // CSW / smart-wallet deposits require explicit depository flow (Relay v2).
     explicitDeposit: true,
+    // Match relay-kit owner-mutation examples: sponsor solver fees where configured.
+    subsidizeFees: true,
+    originGasOverhead: RELAY_OWNER_MUTATION_ORIGIN_GAS_OVERHEAD,
+    ...(params.source ? { source: params.source } : {}),
     txs: params.txs.map((tx) => ({
       to: tx.to,
       data: tx.data,

@@ -11,7 +11,7 @@ import {
   checkRateLimit,
   rateLimitKey,
   trackChatCommandCenterEvent,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 type TelemetryBody = {
   event?: string

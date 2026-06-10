@@ -4,7 +4,7 @@ import {
   setNoStore,
   readRequestPrincipal,
   isAdminAddress,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { getNumberQuery, getStringQuery, handleOptions, setCors } from '../../../server/zora/_shared.js'
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/zora/client
+[4626-web](../../../index.md) / src/lib/zora/client
 
 # src/lib/zora/client
 
@@ -18,7 +18,7 @@ Defined in: [src/lib/zora/client.ts:245](https://github.com/wenakita/4626/blob/m
 
 ##### address
 
-`` `0x${string}` ``
+`string`
 
 ##### chainId
 
@@ -48,9 +48,17 @@ Defined in: [src/lib/zora/client.ts:332](https://github.com/wenakita/4626/blob/m
 
 `number`
 
+###### ethosMin?
+
+`number`
+
 ###### list
 
 [`ZoraExploreListType`](types.md#zoraexplorelisttype)
+
+###### sort?
+
+`"ETHOS_SCORE"`
 
 #### Returns
 
@@ -108,7 +116,7 @@ Defined in: [src/lib/zora/client.ts:293](https://github.com/wenakita/4626/blob/m
 
 > **fetchZoraTopCreators**(`params?`): `Promise`\<[`ZoraExploreList`](types.md#zoraexplorelist) \| `null`\>
 
-Defined in: [src/lib/zora/client.ts:401](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/client.ts#L401)
+Defined in: [src/lib/zora/client.ts:405](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/client.ts#L405)
 
 #### Parameters
 
@@ -142,7 +150,7 @@ Defined in: [src/lib/zora/client.ts:135](https://github.com/wenakita/4626/blob/m
 
 ### normalizeZoraCoinAddress()
 
-> **normalizeZoraCoinAddress**(`address`): `` `0x${string}` ``
+> **normalizeZoraCoinAddress**(`address`): `string`
 
 Defined in: [src/lib/zora/client.ts:219](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/client.ts#L219)
 
@@ -150,11 +158,11 @@ Defined in: [src/lib/zora/client.ts:219](https://github.com/wenakita/4626/blob/m
 
 ##### address
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
-`` `0x${string}` ``
+`string`
 
 ***
 

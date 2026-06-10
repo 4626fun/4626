@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/flags/featureFlags
+[4626-web](../../../index.md) / src/lib/flags/featureFlags
 
 # src/lib/flags/featureFlags
 
@@ -112,7 +112,7 @@ Defined in: [src/lib/flags/featureFlags.ts:57](https://github.com/wenakita/4626/
 
 > `const` **allFlags**: [`FeatureFlag`](#featureflag)\<`unknown`\>[]
 
-Defined in: [src/lib/flags/featureFlags.ts:326](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L326)
+Defined in: [src/lib/flags/featureFlags.ts:323](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L323)
 
 ***
 
@@ -120,7 +120,15 @@ Defined in: [src/lib/flags/featureFlags.ts:326](https://github.com/wenakita/4626
 
 > `const` **debugLogsFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:262](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L262)
+Defined in: [src/lib/flags/featureFlags.ts:245](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L245)
+
+***
+
+### directCswAddOwnerSendCallsFlag
+
+> `const` **directCswAddOwnerSendCallsFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
+
+Defined in: [src/lib/flags/featureFlags.ts:278](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L278)
 
 ***
 
@@ -144,7 +152,7 @@ Defined in: [src/lib/flags/featureFlags.ts:197](https://github.com/wenakita/4626
 
 > `const` **lensGroveFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:242](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L242)
+Defined in: [src/lib/flags/featureFlags.ts:225](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L225)
 
 ***
 
@@ -152,7 +160,7 @@ Defined in: [src/lib/flags/featureFlags.ts:242](https://github.com/wenakita/4626
 
 > `const` **privyAnalyticsFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:295](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L295)
+Defined in: [src/lib/flags/featureFlags.ts:292](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L292)
 
 ***
 
@@ -184,7 +192,17 @@ Defined in: [src/lib/flags/featureFlags.ts:186](https://github.com/wenakita/4626
 
 > `const` **useropTelemetryFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:284](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L284)
+Defined in: [src/lib/flags/featureFlags.ts:267](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L267)
+
+***
+
+### waitlistSubAccountFlowFlag
+
+> `const` **waitlistSubAccountFlowFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
+
+Defined in: [src/lib/flags/featureFlags.ts:209](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L209)
+
+Pairs with server `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1`.
 
 ***
 
@@ -192,32 +210,7 @@ Defined in: [src/lib/flags/featureFlags.ts:284](https://github.com/wenakita/4626
 
 > `const` **xmtpDebugFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:273](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L273)
-
-***
-
-### zoraGlobalWalletConnectorFlag
-
-> `const` **zoraGlobalWalletConnectorFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
-
-Defined in: [src/lib/flags/featureFlags.ts:226](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L226)
-
-Diagnostic flag: registers `@privy-io/cross-app-connect` as a wagmi
-connector so a tester can re-evaluate Privy Connect-mode cross-app
-behavior with Zora's app at `clpgf04wn04hnkw0fv1m11mnb`.
-
-Empirical result (recorded for future re-testing):
-  - Connect step works → Zora authorizes the 4626 appId for Connect mode.
-  - Sign / transact step is refused by `privy.zora.co` (read-only).
-  - The address surfaced even with `smartWalletMode: true` is a Privy
-    embedded EOA that is NOT one of the user's CBSW owners (those are
-    P256 passkeys in Coinbase Wallet / Base Account), so this connector
-    cannot be used to add owners to a Zora CBSW even if read-only is
-    fixed on Zora's side.
-
-Therefore this flag stays OFF by default. Keep it as a one-line probe
-for re-testing if Privy/Zora change their cross-app config. Full
-write-up in `frontend/src/lib/wallet/zoraGlobalWalletConnector.ts`.
+Defined in: [src/lib/flags/featureFlags.ts:256](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L256)
 
 ***
 
@@ -233,7 +226,7 @@ Defined in: [src/lib/flags/featureFlags.ts:147](https://github.com/wenakita/4626
 
 > **buildFlagDefinitions**(): `Record`\<`string`, \{ `description`: `string`; `options`: `object`[]; \}\>
 
-Defined in: [src/lib/flags/featureFlags.ts:351](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L351)
+Defined in: [src/lib/flags/featureFlags.ts:349](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L349)
 
 Build the FlagDefinitionsType shape expected by flags/react FlagDefinitions.
 
@@ -265,7 +258,7 @@ Defined in: [src/lib/flags/featureFlags.ts:124](https://github.com/wenakita/4626
 
 > **resolveAllFlagValues**(): `Record`\<`string`, `unknown`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:342](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L342)
+Defined in: [src/lib/flags/featureFlags.ts:340](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L340)
 
 Snapshot every flag's current value, keyed by flag key.
 
@@ -279,7 +272,7 @@ Snapshot every flag's current value, keyed by flag key.
 
 > **resolvePrivyAppId**(): `string` \| `null`
 
-Defined in: [src/lib/flags/featureFlags.ts:311](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L311)
+Defined in: [src/lib/flags/featureFlags.ts:308](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L308)
 
 #### Returns
 
@@ -291,7 +284,7 @@ Defined in: [src/lib/flags/featureFlags.ts:311](https://github.com/wenakita/4626
 
 > **resolvePrivyClientId**(): `string` \| `null`
 
-Defined in: [src/lib/flags/featureFlags.ts:317](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L317)
+Defined in: [src/lib/flags/featureFlags.ts:314](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L314)
 
 #### Returns
 

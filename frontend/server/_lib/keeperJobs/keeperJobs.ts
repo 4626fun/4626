@@ -1,9 +1,11 @@
-import { getDb } from '../db/postgres.js'
+import { getDbForCron } from '../db/postgres.js'
 
 export type KeeperJobStatus = 'pending' | 'claimed' | 'succeeded' | 'failed' | 'retry'
 
 export type KeeperJob = {
   id: number
+  operationId: string | null
+  stageId: string | null
   kind: string
   status: KeeperJobStatus
   priority: number
@@ -25,6 +27,8 @@ export type KeeperJob = {
 export type EnqueueKeeperJobInput = {
   kind: string
   payload: Record<string, unknown>
+  operationId?: string | null
+  stageId?: string | null
   source?: string | null
   dedupeKey?: string | null
   priority?: number | null
@@ -106,6 +110,8 @@ function normalizeStatus(value: unknown): KeeperJobStatus | null {
 function mapJobRow(row: any): KeeperJob {
   return {
     id: Number(row.id),
+    operationId: row.operation_id ? String(row.operation_id) : null,
+    stageId: row.stage_id ? String(row.stage_id) : null,
     kind: String(row.kind),
     status: String(row.status) as KeeperJobStatus,
     priority: Number(row.priority ?? 0),
@@ -126,12 +132,14 @@ function mapJobRow(row: any): KeeperJob {
 }
 
 export async function enqueueKeeperJob(input: EnqueueKeeperJobInput): Promise<KeeperJob> {
-  const db = await getDb()
+  const db = await getDbForCron()
   if (!db) throw new Error('db_not_configured')
 
   const kind = normalizeKind(input.kind)
   const payload = asObject(input.payload)
   const source = normalizeSource(input.source)
+  const operationId = typeof input.operationId === 'string' && input.operationId.trim() ? input.operationId.trim() : null
+  const stageId = typeof input.stageId === 'string' && input.stageId.trim() ? input.stageId.trim() : null
   const dedupeKey = typeof input.dedupeKey === 'string' && input.dedupeKey.trim() ? input.dedupeKey.trim().slice(0, 240) : null
   const priority = normalizePositiveInt(input.priority, 0, -1_000_000, 1_000_000)
   const maxAttempts = normalizePositiveInt(input.maxAttempts, 5, 1, 25)
@@ -139,6 +147,8 @@ export async function enqueueKeeperJob(input: EnqueueKeeperJobInput): Promise<Ke
 
   const result = await db.sql`
     INSERT INTO keeper_jobs (
+      operation_id,
+      stage_id,
       kind,
       payload,
       source,
@@ -149,6 +159,8 @@ export async function enqueueKeeperJob(input: EnqueueKeeperJobInput): Promise<Ke
       updated_at
     )
     VALUES (
+      ${operationId},
+      ${stageId},
       ${kind},
       ${payload},
       ${source},
@@ -161,6 +173,8 @@ export async function enqueueKeeperJob(input: EnqueueKeeperJobInput): Promise<Ke
     ON CONFLICT (dedupe_key)
       WHERE dedupe_key IS NOT NULL AND status IN ('pending', 'claimed', 'retry')
     DO UPDATE SET
+      operation_id = COALESCE(EXCLUDED.operation_id, keeper_jobs.operation_id),
+      stage_id = COALESCE(EXCLUDED.stage_id, keeper_jobs.stage_id),
       payload = EXCLUDED.payload,
       source = EXCLUDED.source,
       priority = GREATEST(keeper_jobs.priority, EXCLUDED.priority),
@@ -175,7 +189,7 @@ export async function enqueueKeeperJob(input: EnqueueKeeperJobInput): Promise<Ke
 }
 
 export async function claimDueKeeperJobs(input: ClaimKeeperJobsInput): Promise<KeeperJob[]> {
-  const db = await getDb()
+  const db = await getDbForCron()
   if (!db) throw new Error('db_not_configured')
 
   const workerId = normalizeWorkerId(input.workerId)
@@ -209,7 +223,7 @@ export async function claimDueKeeperJobs(input: ClaimKeeperJobsInput): Promise<K
 }
 
 export async function completeKeeperJob(input: CompleteKeeperJobInput): Promise<KeeperJob | null> {
-  const db = await getDb()
+  const db = await getDbForCron()
   if (!db) throw new Error('db_not_configured')
 
   const id = Number(input.id)
@@ -252,7 +266,7 @@ export async function completeKeeperJob(input: CompleteKeeperJobInput): Promise<
 }
 
 export async function releaseExpiredKeeperJobClaims(): Promise<number> {
-  const db = await getDb()
+  const db = await getDbForCron()
   if (!db) throw new Error('db_not_configured')
 
   const result = await db.sql`
@@ -282,7 +296,7 @@ export async function releaseExpiredKeeperJobClaims(): Promise<number> {
 }
 
 export async function listKeeperJobs(input: ListKeeperJobsInput = {}): Promise<KeeperJob[]> {
-  const db = await getDb()
+  const db = await getDbForCron()
   if (!db) throw new Error('db_not_configured')
 
   const status = normalizeStatus(input.status)

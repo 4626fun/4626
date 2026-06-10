@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/explore/useExploreHorizontalTableSync
+[4626-web](../../../index.md) / src/components/explore/useExploreHorizontalTableSync
 
 # src/components/explore/useExploreHorizontalTableSync
 
@@ -53,20 +53,6 @@ Defined in: [src/components/explore/useExploreHorizontalTableSync.ts:17](https:/
 ##### handleBodyScroll()
 
 > **handleBodyScroll**: (`e`) => `void`
-
-###### Parameters
-
-###### e
-
-`UIEvent`\<`HTMLDivElement`\>
-
-###### Returns
-
-`void`
-
-##### handleHeaderScroll()
-
-> **handleHeaderScroll**: (`e`) => `void`
 
 ###### Parameters
 

@@ -11,7 +11,7 @@ import {
   isInsufficientFundsError,
   type PreflightResult,
 } from '../_lib/wallet/walletBalancePreflight.js'
-import type { CommandIssuerContext } from '../_lib/wallet/commandIssuerContext.js'
+import type { CommandIssuerContext } from '@4626/server-core/identity'
 import { submitUserOpOrRefuse } from '../_lib/wallet/userOperationSubmitter.js'
 import { assertTeeAttestationOrThrow } from '../_lib/agent/teeAttestationGate.js'
 import type { CoinbaseSmartWalletCall } from '../_lib/wallet/privyCoinbaseSmartWallet.js'
@@ -330,7 +330,7 @@ export async function reserveTrendTickerViaUserOp(params: {
       walletId: null,
       status: 'already_deployed',
       userOpHash: '0x' as `0x${string}`,
-      smartWallet: params.issuer.smartWallet,
+      smartWallet: params.issuer.smartWallet as `0x${string}`,
     }
   }
 

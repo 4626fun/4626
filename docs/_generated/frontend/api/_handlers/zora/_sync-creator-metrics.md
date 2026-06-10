@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/zora/\_sync-creator-metrics
+[4626-web](../../../index.md) / api/\_handlers/zora/\_sync-creator-metrics
 
 # api/\_handlers/zora/\_sync-creator-metrics
 
@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse`\>
 
-Defined in: [api/\_handlers/zora/\_sync-creator-metrics.ts:34](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/_sync-creator-metrics.ts#L34)
+Defined in: [api/\_handlers/zora/\_sync-creator-metrics.ts:47](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/_sync-creator-metrics.ts#L47)
 
 #### Parameters
 

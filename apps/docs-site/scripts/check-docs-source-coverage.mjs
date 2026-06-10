@@ -43,19 +43,19 @@ const EXPLICIT_OUT_OF_SCOPE = [
   'indexer/README.md',
   'indexer/scripts/lookerStudioConnector/README.md',
   // Internal audit reports kept in repo for traceability, not public docs.
-  'audit/SOLIDSECS_AUDIT.md',
+  'docs/audits/root-audit/SOLIDSECS_AUDIT.md',
   // ZK circuit / ceremony engineering docs (operator-facing, not public site).
-  'circuits/amoe/**',
+  'amoe/circuits/**',
   // Relayer/keeper internal engineering readmes.
-  'relayer/zkproof/README.md',
-  'cloudflare-workers/alfaclub-proxy/README.md',
-  'runbooks/alfaclub-token-rotation.md',
+  'amoe/relayer/zkproof/README.md',
+  'alfaclub/infra/cloudflare-proxy/README.md',
+  'docs/operations/alfaclub/token-rotation.md',
   // SEO assets engineering readme.
   'seo/README.md',
   // Repo-level meta doc (single sign-on notes), peer of note.md.
   'sso.md',
   // ZK tooling engineering readme.
-  'tools/zk/README.md',
+  'amoe/tools/zk/README.md',
   // Hermit (Pinata) agent persona/seed files — runtime-loaded prompts, not public docs.
   'frontend/server/_lib/hermit/seed/**',
 ];
@@ -102,9 +102,9 @@ function isCoveredByManualSource(filePath) {
 }
 
 function isCoveredByCreSource(filePath) {
-  if (!filePath.startsWith('cre/')) return false;
+  if (!filePath.startsWith('kpr/')) return false;
   if (filePath.includes('/node_modules/')) return false;
-  if (filePath.includes('/cre-workflows/') && filePath.includes('/node_modules/')) return false;
+  if (filePath.includes('/kpr-workflows/') && filePath.includes('/node_modules/')) return false;
   if (filePath.includes('/patches/')) return false;
   if (filePath.includes('/dist/')) return false;
   return true;
@@ -137,7 +137,7 @@ function isCoveredBySyncSources(filePath) {
     || filePath === 'SECURITY.md'
     || filePath === 'deployments/README.md'
     || filePath.startsWith('script/agent-runtime/skills/')
-    || filePath === 'frontend/server/agent/eliza/README.md'
+    || filePath === 'frontend/server/agents/eliza/README.md'
     || filePath === 'frontend/server/solana-provisioner/README.md';
 }
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/deploy/\_config
+[4626-web](../../../index.md) / api/\_handlers/deploy/\_config
 
 # api/\_handlers/deploy/\_config
 
@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/deploy/\_config.ts:43](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/_config.ts#L43)
+Defined in: [api/\_handlers/deploy/\_config.ts:50](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/_config.ts#L50)
 
 #### Parameters
 

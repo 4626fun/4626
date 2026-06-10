@@ -1,52 +1,18 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/features/waitlist/waitlistFlowUi
+[4626-web](../../../index.md) / src/features/waitlist/waitlistFlowUi
 
 # src/features/waitlist/waitlistFlowUi
 
 ## Type Aliases
 
-### WaitlistDoneUi
-
-> **WaitlistDoneUi** = `object`
-
-Defined in: [src/features/waitlist/waitlistFlowUi.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L10)
-
-#### Properties
-
-##### primaryLabel
-
-> **primaryLabel**: `string`
-
-Defined in: [src/features/waitlist/waitlistFlowUi.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L13)
-
-##### secondaryLabel
-
-> **secondaryLabel**: `string` \| `null`
-
-Defined in: [src/features/waitlist/waitlistFlowUi.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L14)
-
-##### subtitle
-
-> **subtitle**: `string`
-
-Defined in: [src/features/waitlist/waitlistFlowUi.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L12)
-
-##### title
-
-> **title**: `string`
-
-Defined in: [src/features/waitlist/waitlistFlowUi.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L11)
-
-***
-
 ### WaitlistEmailUi
 
 > **WaitlistEmailUi** = `object`
 
-Defined in: [src/features/waitlist/waitlistFlowUi.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L3)
+Defined in: [src/features/waitlist/waitlistFlowUi.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L1)
 
 #### Properties
 
@@ -54,25 +20,25 @@ Defined in: [src/features/waitlist/waitlistFlowUi.ts:3](https://github.com/wenak
 
 > **busyLabel**: `string`
 
-Defined in: [src/features/waitlist/waitlistFlowUi.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L7)
+Defined in: [src/features/waitlist/waitlistFlowUi.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L5)
 
 ##### ctaLabel
 
 > **ctaLabel**: `string`
 
-Defined in: [src/features/waitlist/waitlistFlowUi.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L6)
+Defined in: [src/features/waitlist/waitlistFlowUi.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L4)
 
 ##### subtitle
 
 > **subtitle**: `string`
 
-Defined in: [src/features/waitlist/waitlistFlowUi.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L5)
+Defined in: [src/features/waitlist/waitlistFlowUi.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L3)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [src/features/waitlist/waitlistFlowUi.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L4)
+Defined in: [src/features/waitlist/waitlistFlowUi.ts:2](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L2)
 
 ## Functions
 
@@ -80,7 +46,7 @@ Defined in: [src/features/waitlist/waitlistFlowUi.ts:4](https://github.com/wenak
 
 > **canEnterAppFromAccountState**(`params`): `boolean`
 
-Defined in: [src/features/waitlist/waitlistFlowUi.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L17)
+Defined in: [src/features/waitlist/waitlistFlowUi.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L8)
 
 #### Parameters
 
@@ -98,28 +64,18 @@ Defined in: [src/features/waitlist/waitlistFlowUi.ts:17](https://github.com/wena
 
 ### deriveWaitlistAuthUi()
 
-> **deriveWaitlistAuthUi**(): [`WaitlistEmailUi`](#waitlistemailui)
+> **deriveWaitlistAuthUi**(`options?`): [`WaitlistEmailUi`](#waitlistemailui)
 
-Defined in: [src/features/waitlist/waitlistFlowUi.ts:22](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L22)
-
-#### Returns
-
-[`WaitlistEmailUi`](#waitlistemailui)
-
-***
-
-### deriveWaitlistDoneUi()
-
-> **deriveWaitlistDoneUi**(`canEnterApp`): [`WaitlistDoneUi`](#waitlistdoneui)
-
-Defined in: [src/features/waitlist/waitlistFlowUi.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L31)
+Defined in: [src/features/waitlist/waitlistFlowUi.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowUi.ts#L13)
 
 #### Parameters
 
-##### canEnterApp
+##### options?
+
+###### recoveryRequired?
 
 `boolean`
 
 #### Returns
 
-[`WaitlistDoneUi`](#waitlistdoneui)
+[`WaitlistEmailUi`](#waitlistemailui)

@@ -7,20 +7,20 @@ const {
   getClientIpMock,
   rateLimitKeyMock,
   readSessionFromRequestMock,
-  isCreWriteCommandTextMock,
+  isKeeperWriteCommandTextMock,
   executeHermitCommandMock,
 } = vi.hoisted(() => ({
   checkRateLimitMock: vi.fn(() => ({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })),
   getClientIpMock: vi.fn(() => '127.0.0.1'),
   rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
   readSessionFromRequestMock: vi.fn(),
-  isCreWriteCommandTextMock: vi.fn(() => false),
+  isKeeperWriteCommandTextMock: vi.fn(() => false),
   executeHermitCommandMock: vi.fn(),
 }))
 
-vi.mock('../../packages/server-core/src/index.js', async () => {
-  const actual = await vi.importActual<typeof import('../../packages/server-core/src/index.js')>(
-    '../../packages/server-core/src/index.js',
+vi.mock('@4626/server-core', async () => {
+  const actual = await vi.importActual<typeof import('@4626/server-core')>(
+    '@4626/server-core',
   )
   return {
     ...actual,
@@ -31,8 +31,8 @@ vi.mock('../../packages/server-core/src/index.js', async () => {
   }
 })
 
-vi.mock('../../server/agent/eliza/plugins/cre/index.js', () => ({
-  isCreWriteCommandText: isCreWriteCommandTextMock,
+vi.mock('../../server/agents/eliza/plugins/keeperOps/index.js', () => ({
+  isKeeperWriteCommandText: isKeeperWriteCommandTextMock,
 }))
 
 vi.mock('../../server/_lib/hermit/skillRouter.js', () => ({
@@ -117,10 +117,10 @@ describe('POST /api/v1/chat/hermit', () => {
   })
 
   it('returns 403 when hermit command is mutating', async () => {
-    isCreWriteCommandTextMock.mockReturnValueOnce(true)
+    isKeeperWriteCommandTextMock.mockReturnValueOnce(true)
     const req = createMockReq({
       method: 'POST',
-      body: { source: 'hermit', command: '/cre tend' },
+      body: { source: 'hermit', command: '/keepr tend' },
     })
     const res = createMockRes()
 

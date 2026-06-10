@@ -1,0 +1,33 @@
+name: Deploy AlfaClub Proxy Worker
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - alfaclub/infra/cloudflare-proxy/**
+      - .github/workflows/cloudflare-alfaclub-proxy-deploy.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-alfaclub-proxy-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Deploy Worker with Wrangler
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: alfaclub/infra/cloudflare-proxy
+          command: deploy

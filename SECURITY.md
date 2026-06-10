@@ -2,7 +2,7 @@
 
 Thank you for helping keep **4626 (CreatorVault)** secure.
 
-4626 combines smart contracts, cross-chain messaging, Chainlink-powered randomness and automation, wallet/account-abstraction flows, and a frontend/API surface. Because the protocol is non-custodial and some onchain components may be immutable after deployment, please report suspected vulnerabilities **privately** and do **not** open public GitHub issues for security matters.
+4626 combines smart contracts, cross-chain messaging, Chainlink-powered randomness, protocol automation workflows, wallet/account-abstraction flows, and a frontend/API surface. Because the protocol is non-custodial and some onchain components may be immutable after deployment, please report suspected vulnerabilities **privately** and do **not** open public GitHub issues for security matters.
 
 ## Supported Versions
 
@@ -25,7 +25,7 @@ Please report vulnerabilities that could affect user funds, protocol accounting,
 - `deployments/`
 - `script/`
 - `frontend/` (including `frontend/api/` and `frontend/server/`)
-- `cre/` automation workflows and keeper logic
+- `kpr/` automation workflows and keeper logic
 - `supabase/` and `frontend/db/migrations/`
 - wallet, paymaster, bundler, or account-abstraction integration logic
 - oracle, randomness, automation, or provisioner integrations

@@ -9,7 +9,7 @@
 //   5. Cron auth — `CRON_SECRET` and `AMOE_CRON_SECRET` fallback both work.
 //   6. Cron auth — accepts both `Bearer <secret>` and bare `<secret>`.
 //   7. Lottery router env unset → 503 `Lottery manager not configured`.
-//   8. No relay configured → 200 with `tick: 'no_relay_configured'`.
+//   8. No relay configured → 503 `amoe_retry_relay_missing`.
 //   9. Happy path — picks rows, calls `retrySubmissionByIdAsCron` per
 //      row, returns aggregated outcomes; reclaim + GC also invoked.
 //  10. Per-row throw is caught and surfaced as `outcome: 'error'` with
@@ -21,8 +21,7 @@
 //   * `amoeReplayStore` row picker + reclaim + GC.
 //   * `amoeReplayRetry` per-row retry function.
 //   * Use the handler's `__setAmoeRetryCronHandlerHooksForTest` to inject
-//     a relay (the production cron currently no-ops without one — the
-//     hook lets us drive the processed path in tests).
+//     a relay for deterministic processed-path tests.
 
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -77,6 +76,12 @@ function setEnabledEnv(opts: { secretEnv?: 'CRON_SECRET' | 'AMOE_CRON_SECRET' } 
     router: process.env.LOTTERY_AMOE_ROUTER,
     cron: process.env.CRON_SECRET,
     amoecron: process.env.AMOE_CRON_SECRET,
+    relayPk: process.env.LOTTERY_AMOE_RELAY_PRIVATE_KEY,
+    relayOwnerPk: process.env.LOTTERY_AMOE_RELAY_OWNER_PRIVATE_KEY,
+    relaySmartWallet: process.env.LOTTERY_AMOE_RELAY_SMART_WALLET,
+    relayBundler: process.env.LOTTERY_AMOE_RELAY_BUNDLER_URL,
+    kprPk: process.env.KPR_PRIVATE_KEY,
+    privatePk: process.env.PRIVATE_KEY,
   }
   process.env.AMOE_ZK_SUBMIT_ENABLED = '1'
   process.env.LOTTERY_AMOE_ROUTER = LOTTERY_ROUTER
@@ -89,12 +94,24 @@ function setEnabledEnv(opts: { secretEnv?: 'CRON_SECRET' | 'AMOE_CRON_SECRET' } 
   } else {
     process.env.CRON_SECRET = VALID_SECRET
   }
+  delete process.env.LOTTERY_AMOE_RELAY_PRIVATE_KEY
+  delete process.env.LOTTERY_AMOE_RELAY_OWNER_PRIVATE_KEY
+  delete process.env.LOTTERY_AMOE_RELAY_SMART_WALLET
+  delete process.env.LOTTERY_AMOE_RELAY_BUNDLER_URL
+  delete process.env.KPR_PRIVATE_KEY
+  delete process.env.PRIVATE_KEY
   return () => {
     for (const [k, v] of Object.entries({
       AMOE_ZK_SUBMIT_ENABLED: prior.enabled,
       LOTTERY_AMOE_ROUTER: prior.router,
       CRON_SECRET: prior.cron,
       AMOE_CRON_SECRET: prior.amoecron,
+      LOTTERY_AMOE_RELAY_PRIVATE_KEY: prior.relayPk,
+      LOTTERY_AMOE_RELAY_OWNER_PRIVATE_KEY: prior.relayOwnerPk,
+      LOTTERY_AMOE_RELAY_SMART_WALLET: prior.relaySmartWallet,
+      LOTTERY_AMOE_RELAY_BUNDLER_URL: prior.relayBundler,
+      KPR_PRIVATE_KEY: prior.kprPk,
+      PRIVATE_KEY: prior.privatePk,
     })) {
       if (v === undefined) delete process.env[k]
       else process.env[k] = v
@@ -348,7 +365,7 @@ describe('lottery router env', () => {
 // ---------------------------------------------------------------------------
 
 describe('relay availability', () => {
-  it('returns 200 no_relay_configured when no relay is wired in', async () => {
+  it('returns 503 amoe_retry_relay_missing when no relay is wired in', async () => {
     const restore = setEnabledEnv()
     try {
       // Leave hooks untouched — no relay injected.
@@ -356,10 +373,10 @@ describe('relay availability', () => {
       const req = authReq({ authHeader: `Bearer ${VALID_SECRET}` })
       const res = createMockRes()
       await handler(req, res)
-      expect(res.statusCode).toBe(200)
+      expect(res.statusCode).toBe(503)
       expect(res.body).toMatchObject({
-        ok: true,
-        tick: 'no_relay_configured',
+        ok: false,
+        error: 'amoe_retry_relay_missing',
         pickedCount: 0,
         reclaimedCount: 0,
         gcCount: 0,

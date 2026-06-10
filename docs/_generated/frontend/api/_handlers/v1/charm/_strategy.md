@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/v1/charm/\_strategy
+[4626-web](../../../../index.md) / api/\_handlers/v1/charm/\_strategy
 
 # api/\_handlers/v1/charm/\_strategy
 

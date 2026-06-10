@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/deploy/\_solanaInfraStatus
+[4626-web](../../../index.md) / api/\_handlers/deploy/\_solanaInfraStatus
 
 # api/\_handlers/deploy/\_solanaInfraStatus
 

@@ -29,6 +29,84 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
+read_frontend_nvmrc_version() {
+  if [[ ! -f "$FRONTEND_DIR/.nvmrc" ]]; then
+    echo "20.19.0"
+    return 0
+  fi
+  sed 's/^[[:space:]]*v//; s/[[:space:]]*$//' "$FRONTEND_DIR/.nvmrc"
+}
+
+activate_frontend_node() {
+  local nvm_version nvm_node_bin
+  nvm_version="$(read_frontend_nvmrc_version)"
+  nvm_node_bin="${NVM_DIR:-$HOME/.nvm}/versions/node/v${nvm_version}/bin/node"
+  if [[ -x "$nvm_node_bin" ]]; then
+    export PATH="$(dirname "$nvm_node_bin"):$PATH"
+    return 0
+  fi
+
+  if [[ ! -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]]; then
+    return 0
+  fi
+
+  # pnpm -C frontend injects npm_config_prefix=<package dir>; nvm refuses to load until it is cleared.
+  unset npm_config_prefix NPM_CONFIG_PREFIX
+  # shellcheck disable=SC1091
+  . "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+  if [[ -f "$FRONTEND_DIR/.nvmrc" ]]; then
+    (cd "$FRONTEND_DIR" && nvm use --silent >/dev/null 2>&1) || (cd "$FRONTEND_DIR" && nvm install >/dev/null 2>&1)
+  else
+    nvm use --silent 20.19.0 >/dev/null 2>&1 || nvm install 20.19.0 >/dev/null 2>&1
+  fi
+  if command -v node >/dev/null 2>&1; then
+    export PATH="$(dirname "$(command -v node)"):$PATH"
+  fi
+}
+
+ensure_node_version() {
+  local required_major=20
+  local required_minor=19
+  activate_frontend_node
+  local current=""
+  if command -v node >/dev/null 2>&1; then
+    current="$(node -p "process.versions.node.split('.').map(Number)" 2>/dev/null || true)"
+  fi
+  if [[ -z "$current" ]]; then
+    echo "Node.js is required for deploy dry-run local dev." >&2
+    exit 1
+  fi
+  local major minor
+  IFS=',' read -r major minor _ <<<"${current//[\[\] ]/}"
+  if [[ "$major" -lt "$required_major" ]] || { [[ "$major" -eq "$required_major" ]] && [[ "$minor" -lt "$required_minor" ]]; }; then
+    echo "Node.js >= ${required_major}.${required_minor}.0 is required (Vite 7). Current: $(node -v 2>/dev/null || echo unknown)." >&2
+    echo "Run: cd frontend && nvm use" >&2
+    exit 1
+  fi
+}
+
+ensure_node_version
+
+maybe_raise_inotify_limit() {
+  local target=524288
+  local current=0
+  if [[ -r /proc/sys/fs/inotify/max_user_watches ]]; then
+    current="$(cat /proc/sys/fs/inotify/max_user_watches)"
+  fi
+  if [[ "$current" -ge "$target" ]]; then
+    return 0
+  fi
+  if command -v sudo >/dev/null 2>&1 && sudo -n sysctl -w "fs.inotify.max_user_watches=${target}" >/dev/null 2>&1; then
+    echo "Raised fs.inotify.max_user_watches to ${target}."
+    return 0
+  fi
+  echo "Warning: fs.inotify.max_user_watches=${current} (recommend >= ${target} on WSL)." >&2
+  echo "Run: echo ${target} | sudo tee /proc/sys/fs/inotify/max_user_watches" >&2
+  echo "Persistent fix: add 'fs.inotify.max_user_watches=${target}' to /etc/sysctl.conf, then sudo sysctl -p" >&2
+}
+
+maybe_raise_inotify_limit
+
 port_in_use() {
   local port="$1"
   if command -v lsof >/dev/null 2>&1; then
@@ -52,7 +130,7 @@ normalize_local_origin_port() {
   echo "$origin"
 }
 
-USE_LOCAL_BATCHER="${DEPLOY_DRY_RUN_USE_LOCAL_BATCHER:-0}"
+USE_LOCAL_BATCHER="${DEPLOY_DRY_RUN_USE_LOCAL_BATCHER:-1}"
 if [[ "$USE_LOCAL_BATCHER" == "1" ]]; then
   if ! command -v forge >/dev/null 2>&1; then
     echo "forge is required when DEPLOY_DRY_RUN_USE_LOCAL_BATCHER=1." >&2
@@ -75,6 +153,20 @@ fi
 source "$PRESET_FILE"
 set +a
 
+# Dry-run defaults should not require a live Postgres connection.
+# This avoids local startup failures when frontend/.env carries an unreachable
+# DATABASE_URL from another workflow. Set DEPLOY_DRY_RUN_KEEP_DB_ENV=1 to opt
+# back into DB-backed routes during dry-run.
+export DEPLOY_DRY_RUN_KEEP_DB_ENV="${DEPLOY_DRY_RUN_KEEP_DB_ENV:-0}"
+if [[ "${DEPLOY_DRY_RUN_KEEP_DB_ENV}" != "1" ]]; then
+  # Isolate the dry-run from any real DB (Supabase or legacy Vercel Postgres).
+  unset DATABASE_URL
+  unset POSTGRES_URL
+  unset POSTGRES_URL_NON_POOLING
+else
+  export POSTGRES_POOL_CONNECT_TIMEOUT_MS="${POSTGRES_POOL_CONNECT_TIMEOUT_MS:-3000}"
+fi
+
 : "${BASE_FORK_UPSTREAM_RPC_URL:?Set BASE_FORK_UPSTREAM_RPC_URL in $PRESET_FILE or your shell environment.}"
 
 FORK_HOST="${DEPLOY_DRY_RUN_FORK_HOST:-127.0.0.1}"
@@ -87,7 +179,8 @@ export ALLOW_API_CONTRACT_OVERRIDES="${ALLOW_API_CONTRACT_OVERRIDES:-0}"
 export VITE_DEV_SERVER_HOST="localhost"
 # Use a dedicated deterministic namespace on local forks so dry-runs do not
 # collide with live Base deployments that share the repo's normal version tag.
-export VITE_DEPLOYMENT_VERSION="${VITE_DEPLOYMENT_VERSION:-v1.11.0-dryrun}"
+export VITE_DEPLOYMENT_VERSION="${VITE_DEPLOYMENT_VERSION:-v1.14.0-dryrun}"
+export VITE_DEPLOY_DRY_RUN_REQUEST_TIMEOUT_MS="${VITE_DEPLOY_DRY_RUN_REQUEST_TIMEOUT_MS:-300000}"
 
 ANVIL_PID=""
 DEV_REDIRECT_PID=""
@@ -122,9 +215,14 @@ if port_in_use "$FORK_PORT"; then
 fi
 
 LOCAL_RPC_URL="http://${FORK_HOST}:${FORK_PORT}"
-# Always point server + browser RPC reads to the selected local fork port.
-export BASE_RPC_URL="$LOCAL_RPC_URL"
+# Browser deploy reads use the fork; deploy-session API uses DEPLOY_DRY_RUN_LOCAL_RPC_URL.
+# Keep BASE_RPC_URL on live upstream so owner-install / Relay preview never hits dead Anvil.
+export DEPLOY_DRY_RUN_LOCAL_RPC_URL="$LOCAL_RPC_URL"
 export VITE_BASE_RPC="$LOCAL_RPC_URL"
+export BASE_READ_RPC_URL="$LOCAL_RPC_URL"
+export BASE_LOGS_RPC_URL="$LOCAL_RPC_URL"
+export BASE_RPC_URL="${BASE_FORK_UPSTREAM_RPC_URL:-https://mainnet.base.org}"
+export ETH_RPC_URL="${ETH_RPC_URL:-https://ethereum-rpc.publicnode.com}"
 export DEPLOY_DRY_RUN_FORK_PORT="$FORK_PORT"
 FALLBACK_FORK_UPSTREAM_RPC_URL="${DEPLOY_DRY_RUN_FORK_FALLBACK_RPC_URL:-https://mainnet.base.org}"
 
@@ -181,6 +279,26 @@ if ! wait_for_anvil_ready; then
 fi
 
 echo "Base fork ready. Logs: $ANVIL_LOG_FILE"
+if [[ "$USE_LOCAL_BATCHER" != "1" ]]; then
+  echo "Ensuring fork batcher Phase1Module matches live store-aligned wiring..."
+  (
+    cd "$FRONTEND_DIR"
+    DEPLOY_DRY_RUN_LOCAL_RPC_URL="$LOCAL_RPC_URL" \
+      pnpm exec tsx "scripts/ops/ensure-fork-phase1-module-aligned.ts"
+  ) || {
+    echo "Failed to align fork Phase1Module. Restart deploy dry-run or rerun ensure-fork-phase1-module-aligned.ts." >&2
+    exit 1
+  }
+  echo "Ensuring fork Phase3 helper matches local forge artifact..."
+  (
+    cd "$FRONTEND_DIR"
+    DEPLOY_DRY_RUN_LOCAL_RPC_URL="$LOCAL_RPC_URL" \
+      pnpm exec tsx "scripts/ops/ensure-fork-phase3-helper-aligned.ts"
+  ) || {
+    echo "Failed to align fork Phase3 helper. Run forge build at repo root, then retry." >&2
+    exit 1
+  }
+fi
 if [[ "$USE_LOCAL_BATCHER" == "1" ]]; then
   echo "Deploying local DeploymentBatcher override onto the fork..."
   LOCAL_BATCHER_ADDRESS="$(
@@ -197,6 +315,22 @@ fi
 if [[ "${DEPLOY_DRY_RUN_CLEAR_VITE_CACHE:-1}" == "1" ]]; then
   rm -rf "$FRONTEND_DIR/node_modules/.vite"
 fi
+
+# Dry-run shares a large Privy/wagmi graph. WSL boxes with <=8GB RAM may OOM-kill esbuild
+# when optimizeDeps pre-bundling runs alongside another Vite dev server — opt in with
+# VITE_LOW_MEMORY=1 (skips dep discovery; see vite.config.ts alwaysOptimizeInclude).
+export VITE_LOW_MEMORY="${VITE_LOW_MEMORY:-0}"
+# WSL often hits ENOSPC on inotify; polling avoids kernel watcher limits (see vite.config watch.ignored too).
+export VITE_WATCH_POLLING="${VITE_WATCH_POLLING:-1}"
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=8192}"
+
+is_transient_vite_esbuild_failure() {
+  local log_file="$1"
+  grep -Eq \
+    'The service was stopped|The service is no longer running|write EPIPE|Error during dependency optimization|JavaScript heap out of memory|FATAL ERROR: .*heap' \
+    "$log_file"
+}
+
 DEV_PORT="${DEPLOY_DRY_RUN_PORT:-5174}"
 ALLOW_DEV_PORT_FALLBACK="${DEPLOY_DRY_RUN_ALLOW_PORT_FALLBACK:-0}"
 ORIG_DEV_PORT="$DEV_PORT"
@@ -265,10 +399,13 @@ PY
   echo "Redirecting stale http://localhost:${DEFAULT_DRY_RUN_PORT} links to http://localhost:${DEV_PORT}."
 fi
 
-echo "Starting frontend dev server on port ${DEV_PORT} with BASE_RPC_URL=${BASE_RPC_URL} and VITE_BASE_RPC=${VITE_BASE_RPC}"
+echo "Starting frontend dev server on port ${DEV_PORT} (node $(node -v), VITE_LOW_MEMORY=${VITE_LOW_MEMORY}, VITE_WATCH_POLLING=${VITE_WATCH_POLLING}, DEPLOY_DRY_RUN_KEEP_DB_ENV=${DEPLOY_DRY_RUN_KEEP_DB_ENV}) with DEPLOY_DRY_RUN_LOCAL_RPC_URL=${DEPLOY_DRY_RUN_LOCAL_RPC_URL}, BASE_READ_RPC_URL=${BASE_READ_RPC_URL}, BASE_RPC_URL=${BASE_RPC_URL}, VITE_BASE_RPC=${VITE_BASE_RPC}"
+if port_in_use 5173; then
+  echo "Warning: localhost:5173 is in use — stop pnpm dev before deploy dry-run to avoid esbuild OOM on WSL." >&2
+fi
 cd "$FRONTEND_DIR"
 VITE_BOOTSTRAP_LOG_FILE="${TMPDIR:-/tmp}/4626-deploy-dry-run-vite-bootstrap.log"
-MAX_VITE_EPIPE_RETRIES="${DEPLOY_DRY_RUN_VITE_EPIPE_RETRIES:-2}"
+MAX_VITE_EPIPE_RETRIES="${DEPLOY_DRY_RUN_VITE_EPIPE_RETRIES:-3}"
 vite_attempt=0
 
 while true; do
@@ -286,13 +423,16 @@ while true; do
 
   if [[ "$vite_attempt" -gt "$MAX_VITE_EPIPE_RETRIES" ]]; then
     echo "Vite exited with code ${vite_exit_code} after ${MAX_VITE_EPIPE_RETRIES} retry attempts."
+    if is_transient_vite_esbuild_failure "$VITE_BOOTSTRAP_LOG_FILE"; then
+      echo "Recent esbuild failure (often memory pressure). Stop other Vite dev servers, then retry." >&2
+    fi
     exit "$vite_exit_code"
   fi
 
-  if grep -q "The service was stopped: write EPIPE" "$VITE_BOOTSTRAP_LOG_FILE"; then
-    echo "Detected transient Vite/esbuild EPIPE during dependency optimization; clearing cache and retrying (attempt ${vite_attempt}/${MAX_VITE_EPIPE_RETRIES})..."
+  if is_transient_vite_esbuild_failure "$VITE_BOOTSTRAP_LOG_FILE"; then
+    echo "Detected transient Vite/esbuild failure; clearing cache and retrying (attempt ${vite_attempt}/${MAX_VITE_EPIPE_RETRIES})..."
     rm -rf "$FRONTEND_DIR/node_modules/.vite"
-    sleep 1
+    sleep 2
     continue
   fi
 

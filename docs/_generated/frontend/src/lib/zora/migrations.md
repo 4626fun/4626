@@ -1,44 +1,18 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/zora/migrations
+[4626-web](../../../index.md) / src/lib/zora/migrations
 
 # src/lib/zora/migrations
 
 ## Functions
 
-### extractMigratedCoinAddressFromLog()
-
-> **extractMigratedCoinAddressFromLog**(`log`): `string` \| `null`
-
-Defined in: [src/lib/zora/migrations.ts:169](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L169)
-
-#### Parameters
-
-##### log
-
-###### address?
-
-`string`
-
-###### data?
-
-`string`
-
-#### Returns
-
-`string` \| `null`
-
-***
-
 ### fetchMigratedCoins()
 
 > **fetchMigratedCoins**(): `Promise`\<`Set`\<`string`\>\>
 
-Defined in: [src/lib/zora/migrations.ts:320](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L320)
-
-Fetch all migrated coin addresses from LiquidityMigrated events
+Defined in: [src/lib/zora/migrations.ts:154](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L154)
 
 #### Returns
 
@@ -50,9 +24,7 @@ Fetch all migrated coin addresses from LiquidityMigrated events
 
 > **getMigrationStats**(): `Promise`\<\{ `count`: `number`; `lastUpdated`: `number`; \}\>
 
-Defined in: [src/lib/zora/migrations.ts:515](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L515)
-
-Get migration stats
+Defined in: [src/lib/zora/migrations.ts:216](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L216)
 
 #### Returns
 
@@ -64,9 +36,7 @@ Get migration stats
 
 > **hasCoinMigrated**(`coinAddress`): `Promise`\<`boolean`\>
 
-Defined in: [src/lib/zora/migrations.ts:481](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L481)
-
-Check if a specific coin has migrated to V4
+Defined in: [src/lib/zora/migrations.ts:194](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L194)
 
 #### Parameters
 
@@ -74,13 +44,9 @@ Check if a specific coin has migrated to V4
 
 `string`
 
-The coin contract address
-
 #### Returns
 
 `Promise`\<`boolean`\>
-
-true if the coin has migrated, false otherwise
 
 ***
 
@@ -88,10 +54,7 @@ true if the coin has migrated, false otherwise
 
 > **hasCoinMigratedSync**(`coinAddress`): `boolean` \| `undefined`
 
-Defined in: [src/lib/zora/migrations.ts:490](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L490)
-
-Synchronous check using cached data only
-Returns undefined if cache is not available
+Defined in: [src/lib/zora/migrations.ts:199](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L199)
 
 #### Parameters
 
@@ -105,33 +68,54 @@ Returns undefined if cache is not available
 
 ***
 
-### parseMinimalProxyImplementation()
-
-> **parseMinimalProxyImplementation**(`bytecode`): `string` \| `null`
-
-Defined in: [src/lib/zora/migrations.ts:160](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L160)
-
-#### Parameters
-
-##### bytecode
-
-`string`
-
-#### Returns
-
-`string` \| `null`
-
-***
-
 ### preloadMigratedCoins()
 
 > **preloadMigratedCoins**(): `void`
 
-Defined in: [src/lib/zora/migrations.ts:508](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L508)
-
-Preload migrated coins cache
-Call this early in the app lifecycle
+Defined in: [src/lib/zora/migrations.ts:212](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/migrations.ts#L212)
 
 #### Returns
 
 `void`
+
+## References
+
+### extractMigratedCoinAddressFromLog
+
+Re-exports [extractMigratedCoinAddressFromLog](migrationScan.md#extractmigratedcoinaddressfromlog)
+
+***
+
+### LIQUIDITY\_MIGRATED\_TOPIC
+
+Re-exports [LIQUIDITY_MIGRATED_TOPIC](migrationScan.md#liquidity_migrated_topic)
+
+***
+
+### MigratedCoinScanClient
+
+Re-exports [MigratedCoinScanClient](migrationScan.md#migratedcoinscanclient)
+
+***
+
+### parseMinimalProxyImplementation
+
+Re-exports [parseMinimalProxyImplementation](migrationScan.md#parseminimalproxyimplementation)
+
+***
+
+### ScanMigratedCoinsOptions
+
+Re-exports [ScanMigratedCoinsOptions](migrationScan.md#scanmigratedcoinsoptions)
+
+***
+
+### scanMigratedCoinsWithClient
+
+Re-exports [scanMigratedCoinsWithClient](migrationScan.md#scanmigratedcoinswithclient)
+
+***
+
+### V4\_LAUNCH\_BLOCK
+
+Re-exports [V4_LAUNCH_BLOCK](migrationScan.md#v4_launch_block)

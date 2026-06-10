@@ -32,7 +32,7 @@ import {
   rateLimitKey,
   enableCswAgent,
   getOrCreateCreatorXmtpAgent,
-} from '../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 import { resolvePersistedWalletIdentity } from '../../../../server/_lib/wallet/canonicalWalletResolver.js'

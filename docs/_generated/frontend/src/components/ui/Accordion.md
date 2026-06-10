@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/ui/Accordion
+[4626-web](../../../index.md) / src/components/ui/Accordion
 
 # src/components/ui/Accordion
 
@@ -10,7 +10,7 @@
 
 ### AccordionItemData
 
-Defined in: [src/components/ui/Accordion.tsx:16](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L16)
+Defined in: [src/components/ui/Accordion.tsx:7](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L7)
 
 #### Properties
 
@@ -18,19 +18,19 @@ Defined in: [src/components/ui/Accordion.tsx:16](https://github.com/wenakita/462
 
 > **children**: `ReactNode`
 
-Defined in: [src/components/ui/Accordion.tsx:19](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L19)
+Defined in: [src/components/ui/Accordion.tsx:10](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L10)
 
 ##### key
 
 > **key**: `string`
 
-Defined in: [src/components/ui/Accordion.tsx:17](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L17)
+Defined in: [src/components/ui/Accordion.tsx:8](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L8)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [src/components/ui/Accordion.tsx:18](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L18)
+Defined in: [src/components/ui/Accordion.tsx:9](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L9)
 
 ## Functions
 
@@ -38,13 +38,7 @@ Defined in: [src/components/ui/Accordion.tsx:18](https://github.com/wenakita/462
 
 > **FaqAccordion**(`__namedParameters`): `Element`
 
-Defined in: [src/components/ui/Accordion.tsx:38](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L38)
-
-Multi-open accordion backed by CDS AccordionItem.
-
-Each item is wrapped in its own CDS Accordion so multiple items can be
-independently expanded — CDS Accordion's native mode only supports
-single-open.
+Defined in: [src/components/ui/Accordion.tsx:29](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L29)
 
 #### Parameters
 
@@ -62,9 +56,7 @@ single-open.
 
 > **SingleAccordion**(`__namedParameters`): `Element`
 
-Defined in: [src/components/ui/Accordion.tsx:70](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L70)
-
-Single-open accordion backed by CDS Accordion (standard mode).
+Defined in: [src/components/ui/Accordion.tsx:68](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L68)
 
 #### Parameters
 

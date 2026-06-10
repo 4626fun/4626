@@ -4,12 +4,11 @@ import { useQuery } from '@tanstack/react-query'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAccount } from 'wagmi'
 
-import { AppLoadingState } from '@/components/layout/AppLoadingState'
+import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { useTelegramMiniAppEntryStatus } from '@/hooks/useTelegramMiniAppEntryStatus'
 import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
-import { apiFetch } from '@/lib/api/apiBase'
-import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { WAITLIST_ME_QUERY_KEY, fetchWaitlistMe } from '@/lib/waitlist/waitlistMeQuery'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
 import { isScreenshotMode } from '@/lib/ui/screenshotMode'
 import {
@@ -52,16 +51,12 @@ function useResolvedAccessState(): AccessState {
   }, [siwe.authAddress])
   const hasSession = Boolean(siweAuthAddress)
   const acceptedStateQuery = useQuery({
-    queryKey: ['appAccessStatus', 'waitlist-me'],
+    queryKey: WAITLIST_ME_QUERY_KEY,
     enabled: hasSession && !screenshotMode,
     queryFn: async (): Promise<WaitlistMeResponse | null> => {
-      const res = await apiFetch('/api/waitlist/me', {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      })
-      const json = (await res.json().catch(() => null)) as ApiEnvelope<WaitlistMeResponse | null> | null
-      if (!res.ok || !json?.success) return null
-      return json.data ?? null
+      const data = await fetchWaitlistMe()
+      if (!data) return null
+      return { appAccessStatus: data.appAccessStatus ?? null }
     },
     staleTime: 15_000,
     retry: 0,
@@ -121,7 +116,7 @@ function RequireRouteAccess(props: { routeId: RouteId; children?: React.ReactNod
   const access = useAccessContext()
   const decision = resolveAccess(props.routeId, access)
   if (!decision.allow) {
-    if (decision.reason === 'loading') return <AppLoadingState intent="session" />
+    if (decision.reason === 'loading') return <AppLoadingRegistrar />
     const to = decision.redirectTo ?? '/'
     if (to.startsWith('http://') || to.startsWith('https://')) {
       if (typeof window !== 'undefined') window.location.replace(to)
@@ -154,11 +149,11 @@ export function RequireTelegramMiniAppEntry(props: { children?: React.ReactNode 
   }
 
   if (entryStatus === 'checking') {
-    return <AppLoadingState intent="session" />
+    return <AppLoadingRegistrar />
   }
 
   const acceptedDecision = resolveAccess('accepted', access)
-  if (acceptedDecision.reason === 'loading') return <AppLoadingState intent="session" />
+  if (acceptedDecision.reason === 'loading') return <AppLoadingRegistrar />
   if (acceptedDecision.allow) {
     return <Navigate to="/swap" replace state={{ from: location.pathname }} />
   }

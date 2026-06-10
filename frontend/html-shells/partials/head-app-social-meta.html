@@ -1,7 +1,7 @@
     <meta property="og:site_name" content="{{SITE_NAME}}" />
     <meta property="og:title" content="{{SITE_TITLE}}" />
     <meta property="og:description" content="{{SITE_SOCIAL_DESCRIPTION}}" />
-    <meta property="og:url" content="{{APP_BASE_URL_TRAILING}}" />
+    <meta property="og:url" content="{{APP_SHELL_URL_TRAILING}}" />
     <meta property="og:image" content="{{APP_SOCIAL_IMAGE_URL}}" />
     <meta property="og:image:secure_url" content="{{APP_SOCIAL_IMAGE_URL}}" />
     <meta property="og:image:type" content="image/png" />
@@ -16,15 +16,15 @@
     <meta name="twitter:description" content="{{SITE_SOCIAL_DESCRIPTION}}" />
     <meta name="twitter:image" content="{{TWITTER_CARD_IMAGE_URL}}" />
     <meta name="twitter:image:alt" content="{{SITE_IMAGE_ALT}}" />
-    <!-- Base App verification uses the app origin, not the marketing domain. -->
+    <!-- Base Build verification reads base:app_id from app.4626.fun; user entry stays on 4626.fun. -->
     <meta name="base:app_id" content="{{BASE_APP_ID}}" />
     <meta
       name="fc:miniapp"
-      content='{"version":"next","imageUrl":"{{MINIAPP_HERO_URL}}","button":{"title":"Open 4626.fun","action":{"type":"launch_miniapp","name":"{{MINIAPP_LAUNCH_NAME}}","url":"{{APP_BASE_URL_TRAILING}}","splashImageUrl":"{{MINIAPP_SPLASH_URL}}","splashBackgroundColor":"{{MINIAPP_SPLASH_BACKGROUND_COLOR}}"}}}'
+      content='{"version":"next","imageUrl":"{{MINIAPP_HERO_URL}}","button":{"title":"Open 4626.fun","action":{"type":"launch_miniapp","name":"{{MINIAPP_LAUNCH_NAME}}","url":"{{APP_BASE_URL_TRAILING}}","splashImageUrl":"{{APP_SHELL_MINIAPP_SPLASH_URL}}","splashBackgroundColor":"{{MINIAPP_SPLASH_BACKGROUND_COLOR}}"}}}'
     />
     <meta
       name="fc:frame"
-      content='{"version":"next","imageUrl":"{{MINIAPP_HERO_URL}}","button":{"title":"Open 4626.fun","action":{"type":"launch_frame","name":"{{MINIAPP_LAUNCH_NAME}}","url":"{{APP_BASE_URL_TRAILING}}","splashImageUrl":"{{MINIAPP_SPLASH_URL}}","splashBackgroundColor":"{{MINIAPP_SPLASH_BACKGROUND_COLOR}}"}}}'
+      content='{"version":"next","imageUrl":"{{MINIAPP_HERO_URL}}","button":{"title":"Open 4626.fun","action":{"type":"launch_frame","name":"{{MINIAPP_LAUNCH_NAME}}","url":"{{APP_BASE_URL_TRAILING}}","splashImageUrl":"{{APP_SHELL_MINIAPP_SPLASH_URL}}","splashBackgroundColor":"{{MINIAPP_SPLASH_BACKGROUND_COLOR}}"}}}'
     />
     <meta
       name="talentapp:project_verification"

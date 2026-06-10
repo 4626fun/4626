@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/infra/durableRateLimit
+[4626-web](../../../index.md) / server/\_lib/infra/durableRateLimit
 
 # server/\_lib/infra/durableRateLimit
 

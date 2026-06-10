@@ -1,0 +1,9 @@
+# Solana SBF builds use cargo-build-sbf's bundled Cargo (not host cargo).
+# Platform-tools v1.51 ships Cargo 1.84, which cannot parse edition-2024 manifests
+# pulled by Anchor 1.0 / solana-address 2.6 (wincode, etc.).
+#
+# Always build via scripts/build-sbf.sh (--tools-version v1.52+, Cargo 1.89).
+# When refreshing Cargo.lock, run scripts/pin-sbf-deps.sh first.
+
+[resolver]
+incompatible-rust-versions = "fallback"

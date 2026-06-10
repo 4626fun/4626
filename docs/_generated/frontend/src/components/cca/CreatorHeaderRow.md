@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/cca/CreatorHeaderRow
+[4626-web](../../../index.md) / src/components/cca/CreatorHeaderRow
 
 # src/components/cca/CreatorHeaderRow
 
@@ -24,7 +24,7 @@ Defined in: [src/components/cca/CreatorHeaderRow.tsx:8](https://github.com/wenak
 
 ###### creatorAddress
 
-`` `0x${string}` ``
+`string`
 
 ###### creatorName
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/features/executionScope/cswOwnerCheck
+[4626-web](../../../index.md) / src/features/executionScope/cswOwnerCheck
 
 # src/features/executionScope/cswOwnerCheck
 
@@ -114,7 +114,7 @@ flows.
 
 ###### csw
 
-`` `0x${string}` ``
+`string`
 
 ###### publicClient
 
@@ -130,21 +130,18 @@ flows.
 
 > **pickOwnerSigner**(`results`): [`CswOwnerResult`](#cswownerresult) \| `null`
 
-Defined in: [src/features/executionScope/cswOwnerCheck.ts:112](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/cswOwnerCheck.ts#L112)
+Defined in: [src/features/executionScope/cswOwnerCheck.ts:109](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/cswOwnerCheck.ts#L109)
 
 Pick the preferred signer for a fresh SpendPermission signature.
 
 Preference order (highest first):
-  1. 4626 Privy app smart wallet (ERC-1271) — the universal path for
-     Zora-cross-app users who completed the waitlist owner-install
-     step. Works without any external wallet connection, no passkey
-     popup, consistent UX.
-  2. External EOA (Rabby / MetaMask / CBW) that is a CSW owner —
-     for power users like profile 1 who manually added their own
-     EOA to the CSW owner list.
-  3. Privy embedded EOA if it is a CSW owner — extremely rare path,
-     only applies to accounts created directly through 4626 Privy
-     without cross-app (not the normal production flow).
+  1. Connected external EOA (Rabby / MetaMask / CBW) that is a CSW
+     owner — plain secp256k1 signatures validate reliably via
+     `recoverTypedDataAddress` on the commit endpoint.
+  2. Privy embedded EOA if it is a CSW owner — rare direct-4626 path.
+  3. 4626 Privy app smart wallet (ERC-1271) — fallback for Zora-cross-app
+     users who completed owner-install but have no external wallet
+     connected in this browser session.
   4. null — nothing available to sign with; the card should prompt
      the user to complete owner install or connect an owner wallet.
 

@@ -40,7 +40,7 @@ vi.mock('../../server/_lib/alfaclub/publicationLedger.js', async () => {
 import {
   alfaclubPlugin,
   parseSubcommand,
-} from '../../server/agent/eliza/plugins/alfaclub/index.ts'
+} from '../../server/agents/eliza/plugins/alfaclub/index.ts'
 
 type AnyAction = {
   name?: string
@@ -128,6 +128,12 @@ describe('parseSubcommand', () => {
   it('accepts /alfaclub as an alias', () => {
     expect(parseSubcommand('/alfaclub').sub).toBe('leaderboard')
     expect(parseSubcommand('/alfaclub status').sub).toBe('status')
+  })
+
+  it('maps bare /bridge to bridge status', () => {
+    expect(parseSubcommand('/bridge').sub).toBe('status')
+    expect(parseSubcommand('/bridge status').sub).toBe('status')
+    expect(parseSubcommand('/bridge flags').sub).toBe('status')
   })
 })
 

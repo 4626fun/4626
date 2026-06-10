@@ -104,7 +104,8 @@ export function normalizeCoinSearchQuery(query: string): {
   withoutBasenameSuffix: string
 } {
   const raw = query.trim().toLowerCase()
-  const withoutAt = raw.startsWith('@') ? raw.slice(1) : raw
+  const withoutPrefix = raw.startsWith('@') ? raw.slice(1) : raw
+  const withoutAt = withoutPrefix.startsWith('$') ? withoutPrefix.slice(1) : withoutPrefix
   const withoutBasenameSuffix = withoutAt.endsWith(BASENAME_SUFFIX)
     ? withoutAt.slice(0, -BASENAME_SUFFIX.length)
     : withoutAt
@@ -304,6 +305,47 @@ export function flattenExplorePagedNodes<TNode>(
   return flattened
 }
 
+type ExploreCoinIdentity = {
+  address?: string | null
+  creatorAddress?: string | null
+  symbol?: string | null
+  name?: string | null
+  creatorProfile?: {
+    handle?: string | null
+    username?: string | null
+  } | null
+}
+
+export function resolveExploreCreatorIdentityKey(coin: ExploreCoinIdentity): string {
+  const profileHandle = coin.creatorProfile?.handle ?? coin.creatorProfile?.username ?? ''
+  const handle = String(profileHandle).trim().toLowerCase().replace(/^@/, '')
+  if (handle && !handle.startsWith('0x')) return `identity:handle:${handle}`
+
+  const symbol = typeof coin.symbol === 'string' ? coin.symbol.trim().toLowerCase().replace(/^@/, '') : ''
+  if (symbol && !symbol.startsWith('0x')) return `identity:symbol:${symbol}`
+
+  const creator = typeof coin.creatorAddress === 'string' ? coin.creatorAddress.trim().toLowerCase() : ''
+  if (/^0x[a-f0-9]{40}$/.test(creator)) return `identity:addr:${creator}`
+
+  const address = typeof coin.address === 'string' ? coin.address.trim().toLowerCase() : ''
+  if (/^0x[a-f0-9]{40}$/.test(address)) return `identity:coin:${address}`
+
+  const name = typeof coin.name === 'string' ? coin.name.trim().toLowerCase() : ''
+  return `identity:fallback:${name}:${creator}:${address}`
+}
+
+export function dedupeExploreCoinsByCreatorIdentity<T extends ExploreCoinIdentity>(coins: readonly T[]): T[] {
+  const out: T[] = []
+  const seen = new Set<string>()
+  for (const coin of coins) {
+    const key = resolveExploreCreatorIdentityKey(coin)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(coin)
+  }
+  return out
+}
+
 export function isSupportedExploreChain(chain: string): boolean {
   return chain.toLowerCase() === 'base'
 }
@@ -381,4 +423,12 @@ export function formatTokenAmount(value: number): string {
   if (abs < 1) return abs.toFixed(6)
   if (abs < 1000) return abs.toFixed(4)
   return abs.toLocaleString(undefined, { maximumFractionDigits: 2 })
+}
+
+export function formatCompactUsd(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return '—'
+  if (v >= 1_000_000_000) return `$${(v / 1_000_000_000).toFixed(2)}B`
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}M`
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(2)}K`
+  return `$${v.toFixed(2)}`
 }

@@ -1,8 +1,13 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
+<!-- Single /favicon.ico (Base App domain bar; avoids multi-tag icon flicker). -->
+    <link rel="icon" href="/favicon.ico?v=20" sizes="any" />
+<meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#020204">
+  <meta name="msapplication-config" content="/browserconfig.xml">
   <title>About | 4626.fun</title>
   <meta name="description" content="About 4626.fun, ERC-4626 creator-vault infrastructure on Base for creators, builders, and onchain communities.">
   <link rel="canonical" href="https://4626.fun/about">
@@ -11,13 +16,13 @@
   <meta property="og:title" content="About | 4626.fun">
   <meta property="og:description" content="4626.fun is building ERC-4626 creator-vault infrastructure on Base.">
   <meta property="og:url" content="https://4626.fun/about">
-  <meta property="og:image" content="https://4626.fun/assets/og-image.png?v=2">
+  <meta property="og:image" content="https://4626.fun/assets/og-image.png?v=20">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:site" content="@4626fun">
   <meta name="twitter:creator" content="@4626fun">
   <meta name="twitter:title" content="About | 4626.fun">
   <meta name="twitter:description" content="ERC-4626 creator-vault infrastructure on Base.">
-  <meta name="twitter:image" content="https://4626.fun/assets/twitter-card.png?v=2">
+  <meta name="twitter:image" content="https://4626.fun/assets/twitter-card.png?v=20">
   <link rel="stylesheet" href="/trust-page.css">
   <script type="application/ld+json">
   {
@@ -30,17 +35,11 @@
   }
   </script>
 </head>
-<body>
+<body data-trust-page="about">
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <a class="brand" href="/"><img src="/assets/logo-mark.svg" alt="">4626.fun</a>
-    <nav class="nav" aria-label="Primary">
-      <a href="/">Home</a>
-      <a href="/risks">Risks</a>
-      <a href="/security">Security</a>
-      <a href="/terms">Terms</a>
-      <a href="/privacy">Privacy</a>
-    </nav>
+    <nav class="nav" data-trust-nav aria-label="Primary"></nav>
   </header>
   <main id="main" class="wrap">
     <section class="page-hero">
@@ -85,5 +84,6 @@
   <footer class="site-footer">
     <div>Experimental software. Vaults not live yet. Not financial advice. Read the <a href="/risks">risks</a>.</div>
   </footer>
+  <script src="/trust-nav.js"></script>
 </body>
 </html>

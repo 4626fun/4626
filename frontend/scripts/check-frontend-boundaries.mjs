@@ -2,6 +2,7 @@
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { reportGuard } from './guard-utils.mjs'
 
 const repoRoot = path.resolve(process.cwd())
 const srcRoot = path.join(repoRoot, 'src')
@@ -14,14 +15,24 @@ const importRegex =
 // Allowed cross-feature pairs: Map<from, Set<to>>.
 // Keep tight: only add when two features are part of the same product flow.
 const ALLOWED_CROSS_FEATURE = new Map([
-  ['accountSetup', new Set(['waitlist'])],
+  ['accountSetup', new Set(['waitlist', 'archB'])],
   ['waitlist', new Set(['accountSetup'])],
+  // Sub-account reprovision flow legitimately shares logic with archB delegation
+  // (spend permission prepare/commit for Base App sub-accounts). This is
+  // flag-gated and scoped to the secondary execution track.
+  ['executionScope', new Set(['archB'])],
 ])
 
 // Allowed api -> src imports: exact normalized module specifiers.
 // These are pure policy helpers shared between server + client surfaces.
 const ALLOWED_API_TO_SRC = new Set([
   'src/lib/agent/erc8004AgentUriPolicy',
+  'src/lib/deploy/finalizeShareBridgeFee',
+  'src/lib/deploy/shareBridgeOftWiring',
+  'src/lib/deploy/phase1ModuleDeploy',
+  'src/config/contracts.defaults',
+  'src/deploy/bytecode.generated',
+  'src/lib/uniswap/swapQuoteSanitize',
 ])
 
 async function walk(dir) {
@@ -167,29 +178,35 @@ async function main() {
     ...(await scanApiToSrc(apiFiles)),
   ]
 
-  if (violations.length === 0) {
-    console.log('ok: frontend boundaries respected')
-    console.log(' - src/components/ui does not import from src/features')
-    console.log(' - src/features/<A> does not import from src/features/<B> (outside allowlist)')
-    console.log(' - api/_handlers does not import from src/ (outside allowlist)')
-    return
-  }
+  const normalizedViolations = violations.map((violation) => ({
+    ...violation,
+    detail:
+      violation.fromFeature && violation.toFeature
+        ? `feature "${violation.fromFeature}" -> "${violation.toFeature}"`
+        : undefined,
+  }))
 
-  console.error('error: frontend boundary violations found:')
-  for (const violation of violations) {
-    console.error(`- [${violation.rule}] ${violation.file}: ${violation.specifier}`)
-    if (violation.fromFeature && violation.toFeature) {
-      console.error(`    feature "${violation.fromFeature}" -> "${violation.toFeature}"`)
-    }
-  }
-  console.error('\nto resolve:')
-  console.error('- ui-no-features: move shared primitives into components/ui or invert the dependency')
-  console.error('- cross-feature: extract the shared symbol into src/lib (or add an explicit allowlist entry if the pair is genuinely co-located)')
-  console.error('- api-no-src: move the shared helper to packages/server-core (or add an explicit allowlist entry if truly shared policy code)')
-  process.exitCode = 1
+  const exitCode = reportGuard({
+    guard: 'Frontend boundaries respected',
+    violations: normalizedViolations,
+    checks: [
+      'src/components/ui does not import from src/features',
+      'src/features/<A> does not import from src/features/<B> outside allowlist',
+      'api/_handlers does not import from src/ outside allowlist',
+    ],
+    remediation: [
+      'ui-no-features: move shared primitives into components/ui or invert the dependency.',
+      'cross-feature: extract shared symbols into src/lib (or add explicit allowlist only when truly co-located).',
+      'api-no-src: move shared helper to packages/server-core (or add explicit allowlist only for shared policy code).',
+    ],
+  })
+  process.exit(exitCode)
 }
 
 main().catch((error) => {
-  console.error(`error: ${String(error?.message ?? error)}`)
-  process.exit(1)
+  const exitCode = reportGuard({
+    guard: 'Frontend boundaries respected',
+    fatalError: String(error?.message ?? error),
+  })
+  process.exit(exitCode)
 })

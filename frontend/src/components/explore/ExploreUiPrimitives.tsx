@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, Copy } from 'lucide-react'
 
+import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
+
 type ExploreCopyButtonProps = {
   text: string
   className?: string
@@ -54,7 +56,7 @@ export function ExploreCopyButton({
 }
 
 type ExploreStatRowProps = {
-  label: string
+  label: ReactNode
   value: string
   note?: string
   icon?: ReactNode
@@ -202,6 +204,63 @@ export function ExploreLoadMoreButton({
       >
         {label}
       </button>
+    </div>
+  )
+}
+
+type ExploreHeroMetricProps = {
+  label: string
+  value: string
+  hint?: string | null
+  title?: string
+  accent?: boolean
+  /** Full-bleed layer behind label/value (e.g. indexed sparkline). */
+  background?: ReactNode
+}
+
+type ExploreTableLoadingOverlayProps = {
+  active: boolean
+  label?: string
+}
+
+export function ExploreTableLoadingOverlay({
+  active,
+  label = 'Loading…',
+}: ExploreTableLoadingOverlayProps) {
+  if (!active) return null
+
+  return (
+    <div
+      className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/30 backdrop-blur-[1px]"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <PixelWaveLoader size="sm" />
+      <p className="text-xs text-zinc-400">{label}</p>
+    </div>
+  )
+}
+
+export function ExploreHeroMetric({ label, value, hint, title, accent = false, background }: ExploreHeroMetricProps) {
+  return (
+    <div
+      className={`relative overflow-hidden vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 ${
+        accent ? 'bg-blue-950/16' : 'bg-white/[0.03]'
+      }`}
+      title={title}
+    >
+      {background ? (
+        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+          {background}
+        </div>
+      ) : null}
+      <div className="relative z-[1]">
+        <div className="text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">{label}</div>
+        <div className="mt-1 text-xl sm:text-[26px] font-semibold tracking-tight text-white tabular-nums lining-nums">
+          {value}
+        </div>
+        {hint ? <div className="app-meta-value mt-1 text-zinc-500">{hint}</div> : null}
+      </div>
     </div>
   )
 }

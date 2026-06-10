@@ -20,7 +20,7 @@ import {
   readTelegramMiniAppSession,
   runTelegramMergePreflight,
   upsertTelegramUserLink,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identity/identityRecovery.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'

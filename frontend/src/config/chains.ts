@@ -2,7 +2,7 @@ import { base, mainnet, arbitrum, optimism, polygon } from 'wagmi/chains'
 import type { Chain } from 'wagmi/chains'
 
 export type SupportedChainId = 1 | 8453 | 42161 | 10 | 137
-const BASE_BRANDMARK_BLUE = '/base/base-square-blue.svg'
+const BASE_CHAIN_LOGO = '/base/base-square-blue.svg'
 
 export interface ChainMeta {
   id: SupportedChainId
@@ -24,11 +24,11 @@ export const SUPPORTED_CHAINS: ChainMeta[] = [
     shortName: 'Base',
     chain: base,
     nativeCurrency: { symbol: 'ETH', name: 'Ethereum', decimals: 18 },
-    logoUrl: BASE_BRANDMARK_BLUE,
+    logoUrl: BASE_CHAIN_LOGO,
     explorerUrl: 'https://basescan.org',
     weth: '0x4200000000000000000000000000000000000006',
     usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-    color: '#0052FF',
+    color: '#1C5CF2',
   },
   {
     id: 1,

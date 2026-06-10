@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "name": "4626-explore-assets",
+  "updatedAt": "2026-05-27T00:00:00.000Z",
+  "policy": {
+    "description": "Integrator-facing token metadata for Explore-indexed assets. Rows are appended as creator_coins backfill progresses; not a live Zora export.",
+    "tokenKindValues": ["creator", "share", "content"],
+    "chains": [{ "chainId": 8453, "name": "Base" }]
+  },
+  "tokens": []
+}

@@ -2,7 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import {DeploymentBatcher, DeploymentBatcherPhase2Module} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
+import {DeploymentBatcher} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
+import "./helpers/DeploymentBatcherFixture.sol";
 import {OFTBootstrapRegistry} from "../contracts/helpers/infra/OFTBootstrapRegistry.sol";
 
 interface IEndpointRegistryLike {
@@ -237,37 +238,28 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
         create2.setCodeKind(WRAPPER_CODE_ID, 2);
         create2.setCodeKind(SHARE_OFT_CODE_ID, 3);
 
-        DeploymentBatcherPhase2Module phase2Fixture = new DeploymentBatcherPhase2Module(
-            address(create2),
-            address(registry),
-            address(0x1003),
-            address(0x1001),
-            address(0x1002),
-            address(this),
-            address(0x1005),
-            address(0x1004),
-            makeAddr("batcher")
-        );
-        deployer = new DeploymentBatcher(
-            address(registry),
-            address(store),
-            address(create2),
-            address(this),
-            address(0x1001),
-            address(0x1002),
-            address(0x1003),
-            address(0x1004),
-            address(0x1005),
-            address(0x1006),
-            address(0x1007),
-            address(0x1008),
-            address(0x1009),
-            address(0x1010),
-            address(0x2001),
-            address(0x2002),
-            address(0x2003),
-            address(phase2Fixture)
-        );
+        DeploymentBatcherFixture deployerLib = new DeploymentBatcherFixture();
+        DeploymentBatcherFixture.BatcherConfig memory cfg = DeploymentBatcherFixture.BatcherConfig({
+            registry: address(registry),
+            bytecodeStore: address(store),
+            create2Deployer: address(create2),
+            protocolTreasury: address(this),
+            protocolAutomation: makeAddr("protocolAutomation"),
+            poolManager: address(0x1001),
+            taxHook: address(0x1002),
+            chainlinkEthUsd: address(0x1003),
+            vaultActivationBatcher: address(0x1004),
+            lotteryManager: address(0x1005),
+            permit2: address(0x1006),
+            usdc: address(0x1007),
+            uniswapV3Factory: address(0x1008),
+            uniswapRouter: address(0x1009),
+            ajnaFactory: address(0x1010),
+            vaultCoreModule: address(0x2001),
+            vaultStrategiesModule: address(0x2002),
+            vaultAdminModule: address(0x2003)
+        });
+        (deployer,) = deployerLib.deployBatcher(cfg);
     }
 
     function test_deployPhase1Core_bootstrapReturnsCanonicalEndpoint() public {
@@ -368,37 +360,28 @@ contract DeploymentBatcherOVaultRuntimeConfigTest is Test {
     function setUp() public {
         vm.chainId(8453);
 
-        DeploymentBatcherPhase2Module phase2Fixture = new DeploymentBatcherPhase2Module(
-            address(0x1003),
-            address(0x1001),
-            address(0x1006),
-            address(0x1004),
-            address(0x1005),
-            PROTOCOL_TREASURY,
-            address(0x1008),
-            address(0x1007),
-            makeAddr("batcher")
-        );
-        batcher = new DeploymentBatcher(
-            address(0x1001), // registry
-            address(0x1002), // bytecodeStore
-            address(0x1003), // create2Deployer
-            PROTOCOL_TREASURY,
-            address(0x1004), // poolManager
-            address(0x1005), // taxHook
-            address(0x1006), // chainlinkEthUsd
-            address(0x1007), // vaultActivationBatcher
-            address(0x1008), // lotteryManager
-            address(0x1009), // permit2
-            address(0x1010), // usdc
-            address(0x1011), // uniswapV3Factory
-            address(0x1012), // uniswapRouter
-            address(0x1013), // ajnaFactory
-            address(0x1014), // vaultCoreModule
-            address(0x1015), // vaultStrategiesModule
-            address(0x1016), // vaultAdminModule
-            address(phase2Fixture) // phase2Module
-        );
+        DeploymentBatcherFixture deployerLib = new DeploymentBatcherFixture();
+        DeploymentBatcherFixture.BatcherConfig memory cfg = DeploymentBatcherFixture.BatcherConfig({
+            registry: address(0x1001),
+            bytecodeStore: address(0x1002),
+            create2Deployer: address(0x1003),
+            protocolTreasury: PROTOCOL_TREASURY,
+            protocolAutomation: makeAddr("protocolAutomation"),
+            poolManager: address(0x1004),
+            taxHook: address(0x1005),
+            chainlinkEthUsd: address(0x1006),
+            vaultActivationBatcher: address(0x1007),
+            lotteryManager: address(0x1008),
+            permit2: address(0x1009),
+            usdc: address(0x1010),
+            uniswapV3Factory: address(0x1011),
+            uniswapRouter: address(0x1012),
+            ajnaFactory: address(0x1013),
+            vaultCoreModule: address(0x1014),
+            vaultStrategiesModule: address(0x1015),
+            vaultAdminModule: address(0x1016)
+        });
+        (batcher,) = deployerLib.deployBatcher(cfg);
     }
 
     function test_SetOVaultRuntimeConfig_OnlyProtocolTreasury() public {

@@ -35,8 +35,12 @@ present in the live classification, fall back to the live
    in the Privy payload:
    - `canonicalSmartWallet` falls back to the classification value (may be null).
    - `allWallets` does not contain the stale canonical.
-3. Same invariants hold for `activeOwnerWallet`.
-4. Solana behaviour is unchanged.
+3. Same invariants hold for `activeOwnerWallet` and `embeddedEoa` (persisted
+   `primary_embedded_eoa` / `embedded_wallet`).
+4. When `profiles.primary_wallet` mirrors a stale embedded signer that is no
+   longer in the live Privy classification, it is not re-injected via the
+   persisted-primary path or `resolveProfilesPrimaryWalletColumn` fallback.
+5. Solana behaviour is unchanged.
 
 ## Rollback
 Revert this PR. No DB migration, no env changes.

@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / server/debank/\_shared
+[4626-web](../../index.md) / server/debank/\_shared
 
 # server/debank/\_shared
 

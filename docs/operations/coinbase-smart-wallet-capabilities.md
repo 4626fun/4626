@@ -228,6 +228,8 @@ Observed profile shape:
 
 ## Message Signing
 
+> SDK capability snapshot (April 2026). Signer rows reference the **pre-migration** probe CSW; current 4626 canonical CSW is `CANONICAL_CSW_ADDRESS` (`0xAb6d5…967b5`).
+
 | Method | Observed result | 4626 usage notes |
 | --- | --- | --- |
 | `eth_sign` | Unsupported: `{ "code": 4200, "message": "The requested method is not supported by this Ethereum provider." }` | Do not use. |
@@ -270,3 +272,43 @@ Observed profile shape:
 - Treat `4200` as unsupported method.
 - Treat `-32602` as caller parameter error; fix the request shape before assuming the method is unavailable.
 - Treat `personal_sign` timeouts separately from rejections. In SDK 2.5.1 E2E, `eth_signTypedData_v4` was more reliable than `personal_sign` for the same connected account context.
+
+## @coinbase/wallet-sdk 4.3.7 — ownership model (2026-05)
+
+The SDK exposes an **EIP-1193 provider** only. There is **no** dedicated `addOwner` SDK method — owner management is an **onchain CSW contract call** the connected Smart Wallet must execute and sign.
+
+| Layer | What it does | 4626 usage |
+| --- | --- | --- |
+| **Connection** | `createCoinbaseWalletSDK` → `getProvider()` → `eth_requestAccounts` | Waitlist wallet connect; does **not** add owners |
+| **Mutation** | Encode `addOwnerAddress(address)` or `addOwnerPublicKey(x,y)`; submit via `wallet_sendCalls` self-call (`to = from = CSW`) | **Method D** (flag-gated, external browser only today) |
+| **Cross-chain replay** | Requires `executeWithoutChainIdValidation` / ERC-4337 replay lane | Relay Part 2 solver path (Method A/B) |
+| **Sub Account SDK** | `subAccount.addOwner({ address, publicKey, chainId })` convenience wrapper | **Not** waitlist canonical path — parent CSW remains asset holder |
+
+Canonical `wallet_sendCalls` payload (aligned in `frontend/src/lib/wallet/walletSendCallsPayload.ts`):
+
+```json
+{
+  "version": "2.0.0",
+  "from": "<cswAddress>",
+  "chainId": "0x2105",
+  "atomicRequired": true,
+  "calls": [{ "to": "<cswAddress>", "value": "0x0", "data": "<addOwnerAddress calldata>" }]
+}
+```
+
+Passkey owners use `addOwnerPublicKey(bytes32 x, bytes32 y)` with a 64-byte uncompressed P-256 key split into coordinates — not a secp256k1 EOA public key.
+
+## Direct addOwner feasibility matrix (Phase 0 gate)
+
+Probe CSW: `0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF` (passkey `owner[0]`, session key `owner[2]`).
+
+| Surface | Action | Status (2026-05) | Notes |
+| --- | --- | --- | --- |
+| Base App WebView (waitlist) | Direct `wallet_sendCalls` → `addOwnerAddress(embeddedEoa)` v2.0.0 + `from` | **Not verified / likely blocked** | [owner-mutation-decision-2026-05.md](../owner-mutation-decision-2026-05.md): third-party dapps hit “Error generating transaction / not enough funds” for owner-mutating selectors. Relay remains **primary** (Method A/B). |
+| Base App prolink deep link | Same calldata via `encodeSingleCallSendCallsProlink` | **Reference / manual** | Advanced waitlist recovery; user opens Base App from external browser. |
+| External browser + `@coinbase/wallet-sdk@4.3.7` | SDK snippet (`smartWalletOnly`) | **Candidate for Method D** | Gated by `VITE_DIRECT_CSW_ADD_OWNER_SEND_CALLS=1`; falls back to Relay on `direct_add_owner_blocked`. |
+| XMTP `walletSendCalls` tx card | `indexer/src/sendAddOwnerTxToSelf.ts` | **Observed working** | Base App approves addOwner when framed as an XMTP tx card; not the waitlist hot path. |
+| Relay Part 1 deposit | `wallet_sendCalls` / prepared-calls → `depositNative` | **Verified (golden tx)** | May 2026 block 45600637 — Method A. |
+| Relay Part 2 | Solver → `addOwnerAddress` via `executeWithoutChainIdValidation` | **Verified (golden tx)** | Bypasses dapp-initiated privileged selector gate. |
+
+**Go/no-go (2026-05):** Relay replacement on waitlist is **not approved** until Base App WebView direct addOwner is manually verified on the probe CSW. Method D ships behind a flag for external-browser evaluation only.

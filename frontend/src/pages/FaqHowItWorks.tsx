@@ -2,16 +2,41 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
-import { TokenImage } from '@/components/token/TokenImage'
-import { AKITA } from '@/config/contracts'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
-import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
+import { getHostMode, getMarketingBaseUrl, isCurrentWindowUrl } from '@/lib/env/host'
+import { Button } from '@/components/ui/Button'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { STORY_CONTENT } from '@/features/home/vault-flow/model/storyContent'
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
-const { defaultDepositTokens, defaultAuctionWindow, distribution, strategies, blendedApy } = STORY_CONTENT
+const {
+  defaultDepositTokens,
+  defaultAuctionWindow,
+  distribution,
+  strategies,
+  blendedApy,
+  shareTokenBadgeSrc,
+} = STORY_CONTENT
+
+/** Marketing FAQ visuals must not call wagmi (4626.fun has no WagmiProvider). */
+function StoryTokenAvatar({
+  wrapped = false,
+  className = 'w-8 h-8',
+}: {
+  wrapped?: boolean
+  className?: string
+}) {
+  return (
+    <img
+      src={shareTokenBadgeSrc}
+      alt={wrapped ? 'Vault share token' : 'Creator coin'}
+      className={`${className} shrink-0 object-cover ${wrapped ? 'rounded-md' : 'rounded-full'}`}
+      loading="lazy"
+      decoding="async"
+    />
+  )
+}
 
 const surface = 'glass-card ring-1 ring-white/5 shadow-[0_30px_80px_rgba(0,0,0,0.6)]'
 
@@ -28,7 +53,9 @@ export function FaqHowItWorks() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (getHostMode() !== 'app') return
-    window.location.replace(`${getMarketingBaseUrl()}/faq/how-it-works`)
+    const target = `${getMarketingBaseUrl()}/faq/how-it-works`
+    if (isCurrentWindowUrl(target)) return
+    window.location.replace(target)
   }, [])
   const howToSchema = useMemo(
     () => ({
@@ -79,7 +106,7 @@ export function FaqHowItWorks() {
           <div className="mb-10">
             <Link
               to="/faq"
-              className="inline-flex items-center gap-2 text-zinc-600 hover:text-zinc-400 transition-colors"
+              className="inline-flex items-center gap-2 text-zinc-400 hover:text-zinc-200 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
               <span className="label">Back to FAQ</span>
@@ -99,7 +126,7 @@ export function FaqHowItWorks() {
               <h1 className="headline text-4xl sm:text-5xl lg:text-6xl">
                 Deposit. Mint.<br className="hidden sm:block" /> Distribute. Earn.
               </h1>
-              <p className="text-zinc-500 text-sm sm:text-base font-light leading-relaxed">
+              <p className="text-zinc-400 text-sm sm:text-base font-light leading-relaxed">
                 The complete creator vault lifecycle — four steps from first deposit to ongoing yield.
               </p>
             </div>
@@ -130,7 +157,7 @@ export function FaqHowItWorks() {
                       <h2 className="headline text-2xl sm:text-3xl mt-1">Open the vault</h2>
                     </div>
 
-                    <p className="text-zinc-500 text-sm font-light leading-relaxed">
+                    <p className="text-zinc-400 text-sm font-light leading-relaxed">
                       To deploy a vault, the creator makes a single one-time deposit of{' '}
                       <span className="mono text-white">{defaultDepositTokens}</span> creator coins —
                       exactly 5% of total supply. This commitment activates the vault and sets the initial share price.
@@ -139,20 +166,20 @@ export function FaqHowItWorks() {
                     {/* stat highlight */}
                     <div className="flex items-baseline gap-3 py-4 border-t border-white/5">
                       <span className="font-mono text-3xl text-white">{defaultDepositTokens}</span>
-                      <span className="text-zinc-600 text-sm">creator coins required = 5% of supply</span>
+                      <span className="text-zinc-400 text-sm">creator coins required = 5% of supply</span>
                     </div>
 
                     {/* token flow */}
                     <div className="flex items-center gap-3">
-                      <TokenImage tokenAddress={AKITA.token as `0x${string}`} symbol="AKITA" size="sm" isWrapped={false} />
+                      <StoryTokenAvatar />
                       <div className="flex-1 h-px bg-white/8 relative">
                         <div className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent to-white/20" />
                       </div>
                       <img src="/assets/logo-mark.svg" alt="4626 vault" className="w-6 h-6 opacity-70" />
                       <div className="flex-1 h-px bg-white/8" />
-                      <TokenImage tokenAddress={AKITA.token as `0x${string}`} symbol="AKITA" size="sm" isWrapped wrappedShape="rect" />
+                      <StoryTokenAvatar wrapped />
                     </div>
-                    <p className="text-[11px] text-zinc-700 font-light -mt-2">
+                    <p className="text-[11px] text-zinc-400 font-light -mt-2">
                       Creator coin → vault → ■ share token
                     </p>
                   </div>
@@ -178,7 +205,7 @@ export function FaqHowItWorks() {
                       </h2>
                     </div>
 
-                    <p className="text-zinc-500 text-sm font-light leading-relaxed">
+                    <p className="text-zinc-400 text-sm font-light leading-relaxed">
                       <span className="mono text-white">{defaultDepositTokens} {SHARE_TOKEN}</span> vault share tokens are minted.
                       These represent proportional ownership of everything the vault earns — for the creator and all future depositors alike.
                       The share price can rise or fall as vault assets change.
@@ -223,7 +250,7 @@ export function FaqHowItWorks() {
                       <h2 className="headline text-2xl sm:text-3xl mt-1">Public price discovery</h2>
                     </div>
 
-                    <p className="text-zinc-500 text-sm font-light leading-relaxed">
+                    <p className="text-zinc-400 text-sm font-light leading-relaxed">
                       Only during the initial deposit, the <span className="mono text-white">{defaultDepositTokens} {SHARE_TOKEN}</span> are split
                       across three destinations. A portion runs through Uniswap's Continuous Clearing Auction over{' '}
                       <span className="text-white">{defaultAuctionWindow}</span> — no fixed presale price, no insider advantage.
@@ -244,11 +271,11 @@ export function FaqHowItWorks() {
                             </div>
                             <div className="flex items-baseline gap-2 shrink-0">
                               <span className="font-mono text-xs text-zinc-400">{dest.amount}</span>
-                              <span className="font-mono text-xs text-zinc-600">{dest.percent}</span>
+                              <span className="font-mono text-xs text-zinc-400">{dest.percent}</span>
                             </div>
                           </div>
                           <AllocBar pct={dest.numericPercent} color="bg-brand-accent/30" />
-                          <p className="text-[11px] text-zinc-700 font-light">{dest.purposeCopy}</p>
+                          <p className="text-[11px] text-zinc-400 font-light">{dest.purposeCopy}</p>
                         </div>
                       ))}
                     </div>
@@ -273,7 +300,7 @@ export function FaqHowItWorks() {
                       <h2 className="headline text-2xl sm:text-3xl mt-1">Tokens go to work</h2>
                     </div>
 
-                    <p className="text-zinc-500 text-sm font-light leading-relaxed">
+                    <p className="text-zinc-400 text-sm font-light leading-relaxed">
                       The deposited creator coins are immediately allocated across four yield strategies.
                       As the vault earns, the <span className="mono text-brand-accent">{SHARE_TOKEN}</span> share price rises — benefiting
                       every holder proportionally, including the creator.
@@ -299,7 +326,7 @@ export function FaqHowItWorks() {
                           </div>
                           <AllocBar pct={s.numericPercent} />
                           <div className="flex items-baseline justify-between gap-4">
-                            <p className="text-[11px] text-zinc-700 font-light leading-relaxed">{s.purposeCopy}</p>
+                            <p className="text-[11px] text-zinc-400 font-light leading-relaxed">{s.purposeCopy}</p>
                             {s.apy !== '—' && (
                               <span className="shrink-0 font-mono text-[11px] text-emerald-500/70">{s.apy}</span>
                             )}
@@ -311,7 +338,7 @@ export function FaqHowItWorks() {
                     <div className="flex items-baseline gap-3 py-3 border-t border-white/5">
                       <span className="label">Blended APR</span>
                       <span className="font-mono text-sm text-emerald-400">{blendedApy}</span>
-                      <span className="text-zinc-700 text-xs font-light">not guaranteed</span>
+                      <span className="text-zinc-400 text-xs font-light">not guaranteed</span>
                     </div>
                   </div>
                 </motion.div>
@@ -336,12 +363,11 @@ export function FaqHowItWorks() {
                 hold <span className="mono text-brand-accent">{SHARE_TOKEN}</span> to earn, or burn to exit.
               </p>
               <div className="mt-6 flex flex-col sm:flex-row gap-3">
-                <Link
-                  to={getCanonicalMarketingWaitlistPath()}
-                  className="btn-accent inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm whitespace-nowrap"
-                >
-                  Join the waitlist <ArrowRight className="w-4 h-4" />
-                </Link>
+                <Button variant="primary" size="lg" className="whitespace-nowrap" asChild>
+                  <Link to={getCanonicalMarketingWaitlistPath()}>
+                    Join the waitlist <ArrowRight className="w-4 h-4" />
+                  </Link>
+                </Button>
                 <Link
                   to="/faq"
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/8 bg-white/[0.02] px-5 py-3 text-sm text-zinc-400 hover:text-white hover:border-white/12 transition-colors whitespace-nowrap"
@@ -352,7 +378,7 @@ export function FaqHowItWorks() {
             </motion.div>
 
             {/* ── Risk note ── */}
-            <p className="text-[11px] text-zinc-700 font-light max-w-prose">
+            <p className="text-[11px] text-zinc-400 font-light max-w-prose">
               Nothing on this page is financial advice. APR ranges are highly variable and not guarantees — the vault can make or lose money.
               Smart contracts can fail. Treat this as experimental unless you have independently verified the deployed contracts.
             </p>

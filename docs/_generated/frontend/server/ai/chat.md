@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / server/ai/chat
+[4626-web](../../index.md) / server/ai/chat
 
 # server/ai/chat
 
@@ -10,7 +10,7 @@
 
 ### ChatRuntimeBridge
 
-> **ChatRuntimeBridge** = `ReturnType`\<*typeof* [`createRuntimeBridge`](../agent/eliza/runtimeBridge.md#createruntimebridge)\>
+> **ChatRuntimeBridge** = `ReturnType`\<*typeof* [`createRuntimeBridge`](../agents/eliza/runtimeBridge.md#createruntimebridge)\>
 
 Defined in: [server/ai/chat.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/ai/chat.ts#L21)
 

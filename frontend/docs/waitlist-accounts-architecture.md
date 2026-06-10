@@ -47,7 +47,7 @@ Wallet invariants:
 Architecture and operational references:
 
 - Canonical architecture: [docs/4626-connection-methods.md](../../docs/4626-connection-methods.md)
-- Server-side owner-install operational runbook (carries a legacy banner for the user-facing flow): `docs/operations/canonical-csw-owner-approval.md`
+- Owner-install reference methods runbook (legacy/server lanes and current relay path): `docs/operations/owner-install-reference-methods.md`
 - User-initiated troubleshooting: `docs/guides/troubleshooting/activate-account-signing.md`
 
 Implementation posture:

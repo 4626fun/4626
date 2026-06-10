@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/swap/TokenAvatar
+[4626-web](../../../index.md) / src/components/swap/TokenAvatar
 
 # src/components/swap/TokenAvatar
 

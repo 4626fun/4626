@@ -1,5 +1,12 @@
 /// <reference types="vite/client" />
 
+declare module '../../scripts/canvasTokens.mjs' {
+  export function hexToRgbTriplet(hex: string): string
+  export function readSiteConfig(): { backgroundColor: string }
+  export function renderCanvasTokensCss(tokens: Record<string, string>): string
+  export function resolveCanvasTokens(siteConfig: { backgroundColor: string }): Record<string, string>
+}
+
 interface ImportMetaEnv {
   readonly VITE_BASE_RPC?: string
   readonly VITE_CDP_PAYMASTER_URL?: string

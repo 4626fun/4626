@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/zora/csw-entry/challenge
+[4626-web](../../../index.md) / api/zora/csw-entry/challenge
 
 # api/zora/csw-entry/challenge
 

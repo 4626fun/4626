@@ -1,5 +1,8 @@
 # Zora creator-coin payout-recipient handoff at vault launch
 
+**Terminology note (per AGENTS.md + canonical reference):**  
+The on-chain field on Creator Coins is still named `payoutRecipient`. In all prose, comments, and docs it must be qualified as the `creatorCoinPayoutRecipient` (external earnings lane). See the canonical definition in [creatorvault-business-logic-core-structure-audit.md](./audits/creatorvault-business-logic-core-structure-audit.md).
+
 Status: **reference architecture (already implemented)** · Author: computer · Date: 2026-05-05 · Updated: 2026-05-06
 Related: [ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md), [owner-mutation-decision-2026-05.md](./owner-mutation-decision-2026-05.md), [sub-accounts-baseapp-design.md](./sub-accounts-baseapp-design.md)
 

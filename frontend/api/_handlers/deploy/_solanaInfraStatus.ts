@@ -15,7 +15,7 @@ import {
   getApiContracts,
   getSessionAddress,
   isAdminAddress,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 
@@ -182,7 +182,7 @@ function readSolanaMintFromEnv(): Hex | null {
 function readRegistrationSignerPk(): Hex | null {
   const candidates = [
     process.env.SOLANA_ADAPTER_OWNER_PRIVATE_KEY,
-    process.env.KEEPR_PRIVATE_KEY,
+    process.env.KPR_PRIVATE_KEY,
     process.env.PRIVATE_KEY,
   ]
   for (const c of candidates) {
@@ -234,7 +234,7 @@ function readMachineMonitorAuth(req: VercelRequest): {
     .trim()
   const internalHeader = requestHeader(req, 'x-cv-solana-registration-secret')
 
-  const keeprApiKey = String(process.env.KEEPR_API_KEY ?? '').trim()
+  const keeprApiKey = String(process.env.KPR_API_KEY ?? '').trim()
   if (keeprApiKey) {
     if (bearer && safeCompareSecret(bearer, keeprApiKey)) {
       return { authorized: true, mode: 'keepr-api-key' }

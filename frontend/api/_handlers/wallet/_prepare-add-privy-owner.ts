@@ -10,7 +10,7 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import {
   bootstrapCanonicalDelegationState,
   extractDelegationFlags,
@@ -20,12 +20,7 @@ type PrepareResponse =
   | { alreadyOwner: true }
   | {
       alreadyOwner: false
-      txRequest: {
-        chainId: 8453
-        to: `0x${string}`
-        data: `0x${string}`
-        value: '0x0'
-      }
+      txRequest: ReturnType<typeof prepareAddOwnerTx>
     }
 
 function resolveStatusCode(error: unknown): number {

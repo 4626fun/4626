@@ -5,7 +5,7 @@ import {
   summarizeBaseSubAccount,
   type BaseSubAccountInput,
   type ExecutionTrackInput,
-} from './executionTrack'
+} from './executionTrack.js'
 
 const CSW = '0x00000000000000000000000000000000000000aa'
 const SUB = '0x00000000000000000000000000000000000000bb'
@@ -92,36 +92,49 @@ describe('resolveExecutionTrack', () => {
     expect(track({ privyEmbeddedEoaIsOwnerOfCanonicalCsw: null })).toBe('none-yet')
   })
 
-  it("returns 'legacy-owner-install' when the embedded EOA is a direct owner and no real sub-account is persisted", () => {
+  it("returns 'legacy-owner-install' when the embedded EOA is a direct owner (parent CSW execution)", () => {
     expect(
       track({
         privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
       }),
     ).toBe('legacy-owner-install')
-    // Legacy backfill in the column is still legacy-owner-install, not sub-account.
     expect(
       track({
         baseSubAccountAddress: CSW,
         privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
       }),
     ).toBe('legacy-owner-install')
-  })
-
-  it("returns 'sub-account' when a real sub-account is persisted and the embedded EOA is not a direct CSW owner", () => {
-    expect(
-      track({
-        baseSubAccountAddress: SUB,
-        privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
-      }),
-    ).toBe('sub-account')
-  })
-
-  it("returns 'migration-pending' when both signals are present (legacy user who later set up a sub-account)", () => {
+    // Parent owner wins even when a distinct sub-account is persisted.
     expect(
       track({
         baseSubAccountAddress: SUB,
         privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
       }),
-    ).toBe('migration-pending')
+    ).toBe('legacy-owner-install')
+  })
+
+  it("returns 'none-yet' when parent embedded owner is not confirmed and sub-account flow is disabled", () => {
+    expect(
+      track({
+        baseSubAccountAddress: SUB,
+        privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+      }),
+    ).toBe('none-yet')
+  })
+
+  it("returns 'sub-account' when sub-account flow is enabled and a distinct sub-account is registered", () => {
+    const prev = process.env.WAITLIST_SUBACCOUNT_FLOW_ENABLED
+    process.env.WAITLIST_SUBACCOUNT_FLOW_ENABLED = '1'
+    try {
+      expect(
+        track({
+          baseSubAccountAddress: SUB,
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+        }),
+      ).toBe('sub-account')
+    } finally {
+      if (prev === undefined) delete process.env.WAITLIST_SUBACCOUNT_FLOW_ENABLED
+      else process.env.WAITLIST_SUBACCOUNT_FLOW_ENABLED = prev
+    }
   })
 })

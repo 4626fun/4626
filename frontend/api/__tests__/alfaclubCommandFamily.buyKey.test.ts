@@ -30,7 +30,7 @@ vi.mock('../../server/_lib/agent/teeAttestationGate.js', () => ({
     assertTeeAttestationOrThrowMock(...args),
 }))
 
-vi.mock('../../server/_lib/wallet/commandIssuerContext.js', () => ({
+vi.mock('@4626/server-core', () => ({  // canonical import path
   resolveCommandIssuerContextByAddress: (...args: unknown[]) =>
     resolveCommandIssuerContextByAddressMock(...args),
   isExecutionReady: (resolution: { status: string }) => resolution.status === 'ready',

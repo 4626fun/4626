@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/uniswap/policy
+[4626-web](../../../index.md) / src/lib/uniswap/policy
 
 # src/lib/uniswap/policy
 

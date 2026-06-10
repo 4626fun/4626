@@ -17,6 +17,7 @@ import {
   type VaultReportResponse,
 } from '@/features/status/statusShared'
 import { InfraReadinessBadges } from '@/features/status/InfraReadinessBadges'
+import { Button } from '@/components/ui/Button'
 import { LoadingInline } from '@/components/ui/LoadingState'
 import { Spinner } from '@/components/ui/Spinner'
 
@@ -271,10 +272,11 @@ export function Status() {
                 placeholder="Vault address (0x…)"
                 className="flex-1 w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none font-mono"
               />
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                className="rounded-lg px-5 py-3 text-sm"
                 onClick={onRun}
-                className="btn-accent btn-no-icon rounded-lg px-5 py-3 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!vaultInputAddress || vaultQuery.isFetching}
                 title={!vaultInputAddress ? 'Enter a valid vault address' : 'Run checks'}
               >
@@ -282,7 +284,7 @@ export function Status() {
                   {vaultQuery.isFetching ? <Spinner size="sm" /> : null}
                   {vaultQuery.isFetching ? 'Running…' : 'Run checks'}
                 </span>
-              </button>
+              </Button>
             </div>
 
             {displayVault ? (
@@ -337,15 +339,16 @@ export function Status() {
                       The report above is read-only. Load owner fixes only if you want to connect a Base wallet and
                       apply repairs for this vault.
                     </div>
-                    <button
+                    <Button
                       type="button"
+                      variant="primary"
+                      className="rounded-lg px-4 py-2 text-xs"
                       onClick={() => {
                         setShowFixPanel(true)
                       }}
-                      className="btn-accent btn-no-icon rounded-lg px-4 py-2 text-xs"
                     >
                       Load owner fixes ({fixCount})
-                    </button>
+                    </Button>
                   </div>
                 ) : (
                   <Suspense

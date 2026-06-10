@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/pages/agents/AgentUriService
+[4626-web](../../../index.md) / src/pages/agents/AgentUriService
 
 # src/pages/agents/AgentUriService
 

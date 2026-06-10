@@ -1,7 +1,20 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { runCreatorMetricsSync } from '../../../server/_lib/zora/creatorMetricsSync.js'
-import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../packages/server-core/src/index.js'
+import {
+  runCreatorMetricsExploreBackfill,
+  runCreatorMetricsHotSync,
+  runCreatorMetricsSync,
+} from '../../../server/_lib/zora/creatorMetricsSync.js'
+import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '@4626/server-core'
 declare const process: { env: Record<string, string | undefined> }
+
+function readSyncMode(req: VercelRequest): 'hot' | 'explore' | 'backfill' {
+  const raw = req.query?.mode
+  const value = Array.isArray(raw) ? String(raw[0] ?? '') : typeof raw === 'string' ? raw : ''
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'hot') return 'hot'
+  if (normalized === 'explore') return 'explore'
+  return 'backfill'
+}
 
 function readCronSecret(req: VercelRequest): string {
   const header = req.headers['x-cron-secret']
@@ -63,8 +76,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const forceFull = readBooleanQuery(req, 'forceFull')
   const pageSize = readNumberQuery(req, 'pageSize')
   const maxPages = readNumberQuery(req, 'maxPages')
+  const mode = readSyncMode(req)
 
-  const result = await runCreatorMetricsSync({ forceFull, pageSize, maxPages })
+  if (mode === 'hot') {
+    const result = await runCreatorMetricsHotSync()
+    const status = result.ok ? 200 : 500
+    return res.status(status).json({
+      success: result.ok,
+      data: result,
+    })
+  }
+
+  if (mode === 'explore') {
+    const exploreMaxPages = readNumberQuery(req, 'maxPages')
+    const result = await runCreatorMetricsExploreBackfill({
+      forceFull,
+      maxPagesPerList: exploreMaxPages,
+      pageSize,
+    })
+    const status = result.ok ? 200 : 500
+    return res.status(status).json({
+      success: result.ok,
+      data: result,
+    })
+  }
+
+  const result = await runCreatorMetricsSync({
+    forceFull,
+    pageSize,
+    maxPages,
+    includeHotRefresh: false,
+  })
   const status = result.ok ? 200 : 500
   return res.status(status).json({
     success: result.ok,

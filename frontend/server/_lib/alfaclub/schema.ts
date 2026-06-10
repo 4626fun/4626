@@ -1,6 +1,13 @@
 /**
  * AlfaClub Vigilante — Supabase schema bootstrap.
  *
+ * **Condensed model (per AGENTS.md + docs/operations/supabase-schema-condensation.md):**
+ * - `supabase/migrations/` is the single source of truth.
+ * - Use `ensureAlfaclubSchema()` (and future extensions in schemaBootstrap.ts) for runtime cold-start needs.
+ * - `frontend/db/migrations-legacy/` is the archived historical mirror; do not add anything here.
+ *
+ * The user_preference + schema creation is now delegated. The remaining tables below are still defined locally (historical bootstrap). They are high-priority candidates for extraction to dedicated supabase/migrations/ files + delegation in a follow-up pass.
+ *
  * Follows the same idempotent CREATE-TABLE / RLS-deny pattern as
  * [walletIntelligenceCache.ts](../wallet/walletIntelligenceCache.ts).
  * All tables are private (RLS deny-all) — reads go through the
@@ -8,6 +15,7 @@
  */
 
 import { getDb } from '../db/postgres.js'
+import { ensureAlfaclubSchema, ensureFinalAdditiveColumns } from '../db/schemaBootstrap.js'
 
 let schemaEnsured = false
 
@@ -17,329 +25,12 @@ export async function ensureAlfaClubVigilanteSchema(): Promise<void> {
   if (!db) return
   schemaEnsured = true
 
-  // ── alfaclub_creators ──
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS alfaclub_creators (
-      token_id          TEXT PRIMARY KEY,
-      creator_address   TEXT NOT NULL,
-      minted_at_block   BIGINT NOT NULL,
-      minted_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      staking_pool      TEXT,
-      updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `
-  try {
-    await db.sql`ALTER TABLE alfaclub_creators ENABLE ROW LEVEL SECURITY;`
-  } catch {
-    // Ignore if RLS cannot be enabled in this runtime.
-  }
-  try {
-    await db.sql`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_policies
-          WHERE schemaname = 'public'
-            AND tablename = 'alfaclub_creators'
-            AND policyname = 'alfaclub_creators_deny_all'
-        ) THEN
-          CREATE POLICY alfaclub_creators_deny_all
-            ON alfaclub_creators FOR ALL TO public USING (false) WITH CHECK (false);
-        END IF;
-      END
-      $$;
-    `
-  } catch {
-    // Ignore if policy creation is unavailable.
-  }
-  await db.sql`CREATE INDEX IF NOT EXISTS alfaclub_creators_addr_idx ON alfaclub_creators(creator_address);`
-  await db.sql`CREATE INDEX IF NOT EXISTS alfaclub_creators_block_idx ON alfaclub_creators(minted_at_block);`
+  // Canonical condensed path: all core Alfaclub schema now lives in
+  // supabase/migrations/ (20260501 + the 20260526 batch).
+  await ensureAlfaclubSchema(db)
 
-  // ── alfaclub_indexer_cursor ──
-  // Tracks the last block we scanned for FriendKey transfers so cron runs are incremental.
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS alfaclub_indexer_cursor (
-      cursor_key        TEXT PRIMARY KEY,
-      last_block        BIGINT NOT NULL,
-      updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `
-  try {
-    await db.sql`ALTER TABLE alfaclub_indexer_cursor ENABLE ROW LEVEL SECURITY;`
-  } catch {
-    // Ignore.
-  }
-  try {
-    await db.sql`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_policies
-          WHERE schemaname = 'public'
-            AND tablename = 'alfaclub_indexer_cursor'
-            AND policyname = 'alfaclub_indexer_cursor_deny_all'
-        ) THEN
-          CREATE POLICY alfaclub_indexer_cursor_deny_all
-            ON alfaclub_indexer_cursor FOR ALL TO public USING (false) WITH CHECK (false);
-        END IF;
-      END
-      $$;
-    `
-  } catch {
-    // Ignore.
-  }
-
-  // ── alfaclub_runtime_secret ──
-  // Runtime-rotated short-lived credentials (e.g. AlfaClub chat JWT).
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS alfaclub_runtime_secret (
-      secret_key         TEXT PRIMARY KEY,
-      secret_value       TEXT NOT NULL,
-      expires_at         TIMESTAMPTZ,
-      updated_by         TEXT,
-      updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `
-  try {
-    await db.sql`ALTER TABLE alfaclub_runtime_secret ENABLE ROW LEVEL SECURITY;`
-  } catch {
-    // Ignore.
-  }
-  try {
-    await db.sql`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_policies
-          WHERE schemaname = 'public'
-            AND tablename = 'alfaclub_runtime_secret'
-            AND policyname = 'alfaclub_runtime_secret_deny_all'
-        ) THEN
-          CREATE POLICY alfaclub_runtime_secret_deny_all
-            ON alfaclub_runtime_secret FOR ALL TO public USING (false) WITH CHECK (false);
-        END IF;
-      END
-      $$;
-    `
-  } catch {
-    // Ignore.
-  }
-
-  // ── alfaclub_metrics_snapshot ──
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS alfaclub_metrics_snapshot (
-      snapshot_ts       TIMESTAMPTZ NOT NULL,
-      creator_address   TEXT NOT NULL,
-      token_id          TEXT NOT NULL,
-      total_supply      NUMERIC NOT NULL DEFAULT 0,
-      staked_supply     NUMERIC NOT NULL DEFAULT 0,
-      pnl_30d_usd       NUMERIC,
-      hl_account_value  NUMERIC,
-      score             NUMERIC NOT NULL DEFAULT 0,
-      rank              INT NOT NULL DEFAULT 0,
-      PRIMARY KEY (snapshot_ts, creator_address)
-    );
-  `
-  try {
-    await db.sql`ALTER TABLE alfaclub_metrics_snapshot ENABLE ROW LEVEL SECURITY;`
-  } catch {
-    // Ignore.
-  }
-  try {
-    await db.sql`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_policies
-          WHERE schemaname = 'public'
-            AND tablename = 'alfaclub_metrics_snapshot'
-            AND policyname = 'alfaclub_metrics_snapshot_deny_all'
-        ) THEN
-          CREATE POLICY alfaclub_metrics_snapshot_deny_all
-            ON alfaclub_metrics_snapshot FOR ALL TO public USING (false) WITH CHECK (false);
-        END IF;
-      END
-      $$;
-    `
-  } catch {
-    // Ignore.
-  }
-  await db.sql`CREATE INDEX IF NOT EXISTS alfaclub_metrics_ts_idx ON alfaclub_metrics_snapshot(snapshot_ts DESC);`
-  await db.sql`CREATE INDEX IF NOT EXISTS alfaclub_metrics_creator_idx ON alfaclub_metrics_snapshot(creator_address, snapshot_ts DESC);`
-
-  // ── alfaclub_publications ──
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS alfaclub_publications (
-      publication_key   TEXT PRIMARY KEY,
-      kind              TEXT NOT NULL,
-      creator_address   TEXT NOT NULL,
-      token_id          TEXT,
-      scorecard_cid     TEXT,
-      scorecard_uri     TEXT,
-      scorecard_hash    TEXT,
-      lens_post_id      TEXT,
-      erc8004_tx_hash   TEXT,
-      erc8004_calldata  TEXT,
-      score             NUMERIC,
-      rank              INT,
-      created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `
-  try {
-    await db.sql`ALTER TABLE alfaclub_publications ENABLE ROW LEVEL SECURITY;`
-  } catch {
-    // Ignore.
-  }
-  try {
-    await db.sql`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_policies
-          WHERE schemaname = 'public'
-            AND tablename = 'alfaclub_publications'
-            AND policyname = 'alfaclub_publications_deny_all'
-        ) THEN
-          CREATE POLICY alfaclub_publications_deny_all
-            ON alfaclub_publications FOR ALL TO public USING (false) WITH CHECK (false);
-        END IF;
-      END
-      $$;
-    `
-  } catch {
-    // Ignore.
-  }
-  await db.sql`CREATE INDEX IF NOT EXISTS alfaclub_publications_creator_idx ON alfaclub_publications(creator_address, created_at DESC);`
-  await db.sql`CREATE INDEX IF NOT EXISTS alfaclub_publications_kind_idx ON alfaclub_publications(kind, created_at DESC);`
-
-  // ── alfaclub.chat_ingest ──
-  // Live websocket message ingest across all rooms visible to the auth identity.
-  await db.sql`CREATE SCHEMA IF NOT EXISTS alfaclub;`
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS alfaclub.chat_ingest (
-      room_id           TEXT NOT NULL,
-      message_id        TEXT NOT NULL,
-      sender_address    TEXT NOT NULL,
-      message_text      TEXT NOT NULL DEFAULT '',
-      message_date      TIMESTAMPTZ,
-      source            TEXT NOT NULL DEFAULT 'ws-live',
-      raw_payload_text  TEXT,
-      ingested_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (room_id, message_id)
-    );
-  `
-  try {
-    await db.sql`ALTER TABLE alfaclub.chat_ingest ENABLE ROW LEVEL SECURITY;`
-  } catch {
-    // Ignore.
-  }
-  try {
-    await db.sql`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_policies
-          WHERE schemaname = 'alfaclub'
-            AND tablename = 'chat_ingest'
-            AND policyname = 'chat_ingest_deny_all'
-        ) THEN
-          CREATE POLICY chat_ingest_deny_all
-            ON alfaclub.chat_ingest FOR ALL TO public USING (false) WITH CHECK (false);
-        END IF;
-      END
-      $$;
-    `
-  } catch {
-    // Ignore.
-  }
-  await db.sql`CREATE INDEX IF NOT EXISTS chat_ingest_room_date_idx ON alfaclub.chat_ingest(room_id, message_date DESC);`
-  await db.sql`CREATE INDEX IF NOT EXISTS chat_ingest_ingested_idx ON alfaclub.chat_ingest(ingested_at DESC);`
-
-  // ── alfaclub.radar_dispatch ──
-  // Dedupe ledger for Telegram radar digests so scheduled runs do not repost
-  // the same snapshot to the same destination.
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS alfaclub.radar_dispatch (
-      dispatch_key          TEXT PRIMARY KEY,
-      snapshot_ts           TIMESTAMPTZ NOT NULL,
-      previous_snapshot_ts  TIMESTAMPTZ,
-      chat_id               TEXT NOT NULL,
-      message_hash          TEXT NOT NULL,
-      sent_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `
-  try {
-    await db.sql`ALTER TABLE alfaclub.radar_dispatch ENABLE ROW LEVEL SECURITY;`
-  } catch {
-    // Ignore.
-  }
-  try {
-    await db.sql`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_policies
-          WHERE schemaname = 'alfaclub'
-            AND tablename = 'radar_dispatch'
-            AND policyname = 'radar_dispatch_deny_all'
-        ) THEN
-          CREATE POLICY radar_dispatch_deny_all
-            ON alfaclub.radar_dispatch FOR ALL TO public USING (false) WITH CHECK (false);
-        END IF;
-      END
-      $$;
-    `
-  } catch {
-    // Ignore.
-  }
-  await db.sql`CREATE INDEX IF NOT EXISTS radar_dispatch_snapshot_idx ON alfaclub.radar_dispatch(snapshot_ts DESC);`
-
-  // ── alfaclub.user_preference ──
-  // Per-(room, sender) chat personalization (e.g. Hermit Spanish dialect).
-  // Owned by the Vercel chat-bridge / Hermit lane. NEVER carries auth or
-  // session material — see migration 036 / 20260501000000 and
-  // [userPreferenceStore.ts](./userPreferenceStore.ts) for the boundary
-  // contract.
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS alfaclub.user_preference (
-      room_id           TEXT NOT NULL,
-      sender_address    TEXT NOT NULL,
-      preference_key    TEXT NOT NULL,
-      preference_value  TEXT,
-      updated_by        TEXT,
-      created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (room_id, sender_address, preference_key)
-    );
-  `
-  try {
-    await db.sql`ALTER TABLE alfaclub.user_preference ENABLE ROW LEVEL SECURITY;`
-  } catch {
-    // Ignore.
-  }
-  try {
-    await db.sql`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_policies
-          WHERE schemaname = 'alfaclub'
-            AND tablename = 'user_preference'
-            AND policyname = 'user_preference_deny_all'
-        ) THEN
-          CREATE POLICY user_preference_deny_all
-            ON alfaclub.user_preference FOR ALL TO public USING (false) WITH CHECK (false);
-        END IF;
-      END
-      $$;
-    `
-  } catch {
-    // Ignore.
-  }
-  await db.sql`CREATE INDEX IF NOT EXISTS user_preference_sender_idx ON alfaclub.user_preference(sender_address);`
-
-  // One-time safe migration from previous public table name.
+  // One-time safe migration from the old public.alfaclub_chat_ingest table
+  // (can be removed after the migration has run everywhere).
   try {
     await db.sql`
       DO $$
@@ -376,26 +67,8 @@ export async function ensureAlfaClubVigilanteSchema(): Promise<void> {
     // Ignore.
   }
 
-  // ── Drain state columns (additive; safe on re-run) ──
-  // Tracks autonomous long-lived submission attempts for 'erc8004-queued'
-  // rows. Consumed by [feedbackRelayer.ts](./feedbackRelayer.ts) when the
-  // long-lived (Railway) AlfaClub relayer is enabled; production AlfaClub
-  // signing now runs on Vercel cron via /api/v1/alfaclub/chat-bridge-run.
-  try {
-    await db.sql`ALTER TABLE alfaclub_publications ADD COLUMN IF NOT EXISTS submission_attempts INT NOT NULL DEFAULT 0;`
-  } catch {
-    // Ignore if the column already exists with an incompatible default.
-  }
-  try {
-    await db.sql`ALTER TABLE alfaclub_publications ADD COLUMN IF NOT EXISTS last_submission_error TEXT;`
-  } catch {
-    // Ignore.
-  }
-  try {
-    await db.sql`ALTER TABLE alfaclub_publications ADD COLUMN IF NOT EXISTS last_submission_at TIMESTAMPTZ;`
-  } catch {
-    // Ignore.
-  }
+  // Additive columns now live in the final additive migration.
+  await ensureFinalAdditiveColumns(db as any).catch(() => {})
 }
 
 /** Reset state cache — exposed for tests only. */

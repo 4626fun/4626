@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/pages/admin/AgentOperatorStatus
+[4626-web](../../../index.md) / src/pages/admin/AgentOperatorStatus
 
 # src/pages/admin/AgentOperatorStatus
 

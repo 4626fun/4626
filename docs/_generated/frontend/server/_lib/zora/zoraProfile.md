@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/zora/zoraProfile
+[4626-web](../../../index.md) / server/\_lib/zora/zoraProfile
 
 # server/\_lib/zora/zoraProfile
 

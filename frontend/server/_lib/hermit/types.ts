@@ -83,6 +83,13 @@ export type HermitPreferenceClearer = () => Promise<boolean>
 export type HermitExecutionParams = {
   commandText: string
   senderAddress: `0x${string}`
+  /** Caller is trusted to mutate room-level strategy controls. */
+  isTrustedOperator?: boolean
+  /**
+   * Optional caller source identity (for routing guards), e.g.
+   * `alfaclub-bridge-runner` or `openclaw-control-ui`.
+   */
+  sourceIdentity?: string | null
   /** AlfaClub room id (digits in prod). Undefined for non-room callers. */
   roomId?: string
   /** Resolved user preferences for this (room, sender). */
@@ -93,6 +100,10 @@ export type HermitExecutionParams = {
   listPreferences?: HermitPreferenceLister | null
   /** Best-effort bulk-clear for `/hermit reset`. Optional. */
   clearPreferences?: HermitPreferenceClearer | null
+
+  // === Room 1659 specific market data ===
+  /** Live hype, liquidation, and user position data (only for room 1659) */
+  room1659Market?: import('../../commands/execute.js').HermitRoomContext['room1659Market']
 }
 
 export type HermitExecutionResult = {
@@ -101,5 +112,5 @@ export type HermitExecutionResult = {
   meme?: HermitMeme
   imagePrompt?: string
   mediaAttachments?: HermitMediaAttachment[]
-  provider: 'local' | 'pinata'
+  provider: 'local' | 'hermit'
 }

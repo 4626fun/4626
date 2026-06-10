@@ -12,6 +12,7 @@ const { dbSqlMock, getDbMock, ensureKeeprSchemaMock } = vi.hoisted(() => ({
 
 vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
+  getDbForCron: getDbMock,
   isDbConfigured: () => true,
 }))
 
@@ -24,6 +25,7 @@ import claimHandler from '../_handlers/keeper/jobs/_claim.js'
 import completeHandler from '../_handlers/keeper/jobs/_complete.js'
 import enqueueActiveVaultsHandler from '../_handlers/keeper/jobs/_enqueueActiveVaults.js'
 import enqueueBridgeIntegrityHandler from '../_handlers/keeper/jobs/_enqueueBridgeIntegrity.js'
+import enqueueEthosSyncHandler from '../_handlers/keeper/jobs/_enqueueEthosSync.js'
 import enqueueSolanaReconcileHandler from '../_handlers/keeper/jobs/_enqueueSolanaReconcile.js'
 import enqueueStrategyCanaryHandler from '../_handlers/keeper/jobs/_enqueueStrategyCanary.js'
 import enqueueStrategySignalsHandler from '../_handlers/keeper/jobs/_enqueueStrategySignals.js'
@@ -64,13 +66,14 @@ function jobRow(overrides: Record<string, unknown> = {}) {
 describe('keeper job coordination handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    applyEnv({ KEEPR_API_KEY: API_KEY })
+    applyEnv({ KPR_API_KEY: API_KEY })
   })
 
   it('routes keeper job endpoints through the API route map', async () => {
     await expect(getApiHandler('keeper/jobs/enqueue')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('keeper/jobs/enqueue-active-vaults')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('keeper/jobs/enqueue-bridge-integrity')).resolves.toBeTypeOf('function')
+    await expect(getApiHandler('keeper/jobs/enqueue-ethos-sync')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('keeper/jobs/enqueue-solana-reconcile')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('keeper/jobs/enqueue-strategy-canary')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('keeper/jobs/enqueue-strategy-signals')).resolves.toBeTypeOf('function')
@@ -377,6 +380,63 @@ describe('keeper job coordination handlers', () => {
     }
   })
 
+  it('keeps ethos sync enqueue disabled by default', async () => {
+    const restoreEnv = applyEnv({
+      CRON_SECRET: 'cron-secret-for-ethos-sync',
+      KEEPER_ETHOS_SYNC_ENQUEUE_ENABLED: undefined,
+    })
+    try {
+      const req = createMockReq({
+        method: 'GET',
+        headers: { authorization: 'Bearer cron-secret-for-ethos-sync' },
+      })
+      const res = createMockRes()
+
+      await enqueueEthosSyncHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.data).toMatchObject({ enabled: false, job: null, reason: 'disabled' })
+      expect(dbSqlMock).not.toHaveBeenCalled()
+    } finally {
+      restoreEnv()
+    }
+  })
+
+  it('enqueues ethos sync monitor when enabled', async () => {
+    const restoreEnv = applyEnv({
+      CRON_SECRET: 'cron-secret-for-ethos-sync',
+      KEEPER_ETHOS_SYNC_ENQUEUE_ENABLED: '1',
+    })
+    try {
+      dbSqlMock.mockResolvedValueOnce({
+        rows: [
+          jobRow({
+            id: 451,
+            dedupe_key: 'ethos-sync:default',
+            payload: {
+              path: '/api/keeper/ethos-sync',
+              body: {},
+            },
+          }),
+        ],
+        rowCount: 1,
+      })
+      const req = createMockReq({
+        method: 'GET',
+        headers: { authorization: 'Bearer cron-secret-for-ethos-sync' },
+      })
+      const res = createMockRes()
+
+      await enqueueEthosSyncHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.data?.enabled).toBe(true)
+      expect(res.body?.data?.job?.dedupeKey).toBe('ethos-sync:default')
+    } finally {
+      restoreEnv()
+    }
+  })
+
   it('keeps strategy canary disabled by default', async () => {
     const restoreEnv = applyEnv({
       CRON_SECRET: 'cron-secret-for-strategy-canary',
@@ -568,8 +628,9 @@ describe('keeper job coordination handlers', () => {
     const restoreEnv = applyEnv({
       CRON_SECRET: 'cron-secret-for-active-vaults',
       KEEPER_ACTIVE_VAULT_ENQUEUE_ENABLED: '1',
-      KEEPER_ACTIVE_VAULT_WORKFLOWS: 'sweep,tend,report,payout',
+      KEEPER_ACTIVE_VAULT_WORKFLOWS: 'sweep,tend,report,rebalance,payout',
       KEEPER_ACTIVE_VAULT_LIMIT: '5',
+      KEEPER_ACTIVE_VAULT_VALIDATE_LISTING: 'false',
     })
     try {
       dbSqlMock
@@ -598,7 +659,8 @@ describe('keeper job coordination handlers', () => {
         .mockResolvedValueOnce({ rows: [jobRow({ id: 301, dedupe_key: 'active-sweep:0x1111111111111111111111111111111111111111' })], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [jobRow({ id: 302, dedupe_key: 'active-tend:0x5555555555555555555555555555555555555555' })], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [jobRow({ id: 303, dedupe_key: 'active-report:0x5555555555555555555555555555555555555555' })], rowCount: 1 })
-        .mockResolvedValueOnce({ rows: [jobRow({ id: 304, dedupe_key: 'active-payout:0x5555555555555555555555555555555555555555' })], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [jobRow({ id: 304, dedupe_key: 'active-rebalance:0x5555555555555555555555555555555555555555' })], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [jobRow({ id: 305, dedupe_key: 'active-payout:0x5555555555555555555555555555555555555555' })], rowCount: 1 })
       const req = createMockReq({
         method: 'GET',
         headers: { authorization: 'Bearer cron-secret-for-active-vaults' },
@@ -614,6 +676,7 @@ describe('keeper job coordination handlers', () => {
         'active-sweep:0x1111111111111111111111111111111111111111',
         'active-tend:0x5555555555555555555555555555555555555555',
         'active-report:0x5555555555555555555555555555555555555555',
+        'active-rebalance:0x5555555555555555555555555555555555555555',
         'active-payout:0x5555555555555555555555555555555555555555',
       ])
     } finally {
@@ -673,7 +736,7 @@ describe('keeper job coordination handlers', () => {
 
   it('runs one cron-gated noop worker tick', async () => {
     const restoreEnv = applyEnv({
-      KEEPR_API_KEY: API_KEY,
+      KPR_API_KEY: API_KEY,
       CRON_SECRET: 'cron-secret-for-keeper-runner',
       KEEPER_COORDINATION_BASE_URL: 'https://app.4626.fun',
       KEEPER_WORKER_ID: 'test-cron-worker',
@@ -716,7 +779,7 @@ describe('keeper job coordination handlers', () => {
 
   it('enqueues mark-settled follow-up after a completed sweep job', async () => {
     const restoreEnv = applyEnv({
-      KEEPR_API_KEY: API_KEY,
+      KPR_API_KEY: API_KEY,
       CRON_SECRET: 'cron-secret-for-keeper-runner',
       KEEPER_COORDINATION_BASE_URL: 'https://app.4626.fun',
       KEEPER_WORKER_ID: 'test-cron-worker',
@@ -805,10 +868,91 @@ describe('keeper job coordination handlers', () => {
     }
   })
 
+  it('skips mark-settled follow-up when sweep already applied control-plane settlement', async () => {
+    const restoreEnv = applyEnv({
+      KPR_API_KEY: API_KEY,
+      CRON_SECRET: 'cron-secret-for-keeper-runner',
+      KEEPER_COORDINATION_BASE_URL: 'https://app.4626.fun',
+      KEEPER_WORKER_ID: 'test-cron-worker',
+    })
+    const originalFetch = globalThis.fetch
+    try {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => ({
+          ok: true,
+          json: async () => ({
+            success: true,
+            data: {
+              completed: true,
+              completionStage: 'completed',
+              settlementWrite: {
+                requested: true,
+                applied: true,
+                error: null,
+              },
+            },
+          }),
+        })),
+      )
+      dbSqlMock
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+        .mockResolvedValueOnce({
+          rows: [
+            jobRow({
+              id: 301,
+              kind: 'internal_api',
+              status: 'claimed',
+              claimed_by: 'test-cron-worker',
+              payload: {
+                path: '/api/keeper/sweep',
+                body: {
+                  ccaStrategyAddress: '0x1111111111111111111111111111111111111111',
+                  markSettled: {
+                    vaultAddress: '0x5555555555555555555555555555555555555555',
+                  },
+                },
+              },
+            }),
+          ],
+          rowCount: 1,
+        })
+        .mockResolvedValueOnce({
+          rows: [jobRow({ id: 301, status: 'succeeded' })],
+          rowCount: 1,
+        })
+
+      const req = createMockReq({
+        method: 'GET',
+        headers: {
+          authorization: 'Bearer cron-secret-for-keeper-runner',
+          host: 'app.4626.fun',
+          'x-forwarded-proto': 'https',
+        },
+      })
+      const res = createMockRes()
+
+      await runHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.data?.results?.[0]).toMatchObject({
+        id: 301,
+        kind: 'internal_api',
+        status: 'succeeded',
+      })
+      expect(res.body?.data?.results?.[0]?.followUpJobId).toBeUndefined()
+      expect(dbSqlMock).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.unstubAllGlobals()
+      if (originalFetch) globalThis.fetch = originalFetch
+      restoreEnv()
+    }
+  })
+
   it('keeps keepr action processing disabled by default', async () => {
     const restoreEnv = applyEnv({
       CRON_SECRET: 'cron-secret-for-action-process',
-      KEEPER_PROCESS_KEEPR_ACTIONS_ENABLED: undefined,
+      KEEPER_PROCESS_KPR_ACTIONS_ENABLED: undefined,
     })
     try {
       const req = createMockReq({
@@ -835,10 +979,10 @@ describe('keeper job coordination handlers', () => {
   it('processes one pending keepr action when enabled', async () => {
     const restoreEnv = applyEnv({
       CRON_SECRET: 'cron-secret-for-action-process',
-      KEEPR_API_KEY: API_KEY,
+      KPR_API_KEY: API_KEY,
       KEEPER_COORDINATION_BASE_URL: 'https://app.4626.fun',
-      KEEPER_PROCESS_KEEPR_ACTIONS_ENABLED: '1',
-      KEEPER_PROCESS_KEEPR_ACTIONS_LIMIT: '1',
+      KEEPER_PROCESS_KPR_ACTIONS_ENABLED: '1',
+      KEEPER_PROCESS_KPR_ACTIONS_LIMIT: '1',
     })
     const calls: Array<{ url: string; init: RequestInit | undefined }> = []
     try {

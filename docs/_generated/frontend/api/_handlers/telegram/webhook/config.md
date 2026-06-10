@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/telegram/webhook/config
+[4626-web](../../../../index.md) / api/\_handlers/telegram/webhook/config
 
 # api/\_handlers/telegram/webhook/config
 
@@ -280,7 +280,7 @@ Defined in: [api/\_handlers/telegram/webhook/config.ts:63](https://github.com/we
 
 > **getBundlerAndPaymasterUrlFromConfig**(`config`): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/config.ts:195](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/config.ts#L195)
+Defined in: [api/\_handlers/telegram/webhook/config.ts:200](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/config.ts#L200)
 
 #### Parameters
 
@@ -298,7 +298,7 @@ Defined in: [api/\_handlers/telegram/webhook/config.ts:195](https://github.com/w
 
 > **getTelegramWebhookConfig**(): [`TelegramWebhookConfig`](#telegramwebhookconfig)
 
-Defined in: [api/\_handlers/telegram/webhook/config.ts:190](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/config.ts#L190)
+Defined in: [api/\_handlers/telegram/webhook/config.ts:195](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/config.ts#L195)
 
 #### Returns
 
@@ -310,7 +310,7 @@ Defined in: [api/\_handlers/telegram/webhook/config.ts:190](https://github.com/w
 
 > **resetTelegramWebhookConfigForTests**(): `void`
 
-Defined in: [api/\_handlers/telegram/webhook/config.ts:205](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/config.ts#L205)
+Defined in: [api/\_handlers/telegram/webhook/config.ts:210](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/config.ts#L210)
 
 #### Returns
 

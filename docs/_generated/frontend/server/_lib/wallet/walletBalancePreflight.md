@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/wallet/walletBalancePreflight
+[4626-web](../../../index.md) / server/\_lib/wallet/walletBalancePreflight
 
 # server/\_lib/wallet/walletBalancePreflight
 
@@ -154,7 +154,7 @@ returns `balance_lookup_failed` — callers should log and proceed (fail-open).
 
 ###### wallet
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 

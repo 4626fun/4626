@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/admin/profiles/\_merge
+[4626-web](../../../../index.md) / api/\_handlers/admin/profiles/\_merge
 
 # api/\_handlers/admin/profiles/\_merge
 

@@ -5,7 +5,7 @@ is no longer wired into the live system. New entries go at the top; never edit
 existing entries except to fill post-broadcast cleanup actions and cleanup dates.
 
 This document is the source of truth referenced by
-`tools/ci/check_no_orphan_addresses.sh` when the guard finds an orphan address
+`amoe/tools/ci/check_no_orphan_addresses.sh` when the guard finds an orphan address
 outside the approved whitelist.
 
 ## Schema
@@ -38,7 +38,7 @@ outside the approved whitelist.
 
 ## CI Guard Whitelist
 
-`tools/ci/check_no_orphan_addresses.sh` intentionally permits orphan-address
+`amoe/tools/ci/check_no_orphan_addresses.sh` intentionally permits orphan-address
 references only in audited historical records, active v1.10.1 runbooks, and CI
 guards that use the addresses as known-bad fixtures.
 
@@ -61,6 +61,6 @@ Current whitelisted paths:
 - `docs/operations/deployment/v1.10.1/post-broadcast-orphan-finalization.md`
 - `docs/operations/deployment/v1.10.1/pre-broadcast-cleanup.md`
 - `test/v183-release-target-guard.sh`
-- `tools/ci/check_manager_amoe_surface.sh`
-- `tools/ci/check_no_orphan_addresses.sh`
+- `amoe/tools/ci/check_manager_amoe_surface.sh`
+- `amoe/tools/ci/check_no_orphan_addresses.sh`
 - Any file named `cursor-deploy-prompt-v1.10.1.md`

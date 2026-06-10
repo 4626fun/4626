@@ -6,12 +6,20 @@ import {
   type KeeperJob,
 } from './keeperJobs.js'
 import {
-  KEEPR_TRUST_ZONE_HEADER,
-  KEEPR_TRUST_ZONE_KEY_HEADER,
+  KPR_TRUST_ZONE_HEADER,
+  KPR_TRUST_ZONE_KEY_HEADER,
   getKeeprTrustZoneEnvKey,
   resolveKeeprEffectiveActionType,
   resolveKeeprTrustZone,
 } from '../agentControl/trustZones.js'
+import {
+  beginOperationExecution,
+  transitionOperationStatus,
+  transitionStageStatus,
+} from '../controlPlane/operations.js'
+import { emitControlPlaneMetric } from '../controlPlane/metrics.js'
+
+declare const process: { env: Record<string, string | undefined> }
 
 const ALLOWED_INTERNAL_API_PREFIXES = [
   '/api/keeper/',
@@ -85,8 +93,8 @@ function zoneHeaders(actionType: string | null, action: Record<string, unknown> 
   const zone = resolveKeeprTrustZone(effectiveActionType ?? actionType)
   const key = String(process.env[getKeeprTrustZoneEnvKey(zone)] ?? '').trim()
   return {
-    [KEEPR_TRUST_ZONE_HEADER]: zone,
-    ...(key ? { [KEEPR_TRUST_ZONE_KEY_HEADER]: key } : null),
+    [KPR_TRUST_ZONE_HEADER]: zone,
+    ...(key ? { [KPR_TRUST_ZONE_KEY_HEADER]: key } : null),
   }
 }
 
@@ -155,31 +163,56 @@ function readInternalApiPayload(job: KeeperJob): {
   return { path, method, body }
 }
 
+function readInternalApiTimeoutMs(): number {
+  const parsed = Number(process.env.KEEPER_INTERNAL_API_TIMEOUT_MS ?? 52_000)
+  if (!Number.isFinite(parsed)) return 52_000
+  return Math.min(55_000, Math.max(5_000, Math.floor(parsed)))
+}
+
 async function callInternalApi(params: {
   baseUrl: string
   apiKey: string
   job: KeeperJob
 }): Promise<Record<string, unknown>> {
   const apiJob = readInternalApiPayload(params.job)
-  const response = await fetch(joinUrl(params.baseUrl, apiJob.path), {
-    method: apiJob.method,
-    headers: {
-      Authorization: `Bearer ${params.apiKey}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify(apiJob.body),
-  })
-  const json = (await response.json().catch(() => null)) as { success?: boolean; data?: unknown; error?: string } | null
-  if (!response.ok || json?.success !== true) {
-    throw new Error(json?.error || `request_failed:${apiJob.path}:${response.status}`)
+  const timeoutMs = readInternalApiTimeoutMs()
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(joinUrl(params.baseUrl, apiJob.path), {
+      method: apiJob.method,
+      headers: {
+        Authorization: `Bearer ${params.apiKey}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(apiJob.body),
+      signal: controller.signal,
+    })
+    const json = (await response.json().catch(() => null)) as { success?: boolean; data?: unknown; error?: string } | null
+    if (!response.ok || json?.success !== true) {
+      throw new Error(json?.error || `request_failed:${apiJob.path}:${response.status}`)
+    }
+    return json?.data && typeof json.data === 'object' && !Array.isArray(json.data)
+      ? (json.data as Record<string, unknown>)
+      : { response: json?.data ?? null }
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`internal_api_timeout:${apiJob.path}:${timeoutMs}ms`)
+    }
+    throw error
+  } finally {
+    clearTimeout(timer)
   }
-  return json?.data && typeof json.data === 'object' && !Array.isArray(json.data)
-    ? (json.data as Record<string, unknown>)
-    : { response: json?.data ?? null }
 }
 
 function readSweepFollowUpMarkSettled(job: KeeperJob, result: Record<string, unknown>): Record<string, unknown> | null {
+  const settlementWrite =
+    result.settlementWrite && typeof result.settlementWrite === 'object' && !Array.isArray(result.settlementWrite)
+      ? (result.settlementWrite as Record<string, unknown>)
+      : null
+  if (settlementWrite?.applied === true) return null
+
   const payloadBody =
     job.payload.body && typeof job.payload.body === 'object' && !Array.isArray(job.payload.body)
       ? (job.payload.body as Record<string, unknown>)
@@ -226,6 +259,24 @@ async function runOneJob(params: {
   retryDelaySeconds: number
 }): Promise<KeeperJobRunResult> {
   try {
+    if (params.job.stageId) {
+      await transitionStageStatus({
+        stageId: params.job.stageId,
+        nextStatus: 'running',
+        reason: 'keeper_job_started',
+        actor: params.workerId,
+        data: { jobId: params.job.id, kind: params.job.kind },
+      })
+    }
+    if (params.job.operationId) {
+      await beginOperationExecution({
+        operationId: params.job.operationId,
+        reason: 'keeper_job_started',
+        actor: params.workerId,
+        data: { jobId: params.job.id, kind: params.job.kind },
+      })
+    }
+
     const result =
       params.job.kind === 'noop'
         ? { ok: true, kind: 'noop' }
@@ -235,12 +286,50 @@ async function runOneJob(params: {
             job: params.job,
           })
 
-    await completeKeeperJob({
+    const completed = await completeKeeperJob({
       id: params.job.id,
       workerId: params.workerId,
       status: 'succeeded',
       result,
     })
+    if (!completed) throw new Error('keeper_job_completion_lost_lease')
+    emitControlPlaneMetric({
+      metric: 'control_plane.job.status',
+      status: 'succeeded',
+      operationId: params.job.operationId,
+      stageId: params.job.stageId,
+      jobId: params.job.id,
+      workerKind: 'keeper_job_runner',
+    })
+
+    if (params.job.stageId) {
+      const terminalStatus =
+        result && typeof result === 'object' && (result as Record<string, unknown>).overall === 'partial'
+          ? 'manual_review'
+          : 'succeeded'
+      await transitionStageStatus({
+        stageId: params.job.stageId,
+        nextStatus: terminalStatus,
+        reason: terminalStatus === 'manual_review' ? 'keeper_job_partial_success' : 'keeper_job_completed',
+        actor: params.workerId,
+        data: { jobId: params.job.id, kind: params.job.kind },
+        result,
+      })
+    }
+    if (params.job.operationId) {
+      const terminalStatus =
+        result && typeof result === 'object' && (result as Record<string, unknown>).overall === 'partial'
+          ? 'manual_review'
+          : 'succeeded'
+      await transitionOperationStatus({
+        operationId: params.job.operationId,
+        nextStatus: terminalStatus,
+        reason: terminalStatus === 'manual_review' ? 'keeper_job_partial_success' : 'keeper_job_completed',
+        actor: params.workerId,
+        data: { jobId: params.job.id, kind: params.job.kind },
+        result,
+      })
+    }
 
     let followUpJobId: number | undefined
     try {
@@ -262,13 +351,57 @@ async function runOneJob(params: {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const retryable = !message.startsWith('unsupported_job_kind') && !message.includes('_not_allowed')
-    await completeKeeperJob({
+    const completed = await completeKeeperJob({
       id: params.job.id,
       workerId: params.workerId,
       status: retryable ? 'retry' : 'failed',
       error: message,
       retryDelaySeconds: params.retryDelaySeconds,
     })
+    if (!completed) {
+      emitControlPlaneMetric({
+        metric: 'control_plane.job.status',
+        status: 'failed',
+        operationId: params.job.operationId,
+        stageId: params.job.stageId,
+        jobId: params.job.id,
+        workerKind: 'keeper_job_runner',
+      })
+      return {
+        id: params.job.id,
+        kind: params.job.kind,
+        status: 'failed',
+        error: 'keeper_job_completion_lost_lease',
+      }
+    }
+    emitControlPlaneMetric({
+      metric: 'control_plane.job.status',
+      status: retryable ? 'retry' : 'failed',
+      operationId: params.job.operationId,
+      stageId: params.job.stageId,
+      jobId: params.job.id,
+      workerKind: 'keeper_job_runner',
+    })
+    if (params.job.stageId) {
+      await transitionStageStatus({
+        stageId: params.job.stageId,
+        nextStatus: retryable ? 'retrying' : 'failed',
+        reason: retryable ? 'keeper_job_retry_scheduled' : 'keeper_job_failed',
+        actor: params.workerId,
+        data: { jobId: params.job.id, kind: params.job.kind, error: message },
+        errorMessage: message,
+      })
+    }
+    if (params.job.operationId) {
+      await transitionOperationStatus({
+        operationId: params.job.operationId,
+        nextStatus: retryable ? 'retrying' : 'failed',
+        reason: retryable ? 'keeper_job_retry_scheduled' : 'keeper_job_failed',
+        actor: params.workerId,
+        data: { jobId: params.job.id, kind: params.job.kind, error: message },
+        errorMessage: message,
+      })
+    }
     return {
       id: params.job.id,
       kind: params.job.kind,

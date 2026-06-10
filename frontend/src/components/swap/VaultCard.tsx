@@ -6,9 +6,6 @@ import { useReadContract } from 'wagmi'
 import { formatUnits } from 'viem'
 import { erc20Abi } from 'viem'
 
-import { ContentCard, ContentCardBody, ContentCardFooter } from '@coinbase/cds-web/cards/ContentCard'
-import { RollingNumber } from '@coinbase/cds-web/numbers/RollingNumber'
-
 import { useVault } from '@/hooks/useVault'
 import { useZoraCoin } from '@/lib/zora/hooks'
 import { apiFetch } from '@/lib/api/apiBase'
@@ -16,7 +13,7 @@ import { toShareSymbol } from '@/lib/tokens/tokenSymbols'
 import { shareTokenLogo } from '@/lib/uniswap/swapUtils'
 import { cn } from '@/lib/shared/utils'
 
-const BASE_BRANDMARK_BLUE = '/base/base-square-blue.svg'
+const BASE_CHAIN_LOGO = '/base/base-chain-light.svg'
 
 /** Static mapping: share token address -> CCA strategy (for vaults not yet in keepr) */
 const SHARE_TO_CCA: Record<string, `0x${string}`> = {
@@ -202,13 +199,13 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
   const title = shareSymbol || data.name || 'Vault'
 
   return (
-    <ContentCard
+    <article
       className={cn(
-        'vault-surface-muted vault-hover-lift p-3 transition',
-        compact ? 'space-y-2' : 'space-y-3',
+        'glass-card vault-surface-muted vault-hover-lift flex flex-col p-3 transition',
+        compact ? 'gap-2' : 'gap-3',
       )}
     >
-      <ContentCardBody>
+      <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex flex-1 items-start gap-3">
             {tokenImageUrl ? (
@@ -230,22 +227,19 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
                 Share token: {shareOFT ?? 'Unavailable'}
               </div>
               <div className="app-meta-value mt-1 inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/6 px-2 py-0.5 text-zinc-400">
-                <img alt="Base" className="h-3.5 w-3.5 rounded-full object-contain shrink-0" loading="lazy" src={BASE_BRANDMARK_BLUE} />
+                <img alt="Base" className="h-3.5 w-3.5 rounded-[4px] object-contain shrink-0" loading="lazy" src={BASE_CHAIN_LOGO} />
                 <span>Base</span>
               </div>
             </div>
           </div>
           <div className="w-[7.5rem] shrink-0 text-right text-xs text-zinc-500">
             <div>{tvlUsd != null ? 'TVL' : 'Assets in vault'}</div>
-            <div className="text-sm text-zinc-200">
+            <div className="text-sm font-medium tabular-nums text-zinc-200">
               {tvlUsd != null ? (
-                <RollingNumber
-                  value={tvlUsd}
-                  prefix={<span>$</span>}
-                  format={{ notation: 'compact', maximumFractionDigits: 1 }}
-                  color="fg"
-                  colorPulseOnUpdate
-                />
+                <>
+                  <span>$</span>
+                  {formatCompactNumber(tvlUsd)}
+                </>
               ) : (
                 tvlLabel
               )}
@@ -312,9 +306,9 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
             Recover Auction + Strategy Funds
           </Link>
         ) : null}
-      </ContentCardBody>
+      </div>
 
-      <ContentCardFooter>
+      <footer className="border-t border-white/8 pt-3">
         <div className="grid grid-cols-2 gap-2 w-full">
           <Link
             to={vaultPath}
@@ -364,7 +358,7 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
             {vault.vaultAddress.slice(0, 8)}…
           </button>
         </div>
-      </ContentCardFooter>
-    </ContentCard>
+      </footer>
+    </article>
   )
 }

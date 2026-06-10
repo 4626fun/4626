@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / src/hooks/useAdminStatus
+[4626-web](../../index.md) / src/hooks/useAdminStatus
 
 # src/hooks/useAdminStatus
 

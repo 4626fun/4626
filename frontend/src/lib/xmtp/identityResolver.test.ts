@@ -36,6 +36,23 @@ describe('resolveModePreferredIdentity', () => {
     })
   })
 
+  it('prefers waitlist XMTP member address over parent CSW when both are available', () => {
+    const subAccount = '0x3333333333333333333333333333333333333333'
+    const result = resolveModePreferredIdentity({
+      connectedAddress: eoa,
+      modeOverride: 'SMART_WALLET',
+      accountContextSmartAddress: null,
+      waitlistCanonicalAddress: smart,
+      waitlistXmtpMemberAddress: subAccount,
+    })
+
+    expect(result).toEqual({
+      preferredAddress: subAccount,
+      isSmartWalletIdentity: true,
+      source: 'waitlist',
+    })
+  })
+
   it('keeps connected identity in SMART_WALLET mode when no smart identity source is available', () => {
     const result = resolveModePreferredIdentity({
       connectedAddress: eoa,

@@ -1,10 +1,8 @@
 import { getAddress, isAddress, type Address } from 'viem'
 import { getAppBaseUrl } from '@/lib/env/host'
+import { CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
 
-// Default Zora platform referrer. Migrated 2026-04-23 from
-// 0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF to the canonical CSW. See
-// src/wallet/canonicalWalletPolicy.ts for the rationale.
-const DEFAULT_PLATFORM_REFERRER = '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5'
+const DEFAULT_PLATFORM_REFERRER = getAddress(CANONICAL_CSW_ADDRESS)
 const DEFAULT_INVITE_URL = 'https://zora.co/invite'
 
 function normalizeHttpsUrl(raw: string | null | undefined): string | null {

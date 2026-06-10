@@ -1,3 +1,5 @@
+import { ZORA_SWAP_SIMULATION_FAILED_MESSAGE } from '@/lib/swap/swapStatusCopy'
+
 export type UniswapErrorCode =
   | 'INSUFFICIENT_FUNDS'
   | 'INSUFFICIENT_GAS'
@@ -26,12 +28,51 @@ const FALLBACK: NormalizedUniswapError = {
   retryable: true,
 }
 
+import { isPreflightSimulationRejection } from '@/lib/aa/coinbaseErc4337ErrorUtils'
+
+function collectSwapErrorText(input: unknown): string {
+  const parts: string[] = []
+  const seen = new Set<unknown>()
+  let cursor: unknown = input
+  for (let depth = 0; depth < 8 && cursor != null && !seen.has(cursor); depth += 1) {
+    seen.add(cursor)
+    if (isPreflightSimulationRejection(cursor)) {
+      parts.push(cursor.message)
+      break
+    }
+    if (typeof cursor === 'string') {
+      parts.push(cursor)
+      break
+    }
+    if (cursor instanceof Error) {
+      parts.push(cursor.message)
+      const shortMessage = (cursor as Error & { shortMessage?: string }).shortMessage
+      if (typeof shortMessage === 'string' && shortMessage.trim()) parts.push(shortMessage)
+      cursor = (cursor as Error & { cause?: unknown }).cause
+      continue
+    }
+    if (typeof cursor === 'object') {
+      const record = cursor as Record<string, unknown>
+      if (typeof record.message === 'string' && record.message.trim()) parts.push(record.message)
+      if (typeof record.details === 'string' && record.details.trim()) parts.push(record.details)
+      cursor = record.cause
+      continue
+    }
+    break
+  }
+  return parts.join(' ')
+}
+
 export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
-  const raw = typeof input === 'string'
-    ? input
-    : (input && typeof input === 'object' && 'message' in input && typeof (input as Record<string, unknown>).message === 'string')
-      ? String((input as Record<string, unknown>).message)
-      : ''
+  if (isPreflightSimulationRejection(input)) {
+    return {
+      code: 'APPROVAL_REQUIRED',
+      message: input.message,
+      retryable: true,
+    }
+  }
+
+  const raw = collectSwapErrorText(input)
   const msg = raw.toLowerCase()
 
   if (!msg.trim()) return FALLBACK
@@ -45,6 +86,19 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
     }
   }
 
+  // Swap proxy pull failed (often WETH transferFrom before deposit is simulated)
+  if (
+    msg.includes('transfer_from_failed') ||
+    (msg.includes('failed_to_estimate_gas') && msg.includes('transfer_from'))
+  ) {
+    return {
+      code: 'INSUFFICIENT_FUNDS',
+      message:
+        'The swap could not pull tokens from your smart wallet. For ETH sells, keep enough ETH to wrap in the same transaction, or reduce the amount and refresh the quote.',
+      retryable: true,
+    }
+  }
+
   // Token balance
   if (msg.includes('insufficient') || msg.includes('not enough balance') || msg.includes('exceeds balance')) {
     return {
@@ -54,11 +108,99 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
     }
   }
 
+  // CSW execute wrapper / Zora router leg reverted during simulation or gas estimate
+  if (
+    msg.includes('0x2c4029e9') ||
+    msg.includes('executionfailed') ||
+    msg.includes('zora swap would revert') ||
+    msg.includes('swap route data from zora') ||
+    msg.includes('0x3b99b53d') ||
+    msg.includes('sliceoutofbounds') ||
+    msg.includes('malformed or stale')
+  ) {
+    return {
+      code: 'SLIPPAGE_EXCEEDED',
+      message: ZORA_SWAP_SIMULATION_FAILED_MESSAGE,
+      retryable: true,
+    }
+  }
+
+  if (msg.includes('permit2 rejected') || msg.includes('0xb0669cbc') || msg.includes('invalidcontractsignature')) {
+    return {
+      code: 'APPROVAL_REQUIRED',
+      message:
+        'Permit2 rejected the smart-wallet signature. Refresh the quote, sign again when prompted, then retry.',
+      retryable: true,
+    }
+  }
+
+  if (
+    msg.includes('756688fe') ||
+    msg.includes('invalidnonce') ||
+    msg.includes('permit2 authorization is stale')
+  ) {
+    return {
+      code: 'QUOTE_EXPIRED',
+      message:
+        'This swap\'s Permit2 authorization is stale (nonce already used). Refresh the quote and try again. If another swap is still confirming, wait ~30 seconds first.',
+      retryable: true,
+    }
+  }
+
+  if (
+    msg.includes('swap simulation passed but the sponsored') ||
+    msg.includes('bundler rejected') ||
+    msg.includes('bundler could not simulate')
+  ) {
+    return {
+      code: 'QUOTE_EXPIRED',
+      message:
+        'The swap looked valid locally but the sponsored transaction was rejected. Refresh the quote and try once more. If a prior swap is still confirming, wait ~30 seconds first.',
+      retryable: true,
+    }
+  }
+
+  if (
+    msg.includes('swap is already pending') ||
+    msg.includes('previous swap is still confirming') ||
+    msg.includes('aa25') ||
+    msg.includes('invalid account nonce')
+  ) {
+    return {
+      code: 'NONCE_CONFLICT',
+      message:
+        'A swap is already pending on this smart wallet. Wait about 30 seconds for it to confirm, then try again once.',
+      retryable: true,
+    }
+  }
+
   // Approval / allowance
   if (msg.includes('approval') || msg.includes('allowance')) {
     return {
       code: 'APPROVAL_REQUIRED',
       message: 'Token approval needed. Click Approve to continue.',
+      retryable: true,
+    }
+  }
+
+  // Paymaster proxy did not classify a Universal Router swap (deploy-only fallback).
+  if (
+    msg.includes('missing_primary_call') &&
+    msg.includes('6ff5693b99212da76ad316178a184ab56d299b43')
+  ) {
+    return {
+      code: 'QUOTE_EXPIRED',
+      message:
+        'Gas sponsorship rejected this swap route shape. Refresh the quote and try again; if it keeps failing, wait ~30s and retry once more.',
+      retryable: true,
+    }
+  }
+
+  if (msg.includes('swap_router_command_not_allowed') || msg.includes('swap_router_non_canonical_encoding')) {
+    return {
+      code: 'QUOTE_EXPIRED',
+      message:
+        'This swap route is not eligible for gas sponsorship yet. Refresh the quote and try again.',
       retryable: true,
     }
   }
@@ -91,6 +233,16 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
     return {
       code: 'FORBIDDEN_ORIGIN',
       message: 'Request blocked by origin/session policy. Refresh and sign in again on the app domain.',
+      retryable: true,
+    }
+  }
+
+  // Uniswap Trading API schema validation (often transaction `value` typed as number in JSON)
+  if (msg.includes('does not match any of the allowed types') && msg.includes('value')) {
+    return {
+      code: 'UNKNOWN',
+      message:
+        'Swap build failed due to an invalid transaction payload from the router. Refresh the quote and try again.',
       retryable: true,
     }
   }
@@ -185,11 +337,12 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
     }
   }
 
-  // Generic contract revert — strip hex noise
+  // Generic contract revert — do not blame balance when the wallet already holds the sell token
   if (msg.includes('reverted') || msg.includes('execution reverted')) {
     return {
-      code: 'UNKNOWN',
-      message: 'Transaction failed. Check your balance and try again.',
+      code: 'QUOTE_EXPIRED',
+      message:
+        'The swap would revert on-chain (often a stale quote, Permit2 signature, or pool slippage). Refresh the quote and try again. Your USDC balance is not the blocker if it covers the amount shown.',
       retryable: true,
     }
   }

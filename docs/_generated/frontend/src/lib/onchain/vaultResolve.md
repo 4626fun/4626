@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/onchain/vaultResolve
+[4626-web](../../../index.md) / src/lib/onchain/vaultResolve
 
 # src/lib/onchain/vaultResolve
 
@@ -134,7 +134,7 @@ Defined in: [src/lib/onchain/vaultResolve.ts:155](https://github.com/wenakita/46
 
 ##### token
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
@@ -144,7 +144,7 @@ Defined in: [src/lib/onchain/vaultResolve.ts:155](https://github.com/wenakita/46
 
 ### resolveCreatorTokenFromAnyAddress()
 
-> **resolveCreatorTokenFromAnyAddress**\<`TTransport`, `TChain`\>(`publicClient`, `addr`): `Promise`\<`` `0x${string}` `` \| `null`\>
+> **resolveCreatorTokenFromAnyAddress**\<`TTransport`, `TChain`\>(`publicClient`, `addr`): `Promise`\<`string` \| `null`\>
 
 Defined in: [src/lib/onchain/vaultResolve.ts:112](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/vaultResolve.ts#L112)
 
@@ -164,17 +164,17 @@ Defined in: [src/lib/onchain/vaultResolve.ts:112](https://github.com/wenakita/46
 
 ##### addr
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
-`Promise`\<`` `0x${string}` `` \| `null`\>
+`Promise`\<`string` \| `null`\>
 
 ***
 
 ### resolveCreatorTradeTokenAddress()
 
-> **resolveCreatorTradeTokenAddress**\<`TTransport`, `TChain`\>(`publicClient`, `addressLike`): `Promise`\<`` `0x${string}` `` \| `null`\>
+> **resolveCreatorTradeTokenAddress**\<`TTransport`, `TChain`\>(`publicClient`, `addressLike`): `Promise`\<`string` \| `null`\>
 
 Defined in: [src/lib/onchain/vaultResolve.ts:143](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/vaultResolve.ts#L143)
 
@@ -198,7 +198,7 @@ Defined in: [src/lib/onchain/vaultResolve.ts:143](https://github.com/wenakita/46
 
 #### Returns
 
-`Promise`\<`` `0x${string}` `` \| `null`\>
+`Promise`\<`string` \| `null`\>
 
 ***
 

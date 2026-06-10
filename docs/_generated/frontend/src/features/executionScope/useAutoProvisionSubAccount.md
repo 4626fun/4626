@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/features/executionScope/useAutoProvisionSubAccount
+[4626-web](../../../index.md) / src/features/executionScope/useAutoProvisionSubAccount
 
 # src/features/executionScope/useAutoProvisionSubAccount
 

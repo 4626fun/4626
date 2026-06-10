@@ -15,6 +15,22 @@ import {
 } from 'viem'
 import { base } from 'viem/chains'
 
+import { isShareOftSaltOverrideDisabledBatcher } from '../../../../../src/config/contracts.defaults.js'
+import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
+import {
+  CREATOR_OVAULT_MODULE_STORAGE_V2,
+  CREATOR_OVAULT_MODULE_STORAGE_V3,
+} from '../../../../../src/lib/deploy/ovaultModuleIdentity.js'
+import {
+  resolveAlignedPhase1DeployDeps,
+  resolveBytecodeStoreForBatcher,
+  resolveCreate2DeployerForBatcher,
+  resolveWiredCreatorOvaultModules,
+} from '../../../../../src/lib/deploy/phase1ModuleDeploy.js'
+import { assertShareBridgeOftWiringForFinalize } from '../../../../../src/lib/deploy/shareBridgeOftWiring.js'
+import { assertPhase3HelperCreate2Authorization } from '../../../../../server/_lib/deploy/ensurePhase3HelperCreate2Authorization.js'
+import { ensurePhase3DryRunForkPrep } from '../../../../../server/_lib/deploy/ensurePhase3DryRunForkPrep.js'
+import { isLocalForkRpcUrl, resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import {
   handleOptions,
   readBoundedJsonObjectBody,
@@ -26,7 +42,7 @@ import {
   checkDurableRateLimit,
   RATE_LIMITS,
   rateLimitKey,
-} from '../../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { ensureDeploySessionsSchema, hashDeployToken, insertDeploySession, randomDeployToken, randomId } from '../../../../../server/_lib/deploy/deploySessions.js'
 
@@ -172,15 +188,8 @@ const PHASE1_WITH_SALT_SELECTORS = new Set<string>([
   PHASE1_SELECTOR_FINALIZE_WITH_SALT,
 ])
 const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
-const KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
-  '0xe3f9490cfd6bd3d68010405d18bf772c167e7178',
-  '0xf941bb68e4f083f3f531cc598d5c08d0b8ffba7e',
-  // Active split Phase-1 batcher on Base mainnet also rejects non-zero
-  // ShareOFT salt overrides (SaltOverrideDisabled selector 0xe7fdf838).
-  '0x271ab2c53d79d52ddb14506a44133fe3fa395332',
-])
 const UNIVERSAL_CREATE2_FACTORY = '0x4e59b44847b379578588920ca78fbf26c0b4956c'
-const EXPECTED_VAULT_MODULE_STORAGE_VERSION = keccak256(encodePacked(['string'], ['CreatorOVaultModuleStorage.current']))
+const EXPECTED_VAULT_MODULE_STORAGE_VERSION = keccak256(encodePacked(['string'], ['CreatorOVaultModuleStorage.v3']))
 const EXPECTED_VAULT_CORE_MODULE_KIND = keccak256(encodePacked(['string'], ['CreatorOVaultModule.core']))
 const EXPECTED_VAULT_STRATEGIES_MODULE_KIND = keccak256(encodePacked(['string'], ['CreatorOVaultModule.strategies']))
 const EXPECTED_VAULT_ADMIN_MODULE_KIND = keccak256(encodePacked(['string'], ['CreatorOVaultModule.admin']))
@@ -855,7 +864,7 @@ async function normalizePhase1EntrypointCalls(calls: Call[]): Promise<{ calls: C
   }
   if (targetAddresses.size === 0) return { calls, rewrote: false }
 
-  const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+  const rpc = resolveDeploySessionRpcUrl()
   const readClient = createPublicClient({
     chain: base,
     transport: http(rpc, { timeout: 12_000 }),
@@ -925,14 +934,14 @@ async function normalizePhase1SaltOverrideCalls(calls: Call[]): Promise<{ calls:
   }
   if (saltedTargets.size === 0) return { calls, rewrote: false }
 
-  const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+  const rpc = resolveDeploySessionRpcUrl()
   const readClient = createPublicClient({
     chain: base,
     transport: http(rpc, { timeout: 12_000 }),
   })
   const saltDisabledTargets = new Set<string>()
   for (const targetLc of saltedTargets) {
-    if (KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS.has(targetLc)) {
+    if (isShareOftSaltOverrideDisabledBatcher(targetLc)) {
       saltDisabledTargets.add(targetLc)
       continue
     }
@@ -1156,7 +1165,7 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
   if (isDeprecatedCreatorVaultBatcherAddress(batcherAddress)) {
     throw new DeploySessionRequestError(409, deploymentBatcherNotConfiguredMessage(batcherAddress))
   }
-  const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+  const rpc = resolveDeploySessionRpcUrl()
   const readClient = createPublicClient({
     chain: base,
     transport: http(rpc, { timeout: 12_000 }),
@@ -1207,21 +1216,17 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
   let create2Deployer: Address
   let bytecodeStore: Address
   try {
-    const [create2Read, storeRead] = await Promise.all([
-      readClient.readContract({
-        address: batcherAddress,
-        abi: BATCHER_DEPENDENCY_ABI,
-        functionName: 'create2Deployer',
-      }),
-      readClient.readContract({
-        address: batcherAddress,
-        abi: BATCHER_DEPENDENCY_ABI,
-        functionName: 'bytecodeStore',
-      }),
-    ])
-    create2Deployer = getAddress(create2Read as Address)
-    bytecodeStore = getAddress(storeRead as Address)
-  } catch {
+    const aligned = await resolveAlignedPhase1DeployDeps({
+      publicClient: readClient,
+      batcherAddress,
+    })
+    if (!aligned.ok) {
+      throw new DeploySessionRequestError(409, `phase1 precheck failed: ${aligned.message}`)
+    }
+    create2Deployer = getAddress(aligned.create2Deployer)
+    bytecodeStore = getAddress(aligned.bytecodeStore)
+  } catch (error) {
+    if (error instanceof DeploySessionRequestError) throw error
     throw new DeploySessionRequestError(
       409,
       `phase1 precheck failed: could not resolve create2 dependencies for batcher ${batcherAddress}.`,
@@ -1269,23 +1274,14 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
   // modules before we attempt phase1. This catches immutable module-mismatch
   // batchers up front (otherwise deployPhase1* reverts with InvalidModuleAddress()).
   try {
-    const [coreModule, strategiesModule, adminModule] = (await Promise.all([
-      readClient.readContract({
-        address: batcherAddress,
-        abi: BATCHER_VAULT_MODULES_ABI,
-        functionName: 'vaultCoreModule',
-      }),
-      readClient.readContract({
-        address: batcherAddress,
-        abi: BATCHER_VAULT_MODULES_ABI,
-        functionName: 'vaultStrategiesModule',
-      }),
-      readClient.readContract({
-        address: batcherAddress,
-        abi: BATCHER_VAULT_MODULES_ABI,
-        functionName: 'vaultAdminModule',
-      }),
-    ])) as [Address, Address, Address]
+    const wiredModules = await resolveWiredCreatorOvaultModules({
+      publicClient: readClient,
+      batcherAddress,
+    })
+    if (!wiredModules) {
+      throw new Error('could not resolve phase1 module wiring')
+    }
+    const { core: coreModule, strategies: strategiesModule, admin: adminModule } = wiredModules
 
     const moduleChecks: Array<{ label: 'core' | 'strategies' | 'admin'; address: Address; expectedKind: Hex }> = [
       { label: 'core', address: getAddress(coreModule), expectedKind: EXPECTED_VAULT_CORE_MODULE_KIND },
@@ -1323,10 +1319,16 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
         moduleKind.toLowerCase() !== moduleCheck.expectedKind.toLowerCase() ||
         moduleStorageVersion.toLowerCase() !== EXPECTED_VAULT_MODULE_STORAGE_VERSION.toLowerCase()
       ) {
+        const moduleIsV2 =
+          moduleStorageVersion.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V2.toLowerCase()
+        const v2Hint = moduleIsV2
+          ? ' Live batcher Phase1Module still wires v2 modules while deploy bytecode expects v3 (v1.14.0). ' +
+            'Rotate to the v1.14.0 v3 Phase1Module via setPhase1Module before greenfield deploy.'
+          : ''
         throw new DeploySessionRequestError(
           409,
           `phase1 precheck failed: batcher ${batcherAddress} ${moduleCheck.label} module ${moduleCheck.address} ` +
-            `is incompatible with current CreatorOVault module identity/version (InvalidModuleAddress).`,
+            `is incompatible with current CreatorOVault module identity/version (InvalidModuleAddress).${v2Hint}`,
         )
       }
     }
@@ -1427,6 +1429,7 @@ function inferPayoutRecipientMode(value: unknown): 'gauge' | 'payout_router' | n
 
 function extractPhase2CoreInvariantInfo(data: Hex): {
   creatorToken: Address
+  // Internal name kept close to ABI; represents creatorCoinPayoutRecipient (external earnings)
   payoutRecipient: Address | null
   rolePolicyId: bigint | null
 } | null {
@@ -1871,7 +1874,7 @@ function isOvaultRuntimeConfigured(value: unknown): boolean {
 }
 
 async function assertOvaultRuntimeReadyForBatcher(batcherAddress: Address): Promise<void> {
-  const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+  const rpc = resolveDeploySessionRpcUrl()
   const publicClient = createPublicClient({
     chain: base,
     transport: http(rpc, { timeout: 12_000 }),
@@ -2243,8 +2246,7 @@ const COINBASE_SMART_WALLET_OWNER_LINK_ABI = [
 
 async function isOnchainSmartWalletOwner(params: { smartWallet: Address; ownerAddress: Address }): Promise<boolean> {
   try {
-    const rpcRaw = (process.env.BASE_RPC_URL ?? '').trim()
-    const rpc = rpcRaw || 'https://mainnet.base.org'
+    const rpc = resolveDeploySessionRpcUrl()
     const publicClient = createPublicClient({
       chain: base,
       transport: http(rpc, { timeout: 12_000 }),
@@ -2641,6 +2643,41 @@ export async function validateDeploySessionRequest(params: {
     phase2FinalizeCalls: distributedPhase2FinalizeCalls,
     targetVersion: phase1Version,
   })
+  if (phase2FinalizeCalls.length > 0) {
+    const rpc = resolveDeploySessionRpcUrl()
+    const readClient = createPublicClient({
+      chain: base,
+      transport: http(rpc, { timeout: 12_000 }),
+    })
+    try {
+      if (params.requireCalls) {
+        const finalizeBridgeCall = phase2FinalizeCalls.find((call) => {
+          const data = typeof call.data === 'string' ? call.data.trim().toLowerCase() : ''
+          return (
+            data.startsWith('0xbd4583fb') ||
+            data.startsWith('0xab56c176') ||
+            data.startsWith('0xcafc9348')
+          )
+        })
+        if (finalizeBridgeCall?.to && isAddress(finalizeBridgeCall.to)) {
+          await assertShareBridgeOftWiringForFinalize({
+            publicClient: readClient,
+            batcherAddress: getAddress(finalizeBridgeCall.to as Address),
+            finalizeCallData: finalizeBridgeCall.data,
+          })
+        }
+      }
+      phase2FinalizeCalls = await attachFinalizeShareBridgeValueToCalls({
+        publicClient: readClient,
+        calls: phase2FinalizeCalls,
+      })
+    } catch (error) {
+      throw new DeploySessionRequestError(
+        409,
+        error instanceof Error ? error.message : 'finalize share bridge fee quote failed',
+      )
+    }
+  }
   const phase3Calls = Array.isArray(params.body.phase3Calls) ? params.body.phase3Calls : []
   const phase4Calls = Array.isArray(params.body.phase4Calls) ? params.body.phase4Calls : []
   const solanaOvault = normalizeSolanaOvaultConfig(params.body.solanaOvault)
@@ -2737,7 +2774,7 @@ export async function validateDeploySessionRequest(params: {
     }
     const ovaultPolicy = DEPLOY_FEATURE_POLICY_MATRIX.find((entry) => entry.key === 'solana_ovault_mesh')
     const requiredFeatureKeys =
-      ovaultPolicy?.requiresAnyOf ?? (['solana_bridge_strategy', 'solana_ovault_mesh', 'solana_meteora_alpha_vault'] as const)
+      ovaultPolicy?.requiresAnyOf ?? (['solana_ovault_mesh', 'solana_meteora_alpha_vault'] as const)
     const entitled = await hasAnyFeatureActivation({
       db: db as any,
       creatorToken,
@@ -2775,7 +2812,7 @@ export async function validateDeploySessionRequest(params: {
     if (!hasDeployGatingFeature) {
       throw new DeploySessionRequestError(
         402,
-        `Phase 3 strategy deploy requires at least one paid deploy feature activation: ${phase3Eligible.join(', ')}. ` +
+        `Phase 3 strategy deploy requires the $499 full vault deploy package (vault_full_deploy) or legacy paid strategy activations: ${phase3Eligible.join(', ')}. ` +
           `Activate at /creator/strategy/features?creator=${creatorToken}.`,
       )
     }
@@ -2840,20 +2877,25 @@ export async function validateDeploySessionRequest(params: {
       .map((call) => extractFinalizePhase2InvariantInfo(call.data))
       .find((info): info is NonNullable<typeof info> => Boolean(info)) ?? null
   const inferredTradeFeeCollector = phase2FinalizeInvariantInfo?.gaugeController ?? null
-  const inferredPayoutRecipient = phase2CoreInvariantInfo?.payoutRecipient ?? null
+  // Note on canonical terminology (AGENTS.md): the on-chain field is still named
+  // `payoutRecipient` in Phase2CoreParams for ABI compatibility. In this code
+  // it represents the `creatorCoinPayoutRecipient` (external earnings lane).
+  // When different from the tradeFeeCollector (gaugeController), we route via
+  // PayoutRouter → VaultShareBurnStream (the "payout_router" external mode).
+  const inferredCreatorCoinPayoutRecipient = phase2CoreInvariantInfo?.payoutRecipient ?? null
   const resolvedTradeFeeCollector = requestedTradeFeeCollector ?? inferredTradeFeeCollector
   let resolvedExternalMode: 'gauge' | 'payout_router' = requestedExternalMode ?? 'gauge'
   if (
     !requestedExternalMode &&
-    inferredPayoutRecipient &&
+    inferredCreatorCoinPayoutRecipient &&
     resolvedTradeFeeCollector &&
-    inferredPayoutRecipient.toLowerCase() !== resolvedTradeFeeCollector.toLowerCase()
+    inferredCreatorCoinPayoutRecipient.toLowerCase() !== resolvedTradeFeeCollector.toLowerCase()
   ) {
     resolvedExternalMode = 'payout_router'
   }
   const resolvedPayoutRecipient =
     requestedPayoutRecipient ??
-    inferredPayoutRecipient ??
+    inferredCreatorCoinPayoutRecipient ??
     (resolvedExternalMode === 'gauge' ? resolvedTradeFeeCollector : null)
   const phase2InvariantExpectations: DeployPhase2InvariantExpectations | null = hasPhase2Finalize
     ? {
@@ -2880,7 +2922,7 @@ export async function validateDeploySessionRequest(params: {
     }
 
     if (allSubmittedCalls.length > 0) {
-      const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+      const rpc = resolveDeploySessionRpcUrl()
       const readClient = createPublicClient({
         chain: base,
         transport: http(rpc, { timeout: 12_000 }),
@@ -2914,6 +2956,39 @@ export async function validateDeploySessionRequest(params: {
       await assertPhase1BatcherReadiness(phase1Calls)
     }
 
+    if (phase3Calls.length > 0) {
+      const batcherAddress = getAddress(phase3Calls[0]!.to)
+      const rpc = resolveDeploySessionRpcUrl()
+      const readClient = createPublicClient({
+        chain: base,
+        transport: http(rpc, { timeout: 12_000 }),
+      })
+      if (isLocalForkRpcUrl(rpc)) {
+        try {
+          await ensurePhase3DryRunForkPrep({
+            rpcUrl: rpc,
+            batcher: batcherAddress,
+          })
+        } catch (error) {
+          throw new DeploySessionRequestError(
+            409,
+            error instanceof Error ? error.message : String(error),
+          )
+        }
+      }
+      try {
+        await assertPhase3HelperCreate2Authorization({
+          publicClient: readClient,
+          batcher: batcherAddress,
+        })
+      } catch (error) {
+        throw new DeploySessionRequestError(
+          409,
+          error instanceof Error ? error.message : String(error),
+        )
+      }
+    }
+
     if (phase2CoreCalls.length > 0 && !hasPhase2Finalize) {
       throw new DeploySessionRequestError(400, 'Missing phase2 finalize calls')
     }
@@ -2924,7 +2999,7 @@ export async function validateDeploySessionRequest(params: {
       }
       const batcherAddress = getAddress(phase4Calls[0]!.to)
       const baseSalt = deriveBaseSalt({ creatorToken, owner: ownerAddress, chainId: 8453, version })
-      const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+      const rpc = resolveDeploySessionRpcUrl()
       const readClient = createPublicClient({
         chain: base,
         transport: http(rpc, { timeout: 12_000 }),

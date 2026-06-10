@@ -19,7 +19,7 @@ import {
   getClientIp,
   rateLimitKey,
   isAdminAddress,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 
@@ -269,7 +269,7 @@ function readSolanaDecimalsFromEnv(): number {
 function readRegistrationSignerPk(): Hex | null {
   const candidates = [
     process.env.SOLANA_ADAPTER_OWNER_PRIVATE_KEY,
-    process.env.KEEPR_PRIVATE_KEY,
+    process.env.KPR_PRIVATE_KEY,
     process.env.PRIVATE_KEY,
   ]
   for (const c of candidates) {
@@ -1216,7 +1216,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             error:
               `Missing Meteora DLMM+Alpha Vault mapping for creator token ${creatorToken}. ` +
               'Add an active creator mapping in creator_meteora_alpha_vaults or METEORA_CREATOR_ALPHA_VAULT_MAP_JSON, then retry. ' +
-              'If you are bootstrapping Solana side, run `pnpm -C cre run solana:bootstrap-side` with METEORA_ALPHA_VAULT, ' +
+              'If you are bootstrapping Solana side, run `pnpm -C kpr run solana:bootstrap-side` with METEORA_ALPHA_VAULT, ' +
               `ALPHA_VAULT_PROGRAM_ID, and DEPOSIT_ACCOUNTS_JSON set.${supersededHint}`,
           } satisfies ApiEnvelope<never>)
         }
@@ -1419,7 +1419,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({
         success: false,
         error:
-          'Auto-registration signer key is not configured. Set SOLANA_ADAPTER_OWNER_PRIVATE_KEY (or KEEPR_PRIVATE_KEY).',
+          'Auto-registration signer key is not configured. Set SOLANA_ADAPTER_OWNER_PRIVATE_KEY (or KPR_PRIVATE_KEY).',
       } satisfies ApiEnvelope<never>)
     }
     const account = privateKeyToAccount(signerPk)

@@ -12,6 +12,7 @@ const MOCK_CODE_ID = keccak256(MOCK_BYTECODE)
 const CHARM_FACTORY_SENTINEL_CODE_ID = keccak256(toBytes('charm-factory-sentinel-v1'))
 
 const sessionAddress = getAddress('0x1111111111111111111111111111111111111111')
+const protocolAjnaKeeper = getAddress('0x2222222222222222222222222222222222222222')
 const sender = getAddress('0x3333333333333333333333333333333333333333')
 const creatorToken = getAddress('0x4444444444444444444444444444444444444444')
 const vault = getAddress('0x5555555555555555555555555555555555555555')
@@ -308,6 +309,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
       CDP_PAYMASTER_URL: 'https://paymaster.example.com',
       AUTH_SESSION_SECRET: 'test-secret-at-least-16-chars',
       PROTOCOL_TREASURY: sessionAddress,
+      '4626_KEEPER_AUTOMATION_PUBLIC_KEY': protocolAjnaKeeper,
     })
 
     readRequestPrincipalMock.mockReturnValue(sessionAddress)
@@ -783,7 +785,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
           solanaWeightBps: 3_000n,
           ajnaBufferRatioBps: 1_000n,
           ajnaMinBucketIndex: 4_156n,
-          ajnaKeeper: sessionAddress,
+          ajnaKeeper: protocolAjnaKeeper,
           solanaKeeper: sessionAddress,
           solanaMaxNavAge: 86_400n,
           solanaMaxNavDeltaBpsPerUpdate: 500,
@@ -1059,7 +1061,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
           solanaWeightBps: 3_000n,
           ajnaBufferRatioBps: 1_000n,
           ajnaMinBucketIndex: 4_156n,
-          ajnaKeeper: sessionAddress,
+          ajnaKeeper: protocolAjnaKeeper,
           solanaKeeper: sessionAddress,
           solanaMaxNavAge: 86_400n,
           solanaMaxNavDeltaBpsPerUpdate: 500,

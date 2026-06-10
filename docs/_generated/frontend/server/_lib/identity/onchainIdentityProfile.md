@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/identity/onchainIdentityProfile
+[4626-web](../../../index.md) / server/\_lib/identity/onchainIdentityProfile
 
 # server/\_lib/identity/onchainIdentityProfile
 

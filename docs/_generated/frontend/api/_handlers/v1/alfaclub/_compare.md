@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/v1/alfaclub/\_compare
+[4626-web](../../../../index.md) / api/\_handlers/v1/alfaclub/\_compare
 
 # api/\_handlers/v1/alfaclub/\_compare
 

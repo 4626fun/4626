@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / src/pages/Faq
+[4626-web](../../index.md) / src/pages/Faq
 
 # src/pages/Faq
 
@@ -12,7 +12,7 @@
 
 > **Faq**(): `Element`
 
-Defined in: [src/pages/Faq.tsx:607](https://github.com/wenakita/4626/blob/main/frontend/src/pages/Faq.tsx#L607)
+Defined in: [src/pages/Faq.tsx:608](https://github.com/wenakita/4626/blob/main/frontend/src/pages/Faq.tsx#L608)
 
 #### Returns
 

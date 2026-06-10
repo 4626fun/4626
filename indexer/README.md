@@ -90,9 +90,23 @@ POC_TARGET_COUNT=500 pnpm poc
 
 Not yet implemented. Planned: `pnpm index:full` walks from a configured `INDEXER_START_BLOCK` up to the current tip in forward order, checkpointing progress so it's resumable.
 
-### Enrichment-only refresh (future)
+### Enrich + classify
 
-Planned: `pnpm enrich` refreshes `current_owners` for the N oldest-synced rows. Scheduled via cron to keep the dataset from going stale.
+```bash
+pnpm enrich          # refresh current_owners (keyset on creation_block)
+pnpm classify        # nonce heuristic → zora_csw_owner_class
+```
+
+**`classify` safety defaults (prod):**
+
+| Env | Default | Purpose |
+| --- | ------- | ------- |
+| `CLASSIFY_MAX_ENRICHED_ROWS` | `25000` | Caps enriched CSWs loaded into Node (~1.5M table) |
+| `CLASSIFY_MIN_CREATION_BLOCK` | unset | Optional cohort: `creation_block >= N` |
+| `CLASSIFY_UNLIMITED` | off | Set `1` only for intentional full-table classify |
+| `CLASSIFY_MULTI_OWNER_ONLY` | off | Set `1` to classify only CSWs with 2+ owners |
+
+Production Supabase notes: `docs/operations/supabase-zora-db-optimization.md`.
 
 ## RPC considerations
 

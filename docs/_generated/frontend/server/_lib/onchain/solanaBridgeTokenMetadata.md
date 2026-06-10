@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/onchain/solanaBridgeTokenMetadata
+[4626-web](../../../index.md) / server/\_lib/onchain/solanaBridgeTokenMetadata
 
 # server/\_lib/onchain/solanaBridgeTokenMetadata
 
@@ -193,7 +193,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:39](https://githu
 
 ###### bridgeToken
 
-`` `0x${string}` ``
+`string`
 
 ###### publicClient
 

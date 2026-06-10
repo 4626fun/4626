@@ -148,7 +148,7 @@ flowchart TD
   Salt --> P1["Phase 1\nDeploy vault + wrapper + OFT"]
   P1 --> P2Core["Phase 2 Core\nDeploy gauge + strategy + oracle"]
   P2Core --> P2Final["Phase 2 Finalize\nRegister + wire + configure"]
-  P2Final --> P3["Phase 3\nOptional strategy/post-config"]
+  P2Final --> P3["Phase 3\nCharm + Ajna (bundle-gated)"]
   P3 --> P4{"Phase 4 required?\nDeferred launch path"}
   P4 -->|Yes| Launch["Phase 4\nActivate deferred launch"]
   P4 -->|No| Ready["Deployment ready"]
@@ -167,6 +167,8 @@ flowchart TD
   class Ready,Ops,Start success;
   class Blocked blocked;
 ```
+
+Greenfield deploy is gated on paid **`vault_full_deploy`** ($499 USDC, all-or-nothing at `/creator/strategy/features`). That bundle expands to Charm + Ajna Phase 3 strategies (45%/45%), Solana mesh (Pipe A finalize bridge), and Meteora entitlement. Legacy per-key comp rows still resolve for grandfathered creators. Canonical spec: [`docs/operations/creator-strategy-features.md`](docs/operations/creator-strategy-features.md).
 
 ### 3) Fee + Incentive Routing
 
@@ -347,7 +349,7 @@ The Keepr XMTP / Eliza runtime is not part of the normal local frontend dev loop
 
 Authoritative runtime entrypoint:
 
-- `frontend/server/agent/eliza/index.ts`
+- `frontend/server/agents/eliza/index.ts`
 
 Architecture at a glance:
 
@@ -355,8 +357,8 @@ Architecture at a glance:
 - Telegram is a separate webhook + Mini App stack; it does not ingress through the XMTP runtime.
 - Privy + Coinbase Smart Wallet provide identity/signing; ElizaOS provides memory, routing, action ranking, and conversational fallback.
 - Shared agent logic now lives behind channel-specific processors:
-  - `frontend/server/agent/core/processXmtpAgentInput.ts`
-  - `frontend/server/agent/core/processTelegramAgentInput.ts`
+  - `frontend/server/agents/core/processXmtpAgentInput.ts`
+  - `frontend/server/agents/core/processTelegramAgentInput.ts`
 
 Authoritative operating model:
 
@@ -455,8 +457,8 @@ The swap surface has a few deliberate runtime constraints to keep the route stab
 
 | Variable             | Purpose                                     |
 | -------------------- | ------------------------------------------- |
-| `KEEPR_PRIVATE_KEY`  | Keeper signer for API-triggered writes      |
-| `KEEPR_API_KEY`      | Auth between keeper clients and API         |
+| `KPR_PRIVATE_KEY`  | Keeper signer for API-triggered writes      |
+| `KPR_API_KEY`      | Auth between keeper clients and API         |
 
 For complete env references, see `frontend/README.md`.
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/admin/waitlist/\_approve
+[4626-web](../../../../index.md) / api/\_handlers/admin/waitlist/\_approve
 
 # api/\_handlers/admin/waitlist/\_approve
 

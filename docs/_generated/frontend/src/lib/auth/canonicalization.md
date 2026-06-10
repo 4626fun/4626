@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/auth/canonicalization
+[4626-web](../../../index.md) / src/lib/auth/canonicalization
 
 # src/lib/auth/canonicalization
 

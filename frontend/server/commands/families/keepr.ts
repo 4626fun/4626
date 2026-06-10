@@ -324,7 +324,7 @@ const HELP_COMMANDS: HelpCommandDef[] = [
     featured: true,
   },
   {
-    command: '/cre status',
+    command: '/keepr status',
     description: 'view keeper states',
     topic: 'ops',
     scopes: ['group'],
@@ -332,28 +332,28 @@ const HELP_COMMANDS: HelpCommandDef[] = [
     featured: true,
   },
   {
-    command: '/cre auction',
+    command: '/keepr auction',
     description: 'view auction states',
     topic: 'ops',
     scopes: ['group'],
     visibility: 'configured',
   },
   {
-    command: '/cre solana',
+    command: '/keepr solana',
     description: 'view Solana price and health',
     topic: 'ops',
     scopes: ['group'],
     visibility: 'configured',
   },
   {
-    command: '/cre health',
+    command: '/keepr health',
     description: 'run a combined health check',
     topic: 'ops',
     scopes: ['group'],
     visibility: 'configured',
   },
   {
-    command: '/cre tend [vault]',
+    command: '/keepr tend [vault]',
     description: 'deploy idle funds',
     topic: 'admin',
     scopes: ['group'],
@@ -361,7 +361,7 @@ const HELP_COMMANDS: HelpCommandDef[] = [
     permission: 'ADMIN',
   },
   {
-    command: '/cre report [vault]',
+    command: '/keepr report [vault]',
     description: 'harvest yields',
     topic: 'admin',
     scopes: ['group'],
@@ -369,7 +369,7 @@ const HELP_COMMANDS: HelpCommandDef[] = [
     permission: 'ADMIN',
   },
   {
-    command: '/cre settle-fees',
+    command: '/keepr settle-fees',
     description: 'settle Solana fees to Base',
     topic: 'admin',
     scopes: ['group'],
@@ -377,7 +377,7 @@ const HELP_COMMANDS: HelpCommandDef[] = [
     permission: 'ADMIN',
   },
   {
-    command: '/cre relay-entries',
+    command: '/keepr relay-entries',
     description: 'relay Solana lottery entries',
     topic: 'admin',
     scopes: ['group'],
@@ -606,7 +606,6 @@ function resolveKeeprHelpTopic(rawTopic: string | null | undefined): { topic: Ke
     case 'twitter':
       return { topic: 'social', unknownTopic: null }
     case 'ops':
-    case 'cre':
     case 'keeper':
     case 'keepr':
       return { topic: 'ops', unknownTopic: null }

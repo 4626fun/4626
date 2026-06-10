@@ -88,6 +88,57 @@ export function detectInAppEnvironment(): InAppEnvironment | null {
 }
 
 /**
+ * Broader Base App in-app browser signal for waitlist sub-account owner install.
+ *
+ * Base App WebViews often expose Coinbase injection without `isToshi` / `isBaseApp`
+ * flags, so `isBaseAppInApp` alone false-negatives and surfaces "open in Base App"
+ * copy while the user is already inside Base App.
+ */
+function hasCoinbaseInjectedProvider(): boolean {
+  if (typeof window === 'undefined') return false
+  const ethereum = (window as unknown as { ethereum?: { isCoinbaseWallet?: boolean; providers?: Array<{ isCoinbaseWallet?: boolean }> } })
+    .ethereum
+  if (!ethereum) return false
+  if (Boolean(ethereum.isCoinbaseWallet)) return true
+  if (Array.isArray(ethereum.providers)) {
+    return ethereum.providers.some((provider) => Boolean(provider?.isCoinbaseWallet))
+  }
+  return false
+}
+
+export function isBaseAppInAppContext(env: InAppEnvironment | null = detectInAppEnvironment()): boolean {
+  if (!env) return false
+  if (env.isBaseAppInApp) return true
+
+  const uaLower = env.userAgent.toLowerCase()
+  // Mobile Base App / Coinbase in-app webview markers — not desktop Chrome + extension.
+  if (
+    uaLower.includes('cbios') ||
+    uaLower.includes('cbandroid') ||
+    uaLower.includes('baseapp') ||
+    uaLower.includes(' base/')
+  ) {
+    return true
+  }
+
+  // Coinbase-branded in-app webviews (Android `wv` marker or Coinbase browser flag).
+  if (/coinbase/.test(uaLower) && (uaLower.includes('wv') || env.isCoinbaseInApp)) {
+    return true
+  }
+
+  // WebView with Coinbase injection but missing isToshi/isBaseApp (some Base App builds).
+  if (
+    uaLower.includes('wv') &&
+    hasCoinbaseInjectedProvider() &&
+    (env.isCoinbaseInApp || uaLower.includes('android'))
+  ) {
+    return true
+  }
+
+  return false
+}
+
+/**
  * Returns a `https://` URL the user can tap to open the current page in the
  * device default browser, escaping the wallet's in-app webview.
  *

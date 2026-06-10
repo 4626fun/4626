@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createPublicClient, getAddress, http, isAddress, type Address } from 'viem'
 import { base } from 'viem/chains'
 
+import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import {
   type ApiEnvelope,
   getApiContracts,
@@ -9,7 +10,7 @@ import {
   readRequestPrincipalAddress,
   setCors,
   setNoStore,
-} from '../../../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 import { isServerAdminAddress } from '../../../../../server/_lib/infra/trust.js'
 import { resolveCoinPartiesAndOwner } from '../../../../../server/_lib/onchain/coinParties.js'
 import { resolveRolePolicyIdForSession } from './_createCore.js'
@@ -231,7 +232,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'rolePolicyId out of supported range (max 65535)' } satisfies ApiEnvelope<never>)
   }
 
-  const parties = await resolveCoinPartiesAndOwner(creatorToken)
+  const parties = await resolveCoinPartiesAndOwner(creatorToken as `0x${string}`)
   const creatorCoinOwner = normalizeAddress(parties.owner)
   const normalizedPrincipal = getAddress(principalAddress as Address)
   const isAdmin = isServerAdminAddress(normalizedPrincipal)
@@ -251,7 +252,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const batcherAddress = contracts.creatorVaultBatcher ?? null
   const client = createPublicClient({
     chain: base,
-    transport: http((process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org', { timeout: 12_000 }),
+    transport: http(resolveDeploySessionRpcUrl(), { timeout: 12_000 }),
   })
 
   let onchainRolePolicyManager: Address | null = null

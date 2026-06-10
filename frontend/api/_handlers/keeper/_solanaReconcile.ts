@@ -13,15 +13,24 @@ import {
   requireKeeprApiKey,
   setCors,
   setNoStore,
-  getDb,
+  getDbForCron,
   isDbConfigured,
   RATE_LIMITS,
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 import { ensureKeeprSchema } from '../../../server/_lib/keepr/keeprSchema.js'
+import {
+  beginOperationExecution,
+  completeControlPlaneOperation,
+  createControlPlaneStage,
+  startControlPlaneOperation,
+  transitionOperationStatus,
+  transitionStageStatus,
+} from '../../../server/_lib/controlPlane/operations.js'
+import { loadControlPlanePolicy } from '../../../server/_lib/controlPlane/policy.js'
 
 type ReconcileBody = {
   workflow?: string
@@ -64,50 +73,14 @@ function normalizeSolanaAction(raw: string): string {
   return raw.trim().toLowerCase()
 }
 
-async function ensureSolanaCheckpointTable(db: Awaited<ReturnType<typeof getDb>>) {
-  if (!db) return
-  await db.sql`
-    CREATE TABLE IF NOT EXISTS keepr_workflow_checkpoints (
-      workflow TEXT NOT NULL,
-      checkpoint_key TEXT NOT NULL,
-      action TEXT NOT NULL,
-      status TEXT NOT NULL,
-      payload_json JSONB,
-      response_json JSONB,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (workflow, checkpoint_key)
-    );
-  `
-  try {
-    await db.sql`ALTER TABLE keepr_workflow_checkpoints ENABLE ROW LEVEL SECURITY;`
-  } catch {
-    // Ignore if RLS cannot be enabled in this runtime.
-  }
-  try {
-    await db.sql`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_policies
-          WHERE schemaname = 'public'
-            AND tablename = 'keepr_workflow_checkpoints'
-            AND policyname = 'keepr_workflow_checkpoints_deny_all'
-        ) THEN
-          CREATE POLICY keepr_workflow_checkpoints_deny_all
-            ON keepr_workflow_checkpoints
-            FOR ALL
-            TO public
-            USING (false)
-            WITH CHECK (false);
-        END IF;
-      END
-      $$;
-    `
-  } catch {
-    // Ignore if policy creation is unavailable in this runtime.
-  }
+function resolveStageKind(action: string): string {
+  if (action.includes('bridge') || action.includes('register')) return 'solana.bridge_token_registration'
+  if (action.includes('meteora')) return 'solana.meteora_instruction_build'
+  if (action.includes('alpha')) return 'solana.alpha_vault_create'
+  if (action.includes('submit')) return 'chain.transaction_submit'
+  if (action.includes('confirm')) return 'chain.confirmation_wait'
+  if (action.includes('reconcile') || action.includes('checkpoint')) return 'reconcile.checkpoint'
+  return 'solana.route_preflight'
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -123,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const limiter = checkRateLimit(
     rateLimitKey('keeper-solana-reconcile', getClientIp(req)),
-    RATE_LIMITS.creRuntimeTriggerWrite,
+    RATE_LIMITS.keeperTriggerWrite,
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
@@ -155,7 +128,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     await ensureKeeprSchema()
-    const db = await getDb()
+    const db = await getDbForCron()
     if (!db) {
       return res.status(200).json({
         success: true,
@@ -163,7 +136,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<ReconcileResult>)
     }
 
-    await ensureSolanaCheckpointTable(db)
+    const policy = loadControlPlanePolicy()
+    const operation = await startControlPlaneOperation({
+      operationKind: 'solana.reconcile',
+      scopeType: 'solana_route',
+      scopeId: `${workflow}:${checkpointKey}`,
+      lockScope: 'solana.reconcile',
+      lockKey: `${workflow}:${checkpointKey}`,
+      requestedBy: 'keeper/solana-reconcile',
+      idempotencyKey: `${workflow}:${checkpointKey}`,
+      policyVersion: policy.policyVersion,
+      schemaVersion: 'v1',
+      input: {
+        workflow,
+        action,
+        checkpointKey,
+        payload,
+      },
+    })
+    const controlPlaneActive = operation.persisted
+    let stageId: string | null = null
+    let resumedFromTerminal = false
+    if (controlPlaneActive) {
+      const execution = await beginOperationExecution({
+        operationId: operation.operationId,
+        reason: 'solana_reconcile_started',
+        actor: 'keeper',
+      })
+      resumedFromTerminal = execution.resumedFromTerminal
+      const stage = await createControlPlaneStage({
+        operationId: operation.operationId,
+        stageKind: resolveStageKind(action),
+        status: 'requested',
+        input: { workflow, checkpointKey, action },
+      })
+      stageId = stage.persisted ? stage.stageId : null
+      if (stageId) {
+        await transitionStageStatus({
+          stageId,
+          nextStatus: 'running',
+          reason: 'solana_reconcile_started',
+          actor: 'keeper',
+        })
+      }
+    }
 
     const prior = await db.sql`
       SELECT status, response_json
@@ -173,6 +189,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `
     const priorRow = prior.rows[0] as { status?: string; response_json?: unknown } | undefined
     if (priorRow?.status === 'completed') {
+      if (controlPlaneActive && stageId) {
+        await transitionStageStatus({
+          stageId,
+          nextStatus: 'succeeded',
+          reason: 'checkpoint_already_processed',
+          actor: 'keeper',
+        })
+      }
+      if (controlPlaneActive) {
+        await completeControlPlaneOperation({
+          operationId: operation.operationId,
+          status: 'succeeded',
+          result: { alreadyProcessed: true, workflow, checkpointKey },
+          actor: 'keeper',
+        })
+      }
       const existing: ReconcileResult = {
         workflow,
         action,
@@ -239,6 +271,74 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         response_json = EXCLUDED.response_json,
         updated_at = NOW();
     `
+    if (status === 'completed') {
+      if (controlPlaneActive && stageId) {
+        await transitionStageStatus({
+          stageId,
+          nextStatus: 'succeeded',
+          reason: 'solana_reconcile_completed',
+          actor: 'keeper',
+        })
+      }
+      if (controlPlaneActive) {
+        await completeControlPlaneOperation({
+          operationId: operation.operationId,
+          status: 'succeeded',
+          result: {
+            workflow,
+            action,
+            checkpointKey,
+            executed,
+            status,
+          },
+          actor: 'keeper',
+        })
+      }
+    } else {
+      const failStatus = status === 'failed' ? 'failed' : 'manual_review'
+      const errorCode =
+        status === 'skipped_unconfigured'
+          ? 'solana_orchestrator_not_configured'
+          : 'solana_reconcile_not_completed'
+      const errorMessage =
+        status === 'skipped_unconfigured'
+          ? 'SOLANA_ORCHESTRATOR_URL is not set on the Vercel deployment'
+          : typeof upstreamResponse === 'string'
+            ? upstreamResponse
+            : JSON.stringify(upstreamResponse ?? {})
+      if (controlPlaneActive && stageId) {
+        await transitionStageStatus({
+          stageId,
+          nextStatus: failStatus,
+          reason: errorCode,
+          actor: 'keeper',
+          errorMessage:
+            status === 'skipped_unconfigured'
+              ? errorMessage
+              : String(upstreamStatusCode ?? 'upstream_unavailable'),
+        })
+      }
+      if (controlPlaneActive) {
+        if (failStatus === 'failed') {
+          await completeControlPlaneOperation({
+            operationId: operation.operationId,
+            status: 'failed',
+            errorCode,
+            errorMessage,
+            actor: 'keeper',
+          })
+        } else {
+          await transitionOperationStatus({
+            operationId: operation.operationId,
+            nextStatus: 'manual_review',
+            reason: errorCode,
+            actor: 'keeper',
+            errorCode,
+            errorMessage,
+          })
+        }
+      }
+    }
 
     const result: ReconcileResult = {
       workflow,
@@ -249,6 +349,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ...(upstreamStatusCode !== undefined ? { upstreamStatusCode } : {}),
       ...(upstreamResponse !== null ? { upstreamResponse } : {}),
     }
+
+    console.info('[keeper/solana/reconcile] completed', {
+      workflow,
+      action,
+      checkpointKey,
+      status: result.status,
+      executed: result.executed,
+      orchestratorConfigured: Boolean(solanaOrchestratorUrl),
+      upstreamStatusCode: result.upstreamStatusCode ?? null,
+      operationId: controlPlaneActive ? operation.operationId : null,
+      operationReused: operation.reused,
+      resumedFromTerminal,
+    })
 
     return res.status(200).json({
       success: true,

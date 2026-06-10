@@ -37,10 +37,11 @@ interface IProtocolRewards {
 /**
  * @title PayoutRouter
  * @author 0xakita.eth
- * @notice Receives external revenue and routes value into the vault via an enforceable burn stream.
+ * @notice Receives creatorCoinPayoutRecipient (external earnings lane) revenue and routes value
+ *         into the vault via an enforceable burn stream (VaultShareBurnStream).
  *
  * @dev Design goals:
- * - Safe CreatorCoin payoutRecipient path: never reverts on ERC20 transfers (no hooks needed).
+ * - Safe creatorCoinPayoutRecipient (external earnings lane) path: never reverts on ERC20 transfers (no hooks needed). Per AGENTS.md canonical terminology.
  * - Can accept ETH: wraps to WETH (kept until processed).
  * - Converts payout tokens → creator coin via Uniswap V3 (exactInput path), deposits into the vault,
  *   and queues the minted vault shares into a burn stream (dripped/burned over time).

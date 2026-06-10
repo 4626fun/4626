@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/features/executionScope/useCswOwnerSigner
+[4626-web](../../../index.md) / src/features/executionScope/useCswOwnerSigner
 
 # src/features/executionScope/useCswOwnerSigner
 

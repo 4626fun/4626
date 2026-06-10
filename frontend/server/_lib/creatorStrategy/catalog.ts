@@ -1,19 +1,17 @@
 /**
  * Creator strategy feature catalog.
  *
- * Every productive strategy on a `CreatorOVault` (Charm, Ajna, Solana
- * bridge) is a paid, per-creator feature gated by an activation in
- * `creator_strategy_features`. There is no free baseline — a creator
- * must activate at least one feature before Phase 3 deploy, and each
- * feature entry in this catalog is independently priced in USDC.
+ * Greenfield vault deploy sells one public SKU: **`vault_full_deploy`**
+ * ($499 USDC). Payment expands into bundled sub-entitlements (Charm,
+ * Ajna, Solana mesh, Meteora) via `expandCreatorFeatureKeys`. Individual
+ * à-la-carte purchases of bundled keys return HTTP 410. Legacy per-key
+ * rows from operator comps still resolve for grandfathered creators.
  *
- * Activation is a one-time USDC payment on Base that unlocks
- * server-side provisioning of the underlying infra. See
- * `docs/operations/creator-strategy-features.md` for the full product
- * model (deploy-gating vs post-deploy features, weight scaling, etc.).
+ * See `docs/operations/creator-strategy-features.md` for the full product
+ * model (bundle, weight scaling, legacy partial entitlements).
  *
  * Design rules (keep this file boring and declarative):
- *   - Prices are in USDC base units (6 decimals). 100e6 = $100.
+ *   - Prices are in USDC base units (6 decimals). 499e6 = $499 bundle.
  *   - Keys are kebab_case + provider-scoped so we can add more without
  *     namespace collisions (e.g. `solana_meteora_alpha_vault`,
  *     `charm_auto_rebalance`, `ajna_min_bucket_keeper`).
@@ -34,13 +32,36 @@
  */
 
 export type CreatorStrategyFeatureKey =
+  | 'vault_full_deploy'
   | 'charm_active_lp'
   | 'ajna_sleeve'
-  | 'solana_bridge_strategy'
   | 'solana_ovault_mesh'
   | 'solana_meteora_alpha_vault'
   | `deploy_vanity_vault_prefix_len_${DeployVanityLength}`
   | `deploy_vanity_share_suffix_len_${DeployVanityLength}`
+
+/** Single SKU for new vault deploys — includes all bundled sub-features below. */
+export const FULL_VAULT_DEPLOY_FEATURE_KEY = 'vault_full_deploy' as const satisfies CreatorStrategyFeatureKey
+
+/** $499.00 USDC at 6 decimals. */
+export const FULL_VAULT_DEPLOY_PRICE_USDC = 499_000_000n
+
+/**
+ * Entitlements granted by `vault_full_deploy`. Legacy rows for these keys
+ * still work; new purchases should use the bundle only.
+ */
+export const FULL_DEPLOY_BUNDLE_GRANTED_KEYS = [
+  'charm_active_lp',
+  'ajna_sleeve',
+  'solana_ovault_mesh',
+  'solana_meteora_alpha_vault',
+] as const satisfies readonly CreatorStrategyFeatureKey[]
+
+const ALACARTE_DEPLOY_FEATURE_KEYS = new Set<string>(FULL_DEPLOY_BUNDLE_GRANTED_KEYS)
+
+export function isAlacarteDeployFeatureKey(key: string): boolean {
+  return ALACARTE_DEPLOY_FEATURE_KEYS.has(String(key ?? '').trim())
+}
 
 export const DEPLOY_VANITY_ALLOWED_LENGTHS = [1, 2, 3, 4, 5] as const
 export type DeployVanityLength = (typeof DEPLOY_VANITY_ALLOWED_LENGTHS)[number]
@@ -57,8 +78,32 @@ export type DeployVanityFeatureKind = 'vaultPrefix' | 'shareSuffix'
 export const DEPLOY_GATING_FEATURE_KEYS = {
   charm: 'charm_active_lp',
   ajna: 'ajna_sleeve',
-  solana: 'solana_bridge_strategy',
-} as const satisfies Record<'charm' | 'ajna' | 'solana', CreatorStrategyFeatureKey>
+} as const satisfies Record<'charm' | 'ajna', CreatorStrategyFeatureKey>
+
+/** Retired keys may still exist on historical DB rows; they are not purchasable. */
+export const RETIRED_CREATOR_STRATEGY_FEATURE_KEYS = ['solana_bridge_strategy'] as const
+
+export type RetiredCreatorStrategyFeatureKey =
+  (typeof RETIRED_CREATOR_STRATEGY_FEATURE_KEYS)[number]
+
+export function isRetiredCreatorStrategyFeatureKey(
+  key: string,
+): key is RetiredCreatorStrategyFeatureKey {
+  return (RETIRED_CREATOR_STRATEGY_FEATURE_KEYS as readonly string[]).includes(key)
+}
+
+export function getRetiredCreatorStrategyFeatureMessage(key: string): string | null {
+  if (key === 'solana_bridge_strategy') {
+    return (
+      'solana_bridge_strategy was retired. Greenfield vaults seed Solana share liquidity via ' +
+      'the 30% ShareOFT auto-bridge at finalizePhase2. Activate solana_ovault_mesh for ' +
+      'cross-chain compose routing instead.'
+    )
+  }
+  return isRetiredCreatorStrategyFeatureKey(key)
+    ? `${key} is retired and cannot be purchased.`
+    : null
+}
 
 /**
  * Paid vanity feature keys used by deploy session validation.
@@ -130,8 +175,8 @@ export type CreatorStrategyFeatureDefinition = {
 }
 
 /**
- * The default USDC price for a premium feature. Individual features can
- * override but keeping them uniform at $100 is the initial product rule.
+ * Legacy list price for bundled sub-feature catalog entries and vanity tiers
+ * ($100). Public greenfield deploy SKU is `FULL_VAULT_DEPLOY_PRICE_USDC` ($499).
  */
 export const DEFAULT_CREATOR_STRATEGY_PRICE_USDC: bigint = 100_000_000n // $100.00 at 6 decimals
 
@@ -139,6 +184,24 @@ export const CREATOR_STRATEGY_FEATURE_CATALOG: Record<
   CreatorStrategyFeatureKey,
   CreatorStrategyFeatureDefinition
 > = {
+  vault_full_deploy: {
+    key: 'vault_full_deploy',
+    displayName: 'Full vault deploy',
+    tagline: 'One payment unlocks your complete 4626 vault on Base + Solana share mesh.',
+    description:
+      'The all-in-one deploy package: Charm active LP and Ajna lending on Base, Solana OVault ' +
+      'composer mesh with 30% ShareOFT auto-bridge at finalizePhase2, and Meteora DLMM entitlement ' +
+      'on the share-mesh mint. Pay once, deploy once — no separate strategy SKUs.',
+    priceUsdc: FULL_VAULT_DEPLOY_PRICE_USDC,
+    provisionerTag: 'vault_full_deploy_bundle',
+    requires: [
+      'Creator coin must be deployable before payment',
+      'Includes Charm + Ajna Phase 3 strategies (45% / 45% productive split, 10% idle)',
+      'Includes Solana share mesh + Meteora add-on entitlement',
+      'Vanity address tiers remain optional add-ons',
+    ],
+    estimatedActivationWindow: 'Instant — deploy unlocks as soon as payment is verified.',
+  },
   charm_active_lp: {
     key: 'charm_active_lp',
     displayName: 'Charm active LP (CREATOR/USDC)',
@@ -177,25 +240,6 @@ export const CREATOR_STRATEGY_FEATURE_CATALOG: Record<
     ],
     estimatedActivationWindow: 'Instant — applied automatically at vault deploy once payment is verified.',
   },
-  solana_bridge_strategy: {
-    key: 'solana_bridge_strategy',
-    displayName: 'Solana bridge strategy (base)',
-    tagline: 'Enable the SolanaStrategy on your vault to bridge CREATOR supply to Solana.',
-    description:
-      'Deploys a `SolanaStrategy` contract against the canonical `SolanaBridgeAdapter` and ' +
-      'registers it on your vault. This is the base Solana integration — it bridges vault-held ' +
-      'CREATOR tokens to Solana and accounts for Solana-side NAV via keeper reports. Required ' +
-      'prerequisite for the separate `solana_meteora_alpha_vault` add-on (Meteora DLMM + Alpha ' +
-      'Vault routing layers on top of this strategy). Payment covers bridge adapter registration ' +
-      'gas and Solana keeper bootstrapping.',
-    priceUsdc: DEFAULT_CREATOR_STRATEGY_PRICE_USDC,
-    provisionerTag: 'phase3_strategy_solana_bridge',
-    requires: [
-      'Must be activated BEFORE vault deploy — the strategy is installed during Phase 3 of DeploymentBatcher; post-deploy enablement is not yet supported',
-      'Creator coin must pass lowercase-parity normalization so the Solana-side wrapped mint can be created (see docs/operations/solana-bridge-naming-invariant.md)',
-    ],
-    estimatedActivationWindow: 'Instant — applied automatically at vault deploy once payment is verified.',
-  },
   solana_ovault_mesh: {
     key: 'solana_ovault_mesh',
     displayName: 'Solana OVault composer mesh (Phase 2b)',
@@ -209,7 +253,8 @@ export const CREATOR_STRATEGY_FEATURE_CATALOG: Record<
     provisionerTag: 'deploy_phase2b_ovault_mesh',
     requires: [
       'Used only when deploy session requests `solanaOvault.enabled=true`',
-      'Deploy lane entitlement is satisfied by any one of: `solana_bridge_strategy`, `solana_ovault_mesh`, or `solana_meteora_alpha_vault`',
+      'Deploy lane entitlement is satisfied by `solana_ovault_mesh` or `solana_meteora_alpha_vault`',
+      'Share mesh seeding (30% of ShareOFT) auto-bridges at finalizePhase2 when OVault runtime is enabled on the batcher',
     ],
     estimatedActivationWindow: 'Instant — entitlement is active as soon as payment is verified.',
   },
@@ -218,18 +263,17 @@ export const CREATOR_STRATEGY_FEATURE_CATALOG: Record<
     displayName: 'Solana Meteora liquidity',
     tagline: 'Activate a Meteora DLMM pool + Alpha Vault for your creator coin on Solana.',
     description:
-      'Creates a permissionless Meteora DLMM pool (SOL-paired) and an Alpha Vault ' +
-      'against your creator coin\'s bridge-wrapped Solana mint. Enables Solana-side ' +
-      'trading and unlocks the atomic bridge + deposit path used by your vault\'s ' +
-      'SolanaStrategy to auto-deploy bridged CREATOR supply into Meteora liquidity. ' +
-      'Payment funds ~1 SOL of Solana-side account rent plus operator gas; rent is ' +
-      'refundable to the protocol on account close.',
+      'Optional post-deploy Meteora DLMM pool + Alpha Vault on the **share-mesh mint** ' +
+      '(`■<TICKER>`) seeded by the 30% ShareOFT auto-bridge at finalizePhase2 — not ' +
+      'bridge-wrapped creator SPL. Enables Solana-side share trading after Path 1/2 ' +
+      'from docs/operations/solana-share-mesh-budget-paths.md. Payment funds operator ' +
+      'Solana rent + gas.',
     priceUsdc: DEFAULT_CREATOR_STRATEGY_PRICE_USDC,
     provisionerTag: 'solana_meteora',
     requires: [
-      '`solana_bridge_strategy` must already be active on the vault — Meteora routes through that strategy, and without it the Alpha Vault has no bridge-side counterparty',
-      'Creator coin deployed on Base with ERC-20 `name()` / `symbol()` that pass strict-parity normalization (name<=32 bytes, symbol<=12 bytes, no null bytes)',
-      'Creator coin registered on the canonical SolanaBridgeAdapter (verify with `scripts/verify-solana-mint-parity.ts`)',
+      '`solana_ovault_mesh` must already be active — share mesh seeded at finalizePhase2',
+      'Path 1 share-mesh OFT live with batcher `solanaShareOftPeer` wired before Meteora pool create',
+      'Use `create-dlmm-pool.ts` with the LZ share mint as `TOKEN_MINT_X` (see share-mesh budget runbook)',
     ],
     estimatedActivationWindow: 'Usually within 1 business day; longer if the Solana keeper needs funding.',
   },
@@ -404,6 +448,15 @@ export function getCreatorStrategyFeature(
 
 export function listCreatorStrategyFeatures(): CreatorStrategyFeatureDefinition[] {
   return Object.values(CREATOR_STRATEGY_FEATURE_CATALOG)
+}
+
+/** Public purchase catalog: full deploy bundle + optional vanity tiers only. */
+export function listCreatorStrategyFeaturesForPurchase(): CreatorStrategyFeatureDefinition[] {
+  return listCreatorStrategyFeatures().filter(
+    (feature) =>
+      feature.key === FULL_VAULT_DEPLOY_FEATURE_KEY ||
+      feature.key.startsWith('deploy_vanity_'),
+  )
 }
 
 /**

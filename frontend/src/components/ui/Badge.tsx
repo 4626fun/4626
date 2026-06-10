@@ -1,39 +1,35 @@
 import { type ReactNode } from 'react'
-import { Tag } from '@coinbase/cds-web/tag'
+import { cva, type VariantProps } from 'class-variance-authority'
+
 import { cn } from '@/lib/shared/utils'
 
-type BadgeVariant =
-  | 'default'
-  | 'success'
-  | 'warning'
-  | 'error'
-  | 'info'
-  | 'canonical'
-  | 'eoa'
-  | 'muted'
+const badgeVariants = cva(
+  'inline-flex items-center rounded-md border font-medium transition-colors',
+  {
+    variants: {
+      variant: {
+        default: 'border-white/10 bg-white/5 text-zinc-300',
+        success: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300',
+        warning: 'border-amber-500/25 bg-amber-500/10 text-amber-200',
+        error: 'border-red-500/25 bg-red-500/10 text-red-300',
+        info: 'border-brand-500/30 bg-brand-500/10 text-brand-200',
+        canonical: 'border-brand-500/35 bg-brand-500/15 text-brand-100',
+        eoa: 'border-white/10 bg-white/5 text-zinc-400',
+        muted: 'border-transparent bg-white/5 text-zinc-500',
+      },
+      size: {
+        xs: 'px-1.5 py-0 text-[9px] uppercase tracking-wide',
+        sm: 'px-2 py-0.5 text-[10px] uppercase tracking-wide',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+      size: 'sm',
+    },
+  },
+)
 
-// CDS 8.66's Tag only ships 6 color schemes (green, blue, yellow, purple,
-// red, gray). Passing anything else — e.g. `teal` or `orange` — causes a
-// destructure crash inside `tagEmphasisColorMap[emphasis][colorScheme]`
-// that throws on every render, triggering the nearest error boundary
-// (`PrivyProviderSafetyBoundary`) which then rebuilds the tree and
-// re-crashes. That infinite crash/reboot loop is why `/portfolio` felt
-// glitchy and why WalletConnect re-initialized dozens of times. Keep
-// every variant mapped to a scheme CDS actually exports.
-const CDS_COLOR_MAP: Record<BadgeVariant, 'gray' | 'green' | 'yellow' | 'red' | 'blue' | 'purple'> = {
-  default: 'gray',
-  success: 'green',
-  warning: 'yellow',
-  error: 'red',
-  info: 'blue',
-  canonical: 'blue',
-  eoa: 'gray',
-  muted: 'gray',
-}
-
-interface BadgeProps {
-  variant?: BadgeVariant
-  size?: 'xs' | 'sm'
+interface BadgeProps extends VariantProps<typeof badgeVariants> {
   dot?: boolean
   className?: string
   children: ReactNode
@@ -47,22 +43,15 @@ export function Badge({
   children,
 }: BadgeProps) {
   return (
-    <Tag
-      colorScheme={CDS_COLOR_MAP[variant]}
-      emphasis={variant === 'muted' ? 'low' : 'high'}
-      className={cn(
-        size === 'xs' && 'text-[9px]',
-        className,
-      )}
-    >
+    <span className={cn(badgeVariants({ variant, size }), className)}>
       {dot ? (
         <span className="inline-flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-current" />
+          <span className="size-1.5 shrink-0 rounded-full bg-current" aria-hidden />
           {children}
         </span>
       ) : (
         children
       )}
-    </Tag>
+    </span>
   )
 }

@@ -1,8 +1,8 @@
-[**4626-app**](../index.md)
+[**4626-web**](../index.md)
 
 ***
 
-[4626-app](../index.md) / api/social-preview
+[4626-web](../index.md) / api/social-preview
 
 # api/social-preview
 

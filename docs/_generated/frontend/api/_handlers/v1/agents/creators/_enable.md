@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / api/\_handlers/v1/agents/creators/\_enable
+[4626-web](../../../../../index.md) / api/\_handlers/v1/agents/creators/\_enable
 
 # api/\_handlers/v1/agents/creators/\_enable
 

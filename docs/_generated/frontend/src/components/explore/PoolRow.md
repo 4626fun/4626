@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/explore/PoolRow
+[4626-web](../../../index.md) / src/components/explore/PoolRow
 
 # src/components/explore/PoolRow
 
@@ -12,7 +12,7 @@
 
 > **PoolRow**(`__namedParameters`): `Element`
 
-Defined in: [src/components/explore/PoolRow.tsx:33](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/PoolRow.tsx#L33)
+Defined in: [src/components/explore/PoolRow.tsx:38](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/PoolRow.tsx#L38)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/components/explore/PoolRow.tsx:33](https://github.com/wenakita/
 
 > **PoolRowSkeleton**(): `Element`
 
-Defined in: [src/components/explore/PoolRow.tsx:319](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/PoolRow.tsx#L319)
+Defined in: [src/components/explore/PoolRow.tsx:310](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/PoolRow.tsx#L310)
 
 #### Returns
 
@@ -42,7 +42,7 @@ Defined in: [src/components/explore/PoolRow.tsx:319](https://github.com/wenakita
 
 > **PoolTableHeader**(`__namedParameters`): `Element`
 
-Defined in: [src/components/explore/PoolRow.tsx:222](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/PoolRow.tsx#L222)
+Defined in: [src/components/explore/PoolRow.tsx:210](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/PoolRow.tsx#L210)
 
 #### Parameters
 

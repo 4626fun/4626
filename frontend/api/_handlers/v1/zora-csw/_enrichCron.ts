@@ -180,7 +180,14 @@ export default async function handler(
   }
 
   if (!isZoraCswIndexerEnabled()) {
-    res.status(503).json({ ok: false, error: 'feature_disabled' })
+    res.status(200).json({
+      ok: true,
+      tick: 'skipped',
+      reason: 'feature_disabled',
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+    })
     return
   }
 
@@ -190,11 +197,25 @@ export default async function handler(
   }
 
   if (!__testHooks.db && !isSupabaseAdminConfigured()) {
-    res.status(503).json({ ok: false, error: 'supabase_not_configured' })
+    res.status(200).json({
+      ok: true,
+      tick: 'skipped',
+      reason: 'supabase_not_configured',
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+    })
     return
   }
   if (!__testHooks.enrichOne && !__testHooks.getClient && !String(process.env.BASE_RPC_URL ?? '').trim()) {
-    res.status(503).json({ ok: false, error: 'base_rpc_url_not_configured' })
+    res.status(200).json({
+      ok: true,
+      tick: 'skipped',
+      reason: 'base_rpc_url_not_configured',
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+    })
     return
   }
 

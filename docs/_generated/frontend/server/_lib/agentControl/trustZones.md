@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/agentControl/trustZones
+[4626-web](../../../index.md) / server/\_lib/agentControl/trustZones
 
 # server/\_lib/agentControl/trustZones
 
@@ -16,17 +16,17 @@ Defined in: [server/\_lib/agentControl/trustZones.ts:3](https://github.com/wenak
 
 ## Variables
 
-### KEEPR\_TRUST\_ZONE\_HEADER
+### KPR\_TRUST\_ZONE\_HEADER
 
-> `const` **KEEPR\_TRUST\_ZONE\_HEADER**: `"x-keepr-trust-zone"` = `'x-keepr-trust-zone'`
+> `const` **KPR\_TRUST\_ZONE\_HEADER**: `"x-keepr-trust-zone"` = `'x-keepr-trust-zone'`
 
 Defined in: [server/\_lib/agentControl/trustZones.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/trustZones.ts#L8)
 
 ***
 
-### KEEPR\_TRUST\_ZONE\_KEY\_HEADER
+### KPR\_TRUST\_ZONE\_KEY\_HEADER
 
-> `const` **KEEPR\_TRUST\_ZONE\_KEY\_HEADER**: `"x-keepr-zone-key"` = `'x-keepr-zone-key'`
+> `const` **KPR\_TRUST\_ZONE\_KEY\_HEADER**: `"x-keepr-zone-key"` = `'x-keepr-zone-key'`
 
 Defined in: [server/\_lib/agentControl/trustZones.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/trustZones.ts#L9)
 

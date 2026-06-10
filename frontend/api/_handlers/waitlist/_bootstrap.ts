@@ -11,7 +11,7 @@ import {
   getClientIp as getRateLimitIp,
   rateLimitKey,
   RATE_LIMITS,
-} from '../../../packages/server-core/src/index.js'
+} from '@4626/server-core'
 
 
 import {
@@ -36,10 +36,16 @@ import {
   upsertAccount,
   verifyPrivyForAccounts,
 } from '../../../server/_lib/identity/accountsIdentity.js'
-import { runWithOwnedEmailCollisionAdoption } from '../../../server/_lib/identity/emailCollisionAdoption.js'
+import { runWithWaitlistEmailCollisionAdoption, runWithWaitlistWalletCollisionAdoption } from '../../../server/_lib/identity/emailCollisionAdoption.js'
 import { resolveBasenameHandle } from '../../../server/_lib/identity/basenameResolver.js'
+import { loadPrivyUserWithVerifiedEmailRetry } from '../../../server/_lib/infra/privyUserLoad.js'
+import { extractPrivyVerifiedEmail } from '../../../server/_lib/infra/trust.js'
 
 type BootstrapBody = { email?: string; referralCode?: string }
+type BootstrapDb = {
+  sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
+  query?: (sql: string, params?: unknown[]) => Promise<unknown>
+}
 type WaitlistBootstrapResponse =
   | {
       requiresPrivyAuth: true
@@ -98,6 +104,27 @@ function readPrivyToken(req: VercelRequest): string | null {
     return token || null
   }
   return null
+}
+
+async function runBootstrapTransaction<T>(
+  db: BootstrapDb,
+  action: (txDb: BootstrapDb) => Promise<T>,
+): Promise<T> {
+  const query = typeof db.query === 'function' ? db.query.bind(db) : null
+  if (!query) return action(db)
+  await query('BEGIN')
+  try {
+    const result = await action(db)
+    await query('COMMIT')
+    return result
+  } catch (error) {
+    try {
+      await query('ROLLBACK')
+    } catch {
+      // ignore rollback failures; preserve root cause from action
+    }
+    throw error
+  }
 }
 
 async function upsertBootstrapProfile(params: {
@@ -445,6 +472,21 @@ async function applyBootstrapReferral(params: {
   void conversionResult
 }
 
+async function lookupVerifiedAccountEmailForPrivyUser(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  privyUserId: string,
+): Promise<string | null> {
+  const result = await db.sql`
+    SELECT email
+    FROM accounts
+    WHERE LOWER(privy_user_id) = LOWER(${privyUserId})
+      AND email_verified = TRUE
+      AND email IS NOT NULL
+    LIMIT 1;
+  `
+  return normalizeEmail(result.rows?.[0]?.email)
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -512,6 +554,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const context = await verifyPrivyForAccounts(req)
     await ensureAccountsIdentitySchema(db as any)
+    const bootstrapEmailHint = email
+    const privyUser = (await loadPrivyUserWithVerifiedEmailRetry({
+      privyUserId: context.privyUserId,
+      initialUser: context.privyUser,
+      attempts: 10,
+      delayMs: 300,
+    })) as any
+    let resolvedPrivyUser = privyUser
+    let resolvedEmail =
+      normalizeEmail(extractPrivyVerifiedEmail(privyUser)) ?? bootstrapEmailHint
 
     // Block wallet-only Privy sign-ins for humans who already have a
     // canonical (email-verified) profile owning one of the incoming
@@ -520,102 +572,136 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // with no email — the exact failure mode that produced the 728↔1
     // split we just merged. Runs BEFORE any profile upsert so no DB
     // state is written on collision.
-    await assertNoWalletPrivyCollision({
+    await runWithWaitlistWalletCollisionAdoption({
       db: db as any,
+      email: resolvedEmail ?? bootstrapEmailHint,
       privyUserId: context.privyUserId,
-      privyUser: context.privyUser,
+      privyUser: resolvedPrivyUser as any,
+      bootstrapEmailHint,
+      action: () =>
+        assertNoWalletPrivyCollision({
+          db: db as any,
+          privyUserId: context.privyUserId,
+          privyUser: privyUser as any,
+        }),
     })
 
-    const privyEmail = normalizeEmail((context.privyUser as any)?.email?.address)
-    await runWithOwnedEmailCollisionAdoption({
+    await runWithWaitlistEmailCollisionAdoption({
       db: db as any,
-      email: privyEmail,
+      email: resolvedEmail,
       privyUserId: context.privyUserId,
-      privyUser: context.privyUser,
+      privyUser: resolvedPrivyUser as any,
+      bootstrapEmailHint,
       action: () =>
         syncEmailIdentity({
           db: db as any,
           privyUserId: context.privyUserId,
-          privyUser: context.privyUser,
+          privyUser: resolvedPrivyUser as any,
         }),
     })
 
-    // Only Privy's verified email is allowed to become the canonical account email.
-    // Pre-auth form input is intent, not proof.
-    if (privyEmail) {
-      await runWithOwnedEmailCollisionAdoption({
-        db: db as any,
-        email: privyEmail,
+    if (!resolvedEmail) {
+      resolvedPrivyUser = (await loadPrivyUserWithVerifiedEmailRetry({
         privyUserId: context.privyUserId,
-        privyUser: context.privyUser,
+        initialUser: resolvedPrivyUser,
+        attempts: 10,
+        delayMs: 300,
+      })) as any
+      resolvedEmail =
+        normalizeEmail(extractPrivyVerifiedEmail(resolvedPrivyUser)) ??
+        bootstrapEmailHint ??
+        (await lookupVerifiedAccountEmailForPrivyUser(db, context.privyUserId))
+    }
+
+    // Only Privy's verified email is allowed to become the canonical account email.
+    // Pre-auth form input is intent, not proof. After OTP, the client may send the
+    // verified email before Privy server hydration catches up (common in Base App).
+    if (resolvedEmail) {
+      await runWithWaitlistEmailCollisionAdoption({
+        db: db as any,
+        email: resolvedEmail,
+        privyUserId: context.privyUserId,
+        privyUser: resolvedPrivyUser as any,
+        bootstrapEmailHint,
         action: () =>
           assertNoEmailPrivyCollision({
             db: db as any,
-            email: privyEmail,
+            email: resolvedEmail,
             privyUserId: context.privyUserId,
           }),
       })
-      await upsertAccount({
+      await runWithWaitlistEmailCollisionAdoption({
         db: db as any,
+        email: resolvedEmail,
         privyUserId: context.privyUserId,
-        email: privyEmail,
-        emailVerified: true,
-      })
-      await upsertBootstrapProfile({
-        db: db as any,
-        email: privyEmail,
-        privyUserId: context.privyUserId,
-      })
+        privyUser: resolvedPrivyUser as any,
+        bootstrapEmailHint,
+        action: () =>
+          runBootstrapTransaction(db as BootstrapDb, async (txDb) => {
+            await upsertAccount({
+              db: txDb as any,
+              privyUserId: context.privyUserId,
+              email: resolvedEmail,
+              emailVerified: true,
+            })
+            await upsertBootstrapProfile({
+              db: txDb,
+              email: resolvedEmail,
+              privyUserId: context.privyUserId,
+            })
 
-      const bootstrapProfile = await readBootstrapProfile({
-        db: db as any,
-        privyUserId: context.privyUserId,
+            const bootstrapProfile = await readBootstrapProfile({
+              db: txDb,
+              privyUserId: context.privyUserId,
+            })
+            if (!bootstrapProfile.signupId) return
+
+            await ensureBootstrapReferralCode({
+              db: txDb,
+              signupId: bootstrapProfile.signupId,
+              referralCode: bootstrapProfile.referralCode,
+              email: bootstrapProfile.email,
+              primaryWallet: bootstrapProfile.primaryWallet,
+              embeddedWallet: bootstrapProfile.embeddedWallet,
+              cswAddress: bootstrapProfile.cswAddress,
+              zoraHandle: bootstrapProfile.zoraHandle,
+            })
+            if (referralCode) {
+              await applyBootstrapReferral({
+                db: txDb,
+                signupId: bootstrapProfile.signupId,
+                referralCode,
+                ipHash,
+                uaHash,
+              })
+            }
+
+            // Mint the baseline `waitlist_signup` award. Idempotent via the
+            // `points_unique_source_full` index on (signup_id, source, source_id):
+            // after the first successful write, repeat calls hit ON CONFLICT
+            // DO NOTHING and return false. Never blocks bootstrap on failure.
+            try {
+              await awardWaitlistPoints({
+                db: txDb as any,
+                signupId: bootstrapProfile.signupId,
+                source: 'waitlist_signup',
+                sourceId: 'signup',
+                amount: WAITLIST_POINTS.signup,
+              })
+            } catch (err) {
+              console.warn('waitlist_bootstrap.signup_award_failed', {
+                signupId: bootstrapProfile.signupId,
+                message: err instanceof Error ? err.message : String(err),
+              })
+            }
+          }),
       })
-      if (bootstrapProfile.signupId) {
-        await ensureBootstrapReferralCode({
-          db: db as any,
-          signupId: bootstrapProfile.signupId,
-          referralCode: bootstrapProfile.referralCode,
-          email: bootstrapProfile.email,
-          primaryWallet: bootstrapProfile.primaryWallet,
-          embeddedWallet: bootstrapProfile.embeddedWallet,
-          cswAddress: bootstrapProfile.cswAddress,
-          zoraHandle: bootstrapProfile.zoraHandle,
-        })
-        if (referralCode) {
-          await applyBootstrapReferral({
-            db: db as any,
-            signupId: bootstrapProfile.signupId,
-            referralCode,
-            ipHash,
-            uaHash,
-          })
-        }
-        // Mint the baseline `waitlist_signup` award. Idempotent via the
-        // `points_unique_source_full` index on (signup_id, source, source_id):
-        // after the first successful write, repeat calls hit ON CONFLICT
-        // DO NOTHING and return false. Never blocks bootstrap on failure.
-        try {
-          await awardWaitlistPoints({
-            db: db as any,
-            signupId: bootstrapProfile.signupId,
-            source: 'waitlist_signup',
-            sourceId: 'signup',
-            amount: WAITLIST_POINTS.signup,
-          })
-        } catch (err) {
-          console.warn('waitlist_bootstrap.signup_award_failed', {
-            signupId: bootstrapProfile.signupId,
-            message: err instanceof Error ? err.message : String(err),
-          })
-        }
-      }
     }
 
     const me = await buildAccountsMePayload({
       db: db as any,
       privyUserId: context.privyUserId,
-      privyUser: context.privyUser,
+      privyUser: resolvedPrivyUser as any,
     })
 
     return res.status(200).json({

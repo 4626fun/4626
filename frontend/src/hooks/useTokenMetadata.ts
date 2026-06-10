@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useReadContract } from 'wagmi'
 import { logger } from '@/lib/observability/logger'
+import { isBlockedTokenLogoUrl } from '@/lib/tokens/tokenLogo'
 
 // ABI for tokenURI function (common to CreatorCoin contracts)
 const tokenURIAbi = [
@@ -118,8 +119,36 @@ function ipfsToHttp(uri: string): string {
   return uri
 }
 
-function buildCanonicalTokenImageUrl(tokenAddress: `0x${string}`): string {
-  return `/api/v1/token/${tokenAddress.toLowerCase()}/image?chain=8453&format=png`
+async function resolveDexscreenerTokenImageUrl(tokenAddress: `0x${string}`): Promise<string | null> {
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), 1000)
+  try {
+    const response = await fetch(
+      `https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(tokenAddress.toLowerCase())}`,
+      {
+        signal: controller.signal,
+        headers: { Accept: 'application/json' },
+      },
+    )
+    if (!response.ok) return null
+    const payload = await response.json() as {
+      pairs?: Array<{
+        info?: {
+          imageUrl?: string | null
+        } | null
+      }>
+    }
+    const pairs = Array.isArray(payload?.pairs) ? payload.pairs : []
+    for (const pair of pairs) {
+      const candidate = normalizeImageUrl(pair?.info?.imageUrl)
+      if (candidate && !isBlockedTokenLogoUrl(candidate)) return candidate
+    }
+    return null
+  } catch {
+    return null
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
 }
 
 export function selectMetadataSourceUri(params: { tokenURI?: unknown; contractURI?: unknown }): string | null {
@@ -174,9 +203,10 @@ export function useTokenMetadata(tokenAddress: `0x${string}` | undefined) {
 
       const metadataSource = selectMetadataSourceUri({ tokenURI, contractURI })
       if (!metadataSource) {
-        // Fall back to canonical token image endpoint while metadata is unavailable.
+        // Prefer Dexscreener API image when metadata is unavailable.
+        setIsLoading(true)
         setMetadata(null)
-        setImageUrl(buildCanonicalTokenImageUrl(tokenAddress))
+        setImageUrl(await resolveDexscreenerTokenImageUrl(tokenAddress))
         setError(null)
         setIsLoading(false)
         return
@@ -235,7 +265,7 @@ export function useTokenMetadata(tokenAddress: `0x${string}` | undefined) {
         if (data.image) {
           setImageUrl(normalizeImageUrl(ipfsToHttp(data.image)))
         } else {
-          setImageUrl(buildCanonicalTokenImageUrl(tokenAddress))
+          setImageUrl(await resolveDexscreenerTokenImageUrl(tokenAddress))
         }
       } catch (err) {
         // If JSON parse fails, the URI might be a direct image link
@@ -246,7 +276,7 @@ export function useTokenMetadata(tokenAddress: `0x${string}` | undefined) {
           setMetadata({ image: directUrl })
           logger.debug('Using tokenURI directly as image', { directUrl })
         } else {
-          setImageUrl(buildCanonicalTokenImageUrl(tokenAddress))
+          setImageUrl(await resolveDexscreenerTokenImageUrl(tokenAddress))
           setMetadata(null)
         }
         setError(err instanceof Error ? err.message : 'Failed to load token metadata')

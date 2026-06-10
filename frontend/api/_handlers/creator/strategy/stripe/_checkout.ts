@@ -13,11 +13,17 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../../../packages/server-core/src/index.js'
+  runInTransaction,
+} from '@4626/server-core'
 import { getAddress, isAddress, type Address } from 'viem'
 
-import { getCreatorStrategyFeature } from '../../../../../server/_lib/creatorStrategy/catalog.js'
+import {
+  getCreatorStrategyFeature,
+  getRetiredCreatorStrategyFeatureMessage,
+} from '../../../../../server/_lib/creatorStrategy/catalog.js'
+import { getAlacarteDeployPurchaseBlockedMessage } from '../../../../../server/_lib/creatorStrategy/bundleEntitlements.js'
 import { insertStripeCheckoutActivation } from '../../../../../server/_lib/creatorStrategy/activations.js'
+import { upsertPaymentOrder } from '../../../../../server/_lib/creatorStrategy/paymentOrders.js'
 import {
   applyPriceOverride,
   findActivePriceOverride,
@@ -117,11 +123,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const creatorToken = getAddress(creatorTokenRaw as Address)
 
   const featureKey = typeof body.featureKey === 'string' ? body.featureKey.trim() : ''
+  const retiredMessage = getRetiredCreatorStrategyFeatureMessage(featureKey)
+  if (retiredMessage) {
+    return res
+      .status(410)
+      .json({ success: false, error: retiredMessage } satisfies ApiEnvelope<never>)
+  }
   const feature = getCreatorStrategyFeature(featureKey)
   if (!feature) {
     return res
       .status(400)
       .json({ success: false, error: `Unknown featureKey "${featureKey}"` } satisfies ApiEnvelope<never>)
+  }
+  const alacarteBlocked = getAlacarteDeployPurchaseBlockedMessage(featureKey)
+  if (alacarteBlocked) {
+    return res
+      .status(410)
+      .json({ success: false, error: alacarteBlocked } satisfies ApiEnvelope<never>)
   }
 
   if (!isDbConfigured()) {
@@ -161,8 +179,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let session
   try {
     session = await createCheckoutSession({
-      creatorToken,
-      walletAddress: sessionAddress,
+      creatorToken: creatorToken as `0x${string}`,
+      walletAddress: sessionAddress as `0x${string}`,
       featureKey: feature.key,
       featureDisplayName: feature.displayName,
       featureDescription: feature.tagline,
@@ -179,30 +197,64 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  const insertResult = await insertStripeCheckoutActivation(db as any, {
-    creatorToken,
-    featureKey: feature.key,
-    priceUsdcExpected: pricing.effectivePriceUsdc,
-    walletAddress: sessionAddress,
-    stripeCheckoutSessionId: session.sessionId,
-    metadata: {
-      sessionAddress,
-      provisionerTag: feature.provisionerTag,
-      paymentSource: 'stripe',
-      catalogPriceUsdc: feature.priceUsdc.toString(),
-      effectivePriceUsdc: pricing.effectivePriceUsdc.toString(),
-      priceOverrideId: pricing.appliedOverrideId,
-      discountBps: pricing.discountBps,
-      stripeUnitAmountCents: session.unitAmountCents,
-    },
-  })
+  const persistedCheckout = await (async () => {
+    try {
+      return await runInTransaction(async (txDb) => {
+        const insertResult = await insertStripeCheckoutActivation(txDb as any, {
+          creatorToken,
+          featureKey: feature.key,
+          priceUsdcExpected: pricing.effectivePriceUsdc,
+          walletAddress: sessionAddress,
+          stripeCheckoutSessionId: session.sessionId,
+          metadata: {
+            sessionAddress,
+            provisionerTag: feature.provisionerTag,
+            paymentSource: 'stripe',
+            catalogPriceUsdc: feature.priceUsdc.toString(),
+            effectivePriceUsdc: pricing.effectivePriceUsdc.toString(),
+            priceOverrideId: pricing.appliedOverrideId,
+            discountBps: pricing.discountBps,
+            stripeUnitAmountCents: session.unitAmountCents,
+          },
+        })
+        if (!insertResult.ok) return { ok: false as const, insertResult }
 
-  if (!insertResult.ok) {
+        await upsertPaymentOrder({
+          db: txDb as any,
+          orderId: `activation:${insertResult.row.id}`,
+          status: 'payment_pending',
+          amountAtomic: pricing.effectivePriceUsdc,
+          currency: 'USDC',
+          metadata: {
+            provider: 'stripe',
+            stripeSessionId: session.sessionId,
+            creatorToken,
+            featureKey: feature.key,
+          },
+        })
+        return { ok: true as const, row: insertResult.row }
+      })
+    } catch (error) {
+      return {
+        ok: false as const,
+        reason: 'db_error' as const,
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  })()
+
+  if (!persistedCheckout) {
+    return res
+      .status(503)
+      .json({ success: false, error: 'Checkout persistence unavailable' } satisfies ApiEnvelope<never>)
+  }
+
+  if (!persistedCheckout.ok && 'insertResult' in persistedCheckout) {
     // If the DB insert failed, we already paid to create a Stripe
     // session. Log it for operator reconciliation and return the error.
     console.error('[stripe-checkout] DB insert failed after creating Stripe session', {
-      reason: insertResult.reason,
-      message: insertResult.message,
+      reason: persistedCheckout.insertResult.reason,
+      message: persistedCheckout.insertResult.message,
       stripeSessionId: session.sessionId,
       creatorToken,
       featureKey: feature.key,
@@ -211,10 +263,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       live_activation_exists: 409,
       db_error: 500,
     }
-    const status = statusByReason[insertResult.reason] ?? 500
+    const status = statusByReason[persistedCheckout.insertResult.reason] ?? 500
     return res.status(status).json({
       success: false,
-      error: `Activation insert failed (${insertResult.reason}): ${insertResult.message}`,
+      error: `Activation insert failed (${persistedCheckout.insertResult.reason}): ${persistedCheckout.insertResult.message}`,
+    } satisfies ApiEnvelope<never>)
+  }
+
+  if (!persistedCheckout.ok) {
+    console.error('[stripe-checkout] transactional persistence failed after creating Stripe session', {
+      reason: persistedCheckout.reason,
+      message: persistedCheckout.message,
+      stripeSessionId: session.sessionId,
+      creatorToken,
+      featureKey: feature.key,
+    })
+    return res.status(500).json({
+      success: false,
+      error: `Checkout persistence failed (${persistedCheckout.reason}): ${persistedCheckout.message}`,
     } satisfies ApiEnvelope<never>)
   }
 

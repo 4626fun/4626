@@ -1,0 +1,94 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_SUPABASE",
+      "label": "Supabase Postgres",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "postgres",
+      "pluginName": "PostgreSQL"
+    }
+  ],
+  "title": "4626 Ethos Charts Dashboard (Template)",
+  "tags": ["4626", "ethos", "supabase"],
+  "time": { "from": "now-30d", "to": "now" },
+  "panels": [
+    {
+      "title": "Ethos Level Distribution",
+      "type": "piechart",
+      "datasource": "${DS_SUPABASE}",
+      "targets": [
+        {
+          "rawSql": "SELECT level as \"Ethos Level\", creator_count as \"Creators\" FROM public.creator_ethos_score_distribution ORDER BY creator_count DESC;",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "title": "Top Creators by Ethos Score",
+      "type": "table",
+      "datasource": "${DS_SUPABASE}",
+      "targets": [
+        {
+          "rawSql": "SELECT creator_address, ethos_score, ethos_level, ethos_score_source, market_cap_usd FROM public.creator_ethos_projection ORDER BY ethos_score DESC NULLS LAST LIMIT 100;",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "title": "Avg Ethos Score Trend (Last 30 days)",
+      "type": "timeseries",
+      "datasource": "${DS_SUPABASE}",
+      "targets": [
+        {
+          "rawSql": "SELECT snapshot_date as time, 'average' as metric, AVG(ethos_score) as value FROM public.creator_ethos_daily_snapshots WHERE snapshot_date >= CURRENT_DATE - INTERVAL '30 days' GROUP BY 1 ORDER BY 1;",
+          "format": "time_series"
+        }
+      ]
+    },
+    {
+      "title": "Ethos Heatmap (Creators vs Score Buckets)",
+      "type": "heatmap",
+      "datasource": "${DS_SUPABASE}",
+      "targets": [
+        {
+          "rawSql": "SELECT date_trunc('day', snapshot_date) as time, width_bucket(COALESCE(ethos_score, 0), 0, 100, 10) as bucket, COUNT(*) as value FROM public.creator_ethos_daily_snapshots WHERE snapshot_date >= CURRENT_DATE - INTERVAL '30 days' GROUP BY 1, 2 ORDER BY 1;",
+          "format": "time_series"
+        }
+      ]
+    },
+    {
+      "title": "Ethos Score Source Trends",
+      "type": "timeseries",
+      "datasource": "${DS_SUPABASE}",
+      "targets": [
+        {
+          "rawSql": "SELECT snapshot_date as time, ethos_score_source as metric, AVG(ethos_score) as value FROM public.creator_ethos_daily_snapshots WHERE snapshot_date >= CURRENT_DATE - INTERVAL '30 days' AND ethos_score_source IS NOT NULL GROUP BY 1, 2 ORDER BY 1;",
+          "format": "time_series"
+        }
+      ]
+    },
+    {
+      "title": "Cohort Retention (Creators First Seen 30d Ago)",
+      "type": "timeseries",
+      "datasource": "${DS_SUPABASE}",
+      "targets": [
+        {
+          "rawSql": "WITH first_seen AS (SELECT creator_address, MIN(snapshot_date) as first_date FROM public.creator_ethos_daily_snapshots WHERE snapshot_date >= CURRENT_DATE - INTERVAL '60 days' GROUP BY 1) SELECT snapshot_date as time, 'retained' as metric, COUNT(DISTINCT s.creator_address) as value FROM first_seen f JOIN public.creator_ethos_daily_snapshots s ON s.creator_address = f.creator_address AND s.snapshot_date >= f.first_date WHERE f.first_date >= CURRENT_DATE - INTERVAL '30 days' GROUP BY 1 ORDER BY 1;",
+          "format": "time_series"
+        }
+      ]
+    },
+    {
+      "title": "Ethos Percentiles Over Time (p50 / p90)",
+      "type": "timeseries",
+      "datasource": "${DS_SUPABASE}",
+      "targets": [
+        {
+          "rawSql": "SELECT snapshot_date as time, 'p50' as metric, percentile_cont(0.5) WITHIN GROUP (ORDER BY ethos_score) as value FROM public.creator_ethos_daily_snapshots WHERE snapshot_date >= CURRENT_DATE - INTERVAL '30 days' GROUP BY 1 UNION ALL SELECT snapshot_date as time, 'p90' as metric, percentile_cont(0.9) WITHIN GROUP (ORDER BY ethos_score) as value FROM public.creator_ethos_daily_snapshots WHERE snapshot_date >= CURRENT_DATE - INTERVAL '30 days' GROUP BY 1 ORDER BY 1, 2;",
+          "format": "time_series"
+        }
+      ]
+    }
+  ]
+}
