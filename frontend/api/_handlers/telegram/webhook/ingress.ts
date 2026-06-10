@@ -44,11 +44,11 @@ export function shouldRelayTelegramToAlfaclubOnCanonicalWebhook(
 export function readHermitTelegramWebhookSecret(
   env: Record<string, string | undefined> = process.env,
 ): string {
-  return String(env.ALFACLUB_TELEGRAM_WEBHOOK_SECRET ?? '').trim()
+  return String(env.HERMIT_TELEGRAM_WEBHOOK_SECRET ?? env.ALFACLUB_TELEGRAM_WEBHOOK_SECRET ?? '').trim()
 }
 
 export function readHermitTelegramBotToken(
   env: Record<string, string | undefined> = process.env,
 ): string {
-  return String(env.ALFACLUB_TELEGRAM_BOT_TOKEN ?? '').trim()
+  return String(env.HERMIT_TELEGRAM_BOT_TOKEN ?? env.ALFACLUB_TELEGRAM_BOT_TOKEN ?? '').trim()
 }

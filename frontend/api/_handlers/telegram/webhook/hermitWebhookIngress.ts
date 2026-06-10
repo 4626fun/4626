@@ -1,5 +1,5 @@
 /**
- * Hermit bot (ALFACLUB_TELEGRAM_BOT_TOKEN) ingress at hermit.4626.fun.
+ * Hermit bot (HERMIT_TELEGRAM_BOT_TOKEN) ingress at hermit.4626.fun.
  *
  * - Group/topic messages: relayed into the configured AlfaClub room.
  * - Private DMs: answered directly through the deterministic command stack
@@ -33,7 +33,7 @@ export async function handleHermitTelegramWebhookIngress(
   if (!configuredSecret) {
     res.status(503).json({
       success: false,
-      error: 'Hermit Telegram webhook secret is not configured (ALFACLUB_TELEGRAM_WEBHOOK_SECRET)',
+      error: 'Hermit Telegram webhook secret is not configured (HERMIT_TELEGRAM_WEBHOOK_SECRET)',
     } satisfies ApiEnvelope<never>)
     return
   }
@@ -47,7 +47,7 @@ export async function handleHermitTelegramWebhookIngress(
   if (!readHermitTelegramBotToken()) {
     res.status(503).json({
       success: false,
-      error: 'Hermit Telegram bot is not configured (ALFACLUB_TELEGRAM_BOT_TOKEN)',
+      error: 'Hermit Telegram bot is not configured (HERMIT_TELEGRAM_BOT_TOKEN)',
     } satisfies ApiEnvelope<never>)
     return
   }

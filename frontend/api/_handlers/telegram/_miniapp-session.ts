@@ -51,6 +51,7 @@ function resolveMiniAppBotTokenCandidates(primaryToken: string): string[] {
   }
 
   push(primaryToken)
+  push(process.env.HERMIT_TELEGRAM_BOT_TOKEN)
   push(process.env.ALFACLUB_TELEGRAM_BOT_TOKEN)
   return Array.from(tokens)
 }
@@ -85,14 +86,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       payload: {
         reason: 'bot_not_configured',
         code: 'TELEGRAM_BOT_NOT_CONFIGURED',
-        hint: 'Set TELEGRAM_BOT_TOKEN (or ALFACLUB_TELEGRAM_BOT_TOKEN) on the server and redeploy.',
+        hint: 'Set TELEGRAM_BOT_TOKEN (or HERMIT_TELEGRAM_BOT_TOKEN) on the server and redeploy.',
       },
     })
     return res.status(503).json({
       success: false,
       error: 'Telegram bot is not configured',
       code: 'TELEGRAM_BOT_NOT_CONFIGURED',
-      hint: 'Set TELEGRAM_BOT_TOKEN (or ALFACLUB_TELEGRAM_BOT_TOKEN) on the server and redeploy.',
+      hint: 'Set TELEGRAM_BOT_TOKEN (or HERMIT_TELEGRAM_BOT_TOKEN) on the server and redeploy.',
     } satisfies MiniAppSessionErrorEnvelope)
   }
 

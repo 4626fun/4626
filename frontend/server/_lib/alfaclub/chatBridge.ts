@@ -400,15 +400,18 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
   const groupIdRaw = normalizeEnvScalar(process.env.ALFACLUB_CHAT_GROUP_ID)
   const authFlags = readAlfaClubApiAuthFlags()
   const telegramRelayBotToken =
-    normalizeEnvScalar(process.env.ALFACLUB_TELEGRAM_BOT_TOKEN) || null
+    normalizeEnvScalar(process.env.HERMIT_TELEGRAM_BOT_TOKEN) ||
+    normalizeEnvScalar(process.env.ALFACLUB_TELEGRAM_BOT_TOKEN) ||
+    null
   const telegramRelayChatRef = parseTelegramChatRef(
-    normalizeEnvScalar(process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID) ||
+    normalizeEnvScalar(process.env.HERMIT_TELEGRAM_RELAY_CHAT_ID) ||
+      normalizeEnvScalar(process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID) ||
       normalizeEnvScalar(process.env.TELEGRAM_TARGET_CHAT_ID) ||
       null,
   )
   const telegramRelayChatId = telegramRelayChatRef.chatId
   const telegramRelayThreadIdFromEnv = parseOptionalPositiveInt(
-    process.env.ALFACLUB_TELEGRAM_RELAY_THREAD_ID,
+    process.env.HERMIT_TELEGRAM_RELAY_THREAD_ID ?? process.env.ALFACLUB_TELEGRAM_RELAY_THREAD_ID,
     2_000_000_000,
   )
   const telegramRelayEnabledFallback = Boolean(telegramRelayBotToken && telegramRelayChatId)
@@ -458,7 +461,7 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
       DEFAULT_WS_INGEST_ALL_ROOMS_ENABLED,
     ),
     telegramRelayEnabled: parseBoolWithDefault(
-      process.env.ALFACLUB_TELEGRAM_RELAY_ENABLED,
+      process.env.HERMIT_TELEGRAM_RELAY_ENABLED ?? process.env.ALFACLUB_TELEGRAM_RELAY_ENABLED,
       DEFAULT_TELEGRAM_RELAY_FALLBACK_ENABLED && telegramRelayEnabledFallback,
     ),
     telegramRelayBotToken,

@@ -64,11 +64,11 @@ async function main(): Promise<void> {
   const targetUrl = resolveHermitTelegramWebhookPublicUrl(env)
 
   if (!botToken) {
-    console.error('ALFACLUB_TELEGRAM_BOT_TOKEN is required')
+    console.error('HERMIT_TELEGRAM_BOT_TOKEN is required')
     process.exit(2)
   }
   if (!secret) {
-    console.error('ALFACLUB_TELEGRAM_WEBHOOK_SECRET is required')
+    console.error('HERMIT_TELEGRAM_WEBHOOK_SECRET is required')
     process.exit(2)
   }
 

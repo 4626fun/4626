@@ -170,9 +170,9 @@ describe('readAlfaClubChatBridgeFlags', () => {
       ALFACLUB_CHAT_JWT: 'token-xyz',
       ALFACLUB_CHAT_WS_LIVE_FALLBACK_ENABLED: '0',
       ALFACLUB_CHAT_WS_INGEST_ALL_ROOMS_ENABLED: '0',
-      ALFACLUB_TELEGRAM_BOT_TOKEN: 'telegram-token',
-      ALFACLUB_TELEGRAM_RELAY_CHAT_ID: '@fun4626',
-      ALFACLUB_TELEGRAM_RELAY_ENABLED: '0',
+      HERMIT_TELEGRAM_BOT_TOKEN: 'telegram-token',
+      HERMIT_TELEGRAM_RELAY_CHAT_ID: '@fun4626',
+      HERMIT_TELEGRAM_RELAY_ENABLED: '0',
     })
 
     const flags = readAlfaClubChatBridgeFlags()
@@ -212,11 +212,11 @@ describe('readAlfaClubChatBridgeFlags', () => {
       ALFACLUB_CHAT_BRIDGE_ENABLED: '1',
       ALFACLUB_CHAT_ROOM_ID: '1043',
       ALFACLUB_CHAT_JWT: 'token-xyz',
-      ALFACLUB_TELEGRAM_BOT_TOKEN: 'telegram-token',
+      HERMIT_TELEGRAM_BOT_TOKEN: 'telegram-token',
       TELEGRAM_BOT_TOKEN: undefined,
-      ALFACLUB_TELEGRAM_RELAY_CHAT_ID: '@fun4626',
-      ALFACLUB_TELEGRAM_RELAY_THREAD_ID: '77',
-      ALFACLUB_TELEGRAM_RELAY_ENABLED: undefined,
+      HERMIT_TELEGRAM_RELAY_CHAT_ID: '@fun4626',
+      HERMIT_TELEGRAM_RELAY_THREAD_ID: '77',
+      HERMIT_TELEGRAM_RELAY_ENABLED: undefined,
     })
 
     const flags = readAlfaClubChatBridgeFlags()
