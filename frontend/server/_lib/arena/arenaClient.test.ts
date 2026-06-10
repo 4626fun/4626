@@ -6,8 +6,10 @@ import { resolve } from 'node:path'
 import type { ArenaConfig } from './arenaConfig.js'
 import {
   parseAcpAgentCreateOutput,
+  runArenaActivateUnifiedAccount,
   runArenaAddApiWallet,
   runArenaCreateAgent,
+  runArenaDepositUsdc,
   runArenaJoin,
   runArenaStatus,
   runArenaTrade,
@@ -55,6 +57,55 @@ describe('arenaClient trade guardrails', () => {
     expect(result.run?.dryRun).toBe(true)
     expect(result.run?.command).toBe('npx')
   })
+
+  it('builds v2 flag-style open args via tsx', async () => {
+    const result = await runArenaTrade(
+      { action: 'open', pair: 'xyz:GOLD', side: 'long', sizeUsd: 1000, leverage: 2 },
+      mockConfig({ dryRun: true }),
+    )
+    expect(result.run?.args).toEqual([
+      'tsx',
+      'scripts/trade.ts',
+      'open',
+      '--pair',
+      'xyz:GOLD',
+      '--side',
+      'long',
+      '--size',
+      '1000',
+      '--leverage',
+      '2',
+    ])
+  })
+
+  it('builds v2 flag-style close args via tsx', async () => {
+    const result = await runArenaTrade({ action: 'close', pair: 'xyz:GOLD' }, mockConfig({ dryRun: true }))
+    expect(result.run?.args).toEqual(['tsx', 'scripts/trade.ts', 'close', '--pair', 'xyz:GOLD'])
+  })
+})
+
+describe('arenaClient dgclaw v2 setup ops', () => {
+  it('activates unified account via scripts/activate-unified.ts', async () => {
+    const result = await runArenaActivateUnifiedAccount(mockConfig({ dryRun: true }))
+    expect(result.ok).toBe(true)
+    expect(result.run?.command).toBe('npx')
+    expect(result.run?.args).toEqual(['tsx', 'scripts/activate-unified.ts'])
+  })
+
+  it('treats add-api-wallet as a successful no-op (v2 needs no API wallet)', async () => {
+    const result = await runArenaAddApiWallet(mockConfig({ dryRun: false }))
+    expect(result.ok).toBe(true)
+    expect(result.message).toContain('no API wallet required')
+    expect(result.run).toBeUndefined()
+  })
+
+  it('fails deposit with ACP job guidance (deposit.ts removed upstream)', async () => {
+    const result = await runArenaDepositUsdc(100, mockConfig({ dryRun: false }))
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('perp_deposit')
+    expect(result.message).toContain('"amount":"100"')
+    expect(result.message).toContain('acp client fund')
+  })
 })
 
 describe('arenaClient dgclaw command preflight', () => {
@@ -81,19 +132,6 @@ describe('arenaClient dgclaw command preflight', () => {
     expect(Array.isArray(result.details?.dgclawCandidatePaths)).toBe(true)
     expect(result.details?.dgclawDirExists).toBe(true)
     expect(result.details?.dgclawCommandExists).toBe(false)
-  })
-
-  it('returns command-path preflight failure for add-api-wallet when live and missing binary', async () => {
-    const result = await runArenaAddApiWallet(
-      mockConfig({
-        dryRun: false,
-        dgclawDir: '/tmp',
-        dgclawBin: './missing-add-wallet.sh',
-      }),
-    )
-
-    expect(result.ok).toBe(false)
-    expect(result.message).toContain('dgclaw binary not found')
   })
 
   it('falls back to canonical dgclaw.sh in configured dir when bin override is stale', async () => {

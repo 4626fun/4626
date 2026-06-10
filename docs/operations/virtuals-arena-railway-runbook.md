@@ -20,7 +20,7 @@ This runbook covers the 4626 `Arena` control lane exposed through Hermit command
 - For manual/owned creation: Existing Virtuals/ACP agent created via app.virtuals.io/acp/new (or `acp agent create` under an ACP session whose ownerWallet is your Alfa EOA). Connect the *alfaclub sender wallet* during that web flow if you want the agent's ACP userId/dashboard ownership to match your chat identity. The no-args `/arena register` create path creates under the *bot runtime's* ACP session (see ACP_OWNER_WALLET).
 - `dgclaw-skill` (or equivalent scripts + `acp` CLI) available on the Railway runtime host. `ARENA_ACP_BIN` (usually "acp") must resolve.
 - `ACP_CLI_DIR` points to a local `acp-cli` checkout used by `dgclaw.sh join` (or ensure `acp-cli` exists as a sibling of `ARENA_DGCLAW_DIR`).
-- `DGCLAW_API_KEY` is configured in the runtime env (required by `activate-unified-account` and `add-api-wallet`).
+- `DGCLAW_API_KEY` is configured in the runtime env **as a Railway service variable on the Hermit service** (the container's `/app/dgclaw-skill/.env` is ephemeral and wiped on redeploy). It gates `dgclaw.sh` leaderboard/forum commands only — `scripts/trade.ts` trades go directly to Hyperliquid signed by the ACP agent wallet and do not use it.
 - `ARENA_CREATION_ENABLED=1` (default) to allow the create path of `/arena register`.
 - Env configured in `frontend/.env.example` Arena section:
   - `ARENA_ENABLED`
@@ -52,11 +52,19 @@ If agent is still on legacy wallet:
 - `/arena status`
 - `/arena assets`
 - `/arena join`
-- `/arena activate`
-- `/arena add-api-wallet`
-- `/arena deposit <usdc>`
+- `/arena activate` — runs `scripts/activate-unified.ts` (dgclaw v2; the old `dgclaw.sh activate-unified-account` subcommand no longer exists)
+- `/arena add-api-wallet` — **no-op success in dgclaw v2**: orders are signed by the ACP agent wallet via acp-cli, no API wallet exists
+- `/arena deposit <usdc>` — **fails with guidance in dgclaw v2**: `scripts/deposit.ts` was removed upstream; deposits are a manual ACP job (`acp client create-job --offering-name perp_deposit` → `acp client fund`, min 6 USDC, ~30 min bridge SLA)
 - `/arena trade open <pair> <long|short> <sizeUsd> <leverage>`
 - `/arena trade close <pair>`
+
+### dgclaw v2 CLI contract (June 2026)
+
+`Dockerfile.hermit` clones `dgclaw-skill@main` unpinned, so the container always carries upstream v2/v3 semantics. The arena client matches these:
+
+- `scripts/trade.ts` accepts **flag-style options only** (`open --pair ETH --side long --size 500 --leverage 5`); positional args are silently ignored, producing a missing `--pair` error.
+- The workspace is ESM (`"type": "module"`) and ships **`tsx`**, not `ts-node` — node scripts run as `npx tsx scripts/<name>.ts`.
+- `dgclaw.sh` subcommands are limited to `join`, `leaderboard*`, `forums`/`forum`/`posts`/`create-post`/`unreplied-posts`, `setup-cron`/`remove-cron`, `token-info`.
 - `/arena register [agentId agentWallet [hlApiWallet]]` — programmatic bind + onboard (drives `acp agent create` if ids omitted). Binds the *current sender* (alfaclub wallet) as 'mine'. See "Programmatic registration" below.
 
 ## HIP-3 Pair Policy
@@ -264,7 +272,7 @@ This gives the best of both: quick chat-driven functional arena agents for the r
 - Action:
   - verify `ARENA_DGCLAW_DIR`
   - verify `ARENA_DGCLAW_BIN`
-  - verify scripts exist (`scripts/deposit.ts`, `scripts/trade.ts`)
+  - verify scripts exist (`scripts/trade.ts`, `scripts/activate-unified.ts`; `scripts/deposit.ts` no longer exists in dgclaw v2)
 
 ### API wallet/setup drift
 

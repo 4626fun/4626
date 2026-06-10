@@ -235,9 +235,10 @@ function buildDgclawCommand(config: ArenaConfig, args: string[]): BuiltCommand {
 }
 
 function buildNodeScriptCommand(config: ArenaConfig, scriptRelPath: string, args: string[]): BuiltCommand {
+  // dgclaw-skill is ESM ("type": "module") and ships tsx, not ts-node.
   return {
     command: config.nodeRunnerBin,
-    args: ['ts-node', scriptRelPath, ...args],
+    args: ['tsx', scriptRelPath, ...args],
     cwd: config.dgclawDir ?? process.cwd(),
     env: buildArenaCommandEnv(config),
   }
@@ -366,9 +367,8 @@ export async function runArenaJoin(config = readArenaConfig()): Promise<ArenaOpR
 export async function runArenaActivateUnifiedAccount(config = readArenaConfig()): Promise<ArenaOpResult> {
   const baseValidation = ensureArenaEnabled(config)
   if (baseValidation) return baseValidation
-  const dgclawValidation = ensureDgclawReady(config)
-  if (dgclawValidation) return dgclawValidation
-  const command = buildDgclawCommand(config, ['activate-unified-account'])
+  // dgclaw v2 moved activation out of dgclaw.sh into a dedicated script.
+  const command = buildNodeScriptCommand(config, 'scripts/activate-unified.ts', [])
   const run = await runCommand(command, config)
   auditLog('activate_unified_account', { ok: run.ok, dryRun: run.dryRun })
   return {
@@ -381,18 +381,13 @@ export async function runArenaActivateUnifiedAccount(config = readArenaConfig())
 export async function runArenaAddApiWallet(config = readArenaConfig()): Promise<ArenaOpResult> {
   const baseValidation = ensureArenaEnabled(config)
   if (baseValidation) return baseValidation
-  const dgclawValidation = ensureDgclawReady(config)
-  if (dgclawValidation) return dgclawValidation
-  const command = buildDgclawCommand(config, ['add-api-wallet'])
-  const run = await runCommand(command, config)
-  const parsed = parseAcpAgentCreateOutput([run.stdout || '', run.stderr || ''].filter(Boolean).join('\n'))
-  const details = parsed.hlApiWalletAddress ? { hlApiWalletAddress: parsed.hlApiWalletAddress } : undefined
-  auditLog('add_api_wallet', { ok: run.ok, dryRun: run.dryRun })
+  // dgclaw v2 removed API wallets entirely: orders are signed by the ACP agent
+  // wallet via acp-cli. Treat this step as a successful no-op so setup
+  // pipelines that still include it do not fail.
+  auditLog('add_api_wallet', { ok: true, dryRun: config.dryRun, skipped: true })
   return {
-    ok: run.ok,
-    message: run.ok ? 'API wallet setup completed.' : 'API wallet setup failed.',
-    ...(details ? { details } : {}),
-    run,
+    ok: true,
+    message: 'API wallet setup skipped: dgclaw v2 signs orders with the ACP agent wallet (no API wallet required).',
   }
 }
 
@@ -409,14 +404,19 @@ export async function runArenaDepositUsdc(amountUsd: number, config = readArenaC
     return fail(`Deposit ${amount} exceeds ARENA_MAX_USDC_DEPOSIT (${config.maxUsdcDeposit}).`)
   }
 
-  const command = buildNodeScriptCommand(config, 'scripts/deposit.ts', [String(amount)])
-  const run = await runCommand(command, config)
-  auditLog('deposit', { ok: run.ok, dryRun: run.dryRun, amountUsd: amount })
-  return {
-    ok: run.ok,
-    message: run.ok ? `Deposit submitted (${amount} USDC).` : 'Deposit command failed.',
-    run,
-  }
+  // dgclaw v2 removed scripts/deposit.ts. Deposits are now an ACP job to the
+  // Degen Claw provider (Base -> Arbitrum -> Hyperliquid bridge, min 6 USDC,
+  // ~30 min SLA) and require an interactive create-job + fund sequence.
+  auditLog('deposit', { ok: false, dryRun: config.dryRun, amountUsd: amount, unsupported: true })
+  return fail(
+    [
+      'Automated deposits are not supported with dgclaw v2 (scripts/deposit.ts was removed upstream).',
+      'Run the ACP job flow manually from the dgclaw-skill workspace:',
+      `acp client create-job --provider "0xd478a8B40372db16cA8045F28C6FE07228F3781A" --offering-name "perp_deposit" --requirements '{"amount":"${amount}"}' --legacy --json`,
+      'then fund it once the requirement memo posts: acp client fund --job-id <jobId> --json',
+      '(Minimum 6 USDC, ~30 minute bridge SLA.)',
+    ].join('\n'),
+  )
 }
 
 export async function runArenaTrade(request: ArenaTradeRequest, config = readArenaConfig()): Promise<ArenaOpResult> {
@@ -431,7 +431,8 @@ export async function runArenaTrade(request: ArenaTradeRequest, config = readAre
 
   const action = request.action
   if (action === 'close') {
-    const command = buildNodeScriptCommand(config, 'scripts/trade.ts', ['close', pairCheck.normalizedPair])
+    // dgclaw v2 trade.ts only accepts flag-style options; positional args are silently ignored.
+    const command = buildNodeScriptCommand(config, 'scripts/trade.ts', ['close', '--pair', pairCheck.normalizedPair])
     const run = await runCommand(command, config)
     auditLog('trade_close', {
       ok: run.ok,
@@ -458,9 +459,13 @@ export async function runArenaTrade(request: ArenaTradeRequest, config = readAre
 
   const command = buildNodeScriptCommand(config, 'scripts/trade.ts', [
     'open',
+    '--pair',
     pairCheck.normalizedPair,
+    '--side',
     side,
+    '--size',
     String(sizeUsd),
+    '--leverage',
     String(leverage),
   ])
   const run = await runCommand(command, config)

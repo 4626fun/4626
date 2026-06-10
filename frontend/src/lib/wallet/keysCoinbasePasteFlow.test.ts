@@ -22,7 +22,7 @@ function derEncode(r: bigint, s: bigint): Hex {
     if (hex.length % 2 === 1) hex = `0${hex}`
     const bytes = hex.match(/.{2}/g)!.map((b) => parseInt(b, 16))
     // DER requires a leading zero when the high bit is set (positive integer).
-    if (bytes[0] & 0x80) bytes.unshift(0)
+    if (bytes[0]! & 0x80) bytes.unshift(0)
     return bytes
   }
   const rB = intBytes(r)
