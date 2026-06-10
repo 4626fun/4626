@@ -282,7 +282,10 @@ describe('deriveSwapExecutionReadiness', () => {
     ).toBe(true)
   })
 
-  it('allows canonical submit only when the Base sub-account track is ready', () => {
+  it('blocks sub-account execution when 4626 canonical policy applies (parent-CSW hardening)', () => {
+    // Since the parent-CSW restore hardening, the sub-account track no longer
+    // bypasses canonical enforcement: when the policy-pinned canonical CSW is
+    // active, execution must come from the parent CSW with an allowed signer.
     expect(
       deriveSwapExecutionReadiness({
         quoteReady: true,
@@ -293,7 +296,7 @@ describe('deriveSwapExecutionReadiness', () => {
         signerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
         canonicalPolicyApplies: true,
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('preserves external EOA submit readiness when quote inputs are ready', () => {
