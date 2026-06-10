@@ -36,6 +36,15 @@ const EXPLICIT_OUT_OF_SCOPE = [
   'design/base-brand-archive/README.md',
   'frontend/public/protocols/README.md',
   'frontend/public/assets/README_ASSETS.md',
+  'frontend/api/_handlers/token/renderers/README.md',
+  'frontend/server/_lib/alfaclub/README.md',
+  'frontend/server/_lib/image/fuji-attribution.md',
+  'frontend/server/_lib/lottery/amoe-zk-assets/README.md',
+  'contracts/vault/tamago/README.md',
+  'contracts/vault/tamago/UPSTREAM_README.md',
+  'scripts/ops/1659-risk-watcher/README.md',
+  'test/halmos/README.md',
+  'SOLO_CLEANUP_STARTER.md',
   // Internal design/typography working notes, not public docs-site content.
   'DESIGN_REFINEMENT.md',
   'TYPOGRAPHY_AUDIT.md',
@@ -58,6 +67,8 @@ const EXPLICIT_OUT_OF_SCOPE = [
   'amoe/tools/zk/README.md',
   // Hermit (Pinata) agent persona/seed files — runtime-loaded prompts, not public docs.
   'frontend/server/_lib/hermit/seed/**',
+  // Hermit workspace runtime personality/context files.
+  'frontend/server/_lib/hermit/workspace/**',
 ];
 
 function gitLines(args) {
