@@ -51,6 +51,7 @@ import {
   FaqHowItWorks,
   GaugeVoting,
   Positions,
+  RemoveOwnerPage,
   Status,
   Swap,
   Vault,
@@ -142,9 +143,17 @@ export const ACCOUNT_ROUTES: PathRouteDef[] = [
     path: '/add-owner',
     element: <Navigate to="/waitlist" replace />,
   },
+  // `/remove-owner` removes an owner from the canonical CSW. Primary lane is
+  // the keys.coinbase.com paste flow (passkey signs the chain-id-agnostic
+  // userOpHash directly); submission goes through Relay's /execute/call via
+  // /api/relay/execute. Surfaces live on-chain owner-slot diagnostics.
   {
     path: '/remove-owner',
-    element: <Navigate to="/waitlist" replace />,
+    element: (
+      <SmartWalletRoute>
+        <RemoveOwnerPage />
+      </SmartWalletRoute>
+    ),
   },
   {
     path: '/csw-funding',

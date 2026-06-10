@@ -249,6 +249,7 @@ export const AddOwnerBaseApp = lazyNamed(
   () => import('../pages/AddOwnerBaseApp'),
   'AddOwnerBaseApp',
 )
+export const RemoveOwnerPage = lazyNamed(() => import('../pages/RemoveOwner'), 'RemoveOwnerPage')
 export const MetaballOsProbe = lazyNamed(
   () => import('../pages/dev/MetaballOsProbe'),
   'MetaballOsProbe',
