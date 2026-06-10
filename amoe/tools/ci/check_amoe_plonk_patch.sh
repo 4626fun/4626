@@ -31,7 +31,7 @@
 
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 VERIFIER="$ROOT/contracts/utilities/lottery/zk/AmoePlonkVerifier.sol"
 RAW="$ROOT/amoe/circuits/build/plonk_fresh/AmoePlonkVerifier_raw.sol"
 
