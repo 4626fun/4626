@@ -99,6 +99,18 @@ function normalizeOrigin(raw: string): string {
   }
 }
 
+function isLoopbackOrigin(raw: string): boolean {
+  const origin = normalizeOrigin(raw)
+  if (!origin) return false
+  try {
+    const url = new URL(origin)
+    const host = url.hostname.toLowerCase()
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]'
+  } catch {
+    return false
+  }
+}
+
 function getCurrentOrigin(): string | null {
   if (typeof window === 'undefined') return null
   return normalizeOrigin(window.location.origin)
@@ -313,7 +325,13 @@ export function resolvePrivyAppId(): string | null {
 
 export function resolvePrivyClientId(): string | null {
   const clientId = String(import.meta.env.VITE_PRIVY_CLIENT_ID ?? '').trim()
-  return clientId.length > 0 ? clientId : null
+  if (!clientId) return null
+  // Local dev should prefer app-id auth unless explicitly forced. This avoids
+  // custom-domain client configs that reject localhost frame ancestors.
+  if (typeof window !== 'undefined' && isLoopbackOrigin(window.location.origin)) {
+    if (!isTruthyEnv(import.meta.env.VITE_PRIVY_CLIENT_ID_ON_LOOPBACK)) return null
+  }
+  return clientId
 }
 
 // ---------------------------------------------------------------------------

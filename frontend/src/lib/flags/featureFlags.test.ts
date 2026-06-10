@@ -48,6 +48,23 @@ describe('resolvePrivyClientId', () => {
     vi.stubEnv('VITE_PRIVY_CLIENT_ID', 'client_live_123')
     expect(resolvePrivyClientId()).toBe('client_live_123')
   })
+
+  it('suppresses client id on loopback by default', () => {
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID', 'client_live_123')
+    vi.stubGlobal('window', {
+      location: { origin: 'http://localhost:5174' },
+    } as unknown as Window & typeof globalThis)
+    expect(resolvePrivyClientId()).toBeNull()
+  })
+
+  it('allows client id on loopback when explicitly enabled', () => {
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID', 'client_live_123')
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID_ON_LOOPBACK', '1')
+    vi.stubGlobal('window', {
+      location: { origin: 'http://localhost:5174' },
+    } as unknown as Window & typeof globalThis)
+    expect(resolvePrivyClientId()).toBe('client_live_123')
+  })
 })
 
 describe('resolvePrivyAppId', () => {

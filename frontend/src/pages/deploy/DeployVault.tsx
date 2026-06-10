@@ -1,5 +1,6 @@
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
+import { toast } from '@/components/ui/Toast'
 import { useAccount, useChainId, useConnect, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
 import { debugLogsFlag } from '@/lib/flags/featureFlags'
 import { base } from 'wagmi/chains'
@@ -96,6 +97,19 @@ import { useAccountMe } from '@/hooks/useAccountMe'
 import { useCreatorAllowlist, useDeploymentTracker } from '@/hooks'
 import { DeploymentSuccess, AlreadyDeployedBanner } from '@/components/deploy/DeploymentSuccess'
 import { VaultImageGenerator } from '@/components/deploy/VaultImageGenerator'
+import { DeployHero } from '@/components/deploy/DeployHero'
+import { ReadinessPanel } from '@/components/deploy/ReadinessPanel'
+import { CreatorCoinCard, type CreatorCoinTypeTone } from '@/components/deploy/CreatorCoinCard'
+import { BlockedStateCard } from '@/components/deploy/ui/BlockedStateCard'
+import { AddressRow as DeployUiAddressRow } from '@/components/deploy/ui/AddressRow'
+import { AddressTable } from '@/components/deploy/ui/AddressTable'
+import { AdvancedDetails } from '@/components/deploy/ui/AdvancedDetails'
+import { DeploymentOverview, OverviewRow } from '@/components/deploy/DeploymentOverview'
+import { MeshPreflightPanel } from '@/components/deploy/MeshPreflightPanel'
+import { PhaseTimeline, PhaseCard, PhaseProgressBadge } from '@/components/deploy/PhaseTimeline'
+import { DryRunPanel } from '@/components/deploy/DryRunPanel'
+import { DeployActionBar } from '@/components/deploy/DeployActionBar'
+import { RolePolicyHealthPanel } from '@/components/deploy/RolePolicyHealthPanel'
 import type { DeploymentRecord } from '@/hooks/useDeploymentTracker'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/api/apiBase'
@@ -152,6 +166,38 @@ import {
   type DeployTimelineStage,
   type DeployTimelineStageId,
 } from '@/features/deploy-vault/deploySteps'
+import {
+  AJNA_FACTORY_ABI,
+  BATCHER_PHASE1_SPLIT_STATE_VIEW_ABI,
+  BATCHER_PHASE3_CONFIG_ABI,
+  BATCHER_SHARED_INFRA_ABI,
+  CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI,
+  CHARM_FACTORY_ABI,
+  COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+  COIN_OWNERSHIP_ABI,
+  COIN_PAYOUT_RECIPIENT_ABI,
+  CREATE2_DEPLOYER_STORE_ABI,
+  CREATOR_COIN_OWNERS_ABI,
+  CREATOR_VAULT_ADMIN_ABI,
+  CREATOR_VAULT_BATCHER_ABI,
+  CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI,
+  CREATOR_VAULT_BATCHER_PHASE1_STATE_ABI,
+  IMPAIRMENT_AUX_OWNED_ABI,
+  PAYOUT_ROUTER_ADMIN_ABI,
+  PHASE3_HELPER_VIEW_ABI,
+  UNISWAP_V3_FACTORY_ABI,
+  UNIVERSAL_BYTECODE_STORE_CHUNKCOUNT_ABI,
+  UNIVERSAL_BYTECODE_STORE_POINTERS_ABI,
+  VAULT_AUXILIARY_DEPLOY_BATCHER_ABI,
+  VAULT_SHARE_BURN_STREAM_ABI,
+} from './deployVaultAbis'
+import {
+  parseRolePolicyOverrideInput,
+  renderRolePolicyRuleLabel,
+  renderRolePolicySourceLabel,
+  type RolePolicyRuleLabel,
+  type RolePolicySourceLabel,
+} from './deployVaultRolePolicy'
 
 const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 50_000_000n
 const MIN_FIRST_DEPOSIT = DEFAULT_MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n
@@ -219,34 +265,6 @@ function hasSaltOverrideDisabledError(error: unknown): boolean {
 }
 const NO_EOA_STRICT_BLOCKER =
   'No-EOA deploy requires Privy owner signer readiness on your canonical CSW. Complete one-time Base Account owner approval (or use Base App prolink), then retry.'
-const CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI = [
-  {
-    name: 'getAuctionStatus',
-    type: 'function',
-    inputs: [],
-    outputs: [
-      { name: 'auction', type: 'address' },
-      { name: 'isActive', type: 'bool' },
-      { name: 'isGraduated', type: 'bool' },
-      { name: 'clearingPrice', type: 'uint256' },
-      { name: 'currencyRaised', type: 'uint256' },
-    ],
-    stateMutability: 'view',
-  },
-  {
-    name: 'previewLaunchPricing',
-    type: 'function',
-    inputs: [],
-    outputs: [
-      { name: 'floorPriceQ96', type: 'uint256' },
-      { name: 'tickSpacingQ96', type: 'uint256' },
-      { name: 'creatorUsdPrice', type: 'uint256' },
-      { name: 'ethUsdPrice', type: 'uint256' },
-    ],
-    stateMutability: 'view',
-  },
-] as const
-
 type DeployMode = 'default' | 'no_eoa_strict'
 
 function resolveDeployMode(): DeployMode {
@@ -358,50 +376,6 @@ async function waitForContractsDeployed(params: {
   }
 }
 
-const CREATOR_VAULT_BATCHER_PHASE1_STATE_ABI = [
-  {
-    type: 'function',
-    name: 'phase1SplitStates',
-    stateMutability: 'view',
-    inputs: [{ name: 'salt', type: 'bytes32' }],
-    outputs: [
-      {
-        type: 'tuple',
-        components: [
-          { name: 'oftBootstrapRegistry', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
-          { name: 'shareOftSalt', type: 'bytes32' },
-          { name: 'paramsHash', type: 'bytes32' },
-          { name: 'codeIdsHash', type: 'bytes32' },
-          { name: 'coreDone', type: 'bool' },
-          { name: 'finalized', type: 'bool' },
-        ],
-      },
-    ],
-  },
-] as const
-
-const CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI = [
-  {
-    type: 'function',
-    name: 'pendingAuctions',
-    stateMutability: 'view',
-    inputs: [{ name: 'salt', type: 'bytes32' }],
-    outputs: [
-      {
-        type: 'tuple',
-        components: [
-          { name: 'shareOFT', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
-          { name: 'amount', type: 'uint256' },
-        ],
-      },
-    ],
-  },
-] as const
-
 async function waitForPhase1CoreState(params: {
   publicClient: {
     readContract: (args: {
@@ -471,8 +445,6 @@ type DeployRuntimeConfigResponse = {
   impairmentChallengeWindowSeconds: number | null
 }
 
-type RolePolicyRuleLabel = 'any' | 'must_equal_owner' | 'must_be_allowlisted' | 'unknown'
-type RolePolicySourceLabel = 'request' | 'creator_default' | 'global_default' | 'none'
 type RolePolicyResolveData = {
   creatorToken: Address
   principalAddress: Address
@@ -736,22 +708,6 @@ type DeployPlanExport = {
   }
   sessionCreateRequest: DeploySessionCreateRequest
 }
-
-const CREATOR_COIN_OWNERS_ABI = [
-  { type: 'function', name: 'totalOwners', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
-  { type: 'function', name: 'ownerAt', inputs: [{ type: 'uint256' }], outputs: [{ type: 'address' }], stateMutability: 'view' },
-] as const
-
-const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
-  {
-    type: 'function',
-    name: 'addOwnerAddress',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'owner', type: 'address' }],
-    outputs: [],
-  },
-  { type: 'error', name: 'AlreadyOwner', inputs: [{ name: 'owner', type: 'bytes' }] },
-] as const
 
 async function isCoinbaseSmartWalletOwner(params: {
   smartWallet: Address
@@ -1071,1205 +1027,11 @@ const COINBASE_ENTRYPOINT_V06 = ERC4337_ENTRYPOINT_V06
 // This will throw at module load if there's a mismatch
 assertEntryPointV06(addr('5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'))
 
-const COIN_PAYOUT_RECIPIENT_ABI = [
-  {
-    type: 'function',
-    name: 'setPayoutRecipient',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'newPayoutRecipient', type: 'address' }],
-    outputs: [],
-  },
-] as const
-
-const COIN_OWNERSHIP_ABI = [
-  {
-    type: 'function',
-    name: 'owner',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: '', type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'transferOwnership',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'newOwner', type: 'address' }],
-    outputs: [],
-  },
-] as const
-
-const VAULT_AUXILIARY_DEPLOY_BATCHER_ABI = [
-  {
-    type: 'function',
-    name: 'deployPhase2Auxiliaries',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'swapRouter', type: 'address' },
-          { name: 'weth', type: 'address' },
-          { name: 'protocolRewards', type: 'address' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'vaultShareBurnStream', type: 'bytes32' },
-          { name: 'payoutRouter', type: 'bytes32' },
-          { name: 'creatorCoinPolicyController', type: 'bytes32' },
-        ],
-      },
-    ],
-    outputs: [
-      {
-        name: 'out',
-        type: 'tuple',
-        components: [
-          { name: 'burnStream', type: 'address' },
-          { name: 'payoutRouter', type: 'address' },
-          { name: 'creatorCoinPolicyController', type: 'address' },
-        ],
-      },
-    ],
-  },
-] as const
-
-const PAYOUT_ROUTER_ADMIN_ABI = [
-  {
-    type: 'function',
-    name: 'keeper',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: '', type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'swapPathToCreator',
-    stateMutability: 'view',
-    inputs: [{ name: 'tokenIn', type: 'address' }],
-    outputs: [{ name: '', type: 'bytes' }],
-  },
-  {
-    type: 'function',
-    name: 'approvedExternalSwapTargets',
-    stateMutability: 'view',
-    inputs: [{ name: 'target', type: 'address' }],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-  {
-    type: 'function',
-    name: 'approvedExternalSwapSpenders',
-    stateMutability: 'view',
-    inputs: [{ name: 'spender', type: 'address' }],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-  {
-    type: 'function',
-    name: 'setKeeper',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'newKeeper', type: 'address' }],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'setExternalSwapTargetApproval',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'target', type: 'address' },
-      { name: 'approved', type: 'bool' },
-    ],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'setExternalSwapSpenderApproval',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'spender', type: 'address' },
-      { name: 'approved', type: 'bool' },
-    ],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'setSwapPath',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'tokenIn', type: 'address' },
-      { name: 'path', type: 'bytes' },
-    ],
-    outputs: [],
-  },
-] as const
-
-const UNISWAP_V3_FACTORY_ABI = [
-  {
-    type: 'function',
-    name: 'getPool',
-    stateMutability: 'view',
-    inputs: [
-      { name: 'tokenA', type: 'address' },
-      { name: 'tokenB', type: 'address' },
-      { name: 'fee', type: 'uint24' },
-    ],
-    outputs: [{ name: 'pool', type: 'address' }],
-  },
-] as const
-
-const BATCHER_PHASE3_CONFIG_ABI = [
-  {
-    type: 'function',
-    name: 'phase3Helper',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'usdc',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'uniswapRouter',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'uniswapV3Factory',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'ajnaFactory',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-] as const
-
-const BATCHER_SHARED_INFRA_ABI = [
-  { type: 'function', name: 'phase1Module', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'phase2Module', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'phase3Helper', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'uniV4Helper', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'utilsHelper', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'create2Deployer', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'bytecodeStore', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'protocolTreasury', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'registry', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'chainlinkEthUsd', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'solanaBridgeAdapter', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'solanaDestination', stateMutability: 'view', inputs: [], outputs: [{ type: 'bytes32' }] },
-  { type: 'function', name: 'solanaShareOftPeer', stateMutability: 'view', inputs: [], outputs: [{ type: 'bytes32' }] },
-  {
-    type: 'function',
-    name: 'getOVaultRuntimeConfig',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'tuple', components: [{ name: 'hubComposer', type: 'address' }, { name: 'solanaEid', type: 'uint32' }, { name: 'enabled', type: 'bool' }] }],
-  },
-] as const
-
-const PHASE3_HELPER_VIEW_ABI = [
-  {
-    type: 'function',
-    name: 'protocolAutomation',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-] as const
-
-const AJNA_FACTORY_ABI = [
-  {
-    type: 'function',
-    name: 'ERC20_NON_SUBSET_HASH',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'bytes32' }],
-  },
-  {
-    type: 'function',
-    name: 'deployedPools',
-    stateMutability: 'view',
-    inputs: [
-      { name: 'subsetHash', type: 'bytes32' },
-      { name: 'quoteToken', type: 'address' },
-      { name: 'collateralToken', type: 'address' },
-    ],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'MIN_RATE',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'MAX_RATE',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'deployPool',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'quoteToken', type: 'address' },
-      { name: 'collateralToken', type: 'address' },
-      { name: 'interestRate', type: 'uint256' },
-    ],
-    outputs: [{ type: 'address' }],
-  },
-] as const
-
-const CHARM_FACTORY_ABI = [
-  {
-    type: 'function',
-    name: 'createVault',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'pool', type: 'address' },
-          { name: 'manager', type: 'address' },
-          { name: 'managerFee', type: 'uint24' },
-          { name: 'rebalanceDelegate', type: 'address' },
-          { name: 'maxTotalSupply', type: 'uint256' },
-          { name: 'baseThreshold', type: 'int24' },
-          { name: 'limitThreshold', type: 'int24' },
-          { name: 'fullRangeWeight', type: 'uint24' },
-          { name: 'period', type: 'uint32' },
-          { name: 'minTickMove', type: 'int24' },
-          { name: 'maxTwapDeviation', type: 'int24' },
-          { name: 'twapDuration', type: 'uint32' },
-          { name: 'name', type: 'string' },
-          { name: 'symbol', type: 'string' },
-        ],
-      },
-    ],
-    outputs: [{ name: 'vault', type: 'address' }],
-  },
-] as const
-
-const CREATOR_VAULT_ADMIN_ABI = [
-  {
-    type: 'function',
-    name: 'management',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: '', type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'burnStream',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: '', type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'setBurnStream',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'burnStream', type: 'address' }],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'setWhitelist',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'account', type: 'address' },
-      { name: 'status', type: 'bool' },
-    ],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'setBurnStreamAuthorizedQueuer',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'queuer', type: 'address' },
-      { name: 'authorized', type: 'bool' },
-    ],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'setMinimumTotalIdle',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: '_minimumTotalIdle', type: 'uint256' }],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'deployToStrategies',
-    stateMutability: 'nonpayable',
-    inputs: [],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'impairmentGuardian',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: '', type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'impairmentClaims',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: '', type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'impairmentRecoveryEscrow',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: '', type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'impairmentChallengeWindow',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: '', type: 'uint64' }],
-  },
-  {
-    type: 'function',
-    name: 'setImpairmentGuardian',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'guardian', type: 'address' }],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'setImpairmentClaims',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'claims', type: 'address' }],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'setImpairmentRecoveryEscrow',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'escrow', type: 'address' }],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'setImpairmentChallengeWindow',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'window', type: 'uint64' }],
-    outputs: [],
-  },
-] as const
-
-const IMPAIRMENT_AUX_OWNED_ABI = [
-  {
-    type: 'function',
-    name: 'owner',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: '', type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'vault',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: '', type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'setVault',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'vault_', type: 'address' }],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'transferOwnership',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'newOwner', type: 'address' }],
-    outputs: [],
-  },
-] as const
-
-const VAULT_SHARE_BURN_STREAM_ABI = [
-  {
-    type: 'function',
-    name: 'authorizedQueuers',
-    stateMutability: 'view',
-    inputs: [{ name: 'queuer', type: 'address' }],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-] as const
-
-// Legacy permit/permit2 ABIs were used for the one-tx deploy paths (now removed).
-
-const CREATOR_VAULT_BATCHER_ABI = [
-  {
-    type: 'function',
-    name: 'bytecodeStore',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'create2Deployer',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'protocolTreasury',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'registry',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'chainlinkEthUsd',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'permit2',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'deployNonces',
-    stateMutability: 'view',
-    inputs: [{ name: 'owner', type: 'address' }],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'deployPhase1',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vaultName', type: 'string' },
-          { name: 'vaultSymbol', type: 'string' },
-          { name: 'shareName', type: 'string' },
-          { name: 'shareSymbol', type: 'string' },
-          { name: 'version', type: 'string' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'vault', type: 'bytes32' },
-          { name: 'wrapper', type: 'bytes32' },
-          { name: 'shareOFT', type: 'bytes32' },
-          { name: 'gauge', type: 'bytes32' },
-          { name: 'cca', type: 'bytes32' },
-          { name: 'oracle', type: 'bytes32' },
-          { name: 'oftBootstrap', type: 'bytes32' },
-        ],
-      },
-    ],
-    outputs: [
-      {
-        name: 'out',
-        type: 'tuple',
-        components: [
-          { name: 'oftBootstrapRegistry', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
-        ],
-      },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'deployPhase1WithSalt',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vaultName', type: 'string' },
-          { name: 'vaultSymbol', type: 'string' },
-          { name: 'shareName', type: 'string' },
-          { name: 'shareSymbol', type: 'string' },
-          { name: 'version', type: 'string' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'vault', type: 'bytes32' },
-          { name: 'wrapper', type: 'bytes32' },
-          { name: 'shareOFT', type: 'bytes32' },
-          { name: 'gauge', type: 'bytes32' },
-          { name: 'cca', type: 'bytes32' },
-          { name: 'oracle', type: 'bytes32' },
-          { name: 'oftBootstrap', type: 'bytes32' },
-        ],
-      },
-      { name: 'shareOftSaltOverride', type: 'bytes32' },
-    ],
-    outputs: [
-      {
-        name: 'out',
-        type: 'tuple',
-        components: [
-          { name: 'oftBootstrapRegistry', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
-        ],
-      },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'deployPhase1Core',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vaultName', type: 'string' },
-          { name: 'vaultSymbol', type: 'string' },
-          { name: 'shareName', type: 'string' },
-          { name: 'shareSymbol', type: 'string' },
-          { name: 'version', type: 'string' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'vault', type: 'bytes32' },
-          { name: 'wrapper', type: 'bytes32' },
-          { name: 'shareOFT', type: 'bytes32' },
-          { name: 'gauge', type: 'bytes32' },
-          { name: 'cca', type: 'bytes32' },
-          { name: 'oracle', type: 'bytes32' },
-          { name: 'oftBootstrap', type: 'bytes32' },
-        ],
-      },
-    ],
-    outputs: [
-      {
-        name: 'out',
-        type: 'tuple',
-        components: [
-          { name: 'oftBootstrapRegistry', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
-        ],
-      },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'deployPhase1CoreWithSalt',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vaultName', type: 'string' },
-          { name: 'vaultSymbol', type: 'string' },
-          { name: 'shareName', type: 'string' },
-          { name: 'shareSymbol', type: 'string' },
-          { name: 'version', type: 'string' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'vault', type: 'bytes32' },
-          { name: 'wrapper', type: 'bytes32' },
-          { name: 'shareOFT', type: 'bytes32' },
-          { name: 'gauge', type: 'bytes32' },
-          { name: 'cca', type: 'bytes32' },
-          { name: 'oracle', type: 'bytes32' },
-          { name: 'oftBootstrap', type: 'bytes32' },
-        ],
-      },
-      { name: 'shareOftSaltOverride', type: 'bytes32' },
-    ],
-    outputs: [
-      {
-        name: 'out',
-        type: 'tuple',
-        components: [
-          { name: 'oftBootstrapRegistry', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
-        ],
-      },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'finalizePhase1',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vaultName', type: 'string' },
-          { name: 'vaultSymbol', type: 'string' },
-          { name: 'shareName', type: 'string' },
-          { name: 'shareSymbol', type: 'string' },
-          { name: 'version', type: 'string' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'vault', type: 'bytes32' },
-          { name: 'wrapper', type: 'bytes32' },
-          { name: 'shareOFT', type: 'bytes32' },
-          { name: 'gauge', type: 'bytes32' },
-          { name: 'cca', type: 'bytes32' },
-          { name: 'oracle', type: 'bytes32' },
-          { name: 'oftBootstrap', type: 'bytes32' },
-        ],
-      },
-    ],
-    outputs: [
-      {
-        name: 'out',
-        type: 'tuple',
-        components: [
-          { name: 'oftBootstrapRegistry', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
-        ],
-      },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'finalizePhase1WithSalt',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vaultName', type: 'string' },
-          { name: 'vaultSymbol', type: 'string' },
-          { name: 'shareName', type: 'string' },
-          { name: 'shareSymbol', type: 'string' },
-          { name: 'version', type: 'string' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'vault', type: 'bytes32' },
-          { name: 'wrapper', type: 'bytes32' },
-          { name: 'shareOFT', type: 'bytes32' },
-          { name: 'gauge', type: 'bytes32' },
-          { name: 'cca', type: 'bytes32' },
-          { name: 'oracle', type: 'bytes32' },
-          { name: 'oftBootstrap', type: 'bytes32' },
-        ],
-      },
-      { name: 'shareOftSaltOverride', type: 'bytes32' },
-    ],
-    outputs: [
-      {
-        name: 'out',
-        type: 'tuple',
-        components: [
-          { name: 'oftBootstrapRegistry', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
-        ],
-      },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'deployPhase2AndLaunch',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'creatorTreasury', type: 'address' },
-          { name: 'payoutRecipient', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
-          { name: 'shareSymbol', type: 'string' },
-          { name: 'version', type: 'string' },
-          { name: 'depositAmount', type: 'uint256' },
-          { name: 'requiredRaise', type: 'uint128' },
-          { name: 'floorPriceQ96', type: 'uint256' },
-          { name: 'auctionSteps', type: 'bytes' },
-          { name: 'meteoraAlphaVault', type: 'bytes32' },
-          {
-            name: 'solanaIxs',
-            type: 'tuple[]',
-            components: [
-              { name: 'programId', type: 'bytes32' },
-              { name: 'serializedAccounts', type: 'bytes[]' },
-              { name: 'data', type: 'bytes' },
-            ],
-          },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'vault', type: 'bytes32' },
-          { name: 'wrapper', type: 'bytes32' },
-          { name: 'shareOFT', type: 'bytes32' },
-          { name: 'gauge', type: 'bytes32' },
-          { name: 'cca', type: 'bytes32' },
-          { name: 'oracle', type: 'bytes32' },
-          { name: 'oftBootstrap', type: 'bytes32' },
-        ],
-      },
-    ],
-    outputs: [
-      {
-        name: 'out',
-        type: 'tuple',
-        components: [
-          { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
-          { name: 'oracle', type: 'address' },
-          { name: 'auction', type: 'address' },
-        ],
-      },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'deployPhase2Core',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'creatorTreasury', type: 'address' },
-          { name: 'payoutRecipient', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
-          { name: 'shareSymbol', type: 'string' },
-          { name: 'version', type: 'string' },
-          { name: 'floorPriceQ96', type: 'uint256' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'vault', type: 'bytes32' },
-          { name: 'wrapper', type: 'bytes32' },
-          { name: 'shareOFT', type: 'bytes32' },
-          { name: 'gauge', type: 'bytes32' },
-          { name: 'cca', type: 'bytes32' },
-          { name: 'oracle', type: 'bytes32' },
-          { name: 'oftBootstrap', type: 'bytes32' },
-        ],
-      },
-    ],
-    outputs: [
-      {
-        name: 'out',
-        type: 'tuple',
-        components: [
-          { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
-          { name: 'oracle', type: 'address' },
-          { name: 'auction', type: 'address' },
-        ],
-      },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'finalizePhase2',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
-          { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
-          { name: 'oracle', type: 'address' },
-          { name: 'version', type: 'string' },
-          { name: 'depositAmount', type: 'uint256' },
-          { name: 'requiredRaise', type: 'uint128' },
-          { name: 'floorPriceQ96', type: 'uint256' },
-          { name: 'auctionSteps', type: 'bytes' },
-          { name: 'meteoraAlphaVault', type: 'bytes32' },
-          {
-            name: 'solanaIxs',
-            type: 'tuple[]',
-            components: [
-              { name: 'programId', type: 'bytes32' },
-              { name: 'serializedAccounts', type: 'bytes[]' },
-              { name: 'data', type: 'bytes' },
-            ],
-          },
-        ],
-      },
-    ],
-    outputs: [
-      {
-        name: 'out',
-        type: 'tuple',
-        components: [
-          { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
-          { name: 'oracle', type: 'address' },
-          { name: 'auction', type: 'address' },
-        ],
-      },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'finalizePhase2WithPermit2',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
-          { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
-          { name: 'oracle', type: 'address' },
-          { name: 'version', type: 'string' },
-          { name: 'depositAmount', type: 'uint256' },
-          { name: 'requiredRaise', type: 'uint128' },
-          { name: 'floorPriceQ96', type: 'uint256' },
-          { name: 'auctionSteps', type: 'bytes' },
-          { name: 'meteoraAlphaVault', type: 'bytes32' },
-          {
-            name: 'solanaIxs',
-            type: 'tuple[]',
-            components: [
-              { name: 'programId', type: 'bytes32' },
-              { name: 'serializedAccounts', type: 'bytes[]' },
-              { name: 'data', type: 'bytes' },
-            ],
-          },
-        ],
-      },
-      {
-        name: 'permit',
-        type: 'tuple',
-        components: [
-          {
-            name: 'permitted',
-            type: 'tuple',
-            components: [
-              { name: 'token', type: 'address' },
-              { name: 'amount', type: 'uint256' },
-            ],
-          },
-          { name: 'nonce', type: 'uint256' },
-          { name: 'deadline', type: 'uint256' },
-        ],
-      },
-      { name: 'signature', type: 'bytes' },
-    ],
-    outputs: [
-      {
-        name: 'out',
-        type: 'tuple',
-        components: [
-          { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
-          { name: 'oracle', type: 'address' },
-          { name: 'auction', type: 'address' },
-        ],
-      },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'deployPhase2AndLaunchWithPermit',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'creatorTreasury', type: 'address' },
-          { name: 'payoutRecipient', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
-          { name: 'shareSymbol', type: 'string' },
-          { name: 'version', type: 'string' },
-          { name: 'depositAmount', type: 'uint256' },
-          { name: 'requiredRaise', type: 'uint128' },
-          { name: 'floorPriceQ96', type: 'uint256' },
-          { name: 'auctionSteps', type: 'bytes' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'vault', type: 'bytes32' },
-          { name: 'wrapper', type: 'bytes32' },
-          { name: 'shareOFT', type: 'bytes32' },
-          { name: 'gauge', type: 'bytes32' },
-          { name: 'cca', type: 'bytes32' },
-          { name: 'oracle', type: 'bytes32' },
-          { name: 'oftBootstrap', type: 'bytes32' },
-        ],
-      },
-      {
-        name: 'permit',
-        type: 'tuple',
-        components: [
-          { name: 'deadline', type: 'uint256' },
-          { name: 'v', type: 'uint8' },
-          { name: 'r', type: 'bytes32' },
-          { name: 's', type: 'bytes32' },
-        ],
-      },
-    ],
-    outputs: [
-      {
-        name: 'out',
-        type: 'tuple',
-        components: [
-          { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
-          { name: 'oracle', type: 'address' },
-          { name: 'auction', type: 'address' },
-        ],
-      },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'deployPhase3Strategies',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'version', type: 'string' },
-          { name: 'initialSqrtPriceX96', type: 'uint160' },
-          { name: 'charmVaultName', type: 'string' },
-          { name: 'charmVaultSymbol', type: 'string' },
-          { name: 'ajnaVaultName', type: 'string' },
-          { name: 'ajnaVaultSymbol', type: 'string' },
-          { name: 'charmWeightBps', type: 'uint256' },
-          { name: 'ajnaWeightBps', type: 'uint256' },
-          { name: 'solanaWeightBps', type: 'uint256' },
-          { name: 'ajnaBufferRatioBps', type: 'uint256' },
-          { name: 'ajnaMinBucketIndex', type: 'uint256' },
-          { name: 'ajnaKeeper', type: 'address' },
-          { name: 'solanaKeeper', type: 'address' },
-          { name: 'solanaMaxNavAge', type: 'uint64' },
-          { name: 'solanaMaxNavDeltaBpsPerUpdate', type: 'uint16' },
-          { name: 'solanaMinBaseLiquidityBps', type: 'uint16' },
-          { name: 'solanaBridgeAddress', type: 'address' },
-          { name: 'enableAutoAllocate', type: 'bool' },
-          { name: 'expectedCharmProtocolFeePips', type: 'uint24' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
-          { name: 'creatorCharmStrategy', type: 'bytes32' },
-          { name: 'ajnaVaultAuth', type: 'bytes32' },
-          { name: 'ajnaVault', type: 'bytes32' },
-          { name: 'erc4626StrategyAdapter', type: 'bytes32' },
-          { name: 'solanaStrategy', type: 'bytes32' },
-        ],
-      },
-    ],
-    outputs: [
-      {
-        name: 'out',
-        type: 'tuple',
-        components: [
-          { name: 'v3Pool', type: 'address' },
-          { name: 'charmVault', type: 'address' },
-          { name: 'charmStrategy', type: 'address' },
-          { name: 'ajnaVaultAuth', type: 'address' },
-          { name: 'ajnaVault', type: 'address' },
-          { name: 'ajnaStrategy', type: 'address' },
-          { name: 'solanaStrategy', type: 'address' },
-        ],
-      },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'launchDeferredAuction',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
-          { name: 'version', type: 'string' },
-          { name: 'floorPriceQ96', type: 'uint256' },
-          { name: 'requiredRaise', type: 'uint128' },
-          { name: 'auctionSteps', type: 'bytes' },
-        ],
-      },
-    ],
-    outputs: [{ name: 'auction', type: 'address' }],
-  },
-] as const
-
-// UniversalBytecodeStore (v1 + v2 compatible) helpers.
-const UNIVERSAL_BYTECODE_STORE_POINTERS_ABI = [
-  {
-    type: 'function',
-    name: 'pointers',
-    stateMutability: 'view',
-    inputs: [{ name: 'codeId', type: 'bytes32' }],
-    outputs: [{ type: 'address' }],
-  },
-] as const
-
-// UniversalBytecodeStoreV2 adds chunking for >24KB creation code. v1 stores won't recognize this selector.
-const UNIVERSAL_BYTECODE_STORE_CHUNKCOUNT_ABI = [
-  {
-    type: 'function',
-    name: 'chunkCount',
-    stateMutability: 'view',
-    inputs: [{ name: 'codeId', type: 'bytes32' }],
-    outputs: [{ type: 'uint256' }],
-  },
-] as const
-
-const BATCHER_PHASE1_SPLIT_STATE_VIEW_ABI = [
-  {
-    type: 'function',
-    name: 'phase1SplitStates',
-    stateMutability: 'view',
-    inputs: [{ name: 'baseSalt', type: 'bytes32' }],
-    outputs: [
-      { name: 'oftBootstrapRegistry', type: 'address' },
-      { name: 'vault', type: 'address' },
-      { name: 'wrapper', type: 'address' },
-      { name: 'shareOFT', type: 'address' },
-      { name: 'shareOftSalt', type: 'bytes32' },
-      { name: 'paramsHash', type: 'bytes32' },
-      { name: 'codeIdsHash', type: 'bytes32' },
-      { name: 'coreDone', type: 'bool' },
-      { name: 'finalized', type: 'bool' },
-    ],
-  },
-] as const
-
-const CREATE2_DEPLOYER_STORE_ABI = [
-  {
-    type: 'function',
-    name: 'store',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-] as const
-
+/**
+ * Legacy-props adapter over the shared deploy ui-kit AddressRow so the
+ * existing call sites keep their `address`/`variant` API while rendering
+ * the new truncate/copy/explorer treatment.
+ */
 function AddressRow({
   label,
   address,
@@ -2286,90 +1048,16 @@ function AddressRow({
   /** When the dry run simulated this row's phase successfully, render a green check next to the status. */
   dryRunPassed?: boolean
 }) {
-  const a = address ? String(address) : ''
-  const ok = a && a !== String(ZERO_ADDRESS)
-  const href = ok ? `https://basescan.org/address/${a}` : null
-  const isShared = variant === 'shared'
-  const dryRunCheck = dryRunPassed ? (
-    <span className="text-emerald-300 ml-1" title="Dry run passed for this phase">
-      ✓
-    </span>
-  ) : null
   return (
-    <div
-      className={`flex items-center justify-between gap-4 text-[11px] rounded px-2 py-1 ${
-        isShared ? 'bg-sky-500/8 border border-sky-400/20' : ''
-      }`}
-    >
-      <div className={isShared ? 'text-sky-200/90' : 'text-zinc-500'}>{label}</div>
-      {ok && forkOnly ? (
-        <div className="font-mono text-amber-300/90 break-all text-right">
-          {a} <span className="text-amber-200/70">(local fork)</span>
-          {dryRunCheck}
-        </div>
-      ) : ok && deployed === false ? (
-        <div className="font-mono text-zinc-400 break-all text-right">
-          {a} <span className="text-zinc-600">(pending)</span>
-          {dryRunCheck}
-        </div>
-      ) : ok && deployed === null ? (
-        <div className="font-mono text-zinc-500 break-all text-right">
-          {a} <span className="text-zinc-600">(checking…)</span>
-          {dryRunCheck}
-        </div>
-      ) : ok && href ? (
-        <a
-          href={href}
-          target="_blank"
-          rel="noreferrer"
-          className="font-mono text-zinc-200/90 hover:text-white transition-colors break-all text-right"
-        >
-          {a}
-        </a>
-      ) : (
-        <div className="font-mono text-zinc-600">—</div>
-      )}
-    </div>
+    <DeployUiAddressRow
+      label={label}
+      value={address ?? null}
+      deployed={deployed}
+      forkOnly={forkOnly}
+      shared={variant === 'shared'}
+      dryRunPassed={dryRunPassed}
+    />
   )
-}
-
-function renderRolePolicyRuleLabel(rule: RolePolicyRuleLabel): string {
-  switch (rule) {
-    case 'any':
-      return 'Any'
-    case 'must_equal_owner':
-      return 'Must equal owner'
-    case 'must_be_allowlisted':
-      return 'Must be allowlisted'
-    default:
-      return 'Unknown'
-  }
-}
-
-function renderRolePolicySourceLabel(source: RolePolicySourceLabel): string {
-  switch (source) {
-    case 'request':
-      return 'Request override'
-    case 'creator_default':
-      return 'Creator default'
-    case 'global_default':
-      return 'Global default'
-    default:
-      return 'No policy selected'
-  }
-}
-
-function parseRolePolicyOverrideInput(raw: string): { value: number | null; error: string | null } {
-  const trimmed = raw.trim()
-  if (!trimmed) return { value: null, error: null }
-  if (!/^\d+$/.test(trimmed)) {
-    return { value: null, error: 'Role policy override must be a whole number (0-65535).' }
-  }
-  const parsed = Number(trimmed)
-  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0 || parsed > 65_535) {
-    return { value: null, error: 'Role policy override must be between 0 and 65535.' }
-  }
-  return { value: parsed, error: null }
 }
 
 function DeployVaultBatcher({
@@ -2604,6 +1292,39 @@ function DeployVaultBatcher({
     () => isLocalForkRpcUrl(String(import.meta.env.VITE_BASE_RPC ?? '')),
     [],
   )
+
+  // Presentation-only toast notifications derived from existing state transitions.
+  const toastedDryRunResultRef = useRef<DeploySessionDryRunResponse | null>(null)
+  useEffect(() => {
+    if (!dryRunResult || toastedDryRunResultRef.current === dryRunResult) return
+    toastedDryRunResultRef.current = dryRunResult
+    if (dryRunResult.ok) toast.success(`Dry run passed on ${dryRunResult.forkMode} fork`)
+    else toast.warning(`Dry run failed on ${dryRunResult.forkMode} fork`)
+  }, [dryRunResult])
+  const prevDeployBusyRef = useRef(false)
+  useEffect(() => {
+    if (busy && !prevDeployBusyRef.current) toast.info('Deployment started')
+    prevDeployBusyRef.current = busy
+  }, [busy])
+  const prevDeployPhaseRef = useRef(phase)
+  useEffect(() => {
+    const prev = prevDeployPhaseRef.current
+    prevDeployPhaseRef.current = phase
+    if (phase === prev) return
+    if (phase === 'done') {
+      toast.success('Deployment complete')
+      return
+    }
+    if (prev !== 'idle' && prev !== 'done' && phase !== 'idle') {
+      toast.message(`Phase ${prev.replace('phase', '')} complete`)
+    }
+  }, [phase])
+  const toastedErrorRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!error || toastedErrorRef.current === error) return
+    toastedErrorRef.current = error
+    toast.error('Deployment failed — see details below')
+  }, [error])
   const [rolePolicyOverrideInput, setRolePolicyOverrideInput] = useState('')
   const rolePolicyOverride = useMemo(
     () => parseRolePolicyOverrideInput(rolePolicyOverrideInput),
@@ -7407,30 +6128,6 @@ function DeployVaultBatcher({
     },
     [busy, isTimelineStageEnabled, phase, setupOwnerApprovalCompleted, timelineCurrentStage],
   )
-  const timelineProgressText = useCallback(
-    (stage: DeployTimelineStageId) => deployTimelineProgressLabel(timelineProgressState(stage)),
-    [timelineProgressState],
-  )
-  const timelineProgressTone = useCallback(
-    (stage: DeployTimelineStageId) => {
-      const state = timelineProgressState(stage)
-      if (state === 'disabled') return 'text-zinc-600'
-      if (state === 'inProgress') return 'text-zinc-100'
-      if (state === 'done') return 'text-zinc-300'
-      return phase === 'idle' ? 'text-zinc-500' : 'text-zinc-600'
-    },
-    [phase, timelineProgressState],
-  )
-  const timelineProgressChipTone = useCallback(
-    (stage: DeployTimelineStageId) => {
-      const state = timelineProgressState(stage)
-      if (state === 'disabled') return 'border-zinc-700 bg-zinc-900 text-zinc-500'
-      if (state === 'inProgress') return 'border-blue-400/35 bg-blue-500/15 text-blue-200'
-      if (state === 'done') return 'border-emerald-400/35 bg-emerald-500/15 text-emerald-200'
-      return 'border-zinc-700 bg-zinc-900 text-zinc-400'
-    },
-    [timelineProgressState],
-  )
   const phaseProgressSummary = useMemo(() => {
     const phaseGroups: Array<{ id: 'phase1' | 'phase2' | 'phase3' | 'phase4'; stages: DeployTimelineStageId[] }> = [
       { id: 'phase1', stages: ['phase1Core', 'phase1Finalize'] },
@@ -7451,7 +6148,6 @@ function DeployVaultBatcher({
       remaining: Math.max(total - completed, 0),
     }
   }, [isTimelineStageEnabled, timelineProgressState])
-  const timelineCompletionSummary = `${phaseProgressSummary.completed}/${phaseProgressSummary.total} phases completed`
   const timelineRemainingText =
     phaseProgressSummary.remaining > 0 ? `${phaseProgressSummary.remaining} remaining` : 'No phases remaining'
   const solanaDestinationPubkey = bytes32ToSolanaAddress(batcherSharedInfraQuery.data?.solanaDestination)
@@ -7460,14 +6156,6 @@ function DeployVaultBatcher({
   const solanaIxProgramPubkeys = (ovaultMeshStatus?.solanaProgramIds ?? [])
     .map((value) => bytes32ToSolanaAddress(value))
     .filter((value): value is string => Boolean(value))
-  const renderStageDetailStatus = useCallback(
-    (stage: DeployTimelineStageId) => {
-      const state = timelineProgressState(stage)
-      if (state === 'pending') return null
-      return <div className="text-zinc-700">{deployTimelineProgressLabel(state)}</div>
-    },
-    [timelineProgressState],
-  )
   const dryRunPhaseStatusByName = useMemo(() => {
     const out = new Map<DeploySessionDryRunPhase['name'], DeploySessionDryRunPhase>()
     for (const phase of dryRunResult?.phases ?? []) out.set(phase.name, phase)
@@ -7519,90 +6207,62 @@ function DeployVaultBatcher({
         <div className="text-[11px] text-amber-300/80">{expectedShareOftVanityWarning}</div>
       ) : null}
 
-      <details className="vault-surface-muted group rounded-lg">
-        <summary className="cursor-pointer select-none list-none px-5 sm:px-6 py-4 flex items-center justify-between gap-3">
+      <section className="vault-surface-muted rounded-lg px-5 sm:px-6 py-5 space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
           <div className="min-w-0">
             <div className="text-[11px] font-medium text-zinc-500">Deployment plan</div>
-            <div className="text-[12px] text-zinc-200 truncate">Canonical stage timeline · deterministic contract plan on Base</div>
+            <div className="text-[12px] text-zinc-200">Canonical stage timeline · deterministic contract plan on Base</div>
           </div>
-          <ChevronDown className="w-4 h-4 text-zinc-500 transition-transform group-open:rotate-180" />
-        </summary>
-        <div className="px-5 sm:px-6 pb-5 pt-2">
-          <div className="text-[11px] text-zinc-600 mb-3">
-            Contract addresses are deterministic on Base. BaseScan links appear once each contract is live.
-          </div>
+        </div>
+        <div className="text-[11px] leading-relaxed text-zinc-600">
+          Contract addresses are deterministic on Base. BaseScan links appear once each contract is live.
           {mainnetAddressCodeQuery.data ? (
-            <div className="text-[10px] text-zinc-600 mb-2">
+            <>
+              {' '}
               Local fork mode marks fork-only addresses as <span className="text-amber-200/80">local fork</span> and hides
               BaseScan links for those rows.
-            </div>
+            </>
           ) : null}
-          <div className="rounded-md border border-white/10 bg-white/4 divide-y divide-white/8 backdrop-blur-sm">
-            <div className="px-4 py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="text-[10px] font-medium text-zinc-500">Canonical stage flow</div>
-                <div className="text-right text-[10px] leading-relaxed">
-                  <div className="text-zinc-400">{timelineCompletionSummary}</div>
-                  <div className="text-zinc-600">{timelineRemainingText}</div>
-                </div>
-              </div>
-              <div className="mt-2 rounded-md border border-white/8 bg-black/10 px-3 py-2">
-                <div className="flex items-center justify-between gap-3 text-[11px]">
-                  <div className={timelineProgressTone('setupOwnerApproval')}>Setup owner approval</div>
-                  <div
-                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${timelineProgressChipTone('setupOwnerApproval')}`}
-                  >
-                    {timelineProgressText('setupOwnerApproval')}
-                  </div>
-                </div>
-                <div className="h-px bg-white/8 my-2" />
-                <div className="space-y-2">
-                  <div className="flex items-start justify-between gap-4 text-[11px]">
-                    <div className="text-zinc-500">Workflow status</div>
-                    <div className="text-right min-w-0">
-                      <div
-                        className={`inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-[10px] font-medium mb-1 ${workflowStatusToneClass}`}
-                      >
-                        {workflowStatus.label}
-                      </div>
-                      <div className="text-zinc-500 leading-relaxed break-words">{workflowStatus.detail}</div>
-                    </div>
-                  </div>
-                  <div className="h-px bg-white/8" />
-                  <div className="flex items-center justify-between gap-4 text-[11px]">
-                    <div className="text-zinc-500">Initial deposit</div>
-                    <div className="font-mono text-zinc-200/90">
-                      {formatDeposit(minFirstDeposit)} {depositSymbol}
-                    </div>
-                  </div>
-                  <AddressRow label="Active batcher" address={batcherAddress} forkOnly={isForkOnlyAddress(batcherAddress, true)} />
-                  <div className="flex items-center justify-between gap-4 text-[11px]">
-                    <div className="text-zinc-500">Deploy mode</div>
-                    <div className="font-mono text-zinc-200/90">{strictNoEoaEnforced ? 'no_eoa_strict' : 'default'}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="px-4 py-4">
-              <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
-                <div className={`inline-flex items-center gap-2 ${timelineProgressTone('phase1Core')}`}>
-                  <span>Phase 1: Deploy vault core (vault, wrapper, share token)</span>
-                  {renderDryRunPhaseBadge('phase1')}
-                </div>
-                {href1 ? (
-                  <a className="font-mono text-zinc-300 hover:text-white" href={href1} target="_blank" rel="noreferrer">
-                    view tx
-                  </a>
-                ) : (
-                  renderStageDetailStatus('phase1Core')
-                )}
-              </div>
-              <div className="text-[11px] text-zinc-500 mb-3">
-                Finalize phase-1 state = lock Phase 1 addresses/state so Phase 2 can continue deterministically (
-                {deployTimelineProgressLabel(timelineProgressState('phase1Finalize'))}).
-              </div>
-              <div className="rounded-md border border-white/10 bg-black/10 px-3 py-3 mb-3 space-y-2">
-                <div className="text-[10px] font-medium text-zinc-500">Shared infrastructure (Phase 1)</div>
+        </div>
+
+        <DeploymentOverview
+          completedPhases={phaseProgressSummary.completed}
+          totalPhases={phaseProgressSummary.total}
+          remainingText={timelineRemainingText}
+          workflowLabel={workflowStatus.label}
+          workflowToneClass={workflowStatusToneClass}
+          workflowDetail={workflowStatus.detail}
+          setupOwnerApprovalState={timelineProgressState('setupOwnerApproval')}
+        >
+          <OverviewRow label="Initial deposit">
+            {formatDeposit(minFirstDeposit)} {depositSymbol}
+          </OverviewRow>
+          <AddressRow label="Active batcher" address={batcherAddress} forkOnly={isForkOnlyAddress(batcherAddress, true)} />
+          <OverviewRow label="Deploy mode">{strictNoEoaEnforced ? 'no_eoa_strict' : 'default'}</OverviewRow>
+        </DeploymentOverview>
+
+        <PhaseTimeline>
+          <PhaseCard
+            index="1"
+            title="Phase 1 · Vault core"
+            purpose={
+              <>
+                Deploys the vault, wrapper, and share token. Finalize locks Phase 1 addresses/state so Phase 2 can
+                continue deterministically ({deployTimelineProgressLabel(timelineProgressState('phase1Finalize'))}).
+              </>
+            }
+            state={timelineProgressState('phase1Core')}
+            statusExtras={renderDryRunPhaseBadge('phase1')}
+            headerAction={
+              href1 ? (
+                <a className="font-mono text-[11px] text-zinc-300 hover:text-white" href={href1} target="_blank" rel="noreferrer">
+                  view tx
+                </a>
+              ) : null
+            }
+            addresses={
+              <div className="space-y-3">
+                <AddressTable title="Shared infrastructure (Phase 1)">
                 <AddressRow
                   label="Phase1 module"
                   address={batcherSharedInfraQuery.data?.phase1Module ?? null}
@@ -7643,8 +6303,8 @@ function DeployVaultBatcher({
                     batcherSharedInfraQuery.data?.deployed.registry ?? null,
                   )}
                 />
-              </div>
-              <div className="space-y-2">
+                </AddressTable>
+                <AddressTable title="This deploy">
                 <AddressRow
                   label={`Vault ${vaultTokenBadge}`}
                   address={expected?.vault}
@@ -7666,34 +6326,37 @@ function DeployVaultBatcher({
                   forkOnly={isForkOnlyAddress(expected?.shareOFT, expectedAddressDeployment?.shareOFT ?? null)}
                   dryRunPassed={dryRunPhasePassed('phase1')}
                 />
+                </AddressTable>
               </div>
-            </div>
+            }
+          />
 
-            <div className="px-4 py-4">
-              <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
-                <div className={`inline-flex items-center gap-2 ${timelineProgressTone('phase2Core')}`}>
-                  <span>Phase 2: Deploy gauge/CCA/oracle core</span>
-                  {renderDryRunPhaseBadge('phase2Core')}
-                </div>
-                {href2 ? (
-                  <a className="font-mono text-zinc-300 hover:text-white" href={href2} target="_blank" rel="noreferrer">
-                    view tx
-                  </a>
-                ) : (
-                  renderStageDetailStatus('phase2Core')
-                )}
-              </div>
-              <div className="text-[11px] text-zinc-500 mb-3">
-                Finalize Phase 2 = configure payout routing + ownership handoff (
-                {deployTimelineProgressLabel(timelineProgressState('phase2Finalize'))}).
+          <PhaseCard
+            index="2"
+            title="Phase 2 · Gauge, CCA, oracle"
+            purpose={
+              <>
+                Deploys the gauge controller, CCA strategy, and oracle. Finalize configures payout routing + ownership
+                handoff ({deployTimelineProgressLabel(timelineProgressState('phase2Finalize'))}).
                 {dryRunPhaseStatusByName.get('phase2Finalize')?.status === 'passed' ? (
                   <span className="ml-2 text-emerald-300">✓</span>
                 ) : dryRunPhaseStatusByName.get('phase2Finalize')?.status === 'failed' ? (
                   <span className="ml-2 text-amber-300">✕</span>
                 ) : null}
-              </div>
-              <div className="rounded-md border border-white/10 bg-black/10 px-3 py-3 mb-3 space-y-2">
-                <div className="text-[10px] font-medium text-zinc-500">Shared infrastructure (Phase 2)</div>
+              </>
+            }
+            state={timelineProgressState('phase2Core')}
+            statusExtras={renderDryRunPhaseBadge('phase2Core')}
+            headerAction={
+              href2 ? (
+                <a className="font-mono text-[11px] text-zinc-300 hover:text-white" href={href2} target="_blank" rel="noreferrer">
+                  view tx
+                </a>
+              ) : null
+            }
+          >
+            <AdvancedDetails summary="Shared infrastructure (Phase 2)">
+              <AddressTable>
                 <AddressRow
                   label="Phase2 module"
                   address={batcherSharedInfraQuery.data?.phase2Module ?? null}
@@ -7724,26 +6387,21 @@ function DeployVaultBatcher({
                     batcherSharedInfraQuery.data?.deployed.chainlinkEthUsd ?? null,
                   )}
                 />
-              </div>
-              <div className="mb-3">
-                <ShareBridgeFinalizeWiringPanel
-                  enabled={ovaultMeshEnabledForSession}
-                  publicClient={publicClient}
-                  batcherAddress={batcherAddress}
-                  finalizeParams={pipeAFinalizeParams}
-                  wrapperDeployed={pipeAWrapperDeployed}
-                />
-              </div>
-              <div className="flex items-center justify-between gap-4 text-[11px] mb-3 mt-3">
-                <div className={timelineProgressTone('phase2bOvaultMesh')}>OVault mesh preflight + peer wiring</div>
-                {renderStageDetailStatus('phase2bOvaultMesh')}
-              </div>
-              <div className="text-[11px] text-zinc-500 mb-3">
-                Solana Share Mesh lane wiring belongs to Phase 2b, not the Phase 3 strategy set.
-              </div>
-              {ovaultMeshEnabledForSession ? (
-                <div className="rounded-md border border-white/10 bg-black/10 px-3 py-3 mb-3 space-y-2">
-                  <div className="text-[10px] font-medium text-zinc-500">Solana token lanes</div>
+              </AddressTable>
+            </AdvancedDetails>
+            <ShareBridgeFinalizeWiringPanel
+              enabled={ovaultMeshEnabledForSession}
+              publicClient={publicClient}
+              batcherAddress={batcherAddress}
+              finalizeParams={pipeAFinalizeParams}
+              wrapperDeployed={pipeAWrapperDeployed}
+            />
+            <MeshPreflightPanel
+              enabled={ovaultMeshEnabledForSession}
+              statusBadge={<PhaseProgressBadge state={timelineProgressState('phase2bOvaultMesh')} />}
+            >
+              <AdvancedDetails summary="Solana token lanes">
+                <div className="space-y-2">
                   <AddressRow
                     label="OVaultHubComposer (runtime)"
                     address={batcherSharedInfraQuery.data?.ovaultHubComposer ?? null}
@@ -7850,10 +6508,10 @@ function DeployVaultBatcher({
                       ) : null}
                     </div>
                   ) : null}
-                  {ovaultMeshStatus ? (
-                    <>
-                      <div className="h-px bg-white/10" />
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
+                </div>
+              </AdvancedDetails>
+              {ovaultMeshStatus ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
                         <div className={ovaultMeshStatus.existingMintCompatible ? 'text-emerald-300/80' : 'text-amber-300/90'}>
                           Asset mint compatibility: {ovaultMeshStatus.existingMintCompatible ? 'ready' : 'needs attention'}
                         </div>
@@ -7872,16 +6530,11 @@ function DeployVaultBatcher({
                         <div className="text-zinc-500">
                           Mesh step: <span className="font-mono text-zinc-300/90">{ovaultMeshStatus.meshStep ?? 'pending'}</span>
                         </div>
-                      </div>
-                    </>
-                  ) : null}
                 </div>
-              ) : (
-                <div className="rounded-md border border-white/8 bg-black/5 px-3 py-2 mb-3 text-[10px] text-zinc-600">
-                  OVault mesh lane is disabled for this deployment profile.
-                </div>
-              )}
-              <div className="space-y-2">
+              ) : null}
+            </MeshPreflightPanel>
+            <AdvancedDetails summary="Contract addresses (this deploy)">
+              <AddressTable>
                 <AddressRow
                   label="Gauge controller"
                   address={expected?.gaugeController}
@@ -7928,35 +6581,36 @@ function DeployVaultBatcher({
                   dryRunPassed={dryRunPhasePassed('phase2Finalize')}
                 />
                 <AddressRow label="Creator coin payout recipient (external earnings)" address={currentPayoutRecipient} />
+              </AddressTable>
+            </AdvancedDetails>
+            {payoutMismatch ? (
+              <div className="text-[11px] text-zinc-400">
+                Next step in Phase 2 finalize: creator coin payout recipient (creatorCoinPayoutRecipient lane) will
+                move to{' '}
+                <span className="font-mono text-zinc-200">
+                  {expectedPayoutRouter ? shortAddress(expectedPayoutRouter) : 'the configured payout router'}
+                </span>
+                . This is the normal routing path via PayoutRouter for PPS accretion.
               </div>
-              {payoutMismatch ? (
-                <div className="mt-2 text-[11px] text-zinc-400">
-                  Next step in Phase 2 finalize: creator coin payout recipient (creatorCoinPayoutRecipient lane) will
-                  move to{' '}
-                  <span className="font-mono text-zinc-200">
-                    {expectedPayoutRouter ? shortAddress(expectedPayoutRouter) : 'the configured payout router'}
-                  </span>
-                  . This is the normal routing path via PayoutRouter for PPS accretion.
-                </div>
-              ) : null}
-            </div>
+            ) : null}
+          </PhaseCard>
 
-            <div className="px-4 py-4">
-              <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
-                <div className={`inline-flex items-center gap-2 ${timelineProgressTone('phase3Strategies')}`}>
-                  <span>Phase 3: Deploy + register strategies (Charm, Ajna)</span>
-                  {renderDryRunPhaseBadge('phase3')}
-                </div>
-                {href3 ? (
-                  <a className="font-mono text-zinc-300 hover:text-white" href={href3} target="_blank" rel="noreferrer">
-                    view tx
-                  </a>
-                ) : (
-                  renderStageDetailStatus('phase3Strategies')
-                )}
-              </div>
-              <div className="rounded-md border border-white/10 bg-black/10 px-3 py-3 mb-3 space-y-2">
-                <div className="text-[10px] font-medium text-zinc-500">Shared infrastructure (Phase 3)</div>
+          <PhaseCard
+            index="3"
+            title="Phase 3 · Strategies"
+            purpose="Deploys and registers the Charm and Ajna strategies, plus this vault's dedicated emergency-safety contracts."
+            state={timelineProgressState('phase3Strategies')}
+            statusExtras={renderDryRunPhaseBadge('phase3')}
+            headerAction={
+              href3 ? (
+                <a className="font-mono text-[11px] text-zinc-300 hover:text-white" href={href3} target="_blank" rel="noreferrer">
+                  view tx
+                </a>
+              ) : null
+            }
+          >
+            <AdvancedDetails summary="Shared infrastructure (Phase 3)">
+              <AddressTable>
                 <AddressRow
                   label="Phase3 helper"
                   address={batcherSharedInfraQuery.data?.phase3Helper ?? null}
@@ -7987,8 +6641,9 @@ function DeployVaultBatcher({
                     batcherSharedInfraQuery.data?.deployed.utilsHelper ?? null,
                   )}
                 />
-              </div>
-              <div className="rounded-md border border-sky-400/20 bg-sky-500/8 px-3 py-3 mt-3 mb-3 space-y-2">
+              </AddressTable>
+            </AdvancedDetails>
+            <div className="rounded-xl border border-sky-400/15 bg-sky-500/[0.05] px-3.5 py-3 space-y-2">
                 <div className="text-[10px] font-medium text-sky-200/90">Emergency safety wiring (this deploy)</div>
                 <div className="text-[11px] text-sky-100/80 leading-relaxed">
                   Every vault gets its own fresh `CreatorOImpairmentClaims` and `CreatorORecoveryEscrow` pair, deployed and
@@ -8023,8 +6678,9 @@ function DeployVaultBatcher({
                   deployed={null}
                   variant="shared"
                 />
-              </div>
-              <div className="space-y-2">
+            </div>
+            <AdvancedDetails summary="Contract addresses (this deploy)">
+              <AddressTable>
                 <AddressRow
                   label="Uniswap v3 pool (CREATOR/USDC)"
                   address={phase3Expected?.v3Pool}
@@ -8084,34 +6740,36 @@ function DeployVaultBatcher({
                   )}
                   dryRunPassed={dryRunPhasePassed('phase3')}
                 />
-              </div>
+              </AddressTable>
               <div className="mt-2 text-[11px] text-zinc-600">
                 Phase-3 addresses are projected from current factory state and CREATE2 salts.
               </div>
-              {phase3LikelyMissingHelperConfig ? (
-                <div className="mt-1 text-[11px] text-amber-300/80">
-                  Some Phase-3 predicted addresses require batcher helper/runtime config that is unavailable on the
-                  current deployment batcher, so they remain hidden until runtime config is complete in the server
-                  deploy runtime config source (`/api/deploy/config`).
-                </div>
-              ) : null}
-            </div>
-
-            <div className="px-4 py-4">
-              <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
-                <div className={`inline-flex items-center gap-2 ${timelineProgressTone('phase4Launch')}`}>
-                  <span>Phase 4: Launch Auction</span>
-                  {renderDryRunPhaseBadge('phase4')}
-                </div>
-                {href4 ? (
-                  <a className="font-mono text-zinc-300 hover:text-white" href={href4} target="_blank" rel="noreferrer">
-                    view tx
-                  </a>
-                ) : (
-                  renderStageDetailStatus('phase4Launch')
-                )}
+            </AdvancedDetails>
+            {phase3LikelyMissingHelperConfig ? (
+              <div className="text-[11px] text-amber-300/80">
+                Some Phase-3 predicted addresses require batcher helper/runtime config that is unavailable on the
+                current deployment batcher, so they remain hidden until runtime config is complete in the server
+                deploy runtime config source (`/api/deploy/config`).
               </div>
-              <div className="space-y-2">
+            ) : null}
+          </PhaseCard>
+
+          <PhaseCard
+            index="4"
+            title="Phase 4 · Launch auction"
+            purpose="Starts the CCA launch auction. The auction address appears after Phase 4 writes CCA auction state."
+            state={timelineProgressState('phase4Launch')}
+            statusExtras={renderDryRunPhaseBadge('phase4')}
+            headerAction={
+              href4 ? (
+                <a className="font-mono text-[11px] text-zinc-300 hover:text-white" href={href4} target="_blank" rel="noreferrer">
+                  view tx
+                </a>
+              ) : null
+            }
+            isLast
+            addresses={
+              <AddressTable>
                 <AddressRow
                   label="Auction"
                   address={phase4AuctionAddress}
@@ -8119,90 +6777,61 @@ function DeployVaultBatcher({
                   forkOnly={isForkOnlyAddress(phase4AuctionAddress, phase4AuctionDeployment)}
                   dryRunPassed={dryRunPhasePassed('phase4')}
                 />
+              </AddressTable>
+            }
+          >
+            {marketFloorText ? (
+              <div className="flex items-center justify-between gap-4 text-[11px]">
+                <div className="text-zinc-500">CCA floor (reference)</div>
+                <div className="text-zinc-300">{marketFloorText}</div>
               </div>
-              <div className="mt-2 text-[11px] text-zinc-600">
-                Auction address appears after Phase 4 writes CCA auction state.
-              </div>
-              {marketFloorText ? (
-                <div className="mt-2 flex items-center justify-between gap-4 text-[11px]">
-                  <div className="text-zinc-500">CCA floor (reference)</div>
-                  <div className="text-zinc-300">{marketFloorText}</div>
-                </div>
-              ) : null}
-              <div className="mt-2 flex items-center justify-between gap-4 text-[11px]">
-                <div className={timelineProgressTone('cleanup')}>Cleanup temporary deploy signer</div>
-                {renderStageDetailStatus('cleanup')}
-              </div>
+            ) : null}
+            <div className="flex items-center justify-between gap-4 text-[11px]">
+              <div className="text-zinc-500">Cleanup temporary deploy signer</div>
+              <PhaseProgressBadge state={timelineProgressState('cleanup')} />
             </div>
-          </div>
-          <div className="mt-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={busy || exportBusy || dryRunBusy || expectedQueryLoading || !expected}
-                onClick={() => void exportPlan()}
-              >
-                {exportBusy ? 'Preparing plan…' : 'Export Plan JSON'}
-              </Button>
-              {dryRunLocalForkRpc ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={busy || exportBusy || dryRunBusy || expectedQueryLoading || !expected}
-                  onClick={() => void runDryRun()}
-                >
-                  {dryRunBusy ? 'Running dry-run…' : 'Run dry-run'}
-                </Button>
-              ) : (
-                <div className="text-[11px] text-zinc-500">
-                  Dry-run is local-fork-only. Start local mode with{' '}
-                  <span className="font-mono text-zinc-300">pnpm run dev:deploy-dry-run</span>.
-                </div>
-              )}
-            </div>
-            {exportStatus ? <div className="text-[11px] text-zinc-500">{exportStatus}</div> : null}
-          </div>
-          {dryRunError ? (
-            <div className="mt-2 space-y-2">
-              <div className="text-[11px] text-amber-300/80">{dryRunError}</div>
-              {isVanityPaidFeatureError(dryRunError) ? (
+          </PhaseCard>
+          </PhaseTimeline>
+
+          <DryRunPanel
+            busy={dryRunBusy}
+            ok={dryRunResult ? dryRunResult.ok : null}
+            forkMode={dryRunResult?.forkMode ?? null}
+            errorText={dryRunError}
+            errorAction={
+              dryRunError && isVanityPaidFeatureError(dryRunError) ? (
                 <Link to={creatorStrategyFeaturesHref} className="inline-flex text-[11px] text-blue-300 hover:text-blue-200">
                   Activate vanity feature access
                 </Link>
-              ) : null}
+              ) : null
+            }
+            failureDetail={
+              dryRunResult?.failure ? (
+                <div className="text-[11px] text-zinc-400 leading-relaxed">
+                  First failure: <span className="text-zinc-200">{dryRunResult.failure.phase}</span> call{' '}
+                  <span className="font-mono text-zinc-200">{dryRunResult.failure.callIndex + 1}</span> to{' '}
+                  <span className="font-mono text-zinc-200">{shortAddress(dryRunResult.failure.to)}</span>.
+                  <div className="mt-1 text-amber-300/80">{dryRunResult.failure.error}</div>
+                </div>
+              ) : null
+            }
+          >
+            <div className="space-y-1">
+              <div className="text-[11px] text-zinc-400">
+                Deploy runs as <span className="text-white">ERC‑4337 UserOperations</span> from{' '}
+                <span className="font-mono text-zinc-200">{shortAddress(owner)}</span>.
+              </div>
+              {typeof smartWalletTokenBalance === 'bigint' ? (
+                <div className="text-[11px] text-zinc-500">
+                  Smart wallet balance:{' '}
+                  <span className="text-zinc-200 font-mono">{formatDeposit(smartWalletTokenBalance)}</span> {depositSymbol}
+                </div>
+              ) : (
+                <div className="text-[11px] text-zinc-600">Checking smart wallet balance…</div>
+              )}
             </div>
-          ) : null}
-          {dryRunBusy ? <div className="mt-3 text-[11px] text-blue-300/90">Dry run running on local fork…</div> : null}
-          {dryRunResult ? (
-            <div className={dryRunResult.ok ? 'mt-3 text-[11px] text-green-400/80' : 'mt-3 text-[11px] text-amber-300/80'}>
-              {dryRunResult.ok ? `Dry run passed on ${dryRunResult.forkMode} fork.` : `Dry run failed on ${dryRunResult.forkMode} fork.`}
-            </div>
-          ) : null}
-          {dryRunResult?.failure ? (
-            <div className="mt-1 text-[11px] text-zinc-400 leading-relaxed">
-              First failure: <span className="text-zinc-200">{dryRunResult.failure.phase}</span> call{' '}
-              <span className="font-mono text-zinc-200">{dryRunResult.failure.callIndex + 1}</span> to{' '}
-              <span className="font-mono text-zinc-200">{shortAddress(dryRunResult.failure.to)}</span>.
-              <div className="mt-1 text-amber-300/80">{dryRunResult.failure.error}</div>
-            </div>
-          ) : null}
-        </div>
-      </details>
-
-      <div className="vault-surface-muted rounded-lg p-5 sm:p-6 space-y-2">
-        <div className="text-[11px] text-zinc-400">
-          Deploy runs as <span className="text-white">ERC‑4337 UserOperations</span> from{' '}
-          <span className="font-mono text-zinc-200">{shortAddress(owner)}</span>.
-        </div>
-        {typeof smartWalletTokenBalance === 'bigint' ? (
-          <div className="text-[11px] text-zinc-500">
-            Smart wallet balance: <span className="text-zinc-200 font-mono">{formatDeposit(smartWalletTokenBalance)}</span> {depositSymbol}
-          </div>
-        ) : (
-          <div className="text-[11px] text-zinc-600">Checking smart wallet balance…</div>
-        )}
-      </div>
+          </DryRunPanel>
+      </section>
 
       {runtimeBatcherConfigError && !runtimeBatcherWarningDismissed ? (
         <div className="rounded-lg border border-amber-500/35 bg-linear-to-b from-amber-500/16 to-amber-500/9 p-3 space-y-1 backdrop-blur-sm">
@@ -8222,168 +6851,198 @@ function DeployVaultBatcher({
         </div>
       ) : null}
 
-      <div className="rounded-lg border border-white/10 bg-white/4 p-3 space-y-2 backdrop-blur-sm">
+      <RolePolicyHealthPanel statusLabel={rolePolicyStatus.label} statusToneClass={rolePolicyStatus.tone}>
         <div className="flex items-center justify-between gap-3">
-          <div className="text-[10px] font-medium text-zinc-500">Role policy health</div>
-          <div className={`text-[11px] ${rolePolicyStatus.tone}`}>{rolePolicyStatus.label}</div>
+          <div className="text-zinc-500">Effective source</div>
+          <div className="text-zinc-300">
+            {rolePolicyDiagnostics
+              ? renderRolePolicySourceLabel(rolePolicyDiagnostics.effectiveResolution.source)
+              : rolePolicyDiagnosticsQuery.isFetching
+                ? 'Loading...'
+                : 'Unavailable'}
+          </div>
         </div>
-        <div className="space-y-1 text-[11px]">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-zinc-500">Effective source</div>
-            <div className="text-zinc-300">
-              {rolePolicyDiagnostics
-                ? renderRolePolicySourceLabel(rolePolicyDiagnostics.effectiveResolution.source)
-                : rolePolicyDiagnosticsQuery.isFetching
-                  ? 'Loading...'
-                  : 'Unavailable'}
-            </div>
+        <div className="flex items-center justify-between gap-3">
+          <label htmlFor="role-policy-override" className="text-zinc-500">
+            Canary override
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              id="role-policy-override"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={rolePolicyOverrideInput}
+              onChange={(event) => setRolePolicyOverrideInput(event.target.value)}
+              placeholder="none"
+              className="w-24 rounded border border-white/10 bg-black/20 px-2 py-1 text-[11px] font-mono text-zinc-200 outline-hidden focus:border-blue-400/60"
+            />
+            {rolePolicyOverrideInput.trim().length > 0 ? (
+              <button
+                type="button"
+                className="text-[10px] text-zinc-400 hover:text-zinc-200 underline underline-offset-2"
+                onClick={() => setRolePolicyOverrideInput('')}
+              >
+                Clear
+              </button>
+            ) : null}
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <label htmlFor="role-policy-override" className="text-zinc-500">
-              Canary override
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                id="role-policy-override"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={rolePolicyOverrideInput}
-                onChange={(event) => setRolePolicyOverrideInput(event.target.value)}
-                placeholder="none"
-                className="w-24 rounded border border-white/10 bg-black/20 px-2 py-1 text-[11px] font-mono text-zinc-200 outline-hidden focus:border-blue-400/60"
-              />
-              {rolePolicyOverrideInput.trim().length > 0 ? (
-                <button
-                  type="button"
-                  className="text-[10px] text-zinc-400 hover:text-zinc-200 underline underline-offset-2"
-                  onClick={() => setRolePolicyOverrideInput('')}
-                >
-                  Clear
-                </button>
-              ) : null}
-            </div>
+        </div>
+        {rolePolicyOverride.error ? (
+          <div className="text-[10px] text-amber-300/90">{rolePolicyOverride.error}</div>
+        ) : null}
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-zinc-500">Effective policy ID</div>
+          <div className="font-mono text-zinc-300">
+            {rolePolicyDiagnostics?.effectiveResolution.rolePolicyId ?? 'none'}
           </div>
-          {rolePolicyOverride.error ? (
-            <div className="text-[10px] text-amber-300/90">{rolePolicyOverride.error}</div>
-          ) : null}
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-zinc-500">Effective policy ID</div>
-            <div className="font-mono text-zinc-300">
-              {rolePolicyDiagnostics?.effectiveResolution.rolePolicyId ?? 'none'}
-            </div>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-zinc-500">Batcher default policy ID</div>
+          <div className="font-mono text-zinc-300">
+            {rolePolicyDiagnostics?.onchainBatcherDefaults.rolePolicyId ?? 'none'}
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-zinc-500">Batcher default policy ID</div>
-            <div className="font-mono text-zinc-300">
-              {rolePolicyDiagnostics?.onchainBatcherDefaults.rolePolicyId ?? 'none'}
+        </div>
+        {rolePolicyDiagnostics?.effectivePolicyReadout ? (
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-zinc-500">Owner tuple validation</div>
+              <div
+                className={
+                  rolePolicyDiagnostics.effectivePolicyReadout.ownerTupleValidation.passes
+                    ? 'text-emerald-300/90'
+                    : 'text-red-300/90'
+                }
+              >
+                {rolePolicyDiagnostics.effectivePolicyReadout.ownerTupleValidation.passes ? 'pass' : 'fail'}
+              </div>
             </div>
-          </div>
-          {rolePolicyDiagnostics?.effectivePolicyReadout ? (
-            <>
+            <div className="grid grid-cols-1 gap-1 text-[10px] text-zinc-400">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-zinc-500">Owner tuple validation</div>
-                <div
-                  className={
-                    rolePolicyDiagnostics.effectivePolicyReadout.ownerTupleValidation.passes
-                      ? 'text-emerald-300/90'
-                      : 'text-red-300/90'
-                  }
-                >
-                  {rolePolicyDiagnostics.effectivePolicyReadout.ownerTupleValidation.passes ? 'pass' : 'fail'}
+                <div>Management rule</div>
+                <div className="text-zinc-300">
+                  {renderRolePolicyRuleLabel(rolePolicyDiagnostics.effectivePolicyReadout.rules.management)}
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-1 text-[10px] text-zinc-400">
-                <div className="flex items-center justify-between gap-3">
-                  <div>Management rule</div>
-                  <div className="text-zinc-300">
-                    {renderRolePolicyRuleLabel(rolePolicyDiagnostics.effectivePolicyReadout.rules.management)}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <div>Keeper rule</div>
-                  <div className="text-zinc-300">
-                    {renderRolePolicyRuleLabel(rolePolicyDiagnostics.effectivePolicyReadout.rules.keeper)}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <div>Emergency admin rule</div>
-                  <div className="text-zinc-300">
-                    {renderRolePolicyRuleLabel(rolePolicyDiagnostics.effectivePolicyReadout.rules.emergencyAdmin)}
-                  </div>
+              <div className="flex items-center justify-between gap-3">
+                <div>Keeper rule</div>
+                <div className="text-zinc-300">
+                  {renderRolePolicyRuleLabel(rolePolicyDiagnostics.effectivePolicyReadout.rules.keeper)}
                 </div>
               </div>
-              {!rolePolicyDiagnostics.effectivePolicyReadout.ownerTupleValidation.passes &&
-              rolePolicyDiagnostics.effectivePolicyReadout.ownerTupleValidation.error ? (
-                <div className="text-[10px] text-amber-300/90">
-                  {rolePolicyDiagnostics.effectivePolicyReadout.ownerTupleValidation.error}
+              <div className="flex items-center justify-between gap-3">
+                <div>Emergency admin rule</div>
+                <div className="text-zinc-300">
+                  {renderRolePolicyRuleLabel(rolePolicyDiagnostics.effectivePolicyReadout.rules.emergencyAdmin)}
                 </div>
-              ) : null}
-            </>
-          ) : rolePolicyDiagnosticsQuery.isError ? (
-            <div className="text-[10px] text-amber-300/80">
-              {(rolePolicyDiagnosticsQuery.error as Error | null)?.message ?? 'Role policy diagnostics are unavailable.'}
+              </div>
             </div>
-          ) : null}
-        </div>
-      </div>
+            {!rolePolicyDiagnostics.effectivePolicyReadout.ownerTupleValidation.passes &&
+            rolePolicyDiagnostics.effectivePolicyReadout.ownerTupleValidation.error ? (
+              <div className="text-[10px] text-amber-300/90">
+                {rolePolicyDiagnostics.effectivePolicyReadout.ownerTupleValidation.error}
+              </div>
+            ) : null}
+          </>
+        ) : rolePolicyDiagnosticsQuery.isError ? (
+          <div className="text-[10px] text-amber-300/80">
+            {(rolePolicyDiagnosticsQuery.error as Error | null)?.message ?? 'Role policy diagnostics are unavailable.'}
+          </div>
+        ) : null}
+      </RolePolicyHealthPanel>
 
-      {/* Show deploy button only if we have a valid ERC-4337 path */}
-      {hasDeploySignerPath ? (
-        <div className="space-y-2">
-          <div className="text-[10px] text-green-400/80 flex items-center gap-1">
-            <span>✓</span>{' '}
-            {strictNoEoaEnforced
-              ? hasPrivyEmbeddedOwnerSigner
-                ? 'Gas-free ERC-4337 via preconfigured owner signer'
-                : 'Gas-free ERC-4337 via preconfigured app smart wallet owner'
-              : `Gas-free ERC-4337 ${
-                  isCoinbaseWalletDirect
-                    ? 'via Coinbase Wallet'
-                    : connectedEoaOwnerReady
-                      ? 'via connected signer'
-                      : hasPrivyEmbeddedOwnerSigner
-                        ? 'via preconfigured owner signer'
-                        : 'via app smart wallet owner'
-                }`}
-          </div>
-          <Button
-            type="button"
-            variant="primary"
-            className="w-full rounded-lg"
-            onClick={() => void submit()}
-            disabled={disabled || exportBusy || dryRunBusy}
-          >
-            {busy ? 'Deploying…' : '1‑Click Deploy (Gas-Free)'}
-          </Button>
-        </div>
-      ) : (
-        <div className="rounded-lg border border-amber-500/35 bg-linear-to-b from-amber-500/16 to-amber-500/9 p-4 space-y-3 backdrop-blur-sm">
-          <div className="text-sm font-medium text-amber-200">
-            {strictNoEoaEnforced ? 'No-EOA deploy requirements' : 'ERC-4337 Setup Required'}
-          </div>
-          {strictNoEoaEnforced ? (
-            <div className="text-[11px] text-amber-200/70 leading-relaxed">{NO_EOA_STRICT_BLOCKER}</div>
-          ) : (
-            <>
-              <div className="text-[11px] text-amber-200/70 leading-relaxed">
+      {!hasDeploySignerPath ? (
+        <BlockedStateCard
+          tone="warning"
+          title={strictNoEoaEnforced ? 'No-EOA deploy requirements' : 'ERC-4337 setup required'}
+          description={
+            strictNoEoaEnforced ? (
+              NO_EOA_STRICT_BLOCKER
+            ) : (
+              <>
                 All deployments use gas-sponsored ERC-4337 UserOperations.
-              </div>
-              <div className="text-[11px] text-zinc-400 space-y-1">
-                <div>Option 1: Connect with <strong className="text-amber-200">Coinbase Wallet</strong> (instant)</div>
-                <div>Option 2: Add your app smart wallet as owner (EIP-1271 setup below)</div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {disabledReason && !busy ? (
-        <div className="text-[11px] text-amber-300/80">{disabledReason}</div>
+                <span className="mt-1 block text-zinc-400">
+                  Option 1: Connect with <strong className="text-amber-200">Coinbase Wallet</strong> (instant). Option
+                  2: Add your app smart wallet as owner (EIP-1271 setup below).
+                </span>
+              </>
+            )
+          }
+        />
       ) : null}
 
+      <DeployActionBar
+        secondary={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={busy || exportBusy || dryRunBusy || expectedQueryLoading || !expected}
+              onClick={() => void exportPlan()}
+            >
+              {exportBusy ? 'Preparing plan…' : 'Export Plan JSON'}
+            </Button>
+            {dryRunLocalForkRpc ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busy || exportBusy || dryRunBusy || expectedQueryLoading || !expected}
+                onClick={() => void runDryRun()}
+              >
+                {dryRunBusy ? 'Running dry-run…' : 'Run dry-run'}
+              </Button>
+            ) : null}
+          </>
+        }
+        note={
+          exportStatus ? (
+            exportStatus
+          ) : !dryRunLocalForkRpc ? (
+            <>
+              Dry-run is local-fork-only. Start local mode with{' '}
+              <span className="font-mono text-zinc-300">pnpm run dev:deploy-dry-run</span>.
+            </>
+          ) : null
+        }
+        supportingCopy={
+          hasDeploySignerPath ? (
+            <span className="inline-flex items-center gap-1 text-green-400/80">
+              <span aria-hidden>✓</span>{' '}
+              {strictNoEoaEnforced
+                ? hasPrivyEmbeddedOwnerSigner
+                  ? 'Gas-free ERC-4337 via preconfigured owner signer'
+                  : 'Gas-free ERC-4337 via preconfigured app smart wallet owner'
+                : `Gas-free ERC-4337 ${
+                    isCoinbaseWalletDirect
+                      ? 'via Coinbase Wallet'
+                      : connectedEoaOwnerReady
+                        ? 'via connected signer'
+                        : hasPrivyEmbeddedOwnerSigner
+                          ? 'via preconfigured owner signer'
+                          : 'via app smart wallet owner'
+                  }`}
+            </span>
+          ) : null
+        }
+        primary={
+          hasDeploySignerPath ? (
+            <Button
+              type="button"
+              variant="primary"
+              className="w-full rounded-lg sm:w-auto sm:min-w-64"
+              onClick={() => void submit()}
+              disabled={disabled || exportBusy || dryRunBusy}
+            >
+              {busy ? 'Deploying…' : '1‑Click Deploy (Gas-Free)'}
+            </Button>
+          ) : null
+        }
+        disabledReason={disabledReason && !busy ? disabledReason : null}
+      />
+
       {error ? (
-        <div className="space-y-2">
-          <div className="text-[11px] text-red-400/90 whitespace-pre-wrap">
+        <div className="space-y-2 rounded-xl border border-red-500/20 bg-red-500/[0.05] px-4 py-3.5" role="alert">
+          <div className="text-[10px] font-medium uppercase tracking-wider text-red-300/90">Deployment failed</div>
+          <div className="text-[11px] leading-relaxed text-red-300/80 whitespace-pre-wrap break-words">
             {/* If error contains a transaction hash, make it clickable */}
             {error.includes('0x') && error.match(/0x[a-fA-F0-9]{64}/) ? (
               <>
@@ -9564,12 +8223,6 @@ function DeployVaultMain() {
   const isCreatorCoin = coinTypeUpper === 'CREATOR'
   const coinTypeLabel =
     coinTypeUpper === 'CREATOR' ? 'Creator Coin' : coinTypeUpper === 'CONTENT' ? 'Content Coin' : 'Coin'
-  const coinTypePillClass =
-    coinTypeUpper === 'CREATOR'
-      ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-      : coinTypeUpper === 'CONTENT'
-        ? 'bg-amber-500/10 border border-amber-500/20 text-amber-300'
-        : 'bg-zinc-500/10 border border-zinc-500/20 text-zinc-300'
 
   const coinCreatedAtMs = useMemo(() => {
     const raw = typeof zoraCoin?.createdAt === 'string' ? zoraCoin.createdAt.trim() : ''
@@ -10248,18 +8901,16 @@ function DeployVaultMain() {
 
   return (
     <div className="vault-shell relative">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(120%_100%_at_50%_0%,rgba(37,99,235,0.10),rgba(37,99,235,0.03)_45%,transparent_70%)]"
+      />
       <PageMeta title={META.deploy.title} description={META.deploy.description} canonicalPath="/deploy/vault" />
       <section className="cinematic-section">
         <div className="max-w-[1400px] mx-auto px-6">
           <div className="space-y-8">
             {/* Header */}
-            <div className="flex items-start justify-between gap-6">
-              <div className="space-y-2">
-                <span className="label">Deploy</span>
-                <h1 className="headline text-4xl sm:text-6xl">Deploy Vault</h1>
-                <p className="text-zinc-600 text-sm font-light">
-                  Deploy a vault for your Creator Coin on Base. Only the creator or current payout recipient can deploy.
-                </p>
+            <DeployHero>
                 <div className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 p-1 text-[11px]">
                   <Link className="rounded-lg px-3 py-1 text-zinc-400 hover:text-white" to="/deploy/coin">
                     Coin
@@ -10315,17 +8966,12 @@ function DeployVaultMain() {
                     ) : null}
                   </motion.div>
                 ) : null}
-              </div>
-              <div className="vault-pill normal-case tracking-[0.02em] px-3 py-1 gap-2">
-                <img src="/protocols/base.png" alt="" aria-hidden="true" loading="lazy" className="w-3.5 h-3.5 opacity-90" />
-                Base
-              </div>
-            </div>
+            </DeployHero>
 
           {oneTimePrivyOwnerApprovalNeeded ? (
-              <div id="owner-approval-setup" className="rounded-lg border border-purple-500/28 bg-linear-to-b from-purple-500/16 to-purple-500/8 p-4 space-y-3 backdrop-blur-sm">
-                <div className="text-sm font-medium text-purple-200">One-time wallet approval (recommended first step)</div>
-                <div className="text-[11px] text-purple-200/75 leading-relaxed">
+              <div id="owner-approval-setup" className="rounded-xl border border-brand-primary/25 bg-linear-to-b from-brand-primary/12 to-brand-primary/4 p-4 space-y-3 backdrop-blur-sm">
+                <div className="text-sm font-medium text-brand-accent">One-time wallet approval (recommended first step)</div>
+                <div className="text-[11px] text-zinc-400 leading-relaxed">
                   Before deploy, approve your app Privy wallet once as an owner of your canonical Coinbase Smart Wallet (EIP-1271).
                   This enables deploy-session and agent server signing. Sponsored user actions continue through your canonical smart wallet.
                 </div>
@@ -10344,7 +8990,7 @@ function DeployVaultMain() {
                         href={addPrivySmartWalletOwnerProlinkUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded-md border border-purple-300/30 bg-purple-400/10 px-2 py-1 text-[10px] text-purple-100 hover:bg-purple-400/20"
+                        className="inline-flex items-center gap-1 rounded-md border border-brand-primary/30 bg-brand-primary/10 px-2 py-1 text-[10px] text-brand-accent hover:bg-brand-primary/20"
                       >
                         Open in Base App <ExternalLink className="w-3 h-3" />
                       </a>
@@ -10487,10 +9133,11 @@ function DeployVaultMain() {
           })()}
 
           {!alreadyDeployed && isAdmin ? (
-              <div className="rounded-lg border border-amber-500/25 bg-linear-to-b from-amber-500/16 to-amber-500/8 p-4 space-y-2 backdrop-blur-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-[11px] uppercase tracking-wide text-amber-200">Launch checklist (admin)</div>
-                  <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+              <ReadinessPanel
+                title="Launch checklist (admin)"
+                checks={firstLaunchChecklist.map((item) => ({ label: item.label, ok: item.ok, hint: item.hint }))}
+                headerControls={
+                  <label className="flex items-center gap-2">
                     <span>Min coin age (days)</span>
                     <input
                       type="number"
@@ -10504,24 +9151,11 @@ function DeployVaultMain() {
                         const clamped = Math.max(0, Math.min(3650, Math.floor(n)))
                         setMinCoinAgeDays(clamped)
                       }}
-                      className="w-16 bg-black/30 border border-zinc-900/70 rounded-md px-2 py-1 text-zinc-200 font-mono text-[11px] outline-none"
+                      className="w-16 rounded-md border border-zinc-900/70 bg-black/30 px-2 py-1 font-mono text-[11px] text-zinc-200 outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/60"
                     />
-                  </div>
-                </div>
-                <div className="space-y-1 text-xs text-zinc-300">
-                  {firstLaunchChecklist.map((item) => (
-                    <div key={item.label} className="flex items-start gap-2">
-                      <span className={`mt-[5px] h-1.5 w-1.5 rounded-full ${item.ok ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                      <div className="flex-1 min-w-0">
-                        <span>{item.label}</span>
-                        {item.hint ? (
-                          <span className="ml-2 text-[11px] text-zinc-500 font-mono">{item.hint}</span>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                  </label>
+                }
+              />
             ) : null}
 
             {!alreadyDeployed && (
@@ -10541,44 +9175,19 @@ function DeployVaultMain() {
                       <span className="text-zinc-200">Creator Coins</span>.
                     </div>
                   ) : baseSymbol ? (
-                    <div className="space-y-4">
-                      <div className="flex items-start justify-between gap-6">
-                        <div className="flex items-center gap-4 min-w-0">
-                          {zoraCoin?.mediaContent?.previewImage?.medium ? (
-                            <img
-                              src={zoraCoin.mediaContent.previewImage.medium}
-                              alt={zoraCoin.symbol ? String(zoraCoin.symbol) : 'Coin'}
-                              className="w-14 h-14 rounded-full object-cover"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="w-14 h-14 rounded-full bg-linear-to-br from-brand-primary/20 to-brand-accent/20 flex items-center justify-center text-sm font-medium text-brand-accent">
-                              {String(baseSymbol).slice(0, 2).toUpperCase()}
-                            </div>
-                          )}
-
-                          <div className="min-w-0">
-                            <div className="text-white font-light text-xl">
-                              {zoraCoin?.name
-                                ? String(zoraCoin.name)
-                                : tokenName
-                                  ? String(tokenName)
-                                  : String(baseSymbol)}
-                              {baseSymbol && showSymbolInReviewHeading ? (
-                                <span className="text-zinc-500"> ({`$${String(baseSymbol)}`})</span>
-                              ) : null}
-                            </div>
-                            <div className="text-xs text-zinc-600 font-mono mt-1">{String(creatorToken)}</div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-medium ${coinTypePillClass}`}>
-                            {coinTypeLabel}
-                          </span>
-                        </div>
-                      </div>
-
+                    <CreatorCoinCard
+                      imageUrl={zoraCoin?.mediaContent?.previewImage?.medium ?? null}
+                      name={
+                        zoraCoin?.name ? String(zoraCoin.name) : tokenName ? String(tokenName) : String(baseSymbol)
+                      }
+                      symbol={baseSymbol ? String(baseSymbol) : null}
+                      showSymbol={Boolean(baseSymbol && showSymbolInReviewHeading)}
+                      address={String(creatorToken)}
+                      typeLabel={coinTypeLabel}
+                      typeTone={
+                        (coinTypeUpper === 'CREATOR' ? 'creator' : coinTypeUpper === 'CONTENT' ? 'content' : 'other') satisfies CreatorCoinTypeTone
+                      }
+                    >
                       {String(zoraCoin?.coinType ?? '').toUpperCase() === 'CONTENT' && (
                         <div className="text-xs text-amber-300/90">
                           This is a <span className="font-mono">Content Coin</span>. Creator Vaults can only be created for{' '}
@@ -10595,7 +9204,7 @@ function DeployVaultMain() {
                           . Only the coin creator or current payout recipient can deploy this vault.
                         </div>
                       )}
-                    </div>
+                    </CreatorCoinCard>
                   ) : (
                     <div className="text-sm text-red-400/80">Could not read token. Is this a valid ERC-20?</div>
                   )}
@@ -10635,78 +9244,62 @@ function DeployVaultMain() {
                   </Button>
                 </div>
               ) : !tokenIsValid && creatorAllowlistQuery.isLoading ? (
-                <button
-                  disabled
-                  className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-600 text-sm cursor-not-allowed"
-                >
-                  Checking vault allowlist…
-                </button>
+                <BlockedStateCard tone="checking" title="Checking vault allowlist…" />
               ) : !tokenIsValid && creatorAllowlistQuery.isError ? (
                 <RequestCreatorAccess />
               ) : !tokenIsValid && allowlistEnforced && !isAllowlistedCreator ? (
                 <RequestCreatorAccess />
               ) : tokenIsValid && zoraCoin && String(zoraCoin.coinType ?? '').toUpperCase() !== 'CREATOR' ? (
-                <button
-                  disabled
-                  className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-600 text-sm cursor-not-allowed"
-                >
-                  Not eligible: vaults are Creator Coin–only
-                </button>
+                <BlockedStateCard
+                  tone="warning"
+                  title="Not eligible"
+                  description="Vaults are Creator Coin–only. Content Coins cannot deploy a Creator Vault."
+                />
               ) : tokenIsValid && (symbolLoading || zoraLoading) ? (
-                <button
-                  disabled
-                  className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-600 text-sm cursor-not-allowed"
-                >
-                  <LoadingInline intent="processing" labelOverride="Loading..." />
-                </button>
+                <BlockedStateCard tone="checking" title="Loading coin details…" />
               ) : tokenIsValid && zoraCoin && identityBlockingReason ? (
-                <div className="p-4 bg-linear-to-b from-amber-500/16 to-amber-500/8 border border-amber-500/25 rounded-lg space-y-2 backdrop-blur-sm">
-                  <div className="text-amber-300/90 text-sm font-medium">Identity mismatch</div>
-                  <div className="text-amber-300/70 text-xs leading-relaxed">{identityBlockingReason}</div>
-                </div>
+                <BlockedStateCard tone="warning" title="Identity mismatch" description={identityBlockingReason} />
               ) : tokenIsValid && zoraCoin && !isAuthorizedDeployerOrOperator ? (
-                <button
-                  disabled
-                  className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-600 text-sm cursor-not-allowed"
-                >
-                  Authorized only: connect the coin’s canonical identity wallet to deploy.
-                </button>
+                <BlockedStateCard
+                  tone="warning"
+                  title="Authorized wallets only"
+                  description="Connect the coin’s canonical identity wallet to deploy this vault."
+                />
               ) : tokenIsValid && zoraCoin && creatorAllowlistQuery.isLoading ? (
-                <button
-                  disabled
-                  className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-600 text-sm cursor-not-allowed"
-                >
-                  Checking vault allowlist…
-                </button>
+                <BlockedStateCard tone="checking" title="Checking vault allowlist…" />
               ) : tokenIsValid && zoraCoin && creatorAllowlistQuery.isError ? (
                 <RequestCreatorAccess coin={creatorToken} />
               ) : tokenIsValid && zoraCoin && allowlistEnforced && !isAllowlistedCreator ? (
                 <RequestCreatorAccess coin={creatorToken} />
               ) : tokenIsValid && zoraCoin && !creatorVaultBatcherConfigured ? (
-                <button
-                  disabled
-                  className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-600 text-sm cursor-not-allowed"
-                >
-                  Deployment is not configured (missing deployment batcher address)
-                </button>
+                <BlockedStateCard
+                  tone="error"
+                  title="Deployment is not configured"
+                  description="Missing deployment batcher address. Configure the deployment batcher before deploying."
+                />
               ) : tokenIsValid && zoraCoin && !walletHasMinDeposit ? (
-                <button
-                  disabled
-                  className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-600 text-sm cursor-not-allowed"
-                >
-                  {`Creator smart wallet needs ${minFirstDepositDisplay} ${underlyingSymbolUpper || 'TOKENS'} to deploy & launch`}
-                </button>
+                <BlockedStateCard
+                  tone="warning"
+                  title="Deposit required"
+                  description={`Creator smart wallet needs ${minFirstDepositDisplay} ${underlyingSymbolUpper || 'TOKENS'} to deploy & launch.`}
+                />
               ) : oneTimePrivyOwnerApprovalNeeded ? (
-                <button
-                  type="button"
-                  className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-500 text-sm"
-                  onClick={() => {
-                    if (typeof document === 'undefined') return
-                    document.getElementById('owner-approval-setup')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                  }}
+                <BlockedStateCard
+                  tone="info"
+                  title="One-time wallet approval pending"
+                  description="Complete the one-time wallet approval above to continue."
                 >
-                  Complete one-time wallet approval above to continue.
-                </button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      if (typeof document === 'undefined') return
+                      document.getElementById('owner-approval-setup')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                    }}
+                  >
+                    Review approval step
+                  </Button>
+                </BlockedStateCard>
               ) : canDeploy ? (
                 <>
                   <DeployVaultBatcher
@@ -10746,12 +9339,7 @@ function DeployVaultMain() {
                   />
                 </>
               ) : (
-                <button
-                  disabled
-                  className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-600 text-sm cursor-not-allowed"
-                >
-                  {deployBlocker || 'Enter token address to continue'}
-                </button>
+                <BlockedStateCard tone="info" title={deployBlocker || 'Enter token address to continue'} />
               )}
 
 
