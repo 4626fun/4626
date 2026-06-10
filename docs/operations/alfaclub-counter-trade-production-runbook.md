@@ -4,13 +4,39 @@ This runbook covers production launch and steady-state operations for the AlfaCl
 
 - Runtime loop: `frontend/server/_lib/alfaclub/counterTradeRunner.ts`
 - Runtime config: `frontend/server/_lib/alfaclub/counterTradeConfig.ts`
-- Trigger endpoint: `GET|POST /api/v1/alfaclub/counter-trade-run` (cron-secret gated)
+- **Executor: Railway Hermit in-process ticker** (`frontend/server/_lib/alfaclub/counterTradeTicker.ts`, started from `frontend/server/agents/hermit/index.ts`)
+- Manual ops trigger: `GET|POST /api/v1/alfaclub/counter-trade-run` (cron-secret gated; **not scheduled** — see below)
 - User status endpoint: `GET /api/v1/alfaclub/counter-trade-status`
 - Persistence: `alfaclub.counter_trade_*` tables from migration `20260709000000_alfaclub_counter_trade_engine.sql`
+
+## Executor placement (read this first)
+
+The execution lane (`runArenaTrade`) shells out to the dgclaw-skill CLI
+(`npx ts-node scripts/trade.ts ...`) inside `ARENA_DGCLAW_DIR`
+(`/app/dgclaw-skill`). That directory only exists in the **Railway Hermit
+container** (`frontend/Dockerfile.hermit` clones it). Vercel serverless can
+detect fills and derive decisions but can never execute — the original Vercel
+cron produced only `failed` ledger rows. Therefore:
+
+- The **Railway Hermit service is the single executor.** Set
+  `ALFACLUB_COUNTER_TRADE_RUNNER_ENABLED=1` (plus the engine env block and
+  validated `ARENA_*` env per `virtuals-arena-railway-runbook.md`) on that
+  service only.
+- Tick cadence: `ALFACLUB_COUNTER_TRADE_RUNNER_INTERVAL_MS` (default 120000,
+  floor 30000). Ticker state is visible on the Hermit `/healthz` payload
+  (`counterTrade` field).
+- The Vercel cron entry was removed from `frontend/vercel.json`. Do not
+  re-add it. Keep `ALFACLUB_COUNTER_TRADE_RUNNER_ENABLED` unset/0 on Vercel
+  and on any local/standby Hermit so only one executor runs.
+- The `/api/v1/alfaclub/counter-trade-run` endpoint remains for manual
+  smoke/ops invocation with the cron secret, but live execution from Vercel
+  will fail by construction (no dgclaw CLI).
 
 ## Operating model
 
 - Engine is gated by env: `ALFACLUB_COUNTER_TRADE_ENABLED`.
+- Executor loop is gated by env: `ALFACLUB_COUNTER_TRADE_RUNNER_ENABLED`
+  (Railway Hermit only).
 - Engine is also gated by room strategy row:
   - `enabled = true`
   - `kill_switch = false`
@@ -27,10 +53,11 @@ Important: there is currently no explicit dry-run flag for this engine. "Shadow 
 
 ## Prerequisites
 
-- Production deploy from `main` is healthy.
-- `CRON_SECRET` is configured in production Vercel env.
-- Hyperliquid/Arena execution lane used by `runArenaTrade(...)` is already validated (see `docs/operations/virtuals-arena-railway-runbook.md`).
-- Counter-trade env block is configured (see `frontend/.env.example` `ALFACLUB_COUNTER_TRADE_*` section).
+- Production deploy from `main` is healthy and the Railway Hermit service is green.
+- `CRON_SECRET` is configured in production Vercel env (manual trigger only).
+- Hyperliquid/Arena execution lane used by `runArenaTrade(...)` is already validated **on the Railway Hermit service** (see `docs/operations/virtuals-arena-railway-runbook.md`): `ARENA_ENABLED=1`, `ARENA_TRADING_ENABLED=1`, `ARENA_DRY_RUN` per rollout phase, `ARENA_DGCLAW_DIR=/app/dgclaw-skill`.
+- Counter-trade env block is configured **on the Railway Hermit service** (see `frontend/.env.example` `ALFACLUB_COUNTER_TRADE_*` section), including `ALFACLUB_COUNTER_TRADE_RUNNER_ENABLED=1`.
+- Railway Hermit has DB access (`DATABASE_URL`) — already required by the chat bridge.
 
 ## Environment baseline (production-safe defaults)
 
@@ -108,16 +135,16 @@ curl -sS -X POST "https://app.4626.fun/api/v1/alfaclub/counter-trade-run" \
 
 ### Phase 0: Disabled deploy (safe install)
 
-1. Set `ALFACLUB_COUNTER_TRADE_ENABLED=0`.
-2. Deploy production from `main`.
-3. Verify cron route returns `reason: "disabled"` when called with secret.
+1. On Railway Hermit set `ALFACLUB_COUNTER_TRADE_RUNNER_ENABLED=1` but `ALFACLUB_COUNTER_TRADE_ENABLED=0`.
+2. Redeploy the Hermit service.
+3. Verify Hermit `/healthz` shows `counterTradeTickerStarted: true` and ticks with `reason: "disabled"`.
 4. Confirm no new `executed` rows appear in action ledger.
 
 ### Phase 1: Shadow mode (no execution cohort)
 
-1. Set `ALFACLUB_COUNTER_TRADE_ENABLED=1`.
+1. On Railway Hermit set `ALFACLUB_COUNTER_TRADE_ENABLED=1`.
 2. Keep all users un-opted (no active opt-in rows).
-3. Confirm cron runs and returns `ok: true` with `scannedIdentities: 0`.
+3. Confirm ticker runs (`/healthz` `counterTrade.lastResult`) with `ok: true` and `scannedIdentities: 0`.
 4. Verify user status endpoint works in UI (`/strategy status` or status card).
 
 ### Phase 2: Canary execution
@@ -198,8 +225,8 @@ Trusted operator in-room:
 
 ### Immediate global stop (hard stop)
 
-1. Set `ALFACLUB_COUNTER_TRADE_ENABLED=0` in production env.
-2. Redeploy production.
+1. Set `ALFACLUB_COUNTER_TRADE_ENABLED=0` (or `ALFACLUB_COUNTER_TRADE_RUNNER_ENABLED=0`) on the Railway Hermit service.
+2. Redeploy the Hermit service (Railway auto-deploys on variable change).
 3. Optionally force DB kill switch:
 
 ```sql

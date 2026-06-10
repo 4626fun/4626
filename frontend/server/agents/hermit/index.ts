@@ -23,6 +23,10 @@ import {
   startAlfaClubChatBridge,
 } from '../../_lib/alfaclub/chatBridge.js'
 import { startAlfaClubPrivyTokenRefresher } from '../../_lib/alfaclub/privyTokenRefresher.js'
+import {
+  type CounterTradeTickerState,
+  startCounterTradeTicker,
+} from '../../_lib/alfaclub/counterTradeTicker.js'
 import { logger } from '../../_lib/infra/logger.js'
 import { isDbConfigured } from '../../_lib/db/postgres.js'
 import { readAlfaClubChatToken, readAlfaClubPrivyAccessToken } from '../../_lib/alfaclub/chatTokenStore.js'
@@ -124,6 +128,11 @@ type RuntimeState = {
   lastSuccessfulTokenRefreshAt: string | null
   chatJwtExpiresAt: string | null
   accessTokenExpiresAt: string | null
+  // Counter-trade executor state (Railway is the single executor; the old
+  // Vercel cron could never execute — no dgclaw CLI on serverless)
+  counterTradeTickerStarted: boolean
+  counterTradeTickerReason: string | null
+  counterTrade: CounterTradeTickerState | null
 }
 
 type TickRollupState = {
@@ -150,10 +159,15 @@ const state: RuntimeState = {
   lastSuccessfulTokenRefreshAt: null,
   chatJwtExpiresAt: null,
   accessTokenExpiresAt: null,
+  counterTradeTickerStarted: false,
+  counterTradeTickerReason: null,
+  counterTrade: null,
 }
 
 let stopBridge: (() => void) | null = null
 let stopRefresher: (() => void) | null = null
+let stopCounterTradeTicker: (() => void) | null = null
+let readCounterTradeState: (() => CounterTradeTickerState) | null = null
 let tickRollup: TickRollupState = {
   windowStartedAtMs: Date.now(),
   ticks: 0,
@@ -244,6 +258,9 @@ function startHealthServer(): void {
       return
     }
 
+    if (readCounterTradeState) {
+      state.counterTrade = readCounterTradeState()
+    }
     const ready = state.bridgeStarted
     const status = url === '/readyz' && !ready ? 503 : 200
     res.writeHead(status, {
@@ -371,11 +388,36 @@ function startRuntime(): void {
       error: asErrorMessage(error),
     })
   }
+
+  try {
+    const counterTrade = startCounterTradeTicker()
+    state.counterTradeTickerStarted = counterTrade.started
+    state.counterTradeTickerReason = counterTrade.started ? null : counterTrade.reason ?? 'unknown'
+    if (counterTrade.started) {
+      stopCounterTradeTicker = counterTrade.stop
+      readCounterTradeState = counterTrade.readState
+      logger.info('[hermit] counter-trade ticker started', {
+        role: 'single executor for alfaclub counter-trade (dgclaw CLI lives on this host)',
+      })
+    } else {
+      logger.info('[hermit] counter-trade ticker not started', {
+        reason: counterTrade.reason ?? 'unknown',
+      })
+    }
+  } catch (error) {
+    state.counterTradeTickerReason = asErrorMessage(error)
+    logger.warn('[hermit] counter-trade ticker not started', {
+      error: asErrorMessage(error),
+    })
+  }
 }
 
 function shutdown(signal: string): void {
   logger.info('[hermit] shutting down', { signal })
   flushTickRollup(Date.now(), true)
+  try {
+    stopCounterTradeTicker?.()
+  } catch {}
   try {
     stopRefresher?.()
   } catch {}
