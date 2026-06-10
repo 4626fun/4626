@@ -9,6 +9,8 @@ import { BASE_CHAIN_ID } from '@/lib/uniswap/swapUtils'
 export type SwapZoraHoldingRow = {
   option: SwapTokenOption
   balanceFormatted: string
+  /** USD value of this holding from the wallet-holdings API (when known). */
+  usdValue?: number
 }
 
 export type ZoraWalletHoldingDto = {
@@ -105,6 +107,7 @@ export function zoraHoldingsDtoToSwapRows(data: ZoraWalletHoldingsResult): SwapZ
     rows.push({
       option: dtoToSwapTokenOption(dto),
       balanceFormatted: dto.amountFormatted,
+      usdValue: Number.isFinite(dto.usdValue) ? dto.usdValue : undefined,
     })
   }
   return rows

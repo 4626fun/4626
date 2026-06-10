@@ -10,13 +10,13 @@ import {
 import { PreflightSimulationRejectionError } from '@/lib/aa/coinbaseErc4337ErrorUtils'
 
 describe('resolveAutoSwapSlippagePct', () => {
-  it('uses 5% floor for canonical Zora routes', () => {
+  it('uses 10% floor for canonical Zora routes (matches Zora production default)', () => {
     expect(
       resolveAutoSwapSlippagePct({
         preferZoraTradeRoute: true,
         executionMode: 'canonical',
       }),
-    ).toBe(5)
+    ).toBe(10)
   })
 
   it('uses 2% floor for EOA Zora routes', () => {
@@ -54,7 +54,7 @@ describe('resolveAutoSwapSlippagePct', () => {
         quotedProvider: 'zora',
         executionMode: 'canonical',
       }),
-    ).toBe(5)
+    ).toBe(10)
   })
 })
 

@@ -5,8 +5,8 @@ import { canEnterAppFromAccountState, deriveWaitlistAuthUi } from './waitlistFlo
 describe('deriveWaitlistAuthUi', () => {
   it('uses sign-in copy that supports both existing and new accounts', () => {
     expect(deriveWaitlistAuthUi()).toEqual({
-      title: 'Waitlist',
-      subtitle: 'Step 1: sign in with email (Privy). Wallet setup is step 2.',
+      title: 'Join the waitlist',
+      subtitle: 'Sign in with your email to claim a spot.',
       ctaLabel: 'Continue with email',
       busyLabel: 'Finishing sign-in…',
     })

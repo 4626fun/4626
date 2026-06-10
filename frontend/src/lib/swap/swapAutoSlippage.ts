@@ -38,7 +38,10 @@ export function resolveAutoSwapSlippagePct(input: ResolveAutoSwapSlippageInput):
 
   let floor = 0.5
   if (isZora) {
-    floor = isCanonical ? 5 : 2
+    // Zora's own production frontend quotes creator coins at 10% slippage
+    // (uniswapSwapRouterV2.getQuoteStrict sends slippage: 0.1) — match it on
+    // canonical CSW paths so we do not burn retries climbing from 5%.
+    floor = isCanonical ? 10 : 2
   } else if (isCanonical) {
     // Creator-coin Uniswap routes on CSW need more than API DEFAULT auto slippage.
     floor = 2

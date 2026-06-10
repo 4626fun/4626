@@ -90,6 +90,8 @@ type TokenSelectorModalProps = {
   recentTokenAddresses: string[]
   chainId?: SupportedChainId
   balanceOwnerAddress?: Address | null
+  /** USD value per held token (lowercased address), e.g. from the Zora wallet-holdings API. */
+  usdValueByAddress?: Map<string, number>
   isSearchLoading?: boolean
   onQueryChange: (value: string) => void
   onClose: () => void
@@ -154,19 +156,27 @@ function formatSectionLabel(section: string): string {
   }
 }
 
+function formatTokenUsdLabel(value: number | undefined): string | null {
+  if (value == null || !Number.isFinite(value) || value <= 0) return null
+  if (value < 0.01) return '<$0.01'
+  return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
 function resolveTokenRowAmountLabels(params: {
   address: string
   symbol: string
   balanceByAddress: Map<string, string>
+  usdValueByAddress?: Map<string, number>
 }): { balanceLabel: string | null; usdLabel: string | null } {
   const key = params.address.toLowerCase()
   const rawBalance = params.balanceByAddress.get(key) ?? null
   const balanceLabel = rawBalance
     ? formatSwapTokenBalanceLabel(rawBalance, params.symbol)
     : null
+  const hasBalance = Boolean(balanceLabel && balanceLabel !== '0')
   return {
-    balanceLabel: balanceLabel && balanceLabel !== '0' ? balanceLabel : null,
-    usdLabel: null,
+    balanceLabel: hasBalance ? balanceLabel : null,
+    usdLabel: hasBalance ? formatTokenUsdLabel(params.usdValueByAddress?.get(key)) : null,
   }
 }
 
@@ -293,6 +303,7 @@ export function TokenSelectorModal({
   recentTokenAddresses,
   chainId,
   balanceOwnerAddress,
+  usdValueByAddress,
   isSearchLoading = false,
   onQueryChange,
   onClose,
@@ -616,69 +627,6 @@ export function TokenSelectorModal({
     return map
   }, [balanceLookupAddresses, balanceQueries])
 
-  useEffect(() => {
-    if (!open) return
-    searchInputRef.current?.focus()
-  }, [open])
-
-  useEffect(() => {
-    if (activeIndex >= visibleRows.length) setActiveIndex(0)
-  }, [activeIndex, visibleRows.length])
-
-  useEffect(() => {
-    const handler = (event: globalThis.KeyboardEvent) => {
-      if (!open) return
-      if (event.key === 'ArrowDown') {
-        event.preventDefault()
-        setActiveIndex((prev) => (prev + 1) % Math.max(1, visibleRows.length))
-      }
-      if (event.key === 'ArrowUp') {
-        event.preventDefault()
-        setActiveIndex((prev) => (prev - 1 + Math.max(1, visibleRows.length)) % Math.max(1, visibleRows.length))
-      }
-      if (event.key === 'Enter' && visibleRows[activeIndex]) {
-        event.preventDefault()
-        const option = visibleRows[activeIndex].option
-        if (option.verified === false) {
-          setNeedsUnverifiedConfirm(option)
-          return
-        }
-        onSelect(option)
-      }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [activeIndex, onSelect, open, visibleRows])
-
-  useEffect(() => {
-    const active = visibleRows[activeIndex]
-    if (!active) return
-    const selector = `[data-token-row="${active.option.address.toLowerCase()}"]`
-    const node = listRef.current?.querySelector<HTMLButtonElement>(selector)
-    node?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-  }, [activeIndex, visibleRows])
-
-  function choose(option: SwapTokenOption) {
-    if (option.verified === false) {
-      setNeedsUnverifiedConfirm(option)
-      return
-    }
-    onSelect(option)
-    onClose()
-  }
-
-  function confirmUnverified() {
-    if (!needsUnverifiedConfirm) return
-    onSelect(needsUnverifiedConfirm)
-    setNeedsUnverifiedConfirm(null)
-    onClose()
-  }
-
-  function retryAddressLookup() {
-    setAddressLookupError(null)
-    setAddressLookupAttempt((attempt) => attempt + 1)
-  }
-
   // Regroup so that any creator/content tokens with positive balance on the current
   // balanceOwnerAddress (the parent/main/zora csw) are collected into a dedicated
   // "Your holdings" section at the top. This ensures the user sees their Zora CSW
@@ -718,6 +666,90 @@ export function TokenSelectorModal({
     res.push(...other);
     return res;
   }, [rowSections, balanceByAddress]);
+
+  // "> $0.01" dust filter: hide rows whose known USD value is below one cent.
+  // Rows without USD data stay visible (filter is best-effort, like Zora's modal).
+  const filteredSections = useMemo(() => {
+    if (!minUsdOnly || !usdValueByAddress || usdValueByAddress.size === 0) return displaySections
+    return displaySections
+      .map(({ section, rows: sectionRows }) => ({
+        section,
+        rows: sectionRows.filter(({ option }) => {
+          const usd = usdValueByAddress.get(option.address.toLowerCase())
+          return usd == null || usd >= 0.01
+        }),
+      }))
+      .filter(({ rows: sectionRows }) => sectionRows.length > 0)
+  }, [displaySections, minUsdOnly, usdValueByAddress])
+
+  // Flattened render order — keyboard navigation must mirror exactly what is displayed.
+  const flatDisplayRows = useMemo(
+    () => filteredSections.flatMap(({ rows: sectionRows }) => sectionRows),
+    [filteredSections],
+  )
+
+  useEffect(() => {
+    if (!open) return
+    searchInputRef.current?.focus()
+  }, [open])
+
+  useEffect(() => {
+    if (activeIndex >= flatDisplayRows.length) setActiveIndex(0)
+  }, [activeIndex, flatDisplayRows.length])
+
+  useEffect(() => {
+    const handler = (event: globalThis.KeyboardEvent) => {
+      if (!open) return
+      if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        setActiveIndex((prev) => (prev + 1) % Math.max(1, flatDisplayRows.length))
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        setActiveIndex((prev) => (prev - 1 + Math.max(1, flatDisplayRows.length)) % Math.max(1, flatDisplayRows.length))
+      }
+      if (event.key === 'Enter' && flatDisplayRows[activeIndex]) {
+        event.preventDefault()
+        const option = flatDisplayRows[activeIndex].option
+        if (option.verified === false) {
+          setNeedsUnverifiedConfirm(option)
+          return
+        }
+        onSelect(option)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [activeIndex, onSelect, open, flatDisplayRows])
+
+  useEffect(() => {
+    const active = flatDisplayRows[activeIndex]
+    if (!active) return
+    const selector = `[data-token-row="${active.option.address.toLowerCase()}"]`
+    const node = listRef.current?.querySelector<HTMLButtonElement>(selector)
+    node?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [activeIndex, flatDisplayRows])
+
+  function choose(option: SwapTokenOption) {
+    if (option.verified === false) {
+      setNeedsUnverifiedConfirm(option)
+      return
+    }
+    onSelect(option)
+    onClose()
+  }
+
+  function confirmUnverified() {
+    if (!needsUnverifiedConfirm) return
+    onSelect(needsUnverifiedConfirm)
+    setNeedsUnverifiedConfirm(null)
+    onClose()
+  }
+
+  function retryAddressLookup() {
+    setAddressLookupError(null)
+    setAddressLookupAttempt((attempt) => attempt + 1)
+  }
 
   const listLoading = isSearchLoading && Boolean(trimmedQuery) && !isAddressSearchActive
 
@@ -836,7 +868,7 @@ export function TokenSelectorModal({
             </div>
           ) : null}
 
-          {!listLoading && visibleRows.length === 0 && !addressLookupLoading ? (
+          {!listLoading && flatDisplayRows.length === 0 && !addressLookupLoading ? (
             <div className="py-14 text-center">
               <p className="text-sm font-medium text-zinc-300">No tokens found</p>
               <p className="mt-1 text-xs text-zinc-500">
@@ -850,7 +882,7 @@ export function TokenSelectorModal({
           {!listLoading
             ? (() => {
                 let visibleIdx = 0
-                return displaySections.map(({ section, rows: sectionRows }) => {
+                return filteredSections.map(({ section, rows: sectionRows }) => {
                   const sectionOpen = true
                   return (
                     <div key={section}>
@@ -865,6 +897,7 @@ export function TokenSelectorModal({
                               address: option.address,
                               symbol: option.symbol,
                               balanceByAddress,
+                              usdValueByAddress,
                             })
                             const row = (
                               <TokenSelectorRow

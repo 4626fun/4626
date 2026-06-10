@@ -173,6 +173,8 @@ export interface UseSwapTokenOptionsResult {
     isFetching: boolean
   }
   preferZoraTradeRoute: boolean
+  /** USD value per held token (lowercased address), from the Zora wallet-holdings API. */
+  holdingsUsdByAddress: Map<string, number>
 }
 
 export function useSwapTokenOptions(params: UseSwapTokenOptionsParams): UseSwapTokenOptionsResult {
@@ -208,6 +210,16 @@ export function useSwapTokenOptions(params: UseSwapTokenOptionsParams): UseSwapT
       ...row.option,
       isUserHolding: true,
     }))
+  }, [userZoraHoldingsQuery.data])
+
+  const holdingsUsdByAddress = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const row of userZoraHoldingsQuery.data ?? []) {
+      if (typeof row.usdValue === 'number' && Number.isFinite(row.usdValue)) {
+        map.set(row.option.address.toLowerCase(), row.usdValue)
+      }
+    }
+    return map
   }, [userZoraHoldingsQuery.data])
 
   const discoveredCreatorTokenOptionsQuery = useQuery({
@@ -338,5 +350,6 @@ export function useSwapTokenOptions(params: UseSwapTokenOptionsParams): UseSwapT
       isFetching: discoveredCreatorTokenOptionsQuery.isFetching,
     },
     preferZoraTradeRoute,
+    holdingsUsdByAddress,
   }
 }

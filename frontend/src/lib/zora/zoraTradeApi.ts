@@ -773,10 +773,10 @@ export async function executeZoraCswQuoteWithEscalation(params: {
     params.slippageEscalationCapPct != null && Number.isFinite(params.slippageEscalationCapPct)
       ? params.slippageEscalationCapPct
       : params.slippagePct
-  // Thin creator pools (e.g. AKITA) usually need ≥5% on CSW-sponsored paths; 0.5% often passes
-  // stale pending eth_call but reverts on bundler simulation.
+  // Zora's own frontend quotes creator coins at 10% slippage on these pools; lower
+  // values often pass stale pending eth_call but revert on bundler simulation.
   const rawLadder = buildZoraSlippageEscalationLadder(
-    isCswExecution ? Math.max(startSlippage, 5) : startSlippage,
+    isCswExecution ? Math.max(startSlippage, 10) : startSlippage,
   )
   const ladder = rawLadder.filter((pct) => pct <= escalationCap + 1e-9)
   const effectiveLadder =

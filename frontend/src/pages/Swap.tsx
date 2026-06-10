@@ -276,6 +276,7 @@ export function Swap() {
     registerTokenForIdentity,
     discoveredCreatorTokenOptionsQuery,
     preferZoraTradeRoute,
+    holdingsUsdByAddress,
   } = useSwapTokenOptions({
     swapChainId,
     tokenIn,
@@ -1129,6 +1130,7 @@ export function Swap() {
         recentTokenAddresses={recentTokenAddresses}
         chainId={swapChainId}
         balanceOwnerAddress={balanceOwnerAddress ?? null}
+        usdValueByAddress={holdingsUsdByAddress}
         isSearchLoading={
           discoveredCreatorTokenOptionsQuery.isFetching && Boolean(normalizedTokenSelectorQuery)
         }

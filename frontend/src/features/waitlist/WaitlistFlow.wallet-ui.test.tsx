@@ -327,7 +327,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     )
 
     await continueIntoWaitlistSetup()
-    expect(screen.queryByRole('heading', { name: /^waitlist$/i })).toBeNull()
+    expect(screen.queryByRole('heading', { name: /^join the waitlist$/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /continue with email/i })).toBeNull()
     expect(screen.queryByText(/climb the waitlist/i)).toBeNull()
   })
@@ -360,7 +360,7 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByRole('heading', { name: /^waitlist$/i })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /^join the waitlist$/i })).toBeTruthy()
     expect(
       screen.queryByText(/one secure email sign-in saves your spot\. then we guide you through setup in a few clear steps\./i),
     ).toBeNull()
@@ -397,7 +397,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     )
 
     await continueIntoWaitlistSetup()
-    expect(screen.queryByRole('heading', { name: /^waitlist$/i })).toBeNull()
+    expect(screen.queryByRole('heading', { name: /^join the waitlist$/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /continue with email/i })).toBeNull()
   })
 
