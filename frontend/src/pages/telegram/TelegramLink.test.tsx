@@ -525,7 +525,7 @@ describe('TelegramLink UI flow', () => {
       expect(document.querySelector('[data-flow-state="sending_email_code"]')).toBeTruthy()
 
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(12_000)
+        await vi.advanceTimersByTimeAsync(20_000)
       })
 
       expect(screen.getByText('Verification email took too long to start. Try again.')).toBeTruthy()

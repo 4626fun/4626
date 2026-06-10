@@ -43,7 +43,7 @@ export type LinkTelegramParams = {
 }
 
 export const OTP_RESEND_DELAY_MS = 30_000
-export const OTP_SEND_TIMEOUT_MS = 12_000
+export const OTP_SEND_TIMEOUT_MS = 20_000
 export const PRIVY_SYNC_TIMEOUT_MS = 45_000
 export const PRIVY_ACCESS_TOKEN_TIMEOUT_MS = 4_000
 export const EMBEDDED_WALLET_PROVISION_TIMEOUT_MS = 20_000
