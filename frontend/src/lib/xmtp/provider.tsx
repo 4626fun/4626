@@ -2711,6 +2711,7 @@ export function XmtpChatProvider({
     connectInFlightRef.current = true
     try {
       const targetIdentity = identityAddressRef.current ?? identityAddress ?? activeAddress
+      const normalizedTargetIdentity = targetIdentity?.toLowerCase() ?? null
       const storedMetaBeforeReset = targetIdentity
         ? readStoredInstallationMeta(XMTP_ENV, targetIdentity)
         : null
@@ -2735,13 +2736,15 @@ export function XmtpChatProvider({
       } catch (deleteErr) {
         const deleteMsg = deleteErr instanceof Error ? deleteErr.message : String(deleteErr)
         if (isOpfsAccessHandleError(deleteMsg)) {
-          writePendingLocalReset({
-            identity: targetIdentity.toLowerCase(),
-            targetInboxId: storedMetaBeforeReset?.inboxId ?? null,
-            phase: 'delete_opfs',
-            updatedAt: Date.now(),
-          })
-          clearLocalInstallMarkers(targetIdentity)
+          if (normalizedTargetIdentity) {
+            writePendingLocalReset({
+              identity: normalizedTargetIdentity,
+              targetInboxId: storedMetaBeforeReset?.inboxId ?? null,
+              phase: 'delete_opfs',
+              updatedAt: Date.now(),
+            })
+            clearLocalInstallMarkers(normalizedTargetIdentity)
+          }
           setStatus('connecting')
           setError('Reloading once to release the local XMTP database lock…')
           if (typeof window !== 'undefined') {

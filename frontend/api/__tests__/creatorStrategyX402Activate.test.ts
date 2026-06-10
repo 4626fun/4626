@@ -238,7 +238,8 @@ describe('x402 activate handler (C-1 regression)', () => {
       }),
     )
     // The orphan writes must NOT use the transactional db handle.
-    const orphanOrderCall = upsertPaymentOrderMock.mock.calls.find(
+    const upsertCalls = upsertPaymentOrderMock.mock.calls as unknown as Array<[Record<string, any>]>
+    const orphanOrderCall = upsertCalls.find(
       (call) => call[0]?.orderId === `orphaned-x402:${SETTLED_TX_HASH}`,
     )
     expect(orphanOrderCall?.[0]?.db?.sql).not.toBe(txDbSqlMock)
@@ -273,7 +274,9 @@ describe('x402 activate handler (C-1 regression)', () => {
     )
     expect(settleX402PaymentMock).toHaveBeenCalledTimes(1)
     expect(insertPendingActivationMock).toHaveBeenCalledTimes(1)
-    const eventTypes = recordPaymentEventMock.mock.calls.map((call) => call[0]?.eventType)
+    const eventTypes = (recordPaymentEventMock.mock.calls as unknown as Array<[Record<string, any>]>).map(
+      (call) => call[0]?.eventType,
+    )
     expect(eventTypes).toContain('x402.authorization_settled')
     expect(eventTypes).not.toContain('x402.settlement_orphaned')
   })

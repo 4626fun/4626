@@ -31,13 +31,12 @@ async function fetchWaitlistPositionByEmail(email: string): Promise<WaitlistPosi
   const json = (await res.json()) as ApiEnvelope<WaitlistPositionPayload | null>
   if (!json.success || !json.data) return null
   const payload = json.data
+  const pointsContainer = (payload as { points?: { total?: unknown } }).points
+  const pointsTotal = typeof pointsContainer?.total === 'number' ? Math.max(0, Math.floor(pointsContainer.total)) : 0
   return {
     signupId: payload.signupId,
     referralCode: payload.referralCode ?? null,
-    pointsTotal:
-      typeof (payload as { points?: { total?: unknown } }).points?.total === 'number'
-        ? Math.max(0, Math.floor((payload as { points: { total: number } }).points.total))
-        : 0,
+    pointsTotal,
     referrals: payload.referrals,
   }
 }

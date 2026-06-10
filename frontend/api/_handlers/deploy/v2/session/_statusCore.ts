@@ -1708,11 +1708,16 @@ async function ensureSolanaRouteReadyForPhase3(params: {
   }
 
   if (!isLegacySolanaBridgePreflightEnabled()) {
-    return ensureShareMeshOvaultPreflight({
+    const ovaultStatus = await ensureShareMeshOvaultPreflight({
       publicClient: params.publicClient,
       finalizeCall: finalizeEntry.call,
       ovaultRequested,
     })
+    return {
+      ...ovaultStatus,
+      meteoraAlphaVault: null,
+      solanaProgramIds: [],
+    }
   }
 
   const { call: finalizeCall, info: finalizeInfo } = finalizeEntry

@@ -59,6 +59,7 @@
     "src/lib/viteManualChunks.ts",
     "shared/deploy/bytecode.generated.ts",
     "shared/deploy/create2Salts.ts",
+    "shared/deploy/impairmentAuxPlan.ts",
     "shared/wallet/bytecode.ts",
     "src/wallet/canonicalWalletPolicy.ts",
     "src/lib/env/**/*.ts",

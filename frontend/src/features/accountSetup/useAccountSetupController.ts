@@ -872,10 +872,14 @@ export function useAccountSetupController(params: {
         } catch {
           // fall through to user-facing guidance below
         }
-        if (typeof window !== 'undefined' && zoraHandoffUrl) {
+        const fallbackZoraHandoffUrl = buildZoraHandoffUrl({
+          returnPath: params.zoraReturnPath ?? '/accounts',
+          context: 'signup',
+        })
+        if (typeof window !== 'undefined' && fallbackZoraHandoffUrl) {
           setNoticeGuarded('Zora auth failed in-app. Redirecting to Zora handoff to complete account detection…')
           window.setTimeout(() => {
-            window.location.assign(zoraHandoffUrl)
+            window.location.assign(fallbackZoraHandoffUrl)
           }, 120)
           return
         }
@@ -886,7 +890,7 @@ export function useAccountSetupController(params: {
     } finally {
       setBusyProviderGuarded(null)
     }
-  }, [authHeaders, linkCrossAppAccount, loadMe, loginWithCrossAppAccount, privyAuthed, zoraHandoffUrl])
+  }, [authHeaders, linkCrossAppAccount, loadMe, loginWithCrossAppAccount, params.zoraReturnPath, privyAuthed])
 
   const onRefreshZora = useCallback(async () => {
     setBusyProviderGuarded('zora_cross_app')
@@ -1096,15 +1100,15 @@ export function useAccountSetupController(params: {
     )
   }, [])
 
+  const zoraHandoffUrl = useMemo(
+    () => buildZoraHandoffUrl({ returnPath: params.zoraReturnPath ?? '/accounts', context: 'signup' }),
+    [params.zoraReturnPath],
+  )
   const zoraCrossAppCount = zoraStatus?.zoraCrossAppAccounts?.length ?? 0
   const canShowAdvanced = Boolean(canonicalCswAddress)
   const baseAppUrl = ownerDelegationFlags?.baseAppUrl ?? null
   const needsBaseAppSetup = Boolean(ownerDelegationFlags?.needsBaseAppSetup)
   const needsEmbeddedWallet = Boolean(ownerDelegationFlags?.needsEmbeddedWallet)
-  const zoraHandoffUrl = useMemo(
-    () => buildZoraHandoffUrl({ returnPath: params.zoraReturnPath ?? '/accounts', context: 'signup' }),
-    [params.zoraReturnPath],
-  )
   const connectedOwnerReady = connectedOwnerState.value === true
   const signerClientReady = Boolean(
     walletClient?.account &&

@@ -1293,7 +1293,6 @@ export function AccountSetupWorkspaceView(props: {
               </div>
               {summaryActions ? <div className="flex flex-wrap items-center gap-2">{summaryActions}</div> : null}
             </section>
-            <WaitlistAdvancedSection controller={controller} label="Account settings" />
           </div>
         </div>
       </section>
