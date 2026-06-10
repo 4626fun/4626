@@ -15,7 +15,7 @@ env:
 jobs:
   a11y:
     runs-on: ubuntu-latest
-    continue-on-error: ${{ env.A11Y_CI_BLOCKING != 'true' }}
+    continue-on-error: ${{ vars.A11Y_CI_BLOCKING != 'true' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 

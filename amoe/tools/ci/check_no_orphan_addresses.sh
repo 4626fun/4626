@@ -20,6 +20,9 @@ readonly WHITELIST=(
   "docs/operations/deployment/orphan-registry.md"
   "amoe/tools/ci/check_manager_amoe_surface.sh"
   "amoe/tools/ci/check_no_orphan_addresses.sh"
+  # Same files when this guard is executed from the amoe/ subtree.
+  "tools/ci/check_manager_amoe_surface.sh"
+  "tools/ci/check_no_orphan_addresses.sh"
   "docs/operations/deployment/v1.10.1/pre-broadcast-cleanup.md"
   # Added during §6 guard expansion — paths that legitimately reference orphan addresses:
   "deployments/base/contracts/services/lottery/CreatorLotteryManager.json"
