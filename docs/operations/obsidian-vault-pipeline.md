@@ -17,7 +17,7 @@ Production marketing hero: [`frontend/public/immersive/index.html`](../../fronte
 
 ## Offline asset pipeline
 
-See [`tools/vault-images/`](../../tools/vault-images/).
+See `tools/vault-images/` in the repository workspace.
 
 ```bash
 # Regenerate GLB + preview (Blender 4.x)
@@ -82,4 +82,4 @@ pnpm -C frontend dev
 
 ## Third-party
 
-Shield shaders: [`tools/vault-images/`](../../tools/vault-images/).
+Shield shaders live in `tools/vault-images/`.
