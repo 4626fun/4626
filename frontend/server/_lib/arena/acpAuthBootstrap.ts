@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { promisify } from 'node:util'
 
@@ -131,6 +131,34 @@ export function readSignerPublicKey(params: {
   }
 }
 
+/**
+ * Pins cross-keychain to its encrypted file backend for the persistent state dir.
+ *
+ * Root cause this guards against (observed on Railway): the default keychain
+ * backend on a headless container can accept reads and return null instead of
+ * throwing NoKeyringError, so acp-cli's keyring fallback never switches to the
+ * file backend on reads — `acp configure` writes tokens to the file backend
+ * (writes DO throw and fall back) while every later `getToken` silently reads
+ * the empty default backend and reports NOT_AUTHENTICATED. Writing
+ * `<HOME>/.config/keyring/keyring.config.json` with `defaultBackend: "file"`
+ * makes reads and writes deterministic. Never overwrites an existing config.
+ */
+export function ensureKeyringFileBackendPinned(stateDir: string): { pinned: boolean; detail?: string } {
+  const keyringDir = resolve(stateDir, '.config', 'keyring')
+  const configPath = resolve(keyringDir, 'keyring.config.json')
+  try {
+    if (existsSync(configPath)) return { pinned: true, detail: 'already_present' }
+    mkdirSync(keyringDir, { recursive: true })
+    writeFileSync(configPath, `${JSON.stringify({ defaultBackend: 'file' }, null, 2)}\n`, {
+      encoding: 'utf8',
+      mode: 0o600,
+    })
+    return { pinned: true, detail: 'written' }
+  } catch (error) {
+    return { pinned: false, detail: (error as Error).message }
+  }
+}
+
 export function hasHeadlessConfigureSeed(env: Record<string, string | undefined> = process.env): boolean {
   return Boolean(
     String(env.ACP_ACCESS_TOKEN ?? '').trim() &&
@@ -217,6 +245,13 @@ export async function runAcpAuthBootstrap(config = readArenaConfig()): Promise<A
     } catch (error) {
       result.reason = `acp_state_dir_unwritable:${(error as Error).message}`
       return result
+    }
+    const keyringPin = ensureKeyringFileBackendPinned(stateDir)
+    if (!keyringPin.pinned) {
+      logger.warn('[arena] failed to pin keyring file backend (token reads may miss)', {
+        stateDir,
+        detail: keyringPin.detail,
+      })
     }
   }
 

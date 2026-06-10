@@ -106,6 +106,23 @@ Notes:
 - After the first successful refresh, the on-volume tokens are newer than the `ACP_*` env seed (refresh tokens rotate and are single-use). The env triplet is only a first-boot/recovery seed — re-rotate it if the volume is ever lost.
 - In dry-run mode the bootstrap is skipped (`arena_dry_run`) since no signing happens.
 
+### Keyring file backend pinning (root-cause fix, June 2026)
+
+On the Railway container, cross-keychain's **default** keychain backend silently returns `null` on reads instead of throwing `NoKeyringError`, while writes do throw and fall back to the encrypted **file** backend. Net effect: `acp configure` stores tokens in `~/.local/share/keyring/secrets.json`, but every later `getToken` reads the empty default backend and acp-cli reports `NOT_AUTHENTICATED` despite a successful configure.
+
+The bootstrap now pins the file backend by writing `<ARENA_ACP_HOME>/.config/keyring/keyring.config.json` with `{"defaultBackend": "file"}` (never overwriting an existing config). If debugging a fresh volume manually, write that file before running any `acp` commands.
+
+### Recovering from a consumed/stale `ACP_*` env seed
+
+ACP refresh tokens are single-use; an env triplet captured earlier may already be consumed, in which case headless configure "succeeds" but the first refresh fails with `Session expired`. Recovery — transfer the live session from an operator machine that has a working `acp agent whoami`:
+
+1. On the operator machine, extract the current tokens from cross-keychain (service `acp-auth`, accounts `access-token-<owner>` / `refresh-token-<owner>`) via a small node script importing acp-cli's bundled `cross-keychain`.
+2. Copy `~/.config/acp/config.json` (agent ids + signer publicKey) and `~/.config/acp-cli/signer-keys.json` (encrypted-file signer keystore — self-contained: `secret` + `salt` live in the file, so it is portable) onto the volume at the same relative paths under `ARENA_ACP_HOME`.
+3. On the container with `HOME`/`ACP_CONFIG_DIR` pinned to the volume, run `acp configure --json` with the fresh `ACP_*` triplet exported.
+4. Verify with `acp agent whoami --json` and an end-to-end `npx tsx scripts/trade.ts balance` from `/app/dgclaw-skill`.
+
+This transfers the already-approved signer key, so no new `add-signer` browser approval is needed. Caveat: the container and operator machine now share one token chain — whichever refreshes first owns it; expect the other side to need `acp configure` (browser flow) again eventually.
+
 ## HIP-3 Pair Policy
 
 Enforced in code (`arenaPairPolicy.ts`):

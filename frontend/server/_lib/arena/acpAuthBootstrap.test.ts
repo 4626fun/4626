@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 
 import type { ArenaConfig } from './arenaConfig.js'
 import {
+  ensureKeyringFileBackendPinned,
   hasHeadlessConfigureSeed,
   parseAcpCliJson,
   readSignerPublicKey,
@@ -135,6 +136,27 @@ describe('hasHeadlessConfigureSeed', () => {
     expect(
       hasHeadlessConfigureSeed({ ACP_ACCESS_TOKEN: 't', ACP_REFRESH_TOKEN: 'r', ACP_OWNER_WALLET: '0xabc' }),
     ).toBe(true)
+  })
+})
+
+describe('ensureKeyringFileBackendPinned', () => {
+  it('writes defaultBackend=file config when missing', () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'acp-keyring-'))
+    const result = ensureKeyringFileBackendPinned(dir)
+    expect(result).toEqual({ pinned: true, detail: 'written' })
+    const configPath = resolve(dir, '.config', 'keyring', 'keyring.config.json')
+    expect(JSON.parse(readFileSync(configPath, 'utf8'))).toEqual({ defaultBackend: 'file' })
+  })
+
+  it('never overwrites an existing keyring config', () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'acp-keyring-'))
+    const keyringDir = resolve(dir, '.config', 'keyring')
+    mkdirSync(keyringDir, { recursive: true })
+    const configPath = resolve(keyringDir, 'keyring.config.json')
+    writeFileSync(configPath, JSON.stringify({ defaultBackend: 'custom' }))
+    const result = ensureKeyringFileBackendPinned(dir)
+    expect(result).toEqual({ pinned: true, detail: 'already_present' })
+    expect(JSON.parse(readFileSync(configPath, 'utf8'))).toEqual({ defaultBackend: 'custom' })
   })
 })
 
