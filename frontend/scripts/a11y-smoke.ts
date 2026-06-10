@@ -167,9 +167,23 @@ async function scanRoute(page: Page, origin: string, path: string): Promise<Rout
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT_MS })
   await page.waitForTimeout(750)
 
-  const axe = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    .analyze()
+  const runAxe = async () =>
+    new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze()
+
+  let axe: Awaited<ReturnType<typeof runAxe>>
+  try {
+    axe = await runAxe()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    // Vite host-mode swaps can briefly invalidate the execution context
+    // between page.goto and axe evaluation. Retry once on that specific race.
+    if (!/Execution context was destroyed/i.test(message)) throw error
+    await page.waitForLoadState('domcontentloaded', { timeout: PAGE_TIMEOUT_MS }).catch(() => null)
+    await page.waitForTimeout(300)
+    axe = await runAxe()
+  }
 
   const violations = axe.violations.map((v) => ({
     id: v.id,
