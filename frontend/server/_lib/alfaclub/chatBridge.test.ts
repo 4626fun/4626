@@ -265,6 +265,53 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     expect(requestImmediatePrivyRefreshMock).toHaveBeenCalledWith('bridge_auth_fail')
   })
 
+  it('treats a history-fetch timeout as a quiet transient instead of a tick error', async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('This operation was aborted')
+    }) as unknown as typeof fetch
+
+    const result = await _runAlfaClubChatBridgeTickForTests(makeFlags())
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0]?.error).toMatch(/^room_history_failed:timeout:/)
+    expect(loggerMock.info).toHaveBeenCalledWith(
+      '[alfaclub-chat] room_history_timeout:transient',
+      expect.objectContaining({ consecutive: 1 }),
+    )
+    expect(loggerMock.warn).not.toHaveBeenCalledWith(
+      '[alfaclub-chat] room_history_failed:no_fallback',
+      expect.anything(),
+    )
+    // Timeouts are not auth failures — no Privy refresh kick.
+    expect(requestImmediatePrivyRefreshMock).not.toHaveBeenCalled()
+  })
+
+  it('escalates sustained consecutive history timeouts to warn and resets on recovery', async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('This operation was aborted')
+    }) as unknown as typeof fetch
+
+    for (let i = 0; i < 5; i += 1) {
+      await _runAlfaClubChatBridgeTickForTests(makeFlags())
+    }
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      '[alfaclub-chat] room_history_timeout:sustained',
+      expect.objectContaining({ consecutive: 5 }),
+    )
+
+    mockHistorySuccess()
+    await _runAlfaClubChatBridgeTickForTests(makeFlags())
+
+    loggerMock.info.mockClear()
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('This operation was aborted')
+    }) as unknown as typeof fetch
+    await _runAlfaClubChatBridgeTickForTests(makeFlags())
+    expect(loggerMock.info).toHaveBeenCalledWith(
+      '[alfaclub-chat] room_history_timeout:transient',
+      expect.objectContaining({ consecutive: 1 }),
+    )
+  })
+
   it('memoizes a known-bad JWT and suppresses repeat live-socket attempts', async () => {
     mockHistoryStatus(401)
     const flags = makeFlags({ wsIngestAllRoomsEnabled: true })

@@ -2055,12 +2055,41 @@ function isCloudflareChallengeError(error: unknown): boolean {
   )
 }
 
-type HistoryErrorKind = 'cf_challenge' | 'auth' | 'other'
+type HistoryErrorKind = 'cf_challenge' | 'auth' | 'timeout' | 'other'
+
+function isRoomHistoryTimeoutError(error: unknown): boolean {
+  const message = (error instanceof Error ? error.message : String(error)).trim()
+  return message.startsWith('room_history_failed:timeout:')
+}
 
 function classifyHistoryError(error: unknown): HistoryErrorKind {
   if (isCloudflareChallengeError(error)) return 'cf_challenge'
   if (isRoomHistoryAuthError(error)) return 'auth'
+  if (isRoomHistoryTimeoutError(error)) return 'timeout'
   return 'other'
+}
+
+/**
+ * Consecutive history-fetch timeouts per room. The always-on Railway bridge
+ * polls every few seconds, and the AlfaClub edge stalls roughly one request
+ * per minute past the abort timeout (observed 2026-06-10: ~1 of ~17 polls;
+ * the next tick always recovers, WS ingest keeps landing). A single timeout
+ * is therefore expected steady-state noise, not an incident — log it at
+ * info and return an early tick result instead of throwing a tick error.
+ * Sustained consecutive timeouts (a real outage of the proxy/upstream)
+ * escalate back to warn.
+ */
+const consecutiveHistoryTimeoutsByRoom = new Map<string, number>()
+const HISTORY_TIMEOUT_SUSTAINED_THRESHOLD = 5
+
+function noteHistoryTimeout(roomId: string): number {
+  const next = (consecutiveHistoryTimeoutsByRoom.get(roomId) ?? 0) + 1
+  consecutiveHistoryTimeoutsByRoom.set(roomId, next)
+  return next
+}
+
+function clearHistoryTimeouts(roomId: string): void {
+  consecutiveHistoryTimeoutsByRoom.delete(roomId)
 }
 
 function isKnownBadJwt(jwt: string, now = Date.now()): boolean {
@@ -3401,6 +3430,29 @@ async function runBridgeTick(
       })
     }
 
+    if (kind === 'timeout') {
+      const consecutive = noteHistoryTimeout(roomId)
+      const sustained = consecutive >= HISTORY_TIMEOUT_SUSTAINED_THRESHOLD
+      const payload = {
+        roomId,
+        consecutive,
+        error: historyError instanceof Error ? historyError.message : String(historyError),
+      }
+      if (sustained) {
+        logger.warn('[alfaclub-chat] room_history_timeout:sustained', payload)
+      } else {
+        logger.info('[alfaclub-chat] room_history_timeout:transient', payload)
+      }
+      // Do not throw: the next poll tick recovers on its own and WS ingest
+      // keeps landing rows. Surface the error in the tick result only.
+      return earlyTickResult({
+        roomId,
+        historyError,
+        processed: 0,
+        replied: 0,
+      })
+    }
+
     const canUseLiveFallback = flags.wsLiveFallbackEnabled && kind === 'auth'
     if (!canUseLiveFallback) {
       logger.warn('[alfaclub-chat] room_history_failed:no_fallback', {
@@ -3461,6 +3513,7 @@ async function runBridgeTick(
   if (!fetchedMessages) {
     throw new Error('room_history_failed:unknown')
   }
+  clearHistoryTimeouts(roomId)
 
   // Persist polled history rows to a DB-backed dedupe ledger so one-shot
   // cron invocations can process newly arrived commands without relying on
@@ -4058,6 +4111,7 @@ export function _resetAlfaClubChatBridgeStateForTests(): void {
     liveSocketWebsocketUrl: null,
     liveSocketRoomId: null,
   }
+  consecutiveHistoryTimeoutsByRoom.clear()
   bridgeAuthState.lastBadJwt = null
   bridgeAuthState.lastBadJwtAt = 0
   bridgeAuthState.lastBadJwtWarnAt = Number.NEGATIVE_INFINITY
