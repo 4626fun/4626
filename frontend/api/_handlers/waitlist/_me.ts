@@ -137,7 +137,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const db = await getDb()
   if (!db) {
-    return res.status(503).json({ success: false, error: 'Service unavailable' } satisfies ApiEnvelope<never>)
+    // Fail soft during transient DB outages so waitlist bootstrap can continue
+    // via other account sources instead of hard-sticking the UI.
+    return res.status(200).json({ success: true, data: null } satisfies ApiEnvelope<WaitlistMeResponse | null>)
   }
 
   await ensureWaitlistSchema(db as any)

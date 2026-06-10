@@ -271,8 +271,9 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     }) as unknown as typeof fetch
 
     const result = await _runAlfaClubChatBridgeTickForTests(makeFlags())
-    expect(result.errors).toHaveLength(1)
-    expect(result.errors[0]?.error).toMatch(/^room_history_failed:timeout:/)
+    // Transient timeouts return a clean tick result so the hermit runtime
+    // does not emit a per-tick "AlfaClub command errors" warning.
+    expect(result.errors).toHaveLength(0)
     expect(loggerMock.info).toHaveBeenCalledWith(
       '[alfaclub-chat] room_history_timeout:transient',
       expect.objectContaining({ consecutive: 1 }),

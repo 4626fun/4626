@@ -109,6 +109,8 @@ type Eip6963ProviderDetail = {
 
 const eip6963Providers = new Map<string, Eip6963ProviderDetail>()
 let eip6963DiscoveryStarted = false
+const eip6963CollisionState = detectEthereumProviderCollision()
+const SHOULD_SKIP_EIP6963_DISCOVERY = eip6963CollisionState.shouldDisableInjectedConnector
 
 function rememberEip6963Provider(detail: Eip6963ProviderDetail | null | undefined) {
   const provider = detail?.provider
@@ -122,6 +124,7 @@ function rememberEip6963Provider(detail: Eip6963ProviderDetail | null | undefine
 
 function requestEip6963Providers() {
   if (!IS_BROWSER || typeof window === 'undefined') return
+  if (SHOULD_SKIP_EIP6963_DISCOVERY) return
   try {
     window.dispatchEvent(new Event('eip6963:requestProvider'))
   } catch {
@@ -131,6 +134,7 @@ function requestEip6963Providers() {
 
 function ensureEip6963Discovery() {
   if (!IS_BROWSER || typeof window === 'undefined' || eip6963DiscoveryStarted) return
+  if (SHOULD_SKIP_EIP6963_DISCOVERY) return
   eip6963DiscoveryStarted = true
   window.addEventListener('eip6963:announceProvider', ((event: CustomEvent<Eip6963ProviderDetail>) => {
     rememberEip6963Provider(event.detail)

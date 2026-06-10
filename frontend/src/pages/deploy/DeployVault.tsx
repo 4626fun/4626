@@ -112,6 +112,7 @@ import { DeployActionBar } from '@/components/deploy/DeployActionBar'
 import { RolePolicyHealthPanel } from '@/components/deploy/RolePolicyHealthPanel'
 import type { DeploymentRecord } from '@/hooks/useDeploymentTracker'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { useDeferUntilAfterCommit } from '@/hooks/useDeferUntilMounted'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { logger } from '@/lib/observability/logger'
@@ -923,6 +924,7 @@ class DeployVaultErrorBoundary extends Component<
 
 export function DeployVault() {
   const privyClientStatus = usePrivyClientStatus()
+  const afterCommitReady = useDeferUntilAfterCommit()
 
   // Privy is used for auth/session - if disabled, show setup hint.
   if (privyClientStatus === 'disabled') {
@@ -938,6 +940,19 @@ export function DeployVault() {
             <div className="text-xs text-zinc-500 leading-relaxed">
               Set <span className="font-mono text-zinc-300">VITE_PRIVY_ENABLED=true</span> in environment variables.
             </div>
+          </div>
+        </section>
+      </div>
+    )
+  }
+
+  if (!afterCommitReady) {
+    return (
+      <div className="vault-shell min-h-0 bg-transparent text-white">
+        <section className="max-w-[1400px] mx-auto px-6 py-16">
+          <div className="text-[10px] font-medium text-zinc-500 mb-4">Deploy</div>
+          <div className="vault-surface vault-hover-lift p-8">
+            <LoadingInline labelOverride="Preparing deploy workspace..." />
           </div>
         </section>
       </div>

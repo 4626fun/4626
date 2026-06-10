@@ -3440,17 +3440,28 @@ async function runBridgeTick(
       }
       if (sustained) {
         logger.warn('[alfaclub-chat] room_history_timeout:sustained', payload)
-      } else {
-        logger.info('[alfaclub-chat] room_history_timeout:transient', payload)
+        // Sustained timeouts surface in the tick result so runtime error
+        // rollups notice the degradation.
+        return earlyTickResult({
+          roomId,
+          historyError,
+          processed: 0,
+          replied: 0,
+        })
       }
-      // Do not throw: the next poll tick recovers on its own and WS ingest
-      // keeps landing rows. Surface the error in the tick result only.
-      return earlyTickResult({
+      logger.info('[alfaclub-chat] room_history_timeout:transient', payload)
+      // Transient timeout: the next poll tick recovers on its own and WS
+      // ingest keeps landing rows. Return a clean result so runtime
+      // consumers do not emit per-tick error warnings for routine edge slowness.
+      return {
+        seeded: false,
         roomId,
-        historyError,
+        fetched: 0,
+        unseen: 0,
         processed: 0,
         replied: 0,
-      })
+        errors: [],
+      }
     }
 
     const canUseLiveFallback = flags.wsLiveFallbackEnabled && kind === 'auth'

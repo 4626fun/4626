@@ -219,6 +219,19 @@ function WaitlistAuthStep(props: {
         }
   )
 
+  // Single source of truth for what this step shows. Exactly one status message
+  // renders at a time — never the old "Creating account… / Finishing sign-in… /
+  // this usually takes a few seconds" triple-stack.
+  const finalizingStall = !busy && error === SESSION_FINALIZING_RETRY_MESSAGE
+  const working = privyAuthed && !recoveryRequired && (busy || finalizingStall)
+  const visibleError =
+    error && error !== SESSION_FINALIZING_RETRY_MESSAGE && (!recoveryRequired || privyAuthed)
+      ? error
+      : null
+  const progressPct = hasWaitlistStats
+    ? Math.min(100, Math.max(2, Math.round((signedUpCount / capacity) * 100)))
+    : 0
+
   return (
     <motion.div
       key="step-auth"
@@ -228,123 +241,156 @@ function WaitlistAuthStep(props: {
       transition={motionEnabled ? { duration: 0.22, ease: WAITLIST_EASE } : { duration: 0 }}
       className="relative flex min-h-[calc(100dvh-2rem)] flex-col justify-center py-4 sm:py-6"
     >
-      <div className="relative z-10 mx-auto w-full max-w-md text-center">
+      <div className="relative z-10 mx-auto w-full max-w-sm text-center">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 top-1/2 h-40 w-[min(100%,22rem)] -translate-x-1/2 -translate-y-1/2 bg-[radial-gradient(ellipse_at_center,rgb(var(--brand-primary)/0.07),transparent_72%)]"
+          className="pointer-events-none absolute left-1/2 top-1/2 h-48 w-[min(100%,24rem)] -translate-x-1/2 -translate-y-1/2 bg-[radial-gradient(ellipse_at_center,rgb(var(--brand-primary)/0.08),transparent_70%)]"
         />
 
-        <motion.div
-          {...stagger(0)}
-          className="relative px-2 sm:px-4"
-        >
-          <div className="space-y-2">
-            <h2 className="text-[1.75rem] font-semibold leading-tight tracking-tight text-white sm:text-[2rem]">{authUi.title}</h2>
-            {waitlistProgressLine ? (
-              <p className="text-xs text-zinc-400">{waitlistProgressLine}</p>
-            ) : null}
-          </div>
+        <motion.div {...stagger(0)} className="relative px-2 sm:px-0">
+          {/* Header */}
+          <h2 className="text-[2rem] font-semibold leading-tight tracking-tight text-white sm:text-[2.25rem]">
+            {authUi.title}
+          </h2>
+
+          {hasWaitlistStats ? (
+            <div className="mx-auto mt-4 w-full max-w-[17rem] space-y-2">
+              <div className="h-1 w-full overflow-hidden rounded-full bg-white/[0.08]">
+                <div
+                  className="h-full rounded-full bg-[rgb(var(--brand-primary))] transition-[width] duration-700 ease-out"
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+              <p className="text-xs tabular-nums text-zinc-500">{waitlistProgressLine}</p>
+            </div>
+          ) : null}
 
           {/* Referral greeting — only renders when a code is present and resolves. */}
           {referralCode ? (
-            <div className="mt-3.5 text-left">
+            <div className="mt-4 text-left">
               <ReferrerGreetingBanner referralCode={referralCode} />
             </div>
           ) : null}
 
-          <p className="mt-2 text-sm text-zinc-400">{authUi.subtitle}</p>
-
-          {privyAuthed && !recoveryRequired ? (
-            <div className="mt-3 rounded-xl border border-zinc-800/80 bg-zinc-950/40 px-3.5 py-2.5 text-left text-sm">
-              <div className="text-zinc-300">
-                Signed in with Privy
-                {privyEmail ? (
-                  <>
-                    {' '}
-                    as <span className="font-medium text-white">{privyEmail}</span>
-                  </>
-                ) : null}
+          {working ? (
+            /* One quiet working state: loader, one line of status, the email it
+               applies to, and an escape hatch. Nothing else competes for attention. */
+            <motion.div {...stagger(1)} className="mt-10 flex flex-col items-center gap-5">
+              <PixelWaveLoader name="wave-lr" size={20} color="rgb(var(--brand-primary))" />
+              <div className="space-y-1.5">
+                <p className="text-sm font-medium text-white" role="status" aria-live="polite">
+                  {finalizingStall ? 'Almost there — finishing sign-in' : 'Setting up your account'}
+                </p>
+                {privyEmail ? <p className="text-xs text-zinc-500">{privyEmail}</p> : null}
               </div>
-              <p className="mt-1 text-xs text-zinc-500">
-                {busy
-                  ? 'Creating your 4626 account…'
-                  : 'Tap Continue if the waitlist screen does not advance automatically.'}
-              </p>
+              {finalizingStall ? (
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={() => void onContinueAuth()}
+                  className="w-full"
+                >
+                  Retry now
+                </Button>
+              ) : null}
               {onSignOut ? (
                 <button
                   type="button"
-                  disabled={busy || signOutBusy}
+                  disabled={signOutBusy}
                   onClick={() => void onSignOut()}
-                  className="mt-2 text-xs text-red-400 transition hover:text-red-300 disabled:opacity-60"
+                  className="text-xs text-red-400/80 transition hover:text-red-300 disabled:opacity-60"
                 >
                   Sign out
                 </button>
               ) : null}
-            </div>
-          ) : null}
-
-          {privyAuthed && recoveryRequired ? (
-            <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/8 px-3.5 py-2.5 text-left text-sm text-amber-100/90">
-              {privyEmail ? (
-                <>
-                  Signed in with Privy as{' '}
-                  <span className="font-medium text-white">{privyEmail}</span>, but that session is not
-                  linked to your existing 4626 account yet.
-                </>
-              ) : (
-                <>
-                  Your wallet session is connected in Privy, but it is not linked to your existing 4626
-                  account yet. Use existing account and sign in with email OTP.
-                </>
-              )}
-            </div>
-          ) : null}
-
-          {/* CTA */}
-          <motion.div {...stagger(1)} className="mt-4 space-y-2.5">
-            <Button
-              type="button"
-              variant="primary"
-              disabled={busy}
-              aria-disabled={buttonsDisabled}
-              onClick={() => {
-                if (buttonsDisabled) return
-                void (recoveryRequired ? onRecoverAccount() : onContinueAuth())
-              }}
-              className="w-full"
-            >
-              {busy || !privyReady ? (
-                <span className="inline-flex items-center gap-2 text-[13.5px] font-medium text-white/90">
-                  <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.92)" />
-                  <span>{busy ? authUi.busyLabel : 'Loading sign-in…'}</span>
-                </span>
-              ) : (
-                authUi.ctaLabel
-              )}
-            </Button>
-            {recoveryRequired ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void onTryDifferentEmail()}
-                className="w-full text-xs text-zinc-400 transition hover:text-zinc-200 disabled:opacity-60"
-              >
-                Try a different email instead
-              </button>
-            ) : null}
-          </motion.div>
-
-          {/* error */}
-          {error && (!recoveryRequired || privyAuthed) ? (
-            <motion.div
-              {...stagger(2)}
-              role="alert"
-              aria-live="polite"
-              className="mt-3.5 space-y-2.5 rounded-xl border border-blue-500/20 bg-blue-500/8 px-4 py-3 text-left text-sm text-blue-200"
-            >
-              <div>{error}</div>
             </motion.div>
-          ) : null}
+          ) : (
+            <>
+              <p className="mt-3 text-sm leading-6 text-zinc-400">
+                {privyAuthed && !recoveryRequired && privyEmail ? (
+                  <>
+                    Signed in as <span className="font-medium text-zinc-200">{privyEmail}</span>
+                  </>
+                ) : (
+                  authUi.subtitle
+                )}
+              </p>
+
+              {privyAuthed && recoveryRequired ? (
+                <div className="mt-4 rounded-xl bg-amber-500/[0.07] px-4 py-3 text-left text-sm leading-6 text-amber-100/90">
+                  {privyEmail ? (
+                    <>
+                      Signed in as <span className="font-medium text-white">{privyEmail}</span>, but
+                      that session is not linked to your existing 4626 account yet.
+                    </>
+                  ) : (
+                    <>
+                      Your wallet session is connected, but it is not linked to your existing 4626
+                      account yet. Use existing account and sign in with email OTP.
+                    </>
+                  )}
+                </div>
+              ) : null}
+
+              {/* CTA */}
+              <motion.div {...stagger(1)} className="mt-6 space-y-3">
+                <Button
+                  type="button"
+                  variant="primary"
+                  disabled={busy}
+                  aria-disabled={buttonsDisabled}
+                  onClick={() => {
+                    if (buttonsDisabled) return
+                    void (recoveryRequired ? onRecoverAccount() : onContinueAuth())
+                  }}
+                  className="w-full"
+                >
+                  {busy || !privyReady ? (
+                    <span className="inline-flex items-center gap-2 text-[13.5px] font-medium text-white/90">
+                      <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.92)" />
+                      <span>{busy ? authUi.busyLabel : 'Loading sign-in…'}</span>
+                    </span>
+                  ) : privyAuthed && !recoveryRequired ? (
+                    'Continue'
+                  ) : (
+                    authUi.ctaLabel
+                  )}
+                </Button>
+                {recoveryRequired ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void onTryDifferentEmail()}
+                    className="w-full text-xs text-zinc-400 transition hover:text-zinc-200 disabled:opacity-60"
+                  >
+                    Try a different email instead
+                  </button>
+                ) : null}
+                {privyAuthed && !recoveryRequired && onSignOut ? (
+                  <button
+                    type="button"
+                    disabled={busy || signOutBusy}
+                    onClick={() => void onSignOut()}
+                    className="w-full text-xs text-red-400/80 transition hover:text-red-300 disabled:opacity-60"
+                  >
+                    Sign out
+                  </button>
+                ) : null}
+              </motion.div>
+
+              {/* error */}
+              {visibleError ? (
+                <motion.div
+                  {...stagger(2)}
+                  role="alert"
+                  aria-live="polite"
+                  className="mt-4 rounded-xl bg-blue-500/[0.07] px-4 py-3 text-left text-sm leading-6 text-blue-200"
+                >
+                  {visibleError}
+                </motion.div>
+              ) : null}
+            </>
+          )}
         </motion.div>
       </div>
     </motion.div>
@@ -1060,11 +1106,13 @@ export function WaitlistFlow(props: {
     if (typeof window === 'undefined') return
     if (step !== 'auth') return
     if (!busy) return
-    // Only timeout explicit user-initiated attempts; background auto-resume uses busy without inFlight.
-    if (!authAttemptInFlightRef.current) return
     if (error) return
 
     const timeoutId = window.setTimeout(() => {
+      authAttemptInFlightRef.current = false
+      loginAwaitInProgressRef.current = false
+      pendingAuthResumeStartedRef.current = false
+      clearWaitlistAuthPending()
       setBusy(false)
       setError(WAITLIST_SPINNER_TIMEOUT_MESSAGE)
     }, WAITLIST_BUSY_WATCHDOG_MS)

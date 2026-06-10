@@ -38,6 +38,18 @@ describe('GET /api/waitlist/me', () => {
     resolveAuthorizedRequestPrincipalMock.mockResolvedValue({ profileId: 42 })
   })
 
+  it('fails soft when DB is unavailable', async () => {
+    getDbMock.mockResolvedValue(null)
+
+    const req = createMockReq({ method: 'GET' })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toEqual({ success: true, data: null })
+  })
+
   it('marks distinct base_sub_account as execution-only, not canonical identity', async () => {
     const cswAddress = '0x1111111111111111111111111111111111111111'
     const subAccount = '0x2222222222222222222222222222222222222222'

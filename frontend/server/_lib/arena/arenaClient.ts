@@ -256,7 +256,15 @@ function buildAcpCommand(config: ArenaConfig, args: string[]): BuiltCommand {
 function buildArenaCommandEnv(config: ArenaConfig): Record<string, string> {
   const env: Record<string, string> = {}
   if (config.agentId) env.ARENA_AGENT_ID = config.agentId
-  if (config.agentWalletAddress) env.ARENA_AGENT_WALLET_ADDRESS = config.agentWalletAddress
+  if (config.agentWalletAddress) {
+    env.ARENA_AGENT_WALLET_ADDRESS = config.agentWalletAddress
+    // dgclaw v2 trade.ts reads HL_MASTER_ADDRESS (the ACP agent wallet) and
+    // otherwise tries acp-cli auto-detection, which fails on ephemeral
+    // containers without a configured ACP session.
+    if (!String(process.env.HL_MASTER_ADDRESS ?? '').trim()) {
+      env.HL_MASTER_ADDRESS = config.agentWalletAddress
+    }
+  }
   if (config.hlApiWalletAddress) env.ARENA_HL_API_WALLET_ADDRESS = config.hlApiWalletAddress
   return env
 }
