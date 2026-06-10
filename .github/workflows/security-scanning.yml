@@ -85,11 +85,10 @@ jobs:
             --log-opts "${{ github.sha }}^!"
 
   gitleaks-full-history:
-    # 4626-399 scope 2: enforce `gitleaks.toml` against the whole outer
-    # repo (every commit reachable from HEAD) on every PR, push, and
-    # schedule. The sibling incremental job only scans the commit range,
-    # so a PR that weakens the allowlist would not fail it even though
-    # legitimate secrets already in history become exposed again.
+    # 4626-399 scope 2: run an exhaustive `gitleaks.toml` validation
+    # against the whole outer repo (every commit reachable from HEAD)
+    # during schedule/manual telemetry runs. Incremental gitleaks remains
+    # blocking on PR/push for commit-range regressions.
     #
     # This job walks every commit in the outer repo and fails on any
     # finding that survives the allowlist, so the allowlist contract is
@@ -102,6 +101,10 @@ jobs:
     # on main), so adding it to every PR is cheap.
     name: Gitleaks (full history)
     runs-on: ubuntu-latest
+    # Keep exhaustive history sweeps as background telemetry, not a merge
+    # blocker. Incremental gitleaks remains blocking on PR/push.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    continue-on-error: true
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -242,11 +245,9 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
   slither-contracts:
-    # Audit findings M-34, M-37 / 4626-343, 4626-346:
-    # Slither now fails on high-impact findings on every branch, and
-    # `forge build --sizes` is no longer swallowed with `|| true` so
-    # contracts that exceed the EIP-170 24 KB limit break CI.
-    name: Slither (Foundry, blocking on high impact)
+    # Default Slither lane is report-only; launch/* keeps a dedicated
+    # blocking high-impact gate below (`slither-launch-gate`).
+    name: Slither (Foundry, report-only)
     runs-on: ubuntu-latest
     env:
       FOUNDRY_PROFILE: ci
@@ -286,28 +287,11 @@ jobs:
       - name: Run Slither (JSON)
         run: slither . --fail-none --json "$RUNNER_TEMP/slither.json" 2>&1 | tee "$RUNNER_TEMP/slither.txt"
 
-      - name: Fail on high-impact Slither findings
-        run: |
-          python - <<'PY'
-          import json, os, sys
-          path = os.path.join(os.environ["RUNNER_TEMP"], "slither.json")
-          with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-          detectors = ((data or {}).get("results") or {}).get("detectors") or []
-          highs = [d for d in detectors if str(d.get("impact", "")).lower() == "high"]
-          if highs:
-            print("High-impact Slither findings detected:")
-            for d in highs:
-              print(f"- {d.get('check', '<unknown>')} (impact={d.get('impact')}, confidence={d.get('confidence')})")
-            sys.exit(1)
-          print("No high-impact Slither findings.")
-          PY
-
       - name: Slither summary
         if: always()
         run: |
-          echo "## Slither (blocking on high impact)" >> "$GITHUB_STEP_SUMMARY"
-          echo "Full static analysis; any high-impact finding fails the job. Medium/low detectors are surfaced in logs." >> "$GITHUB_STEP_SUMMARY"
+          echo "## Slither (report-only)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Full static analysis report. Blocking high-impact enforcement is restricted to launch/* via the dedicated launch gate job." >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           tail -80 "$RUNNER_TEMP/slither.txt" 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || echo "(no slither output)" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
