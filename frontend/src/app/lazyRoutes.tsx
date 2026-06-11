@@ -125,7 +125,7 @@ export const LazyRequireAccepted = lazyNamed(() => import('./accessRuntime'), 'R
 export const LazyRequireAdmin = lazyNamed(() => import('./accessRuntime'), 'RequireAdmin')
 
 export function LazyRouteBoundary(props: { children: ReactNode }) {
-  return <Suspense fallback={<AppLoadingRegistrar />}>{props.children}</Suspense>
+  return <Suspense fallback={<AppLoadingRegistrar label="lazy-route-suspense" />}>{props.children}</Suspense>
 }
 
 export type LazyRouteComponent = ComponentType<any> | LazyExoticComponent<ComponentType<any>>

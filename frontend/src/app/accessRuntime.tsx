@@ -116,7 +116,7 @@ function RequireRouteAccess(props: { routeId: RouteId; children?: React.ReactNod
   const access = useAccessContext()
   const decision = resolveAccess(props.routeId, access)
   if (!decision.allow) {
-    if (decision.reason === 'loading') return <AppLoadingRegistrar />
+    if (decision.reason === 'loading') return <AppLoadingRegistrar label={`route-access:${props.routeId}`} />
     const to = decision.redirectTo ?? '/'
     if (to.startsWith('http://') || to.startsWith('https://')) {
       if (typeof window !== 'undefined') window.location.replace(to)
@@ -149,11 +149,11 @@ export function RequireTelegramMiniAppEntry(props: { children?: React.ReactNode 
   }
 
   if (entryStatus === 'checking') {
-    return <AppLoadingRegistrar />
+    return <AppLoadingRegistrar label="telegram-entry-check" />
   }
 
   const acceptedDecision = resolveAccess('accepted', access)
-  if (acceptedDecision.reason === 'loading') return <AppLoadingRegistrar />
+  if (acceptedDecision.reason === 'loading') return <AppLoadingRegistrar label="route-access:accepted" />
   if (acceptedDecision.allow) {
     return <Navigate to="/swap" replace state={{ from: location.pathname }} />
   }

@@ -30,7 +30,7 @@ function WaitlistFlowGate() {
   }
 
   return (
-    <Suspense fallback={<AppLoadingRegistrar />}>
+    <Suspense fallback={<AppLoadingRegistrar label="waitlist-page-suspense" />}>
       <LazyWaitlistFlow sectionId="waitlist-page" />
     </Suspense>
   )

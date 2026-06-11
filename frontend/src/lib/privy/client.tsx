@@ -183,7 +183,7 @@ export function PrivyClientProvider(props: {
     <PrivyClientContext.Provider value={ctx}>
       <PrivyProviderSafetyBoundary appId={appId} clientId={clientId} baseConfig={baseConfig} safeConfig={safeConfig}>
         <PrivyStatusObserver onStatus={handleRuntimeStatus} />
-        <AppLoadingBootstrapGate active={runtimeStatus === 'loading'}>
+        <AppLoadingBootstrapGate active={runtimeStatus === 'loading'} label="privy-init">
           <PrivyWalletHooksContextProvider enabled>{children}</PrivyWalletHooksContextProvider>
         </AppLoadingBootstrapGate>
       </PrivyProviderSafetyBoundary>

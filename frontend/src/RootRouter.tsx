@@ -20,7 +20,7 @@ function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof T
 }
 
 function LazyRouteBoundary(props: { children: ReactNode }) {
-  return <Suspense fallback={<AppLoadingRegistrar />}>{props.children}</Suspense>
+  return <Suspense fallback={<AppLoadingRegistrar label="root-route-suspense" />}>{props.children}</Suspense>
 }
 
 const Home = lazyNamed(() => import('./pages/Home'), 'Home')
@@ -46,7 +46,7 @@ function StandaloneDocumentRedirect(props: { htmlPath: '/telegram-link.html' }) 
     window.location.replace(`${props.htmlPath}${location.search}${location.hash}`)
   }, [location.hash, location.search, props.htmlPath])
 
-  return <AppLoadingRegistrar />
+  return <AppLoadingRegistrar label="standalone-doc-redirect" />
 }
 
 function AppHostRedirect(props: { target: string }) {
@@ -56,7 +56,7 @@ function AppHostRedirect(props: { target: string }) {
     window.location.replace(props.target)
   }, [props.target])
 
-  return <AppLoadingRegistrar />
+  return <AppLoadingRegistrar label="app-host-redirect" />
 }
 
 function MarketingLayout() {

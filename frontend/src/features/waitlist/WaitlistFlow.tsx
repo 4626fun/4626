@@ -1229,7 +1229,7 @@ export function WaitlistFlow(props: {
   ])
 
   return (
-    <AppLoadingBootstrapGate active={showAuthBootstrapLoader}>
+    <AppLoadingBootstrapGate active={showAuthBootstrapLoader} label="waitlist-auth-bootstrap">
       <section id={sectionId} className={wrapClass}>
       {disableHeroMotion ? (
         step === 'auth' ? (

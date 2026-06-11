@@ -21,7 +21,7 @@ function TelegramLinkStandaloneApp() {
   }
 
   if (entryStatus === 'checking') {
-    return <AppLoadingRegistrar />
+    return <AppLoadingRegistrar label="telegram-link-entry-check" />
   }
 
   return (

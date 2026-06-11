@@ -1,6 +1,7 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useState,
@@ -20,15 +21,19 @@ const APP_LOADING_SR_STATUS = LOADING_INTENT_CONFIG.page.srStatus
 const APP_LOADING_SCROLL_LOCK_CLASS = 'app-loading-scroll-lock'
 /** Bridge brief gaps when sequential bootstrap registrars hand off. */
 const APP_LOADING_HIDE_DELAY_MS = 280
+/** After this long, log which registrars are still holding the overlay so stuck loads are diagnosable. */
+const APP_LOADING_STUCK_WARN_MS = 8_000
 
 type AppLoadingStore = {
   count: number
+  labels: Map<string, number>
   listeners: Set<() => void>
 }
 
 function createAppLoadingStore(): AppLoadingStore {
   return {
     count: 0,
+    labels: new Map(),
     listeners: new Set(),
   }
 }
@@ -42,15 +47,24 @@ function subscribe(store: AppLoadingStore, listener: () => void) {
   }
 }
 
-function increment(store: AppLoadingStore) {
+function increment(store: AppLoadingStore, label: string) {
   store.count += 1
+  store.labels.set(label, (store.labels.get(label) ?? 0) + 1)
   for (const listener of store.listeners) listener()
 }
 
-function decrement(store: AppLoadingStore) {
+function decrement(store: AppLoadingStore, label: string) {
   if (store.count <= 0) return
   store.count -= 1
+  const labelCount = store.labels.get(label) ?? 0
+  if (labelCount <= 1) store.labels.delete(label)
+  else store.labels.set(label, labelCount - 1)
   for (const listener of store.listeners) listener()
+}
+
+function describeHolders(store: AppLoadingStore): string {
+  if (store.labels.size === 0) return '(none)'
+  return [...store.labels.entries()].map(([label, count]) => (count > 1 ? `${label} x${count}` : label)).join(', ')
 }
 
 function getSnapshot(store: AppLoadingStore): boolean {
@@ -122,11 +136,11 @@ export function useAppLoadingShellActive(): boolean {
  * Full-screen bootstrap handoff: register the shared overlay and keep route
  * content out of the document until the gate closes.
  */
-export function AppLoadingBootstrapGate(props: { active: boolean; children: ReactNode }) {
+export function AppLoadingBootstrapGate(props: { active: boolean; children: ReactNode; label?: string }) {
   const reduceMotion = useReducedMotion()
 
   if (props.active) {
-    return <AppLoadingRegistrar />
+    return <AppLoadingRegistrar label={props.label} />
   }
 
   return (
@@ -145,22 +159,38 @@ export function AppLoadingBootstrapGate(props: { active: boolean; children: Reac
 }
 
 /** Register a full-screen bootstrap load. Always renders one shared overlay copy. */
-export function AppLoadingRegistrar() {
+export function AppLoadingRegistrar(props: { label?: string } = {}) {
   const store = useAppLoadingStore()
+  const label = props.label ?? 'unlabeled'
 
   useLayoutEffect(() => {
-    increment(store)
-    return () => decrement(store)
-  }, [store])
+    increment(store, label)
+    return () => decrement(store, label)
+  }, [store, label])
 
   return null
 }
 
+/** Warn (with holder labels) when the bootstrap overlay stays up suspiciously long. */
+function useStuckLoadingWatchdog(active: boolean, store: AppLoadingStore | null) {
+  useEffect(() => {
+    if (!active || !store) return
+    const startedAt = Date.now()
+    const id = window.setInterval(() => {
+      const heldForS = Math.round((Date.now() - startedAt) / 1000)
+      console.warn(`[app-loading] overlay still active after ${heldForS}s — held by: ${describeHolders(store)}`)
+    }, APP_LOADING_STUCK_WARN_MS)
+    return () => window.clearInterval(id)
+  }, [active, store])
+}
+
 export function AppLoadingOverlay() {
+  const store = useContext(AppLoadingStoreContext)
   const active = useOptionalAppLoadingActive()
   const visible = useStableLoadingVisibility(active)
   const reduceMotion = useReducedMotion()
   useAppLoadingScrollLock(active || visible)
+  useStuckLoadingWatchdog(active, store)
 
   if (!visible && !active) return null
 

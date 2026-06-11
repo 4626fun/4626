@@ -71,7 +71,7 @@ export function PageTransitionOutlet() {
 
   return (
     <PageTransitionSurface transitionKey={location.key} variant="route">
-      <Suspense fallback={<AppLoadingRegistrar />}>
+      <Suspense fallback={<AppLoadingRegistrar label="route-transition-suspense" />}>
         <Outlet />
       </Suspense>
     </PageTransitionSurface>
