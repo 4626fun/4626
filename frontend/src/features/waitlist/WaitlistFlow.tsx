@@ -55,6 +55,7 @@ import {
   SESSION_FINALIZING_RETRY_MESSAGE,
   SESSION_MISMATCH_MESSAGE,
   STALE_PRIVY_SESSION_MESSAGE,
+  WAITLIST_STALE_SESSION_RESET_MESSAGE,
   getWalletProviderCollisionMessage,
   getWaitlistNetworkUnstableMessage,
   isSessionFinalizingError,
@@ -980,6 +981,30 @@ export function WaitlistFlow(props: {
     }
   }, [completionBusy, enterAppUrl, navigateWithSessionHandoff])
 
+  /**
+   * Privy can restore a cookie session that reports `authenticated` while its
+   * token mint is broken (stale custom-auth-domain state). Detect that with a
+   * bounded token probe so the flow resets instead of retrying forever.
+   */
+  const probeStalePrivyTokenSession = useCallback(async (): Promise<boolean> => {
+    if (!privyAuthedRef.current) return false
+    const token = await withTimeout(getAccessToken(), 3_000, 'Sign-in token probe').catch(() => null)
+    return !token
+  }, [getAccessToken])
+
+  const resetStaleAuthenticatedPrivySession = useCallback(async (): Promise<void> => {
+    clearWaitlistAuthPending()
+    resetResolvedAccountState()
+    await runWaitlistPrivyLogout({
+      logout: async () => {
+        await privy.logout().catch(() => null)
+      },
+      shouldLogout: true,
+    })
+    setRecoveryRequired(false)
+    setError(WAITLIST_STALE_SESSION_RESET_MESSAGE)
+  }, [privy, resetResolvedAccountState, setError, setRecoveryRequired])
+
   const resumePendingWaitlistAuth = useCallback(async () => {
     clearWaitlistRecoveryGate()
     setRecoveryRequired(false)
@@ -991,6 +1016,10 @@ export function WaitlistFlow(props: {
       clearWaitlistAuthPending()
     } catch (bootstrapError: unknown) {
       if (isSessionFinalizingError(bootstrapError)) {
+        if (await probeStalePrivyTokenSession()) {
+          await resetStaleAuthenticatedPrivySession()
+          return
+        }
         setError(SESSION_FINALIZING_RETRY_MESSAGE)
         return
       }
@@ -1026,8 +1055,10 @@ export function WaitlistFlow(props: {
   }, [
     disableAggressiveSessionReset,
     privyAuthed,
+    probeStalePrivyTokenSession,
     recoveryRequiredBootstrapCooldownUntilRef,
     resetResolvedAccountState,
+    resetStaleAuthenticatedPrivySession,
     setError,
     setRecoveryRequired,
     settleBootstrapAfterRecoverableLoginError,
@@ -1169,6 +1200,10 @@ export function WaitlistFlow(props: {
         } catch (bootstrapError: unknown) {
           if (cancelled) return
           if (isSessionFinalizingError(bootstrapError)) {
+            if (await probeStalePrivyTokenSession()) {
+              await resetStaleAuthenticatedPrivySession()
+              return
+            }
             finalizingBackgroundRetryCountRef.current += 1
             if (finalizingBackgroundRetryCountRef.current >= FINALIZING_BACKGROUND_RETRY_MAX_ATTEMPTS) {
               setError(WAITLIST_SPINNER_TIMEOUT_MESSAGE)
@@ -1219,8 +1254,10 @@ export function WaitlistFlow(props: {
     disableAggressiveSessionReset,
     error,
     privyAuthed,
+    probeStalePrivyTokenSession,
     requestBootstrap,
     resetResolvedAccountState,
+    resetStaleAuthenticatedPrivySession,
     setBusy,
     setError,
     setRecoveryRequired,

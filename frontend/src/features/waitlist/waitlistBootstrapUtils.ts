@@ -7,6 +7,8 @@ export const SESSION_FINALIZING_RETRY_MESSAGE =
   'Finishing sign-in… this usually takes a few seconds.'
 export const STALE_PRIVY_SESSION_MESSAGE =
   'Sign-in session expired. Tap Use existing account to sign in again with email.'
+export const WAITLIST_STALE_SESSION_RESET_MESSAGE =
+  'Your previous sign-in session expired and was reset. Tap Continue with email to sign in again.'
 
 export const FLOW_TIMEOUT_MS = 20_000
 export const TOKENLESS_FINALIZING_BOOTSTRAP_COOLDOWN_MS = 2_500
