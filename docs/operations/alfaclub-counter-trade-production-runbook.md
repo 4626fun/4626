@@ -56,6 +56,29 @@ cron produced only `failed` ledger rows. Therefore:
 
 Important: there is currently no explicit dry-run flag for this engine. "Shadow mode" is achieved by keeping all users un-opted (`state != 'active'`).
 
+## Mirrored exits (June 2026)
+
+The loop is no longer entry-only. When the countered user's fill classifies as
+`close` or `liquidated` on a pair, the bot submits a **full close**
+(`runArenaTrade({ action: 'close', pair })`) of its own position on that pair.
+
+- Gating: `ALFACLUB_COUNTER_TRADE_EXIT_ENABLED` (default **on**). Exits still
+  honour the env + DB kill switches and per-fill dedupe, but deliberately
+  **bypass** the cooldown, hourly action cap, daily notional cap, and the LLM
+  gate — closing risk must never be rate-limited.
+- `reduce` fills are intentionally not mirrored: the dgclaw `trade.ts close`
+  command has no partial-close, so partial reductions are skipped
+  (`fill_action_not_counterable:reduce`) and the bot's position closes in full
+  on the user's final exit instead.
+- Ledger semantics: successful exits record `status = 'executed'` with
+  `reason = 'exit_executed'` and **null notional**, and are excluded from the
+  entry cooldown clock and the hourly/daily usage windows. Skips record
+  `exit_no_position` / `exit_disabled:<action>` / `exit_already_closed_this_tick`;
+  failures record `exit_failed:<arena message>`.
+- If the bot holds no position on the pair (and didn't open one earlier in the
+  same tick), the exit is a no-op skip — safe for users who close positions
+  the bot never countered.
+
 ## LLM risk-review gate (optional)
 
 `frontend/server/_lib/alfaclub/counterTradeLlmAdvisor.ts` adds an optional
@@ -106,6 +129,7 @@ unless you explicitly prefer missing trades over trading without review.
 Use these as launch defaults unless explicit risk approval says otherwise:
 
 - `ALFACLUB_COUNTER_TRADE_ENABLED=0`
+- `ALFACLUB_COUNTER_TRADE_EXIT_ENABLED=1`
 - `ALFACLUB_COUNTER_TRADE_ROOM_ID=1659`
 - `ALFACLUB_COUNTER_TRADE_MIN_USER_NOTIONAL_USD=25`
 - `ALFACLUB_COUNTER_TRADE_COOLDOWN_MS=120000`
