@@ -38,6 +38,21 @@ export type CounterTradeRuntimeConfig = {
   minBufferRatio: number
   /** Max defense+harvest orders per tick (per identity). */
   maxDefenseActionsPerTick: number
+  /**
+   * Run the same defend/harvest loop on the countered user's own wallet (the
+   * other silo). Requires an approved Hyperliquid API-wallet key for that
+   * account (userSiloHlAgentPrivateKey) — the key can trade but never
+   * withdraw. Off by default; the bot silo is always defended when
+   * defenseEnabled is on.
+   */
+  userSiloDefenseEnabled: boolean
+  /** Approved HL API-wallet private key for the user's master account. */
+  userSiloHlAgentPrivateKey: string | null
+  /**
+   * Optional explicit master address for the user silo. Defaults to the
+   * fill-source wallet (the wallet whose trades are mirrored).
+   */
+  userSiloMasterAddress: string | null
   roomId: string
   chatPostEnabled: boolean
   chatPostRoomId: string
@@ -85,6 +100,19 @@ function readRoomId(): string {
   return raw || '1659'
 }
 
+function readOptionalSecret(name: string): string | null {
+  const raw = String(process.env[name] ?? '').trim()
+  return raw.length > 0 ? raw : null
+}
+
+function readOptionalAddress(name: string): string | null {
+  const raw = String(process.env[name] ?? '').trim()
+  if (!raw) return null
+  if (/^0x[a-fA-F0-9]{40}$/.test(raw)) return raw.toLowerCase()
+  logger.warn('[counter-trade] invalid address env; ignoring', { name })
+  return null
+}
+
 export function readCounterTradeRuntimeConfig(): CounterTradeRuntimeConfig {
   const minUserNotionalUsd = Math.max(
     1,
@@ -111,6 +139,9 @@ export function readCounterTradeRuntimeConfig(): CounterTradeRuntimeConfig {
       readPositiveNumber('ALFACLUB_COUNTER_TRADE_MIN_BUFFER_RATIO', 0.2),
     ),
     maxDefenseActionsPerTick: readPositiveInt('ALFACLUB_COUNTER_TRADE_MAX_DEFENSE_ACTIONS_PER_TICK', 2),
+    userSiloDefenseEnabled: readBool('ALFACLUB_COUNTER_TRADE_USER_DEFENSE_ENABLED', false),
+    userSiloHlAgentPrivateKey: readOptionalSecret('ALFACLUB_COUNTER_TRADE_USER_HL_AGENT_KEY'),
+    userSiloMasterAddress: readOptionalAddress('ALFACLUB_COUNTER_TRADE_USER_DEFENSE_MASTER'),
     roomId,
     chatPostEnabled: readBool('ALFACLUB_COUNTER_TRADE_CHAT_POST_ENABLED', true),
     chatPostRoomId: String(process.env.ALFACLUB_COUNTER_TRADE_CHAT_POST_ROOM_ID ?? '').trim() || roomId,

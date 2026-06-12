@@ -263,6 +263,19 @@ function buildArenaCommandEnv(config: ArenaConfig): Record<string, string> {
   // Pin acp-cli state (tokens, config.json, signer keystore) to the persistent
   // ARENA_ACP_HOME dir so trade.ts signing survives Railway redeploys.
   const env: Record<string, string> = { ...resolveAcpStateEnv() }
+
+  // API-wallet signing lane (user-silo defense): trade.ts signs locally with
+  // an approved HL API wallet key for the override master account, bypassing
+  // ACP entirely. The override must win over any ambient HL_MASTER_ADDRESS.
+  if (config.hlAgentPrivateKey && config.hlMasterAddressOverride) {
+    env.HL_AGENT_PRIVATE_KEY = config.hlAgentPrivateKey
+    env.HL_MASTER_ADDRESS = config.hlMasterAddressOverride
+    return env
+  }
+  // Bot (ACP) lane: make sure an ambient API-wallet key can never leak into
+  // the child env and hijack signing away from the ACP master wallet.
+  env.HL_AGENT_PRIVATE_KEY = ''
+
   if (config.agentId) env.ARENA_AGENT_ID = config.agentId
   if (config.agentWalletAddress) {
     env.ARENA_AGENT_WALLET_ADDRESS = config.agentWalletAddress

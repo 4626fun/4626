@@ -19,6 +19,9 @@ const RUNTIME: CounterTradeRuntimeConfig = {
   minReduceNotionalUsd: 15,
   minBufferRatio: 0.2,
   maxDefenseActionsPerTick: 2,
+  userSiloDefenseEnabled: false,
+  userSiloHlAgentPrivateKey: null,
+  userSiloMasterAddress: null,
   roomId: '1659',
   chatPostEnabled: true,
   chatPostRoomId: '1659',
@@ -268,5 +271,23 @@ describe('formatDefenseRoomPost', () => {
     expect(text).toContain('🌾 Harvest: took ~$250.00 off winning Long ETH')
     expect(text).toContain('Unrealized ROI +60%')
     expect(text).not.toContain('Silo buffer')
+  })
+
+  it('tags user-silo actions so room posts distinguish the two wallets', () => {
+    const text = formatDefenseRoomPost({
+      action: {
+        type: 'defend_reduce',
+        coin: 'BTC',
+        side: 'long',
+        reduceNotionalUsd: 250,
+        fullClose: false,
+        positionValueUsd: 1_000,
+        liqDistancePct: 5.2,
+        unrealizedRoiPct: -25,
+      },
+      bufferRatio: 0.2,
+      silo: 'user',
+    })
+    expect(text).toContain('🛡️ Defense (user silo): reduced Long BTC')
   })
 })

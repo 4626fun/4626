@@ -155,11 +155,45 @@ Env knobs (Railway InverseAKITA executor):
 - `ALFACLUB_COUNTER_TRADE_MIN_BUFFER_RATIO` — entry gate floor (default 0.2, capped 0.9).
 - `ALFACLUB_COUNTER_TRADE_MAX_DEFENSE_ACTIONS_PER_TICK` — per identity (default 2).
 
-Observability: every action emits `counter_trade.defense` (type, coin, side,
-reduce notional, liq distance, ROI, buffer ratio, ok) and failures emit
+Observability: every action emits `counter_trade.defense` (silo, type, coin,
+side, reduce notional, liq distance, ROI, buffer ratio, ok) and failures emit
 `counter_trade.defense_execution_failed` — failed actions are recorded as
 `status = 'failed'` with `reason = 'defense_reduce_executed_failed:…'` /
 `'harvest_tp_executed_failed:…'`.
+
+### User-silo defense (both wallets defended)
+
+The same defend/harvest pass can run on the **countered user's own wallet**,
+so both legs of the long/short pair are protected — each silo still uses only
+its own free USDC. Signing for the user wallet does not go through ACP:
+instead, the user creates an **API wallet** (agent key) on Hyperliquid at
+<https://app.hyperliquid.xyz/API> and approves it for their master account.
+API wallets can place orders only — they can never withdraw or transfer funds.
+
+Wiring:
+
+1. Create + approve an API wallet from the user's master account, copy its
+   private key.
+2. On the Railway InverseAKITA service set:
+   - `ALFACLUB_COUNTER_TRADE_USER_DEFENSE_ENABLED=1`
+   - `ALFACLUB_COUNTER_TRADE_USER_HL_AGENT_KEY=0x…` (the API-wallet key)
+   - `ALFACLUB_COUNTER_TRADE_USER_DEFENSE_MASTER=0x…` (optional; defaults to
+     the fill-source wallet whose trades are mirrored)
+3. Redeploy. Each tick now also snapshots the user wallet and runs
+   defend/harvest on its legs; room posts are tagged `(user silo)`.
+
+Execution path: the runner builds an `ArenaConfig` with `hlAgentPrivateKey` +
+`hlMasterAddressOverride`; `arenaClient` exports `HL_AGENT_PRIVATE_KEY` /
+`HL_MASTER_ADDRESS` to the dgclaw child, and the patched `trade.ts` signs
+locally with viem instead of acp-cli (the Dockerfile installs `viem` into
+`/app/dgclaw-skill`). The bot (ACP) lane explicitly clears
+`HL_AGENT_PRIVATE_KEY` so an ambient key can never hijack bot signing.
+
+Feedback-loop safety: a user-silo **partial** reduce lands as a `reduce` fill
+on the user wallet, which the mirror classifies as non-counterable and
+ignores. A dust **full close** lands as `close` and correctly triggers the
+exit mirror on the bot's opposite leg next tick — the hedge pair dissolves
+together instead of leaving the bot one-sided.
 
 ## LLM risk-review gate (optional)
 

@@ -21,6 +21,8 @@ function baseConfig(): ArenaConfig {
     agentId: null,
     agentWalletAddress: null,
     hlApiWalletAddress: null,
+    hlAgentPrivateKey: null,
+    hlMasterAddressOverride: null,
     commandTimeoutMs: 60_000,
     maxUsdcDeposit: 50_000,
     maxTradeSizeUsd: 100_000,

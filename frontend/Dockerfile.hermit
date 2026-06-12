@@ -105,6 +105,10 @@ RUN npm install -g @virtuals-protocol/acp-cli \
   && git clone --depth=1 --branch "${DGCLAW_SKILL_REF}" "${DGCLAW_SKILL_REPO}" /app/dgclaw-skill \
   && cd /app/dgclaw-skill \
   && npm install --omit=dev \
+  # viem powers the optional HL_AGENT_PRIVATE_KEY signing lane in the patched
+  # trade.ts (user-silo liquidation defense signs with an approved HL API
+  # wallet key instead of acp-cli). Upstream dgclaw does not depend on it.
+  && npm install --no-save --omit=dev viem@^2 \
   && git clone --depth=1 --branch "${ACP_CLI_REF}" "${ACP_CLI_REPO}" /app/acp-cli \
   && cd /app/acp-cli \
   && npm install --omit=dev

@@ -33,6 +33,13 @@ import {
 
 export type CounterTradeDefenseActionType = 'defend_reduce' | 'harvest_take_profit'
 
+/**
+ * Which wallet the defense pass is protecting: the bot's Arena agent wallet
+ * or the countered user's own wallet (when an approved HL API-wallet key for
+ * that account is configured). Same rules, separate silos.
+ */
+export type CounterTradeDefenseSilo = 'bot' | 'user'
+
 export type CounterTradeDefenseAction = {
   type: CounterTradeDefenseActionType
   coin: string
@@ -175,22 +182,24 @@ export function deriveCounterTradeDefenseActions(params: {
 export function formatDefenseRoomPost(params: {
   action: CounterTradeDefenseAction
   bufferRatio: number | null
+  silo?: CounterTradeDefenseSilo
 }): string {
   const { action, bufferRatio } = params
+  const siloTag = params.silo === 'user' ? ' (user silo)' : ''
   const sideLabel = action.side === 'long' ? 'Long' : 'Short'
   const lines: string[] = []
   if (action.type === 'defend_reduce') {
     lines.push(
       action.fullClose
-        ? `🛡️ Defense: closed ${sideLabel} ${action.coin} (~$${action.positionValueUsd.toFixed(2)}) — too close to liquidation`
-        : `🛡️ Defense: reduced ${sideLabel} ${action.coin} by ~$${action.reduceNotionalUsd.toFixed(2)} of $${action.positionValueUsd.toFixed(2)}`,
+        ? `🛡️ Defense${siloTag}: closed ${sideLabel} ${action.coin} (~$${action.positionValueUsd.toFixed(2)}) — too close to liquidation`
+        : `🛡️ Defense${siloTag}: reduced ${sideLabel} ${action.coin} by ~$${action.reduceNotionalUsd.toFixed(2)} of $${action.positionValueUsd.toFixed(2)}`,
     )
     if (action.liqDistancePct != null) {
       lines.push(`Liq distance ${action.liqDistancePct.toFixed(1)}% → margin released to buffer`)
     }
   } else {
     lines.push(
-      `🌾 Harvest: took ~$${action.reduceNotionalUsd.toFixed(2)} off winning ${sideLabel} ${action.coin}`,
+      `🌾 Harvest${siloTag}: took ~$${action.reduceNotionalUsd.toFixed(2)} off winning ${sideLabel} ${action.coin}`,
     )
     if (action.unrealizedRoiPct != null) {
       lines.push(`Unrealized ROI ${action.unrealizedRoiPct >= 0 ? '+' : ''}${action.unrealizedRoiPct.toFixed(0)}% → profit banked to buffer`)
@@ -212,9 +221,11 @@ export async function runCounterTradeDefenseForIdentity(params: {
   senderAddress: string
   identityConfig: ArenaConfig
   counterWalletState: HyperliquidClearinghouseState | null
+  silo?: CounterTradeDefenseSilo
   nowMs?: number
 }): Promise<CounterTradeDefenseRunOutcome> {
   const { runtime, senderAddress, identityConfig, counterWalletState } = params
+  const silo: CounterTradeDefenseSilo = params.silo ?? 'bot'
   const outcome: CounterTradeDefenseRunOutcome = { executed: 0, failed: 0, fullyClosedCoins: [] }
   if (!runtime.defenseEnabled) return outcome
 
@@ -229,7 +240,7 @@ export async function runCounterTradeDefenseForIdentity(params: {
       action.type === 'defend_reduce'
         ? COUNTER_TRADE_DEFENSE_EXECUTED_REASON
         : COUNTER_TRADE_HARVEST_EXECUTED_REASON
-    const eventKey = ['defense', action.coin.toUpperCase(), action.type, String(tickMs)].join('|')
+    const eventKey = ['defense', silo, action.coin.toUpperCase(), action.type, String(tickMs)].join('|')
 
     const tradeResult = await runArenaTrade(
       {
@@ -243,6 +254,7 @@ export async function runCounterTradeDefenseForIdentity(params: {
     logger.info('counter_trade.defense', {
       roomId: runtime.roomId,
       senderAddress,
+      silo,
       type: action.type,
       coin: action.coin,
       side: action.side,
@@ -273,6 +285,7 @@ export async function runCounterTradeDefenseForIdentity(params: {
       logger.warn('counter_trade.defense_execution_failed', {
         roomId: runtime.roomId,
         senderAddress,
+        silo,
         type: action.type,
         coin: action.coin,
         reason: tradeResult.message,
@@ -287,7 +300,7 @@ export async function runCounterTradeDefenseForIdentity(params: {
       try {
         await sendAlfaClubRoomText({
           roomId: runtime.chatPostRoomId,
-          text: formatDefenseRoomPost({ action, bufferRatio }),
+          text: formatDefenseRoomPost({ action, bufferRatio, silo }),
         })
       } catch (postError) {
         logger.warn('counter_trade.defense_room_post_failed', {

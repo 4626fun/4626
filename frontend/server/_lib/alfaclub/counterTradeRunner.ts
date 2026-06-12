@@ -349,10 +349,54 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
           senderAddress: optIn.senderAddress,
           identityConfig,
           counterWalletState,
+          silo: 'bot',
         })
         executed += defense.executed
         failed += defense.failed
         for (const coin of defense.fullyClosedCoins) closedCoinsThisTick.add(coin)
+      }
+
+      // User-silo defense: the same defend/harvest pass on the countered
+      // user's own wallet, signed with an approved HL API-wallet key (trade
+      // only, no withdrawals). Partial reduces on the user wallet land as
+      // `reduce` fills, which the mirror ignores; a dust full-close lands as
+      // `close` and correctly triggers the exit mirror on the next tick.
+      // Each silo still defends itself with its own USDC — no transfers.
+      if (
+        runtime.defenseEnabled &&
+        runtime.userSiloDefenseEnabled &&
+        runtime.userSiloHlAgentPrivateKey
+      ) {
+        const userSiloMaster = runtime.userSiloMasterAddress ?? userWalletForFills
+        try {
+          const userWalletState = await getClearinghouseState(userSiloMaster)
+          if (userWalletState) {
+            const userDefense = await runCounterTradeDefenseForIdentity({
+              runtime,
+              senderAddress: optIn.senderAddress,
+              identityConfig: {
+                ...baseArenaConfig,
+                agentId: null,
+                agentWalletAddress: null,
+                hlApiWalletAddress: null,
+                hlAgentPrivateKey: runtime.userSiloHlAgentPrivateKey,
+                hlMasterAddressOverride: userSiloMaster,
+              },
+              counterWalletState: userWalletState,
+              silo: 'user',
+            })
+            executed += userDefense.executed
+            failed += userDefense.failed
+          }
+        } catch (userDefenseError) {
+          logger.warn('counter_trade.user_silo_defense_failed', {
+            roomId: runtime.roomId,
+            senderAddress: optIn.senderAddress,
+            userSiloMaster,
+            message:
+              userDefenseError instanceof Error ? userDefenseError.message : String(userDefenseError),
+          })
+        }
       }
 
       if (!fills?.length) continue

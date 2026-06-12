@@ -15,6 +15,14 @@ export type ArenaConfig = {
   agentId: string | null
   agentWalletAddress: string | null
   hlApiWalletAddress: string | null
+  /**
+   * Approved Hyperliquid API-wallet private key for local signing (no ACP).
+   * Never read from base env — set programmatically for the user-silo defense
+   * lane only. When set, hlMasterAddressOverride must carry the master account.
+   */
+  hlAgentPrivateKey: string | null
+  /** Master account that approved hlAgentPrivateKey (reads + order target). */
+  hlMasterAddressOverride: string | null
   commandTimeoutMs: number
   maxUsdcDeposit: number
   maxTradeSizeUsd: number
@@ -113,6 +121,8 @@ export function readArenaConfig(): ArenaConfig {
     agentId,
     agentWalletAddress,
     hlApiWalletAddress,
+    hlAgentPrivateKey: null,
+    hlMasterAddressOverride: null,
     commandTimeoutMs,
     maxUsdcDeposit,
     maxTradeSizeUsd,

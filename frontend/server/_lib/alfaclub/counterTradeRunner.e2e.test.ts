@@ -86,6 +86,9 @@ const BASE_RUNTIME = {
   minReduceNotionalUsd: 15,
   minBufferRatio: 0.2,
   maxDefenseActionsPerTick: 2,
+  userSiloDefenseEnabled: false,
+  userSiloHlAgentPrivateKey: null,
+  userSiloMasterAddress: null,
   roomId: '1659',
   chatPostEnabled: true,
   chatPostRoomId: '1659',
@@ -656,5 +659,78 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     expect(mocks.recordCounterTradeAction).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'executed', reason: 'defense_reduce_executed' }),
     )
+  })
+
+  it('user-silo defense reduces a user leg near liquidation via the API-wallet config', async () => {
+    const userWallet = '0xebf94fa19db7d2e7905decd01dae4ea9eb4c1ff2'
+    const agentKey = `0x${'11'.repeat(32)}`
+    mocks.readCounterTradeRuntimeConfig.mockReturnValue({
+      ...BASE_RUNTIME,
+      userSiloDefenseEnabled: true,
+      userSiloHlAgentPrivateKey: agentKey,
+    })
+    mocks.getUserFillsByTimeDetailed.mockResolvedValue([])
+    // Bot wallet healthy/no legs; user wallet has a losing long inside the
+    // defend threshold (entry 100, pnl -50 on $1000 → mark ≈ 95; liq 90 → ~5.3%).
+    mocks.getClearinghouseState.mockImplementation(async (address: string) =>
+      address === '0xagentwallet'
+        ? { accountValueUsd: 10_000, withdrawableUsd: 5_000, assetPositions: [] }
+        : {
+            accountValueUsd: 4_000,
+            withdrawableUsd: 800,
+            assetPositions: [
+              {
+                coin: 'BTC',
+                side: 'long',
+                entryPx: 100,
+                positionValue: 1_000,
+                unrealizedPnl: -50,
+                liquidationPx: 90,
+                leverage: 5,
+              },
+            ],
+          },
+    )
+
+    const result = await runCounterTradeLoop()
+
+    expect(result.executed).toBe(1)
+    expect(result.failed).toBe(0)
+    expect(mocks.getClearinghouseState).toHaveBeenCalledWith(userWallet)
+    expect(mocks.runArenaTrade).toHaveBeenCalledTimes(1)
+    // ~5.3% liq distance is inside half the 12% defend threshold → escalated
+    // shave: 2 × 25% of the $1000 leg = $500.
+    expect(mocks.runArenaTrade).toHaveBeenCalledWith(
+      { action: 'close', pair: 'BTC', sizeUsd: 500 },
+      expect.objectContaining({
+        hlAgentPrivateKey: agentKey,
+        hlMasterAddressOverride: userWallet,
+        agentWalletAddress: null,
+      }),
+    )
+    const postedText = String(mocks.sendAlfaClubRoomText.mock.calls[0]?.[0]?.text ?? '')
+    expect(postedText).toContain('(user silo)')
+  })
+
+  it('skips user-silo defense when no API-wallet key is configured', async () => {
+    mocks.readCounterTradeRuntimeConfig.mockReturnValue({
+      ...BASE_RUNTIME,
+      userSiloDefenseEnabled: true,
+      userSiloHlAgentPrivateKey: null,
+    })
+    mocks.getUserFillsByTimeDetailed.mockResolvedValue([])
+    mocks.getClearinghouseState.mockResolvedValue({
+      accountValueUsd: 10_000,
+      withdrawableUsd: 5_000,
+      assetPositions: [],
+    })
+
+    const result = await runCounterTradeLoop()
+
+    expect(result.executed).toBe(0)
+    // Only the bot wallet snapshot is read; the user wallet is never touched.
+    expect(mocks.getClearinghouseState).toHaveBeenCalledTimes(1)
+    expect(mocks.getClearinghouseState).toHaveBeenCalledWith('0xagentwallet')
+    expect(mocks.runArenaTrade).not.toHaveBeenCalled()
   })
 })

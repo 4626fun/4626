@@ -63,10 +63,13 @@ Options:
   --tp <px>             Take profit trigger price
 
 Signing:
-  Orders are signed by your ACP agent wallet via acp-cli (no API wallet needed).
+  Default: orders are signed by your ACP agent wallet via acp-cli (no API wallet needed).
+  API-wallet mode: set HL_AGENT_PRIVATE_KEY to an approved Hyperliquid API wallet
+  key to sign locally for the master account in HL_MASTER_ADDRESS (no acp-cli).
 
 Environment:
   HL_MASTER_ADDRESS     Master account address (the ACP agent wallet). Auto-detected via acp-cli if unset.
+  HL_AGENT_PRIVATE_KEY  Approved HL API-wallet private key (enables local signing; requires HL_MASTER_ADDRESS)
   ACP_CLI_DIR           Path to acp-cli repo (auto-detected as sibling dir if unset)
 
 Examples:
@@ -506,11 +509,47 @@ function derivePrimaryType(
   return Object.keys(types).find((t) => !referenced.has(t)) ?? Object.keys(types)[0];
 }
 
+// Approved Hyperliquid API-wallet private key (optional). When set, orders are
+// signed locally with this agent key instead of shelling out to acp-cli. The
+// exchange resolves the agent signature to the master account that approved
+// it, so HL_MASTER_ADDRESS must point at that master account.
+function getAgentPrivateKey(): string | null {
+  const raw = (process.env.HL_AGENT_PRIVATE_KEY ?? '').trim();
+  if (!raw) return null;
+  const normalized = raw.startsWith('0x') ? raw : `0x${raw}`;
+  if (!/^0x[0-9a-fA-F]{64}$/.test(normalized)) {
+    console.error('HL_AGENT_PRIVATE_KEY is set but is not a 32-byte hex private key.');
+    process.exit(1);
+  }
+  return normalized;
+}
+
+// Build a viem local account from the API-wallet key. viem is an optional
+// dependency only required for this signing lane, so it is imported lazily —
+// the default ACP lane must keep working in environments without viem.
+async function makeApiWallet(privateKey: string) {
+  try {
+    const { privateKeyToAccount } = await import('viem/accounts');
+    return privateKeyToAccount(privateKey as `0x${string}`);
+  } catch (err: any) {
+    console.error('HL_AGENT_PRIVATE_KEY signing requires the `viem` package.');
+    console.error('Install it in dgclaw-skill: npm install viem');
+    console.error(err?.message ?? err);
+    process.exit(1);
+  }
+}
+
 // Resolve the master (ACP agent) wallet address. This is the account that
 // signs orders and whose positions/balances we read.
 function getMasterAddress(): string {
   const env = process.env.HL_MASTER_ADDRESS;
   if (env) return env;
+
+  if (getAgentPrivateKey()) {
+    console.error('HL_AGENT_PRIVATE_KEY is set but HL_MASTER_ADDRESS is missing.');
+    console.error('API-wallet signing needs the master account address explicitly.');
+    process.exit(1);
+  }
 
   const acp = getAcpBin();
   try {
@@ -590,7 +629,8 @@ async function main() {
     case 'open':
     case 'close':
     case 'modify': {
-      const wallet = makeAcpWallet(masterAddress);
+      const agentKey = getAgentPrivateKey();
+      const wallet = agentKey ? await makeApiWallet(agentKey) : makeAcpWallet(masterAddress);
       const exchange = new ExchangeClient({ wallet: wallet as any, transport });
       if (args.command === 'open') await openPosition(exchange, info, args, masterAddress);
       else if (args.command === 'close') await closePosition(exchange, info, args, masterAddress);
