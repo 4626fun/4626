@@ -10,6 +10,7 @@
 
 import { CHAINS } from '../config.js';
 import { readContract, writeContract, type WriteResult } from '../utils/onchain.js';
+import { deriveMinOutFromQuote, resolveHarvestMinCreatorOut } from '../utils/payoutRouterMinOut.js';
 import { alertCritical, alertInfo, alertWarning, formatTokens } from '../utils/alerts.js';
 import {
   fetchActiveVaults,
@@ -296,8 +297,32 @@ type DefiLlamaExternalQuote = {
   swapTarget: `0x${string}`;
   spender: `0x${string}`;
   swapCallData: `0x${string}`;
+  amountOut?: bigint;
   error?: string;
 };
+
+/** Best-effort expected-output extraction from an aggregator quote payload. */
+function extractQuoteAmountOut(payload: Record<string, unknown>): bigint | undefined {
+  const candidates: unknown[] = [
+    payload.amountReturned,
+    payload.outAmount,
+    payload.toAmount,
+    payload.buyAmount,
+    isObject(payload.rawQuote) ? (payload.rawQuote as Record<string, unknown>).outAmount : undefined,
+    isObject(payload.rawQuote) ? (payload.rawQuote as Record<string, unknown>).buyAmount : undefined,
+  ];
+  for (const candidate of candidates) {
+    const raw = typeof candidate === 'number' ? String(Math.floor(candidate)) : String(candidate ?? '').trim();
+    if (!/^\d+$/.test(raw)) continue;
+    try {
+      const parsed = BigInt(raw);
+      if (parsed > 0n) return parsed;
+    } catch {
+      // keep scanning
+    }
+  }
+  return undefined;
+}
 
 async function fetchDefiLlamaExternalQuote(params: {
   payoutRouterAddress: `0x${string}`;
@@ -350,6 +375,7 @@ async function fetchDefiLlamaExternalQuote(params: {
     swapTarget: tx.to,
     spender,
     swapCallData: tx.data,
+    amountOut: extractQuoteAmountOut(payloadObj),
   };
 }
 
@@ -491,14 +517,15 @@ export async function executePayoutRouterHarvest(): Promise<BatchPayoutRouterHar
         }
 
         let hasV3Path = true;
+        let v3Path: `0x${string}` = '0x';
         if (token.label !== 'creatorCoin') {
-          const path = await readContract<`0x${string}`>({
+          v3Path = await readContract<`0x${string}`>({
             address: payoutRouterAddress,
             abi: PAYOUT_ROUTER_ABI,
             functionName: 'swapPathToCreator',
             args: [token.token],
           });
-          hasV3Path = Boolean(path && path !== '0x');
+          hasV3Path = Boolean(v3Path && v3Path !== '0x');
         }
 
         const shouldTryExternal =
@@ -554,43 +581,66 @@ export async function executePayoutRouterHarvest(): Promise<BatchPayoutRouterHar
                 continue;
               }
             } else {
-              const externalConvertResult = await writeContract({
-                address: payoutRouterAddress,
-                abi: PAYOUT_ROUTER_ABI,
-                functionName: 'convertViaExternalAndQueue',
-                args: [
-                  {
-                    tokenIn: token.token,
-                    amountIn: balance,
-                    minCreatorOut: token.minCreatorOut,
-                    spender: quote.spender,
-                    swapTarget: quote.swapTarget,
-                    swapCallData: quote.swapCallData,
-                  },
-                ],
-              });
-
-              result.tokens.push({
-                token: token.token,
-                label: token.label,
-                balance,
-                converted: externalConvertResult.success,
-                route: 'external',
-                txHash: externalConvertResult.success ? externalConvertResult.txHash : undefined,
-                error: externalConvertResult.success ? undefined : externalConvertResult.error,
-              });
-
-              if (externalConvertResult.success) {
-                batch.converted += 1;
-                console.log(
-                  `[${short(vault.vaultAddress)}] convertViaExternalAndQueue(${token.label}) succeeded; amount=${formatTokens(balance, token.label)}`,
-                );
-                continue;
+              // The external route reverts on-chain when minCreatorOut == 0,
+              // so derive a slippage-bounded min-out from the aggregator quote
+              // and skip the external lane cleanly when neither a quote-derived
+              // value nor an env floor is available.
+              let externalMinOut = token.minCreatorOut;
+              if (typeof quote.amountOut === 'bigint' && quote.amountOut > 0n) {
+                const derived = deriveMinOutFromQuote(quote.amountOut, externalSwapSlippageBps);
+                if (derived > externalMinOut) externalMinOut = derived;
               }
+              if (externalMinOut <= 0n) {
+                if (!hasV3Path) {
+                  result.tokens.push({
+                    token: token.token,
+                    label: token.label,
+                    balance,
+                    converted: false,
+                    skippedReason: 'external_min_out_unavailable',
+                  });
+                  continue;
+                }
+                // fall through to the V3 route below
+              } else {
+                const externalConvertResult = await writeContract({
+                  address: payoutRouterAddress,
+                  abi: PAYOUT_ROUTER_ABI,
+                  functionName: 'convertViaExternalAndQueue',
+                  args: [
+                    {
+                      tokenIn: token.token,
+                      amountIn: balance,
+                      minCreatorOut: externalMinOut,
+                      spender: quote.spender,
+                      swapTarget: quote.swapTarget,
+                      swapCallData: quote.swapCallData,
+                    },
+                  ],
+                });
 
-              if (!hasV3Path) {
-                batch.errors += 1;
-                continue;
+                result.tokens.push({
+                  token: token.token,
+                  label: token.label,
+                  balance,
+                  converted: externalConvertResult.success,
+                  route: 'external',
+                  txHash: externalConvertResult.success ? externalConvertResult.txHash : undefined,
+                  error: externalConvertResult.success ? undefined : externalConvertResult.error,
+                });
+
+                if (externalConvertResult.success) {
+                  batch.converted += 1;
+                  console.log(
+                    `[${short(vault.vaultAddress)}] convertViaExternalAndQueue(${token.label}) succeeded; amount=${formatTokens(balance, token.label)}`,
+                  );
+                  continue;
+                }
+
+                if (!hasV3Path) {
+                  batch.errors += 1;
+                  continue;
+                }
               }
             }
           }
@@ -607,11 +657,33 @@ export async function executePayoutRouterHarvest(): Promise<BatchPayoutRouterHar
           continue;
         }
 
+        // Slippage guard: the V3 route does not enforce min-out on-chain, so
+        // never submit a swap with min-out 0 — quote it, or skip (fail closed).
+        let v3MinCreatorOut = token.minCreatorOut;
+        if (token.label !== 'creatorCoin') {
+          const minOut = await resolveHarvestMinCreatorOut({
+            path: v3Path,
+            amountIn: balance,
+            configuredMinOut: token.minCreatorOut,
+          });
+          if (!minOut.ok) {
+            result.tokens.push({
+              token: token.token,
+              label: token.label,
+              balance,
+              converted: false,
+              skippedReason: minOut.reason,
+            });
+            continue;
+          }
+          v3MinCreatorOut = minOut.minCreatorOut;
+        }
+
         const convertResult = await writeContract({
           address: payoutRouterAddress,
           abi: PAYOUT_ROUTER_ABI,
           functionName: 'convertAndQueue',
-          args: [token.token, balance, token.minCreatorOut],
+          args: [token.token, balance, v3MinCreatorOut],
         });
 
         result.tokens.push({

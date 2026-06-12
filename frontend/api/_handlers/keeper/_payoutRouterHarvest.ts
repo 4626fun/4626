@@ -20,7 +20,12 @@ import {
   RATE_LIMITS,
 } from '@4626/server-core'
 import { resolvePayoutRouterKeeperPrivateKey } from '../../../server/_lib/onchain/payoutRouterRuntime.js'
-import { createPublicClient, createWalletClient, getAddress, http, isAddress, type Abi } from 'viem'
+import { resolveHarvestMinCreatorOut } from '../../../server/_lib/onchain/payoutRouterMinOut.js'
+import {
+  executePayoutRouterTreasurySetup,
+  payoutRouterTreasuryAutoSetupEnabled,
+} from '../../../server/_lib/onchain/payoutRouterTreasurySetup.js'
+import { createPublicClient, createWalletClient, getAddress, http, isAddress, type Abi, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
 
@@ -220,6 +225,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       claimedProtocolRewards = receipt.status === 'success'
     }
 
+    const creatorCoinAddress = normalizeAddress(body.creatorCoinAddress)
+    let treasurySetupAttempted = false
+
+    const readSwapPath = async (tokenIn: `0x${string}`): Promise<Hex> => {
+      const path = await publicClient.readContract({
+        address: payoutRouterAddress,
+        abi: PAYOUT_ROUTER_ABI as unknown as Abi,
+        functionName: 'swapPathToCreator',
+        args: [tokenIn],
+      }) as `0x${string}`
+      return (path && path !== '0x' ? path : '0x') as Hex
+    }
+
+    // Self-heal: when a swap path is missing and treasury auto-setup is
+    // enabled, run the Safe-batched setup plan (setKeeper/setSwapPath/external
+    // approvals) once per request, then re-read the path.
+    const maybeSelfHealSwapPath = async (tokenIn: `0x${string}`): Promise<Hex> => {
+      if (treasurySetupAttempted || !creatorCoinAddress || !payoutRouterTreasuryAutoSetupEnabled()) {
+        return '0x' as Hex
+      }
+      treasurySetupAttempted = true
+      try {
+        const setup = await executePayoutRouterTreasurySetup({
+          publicClient,
+          rpcUrl,
+          payoutRouter: payoutRouterAddress,
+          creatorToken: creatorCoinAddress,
+        })
+        console.info('[keeper/payout-router-harvest] treasury setup self-heal', {
+          payoutRouterAddress,
+          executed: setup.executed,
+          txHash: setup.txHash ?? null,
+          skipReason: setup.plan.skipReason ?? null,
+        })
+        if (!setup.executed) return '0x' as Hex
+      } catch (error) {
+        console.warn('[keeper/payout-router-harvest] treasury setup self-heal failed', {
+          payoutRouterAddress,
+          message: error instanceof Error ? error.message : String(error),
+        })
+        return '0x' as Hex
+      }
+      return readSwapPath(tokenIn)
+    }
+
     const tokens: TokenResult[] = []
     for (const token of tokenPlan) {
       const balance = await publicClient.readContract({
@@ -232,24 +282,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         tokens.push({ token: token.token, label: token.label, balance: balance.toString(), converted: false, skippedReason: 'balance_below_threshold' })
         continue
       }
+      let minCreatorOut = token.minCreatorOut
       if (token.label !== 'creatorCoin') {
-        const path = await publicClient.readContract({
-          address: payoutRouterAddress,
-          abi: PAYOUT_ROUTER_ABI as unknown as Abi,
-          functionName: 'swapPathToCreator',
-          args: [token.token],
-        }) as `0x${string}`
-        if (!path || path === '0x') {
+        let path = await readSwapPath(token.token)
+        if (path === '0x') {
+          path = await maybeSelfHealSwapPath(token.token)
+        }
+        if (path === '0x') {
           tokens.push({ token: token.token, label: token.label, balance: balance.toString(), converted: false, skippedReason: 'path_not_configured' })
           continue
         }
+        // Slippage guard: the V3 route does not enforce min-out on-chain, so
+        // never submit a swap with min-out 0 — quote it, or skip (fail closed).
+        const minOut = await resolveHarvestMinCreatorOut({
+          publicClient,
+          path,
+          amountIn: balance,
+          configuredMinOut: token.minCreatorOut,
+        })
+        if (!minOut.ok) {
+          tokens.push({ token: token.token, label: token.label, balance: balance.toString(), converted: false, skippedReason: minOut.reason })
+          continue
+        }
+        minCreatorOut = minOut.minCreatorOut
       }
       try {
         const txHash = await walletClient.writeContract({
           address: payoutRouterAddress,
           abi: PAYOUT_ROUTER_ABI as unknown as Abi,
           functionName: 'convertAndQueue',
-          args: [token.token, balance, token.minCreatorOut],
+          args: [token.token, balance, minCreatorOut],
           chain: base,
           account,
         })

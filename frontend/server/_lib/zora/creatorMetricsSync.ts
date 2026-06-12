@@ -814,26 +814,24 @@ export async function runCreatorMetricsExploreBackfill(
 }
 
 export async function recomputeAndCacheCreatorMetricsTotals(db: Db): Promise<void> {
+  // Single pass over creator_coins for all three sums (the previous three scalar
+  // subqueries each scanned the ~1M-row table separately: ~1.2s/call, 4.7K calls).
   await db.sql`
     UPDATE creator_metrics_state
     SET
       cached_creators_total = (SELECT COUNT(*)::BIGINT FROM creators),
-      cached_market_cap_usd = (
-        SELECT COALESCE(SUM(market_cap_usd), 0)::NUMERIC
-        FROM creator_coins
-        WHERE chain_id = ${BASE_CHAIN_ID}
-      ),
-      cached_volume_24h_usd = (
-        SELECT COALESCE(SUM(volume_24h_usd), 0)::NUMERIC
-        FROM creator_coins
-        WHERE chain_id = ${BASE_CHAIN_ID}
-      ),
-      cached_fees_24h_usd = (
-        SELECT COALESCE(SUM(fees_24h_usd), 0)::NUMERIC
-        FROM creator_coins
-        WHERE chain_id = ${BASE_CHAIN_ID}
-      ),
+      cached_market_cap_usd = totals.market_cap_usd,
+      cached_volume_24h_usd = totals.volume_24h_usd,
+      cached_fees_24h_usd = totals.fees_24h_usd,
       cached_totals_at = NOW()
+    FROM (
+      SELECT
+        COALESCE(SUM(market_cap_usd), 0)::NUMERIC AS market_cap_usd,
+        COALESCE(SUM(volume_24h_usd), 0)::NUMERIC AS volume_24h_usd,
+        COALESCE(SUM(fees_24h_usd), 0)::NUMERIC AS fees_24h_usd
+      FROM creator_coins
+      WHERE chain_id = ${BASE_CHAIN_ID}
+    ) AS totals
     WHERE id = 1;
   `
 }

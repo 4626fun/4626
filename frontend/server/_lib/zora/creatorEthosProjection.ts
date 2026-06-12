@@ -263,74 +263,110 @@ export async function refreshCreatorEthosProjection(params: {
   // but skips chart/snapshot maintenance to keep hot-lane pressure predictable.
   const projectionMode = params.mode ?? 'full'
 
+  // Top-N candidate window for the volume arm. A creator's best coin is, by definition,
+  // the first of their coins in the global volume/mcap ordering, so scanning the top
+  // 4x oversampled slice via idx_creator_coins_volume_rank and deduping per creator is
+  // equivalent to ranking all ~1M coins with a window function -- at a fraction of the IO.
+  const volumeCandidateLimit = volumeLimit * 4
+
   const result = await params.db.sql`
-    WITH ranked_creator_coins AS (
+    WITH ethos_signal_eoas AS (
+      -- Small set: EOAs with a meaningful cached Ethos score.
+      SELECT lower(zoc.eoa) AS eoa, zoc.ethos_score
+      FROM zora_csw_owner_class zoc
+      WHERE zoc.ethos_score IS NOT NULL
+        AND zoc.ethos_score >= ${ethosPriorityMinScore}
+    ),
+    ethos_signal_creators AS (
+      -- Set-based replacement for the old per-creator EXISTS probes: one pass over
+      -- zora_csw_owners hashed against the small scored-EOA set instead of billions
+      -- of correlated index probes (the prior shape averaged 32-46s per refresh).
+      SELECT creator_address, MAX(ethos_score) AS max_owner_score
+      FROM (
+        SELECT eoa AS creator_address, ethos_score FROM ethos_signal_eoas
+        UNION ALL
+        SELECT lower(zco.csw_address) AS creator_address, ese.ethos_score
+        FROM zora_csw_owners zco
+        CROSS JOIN LATERAL unnest(COALESCE(zco.current_owners, ARRAY[]::text[])) AS owner_eoa
+        JOIN ethos_signal_eoas ese ON ese.eoa = lower(owner_eoa)
+      ) signals
+      GROUP BY creator_address
+    ),
+    volume_candidates AS (
       SELECT
         cc.coin_address,
         lower(cc.creator_address) AS creator_address,
         cc.created_at,
         cc.market_cap_usd,
-        cc.volume_24h_usd,
-        ROW_NUMBER() OVER (
-          PARTITION BY lower(cc.creator_address)
-          ORDER BY
-            cc.volume_24h_usd DESC NULLS LAST,
-            cc.market_cap_usd DESC NULLS LAST,
-            cc.created_at DESC NULLS LAST,
-            cc.coin_address ASC
-        ) AS creator_coin_rank
+        cc.volume_24h_usd
       FROM creator_coins cc
       WHERE cc.chain_id = 8453
+      ORDER BY
+        cc.volume_24h_usd DESC NULLS LAST,
+        cc.market_cap_usd DESC NULLS LAST,
+        cc.created_at DESC NULLS LAST,
+        cc.coin_address ASC
+      LIMIT ${volumeCandidateLimit}
     ),
     top_by_volume AS (
       SELECT *
-      FROM ranked_creator_coins
-      WHERE creator_coin_rank = 1
+      FROM (
+        SELECT DISTINCT ON (vc.creator_address) vc.*
+        FROM volume_candidates vc
+        ORDER BY
+          vc.creator_address,
+          vc.volume_24h_usd DESC NULLS LAST,
+          vc.market_cap_usd DESC NULLS LAST,
+          vc.created_at DESC NULLS LAST,
+          vc.coin_address ASC
+      ) dedup
       ORDER BY volume_24h_usd DESC NULLS LAST, market_cap_usd DESC NULLS LAST, creator_address ASC
       LIMIT ${volumeLimit}
     ),
+    ethos_top_coins AS (
+      -- The ethos-signal set is small, so resolve each creator's best coin with a
+      -- single index probe per creator (creator_coins_chain_creator_rank_idx).
+      SELECT
+        esc.creator_address,
+        esc.max_owner_score,
+        tc.coin_address,
+        tc.created_at,
+        tc.market_cap_usd,
+        tc.volume_24h_usd
+      FROM ethos_signal_creators esc
+      CROSS JOIN LATERAL (
+        SELECT cc.coin_address, cc.created_at, cc.market_cap_usd, cc.volume_24h_usd
+        FROM creator_coins cc
+        WHERE cc.chain_id = 8453
+          AND lower(cc.creator_address) = esc.creator_address
+        ORDER BY
+          cc.volume_24h_usd DESC NULLS LAST,
+          cc.market_cap_usd DESC NULLS LAST,
+          cc.created_at DESC NULLS LAST,
+          cc.coin_address ASC
+        LIMIT 1
+      ) tc
+    ),
     top_by_ethos_signal AS (
-      SELECT rcc.*
-      FROM ranked_creator_coins rcc
-      WHERE rcc.creator_coin_rank = 1
-        AND (
-          EXISTS (
-            SELECT 1
-            FROM zora_csw_owner_class zoc
-            WHERE lower(zoc.eoa) = rcc.creator_address
-              AND zoc.ethos_score IS NOT NULL
-              AND zoc.ethos_score >= ${ethosPriorityMinScore}
-          )
-          OR EXISTS (
-            SELECT 1
-            FROM zora_csw_owners zco
-            CROSS JOIN LATERAL unnest(COALESCE(zco.current_owners, ARRAY[]::text[])) AS owner_eoa
-            JOIN zora_csw_owner_class zoc
-              ON lower(zoc.eoa) = lower(owner_eoa)
-            WHERE lower(zco.csw_address) = rcc.creator_address
-              AND zoc.ethos_score IS NOT NULL
-              AND zoc.ethos_score >= ${ethosPriorityMinScore}
-          )
-        )
-      ORDER BY (
-        SELECT MAX(zoc.ethos_score)
-        FROM zora_csw_owner_class zoc
-        WHERE lower(zoc.eoa) = rcc.creator_address
-      ) DESC NULLS LAST,
-      rcc.volume_24h_usd DESC NULLS LAST,
-      rcc.creator_address ASC
+      SELECT creator_address, coin_address, created_at, market_cap_usd, volume_24h_usd
+      FROM ethos_top_coins
+      ORDER BY
+        max_owner_score DESC NULLS LAST,
+        volume_24h_usd DESC NULLS LAST,
+        creator_address ASC
       LIMIT ${ethosPriorityLimit}
     ),
-    selected_creators AS (
-      SELECT creator_address FROM top_by_volume
-      UNION
-      SELECT creator_address FROM top_by_ethos_signal
-    ),
     top_creator_coin AS (
-      SELECT rcc.*
-      FROM ranked_creator_coins rcc
-      INNER JOIN selected_creators sc ON sc.creator_address = rcc.creator_address
-      WHERE rcc.creator_coin_rank = 1
+      -- Both arms already carry each creator's best coin, so dedupe directly instead of
+      -- re-deriving rank-1 rows from a materialized full ranking.
+      SELECT DISTINCT ON (creator_address)
+        creator_address, coin_address, created_at, market_cap_usd, volume_24h_usd
+      FROM (
+        SELECT creator_address, coin_address, created_at, market_cap_usd, volume_24h_usd FROM top_by_volume
+        UNION ALL
+        SELECT creator_address, coin_address, created_at, market_cap_usd, volume_24h_usd FROM top_by_ethos_signal
+      ) u
+      ORDER BY creator_address
     ),
     profile_identity AS (
       SELECT

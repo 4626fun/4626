@@ -103,6 +103,48 @@ export function resolveSupabaseMigrationsRoot(): string {
 const ensuredFiles = new Set<string>()
 
 /**
+ * Durable DB-side ledger (public.schema_bootstrap_ledger, created by
+ * 20260713070000_schema_bootstrap_ledger.sql). Without it, every serverless
+ * cold start replayed full migration files: thousands of no-op-but-locking DDL
+ * statements (ALTER TABLE on creator_coins averaged ~1.9s under ACCESS
+ * EXCLUSIVE lock) and constant PostgREST schema-cache invalidations.
+ * With it, a cold start does one cheap SELECT per file.
+ *
+ * To force a re-apply on next cold start:
+ *   DELETE FROM public.schema_bootstrap_ledger WHERE filename = '<file>.sql';
+ */
+let ledgerAvailable: boolean | null = null
+
+async function isLedgerAvailable(db: Db): Promise<boolean> {
+  if (ledgerAvailable !== null) return ledgerAvailable
+  try {
+    const result = await db.sql`SELECT to_regclass('public.schema_bootstrap_ledger') IS NOT NULL AS ok;`
+    ledgerAvailable = Boolean(result.rows?.[0]?.ok)
+  } catch {
+    ledgerAvailable = false
+  }
+  return ledgerAvailable
+}
+
+async function isRecordedInLedger(db: Db, filename: string): Promise<boolean> {
+  if (!(await isLedgerAvailable(db))) return false
+  try {
+    const result = await db.sql`SELECT 1 FROM public.schema_bootstrap_ledger WHERE filename = ${filename} LIMIT 1;`
+    return (result.rows?.length ?? 0) > 0
+  } catch {
+    return false
+  }
+}
+
+async function recordInLedger(db: Db, filename: string): Promise<void> {
+  if (!(await isLedgerAvailable(db))) return
+  await db.sql`
+    INSERT INTO public.schema_bootstrap_ledger (filename) VALUES (${filename})
+    ON CONFLICT (filename) DO NOTHING;
+  `.catch(() => {})
+}
+
+/**
  * Per-helper idempotency + concurrent safety state.
  * This centralizes the "ensure once" pattern that was previously duplicated
  * (and sometimes incorrectly implemented) in legacy wrapper modules.
@@ -230,10 +272,18 @@ export async function ensureMigrationApplied(
 ): Promise<boolean> {
   if (ensuredFiles.has(filename)) return true
 
+  // Durable cross-process short-circuit: skip the DDL replay entirely when a
+  // previous process already applied this file against this database.
+  if (await isRecordedInLedger(db, filename)) {
+    ensuredFiles.add(filename)
+    return true
+  }
+
   if (preflightCheck) {
     const alreadyGood = await preflightCheck()
     if (alreadyGood) {
       ensuredFiles.add(filename)
+      await recordInLedger(db, filename)
       return true
     }
   }
@@ -261,6 +311,7 @@ export async function ensureMigrationApplied(
   }
 
   ensuredFiles.add(filename)
+  await recordInLedger(db, filename)
   return true
 }
 
@@ -495,11 +546,22 @@ export async function ensureAlfaclubCounterTradeSchema(db: Db): Promise<void> {
   })
 }
 
-/** Ethos chart snapshots + unified chart view refresh helpers. */
+/**
+ * Ethos chart MV + refresh-function support.
+ *
+ * Do NOT re-add 20260616000000_ethos_15min_snapshots.sql here: the 15min/hourly snapshot
+ * lanes were retired by 20260713010000_drop_ethos_high_frequency_snapshots.sql, and
+ * re-applying that file from cold-start bootstrap resurrects the dropped table.
+ * The preflight keeps already-bootstrapped databases no-op.
+ */
 export async function ensureEthosChartSupportSchema(db: Db): Promise<void> {
   await withEnsureOnce('ethosChartSupport', async () => {
-    await ensureMigrationApplied(db, '20260616000000_ethos_15min_snapshots.sql').catch(() => {})
-    await ensureMigrationApplied(db, '20260620000000_unified_ethos_chart_support.sql').catch(() => {})
+    await ensureMigrationApplied(db, '20260620000000_unified_ethos_chart_support.sql', async () => {
+      const result = await db.sql`
+        SELECT to_regprocedure('public.refresh_all_ethos_chart_views()') IS NOT NULL AS ok;
+      `
+      return Boolean(result.rows?.[0]?.ok)
+    }).catch(() => {})
   })
 }
 
@@ -520,9 +582,35 @@ export async function ensureBaseMcpApprovalSchema(db: Db): Promise<void> {
 /**
  * Final set of additive columns that were still being applied via raw
  * ALTERs in a handful of bootstrap helpers. One-time migration.
+ *
+ * The preflight matters operationally: without it, every cold start replayed
+ * 17 ALTER TABLE statements, each taking an ACCESS EXCLUSIVE lock on hot
+ * tables (creator_coins averaged ~1.9s per call queued behind reads) and
+ * invalidating PostgREST's schema cache. Probe the last column added to each
+ * touched table instead; if all exist the migration is a guaranteed no-op.
  */
 export async function ensureFinalAdditiveColumns(db: Db): Promise<void> {
-  await ensureMigrationApplied(db, '20260611000000_final_additive_columns.sql').catch(() => {})
+  await withEnsureOnce('finalAdditiveColumns', async () => {
+    await ensureMigrationApplied(db, '20260611000000_final_additive_columns.sql', async () => {
+      const result = await db.sql`
+        SELECT
+          EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_schema = 'public' AND table_name = 'creator_coins'
+                    AND column_name = 'sparkline_30d_updated_at')
+          AND EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_schema = 'public' AND table_name = 'creator_metrics_state'
+                    AND column_name = 'explore_last_sync_at')
+          AND EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_schema = 'public' AND table_name = 'deploys'
+                    AND column_name = 'next_run_after')
+          AND EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_schema = 'public' AND table_name = 'alfaclub_publications'
+                    AND column_name = 'last_submission_at')
+          AS ok;
+      `
+      return Boolean(result.rows?.[0]?.ok)
+    }).catch(() => {})
+  })
 }
 
 /**
