@@ -357,20 +357,20 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
       }
 
       // User-silo defense: the same defend/harvest pass on the countered
-      // user's own wallet, signed with an approved HL API-wallet key (trade
-      // only, no withdrawals). Partial reduces on the user wallet land as
-      // `reduce` fills, which the mirror ignores; a dust full-close lands as
-      // `close` and correctly triggers the exit mirror on the next tick.
-      // Each silo still defends itself with its own USDC — no transfers.
-      if (
-        runtime.defenseEnabled &&
-        runtime.userSiloDefenseEnabled &&
-        runtime.userSiloHlAgentPrivateKey
-      ) {
+      // user's own wallet. With an approved HL API-wallet key (trade only,
+      // no withdrawals) it executes reduce-only closes; without one — e.g.
+      // an AlfaClub-custodied room wallet awaiting delegation — it runs in
+      // alert mode and posts advisory cards instead of trading. Partial
+      // reduces on the user wallet land as `reduce` fills, which the mirror
+      // ignores; a dust full-close lands as `close` and correctly triggers
+      // the exit mirror on the next tick. Each silo still defends itself
+      // with its own USDC — no transfers.
+      if (runtime.defenseEnabled && runtime.userSiloDefenseEnabled) {
         const userSiloMaster = runtime.userSiloMasterAddress ?? userWalletForFills
         try {
           const userWalletState = await getClearinghouseState(userSiloMaster)
           if (userWalletState) {
+            const userSiloKey = runtime.userSiloHlAgentPrivateKey
             const userDefense = await runCounterTradeDefenseForIdentity({
               runtime,
               senderAddress: optIn.senderAddress,
@@ -379,11 +379,12 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
                 agentId: null,
                 agentWalletAddress: null,
                 hlApiWalletAddress: null,
-                hlAgentPrivateKey: runtime.userSiloHlAgentPrivateKey,
-                hlMasterAddressOverride: userSiloMaster,
+                hlAgentPrivateKey: userSiloKey,
+                hlMasterAddressOverride: userSiloKey ? userSiloMaster : null,
               },
               counterWalletState: userWalletState,
               silo: 'user',
+              mode: userSiloKey ? 'execute' : 'alert',
             })
             executed += userDefense.executed
             failed += userDefense.failed

@@ -26,12 +26,23 @@ import type { HyperliquidClearinghouseState } from './hyperliquid.js'
 import type { CounterTradeRuntimeConfig, CounterTradeSide } from './counterTradeConfig.js'
 import { computeLegLiqDistancePct, type CounterWalletPositionLeg } from './counterTradeEngine.js'
 import {
+  COUNTER_TRADE_DEFENSE_ALERT_REASON,
   COUNTER_TRADE_DEFENSE_EXECUTED_REASON,
+  COUNTER_TRADE_HARVEST_ALERT_REASON,
   COUNTER_TRADE_HARVEST_EXECUTED_REASON,
   recordCounterTradeAction,
 } from './counterTradeStore.js'
 
 export type CounterTradeDefenseActionType = 'defend_reduce' | 'harvest_take_profit'
+
+/**
+ * How a defense pass acts on its decisions:
+ * - execute: place reduce-only closes via the arena trade lane.
+ * - alert: post a warning card in the room instead of trading — used for the
+ *   user silo while the account is custodied (e.g. an AlfaClub room wallet)
+ *   and no approved HL API-wallet key exists yet.
+ */
+export type CounterTradeDefenseMode = 'execute' | 'alert'
 
 /**
  * Which wallet the defense pass is protecting: the bot's Arena agent wallet
@@ -56,8 +67,24 @@ export type CounterTradeDefenseAction = {
 export type CounterTradeDefenseRunOutcome = {
   executed: number
   failed: number
+  /** Alert-mode warnings posted this tick (no orders placed). */
+  alerted: number
   /** Coins whose legs were fully closed by defense this tick. */
   fullyClosedCoins: string[]
+}
+
+/**
+ * Alert-mode anti-spam: remember when each (silo, coin, action-type) leg was
+ * last alerted so a 2-minute tick does not repost the same warning. The
+ * runtime is a single long-lived Railway process, so in-memory is enough; a
+ * restart re-alerts once, which is acceptable for a risk warning.
+ */
+const lastAlertAtMsByKey = new Map<string, number>()
+
+export const DEFENSE_ALERT_COOLDOWN_MS = 30 * 60 * 1000
+
+export function __resetDefenseAlertStateForTests(): void {
+  lastAlertAtMsByKey.clear()
 }
 
 /** Free-collateral share of account equity (withdrawable / accountValue). */
@@ -212,9 +239,55 @@ export function formatDefenseRoomPost(params: {
 }
 
 /**
+ * Advisory card for alert mode: the same trigger fired, but the silo's
+ * account is custodied so the bot cannot place the reduce itself.
+ */
+export function formatDefenseAlertPost(params: {
+  action: CounterTradeDefenseAction
+  bufferRatio: number | null
+  silo?: CounterTradeDefenseSilo
+}): string {
+  const { action, bufferRatio } = params
+  const siloTag = params.silo === 'user' ? ' (user silo)' : ''
+  const sideLabel = action.side === 'long' ? 'Long' : 'Short'
+  const lines: string[] = []
+  if (action.type === 'defend_reduce') {
+    lines.push(
+      `⚠️ Defense alert${siloTag}: ${sideLabel} ${action.coin} is ${
+        action.liqDistancePct != null ? `${action.liqDistancePct.toFixed(1)}% ` : ''
+      }from liquidation`,
+    )
+    lines.push(
+      action.fullClose
+        ? `Suggested: close the leg (~$${action.positionValueUsd.toFixed(2)}) — too small to partially reduce`
+        : `Suggested: reduce ~$${action.reduceNotionalUsd.toFixed(2)} of $${action.positionValueUsd.toFixed(2)} to release margin`,
+    )
+  } else {
+    lines.push(
+      `🌾 Harvest alert${siloTag}: ${sideLabel} ${action.coin} is up ${
+        action.unrealizedRoiPct != null
+          ? `${action.unrealizedRoiPct >= 0 ? '+' : ''}${action.unrealizedRoiPct.toFixed(0)}% ROI`
+          : 'strongly'
+      }`,
+    )
+    lines.push(
+      `Suggested: take ~$${action.reduceNotionalUsd.toFixed(2)} off to bank profit into the buffer`,
+    )
+  }
+  if (bufferRatio != null) {
+    lines.push(`Silo buffer ${(bufferRatio * 100).toFixed(0)}% of equity`)
+  }
+  return lines.join('\n')
+}
+
+/**
  * Execute defense/harvest actions for one identity. Each action is a
  * (partial) reduce-only close on the bot wallet, recorded in the action
  * ledger under a risk-reducing reason (never counted as an entry).
+ *
+ * In `alert` mode no orders are placed: each triggered action posts an
+ * advisory card instead (deduped per silo/coin/type for
+ * DEFENSE_ALERT_COOLDOWN_MS) and is ledgered as `skipped`.
  */
 export async function runCounterTradeDefenseForIdentity(params: {
   runtime: CounterTradeRuntimeConfig
@@ -222,11 +295,18 @@ export async function runCounterTradeDefenseForIdentity(params: {
   identityConfig: ArenaConfig
   counterWalletState: HyperliquidClearinghouseState | null
   silo?: CounterTradeDefenseSilo
+  mode?: CounterTradeDefenseMode
   nowMs?: number
 }): Promise<CounterTradeDefenseRunOutcome> {
   const { runtime, senderAddress, identityConfig, counterWalletState } = params
   const silo: CounterTradeDefenseSilo = params.silo ?? 'bot'
-  const outcome: CounterTradeDefenseRunOutcome = { executed: 0, failed: 0, fullyClosedCoins: [] }
+  const mode: CounterTradeDefenseMode = params.mode ?? 'execute'
+  const outcome: CounterTradeDefenseRunOutcome = {
+    executed: 0,
+    failed: 0,
+    alerted: 0,
+    fullyClosedCoins: [],
+  }
   if (!runtime.defenseEnabled) return outcome
 
   const actions = deriveCounterTradeDefenseActions({ state: counterWalletState, runtime })
@@ -236,6 +316,60 @@ export async function runCounterTradeDefenseForIdentity(params: {
   const tickMs = params.nowMs ?? Date.now()
 
   for (const action of actions) {
+    if (mode === 'alert') {
+      const alertKey = [silo, action.coin.toUpperCase(), action.type].join('|')
+      const lastAlertAtMs = lastAlertAtMsByKey.get(alertKey) ?? 0
+      if (tickMs - lastAlertAtMs < DEFENSE_ALERT_COOLDOWN_MS) continue
+      lastAlertAtMsByKey.set(alertKey, tickMs)
+
+      logger.info('counter_trade.defense_alert', {
+        roomId: runtime.roomId,
+        senderAddress,
+        silo,
+        type: action.type,
+        coin: action.coin,
+        side: action.side,
+        reduceNotionalUsd: action.reduceNotionalUsd,
+        fullClose: action.fullClose,
+        positionValueUsd: action.positionValueUsd,
+        liqDistancePct: action.liqDistancePct,
+        unrealizedRoiPct: action.unrealizedRoiPct,
+        bufferRatio,
+      })
+
+      await recordCounterTradeAction({
+        roomId: runtime.roomId,
+        senderAddress,
+        eventKey: ['defense-alert', silo, action.coin.toUpperCase(), action.type, String(tickMs)].join('|'),
+        status: 'skipped',
+        reason:
+          action.type === 'defend_reduce'
+            ? COUNTER_TRADE_DEFENSE_ALERT_REASON
+            : COUNTER_TRADE_HARVEST_ALERT_REASON,
+        counterSide: action.side,
+        counterNotionalUsd: action.reduceNotionalUsd,
+        counterLeverage: null,
+      })
+
+      if (runtime.chatPostEnabled) {
+        try {
+          await sendAlfaClubRoomText({
+            roomId: runtime.chatPostRoomId,
+            text: formatDefenseAlertPost({ action, bufferRatio, silo }),
+          })
+        } catch (postError) {
+          logger.warn('counter_trade.defense_room_post_failed', {
+            roomId: runtime.roomId,
+            postRoomId: runtime.chatPostRoomId,
+            coin: action.coin,
+            message: postError instanceof Error ? postError.message : String(postError),
+          })
+        }
+      }
+      outcome.alerted += 1
+      continue
+    }
+
     const reason =
       action.type === 'defend_reduce'
         ? COUNTER_TRADE_DEFENSE_EXECUTED_REASON

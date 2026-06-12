@@ -29,6 +29,16 @@ export const COUNTER_TRADE_DEFENSE_EXECUTED_REASON = 'defense_reduce_executed'
 export const COUNTER_TRADE_HARVEST_EXECUTED_REASON = 'harvest_tp_executed'
 
 /**
+ * Ledger `reason` for alert-mode defense warnings (custodied silo — e.g. an
+ * AlfaClub room wallet with no approved API-wallet key — so the bot posts an
+ * advisory card instead of placing the reduce). Rows use status 'skipped'.
+ */
+export const COUNTER_TRADE_DEFENSE_ALERT_REASON = 'defense_alert_posted'
+
+/** Alert-mode counterpart of harvest_tp_executed (advisory only). */
+export const COUNTER_TRADE_HARVEST_ALERT_REASON = 'harvest_alert_posted'
+
+/**
  * Executed-row reasons that are risk-reducing rather than new entries. These
  * never advance the cooldown clock and never count toward hourly/daily entry
  * caps.

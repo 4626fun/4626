@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   computeBufferRatio,
   deriveCounterTradeDefenseActions,
+  formatDefenseAlertPost,
   formatDefenseRoomPost,
 } from './counterTradeDefense.js'
 import type { CounterTradeRuntimeConfig } from './counterTradeConfig.js'
@@ -289,5 +290,61 @@ describe('formatDefenseRoomPost', () => {
       silo: 'user',
     })
     expect(text).toContain('🛡️ Defense (user silo): reduced Long BTC')
+  })
+})
+
+describe('formatDefenseAlertPost', () => {
+  it('formats an advisory defend alert with suggested reduce size', () => {
+    const text = formatDefenseAlertPost({
+      action: {
+        type: 'defend_reduce',
+        coin: 'BTC',
+        side: 'long',
+        reduceNotionalUsd: 500,
+        fullClose: false,
+        positionValueUsd: 1_000,
+        liqDistancePct: 5.3,
+        unrealizedRoiPct: -25,
+      },
+      bufferRatio: 0.2,
+      silo: 'user',
+    })
+    expect(text).toContain('⚠️ Defense alert (user silo): Long BTC is 5.3% from liquidation')
+    expect(text).toContain('Suggested: reduce ~$500.00 of $1000.00')
+    expect(text).toContain('Silo buffer 20% of equity')
+  })
+
+  it('suggests a full close for dust legs and formats harvest alerts', () => {
+    const dustText = formatDefenseAlertPost({
+      action: {
+        type: 'defend_reduce',
+        coin: 'BTC',
+        side: 'short',
+        reduceNotionalUsd: 25,
+        fullClose: true,
+        positionValueUsd: 25,
+        liqDistancePct: 4.8,
+        unrealizedRoiPct: -25,
+      },
+      bufferRatio: null,
+    })
+    expect(dustText).toContain('Suggested: close the leg (~$25.00)')
+
+    const harvestText = formatDefenseAlertPost({
+      action: {
+        type: 'harvest_take_profit',
+        coin: 'ETH',
+        side: 'long',
+        reduceNotionalUsd: 250,
+        fullClose: false,
+        positionValueUsd: 1_000,
+        liqDistancePct: 28.6,
+        unrealizedRoiPct: 60,
+      },
+      bufferRatio: null,
+      silo: 'user',
+    })
+    expect(harvestText).toContain('🌾 Harvest alert (user silo): Long ETH is up +60% ROI')
+    expect(harvestText).toContain('Suggested: take ~$250.00 off')
   })
 })

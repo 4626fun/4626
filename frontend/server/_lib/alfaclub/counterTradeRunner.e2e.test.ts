@@ -47,6 +47,8 @@ vi.mock('./counterTradeStore.js', () => ({
   COUNTER_TRADE_EXIT_EXECUTED_REASON: 'exit_executed',
   COUNTER_TRADE_DEFENSE_EXECUTED_REASON: 'defense_reduce_executed',
   COUNTER_TRADE_HARVEST_EXECUTED_REASON: 'harvest_tp_executed',
+  COUNTER_TRADE_DEFENSE_ALERT_REASON: 'defense_alert_posted',
+  COUNTER_TRADE_HARVEST_ALERT_REASON: 'harvest_alert_posted',
   listActiveCounterTradeOptIns: mocks.listActiveCounterTradeOptIns,
   readCounterTradeUsageWindow: mocks.readCounterTradeUsageWindow,
   readOrCreateCounterTradeRoomStrategy: mocks.readOrCreateCounterTradeRoomStrategy,
@@ -74,6 +76,7 @@ vi.mock('./chatBridge.js', () => ({
 }))
 
 import { runCounterTradeLoop } from './counterTradeRunner.js'
+import { __resetDefenseAlertStateForTests } from './counterTradeDefense.js'
 
 const BASE_RUNTIME = {
   enabled: true,
@@ -123,6 +126,7 @@ const FILL = {
 describe('runCounterTradeLoop end-to-end integration behavior', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    __resetDefenseAlertStateForTests()
     vi.stubEnv('ALFACLUB_COUNTER_TRADE_ENABLED', '1')
 
     mocks.readCounterTradeRuntimeConfig.mockReturnValue(BASE_RUNTIME)
@@ -712,25 +716,57 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     expect(postedText).toContain('(user silo)')
   })
 
-  it('skips user-silo defense when no API-wallet key is configured', async () => {
+  it('falls back to alert-only user-silo defense when no API-wallet key is configured', async () => {
+    const userWallet = '0xebf94fa19db7d2e7905decd01dae4ea9eb4c1ff2'
     mocks.readCounterTradeRuntimeConfig.mockReturnValue({
       ...BASE_RUNTIME,
       userSiloDefenseEnabled: true,
       userSiloHlAgentPrivateKey: null,
     })
     mocks.getUserFillsByTimeDetailed.mockResolvedValue([])
-    mocks.getClearinghouseState.mockResolvedValue({
-      accountValueUsd: 10_000,
-      withdrawableUsd: 5_000,
-      assetPositions: [],
-    })
+    // Same risky user leg as the execute-mode test, but without a key the
+    // bot must warn instead of trade.
+    mocks.getClearinghouseState.mockImplementation(async (address: string) =>
+      address === '0xagentwallet'
+        ? { accountValueUsd: 10_000, withdrawableUsd: 5_000, assetPositions: [] }
+        : {
+            accountValueUsd: 4_000,
+            withdrawableUsd: 800,
+            assetPositions: [
+              {
+                coin: 'BTC',
+                side: 'long',
+                entryPx: 100,
+                positionValue: 1_000,
+                unrealizedPnl: -50,
+                liquidationPx: 90,
+                leverage: 5,
+              },
+            ],
+          },
+    )
 
     const result = await runCounterTradeLoop()
 
     expect(result.executed).toBe(0)
-    // Only the bot wallet snapshot is read; the user wallet is never touched.
-    expect(mocks.getClearinghouseState).toHaveBeenCalledTimes(1)
-    expect(mocks.getClearinghouseState).toHaveBeenCalledWith('0xagentwallet')
+    expect(result.failed).toBe(0)
+    expect(mocks.getClearinghouseState).toHaveBeenCalledWith(userWallet)
+    // No orders — the silo is custodied; only an advisory card goes out.
     expect(mocks.runArenaTrade).not.toHaveBeenCalled()
+    expect(mocks.recordCounterTradeAction).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'skipped', reason: 'defense_alert_posted' }),
+    )
+    const postedText = String(mocks.sendAlfaClubRoomText.mock.calls[0]?.[0]?.text ?? '')
+    expect(postedText).toContain('⚠️ Defense alert (user silo)')
+    expect(postedText).toContain('BTC')
+
+    // Second tick inside the alert cooldown: no duplicate post.
+    mocks.sendAlfaClubRoomText.mockClear()
+    mocks.recordCounterTradeAction.mockClear()
+    await runCounterTradeLoop()
+    expect(mocks.sendAlfaClubRoomText).not.toHaveBeenCalled()
+    expect(mocks.recordCounterTradeAction).not.toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'defense_alert_posted' }),
+    )
   })
 })

@@ -166,9 +166,23 @@ side, reduce notional, liq distance, ROI, buffer ratio, ok) and failures emit
 The same defend/harvest pass can run on the **countered user's own wallet**,
 so both legs of the long/short pair are protected — each silo still uses only
 its own free USDC. Signing for the user wallet does not go through ACP:
-instead, the user creates an **API wallet** (agent key) on Hyperliquid at
-<https://app.hyperliquid.xyz/API> and approves it for their master account.
-API wallets can place orders only — they can never withdraw or transfer funds.
+instead, an **API wallet** (agent key) must be approved for that master
+account on Hyperliquid (<https://app.hyperliquid.xyz/API>). API wallets can
+place orders only — they can never withdraw or transfer funds.
+
+**Alert-only fallback (custodied accounts).** For room 1659 the countered
+wallet is the AlfaClub room portfolio wallet, which AlfaClub custodies — no
+API-wallet key exists until AlfaClub grants delegation. With
+`ALFACLUB_COUNTER_TRADE_USER_DEFENSE_ENABLED=1` and **no**
+`ALFACLUB_COUNTER_TRADE_USER_HL_AGENT_KEY`, the user silo runs in **alert
+mode**: the same liquidation-distance / harvest triggers fire, but instead of
+placing orders the bot posts an advisory card (`⚠️ Defense alert (user silo)`
+/ `🌾 Harvest alert (user silo)`) with the suggested reduce size, so the
+position can be trimmed manually through AlfaClub. Alerts dedupe per
+(silo, coin, action type) for 30 minutes, are ledgered as `status='skipped'`
+with `reason='defense_alert_posted'` / `'harvest_alert_posted'`, and emit
+`counter_trade.defense_alert` logs. Setting the agent key later upgrades the
+silo to full execution with no code change.
 
 Wiring:
 
