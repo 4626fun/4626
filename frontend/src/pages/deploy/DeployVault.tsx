@@ -202,6 +202,8 @@ import {
 } from './deployVaultRolePolicy'
 
 const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 50_000_000n
+// Batcher Phase2Module accepts a first-deposit range of [50M, 100M] creator tokens.
+const MAX_FIRST_DEPOSIT_TOKENS = 100_000_000n
 const MIN_FIRST_DEPOSIT = DEFAULT_MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
 const ZERO_ADDRESS = addr('0000000000000000000000000000000000000000')
@@ -7402,25 +7404,31 @@ function DeployVaultMain() {
   const deploymentVersion = useMemo(() => resolveDeploymentVersionFromRuntime(), [])
   const deployMode = useMemo(() => resolveDeployMode(), [])
   const strictNoEoaMode = deployMode === 'no_eoa_strict'
-  const minFirstDepositTokens = useMemo(() => {
-    // Deployment flow currently enforces an exact 50M creator-token first deposit.
-    // Keep UI/runtime locked to that value so query/env overrides cannot drift and fail late.
-    return DEFAULT_MIN_FIRST_DEPOSIT_TOKENS
-  }, [])
   const requestedMinFirstDepositTokens = useMemo(() => {
     const env = parsePositiveTokenAmount((import.meta.env.VITE_MIN_FIRST_DEPOSIT_TOKENS as string | undefined) ?? '')
     if (typeof window === 'undefined') return env
     const params = new URLSearchParams(window.location.search)
     return parsePositiveTokenAmount(params.get('minFirstDepositTokens')) ?? env
   }, [])
+  const minFirstDepositTokens = useMemo(() => {
+    // Batcher Phase2Module enforces a [50M, 100M] first-deposit range on-chain.
+    // Honor query/env overrides inside that range; clamp anything else so a drifted
+    // override cannot fail late at finalizePhase2.
+    if (requestedMinFirstDepositTokens === null) return DEFAULT_MIN_FIRST_DEPOSIT_TOKENS
+    if (requestedMinFirstDepositTokens < DEFAULT_MIN_FIRST_DEPOSIT_TOKENS) return DEFAULT_MIN_FIRST_DEPOSIT_TOKENS
+    if (requestedMinFirstDepositTokens > MAX_FIRST_DEPOSIT_TOKENS) return MAX_FIRST_DEPOSIT_TOKENS
+    return requestedMinFirstDepositTokens
+  }, [requestedMinFirstDepositTokens])
   useEffect(() => {
-    if (requestedMinFirstDepositTokens !== null && requestedMinFirstDepositTokens !== DEFAULT_MIN_FIRST_DEPOSIT_TOKENS) {
-      logger.debug('[DeployVault] ignoring minFirstDepositTokens override; enforcing 50M policy', {
+    if (requestedMinFirstDepositTokens !== null && requestedMinFirstDepositTokens !== minFirstDepositTokens) {
+      logger.debug('[DeployVault] clamped minFirstDepositTokens override to the supported range', {
         requested: requestedMinFirstDepositTokens.toString(),
-        enforced: DEFAULT_MIN_FIRST_DEPOSIT_TOKENS.toString(),
+        applied: minFirstDepositTokens.toString(),
+        min: DEFAULT_MIN_FIRST_DEPOSIT_TOKENS.toString(),
+        max: MAX_FIRST_DEPOSIT_TOKENS.toString(),
       })
     }
-  }, [requestedMinFirstDepositTokens])
+  }, [requestedMinFirstDepositTokens, minFirstDepositTokens])
   const shareOftSaltOverride = useMemo(() => {
     const env = normalizeBytes32(import.meta.env.VITE_SHARE_OFT_SALT_OVERRIDE as string | undefined)
     if (typeof window === 'undefined') return env

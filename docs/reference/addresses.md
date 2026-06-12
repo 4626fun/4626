@@ -31,7 +31,7 @@ Deployed contract addresses for 4626.
 | CreatorOVaultAdminModule | `0x702DB3176493D79Ee47ac746AA9865113e667aD1` |
 | DeploymentBatcher | `0xa99058f424FB3ACC639F59355C65C40149030651` |
 | DeploymentBatcherPhase1Module | `0xE83876c67E1E845A199f64fb33D76ADC62EAaB9D` |
-| DeploymentBatcherPhase2Module | `0x67FD8A34E5b26F875a9513DFf37521A1ca92d80f` |
+| DeploymentBatcherPhase2Module | `0xdDbD468271BffF84De09AAc3C43B582e2dBEDC5E` |
 | DeploymentBatcherPhase3Helper | `0x674a2D5EE33e184e2120B373a9AcB3fef640885c` |
 | DeploymentBatcherUniV4Helper | `0xF71a6236586077CD29C971443D2cce37B543DcBB` |
 | DeploymentBatcherUtilsHelper | `0xD71C4910C7bB38FB1089Cca42b0883F1BFFfa28D` |
@@ -42,6 +42,7 @@ Notes:
 - Greenfield Phase 1 reads **Phase1Module immutables** (`phase1Module()` → `0xE838…`), not batcher-shell module getters (shell may still expose legacy `.current` modules).
 - Retired v1.13.0 v2 Phase1Module (`0x19Bd8…`) is for grandfathered vaults only — do not restore for new greenfield deploys after the v1.14.0 cutover.
 - Pre-Pipe-A batcher `0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8` is deprecated — do not use for greenfield deploys.
+- **2026-06-12 Phase2Module rotation (100M deposit widening):** `setPhase2Module(0xdDbD…DC5E)` executed via protocol treasury Safe (tx `0xa6f4a4a9a3961f3c53853b4c9c2fa1d18e377203148d99e8ef924134af54520b`; module deploy tx `0xae1f18d21551119f696f391e6ddecfb2884e210f7ac4f1889ada8f1521cefdb2`). The new module enforces a first-deposit **range of [50M, 100M]** creator tokens in `_validateFinalizePhase2`; previous module `0x67FD8A34E5b26F875a9513DFf37521A1ca92d80f` (exact 50M) retired. The live batcher shell predates the widening, so shell getters still report `MAX_DEPOSIT = 50M` — informational only; enforcement lives in the module.
 
 ### Per-Creator Deployments
 

@@ -7,6 +7,37 @@ import "../contracts/helpers/batchers/DeploymentBatcher.sol";
 import "../contracts/governance/VaultRolePolicyManager.sol";
 import "./helpers/DeploymentBatcherFixture.sol";
 
+contract MockCreatorTokenDepositBounds {
+    string public constant name = "Mock Creator Token";
+    string public constant symbol = "MOCKCR";
+    uint8 public constant decimals = 18;
+
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    function mint(address to, uint256 amount) external {
+        balanceOf[to] += amount;
+    }
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        return true;
+    }
+
+    function transfer(address to, uint256 amount) external returns (bool) {
+        balanceOf[msg.sender] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+        allowance[from][msg.sender] -= amount;
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+}
+
 contract MockOwnableVaultForPhase3Bounds {
     address public owner;
     address public managementAddress;
@@ -296,11 +327,44 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
 
     function test_phase2ShareSplitAndDepositBounds_remainFixed() public view {
         assertEq(batcher.MIN_DEPOSIT(), 50_000_000e18, "minimum first deposit drifted");
-        assertEq(batcher.MAX_DEPOSIT(), 50_000_000e18, "maximum first deposit drifted");
+        assertEq(batcher.MAX_DEPOSIT(), 100_000_000e18, "maximum first deposit drifted");
         assertEq(batcher.AUCTION_PERCENT(), 30, "CCA split drifted");
         assertEq(batcher.VESTING_PERCENT(), 30, "creator vesting split drifted");
         assertEq(batcher.SOLANA_ALLOC_PERCENT(), 30, "Solana share split drifted");
         assertEq(batcher.LP_RESERVE_PERCENT(), 10, "LP reserve split drifted");
+    }
+
+    /// @dev The deposit-bounds gate runs before the Phase-1 code-existence checks in
+    ///      `_validateFinalizePhase2`, so an in-range deposit surfaces `Phase1Missing`
+    ///      (no Phase-1 contracts in this fixture) while out-of-range deposits surface
+    ///      `InvalidDepositAmount`. That distinction proves exactly where the gate sits.
+    function test_finalizePhase2_depositBounds_allow50Mto100M() public {
+        _expectFinalizeDepositRevert(50_000_000e18 - 1, DeploymentBatcherPhase2Module.InvalidDepositAmount.selector);
+        _expectFinalizeDepositRevert(100_000_000e18 + 1, DeploymentBatcherPhase2Module.InvalidDepositAmount.selector);
+        _expectFinalizeDepositRevert(50_000_000e18, DeploymentBatcherPhase2Module.Phase1Missing.selector);
+        _expectFinalizeDepositRevert(75_000_000e18, DeploymentBatcherPhase2Module.Phase1Missing.selector);
+        _expectFinalizeDepositRevert(100_000_000e18, DeploymentBatcherPhase2Module.Phase1Missing.selector);
+    }
+
+    function _expectFinalizeDepositRevert(uint256 depositAmount, bytes4 expectedSelector) internal {
+        MockCreatorTokenDepositBounds creatorToken = new MockCreatorTokenDepositBounds();
+        creatorToken.mint(address(this), depositAmount);
+        creatorToken.approve(address(batcher), depositAmount);
+
+        DeploymentBatcher.Phase2FinalizeParams memory params;
+        params.creatorToken = address(creatorToken);
+        params.owner = address(this);
+        params.vault = makeAddr("depositBoundsVault");
+        params.wrapper = makeAddr("depositBoundsWrapper");
+        params.shareOFT = makeAddr("depositBoundsShareOFT");
+        params.gaugeController = makeAddr("depositBoundsGauge");
+        params.ccaStrategy = makeAddr("depositBoundsCca");
+        params.oracle = makeAddr("depositBoundsOracle");
+        params.version = "deposit-bounds-test";
+        params.depositAmount = depositAmount;
+
+        vm.expectRevert(expectedSelector);
+        batcher.finalizePhase2(params);
     }
 
     function _seedPhase1State()

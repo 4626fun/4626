@@ -922,6 +922,12 @@ contract DeploymentBatcherPhase2Module {
     uint8 internal constant VESTING_PERCENT = 30;
     uint8 internal constant SOLANA_ALLOC_PERCENT = 30;
     uint8 internal constant LP_RESERVE_PERCENT = 10;
+    /// @notice Allowed first-deposit range (creator-token principal, 18 decimals).
+    /// @dev Must stay >= CreatorOVault.MINIMUM_FIRST_DEPOSIT (50M). The upper bound
+    ///      keeps the four-way share split (auction/vesting/Solana/LP) within sizes
+    ///      the CCA + LZ bridge lanes have been validated for.
+    uint256 internal constant MIN_FIRST_DEPOSIT = 50_000_000e18;
+    uint256 internal constant MAX_FIRST_DEPOSIT = 100_000_000e18;
     uint16 internal constant DEFAULT_LAUNCH_DISCOUNT_BPS = 8_000;
     uint16 internal constant DEFAULT_LAUNCH_TICK_SPACING_BPS = 100;
     uint128 internal constant DEFAULT_SHARE_BRIDGE_GAS_LIMIT = 200_000;
@@ -1250,7 +1256,7 @@ contract DeploymentBatcherPhase2Module {
         if (params.gaugeController == address(0) || params.ccaStrategy == address(0) || params.oracle == address(0)) {
             revert ZeroAddress();
         }
-        if (params.depositAmount < 50_000_000e18 || params.depositAmount > 50_000_000e18) {
+        if (params.depositAmount < MIN_FIRST_DEPOSIT || params.depositAmount > MAX_FIRST_DEPOSIT) {
             revert InvalidDepositAmount();
         }
         if (params.meteoraAlphaVault != bytes32(0) || params.solanaIxs.length != 0) {
@@ -1342,8 +1348,11 @@ contract DeploymentBatcher is ReentrancyGuard {
     // ── Fixed Four-Way Share Split Constants ─────────────────────────
     /// @notice Minimum deposit amount (50M tokens, 18 decimals)
     uint256 public constant MIN_DEPOSIT = 50_000_000e18;
-    /// @notice Maximum deposit amount (50M tokens, 18 decimals)
-    uint256 public constant MAX_DEPOSIT = 50_000_000e18;
+    /// @notice Maximum deposit amount (100M tokens, 18 decimals)
+    /// @dev Enforcement lives in DeploymentBatcherPhase2Module._validateFinalizePhase2
+    ///      (hot-swappable). The live shell at 0xa99058… predates the 100M widening and
+    ///      still reports 50M here; these getters are informational only.
+    uint256 public constant MAX_DEPOSIT = 100_000_000e18;
     /// @notice Percentage of ■TOKENs allocated to CCA auction
     uint8 public constant AUCTION_PERCENT = 30;
     /// @notice Percentage of ■TOKENs vested to the creator

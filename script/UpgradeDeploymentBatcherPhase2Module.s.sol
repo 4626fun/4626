@@ -10,11 +10,14 @@ import {DeploymentBatcher, DeploymentBatcherPhase2Module} from "../contracts/hel
  * @notice Deploy a fresh `DeploymentBatcherPhase2Module` and hot-swap it on an existing batcher.
  *
  * Required env:
- * - PRIVATE_KEY (must equal batcher.protocolTreasury())
+ * - PRIVATE_KEY (any funded EOA for deploy-only; must equal batcher.protocolTreasury()
+ *   when SET_PHASE2_MODULE=1)
  * - DEPLOYMENT_BATCHER (defaults to live split Phase-1 batcher)
  *
  * Optional:
- * - SET_PHASE2_MODULE=1 (default 1) — call `setPhase2Module` after deploy
+ * - SET_PHASE2_MODULE=1 (default 1) — call `setPhase2Module` after deploy. When the
+ *   protocol treasury is the Safe (live config), run with SET_PHASE2_MODULE=0 and
+ *   execute the swap via frontend/scripts/ops/execute-set-phase2-module-safe.ts.
  */
 contract UpgradeDeploymentBatcherPhase2Module is Script {
     address constant DEFAULT_DEPLOYMENT_BATCHER = 0xa99058f424FB3ACC639F59355C65C40149030651;
@@ -26,7 +29,9 @@ contract UpgradeDeploymentBatcherPhase2Module is Script {
         bool setPhase2Module = vm.envOr("SET_PHASE2_MODULE", uint256(1)) == 1;
 
         DeploymentBatcher batcher = DeploymentBatcher(batcherAddr);
-        require(broadcaster == batcher.protocolTreasury(), "broadcaster must equal protocolTreasury");
+        if (setPhase2Module) {
+            require(broadcaster == batcher.protocolTreasury(), "broadcaster must equal protocolTreasury");
+        }
 
         address previousModule = address(batcher.phase2Module());
         console2.log("Deployment batcher:", batcherAddr);
@@ -52,7 +57,9 @@ contract UpgradeDeploymentBatcherPhase2Module is Script {
         }
         vm.stopBroadcast();
 
-        require(address(batcher.phase2Module()) == address(module), "phase2 module mismatch");
+        if (setPhase2Module) {
+            require(address(batcher.phase2Module()) == address(module), "phase2 module mismatch");
+        }
         require(module.batcher() == batcherAddr, "module batcher mismatch");
     }
 }
