@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -167,6 +168,81 @@ export function hasHeadlessConfigureSeed(env: Record<string, string | undefined>
   )
 }
 
+/**
+ * Consumed-seed guard.
+ *
+ * ACP refresh tokens are single-use: once a seed triplet (access/refresh/owner)
+ * has been fed through `acp configure`, the CLI's built-in refresh rotates the
+ * on-volume tokens and the original env triplet is dead. Re-running configure
+ * with the same stale triplet later (e.g. on a restart after the session broke
+ * for an unrelated reason, or via the agent-create rotation path) would
+ * OVERWRITE the newer rotated tokens on the volume with dead ones — this is
+ * exactly how the live Railway session got poisoned in June 2026.
+ *
+ * After a successful configure we persist a fingerprint of the seed next to
+ * config.json. Any later attempt to configure with a triplet matching that
+ * fingerprint is refused; the operator must rotate fresh tokens into the
+ * ACP_* envs (or run `acp configure` on the volume) instead.
+ */
+
+export function computeAcpSeedFingerprint(env: Record<string, string | undefined> = process.env): string | null {
+  const access = String(env.ACP_ACCESS_TOKEN ?? '').trim()
+  const refresh = String(env.ACP_REFRESH_TOKEN ?? '').trim()
+  // Owner wallet is intentionally excluded: the single-use component is the
+  // token pair, and callers may resolve the owner from a non-env fallback.
+  if (!access || !refresh) return null
+  return createHash('sha256').update(`${access}|${refresh}`).digest('hex').slice(0, 32)
+}
+
+function resolveConsumedSeedMarkerPath(env: Record<string, string | undefined> = process.env): string | null {
+  const stateEnv = resolveAcpStateEnv(env)
+  if (!stateEnv.ACP_CONFIG_DIR) return null
+  return resolve(stateEnv.ACP_CONFIG_DIR, 'consumed-seed.json')
+}
+
+export function readConsumedAcpSeedFingerprint(env: Record<string, string | undefined> = process.env): string | null {
+  const markerPath = resolveConsumedSeedMarkerPath(env)
+  if (!markerPath) return null
+  try {
+    if (!existsSync(markerPath)) return null
+    const raw = JSON.parse(readFileSync(markerPath, 'utf8')) as { fingerprint?: string }
+    const fingerprint = String(raw?.fingerprint ?? '').trim()
+    return fingerprint.length > 0 ? fingerprint : null
+  } catch {
+    return null
+  }
+}
+
+export function markAcpSeedConsumed(
+  fingerprint: string,
+  env: Record<string, string | undefined> = process.env,
+): { marked: boolean; detail?: string } {
+  const markerPath = resolveConsumedSeedMarkerPath(env)
+  if (!markerPath) return { marked: false, detail: 'no_persistent_state_dir' }
+  try {
+    mkdirSync(resolve(markerPath, '..'), { recursive: true })
+    writeFileSync(markerPath, `${JSON.stringify({ fingerprint, consumedAt: new Date().toISOString() }, null, 2)}\n`, {
+      encoding: 'utf8',
+      mode: 0o600,
+    })
+    return { marked: true }
+  } catch (error) {
+    return { marked: false, detail: (error as Error).message }
+  }
+}
+
+/**
+ * True when the current env seed triplet has already been consumed by a prior
+ * successful configure on this state dir. Reconfiguring with it can only
+ * install dead tokens over a (potentially live) rotated session.
+ */
+export function isEnvSeedConsumed(env: Record<string, string | undefined> = process.env): boolean {
+  const fingerprint = computeAcpSeedFingerprint(env)
+  if (!fingerprint) return false
+  const consumed = readConsumedAcpSeedFingerprint(env)
+  return consumed !== null && consumed === fingerprint
+}
+
 type RunAcpResult = {
   ok: boolean
   json: AcpCliJson | null
@@ -262,12 +338,24 @@ export async function runAcpAuthBootstrap(config = readArenaConfig()): Promise<A
   // 2. Seed tokens from env if unauthenticated and a seed is available.
   if (!whoami.ok && isAuthError(whoami)) {
     if (hasHeadlessConfigureSeed()) {
+      if (isEnvSeedConsumed()) {
+        result.reason =
+          'seed_already_consumed (the ACP_* env triplet was already used to configure this volume; refresh tokens are single-use so re-seeding cannot help — rotate fresh tokens into ACP_ACCESS_TOKEN/ACP_REFRESH_TOKEN via `acp configure` on a trusted machine, or run `acp configure` directly on the volume)'
+        return result
+      }
       const configure = await runAcp(config, ['configure'])
       result.steps.push({ step: 'configure', ok: configure.ok, detail: configure.error })
       result.configuredFromEnv = configure.ok
       if (!configure.ok) {
         result.reason = `headless_configure_failed:${configure.error ?? 'unknown'}`
         return result
+      }
+      const fingerprint = computeAcpSeedFingerprint()
+      if (fingerprint) {
+        const marked = markAcpSeedConsumed(fingerprint)
+        if (!marked.marked && marked.detail !== 'no_persistent_state_dir') {
+          logger.warn('[arena] failed to persist consumed-seed marker', { detail: marked.detail })
+        }
       }
     } else {
       result.reason = 'unauthenticated_no_seed (set ACP_ACCESS_TOKEN/ACP_REFRESH_TOKEN/ACP_OWNER_WALLET or run `acp configure` once on the volume)'

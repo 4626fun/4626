@@ -106,6 +106,17 @@ Notes:
 - After the first successful refresh, the on-volume tokens are newer than the `ACP_*` env seed (refresh tokens rotate and are single-use). The env triplet is only a first-boot/recovery seed — re-rotate it if the volume is ever lost.
 - In dry-run mode the bootstrap is skipped (`arena_dry_run`) since no signing happens.
 
+### Consumed-seed guard (June 2026)
+
+Because refresh tokens are single-use, re-running `acp configure` with an already-used `ACP_*` env triplet installs dead tokens **over** the newer rotated session on the volume — this is how the live session was poisoned once (the `/arena register default` create path re-ran the session rotation with the original seed).
+
+After any successful configure from the env triplet, the bootstrap writes a fingerprint of the token pair to `<ARENA_ACP_HOME>/.config/acp/consumed-seed.json`. From then on:
+
+- the startup bootstrap refuses to re-seed with a matching triplet and reports `seed_already_consumed` instead (rotate fresh tokens into `ACP_ACCESS_TOKEN`/`ACP_REFRESH_TOKEN` or run `acp configure` on the volume);
+- the `acp agent create` session-rotation path skips the configure step with audit event `acp_session_rotation_skipped_consumed_seed` and proceeds under the current live session (same identity the triplet originally established).
+
+Rotating new tokens into the env vars produces a different fingerprint, so genuine recovery seeds always go through. Deleting `consumed-seed.json` manually re-arms the env seed (only do this with a known-fresh triplet).
+
 ### Keyring file backend pinning (root-cause fix, June 2026)
 
 On the Railway container, cross-keychain's **default** keychain backend silently returns `null` on reads instead of throwing `NoKeyringError`, while writes do throw and fall back to the encrypted **file** backend. Net effect: `acp configure` stores tokens in `~/.local/share/keyring/secrets.json`, but every later `getToken` reads the empty default backend and acp-cli reports `NOT_AUTHENTICATED` despite a successful configure.

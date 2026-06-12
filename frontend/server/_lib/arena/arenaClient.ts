@@ -4,7 +4,12 @@ import { dirname, isAbsolute, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
 import { logger } from '../infra/logger.js'
-import { resolveAcpStateEnv } from './acpAuthBootstrap.js'
+import {
+  computeAcpSeedFingerprint,
+  isEnvSeedConsumed,
+  markAcpSeedConsumed,
+  resolveAcpStateEnv,
+} from './acpAuthBootstrap.js'
 import { readArenaConfig, type ArenaConfig } from './arenaConfig.js'
 import { validateArenaPair } from './arenaPairPolicy.js'
 import type { ArenaCreateResult, ArenaOpResult, ArenaRunResult, ArenaTradeRequest } from './arenaTypes.js'
@@ -550,7 +555,16 @@ export async function runArenaCreateAgent(config = readArenaConfig(), ownerAddre
     })
   }
 
-  if (hasAllAcpRotationEnv) {
+  if (hasAllAcpRotationEnv && isEnvSeedConsumed()) {
+    // The env triplet already seeded this state dir once. ACP refresh tokens are
+    // single-use, so re-running configure with it would overwrite the rotated
+    // (live) on-volume session with dead tokens — the create proceeds under the
+    // current session instead, which is the identity that triplet established.
+    auditLog('acp_session_rotation_skipped_consumed_seed', {
+      owner: acpOwner,
+      dryRun: config.dryRun,
+    })
+  } else if (hasAllAcpRotationEnv) {
     const configureArgs = [
       'configure',
       '--token', acpAccess,
@@ -570,6 +584,10 @@ export async function runArenaCreateAgent(config = readArenaConfig(), ownerAddre
         message: 'acp configure failed; refusing to run agent create under a potentially stale ACP session.',
         run: configureRun,
       }
+    }
+    const rotationFingerprint = computeAcpSeedFingerprint()
+    if (rotationFingerprint && !config.dryRun) {
+      markAcpSeedConsumed(rotationFingerprint)
     }
   }
 

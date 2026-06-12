@@ -5,9 +5,13 @@ import { resolve } from 'node:path'
 
 import type { ArenaConfig } from './arenaConfig.js'
 import {
+  computeAcpSeedFingerprint,
   ensureKeyringFileBackendPinned,
   hasHeadlessConfigureSeed,
+  isEnvSeedConsumed,
+  markAcpSeedConsumed,
   parseAcpCliJson,
+  readConsumedAcpSeedFingerprint,
   readSignerPublicKey,
   resolveAcpConfigJsonPath,
   resolveAcpStateEnv,
@@ -157,6 +161,41 @@ describe('ensureKeyringFileBackendPinned', () => {
     const result = ensureKeyringFileBackendPinned(dir)
     expect(result).toEqual({ pinned: true, detail: 'already_present' })
     expect(JSON.parse(readFileSync(configPath, 'utf8'))).toEqual({ defaultBackend: 'custom' })
+  })
+})
+
+describe('consumed-seed guard', () => {
+  it('computes a stable fingerprint from the token pair only (owner excluded)', () => {
+    const a = computeAcpSeedFingerprint({ ACP_ACCESS_TOKEN: 'tok', ACP_REFRESH_TOKEN: 'ref', ACP_OWNER_WALLET: '0xAAA' })
+    const b = computeAcpSeedFingerprint({ ACP_ACCESS_TOKEN: 'tok', ACP_REFRESH_TOKEN: 'ref', ACP_OWNER_WALLET: '0xBBB' })
+    const c = computeAcpSeedFingerprint({ ACP_ACCESS_TOKEN: 'tok', ACP_REFRESH_TOKEN: 'other' })
+    expect(a).toBeTruthy()
+    expect(a).toBe(b)
+    expect(c).not.toBe(a)
+    expect(computeAcpSeedFingerprint({ ACP_ACCESS_TOKEN: 'tok' })).toBeNull()
+    expect(computeAcpSeedFingerprint({})).toBeNull()
+  })
+
+  it('marks and reads the consumed fingerprint on a persistent state dir', () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'acp-seed-'))
+    const env = { ARENA_ACP_HOME: dir, ACP_ACCESS_TOKEN: 'tok', ACP_REFRESH_TOKEN: 'ref' }
+    expect(readConsumedAcpSeedFingerprint(env)).toBeNull()
+    expect(isEnvSeedConsumed(env)).toBe(false)
+
+    const fingerprint = computeAcpSeedFingerprint(env)!
+    expect(markAcpSeedConsumed(fingerprint, env)).toEqual({ marked: true })
+    expect(readConsumedAcpSeedFingerprint(env)).toBe(fingerprint)
+    expect(isEnvSeedConsumed(env)).toBe(true)
+
+    // A rotated (fresh) triplet is not considered consumed.
+    expect(isEnvSeedConsumed({ ...env, ACP_REFRESH_TOKEN: 'fresh-ref' })).toBe(false)
+  })
+
+  it('does nothing without a persistent state dir', () => {
+    const env = { ACP_ACCESS_TOKEN: 'tok', ACP_REFRESH_TOKEN: 'ref' }
+    expect(markAcpSeedConsumed('abc', env)).toEqual({ marked: false, detail: 'no_persistent_state_dir' })
+    expect(readConsumedAcpSeedFingerprint(env)).toBeNull()
+    expect(isEnvSeedConsumed(env)).toBe(false)
   })
 })
 
