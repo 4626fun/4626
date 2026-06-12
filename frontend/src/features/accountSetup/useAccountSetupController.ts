@@ -817,6 +817,29 @@ export function useAccountSetupController(params: {
     setErrorGuarded(null)
     setNoticeGuarded(null)
     try {
+      const action = selectCrossAppAuthAction({
+        privyAuthed: privyAuthedNow,
+        linkCrossAppAccount: linkCrossAppAccountNow,
+        loginWithCrossAppAccount: loginWithCrossAppAccountNow,
+      })
+      if (!action) throw new Error('Zora linking is unavailable in this client.')
+
+      // Start cross-app auth immediately. Privy opens its popup with a plain
+      // `window.open()` that only succeeds inside this click's transient user
+      // activation — any awaited work before this point (access-token fetch,
+      // /api/zora/resolve prechecks) consumes the activation, the popup gets
+      // blocked, and Privy fails instantly with the generic "There was an issue
+      // connecting your Zora account" modal. Signals-already-resolved cases are
+      // handled by the zoraLinked UI branch and onRefreshZora instead.
+      await performZoraCrossAppAuth({
+        privyAuthed: privyAuthedNow,
+        appId: ZORA_PRIVY_APP_ID,
+        linkCrossAppAccount: linkCrossAppAccountNow,
+        loginWithCrossAppAccount: loginWithCrossAppAccountNow,
+        sanitizeRedirect: sanitizeCrossAppRedirectUrlForAuth,
+        isRedirectUrlNotAllowedError: isPrivyRedirectUrlNotAllowedError,
+      })
+
       const headers = await authHeaders()
       const resolveSignals = async () => {
         const resolveRes = await apiFetch('/api/zora/resolve', {
@@ -834,34 +857,6 @@ export function useAccountSetupController(params: {
         }
         return resolvePayload.data
       }
-
-      const existingSignals = await resolveSignals()
-      if (hasResolvedZoraSignals(existingSignals)) {
-        setNoticeGuarded('Zora signals were detected from your current account. Cross-app login was not needed.')
-        await loadMe({ showSpinner: false })
-        return
-      }
-      if (existingSignals?.zoraHandle || existingSignals?.creatorCoin?.address) {
-        setNoticeGuarded('Zora profile found, but wallet detection is still pending. Open Base app and retry detection.')
-        await loadMe({ showSpinner: false })
-        return
-      }
-
-      const action = selectCrossAppAuthAction({
-        privyAuthed: privyAuthedNow,
-        linkCrossAppAccount: linkCrossAppAccountNow,
-        loginWithCrossAppAccount: loginWithCrossAppAccountNow,
-      })
-      if (!action) throw new Error('Zora linking is unavailable in this client.')
-
-      await performZoraCrossAppAuth({
-        privyAuthed: privyAuthedNow,
-        appId: ZORA_PRIVY_APP_ID,
-        linkCrossAppAccount: linkCrossAppAccountNow,
-        loginWithCrossAppAccount: loginWithCrossAppAccountNow,
-        sanitizeRedirect: sanitizeCrossAppRedirectUrlForAuth,
-        isRedirectUrlNotAllowedError: isPrivyRedirectUrlNotAllowedError,
-      })
 
       const linkResponse = await apiFetch('/api/accounts/link', {
         method: 'POST',
@@ -920,7 +915,9 @@ export function useAccountSetupController(params: {
           }, 120)
           return
         }
-        setErrorGuarded('Zora authentication failed. Open zora.co in this browser first, then tap Connect again.')
+        setErrorGuarded(
+          'Zora authentication failed. Allow pop-ups for this site and open zora.co in this browser first, then tap Connect again.',
+        )
       } else {
         setErrorGuarded(typeof zoraError?.message === 'string' ? zoraError.message : 'Failed to link Zora.')
       }
