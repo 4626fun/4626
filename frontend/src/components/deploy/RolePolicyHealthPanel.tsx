@@ -21,7 +21,7 @@ export function RolePolicyHealthPanel({
   details?: ReactNode
 }) {
   return (
-    <div className="space-y-2 rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-3.5 backdrop-blur-sm">
+    <div className="space-y-2 rounded-xl bg-white/[0.02] px-4 py-3.5 backdrop-blur-sm">
       <div className="flex items-center justify-between gap-3">
         <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">Role policy health</div>
         <div className={cn('text-[11px]', statusToneClass)}>{statusLabel}</div>

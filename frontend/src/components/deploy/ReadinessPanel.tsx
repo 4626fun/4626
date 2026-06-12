@@ -12,7 +12,7 @@ export interface ReadinessCheck {
 
 function ReadinessCheckItem({ check }: { check: ReadinessCheck }) {
   return (
-    <div className="flex items-start gap-2.5 rounded-lg border border-white/[0.05] bg-black/20 px-3 py-2">
+    <div className="flex items-start gap-2.5 rounded-lg bg-black/20 px-3 py-2">
       <span
         aria-hidden="true"
         className={cn('mt-[5px] size-1.5 shrink-0 rounded-full', check.ok ? 'bg-emerald-400' : 'bg-amber-400')}
@@ -47,7 +47,7 @@ export function ReadinessPanel({
   const allOk = failing === 0
 
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-sm">
+    <div className="rounded-2xl bg-white/[0.02] backdrop-blur-sm">
       <button
         type="button"
         aria-expanded={open}

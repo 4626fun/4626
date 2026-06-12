@@ -9,8 +9,6 @@ declare const process: { env: Record<string, string | undefined> }
 let schemaChecked = false
 let schemaCheckPromise: Promise<boolean> | null = null
 let warnedMissingUnifiedChartRefreshFn = false
-let warnedMissingMarketCapBucketsRefreshFn = false
-let warnedMissing15MinSnapshotFn = false
 
 type PgLikeError = { code?: string; message?: string }
 
@@ -621,72 +619,11 @@ export async function refreshCreatorEthosProjection(params: {
     }
   }
 
-  // Keep chart distribution tables fresh for the 137+ Ethos charts
-  try {
-    await params.db.sql`SELECT public.refresh_creator_ethos_distribution();`
-  } catch (e) {
-    // Non-fatal — the distribution is a nice-to-have for charts
-    console.warn('[creatorEthosProjection] failed to refresh distribution table', e)
-  }
-
-  // Snapshot for trend charts (daily + hourly)
+  // Snapshot for trend charts (daily)
   try {
     await params.db.sql`SELECT public.snapshot_creator_ethos_daily();`
   } catch (e) {
     console.warn('[creatorEthosProjection] failed to snapshot daily Ethos data', e)
-  }
-
-  try {
-    await params.db.sql`SELECT public.snapshot_creator_ethos_hourly();`
-  } catch (e) {
-    console.warn('[creatorEthosProjection] failed to snapshot hourly Ethos data', e)
-  }
-
-  // Ultra high-resolution 15-min snapshots (use with short retention)
-  try {
-    const has15MinSnapshotFn = await hasFunction(
-      params.db,
-      'public.snapshot_creator_ethos_15min()',
-    )
-    if (has15MinSnapshotFn) {
-      await params.db.sql`SELECT public.snapshot_creator_ethos_15min();`
-      warnedMissing15MinSnapshotFn = false
-    } else if (!warnedMissing15MinSnapshotFn) {
-      warnedMissing15MinSnapshotFn = true
-      console.warn(
-        '[creatorEthosProjection] skipping 15min snapshot; function public.snapshot_creator_ethos_15min() is missing',
-      )
-    }
-  } catch (e) {
-    if (isMissingFunctionError(e, 'public.snapshot_creator_ethos_15min()')) {
-      if (!warnedMissing15MinSnapshotFn) {
-        warnedMissing15MinSnapshotFn = true
-        console.warn(
-          '[creatorEthosProjection] skipping 15min snapshot; function public.snapshot_creator_ethos_15min() is missing',
-        )
-      }
-    } else {
-      console.warn('[creatorEthosProjection] failed to snapshot 15min Ethos data', e)
-    }
-  }
-
-  // Market cap bucket stats for segmented charts
-  try {
-    const hasMarketCapBucketRefreshFn = await hasFunction(
-      params.db,
-      'public.refresh_ethos_market_cap_buckets()',
-    )
-    if (hasMarketCapBucketRefreshFn) {
-      await params.db.sql`SELECT public.refresh_ethos_market_cap_buckets();`
-      warnedMissingMarketCapBucketsRefreshFn = false
-    } else if (!warnedMissingMarketCapBucketsRefreshFn) {
-      warnedMissingMarketCapBucketsRefreshFn = true
-      console.warn(
-        '[creatorEthosProjection] skipping market cap buckets refresh; function public.refresh_ethos_market_cap_buckets() is missing',
-      )
-    }
-  } catch (e) {
-    console.warn('[creatorEthosProjection] failed to refresh market cap buckets', e)
   }
 
   // Refresh all interconnected chart materialized views (unified approach)

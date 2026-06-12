@@ -499,17 +499,15 @@ async function ensureOvaultPreflight(params: {
   solanaOvault: unknown
 }): Promise<{
   existingMintCompatible: boolean
-  depositEligible: boolean
   redeemEligible: boolean
-  assetPeerSet: boolean
   sharePeerSet: boolean
   meshStep: 'ovault_mesh_confirmed'
 }> {
+  // Compose-deposit lane is retired: deposit-eligibility / asset-peer hints are no
+  // longer part of the live preflight result (creator coin lives only on Base).
   const defaultStatus = {
     existingMintCompatible: true,
-    depositEligible: true,
     redeemEligible: true,
-    assetPeerSet: true,
     sharePeerSet: true,
     meshStep: 'ovault_mesh_confirmed' as const,
   }
@@ -621,9 +619,7 @@ async function ensureOvaultPreflight(params: {
       } else {
         return {
           existingMintCompatible,
-          depositEligible,
           redeemEligible,
-          assetPeerSet,
           sharePeerSet,
           meshStep: 'ovault_mesh_confirmed',
         }

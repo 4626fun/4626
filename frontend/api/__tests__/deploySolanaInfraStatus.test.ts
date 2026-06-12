@@ -166,7 +166,8 @@ describe('deploy solana infra status handler', () => {
       expect(res.body?.data?.signerConfigured).toBe(false)
       expect(res.body?.data?.readyForAutoRegistration).toBe(false)
       expect(res.body?.data?.existingMintCompatible).toBe(false)
-      expect(typeof res.body?.data?.depositEligible).toBe('boolean')
+      // Compose-deposit lane is dormant: depositEligible must not exist in the payload.
+      expect(res.body?.data?.depositEligible).toBeUndefined()
       expect(typeof res.body?.data?.redeemEligible).toBe('boolean')
       expect(String((res.body?.data?.blockers ?? []).join(' '))).toContain('No usable dynamic route runner')
       expect(String((res.body?.data?.blockers ?? []).join(' '))).toContain('missing or invalid')
@@ -223,7 +224,8 @@ describe('deploy solana infra status handler', () => {
       expect(res.statusCode).toBe(200)
       expect(res.body?.success).toBe(true)
       expect(res.body?.data?.existingMintCompatible).toBe(true)
-      expect(res.body?.data?.depositEligible).toBe(true)
+      // Compose-deposit lane is dormant: depositEligible must not exist in the payload.
+      expect(res.body?.data?.depositEligible).toBeUndefined()
       expect(res.body?.data?.redeemEligible).toBe(true)
       expect(res.body?.data?.transferHookDetected).toBe(true)
       expect(res.body?.data?.oftFeeIsZero).toBe(true)

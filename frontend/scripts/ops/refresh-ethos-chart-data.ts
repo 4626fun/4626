@@ -4,14 +4,14 @@
  *
  * Usage:
  *   pnpm -C frontend exec tsx scripts/ops/refresh-ethos-chart-data.ts
- *   pnpm -C frontend exec tsx scripts/ops/refresh-ethos-chart-data.ts --distribution-only
+ *   pnpm -C frontend exec tsx scripts/ops/refresh-ethos-chart-data.ts --views-only
  */
 
 import { getDb } from '../server/_lib/db/postgres.js';
 
 async function main() {
   const args = process.argv.slice(2);
-  const distributionOnly = args.includes('--distribution-only');
+  const viewsOnly = args.includes('--views-only') || args.includes('--distribution-only');
   const snapshotOnly = args.includes('--snapshot-only');
 
   const db = await getDb();
@@ -23,15 +23,19 @@ async function main() {
   console.log('Refreshing Ethos chart support data...\n');
 
   if (!snapshotOnly) {
-    console.log('→ Refreshing distribution table...');
-    await db.sql`SELECT public.refresh_creator_ethos_distribution();`;
+    console.log('→ Refreshing unified Ethos materialized views...');
+    await db.sql`SELECT public.refresh_all_ethos_chart_views();`;
     console.log('   Done.');
   }
 
-  if (!distributionOnly) {
+  if (!viewsOnly) {
     console.log('→ Snapshotting daily Ethos data...');
     await db.sql`SELECT public.snapshot_creator_ethos_daily();`;
     console.log('   Done.');
+  }
+
+  if (args.includes('--hourly') || args.includes('--15min')) {
+    console.log('→ High-frequency snapshots are retired (no-op).');
   }
 
   console.log('\n✅ Ethos chart data refreshed.');

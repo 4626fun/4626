@@ -8,11 +8,11 @@ export type CreatorCoinTypeTone = 'creator' | 'content' | 'other'
 function coinTypeToneClasses(tone: CreatorCoinTypeTone): string {
   switch (tone) {
     case 'creator':
-      return 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/25'
+      return 'bg-emerald-500/10 text-emerald-300'
     case 'content':
-      return 'bg-amber-500/10 text-amber-300 border border-amber-500/25'
+      return 'bg-amber-500/10 text-amber-300'
     case 'other': {
-      return 'bg-white/[0.06] text-zinc-300 border border-white/10'
+      return 'bg-white/[0.06] text-zinc-300'
     }
     default: {
       const exhaustive: never = tone

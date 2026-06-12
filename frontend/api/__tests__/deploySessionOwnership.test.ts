@@ -861,7 +861,6 @@ describe('deploy session ownership guardrails', () => {
         solanaOvault: {
           enabled: true,
           assetMintOrigin: 'existing',
-          assetMeshMint: '11111111111111111111111111111111',
           shareMeshMint: '22222222222222222222222222222222',
           solanaEid: 30168,
           mintCompatibilityHints: {

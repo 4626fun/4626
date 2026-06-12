@@ -29,7 +29,7 @@ export function DeployActionBar({
 }) {
   return (
     <div className={cn('sticky bottom-3 z-30', className)}>
-      <div className="rounded-2xl border border-white/[0.1] bg-zinc-950/90 px-4 py-3.5 shadow-[0_8px_32px_rgba(0,0,0,0.45)] backdrop-blur-md sm:px-5">
+      <div className="rounded-2xl bg-zinc-950/90 px-4 py-3.5 shadow-[0_8px_32px_rgba(0,0,0,0.45)] backdrop-blur-md sm:px-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 space-y-1.5">
             {secondary ? <div className="flex flex-wrap items-center gap-2">{secondary}</div> : null}

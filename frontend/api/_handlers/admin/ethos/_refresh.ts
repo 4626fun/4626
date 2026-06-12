@@ -28,23 +28,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const results: string[] = [];
 
   try {
-    if (type === 'all' || type === 'distribution') {
-      await db.sql`SELECT public.refresh_creator_ethos_distribution();`;
-      results.push('distribution refreshed');
-    }
     if (type === 'all' || type === 'daily') {
       await db.sql`SELECT public.snapshot_creator_ethos_daily();`;
       results.push('daily snapshot created');
     }
-    if (type === 'all' || type === 'hourly') {
-      await db.sql`SELECT public.snapshot_creator_ethos_hourly();`;
-      results.push('hourly snapshot created');
+    // Backward-compatible aliases after high-frequency snapshot retirement.
+    if (type === 'hourly' || type === '15min') {
+      results.push(`${type} snapshots retired (no-op)`);
     }
-    if (type === 'all' || type === '15min') {
-      await db.sql`SELECT public.snapshot_creator_ethos_15min();`;
-      results.push('15min snapshot created');
-    }
-    if (type === 'all' || type === 'views') {
+    // Keep "distribution" as a compatibility alias for old admin clients.
+    if (type === 'all' || type === 'views' || type === 'distribution') {
       await db.sql`SELECT public.refresh_all_ethos_chart_views();`;
       results.push('unified materialized views refreshed');
     }

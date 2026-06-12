@@ -16,7 +16,7 @@ export function MeshPreflightPanel({
   children?: ReactNode
 }) {
   return (
-    <div className="rounded-xl border border-sky-400/15 bg-sky-500/[0.04] p-3.5 space-y-3">
+    <div className="rounded-xl bg-sky-500/[0.04] p-3.5 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
         <div className="min-w-0">
           <div className="text-xs font-medium text-sky-200/90">Phase 2b · OVault mesh preflight + peer wiring</div>
@@ -29,7 +29,7 @@ export function MeshPreflightPanel({
       {enabled ? (
         children
       ) : (
-        <div className="rounded-lg border border-white/[0.06] bg-black/10 px-3 py-2 text-[10px] text-zinc-600">
+        <div className="rounded-lg bg-black/10 px-3 py-2 text-[10px] text-zinc-600">
           OVault mesh lane is disabled for this deployment profile.
         </div>
       )}

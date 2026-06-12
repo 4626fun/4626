@@ -27,6 +27,22 @@
       "brandGuideUrl": "https://www.charm.fi/"
     },
     {
+      "protocol": "chainlink",
+      "variant": "hexagon-mark-blue-svg",
+      "file": "chainlink.svg",
+      "sha256": "b850708185356bd45126a929a1cf01a2445466bf124574d6da468de144cc4e77",
+      "officialSourceUrl": "https://chain.link/brand-assets",
+      "brandGuideUrl": "https://chain.link/brand-assets"
+    },
+    {
+      "protocol": "safe",
+      "variant": "primary-mark-png",
+      "file": "safe.png",
+      "sha256": "079d09dfe4d3d199a9de8c725d3292fb5c2bbc434857d4dc05172803565f1864",
+      "officialSourceUrl": "https://app.safe.global/images/safe-logo-green.png",
+      "brandGuideUrl": "https://safe.global/"
+    },
+    {
       "protocol": "solana",
       "variant": "official-logomark-svg",
       "file": "solana.svg",

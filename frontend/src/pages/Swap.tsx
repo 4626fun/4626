@@ -135,6 +135,7 @@ export function Swap() {
     authenticated: privyAuthenticated,
     user: privyUser,
     getAccessToken,
+    logout: privyLogout,
   } = useSafeSwapPrivyHook(privyHooksEnabled)
   const { connectors: wagmiConnectors } = useConnect()
   const { reconnectAsync } = useReconnect()
@@ -724,6 +725,33 @@ export function Swap() {
     ensureCanonicalSession,
   })
 
+  // ─── Stale embedded-signer session recovery ──────────────────────────────
+  // "Missing auth token" from the Privy embedded-wallet iframe cannot be fixed
+  // by page-side token refresh (custom auth-domain cookies are third-party on
+  // localhost). Only a real Privy logout + fresh interactive login re-seeds
+  // the iframe session.
+  const signingSessionExpired = useMemo(() => {
+    const text = String(error ?? '')
+    return (
+      /signing session (was refreshed but|could not be refreshed)/i.test(text) ||
+      /missing auth token/i.test(text)
+    )
+  }, [error])
+  const [signingRecoveryBusy, setSigningRecoveryBusy] = useState(false)
+  const handleSigningSessionRecovery = useCallback(async () => {
+    if (signingRecoveryBusy) return
+    setSigningRecoveryBusy(true)
+    try {
+      if (typeof privyLogout === 'function') {
+        await Promise.resolve(privyLogout()).catch(() => null)
+      }
+      const bridged = await signIn({ method: 'privy' })
+      if (bridged) resetTradeState()
+    } finally {
+      setSigningRecoveryBusy(false)
+    }
+  }, [privyLogout, resetTradeState, signIn, signingRecoveryBusy])
+
   const buyAmountDisplay = useMemo(() => {
     if (swapCompletion?.estimatedOut) return swapCompletion.estimatedOut
     return estimatedOut
@@ -1040,18 +1068,36 @@ export function Swap() {
                         executionMode={executionMode}
                         fallbackActive={fallbackActive}
                         swapProviderLabel={swapProviderLabel}
-                        primaryActionLabel={needsCanonicalSetupAction ? canonicalSetupActionLabel : undefined}
-                        onPrimaryAction={
-                          needsCanonicalSetupAction ? handleEnableCanonicalSigning : undefined
+                        primaryActionLabel={
+                          signingSessionExpired
+                            ? signingRecoveryBusy
+                              ? 'Signing in…'
+                              : 'Sign in again to fix signing'
+                            : needsCanonicalSetupAction
+                              ? canonicalSetupActionLabel
+                              : undefined
                         }
-                        forcePrimaryActionEnabled={needsCanonicalSetupAction}
+                        onPrimaryAction={
+                          signingSessionExpired
+                            ? () => {
+                                void handleSigningSessionRecovery()
+                              }
+                            : needsCanonicalSetupAction
+                              ? handleEnableCanonicalSigning
+                              : undefined
+                        }
+                        forcePrimaryActionEnabled={
+                          (signingSessionExpired && !signingRecoveryBusy) || needsCanonicalSetupAction
+                        }
                         primaryActionHint={
-                          needsCanonicalSetupAction
-                            ? canonicalSignerGate.reason ??
-                              'Finish one-time account setup before canonical swaps can execute.'
-                            : executionMode === 'canonical' && swapExecutionChrome.swapSenderLabel
-                              ? swapExecutionChrome.swapSenderLabel
-                              : null
+                          signingSessionExpired
+                            ? 'Your embedded signing session expired. Sign in again (email code) to restore it, then retry the swap.'
+                            : needsCanonicalSetupAction
+                              ? canonicalSignerGate.reason ??
+                                'Finish one-time account setup before canonical swaps can execute.'
+                              : executionMode === 'canonical' && swapExecutionChrome.swapSenderLabel
+                                ? swapExecutionChrome.swapSenderLabel
+                                : null
                         }
                       />
                     </motion.div>

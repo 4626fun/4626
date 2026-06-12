@@ -7,7 +7,7 @@ Policy: [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy
 ## Scope
 
 - **In:** one LZ **share-mesh OFT** on Solana (EID `30168`) + `setSolanaShareOftPeer` + optional Meteora/lottery (B1/B2).
-- **Out:** compose deposit lane (Pipe B), bridge-wrapped creator SPL as lottery token, `POST /provision` auto-pool for share mesh.
+- **Out:** compose deposit lane (Pipe B — **dormant**: no Solana asset mesh exists while the creator coin is Base-only; deposit-eligibility hints are stripped from deploy preflight/infra status and the lane reactivates only via `configureCreatorMesh` if a creator-coin bridge ever launches), bridge-wrapped creator SPL as lottery token, `POST /provision` auto-pool for share mesh.
 
 Reused on mainnet: `creator-share-hook` (`EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU`) — **B2 relay only**, not a substitute for LZ share OFT.
 

@@ -1680,19 +1680,17 @@ async function ensureSolanaRouteReadyForPhase3(params: {
   solanaOvault?: unknown
 }): Promise<{
   existingMintCompatible: boolean
-  depositEligible: boolean
   redeemEligible: boolean
-  assetPeerSet: boolean
   sharePeerSet: boolean
   meshStep: 'ovault_mesh_confirmed'
   meteoraAlphaVault: Hex | null
   solanaProgramIds: Hex[]
 }> {
+  // Compose-deposit lane is retired: deposit-eligibility / asset-peer hints are no
+  // longer part of the live preflight result (creator coin lives only on Base).
   const defaultStatus = {
     existingMintCompatible: true,
-    depositEligible: true,
     redeemEligible: true,
-    assetPeerSet: true,
     sharePeerSet: true,
     meshStep: 'ovault_mesh_confirmed' as const,
     meteoraAlphaVault: null as Hex | null,
@@ -1822,9 +1820,7 @@ async function ensureSolanaRouteReadyForPhase3(params: {
     failure: string | null
     ovault: {
       existingMintCompatible: boolean
-      depositEligible: boolean
       redeemEligible: boolean
-      assetPeerSet: boolean
       sharePeerSet: boolean
       meshStep: 'ovault_mesh_confirmed'
       meteoraAlphaVault: Hex | null
@@ -1921,9 +1917,7 @@ async function ensureSolanaRouteReadyForPhase3(params: {
           failure: null,
           ovault: {
             existingMintCompatible,
-            depositEligible,
             redeemEligible,
-            assetPeerSet,
             sharePeerSet,
             meshStep: 'ovault_mesh_confirmed',
             meteoraAlphaVault: hasMeteoraAlphaVault ? (meteoraAlphaVault as Hex) : null,
@@ -3016,9 +3010,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ovault: ovaultEnabled
         ? {
             existingMintCompatible: ovaultRaw.existingMintCompatible === false ? false : true,
-            depositEligible: ovaultRaw.depositEligible === false ? false : true,
             redeemEligible: ovaultRaw.redeemEligible === false ? false : true,
-            assetPeerSet: ovaultRaw.assetPeerSet === false ? false : true,
             sharePeerSet: ovaultRaw.sharePeerSet === false ? false : true,
             meshStep:
               typeof ovaultRaw.meshStep === 'string' && ovaultRaw.meshStep.trim()

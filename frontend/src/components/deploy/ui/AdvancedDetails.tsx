@@ -26,7 +26,7 @@ export function AdvancedDetails({
   const contentId = useId()
 
   return (
-    <div className={cn('rounded-xl border border-white/[0.06] bg-white/[0.015]', className)}>
+    <div className={cn('rounded-xl bg-white/[0.02]', className)}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

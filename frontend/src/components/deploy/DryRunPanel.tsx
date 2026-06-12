@@ -33,7 +33,7 @@ export function DryRunPanel({
 }) {
   const hasStatus = busy || ok !== null || Boolean(errorText)
   return (
-    <div className="space-y-2 rounded-xl border border-white/[0.07] bg-black/20 px-4 py-3.5">
+    <div className="space-y-2 rounded-xl bg-black/20 px-4 py-3.5">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
         <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">Dry run</div>
         {busy ? (

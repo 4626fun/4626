@@ -23,20 +23,19 @@ const CREATOR_VAULT_BATCHER_OVAULT_RUNTIME_VIEW_ABI = [
   },
 ] as const
 
+// Compose-deposit (Pipe B deposit lane) is retired: the creator coin lives only on
+// Base and no Solana asset mesh exists, so deposit-eligibility / asset-peer hints
+// are intentionally absent from this result.
 export type OvaultMeshPreflightResult = {
   existingMintCompatible: boolean
-  depositEligible: boolean
   redeemEligible: boolean
-  assetPeerSet: boolean
   sharePeerSet: boolean
   meshStep: 'ovault_mesh_confirmed'
 }
 
 export const DEFAULT_OVAULT_MESH_PREFLIGHT_RESULT: OvaultMeshPreflightResult = {
   existingMintCompatible: true,
-  depositEligible: true,
   redeemEligible: true,
-  assetPeerSet: true,
   sharePeerSet: true,
   meshStep: 'ovault_mesh_confirmed',
 }

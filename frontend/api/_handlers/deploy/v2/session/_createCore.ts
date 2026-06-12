@@ -83,10 +83,11 @@ export type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 // JSON comes over the wire, so `value` may be a string/number.
 export type Call = { to: Address; value?: bigint | number | string; data: Hex }
 
+// Compose-deposit lane is retired: no asset mesh mint exists, so the session
+// request only carries share-mesh fields.
 type SolanaOvaultRequest = {
   enabled?: boolean
   assetMintOrigin?: 'existing' | 'new'
-  assetMeshMint?: string
   shareMeshMint?: string
   solanaEid?: number | string
   mintCompatibilityHints?: unknown
@@ -2038,10 +2039,6 @@ function normalizeSolanaOvaultConfig(value: unknown): Record<string, unknown> | 
 
   const enabled = raw.enabled === true
   const assetMintOrigin = normalizeSolanaAssetMintOrigin(raw.assetMintOrigin, 'existing')
-  const assetMeshMint =
-    typeof raw.assetMeshMint === 'string' && raw.assetMeshMint.trim()
-      ? raw.assetMeshMint.trim()
-      : null
   const shareMeshMint =
     typeof raw.shareMeshMint === 'string' && raw.shareMeshMint.trim()
       ? raw.shareMeshMint.trim()
@@ -2051,7 +2048,6 @@ function normalizeSolanaOvaultConfig(value: unknown): Record<string, unknown> | 
   return {
     enabled,
     assetMintOrigin,
-    ...(assetMeshMint ? { assetMeshMint } : null),
     ...(shareMeshMint ? { shareMeshMint } : null),
     ...(solanaEid !== null ? { solanaEid } : null),
   }

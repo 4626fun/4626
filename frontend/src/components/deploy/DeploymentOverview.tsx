@@ -39,7 +39,7 @@ export function DeploymentOverview({
 }) {
   const ratio = totalPhases > 0 ? Math.min(Math.max(completedPhases / totalPhases, 0), 1) : 0
   return (
-    <div className="space-y-3 rounded-xl border border-white/[0.07] bg-black/20 px-4 py-3.5">
+    <div className="space-y-3 rounded-xl bg-black/20 px-4 py-3.5">
       <div className="flex items-start justify-between gap-3">
         <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">Launch control</div>
         <div className="text-right text-[10px] leading-relaxed">

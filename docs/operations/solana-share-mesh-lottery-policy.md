@@ -19,9 +19,14 @@ Related: [budget paths](./solana-share-mesh-budget-paths.md) (costs + runbooks),
 ## Two lanes (do not conflate)
 
 ```text
-A — Share mesh (lottery surface)   Base ShareOFT ──LZ──► Solana share mesh ──► Meteora pool buy
-B — Compose deposit (no lottery)   Solana asset mesh ──► OVaultHubComposer ──► ShareOFT on Base
+A — Share mesh (lottery surface)        Base ShareOFT ──LZ──► Solana share mesh ──► Meteora pool buy
+B — Compose deposit (DORMANT, no lottery) Solana asset mesh ──► OVaultHubComposer ──► ShareOFT on Base
 ```
+
+**Lane B (compose deposit) is dormant, not deleted.** The creator coin (e.g. $AKITA) lives only on Base today — no Solana asset mesh token is configured, so `OVaultHubComposer` rejects compose deposits with `CreatorMeshNotConfigured` and the lane is inert by construction. The contract capability stays in place: if product later launches the canonical creator-coin bridge to Solana (**LayerZero OFT adapter lockbox — CCIP was evaluated and ruled out**), activating the lane is a `configureCreatorMesh(...)` call with the new `assetMeshToken` — no redeploy. Bridge design + activation checklist: [akita-oft-adapter-lockbox.md](../research/akita-oft-adapter-lockbox.md). Until then:
+
+- Deposit-eligibility / asset-mesh readiness hints are **excluded from deploy preflight and infra status** (`depositEligible`, `solanaAssetMeshReady`, `assetPeerSet` removed) — the dormant lane must never gate or confuse vault deploys.
+- Compose **redeem** (Solana shares → composer → creator coin paid out **on Base**) remains the supported share exit; the creator coin itself never leaves Base through this lane.
 
 Do not use bridge-wrapped creator SPL (e.g. AKITA `9JWh…` via `SolanaBridgeAdapter`) as the share-lottery token. That legacy adapter/provisioner grain is out of scope for share-mesh policy.
 
@@ -83,7 +88,7 @@ Execution steps, costs, and commands: [solana-share-mesh-budget-paths.md](./sola
 | `SOLANA_CREATOR_MINTS` = creator SPL + `relay_entries` | Wrong grain |
 | `POST /provision` DLMM on creator SPL | Legacy provisioner / Alpha Vault — not share lottery |
 | `solana_bridge_strategy` / `SolanaBridgeStrategy` TVL | Removed for greenfield; use Pipe A 30% finalize bridge |
-| Compose deposit | Valid vault entry; no lottery |
+| Compose deposit | Dormant (no asset mesh configured; creator coin is Base-only). Would be a valid vault entry if a creator-coin bridge ever launches; never lottery-eligible |
 | `SolanaBridgeAdapter.buyAndEnterLottery` | Non-canonical alternate |
 
 ## Verification

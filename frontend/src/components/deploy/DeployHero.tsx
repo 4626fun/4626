@@ -22,7 +22,7 @@ export function DeployHero({ children }: { children?: ReactNode }) {
           {HERO_PILLS.map((pill) => (
             <span
               key={pill}
-              className="inline-flex items-center rounded-full border border-white/[0.07] bg-white/[0.03] px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-zinc-500"
+              className="inline-flex items-center rounded-full bg-white/[0.04] px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-zinc-500"
             >
               {pill}
             </span>

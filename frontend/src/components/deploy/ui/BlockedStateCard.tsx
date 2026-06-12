@@ -9,25 +9,25 @@ function toneClasses(tone: BlockedTone): { card: string; title: string; body: st
   switch (tone) {
     case 'info':
       return {
-        card: 'border-white/[0.07] bg-white/[0.03]',
+        card: 'bg-white/[0.03]',
         title: 'text-zinc-300',
         body: 'text-zinc-500',
       }
     case 'warning':
       return {
-        card: 'border-amber-500/25 bg-linear-to-b from-amber-500/14 to-amber-500/6',
+        card: 'bg-linear-to-b from-amber-500/14 to-amber-500/6',
         title: 'text-amber-200',
         body: 'text-amber-200/70',
       }
     case 'error':
       return {
-        card: 'border-red-500/25 bg-linear-to-b from-red-500/12 to-red-500/5',
+        card: 'bg-linear-to-b from-red-500/12 to-red-500/5',
         title: 'text-red-300',
         body: 'text-red-300/70',
       }
     case 'checking':
       return {
-        card: 'border-white/[0.07] bg-white/[0.02]',
+        card: 'bg-white/[0.02]',
         title: 'text-zinc-400',
         body: 'text-zinc-600',
       }
@@ -75,7 +75,7 @@ export function BlockedStateCard({
 }) {
   const classes = toneClasses(tone)
   return (
-    <div className={cn('rounded-xl border p-4 backdrop-blur-sm', classes.card, className)} role={tone === 'error' ? 'alert' : undefined}>
+    <div className={cn('rounded-xl p-4 backdrop-blur-sm', classes.card, className)} role={tone === 'error' ? 'alert' : undefined}>
       <div className="flex items-start gap-3">
         <span className="mt-0.5">
           <ToneIcon tone={tone} />

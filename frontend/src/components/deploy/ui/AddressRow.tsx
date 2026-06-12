@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { ExternalLink } from 'lucide-react'
 
 import { cn } from '@/lib/shared/utils'
@@ -11,7 +11,7 @@ export type AddressRowTag = 'local fork' | 'pending' | 'live' | 'shared' | 'this
 
 export interface AddressRowProps {
   label: string
-  /** Full underlying value (EVM address, bytes32, Solana base58, …). Never truncated in the data model. */
+  /** Full underlying value (EVM address, bytes32, Solana base58, …). Always rendered in full. */
   value: string | null | undefined
   /**
    * On-chain liveness from the existing bytecode checks:
@@ -20,10 +20,14 @@ export interface AddressRowProps {
   deployed?: boolean | null
   /** Local fork rows are clearly labeled and never link to BaseScan. */
   forkOnly?: boolean
-  /** Shared protocol infrastructure rows get a subtle distinct tint. */
+  /** Protocol shared infrastructure rows get a "protocol" tag and sky label. */
   shared?: boolean
   /** When the dry run simulated this row's phase successfully, render a green check. */
   dryRunPassed?: boolean
+  /** Dry run currently in flight for this row's phase: brighten + pulse the value. */
+  simulating?: boolean
+  /** Stagger delay (ms) for the dry-run check pop-in so phases reveal in deploy order. */
+  dryRunCheckDelayMs?: number
   /** Extra descriptive tags rendered after the label. */
   tags?: AddressRowTag[]
   /**
@@ -34,12 +38,9 @@ export interface AddressRowProps {
   /** Optional secondary raw value (e.g. bytes32 form of a Solana address). */
   rawValue?: string | null
   rawValueLabel?: string
+  /** Optional protocol logo rendered before the label (e.g. Uniswap, Ajna, Chainlink). */
+  iconSrc?: string
   className?: string
-}
-
-function truncateValue(value: string): string {
-  if (value.length <= 14) return value
-  return `${value.slice(0, 6)}…${value.slice(-4)}`
 }
 
 function rowStatus(params: { ok: boolean; forkOnly?: boolean; deployed?: boolean | null }): DeployStatus {
@@ -64,17 +65,18 @@ function statusHint(status: DeployStatus): string | null {
 }
 
 const TAG_CLASSES: Record<AddressRowTag, string> = {
-  'local fork': 'border-amber-500/25 bg-amber-500/10 text-amber-200',
-  pending: 'border-white/10 bg-white/[0.04] text-zinc-400',
-  live: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300',
-  shared: 'border-sky-500/25 bg-sky-500/10 text-sky-300',
-  'this deploy': 'border-blue-500/25 bg-blue-500/10 text-blue-300',
-  external: 'border-white/10 bg-white/[0.04] text-zinc-400',
+  'local fork': 'bg-amber-500/10 text-amber-200',
+  pending: 'bg-white/[0.05] text-zinc-400',
+  live: 'bg-emerald-500/10 text-emerald-300',
+  shared: 'bg-sky-500/10 text-sky-300',
+  'this deploy': 'bg-blue-500/10 text-blue-300',
+  external: 'bg-white/[0.05] text-zinc-400',
 }
 
 /**
- * Polished address/value row: truncated mono display, copy of the full value,
- * explorer link only when the contract is live and not fork-only.
+ * Borderless address/value row: full untruncated mono value, copy of the
+ * full value, explorer link only when the contract is live and not fork-only.
+ * Protocol shared rows are tagged "protocol" so ownership is unambiguous.
  */
 export function AddressRow({
   label,
@@ -83,14 +85,15 @@ export function AddressRow({
   forkOnly,
   shared,
   dryRunPassed,
+  simulating,
+  dryRunCheckDelayMs,
   tags,
   explorerHref,
   rawValue,
   rawValueLabel,
+  iconSrc,
   className,
 }: AddressRowProps) {
-  const [expanded, setExpanded] = useState(false)
-
   const fullValue = value ? String(value) : ''
   const ok = Boolean(fullValue) && fullValue !== ZERO_EVM_ADDRESS
   const status = rowStatus({ ok, forkOnly, deployed })
@@ -103,65 +106,62 @@ export function AddressRow({
     return `https://basescan.org/address/${fullValue}`
   }, [ok, status, explorerHref, fullValue])
 
-  const display = expanded ? fullValue : truncateValue(fullValue)
-
   return (
-    <div
-      className={cn(
-        'flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg px-2.5 py-1.5 text-xs transition-colors',
-        shared ? 'border border-sky-400/15 bg-sky-500/[0.06]' : 'hover:bg-white/[0.03]',
-        className,
-      )}
-    >
-      <div className="flex min-w-0 items-center gap-2">
-        <span className={cn('truncate', shared ? 'text-sky-200/90' : 'text-zinc-500')}>{label}</span>
+    <div className={cn('min-w-0 py-1.5', className)}>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+        {iconSrc ? (
+          <img src={iconSrc} alt="" aria-hidden="true" loading="lazy" className="size-3.5 shrink-0 opacity-90" />
+        ) : null}
+        <span className={cn('truncate', shared ? 'text-sky-200/80' : 'text-zinc-400')}>{label}</span>
+        {shared ? (
+          <span className="shrink-0 rounded-full bg-sky-500/10 px-1.5 py-px text-[9px] uppercase tracking-wide text-sky-300">
+            protocol
+          </span>
+        ) : null}
         {tags?.map((tag) => (
           <span
             key={tag}
-            className={cn(
-              'hidden shrink-0 rounded-full border px-1.5 py-px text-[9px] uppercase tracking-wide sm:inline-flex',
-              TAG_CLASSES[tag],
-            )}
+            className={cn('shrink-0 rounded-full px-1.5 py-px text-[9px] uppercase tracking-wide', TAG_CLASSES[tag])}
           >
             {tag}
           </span>
         ))}
+        {hint ? (
+          <span className={cn('shrink-0 text-[10px]', status === 'localFork' ? 'text-amber-200/70' : 'text-zinc-600')}>
+            ({hint})
+          </span>
+        ) : null}
+        {simulating && ok ? (
+          <span className="shrink-0 text-[10px] text-zinc-300 animate-pulse motion-reduce:animate-none">
+            simulating…
+          </span>
+        ) : dryRunPassed ? (
+          <span
+            className="deploy-dryrun-check shrink-0 text-emerald-300"
+            style={dryRunCheckDelayMs ? { animationDelay: `${dryRunCheckDelayMs}ms` } : undefined}
+            title="Dry run passed for this phase"
+          >
+            ✓
+          </span>
+        ) : null}
       </div>
 
-      <div className="flex min-w-0 items-center gap-1.5">
+      <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
         {!ok ? (
-          <span className="font-mono text-zinc-600">—</span>
+          <span className="font-mono text-xs text-zinc-600">—</span>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              aria-label={expanded ? `Collapse ${label} value` : `Expand ${label} value to full length`}
-              aria-expanded={expanded}
-              title={expanded ? 'Show truncated value' : fullValue}
+            <span
               className={cn(
-                'min-w-0 break-all text-right font-mono transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500/70',
+                'min-w-0 break-all font-mono text-[11px] leading-relaxed',
                 status === 'checking' && 'animate-pulse motion-reduce:animate-none',
-                deployStatusTextClasses(status),
+                simulating
+                  ? 'text-zinc-100 animate-pulse motion-reduce:animate-none'
+                  : deployStatusTextClasses(status),
               )}
             >
-              {display}
-            </button>
-            {hint ? (
-              <span
-                className={cn(
-                  'shrink-0 text-[10px]',
-                  status === 'localFork' ? 'text-amber-200/70' : 'text-zinc-600',
-                )}
-              >
-                ({hint})
-              </span>
-            ) : null}
-            {dryRunPassed ? (
-              <span className="shrink-0 text-emerald-300" title="Dry run passed for this phase">
-                ✓
-              </span>
-            ) : null}
+              {fullValue}
+            </span>
             <CopyButton value={fullValue} label={`Copy ${label}`} />
             {href ? (
               <a
@@ -179,8 +179,8 @@ export function AddressRow({
         )}
       </div>
 
-      {rawValue && expanded ? (
-        <div className="w-full basis-full pl-2 text-[10px] text-zinc-600">
+      {rawValue ? (
+        <div className="text-[10px] text-zinc-600">
           <span className="mr-1">{rawValueLabel ?? 'raw'}:</span>
           <span className="break-all font-mono">{rawValue}</span>
         </div>

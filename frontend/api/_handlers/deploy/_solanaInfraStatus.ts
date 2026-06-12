@@ -150,12 +150,12 @@ type SolanaInfraStatusResponse = {
   internalRegistrationSecretConfigured: boolean
   mintCompatibility: ReturnType<typeof evaluateSolanaOvaultMintCompatibility>['mintCompatibility']
   ovaultComposerConfigured: boolean
-  solanaAssetMeshReady: boolean
+  // Compose-deposit (asset mesh) lane is dormant: deposit-eligibility hints are
+  // intentionally absent so they can never gate auto-registration readiness.
   solanaShareMeshReady: boolean
   existingMintCompatible: boolean
   transferHookDetected: boolean
   oftFeeIsZero: boolean
-  depositEligible: boolean
   redeemEligible: boolean
   readyForAutoRegistration: boolean
   blockers: string[]
@@ -445,9 +445,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     requireHintsForExisting: true,
   })
   const existingMintCompatible = mintEligibility.existingMintCompatible
-  const depositEligible = mintEligibility.depositEligible
   const redeemEligible = mintEligibility.redeemEligible
-  const solanaAssetMeshReady = depositEligible
   const solanaShareMeshReady = redeemEligible
   const transferHookDetected = mintEligibility.mintCompatibility.transferHookDetected
   const oftFeeIsZero = mintEligibility.mintCompatibility.oftFeeIsZero
@@ -589,7 +587,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const bridgeLivenessReady = !bridgeLivenessApplies || bridgeLivenessEvaluation.healthy
   const meteoraProvisionerReady = !meteoraProvisionerUrlConfigured || meteoraProvisionerSecretConfigured
   const signerReady = signerConfigured && signerMatchesAdapterOwner !== false
-  const ovaultEligibilityReady = !solanaEnabledOnBatcher || (existingMintCompatible && depositEligible && redeemEligible)
+  // Deposit eligibility (dormant compose-deposit lane) intentionally excluded.
+  const ovaultEligibilityReady = !solanaEnabledOnBatcher || (existingMintCompatible && redeemEligible)
   const readyForAutoRegistration =
     !!batcherAddress &&
     (!solanaEnabledOnBatcher ||
@@ -654,12 +653,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     internalRegistrationSecretConfigured,
     mintCompatibility: mintEligibility.mintCompatibility,
     ovaultComposerConfigured,
-    solanaAssetMeshReady,
     solanaShareMeshReady,
     existingMintCompatible,
     transferHookDetected,
     oftFeeIsZero,
-    depositEligible,
     redeemEligible,
     readyForAutoRegistration,
     blockers,

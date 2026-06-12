@@ -57,9 +57,7 @@ const {
   checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
   ensureShareMeshOvaultPreflightMock: vi.fn(async () => ({
     existingMintCompatible: true,
-    depositEligible: true,
     redeemEligible: true,
-    assetPeerSet: true,
     sharePeerSet: true,
     meshStep: 'ovault_mesh_confirmed' as const,
   })),
@@ -262,9 +260,7 @@ describe('deploy session optimistic concurrency', () => {
     checkRateLimitMock.mockReturnValue({ allowed: true, resetAt: Date.now() + 60_000 })
     ensureShareMeshOvaultPreflightMock.mockResolvedValue({
       existingMintCompatible: true,
-      depositEligible: true,
       redeemEligible: true,
-      assetPeerSet: true,
       sharePeerSet: true,
       meshStep: 'ovault_mesh_confirmed',
     })
