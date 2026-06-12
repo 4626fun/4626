@@ -6,6 +6,14 @@ import type { CounterTradeBias, CounterTradePreset } from './counterTradeConfig.
 export type CounterTradeUserState = 'not_opted_in' | 'active' | 'paused'
 export type CounterTradeActionStatus = 'executed' | 'skipped' | 'blocked' | 'failed'
 
+/**
+ * Ledger `reason` for mirrored exit executions (bot closed its position after
+ * the countered user closed / was liquidated out of theirs). Exit rows reuse
+ * status 'executed' (DB CHECK constraint) but are excluded from the entry
+ * cooldown clock and the hourly/daily usage windows.
+ */
+export const COUNTER_TRADE_EXIT_EXECUTED_REASON = 'exit_executed'
+
 export type CounterTradeRoomStrategy = {
   roomId: string
   enabled: boolean
@@ -464,7 +472,9 @@ export async function recordCounterTradeAction(params: {
         ${params.counterSide}, ${params.counterNotionalUsd}, ${params.counterLeverage}, NOW()
       );
     `
-    if (params.status === 'executed') {
+    // Only entry executions advance the cooldown clock; mirrored exits are
+    // risk-reducing and must not delay the next counter-entry.
+    if (params.status === 'executed' && params.reason !== COUNTER_TRADE_EXIT_EXECUTED_REASON) {
       await db.sql`
         UPDATE alfaclub.counter_trade_user_opt_in
         SET last_action_at = NOW(), updated_at = NOW()
@@ -503,8 +513,12 @@ export async function readCounterTradeUsageWindow(params: {
     const result = await db.sql`
       SELECT
         COUNT(*)::int AS action_count,
-        COUNT(*) FILTER (WHERE status = 'executed')::int AS executed_count,
-        COALESCE(SUM(counter_notional_usd) FILTER (WHERE status = 'executed'), 0)::text AS notional_usd
+        COUNT(*) FILTER (
+          WHERE status = 'executed' AND reason <> ${COUNTER_TRADE_EXIT_EXECUTED_REASON}
+        )::int AS executed_count,
+        COALESCE(SUM(counter_notional_usd) FILTER (
+          WHERE status = 'executed' AND reason <> ${COUNTER_TRADE_EXIT_EXECUTED_REASON}
+        ), 0)::text AS notional_usd
       FROM alfaclub.counter_trade_action_ledger
       WHERE room_id = ${roomId}
         AND sender_address = ${senderAddress}

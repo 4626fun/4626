@@ -117,6 +117,41 @@ export function classifyCounterTradeFillAction(fill: HyperliquidUserFillDetailed
   return 'unknown'
 }
 
+/**
+ * Fill actions that mean the countered user exited risk on a pair. The bot
+ * mirrors these by closing its own position on the same pair (full close —
+ * the arena CLI has no partial-close, so `reduce` fills are intentionally
+ * not mirrored).
+ */
+export function isExitFillAction(action: CounterTradeFillAction): boolean {
+  return action === 'close' || action === 'liquidated'
+}
+
+export type CounterPositionLeg = {
+  coin: string
+  side: CounterTradeSide
+  positionValue: number
+}
+
+/**
+ * Find the bot's open position leg for a coin, if any. Used to decide
+ * whether a mirrored exit has anything to close.
+ */
+export function findCounterPositionForCoin(
+  state: HyperliquidClearinghouseState | null,
+  coin: string | null | undefined,
+): CounterPositionLeg | null {
+  const target = String(coin ?? '').trim().toUpperCase()
+  if (!target) return null
+  for (const leg of state?.assetPositions ?? []) {
+    if (String(leg.coin ?? '').trim().toUpperCase() !== target) continue
+    if (leg.side !== 'long' && leg.side !== 'short') continue
+    if (leg.positionValue == null || !Number.isFinite(leg.positionValue) || leg.positionValue <= 0) continue
+    return { coin: leg.coin, side: leg.side, positionValue: leg.positionValue }
+  }
+  return null
+}
+
 function computeMinimumLiqDistancePct(state: HyperliquidClearinghouseState | null): number | null {
   const legs = state?.assetPositions ?? []
   let minDistance: number | null = null

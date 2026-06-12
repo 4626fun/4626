@@ -132,6 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     data: {
       roomId,
       engineEnabled: runtime.enabled && isEnabledByEnv(),
+      exitEnabled: runtime.exitEnabled,
       strategy,
       user: {
         senderAddress: selected.address,

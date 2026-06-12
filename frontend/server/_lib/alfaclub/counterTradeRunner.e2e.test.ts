@@ -43,6 +43,7 @@ vi.mock('./counterTradeConfig.js', async () => {
 })
 
 vi.mock('./counterTradeStore.js', () => ({
+  COUNTER_TRADE_EXIT_EXECUTED_REASON: 'exit_executed',
   listActiveCounterTradeOptIns: mocks.listActiveCounterTradeOptIns,
   readCounterTradeUsageWindow: mocks.readCounterTradeUsageWindow,
   readOrCreateCounterTradeRoomStrategy: mocks.readOrCreateCounterTradeRoomStrategy,
@@ -63,6 +64,7 @@ import { runCounterTradeLoop } from './counterTradeRunner.js'
 
 const BASE_RUNTIME = {
   enabled: true,
+  exitEnabled: true,
   roomId: '1659',
   chatPostEnabled: true,
   chatPostRoomId: '1659',
@@ -238,6 +240,171 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
         roomId: '1659',
         survivorSenderAddress: '0xsender-a',
       }),
+    )
+  })
+
+  it('mirrors a user close by closing the bot position on that pair', async () => {
+    mocks.getUserFillsByTimeDetailed.mockResolvedValue([
+      { ...FILL, dir: 'Close Long', sz: '1', px: '100', startPosition: '1' },
+    ])
+    mocks.getClearinghouseState.mockResolvedValue({
+      assetPositions: [
+        { coin: 'BTC', side: 'short', positionValue: 45, entryPx: 100, liquidationPx: 200 },
+      ],
+      marginSummary: { accountValue: '10000' },
+      time: 1_720_000_000_000,
+    })
+
+    const result = await runCounterTradeLoop()
+
+    expect(result.executed).toBe(1)
+    expect(result.failed).toBe(0)
+    expect(mocks.runArenaTrade).toHaveBeenCalledTimes(1)
+    expect(mocks.runArenaTrade).toHaveBeenCalledWith(
+      { action: 'close', pair: 'BTC' },
+      expect.objectContaining({ agentWalletAddress: '0xagentwallet' }),
+    )
+    expect(mocks.recordCounterTradeAction).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'executed', reason: 'exit_executed', counterSide: 'short' }),
+    )
+    expect(mocks.sendAlfaClubRoomText).toHaveBeenCalledTimes(1)
+  })
+
+  it('mirrors a user liquidation by closing the bot position', async () => {
+    mocks.getUserFillsByTimeDetailed.mockResolvedValue([
+      { ...FILL, dir: 'Liquidated Long', sz: '1', px: '100' },
+    ])
+    mocks.getClearinghouseState.mockResolvedValue({
+      assetPositions: [
+        { coin: 'BTC', side: 'short', positionValue: 45, entryPx: 100, liquidationPx: 200 },
+      ],
+      marginSummary: { accountValue: '10000' },
+      time: 1_720_000_000_000,
+    })
+
+    const result = await runCounterTradeLoop()
+
+    expect(result.executed).toBe(1)
+    expect(mocks.runArenaTrade).toHaveBeenCalledWith(
+      { action: 'close', pair: 'BTC' },
+      expect.anything(),
+    )
+  })
+
+  it('skips a mirrored exit when the bot holds no position on the pair', async () => {
+    mocks.getUserFillsByTimeDetailed.mockResolvedValue([
+      { ...FILL, dir: 'Close Long', sz: '1', px: '100', startPosition: '1' },
+    ])
+
+    const result = await runCounterTradeLoop()
+
+    expect(result.executed).toBe(0)
+    expect(result.skipped).toBe(1)
+    expect(mocks.runArenaTrade).not.toHaveBeenCalled()
+    expect(mocks.recordCounterTradeAction).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'skipped', reason: 'exit_no_position' }),
+    )
+  })
+
+  it('skips mirrored exits entirely when exitEnabled is off', async () => {
+    mocks.readCounterTradeRuntimeConfig.mockReturnValue({ ...BASE_RUNTIME, exitEnabled: false })
+    mocks.getUserFillsByTimeDetailed.mockResolvedValue([
+      { ...FILL, dir: 'Close Long', sz: '1', px: '100', startPosition: '1' },
+    ])
+    mocks.getClearinghouseState.mockResolvedValue({
+      assetPositions: [
+        { coin: 'BTC', side: 'short', positionValue: 45, entryPx: 100, liquidationPx: 200 },
+      ],
+      marginSummary: { accountValue: '10000' },
+      time: 1_720_000_000_000,
+    })
+
+    const result = await runCounterTradeLoop()
+
+    expect(result.executed).toBe(0)
+    expect(result.skipped).toBe(1)
+    expect(mocks.runArenaTrade).not.toHaveBeenCalled()
+    expect(mocks.recordCounterTradeAction).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'skipped', reason: 'exit_disabled:close' }),
+    )
+  })
+
+  it('mirrored exit bypasses an active cooldown', async () => {
+    const nowMs = Date.now()
+    mocks.listActiveCounterTradeOptIns.mockResolvedValue([
+      {
+        senderAddress: '0xsender',
+        preset: 'balanced',
+        lastActionAt: new Date(nowMs - 15_000).toISOString(),
+      },
+    ])
+    mocks.getUserFillsByTimeDetailed.mockResolvedValue([
+      { ...FILL, dir: 'Close Long', sz: '1', px: '100', startPosition: '1' },
+    ])
+    mocks.getClearinghouseState.mockResolvedValue({
+      assetPositions: [
+        { coin: 'BTC', side: 'short', positionValue: 45, entryPx: 100, liquidationPx: 200 },
+      ],
+      marginSummary: { accountValue: '10000' },
+      time: 1_720_000_000_000,
+    })
+
+    const result = await runCounterTradeLoop()
+
+    expect(result.executed).toBe(1)
+    expect(result.blocked).toBe(0)
+    expect(mocks.runArenaTrade).toHaveBeenCalledWith(
+      { action: 'close', pair: 'BTC' },
+      expect.anything(),
+    )
+  })
+
+  it('closes a same-tick entry+exit pair even though the position snapshot is stale', async () => {
+    mocks.getUserFillsByTimeDetailed.mockResolvedValue([
+      { ...FILL, time: 1_720_000_000_000, dir: 'Open Long 6x', sz: '1', px: '100', startPosition: '0' },
+      { ...FILL, time: 1_720_000_060_000, dir: 'Close Long', sz: '1', px: '101', startPosition: '1' },
+    ])
+    // Snapshot taken before the entry executed — shows no BTC position.
+    mocks.getClearinghouseState.mockResolvedValue({
+      assetPositions: [],
+      marginSummary: { accountValue: '10000' },
+      time: 1_720_000_000_000,
+    })
+
+    const result = await runCounterTradeLoop()
+
+    expect(result.executed).toBe(2)
+    expect(mocks.runArenaTrade).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ action: 'open', pair: 'BTC', side: 'short' }),
+      expect.anything(),
+    )
+    expect(mocks.runArenaTrade).toHaveBeenNthCalledWith(
+      2,
+      { action: 'close', pair: 'BTC' },
+      expect.anything(),
+    )
+  })
+
+  it('records a failed exit when the arena close errors', async () => {
+    mocks.getUserFillsByTimeDetailed.mockResolvedValue([
+      { ...FILL, dir: 'Close Long', sz: '1', px: '100', startPosition: '1' },
+    ])
+    mocks.getClearinghouseState.mockResolvedValue({
+      assetPositions: [
+        { coin: 'BTC', side: 'short', positionValue: 45, entryPx: 100, liquidationPx: 200 },
+      ],
+      marginSummary: { accountValue: '10000' },
+      time: 1_720_000_000_000,
+    })
+    mocks.runArenaTrade.mockResolvedValue({ ok: false, message: 'close rejected' })
+
+    const result = await runCounterTradeLoop()
+
+    expect(result.executed).toBe(0)
+    expect(result.failed).toBe(1)
+    expect(mocks.recordCounterTradeAction).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'failed', reason: 'exit_failed:close rejected' }),
     )
   })
 

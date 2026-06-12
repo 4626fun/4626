@@ -12,6 +12,7 @@ import { resolveRoom1659HyperliquidUserForSnapshot } from './room1659Market.js'
 import { readCounterTradeRuntimeConfig } from './counterTradeConfig.js'
 import { applyCounterTradeLlmGate } from './counterTradeLlmAdvisor.js'
 import {
+  classifyCounterTradeFillAction,
   type CounterTradeFillAction,
   deriveCounterTradeDecision,
   deriveEventKeyFromFill,
@@ -20,8 +21,11 @@ import {
   deriveUserLeverage,
   deriveUserNotional,
   deriveUserSide,
+  findCounterPositionForCoin,
+  isExitFillAction,
 } from './counterTradeEngine.js'
 import {
+  COUNTER_TRADE_EXIT_EXECUTED_REASON,
   enforceSingleActiveCounterTradeActor,
   listActiveCounterTradeOptIns,
   readCounterTradeUsageWindow,
@@ -109,6 +113,64 @@ function formatCounterTradeRoomPost(params: {
     '',
     `User ${userLabel}${userLeverage != null ? ` ${userLeverage}x` : ''} · bot opened ${oppositeLabel}`,
   ].join('\n')
+}
+
+function formatCounterTradeExitRoomPost(params: {
+  pair: string
+  userFill: HyperliquidUserFillDetailed
+  fillAction: CounterTradeFillAction
+  closedSide: 'long' | 'short' | null
+  closedPositionValueUsd: number | null
+}): string {
+  const closedAt = new Date(params.userFill.time).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  const userLabel = params.userFill.side === 'short' ? 'Short' : 'Long'
+  const closedLabel =
+    params.closedSide === 'long' ? 'Long' : params.closedSide === 'short' ? 'Short' : 'position'
+  const userVerb = params.fillAction === 'liquidated' ? 'was liquidated out of' : 'closed'
+
+  return [
+    `⤵️ User ${userVerb} ${userLabel} → closed our ${closedLabel} · ${closedAt}`,
+    '',
+    `${params.pair}/USDC`,
+    '',
+    params.closedPositionValueUsd != null
+      ? `Closed position ~$${params.closedPositionValueUsd.toFixed(2)}`
+      : 'Closed position',
+    `Signal ${params.fillAction}`,
+  ].join('\n')
+}
+
+async function postCounterTradeExitRoomUpdate(params: {
+  runtimeRoomId: string
+  postRoomId: string
+  pair: string
+  userFill: HyperliquidUserFillDetailed
+  fillAction: CounterTradeFillAction
+  closedSide: 'long' | 'short' | null
+  closedPositionValueUsd: number | null
+}): Promise<void> {
+  const message = formatCounterTradeExitRoomPost({
+    pair: params.pair,
+    userFill: params.userFill,
+    fillAction: params.fillAction,
+    closedSide: params.closedSide,
+    closedPositionValueUsd: params.closedPositionValueUsd,
+  })
+  const send = await sendAlfaClubRoomText({
+    roomId: params.postRoomId,
+    text: message,
+  })
+  logger.info('counter_trade.exit_room_posted', {
+    roomId: params.runtimeRoomId,
+    postRoomId: params.postRoomId,
+    lane: send.lane,
+    pair: params.pair,
+    fillAction: params.fillAction,
+    closedSide: params.closedSide,
+  })
 }
 
 async function postCounterTradeRoomUpdate(params: {
@@ -253,6 +315,18 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
       const sorted = [...fills].sort((a, b) => a.time - b.time).slice(-runtime.runLimitPerIdentity)
       let lastExecutedAtMs = parseIsoMs(optIn.lastActionAt)
 
+      const identityConfig = {
+        ...baseArenaConfig,
+        agentId: identity.agentId,
+        agentWalletAddress: identity.agentWalletAddress,
+        hlApiWalletAddress: identity.hlApiWalletAddress,
+      }
+      // counterWalletState is a single snapshot per tick, so track coins the
+      // bot opened/closed during this tick to keep exit decisions coherent
+      // when a user entry+exit pair lands inside one lookback window.
+      const openedCoinsThisTick = new Set<string>()
+      const closedCoinsThisTick = new Set<string>()
+
       for (const fill of sorted) {
         scannedEvents += 1
         const eventKey = deriveEventKeyFromFill({ walletAddress: userWalletForFills, fill })
@@ -270,6 +344,103 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
         })
         if (!isNewEvent) continue
         newEvents += 1
+
+        // Mirrored exits: when the countered user closes (or is liquidated out
+        // of) a pair, close the bot's position on that pair. Risk-reducing, so
+        // it runs before cooldown/hourly/daily gates and the LLM gate; dedupe
+        // and the env/DB kill switches above still apply.
+        const fillAction = classifyCounterTradeFillAction(fill)
+        if (isExitFillAction(fillAction)) {
+          const exitPair = String(fill.coin ?? '').trim()
+          const exitCoinKey = exitPair.toUpperCase()
+          const recordExitOutcome = async (status: 'executed' | 'skipped' | 'failed', reason: string) => {
+            await recordCounterTradeAction({
+              roomId: runtime.roomId,
+              senderAddress: optIn.senderAddress,
+              eventKey,
+              status,
+              reason,
+              counterSide: null,
+              counterNotionalUsd: null,
+              counterLeverage: null,
+            })
+          }
+
+          if (!runtime.exitEnabled) {
+            skipped += 1
+            await recordExitOutcome('skipped', `exit_disabled:${fillAction}`)
+            continue
+          }
+          if (!exitPair) {
+            skipped += 1
+            await recordExitOutcome('skipped', 'exit_missing_pair')
+            continue
+          }
+          if (closedCoinsThisTick.has(exitCoinKey)) {
+            skipped += 1
+            await recordExitOutcome('skipped', 'exit_already_closed_this_tick')
+            continue
+          }
+
+          const botLeg = findCounterPositionForCoin(counterWalletState, exitPair)
+          if (!botLeg && !openedCoinsThisTick.has(exitCoinKey)) {
+            skipped += 1
+            await recordExitOutcome('skipped', 'exit_no_position')
+            continue
+          }
+
+          const closeResult = await runArenaTrade({ action: 'close', pair: exitPair }, identityConfig)
+          if (closeResult.ok) {
+            executed += 1
+            closedCoinsThisTick.add(exitCoinKey)
+            openedCoinsThisTick.delete(exitCoinKey)
+            await recordCounterTradeAction({
+              roomId: runtime.roomId,
+              senderAddress: optIn.senderAddress,
+              eventKey,
+              status: 'executed',
+              reason: COUNTER_TRADE_EXIT_EXECUTED_REASON,
+              counterSide: botLeg?.side ?? null,
+              counterNotionalUsd: null,
+              counterLeverage: null,
+            })
+            if (runtime.chatPostEnabled) {
+              try {
+                await postCounterTradeExitRoomUpdate({
+                  runtimeRoomId: runtime.roomId,
+                  postRoomId: runtime.chatPostRoomId,
+                  pair: exitPair,
+                  userFill: fill,
+                  fillAction,
+                  closedSide: botLeg?.side ?? null,
+                  closedPositionValueUsd: botLeg?.positionValue ?? null,
+                })
+              } catch (postError) {
+                logger.warn('counter_trade.exit_room_post_failed', {
+                  roomId: runtime.roomId,
+                  postRoomId: runtime.chatPostRoomId,
+                  senderAddress: optIn.senderAddress,
+                  pair: exitPair,
+                  message: postError instanceof Error ? postError.message : String(postError),
+                })
+              }
+            }
+          } else {
+            failed += 1
+            await recordExitOutcome(
+              'failed',
+              `exit_failed:${String(closeResult.message ?? 'arena_close_failed')}`,
+            )
+            logger.warn('counter_trade.exit_execution_failed', {
+              roomId: runtime.roomId,
+              senderAddress: optIn.senderAddress,
+              eventKey,
+              pair: exitPair,
+              reason: closeResult.message,
+            })
+          }
+          continue
+        }
 
         const nowMs = Date.now()
         const cooldownRemainingMs = computeCounterTradeCooldownRemainingMs({
@@ -417,13 +588,6 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
         }
         const counterNotionalUsd = llmGate.notionalUsd
 
-        const identityConfig = {
-          ...baseArenaConfig,
-          agentId: identity.agentId,
-          agentWalletAddress: identity.agentWalletAddress,
-          hlApiWalletAddress: identity.hlApiWalletAddress,
-        }
-
         const tradeResult = await runArenaTrade(
           {
             action: 'open',
@@ -438,6 +602,8 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
         if (tradeResult.ok) {
           executed += 1
           lastExecutedAtMs = nowMs
+          openedCoinsThisTick.add(pair.toUpperCase())
+          closedCoinsThisTick.delete(pair.toUpperCase())
           await recordCounterTradeAction({
             roomId: runtime.roomId,
             senderAddress: optIn.senderAddress,

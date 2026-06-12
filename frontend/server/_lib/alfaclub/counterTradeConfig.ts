@@ -8,6 +8,13 @@ export type CounterTradeSide = 'long' | 'short'
 
 export type CounterTradeRuntimeConfig = {
   enabled: boolean
+  /**
+   * Mirror exits: when the countered user closes (or is liquidated out of) a
+   * position, close the bot's position on that pair. Exits are risk-reducing,
+   * so they bypass cooldown/hourly/daily entry gates but still respect the
+   * env + DB kill switches and per-fill dedupe.
+   */
+  exitEnabled: boolean
   roomId: string
   chatPostEnabled: boolean
   chatPostRoomId: string
@@ -63,6 +70,7 @@ export function readCounterTradeRuntimeConfig(): CounterTradeRuntimeConfig {
   const roomId = readRoomId()
   return {
     enabled: readBool('ALFACLUB_COUNTER_TRADE_ENABLED', false),
+    exitEnabled: readBool('ALFACLUB_COUNTER_TRADE_EXIT_ENABLED', true),
     roomId,
     chatPostEnabled: readBool('ALFACLUB_COUNTER_TRADE_CHAT_POST_ENABLED', true),
     chatPostRoomId: String(process.env.ALFACLUB_COUNTER_TRADE_CHAT_POST_ROOM_ID ?? '').trim() || roomId,

@@ -3,13 +3,16 @@ import {
   classifyCounterTradeFillAction,
   deriveCounterTradeDecision,
   deriveEventKeyFromFill,
+  findCounterPositionForCoin,
+  isExitFillAction,
 } from './counterTradeEngine.js'
 import type { CounterTradeRuntimeConfig } from './counterTradeConfig.js'
-import type { HyperliquidUserFillDetailed } from './hyperliquid.js'
+import type { HyperliquidClearinghouseState, HyperliquidUserFillDetailed } from './hyperliquid.js'
 
 function makeRuntime(): CounterTradeRuntimeConfig {
   return {
     enabled: true,
+    exitEnabled: true,
     roomId: '1659',
     chatPostEnabled: true,
     chatPostRoomId: '1659',
@@ -150,6 +153,45 @@ describe('counterTradeEngine', () => {
       expect(closeDecision.reason).toBe('fill_action_not_counterable')
       expect(closeDecision.fillAction).toBe('close')
     }
+  })
+
+  it('flags only close and liquidated fill actions as exits', () => {
+    expect(isExitFillAction('close')).toBe(true)
+    expect(isExitFillAction('liquidated')).toBe(true)
+    expect(isExitFillAction('entry')).toBe(false)
+    expect(isExitFillAction('add')).toBe(false)
+    expect(isExitFillAction('reduce')).toBe(false)
+    expect(isExitFillAction('unknown')).toBe(false)
+  })
+
+  it('finds the bot position leg for a coin case-insensitively', () => {
+    const state = {
+      assetPositions: [
+        { coin: 'ETH', side: 'long', positionValue: 120, entryPx: null, liquidationPx: null },
+        { coin: 'BTC', side: 'short', positionValue: 350, entryPx: null, liquidationPx: null },
+      ],
+    } as unknown as HyperliquidClearinghouseState
+
+    expect(findCounterPositionForCoin(state, 'btc')).toEqual({
+      coin: 'BTC',
+      side: 'short',
+      positionValue: 350,
+    })
+    expect(findCounterPositionForCoin(state, 'SOL')).toBeNull()
+    expect(findCounterPositionForCoin(null, 'BTC')).toBeNull()
+    expect(findCounterPositionForCoin(state, '')).toBeNull()
+  })
+
+  it('ignores flat or malformed position legs when resolving exit targets', () => {
+    const state = {
+      assetPositions: [
+        { coin: 'BTC', side: null, positionValue: 350 },
+        { coin: 'BTC', side: 'short', positionValue: 0 },
+        { coin: 'BTC', side: 'short', positionValue: null },
+      ],
+    } as unknown as HyperliquidClearinghouseState
+
+    expect(findCounterPositionForCoin(state, 'BTC')).toBeNull()
   })
 })
 
