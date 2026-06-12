@@ -10,6 +10,7 @@ import {
 } from './hyperliquid.js'
 import { resolveRoom1659HyperliquidUserForSnapshot } from './room1659Market.js'
 import { readCounterTradeRuntimeConfig } from './counterTradeConfig.js'
+import { applyCounterTradeLlmGate } from './counterTradeLlmAdvisor.js'
 import {
   type CounterTradeFillAction,
   deriveCounterTradeDecision,
@@ -364,7 +365,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
           continue
         }
 
-        const counterNotionalUsd = Math.min(decision.counterNotionalUsd, remainingDailyNotional)
+        const cappedCounterNotionalUsd = Math.min(decision.counterNotionalUsd, remainingDailyNotional)
         const pair = String(fill.coin ?? '').trim()
         if (!pair) {
           skipped += 1
@@ -380,6 +381,41 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
           })
           continue
         }
+
+        // Optional LLM risk-review gate: it can veto or shrink the candidate
+        // (never enlarge / flip / re-lever). Disabled or advisory by default;
+        // see counterTradeLlmAdvisor.ts for the policy.
+        const llmGate = await applyCounterTradeLlmGate({
+          roomId: runtime.roomId,
+          pair,
+          fill,
+          fillAction: decision.fillAction,
+          bias: roomStrategy.globalBias,
+          preset: optIn.preset,
+          counterSide: decision.counterSide,
+          counterLeverage: decision.counterLeverage,
+          counterNotionalUsd: cappedCounterNotionalUsd,
+          counterWalletState,
+          hourlyExecutedCount: hourlyUsage.executedCount,
+          hourlyCap,
+          dailyNotionalUsedUsd: dailyUsage.notionalUsd,
+          dailyNotionalCapUsd: dailyCap,
+        })
+        if (!llmGate.proceed) {
+          skipped += 1
+          await recordCounterTradeAction({
+            roomId: runtime.roomId,
+            senderAddress: optIn.senderAddress,
+            eventKey,
+            status: 'skipped',
+            reason: llmGate.skipReason ?? 'llm_veto',
+            counterSide: decision.counterSide,
+            counterNotionalUsd: cappedCounterNotionalUsd,
+            counterLeverage: decision.counterLeverage,
+          })
+          continue
+        }
+        const counterNotionalUsd = llmGate.notionalUsd
 
         const identityConfig = {
           ...baseArenaConfig,

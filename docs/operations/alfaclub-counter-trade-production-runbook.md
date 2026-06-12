@@ -56,6 +56,43 @@ cron produced only `failed` ledger rows. Therefore:
 
 Important: there is currently no explicit dry-run flag for this engine. "Shadow mode" is achieved by keeping all users un-opted (`state != 'active'`).
 
+## LLM risk-review gate (optional)
+
+`frontend/server/_lib/alfaclub/counterTradeLlmAdvisor.ts` adds an optional
+Eliza-LLM review step between the deterministic decision and execution. The
+deterministic engine stays authoritative for every hard cap; the model's power
+is strictly one-directional — it can **veto** a candidate counter-trade or
+**shrink** its notional (`sizeFactor` in (0, 1]), and can never enlarge size,
+raise leverage, flip side, or originate trades.
+
+Context the model sees per candidate: the room wallet's fill (action, side,
+pair, price, size, leverage), the deterministically sized counter-trade, the
+counter wallet's open positions / account value / liquidation distances, and
+the hourly + daily usage against caps.
+
+Env (Railway Hermit executor only — it needs an Eliza LLM provider key such as
+`GROQ_API_KEY` or `OPENAI_API_KEY` on that service):
+
+- `ALFACLUB_COUNTER_TRADE_LLM_ENABLED` — master switch (default 0).
+- `ALFACLUB_COUNTER_TRADE_LLM_MODE` — `advisory` (default; decisions are
+  logged as `counter_trade.llm_advice` but never change execution) or `gate`
+  (veto/downsize applied).
+- `ALFACLUB_COUNTER_TRADE_LLM_FAIL_MODE` — `allow` (default; deterministic
+  trade proceeds when the LLM errors/times out/returns garbage) or `block`.
+- `ALFACLUB_COUNTER_TRADE_LLM_TIMEOUT_MS` — per-decision budget (default 12000).
+- `ALFACLUB_COUNTER_TRADE_LLM_MIN_SIZE_FACTOR` — execute verdicts below this
+  floor are treated as a veto instead of placing dust trades (default 0.2).
+
+Ledger semantics: gate-mode vetoes are recorded as `status = 'skipped'` with
+`reason = 'llm_veto:<model reason>'` (or `llm_downsize_below_floor:<factor>` /
+`llm_unavailable:<cause>` under fail-block). Downsized executions record the
+reduced notional.
+
+Rollout: enable with `mode=advisory` first and review the
+`counter_trade.llm_advice` log stream against actual outcomes for a few days;
+flip to `gate` only once the veto quality looks right. Keep `failMode=allow`
+unless you explicitly prefer missing trades over trading without review.
+
 ## Prerequisites
 
 - Production deploy from `main` is healthy and the Railway Hermit service is green.
