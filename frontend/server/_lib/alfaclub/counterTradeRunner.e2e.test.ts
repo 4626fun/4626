@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   readOrCreateCounterTradeRoomStrategy: vi.fn(),
   recordCounterTradeAction: vi.fn(),
   registerCounterTradeEventIfNew: vi.fn(),
+  enforceSingleActiveCounterTradeActor: vi.fn(),
   resolveRoom1659HyperliquidUserForSnapshot: vi.fn(),
   sendAlfaClubRoomText: vi.fn(),
 }))
@@ -47,6 +48,7 @@ vi.mock('./counterTradeStore.js', () => ({
   readOrCreateCounterTradeRoomStrategy: mocks.readOrCreateCounterTradeRoomStrategy,
   recordCounterTradeAction: mocks.recordCounterTradeAction,
   registerCounterTradeEventIfNew: mocks.registerCounterTradeEventIfNew,
+  enforceSingleActiveCounterTradeActor: mocks.enforceSingleActiveCounterTradeActor,
 }))
 
 vi.mock('./room1659Market.js', () => ({
@@ -141,6 +143,11 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
       killSwitch: false,
       globalBias: 'neutral',
     })
+    mocks.enforceSingleActiveCounterTradeActor.mockResolvedValue({
+      roomId: BASE_RUNTIME.roomId,
+      survivorSenderAddress: '0xsender',
+      pausedSenderAddresses: [],
+    })
 
     mocks.getClearinghouseState.mockResolvedValue({
       assetPositions: [],
@@ -176,6 +183,11 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
   })
 
   it('continues scanning other identities after one identity fails', async () => {
+    mocks.readCounterTradeRuntimeConfig.mockReturnValue({
+      ...BASE_RUNTIME,
+      roomId: '1043',
+      chatPostRoomId: '1043',
+    })
     mocks.listActiveCounterTradeOptIns.mockResolvedValue([
       { senderAddress: '0xsender-a', preset: 'balanced', lastActionAt: null },
       { senderAddress: '0xsender-b', preset: 'balanced', lastActionAt: null },
@@ -196,6 +208,37 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     expect(result.scannedIdentities).toBe(2)
     expect(result.executed).toBe(1)
     expect(mocks.runArenaTrade).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses only one active strategy actor for room 1659', async () => {
+    mocks.listActiveCounterTradeOptIns.mockResolvedValue([
+      { senderAddress: '0xsender-a', preset: 'balanced', lastActionAt: null },
+      { senderAddress: '0xsender-b', preset: 'balanced', lastActionAt: null },
+      { senderAddress: '0xsender-c', preset: 'balanced', lastActionAt: null },
+    ])
+    mocks.resolveArenaIdentityForContext.mockResolvedValue({
+      roomId: BASE_RUNTIME.roomId,
+      senderAddress: '0xsender-a',
+      agentWalletAddress: '0xagentwallet',
+      hlApiWalletAddress: '0xhlwallet',
+      hasDbRow: true,
+      source: 'db',
+    })
+
+    const result = await runCounterTradeLoop()
+
+    expect(result.scannedIdentities).toBe(1)
+    expect(result.executed).toBe(1)
+    expect(mocks.resolveArenaIdentityForContext).toHaveBeenCalledTimes(1)
+    expect(mocks.resolveArenaIdentityForContext).toHaveBeenCalledWith(
+      expect.objectContaining({ senderAddress: '0xsender-a' }),
+    )
+    expect(mocks.enforceSingleActiveCounterTradeActor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        roomId: '1659',
+        survivorSenderAddress: '0xsender-a',
+      }),
+    )
   })
 
   it('blocks execution when cooldown is still active from lastActionAt', async () => {

@@ -31,6 +31,11 @@ cron produced only `failed` ledger rows. Therefore:
 - The `/api/v1/alfaclub/counter-trade-run` endpoint remains for manual
   smoke/ops invocation with the cron secret, but live execution from Vercel
   will fail by construction (no dgclaw CLI).
+- Room `1659` enforces a single active strategy actor. The runner now auto-pauses
+  extra active opt-ins (`pause_reason=room1659_single_actor_enforced`) and logs
+  `counter_trade.room1659_multiple_active_optins` whenever drift is detected.
+  For one-off/manual normalization use:
+  `pnpm -C frontend ops:counter-trade:normalize-optins -- --room 1659 --apply`.
 
 ## Operating model
 

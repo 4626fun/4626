@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  classifyCounterTradeFillAction,
   deriveCounterTradeDecision,
   deriveEventKeyFromFill,
 } from './counterTradeEngine.js'
@@ -89,6 +90,66 @@ describe('counterTradeEngine', () => {
     })
     expect(key).toContain('|123|')
     expect(key).toContain('|BTC|42|0.5|Open Short 3x|')
+  })
+
+  it('classifies position transitions across open/add/reduce/close', () => {
+    expect(
+      classifyCounterTradeFillAction(
+        makeFill({ dir: 'Open Long 6x', side: 'long', startPosition: 0, sz: 1 }),
+      ),
+    ).toBe('entry')
+    expect(
+      classifyCounterTradeFillAction(
+        makeFill({ dir: 'Buy', side: 'long', startPosition: 1, sz: 1 }),
+      ),
+    ).toBe('add')
+    expect(
+      classifyCounterTradeFillAction(
+        makeFill({ dir: 'Sell', side: 'short', startPosition: 2, sz: 0.5 }),
+      ),
+    ).toBe('reduce')
+    expect(
+      classifyCounterTradeFillAction(
+        makeFill({ dir: 'Sell', side: 'short', startPosition: 1, sz: 1 }),
+      ),
+    ).toBe('close')
+    expect(
+      classifyCounterTradeFillAction(
+        makeFill({ dir: 'Sell', side: 'short', startPosition: 0.25, sz: 1 }),
+      ),
+    ).toBe('close')
+  })
+
+  it('skips non-counterable fill actions (reduce/close/liquidation)', () => {
+    const reduceDecision = deriveCounterTradeDecision({
+      bias: 'neutral',
+      preset: 'balanced',
+      fill: makeFill({ dir: 'Sell', side: 'short', startPosition: 2, sz: 0.5 }),
+      userNotionalUsd: 200,
+      userLeverage: 4,
+      runtime: makeRuntime(),
+      counterWalletState: null,
+    })
+    expect(reduceDecision.ok).toBe(false)
+    if (!reduceDecision.ok) {
+      expect(reduceDecision.reason).toBe('fill_action_not_counterable')
+      expect(reduceDecision.fillAction).toBe('reduce')
+    }
+
+    const closeDecision = deriveCounterTradeDecision({
+      bias: 'neutral',
+      preset: 'balanced',
+      fill: makeFill({ dir: 'Close Short', side: 'short', startPosition: -1, sz: 1 }),
+      userNotionalUsd: 200,
+      userLeverage: 4,
+      runtime: makeRuntime(),
+      counterWalletState: null,
+    })
+    expect(closeDecision.ok).toBe(false)
+    if (!closeDecision.ok) {
+      expect(closeDecision.reason).toBe('fill_action_not_counterable')
+      expect(closeDecision.fillAction).toBe('close')
+    }
   })
 })
 

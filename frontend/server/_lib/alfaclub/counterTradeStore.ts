@@ -350,6 +350,46 @@ export async function listActiveCounterTradeOptIns(params: {
   }
 }
 
+export async function enforceSingleActiveCounterTradeActor(params: {
+  roomId: string
+  survivorSenderAddress: string
+  pauseReason?: string
+}): Promise<{ roomId: string; survivorSenderAddress: string; pausedSenderAddresses: string[] } | null> {
+  const roomId = normalizeRoomId(params.roomId)
+  const survivorSenderAddress = normalizeAddress(params.survivorSenderAddress)
+  if (!roomId || !survivorSenderAddress) return null
+  const db = await getDb()
+  if (!db) return null
+  await ensureAlfaclubCounterTradeSchema(db)
+
+  try {
+    const result = await db.sql`
+      UPDATE alfaclub.counter_trade_user_opt_in
+      SET state = 'paused',
+          pause_reason = ${String(params.pauseReason ?? 'room_single_actor_enforced')},
+          paused_at = NOW(),
+          updated_at = NOW()
+      WHERE room_id = ${roomId}
+        AND state = 'active'
+        AND sender_address <> ${survivorSenderAddress}
+      RETURNING sender_address;
+    `
+    const rows = (result.rows ?? []) as Array<{ sender_address: string }>
+    return {
+      roomId,
+      survivorSenderAddress,
+      pausedSenderAddresses: rows.map((row) => row.sender_address),
+    }
+  } catch (error) {
+    logger.warn('counter_trade.single_actor_enforce_failed', {
+      roomId,
+      survivorSenderAddress,
+      message: error instanceof Error ? error.message : String(error),
+    })
+    return null
+  }
+}
+
 export async function registerCounterTradeEventIfNew(params: {
   roomId: string
   senderAddress: string

@@ -11,6 +11,7 @@ import {
 import { resolveRoom1659HyperliquidUserForSnapshot } from './room1659Market.js'
 import { readCounterTradeRuntimeConfig } from './counterTradeConfig.js'
 import {
+  type CounterTradeFillAction,
   deriveCounterTradeDecision,
   deriveEventKeyFromFill,
   derivePresetDailyNotionalCap,
@@ -20,6 +21,7 @@ import {
   deriveUserSide,
 } from './counterTradeEngine.js'
 import {
+  enforceSingleActiveCounterTradeActor,
   listActiveCounterTradeOptIns,
   readCounterTradeUsageWindow,
   readOrCreateCounterTradeRoomStrategy,
@@ -78,6 +80,7 @@ export function resolveCounterTradeFillSourceWallet(params: {
 function formatCounterTradeRoomPost(params: {
   pair: string
   userFill: HyperliquidUserFillDetailed
+  fillAction: CounterTradeFillAction
   counterSide: 'long' | 'short'
   counterLeverage: number
   counterNotionalUsd: number
@@ -101,6 +104,7 @@ function formatCounterTradeRoomPost(params: {
     '',
     `Mark ${mark != null && Number.isFinite(mark) ? `$${mark.toFixed(2)}` : 'n/a'}`,
     `Margin/Size $${counterMarginUsd.toFixed(2)} / $${params.counterNotionalUsd.toFixed(2)}`,
+    `Signal ${params.fillAction}`,
     '',
     `User ${userLabel}${userLeverage != null ? ` ${userLeverage}x` : ''} · bot opened ${oppositeLabel}`,
   ].join('\n')
@@ -111,6 +115,7 @@ async function postCounterTradeRoomUpdate(params: {
   postRoomId: string
   pair: string
   userFill: HyperliquidUserFillDetailed
+  fillAction: CounterTradeFillAction
   counterSide: 'long' | 'short'
   counterLeverage: number
   counterNotionalUsd: number
@@ -118,6 +123,7 @@ async function postCounterTradeRoomUpdate(params: {
   const message = formatCounterTradeRoomPost({
     pair: params.pair,
     userFill: params.userFill,
+    fillAction: params.fillAction,
     counterSide: params.counterSide,
     counterLeverage: params.counterLeverage,
     counterNotionalUsd: params.counterNotionalUsd,
@@ -131,6 +137,7 @@ async function postCounterTradeRoomUpdate(params: {
     postRoomId: params.postRoomId,
     lane: send.lane,
     pair: params.pair,
+    fillAction: params.fillAction,
     counterSide: params.counterSide,
     counterLeverage: params.counterLeverage,
     counterNotionalUsd: params.counterNotionalUsd,
@@ -171,7 +178,24 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
   }
 
   const activeOptIns = await listActiveCounterTradeOptIns({ roomId: runtime.roomId, limit: 300 })
-  if (activeOptIns.length === 0) {
+  const strategyActors =
+    runtime.roomId === '1659' && activeOptIns.length > 1 ? [activeOptIns[0]] : activeOptIns
+  if (runtime.roomId === '1659' && activeOptIns.length > 1 && activeOptIns[0]?.senderAddress) {
+    const cleanup = await enforceSingleActiveCounterTradeActor({
+      roomId: runtime.roomId,
+      survivorSenderAddress: activeOptIns[0].senderAddress,
+      pauseReason: 'room1659_single_actor_enforced',
+    })
+    if (cleanup?.pausedSenderAddresses.length) {
+      logger.warn('counter_trade.room1659_multiple_active_optins', {
+        roomId: runtime.roomId,
+        activeCount: activeOptIns.length,
+        selectedSenderAddress: cleanup.survivorSenderAddress,
+        pausedSenderAddresses: cleanup.pausedSenderAddresses,
+      })
+    }
+  }
+  if (strategyActors.length === 0) {
     return {
       ok: true,
       roomId: runtime.roomId,
@@ -194,7 +218,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
   let blocked = 0
   let failed = 0
 
-  for (const optIn of activeOptIns) {
+  for (const optIn of strategyActors) {
     try {
       const identity = await resolveArenaIdentityForContext({
         roomId: runtime.roomId,
@@ -307,12 +331,16 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
 
         if (!decision.ok) {
           skipped += 1
+          const skipReason =
+            decision.reason === 'fill_action_not_counterable' && decision.fillAction
+              ? `fill_action_not_counterable:${decision.fillAction}`
+              : decision.reason
           await recordCounterTradeAction({
             roomId: runtime.roomId,
             senderAddress: optIn.senderAddress,
             eventKey,
             status: 'skipped',
-            reason: decision.reason,
+            reason: skipReason,
             counterSide: null,
             counterNotionalUsd: null,
             counterLeverage: null,
@@ -391,6 +419,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
                 postRoomId: runtime.chatPostRoomId,
                 pair,
                 userFill: fill,
+                fillAction: decision.fillAction,
                 counterSide: decision.counterSide,
                 counterLeverage: decision.counterLeverage,
                 counterNotionalUsd,
@@ -439,7 +468,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
   return {
     ok: true,
     roomId: runtime.roomId,
-    scannedIdentities: activeOptIns.length,
+    scannedIdentities: strategyActors.length,
     scannedEvents,
     newEvents,
     executed,

@@ -12,6 +12,7 @@ export type CounterTradeDecision =
   | {
       ok: true
       reason: 'execute'
+      fillAction: CounterTradeFillAction
       counterSide: CounterTradeSide
       counterLeverage: number
       counterNotionalUsd: number
@@ -25,8 +26,18 @@ export type CounterTradeDecision =
         | 'below_min_notional'
         | 'below_min_leverage'
         | 'risk_liquidation_too_close'
+        | 'fill_action_not_counterable'
         | 'invalid_input'
+      fillAction: CounterTradeFillAction | null
     }
+
+export type CounterTradeFillAction =
+  | 'entry'
+  | 'add'
+  | 'reduce'
+  | 'close'
+  | 'liquidated'
+  | 'unknown'
 
 type PresetCaps = {
   leverageCapMultiplier: number
@@ -73,6 +84,37 @@ function computeUserNotionalUsd(fill: HyperliquidUserFillDetailed): number | nul
   if (fill.px == null || fill.sz == null) return null
   const notional = Math.abs(fill.px * fill.sz)
   return Number.isFinite(notional) && notional > 0 ? notional : null
+}
+
+export function classifyCounterTradeFillAction(fill: HyperliquidUserFillDetailed): CounterTradeFillAction {
+  const dir = (fill.dir ?? '').toLowerCase()
+  if (dir.includes('liquidat') || dir.includes('liq')) return 'liquidated'
+  if (dir.includes('open')) return 'entry'
+  if (dir.includes('close')) return 'close'
+
+  const size = Math.abs(fill.sz ?? 0)
+  if (!Number.isFinite(size) || size <= 0) return 'unknown'
+  if (fill.startPosition == null) return 'unknown'
+
+  const signedDelta =
+    fill.side === 'long' ? size : fill.side === 'short' ? -size : null
+  if (signedDelta == null) return 'unknown'
+
+  const before = fill.startPosition
+  const after = before + signedDelta
+  const beforeAbs = Math.abs(before)
+  const afterAbs = Math.abs(after)
+  const EPSILON = 1e-9
+
+  if (beforeAbs <= EPSILON && afterAbs > EPSILON) return 'entry'
+  if (beforeAbs > EPSILON && afterAbs <= EPSILON) return 'close'
+  // Conservative handling: if a single fill appears to cross through zero,
+  // treat it as a close-like transition instead of inventing a synthetic "flip".
+  // This avoids countering ambiguous close+reopen transitions as one action.
+  if (before * after < -EPSILON && beforeAbs > EPSILON && afterAbs > EPSILON) return 'close'
+  if (afterAbs > beforeAbs) return 'add'
+  if (afterAbs < beforeAbs) return 'reduce'
+  return 'unknown'
 }
 
 function computeMinimumLiqDistancePct(state: HyperliquidClearinghouseState | null): number | null {
@@ -131,16 +173,22 @@ export function deriveCounterTradeDecision(params: {
   runtime: CounterTradeRuntimeConfig
   counterWalletState: HyperliquidClearinghouseState | null
 }): CounterTradeDecision {
+  const fillAction = classifyCounterTradeFillAction(params.fill)
+  if (fillAction === 'reduce' || fillAction === 'close' || fillAction === 'liquidated') {
+    return { ok: false, reason: 'fill_action_not_counterable', fillAction }
+  }
   const userSide = parseFillSide(params.fill)
-  if (!userSide) return { ok: false, reason: 'missing_side' }
-  if (!params.userNotionalUsd || params.userNotionalUsd <= 0) return { ok: false, reason: 'missing_notional' }
+  if (!userSide) return { ok: false, reason: 'missing_side', fillAction }
+  if (!params.userNotionalUsd || params.userNotionalUsd <= 0) {
+    return { ok: false, reason: 'missing_notional', fillAction }
+  }
   if (params.userNotionalUsd < params.runtime.minUserNotionalUsd) {
-    return { ok: false, reason: 'below_min_notional' }
+    return { ok: false, reason: 'below_min_notional', fillAction }
   }
 
   const minLiqDistance = computeMinimumLiqDistancePct(params.counterWalletState)
   if (minLiqDistance != null && minLiqDistance <= params.runtime.liquidationMinDistancePct) {
-    return { ok: false, reason: 'risk_liquidation_too_close' }
+    return { ok: false, reason: 'risk_liquidation_too_close', fillAction }
   }
 
   const presetCaps = PRESET_CAPS[params.preset]
@@ -179,7 +227,7 @@ export function deriveCounterTradeDecision(params: {
   )
   const counterLeverage = toQuarter(cappedLeverage)
   if (!Number.isFinite(counterLeverage) || counterLeverage <= 0.25) {
-    return { ok: false, reason: 'below_min_leverage' }
+    return { ok: false, reason: 'below_min_leverage', fillAction }
   }
 
   const rawCounterNotional = params.userNotionalUsd * notionalRatio
@@ -188,12 +236,13 @@ export function deriveCounterTradeDecision(params: {
     params.runtime.maxCounterNotionalPerTradeUsd * presetCaps.notionalCapMultiplier,
   )
   if (!Number.isFinite(counterNotionalUsd) || counterNotionalUsd <= 0) {
-    return { ok: false, reason: 'invalid_input' }
+    return { ok: false, reason: 'invalid_input', fillAction }
   }
 
   return {
     ok: true,
     reason: 'execute',
+    fillAction,
     counterSide,
     counterLeverage,
     counterNotionalUsd,
