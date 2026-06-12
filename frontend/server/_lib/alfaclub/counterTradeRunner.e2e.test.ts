@@ -4,7 +4,9 @@ const mocks = vi.hoisted(() => ({
   readArenaConfig: vi.fn(),
   resolveArenaIdentityForContext: vi.fn(),
   runArenaTrade: vi.fn(),
+  runArenaSpotPerpTransfer: vi.fn(),
   getClearinghouseState: vi.fn(),
+  getSpotUsdcBalance: vi.fn(),
   getUserFillsByTimeDetailed: vi.fn(),
   resolveBotBankedPnlForClose: vi.fn(),
   readCounterTradeRuntimeConfig: vi.fn(),
@@ -28,10 +30,12 @@ vi.mock('../arena/arenaIdentityMappingStore.js', () => ({
 
 vi.mock('../arena/arenaClient.js', () => ({
   runArenaTrade: mocks.runArenaTrade,
+  runArenaSpotPerpTransfer: mocks.runArenaSpotPerpTransfer,
 }))
 
 vi.mock('./hyperliquid.js', () => ({
   getClearinghouseState: mocks.getClearinghouseState,
+  getSpotUsdcBalance: mocks.getSpotUsdcBalance,
   getUserFillsByTimeDetailed: mocks.getUserFillsByTimeDetailed,
 }))
 
@@ -89,6 +93,8 @@ const BASE_RUNTIME = {
   minReduceNotionalUsd: 15,
   minBufferRatio: 0.2,
   maxDefenseActionsPerTick: 2,
+  spotSweepEnabled: true,
+  spotSweepMinUsd: 1,
   userSiloDefenseEnabled: false,
   userSiloHlAgentPrivateKey: null,
   userSiloMasterAddress: null,
@@ -188,6 +194,8 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     })
 
     mocks.runArenaTrade.mockResolvedValue({ ok: true, fill: { oid: 1234 } })
+    mocks.getSpotUsdcBalance.mockResolvedValue(0)
+    mocks.runArenaSpotPerpTransfer.mockResolvedValue({ ok: true, message: 'Transferred.' })
     mocks.sendAlfaClubRoomText.mockResolvedValue({ lane: 'bot_token_without_reply_id' })
     mocks.recordCounterTradeAction.mockResolvedValue(undefined)
     mocks.resolveBotBankedPnlForClose.mockResolvedValue(null)
@@ -768,5 +776,49 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     expect(mocks.recordCounterTradeAction).not.toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'defense_alert_posted' }),
     )
+  })
+
+  it('sweeps spot USDC into the perps account when above the minimum', async () => {
+    mocks.getUserFillsByTimeDetailed.mockResolvedValue([])
+    mocks.getSpotUsdcBalance.mockResolvedValue(5.994314)
+
+    await runCounterTradeLoop()
+
+    expect(mocks.getSpotUsdcBalance).toHaveBeenCalledWith('0xagentwallet')
+    expect(mocks.runArenaSpotPerpTransfer).toHaveBeenCalledTimes(1)
+    expect(mocks.runArenaSpotPerpTransfer).toHaveBeenCalledWith(
+      { amountUsd: 5.994314 },
+      expect.objectContaining({ agentWalletAddress: '0xagentwallet' }),
+    )
+  })
+
+  it('skips the spot sweep below the minimum and when disabled', async () => {
+    mocks.getUserFillsByTimeDetailed.mockResolvedValue([])
+    mocks.getSpotUsdcBalance.mockResolvedValue(0.5)
+
+    await runCounterTradeLoop()
+    expect(mocks.runArenaSpotPerpTransfer).not.toHaveBeenCalled()
+
+    mocks.readCounterTradeRuntimeConfig.mockReturnValue({
+      ...BASE_RUNTIME,
+      spotSweepEnabled: false,
+    })
+    mocks.getSpotUsdcBalance.mockResolvedValue(100)
+
+    await runCounterTradeLoop()
+    expect(mocks.runArenaSpotPerpTransfer).not.toHaveBeenCalled()
+  })
+
+  it('spot sweep runs even when defense is disabled and ticks still mirror trades', async () => {
+    mocks.readCounterTradeRuntimeConfig.mockReturnValue({
+      ...BASE_RUNTIME,
+      defenseEnabled: false,
+    })
+    mocks.getSpotUsdcBalance.mockResolvedValue(6)
+
+    await runCounterTradeLoop()
+
+    expect(mocks.runArenaSpotPerpTransfer).toHaveBeenCalledTimes(1)
+    expect(mocks.runArenaTrade).toHaveBeenCalled()
   })
 })

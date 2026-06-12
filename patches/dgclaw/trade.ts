@@ -32,6 +32,8 @@ interface TradeArgs {
   limitPrice?: string;
   stopLoss?: string;
   takeProfit?: string;
+  amount?: string;
+  to?: 'perp' | 'spot';
 }
 
 // ---- CLI Parsing ----
@@ -48,6 +50,7 @@ Commands:
   positions   List open positions
   balance     Show account balance (spot + perp)
   tickers     List available trading pairs
+  transfer    Move USDC between spot and perp accounts (--amount, --to)
 
 Note: For deposits, use ACP job (see SKILL.md). For withdrawals, use scripts/withdraw.ts.
 
@@ -61,6 +64,8 @@ Options:
   --limit-price <px>    Limit price (required for limit orders)
   --sl <px>             Stop loss trigger price
   --tp <px>             Take profit trigger price
+  --amount <usdc>       USDC amount (required for transfer)
+  --to <perp|spot>      Transfer destination (default: perp)
 
 Signing:
   Default: orders are signed by your ACP agent wallet via acp-cli (no API wallet needed).
@@ -114,6 +119,12 @@ function parseArgs(): TradeArgs {
         break;
       case '--tp':
         result.takeProfit = args[++i];
+        break;
+      case '--amount':
+        result.amount = args[++i];
+        break;
+      case '--to':
+        result.to = args[++i] as 'perp' | 'spot';
         break;
       default:
         if (!args[i].startsWith('--')) break;
@@ -539,6 +550,25 @@ async function makeApiWallet(privateKey: string) {
   }
 }
 
+async function transferUsdClass(exchange: ExchangeClient, args: TradeArgs): Promise<void> {
+  const amount = String(args.amount ?? '').trim();
+  if (!amount || !(parseFloat(amount) > 0)) {
+    console.error('transfer requires --amount <usdc> (positive number)');
+    process.exit(1);
+  }
+  const toPerp = (args.to ?? 'perp') !== 'spot';
+
+  console.log(`Transferring ${amount} USDC ${toPerp ? 'spot -> perp' : 'perp -> spot'}...`);
+  const result = await exchange.usdClassTransfer({ amount, toPerp });
+  if ((result as any)?.status === 'ok') {
+    console.log('Transfer submitted successfully.');
+  } else {
+    console.error('Transfer failed:');
+    console.error(JSON.stringify(result, null, 2));
+    process.exit(1);
+  }
+}
+
 // Resolve the master (ACP agent) wallet address. This is the account that
 // signs orders and whose positions/balances we read.
 function getMasterAddress(): string {
@@ -635,6 +665,20 @@ async function main() {
       if (args.command === 'open') await openPosition(exchange, info, args, masterAddress);
       else if (args.command === 'close') await closePosition(exchange, info, args, masterAddress);
       else await modifyPosition(exchange, info, args, masterAddress);
+      break;
+    }
+    case 'transfer': {
+      // usdClassTransfer is a user-signed action: Hyperliquid moves funds on
+      // the account that SIGNS, so an API-wallet key would transfer the API
+      // wallet's own (empty) balance instead of the master's. ACP lane only.
+      if (getAgentPrivateKey()) {
+        console.error('transfer is not supported in API-wallet mode (HL_AGENT_PRIVATE_KEY set).');
+        console.error('usdClassTransfer must be signed by the master wallet via acp-cli.');
+        process.exit(1);
+      }
+      const wallet = makeAcpWallet(masterAddress);
+      const exchange = new ExchangeClient({ wallet: wallet as any, transport });
+      await transferUsdClass(exchange, args);
       break;
     }
     default:

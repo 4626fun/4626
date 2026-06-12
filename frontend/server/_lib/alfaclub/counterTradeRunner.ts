@@ -1,10 +1,11 @@
 import { logger } from '../infra/logger.js'
 import { readArenaConfig } from '../arena/arenaConfig.js'
 import { resolveArenaIdentityForContext } from '../arena/arenaIdentityMappingStore.js'
-import { runArenaTrade } from '../arena/arenaClient.js'
+import { runArenaSpotPerpTransfer, runArenaTrade } from '../arena/arenaClient.js'
 import { sendAlfaClubRoomText } from './chatBridge.js'
 import {
   getClearinghouseState,
+  getSpotUsdcBalance,
   getUserFillsByTimeDetailed,
   type HyperliquidUserFillDetailed,
 } from './hyperliquid.js'
@@ -295,6 +296,9 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
   let skipped = 0
   let blocked = 0
   let failed = 0
+  // One sweep attempt per bot wallet per tick, even when several actors share
+  // the same agent wallet.
+  const spotSweepAttempted = new Set<string>()
 
   for (const optIn of strategyActors) {
     try {
@@ -332,6 +336,36 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
         agentId: identity.agentId,
         agentWalletAddress: identity.agentWalletAddress,
         hlApiWalletAddress: identity.hlApiWalletAddress,
+      }
+
+      // Spot -> perps margin sweep: deposits sent as Hyperliquid spot
+      // transfers land in the bot wallet's SPOT balance, where they cannot
+      // back perps positions. Move them into the perps clearinghouse so the
+      // counter orders have margin. ACP-signed, bot wallet only.
+      if (runtime.spotSweepEnabled && identity.agentWalletAddress) {
+        const sweepWallet = identity.agentWalletAddress.toLowerCase()
+        if (!spotSweepAttempted.has(sweepWallet)) {
+          spotSweepAttempted.add(sweepWallet)
+          try {
+            const spotUsdc = await getSpotUsdcBalance(sweepWallet)
+            if (spotUsdc != null && spotUsdc >= runtime.spotSweepMinUsd) {
+              const sweep = await runArenaSpotPerpTransfer({ amountUsd: spotUsdc }, identityConfig)
+              logger.info('counter_trade.spot_sweep', {
+                roomId: runtime.roomId,
+                agentWalletAddress: sweepWallet,
+                amountUsd: spotUsdc,
+                ok: sweep.ok,
+                message: sweep.message,
+              })
+            }
+          } catch (sweepError) {
+            logger.warn('counter_trade.spot_sweep_failed', {
+              roomId: runtime.roomId,
+              agentWalletAddress: sweepWallet,
+              message: sweepError instanceof Error ? sweepError.message : String(sweepError),
+            })
+          }
+        }
       }
       // counterWalletState is a single snapshot per tick, so track coins the
       // bot opened/closed during this tick to keep exit decisions coherent

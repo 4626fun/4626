@@ -197,6 +197,32 @@ export async function getClearinghouseState(
   return result
 }
 
+/**
+ * USDC sitting in the account's SPOT balance (separate from the perps
+ * clearinghouse). Deposits sent as Hyperliquid spot transfers land here and
+ * are unusable as perps margin until moved with usdClassTransfer.
+ * Returns null on fetch failure (callers must not treat that as zero).
+ */
+export async function getSpotUsdcBalance(address: string): Promise<number | null> {
+  const url = getInfoUrl()
+  const raw = await fetchJsonBounded(url, {
+    type: 'spotClearinghouseState',
+    user: address.toLowerCase(),
+  })
+  if (isErrorShape(raw)) return null
+  const balances = (raw as { balances?: unknown })?.balances
+  if (!Array.isArray(balances)) return null
+  for (const entry of balances) {
+    const coin = String((entry as { coin?: unknown })?.coin ?? '')
+    if (coin.toUpperCase() !== 'USDC') continue
+    const total = parseFloatSafe((entry as { total?: unknown })?.total)
+    const hold = parseFloatSafe((entry as { hold?: unknown })?.hold) ?? 0
+    if (total == null) return null
+    return Math.max(0, total - hold)
+  }
+  return 0
+}
+
 /** Compact position summary for `/help` and `/halp` in Hermit command rooms. */
 export function formatHyperliquidPositionHelpBlock(
   state: HyperliquidClearinghouseState | null,

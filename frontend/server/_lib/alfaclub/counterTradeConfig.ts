@@ -39,6 +39,15 @@ export type CounterTradeRuntimeConfig = {
   /** Max defense+harvest orders per tick (per identity). */
   maxDefenseActionsPerTick: number
   /**
+   * Auto-sweep USDC sitting in the bot wallet's SPOT balance into its perps
+   * account each tick (Hyperliquid usdClassTransfer via the ACP signing
+   * lane). Deposits sent as HL spot transfers land in spot and are unusable
+   * as perps margin until moved. On by default.
+   */
+  spotSweepEnabled: boolean
+  /** Minimum spot USDC required before a sweep fires (avoids dust churn). */
+  spotSweepMinUsd: number
+  /**
    * Run the same defend/harvest loop on the countered user's own wallet (the
    * other silo). Requires an approved Hyperliquid API-wallet key for that
    * account (userSiloHlAgentPrivateKey) — the key can trade but never
@@ -139,6 +148,8 @@ export function readCounterTradeRuntimeConfig(): CounterTradeRuntimeConfig {
       readPositiveNumber('ALFACLUB_COUNTER_TRADE_MIN_BUFFER_RATIO', 0.2),
     ),
     maxDefenseActionsPerTick: readPositiveInt('ALFACLUB_COUNTER_TRADE_MAX_DEFENSE_ACTIONS_PER_TICK', 2),
+    spotSweepEnabled: readBool('ALFACLUB_COUNTER_TRADE_SPOT_SWEEP_ENABLED', true),
+    spotSweepMinUsd: readPositiveNumber('ALFACLUB_COUNTER_TRADE_SPOT_SWEEP_MIN_USD', 1),
     userSiloDefenseEnabled: readBool('ALFACLUB_COUNTER_TRADE_USER_DEFENSE_ENABLED', false),
     userSiloHlAgentPrivateKey: readOptionalSecret('ALFACLUB_COUNTER_TRADE_USER_HL_AGENT_KEY'),
     userSiloMasterAddress: readOptionalAddress('ALFACLUB_COUNTER_TRADE_USER_DEFENSE_MASTER'),

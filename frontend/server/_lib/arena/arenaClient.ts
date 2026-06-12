@@ -522,6 +522,44 @@ export async function runArenaTrade(request: ArenaTradeRequest, config = readAre
   }
 }
 
+/**
+ * Moves USDC between the agent wallet's spot and perp accounts via the
+ * repo-patched dgclaw `transfer` command (Hyperliquid usdClassTransfer).
+ * ACP-signed master-wallet lane only — the API-wallet override is rejected by
+ * trade.ts because user-signed actions move funds on the signing account.
+ */
+export async function runArenaSpotPerpTransfer(
+  params: { amountUsd: number; toPerp?: boolean },
+  config = readArenaConfig(),
+): Promise<ArenaOpResult> {
+  const baseValidation = ensureArenaEnabled(config)
+  if (baseValidation) return baseValidation
+  if (!config.tradingEnabled) {
+    return fail('Arena trading is disabled. Set ARENA_TRADING_ENABLED=1 to transfer.')
+  }
+
+  const amount = parsePositiveNumber(params.amountUsd)
+  if (amount <= 0) return fail('Transfer amount must be a positive number.')
+  const toPerp = params.toPerp !== false
+
+  const command = buildNodeScriptCommand(config, 'scripts/trade.ts', [
+    'transfer',
+    '--amount',
+    String(amount),
+    '--to',
+    toPerp ? 'perp' : 'spot',
+  ])
+  const run = await runCommand(command, config)
+  auditLog('spot_perp_transfer', { ok: run.ok, dryRun: run.dryRun, amountUsd: amount, toPerp })
+  return {
+    ok: run.ok,
+    message: run.ok
+      ? `Transferred ${amount} USDC ${toPerp ? 'spot -> perp' : 'perp -> spot'}.`
+      : 'Spot/perp transfer failed.',
+    run,
+  }
+}
+
 function ensureCreationEnabled(config: ArenaConfig): ArenaOpResult | null {
   if (!config.creationEnabled) {
     return fail('Arena agent creation is disabled. Set ARENA_CREATION_ENABLED=1 (or leave default true when ARENA_ENABLED=1).')

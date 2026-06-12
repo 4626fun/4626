@@ -21,6 +21,8 @@ function makeRuntime(): CounterTradeRuntimeConfig {
     minReduceNotionalUsd: 15,
     minBufferRatio: 0.2,
     maxDefenseActionsPerTick: 2,
+    spotSweepEnabled: true,
+    spotSweepMinUsd: 1,
     userSiloDefenseEnabled: false,
     userSiloHlAgentPrivateKey: null,
     userSiloMasterAddress: null,

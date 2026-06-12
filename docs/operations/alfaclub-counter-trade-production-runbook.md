@@ -108,6 +108,32 @@ net drift the bias tilt earned (minus combined fees); the individual legs show
 how much got shifted between the wallets, and `grossVolumeUsd` on both legs is
 the volume the strategy generated.
 
+## Spot -> perps margin sweep (June 2026)
+
+Hyperliquid keeps spot and perps balances separate. Deposits that arrive as
+HL **spot transfers** (e.g. someone sends USDC to the bot wallet from another
+Hyperliquid account) land in the spot balance, where they cannot back perps
+positions — the first counter order would fail with insufficient margin even
+though the account "has money".
+
+Each tick, before any defense or mirror work, the runner checks the bot
+wallet's spot USDC (`spotClearinghouseState`). When the free balance is at or
+above `ALFACLUB_COUNTER_TRADE_SPOT_SWEEP_MIN_USD` (default `1`), it moves the
+full amount into the perps account via the repo-patched dgclaw
+`transfer` command (`usdClassTransfer`, ACP-signed). Details:
+
+- **Bot wallet only.** `usdClassTransfer` is a user-signed action — funds move
+  on the account that signs, so trade.ts rejects the command in API-wallet
+  mode (`HL_AGENT_PRIVATE_KEY` set). The user silo is never swept.
+- **Independent of defense.** The sweep runs even when
+  `ALFACLUB_COUNTER_TRADE_DEFENSE_ENABLED=0`; it is margin plumbing, not a
+  risk action.
+- **Once per wallet per tick**, even when several actors share the bot wallet.
+- **Observability.** Success/failure logs as `counter_trade.spot_sweep` /
+  `counter_trade.spot_sweep_failed`; the arena audit log records
+  `spot_perp_transfer`.
+- Disable with `ALFACLUB_COUNTER_TRADE_SPOT_SWEEP_ENABLED=0`.
+
 ## Liquidation defense + profit recycling (June 2026)
 
 Each silo (the bot wallet, and symmetrically the countered wallet if it runs
