@@ -487,6 +487,20 @@ const optionalCorePlugins: CorePlugin[] = await (async () => {
       console.warn('[eliza] alfaclub plugin load skipped:', message)
     }
   }
+  // Virtuals ACP plugin pulls in the acp-node-v2 SDK (Privy/Alchemy wallet
+  // stack); load it fail-open and only when the bridge is enabled so the
+  // Railway Keepr primary is unaffected by default.
+  if (parseEnvBoolean(process.env.VIRTUALS_ACP_ENABLED, false)) {
+    try {
+      const mod = await import('./plugins/virtuals/index.js')
+      if (mod?.virtualsPlugin) {
+        loaded.push(mod.virtualsPlugin as CorePlugin)
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.warn('[eliza] virtuals plugin load skipped:', message)
+    }
+  }
   return loaded
 })()
 
@@ -2612,6 +2626,30 @@ async function main() {
     )
     await releaseRuntimeLease()
     process.exit(1)
+  }
+
+  // Virtuals ACP bridge (optional). Connects this runtime to a Virtuals ACP v2
+  // agent when VIRTUALS_ACP_ENABLED=1 + wallet creds are configured. Dynamic
+  // import + fail-open so a broken SDK dep can never block agent readiness.
+  if (parseEnvBoolean(process.env.VIRTUALS_ACP_ENABLED, false)) {
+    void (async () => {
+      try {
+        const mod = await import('./plugins/virtuals/service.js')
+        const service = mod.getVirtualsAcpService()
+        const result = await service.start()
+        if (!result.started) {
+          logger.info('[virtuals-acp] not started', { reason: result.reason ?? 'unknown' })
+          return
+        }
+        const stopOnShutdown = () => void service.stop()
+        process.on('SIGINT', stopOnShutdown)
+        process.on('SIGTERM', stopOnShutdown)
+      } catch (err) {
+        logger.warn('[virtuals-acp] boot failed — continuing without ACP bridge', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    })()
   }
 
   agentBooted = true
