@@ -1,5 +1,3 @@
-import { ensureEthosChartSupportSchema } from '../db/schemaBootstrap.js'
-
 type Db = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows?: any[]; rowCount?: number }>
 }
@@ -8,29 +6,12 @@ declare const process: { env: Record<string, string | undefined> }
 
 let schemaChecked = false
 let schemaCheckPromise: Promise<boolean> | null = null
-let warnedMissingUnifiedChartRefreshFn = false
-
-type PgLikeError = { code?: string; message?: string }
 
 async function hasProjectionTable(db: Db): Promise<boolean> {
   const result = await db.sql`
     SELECT to_regclass('public.creator_ethos_projection') IS NOT NULL AS has_projection;
   `
   return Boolean(result.rows?.[0]?.has_projection)
-}
-
-async function hasFunction(db: Db, signature: string): Promise<boolean> {
-  const result = await db.sql`
-    SELECT to_regprocedure(${signature}) IS NOT NULL AS available;
-  `
-  return Boolean(result.rows?.[0]?.available)
-}
-
-function isMissingFunctionError(error: unknown, signature: string): boolean {
-  const candidate = error as PgLikeError | null | undefined
-  if (!candidate || candidate.code !== '42883') return false
-  const functionName = signature.replace(/^public\./, '').replace(/\(\)$/, '')
-  return String(candidate.message ?? '').includes(functionName)
 }
 
 export async function ensureCreatorEthosProjectionSchema(db: Db): Promise<boolean> {
@@ -227,10 +208,6 @@ export async function refreshCreatorEthosProjection(params: {
   /** fast uses the same scorer but skips expensive chart-side refreshes. */
   mode?: 'full' | 'fast'
 }): Promise<{ refreshedRows: number; appliedLimit: number; available: boolean }> {
-  // The two modules declare structurally-compatible ad-hoc `Db` shapes (this file allows an
-  // optional `rows`); cast to the helper's parameter type at the single call boundary.
-  await ensureEthosChartSupportSchema(params.db as Parameters<typeof ensureEthosChartSupportSchema>[0])
-
   const available = await ensureCreatorEthosProjectionSchema(params.db)
   if (!available) return { refreshedRows: 0, appliedLimit: 0, available: false }
 
@@ -655,39 +632,12 @@ export async function refreshCreatorEthosProjection(params: {
     }
   }
 
-  // Snapshot for trend charts (daily)
+  // Snapshot for trend charts (daily). The mv_ethos_* materialized-view layer was
+  // retired 2026-07-13 (no readers); charts aggregate creator_ethos_projection live.
   try {
     await params.db.sql`SELECT public.snapshot_creator_ethos_daily();`
   } catch (e) {
     console.warn('[creatorEthosProjection] failed to snapshot daily Ethos data', e)
-  }
-
-  // Refresh all interconnected chart materialized views (unified approach)
-  try {
-    const hasUnifiedChartRefreshFn = await hasFunction(
-      params.db,
-      'public.refresh_all_ethos_chart_views()',
-    )
-    if (hasUnifiedChartRefreshFn) {
-      await params.db.sql`SELECT public.refresh_all_ethos_chart_views();`
-      warnedMissingUnifiedChartRefreshFn = false
-    } else if (!warnedMissingUnifiedChartRefreshFn) {
-      warnedMissingUnifiedChartRefreshFn = true
-      console.warn(
-        '[creatorEthosProjection] skipping chart views refresh; function public.refresh_all_ethos_chart_views() is missing',
-      )
-    }
-  } catch (e) {
-    if (isMissingFunctionError(e, 'public.refresh_all_ethos_chart_views()')) {
-      if (!warnedMissingUnifiedChartRefreshFn) {
-        warnedMissingUnifiedChartRefreshFn = true
-        console.warn(
-          '[creatorEthosProjection] skipping chart views refresh; function public.refresh_all_ethos_chart_views() is missing',
-        )
-      }
-    } else {
-      console.warn('[creatorEthosProjection] failed to refresh chart views', e)
-    }
   }
 
   return {

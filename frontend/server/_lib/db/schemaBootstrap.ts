@@ -546,24 +546,11 @@ export async function ensureAlfaclubCounterTradeSchema(db: Db): Promise<void> {
   })
 }
 
-/**
- * Ethos chart MV + refresh-function support.
- *
- * Do NOT re-add 20260616000000_ethos_15min_snapshots.sql here: the 15min/hourly snapshot
- * lanes were retired by 20260713010000_drop_ethos_high_frequency_snapshots.sql, and
- * re-applying that file from cold-start bootstrap resurrects the dropped table.
- * The preflight keeps already-bootstrapped databases no-op.
- */
-export async function ensureEthosChartSupportSchema(db: Db): Promise<void> {
-  await withEnsureOnce('ethosChartSupport', async () => {
-    await ensureMigrationApplied(db, '20260620000000_unified_ethos_chart_support.sql', async () => {
-      const result = await db.sql`
-        SELECT to_regprocedure('public.refresh_all_ethos_chart_views()') IS NOT NULL AS ok;
-      `
-      return Boolean(result.rows?.[0]?.ok)
-    }).catch(() => {})
-  })
-}
+// NOTE (2026-07-13): ensureEthosChartSupportSchema was removed. The entire Ethos chart
+// matview layer (20260620000000_unified_ethos_chart_support.sql) was retired by
+// 20260713110000_retire_ethos_chart_matview_layer.sql — the matviews had no readers.
+// Do NOT re-add a bootstrap hook for that file (or 20260616000000_ethos_15min_snapshots.sql);
+// re-applying either from cold start resurrects dropped objects.
 
 /** Solana share-mesh mapping persistence for orchestrator automation. */
 export async function ensureSolanaShareMeshMappingsSchema(db: Db): Promise<void> {

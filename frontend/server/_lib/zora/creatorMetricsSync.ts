@@ -743,7 +743,7 @@ export async function runCreatorMetricsExploreBackfill(
       }
     }
 
-    await recomputeCreatorCounts(db)
+    await maybeRecomputeCreatorCounts(db)
     const exploreBackfillComplete = isExploreBackfillComplete(checkpoints)
     await recomputeAndCacheCreatorMetricsTotals(db)
     await db.sql`
@@ -786,7 +786,7 @@ export async function runCreatorMetricsExploreBackfill(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'creator_metrics_explore_backfill_failed'
     try {
-      await recomputeCreatorCounts(db)
+      await maybeRecomputeCreatorCounts(db)
       await recomputeAndCacheCreatorMetricsTotals(db)
       await db.sql`
         UPDATE creator_metrics_state
@@ -1125,6 +1125,36 @@ export async function recomputeCreatorCounts(db: Db): Promise<void> {
       SELECT 1 FROM creator_coins AS cc WHERE cc.creator_address = c.creator_address
     );
   `
+}
+
+const DEFAULT_RECONCILE_INTERVAL_MINUTES = 360
+
+/**
+ * Time-gated wrapper for recomputeCreatorCounts. The full reconcile is three
+ * sequential passes over all of creator_coins (~8-10s of DB time) and exists
+ * only to repair rare drift — the incremental sync paths already upsert
+ * creators rows inline. Running it on every cron tick was the single largest
+ * recurring DB cost, so periodic callers go through this gate; explicit ops
+ * repair scripts keep calling recomputeCreatorCounts directly.
+ */
+export async function maybeRecomputeCreatorCounts(db: Db): Promise<{ ran: boolean }> {
+  const intervalMinutes = parsePositiveInt(
+    process.env.CREATOR_METRICS_RECONCILE_INTERVAL_MINUTES,
+    DEFAULT_RECONCILE_INTERVAL_MINUTES,
+  )
+  const claim = await db.sql`
+    UPDATE creator_metrics_state
+    SET creators_reconciled_at = NOW()
+    WHERE id = 1
+      AND (
+        creators_reconciled_at IS NULL
+        OR creators_reconciled_at < NOW() - make_interval(mins => ${intervalMinutes})
+      )
+    RETURNING id;
+  `
+  if ((claim.rows?.length ?? 0) === 0) return { ran: false }
+  await recomputeCreatorCounts(db)
+  return { ran: true }
 }
 
 async function measureDrift(db: Db, sdk: any, pageSize: number): Promise<{ estimate: number | null; driftPct: number | null }> {
@@ -1496,7 +1526,7 @@ export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<C
       }
     }
 
-    await withRetry('recompute_creator_counts', () => recomputeCreatorCounts(db))
+    await withRetry('recompute_creator_counts', () => maybeRecomputeCreatorCounts(db))
 
     if (mode === 'backfill') backfillComplete = reachedChainTip
     if (mode === 'incremental' && !reachedChainTip) backfillComplete = false
@@ -1604,7 +1634,7 @@ export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<C
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'creator_metrics_sync_failed'
     try {
-      await withRetry('recompute_creator_counts_on_failure', () => recomputeCreatorCounts(db))
+      await withRetry('recompute_creator_counts_on_failure', () => maybeRecomputeCreatorCounts(db))
       await recomputeAndCacheCreatorMetricsTotals(db)
     } catch (repairError) {
       log.warn('[creator-metrics-sync] post-failure creator repair failed', {
