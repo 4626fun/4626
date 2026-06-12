@@ -49,8 +49,11 @@ const CHARM_VAULT_AUTH_ABI = [
 ] as const
 
 function readHexPrivateKey(env: Record<string, string | undefined>, key: string): `0x${string}` | null {
+  // Accepts both 0x-prefixed and bare 64-hex keys (KPR_PRIVATE_KEY is
+  // historically stored without the prefix in this workspace).
   const raw = (env[key] ?? '').trim()
-  if (/^0x[0-9a-fA-F]{64}$/.test(raw)) return raw as `0x${string}`
+  const normalized = raw.startsWith('0x') || raw.startsWith('0X') ? `0x${raw.slice(2)}` : `0x${raw}`
+  if (/^0x[0-9a-fA-F]{64}$/.test(normalized)) return normalized as `0x${string}`
   return null
 }
 

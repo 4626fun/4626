@@ -31,11 +31,20 @@ function normalizeAddress(value: unknown): Address | null {
   }
 }
 
-function addressFromPrivateKey(rawKey: string | undefined): Address | null {
-  const key = String(rawKey ?? '').trim()
+// Accepts both 0x-prefixed and bare 64-hex private keys (KPR_PRIVATE_KEY is
+// historically stored without the prefix in this workspace).
+function normalizePrivateKey(rawKey: string | undefined): Hex | null {
+  const trimmed = String(rawKey ?? '').trim()
+  const key = trimmed.startsWith('0x') || trimmed.startsWith('0X') ? `0x${trimmed.slice(2)}` : `0x${trimmed}`
   if (!/^0x[0-9a-fA-F]{64}$/.test(key)) return null
+  return key as Hex
+}
+
+function addressFromPrivateKey(rawKey: string | undefined): Address | null {
+  const key = normalizePrivateKey(rawKey)
+  if (!key) return null
   try {
-    return getAddress(privateKeyToAccount(key as Hex).address)
+    return getAddress(privateKeyToAccount(key).address)
   } catch {
     return null
   }
@@ -53,12 +62,12 @@ export function resolvePayoutRouterKeeperPrivateKey(
 ): `0x${string}` | null {
   const expectedKeeper = resolvePayoutRouterKeeperAddress()
   for (const key of PAYOUT_ROUTER_KEEPER_PRIVATE_KEY_ENVS) {
-    const raw = String(env[key] ?? '').trim()
-    if (!/^0x[0-9a-fA-F]{64}$/.test(raw)) continue
-    const derived = addressFromPrivateKey(raw)
-    if (!expectedKeeper) return raw as `0x${string}`
+    const normalized = normalizePrivateKey(env[key])
+    if (!normalized) continue
+    const derived = addressFromPrivateKey(normalized)
+    if (!expectedKeeper) return normalized
     if (derived && derived.toLowerCase() === expectedKeeper.toLowerCase()) {
-      return raw as `0x${string}`
+      return normalized
     }
   }
   return null
