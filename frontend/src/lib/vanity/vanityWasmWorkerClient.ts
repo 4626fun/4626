@@ -1,4 +1,4 @@
-import { resolvePerVaultVanityWasmUrl } from '@/lib/vanity/perVaultVanityWasm'
+import { resolvePerVaultVanityWasmUrl } from './perVaultVanityWasm.js'
 
 export type VanityWasmWorkerEntrypoint = 'per_vault_version_search' | 'create2_salt_suffix_search'
 

@@ -2,14 +2,16 @@ import { getAddress, isAddress, type Address, type Hex } from 'viem'
 
 import type { ShareBridgeReadClient } from './shareBridgeReadClient'
 
-import { BASE_DEFAULTS } from '../../config/contracts.defaults'
+// NOTE: this module is in the api→src allowlist (server-shared). Imports must be
+// Node-ESM-safe: relative with explicit .js extension, never `@/` aliases.
+import { BASE_DEFAULTS } from '../../config/contracts.defaults.js'
 
 import {
   decodeFinalizePhase2Call,
   quoteFinalizeShareBridgeNativeFee,
   readFinalizePhase2WrapperHasBytecode,
   type FinalizeShareBridgeQuoteError,
-} from './finalizeShareBridgeFee'
+} from './finalizeShareBridgeFee.js'
 
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
 

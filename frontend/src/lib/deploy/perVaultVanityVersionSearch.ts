@@ -3,7 +3,7 @@ import { encodePacked, getCreate2Address, keccak256, type Address, type Hex } fr
 import {
   findPerVaultVanityVersionWithWasm,
   isPerVaultVanityWasmConfigured,
-} from '@/lib/vanity/perVaultVanityWasm'
+} from '../vanity/perVaultVanityWasm.js'
 
 const HEX_SUFFIX_RE = /^[0-9a-fA-F]+$/
 

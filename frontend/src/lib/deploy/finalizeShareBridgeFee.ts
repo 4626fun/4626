@@ -1,4 +1,6 @@
-import { AKITA_DEFAULTS, BASE_DEFAULTS } from '../../config/contracts.defaults'
+// NOTE: this module is in the api→src allowlist (server-shared). Imports must be
+// Node-ESM-safe: relative with explicit .js extension, never `@/` aliases.
+import { AKITA_DEFAULTS, BASE_DEFAULTS } from '../../config/contracts.defaults.js'
 
 import {
   decodeFunctionData,

@@ -1,11 +1,13 @@
 import { encodePacked, getAddress, isAddress, keccak256, type Address, type Hex } from 'viem'
 
+// NOTE: this module is in the api→src allowlist (server-shared). Imports must be
+// Node-ESM-safe: relative with explicit .js extension, never `@/` aliases.
 import {
   CREATOR_OVAULT_ADMIN_MODULE,
   CREATOR_OVAULT_CORE_MODULE,
   CREATOR_OVAULT_STRATEGIES_MODULE,
-} from '@/config/contracts.defaults'
-import { resolveWiredCreatorOvaultModules } from '@/lib/deploy/phase1ModuleDeploy'
+} from '../../config/contracts.defaults.js'
+import { resolveWiredCreatorOvaultModules } from './phase1ModuleDeploy.js'
 
 /** Live batcher + store deploy fingerprint (CreatorOVaultModuleStorage.v2). */
 export const CREATOR_OVAULT_MODULE_STORAGE_V2 = keccak256(

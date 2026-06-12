@@ -153,6 +153,75 @@ async function scanCrossFeature(files) {
   return violations
 }
 
+// Server-shared src modules (ALLOWED_API_TO_SRC + their transitive relative
+// imports) run under plain Node ESM on Vercel. There, `@/` aliases do not
+// resolve at all and relative specifiers need an explicit `.js` extension —
+// `'../../config/contracts.defaults'` resolves under Vite but crashes the
+// whole API function at module load in production (paymaster outage class).
+// Type-only imports are erased at compile time and are exempt.
+const typedImportRegex =
+  /\b(?:import|export)\s+(type\s+)?(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g
+
+async function readSourceIfExists(basePathNoExt) {
+  for (const ext of ['.ts', '.tsx']) {
+    const candidate = `${basePathNoExt}${ext}`
+    try {
+      return { filePath: candidate, source: await fs.readFile(candidate, 'utf8') }
+    } catch {
+      // try next extension
+    }
+  }
+  return null
+}
+
+async function scanServerSharedSrcModules() {
+  const violations = []
+  const seen = new Set()
+  const queue = [...ALLOWED_API_TO_SRC].map((mod) => path.join(repoRoot, mod))
+
+  while (queue.length > 0) {
+    const basePathNoExt = queue.pop()
+    if (seen.has(basePathNoExt)) continue
+    seen.add(basePathNoExt)
+
+    const entry = await readSourceIfExists(basePathNoExt)
+    if (!entry) continue
+
+    const relFile = path.relative(repoRoot, entry.filePath).replace(/\\/g, '/')
+    typedImportRegex.lastIndex = 0
+    for (let match = typedImportRegex.exec(entry.source); match; match = typedImportRegex.exec(entry.source)) {
+      const isTypeOnly = Boolean(match[1])
+      const specifier = match[2] ?? match[3]
+      if (!specifier || isTypeOnly) continue
+
+      if (specifier.startsWith('@/')) {
+        violations.push({
+          rule: 'server-shared-no-alias',
+          file: relFile,
+          specifier,
+        })
+        continue
+      }
+
+      if (!specifier.startsWith('.')) continue
+
+      if (!specifier.endsWith('.js')) {
+        violations.push({
+          rule: 'server-shared-needs-js-extension',
+          file: relFile,
+          specifier,
+        })
+        continue
+      }
+
+      const next = path.resolve(path.dirname(entry.filePath), specifier).replace(/\.js$/, '')
+      queue.push(next)
+    }
+  }
+
+  return violations
+}
+
 async function scanApiToSrc(files) {
   const violations = []
   for (const filePath of files) {
@@ -187,6 +256,7 @@ async function main() {
     ...(await scanUi(srcFiles)),
     ...(await scanCrossFeature(srcFiles)),
     ...(await scanApiToSrc(apiFiles)),
+    ...(await scanServerSharedSrcModules()),
   ]
 
   const normalizedViolations = violations.map((violation) => ({
@@ -204,11 +274,13 @@ async function main() {
       'src/components/ui does not import from src/features',
       'src/features/<A> does not import from src/features/<B> outside allowlist',
       'api/_handlers does not import from src/ outside allowlist',
+      'server-shared src modules use Node-ESM-safe specifiers (relative + .js, no @/ aliases)',
     ],
     remediation: [
       'ui-no-features: move shared primitives into components/ui or invert the dependency.',
       'cross-feature: extract shared symbols into src/lib (or add explicit allowlist only when truly co-located).',
       'api-no-src: move shared helper to packages/server-core (or add explicit allowlist only for shared policy code).',
+      'server-shared-no-alias / server-shared-needs-js-extension: server-reachable src modules run under plain Node ESM on Vercel — use relative imports with explicit .js extensions (type-only imports are exempt).',
     ],
   })
   process.exit(exitCode)

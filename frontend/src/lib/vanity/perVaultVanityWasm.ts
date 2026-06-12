@@ -2,8 +2,8 @@ import {
   instantiateVanityWasmFromBytes,
   invokeVanityWasmSearch,
   type VanityWasmExports,
-} from '@/lib/vanity/vanityWasmRuntime'
-import { invokeVanityWasmInWorker, isVanityWasmWorkerEnabled } from '@/lib/vanity/vanityWasmWorkerClient'
+} from './vanityWasmRuntime.js'
+import { invokeVanityWasmInWorker, isVanityWasmWorkerEnabled } from './vanityWasmWorkerClient.js'
 
 const DEFAULT_VANITY_WASM_PUBLIC_PATH = '/vanity/vanity_salt_grinder.wasm'
 
