@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   runArenaTrade: vi.fn(),
   getClearinghouseState: vi.fn(),
   getUserFillsByTimeDetailed: vi.fn(),
+  resolveBotBankedPnlForClose: vi.fn(),
   readCounterTradeRuntimeConfig: vi.fn(),
   listActiveCounterTradeOptIns: vi.fn(),
   readCounterTradeUsageWindow: vi.fn(),
@@ -55,6 +56,16 @@ vi.mock('./counterTradeStore.js', () => ({
 vi.mock('./room1659Market.js', () => ({
   resolveRoom1659HyperliquidUserForSnapshot: mocks.resolveRoom1659HyperliquidUserForSnapshot,
 }))
+
+vi.mock('./counterTradeHarvest.js', async () => {
+  const actual = await vi.importActual<typeof import('./counterTradeHarvest.js')>(
+    './counterTradeHarvest.js',
+  )
+  return {
+    ...actual,
+    resolveBotBankedPnlForClose: mocks.resolveBotBankedPnlForClose,
+  }
+})
 
 vi.mock('./chatBridge.js', () => ({
   sendAlfaClubRoomText: mocks.sendAlfaClubRoomText,
@@ -162,6 +173,7 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     mocks.runArenaTrade.mockResolvedValue({ ok: true, fill: { oid: 1234 } })
     mocks.sendAlfaClubRoomText.mockResolvedValue({ lane: 'bot_token_without_reply_id' })
     mocks.recordCounterTradeAction.mockResolvedValue(undefined)
+    mocks.resolveBotBankedPnlForClose.mockResolvedValue(null)
   })
 
   it('executes a qualifying counter-trade and records success', async () => {
@@ -268,6 +280,58 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
       expect.objectContaining({ status: 'executed', reason: 'exit_executed', counterSide: 'short' }),
     )
     expect(mocks.sendAlfaClubRoomText).toHaveBeenCalledTimes(1)
+  })
+
+  it('includes the banked harvest amount on the exit room post when resolvable', async () => {
+    mocks.getUserFillsByTimeDetailed.mockResolvedValue([
+      { ...FILL, dir: 'Close Long', sz: '1', px: '100', startPosition: '1' },
+    ])
+    mocks.getClearinghouseState.mockResolvedValue({
+      assetPositions: [
+        { coin: 'BTC', side: 'short', positionValue: 45, entryPx: 100, liquidationPx: 200 },
+      ],
+      marginSummary: { accountValue: '10000' },
+      time: 1_720_000_000_000,
+    })
+    mocks.resolveBotBankedPnlForClose.mockResolvedValue({
+      realizedPnlUsd: 12.4,
+      feesUsd: 0.3,
+      netRealizedUsd: 12.1,
+      fillCount: 1,
+    })
+
+    const result = await runCounterTradeLoop()
+
+    expect(result.executed).toBe(1)
+    expect(mocks.resolveBotBankedPnlForClose).toHaveBeenCalledWith(
+      expect.objectContaining({ botWalletAddress: '0xagentwallet', coin: 'BTC' }),
+    )
+    expect(mocks.sendAlfaClubRoomText).toHaveBeenCalledTimes(1)
+    const postedText = String(mocks.sendAlfaClubRoomText.mock.calls[0]?.[0]?.text ?? '')
+    expect(postedText).toContain('Banked +$12.10')
+    expect(postedText).toContain('pnl +$12.40')
+  })
+
+  it('still posts the exit card when the harvest lookup fails', async () => {
+    mocks.getUserFillsByTimeDetailed.mockResolvedValue([
+      { ...FILL, dir: 'Close Long', sz: '1', px: '100', startPosition: '1' },
+    ])
+    mocks.getClearinghouseState.mockResolvedValue({
+      assetPositions: [
+        { coin: 'BTC', side: 'short', positionValue: 45, entryPx: 100, liquidationPx: 200 },
+      ],
+      marginSummary: { accountValue: '10000' },
+      time: 1_720_000_000_000,
+    })
+    mocks.resolveBotBankedPnlForClose.mockRejectedValue(new Error('hl_unreachable'))
+
+    const result = await runCounterTradeLoop()
+
+    expect(result.executed).toBe(1)
+    expect(result.failed).toBe(0)
+    expect(mocks.sendAlfaClubRoomText).toHaveBeenCalledTimes(1)
+    const postedText = String(mocks.sendAlfaClubRoomText.mock.calls[0]?.[0]?.text ?? '')
+    expect(postedText).not.toContain('Banked')
   })
 
   it('mirrors a user liquidation by closing the bot position', async () => {

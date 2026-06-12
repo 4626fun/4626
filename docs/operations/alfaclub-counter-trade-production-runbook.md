@@ -79,6 +79,35 @@ The loop is no longer entry-only. When the countered user's fill classifies as
   same tick), the exit is a no-op skip — safe for users who close positions
   the bot never countered.
 
+## Harvest accounting (June 2026)
+
+The exit mirror turns chop into realized PnL transfers between the countered
+wallet and the bot wallet — every user round trip forces a bot round trip.
+`frontend/server/_lib/alfaclub/counterTradeHarvest.ts` makes that channel
+observable. Hyperliquid fills are the source of truth (`closedPnl` / `fee`
+per fill); there is no local schema for this.
+
+- **Banked line on exit cards.** After a successful mirrored close, the runner
+  polls the bot wallet's own fills (up to 3 attempts, ~1.5 s apart) and, when
+  the close fill has landed, the room post includes
+  `Banked +$12.10 (pnl +$12.40, fees $0.30)`. If the fill hasn't landed yet
+  the card posts without the line — the lookup is best-effort and never blocks
+  or fails the exit.
+- **Structured log.** Every executed exit emits `counter_trade.harvest` with
+  `bankedRealizedPnlUsd` / `bankedFeesUsd` / `bankedNetUsd` / `bankedFillCount`
+  (nulls when unresolved), so Railway logs carry a per-round-trip harvest
+  ledger.
+- **Window summary API.** `GET /api/v1/alfaclub/counter-trade-status?harvest=1`
+  adds a `harvest` block: 7-day realized PnL, fees, net, gross volume, fill
+  count, and round-trip win/loss counts for both the countered wallet and the
+  bot wallet, computed live from Hyperliquid fills. Omitting the query param
+  skips the extra Hyperliquid calls entirely.
+
+Interpretation: `userWallet.realizedPnlUsd + botWallet.realizedPnlUsd` is the
+net drift the bias tilt earned (minus combined fees); the individual legs show
+how much got shifted between the wallets, and `grossVolumeUsd` on both legs is
+the volume the strategy generated.
+
 ## LLM risk-review gate (optional)
 
 `frontend/server/_lib/alfaclub/counterTradeLlmAdvisor.ts` adds an optional

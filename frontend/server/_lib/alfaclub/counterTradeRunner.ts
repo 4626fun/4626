@@ -25,6 +25,11 @@ import {
   isExitFillAction,
 } from './counterTradeEngine.js'
 import {
+  type BankedCloseSummary,
+  formatSignedUsd,
+  resolveBotBankedPnlForClose,
+} from './counterTradeHarvest.js'
+import {
   COUNTER_TRADE_EXIT_EXECUTED_REASON,
   enforceSingleActiveCounterTradeActor,
   listActiveCounterTradeOptIns,
@@ -121,6 +126,7 @@ function formatCounterTradeExitRoomPost(params: {
   fillAction: CounterTradeFillAction
   closedSide: 'long' | 'short' | null
   closedPositionValueUsd: number | null
+  banked: BankedCloseSummary | null
 }): string {
   const closedAt = new Date(params.userFill.time).toLocaleTimeString([], {
     hour: '2-digit',
@@ -139,6 +145,11 @@ function formatCounterTradeExitRoomPost(params: {
     params.closedPositionValueUsd != null
       ? `Closed position ~$${params.closedPositionValueUsd.toFixed(2)}`
       : 'Closed position',
+    ...(params.banked != null
+      ? [
+          `Banked ${formatSignedUsd(params.banked.netRealizedUsd)} (pnl ${formatSignedUsd(params.banked.realizedPnlUsd)}, fees $${params.banked.feesUsd.toFixed(2)})`,
+        ]
+      : []),
     `Signal ${params.fillAction}`,
   ].join('\n')
 }
@@ -151,6 +162,7 @@ async function postCounterTradeExitRoomUpdate(params: {
   fillAction: CounterTradeFillAction
   closedSide: 'long' | 'short' | null
   closedPositionValueUsd: number | null
+  banked: BankedCloseSummary | null
 }): Promise<void> {
   const message = formatCounterTradeExitRoomPost({
     pair: params.pair,
@@ -158,6 +170,7 @@ async function postCounterTradeExitRoomUpdate(params: {
     fillAction: params.fillAction,
     closedSide: params.closedSide,
     closedPositionValueUsd: params.closedPositionValueUsd,
+    banked: params.banked,
   })
   const send = await sendAlfaClubRoomText({
     roomId: params.postRoomId,
@@ -170,6 +183,7 @@ async function postCounterTradeExitRoomUpdate(params: {
     pair: params.pair,
     fillAction: params.fillAction,
     closedSide: params.closedSide,
+    bankedNetUsd: params.banked?.netRealizedUsd ?? null,
   })
 }
 
@@ -389,6 +403,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
             continue
           }
 
+          const closeSubmittedAtMs = Date.now()
           const closeResult = await runArenaTrade({ action: 'close', pair: exitPair }, identityConfig)
           if (closeResult.ok) {
             executed += 1
@@ -404,6 +419,39 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
               counterNotionalUsd: null,
               counterLeverage: null,
             })
+
+            // Harvest accounting: best-effort read of what this round trip
+            // banked on the bot wallet (realized PnL net of fees). Null when
+            // the close fill has not landed in the fills API yet.
+            let banked: BankedCloseSummary | null = null
+            if (identityConfig.agentWalletAddress) {
+              try {
+                banked = await resolveBotBankedPnlForClose({
+                  botWalletAddress: identityConfig.agentWalletAddress,
+                  coin: exitPair,
+                  closeSubmittedAtMs,
+                })
+              } catch (harvestError) {
+                logger.warn('counter_trade.harvest_lookup_failed', {
+                  roomId: runtime.roomId,
+                  pair: exitPair,
+                  message: harvestError instanceof Error ? harvestError.message : String(harvestError),
+                })
+              }
+            }
+            logger.info('counter_trade.harvest', {
+              roomId: runtime.roomId,
+              senderAddress: optIn.senderAddress,
+              pair: exitPair,
+              fillAction,
+              closedSide: botLeg?.side ?? null,
+              closedPositionValueUsd: botLeg?.positionValue ?? null,
+              bankedRealizedPnlUsd: banked?.realizedPnlUsd ?? null,
+              bankedFeesUsd: banked?.feesUsd ?? null,
+              bankedNetUsd: banked?.netRealizedUsd ?? null,
+              bankedFillCount: banked?.fillCount ?? 0,
+            })
+
             if (runtime.chatPostEnabled) {
               try {
                 await postCounterTradeExitRoomUpdate({
@@ -414,6 +462,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
                   fillAction,
                   closedSide: botLeg?.side ?? null,
                   closedPositionValueUsd: botLeg?.positionValue ?? null,
+                  banked,
                 })
               } catch (postError) {
                 logger.warn('counter_trade.exit_room_post_failed', {
