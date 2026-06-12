@@ -6,7 +6,12 @@ import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
 import { AppLoadingBootstrapGate } from '@/components/layout/AppLoadingOverlay'
 import { createPrivyAppearance } from './clientAppearance'
+import { applyLoopbackPrivySessionMarkerShim } from './loopbackSessionMarkerShim'
 import { PrivyWalletHooksContextProvider } from './walletHooksContext'
+
+// Must run before the Privy SDK's first getAccessToken() call — see the shim
+// module for why localhost needs the first-party `privy-session` marker.
+applyLoopbackPrivySessionMarkerShim()
 
 type PrivyClientStatus = 'disabled' | 'loading' | 'ready'
 export const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
