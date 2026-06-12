@@ -518,8 +518,9 @@ export function AlfaClubKeySafety() {
                       selectedTier={roomTier}
                       activeKeyIndex={keySupply}
                       raidCurve={evaluation.raid.curve}
+                      progressiveStage={unlockedStep}
                       maxKeys={Math.max(80, keySupply + 10)}
-                      heightClassName="h-72"
+                      heightClassName="h-96"
                       withFrame={false}
                     />
                   </div>
@@ -532,8 +533,9 @@ export function AlfaClubKeySafety() {
                   <TradingRoomCurvePreview
                     selectedTier={roomTier}
                     activeKeyIndex={keySupply}
+                    progressiveStage={unlockedStep}
                     maxKeys={Math.max(80, keySupply + 10)}
-                    heightClassName="h-72"
+                    heightClassName="h-96"
                     withFrame={false}
                   />
                 </div>
