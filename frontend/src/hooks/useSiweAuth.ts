@@ -244,6 +244,17 @@ function coerceErrorMessage(e: unknown, fallback: string): string {
   return fallback
 }
 
+function isPrivyClientConfigErrorMessage(message: string): boolean {
+  const lower = String(message || '').trim().toLowerCase()
+  if (!lower) return false
+  return (
+    lower.includes('invalid app client id') ||
+    lower.includes('invalid client id') ||
+    lower.includes('client id') && lower.includes('invalid') ||
+    lower.includes('privy') && lower.includes('misconfig')
+  )
+}
+
 function getStoredSessionToken(): string | null {
   try {
     const v = sessionStorage.getItem(SESSION_TOKEN_KEY)
@@ -637,7 +648,11 @@ export function useSiweAuth() {
         return address
       } catch (e: unknown) {
         const message = coerceErrorMessage(e, 'Privy sign-in failed')
-        if (shouldResetPrivyBridgeState(message)) {
+        const hasActiveCookieSession = Boolean(sharedAuthSnapshotAddress)
+        // Never tear down an already-hydrated app session just because a Privy
+        // access token refresh/bridge failed. That creates a "kicked out" loop
+        // while the user still has a valid HttpOnly 4626 session cookie.
+        if (shouldResetPrivyBridgeState(message) && !hasActiveCookieSession) {
           writeStoredSessionToken(null)
           supersedePendingRefresh()
           writeSharedAuthSnapshot(null)
@@ -808,6 +823,7 @@ export function useSiweAuth() {
     setError(null)
     try {
       const allowPrivy = method === 'auto' || method === 'privy'
+      let privyLoginFailureMessage: string | null = null
 
       if (allowPrivy) {
         if (preferBaseAccountWallet && privyReady && typeof connectWallet === 'function') {
@@ -831,7 +847,8 @@ export function useSiweAuth() {
             : ([...PRIVY_INTERACTIVE_LOGIN_METHODS] as const)
           try {
             await login({ loginMethods })
-          } catch {
+          } catch (loginError: unknown) {
+            privyLoginFailureMessage = coerceErrorMessage(loginError, 'Privy login failed')
             // If Privy auth fails/cancels, fall back to SIWE below (only for method=auto).
           }
           if (getPrivyAccessToken) {
@@ -862,8 +879,15 @@ export function useSiweAuth() {
         // If caller explicitly requested Privy, do not attempt SIWE.
         // Surface an actionable message so the UI never feels like a dead click.
         if (method === 'privy') {
-          if (!privyReady) {
+          if (privyLoginFailureMessage && isPrivyClientConfigErrorMessage(privyLoginFailureMessage)) {
+            setError(
+              'Privy client config is invalid for this environment. ' +
+                'On localhost, disable client-id auth (`VITE_PRIVY_CLIENT_ID_ON_LOOPBACK=0`) or fix `VITE_PRIVY_CLIENT_ID`, then restart the dev server.',
+            )
+          } else if (!privyReady) {
             setError('Wallet login is still initializing. Try again in a moment.')
+          } else if (privyLoginFailureMessage) {
+            setError(privyLoginFailureMessage)
           } else if (privyAuthenticated) {
             setError('Sign-in is still finalizing. Please try once more.')
           } else {

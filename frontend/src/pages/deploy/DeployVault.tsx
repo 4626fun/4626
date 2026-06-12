@@ -4532,7 +4532,9 @@ function DeployVaultBatcher({
         }
         const solanaBridgeAddress = getAddress(configuredSolanaBridge as Address)
         const solanaKeeper = expectedProtocolTreasury
-        const ajnaKeeper = normalizeAddressLike(runtimeConfig?.protocolAjnaKeeper)
+        const ajnaKeeper =
+          normalizeAddressLike(runtimeConfig?.protocolAjnaKeeper) ??
+          (isLocalhostRuntime() ? expectedProtocolTreasury : null)
         if (!ajnaKeeper) {
           throw new Error(
             'Protocol Ajna keeper is not configured. Set 4626_KEEPER_AUTOMATION_PUBLIC_KEY on the server.',

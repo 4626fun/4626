@@ -877,17 +877,7 @@ export function useAccountSetupController(params: {
       )
       await loadMe({ showSpinner: false })
     } catch (zoraError: any) {
-      if (isPrivyRedirectUrlNotAllowedError(zoraError)) {
-        setErrorGuarded('Privy redirect URL is not allowed for this origin. Add this app URL in Privy settings and retry.')
-      } else if (
-        isUnauthorizedCrossAppLinkError(zoraError) ||
-        Number(zoraError?.status) === 401 ||
-        String(zoraError?.message ?? '').toLowerCase().includes('oauth/init')
-      ) {
-        setErrorGuarded('Privy cross-app Zora auth is unavailable right now. Use Connect with Zora again, or refresh signals if you already linked.')
-      } else if (isRecoverableCrossAppAuthError(zoraError)) {
-        // Privy can throw a generic auth failure even when cross-app linkage eventually lands.
-        // Re-check resolve once before surfacing a blocking error.
+      const resolveSignalsAfterAuthFailure = async (): Promise<boolean> => {
         try {
           const retryHeaders = await authHeaders()
           const resolveRes = await apiFetch('/api/zora/resolve', {
@@ -899,11 +889,14 @@ export function useAccountSetupController(params: {
           if (resolveRes.ok && resolvePayload?.success && hasResolvedZoraSignals(resolvePayload.data)) {
             setNoticeGuarded('Zora signals were detected after auth retry. Link completed.')
             await loadMe({ showSpinner: false })
-            return
+            return true
           }
         } catch {
-          // fall through to user-facing guidance below
+          // fall through to caller fallback handling
         }
+        return false
+      }
+      const redirectToZoraHandoff = (): boolean => {
         const fallbackZoraHandoffUrl = buildZoraHandoffUrl({
           returnPath: params.zoraReturnPath ?? '/accounts',
           context: 'signup',
@@ -913,8 +906,25 @@ export function useAccountSetupController(params: {
           window.setTimeout(() => {
             window.location.assign(fallbackZoraHandoffUrl)
           }, 120)
-          return
+          return true
         }
+        return false
+      }
+      if (isPrivyRedirectUrlNotAllowedError(zoraError)) {
+        setErrorGuarded('Privy redirect URL is not allowed for this origin. Add this app URL in Privy settings and retry.')
+      } else if (
+        isUnauthorizedCrossAppLinkError(zoraError) ||
+        Number(zoraError?.status) === 401 ||
+        String(zoraError?.message ?? '').toLowerCase().includes('oauth/init')
+      ) {
+        if (await resolveSignalsAfterAuthFailure()) return
+        if (redirectToZoraHandoff()) return
+        setErrorGuarded(
+          'Privy cross-app Zora auth is unavailable right now. Allow pop-ups for this site and open zora.co in this browser first, then tap Connect again.',
+        )
+      } else if (isRecoverableCrossAppAuthError(zoraError)) {
+        if (await resolveSignalsAfterAuthFailure()) return
+        if (redirectToZoraHandoff()) return
         setErrorGuarded(
           'Zora authentication failed. Allow pop-ups for this site and open zora.co in this browser first, then tap Connect again.',
         )

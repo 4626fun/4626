@@ -32,7 +32,10 @@ export function isRecoverableCrossAppAuthError(error: unknown): boolean {
   return (
     message.includes('authentication failed') ||
     message.includes('issue connecting your zora account') ||
-    message.includes('issue connecting your account')
+    message.includes('issue connecting your account') ||
+    message.includes('popup') ||
+    message.includes('window.open') ||
+    message.includes('blocked')
   )
 }
 

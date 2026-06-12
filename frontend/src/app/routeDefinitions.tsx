@@ -23,6 +23,7 @@ import {
   AgentDirectory,
   AgentRegister,
   AgentUriService,
+  AlfaClubKeySafety,
   AlfaClubLiquidity,
   AuctionBid,
   AuctionDemo,
@@ -240,6 +241,7 @@ export const APP_ACCEPTED_ROUTES: PathRouteDef[] = [
       </SmartWalletRoute>
     ),
   },
+  { path: '/alfaclub/key-safety', element: <AlfaClubKeySafety /> },
   { path: '/auction-demo', element: <AuctionDemo /> },
 ]
 

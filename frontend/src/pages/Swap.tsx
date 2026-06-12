@@ -587,7 +587,8 @@ export function Swap() {
     try {
       const token = await getAccessToken()
       if (!token) return null
-      const bridgedAddress = await signInWithPrivyToken(token)
+      // Background refresh only: avoid foreground auth churn/kickout behavior.
+      const bridgedAddress = await signInWithPrivyToken(token, { background: true })
       return typeof bridgedAddress === 'string' && bridgedAddress.trim().length > 0 ? bridgedAddress : null
     } catch {
       return null
@@ -600,11 +601,8 @@ export function Swap() {
     if (bridged) return
     await signIn({ method: 'privy' })
   }, [authBusy, ensureCanonicalSession, privyClientStatus, signIn])
-  useEffect(() => {
-    if (executionMode !== 'canonical' || !needsPrivyCanonicalAuth || authBusy) return
-    if (!getAccessToken || typeof signInWithPrivyToken !== 'function') return
-    void ensureCanonicalSession()
-  }, [authBusy, ensureCanonicalSession, executionMode, getAccessToken, needsPrivyCanonicalAuth, signInWithPrivyToken])
+  // Keep canonical-session recovery user-driven. Auto-attempt loops can feel
+  // like repeated sign-outs when Privy client/session wiring is unstable.
   const identityReady = Boolean(
     canonicalAddress &&
       executionWalletClient &&

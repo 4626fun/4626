@@ -28,6 +28,17 @@ function isMissingAuthTokenError(message: string): boolean {
   )
 }
 
+function isDisconnectedWalletSessionError(message: string): boolean {
+  const normalized = String(message ?? '').trim().toLowerCase()
+  return (
+    normalized === 'disconnected' ||
+    normalized.includes('wallet disconnected') ||
+    normalized.includes('provider disconnected') ||
+    normalized.includes('disconnected from wallet') ||
+    normalized.includes('disconnected session')
+  )
+}
+
 /**
  * Sign a 32-byte hash for Permit2 / UserOp lanes. Must NOT use personal_sign (EIP-191 prefix).
  * Prefer Privy `secp256k1_sign`, then `eth_sign` on the digest.
@@ -105,8 +116,11 @@ export async function signRawEcdsaDigest(params: {
     const firstPass = await runRawSigningAttemptSet()
     if (firstPass.signature) return firstPass.signature
 
-    const hasAuthFailure = firstPass.failures.some((failure) => isMissingAuthTokenError(failure.message))
-    if (hasAuthFailure) {
+    const hasRefreshableSessionFailure = firstPass.failures.some(
+      (failure) =>
+        isMissingAuthTokenError(failure.message) || isDisconnectedWalletSessionError(failure.message),
+    )
+    if (hasRefreshableSessionFailure) {
       attemptedSessionRefresh = true
       const refreshSession = params.refreshSession ?? params.walletClient.refreshSession
       try {

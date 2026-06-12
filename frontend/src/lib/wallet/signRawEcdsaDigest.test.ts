@@ -199,4 +199,30 @@ describe('signRawEcdsaDigest', () => {
       }),
     ).rejects.toThrow(/Sign out and sign in again/)
   })
+
+  it('retries after disconnected signer errors by refreshing the session', async () => {
+    let refreshed = false
+    const request = vi.fn(async (args: { method: string }) => {
+      if (args.method === 'secp256k1_sign') {
+        if (!refreshed) throw new Error('Disconnected')
+        return SIG
+      }
+      if (args.method === 'eth_sign') throw new Error('Disconnected')
+      throw new Error(`unexpected method ${args.method}`)
+    })
+    const refreshSession = vi.fn(async () => {
+      refreshed = true
+      return true
+    })
+
+    const out = await signRawEcdsaDigest({
+      digest: DIGEST,
+      signerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9',
+      walletClient: { request },
+      refreshSession,
+    })
+
+    expect(out).toBe(SIG)
+    expect(refreshSession).toHaveBeenCalledTimes(1)
+  })
 })
