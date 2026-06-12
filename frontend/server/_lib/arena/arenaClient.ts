@@ -575,19 +575,17 @@ export async function runArenaCreateAgent(config = readArenaConfig(), ownerAddre
 
   // Note: buildAcpCommand + buildArenaCommandEnv will inject any currently resolved
   // ARENA_AGENT_ID / ARENA_AGENT_WALLET_ADDRESS etc. into the child env.
-  // If ownerAddress is passed, we append `--owner <address>` to the `acp agent create` args
-  // (best-effort; the official acp-cli "agent create" per Virtual-Protocol/acp-cli source
-  // only supports --name/--description/--image/--signer and does not declare --owner.
-  // Ownership/creator (userId on the Agent) is determined by the ACP auth session under
-  // which the CLI runs — see ACP_OWNER_WALLET + headless tokens from `acp configure`).
+  // Do NOT pass `--owner` here: the official acp-cli "agent create" (per
+  // Virtual-Protocol/acp-cli source) only supports --name/--description/--image/--signer
+  // and hard-fails on unknown options. Ownership/creator (userId on the Agent) is
+  // determined by the ACP auth session under which the CLI runs — that is what the
+  // `acp configure` session-rotation block above establishes (ACP_OWNER_WALLET +
+  // headless tokens, with ownerAddress as the wallet fallback).
   // The created agent always gets a fresh provisioned walletAddress used for on-chain
   // identity + arena/HL signing. Full per-Alfa-EOA "owned by this wallet" dashboard
   // association on Virtuals/ACP typically requires web create/claim at app.virtuals.io
   // while the Alfa sender is the connected/auth'd identity for that ACP user.
   const args = ['agent', 'create']
-  if (ownerAddress) {
-    args.push('--owner', ownerAddress)
-  }
   const command = buildAcpCommand(config, args)
   const run = await runCommand(command, config)
   auditLog('create_agent', {
