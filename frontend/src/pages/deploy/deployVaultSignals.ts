@@ -47,7 +47,7 @@ export function deriveDeployTimelineProgressState(params: {
 export function deployTimelineProgressLabel(state: DeployTimelineProgressState): string {
   if (state === 'disabled') return 'not enabled'
   if (state === 'inProgress') return 'in progress'
-  if (state === 'done') return 'done'
+  if (state === 'done') return 'complete'
   return 'pending'
 }
 

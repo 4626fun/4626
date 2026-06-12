@@ -58,7 +58,7 @@ describe('deploy vault signals', () => {
       stageIndexMap: DEPLOY_TIMELINE_STAGE_INDEX,
     })
     expect(doneState).toBe('done')
-    expect(deployTimelineProgressLabel(doneState)).toBe('done')
+    expect(deployTimelineProgressLabel(doneState)).toBe('complete')
 
     const inProgressState = deriveDeployTimelineProgressState({
       stage: 'phase2Core',

@@ -1,13 +1,11 @@
 import type { ReactNode } from 'react'
 
-import { NetworkBadge } from './ui/NetworkBadge'
-
 const HERO_PILLS = ['Creator Coin', 'Vault', 'Base', 'ERC-4337 gas-free'] as const
 
 /**
- * Calm hero header for the deploy cockpit: title, one-line purpose,
- * context pills, and the Base network badge. Children render under the
- * subtitle (tab switcher, signer nudges).
+ * Calm hero header for the deploy cockpit: title, one-line purpose, and
+ * context pills. Children render under the subtitle (tab switcher,
+ * signer nudges).
  */
 export function DeployHero({ children }: { children?: ReactNode }) {
   return (
@@ -30,7 +28,6 @@ export function DeployHero({ children }: { children?: ReactNode }) {
         </div>
         {children}
       </div>
-      <NetworkBadge className="mt-1" />
     </div>
   )
 }
