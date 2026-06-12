@@ -86,6 +86,20 @@ describe('alfaclub vigilante — vercel wiring', () => {
     expect(csp).toContain('https://res.cloudinary.com')
   })
 
+  it('allows the custom Privy auth domains in connect-src (session fetches go to privy.4626.fun)', async () => {
+    const body = await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')
+    const parsed = JSON.parse(body) as {
+      routes?: Array<{ headers?: Record<string, string> }>
+    }
+    const csp = (parsed.routes ?? [])
+      .map((route) => route.headers?.['content-security-policy'] ?? '')
+      .find((value) => value.includes('connect-src'))
+
+    const connectSrc = csp?.split(';').find((d) => d.trim().startsWith('connect-src')) ?? ''
+    expect(connectSrc).toContain('https://privy.4626.fun')
+    expect(connectSrc).toContain('https://privy.app.4626.fun')
+  })
+
   it('allows Base App Cloudinary avatar fetches in the app CSP', async () => {
     const body = await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')
     const parsed = JSON.parse(body) as {
