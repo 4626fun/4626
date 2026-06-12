@@ -136,19 +136,24 @@ async function readVaultRows(): Promise<ActiveVaultRow[]> {
   if (!db) throw new Error('db_unavailable')
   const chainId = chainIdFilter()
   const limit = maxVaults()
+  // Per-vault kill switch: vaults with a keepr_vault_automation row that is
+  // disabled or revoked are excluded from all enqueued workflows. Vaults
+  // without an automation row stay enabled (greenfield default).
   const result = await db.sql`
     WITH eligible AS (
       SELECT
-        vault_address,
-        chain_id,
-        creator_coin_address,
-        share_token_address,
-        settled_at,
-        config_json,
-        ROW_NUMBER() OVER (ORDER BY created_at ASC, vault_address ASC) - 1 AS row_index,
+        v.vault_address,
+        v.chain_id,
+        v.creator_coin_address,
+        v.share_token_address,
+        v.settled_at,
+        v.config_json,
+        ROW_NUMBER() OVER (ORDER BY v.created_at ASC, v.vault_address ASC) - 1 AS row_index,
         COUNT(*) OVER () AS total_count
-      FROM keepr_vaults
-      WHERE chain_id = ${chainId}
+      FROM keepr_vaults v
+      LEFT JOIN keepr_vault_automation a ON a.vault_address = v.vault_address
+      WHERE v.chain_id = ${chainId}
+        AND (a.vault_address IS NULL OR (a.automation_enabled = TRUE AND a.revoked_at IS NULL))
     ),
     rotated AS (
       SELECT
