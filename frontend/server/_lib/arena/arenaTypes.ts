@@ -22,6 +22,11 @@ export type ArenaTradeRequest = {
   action: ArenaTradeAction
   pair: string
   side?: ArenaTradeSide
+  /**
+   * USD notional. Required for `open`. Optional for `close`: when set, the
+   * close is a partial reduce-only close of that notional (dgclaw
+   * `close --size`); when omitted, the full position is closed.
+   */
   sizeUsd?: number
   leverage?: number
 }

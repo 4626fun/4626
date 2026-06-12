@@ -448,17 +448,25 @@ export async function runArenaTrade(request: ArenaTradeRequest, config = readAre
   const action = request.action
   if (action === 'close') {
     // dgclaw v2 trade.ts only accepts flag-style options; positional args are silently ignored.
-    const command = buildNodeScriptCommand(config, 'scripts/trade.ts', ['close', '--pair', pairCheck.normalizedPair])
+    // Optional sizeUsd makes this a partial reduce-only close (repo-patched
+    // dgclaw `close --size`); omitted = full close.
+    const closeSizeUsd = parsePositiveNumber(request.sizeUsd ?? 0)
+    const closeArgs = ['close', '--pair', pairCheck.normalizedPair]
+    if (closeSizeUsd > 0) closeArgs.push('--size', String(closeSizeUsd))
+    const command = buildNodeScriptCommand(config, 'scripts/trade.ts', closeArgs)
     const run = await runCommand(command, config)
     auditLog('trade_close', {
       ok: run.ok,
       dryRun: run.dryRun,
       pair: pairCheck.normalizedPair,
       market: pairCheck.market,
+      ...(closeSizeUsd > 0 ? { partialSizeUsd: closeSizeUsd } : {}),
     })
     return {
       ok: run.ok,
-      message: run.ok ? `Close submitted for ${pairCheck.normalizedPair}.` : 'Close trade failed.',
+      message: run.ok
+        ? `${closeSizeUsd > 0 ? 'Partial close' : 'Close'} submitted for ${pairCheck.normalizedPair}.`
+        : 'Close trade failed.',
       run,
     }
   }

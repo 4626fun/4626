@@ -45,6 +45,8 @@ vi.mock('./counterTradeConfig.js', async () => {
 
 vi.mock('./counterTradeStore.js', () => ({
   COUNTER_TRADE_EXIT_EXECUTED_REASON: 'exit_executed',
+  COUNTER_TRADE_DEFENSE_EXECUTED_REASON: 'defense_reduce_executed',
+  COUNTER_TRADE_HARVEST_EXECUTED_REASON: 'harvest_tp_executed',
   listActiveCounterTradeOptIns: mocks.listActiveCounterTradeOptIns,
   readCounterTradeUsageWindow: mocks.readCounterTradeUsageWindow,
   readOrCreateCounterTradeRoomStrategy: mocks.readOrCreateCounterTradeRoomStrategy,
@@ -76,6 +78,14 @@ import { runCounterTradeLoop } from './counterTradeRunner.js'
 const BASE_RUNTIME = {
   enabled: true,
   exitEnabled: true,
+  defenseEnabled: true,
+  defendLiqDistancePct: 12,
+  defendReduceFraction: 0.25,
+  harvestTriggerRoiPct: 50,
+  harvestFraction: 0.25,
+  minReduceNotionalUsd: 15,
+  minBufferRatio: 0.2,
+  maxDefenseActionsPerTick: 2,
   roomId: '1659',
   chatPostEnabled: true,
   chatPostRoomId: '1659',
@@ -496,6 +506,155 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
         status: 'blocked',
         reason: 'cooldown_active',
       }),
+    )
+  })
+
+  it('defense partially reduces a bot leg near liquidation even with no user fills', async () => {
+    mocks.getUserFillsByTimeDetailed.mockResolvedValue([])
+    // Short losing leg: entry 100, pnl -50 on $1000 → mark ≈ 105; liq 115 → ~9.5% distance.
+    mocks.getClearinghouseState.mockResolvedValue({
+      accountValueUsd: 10_000,
+      withdrawableUsd: 3_000,
+      assetPositions: [
+        {
+          coin: 'BTC',
+          side: 'short',
+          entryPx: 100,
+          positionValue: 1_000,
+          unrealizedPnl: -50,
+          liquidationPx: 115,
+          leverage: 5,
+        },
+      ],
+    })
+
+    const result = await runCounterTradeLoop()
+
+    expect(result.executed).toBe(1)
+    expect(result.failed).toBe(0)
+    expect(mocks.runArenaTrade).toHaveBeenCalledTimes(1)
+    expect(mocks.runArenaTrade).toHaveBeenCalledWith(
+      { action: 'close', pair: 'BTC', sizeUsd: 250 },
+      expect.objectContaining({ agentWalletAddress: '0xagentwallet' }),
+    )
+    expect(mocks.recordCounterTradeAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'executed',
+        reason: 'defense_reduce_executed',
+        counterSide: 'short',
+        counterNotionalUsd: 250,
+      }),
+    )
+    expect(mocks.sendAlfaClubRoomText).toHaveBeenCalledTimes(1)
+    const postedText = String(mocks.sendAlfaClubRoomText.mock.calls[0]?.[0]?.text ?? '')
+    expect(postedText).toContain('🛡️ Defense')
+  })
+
+  it('harvests partial profit off a winning bot leg above the ROI trigger', async () => {
+    mocks.getUserFillsByTimeDetailed.mockResolvedValue([])
+    // Winning long: pnl +120 on $1000 @5x → margin $200 → ROI 60% ≥ 50% trigger.
+    mocks.getClearinghouseState.mockResolvedValue({
+      accountValueUsd: 10_000,
+      withdrawableUsd: 3_000,
+      assetPositions: [
+        {
+          coin: 'ETH',
+          side: 'long',
+          entryPx: 100,
+          positionValue: 1_000,
+          unrealizedPnl: 120,
+          liquidationPx: 80,
+          leverage: 5,
+        },
+      ],
+    })
+
+    const result = await runCounterTradeLoop()
+
+    expect(result.executed).toBe(1)
+    expect(mocks.runArenaTrade).toHaveBeenCalledWith(
+      { action: 'close', pair: 'ETH', sizeUsd: 250 },
+      expect.anything(),
+    )
+    expect(mocks.recordCounterTradeAction).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'executed', reason: 'harvest_tp_executed' }),
+    )
+    const postedText = String(mocks.sendAlfaClubRoomText.mock.calls[0]?.[0]?.text ?? '')
+    expect(postedText).toContain('🌾 Harvest')
+  })
+
+  it('blocks new entries when the silo buffer ratio is below the floor', async () => {
+    // withdrawable 1k of 10k equity → buffer 10% < 20% floor; no defense-eligible legs.
+    mocks.getClearinghouseState.mockResolvedValue({
+      accountValueUsd: 10_000,
+      withdrawableUsd: 1_000,
+      assetPositions: [],
+    })
+
+    const result = await runCounterTradeLoop()
+
+    expect(result.executed).toBe(0)
+    expect(result.blocked).toBe(1)
+    expect(mocks.runArenaTrade).not.toHaveBeenCalled()
+    expect(mocks.recordCounterTradeAction).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'blocked', reason: 'buffer_floor' }),
+    )
+  })
+
+  it('mirrored exits still run when the buffer is below the entry floor', async () => {
+    mocks.getUserFillsByTimeDetailed.mockResolvedValue([
+      { ...FILL, dir: 'Close Long', sz: '1', px: '100', startPosition: '1' },
+    ])
+    mocks.getClearinghouseState.mockResolvedValue({
+      accountValueUsd: 10_000,
+      withdrawableUsd: 1_000,
+      assetPositions: [
+        { coin: 'BTC', side: 'short', positionValue: 45, entryPx: 100, liquidationPx: 200 },
+      ],
+    })
+
+    const result = await runCounterTradeLoop()
+
+    expect(result.executed).toBe(1)
+    expect(result.blocked).toBe(0)
+    expect(mocks.runArenaTrade).toHaveBeenCalledWith(
+      { action: 'close', pair: 'BTC' },
+      expect.anything(),
+    )
+  })
+
+  it('does not double-close when defense fully closed the coin earlier in the tick', async () => {
+    mocks.getUserFillsByTimeDetailed.mockResolvedValue([
+      { ...FILL, dir: 'Close Long', sz: '1', px: '100', startPosition: '1' },
+    ])
+    // Dust losing leg near liquidation → defense full-closes it, then the
+    // user's mirrored close on the same coin must be skipped.
+    mocks.getClearinghouseState.mockResolvedValue({
+      accountValueUsd: 10_000,
+      withdrawableUsd: 3_000,
+      assetPositions: [
+        {
+          coin: 'BTC',
+          side: 'short',
+          entryPx: 100,
+          positionValue: 25,
+          unrealizedPnl: -1.25,
+          liquidationPx: 105,
+          leverage: 5,
+        },
+      ],
+    })
+
+    const result = await runCounterTradeLoop()
+
+    expect(result.executed).toBe(1)
+    expect(mocks.runArenaTrade).toHaveBeenCalledTimes(1)
+    expect(mocks.runArenaTrade).toHaveBeenCalledWith(
+      { action: 'close', pair: 'BTC' },
+      expect.anything(),
+    )
+    expect(mocks.recordCounterTradeAction).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'executed', reason: 'defense_reduce_executed' }),
     )
   })
 })

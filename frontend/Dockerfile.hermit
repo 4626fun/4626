@@ -109,6 +109,13 @@ RUN npm install -g @virtuals-protocol/acp-cli \
   && cd /app/acp-cli \
   && npm install --omit=dev
 
+# Overlay repo-patched dgclaw scripts on top of the upstream clone.
+# trade.ts adds partial close (`close --size <usd>`, reduce-only) used by the
+# counter-trade liquidation-defense loop. Sourced from patches/ (repo-native)
+# rather than the dgclaw-skill submodule so the Railway build context does not
+# depend on submodule checkout state.
+COPY patches/dgclaw/trade.ts /app/dgclaw-skill/scripts/trade.ts
+
 # Health check port
 ENV PORT=8080
 ENV ACP_CLI_DIR=/app/acp-cli

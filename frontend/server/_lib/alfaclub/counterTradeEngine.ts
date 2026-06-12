@@ -152,30 +152,41 @@ export function findCounterPositionForCoin(
   return null
 }
 
+export type CounterWalletPositionLeg = NonNullable<
+  HyperliquidClearinghouseState['assetPositions']
+>[number]
+
+/**
+ * Approximate distance (in % of mark price) between a leg's mark and its
+ * liquidation price. Mark is approximated from entry + unrealized PnL since
+ * the clearinghouse snapshot does not carry mark directly.
+ */
+export function computeLegLiqDistancePct(leg: CounterWalletPositionLeg): number | null {
+  if (leg.side == null || leg.liquidationPx == null || leg.entryPx == null || leg.positionValue == null) return null
+  if (leg.positionValue <= 0) return null
+
+  // Approximate mark from entry + unrealized pnl.
+  const markApprox =
+    leg.entryPx +
+    (leg.side === 'long'
+      ? (leg.unrealizedPnl ?? 0) / Math.max(1e-9, leg.positionValue / Math.max(1e-9, leg.entryPx))
+      : -(leg.unrealizedPnl ?? 0) / Math.max(1e-9, leg.positionValue / Math.max(1e-9, leg.entryPx)))
+
+  if (!Number.isFinite(markApprox) || markApprox <= 0) return null
+  const distance =
+    leg.side === 'long'
+      ? ((markApprox - leg.liquidationPx) / markApprox) * 100
+      : ((leg.liquidationPx - markApprox) / markApprox) * 100
+  return Number.isFinite(distance) ? distance : null
+}
+
 function computeMinimumLiqDistancePct(state: HyperliquidClearinghouseState | null): number | null {
-  const legs = state?.assetPositions ?? []
   let minDistance: number | null = null
-
-  for (const leg of legs) {
-    if (leg.side == null || leg.liquidationPx == null || leg.entryPx == null || leg.positionValue == null) continue
-    if (leg.positionValue <= 0) continue
-
-    // Approximate mark from entry + unrealized pnl.
-    const markApprox =
-      leg.entryPx +
-      (leg.side === 'long'
-        ? (leg.unrealizedPnl ?? 0) / Math.max(1e-9, leg.positionValue / Math.max(1e-9, leg.entryPx))
-        : -(leg.unrealizedPnl ?? 0) / Math.max(1e-9, leg.positionValue / Math.max(1e-9, leg.entryPx)))
-
-    if (!Number.isFinite(markApprox) || markApprox <= 0) continue
-    const distance =
-      leg.side === 'long'
-        ? ((markApprox - leg.liquidationPx) / markApprox) * 100
-        : ((leg.liquidationPx - markApprox) / markApprox) * 100
-    if (!Number.isFinite(distance)) continue
+  for (const leg of state?.assetPositions ?? []) {
+    const distance = computeLegLiqDistancePct(leg)
+    if (distance == null) continue
     if (minDistance == null || distance < minDistance) minDistance = distance
   }
-
   return minDistance
 }
 

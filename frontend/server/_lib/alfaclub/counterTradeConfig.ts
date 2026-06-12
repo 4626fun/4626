@@ -15,6 +15,29 @@ export type CounterTradeRuntimeConfig = {
    * env + DB kill switches and per-fill dedupe.
    */
   exitEnabled: boolean
+  /**
+   * Liquidation-defense loop: each tick, inspect the bot wallet's open legs.
+   * Legs too close to their liquidation price are partially reduced
+   * (releasing margin back into the silo's USDC buffer); legs deep in profit
+   * are partially taken to refill that buffer. Cross-margin means free USDC
+   * in the wallet automatically backs every leg, so the buffer IS the
+   * defense. No cross-wallet transfers — each silo defends itself.
+   */
+  defenseEnabled: boolean
+  /** Defend (partial-reduce) a leg when its liq distance falls to/below this %. */
+  defendLiqDistancePct: number
+  /** Fraction of the losing leg's notional to shave per defense action. */
+  defendReduceFraction: number
+  /** Harvest (partial take-profit) when unrealized PnL >= this % of the leg's margin. */
+  harvestTriggerRoiPct: number
+  /** Fraction of the winning leg's notional to realize per harvest action. */
+  harvestFraction: number
+  /** Floor for any partial reduce/harvest order (HL min order is $10). */
+  minReduceNotionalUsd: number
+  /** Entry gate: block new counters when withdrawable/accountValue is below this ratio. */
+  minBufferRatio: number
+  /** Max defense+harvest orders per tick (per identity). */
+  maxDefenseActionsPerTick: number
   roomId: string
   chatPostEnabled: boolean
   chatPostRoomId: string
@@ -71,6 +94,23 @@ export function readCounterTradeRuntimeConfig(): CounterTradeRuntimeConfig {
   return {
     enabled: readBool('ALFACLUB_COUNTER_TRADE_ENABLED', false),
     exitEnabled: readBool('ALFACLUB_COUNTER_TRADE_EXIT_ENABLED', true),
+    defenseEnabled: readBool('ALFACLUB_COUNTER_TRADE_DEFENSE_ENABLED', true),
+    defendLiqDistancePct: readPositiveNumber('ALFACLUB_COUNTER_TRADE_DEFEND_LIQ_DISTANCE_PCT', 12),
+    defendReduceFraction: Math.min(
+      0.75,
+      readPositiveNumber('ALFACLUB_COUNTER_TRADE_DEFEND_REDUCE_FRACTION', 0.25),
+    ),
+    harvestTriggerRoiPct: readPositiveNumber('ALFACLUB_COUNTER_TRADE_HARVEST_TRIGGER_ROI_PCT', 50),
+    harvestFraction: Math.min(
+      0.75,
+      readPositiveNumber('ALFACLUB_COUNTER_TRADE_HARVEST_FRACTION', 0.25),
+    ),
+    minReduceNotionalUsd: readPositiveNumber('ALFACLUB_COUNTER_TRADE_MIN_REDUCE_USD', 15),
+    minBufferRatio: Math.min(
+      0.9,
+      readPositiveNumber('ALFACLUB_COUNTER_TRADE_MIN_BUFFER_RATIO', 0.2),
+    ),
+    maxDefenseActionsPerTick: readPositiveInt('ALFACLUB_COUNTER_TRADE_MAX_DEFENSE_ACTIONS_PER_TICK', 2),
     roomId,
     chatPostEnabled: readBool('ALFACLUB_COUNTER_TRADE_CHAT_POST_ENABLED', true),
     chatPostRoomId: String(process.env.ALFACLUB_COUNTER_TRADE_CHAT_POST_ROOM_ID ?? '').trim() || roomId,

@@ -14,6 +14,31 @@ export type CounterTradeActionStatus = 'executed' | 'skipped' | 'blocked' | 'fai
  */
 export const COUNTER_TRADE_EXIT_EXECUTED_REASON = 'exit_executed'
 
+/**
+ * Ledger `reason` for liquidation-defense partial reduces (losing leg shaved
+ * to push its liquidation price away). Risk-reducing — excluded from entry
+ * cooldown and usage windows, same as mirrored exits.
+ */
+export const COUNTER_TRADE_DEFENSE_EXECUTED_REASON = 'defense_reduce_executed'
+
+/**
+ * Ledger `reason` for profit-harvest partial closes (winning leg partially
+ * realized to refill the silo's USDC buffer). Risk-reducing — excluded from
+ * entry cooldown and usage windows.
+ */
+export const COUNTER_TRADE_HARVEST_EXECUTED_REASON = 'harvest_tp_executed'
+
+/**
+ * Executed-row reasons that are risk-reducing rather than new entries. These
+ * never advance the cooldown clock and never count toward hourly/daily entry
+ * caps.
+ */
+const NON_ENTRY_EXECUTED_REASONS = [
+  COUNTER_TRADE_EXIT_EXECUTED_REASON,
+  COUNTER_TRADE_DEFENSE_EXECUTED_REASON,
+  COUNTER_TRADE_HARVEST_EXECUTED_REASON,
+] as const
+
 export type CounterTradeRoomStrategy = {
   roomId: string
   enabled: boolean
@@ -472,9 +497,13 @@ export async function recordCounterTradeAction(params: {
         ${params.counterSide}, ${params.counterNotionalUsd}, ${params.counterLeverage}, NOW()
       );
     `
-    // Only entry executions advance the cooldown clock; mirrored exits are
-    // risk-reducing and must not delay the next counter-entry.
-    if (params.status === 'executed' && params.reason !== COUNTER_TRADE_EXIT_EXECUTED_REASON) {
+    // Only entry executions advance the cooldown clock; mirrored exits,
+    // defense reduces, and profit harvests are risk-reducing and must not
+    // delay the next counter-entry.
+    if (
+      params.status === 'executed' &&
+      !(NON_ENTRY_EXECUTED_REASONS as readonly string[]).includes(params.reason)
+    ) {
       await db.sql`
         UPDATE alfaclub.counter_trade_user_opt_in
         SET last_action_at = NOW(), updated_at = NOW()
@@ -510,14 +539,17 @@ export async function readCounterTradeUsageWindow(params: {
 
   try {
     const sinceIso = new Date(params.sinceMs).toISOString()
+    const [exitReason, defenseReason, harvestReason] = NON_ENTRY_EXECUTED_REASONS
     const result = await db.sql`
       SELECT
         COUNT(*)::int AS action_count,
         COUNT(*) FILTER (
-          WHERE status = 'executed' AND reason <> ${COUNTER_TRADE_EXIT_EXECUTED_REASON}
+          WHERE status = 'executed'
+            AND reason NOT IN (${exitReason}, ${defenseReason}, ${harvestReason})
         )::int AS executed_count,
         COALESCE(SUM(counter_notional_usd) FILTER (
-          WHERE status = 'executed' AND reason <> ${COUNTER_TRADE_EXIT_EXECUTED_REASON}
+          WHERE status = 'executed'
+            AND reason NOT IN (${exitReason}, ${defenseReason}, ${harvestReason})
         ), 0)::text AS notional_usd
       FROM alfaclub.counter_trade_action_ledger
       WHERE room_id = ${roomId}

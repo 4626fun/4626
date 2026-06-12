@@ -108,6 +108,59 @@ net drift the bias tilt earned (minus combined fees); the individual legs show
 how much got shifted between the wallets, and `grossVolumeUsd` on both legs is
 the volume the strategy generated.
 
+## Liquidation defense + profit recycling (June 2026)
+
+Each silo (the bot wallet, and symmetrically the countered wallet if it runs
+its own instance) defends itself with its own free USDC — there are **no
+cross-wallet transfers**. dgclaw opens everything in cross margin, so every
+free dollar in the wallet automatically backs every open leg: the buffer IS
+the liquidation defense. `frontend/server/_lib/alfaclub/counterTradeDefense.ts`
+runs every tick on the bot wallet's own legs, before user fills are processed:
+
+- **`defend_reduce`** — when a leg's liquidation distance falls to/below
+  `ALFACLUB_COUNTER_TRADE_DEFEND_LIQ_DISTANCE_PCT` (default 12%), partially
+  close it (reduce-only, `defendReduceFraction` of notional, default 25%).
+  This shrinks maintenance margin while equity stays put, pushing the
+  liquidation price away and releasing margin back into the silo's buffer.
+  Inside half the threshold the fraction doubles (capped at 50%) so fast moves
+  get a meaningful response per tick. Dust legs (≤ 2× the minimum order) are
+  fully closed instead of leaving an unreducible remainder.
+- **`harvest_take_profit`** — when a leg's unrealized PnL reaches
+  `ALFACLUB_COUNTER_TRADE_HARVEST_TRIGGER_ROI_PCT` (default 50% of the leg's
+  margin), partially realize it (`harvestFraction`, default 25% of notional).
+  Paper profit on the winning side becomes banked USDC in the same silo — the
+  buffer that will defend this wallet when the market turns and this side
+  becomes the loser. Harvest never fully closes a healthy winner; the exit
+  mirror owns full closes.
+- **Buffer-floor entry gate** — new counter entries are blocked
+  (`reason = 'buffer_floor'`) when `withdrawable / accountValue` drops below
+  `ALFACLUB_COUNTER_TRADE_MIN_BUFFER_RATIO` (default 20%). Mirrored exits and
+  defense actions are risk-reducing and bypass this gate.
+
+Mechanics: partial closes go through the repo-patched dgclaw
+`close --size <usd>` (reduce-only; overlay in `frontend/Dockerfile.hermit`).
+Ledger rows use `reason = 'defense_reduce_executed'` / `'harvest_tp_executed'`
+and — like mirrored exits — never count toward the cooldown clock, hourly
+action cap, or daily notional cap. Each action posts a `🛡️ Defense` /
+`🌾 Harvest` card with the resulting buffer ratio.
+
+Env knobs (Railway InverseAKITA executor):
+
+- `ALFACLUB_COUNTER_TRADE_DEFENSE_ENABLED` — master switch (default 1).
+- `ALFACLUB_COUNTER_TRADE_DEFEND_LIQ_DISTANCE_PCT` — defend trigger (default 12).
+- `ALFACLUB_COUNTER_TRADE_DEFEND_REDUCE_FRACTION` — shave per action (default 0.25, capped 0.75).
+- `ALFACLUB_COUNTER_TRADE_HARVEST_TRIGGER_ROI_PCT` — harvest trigger vs margin (default 50).
+- `ALFACLUB_COUNTER_TRADE_HARVEST_FRACTION` — realize per action (default 0.25, capped 0.75).
+- `ALFACLUB_COUNTER_TRADE_MIN_REDUCE_USD` — partial-order floor (default 15; HL min order is $10).
+- `ALFACLUB_COUNTER_TRADE_MIN_BUFFER_RATIO` — entry gate floor (default 0.2, capped 0.9).
+- `ALFACLUB_COUNTER_TRADE_MAX_DEFENSE_ACTIONS_PER_TICK` — per identity (default 2).
+
+Observability: every action emits `counter_trade.defense` (type, coin, side,
+reduce notional, liq distance, ROI, buffer ratio, ok) and failures emit
+`counter_trade.defense_execution_failed` — failed actions are recorded as
+`status = 'failed'` with `reason = 'defense_reduce_executed_failed:…'` /
+`'harvest_tp_executed_failed:…'`.
+
 ## LLM risk-review gate (optional)
 
 `frontend/server/_lib/alfaclub/counterTradeLlmAdvisor.ts` adds an optional
@@ -178,6 +231,14 @@ Use these as launch defaults unless explicit risk approval says otherwise:
 - `ALFACLUB_COUNTER_TRADE_LIQUIDATION_MIN_DISTANCE_PCT=8`
 - `ALFACLUB_COUNTER_TRADE_EVENT_LOOKBACK_MS=2700000`
 - `ALFACLUB_COUNTER_TRADE_RUN_LIMIT_PER_IDENTITY=20`
+- `ALFACLUB_COUNTER_TRADE_DEFENSE_ENABLED=1`
+- `ALFACLUB_COUNTER_TRADE_DEFEND_LIQ_DISTANCE_PCT=12`
+- `ALFACLUB_COUNTER_TRADE_DEFEND_REDUCE_FRACTION=0.25`
+- `ALFACLUB_COUNTER_TRADE_HARVEST_TRIGGER_ROI_PCT=50`
+- `ALFACLUB_COUNTER_TRADE_HARVEST_FRACTION=0.25`
+- `ALFACLUB_COUNTER_TRADE_MIN_REDUCE_USD=15`
+- `ALFACLUB_COUNTER_TRADE_MIN_BUFFER_RATIO=0.2`
+- `ALFACLUB_COUNTER_TRADE_MAX_DEFENSE_ACTIONS_PER_TICK=2`
 
 ## Preflight checks
 

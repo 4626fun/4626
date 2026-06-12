@@ -29,6 +29,7 @@ import {
   formatSignedUsd,
   resolveBotBankedPnlForClose,
 } from './counterTradeHarvest.js'
+import { computeBufferRatio, runCounterTradeDefenseForIdentity } from './counterTradeDefense.js'
 import {
   COUNTER_TRADE_EXIT_EXECUTED_REASON,
   enforceSingleActiveCounterTradeActor,
@@ -322,12 +323,9 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
       }
 
       const fills = await getUserFillsByTimeDetailed(userWalletForFills, startTimeMs)
-      if (!fills?.length) continue
 
       const counterWalletState =
         identity.agentWalletAddress != null ? await getClearinghouseState(identity.agentWalletAddress) : null
-      const sorted = [...fills].sort((a, b) => a.time - b.time).slice(-runtime.runLimitPerIdentity)
-      let lastExecutedAtMs = parseIsoMs(optIn.lastActionAt)
 
       const identityConfig = {
         ...baseArenaConfig,
@@ -340,6 +338,27 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
       // when a user entry+exit pair lands inside one lookback window.
       const openedCoinsThisTick = new Set<string>()
       const closedCoinsThisTick = new Set<string>()
+
+      // Liquidation defense + profit recycling runs every tick on the bot
+      // wallet's own legs — independent of whether the user traded. Legs too
+      // close to liquidation are partially reduced; legs deep in profit are
+      // partially realized into the silo's USDC buffer.
+      if (runtime.defenseEnabled && counterWalletState) {
+        const defense = await runCounterTradeDefenseForIdentity({
+          runtime,
+          senderAddress: optIn.senderAddress,
+          identityConfig,
+          counterWalletState,
+        })
+        executed += defense.executed
+        failed += defense.failed
+        for (const coin of defense.fullyClosedCoins) closedCoinsThisTick.add(coin)
+      }
+
+      if (!fills?.length) continue
+      const sorted = [...fills].sort((a, b) => a.time - b.time).slice(-runtime.runLimitPerIdentity)
+      let lastExecutedAtMs = parseIsoMs(optIn.lastActionAt)
+      const bufferRatio = computeBufferRatio(counterWalletState)
 
       for (const fill of sorted) {
         scannedEvents += 1
@@ -533,6 +552,24 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
             eventKey,
             status: 'blocked',
             reason: 'hourly_cap_reached',
+            counterSide: null,
+            counterNotionalUsd: null,
+            counterLeverage: null,
+          })
+          continue
+        }
+
+        // Buffer floor: keep a free-USDC reserve in the bot silo. In cross
+        // margin that reserve is what extends liquidation distance on every
+        // open leg, so new entries stop before the buffer is consumed.
+        if (bufferRatio != null && bufferRatio < runtime.minBufferRatio) {
+          blocked += 1
+          await recordCounterTradeAction({
+            roomId: runtime.roomId,
+            senderAddress: optIn.senderAddress,
+            eventKey,
+            status: 'blocked',
+            reason: 'buffer_floor',
             counterSide: null,
             counterNotionalUsd: null,
             counterLeverage: null,
