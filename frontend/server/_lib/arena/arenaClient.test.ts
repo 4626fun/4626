@@ -101,12 +101,24 @@ describe('arenaClient dgclaw v2 setup ops', () => {
     expect(result.run).toBeUndefined()
   })
 
-  it('fails deposit with ACP job guidance (deposit.ts removed upstream)', async () => {
-    const result = await runArenaDepositUsdc(100, mockConfig({ dryRun: false }))
-    expect(result.ok).toBe(false)
-    expect(result.message).toContain('perp_deposit')
-    expect(result.message).toContain('"amount":"100"')
-    expect(result.message).toContain('acp client fund')
+  it('builds ACP perp_deposit create-job command for deposits', async () => {
+    const result = await runArenaDepositUsdc(100, mockConfig({ dryRun: true }))
+    expect(result.ok).toBe(true)
+    expect(result.run?.command).toBe('acp')
+    expect(result.run?.args).toEqual([
+      'client',
+      'create-job',
+      '--provider',
+      '0xd478a8B40372db16cA8045F28C6FE07228F3781A',
+      '--offering-name',
+      'perp_deposit',
+      '--requirements',
+      '{"amount":"100"}',
+      '--legacy',
+      '--json',
+    ])
+    expect(result.message).toContain('Bridge dry-run prepared')
+    expect(result.message).toContain('/arena sweep')
   })
 })
 

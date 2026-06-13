@@ -325,6 +325,40 @@ export function parseAcpAgentCreateOutput(stdout: string): { agentId?: string; a
   return { agentId, agentWalletAddress, hlApiWalletAddress }
 }
 
+function parseAcpJobCreateOutput(run: ArenaRunResult): { jobId?: string } {
+  const candidates = [run.stdout, run.stderr]
+    .map((part) => String(part ?? '').trim())
+    .filter(Boolean)
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate) as Record<string, unknown>
+      const fromKnownKeys =
+        (typeof parsed.jobId === 'string' ? parsed.jobId : null) ??
+        (typeof parsed.id === 'string' ? parsed.id : null) ??
+        (typeof parsed.requestId === 'string' ? parsed.requestId : null)
+      if (fromKnownKeys) return { jobId: fromKnownKeys }
+    } catch {
+      // fall through to regex extraction
+    }
+  }
+
+  const merged = candidates.join('\n')
+  const jobMatch = merged.match(/\b([0-9a-f]{8}-[0-9a-f-]{9,}|[0-9a-f]{24,})\b/i)
+  return { jobId: jobMatch?.[1] }
+}
+
+function isAcpSessionExpired(run: ArenaRunResult): boolean {
+  const haystack = `${run.error ?? ''}\n${run.stdout}\n${run.stderr}`.toLowerCase()
+  return (
+    haystack.includes('not_authenticated') ||
+    haystack.includes('session expired') ||
+    haystack.includes('run `acp configure`') ||
+    haystack.includes('not authenticated') ||
+    haystack.includes('unauthorized')
+  )
+}
+
 export async function runArenaStatus(config = readArenaConfig()): Promise<ArenaOpResult> {
   const baseValidation = ensureArenaEnabled(config)
   if (baseValidation) return baseValidation
@@ -420,32 +454,119 @@ export async function runArenaAddApiWallet(config = readArenaConfig()): Promise<
   }
 }
 
-export async function runArenaDepositUsdc(amountUsd: number, config = readArenaConfig()): Promise<ArenaOpResult> {
+export async function runArenaBridgeToHyperliquid(
+  amountUsd: number,
+  config = readArenaConfig(),
+): Promise<ArenaOpResult> {
   const baseValidation = ensureArenaEnabled(config)
   if (baseValidation) return baseValidation
   if (!config.tradingEnabled) {
-    return fail('Arena trading actions are disabled. Set ARENA_TRADING_ENABLED=1 to deposit.')
+    return fail('Arena trading actions are disabled. Set ARENA_TRADING_ENABLED=1 to bridge.')
   }
 
   const amount = parsePositiveNumber(amountUsd)
-  if (amount <= 0) return fail('Deposit amount must be a positive number.')
+  if (amount <= 0) return fail('Bridge amount must be a positive number.')
   if (amount > config.maxUsdcDeposit) {
-    return fail(`Deposit ${amount} exceeds ARENA_MAX_USDC_DEPOSIT (${config.maxUsdcDeposit}).`)
+    return fail(`Bridge amount ${amount} exceeds ARENA_MAX_USDC_DEPOSIT (${config.maxUsdcDeposit}).`)
+  }
+  if (amount < 6) {
+    return fail('Bridge amount must be at least 6 USDC for perp_deposit.')
+  }
+  if (!config.acpBin) {
+    return fail('ARENA_ACP_BIN is not configured (needed for ACP bridge jobs).')
   }
 
-  // dgclaw v2 removed scripts/deposit.ts. Deposits are now an ACP job to the
-  // Degen Claw provider (Base -> Arbitrum -> Hyperliquid bridge, min 6 USDC,
-  // ~30 min SLA) and require an interactive create-job + fund sequence.
-  auditLog('deposit', { ok: false, dryRun: config.dryRun, amountUsd: amount, unsupported: true })
-  return fail(
-    [
-      'Automated deposits are not supported with dgclaw v2 (scripts/deposit.ts was removed upstream).',
-      'Run the ACP job flow manually from the dgclaw-skill workspace:',
-      `acp client create-job --provider "0xd478a8B40372db16cA8045F28C6FE07228F3781A" --offering-name "perp_deposit" --requirements '{"amount":"${amount}"}' --legacy --json`,
-      'then fund it once the requirement memo posts: acp client fund --job-id <jobId> --json',
-      '(Minimum 6 USDC, ~30 minute bridge SLA.)',
-    ].join('\n'),
-  )
+  const createCommand = buildAcpCommand(config, [
+    'client',
+    'create-job',
+    '--provider',
+    '0xd478a8B40372db16cA8045F28C6FE07228F3781A',
+    '--offering-name',
+    'perp_deposit',
+    '--requirements',
+    JSON.stringify({ amount: String(amount) }),
+    '--legacy',
+    '--json',
+  ])
+  const createRun = await runCommand(createCommand, config)
+  auditLog('bridge_create_job', {
+    ok: createRun.ok,
+    dryRun: createRun.dryRun,
+    amountUsd: amount,
+  })
+
+  if (!createRun.ok) {
+    if (isAcpSessionExpired(createRun)) {
+      return fail(
+        'ACP session expired on the runtime. Operator action required: run `acp configure` in the same ACP state dir (`ARENA_ACP_HOME`) used by Hermit, then retry `/arena bridge <amount>`.',
+        { run: createRun },
+      )
+    }
+    return fail(
+      'Bridge job creation failed. Ensure ACP auth/signer is configured and retry `/arena bridge <amount>`.',
+      { run: createRun },
+    )
+  }
+
+  if (createRun.dryRun) {
+    return {
+      ok: true,
+      message: `Bridge dry-run prepared for ${amount} USDC (Base -> Hyperliquid). After funds land, run \`/arena sweep <amount>\`.`,
+      run: createRun,
+      details: { amountUsd: amount, stage: 'create-job-dry-run' },
+    }
+  }
+
+  const parsedCreate = parseAcpJobCreateOutput(createRun)
+  const jobId = parsedCreate.jobId
+  if (!jobId) {
+    return fail(
+      'Bridge job was created but no job id was parsed. Re-run `/arena bridge <amount>` or create/fund manually via ACP.',
+      { run: createRun },
+    )
+  }
+
+  const fundCommand = buildAcpCommand(config, ['client', 'fund', '--job-id', jobId, '--json'])
+  const fundRun = await runCommand(fundCommand, config)
+  auditLog('bridge_fund_job', {
+    ok: fundRun.ok,
+    dryRun: fundRun.dryRun,
+    amountUsd: amount,
+    jobId,
+  })
+
+  if (!fundRun.ok) {
+    if (isAcpSessionExpired(fundRun)) {
+      return fail(
+        `Bridge job ${jobId} was created, but ACP session expired before funding. Operator action required: run \`acp configure\` in runtime ACP state, then re-run \`acp client fund --job-id ${jobId} --json\` or retry \`/arena bridge <amount>\`.`,
+        { run: fundRun, jobId, createRun },
+      )
+    }
+    return fail(
+      `Bridge job ${jobId} created, but funding failed. Retry: \`acp client fund --job-id ${jobId} --json\`.`,
+      { run: fundRun, jobId, createRun },
+    )
+  }
+
+  const lines = [
+    `Bridge started: ${amount} USDC Base -> Hyperliquid.`,
+    `Job id: ${jobId}`,
+    'Typical SLA is ~30 minutes. Once funds land in HL spot, run `/arena sweep <amount>`.',
+  ]
+  return {
+    ok: true,
+    message: lines.join('\n'),
+    run: fundRun,
+    details: {
+      amountUsd: amount,
+      jobId,
+      flow: 'perp_deposit_bridge',
+    },
+  }
+}
+
+export async function runArenaDepositUsdc(amountUsd: number, config = readArenaConfig()): Promise<ArenaOpResult> {
+  return runArenaBridgeToHyperliquid(amountUsd, config)
 }
 
 export async function runArenaTrade(request: ArenaTradeRequest, config = readArenaConfig()): Promise<ArenaOpResult> {

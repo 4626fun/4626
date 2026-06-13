@@ -54,6 +54,7 @@ import {
   listArenaAssets,
   runArenaActivateUnifiedAccount,
   runArenaAddApiWallet,
+  runArenaBridgeToHyperliquid,
   runArenaCreateAgent,
   runArenaDepositUsdc,
   runArenaJoin,
@@ -177,7 +178,7 @@ type ParsedArenaCommand =
       target: 'default' | 'mine' | 'user'
       senderAddress?: string
     }
-  | { kind: 'deposit'; amountUsd: number }
+  | { kind: 'deposit' | 'bridge'; amountUsd: number }
   | { kind: 'transfer'; amountUsd: number; toPerp: boolean }
   | {
       kind: 'trade'
@@ -265,10 +266,10 @@ function parseArenaCommandArgs(args: string): ParsedArenaCommand | null {
     return null
   }
 
-  if (sub === 'deposit' || sub === 'fund') {
+  if (sub === 'deposit' || sub === 'fund' || sub === 'bridge') {
     const amountUsd = Number(parts[1] ?? '')
     if (!Number.isFinite(amountUsd) || amountUsd <= 0) return null
-    return { kind: 'deposit', amountUsd }
+    return { kind: sub === 'bridge' ? 'bridge' : 'deposit', amountUsd }
   }
 
   if (sub === 'transfer' || sub === 'sweep' || sub === 'move') {
@@ -427,7 +428,7 @@ function formatArenaUsage(): string {
     '- `/arena join`',
     '- `/arena activate`',
     '- `/arena add-api-wallet`',
-    '- `/arena deposit <usdc>` / `/arena fund <usdc>`',
+    '- `/arena deposit <usdc>` / `/arena fund <usdc>` / `/arena bridge <usdc>`',
     '- `/arena register`  (create path: runs acp agent create if enabled under the runtime ACP session; auto-binds + onboards the new agent for your sender or as room default)',
     '- `/arena register <agentId> <agentWallet> [hlApiWallet]`  (supplied-ids: bind your sender + onboard)',
     '- `/arena register default <agentId> <agentWallet> [hlApiWallet]`  (supplied-ids: set/change room default + onboard; use this to switch global for the room to one owned via your Alfa address)',
@@ -440,7 +441,7 @@ function formatArenaUsage(): string {
     '- `/arena identity clear default|mine|user <senderWallet>`',
     '',
     'HIP-3 pairs must use `xyz:` (example: `xyz:GOLD`).',
-    '`/arena deposit` is currently guidance-only in dgclaw v2; use your normal wallet funding path + `/arena sweep` for immediate margin move.',
+    '`/arena bridge <usdc>` (or `/arena deposit`) runs ACP `perp_deposit` Base->Hyperliquid bridge and auto-funds the job; then use `/arena sweep <usdc>` once funds land.',
     'Create path (`/arena register` or `default`) runs under the bot\'s pre-configured ACP session (see ACP_OWNER_WALLET in acp-cli headless). Agent is functional for arena immediately (auto-bound + onboarded). For the agent to appear "owned by your Alfa EOA" in Virtuals ACP dashboard (userId match), create via web at app.virtuals.io/acp while connected as your Alfa sender, then supply ids with `/arena register [default] <id> <wallet>`.',
     'IMPORTANT: In AlfaClub rooms, /arena commands are gated (see execute.ts). Add your sender wallet (e.g. 0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9 for 1659) to HERMIT_ALLOWED_USERS env, or set HERMIT_OWNER_ADDRESS to your wallet, and restart the service before running clears/registers from that wallet. Owner address bypasses the allowlist for /arena.',
   ].join('\n')
@@ -2990,8 +2991,11 @@ export async function executeHermitCommand(
         reply: result.ok ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}` : result.message,
       }
     }
-    if (parsed.kind === 'deposit') {
-      const result = await runArenaDepositUsdc(parsed.amountUsd, config)
+    if (parsed.kind === 'deposit' || parsed.kind === 'bridge') {
+      const result =
+        parsed.kind === 'bridge'
+          ? await runArenaBridgeToHyperliquid(parsed.amountUsd, config)
+          : await runArenaDepositUsdc(parsed.amountUsd, config)
       return {
         kind: 'hermit',
         provider: 'local',

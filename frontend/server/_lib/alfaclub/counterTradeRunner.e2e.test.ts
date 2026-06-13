@@ -812,6 +812,12 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
       { amountUsd: 5.994314 },
       expect.objectContaining({ agentWalletAddress: '0xagentwallet' }),
     )
+    expect(mocks.sendAlfaClubRoomText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        roomId: '1659',
+        text: expect.stringContaining('✅ Bridge funds settled'),
+      }),
+    )
   })
 
   it('skips the spot sweep below the minimum and when disabled', async () => {

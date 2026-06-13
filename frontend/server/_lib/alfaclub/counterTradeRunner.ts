@@ -159,6 +159,25 @@ function formatCounterTradeExitRoomPost(params: {
   ].join('\n')
 }
 
+function formatSpotSweepRoomPost(params: {
+  amountUsd: number
+  agentWalletAddress: string
+  dryRun: boolean
+}): string {
+  const walletLabel = `${params.agentWalletAddress.slice(0, 6)}…${params.agentWalletAddress.slice(-4)}`
+  return [
+    '🐈‍⬛ inverseAKITA',
+    '',
+    '✅ Bridge funds settled',
+    '',
+    `Swept $${params.amountUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} spot -> perp`,
+    `Wallet ${walletLabel}`,
+    params.dryRun ? '[dry-run]' : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
 function findCoinLeverageFromState(
   state: HyperliquidClearinghouseState | null,
   coin: string | null | undefined,
@@ -377,6 +396,24 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
                 ok: sweep.ok,
                 message: sweep.message,
               })
+              if (sweep.ok && runtime.chatPostEnabled) {
+                try {
+                  await sendAlfaClubRoomText({
+                    roomId: runtime.chatPostRoomId,
+                    text: formatSpotSweepRoomPost({
+                      amountUsd: spotUsdc,
+                      agentWalletAddress: sweepWallet,
+                      dryRun: sweep.run?.dryRun === true,
+                    }),
+                  })
+                } catch (postError) {
+                  logger.warn('counter_trade.spot_sweep_post_failed', {
+                    roomId: runtime.roomId,
+                    agentWalletAddress: sweepWallet,
+                    message: postError instanceof Error ? postError.message : String(postError),
+                  })
+                }
+              }
             }
           } catch (sweepError) {
             logger.warn('counter_trade.spot_sweep_failed', {
