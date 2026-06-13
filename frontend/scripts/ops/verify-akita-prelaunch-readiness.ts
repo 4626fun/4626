@@ -500,7 +500,7 @@ async function main(): Promise<void> {
 
   process.stdout.write('\n--- Your checklist (before you launch deploy) ---\n')
   process.stdout.write('  1. Execution-ready wallet (parent CSW + embedded owner on app track)\n')
-  process.stdout.write('  2. ≥50,000,000 AKITA creator tokens approved for vault deposit\n')
+  process.stdout.write('  2. ≥100,000,000 AKITA creator tokens approved for vault deposit\n')
   process.stdout.write('  3. **`vault_full_deploy`** active/pending (or legacy comp: charm + ajna + solana_ovault_mesh)\n')
   process.stdout.write('  4. Optional fork dry-run: pnpm -C frontend run dev:deploy-dry-run\n')
   process.stdout.write('  5. Launch at https://app.4626.fun/deploy/vault with AKITA creator coin\n')

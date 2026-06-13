@@ -23,6 +23,7 @@
     "build:clean": "pnpm clean:dist && pnpm build",
     "build:server-core": "node packages/server-core/build.mjs",
     "build": "pnpm build:server-core && pnpm build:app && pnpm build:telegram-link-standalone && pnpm build:marketing-vault",
+    "build:vercel": "node scripts/build-vercel.mjs",
     "build:marketing-vault": "node scripts/sync-immersive-three-vendor.mjs && NODE_OPTIONS=--max-old-space-size=4096 vite build --config vite.marketing-vault.config.ts && node scripts/copy-marketing-vault-bundle.mjs",
     "build:vault-glb": "blender --background --python ../tools/vault-images/ethereum_vault_generator.py",
     "build:app": "NODE_OPTIONS=--max-old-space-size=7168 vite build --config vite.config.ts",

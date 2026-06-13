@@ -201,7 +201,7 @@ import {
   type RolePolicySourceLabel,
 } from './deployVaultRolePolicy'
 
-const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 50_000_000n
+const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 100_000_000n
 // Batcher Phase2Module accepts a first-deposit range of [50M, 100M] creator tokens.
 const MAX_FIRST_DEPOSIT_TOKENS = 100_000_000n
 const MIN_FIRST_DEPOSIT = DEFAULT_MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n

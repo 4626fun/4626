@@ -26,7 +26,7 @@ declare const process: { env: Record<string, string | undefined> }
 
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as const
 const OFT_BOOTSTRAP_LABEL = '4626:OFTBootstrapRegistry:v1'
-const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 50_000_000n
+const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 100_000_000n
 const DEFAULT_MIN_FIRST_DEPOSIT_WEI = DEFAULT_MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n
 
 type ReadContractClient = Pick<PublicClient, 'readContract'>
