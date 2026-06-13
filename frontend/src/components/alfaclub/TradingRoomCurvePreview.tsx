@@ -174,7 +174,9 @@ export function TradingRoomCurvePreview({
 
   const minVotePassX = useMemo(() => {
     if (!raidCurve || raidCurve.length === 0) return null
-    return attackXOffset + raidCurve[0].keysBought
+    const firstPoint = raidCurve[0]
+    if (!firstPoint) return null
+    return attackXOffset + firstPoint.keysBought
   }, [attackXOffset, raidCurve])
 
   const breakEvenX = useMemo(() => {
@@ -182,6 +184,7 @@ export function TradingRoomCurvePreview({
     for (let index = 1; index < raidCurve.length; index += 1) {
       const prev = raidCurve[index - 1]
       const current = raidCurve[index]
+      if (!prev || !current) continue
       if (prev.profitUsdc <= 0 && current.profitUsdc > 0) {
         return attackXOffset + current.keysBought
       }
@@ -281,17 +284,13 @@ export function TradingRoomCurvePreview({
             updateKeyIndexFromEvent(event)
           }}
           onMouseMove={(event) => {
+            const activeLabel = (event as { activeLabel?: number | string } | null)?.activeLabel
+            if (activeLabel !== undefined && activeLabel !== null) {
+              const numeric = typeof activeLabel === 'number' ? activeLabel : Number(activeLabel)
+              if (Number.isFinite(numeric)) setHoveredX(Math.round(numeric))
+            }
             if (!isDragging) return
             updateKeyIndexFromEvent(event)
-          }}
-          onMouseMoveCapture={(event) => {
-            const activeLabel = (
-              event as unknown as { activeLabel?: number | string } | null
-            )?.activeLabel
-            if (activeLabel === undefined || activeLabel === null) return
-            const numeric = typeof activeLabel === 'number' ? activeLabel : Number(activeLabel)
-            if (!Number.isFinite(numeric)) return
-            setHoveredX(Math.round(numeric))
           }}
           onMouseUp={() => setIsDragging(false)}
           onMouseLeave={() => {

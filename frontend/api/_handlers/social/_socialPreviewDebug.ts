@@ -1,13 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { getStringQuery, setPublicCors } from '../server/zora/_shared.js'
+import { getStringQuery, setPublicCors } from '../../../server/zora/_shared.js'
 
 import {
   getRequestOrigin,
   matchSocialPreviewRewrite,
   normalizeSocialPreviewInput,
   resolveSocialPreviewPayloadSafe,
-} from './_handlers/social/_socialPreview.js'
+} from './_socialPreview.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

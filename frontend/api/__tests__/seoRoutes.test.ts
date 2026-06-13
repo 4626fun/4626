@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import robotsHandler from '../robots.txt'
-import sitemapHandler from '../sitemap.xml'
+import robotsHandler from '../_handlers/seo/_robots.ts'
+import sitemapHandler from '../_handlers/seo/_sitemap.ts'
 import { createMockReq, createMockRes } from './helpers'
 
 describe('seo route handlers', () => {

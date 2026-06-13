@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import handler from '../social-preview'
+import handler from '../_handlers/social/_socialPreviewRoute.ts'
 import { createMockReq, createMockRes } from './helpers'
 
 const {

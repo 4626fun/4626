@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import cswEntryChallengeHandler from '../../_handlers/zora/_cswEntryChallenge.js'
+import socialPreviewHandler from './_socialPreview.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  return cswEntryChallengeHandler(req, res)
+  return socialPreviewHandler(req, res)
 }

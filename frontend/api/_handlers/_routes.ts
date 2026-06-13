@@ -24,6 +24,7 @@ function prefixRouteLoaders(prefix: string, loaders: ApiRouteLoaders): ApiRouteL
 // route families back into it so Vercel doesn't spend extra packaging passes
 // on wrappers that do not need runtime isolation.
 export const apiRouteLoaders: ApiRouteLoaders = {
+  'agent-registration': () => import('./agent/_registration.js'),
   'agents': () => import('./agents/_agents.js'),
   'agent/creative': () => import('./agent/_creative.js'),
   'agent/stream': () => import('./agent/_stream.js'),
@@ -144,6 +145,10 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'onchain/protocolRewardsWithdrawn': () => import('./onchain/_protocolRewardsWithdrawn.js'),
 
   'paymaster': () => import('./paymaster/_paymaster.js'),
+  'robots.txt': () => import('./seo/_robots.js'),
+  'sitemap.xml': () => import('./seo/_sitemap.js'),
+  'social-preview': () => import('./social/_socialPreviewRoute.js'),
+  'social-preview-debug': () => import('./social/_socialPreviewDebug.js'),
   'social/recipient': () => import('./social/_recipient.js'),
   'social/talent': () => import('./social/_talent.js'),
   'status/protocolReport': () => import('./status/_protocolReport.js'),

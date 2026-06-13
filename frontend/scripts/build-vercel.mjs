@@ -7,10 +7,13 @@ const PLAN_ONLY = process.argv.includes('--plan') || process.env.VERCEL_BUILD_PL
 function run(command, args) {
   const rendered = `${command} ${args.join(' ')}`
   console.log(`[build:vercel] ${rendered}`)
+  const startedAt = Date.now()
   const result = spawnSync(command, args, {
     stdio: 'inherit',
     env: process.env,
   })
+  const elapsedMs = Date.now() - startedAt
+  console.log(`[build:vercel] completed in ${(elapsedMs / 1000).toFixed(2)}s: ${rendered}`)
   if (result.status !== 0) {
     const exitCode = typeof result.status === 'number' ? result.status : 1
     process.exit(exitCode)
@@ -133,6 +136,11 @@ const triggerSuffix = plan.matchedTrigger ? ` [trigger: ${plan.matchedTrigger}]`
 console.log(
   `[build:vercel] marketing bundle: ${plan.buildMarketingVault ? 'build' : 'skip'} (${plan.reason})${triggerSuffix}`,
 )
+if ((process.env.VERCEL_FORCE_NO_BUILD_CACHE || '').trim() !== '') {
+  console.warn(
+    '[build:vercel] warning: VERCEL_FORCE_NO_BUILD_CACHE is set; cache restore is disabled and build time will increase.',
+  )
+}
 
 if (PLAN_ONLY) process.exit(0)
 

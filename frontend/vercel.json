@@ -12,9 +12,6 @@
     }
   },
   "functions": {
-    "api/agent-registration.ts": {
-      "includeFiles": "public/.well-known/agent-registration.json"
-    },
     "api/keepr/actions/execute.ts": {
       "maxDuration": 60,
       "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node,node_modules/.pnpm/**/bindings_node.linux-arm64*.node,node_modules/.pnpm/**/bindings_node.linux-x64-musl.node}"
@@ -24,20 +21,8 @@
     },
     "api/[...path].ts": {
       "maxDuration": 60,
-      "includeFiles": "{server/_lib/alfaclub/assets/**,server/_lib/lottery/amoe-zk-assets/**,../supabase/migrations/**}",
+      "includeFiles": "{public/.well-known/agent-registration.json,server/_lib/alfaclub/assets/**,server/_lib/lottery/amoe-zk-assets/**,../supabase/migrations/**}",
       "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node,node_modules/.pnpm/**/bindings_node.linux-arm64*.node,node_modules/.pnpm/**/bindings_node.linux-x64-musl.node}"
-    },
-    "api/social-preview.ts": {
-      "maxDuration": 10
-    },
-    "api/social-preview-debug.ts": {
-      "maxDuration": 10
-    },
-    "api/robots.txt.ts": {
-      "maxDuration": 10
-    },
-    "api/sitemap.xml.ts": {
-      "maxDuration": 10
     }
   },
   "crons": [
