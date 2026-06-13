@@ -1,7 +1,7 @@
+import { AlertTriangle, CheckCircle2, ShieldAlert } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 
 import { KeyOwnershipBar } from '@/components/alfaclub/KeyOwnershipBar'
-import { KeySafetyVerdictBanner } from '@/components/alfaclub/KeySafetyVerdictBanner'
 import { TradingRoomCurvePreview } from '@/components/alfaclub/TradingRoomCurvePreview'
 import {
   evaluateKeyDefense,
@@ -78,7 +78,6 @@ type ControlSliderInputProps = {
   caption?: ReactNode
 }
 
-/** Combined number box + slider. The box accepts values beyond the slider range. */
 function ControlSliderInput({
   label,
   min,
@@ -134,7 +133,7 @@ function ContinueButton({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       className="mt-3 rounded-full bg-gradient-to-r from-sky-500/40 to-blue-500/30 px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-zinc-100 shadow-[inset_0_0_0_1px_rgba(125,211,252,0.35)] transition-all hover:from-sky-500/55 hover:to-blue-500/45"
     >
-      Continue
+      Next
     </button>
   )
 }
@@ -199,7 +198,7 @@ type StatTileProps = {
   label: string
   value: string
   caption: string
-  tone: 'good' | 'warn' | 'neutral'
+  tone: 'good' | 'warn' | 'risk' | 'neutral'
 }
 
 function StatTile({ label, value, caption, tone }: StatTileProps) {
@@ -210,7 +209,8 @@ function StatTile({ label, value, caption, tone }: StatTileProps) {
         className={cn(
           'mt-1.5 text-xl font-semibold tracking-tight',
           tone === 'good' && 'text-sky-100',
-          tone === 'warn' && 'text-amber-100',
+          tone === 'warn' && 'text-amber-200',
+          tone === 'risk' && 'text-red-200',
           tone === 'neutral' && 'text-white',
         )}
       >
@@ -221,23 +221,70 @@ function StatTile({ label, value, caption, tone }: StatTileProps) {
   )
 }
 
-function verdictReason(evaluation: KeyDefenseEvaluation): string {
-  switch (evaluation.verdict) {
+type SafetyStatus = 'safe' | 'caution' | 'at-risk'
+
+function resolveSafetyStatus(evaluation: KeyDefenseEvaluation, potAtRiskUsdc: number): SafetyStatus {
+  if (!evaluation.raid.raidUnprofitable) return 'at-risk'
+  const nearThreshold =
+    Number.isFinite(evaluation.maxSafePotUsdc) &&
+    evaluation.maxSafePotUsdc > 0 &&
+    potAtRiskUsdc / evaluation.maxSafePotUsdc >= 0.75
+  return nearThreshold || !evaluation.hasVeto ? 'caution' : 'safe'
+}
+
+type StatusPresentation = {
+  label: string
+  title: string
+  bodyLines: [string, string]
+  icon: typeof CheckCircle2
+  shellClassName: string
+  iconClassName: string
+}
+
+function statusPresentation(status: SafetyStatus): StatusPresentation {
+  switch (status) {
     case 'safe':
-      return 'Your veto holds and raid attempts stay net negative.'
-    case 'economically-protected':
-      return 'Raid attempts stay net negative, but you are below veto control.'
-    case 'at-risk': {
-      const attack = evaluation.raid.bestAttack
-      return attack
-        ? `${attack.keysBought.toLocaleString()} bought keys can net ≈ ${formatUsd(attack.profitUsdc)}.`
-        : 'A positive-net raid path exists.'
-    }
-    case 'not-applicable':
-      return 'Not applicable in this mode.'
+      return {
+        label: 'Safe',
+        title: 'Your current safety status',
+        bodyLines: [
+          'A hostile distribution is currently not profitable.',
+          'Even if someone tries, expected attacker return is negative.',
+        ],
+        icon: CheckCircle2,
+        shellClassName:
+          'bg-white/[0.055] shadow-[0_16px_34px_rgba(0,0,0,0.26),inset_0_0_0_1px_rgba(125,211,252,0.22)]',
+        iconClassName: 'text-sky-200',
+      }
+    case 'caution':
+      return {
+        label: 'Caution',
+        title: 'Your current safety status',
+        bodyLines: [
+          'You are hard to exploit, but close to the edge.',
+          'A larger pot or lower ownership could make attacks profitable.',
+        ],
+        icon: ShieldAlert,
+        shellClassName:
+          'bg-amber-500/[0.1] shadow-[0_16px_34px_rgba(0,0,0,0.26),inset_0_0_0_1px_rgba(245,158,11,0.3)]',
+        iconClassName: 'text-amber-200',
+      }
+    case 'at-risk':
+      return {
+        label: 'At risk',
+        title: 'Your current safety status',
+        bodyLines: [
+          'A hostile distribution can currently be profitable.',
+          'You should increase key share, reduce exposed donation, or both.',
+        ],
+        icon: AlertTriangle,
+        shellClassName:
+          'bg-red-500/[0.12] shadow-[0_16px_34px_rgba(0,0,0,0.26),inset_0_0_0_1px_rgba(239,68,68,0.32)]',
+        iconClassName: 'text-red-200',
+      }
     default: {
-      const exhaustive: never = evaluation.verdict
-      throw new Error(`Unknown verdict: ${String(exhaustive)}`)
+      const exhaustive: never = status
+      throw new Error(`Unknown safety status: ${String(exhaustive)}`)
     }
   }
 }
@@ -248,14 +295,13 @@ export function AlfaClubKeySafety() {
   const [sharePercent, setSharePercent] = useState(20)
   const [donationUsdc, setDonationUsdc] = useState(0)
   const [potOverride, setPotOverride] = useState<number | null>(null)
-  // Progressive disclosure: 1=tier, 2=supply, 3=ownership, 4=pot, 5=donation.
   const [unlockedStep, setUnlockedStep] = useState(1)
-
   const unlock = (target: number) => setUnlockedStep((current) => Math.max(current, target))
 
   const yourKeys = Math.round((sharePercent / 100) * keySupply)
   const potBaseline = useMemo(() => poolFeeBaselineUsdc('trading', roomTier, keySupply), [roomTier, keySupply])
   const potUsdc = potOverride ?? potBaseline
+  const potAtRiskUsdc = Math.max(0, potUsdc + donationUsdc)
 
   const evaluation = useMemo(
     () =>
@@ -280,24 +326,27 @@ export function AlfaClubKeySafety() {
         roomTier,
         keySupply,
         yourKeys,
-        potUsdc: potUsdc + donationUsdc,
+        potUsdc: potAtRiskUsdc,
       },
       minAttackKeys,
     )
     const eligibleAfterAttack = keySupply + minAttackKeys
-    const netDistributableUsdc = point.distributedPerKeyUsdc * eligibleAfterAttack
     return {
       minAttackKeys,
       minAttackKeysCostUsdc: evaluation.raid.minAttackKeysCostUsdc,
       poolFeeAddedUsdc: point.poolFeeAddedUsdc,
       potSizeUsdc: point.potSizeUsdc,
       distributedPerKeyUsdc: point.distributedPerKeyUsdc,
-      netDistributableUsdc,
+      netDistributableUsdc: point.distributedPerKeyUsdc * eligibleAfterAttack,
+      attackerNetUsdc: point.profitUsdc,
     }
-  }, [donationUsdc, evaluation.raid.minAttackKeys, evaluation.raid.minAttackKeysCostUsdc, keySupply, potUsdc, roomTier, yourKeys])
+  }, [evaluation.raid.minAttackKeys, evaluation.raid.minAttackKeysCostUsdc, keySupply, potAtRiskUsdc, roomTier, yourKeys])
 
+  const safetyStatus = resolveSafetyStatus(evaluation, potAtRiskUsdc)
+  const safety = statusPresentation(safetyStatus)
+  const SafetyIcon = safety.icon
   const recoveryPercent = Math.round(evaluation.recovery.donationRecoveryFraction * 100)
-  const showResults = unlockedStep >= 5
+  const showResults = unlockedStep >= 4
 
   return (
     <div className="relative pb-24 md:pb-0">
@@ -305,9 +354,11 @@ export function AlfaClubKeySafety() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="mb-8 rounded-3xl bg-[radial-gradient(120%_140%_at_0%_0%,rgba(56,189,248,0.18),rgba(0,0,0,0))] p-6 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]">
             <span className="label">AlfaClub</span>
-            <h1 className="headline mt-3 text-3xl tracking-tight sm:text-5xl">Key Safety</h1>
+            <h1 className="headline mt-3 text-3xl tracking-tight sm:text-5xl">
+              How exposed is your room right now?
+            </h1>
             <p className="mt-3 text-sm leading-relaxed text-zinc-400">
-              Hold enough keys so nobody can dissolve the room and take your donation.
+              Same underlying math, rewritten so first-time users can make a fast safety decision.
             </p>
             <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
               <span className="rounded-full bg-white/[0.06] px-3 py-1 text-zinc-300 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]">
@@ -319,18 +370,21 @@ export function AlfaClubKeySafety() {
               <span className="rounded-full bg-white/[0.06] px-3 py-1 text-zinc-300 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]">
                 Ownership: {sharePercent}%
               </span>
+              <span className="rounded-full bg-white/[0.06] px-3 py-1 text-zinc-300 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]">
+                Pot: {formatUsd(potUsdc)}
+              </span>
+              <span className="rounded-full bg-white/[0.06] px-3 py-1 text-zinc-300 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]">
+                Planned donation: {formatUsd(donationUsdc)}
+              </span>
             </div>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-[minmax(320px,0.86fr)_minmax(0,1.14fr)]">
             <div className="space-y-4 rounded-3xl bg-black/45 p-5 backdrop-blur-[2px] shadow-[0_20px_55px_rgba(0,0,0,0.42),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
-                Trading room defense calculator
-              </p>
-
+              <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Input setup</p>
               <div className="space-y-5 pt-2">
                 <div className="mb-1 flex items-center gap-2 px-1" aria-hidden="true">
-                  {[1, 2, 3, 4, 5].map((step) => (
+                  {[1, 2, 3, 4].map((step) => (
                     <div
                       key={step}
                       className={cn(
@@ -342,11 +396,10 @@ export function AlfaClubKeySafety() {
                     />
                   ))}
                 </div>
-
                 <StepShell
                   index={1}
-                  title="Select Trading Room Type"
-                  description="Casual: i²/4000, Club: i²/40, Exclusive: i²/4"
+                  title="1) Choose room type"
+                  description="This controls how fast key prices rise."
                   state={unlockedStep > 1 ? 'done' : 'active'}
                 >
                   <div className="grid grid-cols-3 gap-2" role="group" aria-label="Trading room tier">
@@ -373,17 +426,16 @@ export function AlfaClubKeySafety() {
                   </div>
                   {unlockedStep === 1 ? <ContinueButton onClick={() => unlock(2)} /> : null}
                 </StepShell>
-
                 <StepShell
                   index={2}
-                  title="Enter Total Supply of Keys"
-                  description="How many keys are in circulation now?"
+                  title="2) Enter total keys in the room"
+                  description="More keys usually means more money needed to shift control."
                   state={unlockedStep < 2 ? 'locked' : unlockedStep > 2 ? 'done' : 'active'}
                 >
                   {unlockedStep >= 2 ? (
                     <>
                       <ControlSliderInput
-                        label="Total supply of keys"
+                        label="Total keys in room"
                         min={1}
                         sliderMax={200}
                         step={1}
@@ -397,17 +449,16 @@ export function AlfaClubKeySafety() {
                     </>
                   ) : null}
                 </StepShell>
-
                 <StepShell
                   index={3}
-                  title="What % Do You Hold?"
-                  description="Your ownership share in this room."
+                  title="3) Enter your key share"
+                  description="Your share decides how hard it is to force a distribution vote."
                   state={unlockedStep < 3 ? 'locked' : unlockedStep > 3 ? 'done' : 'active'}
                 >
                   {unlockedStep >= 3 ? (
                     <>
                       <ControlSlider
-                        label="What % do you hold"
+                        label="Your key share"
                         valueLabel={`${sharePercent}% · ${yourKeys.toLocaleString()} keys`}
                         min={0}
                         max={100}
@@ -418,73 +469,61 @@ export function AlfaClubKeySafety() {
                           unlock(4)
                         }}
                       />
+                      <p className="mt-2 text-[11px] text-zinc-500">
+                        You currently hold {yourKeys.toLocaleString()} of {keySupply.toLocaleString()} keys ({sharePercent}%).
+                      </p>
                       {unlockedStep === 3 ? <ContinueButton onClick={() => unlock(4)} /> : null}
                     </>
                   ) : null}
                 </StepShell>
-
                 <StepShell
                   index={4}
-                  title="Current Size of Room Pot"
-                  description="Defaults to fee baseline from the selected supply."
-                  state={unlockedStep < 4 ? 'locked' : unlockedStep > 4 ? 'done' : 'active'}
+                  title="4) Enter room money"
+                  description="Set today's pot and any new donation you plan to add."
+                  state={unlockedStep < 4 ? 'locked' : 'active'}
                 >
                   {unlockedStep >= 4 ? (
                     <>
                       <ControlSliderInput
-                        label="Current size of room pot"
+                        label="Current room pot"
                         min={0}
                         sliderMax={Math.max(Math.ceil(potBaseline * 4), 5_000)}
                         step={potBaseline >= 1_000 ? 100 : 10}
                         value={Math.round(potUsdc * 100) / 100}
-                        onChange={(value) => {
-                          setPotOverride(value)
-                          unlock(5)
-                        }}
+                        onChange={setPotOverride}
                         isUsd
                         caption={
                           potOverride === null ? (
-                            <>Baseline = 6% x cumulative buy volume ({formatUsd(potBaseline)})</>
+                            <>Auto-filled from trading fees so far.</>
                           ) : (
                             <button
                               type="button"
                               onClick={() => setPotOverride(null)}
                               className="text-sky-400 transition-colors hover:text-sky-300"
                             >
-                              ↺ Use fee baseline ({formatUsd(potBaseline)})
+                              Use fee-based estimate ({formatUsd(potBaseline)})
                             </button>
                           )
                         }
                       />
-                      {unlockedStep === 4 ? <ContinueButton onClick={() => unlock(5)} /> : null}
+                      <div className="mt-4">
+                        <ControlSliderInput
+                          label="Planned donation"
+                          min={0}
+                          sliderMax={10_000}
+                          step={50}
+                          value={donationUsdc}
+                          onChange={setDonationUsdc}
+                          isUsd
+                        />
+                      </div>
                     </>
                   ) : null}
                 </StepShell>
-
-                <StepShell
-                  index={5}
-                  title="How Much You Plan to Donate"
-                  description="Set your planned new capital."
-                  state={unlockedStep < 5 ? 'locked' : 'active'}
-                >
-                  {unlockedStep >= 5 ? (
-                    <ControlSliderInput
-                      label="You plan to donate"
-                      min={0}
-                      sliderMax={10_000}
-                      step={50}
-                      value={donationUsdc}
-                      onChange={setDonationUsdc}
-                      isUsd
-                    />
-                  ) : null}
-                </StepShell>
               </div>
-
               {showResults ? (
                 <p className="pt-2 text-[11px] leading-relaxed text-zinc-600">
-                  Worst case: every other key is hostile &amp; staked. Payouts return 72% of the
-                  pot. Keys must be staked &gt;24h to vote or get paid.
+                  Worst-case assumption: all non-owned keys are hostile and eligible. Distribution pays 72% of the pot; keys must be staked &gt;24h to vote or receive payout.
                 </p>
               ) : null}
             </div>
@@ -492,10 +531,17 @@ export function AlfaClubKeySafety() {
             <div className="space-y-4">
               {showResults ? (
                 <>
-                  <KeySafetyVerdictBanner
-                    verdict={evaluation.verdict}
-                    reason={verdictReason(evaluation)}
-                  />
+                  <div className={cn('rounded-2xl p-4', safety.shellClassName)} role="status">
+                    <div className="flex items-start gap-3">
+                      <SafetyIcon className={cn('mt-0.5 h-5 w-5 shrink-0', safety.iconClassName)} aria-hidden />
+                      <div className="min-w-0">
+                        <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-300">{safety.title}</p>
+                        <p className="mt-1 text-lg font-semibold text-white">{safety.label}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-zinc-300">{safety.bodyLines[0]}</p>
+                        <p className="text-xs leading-relaxed text-zinc-400">{safety.bodyLines[1]}</p>
+                      </div>
+                    </div>
+                  </div>
 
                   <div className="rounded-3xl bg-black/35 p-5 shadow-[0_16px_36px_rgba(0,0,0,0.35),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
                     <KeyOwnershipBar keySupply={keySupply} yourKeys={yourKeys} />
@@ -503,121 +549,131 @@ export function AlfaClubKeySafety() {
 
                   <div className="grid gap-3 sm:grid-cols-3">
                     <StatTile
-                      label="Veto"
+                      label="Attacker must buy"
                       value={
-                        evaluation.hasVeto
-                          ? 'Held'
-                          : `+${evaluation.vetoKeysToBuy.toLocaleString()} keys`
+                        minAttackBreakdown
+                          ? `${minAttackBreakdown.minAttackKeys.toLocaleString()} keys`
+                          : '—'
                       }
-                      caption={
-                        evaluation.hasVeto
-                          ? 'No vote passes without you'
-                          : `≈ ${formatUsd(evaluation.vetoKeysToBuyCostUsdc)} to block all votes`
-                      }
-                      tone={evaluation.hasVeto ? 'good' : 'warn'}
+                      caption="Minimum keys needed to force a distribution vote."
+                      tone={safetyStatus === 'at-risk' ? 'risk' : 'warn'}
                     />
                     <StatTile
-                      label="Raid-proof"
+                      label="Estimated spend to buy"
                       value={
-                        evaluation.raid.raidUnprofitable
-                          ? 'Yes'
-                          : evaluation.raidproofExtraKeys !== null
-                            ? `+${evaluation.raidproofExtraKeys.toLocaleString()} keys`
-                            : 'No'
+                        minAttackBreakdown ? formatUsd(minAttackBreakdown.minAttackKeysCostUsdc) : '—'
                       }
-                      caption={
-                        evaluation.raid.raidUnprofitable
-                          ? `Safe until pot ≈ ${formatUsd(evaluation.maxSafePotUsdc)}`
-                          : evaluation.raidproofExtraKeys !== null &&
-                              evaluation.raidproofExtraKeysCostUsdc !== null
-                            ? `≈ ${formatUsd(evaluation.raidproofExtraKeysCostUsdc)} to neutralize raids`
-                            : 'Pot too large — key buys alone cannot neutralize'
-                      }
-                      tone={evaluation.raid.raidUnprofitable ? 'good' : 'warn'}
+                      caption="Estimated attacker spend for that minimum size."
+                      tone="neutral"
                     />
                     <StatTile
-                      label="Donation back"
-                      value={donationUsdc > 0 ? `${recoveryPercent}%` : '—'}
+                      label="Expected attacker net"
+                      value={
+                        minAttackBreakdown
+                          ? `${minAttackBreakdown.attackerNetUsdc >= 0 ? '+' : ''}${formatUsd(minAttackBreakdown.attackerNetUsdc)}`
+                          : '—'
+                      }
                       caption={
-                        donationUsdc > 0
-                          ? `${formatUsd(evaluation.recovery.distributionPayoutUsdc)} if distribution fires`
-                          : 'Set a donation to see recovery'
+                        minAttackBreakdown && minAttackBreakdown.attackerNetUsdc > 0
+                          ? 'Positive means this attack can be profitable.'
+                          : 'Negative means this attack is expected to lose money.'
                       }
                       tone={
-                        donationUsdc <= 0 ? 'neutral' : recoveryPercent >= 50 ? 'good' : 'warn'
+                        minAttackBreakdown && minAttackBreakdown.attackerNetUsdc > 0
+                          ? 'risk'
+                          : 'good'
                       }
                     />
                   </div>
 
-                  <div className="rounded-3xl bg-black/35 p-5 shadow-[0_16px_36px_rgba(0,0,0,0.35),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
-                    <p className="mb-2 text-[11px] uppercase tracking-[0.12em] text-zinc-500">
-                      Curve + attack simulation
-                    </p>
-                    <TradingRoomCurvePreview
-                      selectedTier={roomTier}
-                      activeKeyIndex={keySupply}
-                      raidCurve={evaluation.raid.curve}
-                      progressiveStage={unlockedStep}
-                      ownerSharePercent={sharePercent}
-                      onActiveKeyChange={(next) => {
-                        setKeySupply(next)
-                        unlock(3)
-                      }}
-                      maxKeys={Math.max(80, keySupply + 10)}
-                      heightClassName="h-96"
-                      withFrame={false}
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <StatTile
+                      label="Attack adds fees to pot"
+                      value={minAttackBreakdown ? formatUsd(minAttackBreakdown.poolFeeAddedUsdc) : '—'}
+                      caption="Extra fees created by the attack buys."
+                      tone="neutral"
                     />
-                    {minAttackBreakdown ? (
-                      <div className="mt-4 rounded-2xl bg-white/[0.035] p-3 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]">
-                        <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">
-                          Bad-actor threshold
-                        </p>
-                        <div className="mt-2 grid gap-2 text-xs text-zinc-300 sm:grid-cols-2">
-                          <p>
-                            Minimum attack keys:{' '}
-                            <span className="font-mono text-zinc-100">
-                              {minAttackBreakdown.minAttackKeys.toLocaleString()}
-                            </span>
-                          </p>
-                          <p>
-                            Attack buy cost:{' '}
-                            <span className="font-mono text-zinc-100">
-                              {formatUsd(minAttackBreakdown.minAttackKeysCostUsdc)}
-                            </span>
-                          </p>
-                          <p>
-                            Fees added to room pot:{' '}
-                            <span className="font-mono text-zinc-100">
-                              {formatUsd(minAttackBreakdown.poolFeeAddedUsdc)}
-                            </span>
-                          </p>
-                          <p>
-                            Pot size after attack buys:{' '}
-                            <span className="font-mono text-zinc-100">
-                              {formatUsd(minAttackBreakdown.potSizeUsdc)}
-                            </span>
-                          </p>
-                          <p>
-                            Distribution per key:{' '}
-                            <span className="font-mono text-zinc-100">
-                              {formatUsd(minAttackBreakdown.distributedPerKeyUsdc)}
-                            </span>
-                          </p>
-                          <p>
-                            Net distributed amount:{' '}
-                            <span className="font-mono text-zinc-100">
-                              {formatUsd(minAttackBreakdown.netDistributableUsdc)}
-                            </span>
-                          </p>
-                        </div>
-                      </div>
-                    ) : null}
+                    <StatTile
+                      label="Pot after attack buys"
+                      value={minAttackBreakdown ? formatUsd(minAttackBreakdown.potSizeUsdc) : '—'}
+                      caption="Room pot right before distribution."
+                      tone="neutral"
+                    />
+                    <StatTile
+                      label="Total distribution payout"
+                      value={
+                        minAttackBreakdown
+                          ? formatUsd(minAttackBreakdown.netDistributableUsdc)
+                          : '—'
+                      }
+                      caption="Estimated payout to all eligible stakers."
+                      tone="neutral"
+                    />
                   </div>
+
+                  <div className="rounded-3xl bg-black/35 p-5 shadow-[0_16px_36px_rgba(0,0,0,0.35),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
+                    <details open={safetyStatus === 'at-risk'}>
+                      <summary className="cursor-pointer list-none text-[11px] uppercase tracking-[0.12em] text-zinc-400">
+                        See why this result happens
+                      </summary>
+                      <p className="mt-2 text-xs text-zinc-400">
+                        Where attacker profit flips from loss to gain. Move along attacker key buys to see when net turns positive.
+                      </p>
+                      <div className="mt-3">
+                        <TradingRoomCurvePreview
+                          selectedTier={roomTier}
+                          activeKeyIndex={keySupply}
+                          raidCurve={evaluation.raid.curve}
+                          progressiveStage={unlockedStep}
+                          ownerSharePercent={sharePercent}
+                          onActiveKeyChange={(next) => {
+                            setKeySupply(next)
+                            unlock(3)
+                          }}
+                          maxKeys={Math.max(80, keySupply + 10)}
+                          heightClassName="h-96"
+                          withFrame={false}
+                        />
+                      </div>
+                    </details>
+                  </div>
+
+                  <details className="rounded-3xl bg-black/35 p-5 shadow-[0_16px_36px_rgba(0,0,0,0.35),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
+                    <summary className="cursor-pointer list-none text-[11px] uppercase tracking-[0.12em] text-zinc-400">
+                      Show technical details
+                    </summary>
+                    <div className="mt-3 grid gap-2 text-xs text-zinc-300 sm:grid-cols-2">
+                      <p>
+                        Vote control: <span className="font-mono text-zinc-100">{evaluation.hasVeto ? 'Held' : `+${evaluation.vetoKeysToBuy.toLocaleString()} keys`}</span>
+                      </p>
+                      <p>
+                        Vote control cost:{' '}
+                        <span className="font-mono text-zinc-100">{formatUsd(evaluation.vetoKeysToBuyCostUsdc)}</span>
+                      </p>
+                      <p>
+                        Safe pot threshold:{' '}
+                        <span className="font-mono text-zinc-100">{formatUsd(evaluation.maxSafePotUsdc)}</span>
+                      </p>
+                      <p>
+                        Donation recovery:{' '}
+                        <span className="font-mono text-zinc-100">{donationUsdc > 0 ? `${recoveryPercent}%` : '—'}</span>
+                      </p>
+                      <p>
+                        Distribution payout:{' '}
+                        <span className="font-mono text-zinc-100">{formatUsd(evaluation.recovery.distributionPayoutUsdc)}</span>
+                      </p>
+                      <p>
+                        Distribution / key:{' '}
+                        <span className="font-mono text-zinc-100">{minAttackBreakdown ? formatUsd(minAttackBreakdown.distributedPerKeyUsdc) : '—'}</span>
+                      </p>
+                    </div>
+                  </details>
                 </>
               ) : (
                 <div className="rounded-3xl bg-black/35 p-5 shadow-[0_16px_36px_rgba(0,0,0,0.35),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
-                  <p className="mb-2 text-[11px] uppercase tracking-[0.12em] text-zinc-500">
-                    Trading room curve preview
+                  <p className="mb-2 text-[11px] uppercase tracking-[0.12em] text-zinc-500">Why this matters</p>
+                  <p className="mb-3 text-xs text-zinc-400">
+                    This calculator estimates whether a hostile buyer can profit by forcing a distribution event.
                   </p>
                   <TradingRoomCurvePreview
                     selectedTier={roomTier}

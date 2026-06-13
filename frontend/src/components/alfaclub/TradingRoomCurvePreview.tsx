@@ -4,6 +4,7 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
+  ReferenceArea,
   ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
@@ -27,6 +28,8 @@ type CurveRow = {
   ownerFilledUsdc: number | null
   nonOwnerFilledUsdc: number | null
   attackNet: number | null
+  attackPositive: number | null
+  attackNegative: number | null
 }
 
 export type TradingRoomCurvePreviewProps = {
@@ -63,14 +66,52 @@ function CurveTooltip({
   label,
   selectedTier,
   selectedDivisor,
+  raidPoint,
 }: {
   active?: boolean
   label?: number
   selectedTier: AlfaRoomTier
   selectedDivisor: number
+  raidPoint?: RaidPoint
 }) {
   if (!active || label === undefined) return null
   const supply = Math.max(0, Number(label))
+  if (raidPoint) {
+    const profitable = raidPoint.profitUsdc > 0
+    return (
+      <div className="rounded-lg border border-white/10 bg-black/90 px-3 py-2 text-xs shadow-xl">
+        <p className="font-medium text-white">
+          Attacker buys: {raidPoint.keysBought.toLocaleString()} keys
+        </p>
+        <p className="mt-1 text-zinc-300">
+          Buy spend:{' '}
+          <span className="font-mono text-zinc-100">
+            {formatUsdLong(raidPoint.averageBuyCostPerKeyUsdc * raidPoint.keysBought)}
+          </span>
+        </p>
+        <p className="text-zinc-300">
+          Fees added to pot:{' '}
+          <span className="font-mono text-zinc-100">{formatUsdLong(raidPoint.poolFeeAddedUsdc)}</span>
+        </p>
+        <p className="text-zinc-300">
+          Pot after buys:{' '}
+          <span className="font-mono text-zinc-100">{formatUsdLong(raidPoint.potSizeUsdc)}</span>
+        </p>
+        <p className="text-zinc-300">
+          Attacker payout from distribution:{' '}
+          <span className="font-mono text-zinc-100">{formatUsdLong(raidPoint.payoutUsdc)}</span>
+        </p>
+        <p className={profitable ? 'text-red-300' : 'text-emerald-300'}>
+          Attacker net:{' '}
+          <span className="font-mono">
+            {raidPoint.profitUsdc > 0 ? '+' : ''}
+            {formatUsdLong(raidPoint.profitUsdc)}
+          </span>
+        </p>
+        <p className="mt-1 text-zinc-500">Positive means attack is profitable.</p>
+      </div>
+    )
+  }
   const cumulativeRawUsd = curveCost(0, supply, selectedDivisor)
   const price = curveCost(supply, 1, selectedDivisor)
   const tierName = `${selectedTier.charAt(0).toUpperCase()}${selectedTier.slice(1)}`
@@ -123,6 +164,31 @@ export function TradingRoomCurvePreview({
     return map
   }, [attackXOffset, raidCurve])
 
+  const raidPointByKeys = useMemo(() => {
+    const map = new Map<number, RaidPoint>()
+    for (const point of raidCurve ?? []) {
+      map.set(attackXOffset + point.keysBought, point)
+    }
+    return map
+  }, [attackXOffset, raidCurve])
+
+  const minVotePassX = useMemo(() => {
+    if (!raidCurve || raidCurve.length === 0) return null
+    return attackXOffset + raidCurve[0].keysBought
+  }, [attackXOffset, raidCurve])
+
+  const breakEvenX = useMemo(() => {
+    if (!raidCurve || raidCurve.length < 2) return null
+    for (let index = 1; index < raidCurve.length; index += 1) {
+      const prev = raidCurve[index - 1]
+      const current = raidCurve[index]
+      if (prev.profitUsdc <= 0 && current.profitUsdc > 0) {
+        return attackXOffset + current.keysBought
+      }
+    }
+    return null
+  }, [attackXOffset, raidCurve])
+
   const clampedActiveKeyIndex =
     activeKeyIndex === undefined ? undefined : Math.max(0, activeKeyIndex)
   const activePointValue =
@@ -152,6 +218,7 @@ export function TradingRoomCurvePreview({
   const data = useMemo<CurveRow[]>(() => {
     const rows: CurveRow[] = []
     for (let i = xMin; i <= xMax; i += 1) {
+      const attackNet = raidByKeys.get(i) ?? null
       rows.push({
         keyIndex: i,
         cumulativeBackdropUsdc: curveCost(0, i, selectedDivisor),
@@ -161,7 +228,9 @@ export function TradingRoomCurvePreview({
           i <= fillLimitIndex ? curveCost(0, i, selectedDivisor) * ownerShareFraction : null,
         nonOwnerFilledUsdc:
           i <= fillLimitIndex ? curveCost(0, i, selectedDivisor) * (1 - ownerShareFraction) : null,
-        attackNet: raidByKeys.get(i) ?? null,
+        attackNet,
+        attackPositive: attackNet !== null && attackNet > 0 ? attackNet : null,
+        attackNegative: attackNet !== null && attackNet < 0 ? attackNet : null,
       })
     }
     return rows
@@ -184,6 +253,7 @@ export function TradingRoomCurvePreview({
   }, [data, hasAttackCurve])
 
   const chartIsInteractive = typeof onActiveKeyChange === 'function'
+  const [hoveredX, setHoveredX] = useState<number | null>(null)
   const updateKeyIndexFromEvent = (event: unknown) => {
     if (!chartIsInteractive) return
     const activeLabel = (event as { activeLabel?: number | string } | null)?.activeLabel
@@ -214,8 +284,20 @@ export function TradingRoomCurvePreview({
             if (!isDragging) return
             updateKeyIndexFromEvent(event)
           }}
+          onMouseMoveCapture={(event) => {
+            const activeLabel = (
+              event as unknown as { activeLabel?: number | string } | null
+            )?.activeLabel
+            if (activeLabel === undefined || activeLabel === null) return
+            const numeric = typeof activeLabel === 'number' ? activeLabel : Number(activeLabel)
+            if (!Number.isFinite(numeric)) return
+            setHoveredX(Math.round(numeric))
+          }}
           onMouseUp={() => setIsDragging(false)}
-          onMouseLeave={() => setIsDragging(false)}
+          onMouseLeave={() => {
+            setIsDragging(false)
+            setHoveredX(null)
+          }}
         >
           <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
           <XAxis
@@ -246,15 +328,60 @@ export function TradingRoomCurvePreview({
           {hasAttackCurve ? (
             <ReferenceLine y={0} stroke="rgba(245,158,11,0.4)" strokeDasharray="4 4" />
           ) : null}
+          {hasAttackCurve ? (
+            <ReferenceArea
+              y1={0}
+              y2={yMax}
+              fill="rgba(239,68,68,0.08)"
+              strokeOpacity={0}
+              ifOverflow="extendDomain"
+            />
+          ) : null}
+          {hasAttackCurve ? (
+            <ReferenceArea
+              y1={yMin}
+              y2={0}
+              fill="rgba(34,197,94,0.08)"
+              strokeOpacity={0}
+              ifOverflow="extendDomain"
+            />
+          ) : null}
           <Tooltip
             content={
               <CurveTooltip
                 selectedTier={selectedTier}
                 selectedDivisor={selectedDivisor}
+                raidPoint={hoveredX !== null ? raidPointByKeys.get(hoveredX) : undefined}
               />
             }
             cursor={{ stroke: 'rgba(255,255,255,0.15)' }}
           />
+          {hasAttackCurve && minVotePassX !== null ? (
+            <ReferenceLine
+              x={minVotePassX}
+              stroke="rgba(250,204,21,0.55)"
+              strokeDasharray="3 3"
+              label={{
+                value: 'Vote can pass from here',
+                position: 'insideTopLeft',
+                fill: 'rgba(250,204,21,0.8)',
+                fontSize: 10,
+              }}
+            />
+          ) : null}
+          {hasAttackCurve && breakEvenX !== null ? (
+            <ReferenceLine
+              x={breakEvenX}
+              stroke="rgba(248,113,113,0.65)"
+              strokeDasharray="4 4"
+              label={{
+                value: 'Profit starts here',
+                position: 'insideTopRight',
+                fill: 'rgba(248,113,113,0.85)',
+                fontSize: 10,
+              }}
+            />
+          ) : null}
           {clampedActiveKeyIndex !== undefined ? (
             <ReferenceLine
               x={clampedActiveKeyIndex}
@@ -375,7 +502,12 @@ export function TradingRoomCurvePreview({
       ) : null}
       {chartIsInteractive ? (
         <p className="mt-1 text-[11px] text-zinc-600">
-          Drag on the chart to adjust total supply.
+          Drag horizontally to test different total key supply.
+        </p>
+      ) : null}
+      {hasAttackCurve ? (
+        <p className="mt-1 text-[11px] text-zinc-600">
+          Below zero = attacker loses money. Above zero = attacker profits.
         </p>
       ) : null}
     </div>
