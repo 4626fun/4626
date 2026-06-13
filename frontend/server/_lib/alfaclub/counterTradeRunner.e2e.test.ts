@@ -106,6 +106,7 @@ const BASE_RUNTIME = {
   hourlyActionCap: 12,
   dailyNotionalCapUsd: 7_500,
   maxCounterNotionalPerTradeUsd: 750,
+  minOrderNotionalUsd: 10,
   globalMaxLeverage: 12,
   favoredMultiplier: 1.35,
   neutralMultiplier: 1,
@@ -520,6 +521,27 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
       expect.objectContaining({
         status: 'blocked',
         reason: 'cooldown_active',
+      }),
+    )
+  })
+
+  it('skips entries below HL minimum order notional without submitting an open', async () => {
+    mocks.readCounterTradeRuntimeConfig.mockReturnValue({
+      ...BASE_RUNTIME,
+      maxCounterNotionalPerTradeUsd: 40,
+      minOrderNotionalUsd: 50,
+    })
+
+    const result = await runCounterTradeLoop()
+
+    expect(result.executed).toBe(0)
+    expect(result.skipped).toBe(1)
+    expect(result.failed).toBe(0)
+    expect(mocks.runArenaTrade).not.toHaveBeenCalled()
+    expect(mocks.recordCounterTradeAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'skipped',
+        reason: 'below_hl_min_order_notional',
       }),
     )
   })

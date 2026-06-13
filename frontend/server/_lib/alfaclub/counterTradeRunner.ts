@@ -752,6 +752,20 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
           continue
         }
         const counterNotionalUsd = llmGate.notionalUsd
+        if (counterNotionalUsd < runtime.minOrderNotionalUsd) {
+          skipped += 1
+          await recordCounterTradeAction({
+            roomId: runtime.roomId,
+            senderAddress: optIn.senderAddress,
+            eventKey,
+            status: 'skipped',
+            reason: 'below_hl_min_order_notional',
+            counterSide: decision.counterSide,
+            counterNotionalUsd,
+            counterLeverage: decision.counterLeverage,
+          })
+          continue
+        }
 
         const tradeResult = await runArenaTrade(
           {

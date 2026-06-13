@@ -33,6 +33,7 @@ const RUNTIME: CounterTradeRuntimeConfig = {
   hourlyActionCap: 12,
   dailyNotionalCapUsd: 7_500,
   maxCounterNotionalPerTradeUsd: 750,
+  minOrderNotionalUsd: 10,
   globalMaxLeverage: 12,
   favoredMultiplier: 1.35,
   neutralMultiplier: 1,

@@ -70,6 +70,8 @@ export type CounterTradeRuntimeConfig = {
   hourlyActionCap: number
   dailyNotionalCapUsd: number
   maxCounterNotionalPerTradeUsd: number
+  /** Do not submit counter opens below this HL order-notional floor. */
+  minOrderNotionalUsd: number
   globalMaxLeverage: number
   favoredMultiplier: number
   neutralMultiplier: number
@@ -164,6 +166,7 @@ export function readCounterTradeRuntimeConfig(): CounterTradeRuntimeConfig {
       'ALFACLUB_COUNTER_TRADE_MAX_PER_TRADE_USD',
       750,
     ),
+    minOrderNotionalUsd: readPositiveNumber('ALFACLUB_COUNTER_TRADE_MIN_ORDER_NOTIONAL_USD', 10),
     globalMaxLeverage: readPositiveNumber('ALFACLUB_COUNTER_TRADE_GLOBAL_MAX_LEVERAGE', 12),
     favoredMultiplier: readPositiveNumber('ALFACLUB_COUNTER_TRADE_FAVORED_MULTIPLIER', 1.35),
     neutralMultiplier: readPositiveNumber('ALFACLUB_COUNTER_TRADE_NEUTRAL_MULTIPLIER', 1),
