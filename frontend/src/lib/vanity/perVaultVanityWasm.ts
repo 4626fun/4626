@@ -8,7 +8,8 @@ import { invokeVanityWasmInWorker, isVanityWasmWorkerEnabled } from './vanityWas
 const DEFAULT_VANITY_WASM_PUBLIC_PATH = '/vanity/vanity_salt_grinder.wasm'
 
 export function resolvePerVaultVanityWasmUrl(): string | null {
-  const fromEnv = (import.meta.env.VITE_VANITY_WASM_URL as string | undefined)?.trim()
+  const importMetaEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
+  const fromEnv = importMetaEnv?.VITE_VANITY_WASM_URL?.trim()
   if (fromEnv) return fromEnv
   // Served from frontend/public/vanity/ after `pnpm build:vanity-wasm`
   return DEFAULT_VANITY_WASM_PUBLIC_PATH

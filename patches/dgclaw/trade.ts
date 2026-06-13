@@ -170,6 +170,24 @@ function formatSize(usdSize: number, price: number, szDecimals: number): string 
   return rawSize.toFixed(szDecimals);
 }
 
+function assertOrderAccepted(result: any, context: string): void {
+  if (!result || result.status !== 'ok') {
+    console.error(`${context} failed:`);
+    console.error(JSON.stringify(result, null, 2));
+    process.exit(1);
+  }
+  const statuses = result?.response?.data?.statuses;
+  if (!Array.isArray(statuses) || statuses.length === 0) return;
+
+  for (const status of statuses) {
+    if (status?.error) {
+      console.error(`${context} rejected by exchange: ${String(status.error)}`);
+      console.error(JSON.stringify(result, null, 2));
+      process.exit(1);
+    }
+  }
+}
+
 // ---- Commands ----
 
 async function openPosition(
@@ -232,6 +250,7 @@ async function openPosition(
   });
 
   console.log(JSON.stringify(result, null, 2));
+  assertOrderAccepted(result, `Open ${args.pair}`);
 
   // Place TP/SL trigger orders if specified
   if (args.takeProfit) {
@@ -343,6 +362,7 @@ async function closePosition(
   });
 
   console.log(JSON.stringify(result, null, 2));
+  assertOrderAccepted(result, `Close ${args.pair}`);
 }
 
 async function modifyPosition(

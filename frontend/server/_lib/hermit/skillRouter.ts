@@ -57,6 +57,7 @@ import {
   runArenaCreateAgent,
   runArenaDepositUsdc,
   runArenaJoin,
+  runArenaSpotPerpTransfer,
   runArenaStatus,
   runArenaTrade,
 } from '../arena/arenaClient.js'
@@ -177,6 +178,7 @@ type ParsedArenaCommand =
       senderAddress?: string
     }
   | { kind: 'deposit'; amountUsd: number }
+  | { kind: 'transfer'; amountUsd: number; toPerp: boolean }
   | {
       kind: 'trade'
       action: 'open' | 'close'
@@ -263,10 +265,38 @@ function parseArenaCommandArgs(args: string): ParsedArenaCommand | null {
     return null
   }
 
-  if (sub === 'deposit') {
+  if (sub === 'deposit' || sub === 'fund') {
     const amountUsd = Number(parts[1] ?? '')
     if (!Number.isFinite(amountUsd) || amountUsd <= 0) return null
     return { kind: 'deposit', amountUsd }
+  }
+
+  if (sub === 'transfer' || sub === 'sweep' || sub === 'move') {
+    const amountUsd = Number(parts[1] ?? '')
+    if (!Number.isFinite(amountUsd) || amountUsd <= 0) return null
+    const destinationToken = String(parts[2] ?? '').trim().toLowerCase()
+    const destination =
+      destinationToken === 'to'
+        ? String(parts[3] ?? '').trim().toLowerCase()
+        : destinationToken
+    if (destination && destination !== 'perp' && destination !== 'spot') return null
+    return {
+      kind: 'transfer',
+      amountUsd,
+      toPerp: destination !== 'spot',
+    }
+  }
+
+  if (sub === 'to-perp' || sub === 'spot2perp') {
+    const amountUsd = Number(parts[1] ?? '')
+    if (!Number.isFinite(amountUsd) || amountUsd <= 0) return null
+    return { kind: 'transfer', amountUsd, toPerp: true }
+  }
+
+  if (sub === 'to-spot' || sub === 'perp2spot') {
+    const amountUsd = Number(parts[1] ?? '')
+    if (!Number.isFinite(amountUsd) || amountUsd <= 0) return null
+    return { kind: 'transfer', amountUsd, toPerp: false }
   }
 
   if (sub === 'trade') {
@@ -293,6 +323,31 @@ function parseArenaCommandArgs(args: string): ParsedArenaCommand | null {
         leverage,
       }
     }
+  }
+
+  if (sub === 'long' || sub === 'short' || sub === 'buy' || sub === 'sell') {
+    const pair = parts[1] ?? ''
+    const sizeUsd = Number(parts[2] ?? '')
+    const leverage = Number(parts[3] ?? '')
+    if (!pair) return null
+    if (!Number.isFinite(sizeUsd) || sizeUsd <= 0) return null
+    if (!Number.isFinite(leverage) || leverage <= 0) return null
+    const side: 'long' | 'short' =
+      sub === 'short' || sub === 'sell' ? 'short' : 'long'
+    return {
+      kind: 'trade',
+      action: 'open',
+      pair,
+      side,
+      sizeUsd,
+      leverage,
+    }
+  }
+
+  if (sub === 'close') {
+    const pair = parts[1] ?? ''
+    if (!pair) return null
+    return { kind: 'trade', action: 'close', pair }
   }
 
   if (sub === 'register' || sub === 'create' || sub === 'create-agent') {
@@ -353,14 +408,26 @@ function parseStrategyCommandArgs(args: string): ParsedStrategyCommand | null {
 function formatArenaUsage(): string {
   return [
     '**Arena controls (room-gated)**',
+    '',
+    '**Most useful**',
     '- `/arena status`',
+    '- `/arena long <pair> <sizeUsd> <leverage>`',
+    '- `/arena short <pair> <sizeUsd> <leverage>`',
+    '- `/arena close <pair>`',
+    '- `/arena sweep <usdc>`  (spot -> perp)',
+    '- `/arena to-spot <usdc>`  (perp -> spot)',
+    '',
+    '**Also supported**',
+    '- `/arena transfer <usdc> [perp|spot]`',
+    '- `/arena move <usdc> [to] [perp|spot]`',
+    '- `/arena spot2perp <usdc>` / `/arena perp2spot <usdc>`',
+    '- `/arena trade open <pair> <long|short> <sizeUsd> <leverage>`',
+    '- `/arena trade close <pair>`',
     '- `/arena assets`',
     '- `/arena join`',
     '- `/arena activate`',
     '- `/arena add-api-wallet`',
-    '- `/arena deposit <usdc>`',
-    '- `/arena trade open <pair> <long|short> <sizeUsd> <leverage>`',
-    '- `/arena trade close <pair>`',
+    '- `/arena deposit <usdc>` / `/arena fund <usdc>`',
     '- `/arena register`  (create path: runs acp agent create if enabled under the runtime ACP session; auto-binds + onboards the new agent for your sender or as room default)',
     '- `/arena register <agentId> <agentWallet> [hlApiWallet]`  (supplied-ids: bind your sender + onboard)',
     '- `/arena register default <agentId> <agentWallet> [hlApiWallet]`  (supplied-ids: set/change room default + onboard; use this to switch global for the room to one owned via your Alfa address)',
@@ -373,6 +440,7 @@ function formatArenaUsage(): string {
     '- `/arena identity clear default|mine|user <senderWallet>`',
     '',
     'HIP-3 pairs must use `xyz:` (example: `xyz:GOLD`).',
+    '`/arena deposit` is currently guidance-only in dgclaw v2; use your normal wallet funding path + `/arena sweep` for immediate margin move.',
     'Create path (`/arena register` or `default`) runs under the bot\'s pre-configured ACP session (see ACP_OWNER_WALLET in acp-cli headless). Agent is functional for arena immediately (auto-bound + onboarded). For the agent to appear "owned by your Alfa EOA" in Virtuals ACP dashboard (userId match), create via web at app.virtuals.io/acp while connected as your Alfa sender, then supply ids with `/arena register [default] <id> <wallet>`.',
     'IMPORTANT: In AlfaClub rooms, /arena commands are gated (see execute.ts). Add your sender wallet (e.g. 0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9 for 1659) to HERMIT_ALLOWED_USERS env, or set HERMIT_OWNER_ADDRESS to your wallet, and restart the service before running clears/registers from that wallet. Owner address bypasses the allowlist for /arena.',
   ].join('\n')
@@ -2924,6 +2992,17 @@ export async function executeHermitCommand(
     }
     if (parsed.kind === 'deposit') {
       const result = await runArenaDepositUsdc(parsed.amountUsd, config)
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: result.ok ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}` : result.message,
+      }
+    }
+    if (parsed.kind === 'transfer') {
+      const result = await runArenaSpotPerpTransfer(
+        { amountUsd: parsed.amountUsd, toPerp: parsed.toPerp },
+        config,
+      )
       return {
         kind: 'hermit',
         provider: 'local',

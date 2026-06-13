@@ -20,6 +20,7 @@
     }
   },
   "include": [
+    "src/vite-env.d.ts",
     "vite.config.ts",
     "packages/server-core/src/**/*.ts",
     "api/**/*.ts",

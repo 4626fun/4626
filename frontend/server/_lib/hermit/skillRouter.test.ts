@@ -302,6 +302,86 @@ describe('executeHermitCommand', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('supports intuitive /arena long + /arena close aliases', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_TRADING_ENABLED: '1',
+      ARENA_DRY_RUN: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+    })
+    const openResult = await executeHermitCommand({
+      commandText: '/arena long xyz:GOLD 5000 3',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+    expect(openResult.reply).toContain('Open submitted for xyz:GOLD.')
+    expect(openResult.reply).toContain('[dry-run]')
+
+    const closeResult = await executeHermitCommand({
+      commandText: '/arena close xyz:GOLD',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+    expect(closeResult.reply).toContain('Close submitted for xyz:GOLD.')
+    expect(closeResult.reply).toContain('[dry-run]')
+  })
+
+  it('supports /arena transfer to perps in dry-run mode', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_TRADING_ENABLED: '1',
+      ARENA_DRY_RUN: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+    })
+    const result = await executeHermitCommand({
+      commandText: '/arena transfer 6 perp',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+    expect(result.reply).toContain('Transferred 6 USDC spot -> perp.')
+    expect(result.reply).toContain('[dry-run]')
+  })
+
+  it('supports intuitive transfer aliases (/arena move and /arena to-spot)', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_TRADING_ENABLED: '1',
+      ARENA_DRY_RUN: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+    })
+    const moveResult = await executeHermitCommand({
+      commandText: '/arena move 6 to perp',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+    expect(moveResult.reply).toContain('Transferred 6 USDC spot -> perp.')
+    expect(moveResult.reply).toContain('[dry-run]')
+
+    const toSpotResult = await executeHermitCommand({
+      commandText: '/arena to-spot 2',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+    expect(toSpotResult.reply).toContain('Transferred 2 USDC perp -> spot.')
+    expect(toSpotResult.reply).toContain('[dry-run]')
+  })
+
+  it('supports /arena sweep alias in dry-run mode', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_TRADING_ENABLED: '1',
+      ARENA_DRY_RUN: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+    })
+    const result = await executeHermitCommand({
+      commandText: '/arena sweep 4',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+    expect(result.reply).toContain('Transferred 4 USDC spot -> perp.')
+    expect(result.reply).toContain('[dry-run]')
+  })
+
   it('supports /arena register (supplied ids) + runs onboard sequence (dry) with in-memory identity fallback when DB is unavailable', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',

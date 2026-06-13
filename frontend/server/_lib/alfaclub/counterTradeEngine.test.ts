@@ -135,6 +135,21 @@ describe('counterTradeEngine', () => {
         makeFill({ dir: 'Sell', side: 'short', startPosition: 0.25, sz: 1 }),
       ),
     ).toBe('close')
+    // Exchange dir text can say "Close" on a partial reduce. We trust
+    // position transition math first so this remains reduce.
+    expect(
+      classifyCounterTradeFillAction(
+        makeFill({ dir: 'Close Long', side: 'short', startPosition: 2, sz: 0.5 }),
+      ),
+    ).toBe('reduce')
+  })
+
+  it('fails closed when close-text fill lacks position transition data', () => {
+    expect(
+      classifyCounterTradeFillAction(
+        makeFill({ dir: 'Close Long', side: null, startPosition: null, sz: null }),
+      ),
+    ).toBe('unknown')
   })
 
   it('skips non-counterable fill actions (reduce/close/liquidation)', () => {

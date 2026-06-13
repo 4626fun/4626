@@ -72,11 +72,17 @@ function parseLeverageFromDir(dir: string | null): number | null {
 }
 
 function parseFillSide(fill: HyperliquidUserFillDetailed): CounterTradeSide | null {
-  if (fill.side === 'long' || fill.side === 'short') return fill.side
   const dir = String(fill.dir ?? '').toLowerCase()
   if (!dir) return null
+  if (dir.includes('close') || dir.includes('liquidat') || dir.includes('liq')) {
+    if (dir.includes('short')) return 'long'
+    if (dir.includes('long')) return 'short'
+    if (fill.side === 'long') return 'short'
+    if (fill.side === 'short') return 'long'
+  }
   if (dir.includes('long') || dir.includes('buy')) return 'long'
   if (dir.includes('short') || dir.includes('sell')) return 'short'
+  if (fill.side === 'long' || fill.side === 'short') return fill.side
   return null
 }
 
@@ -89,31 +95,38 @@ function computeUserNotionalUsd(fill: HyperliquidUserFillDetailed): number | nul
 export function classifyCounterTradeFillAction(fill: HyperliquidUserFillDetailed): CounterTradeFillAction {
   const dir = (fill.dir ?? '').toLowerCase()
   if (dir.includes('liquidat') || dir.includes('liq')) return 'liquidated'
-  if (dir.includes('open')) return 'entry'
-  if (dir.includes('close')) return 'close'
 
-  const size = Math.abs(fill.sz ?? 0)
-  if (!Number.isFinite(size) || size <= 0) return 'unknown'
-  if (fill.startPosition == null) return 'unknown'
-
-  const signedDelta =
-    fill.side === 'long' ? size : fill.side === 'short' ? -size : null
-  if (signedDelta == null) return 'unknown'
-
-  const before = fill.startPosition
-  const after = before + signedDelta
-  const beforeAbs = Math.abs(before)
-  const afterAbs = Math.abs(after)
+  const sizeRaw = Number(fill.sz ?? 0)
+  const size = Math.abs(sizeRaw)
   const EPSILON = 1e-9
+  const inferredSide = parseFillSide(fill)
+  const beforeRaw = fill.startPosition == null ? null : Number(fill.startPosition)
 
-  if (beforeAbs <= EPSILON && afterAbs > EPSILON) return 'entry'
-  if (beforeAbs > EPSILON && afterAbs <= EPSILON) return 'close'
-  // Conservative handling: if a single fill appears to cross through zero,
-  // treat it as a close-like transition instead of inventing a synthetic "flip".
-  // This avoids countering ambiguous close+reopen transitions as one action.
-  if (before * after < -EPSILON && beforeAbs > EPSILON && afterAbs > EPSILON) return 'close'
-  if (afterAbs > beforeAbs) return 'add'
-  if (afterAbs < beforeAbs) return 'reduce'
+  // Primary classification path: use signed position transition when available.
+  // This distinguishes partial reduce vs full close even when dir text says "Close".
+  if (Number.isFinite(size) && size > 0 && beforeRaw != null && Number.isFinite(beforeRaw) && inferredSide != null) {
+    const before = beforeRaw
+    const signedDelta = inferredSide === 'long' ? size : -size
+    const after = before + signedDelta
+    const beforeAbs = Math.abs(before)
+    const afterAbs = Math.abs(after)
+
+    if (beforeAbs <= EPSILON && afterAbs > EPSILON) return 'entry'
+    if (beforeAbs > EPSILON && afterAbs <= EPSILON) return 'close'
+    // Conservative handling: if a single fill appears to cross through zero,
+    // treat it as a close-like transition instead of inventing a synthetic "flip".
+    // This avoids countering ambiguous close+reopen transitions as one action.
+    if (before * after < -EPSILON && beforeAbs > EPSILON && afterAbs > EPSILON) return 'close'
+    if (afterAbs > beforeAbs) return 'add'
+    if (afterAbs < beforeAbs) return 'reduce'
+  }
+
+  // Fallback path: rely on exchange dir hints only when transition math is unavailable.
+  if (dir.includes('open')) return 'entry'
+  // "close" can also appear on partial reductions; without position math we fail closed.
+  if (dir.includes('close')) return 'unknown'
+
+  if (!Number.isFinite(size) || size <= 0) return 'unknown'
   return 'unknown'
 }
 

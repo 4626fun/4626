@@ -6,6 +6,7 @@ import { TradingRoomCurvePreview } from '@/components/alfaclub/TradingRoomCurveP
 import {
   evaluateKeyDefense,
   poolFeeBaselineUsdc,
+  raidProfit,
   type AlfaRoomTier,
   type KeyDefenseEvaluation,
 } from '@/lib/alfaclub/keyDefense'
@@ -46,10 +47,10 @@ type ControlSliderProps = {
 function ControlSlider({ label, valueLabel, min, max, step, value, onChange }: ControlSliderProps) {
   const percent = ((value - min) / (max - min)) * 100
   return (
-    <div>
+    <div className="space-y-1.5">
       <div className="flex items-baseline justify-between">
-        <span className="text-[11px] uppercase tracking-wide text-zinc-500">{label}</span>
-        <span className="font-mono text-sm text-white">{valueLabel}</span>
+        <span className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">{label}</span>
+        <span className="font-mono text-sm text-zinc-100">{valueLabel}</span>
       </div>
       <input
         type="range"
@@ -58,7 +59,7 @@ function ControlSlider({ label, valueLabel, min, max, step, value, onChange }: C
         step={step}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="bv-amount-slider mt-2 h-1 w-full cursor-pointer appearance-none rounded-full accent-brand-primary"
+        className="bv-amount-slider h-1.5 w-full cursor-pointer appearance-none rounded-full accent-brand-primary"
         style={{ background: sliderTrack(percent) }}
         aria-label={label}
       />
@@ -91,9 +92,9 @@ function ControlSliderInput({
   const sliderValue = Math.min(value, sliderMax)
   const percent = ((sliderValue - min) / (sliderMax - min)) * 100
   return (
-    <div>
+    <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[11px] uppercase tracking-wide text-zinc-500">{label}</span>
+        <span className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">{label}</span>
         <div className="flex items-center gap-1.5">
           {isUsd ? <span className="font-mono text-sm text-zinc-500">$</span> : null}
           <input
@@ -105,7 +106,7 @@ function ControlSliderInput({
               const next = Number(event.target.value)
               onChange(Number.isFinite(next) ? Math.max(min, next) : min)
             }}
-            className="w-28 rounded-xl bg-black/45 px-2.5 py-1.5 text-right font-mono text-sm text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)] outline-none focus:shadow-[inset_0_0_0_1px_rgba(96,165,250,0.65)] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            className="w-28 rounded-xl bg-black/45 px-2.5 py-1.5 text-right font-mono text-sm text-zinc-100 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] outline-none transition-shadow focus:shadow-[inset_0_0_0_1px_rgba(96,165,250,0.75)] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             aria-label={label}
           />
         </div>
@@ -117,7 +118,7 @@ function ControlSliderInput({
         step={step}
         value={sliderValue}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="bv-amount-slider mt-2 h-1 w-full cursor-pointer appearance-none rounded-full accent-brand-primary"
+        className="bv-amount-slider h-1.5 w-full cursor-pointer appearance-none rounded-full accent-brand-primary"
         style={{ background: sliderTrack(percent) }}
         aria-label={`${label} slider`}
       />
@@ -131,7 +132,7 @@ function ContinueButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="mt-3 rounded-full bg-white/10 px-3 py-1 text-[11px] uppercase tracking-wide text-zinc-200 transition-colors hover:bg-white/15"
+      className="mt-3 rounded-full bg-gradient-to-r from-sky-500/40 to-blue-500/30 px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-zinc-100 shadow-[inset_0_0_0_1px_rgba(125,211,252,0.35)] transition-all hover:from-sky-500/55 hover:to-blue-500/45"
     >
       Continue
     </button>
@@ -150,17 +151,19 @@ function StepShell({ index, title, description, state, children }: StepShellProp
   return (
     <section
       className={cn(
-        'rounded-2xl p-4 transition-colors',
-        state === 'active' && 'bg-white/[0.05] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]',
-        state === 'done' && 'bg-white/[0.04] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.02)]',
-        state === 'locked' && 'bg-black/20',
+        'rounded-2xl p-4 transition-all duration-300',
+        state === 'active' &&
+          'bg-white/[0.055] shadow-[0_16px_34px_rgba(0,0,0,0.22),inset_0_0_0_1px_rgba(125,211,252,0.24)]',
+        state === 'done' &&
+          'bg-white/[0.045] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)]',
+        state === 'locked' && 'bg-black/20 opacity-75',
       )}
     >
       <div className="flex items-start gap-3">
         <div
           className={cn(
-            'mt-0.5 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold',
-            state === 'active' && 'bg-blue-400/20 text-blue-300',
+            'mt-0.5 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold transition-colors',
+            state === 'active' && 'bg-sky-400/25 text-sky-200',
             state === 'done' && 'bg-white/15 text-zinc-100',
             state === 'locked' && 'bg-white/5 text-zinc-500',
           )}
@@ -171,7 +174,7 @@ function StepShell({ index, title, description, state, children }: StepShellProp
         <div className="min-w-0 flex-1">
           <h3
             className={cn(
-              'text-sm font-medium',
+              'text-sm font-medium tracking-[0.01em]',
               state === 'locked' ? 'text-zinc-500' : 'text-zinc-100',
             )}
           >
@@ -179,7 +182,7 @@ function StepShell({ index, title, description, state, children }: StepShellProp
           </h3>
           <p
             className={cn(
-              'mt-0.5 text-[11px]',
+              'mt-0.5 text-[11px] leading-relaxed',
               state === 'locked' ? 'text-zinc-600' : 'text-zinc-500',
             )}
           >
@@ -201,19 +204,19 @@ type StatTileProps = {
 
 function StatTile({ label, value, caption, tone }: StatTileProps) {
   return (
-    <div className="rounded-2xl bg-white/[0.04] p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.02)]">
-      <p className="text-[11px] uppercase tracking-wide text-zinc-500">{label}</p>
+    <div className="rounded-2xl bg-white/[0.045] p-4 shadow-[0_12px_24px_rgba(0,0,0,0.2),inset_0_0_0_1px_rgba(255,255,255,0.03)]">
+      <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">{label}</p>
       <p
         className={cn(
-          'mt-1.5 text-xl font-semibold',
-          tone === 'good' && 'text-zinc-100',
-          tone === 'warn' && 'text-zinc-100',
+          'mt-1.5 text-xl font-semibold tracking-tight',
+          tone === 'good' && 'text-sky-100',
+          tone === 'warn' && 'text-amber-100',
           tone === 'neutral' && 'text-white',
         )}
       >
         {value}
       </p>
-      <p className="mt-1 text-xs leading-relaxed text-zinc-500">{caption}</p>
+      <p className="mt-1.5 text-xs leading-relaxed text-zinc-500">{caption}</p>
     </div>
   )
 }
@@ -268,36 +271,72 @@ export function AlfaClubKeySafety() {
     [roomTier, keySupply, yourKeys, potUsdc, donationUsdc],
   )
 
+  const minAttackBreakdown = useMemo(() => {
+    const minAttackKeys = evaluation.raid.minAttackKeys
+    if (minAttackKeys <= 0) return null
+    const point = raidProfit(
+      {
+        roomType: 'trading',
+        roomTier,
+        keySupply,
+        yourKeys,
+        potUsdc: potUsdc + donationUsdc,
+      },
+      minAttackKeys,
+    )
+    const eligibleAfterAttack = keySupply + minAttackKeys
+    const netDistributableUsdc = point.distributedPerKeyUsdc * eligibleAfterAttack
+    return {
+      minAttackKeys,
+      minAttackKeysCostUsdc: evaluation.raid.minAttackKeysCostUsdc,
+      poolFeeAddedUsdc: point.poolFeeAddedUsdc,
+      potSizeUsdc: point.potSizeUsdc,
+      distributedPerKeyUsdc: point.distributedPerKeyUsdc,
+      netDistributableUsdc,
+    }
+  }, [donationUsdc, evaluation.raid.minAttackKeys, evaluation.raid.minAttackKeysCostUsdc, keySupply, potUsdc, roomTier, yourKeys])
+
   const recoveryPercent = Math.round(evaluation.recovery.donationRecoveryFraction * 100)
   const showResults = unlockedStep >= 5
 
   return (
     <div className="relative pb-24 md:pb-0">
       <section className="cinematic-section">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="mb-8">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="mb-8 rounded-3xl bg-[radial-gradient(120%_140%_at_0%_0%,rgba(56,189,248,0.18),rgba(0,0,0,0))] p-6 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]">
             <span className="label">AlfaClub</span>
-            <h1 className="headline text-3xl sm:text-5xl mt-3">Key Safety</h1>
-            <p className="mt-3 text-sm text-zinc-400">
+            <h1 className="headline mt-3 text-3xl tracking-tight sm:text-5xl">Key Safety</h1>
+            <p className="mt-3 text-sm leading-relaxed text-zinc-400">
               Hold enough keys so nobody can dissolve the room and take your donation.
             </p>
+            <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
+              <span className="rounded-full bg-white/[0.06] px-3 py-1 text-zinc-300 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]">
+                Tier: {roomTier}
+              </span>
+              <span className="rounded-full bg-white/[0.06] px-3 py-1 text-zinc-300 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]">
+                Supply: {keySupply.toLocaleString()} keys
+              </span>
+              <span className="rounded-full bg-white/[0.06] px-3 py-1 text-zinc-300 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]">
+                Ownership: {sharePercent}%
+              </span>
+            </div>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-[minmax(300px,0.82fr)_minmax(0,1.18fr)]">
-            <div className="space-y-4 rounded-3xl bg-black/35 p-5 shadow-[0_14px_45px_rgba(0,0,0,0.35),inset_0_0_0_1px_rgba(255,255,255,0.03)]">
-              <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+          <div className="grid gap-6 lg:grid-cols-[minmax(320px,0.86fr)_minmax(0,1.14fr)]">
+            <div className="space-y-4 rounded-3xl bg-black/45 p-5 backdrop-blur-[2px] shadow-[0_20px_55px_rgba(0,0,0,0.42),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
                 Trading room defense calculator
               </p>
 
               <div className="space-y-5 pt-2">
-                <div className="mb-1 flex items-center gap-2" aria-hidden="true">
+                <div className="mb-1 flex items-center gap-2 px-1" aria-hidden="true">
                   {[1, 2, 3, 4, 5].map((step) => (
                     <div
                       key={step}
                       className={cn(
-                        'h-1.5 flex-1 rounded-full transition-colors',
-                        unlockedStep > step && 'bg-zinc-400/70',
-                        unlockedStep === step && 'bg-blue-400/80',
+                        'h-1.5 flex-1 rounded-full transition-colors duration-300',
+                        unlockedStep > step && 'bg-zinc-300/65',
+                        unlockedStep === step && 'bg-sky-400/85',
                         unlockedStep < step && 'bg-white/10',
                       )}
                     />
@@ -458,7 +497,7 @@ export function AlfaClubKeySafety() {
                     reason={verdictReason(evaluation)}
                   />
 
-                  <div className="rounded-3xl bg-black/30 p-5 shadow-[0_12px_35px_rgba(0,0,0,0.28),inset_0_0_0_1px_rgba(255,255,255,0.03)]">
+                  <div className="rounded-3xl bg-black/35 p-5 shadow-[0_16px_36px_rgba(0,0,0,0.35),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
                     <KeyOwnershipBar keySupply={keySupply} yourKeys={yourKeys} />
                   </div>
 
@@ -510,8 +549,8 @@ export function AlfaClubKeySafety() {
                     />
                   </div>
 
-                  <div className="rounded-3xl bg-black/30 p-5 shadow-[0_12px_35px_rgba(0,0,0,0.28),inset_0_0_0_1px_rgba(255,255,255,0.03)]">
-                    <p className="mb-2 text-[11px] uppercase tracking-wide text-zinc-500">
+                  <div className="rounded-3xl bg-black/35 p-5 shadow-[0_16px_36px_rgba(0,0,0,0.35),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
+                    <p className="mb-2 text-[11px] uppercase tracking-[0.12em] text-zinc-500">
                       Curve + attack simulation
                     </p>
                     <TradingRoomCurvePreview
@@ -519,21 +558,76 @@ export function AlfaClubKeySafety() {
                       activeKeyIndex={keySupply}
                       raidCurve={evaluation.raid.curve}
                       progressiveStage={unlockedStep}
+                      ownerSharePercent={sharePercent}
+                      onActiveKeyChange={(next) => {
+                        setKeySupply(next)
+                        unlock(3)
+                      }}
                       maxKeys={Math.max(80, keySupply + 10)}
                       heightClassName="h-96"
                       withFrame={false}
                     />
+                    {minAttackBreakdown ? (
+                      <div className="mt-4 rounded-2xl bg-white/[0.035] p-3 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]">
+                        <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">
+                          Bad-actor threshold
+                        </p>
+                        <div className="mt-2 grid gap-2 text-xs text-zinc-300 sm:grid-cols-2">
+                          <p>
+                            Minimum attack keys:{' '}
+                            <span className="font-mono text-zinc-100">
+                              {minAttackBreakdown.minAttackKeys.toLocaleString()}
+                            </span>
+                          </p>
+                          <p>
+                            Attack buy cost:{' '}
+                            <span className="font-mono text-zinc-100">
+                              {formatUsd(minAttackBreakdown.minAttackKeysCostUsdc)}
+                            </span>
+                          </p>
+                          <p>
+                            Fees added to room pot:{' '}
+                            <span className="font-mono text-zinc-100">
+                              {formatUsd(minAttackBreakdown.poolFeeAddedUsdc)}
+                            </span>
+                          </p>
+                          <p>
+                            Pot size after attack buys:{' '}
+                            <span className="font-mono text-zinc-100">
+                              {formatUsd(minAttackBreakdown.potSizeUsdc)}
+                            </span>
+                          </p>
+                          <p>
+                            Distribution per key:{' '}
+                            <span className="font-mono text-zinc-100">
+                              {formatUsd(minAttackBreakdown.distributedPerKeyUsdc)}
+                            </span>
+                          </p>
+                          <p>
+                            Net distributed amount:{' '}
+                            <span className="font-mono text-zinc-100">
+                              {formatUsd(minAttackBreakdown.netDistributableUsdc)}
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </>
               ) : (
-                <div className="rounded-3xl bg-black/30 p-5 shadow-[0_12px_35px_rgba(0,0,0,0.28),inset_0_0_0_1px_rgba(255,255,255,0.03)]">
-                  <p className="mb-2 text-[11px] uppercase tracking-wide text-zinc-500">
+                <div className="rounded-3xl bg-black/35 p-5 shadow-[0_16px_36px_rgba(0,0,0,0.35),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
+                  <p className="mb-2 text-[11px] uppercase tracking-[0.12em] text-zinc-500">
                     Trading room curve preview
                   </p>
                   <TradingRoomCurvePreview
                     selectedTier={roomTier}
                     activeKeyIndex={keySupply}
                     progressiveStage={unlockedStep}
+                    ownerSharePercent={sharePercent}
+                    onActiveKeyChange={(next) => {
+                      setKeySupply(next)
+                      unlock(3)
+                    }}
                     maxKeys={Math.max(80, keySupply + 10)}
                     heightClassName="h-96"
                     withFrame={false}
