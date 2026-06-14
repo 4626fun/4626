@@ -60,5 +60,8 @@ export const API_ENDPOINTS = {
   },
   alfaclub: {
     counterTradeStatus: '/api/v1/alfaclub/counter-trade-status',
+    backtestSweep: '/api/v1/alfaclub/backtest-sweep',
+    backtestRun: '/api/v1/alfaclub/backtest-run',
+    backtestMarkets: '/api/v1/alfaclub/backtest-markets',
   },
 } as const

@@ -11,6 +11,7 @@ import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { extractPrivyWalletsFromUser, useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import {
+  isLocalhostPrivyCustomDomainConfigError,
   isRecoverableCrossAppAuthError,
   isUserRejectedCrossAppAuthError,
   isUnauthorizedCrossAppLinkError,
@@ -777,7 +778,11 @@ export function useAccountSetupController(params: {
       await loadMe({ showSpinner: false })
     } catch (linkError: any) {
       if (provider === 'zora_cross_app') {
-        if (isPrivyRedirectUrlNotAllowedError(linkError)) {
+        if (isLocalhostPrivyCustomDomainConfigError(linkError)) {
+          setErrorGuarded(
+            'Privy localhost setup required for Zora linking (custom domain privy.4626.fun). In the Privy dashboard for your Local Dev client, add http://localhost:5173, http://localhost:5174 (and 127.0.0.1 variants) to Allowed Origins + allowed redirect URLs. Restart Vite after changing. See .env.example "Privy Local Dev".'
+          )
+        } else if (isPrivyRedirectUrlNotAllowedError(linkError)) {
           setErrorGuarded('Privy redirect URL is not allowed for this origin. Add this app URL in Privy settings and retry.')
         } else if (
           isUnauthorizedCrossAppLinkError(linkError) ||
@@ -944,7 +949,11 @@ export function useAccountSetupController(params: {
         }
         return false
       }
-      if (isPrivyRedirectUrlNotAllowedError(zoraError)) {
+      if (isLocalhostPrivyCustomDomainConfigError(zoraError)) {
+        setErrorGuarded(
+          'Privy localhost setup required for Zora linking (custom domain privy.4626.fun). In the Privy dashboard for your Local Dev client, add http://localhost:5173, http://localhost:5174 (and 127.0.0.1 variants) to Allowed Origins + allowed redirect URLs. Restart Vite after changing. See .env.example "Privy Local Dev".'
+        )
+      } else if (isPrivyRedirectUrlNotAllowedError(zoraError)) {
         setErrorGuarded('Privy redirect URL is not allowed for this origin. Add this app URL in Privy settings and retry.')
       } else if (
         isUnauthorizedCrossAppLinkError(zoraError) ||

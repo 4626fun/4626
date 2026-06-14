@@ -225,6 +225,16 @@ export async function prepareWaitlistMessagingWallet(
 
   const provider = await resolveEmbeddedProvider(embeddedWallet)
   if (!provider) {
+    if (typeof window !== 'undefined') {
+      const h = window.location.hostname.toLowerCase()
+      if (h === 'localhost' || h === '127.0.0.1') {
+        return {
+          ok: false,
+          error:
+            'Embedded signer session not ready on localhost (privy.4626.fun custom domain). Sign out completely, hard refresh, and sign in with email OTP again. If linking Zora/OAuth, also allowlist localhost:5173/5174 in your Privy Local Dev client Allowed Origins.',
+        }
+      }
+    }
     return {
       ok: false,
       error: 'Embedded signer is not ready to sign yet. Refresh the page and retry Connect messaging.',

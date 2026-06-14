@@ -2336,6 +2336,7 @@ export function XmtpChatProvider({
           return
         }
         if (isPrivyEmbeddedSignerAuthError(msg)) {
+          clearAutoConnect(xmtpIdentityAddress)
           setStatus('error')
           setError(
             'Embedded signer session expired. Sign out and sign in with email OTP again, then retry Connect Messaging.',
@@ -2426,6 +2427,7 @@ export function XmtpChatProvider({
     if (manualConnectOnly) return
     const onAutoConnectRequest = () => {
       if (localStateResetRequired) return
+      if (status === 'error' && error && isPrivyEmbeddedSignerAuthError(error)) return
       if (status === 'idle' || status === 'error') {
         void connect('auto')
       }
@@ -2434,7 +2436,7 @@ export function XmtpChatProvider({
     return () => {
       window.removeEventListener('cv:xmtp:autoConnectRequest', onAutoConnectRequest)
     }
-  }, [connect, localStateResetRequired, manualConnectOnly, status])
+  }, [connect, error, localStateResetRequired, manualConnectOnly, status])
 
   useEffect(() => {
     if (manualConnectOnly) return

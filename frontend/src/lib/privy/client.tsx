@@ -13,6 +13,21 @@ import { PrivyWalletHooksContextProvider } from './walletHooksContext'
 // module for why localhost needs the first-party `privy-session` marker.
 applyLoopbackPrivySessionMarkerShim()
 
+// One-time dev guidance for the common "401 on oauth/link" / "Missing auth token" on custom domain.
+if (typeof window !== 'undefined') {
+  const h = window.location.hostname.toLowerCase()
+  if ((h === 'localhost' || h === '127.0.0.1') && ! (window as any).__cv_privy_local_guidance_logged) {
+    ;(window as any).__cv_privy_local_guidance_logged = true
+    console.info(
+      '[privy] Using custom domain privy.4626.fun on localhost.\n' +
+        'If you hit 401 on /oauth/link or "Missing auth token" for embedded signing/XMTP:\n' +
+        '  • In Privy dashboard (Local Dev client): allowlist http://localhost:5173 + :5174 + 127.0.0.1 variants in Allowed Origins.\n' +
+        '  • Allow the redirect URLs your VITE_APP_ORIGIN / VITE_MARKETING_ORIGIN resolve to.\n' +
+        '  • Restart the dev server. See .env.example section "Privy Local Dev with custom domain".'
+    )
+  }
+}
+
 type PrivyClientStatus = 'disabled' | 'loading' | 'ready'
 export const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
 type PrivyClientMode = 'default' | 'waitlist-email-only'

@@ -174,6 +174,7 @@ export const ArenaHowItWorksPage = lazyNamed(
   () => import('../pages/Arena'),
   'ArenaHowItWorksPage',
 )
+export const ArenaBacktestPage = lazyNamed(() => import('../pages/Arena'), 'ArenaBacktestPage')
 export const DistributeCcaLaunch = lazyNamed(() => import('../pages/DistributeCcaLaunch'), 'DistributeCcaLaunch')
 export const Status = lazyNamed(() => import('../pages/status/Status'), 'Status')
 export const AdminCreatorAccess = lazyNamed(() => import('../pages/admin/AdminCreatorAccess'), 'AdminCreatorAccess')

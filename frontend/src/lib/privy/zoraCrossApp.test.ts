@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  isLocalhostPrivyCustomDomainConfigError,
   isRecoverableCrossAppAuthError,
   isUserRejectedCrossAppAuthError,
   isUnauthorizedCrossAppLinkError,
@@ -29,6 +30,61 @@ describe('isRecoverableCrossAppAuthError', () => {
     expect(isRecoverableCrossAppAuthError(new Error('Popup blocked by browser settings'))).toBe(true)
     expect(isRecoverableCrossAppAuthError(new Error('window.open failed for cross-app flow'))).toBe(true)
     expect(isRecoverableCrossAppAuthError(new Error('plain network error'))).toBe(false)
+  })
+})
+
+describe('isLocalhostPrivyCustomDomainConfigError', () => {
+  const originalWindow = globalThis.window
+
+  afterEach(() => {
+    // @ts-expect-error test cleanup
+    globalThis.window = originalWindow
+  })
+
+  it('returns false off localhost', () => {
+    // @ts-expect-error test shim
+    globalThis.window = { location: { hostname: '4626.fun' } }
+    expect(isLocalhostPrivyCustomDomainConfigError({ status: 401, message: 'oauth/link 401' })).toBe(false)
+  })
+
+  it('detects 401/403 on localhost during oauth flows as config issue', () => {
+    // @ts-expect-error test shim
+    globalThis.window = { location: { hostname: 'localhost' } }
+    expect(isLocalhostPrivyCustomDomainConfigError({ status: 401 })).toBe(true)
+    expect(isLocalhostPrivyCustomDomainConfigError(new Error('POST /api/v1/oauth/link 401'))).toBe(true)
+    expect(isLocalhostPrivyCustomDomainConfigError({ status: 403, message: 'redirect not allowed' })).toBe(true)
+  })
+
+  it('detects explicit redirect url not allowed messages on localhost', () => {
+    // @ts-expect-error test shim
+    globalThis.window = { location: { hostname: '127.0.0.1' } }
+    expect(isLocalhostPrivyCustomDomainConfigError(new Error('redirect url is not allowed'))).toBe(true)
+  })
+})
+
+describe('performZoraCrossAppAuth localhost short-circuit', () => {
+  it('immediately throws helpful message on localhost without calling the link fn', async () => {
+    const originalWindow = globalThis.window
+    // @ts-expect-error test shim
+    globalThis.window = { location: { hostname: 'localhost' } }
+
+    const linkFn = vi.fn()
+    const loginFn = vi.fn()
+
+    await expect(
+      performZoraCrossAppAuth({
+        privyAuthed: true,
+        appId: 'zora-app-id',
+        linkCrossAppAccount: linkFn,
+        loginWithCrossAppAccount: loginFn,
+      })
+    ).rejects.toThrow(/Privy localhost \+ custom domain/)
+
+    expect(linkFn).not.toHaveBeenCalled()
+    expect(loginFn).not.toHaveBeenCalled()
+
+    // @ts-expect-error test cleanup
+    globalThis.window = originalWindow
   })
 })
 

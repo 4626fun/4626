@@ -81,6 +81,7 @@
     "alfaclub:gmeow:smoke": "tsx --env-file=.env scripts/alfaclub-chat-smoke.ts --preset gmeow",
     "ops:alfaclub-refresh-snapshot": "tsx scripts/ops/alfaclub-refresh-snapshot.ts",
     "ops:counter-trade:normalize-optins": "tsx scripts/ops/normalize-counter-trade-room-optins.ts",
+    "ops:counter-trade:backtest": "tsx scripts/backtest-counter-rebalance.ts",
     "ops:hermit-telegram-webhook": "tsx --env-file=.env scripts/ops/setup-hermit-telegram-webhook.ts",
     "ops:hermit-dns-vercel": "tsx scripts/ops/setup-hermit-dns-vercel.ts",
     "solana-provisioner:start": "if [ -f server/solana-provisioner/.env ]; then tsx --env-file=server/solana-provisioner/.env server/solana-provisioner/index.ts; else tsx server/solana-provisioner/index.ts; fi",

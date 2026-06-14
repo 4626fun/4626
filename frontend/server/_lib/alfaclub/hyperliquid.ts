@@ -18,6 +18,7 @@ const FETCH_TIMEOUT_MS = 8_000
 const MAX_RESPONSE_BYTES = 2_000_000
 /** Seconds in a 30-day window. */
 const THIRTY_DAYS_SECONDS = 30 * 24 * 60 * 60
+const MAX_CANDLE_PAGINATION_STEPS = 128
 
 // ---------------------------------------------------------------------------
 // Types (subset of the Hyperliquid schema — we read only what we need)
@@ -74,6 +75,11 @@ export type HyperliquidSnapshot = {
   fetchedAt: string
   ok: boolean
   errorReason: string | null
+}
+
+export type HyperliquidPerpMarket = {
+  symbol: string
+  maxLeverage: number | null
 }
 
 // ---------------------------------------------------------------------------
@@ -135,9 +141,100 @@ function isErrorShape(value: unknown): value is { __error: string } {
   return typeof value === 'object' && value !== null && '__error' in (value as Record<string, unknown>)
 }
 
+function intervalToMs(interval: string): number | null {
+  const value = String(interval ?? '').trim().toLowerCase()
+  if (!value) return null
+  const match = value.match(/^(\d+)\s*([mhdw])$/)
+  if (!match) return null
+  const amount = Number(match[1])
+  if (!Number.isFinite(amount) || amount <= 0) return null
+  const unit = match[2]
+  if (unit === 'm') return amount * 60_000
+  if (unit === 'h') return amount * 60 * 60_000
+  if (unit === 'd') return amount * 24 * 60 * 60_000
+  if (unit === 'w') return amount * 7 * 24 * 60 * 60_000
+  return null
+}
+
+async function getCandleSnapshotPage(params: {
+  coin: string
+  interval: string
+  startTimeMs: number
+  endTimeMs: number
+}): Promise<HyperliquidCandle[] | null> {
+  const url = getInfoUrl()
+  const raw = await fetchJsonBounded(url, {
+    type: 'candleSnapshot',
+    req: {
+      coin: params.coin,
+      interval: params.interval,
+      startTime: params.startTimeMs,
+      endTime: params.endTimeMs,
+    },
+  })
+  if (isErrorShape(raw)) return null
+  if (!Array.isArray(raw)) return null
+  const out: HyperliquidCandle[] = []
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue
+    const candle = entry as Record<string, unknown>
+    const time =
+      typeof candle.t === 'number'
+        ? candle.t
+        : typeof candle.time === 'number'
+          ? candle.time
+          : Number(candle.T ?? 0)
+    if (!Number.isFinite(time)) continue
+
+    const open = parseFloatSafe(candle.o)
+    const high = parseFloatSafe(candle.h)
+    const low = parseFloatSafe(candle.l)
+    const close = parseFloatSafe(candle.c)
+    if (open == null || high == null || low == null || close == null) continue
+    out.push({
+      time,
+      open,
+      high,
+      low,
+      close,
+      volume: parseFloatSafe(candle.v),
+    })
+  }
+  out.sort((a, b) => a.time - b.time)
+  return out
+}
+
 // ---------------------------------------------------------------------------
 // Public reads
 // ---------------------------------------------------------------------------
+
+export async function getPerpMarkets(): Promise<HyperliquidPerpMarket[] | null> {
+  const url = getInfoUrl()
+  const raw = await fetchJsonBounded(url, { type: 'meta' })
+  if (isErrorShape(raw)) return null
+  if (!raw || typeof raw !== 'object') return null
+
+  const universe = (raw as { universe?: unknown }).universe
+  if (!Array.isArray(universe)) return null
+
+  const seen = new Set<string>()
+  const out: HyperliquidPerpMarket[] = []
+  for (const entry of universe) {
+    if (!entry || typeof entry !== 'object') continue
+    const nameRaw = (entry as { name?: unknown }).name
+    if (typeof nameRaw !== 'string') continue
+    const symbol = nameRaw.trim().toUpperCase()
+    if (!symbol || seen.has(symbol)) continue
+    seen.add(symbol)
+    out.push({
+      symbol,
+      maxLeverage: parseFloatSafe((entry as { maxLeverage?: unknown }).maxLeverage),
+    })
+  }
+
+  out.sort((a, b) => a.symbol.localeCompare(b.symbol))
+  return out
+}
 
 export async function getClearinghouseState(
   address: string,
@@ -344,45 +441,44 @@ export async function getCandleSnapshot(params: {
   startTimeMs: number
   endTimeMs: number
 }): Promise<HyperliquidCandle[] | null> {
-  const url = getInfoUrl()
-  const raw = await fetchJsonBounded(url, {
-    type: 'candleSnapshot',
-    req: {
+  const stepMs = intervalToMs(params.interval)
+  const startTimeMs = Math.floor(params.startTimeMs)
+  const endTimeMs = Math.floor(params.endTimeMs)
+  if (!Number.isFinite(startTimeMs) || !Number.isFinite(endTimeMs) || startTimeMs >= endTimeMs) return []
+
+  // Keep existing behavior for unknown intervals.
+  if (!stepMs || stepMs <= 0) {
+    return getCandleSnapshotPage(params)
+  }
+
+  const byTime = new Map<number, HyperliquidCandle>()
+  let cursorEnd = endTimeMs
+  let iterations = 0
+
+  while (cursorEnd > startTimeMs && iterations < MAX_CANDLE_PAGINATION_STEPS) {
+    iterations += 1
+    const page = await getCandleSnapshotPage({
       coin: params.coin,
       interval: params.interval,
-      startTime: params.startTimeMs,
-      endTime: params.endTimeMs,
-    },
-  })
-  if (isErrorShape(raw)) return null
-  if (!Array.isArray(raw)) return null
-  const out: HyperliquidCandle[] = []
-  for (const entry of raw) {
-    if (!entry || typeof entry !== 'object') continue
-    const candle = entry as Record<string, unknown>
-    const time =
-      typeof candle.t === 'number'
-        ? candle.t
-        : typeof candle.time === 'number'
-          ? candle.time
-          : Number(candle.T ?? 0)
-    if (!Number.isFinite(time)) continue
-
-    const open = parseFloatSafe(candle.o)
-    const high = parseFloatSafe(candle.h)
-    const low = parseFloatSafe(candle.l)
-    const close = parseFloatSafe(candle.c)
-    if (open == null || high == null || low == null || close == null) continue
-    out.push({
-      time,
-      open,
-      high,
-      low,
-      close,
-      volume: parseFloatSafe(candle.v),
+      startTimeMs,
+      endTimeMs: cursorEnd,
     })
+    if (page == null) return byTime.size > 0 ? Array.from(byTime.values()).sort((a, b) => a.time - b.time) : null
+    if (page.length === 0) break
+
+    for (const candle of page) {
+      if (candle.time < startTimeMs || candle.time > endTimeMs) continue
+      byTime.set(candle.time, candle)
+    }
+
+    const earliest = page[0]!.time
+    if (!Number.isFinite(earliest) || earliest <= startTimeMs) break
+    const nextCursorEnd = earliest - 1
+    if (nextCursorEnd >= cursorEnd) break
+    cursorEnd = nextCursorEnd
   }
-  return out
+
+  return Array.from(byTime.values()).sort((a, b) => a.time - b.time)
 }
 
 /**

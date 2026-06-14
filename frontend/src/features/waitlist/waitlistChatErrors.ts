@@ -27,7 +27,9 @@ export function formatWaitlistChatError(raw: string | null | undefined): string 
   if (
     message.toLowerCase().includes('missing auth token') ||
     (message.toLowerCase().includes('unknownrpcerror') && message.toLowerCase().includes('auth token')) ||
-    message.toLowerCase().includes('embedded signer')
+    message.toLowerCase().includes('embedded signer') ||
+    message.toLowerCase().includes('privy localhost') ||
+    (message.toLowerCase().includes('oauth/link') && (message.includes('401') || message.toLowerCase().includes('unauthorized')))
   ) {
     return 'Sign-in for chat expired.'
   }

@@ -183,6 +183,9 @@ function buildTradeSummaryLine(
   if (margin != null && leverage != null && notional != null && price != null) {
     return `${formatCompactUsd(margin)} x${formatCompactLeverage(leverage)} = ${formatCompactUsd(notional)} @ ${formatCompactUsd(price)}`
   }
+  if (margin != null && leverage != null && notional != null) {
+    return `${formatCompactUsd(margin)} x${formatCompactLeverage(leverage)} = ${formatCompactUsd(notional)}`
+  }
   if (notional != null && price != null) {
     return `${formatCompactUsd(notional)} @ ${formatCompactUsd(price)}`
   }
@@ -288,7 +291,9 @@ function aggregateTradeEventsForDisplay(trades: RawTradeEvent[]): RawTradeEvent[
     })
     .sort((a, b) => a.time - b.time)
 
-  return pruneRedundantZeroSizeTradeEvents(mergeAdjacentLifecycleTradeEvents(aggregated))
+  return pruneRedundantZeroSizeTradeEvents(
+    dedupeCounterActionFillPairs(mergeAdjacentLifecycleTradeEvents(aggregated)),
+  )
 }
 
 function resolveMergedLifecycleAction(
@@ -346,6 +351,119 @@ function mergeAdjacentLifecycleTradeEvents(events: RawTradeEvent[]): RawTradeEve
     merged.push(event)
   }
   return merged
+}
+
+function deriveEventNotionalForMatching(event: RawTradeEvent): number | null {
+  const explicit = toPositiveNumber(event.notionalUsd)
+  if (explicit != null) return explicit
+  if (event.price != null && event.size != null && Number.isFinite(event.price) && Number.isFinite(event.size)) {
+    const computed = Math.abs(event.price * event.size)
+    return Number.isFinite(computed) && computed > 0 ? computed : null
+  }
+  return null
+}
+
+function isCounterActionTimelineEvent(event: RawTradeEvent): boolean {
+  return event.source === 'counter' && event.id.startsWith('counter_action:')
+}
+
+function isCounterFillTimelineEvent(event: RawTradeEvent): boolean {
+  return event.source === 'counter' && !event.id.startsWith('counter_action:')
+}
+
+function mergeCounterActionAndFillEvent(actionEvent: RawTradeEvent, fillEvent: RawTradeEvent): RawTradeEvent {
+  const dominant = actionEvent
+  const support = fillEvent
+  return {
+    ...support,
+    ...dominant,
+    id: `counter_merged:${dominant.id}:${support.id}`,
+    time: Math.min(actionEvent.time, fillEvent.time),
+    source: 'counter',
+    side: dominant.side ?? support.side,
+    action: dominant.action,
+    price: support.price ?? dominant.price,
+    size: support.size ?? dominant.size,
+    dir: dominant.dir ?? support.dir,
+    closedPnl:
+      Math.abs(support.closedPnl ?? 0) > Math.abs(dominant.closedPnl ?? 0)
+        ? support.closedPnl
+        : dominant.closedPnl,
+    fee: Math.abs(support.fee ?? 0) > Math.abs(dominant.fee ?? 0) ? support.fee : dominant.fee,
+    leverage: dominant.leverage ?? support.leverage,
+    notionalUsd: dominant.notionalUsd ?? support.notionalUsd,
+    marginUsd: dominant.marginUsd ?? support.marginUsd,
+  }
+}
+
+function dedupeCounterActionFillPairs(events: RawTradeEvent[]): RawTradeEvent[] {
+  if (events.length <= 1) return events
+  const consumed = new Set<number>()
+  const mergedOrUnmatchedActions: RawTradeEvent[] = []
+  const leftovers: RawTradeEvent[] = []
+  const MAX_TIME_DELTA_MS = 90_000
+  const MAX_RELATIVE_NOTIONAL_DRIFT = 0.1
+
+  // Pass 1: pair counter actions with candidate counter fills before emitting fills.
+  for (let i = 0; i < events.length; i += 1) {
+    if (consumed.has(i)) continue
+    const event = events[i]!
+    if (!isCounterActionTimelineEvent(event)) continue
+
+    const actionNotional = deriveEventNotionalForMatching(event)
+    let bestCandidateIndex = -1
+    let bestScore = Number.POSITIVE_INFINITY
+
+    for (let j = 0; j < events.length; j += 1) {
+      if (i === j || consumed.has(j)) continue
+      const candidate = events[j]!
+      if (!isCounterFillTimelineEvent(candidate)) continue
+      if (candidate.market !== event.market) continue
+      if (candidate.action !== event.action) continue
+      if (event.side && candidate.side && event.side !== candidate.side) continue
+
+      const dt = Math.abs(candidate.time - event.time)
+      if (dt > MAX_TIME_DELTA_MS) continue
+
+      const candidateNotional = deriveEventNotionalForMatching(candidate)
+      if (actionNotional != null && candidateNotional != null) {
+        const relDelta =
+          Math.abs(actionNotional - candidateNotional) /
+          Math.max(actionNotional, candidateNotional, 1)
+        if (relDelta > MAX_RELATIVE_NOTIONAL_DRIFT) continue
+        const score = dt + relDelta * 1_000
+        if (score < bestScore) {
+          bestScore = score
+          bestCandidateIndex = j
+        }
+        continue
+      }
+
+      if (dt <= 5_000 && dt < bestScore) {
+        bestScore = dt
+        bestCandidateIndex = j
+      }
+    }
+
+    if (bestCandidateIndex >= 0) {
+      const candidate = events[bestCandidateIndex]!
+      mergedOrUnmatchedActions.push(mergeCounterActionAndFillEvent(event, candidate))
+      consumed.add(i)
+      consumed.add(bestCandidateIndex)
+      continue
+    }
+
+    mergedOrUnmatchedActions.push(event)
+    consumed.add(i)
+  }
+
+  // Pass 2: append every non-consumed event (host rows and unmatched counter fills).
+  for (let i = 0; i < events.length; i += 1) {
+    if (consumed.has(i)) continue
+    leftovers.push(events[i]!)
+  }
+
+  return [...mergedOrUnmatchedActions, ...leftovers].sort((a, b) => a.time - b.time)
 }
 
 function pruneRedundantZeroSizeTradeEvents(events: RawTradeEvent[]): RawTradeEvent[] {
@@ -444,9 +562,9 @@ async function fetchRoomTimelineBySymbol(
 }
 
 export function Positions() {
-  const PANEL_MIN_WIDTH = 180
+  const PANEL_MIN_WIDTH = 240
   const PANEL_MAX_WIDTH = 420
-  const PANEL_DEFAULT_WIDTH = 280
+  const PANEL_DEFAULT_WIDTH = 320
   const [chatScope, setChatScope] = useState<'host' | 'all' | 'sender'>('all')
   const [selectedSender, setSelectedSender] = useState<string | null>(null)
   const [selectedMarket, setSelectedMarket] = useState<string>('')
@@ -1148,7 +1266,7 @@ export function Positions() {
                             }}
                             role="button"
                             tabIndex={0}
-                            className={`w-full text-left rounded-lg p-2 text-xs transition border ${
+                            className={`relative w-full overflow-hidden text-left rounded-lg p-2 text-xs transition border ${
                               event.source === 'counter'
                                 ? 'border-emerald-300/20 bg-emerald-400/12 hover:bg-emerald-400/16'
                                 : 'border-sky-300/20 bg-sky-400/10 hover:bg-sky-400/14'
@@ -1169,43 +1287,44 @@ export function Positions() {
                               const pnlClass = event.closedPnl >= 0 ? 'text-emerald-200' : 'text-rose-200'
                               const summaryLine = buildTradeSummaryLine(event, marketCoin)
                               return (
-                                <div className="space-y-1">
+                                <div className="relative space-y-1">
+                                  <img
+                                    src={source.logo}
+                                    alt=""
+                                    aria-hidden="true"
+                                    className="pointer-events-none absolute -right-5 -top-3 h-20 w-20 select-none object-contain opacity-[0.15]"
+                                    loading="lazy"
+                                  />
                                   <div className="flex items-center justify-between gap-1.5">
-                                    <div className="text-[12px] font-semibold leading-snug text-zinc-100">
-                                      {describeTradeEventAction(event)}
-                                    </div>
-                                    {showRealizedPnl && hasMeaningfulRealizedPnl ? (
-                                      <span className={`text-[11px] font-medium ${pnlClass}`}>
-                                        {event.closedPnl >= 0 ? '+' : '-'}
-                                        {formatCompactUsd(Math.abs(event.closedPnl))}
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                  <div className="text-[11px] font-semibold leading-tight text-zinc-100">
-                                    {summaryLine}
-                                  </div>
-                                  <div className="flex items-center justify-between gap-1.5 pt-0.5">
                                     <a
                                       href={source.href}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       onClick={(clickEvent) => clickEvent.stopPropagation()}
-                                      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium transition hover:opacity-90 ${source.chipClass}`}
+                                      className="relative z-[1] inline-flex min-w-0 items-center gap-1.5 text-[12px] font-semibold leading-snug text-zinc-100 underline-offset-2 transition hover:text-white hover:underline"
                                     >
-                                      <span
-                                        className={`inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-full ring-1 ${source.ringClass}`}
-                                      >
-                                        <img
-                                          src={source.logo}
-                                          alt={source.logoAlt}
-                                          className="h-3 w-3 object-contain"
-                                          loading="lazy"
-                                        />
-                                      </span>
-                                      {source.label}
-                                      <span aria-hidden>↗</span>
+                                      <img
+                                        src={source.logo}
+                                        alt={source.logoAlt}
+                                        className="h-3.5 w-3.5 shrink-0 object-contain"
+                                        loading="lazy"
+                                      />
+                                      <span className="truncate">{describeTradeEventAction(event)}</span>
                                     </a>
-                                    <span className="text-[11px] text-zinc-400">{formatTime(event.time)}</span>
+                                    {showRealizedPnl && hasMeaningfulRealizedPnl ? (
+                                      <span className={`relative z-[1] text-[11px] font-medium ${pnlClass}`}>
+                                        {event.closedPnl >= 0 ? '+' : '-'}
+                                        {formatCompactUsd(Math.abs(event.closedPnl))}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <div className="relative z-[1] text-[11px] font-semibold leading-tight text-zinc-100">
+                                    {summaryLine}
+                                  </div>
+                                  <div className="relative z-[1] flex items-center justify-end gap-1.5 pt-0.5 flex-nowrap">
+                                    <span className="shrink-0 whitespace-nowrap text-[10px] text-zinc-300">
+                                      {formatTime(event.time)}
+                                    </span>
                                   </div>
                                 </div>
                               )

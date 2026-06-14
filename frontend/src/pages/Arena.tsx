@@ -4,8 +4,13 @@ import { SlidersHorizontal } from 'lucide-react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 
 import { PageMeta, META } from '@/components/seo/PageMeta'
+import { useBacktestMarkets } from '@/hooks/useBacktestMarkets'
+import { useBacktestSweep } from '@/hooks/useBacktestSweep'
 import { useCounterTradeStatus } from '@/hooks/useCounterTradeStatus'
 import { CounterTradeFlowTimeline } from '@/components/alfaclub/CounterTradeFlowTimeline'
+import { apiFetch } from '@/lib/api/apiBase'
+import { resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
+import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 
 const shellToneCard = 'bg-black/20 backdrop-blur-sm shadow-[0_30px_80px_rgba(0,0,0,0.45)] rounded-3xl'
 
@@ -13,8 +18,25 @@ const docsPages = [
   { key: 'introduction', label: 'Introduction', path: '/arena/introduction' },
   { key: 'getting-started', label: 'Getting Started', path: '/arena/getting-started' },
   { key: 'how-it-works', label: 'How it Works', path: '/arena/how-it-works' },
+  { key: 'backtest', label: 'Backtest', path: '/arena/backtest' },
   { key: 'positions', label: 'View Live', path: '/arena/positions' },
 ] as const
+
+const DEFAULT_BACKTEST_MARKETS = ['BTC/USDC', 'ETH/USDC', 'SOL/USDC'] as const
+const BACKTEST_TIMEFRAME_OPTIONS = [
+  { label: '24 hours', value: 24 },
+  { label: '7 days', value: 24 * 7 },
+  { label: '15 days', value: 24 * 15 },
+  { label: '30 days', value: 24 * 30 },
+  { label: '90 days', value: 24 * 90 },
+] as const
+
+function chooseBacktestInterval(windowHours: number): '1m' | '5m' | '15m' | '1h' {
+  if (windowHours <= 24 * 3) return '1m'
+  if (windowHours <= 24 * 14) return '5m'
+  if (windowHours <= 24 * 30) return '15m'
+  return '1h'
+}
 
 const counterTradeFileGroups = [
   {
@@ -754,6 +776,598 @@ export function ArenaHowItWorksPage() {
             ))}
           </div>
         </section>
+      </div>
+    </article>
+  )
+}
+
+export function ArenaBacktestPage() {
+  const [selectedFile, setSelectedFile] = useState<string | null>(null)
+  const [healthFloorFilter, setHealthFloorFilter] = useState<string>('all')
+  const [chunkFilter, setChunkFilter] = useState<string>('all')
+  const [cooldownFilter, setCooldownFilter] = useState<string>('all')
+  const [topN, setTopN] = useState<number>(10)
+  const [isRunning, setIsRunning] = useState(false)
+  const [runError, setRunError] = useState<string | null>(null)
+  const [runOutput, setRunOutput] = useState<string | null>(null)
+  const [defaults, setDefaults] = useState({
+    market: 'BTC/USDC',
+    leverage: 30,
+    windowHours: 168,
+    initialLongMarginUsd: 1000,
+    initialShortMarginUsd: 1000,
+    initialLongBufferUsd: 1000,
+    initialShortBufferUsd: 1000,
+    healthFloor: 0.7,
+    deadband: 0.08,
+    minChunkUsd: 500,
+    maxChunkUsd: 800,
+    cooldownBars: 3,
+  })
+  const marketsQuery = useBacktestMarkets()
+  const sweep = useBacktestSweep({ file: selectedFile })
+
+  useEffect(() => {
+    if (!sweep.data?.file) return
+    setSelectedFile((current) => current ?? sweep.data?.file ?? null)
+  }, [sweep.data?.file])
+
+  const healthFloorOptions = useMemo(() => {
+    if (!sweep.data) return []
+    return Array.from(new Set(sweep.data.rows.map((row) => row.healthFloor))).sort((a, b) => a - b)
+  }, [sweep.data])
+
+  const chunkOptions = useMemo(() => {
+    if (!sweep.data) return []
+    return Array.from(new Set(sweep.data.rows.map((row) => `${row.minChunkUsd}-${row.maxChunkUsd}`))).sort()
+  }, [sweep.data])
+
+  const cooldownOptions = useMemo(() => {
+    if (!sweep.data) return []
+    return Array.from(new Set(sweep.data.rows.map((row) => row.cooldownBars))).sort((a, b) => a - b)
+  }, [sweep.data])
+
+  const filteredRows = useMemo(() => {
+    if (!sweep.data) return []
+    const byFilter = sweep.data.rows.filter((row) => {
+      if (healthFloorFilter !== 'all' && String(row.healthFloor) !== healthFloorFilter) return false
+      if (chunkFilter !== 'all' && `${row.minChunkUsd}-${row.maxChunkUsd}` !== chunkFilter) return false
+      if (cooldownFilter !== 'all' && String(row.cooldownBars) !== cooldownFilter) return false
+      return true
+    })
+    return byFilter.sort((a, b) => b.objective - a.objective)
+  }, [sweep.data, healthFloorFilter, chunkFilter, cooldownFilter])
+
+  const topRows = useMemo(() => filteredRows.slice(0, topN), [filteredRows, topN])
+  const selectedTopRow = topRows[0] ?? null
+  const runFileOptions = useMemo(() => {
+    const files = sweep.data?.files ?? []
+    return files.map((file) => {
+      const base = file.replace(/\.csv$/i, '')
+      const match = base.match(/^counter-rebalance-([A-Z0-9]+)-x(\d+)-(\d{10,})$/i)
+      if (!match) return { file, label: file }
+      const [, symbolRaw, leverageRaw, tsRaw] = match
+      const symbol = String(symbolRaw ?? '').toUpperCase()
+      const leverage = Number(leverageRaw)
+      const ts = Number(tsRaw)
+      if (!Number.isFinite(ts)) return { file, label: `${symbol} • ${leverage}x` }
+      const when = new Date(ts)
+      const whenLabel = new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(when)
+      return { file, label: `${symbol} • ${leverage}x • ${whenLabel}` }
+    })
+  }, [sweep.data?.files])
+
+  const intervalForWindow = useMemo(() => chooseBacktestInterval(defaults.windowHours), [defaults.windowHours])
+  const inferredSymbol = useMemo(() => defaults.market.split('/')[0] ?? 'BTC', [defaults.market])
+  const availableMarkets = useMemo(() => {
+    const fromApi = marketsQuery.data?.markets ?? []
+    if (fromApi.length > 0) return fromApi
+    return DEFAULT_BACKTEST_MARKETS.map((market) => ({
+      market,
+      symbol: market.split('/')[0] ?? 'BTC',
+      maxLeverage: 40,
+    }))
+  }, [marketsQuery.data?.markets])
+  const selectedMarket = useMemo(
+    () => availableMarkets.find((row) => row.market === defaults.market) ?? null,
+    [availableMarkets, defaults.market],
+  )
+  const leverageMax = selectedMarket?.maxLeverage ?? 40
+
+  useEffect(() => {
+    if (availableMarkets.length === 0) return
+    const hasSelected = availableMarkets.some((row) => row.market === defaults.market)
+    if (hasSelected) return
+    setDefaults((current) => ({
+      ...current,
+      market: availableMarkets[0]?.market ?? current.market,
+    }))
+  }, [availableMarkets, defaults.market])
+
+  useEffect(() => {
+    setDefaults((current) => ({
+      ...current,
+      leverage: Math.min(leverageMax, Math.max(1, current.leverage)),
+    }))
+  }, [leverageMax])
+
+  const runCommand = useMemo(() => {
+    return [
+      'pnpm -C frontend run ops:counter-trade:backtest',
+      `--symbol ${inferredSymbol}`,
+      `--interval ${intervalForWindow}`,
+      `--window-hours ${defaults.windowHours}`,
+      `--leverage ${defaults.leverage}`,
+      `--initial-long-margin-usd ${defaults.initialLongMarginUsd}`,
+      `--initial-short-margin-usd ${defaults.initialShortMarginUsd}`,
+      `--initial-long-buffer-usd ${defaults.initialLongBufferUsd}`,
+      `--initial-short-buffer-usd ${defaults.initialShortBufferUsd}`,
+      `--floors ${defaults.healthFloor}`,
+      `--deadbands ${defaults.deadband}`,
+      `--min-chunks ${defaults.minChunkUsd}`,
+      `--max-chunks ${defaults.maxChunkUsd}`,
+      `--cooldowns ${defaults.cooldownBars}`,
+    ].join(' ')
+  }, [defaults, inferredSymbol, intervalForWindow])
+
+  const handleRunBacktest = async () => {
+    try {
+      setIsRunning(true)
+      setRunError(null)
+      setRunOutput(null)
+
+      const response = await apiFetch(API_ENDPOINTS.alfaclub.backtestRun, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          symbol: inferredSymbol,
+          interval: intervalForWindow,
+          windowHours: defaults.windowHours,
+          leverage: defaults.leverage,
+          initialLongMarginUsd: defaults.initialLongMarginUsd,
+          initialShortMarginUsd: defaults.initialShortMarginUsd,
+          initialLongBufferUsd: defaults.initialLongBufferUsd,
+          initialShortBufferUsd: defaults.initialShortBufferUsd,
+          healthFloor: defaults.healthFloor,
+          deadband: defaults.deadband,
+          minChunkUsd: defaults.minChunkUsd,
+          maxChunkUsd: defaults.maxChunkUsd,
+          cooldownBars: defaults.cooldownBars,
+        }),
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(resolveApiErrorMessage(payload, `Backtest run failed (${response.status})`))
+      }
+      const output = typeof payload?.data?.stdout === 'string' ? payload.data.stdout : ''
+      setRunOutput(output.trim().length > 0 ? output : 'Backtest completed. Refreshing sweep list...')
+      await sweep.refetch()
+      setSelectedFile(null)
+    } catch (error) {
+      setRunError(error instanceof Error ? error.message : 'Backtest run failed')
+    } finally {
+      setIsRunning(false)
+    }
+  }
+
+  const applyDefaultsFromRow = (index: number) => {
+    const row = topRows[index]
+    if (!row) return
+    setDefaults((current) => ({
+      ...current,
+      market: `${row.symbol}/USDC`,
+      leverage: row.leverage,
+      windowHours: row.windowHours,
+      healthFloor: row.healthFloor,
+      deadband: row.deadband,
+      minChunkUsd: row.minChunkUsd,
+      maxChunkUsd: row.maxChunkUsd,
+      cooldownBars: row.cooldownBars,
+    }))
+  }
+
+  const formatUsd = (value: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value)
+  const formatNum = (value: number, digits = 4) =>
+    new Intl.NumberFormat('en-US', { maximumFractionDigits: digits, minimumFractionDigits: 0 }).format(value)
+  const formatPct = (value: number) => `${(value * 100).toFixed(2)}%`
+  const scenarioStatement = selectedTopRow
+    ? `Scenario: ${selectedTopRow.symbol} moved from ${formatUsd(selectedTopRow.startPrice)} to ${formatUsd(selectedTopRow.endPrice)} (${formatPct(selectedTopRow.priceChangePct)}) over ${formatNum(selectedTopRow.windowHours, 0)}h on ${selectedTopRow.interval} candles; with ${selectedTopRow.leverage}x leverage and isolated legs, this setup ended at ${formatUsd(selectedTopRow.finalEquity)} after ${formatNum(selectedTopRow.rebalanceCount, 0)} rebalances, with long/short BTC at ${formatNum(selectedTopRow.finalLongQty, 6)} / ${formatNum(selectedTopRow.finalShortQty, 6)}.`
+    : null
+
+  return (
+    <article className={`${shellToneCard} p-8 sm:p-12`}>
+      <div className="max-w-7xl space-y-6">
+        <div className="label">Backtesting workspace</div>
+        <h2 className="headline text-3xl sm:text-5xl">Arena strategy backtests</h2>
+        <p className="text-base sm:text-lg text-zinc-300 leading-relaxed">
+          Pick a past backtest run, review the strongest setups, and tune values you want to try next.
+        </p>
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="rounded-2xl border border-zinc-900/70 bg-black/25 p-5 sm:p-6 space-y-3">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Step 1</div>
+            <h3 className="text-xl text-zinc-100">Backtest run</h3>
+            <p className="text-sm text-zinc-400">Choose which saved run results to view.</p>
+            <label className="block text-xs uppercase tracking-[0.16em] text-zinc-500">
+              Saved runs
+              <select
+                value={selectedFile ?? ''}
+                onChange={(event) => setSelectedFile(event.target.value || null)}
+                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              >
+                {runFileOptions.map(({ file, label }, idx) => (
+                  <option key={file} value={file}>
+                    {idx === 0 ? `Latest • ${label}` : label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => void sweep.refetch()}
+              className="inline-flex items-center rounded-lg bg-zinc-900 px-3 py-2 text-xs text-zinc-100 hover:bg-zinc-800"
+            >
+              Refresh
+            </button>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-900/70 bg-black/25 p-5 sm:p-6 space-y-3">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Step 2</div>
+            <h3 className="text-xl text-zinc-100">Filters</h3>
+            <label className="block text-xs uppercase tracking-[0.16em] text-zinc-500">
+              Health floor
+              <select
+                value={healthFloorFilter}
+                onChange={(event) => setHealthFloorFilter(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              >
+                <option value="all">All</option>
+                {healthFloorOptions.map((option) => (
+                  <option key={option} value={String(option)}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs uppercase tracking-[0.16em] text-zinc-500">
+              Chunk range
+              <select
+                value={chunkFilter}
+                onChange={(event) => setChunkFilter(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              >
+                <option value="all">All</option>
+                {chunkOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs uppercase tracking-[0.16em] text-zinc-500">
+              Cooldown bars
+              <select
+                value={cooldownFilter}
+                onChange={(event) => setCooldownFilter(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              >
+                <option value="all">All</option>
+                {cooldownOptions.map((option) => (
+                  <option key={option} value={String(option)}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-900/70 bg-black/25 p-5 sm:p-6 space-y-3">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Step 3</div>
+            <h3 className="text-xl text-zinc-100">Run configuration</h3>
+            <div className="grid grid-cols-2 gap-2 text-sm text-zinc-300">
+              <label className="text-zinc-500">
+                Market
+                <select
+                  value={defaults.market}
+                  onChange={(event) => setDefaults((current) => ({ ...current, market: event.target.value }))}
+                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
+                >
+                  {availableMarkets.map(({ market, maxLeverage }) => (
+                    <option key={market} value={market}>
+                      {market} ({maxLeverage}x max)
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-zinc-500">
+                Timeframe
+                <select
+                  value={defaults.windowHours}
+                  onChange={(event) =>
+                    setDefaults((current) => ({
+                      ...current,
+                      windowHours: Math.max(1, Number(event.target.value) || 24),
+                    }))
+                  }
+                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
+                >
+                  {BACKTEST_TIMEFRAME_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-zinc-500">
+                Leverage
+                <input
+                  type="number"
+                  min={1}
+                  max={leverageMax}
+                  value={defaults.leverage}
+                  onChange={(event) =>
+                    setDefaults((current) => ({
+                      ...current,
+                      leverage: Math.min(leverageMax, Math.max(1, Number(event.target.value) || 1)),
+                    }))
+                  }
+                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
+                />
+              </label>
+              <label className="text-zinc-500">
+                Long margin (USD)
+                <input
+                  type="number"
+                  min={1}
+                  value={defaults.initialLongMarginUsd}
+                  onChange={(event) =>
+                    setDefaults((current) => ({
+                      ...current,
+                      initialLongMarginUsd: Math.max(1, Number(event.target.value) || 1),
+                    }))
+                  }
+                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
+                />
+              </label>
+              <label className="text-zinc-500">
+                Short margin (USD)
+                <input
+                  type="number"
+                  min={1}
+                  value={defaults.initialShortMarginUsd}
+                  onChange={(event) =>
+                    setDefaults((current) => ({
+                      ...current,
+                      initialShortMarginUsd: Math.max(1, Number(event.target.value) || 1),
+                    }))
+                  }
+                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
+                />
+              </label>
+              <label className="text-zinc-500">
+                Long buffer (USD)
+                <input
+                  type="number"
+                  min={1}
+                  value={defaults.initialLongBufferUsd}
+                  onChange={(event) =>
+                    setDefaults((current) => ({
+                      ...current,
+                      initialLongBufferUsd: Math.max(1, Number(event.target.value) || 1),
+                    }))
+                  }
+                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
+                />
+              </label>
+              <label className="text-zinc-500">
+                Short buffer (USD)
+                <input
+                  type="number"
+                  min={1}
+                  value={defaults.initialShortBufferUsd}
+                  onChange={(event) =>
+                    setDefaults((current) => ({
+                      ...current,
+                      initialShortBufferUsd: Math.max(1, Number(event.target.value) || 1),
+                    }))
+                  }
+                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
+                />
+              </label>
+              <label className="text-zinc-500">
+                healthFloor
+                <input
+                  type="number"
+                  step="0.001"
+                  value={defaults.healthFloor}
+                  onChange={(event) =>
+                    setDefaults((current) => ({ ...current, healthFloor: Number(event.target.value) || 0 }))
+                  }
+                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
+                />
+              </label>
+              <label className="text-zinc-500">
+                deadband
+                <input
+                  type="number"
+                  step="0.001"
+                  value={defaults.deadband}
+                  onChange={(event) =>
+                    setDefaults((current) => ({ ...current, deadband: Number(event.target.value) || 0 }))
+                  }
+                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
+                />
+              </label>
+              <label className="text-zinc-500">
+                min chunk
+                <input
+                  type="number"
+                  value={defaults.minChunkUsd}
+                  onChange={(event) =>
+                    setDefaults((current) => ({ ...current, minChunkUsd: Math.max(1, Number(event.target.value) || 1) }))
+                  }
+                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
+                />
+              </label>
+              <label className="text-zinc-500">
+                max chunk
+                <input
+                  type="number"
+                  value={defaults.maxChunkUsd}
+                  onChange={(event) =>
+                    setDefaults((current) => ({ ...current, maxChunkUsd: Math.max(1, Number(event.target.value) || 1) }))
+                  }
+                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
+                />
+              </label>
+              <label className="text-zinc-500 col-span-2">
+                cooldown bars
+                <input
+                  type="number"
+                  value={defaults.cooldownBars}
+                  onChange={(event) =>
+                    setDefaults((current) => ({ ...current, cooldownBars: Math.max(0, Number(event.target.value) || 0) }))
+                  }
+                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
+                />
+              </label>
+            </div>
+            <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 p-2 text-xs text-zinc-400 space-y-1">
+              <p>
+                Historical interval for selected timeframe: <span className="text-zinc-100">{intervalForWindow}</span>
+              </p>
+              <p>
+                Constraints: leverage 1-{leverageMax}x for {defaults.market}, USD inputs must be positive, legs stay isolated
+                (no cross-leg fund transfers).
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void handleRunBacktest()}
+                disabled={isRunning}
+                className="inline-flex items-center rounded-lg bg-sky-700 px-3 py-2 text-xs text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isRunning ? 'Running backtest...' : 'Run backtest'}
+              </button>
+            </div>
+            {runError ? <p className="text-xs text-red-300">{runError}</p> : null}
+            {runOutput ? (
+              <pre className="max-h-36 overflow-auto rounded-lg border border-zinc-800 bg-zinc-950/60 p-2 text-[11px] text-zinc-300 whitespace-pre-wrap">
+                {runOutput}
+              </pre>
+            ) : null}
+            <p className="text-xs text-zinc-500 break-all">
+              <code className="text-zinc-300">{runCommand}</code>
+            </p>
+          </div>
+        </div>
+
+        {selectedTopRow ? (
+          <div className="rounded-2xl border border-zinc-900/70 bg-black/25 p-5 sm:p-6 space-y-4">
+            <h3 className="text-xl text-zinc-100">Top Row Context</h3>
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 text-sm text-zinc-300">
+              <div>Start: <span className="text-zinc-100">{formatUsd(selectedTopRow.startPrice)}</span></div>
+              <div>End: <span className="text-zinc-100">{formatUsd(selectedTopRow.endPrice)}</span></div>
+              <div>Move: <span className="text-zinc-100">{formatPct(selectedTopRow.priceChangePct)}</span></div>
+              <div>Long BTC: <span className="text-zinc-100">{formatNum(selectedTopRow.finalLongQty, 6)}</span></div>
+              <div>Short BTC: <span className="text-zinc-100">{formatNum(selectedTopRow.finalShortQty, 6)}</span></div>
+            </div>
+            {scenarioStatement ? (
+              <div className="rounded-xl border border-sky-900/50 bg-sky-950/20 p-3 text-sm text-sky-100">
+                <div className="text-[11px] uppercase tracking-[0.16em] text-sky-300 mb-1">Scenario statement</div>
+                <p>{scenarioStatement}</p>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="rounded-2xl border border-zinc-900/70 bg-black/25 p-5 sm:p-6 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-xl text-zinc-100">Top configurations</h3>
+            <label className="text-xs uppercase tracking-[0.16em] text-zinc-500">
+              Top N
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={topN}
+                onChange={(event) => setTopN(Math.min(100, Math.max(1, Number(event.target.value) || 10)))}
+                className="ml-2 w-20 rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
+              />
+            </label>
+          </div>
+
+          {sweep.isLoading ? (
+            <p className="text-sm text-zinc-400">Loading backtest sweep...</p>
+          ) : sweep.error ? (
+            <p className="text-sm text-red-300">{(sweep.error as Error).message || 'Failed to load sweep data.'}</p>
+          ) : topRows.length === 0 ? (
+            <p className="text-sm text-zinc-400">
+              No rows found for current file/filter combination. If you just ran a sweep, refresh once and make sure the
+              CSV exists in <code className="text-zinc-200">frontend/tmp/backtests</code>.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm text-zinc-200">
+                <thead className="text-xs uppercase tracking-[0.12em] text-zinc-500">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Objective</th>
+                    <th className="px-3 py-2 text-left">Final equity</th>
+                    <th className="px-3 py-2 text-left">Realized</th>
+                    <th className="px-3 py-2 text-left">Costs</th>
+                    <th className="px-3 py-2 text-left">Start/End</th>
+                    <th className="px-3 py-2 text-left">Move</th>
+                    <th className="px-3 py-2 text-left">Long/Short BTC</th>
+                    <th className="px-3 py-2 text-left">health/deadband</th>
+                    <th className="px-3 py-2 text-left">Chunk min/max</th>
+                    <th className="px-3 py-2 text-left">Cooldown</th>
+                    <th className="px-3 py-2 text-left">Cross-leg violations</th>
+                    <th className="px-3 py-2 text-left">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topRows.map((row, index) => (
+                    <tr key={`${row.objective}-${row.cooldownBars}-${index}`} className="border-t border-zinc-900/70">
+                      <td className="px-3 py-2">{formatNum(row.objective)}</td>
+                      <td className="px-3 py-2">{formatUsd(row.finalEquity)}</td>
+                      <td className="px-3 py-2">{formatUsd(row.realizedPnl)}</td>
+                      <td className="px-3 py-2">{formatUsd(row.executionCost)}</td>
+                      <td className="px-3 py-2">{formatUsd(row.startPrice)} / {formatUsd(row.endPrice)}</td>
+                      <td className="px-3 py-2">{formatPct(row.priceChangePct)}</td>
+                      <td className="px-3 py-2">
+                        {formatNum(row.finalLongQty, 4)} / {formatNum(row.finalShortQty, 4)}
+                      </td>
+                      <td className="px-3 py-2">
+                        {row.healthFloor} / {row.deadband}
+                      </td>
+                      <td className="px-3 py-2">
+                        {row.minChunkUsd} / {row.maxChunkUsd}
+                      </td>
+                      <td className="px-3 py-2">{row.cooldownBars}</td>
+                      <td className="px-3 py-2">{row.commingleViolationCount}</td>
+                      <td className="px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() => applyDefaultsFromRow(index)}
+                          className="rounded-md bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-100 hover:bg-zinc-800"
+                        >
+                          Use as defaults
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </article>
   )

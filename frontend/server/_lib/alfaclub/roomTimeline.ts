@@ -205,6 +205,16 @@ function parseDirFromRawEventPayload(rawEvent: unknown): string | null {
   return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : null
 }
 
+function parsePriceFromRawEventPayload(rawEvent: unknown): number | null {
+  if (!rawEvent || typeof rawEvent !== 'object') return null
+  return parsePositiveNumber((rawEvent as Record<string, unknown>).px)
+}
+
+function parseSizeFromRawEventPayload(rawEvent: unknown): number | null {
+  if (!rawEvent || typeof rawEvent !== 'object') return null
+  return parsePositiveNumber((rawEvent as Record<string, unknown>).sz)
+}
+
 function resolveRoom1659CounterTradeBotWallet(): string {
   const configured = String(process.env.ROOM_1659_COUNTER_TRADE_BOT_WALLET ?? '').trim()
   if (EVM_ADDRESS_RE.test(configured)) return configured.toLowerCase()
@@ -259,6 +269,8 @@ async function readCounterTradeActionTimeline(params: {
         const counterLeverage = parsePositiveNumber(row.counter_leverage)
         const rawEventLeverage = parseLeverageFromRawEventPayload(row.raw_event)
         const rawEventNotionalUsd = parseNotionalFromRawEventPayload(row.raw_event)
+        const rawEventPrice = parsePriceFromRawEventPayload(row.raw_event)
+        const rawEventSize = parseSizeFromRawEventPayload(row.raw_event)
         const userNotionalUsd = parsePositiveNumber(row.user_notional_usd)
         // Entry mirrors should primarily use the persisted action-ledger values.
         // Fall back to source event payloads only when explicit counter values are absent.
@@ -286,8 +298,8 @@ async function readCounterTradeActionTimeline(params: {
           source: 'counter',
           side: row.counter_side ?? null,
           action,
-          price: null,
-          size: null,
+          price: rawEventPrice,
+          size: rawEventSize,
           dir: `inverse:${reason || 'executed'}`,
           closedPnl: 0,
           fee: 0,
@@ -909,10 +921,13 @@ export async function buildRoomTimelineData(params: {
   interval?: string | null
   windowHours?: number | null
 }): Promise<RoomTimelineData> {
+  const MAX_TIMELINE_WINDOW_HOURS = 24 * 90
   const roomId = params.roomId.trim()
   const symbol = (params.symbol ?? 'HYPE').trim().toUpperCase() || 'HYPE'
   const interval = (params.interval ?? '1h').trim() || '1h'
-  const windowHours = Math.max(1, Math.min(24 * 14, Math.floor(params.windowHours ?? 72)))
+  // Allow true longer-horizon analysis (30/60/90d) while still bounding
+  // potentially unbounded callers.
+  const windowHours = Math.max(1, Math.min(MAX_TIMELINE_WINDOW_HOURS, Math.floor(params.windowHours ?? 72)))
   const endTimeMs = Date.now()
   const startTimeMs = endTimeMs - windowHours * 60 * 60 * 1000
 
