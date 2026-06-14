@@ -12,6 +12,7 @@ import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { extractPrivyWalletsFromUser, useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import {
   isLocalhostPrivyCustomDomainConfigError,
+  isMissingPrivyAuthTokenError,
   isRecoverableCrossAppAuthError,
   isUserRejectedCrossAppAuthError,
   isUnauthorizedCrossAppLinkError,
@@ -394,6 +395,30 @@ export function useAccountSetupController(params: {
     [getAccessToken],
   )
 
+  const ensurePrivyTokenReadyForCrossApp = useCallback(async (): Promise<boolean> => {
+    const privyNow = privyRef.current
+    const getAccessTokenNow =
+      typeof privyNow?.getAccessToken === 'function'
+        ? (privyNow.getAccessToken as () => Promise<string | null>)
+        : async () => null
+    const token = await resolvePrivyAccessTokenWithRetry(getAccessTokenNow, {
+      attempts: 6,
+      delayMs: 200,
+    })
+    if (token) return true
+    if (!privyNow?.authenticated) return true
+
+    // Split-state guard: UI can be authenticated while cross-app lanes return
+    // Missing auth token. Clear Privy + app session so the next attempt starts clean.
+    await runWaitlistPrivyLogout({
+      logout: async () => {
+        await (privyNow?.logout ? privyNow.logout().catch(() => null) : Promise.resolve())
+      },
+      shouldLogout: true,
+    })
+    return false
+  }, [])
+
   const loadMe = useCallback(
     async (options?: { showSpinner?: boolean }) => {
       // Read unstable objects via refs so the callback does not need them in its dependency array.
@@ -750,6 +775,13 @@ export function useAccountSetupController(params: {
     setErrorGuarded(null)
     setNoticeGuarded(null)
     try {
+      if (provider === 'zora_cross_app') {
+        const sessionReady = await ensurePrivyTokenReadyForCrossApp()
+        if (!sessionReady) {
+          setErrorGuarded('Privy session expired. Sign in again with email OTP, then retry Connect with Zora.')
+          return
+        }
+      }
       await performClientSideLink(provider)
       if (provider === 'external_eoa') {
         let linked = false
@@ -784,6 +816,8 @@ export function useAccountSetupController(params: {
           )
         } else if (isPrivyRedirectUrlNotAllowedError(linkError)) {
           setErrorGuarded('Privy redirect URL is not allowed for this origin. Add this app URL in Privy settings and retry.')
+        } else if (isMissingPrivyAuthTokenError(linkError)) {
+          setErrorGuarded('Privy session is stale on localhost. Sign out, sign back in with email OTP, then retry Connect with Zora.')
         } else if (
           isUnauthorizedCrossAppLinkError(linkError) ||
           Number(linkError?.status) === 401 ||
@@ -822,7 +856,7 @@ export function useAccountSetupController(params: {
     } finally {
       setBusyProviderGuarded(null)
     }
-  }, [authHeaders, callLinkEndpoint, loadMe, performClientSideLink, privyAuthed])
+  }, [authHeaders, callLinkEndpoint, ensurePrivyTokenReadyForCrossApp, loadMe, performClientSideLink, privyAuthed])
 
   const onUnlinkProvider = useCallback(async (provider: string) => {
     const privyAuthedNow = Boolean(privyRef.current?.authenticated)
@@ -852,6 +886,14 @@ export function useAccountSetupController(params: {
     setErrorGuarded(null)
     setNoticeGuarded(null)
     try {
+      const sessionReady = await ensurePrivyTokenReadyForCrossApp()
+      if (!sessionReady) {
+        setErrorGuarded(
+          'Privy session expired. Sign in again with email OTP, then retry Connect with Zora.',
+        )
+        return
+      }
+
       const action = selectCrossAppAuthAction({
         privyAuthed: privyAuthedNow,
         linkCrossAppAccount: linkCrossAppAccountNow,
@@ -953,6 +995,10 @@ export function useAccountSetupController(params: {
         setErrorGuarded(
           'Privy localhost setup required for Zora linking (custom domain privy.4626.fun). In the Privy dashboard for your Local Dev client, add http://localhost:5173, http://localhost:5174 (and 127.0.0.1 variants) to Allowed Origins + allowed redirect URLs. Restart Vite after changing. See .env.example "Privy Local Dev".'
         )
+      } else if (isMissingPrivyAuthTokenError(zoraError)) {
+        setErrorGuarded(
+          'Privy session is stale on localhost. Click Sign out, sign back in with email OTP, then retry Connect with Zora.',
+        )
       } else if (isPrivyRedirectUrlNotAllowedError(zoraError)) {
         setErrorGuarded('Privy redirect URL is not allowed for this origin. Add this app URL in Privy settings and retry.')
       } else if (
@@ -977,7 +1023,7 @@ export function useAccountSetupController(params: {
     } finally {
       setBusyProviderGuarded(null)
     }
-  }, [authHeaders, linkCrossAppAccount, loadMe, loginWithCrossAppAccount, params.zoraReturnPath, privyAuthed])
+  }, [authHeaders, ensurePrivyTokenReadyForCrossApp, linkCrossAppAccount, loadMe, loginWithCrossAppAccount, params.zoraReturnPath, privyAuthed])
 
   const onRefreshZora = useCallback(async () => {
     setBusyProviderGuarded('zora_cross_app')
