@@ -30,7 +30,7 @@ DEFAULT_PINATA_CLONE="$MONOREPO_ROOT/agent-hermit-x7lmjaxx"
 
 SEEDS=(SOUL USER MEMORY SPANISH)
 WORKSPACE_MD=(
-  AGENTS BOOTSTRAP HEARTBEAT IDENTITY MEMORY PERSONALITY PLATFORM SOUL SPANISH TOOLS USER
+  AGENTS HEARTBEAT IDENTITY MEMORY PERSONALITY PLATFORM SOUL SPANISH TOOLS USER
 )
 
 require_seeds() {
@@ -202,7 +202,7 @@ cmd_import_pinata() {
     exit 1
   fi
   mkdir -p "$WORKSPACE_DIR/avatars"
-  rsync -a --exclude='.openclaw/' "$src/" "$WORKSPACE_DIR/"
+  rsync -a --delete --exclude='.openclaw/' --exclude='memory/' "$src/" "$WORKSPACE_DIR/"
   sync_seeds_from_workspace
   echo "Imported workspace from $clone into $WORKSPACE_DIR (and refreshed seed/)"
 }
