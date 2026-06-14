@@ -12,6 +12,7 @@ import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { extractPrivyWalletsFromUser, useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import {
   isRecoverableCrossAppAuthError,
+  isUserRejectedCrossAppAuthError,
   isUnauthorizedCrossAppLinkError,
   performZoraCrossAppAuth,
 } from '@/lib/privy/zoraCrossApp'
@@ -87,6 +88,29 @@ function parseChainId(value: string | number | null | undefined): number | null 
   }
   const parsed = Number(trimmed)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+async function resolvePrivyAccessTokenWithRetry(
+  readToken: () => Promise<string | null>,
+  options?: { attempts?: number; delayMs?: number },
+): Promise<string | null> {
+  const attempts = Math.max(1, Number(options?.attempts ?? 6))
+  const delayMs = Math.max(0, Number(options?.delayMs ?? 200))
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const token = await readToken()
+      if (typeof token === 'string' && token.trim().length > 0) return token
+    } catch {
+      // Privy token hydration can race briefly after OAuth return.
+      // Retry before surfacing a blocking auth-token error.
+    }
+    if (attempt < attempts - 1 && delayMs > 0) {
+      await sleep(delayMs)
+    }
+  }
+
+  return null
 }
 
 function isPrivyExternalEthereumWallet(wallet: any): boolean {
@@ -356,7 +380,10 @@ export function useAccountSetupController(params: {
 
   const authHeaders = useCallback(
     async (): Promise<Record<string, string>> => {
-      const token = await getAccessToken()
+      const token = await resolvePrivyAccessTokenWithRetry(() => getAccessToken(), {
+        attempts: 6,
+        delayMs: 200,
+      })
       if (!token) throw new Error('Missing Privy auth token. Sign in and retry.')
       return {
         'Content-Type': 'application/json',
@@ -387,7 +414,10 @@ export function useAccountSetupController(params: {
       }
       setErrorGuarded(null)
       try {
-        const token = await getAccessTokenNow()
+        const token = await resolvePrivyAccessTokenWithRetry(getAccessTokenNow, {
+          attempts: 8,
+          delayMs: 250,
+        })
         if (!token) throw new Error('Missing Privy auth token. Sign in and retry.')
         let canonicalization = await runCanonicalizationPipeline({
           privyToken: token,
@@ -877,6 +907,10 @@ export function useAccountSetupController(params: {
       )
       await loadMe({ showSpinner: false })
     } catch (zoraError: any) {
+      if (isUserRejectedCrossAppAuthError(zoraError)) {
+        setNoticeGuarded('Zora connect was canceled.')
+        return
+      }
       const resolveSignalsAfterAuthFailure = async (): Promise<boolean> => {
         try {
           const retryHeaders = await authHeaders()

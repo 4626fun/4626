@@ -39,6 +39,19 @@ export function isRecoverableCrossAppAuthError(error: unknown): boolean {
   )
 }
 
+export function isUserRejectedCrossAppAuthError(error: unknown): boolean {
+  const message = String((error as any)?.message ?? '').trim().toLowerCase()
+  if (!message) return false
+  return (
+    message.includes('user rejected') ||
+    message.includes('user denied') ||
+    message.includes('rejected request') ||
+    message.includes('rejected the request') ||
+    message.includes('request was cancelled') ||
+    message.includes('request was canceled')
+  )
+}
+
 async function runWithSanitizedRedirect<T>(
   work: () => Promise<T>,
   sanitizeRedirect: () => (() => void) | null,

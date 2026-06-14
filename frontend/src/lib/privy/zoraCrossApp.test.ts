@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   isRecoverableCrossAppAuthError,
+  isUserRejectedCrossAppAuthError,
   isUnauthorizedCrossAppLinkError,
   performZoraCrossAppAuth,
 } from './zoraCrossApp'
@@ -25,6 +26,15 @@ describe('isRecoverableCrossAppAuthError', () => {
     expect(isRecoverableCrossAppAuthError(new Error('Popup blocked by browser settings'))).toBe(true)
     expect(isRecoverableCrossAppAuthError(new Error('window.open failed for cross-app flow'))).toBe(true)
     expect(isRecoverableCrossAppAuthError(new Error('plain network error'))).toBe(false)
+  })
+})
+
+describe('isUserRejectedCrossAppAuthError', () => {
+  it('detects user-cancelled cross-app auth attempts', () => {
+    expect(isUserRejectedCrossAppAuthError(new Error('client_error: User rejected request'))).toBe(true)
+    expect(isUserRejectedCrossAppAuthError(new Error('User denied request'))).toBe(true)
+    expect(isUserRejectedCrossAppAuthError(new Error('request was canceled by user'))).toBe(true)
+    expect(isUserRejectedCrossAppAuthError(new Error('plain network error'))).toBe(false)
   })
 })
 
