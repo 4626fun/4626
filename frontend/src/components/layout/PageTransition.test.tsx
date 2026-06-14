@@ -4,7 +4,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
-import { PageTransitionSurface, PageTransitionNestedOutlet } from './PageTransition'
+import { PageTransitionSurface, PageTransitionNestedOutlet, getRouteTransitionKey } from './PageTransition'
 
 vi.mock('framer-motion', async () => {
   const actual = await vi.importActual<typeof import('framer-motion')>('framer-motion')
@@ -48,5 +48,17 @@ describe('PageTransitionNestedOutlet', () => {
     )
 
     expect(screen.getByText('Nested child')).toBeTruthy()
+  })
+})
+
+describe('getRouteTransitionKey', () => {
+  it('keeps arena routes under one transition key', () => {
+    expect(getRouteTransitionKey('/arena', 'abc')).toBe('/arena')
+    expect(getRouteTransitionKey('/arena/view-status', 'def')).toBe('/arena')
+    expect(getRouteTransitionKey('/arena/how-it-works', 'ghi')).toBe('/arena')
+  })
+
+  it('uses location key outside arena', () => {
+    expect(getRouteTransitionKey('/swap', 'xyz')).toBe('xyz')
   })
 })

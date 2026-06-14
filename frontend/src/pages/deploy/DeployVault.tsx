@@ -4537,7 +4537,7 @@ function DeployVaultBatcher({
           (isLocalhostRuntime() ? expectedProtocolTreasury : null)
         if (!ajnaKeeper) {
           throw new Error(
-            'Protocol Ajna keeper is not configured. Set 4626_KEEPER_AUTOMATION_PUBLIC_KEY on the server.',
+            'Protocol Ajna keeper is not configured. Set PROTOCOL_AJNA_KEEPER (or 4626_KEEPER_AUTOMATION_PUBLIC_KEY) on the server.',
           )
         }
         const ajnaBufferRatioBps = 1_000n

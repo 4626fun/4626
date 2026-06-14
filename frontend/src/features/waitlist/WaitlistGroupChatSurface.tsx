@@ -9,6 +9,7 @@ import { usePrepareWaitlistMessagingWallet } from './usePrepareWaitlistMessaging
 import { useWaitlistGroupSync } from './useWaitlistGroupSync'
 import { useWaitlistMessagingConnect } from './useWaitlistMessagingConnect'
 import { formatWaitlistChatError } from './waitlistChatErrors'
+import { isPrivyEmbeddedSignerAuthError } from '@/lib/xmtp/xmtpHelpers'
 import type { WaitlistChatStatus } from './waitlistChatCopy'
 import { findWaitlistGroupConversation } from './waitlistXmtpGroupIds'
 import {
@@ -28,6 +29,9 @@ export type WaitlistGroupChatSurfaceProps = {
   xmtpMemberAddress: string | null
   retryJoin: () => void
   chatReady: boolean
+  /** Optional handler to trigger full sign-out + re-login (for embedded signer expiry). */
+  onRequestReauth?: () => void
+  reauthBusy?: boolean
 }
 
 export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
@@ -42,6 +46,8 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
     xmtpMemberAddress,
     retryJoin,
     chatReady,
+    onRequestReauth,
+    reauthBusy = false,
   } = props
 
   const {
@@ -86,14 +92,7 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
   const [rekeyedConversationId, setRekeyedConversationId] = useState<string | null>(null)
   const chatConversationId = rekeyedConversationId ?? groupConversation?.id ?? null
 
-  const {
-    prepareError,
-    prepareBusy,
-    isConnecting,
-    needsConnectMessaging,
-    connectAndJoin,
-    reconnectMessaging,
-  } = useWaitlistMessagingConnect({
+  const rawMessaging = useWaitlistMessagingConnect({
     xmtpStatus: status,
     privyAuthenticated,
     prepare,
@@ -103,6 +102,23 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
     retryJoin,
     walletReady,
   })
+  const prepareError = formatWaitlistChatError(rawMessaging.prepareError) ?? rawMessaging.prepareError
+  const {
+    prepareBusy,
+    isConnecting,
+    needsConnectMessaging,
+    connectAndJoin,
+    reconnectMessaging,
+  } = rawMessaging
+
+  const displayXmtpError = formatWaitlistChatError(error) ?? error
+  const displayErrorForPhase = prepareError ?? displayXmtpError
+
+  const isReauthError =
+    isPrivyEmbeddedSignerAuthError(rawMessaging.prepareError || '') ||
+    isPrivyEmbeddedSignerAuthError(error || '') ||
+    /sign-in for chat expired|sign out and sign in/i.test(prepareError || '') ||
+    /sign-in for chat expired|sign out and sign in/i.test(displayXmtpError || '')
 
   const displayJoinActionError = useMemo(() => {
     if (joinStatus === 'executed') return null
@@ -130,13 +146,13 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
     syncTimedOut,
     needsConnectMessaging,
     prepareError,
-    xmtpError: error,
+    xmtpError: displayXmtpError,
   })
 
   const statusMessage = waitlistXmtpPhaseMessage(phase, {
     joinStatus,
     walletReady,
-    error: prepareError ?? error,
+    error: displayErrorForPhase,
     syncTimedOut,
   })
 
@@ -177,17 +193,17 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
   }
 
   return (
-    <div className="flex flex-col justify-center space-y-3 py-2" style={shellStyle}>
+    <div className="flex flex-col items-center justify-center text-center" style={shellStyle}>
       {phase === 'connecting' ? (
         <LoadingInline
           labelOverride={status === 'signing' ? 'Sign to enable messaging…' : 'Connecting to XMTP…'}
         />
       ) : (
-        <>
+        <div className="w-full max-w-[260px] space-y-3">
           {statusMessage ? (
             <p
-              className={`text-center text-xs leading-relaxed ${
-                phase === 'connect_error' ? 'text-red-300' : 'text-zinc-400'
+              className={`text-sm leading-relaxed ${
+                isReauthError ? 'text-amber-300' : phase === 'connect_error' ? 'text-red-300' : 'text-zinc-400'
               }`}
               role="status"
               aria-live="polite"
@@ -197,32 +213,46 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
           ) : null}
 
           {displayJoinActionError ? (
-            <p className="text-center text-xs text-red-300">{displayJoinActionError}</p>
+            <p className="text-xs text-red-300">{displayJoinActionError}</p>
           ) : null}
 
-          {resyncError ? <p className="text-center text-xs text-red-300">{resyncError}</p> : null}
+          {resyncError ? <p className="text-xs text-red-300">{resyncError}</p> : null}
 
           {identityMismatch ? (
-            <p className="text-center text-xs text-amber-200/90">
+            <p className="text-xs text-amber-200/90">
               Messaging opened the wrong wallet inbox. Reconnect to use your waitlist wallet (
               {xmtpMemberAddress?.slice(0, 6)}…{xmtpMemberAddress?.slice(-4)}).
             </p>
           ) : null}
 
-          <div className="flex flex-wrap items-center justify-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
             {phase === 'local_reset_required' ? (
               <Button type="button" variant="secondary" size="sm" onClick={() => void resetLocalState()}>
                 Reset local XMTP state
               </Button>
             ) : null}
 
-            {phase === 'connect_prompt' || phase === 'connect_error' ? (
+            {/* For signer expiry, prefer a reauth action over retrying a doomed connect. */}
+            {isReauthError && onRequestReauth ? (
               <Button
                 type="button"
                 variant="primary"
                 size="sm"
+                loading={reauthBusy}
+                disabled={reauthBusy}
+                onClick={() => void onRequestReauth()}
+              >
+                Sign out and sign in again
+              </Button>
+            ) : null}
+
+            {(phase === 'connect_prompt' || phase === 'connect_error') && (!isReauthError || !onRequestReauth) ? (
+              <Button
+                type="button"
+                variant={isReauthError ? 'secondary' : 'primary'}
+                size="sm"
                 loading={prepareBusy || isConnecting}
-                disabled={prepareBusy || isConnecting}
+                disabled={prepareBusy || isConnecting || (isReauthError && !onRequestReauth)}
                 onClick={() => void connectAndJoin()}
               >
                 {isConnecting ? 'Connecting…' : 'Connect & join waitlist chat'}
@@ -267,7 +297,13 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
               </Button>
             ) : null}
           </div>
-        </>
+
+          {isReauthError && !onRequestReauth ? (
+            <p className="text-[10px] text-zinc-500">
+              Use the Sign out link below, then sign in with email again.
+            </p>
+          ) : null}
+        </div>
       )}
     </div>
   )

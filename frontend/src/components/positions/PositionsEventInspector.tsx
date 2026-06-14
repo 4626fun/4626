@@ -1,5 +1,8 @@
 import type { ChartOverlayEvent } from './types'
 
+const ALFACLUB_ROOM_URL = 'https://alfaclub.app/rooms/1659/'
+const VIRTUALS_AGENT_URL = 'https://degen.virtuals.io/agents/1213'
+
 function formatTime(value: number): string {
   return new Date(value).toLocaleString([], {
     month: 'short',
@@ -72,6 +75,27 @@ function formatUsd(value: number): string {
   })
 }
 
+function tradeSourceMeta(source: 'host' | 'counter') {
+  if (source === 'counter') {
+    return {
+      label: 'Inverse trade',
+      href: VIRTUALS_AGENT_URL,
+      logo: '/protocols/virtuals.svg',
+      logoAlt: 'Virtuals',
+      chipClass: 'bg-emerald-400/10 text-emerald-200',
+      ringClass: 'bg-emerald-900/30 ring-emerald-300/25',
+    }
+  }
+  return {
+    label: 'Room trade',
+    href: ALFACLUB_ROOM_URL,
+    logo: '/protocols/alfaclub.svg',
+    logoAlt: 'AlfaClub',
+    chipClass: 'bg-sky-400/10 text-sky-200',
+    ringClass: 'bg-sky-900/30 ring-sky-300/25',
+  }
+}
+
 export function PositionsEventInspector(props: {
   event: ChartOverlayEvent | null
   index: number
@@ -82,13 +106,13 @@ export function PositionsEventInspector(props: {
 }) {
   const { event } = props
   return (
-    <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4 sm:p-5">
+    <div className="rounded-2xl bg-white/[0.03] p-4 sm:p-5">
       <div className="flex items-center justify-between gap-2">
         <div className="label">Event inspector</div>
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-zinc-200 disabled:opacity-40"
+            className="rounded-full bg-white/[0.06] px-2.5 py-1 text-xs text-zinc-200 disabled:opacity-40"
             onClick={props.onPrevious}
             disabled={!event || props.total < 2}
           >
@@ -96,7 +120,7 @@ export function PositionsEventInspector(props: {
           </button>
           <button
             type="button"
-            className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-zinc-200 disabled:opacity-40"
+            className="rounded-full bg-white/[0.06] px-2.5 py-1 text-xs text-zinc-200 disabled:opacity-40"
             onClick={props.onNext}
             disabled={!event || props.total < 2}
           >
@@ -104,7 +128,7 @@ export function PositionsEventInspector(props: {
           </button>
           <button
             type="button"
-            className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-zinc-200 disabled:opacity-40"
+            className="rounded-full bg-white/[0.06] px-2.5 py-1 text-xs text-zinc-200 disabled:opacity-40"
             onClick={props.onClear}
             disabled={!event}
           >
@@ -169,11 +193,35 @@ export function PositionsEventInspector(props: {
               <span className="text-zinc-100">{formatUsd(notionalUsd(event.price, event.size)!)}</span>
             </div>
           )}
+          {event.kind === 'trade' && (
+            <div className="text-zinc-300">
+              Lane:{' '}
+              {(() => {
+                const source = tradeSourceMeta(event.source)
+                return (
+                  <a
+                    href={source.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium transition hover:opacity-90 ${source.chipClass}`}
+                  >
+                    <span
+                      className={`inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-full ring-1 ${source.ringClass}`}
+                    >
+                      <img src={source.logo} alt={source.logoAlt} className="h-3 w-3 object-contain" loading="lazy" />
+                    </span>
+                    {source.label}
+                    <span aria-hidden>↗</span>
+                  </a>
+                )
+              })()}
+            </div>
+          )}
           {event.kind === 'trade' &&
             (event.action === 'close' || event.action === 'liquidated') &&
             typeof event.closedPnl === 'number' && (
               <div className="flex items-center gap-2">
-                <span className="rounded-full border border-white/15 bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-zinc-300">
+                <span className="rounded-full bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-zinc-300">
                   {inferExitReason(event)}
                 </span>
                 <span className={event.closedPnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}>

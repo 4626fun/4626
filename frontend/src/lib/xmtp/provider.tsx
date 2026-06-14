@@ -43,6 +43,7 @@ import {
   isInstallationLimitError,
   isLocalXmtpStateInvalidError,
   isOpfsAccessHandleError,
+  isPrivyEmbeddedSignerAuthError,
   isScwSignatureValidationError,
   isTransientXmtpStreamNetworkError,
   isXmtpRateLimitError,
@@ -2332,6 +2333,13 @@ export function XmtpChatProvider({
         }
         if (isLocalXmtpStateInvalidError(msg)) {
           markLocalStateInvalid(msg)
+          return
+        }
+        if (isPrivyEmbeddedSignerAuthError(msg)) {
+          setStatus('error')
+          setError(
+            'Embedded signer session expired. Sign out and sign in with email OTP again, then retry Connect Messaging.',
+          )
           return
         }
         setIdentityAddress(null)

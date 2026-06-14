@@ -111,50 +111,95 @@ function shouldBuildMarketingVault(files) {
   return { build: false, matchedTrigger: null }
 }
 
+function shouldBuildTelegramLinkStandalone(files) {
+  if (!files) return { build: true, matchedTrigger: null }
+  if (files.length === 0) return { build: false, matchedTrigger: null }
+
+  for (const file of files) {
+    if (file === 'pnpm-lock.yaml') return { build: true, matchedTrigger: file }
+    if (file === 'frontend/package.json') return { build: true, matchedTrigger: file }
+    if (file === 'frontend/pnpm-lock.yaml') return { build: true, matchedTrigger: file }
+    if (file === 'frontend/vite.config.ts') return { build: true, matchedTrigger: file }
+    if (file === 'frontend/scripts/build-vercel.mjs') return { build: true, matchedTrigger: file }
+    if (file === 'frontend/scripts/generate-html-shells.mjs') return { build: true, matchedTrigger: file }
+    if (file === 'frontend/scripts/html-shells.config.mjs') return { build: true, matchedTrigger: file }
+    if (file === 'frontend/telegram-link.html') return { build: true, matchedTrigger: file }
+
+    if (file.startsWith('frontend/html-shells/templates/')) return { build: true, matchedTrigger: file }
+    if (file.startsWith('frontend/src/')) return { build: true, matchedTrigger: file }
+    if (file.startsWith('frontend/public/')) return { build: true, matchedTrigger: file }
+  }
+
+  return { build: false, matchedTrigger: null }
+}
+
 function buildPlan() {
   const ref = process.env.VERCEL_GIT_COMMIT_REF || ''
   const onMain = ref === '' || ref === 'main' || ref === 'refs/heads/main'
   if (!onMain) {
     return {
+      buildTelegramLinkStandalone: true,
+      telegramReason: 'non-main ref (conservative full build)',
+      telegramMatchedTrigger: null,
       buildMarketingVault: true,
-      reason: 'non-main ref (conservative full build)',
-      matchedTrigger: null,
+      marketingReason: 'non-main ref (conservative full build)',
+      marketingMatchedTrigger: null,
     }
   }
 
   const range = resolveCommitRange()
   if (!range) {
     return {
+      buildTelegramLinkStandalone: true,
+      telegramReason: 'commit range unavailable (conservative full build)',
+      telegramMatchedTrigger: null,
       buildMarketingVault: true,
-      reason: 'commit range unavailable (conservative full build)',
-      matchedTrigger: null,
+      marketingReason: 'commit range unavailable (conservative full build)',
+      marketingMatchedTrigger: null,
     }
   }
 
   const message = readCommitMessage(range.to)
   if (message.includes('[force-vercel]') || message.includes('[force-vercel-full-build]')) {
     return {
+      buildTelegramLinkStandalone: true,
+      telegramReason: 'forced by commit message override',
+      telegramMatchedTrigger: '[force-vercel]',
       buildMarketingVault: true,
-      reason: 'forced by commit message override',
-      matchedTrigger: '[force-vercel]',
+      marketingReason: 'forced by commit message override',
+      marketingMatchedTrigger: '[force-vercel]',
     }
   }
 
   const changedFiles = listChangedFiles(range)
+  const buildTelegram = shouldBuildTelegramLinkStandalone(changedFiles)
   const buildMarketing = shouldBuildMarketingVault(changedFiles)
   return {
+    buildTelegramLinkStandalone: buildTelegram.build,
+    telegramReason: buildTelegram.build
+      ? 'telegram-link inputs changed'
+      : 'telegram-link inputs unchanged',
+    telegramMatchedTrigger: buildTelegram.matchedTrigger,
     buildMarketingVault: buildMarketing.build,
-    reason: buildMarketing.build ? 'marketing inputs changed' : 'marketing inputs unchanged',
-    matchedTrigger: buildMarketing.matchedTrigger,
+    marketingReason: buildMarketing.build ? 'marketing inputs changed' : 'marketing inputs unchanged',
+    marketingMatchedTrigger: buildMarketing.matchedTrigger,
   }
 }
 
 const plan = buildPlan()
-const triggerSuffix = plan.matchedTrigger ? ` [trigger: ${plan.matchedTrigger}]` : ''
+const telegramTriggerSuffix = plan.telegramMatchedTrigger
+  ? ` [trigger: ${plan.telegramMatchedTrigger}]`
+  : ''
+const marketingTriggerSuffix = plan.marketingMatchedTrigger
+  ? ` [trigger: ${plan.marketingMatchedTrigger}]`
+  : ''
 const useParallelAppTelegramBuild =
   String(process.env.VERCEL_EXPERIMENTAL_PARALLEL_APP_TELEGRAM_BUILD ?? '').trim() === '1'
 console.log(
-  `[build:vercel] marketing bundle: ${plan.buildMarketingVault ? 'build' : 'skip'} (${plan.reason})${triggerSuffix}`,
+  `[build:vercel] telegram-link bundle: ${plan.buildTelegramLinkStandalone ? 'build' : 'skip'} (${plan.telegramReason})${telegramTriggerSuffix}`,
+)
+console.log(
+  `[build:vercel] marketing bundle: ${plan.buildMarketingVault ? 'build' : 'skip'} (${plan.marketingReason})${marketingTriggerSuffix}`,
 )
 if ((process.env.VERCEL_FORCE_NO_BUILD_CACHE || '').trim() !== '') {
   console.warn(
@@ -172,7 +217,11 @@ if (useParallelAppTelegramBuild) {
   run('pnpm', ['run', 'build:app-and-telegram:parallel-experimental'])
 } else {
   run('pnpm', ['run', 'build:app'])
-  run('pnpm', ['run', 'build:telegram-link-standalone'])
+  if (plan.buildTelegramLinkStandalone) {
+    run('pnpm', ['run', 'build:telegram-link-standalone'])
+  } else {
+    console.log('[build:vercel] skipping build:telegram-link-standalone')
+  }
 }
 
 if (plan.buildMarketingVault) {

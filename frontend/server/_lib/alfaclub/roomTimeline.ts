@@ -40,6 +40,7 @@ export type RoomTimelineTradeEvent = {
   id: string
   time: number
   coin: string | null
+  source: 'host' | 'counter'
   side: 'long' | 'short' | null
   action: 'entry' | 'add' | 'reduce' | 'close' | 'liquidated' | 'flip' | 'unknown'
   price: number | null
@@ -48,11 +49,16 @@ export type RoomTimelineTradeEvent = {
   closedPnl: number
   fee: number
   market: string
+  leverage: number | null
+  notionalUsd: number | null
+  marginUsd: number | null
 }
 
 export type RoomMarketPosition = {
   market: string
   coin: string
+  source: 'host' | 'counter'
+  ownerAddress: string
   side: 'long' | 'short' | null
   sizeUsd: number | null
   entryPrice: number | null
@@ -105,6 +111,33 @@ type ChatRow = {
 }
 
 type AlfaClubRoomMessage = Record<string, unknown>
+const EVM_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
+const ROOM_1659_COUNTER_TRADE_BOT_WALLET_DEFAULT =
+  '0x74ab91cd845ff0d2006404440af49c3bc8c1df96' as const
+type CounterTradeActionTimelineRow = {
+  id: number
+  sender_address: string
+  event_key: string
+  reason: string
+  counter_side: 'long' | 'short' | null
+  counter_notional_usd: string | null
+  counter_leverage: string | null
+  user_notional_usd: string | null
+  raw_event: unknown
+  created_time_ms: string
+  event_time_ms: number | null
+  coin: string | null
+}
+
+function parseLeverageFromDir(dir: string | null | undefined): number | null {
+  const text = String(dir ?? '')
+  const match = text.match(/(\d+(?:\.\d+)?)\s*x|x\s*(\d+(?:\.\d+)?)/i)
+  if (!match) return null
+  const candidate = match[1] ?? match[2]
+  if (!candidate) return null
+  const value = Number(candidate)
+  return Number.isFinite(value) && value > 0 ? value : null
+}
 
 function toMs(iso: string | null): number | null {
   if (!iso) return null
@@ -119,6 +152,155 @@ function normalizeMarket(coinOrSymbol: string): string {
 function normalizeMarketFromCoin(coin: string | null | undefined, fallbackSymbol: string): string {
   const normalized = (coin ?? '').trim().toUpperCase()
   return normalizeMarket(normalized || fallbackSymbol)
+}
+
+function parseCounterCoinFromEventKey(eventKey: string): string | null {
+  const key = String(eventKey ?? '').trim()
+  if (!key) return null
+  // defense|bot|BTC|defend_reduce|<tickMs>
+  if (key.startsWith('defense|')) {
+    const parts = key.split('|')
+    return (parts[2] ?? '').trim().toUpperCase() || null
+  }
+  // default fill-derived key: wallet|time|coin|px|sz|dir|startPosition
+  const parts = key.split('|')
+  return (parts[2] ?? '').trim().toUpperCase() || null
+}
+
+function parsePositiveNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value
+  if (typeof value === 'string') {
+    const n = Number(value)
+    if (Number.isFinite(n) && n > 0) return n
+  }
+  return null
+}
+
+function parseLeverageFromRawEventPayload(rawEvent: unknown): number | null {
+  if (!rawEvent || typeof rawEvent !== 'object') return null
+  const record = rawEvent as Record<string, unknown>
+  const direct = parsePositiveNumber(record.leverage)
+  if (direct != null) return direct
+  if (record.leverage && typeof record.leverage === 'object') {
+    const nested = parsePositiveNumber((record.leverage as Record<string, unknown>).value)
+    if (nested != null) return nested
+  }
+  return null
+}
+
+function parseNotionalFromRawEventPayload(rawEvent: unknown): number | null {
+  if (!rawEvent || typeof rawEvent !== 'object') return null
+  const record = rawEvent as Record<string, unknown>
+  const explicit = parsePositiveNumber(record.notionalUsd)
+  if (explicit != null) return explicit
+  const px = parsePositiveNumber(record.px)
+  const sz = parsePositiveNumber(record.sz)
+  if (px != null && sz != null) return Math.abs(px * sz)
+  return null
+}
+
+function parseDirFromRawEventPayload(rawEvent: unknown): string | null {
+  if (!rawEvent || typeof rawEvent !== 'object') return null
+  const candidate = (rawEvent as Record<string, unknown>).dir
+  return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : null
+}
+
+function resolveRoom1659CounterTradeBotWallet(): string {
+  const configured = String(process.env.ROOM_1659_COUNTER_TRADE_BOT_WALLET ?? '').trim()
+  if (EVM_ADDRESS_RE.test(configured)) return configured.toLowerCase()
+  return ROOM_1659_COUNTER_TRADE_BOT_WALLET_DEFAULT
+}
+
+async function readCounterTradeActionTimeline(params: {
+  roomId: string
+  startTimeMs: number
+  fallbackSymbol: string
+}): Promise<RoomTimelineTradeEvent[]> {
+  const db = await getDb()
+  if (!db) return []
+  try {
+    const result = await db.sql`
+      SELECT
+        a.id,
+        a.sender_address,
+        a.event_key,
+        a.reason,
+        a.counter_side,
+        a.counter_notional_usd::text AS counter_notional_usd,
+        a.counter_leverage::text AS counter_leverage,
+        e.user_notional_usd::text AS user_notional_usd,
+        e.raw_event,
+        (EXTRACT(EPOCH FROM a.created_at) * 1000)::bigint::text AS created_time_ms,
+        e.event_time_ms,
+        e.coin
+      FROM alfaclub.counter_trade_action_ledger a
+      LEFT JOIN alfaclub.counter_trade_event_ledger e
+        ON e.room_id = a.room_id
+       AND e.sender_address = a.sender_address
+       AND e.event_key = a.event_key
+      WHERE a.room_id = ${params.roomId}
+        AND a.status = 'executed'
+        AND a.created_at >= ${new Date(params.startTimeMs).toISOString()}::timestamptz
+      ORDER BY a.created_at ASC
+      LIMIT 3000;
+    `
+    const rows = (result.rows ?? []) as CounterTradeActionTimelineRow[]
+    const events: RoomTimelineTradeEvent[] = []
+    for (const row of rows) {
+        const coin =
+          (row.coin ?? '').trim().toUpperCase() || parseCounterCoinFromEventKey(row.event_key) || null
+        const timeMs =
+          Number.isFinite(row.event_time_ms) && (row.event_time_ms ?? 0) > 0
+            ? Number(row.event_time_ms)
+            : Number(row.created_time_ms)
+        if (!Number.isFinite(timeMs) || timeMs <= 0) continue
+        const reason = String(row.reason ?? '').trim().toLowerCase()
+        const counterNotionalUsd = parsePositiveNumber(row.counter_notional_usd)
+        const counterLeverage = parsePositiveNumber(row.counter_leverage)
+        const rawEventLeverage = parseLeverageFromRawEventPayload(row.raw_event)
+        const rawEventNotionalUsd = parseNotionalFromRawEventPayload(row.raw_event)
+        const userNotionalUsd = parsePositiveNumber(row.user_notional_usd)
+        // Entry mirrors should primarily use the persisted action-ledger values.
+        // Fall back to source event payloads only when explicit counter values are absent.
+        const notionalUsd =
+          counterNotionalUsd ??
+          (reason === 'exit_executed' ? null : rawEventNotionalUsd ?? userNotionalUsd)
+        // Historical leverage uses explicit per-event fields only:
+        // 1) counter_trade_action_ledger.counter_leverage
+        // 2) structured leverage inside counter_trade_event_ledger.raw_event
+        // 3) last-resort parse from raw event dir text
+        const leverage =
+          counterLeverage ??
+          rawEventLeverage ??
+          parseLeverageFromDir(parseDirFromRawEventPayload(row.raw_event))
+        const action: RoomTimelineTradeEvent['action'] =
+          reason === 'exit_executed'
+            ? 'close'
+            : reason === 'defense_reduce_executed' || reason === 'harvest_tp_executed'
+              ? 'reduce'
+              : 'entry'
+        events.push({
+          id: `counter_action:${row.id}`,
+          time: timeMs,
+          coin,
+          source: 'counter',
+          side: row.counter_side ?? null,
+          action,
+          price: null,
+          size: null,
+          dir: `inverse:${reason || 'executed'}`,
+          closedPnl: 0,
+          fee: 0,
+          market: normalizeMarketFromCoin(coin, params.fallbackSymbol),
+          leverage,
+          notionalUsd,
+          marginUsd: notionalUsd != null && leverage != null ? notionalUsd / leverage : null,
+        })
+    }
+    return events
+  } catch {
+    return []
+  }
 }
 
 function inferChatMarket(text: string, symbols: Set<string>): string | null {
@@ -602,15 +784,26 @@ async function enrichChatSenderProfiles(
 function mapTradeEvents(
   fills: HyperliquidUserFillDetailed[] | null,
   fallbackSymbol: string,
+  source: 'host' | 'counter',
 ): RoomTimelineTradeEvent[] {
   if (!fills || fills.length === 0) return []
   return fills
-    .map((fill, idx) => ({
+    .map((fill, idx) => {
+      const leverage =
+        fill.leverage != null && Number.isFinite(fill.leverage) && fill.leverage > 0
+          ? fill.leverage
+          : parseLeverageFromDir(fill.dir)
+      const notionalUsd =
+        fill.px != null && fill.sz != null && Number.isFinite(fill.px) && Number.isFinite(fill.sz)
+          ? Math.abs(fill.px * fill.sz)
+          : null
+      return {
       // Include idx to guarantee uniqueness even when multiple fills share the exact same timestamp + coin
       // (common for large orders that walk the book or multiple makers at one tick).
-      id: `fill:${fill.time}:${fill.coin ?? 'unknown'}:${idx}`,
+      id: `fill:${source}:${fill.time}:${fill.coin ?? 'unknown'}:${idx}`,
       time: fill.time,
       coin: fill.coin,
+      source,
       side: fill.side,
       action: classifyFillAction(fill),
       price: fill.px,
@@ -619,14 +812,21 @@ function mapTradeEvents(
       closedPnl: fill.closedPnl,
       fee: fill.fee,
       market: normalizeMarketFromCoin(fill.coin, fallbackSymbol),
-    }))
+      leverage,
+      notionalUsd,
+      marginUsd: notionalUsd != null && leverage != null ? notionalUsd / leverage : null,
+    }})
     .sort((a, b) => a.time - b.time)
 }
 
 function mapCurrentPositions(
   state: HyperliquidClearinghouseState | null,
   fallbackSymbol: string,
+  source: 'host' | 'counter',
+  ownerAddress: string | null,
 ): RoomMarketPosition[] {
+  const normalizedOwner = String(ownerAddress ?? '').trim().toLowerCase()
+  if (!normalizedOwner) return []
   const positions = state?.assetPositions ?? []
   return positions
     .map((pos) => {
@@ -638,6 +838,8 @@ function mapCurrentPositions(
       return {
         market: normalizeMarketFromCoin(coin, fallbackSymbol),
         coin: coin.toUpperCase(),
+        source,
+        ownerAddress: normalizedOwner,
         side: pos.side ?? null,
         sizeUsd,
         entryPrice: pos.entryPx,
@@ -647,6 +849,22 @@ function mapCurrentPositions(
       } satisfies RoomMarketPosition
     })
     .filter((position): position is RoomMarketPosition => Boolean(position))
+}
+
+function pickDefaultMarket(params: {
+  requestedSymbol: string
+  currentPositions: RoomMarketPosition[]
+  allTradeEvents: RoomTimelineTradeEvent[]
+}): string {
+  const open = [...params.currentPositions].sort(
+    (a, b) => Math.abs(b.sizeUsd ?? 0) - Math.abs(a.sizeUsd ?? 0),
+  )
+  if (open.length > 0) return open[0]!.market
+  const latestTrade = params.allTradeEvents.length
+    ? params.allTradeEvents[params.allTradeEvents.length - 1]
+    : null
+  if (latestTrade?.market) return latestTrade.market
+  return normalizeMarket(params.requestedSymbol)
 }
 
 function buildMarketSummaries(params: {
@@ -706,8 +924,11 @@ export async function buildRoomTimelineData(params: {
     roomId === '1659'
       ? resolveRoom1659HyperliquidUserForSnapshot(hostAddress ?? '0x0000000000000000000000000000000000000000')
       : hostAddress
+  const counterTradeBotAddress =
+    roomId === '1659' ? resolveRoom1659CounterTradeBotWallet() : null
 
-  const [candles, fills, clearinghouseState] = await Promise.all([
+  const [candles, fills, counterFills, counterActionTimeline, clearinghouseState, counterClearinghouseState] =
+    await Promise.all([
     getCandleSnapshot({
       coin: symbol,
       interval,
@@ -715,13 +936,34 @@ export async function buildRoomTimelineData(params: {
       endTimeMs,
     }),
     hlAddress ? getUserFillsByTimeDetailed(hlAddress, startTimeMs) : Promise.resolve(null),
-    hlAddress ? getClearinghouseState(hlAddress) : Promise.resolve(null),
-  ])
-
-  const defaultMarket = normalizeMarket(symbol)
+    counterTradeBotAddress && counterTradeBotAddress !== hlAddress
+      ? getUserFillsByTimeDetailed(counterTradeBotAddress, startTimeMs)
+      : Promise.resolve(null),
+    readCounterTradeActionTimeline({
+      roomId,
+      startTimeMs,
+      fallbackSymbol: symbol,
+    }),
+      hlAddress ? getClearinghouseState(hlAddress) : Promise.resolve(null),
+      counterTradeBotAddress && counterTradeBotAddress !== hlAddress
+        ? getClearinghouseState(counterTradeBotAddress)
+        : Promise.resolve(null),
+    ])
   // All markets the room has traded in this window (not just the selected symbol).
-  const allTradeEvents = mapTradeEvents(fills, symbol)
-  const currentPositions = mapCurrentPositions(clearinghouseState, symbol)
+  const allTradeEvents = [
+    ...mapTradeEvents(fills, symbol, 'host'),
+    ...mapTradeEvents(counterFills, symbol, 'counter'),
+    ...counterActionTimeline,
+  ].sort((a, b) => a.time - b.time)
+  const currentPositions = [
+    ...mapCurrentPositions(clearinghouseState, symbol, 'host', hlAddress),
+    ...mapCurrentPositions(counterClearinghouseState, symbol, 'counter', counterTradeBotAddress),
+  ]
+  const defaultMarket = pickDefaultMarket({
+    requestedSymbol: symbol,
+    currentPositions,
+    allTradeEvents,
+  })
 
   // Known coins/symbols power chat → market inference. Include every coin the room
   // has touched (historical fills + open positions), not just the selected symbol.

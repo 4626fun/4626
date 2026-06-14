@@ -24,6 +24,13 @@ export function formatWaitlistChatError(raw: string | null | undefined): string 
   if (message.includes('wagmi is still syncing')) {
     return 'Wallet is still connecting. Wait a moment, then retry Connect messaging.'
   }
+  if (
+    message.toLowerCase().includes('missing auth token') ||
+    (message.toLowerCase().includes('unknownrpcerror') && message.toLowerCase().includes('auth token')) ||
+    message.toLowerCase().includes('embedded signer')
+  ) {
+    return 'Sign-in for chat expired.'
+  }
 
   return message
 }

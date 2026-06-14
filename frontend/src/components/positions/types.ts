@@ -11,6 +11,7 @@ export type TimelineTrade = {
   id: string
   time: number
   coin: string | null
+  source: 'host' | 'counter'
   side: 'long' | 'short' | null
   action: 'entry' | 'add' | 'reduce' | 'close' | 'liquidated' | 'flip' | 'unknown'
   price: number | null
@@ -19,6 +20,9 @@ export type TimelineTrade = {
   closedPnl: number
   fee: number
   market: string
+  leverage: number | null
+  notionalUsd: number | null
+  marginUsd: number | null
 }
 
 export type TimelineChat = {
@@ -42,6 +46,8 @@ export type TimelineChat = {
 export type MarketPosition = {
   market: string
   coin: string
+  source: 'host' | 'counter'
+  ownerAddress: string
   side: 'long' | 'short' | null
   sizeUsd: number | null
   entryPrice: number | null
@@ -92,11 +98,15 @@ export type ChartOverlayEvent = {
   market: string | null
   kind: 'trade' | 'host-chat' | 'chat'
   action?: TimelineTrade['action']
+  source?: TimelineTrade['source']
   side?: TimelineTrade['side']
   price?: number | null
   size?: number | null
   closedPnl?: number
   dir?: string | null
+  leverage?: number | null
+  notionalUsd?: number | null
+  marginUsd?: number | null
   text?: string
   senderLabel?: string | null
   senderAvatarUrl?: string | null

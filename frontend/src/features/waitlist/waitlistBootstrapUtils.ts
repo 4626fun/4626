@@ -11,6 +11,7 @@ export const WAITLIST_STALE_SESSION_RESET_MESSAGE =
   'Your previous sign-in session expired and was reset. Tap Continue with email to sign in again.'
 
 export const FLOW_TIMEOUT_MS = 20_000
+export const PRIVY_TOKEN_READ_TIMEOUT_MS = 4_000
 export const TOKENLESS_FINALIZING_BOOTSTRAP_COOLDOWN_MS = 2_500
 export const RECOVERY_REQUIRED_BOOTSTRAP_COOLDOWN_MS = 15_000
 export const FINALIZING_BACKGROUND_RETRY_MS = 900

@@ -5,16 +5,15 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { useCounterTradeStatus } from '@/hooks/useCounterTradeStatus'
+import { CounterTradeFlowTimeline } from '@/components/alfaclub/CounterTradeFlowTimeline'
 
 const shellToneCard = 'bg-black/20 backdrop-blur-sm shadow-[0_30px_80px_rgba(0,0,0,0.45)] rounded-3xl'
 
 const docsPages = [
   { key: 'introduction', label: 'Introduction', path: '/arena/introduction' },
   { key: 'getting-started', label: 'Getting Started', path: '/arena/getting-started' },
-  { key: 'view-status', label: 'View Status', path: '/arena/view-status' },
-  { key: 'view-chart', label: 'View Chart', path: '/arena/view-chart' },
-  { key: 'counter-trade-files', label: 'Counter-Trade Files', path: '/arena/counter-trade-files' },
-  { key: 'positions', label: 'Positions', path: '/arena/positions' },
+  { key: 'how-it-works', label: 'How it Works', path: '/arena/how-it-works' },
+  { key: 'positions', label: 'View Live', path: '/arena/positions' },
 ] as const
 
 const counterTradeFileGroups = [
@@ -163,14 +162,30 @@ const scopeSpec = `flowchart LR
 export function Arena() {
   const location = useLocation()
   const isPositionsRoute = location.pathname === '/arena/positions'
+  const [inverseSidebarCollapsed, setInverseSidebarCollapsed] = useState(false)
 
   return (
     <div className="relative">
       <PageMeta title={META.arena.title} description={META.arena.description} canonicalPath="/arena" />
-      <section className="cinematic-section">
-        <aside className="hidden lg:block fixed left-0 top-0 h-screen w-64 border-r border-zinc-900/80 bg-black/50 backdrop-blur-md z-20">
+      <section className={isPositionsRoute ? 'cinematic-section no-divider-top !pt-0' : 'cinematic-section'}>
+        <aside
+          className={`hidden lg:block fixed left-0 top-0 h-screen border-r border-zinc-900/80 bg-black/50 backdrop-blur-md z-20 transition-[width] duration-200 ${
+            inverseSidebarCollapsed ? 'w-16' : 'w-64'
+          }`}
+        >
           <div className="h-full overflow-y-auto px-4 pt-24 pb-6">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500 mb-3">Inverse Engine</div>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              {!inverseSidebarCollapsed ? (
+                <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Inverse Engine</div>
+              ) : <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">IE</div>}
+              <button
+                type="button"
+                onClick={() => setInverseSidebarCollapsed((value) => !value)}
+                className="rounded-md bg-zinc-900/70 px-2 py-1 text-[10px] text-zinc-400 hover:text-zinc-100"
+              >
+                {inverseSidebarCollapsed ? '>' : '<'}
+              </button>
+            </div>
             <nav className="space-y-1">
               {docsPages.map((page) => {
                 const active = location.pathname === page.path
@@ -184,7 +199,7 @@ export function Arena() {
                         : 'text-zinc-400 hover:bg-zinc-900/70 hover:text-zinc-100'
                     }`}
                   >
-                    {page.label}
+                    {inverseSidebarCollapsed ? page.label.slice(0, 1) : page.label}
                   </Link>
                 )
               })}
@@ -195,8 +210,8 @@ export function Arena() {
         <div
           className={
             isPositionsRoute
-              ? 'mx-auto w-full max-w-[1920px] px-0 sm:px-0 lg:pl-[18rem] space-y-4'
-              : 'mx-auto w-full max-w-7xl px-4 sm:px-6 lg:pl-[18rem] space-y-6'
+              ? `w-full max-w-none px-0 sm:px-0 space-y-4 ${inverseSidebarCollapsed ? 'lg:pl-[4.5rem]' : 'lg:pl-[16rem]'}`
+              : `mx-auto w-full max-w-7xl px-4 sm:px-6 space-y-6 ${inverseSidebarCollapsed ? 'lg:pl-[6rem]' : 'lg:pl-[18rem]'}`
           }
         >
           {!isPositionsRoute ? (
@@ -698,46 +713,53 @@ export function ArenaChartPage() {
   )
 }
 
-export function ArenaCounterTradeFilesPage() {
+export function ArenaHowItWorksPage() {
   return (
     <article className={`${shellToneCard} p-8 sm:p-12`}>
-      <div className="max-w-6xl space-y-10">
+      <div className="max-w-7xl space-y-10">
+        {/* Header */}
         <section className="space-y-4">
-          <div className="label">Counter-trade inventory</div>
-          <h2 className="headline text-3xl sm:text-5xl">Files currently involved</h2>
-          <p className="text-base sm:text-lg text-zinc-300 leading-relaxed">
-            Living index of the counter-trading bot codepath used by the Arena inverse engine. Grouped by function so
-            operators can quickly locate execution logic, API surfaces, data model, and tests.
+          <div className="label">Counter-trade architecture</div>
+          <h2 className="headline text-3xl sm:text-5xl">How the pieces fit together</h2>
+          <p className="text-base sm:text-lg text-zinc-300 leading-relaxed max-w-3xl">
+            A clean left-to-right timeline of the runtime flow (condensed phases with connections) + the grouped file inventory with the original descriptions you liked.
           </p>
-          <p className="text-sm text-zinc-500">
-            Updated for the latest runner modularization (entry flow, exit flow, usage state, and room posting helpers).
+          <p className="text-sm text-amber-300/90">
+            Execution only happens on the dedicated Railway Hermit instance when <code className="text-amber-200/90">ALFACLUB_COUNTER_TRADE_RUNNER_ENABLED=1</code>.
+            Vercel surfaces are read-only observation.
           </p>
         </section>
+        <section className="pt-6">
+          <CounterTradeFlowTimeline />
+        </section>
+        <section className="space-y-4">
+          <div className="text-sm text-zinc-500">Files currently involved (grouped by function, same order as the diagram above)</div>
 
-        <section className="space-y-6">
-          {counterTradeFileGroups.map((group) => (
-            <div key={group.title} className="rounded-2xl border border-zinc-900/70 bg-black/25 p-5 sm:p-6 space-y-4">
-              <div className="space-y-1">
-                <h3 className="text-2xl text-zinc-100">{group.title}</h3>
-                <p className="text-sm text-zinc-500">{group.description}</p>
+          <div className="space-y-6">
+            {counterTradeFileGroups.map((group) => (
+              <div key={group.title} className="rounded-2xl border border-zinc-900/70 bg-black/25 p-5 sm:p-6 space-y-4">
+                <div className="space-y-1">
+                  <h3 className="text-2xl text-zinc-100">{group.title}</h3>
+                  <p className="text-sm text-zinc-500">{group.description}</p>
+                </div>
+                <ul className="space-y-2">
+                  {group.files.map((file) => (
+                    <li key={file.path} className="rounded-lg border border-zinc-900/70 bg-zinc-950/40 px-3 py-2">
+                      <code className="block text-xs sm:text-sm text-sky-300 break-all">{file.path}</code>
+                      <p className="mt-1 text-xs sm:text-sm text-zinc-400">{file.why}</p>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="space-y-2">
-                {group.files.map((file) => (
-                  <li key={file.path} className="rounded-lg border border-zinc-900/70 bg-zinc-950/40 px-3 py-2">
-                    <code className="block text-xs sm:text-sm text-sky-300 break-all">{file.path}</code>
-                    <p className="mt-1 text-xs sm:text-sm text-zinc-400">{file.why}</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+            ))}
+          </div>
         </section>
       </div>
     </article>
   )
 }
 
-function MermaidDiagram({ chart }: { chart: string }) {
+function MermaidDiagram({ chart, wrapperClassName = '' }: { chart: string; wrapperClassName?: string }) {
   const renderId = useId().replace(/:/g, '-')
   const [svg, setSvg] = useState<string>('')
   const [renderError, setRenderError] = useState<string | null>(null)
@@ -784,7 +806,7 @@ function MermaidDiagram({ chart }: { chart: string }) {
 
   return (
     <div
-      className="rounded-xl bg-black/40 border border-zinc-900/70 p-4 overflow-x-auto [&_svg]:w-full [&_svg]:h-auto"
+      className={`rounded-xl bg-black/40 border border-zinc-900/70 p-4 overflow-x-auto [&_svg]:w-full [&_svg]:h-auto ${wrapperClassName}`}
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   )

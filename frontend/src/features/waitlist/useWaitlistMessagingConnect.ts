@@ -2,8 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { XmtpStatus } from '@/lib/xmtp/provider'
 
+import { isPrivyEmbeddedSignerAuthError } from '@/lib/xmtp/xmtpHelpers'
+
 import type { WaitlistChatStatus } from './waitlistChatCopy'
 import { shouldRetryWaitlistJoin } from './waitlistChatCopy'
+import { formatWaitlistChatError } from './waitlistChatErrors'
 import type { PrepareWaitlistMessagingWalletResult } from './prepareWaitlistMessagingWallet'
 
 type UseWaitlistMessagingConnectParams = {
@@ -80,7 +83,15 @@ export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectP
           retryJoin()
         }
       } catch (err) {
-        setPrepareError(err instanceof Error ? err.message : String(err))
+        const raw = err instanceof Error ? err.message : String(err)
+        const friendly = formatWaitlistChatError(raw)
+        if (friendly) {
+          setPrepareError(friendly)
+        } else if (isPrivyEmbeddedSignerAuthError(raw)) {
+          setPrepareError('Sign-in for chat expired.')
+        } else {
+          setPrepareError(raw)
+        }
       } finally {
         connectInFlightRef.current = false
         setPrepareBusy(false)

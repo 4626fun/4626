@@ -182,9 +182,12 @@ export function PositionsChartSurface(props: {
   onSelectEvent: (id: string) => void
   onHoverEvent?: (id: string | null) => void
   marketLabel?: string | null
-  currentEntryPrice?: number | null
-  currentLiqPrice?: number | null
-  positionEntryData?: Array<{ time: number; value: number }>
+  roomEntryPrice?: number | null
+  roomLiqPrice?: number | null
+  agentEntryPrice?: number | null
+  agentLiqPrice?: number | null
+  roomEntryPathData?: Array<{ time: number; value: number }>
+  agentEntryPathData?: Array<{ time: number; value: number }>
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<IChartApi | null>(null)
@@ -202,10 +205,13 @@ export function PositionsChartSurface(props: {
   // candle's coordinate and then offset by (exactTime - candleTime) × pxPerSecond.
   const candleTimesRef = useRef<UTCTimestamp[]>([])
 
-  // Refs for current position price lines so they can be updated when the summary changes.
-  const entryPriceLineRef = useRef<any>(null)
-  const liqPriceLineRef = useRef<any>(null)
-  const entrySeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+  // Refs for lane-specific price lines so they can be updated when the summary changes.
+  const roomEntryPriceLineRef = useRef<any>(null)
+  const roomLiqPriceLineRef = useRef<any>(null)
+  const agentEntryPriceLineRef = useRef<any>(null)
+  const agentLiqPriceLineRef = useRef<any>(null)
+  const roomEntrySeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+  const agentEntrySeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
 
   const [crosshairInfo, setCrosshairInfo] = useState<{ time: number; price: number | null } | null>(null)
   const [hoveredTrade, setHoveredTrade] = useState<{ event: ChartOverlayEvent; x: number; y: number } | null>(
@@ -449,7 +455,8 @@ export function PositionsChartSurface(props: {
       wickUpColor: '#22c55e',
       wickDownColor: '#ef4444',
       borderVisible: false,
-      priceLineColor: '#60a5fa',
+      // Keep current/last price white so it's visually distinct from room entry (blue).
+      priceLineColor: '#f8fafc',
       lastValueVisible: true,
     })
     // Volume histogram on its own overlay scale, pinned to the bottom ~16% of the pane.
@@ -461,17 +468,24 @@ export function PositionsChartSurface(props: {
     })
     volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } })
 
-    // Historical entry price as a step/dashed line. This makes the position's average
-    // entry visible over time (steps when adds/reduces happen). Sampled from the
-    // reconstructed position context at candle times. Segments naturally per open position.
-    const entrySeries = chart.addSeries(LineSeries, {
+    // Historical room entry path (host lane).
+    const roomEntrySeries = chart.addSeries(LineSeries, {
       color: '#3b82f6',
       lineWidth: 2,
       lineStyle: LineStyle.Dashed,
       lastValueVisible: false,
       priceLineVisible: false,
     })
-    entrySeriesRef.current = entrySeries
+    roomEntrySeriesRef.current = roomEntrySeries
+    // Historical agent entry path (counter lane).
+    const agentEntrySeries = chart.addSeries(LineSeries, {
+      color: '#34d399',
+      lineWidth: 2,
+      lineStyle: LineStyle.Dashed,
+      lastValueVisible: false,
+      priceLineVisible: false,
+    })
+    agentEntrySeriesRef.current = agentEntrySeries
 
     const markersApi = createSeriesMarkers(candleSeries, [], { zOrder: 'top' })
 
@@ -551,36 +565,85 @@ export function PositionsChartSurface(props: {
     markersApiRef.current.setMarkers(markerData)
     candleTimesRef.current = candleData.map((candle) => candle.time)
     eventByIdRef.current = new Map(props.events.map((event) => [event.id, event]))
-    // Historical entry line (the step line showing the position's avg entry over time)
-    entrySeriesRef.current?.setData(
-      (props.positionEntryData ?? []).map((point) => ({
+    // Historical room entry path.
+    roomEntrySeriesRef.current?.setData(
+      (props.roomEntryPathData ?? []).map((point) => ({
         time: point.time as UTCTimestamp,
         value: point.value,
       })),
     )
-    // Update current position lines (entry + liq) whenever the loaded data / summary changes.
+    // Historical agent entry path.
+    agentEntrySeriesRef.current?.setData(
+      (props.agentEntryPathData ?? []).map((point) => ({
+        time: point.time as UTCTimestamp,
+        value: point.value,
+      })),
+    )
+    // Update lane-specific current position lines whenever loaded data / summary changes.
     const series = candleSeriesRef.current
     if (series) {
-      if (entryPriceLineRef.current) { try { series.removePriceLine(entryPriceLineRef.current) } catch {} ; entryPriceLineRef.current = null }
-      if (liqPriceLineRef.current) { try { series.removePriceLine(liqPriceLineRef.current) } catch {} ; liqPriceLineRef.current = null }
-      if (props.currentEntryPrice != null) {
-        entryPriceLineRef.current = series.createPriceLine({
-          price: props.currentEntryPrice,
+      if (roomEntryPriceLineRef.current) {
+        try {
+          series.removePriceLine(roomEntryPriceLineRef.current)
+        } catch {}
+        roomEntryPriceLineRef.current = null
+      }
+      if (roomLiqPriceLineRef.current) {
+        try {
+          series.removePriceLine(roomLiqPriceLineRef.current)
+        } catch {}
+        roomLiqPriceLineRef.current = null
+      }
+      if (agentEntryPriceLineRef.current) {
+        try {
+          series.removePriceLine(agentEntryPriceLineRef.current)
+        } catch {}
+        agentEntryPriceLineRef.current = null
+      }
+      if (agentLiqPriceLineRef.current) {
+        try {
+          series.removePriceLine(agentLiqPriceLineRef.current)
+        } catch {}
+        agentLiqPriceLineRef.current = null
+      }
+      if (props.roomEntryPrice != null) {
+        roomEntryPriceLineRef.current = series.createPriceLine({
+          price: props.roomEntryPrice,
           color: '#60a5fa',
           lineWidth: 1,
           lineStyle: LineStyle.Dotted,
           axisLabelVisible: true,
-          title: 'Entry',
+          title: 'Room Entry',
         })
       }
-      if (props.currentLiqPrice != null) {
-        liqPriceLineRef.current = series.createPriceLine({
-          price: props.currentLiqPrice,
+      if (props.roomLiqPrice != null) {
+        roomLiqPriceLineRef.current = series.createPriceLine({
+          price: props.roomLiqPrice,
           color: '#f87171',
           lineWidth: 1,
           lineStyle: LineStyle.Dashed,
           axisLabelVisible: true,
-          title: 'Liq',
+          title: 'Room Liq',
+        })
+      }
+      if (props.agentEntryPrice != null) {
+        agentEntryPriceLineRef.current = series.createPriceLine({
+          price: props.agentEntryPrice,
+          color: '#34d399',
+          lineWidth: 1,
+          lineStyle: LineStyle.Dotted,
+          axisLabelVisible: true,
+          title: 'Agent Entry',
+        })
+      }
+      if (props.agentLiqPrice != null) {
+        agentLiqPriceLineRef.current = series.createPriceLine({
+          price: props.agentLiqPrice,
+          color: '#34d399',
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: 'Agent Liq',
         })
       }
     }
@@ -590,7 +653,19 @@ export function PositionsChartSurface(props: {
       recomputeOverlaysRef.current()
     })
     return () => cancelAnimationFrame(raf)
-  }, [candleData, volumeData, markerData, props.events, chartReady, props.currentEntryPrice, props.currentLiqPrice, props.positionEntryData])
+  }, [
+    candleData,
+    volumeData,
+    markerData,
+    props.events,
+    chartReady,
+    props.roomEntryPrice,
+    props.roomLiqPrice,
+    props.agentEntryPrice,
+    props.agentLiqPrice,
+    props.roomEntryPathData,
+    props.agentEntryPathData,
+  ])
 
   useEffect(() => {
     if (!chartRef.current || candleData.length <= 2) return
@@ -633,7 +708,7 @@ export function PositionsChartSurface(props: {
       )}
 
       {/* Visitor control: spacing between events and candles */}
-      <div className="pointer-events-auto absolute right-14 top-3 z-30 flex items-center gap-2 rounded-md border border-white/10 bg-zinc-950/80 px-2.5 py-1.5 text-[11px] text-zinc-300 backdrop-blur-sm">
+      <div className="pointer-events-auto absolute right-14 top-3 z-30 flex items-center gap-2 rounded-md bg-zinc-950/80 px-2.5 py-1.5 text-[11px] text-zinc-300 backdrop-blur-sm">
         <span className="text-zinc-500">Event spacing</span>
         <input
           type="range"
@@ -707,7 +782,7 @@ export function PositionsChartSurface(props: {
       {/* Chat hover card: message + price / position / P&L at that moment */}
       {hoveredChat && (
         <div
-          className="pointer-events-none absolute z-30 w-[320px] max-w-[78vw] rounded-2xl border border-white/20 bg-zinc-950/96 p-3 shadow-2xl backdrop-blur-sm"
+          className="pointer-events-none absolute z-30 w-[320px] max-w-[78vw] rounded-2xl bg-zinc-950/96 p-3 shadow-2xl backdrop-blur-sm"
           style={{
             // Dock into the candle-free whitespace at the top of the pane and centre over
             // the hovered candle, so the card never floats across the live price action.
@@ -763,7 +838,7 @@ export function PositionsChartSurface(props: {
                   {hoveredChat.event.text}
                 </div>
               )}
-              <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-white/10 pt-2 text-[11px]">
+              <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 pt-2 text-[11px]">
                 <div className="text-zinc-500">Price</div>
                 <div className="text-right text-zinc-100">
                   {hoveredChat.event.price != null ? `$${hoveredChat.event.price.toFixed(4)}` : 'n/a'}
@@ -813,7 +888,7 @@ export function PositionsChartSurface(props: {
                 {hoveredChat.group.slice(-5).map((message) => (
                   <div
                     key={message.id}
-                    className="flex gap-2 rounded-lg border border-white/5 bg-white/[0.03] p-2"
+                    className="flex gap-2 rounded-lg bg-white/[0.03] p-2"
                   >
                     <span
                       className="relative block h-6 w-6 shrink-0 overflow-hidden rounded-full"
@@ -860,7 +935,7 @@ export function PositionsChartSurface(props: {
                 ))}
               </div>
               {hoveredChat.count > 5 && (
-                <div className="mt-2 border-t border-white/10 pt-1 text-[10px] text-zinc-500">
+                <div className="mt-2 pt-1 text-[10px] text-zinc-500">
                   +{hoveredChat.count - 5} more — open from the timeline list to read all
                 </div>
               )}
@@ -872,7 +947,7 @@ export function PositionsChartSurface(props: {
       {/* Trade hover card (key events) near the cursor */}
       {hoveredTrade && !hoveredChat && (
         <div
-          className="pointer-events-none absolute z-20 w-[230px] rounded-xl border border-white/15 bg-zinc-950/95 p-3 text-[11px] shadow-2xl backdrop-blur-sm"
+          className="pointer-events-none absolute z-20 w-[230px] rounded-xl bg-zinc-950/95 p-3 text-[11px] shadow-2xl backdrop-blur-sm"
           style={{
             left: `${Math.min(
               Math.max(hoveredTrade.x + 16, 12),
@@ -937,6 +1012,14 @@ export function PositionsChartSurface(props: {
                 <div className="text-right text-zinc-300">{hoveredTrade.event.market}</div>
               </>
             )}
+            {hoveredTrade.event.source && (
+              <>
+                <div className="text-zinc-500">Lane</div>
+                <div className="text-right text-zinc-300">
+                  {hoveredTrade.event.source === 'counter' ? 'Inverse engine' : 'Room host'}
+                </div>
+              </>
+            )}
             {(hoveredTrade.event.action === 'close' || hoveredTrade.event.action === 'liquidated') &&
               typeof hoveredTrade.event.closedPnl === 'number' && (
                 <>
@@ -956,7 +1039,7 @@ export function PositionsChartSurface(props: {
       )}
 
       {/* Always-on crosshair readout (top-left) */}
-      <div className="pointer-events-none absolute left-3 top-3 rounded-md border border-white/10 bg-zinc-950/80 px-2.5 py-1.5 text-[11px] text-zinc-200 backdrop-blur-sm">
+      <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-zinc-950/80 px-2.5 py-1.5 text-[11px] text-zinc-200 backdrop-blur-sm">
         {crosshairInfo ? (
           <div className="space-y-0.5">
             <div>{new Date(crosshairInfo.time).toLocaleString()}</div>

@@ -20,6 +20,30 @@ function formatTime(value: number): string {
   })
 }
 
+const ALFACLUB_ROOM_URL = 'https://alfaclub.app/rooms/1659/'
+const VIRTUALS_AGENT_URL = 'https://degen.virtuals.io/agents/1213'
+
+function tradeSourceMeta(source: 'host' | 'counter') {
+  if (source === 'counter') {
+    return {
+      label: 'Inverse trade',
+      href: VIRTUALS_AGENT_URL,
+      logo: '/protocols/virtuals.svg',
+      logoAlt: 'Virtuals',
+      chipClass: 'bg-emerald-400/10 text-emerald-200',
+      ringClass: 'bg-emerald-900/30 ring-emerald-300/25',
+    }
+  }
+  return {
+    label: 'Room trade',
+    href: ALFACLUB_ROOM_URL,
+    logo: '/protocols/alfaclub.svg',
+    logoAlt: 'AlfaClub',
+    chipClass: 'bg-sky-400/10 text-sky-200',
+    ringClass: 'bg-sky-900/30 ring-sky-300/25',
+  }
+}
+
 function nearestCandleClose(ts: number, candles: TimelineResponse['candles']): number | null {
   if (candles.length === 0) return null
   let best = candles[0]!
@@ -92,12 +116,109 @@ function buildPositionContextResolver(fills: PositionFill[]) {
   }
 }
 
-function inferExitReason(event: Pick<ChartOverlayEvent, 'action' | 'dir'>): string | null {
-  if (event.action === 'liquidated') return 'Liquidation'
-  if (event.action !== 'close') return null
+function resolveTradeSideLabel(event: Pick<ChartOverlayEvent, 'side' | 'dir'>): 'long' | 'short' | null {
+  if (event.side === 'long' || event.side === 'short') return event.side
   const dir = (event.dir ?? '').toLowerCase()
-  if (dir.includes('liquidat') || dir.includes('liq')) return 'Liquidation'
-  return 'Manual Close'
+  if (dir.includes('short')) return 'short'
+  if (dir.includes('long')) return 'long'
+  return null
+}
+
+function describeTradeEventAction(event: Pick<ChartOverlayEvent, 'action' | 'side' | 'dir' | 'closedPnl'>): string {
+  const side = resolveTradeSideLabel(event)
+  const sideText = side ? ` ${side}` : ''
+  switch (event.action) {
+    case 'entry':
+      return `Opened new${sideText || ' position'}`
+    case 'add':
+      return `Added to${sideText || ' position'}`
+    case 'reduce':
+      return `Reduced${sideText || ' position'}`
+    case 'close':
+      if (typeof event.closedPnl === 'number' && event.closedPnl > 0) {
+        return `Took profit on${sideText || ' position'}`
+      }
+      return `Closed${sideText || ' position'}`
+    case 'liquidated':
+      return `Liquidated${sideText || ' position'}`
+    case 'flip':
+      return `Flipped to${sideText || ' opposite side'}`
+    default:
+      return 'Trade update'
+  }
+}
+
+function formatCompactUsd(value: number): string {
+  return value.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+function toPositiveNumber(value: number | null | undefined): number | null {
+  return value != null && Number.isFinite(value) && value > 0 ? value : null
+}
+
+function formatCompactLeverage(value: number): string {
+  return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)
+}
+
+function buildTradeSummaryLine(
+  event: Pick<ChartOverlayEvent, 'price' | 'size' | 'leverage' | 'notionalUsd' | 'marginUsd'>,
+  marketLabel: string,
+): string {
+  const price = toPositiveNumber(event.price)
+  const leverage = toPositiveNumber(event.leverage)
+  const explicitNotional = toPositiveNumber(event.notionalUsd)
+  const computedNotional =
+    price != null && event.size != null && Number.isFinite(event.size)
+      ? Math.abs(price * event.size)
+      : null
+  const notional = explicitNotional ?? computedNotional
+  const explicitMargin = toPositiveNumber(event.marginUsd)
+  const margin = explicitMargin ?? (notional != null && leverage != null ? notional / leverage : null)
+
+  if (margin != null && leverage != null && notional != null && price != null) {
+    return `${formatCompactUsd(margin)} x${formatCompactLeverage(leverage)} = ${formatCompactUsd(notional)} @ ${formatCompactUsd(price)}`
+  }
+  if (notional != null && price != null) {
+    return `${formatCompactUsd(notional)} @ ${formatCompactUsd(price)}`
+  }
+  if (price != null && event.size != null && Number.isFinite(event.size)) {
+    return `${formatTokenAmount(event.size)} ${marketLabel} @ ${formatCompactUsd(price)}`
+  }
+  if (event.size != null && Number.isFinite(event.size)) {
+    return `Size ${formatTokenAmount(event.size)} ${marketLabel}`
+  }
+  return 'Trade update'
+}
+
+function formatTokenAmount(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return 'n/a'
+  return Math.abs(value).toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 4,
+  })
+}
+
+function buildEntryPathData(
+  candles: TimelineResponse['candles'],
+  resolver: ReturnType<typeof buildPositionContextResolver>,
+): Array<{ time: number; value: number }> {
+  if (!candles.length) return []
+  const points: Array<{ time: number; value: number }> = []
+  for (const candle of candles) {
+    const ctx = resolver(candle.time, candle.close)
+    if (ctx.avgEntry != null && ctx.size > 0) {
+      points.push({
+        time: Math.floor(candle.time / 1000),
+        value: ctx.avgEntry,
+      })
+    }
+  }
+  return points
 }
 
 /**
@@ -149,7 +270,7 @@ function aggregateTradeEventsForDisplay(trades: RawTradeEvent[]): RawTradeEvent[
     existing.count += 1
   }
 
-  return [...buckets.values()]
+  const aggregated = [...buckets.values()]
     .map((bucket) => {
       const averagePrice =
         bucket.weightedQtySum > 0 ? bucket.weightedPriceSum / bucket.weightedQtySum : bucket.sample.price
@@ -166,6 +287,91 @@ function aggregateTradeEventsForDisplay(trades: RawTradeEvent[]): RawTradeEvent[
       } satisfies RawTradeEvent
     })
     .sort((a, b) => a.time - b.time)
+
+  return pruneRedundantZeroSizeTradeEvents(mergeAdjacentLifecycleTradeEvents(aggregated))
+}
+
+function resolveMergedLifecycleAction(
+  left: RawTradeEvent['action'],
+  right: RawTradeEvent['action'],
+): RawTradeEvent['action'] | null {
+  const actionSet = new Set([left, right])
+  if (actionSet.has('entry') && actionSet.has('add')) return 'entry'
+  if (actionSet.has('reduce') && actionSet.has('close')) return 'close'
+  return null
+}
+
+function mergeLifecyclePair(
+  base: RawTradeEvent,
+  incoming: RawTradeEvent,
+  mergedAction: RawTradeEvent['action'],
+): RawTradeEvent {
+  const baseQty = Math.abs(base.size ?? 0)
+  const incomingQty = Math.abs(incoming.size ?? 0)
+  const weightedPrice =
+    baseQty + incomingQty > 0
+      ? ((base.price ?? 0) * baseQty + (incoming.price ?? 0) * incomingQty) / (baseQty + incomingQty)
+      : (incoming.price ?? base.price ?? null)
+  return {
+    ...base,
+    id: `merged:${base.id}:${incoming.id}`,
+    action: mergedAction,
+    side: base.side ?? incoming.side,
+    dir: base.dir ?? incoming.dir,
+    size: (base.size ?? 0) + (incoming.size ?? 0),
+    fee: (base.fee ?? 0) + (incoming.fee ?? 0),
+    closedPnl: (base.closedPnl ?? 0) + (incoming.closedPnl ?? 0),
+    price: weightedPrice,
+  }
+}
+
+function mergeAdjacentLifecycleTradeEvents(events: RawTradeEvent[]): RawTradeEvent[] {
+  if (events.length <= 1) return events
+  const merged: RawTradeEvent[] = []
+  for (const event of events) {
+    const last = merged[merged.length - 1]
+    if (!last) {
+      merged.push(event)
+      continue
+    }
+
+    const isSameBucket =
+      last.time === event.time && last.market === event.market && last.source === event.source
+    const mergedAction = isSameBucket ? resolveMergedLifecycleAction(last.action, event.action) : null
+    if (mergedAction) {
+      merged[merged.length - 1] = mergeLifecyclePair(last, event, mergedAction)
+      continue
+    }
+
+    merged.push(event)
+  }
+  return merged
+}
+
+function pruneRedundantZeroSizeTradeEvents(events: RawTradeEvent[]): RawTradeEvent[] {
+  if (events.length <= 1) return events
+
+  const SIZE_EPSILON = 1e-9
+  const bucketHasMeaningfulSize = new Map<string, boolean>()
+
+  const keyFor = (event: RawTradeEvent) =>
+    `${Math.floor(event.time / 60_000)}|${event.market}|${event.source}|${event.action}|${event.side ?? 'none'}`
+
+  for (const event of events) {
+    const key = keyFor(event)
+    if (Math.abs(event.size ?? 0) > SIZE_EPSILON) {
+      bucketHasMeaningfulSize.set(key, true)
+    } else if (!bucketHasMeaningfulSize.has(key)) {
+      bucketHasMeaningfulSize.set(key, false)
+    }
+  }
+
+  return events.filter((event) => {
+    const key = keyFor(event)
+    const hasMeaningfulSibling = bucketHasMeaningfulSize.get(key) === true
+    const isZeroSize = Math.abs(event.size ?? 0) <= SIZE_EPSILON
+    return !(isZeroSize && hasMeaningfulSibling)
+  })
 }
 
 // Finer candles when zoomed in, coarser for long windows — keeps us under Hyperliquid's
@@ -238,6 +444,9 @@ async function fetchRoomTimelineBySymbol(
 }
 
 export function Positions() {
+  const PANEL_MIN_WIDTH = 180
+  const PANEL_MAX_WIDTH = 420
+  const PANEL_DEFAULT_WIDTH = 280
   const [chatScope, setChatScope] = useState<'host' | 'all' | 'sender'>('all')
   const [selectedSender, setSelectedSender] = useState<string | null>(null)
   const [selectedMarket, setSelectedMarket] = useState<string>('')
@@ -245,13 +454,28 @@ export function Positions() {
   const [intervalChoice, setIntervalChoice] = useState<IntervalChoice>('5m')
   const [densityMode, setDensityMode] = useState<'all' | 'major'>('all')
   const [showTrades, setShowTrades] = useState(true)
-  const [hideBots, setHideBots] = useState(true)
-  const [hideCommands, setHideCommands] = useState(true)
+  const [showHermitComments, setShowHermitComments] = useState(false)
+  const [showCommandMessages, setShowCommandMessages] = useState(false)
+  const [showEntryPath, setShowEntryPath] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [hoveredEventId, setHoveredEventId] = useState<string | null>(null)
+  const [tradePanelCollapsed, setTradePanelCollapsed] = useState(false)
+  const [messagePanelCollapsed, setMessagePanelCollapsed] = useState(false)
+  const [tradePanelWidth, setTradePanelWidth] = useState(PANEL_DEFAULT_WIDTH)
+  const [messagePanelWidth, setMessagePanelWidth] = useState(PANEL_DEFAULT_WIDTH)
+  const [tradeSourceFilter, setTradeSourceFilter] = useState<'all' | 'host' | 'counter'>('all')
+  const [messageSourceFilter, setMessageSourceFilter] = useState<'all' | 'host' | 'room' | 'bot'>('all')
+  const resizeStateRef = useRef<{
+    side: 'left' | 'right'
+    startX: number
+    startWidth: number
+  } | null>(null)
+  const [activeResizeSide, setActiveResizeSide] = useState<'left' | 'right' | null>(null)
 
-  // Ref for the timeline list scroll container so we can bring the selected row into view.
-  const timelineListRef = useRef<HTMLDivElement | null>(null)
+  // Refs for timeline scroll containers so selected events can be brought into view.
+  const tradeTimelineListRef = useRef<HTMLDivElement | null>(null)
+  const messageTimelineListRef = useRef<HTMLDivElement | null>(null)
 
   const selectedSymbolForQuery = useMemo(() => {
     const [symbol] = selectedMarket.split('/')
@@ -270,25 +494,54 @@ export function Positions() {
     staleTime: 30_000,
   })
 
+  const preferredOpenMarket = useMemo(() => {
+    const positions = data?.currentPositions ?? []
+    const openPositions = positions.filter((position) => position.side != null)
+    if (openPositions.length === 0) return null
+    // Default to the open market with the highest live TVL (abs sizeUsd).
+    // Tie-breaker keeps BTC first when exposure is effectively equal.
+    const ranked = [...openPositions].sort((a, b) => {
+      const byTvl = Math.abs(b.sizeUsd ?? 0) - Math.abs(a.sizeUsd ?? 0)
+      if (Math.abs(byTvl) > 1e-9) return byTvl
+      if (a.market === 'BTC/USDC' && b.market !== 'BTC/USDC') return -1
+      if (b.market === 'BTC/USDC' && a.market !== 'BTC/USDC') return 1
+      return 0
+    })
+    return ranked[0]?.market ?? null
+  }, [data?.currentPositions])
+
   // Resolve the active market during render instead of syncing via an effect.
   // `selectedMarket` is the raw user choice (empty until they pick one); we fall
   // back to the server default whenever the choice is empty or no longer available.
   const effectiveMarket = useMemo(() => {
     const available = data?.markets ?? []
     if (selectedMarket && available.includes(selectedMarket)) return selectedMarket
+    if (preferredOpenMarket && available.includes(preferredOpenMarket)) return preferredOpenMarket
     return data?.defaultMarket ?? selectedMarket
-  }, [data?.defaultMarket, data?.markets, selectedMarket])
+  }, [data?.defaultMarket, data?.markets, preferredOpenMarket, selectedMarket])
+
+  // Keep the initial chart/feed market aligned with the highest-open-TVL market when the user
+  // has not made an explicit selection yet.
+  useEffect(() => {
+    if (selectedMarket) return
+    if (!data?.markets || data.markets.length === 0) return
+    const next =
+      preferredOpenMarket && data.markets.includes(preferredOpenMarket)
+        ? preferredOpenMarket
+        : data.defaultMarket
+    if (!next) return
+    const timer = window.setTimeout(() => {
+      setSelectedMarket(next)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [data?.defaultMarket, data?.markets, preferredOpenMarket, selectedMarket])
 
   // Bot filter (Hermit etc.) is applied early so that sender options and downstream
   // lists/chart only see human messages when the toggle is active.
   const baseChatEvents = useMemo(() => {
     let evs = data?.chatEvents ?? []
-    if (hideBots) {
-      // Hide bot messages. We primarily use the isBot flag (populated server-side from
-      // AlfaClub ingest/read API). As a robust fallback for Hermit4626 specifically, we
-      // also hide anything whose senderLabel contains "hermit" (e.g. "hermit4626", "Hermit").
-      // This ensures messages from the Hermit bot are hidden even if the isBot flag is
-      // missing on some payloads (historical data, certain read paths, etc.).
+    if (!showHermitComments) {
+      // Hide Hermit comments when toggle is OFF.
       evs = evs.filter((e) => {
         if (e.isBot === true) return false;
         const label = (e.senderLabel || '').toLowerCase();
@@ -296,13 +549,12 @@ export function Positions() {
         return true;
       });
     }
-    if (hideCommands) {
-      // Filter out bot command invocations (e.g. /hermit, /gmeow, /signal, etc.).
-      // These are typically the inputs that trigger Hermit rather than organic chat.
+    if (!showCommandMessages) {
+      // Hide slash-command messages when toggle is OFF.
       evs = evs.filter((e) => !(e.text || '').trim().startsWith('/'))
     }
     return evs
-  }, [data?.chatEvents, hideBots, hideCommands])
+  }, [data?.chatEvents, showHermitComments, showCommandMessages])
 
   const senderOptions = useMemo(() => {
     const map = new Map<string, string>()
@@ -364,30 +616,62 @@ export function Positions() {
     )
   }, [filteredTradeEvents])
 
-  // Historical step line data for the position's average entry price while the position
-  // was open. Sampled at every candle time using the reconstructed context. This makes
-  // position openings, adds, and the entry level visually traceable over time on the chart.
-  const positionEntryData = useMemo(() => {
-    const candles = data?.candles ?? []
-    if (!candles.length) return []
-    const points: Array<{ time: number; value: number }> = []
-    for (const c of candles) {
-      const ctx = positionContextResolver(c.time, c.close)
-      if (ctx.avgEntry != null && ctx.size > 0) {
-        // Convert ms timestamp to seconds (UTCTimestamp) for the chart series
-        points.push({
-          time: Math.floor(c.time / 1000),
-          value: ctx.avgEntry,
-        })
-      }
-    }
-    return points
-  }, [data?.candles, positionContextResolver])
+  const roomPositionContextResolver = useMemo(() => {
+    return buildPositionContextResolver(
+      filteredTradeEvents
+        .filter((event) => event.source === 'host')
+        .map((event) => ({
+          time: event.time,
+          side: event.side,
+          size: event.size,
+          price: event.price,
+        })),
+    )
+  }, [filteredTradeEvents])
+
+  const agentPositionContextResolver = useMemo(() => {
+    return buildPositionContextResolver(
+      filteredTradeEvents
+        .filter((event) => event.source === 'counter')
+        .map((event) => ({
+          time: event.time,
+          side: event.side,
+          size: event.size,
+          price: event.price,
+        })),
+    )
+  }, [filteredTradeEvents])
+
+  const roomEntryPathData = useMemo(
+    () => buildEntryPathData(data?.candles ?? [], roomPositionContextResolver),
+    [data?.candles, roomPositionContextResolver],
+  )
+
+  const agentEntryPathData = useMemo(
+    () => buildEntryPathData(data?.candles ?? [], agentPositionContextResolver),
+    [data?.candles, agentPositionContextResolver],
+  )
 
   const selectedSummary = useMemo(() => {
     const summaries = data?.marketSummaries ?? []
     return summaries.find((summary) => summary.market === effectiveMarket) ?? summaries[0] ?? null
   }, [data?.marketSummaries, effectiveMarket])
+
+  const roomCurrentPosition = useMemo(() => {
+    const positions = (data?.currentPositions ?? []).filter(
+      (position) => position.market === effectiveMarket && position.source === 'host',
+    )
+    if (positions.length === 0) return null
+    return [...positions].sort((a, b) => Math.abs(b.sizeUsd ?? 0) - Math.abs(a.sizeUsd ?? 0))[0] ?? null
+  }, [data?.currentPositions, effectiveMarket])
+
+  const agentCurrentPosition = useMemo(() => {
+    const positions = (data?.currentPositions ?? []).filter(
+      (position) => position.market === effectiveMarket && position.source === 'counter',
+    )
+    if (positions.length === 0) return null
+    return [...positions].sort((a, b) => Math.abs(b.sizeUsd ?? 0) - Math.abs(a.sizeUsd ?? 0))[0] ?? null
+  }, [data?.currentPositions, effectiveMarket])
 
   const lastPrice = useMemo(() => {
     const candles = data?.candles ?? []
@@ -403,11 +687,15 @@ export function Positions() {
           market: event.market,
           kind: 'trade',
           action: event.action,
+          source: event.source,
           side: event.side,
           price: event.price,
           size: event.size,
           closedPnl: event.closedPnl,
           dir: event.dir,
+          leverage: event.leverage,
+          notionalUsd: event.notionalUsd,
+          marginUsd: event.marginUsd,
         }))
       : []
     const chats = filteredChatEvents.map<ChartOverlayEvent>((event) => {
@@ -472,6 +760,31 @@ export function Positions() {
     return [...recent].reverse()
   }, [allOverlayEvents])
 
+  const timelineTradeEvents = useMemo(
+    () => timelineListEvents.filter((event) => event.kind === 'trade'),
+    [timelineListEvents],
+  )
+  const timelineChatEvents = useMemo(
+    () => timelineListEvents.filter((event) => event.kind !== 'trade'),
+    [timelineListEvents],
+  )
+
+  const filteredTimelineTradeEvents = useMemo(() => {
+    if (tradeSourceFilter === 'all') return timelineTradeEvents
+    return timelineTradeEvents.filter((event) => event.source === tradeSourceFilter)
+  }, [timelineTradeEvents, tradeSourceFilter])
+
+  const filteredTimelineChatEvents = useMemo(() => {
+    if (messageSourceFilter === 'all') return timelineChatEvents
+    if (messageSourceFilter === 'host') {
+      return timelineChatEvents.filter((event) => event.kind === 'host-chat')
+    }
+    if (messageSourceFilter === 'room') {
+      return timelineChatEvents.filter((event) => event.kind === 'chat')
+    }
+    return timelineChatEvents.filter((event) => event.isBot)
+  }, [timelineChatEvents, messageSourceFilter])
+
   const stepEvent = useCallback((delta: -1 | 1) => {
     if (allOverlayEvents.length === 0) return
     if (selectedEventIndex < 0) {
@@ -499,19 +812,71 @@ export function Positions() {
   // When selection changes (via click, keyboard arrows, or inspector), scroll the
   // corresponding row into view inside the timeline list (newest-first order).
   useEffect(() => {
-    if (!selectedEventId || !timelineListRef.current) return
-    const container = timelineListRef.current
-    const row = container.querySelector(`[data-event-id="${selectedEventId}"]`) as HTMLElement | null
-    if (row) {
-      row.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    if (!selectedEventId) return
+    const containers = [tradeTimelineListRef.current, messageTimelineListRef.current]
+    for (const container of containers) {
+      if (!container) continue
+      const row = container.querySelector(`[data-event-id="${selectedEventId}"]`) as HTMLElement | null
+      if (row) {
+        row.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+        break
+      }
     }
   }, [selectedEventId])
+
+  const positionsGridColumns = useMemo(() => {
+    const left = tradePanelCollapsed ? 64 : tradePanelWidth
+    const right = messagePanelCollapsed ? 64 : messagePanelWidth
+    return `${left}px 12px minmax(0,1fr) 12px ${right}px`
+  }, [messagePanelCollapsed, messagePanelWidth, tradePanelCollapsed, tradePanelWidth])
+
+  const beginResize = useCallback(
+    (side: 'left' | 'right') => (event: React.MouseEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      resizeStateRef.current = {
+        side,
+        startX: event.clientX,
+        startWidth: side === 'left' ? tradePanelWidth : messagePanelWidth,
+      }
+      setActiveResizeSide(side)
+    },
+    [messagePanelWidth, tradePanelWidth],
+  )
+
+  useEffect(() => {
+    if (!activeResizeSide) return
+
+    const onMove = (event: MouseEvent) => {
+      const state = resizeStateRef.current
+      if (!state) return
+      const deltaX = event.clientX - state.startX
+      if (state.side === 'left') {
+        const next = Math.max(PANEL_MIN_WIDTH, Math.min(PANEL_MAX_WIDTH, state.startWidth + deltaX))
+        setTradePanelWidth(next)
+        return
+      }
+      const next = Math.max(PANEL_MIN_WIDTH, Math.min(PANEL_MAX_WIDTH, state.startWidth - deltaX))
+      setMessagePanelWidth(next)
+    }
+
+    const onUp = () => {
+      resizeStateRef.current = null
+      setActiveResizeSide(null)
+    }
+
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [activeResizeSide])
 
   return (
     <div className="relative pb-24 md:pb-0">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-52 bg-gradient-to-b from-sky-500/10 to-transparent" />
-      <section className="cinematic-section !py-6 sm:!py-8 lg:!py-10">
-        <div className="max-w-[1920px] mx-auto px-4 sm:px-6">
+      <section className="cinematic-section no-divider-top !pt-0 !pb-6 sm:!pb-8 lg:!pb-10">
+        <div className="w-full px-2 sm:px-3 lg:px-4 2xl:px-6">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -525,18 +890,46 @@ export function Positions() {
               overlaid with the chatter that called them, mapped to the market they reference.
               Blue dashed = entry line (per position lifetime) · Red dashed = liq. Volume shown on "Position Open" rows.
             </p>
-            <a
-              href="https://alfaclub.app/rooms/1659/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-sky-400/30 bg-sky-400/10 px-3 py-1 text-xs font-medium text-sky-200 transition hover:border-sky-400/60 hover:bg-sky-400/15"
-            >
-              Powered by AlfaClub · Room 1659
-              <span aria-hidden>↗</span>
-            </a>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-zinc-500">Powered by</span>
+              <a
+                href={ALFACLUB_ROOM_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-full bg-sky-400/10 px-3 py-1 font-medium text-sky-200 transition hover:bg-sky-400/15"
+              >
+                <span className="inline-flex h-5 w-5 items-center justify-center overflow-hidden rounded-full bg-sky-900/30 ring-1 ring-sky-300/25">
+                  <img
+                    src="/protocols/alfaclub.svg"
+                    alt="AlfaClub"
+                    className="h-4 w-4 object-contain"
+                    loading="lazy"
+                  />
+                </span>
+                Room 1659
+                <span aria-hidden>↗</span>
+              </a>
+              <a
+                href={VIRTUALS_AGENT_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-3 py-1 font-medium text-emerald-200 transition hover:bg-emerald-400/15"
+              >
+                <span className="inline-flex h-5 w-5 items-center justify-center overflow-hidden rounded-full bg-emerald-900/30 ring-1 ring-emerald-300/25">
+                  <img
+                    src="/protocols/virtuals.svg"
+                    alt="Virtuals"
+                    className="h-4 w-4 object-contain"
+                    loading="lazy"
+                  />
+                </span>
+                Agent 1213
+                <span aria-hidden>↗</span>
+              </a>
+            </div>
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <select
-                className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
+                className="rounded-full bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
                 value={effectiveMarket}
                 onChange={(event) => setSelectedMarket(event.target.value)}
               >
@@ -547,7 +940,7 @@ export function Positions() {
                 ))}
               </select>
               <select
-                className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
+                className="rounded-full bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
                 value={String(windowHours)}
                 onChange={(event) => setWindowHours(Number(event.target.value) as 24 | 72 | 168)}
               >
@@ -556,7 +949,7 @@ export function Positions() {
                 <option value="168">7d</option>
               </select>
               <select
-                className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
+                className="rounded-full bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
                 value={intervalChoice}
                 onChange={(event) => setIntervalChoice(event.target.value as IntervalChoice)}
                 title="Candle interval — finer intervals spread same-candle messages apart"
@@ -571,7 +964,7 @@ export function Positions() {
                 {isIntervalAllowed('4h', windowHours) && <option value="4h">4h</option>}
               </select>
               <select
-                className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
+                className="rounded-full bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
                 value={densityMode}
                 onChange={(event) => setDensityMode(event.target.value as 'all' | 'major')}
               >
@@ -579,7 +972,7 @@ export function Positions() {
                 <option value="major">Key events only</option>
               </select>
               <select
-                className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
+                className="rounded-full bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
                 value={effectiveChatScope}
                 onChange={(event) => {
                   const scope = event.target.value as 'host' | 'all' | 'sender'
@@ -597,7 +990,7 @@ export function Positions() {
               </select>
               {effectiveChatScope === 'sender' && (
                 <select
-                  className="rounded-full border border-white/10 bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
+                  className="rounded-full bg-zinc-900 text-zinc-100 text-xs px-3 py-1.5"
                   value={effectiveSelectedSender ?? ''}
                   onChange={(event) => setSelectedSender(event.target.value || null)}
                 >
@@ -609,30 +1002,12 @@ export function Positions() {
                 </select>
               )}
               <Button
-                variant={showTrades ? 'primary' : 'secondary'}
+                variant={settingsOpen ? 'primary' : 'secondary'}
                 size="sm"
                 className="btn-compact rounded-full text-xs"
-                onClick={() => setShowTrades((value) => !value)}
+                onClick={() => setSettingsOpen((value) => !value)}
               >
-                Trades
-              </Button>
-              <Button
-                variant={hideBots ? 'primary' : 'secondary'}
-                size="sm"
-                className="btn-compact rounded-full text-xs"
-                onClick={() => setHideBots((value) => !value)}
-                title={hideBots ? 'Hermit bot messages (isBot or sender label containing "hermit") are hidden (click to show)' : 'Click to hide Hermit4626 / other bot messages'}
-              >
-                Hermit bots
-              </Button>
-              <Button
-                variant={hideCommands ? 'primary' : 'secondary'}
-                size="sm"
-                className="btn-compact rounded-full text-xs"
-                onClick={() => setHideCommands((value) => !value)}
-                title={hideCommands ? 'Bot command messages (starting with /) are hidden (click to show)' : 'Click to hide bot commands (messages starting with / like /hermit)'}
-              >
-                Commands
+                System settings
               </Button>
               <Button
                 variant="secondary"
@@ -644,8 +1019,45 @@ export function Positions() {
                 {isFetching ? 'Refreshing…' : 'Refresh'}
               </Button>
             </div>
+            {settingsOpen && (
+              <div className="mt-3 w-full max-w-md rounded-xl bg-zinc-950/85 p-3 text-xs text-zinc-200 backdrop-blur-sm">
+                <div className="mb-2 text-[11px] uppercase tracking-[0.12em] text-zinc-500">Display + filters</div>
+                <label className="flex items-center justify-between py-1.5">
+                  <span>Trade Markers</span>
+                  <input
+                    type="checkbox"
+                    checked={showTrades}
+                    onChange={(event) => setShowTrades(event.target.checked)}
+                  />
+                </label>
+                <label className="flex items-center justify-between py-1.5">
+                  <span>Historical Average Entry Path</span>
+                  <input
+                    type="checkbox"
+                    checked={showEntryPath}
+                    onChange={(event) => setShowEntryPath(event.target.checked)}
+                  />
+                </label>
+                <label className="flex items-center justify-between py-1.5">
+                  <span>Hermit4626bot Comments</span>
+                  <input
+                    type="checkbox"
+                    checked={showHermitComments}
+                    onChange={(event) => setShowHermitComments(event.target.checked)}
+                  />
+                </label>
+                <label className="flex items-center justify-between py-1.5">
+                  <span>Command Messages (`/hermit`, etc.)</span>
+                  <input
+                    type="checkbox"
+                    checked={showCommandMessages}
+                    onChange={(event) => setShowCommandMessages(event.target.checked)}
+                  />
+                </label>
+              </div>
+            )}
             <p className="mt-2 text-[11px] text-zinc-500">
-              Message scope controls chat overlays; “Trades” toggles position events.
+              Message scope controls chat overlays. System settings controls visibility filters and chart overlays.
             </p>
           </motion.div>
 
@@ -653,20 +1065,186 @@ export function Positions() {
             <div className="mb-3 space-y-3">
               <PositionsRoomBook
                 summaries={data.marketSummaries}
+                currentPositions={data.currentPositions}
                 selectedMarket={effectiveMarket}
                 onSelect={setSelectedMarket}
               />
               <PositionsMarketSignal
                 summary={selectedSummary}
+                roomPosition={roomCurrentPosition}
+                agentPosition={agentCurrentPosition}
                 lastPrice={lastPrice}
                 roomWideMessageCount={data.roomWideMessageCount ?? 0}
               />
             </div>
           )}
 
-          {/* Chart + side panel (timeline events & inspector) */}
-          <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-            <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-3 sm:p-4">
+          {/* Trade list (left) + chart (center) + messages/inspector (right) */}
+          <div
+            className="mt-4 grid gap-3 lg:items-start lg:[grid-template-columns:var(--positions-grid-cols)]"
+            style={{ ['--positions-grid-cols' as string]: positionsGridColumns }}
+          >
+            <div className="rounded-2xl bg-white/[0.03] p-3 sm:p-4 flex flex-col min-h-0 lg:sticky lg:top-6 lg:h-[72vh] lg:min-h-[520px]">
+              <div className={`flex gap-2 ${tradePanelCollapsed ? 'flex-col items-center' : 'items-center justify-between'}`}>
+                <div className="label shrink-0">
+                  {tradePanelCollapsed ? (
+                    <>
+                      <span aria-hidden className="text-base">📈</span>
+                      <span className="sr-only">Trades</span>
+                    </>
+                  ) : (
+                    `Trade events (${filteredTimelineTradeEvents.length})`
+                  )}
+                </div>
+                <button
+                  type="button"
+                  aria-label={tradePanelCollapsed ? 'Expand trades panel' : 'Collapse trades panel'}
+                  onClick={() => setTradePanelCollapsed((value) => !value)}
+                  className={`rounded-md bg-white/[0.06] text-zinc-300 hover:bg-white/[0.12] ${
+                    tradePanelCollapsed ? 'px-2 py-1.5 text-sm leading-none' : 'px-2 py-1 text-[10px]'
+                  }`}
+                >
+                  <span aria-hidden>{tradePanelCollapsed ? '▸' : '▾'}</span>
+                  {!tradePanelCollapsed ? <span className="ml-1">Collapse</span> : null}
+                </button>
+              </div>
+              {!tradePanelCollapsed ? (
+                <>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {(['all', 'host', 'counter'] as const).map((filter) => (
+                      <button
+                        key={filter}
+                        type="button"
+                        onClick={() => setTradeSourceFilter(filter)}
+                        className={`rounded-full px-2 py-1 text-[10px] uppercase tracking-wide ${
+                          tradeSourceFilter === filter
+                            ? 'bg-sky-400/15 text-sky-200'
+                            : 'bg-white/[0.05] text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {filter === 'all' ? 'all' : filter === 'host' ? 'room' : 'agent'}
+                      </button>
+                    ))}
+                  </div>
+                  <div
+                    ref={tradeTimelineListRef}
+                    className="mt-3 max-h-[48vh] lg:max-h-none lg:flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 [scrollbar-gutter:stable]"
+                  >
+                    <div className="rounded-lg bg-white/[0.02] p-2">
+                      <div className="mb-2 px-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                        Trades ({filteredTimelineTradeEvents.length})
+                      </div>
+                      <div className="space-y-1.5">
+                        {filteredTimelineTradeEvents.map((event, index) => (
+                          <div
+                            key={`trade-${event.id}-${index}`}
+                            data-event-id={event.id}
+                            onClick={() => setSelectedEventId(event.id)}
+                            onKeyDown={(keyboardEvent) => {
+                              if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') {
+                                keyboardEvent.preventDefault()
+                                setSelectedEventId(event.id)
+                              }
+                            }}
+                            role="button"
+                            tabIndex={0}
+                            className={`w-full text-left rounded-lg p-2 text-xs transition border ${
+                              event.source === 'counter'
+                                ? 'border-emerald-300/20 bg-emerald-400/12 hover:bg-emerald-400/16'
+                                : 'border-sky-300/20 bg-sky-400/10 hover:bg-sky-400/14'
+                            } ${
+                              selectedEventId === event.id
+                                ? 'ring-1 ring-sky-300/70'
+                                : hoveredEventId === event.id
+                                  ? 'ring-1 ring-violet-300/55'
+                                  : ''
+                            }`}
+                          >
+                            {(() => {
+                              const source = tradeSourceMeta(event.source)
+                              const marketCoin =
+                                ((event.market ?? effectiveMarket).split('/')[0] ?? '').toUpperCase() || 'TOKEN'
+                              const showRealizedPnl = event.action === 'close' || event.action === 'liquidated'
+                              const hasMeaningfulRealizedPnl = Math.abs(event.closedPnl ?? 0) >= 0.005
+                              const pnlClass = event.closedPnl >= 0 ? 'text-emerald-200' : 'text-rose-200'
+                              const summaryLine = buildTradeSummaryLine(event, marketCoin)
+                              return (
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between gap-1.5">
+                                    <div className="text-[12px] font-semibold leading-snug text-zinc-100">
+                                      {describeTradeEventAction(event)}
+                                    </div>
+                                    {showRealizedPnl && hasMeaningfulRealizedPnl ? (
+                                      <span className={`text-[11px] font-medium ${pnlClass}`}>
+                                        {event.closedPnl >= 0 ? '+' : '-'}
+                                        {formatCompactUsd(Math.abs(event.closedPnl))}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <div className="text-[11px] font-semibold leading-tight text-zinc-100">
+                                    {summaryLine}
+                                  </div>
+                                  <div className="flex items-center justify-between gap-1.5 pt-0.5">
+                                    <a
+                                      href={source.href}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(clickEvent) => clickEvent.stopPropagation()}
+                                      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium transition hover:opacity-90 ${source.chipClass}`}
+                                    >
+                                      <span
+                                        className={`inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-full ring-1 ${source.ringClass}`}
+                                      >
+                                        <img
+                                          src={source.logo}
+                                          alt={source.logoAlt}
+                                          className="h-3 w-3 object-contain"
+                                          loading="lazy"
+                                        />
+                                      </span>
+                                      {source.label}
+                                      <span aria-hidden>↗</span>
+                                    </a>
+                                    <span className="text-[11px] text-zinc-400">{formatTime(event.time)}</span>
+                                  </div>
+                                </div>
+                              )
+                            })()}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : null}
+            </div>
+
+            <button
+              type="button"
+              aria-label="Resize trade panel"
+              onMouseDown={beginResize('left')}
+              onKeyDown={(event) => {
+                if (tradePanelCollapsed) return
+                if (event.key === 'ArrowLeft') {
+                  event.preventDefault()
+                  setTradePanelWidth((value) => Math.max(PANEL_MIN_WIDTH, value - 12))
+                } else if (event.key === 'ArrowRight') {
+                  event.preventDefault()
+                  setTradePanelWidth((value) => Math.min(PANEL_MAX_WIDTH, value + 12))
+                }
+              }}
+              className={`hidden lg:flex lg:h-[72vh] lg:min-h-[520px] items-stretch justify-center cursor-col-resize select-none bg-transparent p-0 border-0 ${
+                tradePanelCollapsed ? 'pointer-events-none opacity-30' : 'opacity-80 hover:opacity-100'
+              }`}
+            >
+              <span
+                className={`h-full w-px bg-white/[0.12] transition-colors ${
+                  activeResizeSide === 'left' ? 'bg-sky-300/80' : ''
+                }`}
+              />
+            </button>
+
+            <div className="rounded-2xl bg-white/[0.03] p-2 sm:p-3 lg:p-4">
               {isLoading ? (
                 <div className="text-sm text-zinc-400">Loading room timeline…</div>
               ) : error ? (
@@ -684,99 +1262,143 @@ export function Positions() {
                     onSelectEvent={setSelectedEventId}
                     onHoverEvent={setHoveredEventId}
                     marketLabel={effectiveMarket}
-                    currentEntryPrice={selectedSummary?.currentPosition?.entryPrice ?? null}
-                    currentLiqPrice={selectedSummary?.currentPosition?.liquidationPrice ?? null}
-                    positionEntryData={positionEntryData}
+                    roomEntryPrice={roomCurrentPosition?.entryPrice ?? null}
+                    roomLiqPrice={roomCurrentPosition?.liquidationPrice ?? null}
+                    agentEntryPrice={agentCurrentPosition?.entryPrice ?? null}
+                    agentLiqPrice={agentCurrentPosition?.liquidationPrice ?? null}
+                    roomEntryPathData={showEntryPath ? roomEntryPathData : []}
+                    agentEntryPathData={showEntryPath ? agentEntryPathData : []}
                   />
                   <PositionsEventLegend />
                 </div>
               )}
             </div>
 
-            <div className="flex flex-col gap-4 lg:sticky lg:top-6 self-start lg:h-[72vh] lg:min-h-[520px]">
-              <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4 sm:p-5 flex flex-col min-h-0 lg:flex-1">
-              <div className="label shrink-0">Timeline events ({timelineListEvents.length})</div>
-              <div
-                ref={timelineListRef}
-                className="mt-3 max-h-[48vh] lg:max-h-none lg:flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 [scrollbar-gutter:stable]"
-              >
-                {timelineListEvents.map((event, index) => (
-                  <button
-                    key={`${event.id}-${index}`}
-                    data-event-id={event.id}
-                    type="button"
-                    onClick={() => setSelectedEventId(event.id)}
-                    className={`w-full text-left rounded-lg border p-2.5 text-xs transition ${
-                      selectedEventId === event.id
-                        ? 'border-sky-400/60 bg-sky-400/10'
-                        : hoveredEventId === event.id
-                          ? 'border-violet-400/60 bg-violet-400/10'
-                        : 'border-white/5 bg-white/[0.03] hover:border-sky-400/40 hover:bg-white/[0.05]'
-                    }`}
+            <button
+              type="button"
+              aria-label="Resize message panel"
+              onMouseDown={beginResize('right')}
+              onKeyDown={(event) => {
+                if (messagePanelCollapsed) return
+                if (event.key === 'ArrowLeft') {
+                  event.preventDefault()
+                  setMessagePanelWidth((value) => Math.min(PANEL_MAX_WIDTH, value + 12))
+                } else if (event.key === 'ArrowRight') {
+                  event.preventDefault()
+                  setMessagePanelWidth((value) => Math.max(PANEL_MIN_WIDTH, value - 12))
+                }
+              }}
+              className={`hidden lg:flex lg:h-[72vh] lg:min-h-[520px] items-stretch justify-center cursor-col-resize select-none bg-transparent p-0 border-0 ${
+                messagePanelCollapsed ? 'pointer-events-none opacity-30' : 'opacity-80 hover:opacity-100'
+              }`}
+            >
+              <span
+                className={`h-full w-px bg-white/[0.12] transition-colors ${
+                  activeResizeSide === 'right' ? 'bg-sky-300/80' : ''
+                }`}
+              />
+            </button>
+
+            <div className="flex flex-col gap-3 lg:sticky lg:top-6 self-start lg:h-[72vh] lg:min-h-[520px]">
+              <div className="rounded-2xl bg-white/[0.03] p-3 sm:p-4 flex flex-col min-h-0 lg:flex-1">
+              <div className={`flex gap-2 ${messagePanelCollapsed ? 'flex-col items-center' : 'items-center justify-between'}`}>
+                <div className="label shrink-0">
+                  {messagePanelCollapsed ? (
+                    <>
+                      <span aria-hidden className="text-base">💬</span>
+                      <span className="sr-only">Messages</span>
+                    </>
+                  ) : (
+                    `Messages (${filteredTimelineChatEvents.length})`
+                  )}
+                </div>
+                <button
+                  type="button"
+                  aria-label={messagePanelCollapsed ? 'Expand messages panel' : 'Collapse messages panel'}
+                  onClick={() => setMessagePanelCollapsed((value) => !value)}
+                  className={`rounded-md bg-white/[0.06] text-zinc-300 hover:bg-white/[0.12] ${
+                    messagePanelCollapsed ? 'px-2 py-1.5 text-sm leading-none' : 'px-2 py-1 text-[10px]'
+                  }`}
+                >
+                  <span aria-hidden>{messagePanelCollapsed ? '▸' : '▾'}</span>
+                  {!messagePanelCollapsed ? <span className="ml-1">Collapse</span> : null}
+                </button>
+              </div>
+              {!messagePanelCollapsed ? (
+                <>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {(['all', 'host', 'room', 'bot'] as const).map((filter) => (
+                      <button
+                        key={filter}
+                        type="button"
+                        onClick={() => setMessageSourceFilter(filter)}
+                        className={`rounded-full px-2 py-1 text-[10px] uppercase tracking-wide ${
+                          messageSourceFilter === filter
+                            ? 'bg-sky-400/15 text-sky-200'
+                            : 'bg-white/[0.05] text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {filter}
+                      </button>
+                    ))}
+                  </div>
+                  <div
+                    ref={messageTimelineListRef}
+                    className="mt-3 max-h-[48vh] lg:max-h-none lg:flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 [scrollbar-gutter:stable]"
                   >
-                    <div className="flex items-center gap-2 text-zinc-300">
-                      {event.kind !== 'trade' && event.senderAvatarUrl ? (
-                        <span className="relative block h-5 w-5 shrink-0 overflow-hidden rounded-full ring-1 ring-white/10">
-                          <span
-                            className="absolute inset-0"
-                            style={{ background: '#27272a' }}
-                          />
-                          <img
-                            src={event.senderAvatarUrl}
-                            alt=""
-                            className="absolute inset-0 h-full w-full object-cover"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none'
-                            }}
-                          />
-                        </span>
-                      ) : null}
-                      <span>
-                        {formatTime(event.time)} · {event.market ?? 'all markets'}
-                      </span>
-                    </div>
-                    <div className="mt-1 text-zinc-100">
-                      {event.kind === 'trade' ? (
-                        <>
-                          {event.action === 'liquidated'
-                            ? 'Liquidation'
-                            : event.action === 'close' && typeof event.closedPnl === 'number' && event.closedPnl > 0
-                              ? 'Take Profit'
-                              : event.action === 'entry'
-                                ? 'Position Open'
-                                : `Trade ${event.action ?? 'unknown'}`}
-                        </>
-                      ) : event.kind === 'host-chat' ? (
-                        'Host message'
-                      ) : (
-                        'Room message'
-                      )}
-                      {event.kind !== 'trade' && event.senderLabel ? (
-                        <span className="ml-1.5 text-[10px] text-zinc-400">· {event.senderLabel}</span>
-                      ) : null}
-                    </div>
-                    {event.kind === 'trade' &&
-                      (event.action === 'close' || event.action === 'liquidated') &&
-                      typeof event.closedPnl === 'number' && (
-                        <div className="mt-1 flex items-center gap-1.5">
-                          <span className="rounded-full border border-white/15 bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-zinc-300">
-                            {inferExitReason(event)}
-                          </span>
-                          <span
-                            className={`text-[11px] ${
-                              event.closedPnl >= 0 ? 'text-emerald-300' : 'text-rose-300'
+                    <div className="rounded-lg bg-white/[0.02] p-2">
+                      <div className="mb-2 px-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                        Messages ({filteredTimelineChatEvents.length})
+                      </div>
+                      <div className="space-y-2">
+                        {filteredTimelineChatEvents.map((event, index) => (
+                          <button
+                            key={`chat-${event.id}-${index}`}
+                            data-event-id={event.id}
+                            type="button"
+                            onClick={() => setSelectedEventId(event.id)}
+                            className={`w-full text-left rounded-lg p-2.5 text-xs transition ${
+                              selectedEventId === event.id
+                                ? 'bg-sky-400/10'
+                                : hoveredEventId === event.id
+                                  ? 'bg-violet-400/10'
+                                  : 'bg-white/[0.03] hover:bg-white/[0.05]'
                             }`}
                           >
-                            P/L {event.closedPnl >= 0 ? '+' : ''}
-                            ${event.closedPnl.toFixed(2)}
-                          </span>
-                        </div>
-                      )}
-                    {event.text && <div className="mt-1 text-zinc-300">{event.text.slice(0, 180)}</div>}
-                  </button>
-                ))}
+                            <div className="flex items-center gap-2 text-zinc-300">
+                              {event.senderAvatarUrl ? (
+                                <span className="relative block h-5 w-5 shrink-0 overflow-hidden rounded-full ring-1 ring-white/10">
+                                  <span className="absolute inset-0" style={{ background: '#27272a' }} />
+                                  <img
+                                    src={event.senderAvatarUrl}
+                                    alt=""
+                                    className="absolute inset-0 h-full w-full object-cover"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none'
+                                    }}
+                                  />
+                                </span>
+                              ) : null}
+                              <span>
+                                {formatTime(event.time)} · {event.market ?? 'all markets'}
+                              </span>
+                            </div>
+                            <div className="mt-1 text-zinc-100">
+                              {event.kind === 'host-chat' ? 'Host message' : 'Room message'}
+                              {event.senderLabel ? (
+                                <span className="ml-1.5 text-[10px] text-zinc-400">· {event.senderLabel}</span>
+                              ) : null}
+                            </div>
+                            {event.text && <div className="mt-1 text-zinc-300">{event.text.slice(0, 180)}</div>}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : null}
               </div>
-              </div>
+              {!messagePanelCollapsed ? (
               <div className="shrink-0">
                 <PositionsEventInspector
                   event={selectedEvent ?? null}
@@ -787,6 +1409,7 @@ export function Positions() {
                   onClear={() => setSelectedEventId(null)}
                 />
               </div>
+              ) : null}
             </div>
           </div>
         </div>

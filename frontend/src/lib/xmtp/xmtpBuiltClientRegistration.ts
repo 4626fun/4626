@@ -1,4 +1,5 @@
 import { Client, type Signer } from '@xmtp/browser-sdk'
+import { isPrivyEmbeddedSignerAuthError } from '@/lib/xmtp/xmtpHelpers'
 
 type XmtpClient = Client
 
@@ -66,6 +67,11 @@ export async function registerBuiltClientInboxViaCreate(input: {
     } catch (registerErr) {
       lastError = registerErr
       const registerMsg = registerErr instanceof Error ? registerErr.message : String(registerErr)
+      if (isPrivyEmbeddedSignerAuthError(registerMsg)) {
+        throw new Error(
+          'Embedded signer session expired. Sign out and sign in with email OTP again, then retry Connect Messaging.',
+        )
+      }
       if (/reject|denied|cancel|user rejected/i.test(registerMsg)) {
         throw registerErr
       }

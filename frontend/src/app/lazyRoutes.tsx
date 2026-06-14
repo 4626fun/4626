@@ -170,9 +170,9 @@ export const ArenaIntroductionPage = lazyNamed(() => import('../pages/Arena'), '
 export const ArenaGettingStartedPage = lazyNamed(() => import('../pages/Arena'), 'ArenaGettingStartedPage')
 export const ArenaStatusPage = lazyNamed(() => import('../pages/Arena'), 'ArenaStatusPage')
 export const ArenaChartPage = lazyNamed(() => import('../pages/Arena'), 'ArenaChartPage')
-export const ArenaCounterTradeFilesPage = lazyNamed(
+export const ArenaHowItWorksPage = lazyNamed(
   () => import('../pages/Arena'),
-  'ArenaCounterTradeFilesPage',
+  'ArenaHowItWorksPage',
 )
 export const DistributeCcaLaunch = lazyNamed(() => import('../pages/DistributeCcaLaunch'), 'DistributeCcaLaunch')
 export const Status = lazyNamed(() => import('../pages/status/Status'), 'Status')

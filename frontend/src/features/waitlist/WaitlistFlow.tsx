@@ -242,7 +242,7 @@ function WaitlistAuthStep(props: {
       transition={motionEnabled ? { duration: 0.22, ease: WAITLIST_EASE } : { duration: 0 }}
       className="relative flex min-h-[calc(100dvh-2rem)] flex-col justify-center py-4 sm:py-6"
     >
-      <div className="relative z-10 mx-auto w-full max-w-sm text-center">
+      <div className="relative z-10 mx-auto w-full max-w-md text-center">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute left-1/2 top-1/2 h-48 w-[min(100%,24rem)] -translate-x-1/2 -translate-y-1/2 bg-[radial-gradient(ellipse_at_center,rgb(var(--brand-primary)/0.08),transparent_70%)]"
@@ -255,7 +255,7 @@ function WaitlistAuthStep(props: {
           </h2>
 
           {hasWaitlistStats ? (
-            <div className="mx-auto mt-4 w-full max-w-[17rem] space-y-2">
+            <div className="mx-auto mt-4 w-full max-w-[20rem] space-y-2">
               <div className="h-1 w-full overflow-hidden rounded-full bg-white/[0.08]">
                 <div
                   className="h-full rounded-full bg-[rgb(var(--brand-primary))] transition-[width] duration-700 ease-out"
@@ -1239,7 +1239,10 @@ export function WaitlistFlow(props: {
 
           setError(isSessionMismatch ? SESSION_MISMATCH_MESSAGE : message)
         } finally {
-          if (!cancelled) setBusy(false)
+          // Always release the auth-bootstrap busy latch. When this effect reruns,
+          // its cleanup marks `cancelled=true`; gating setBusy(false) on that flag
+          // can orphan the app-loading registrar and leave the overlay stuck.
+          setBusy(false)
         }
       })()
     }, FINALIZING_BACKGROUND_RETRY_MS)

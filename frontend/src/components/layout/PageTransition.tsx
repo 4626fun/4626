@@ -9,6 +9,11 @@ import { cn } from '@/lib/shared/utils'
 
 export type PageTransitionVariant = 'route' | 'nested'
 
+export function getRouteTransitionKey(pathname: string, locationKey: string): string {
+  if (pathname === '/arena' || pathname.startsWith('/arena/')) return '/arena'
+  return locationKey
+}
+
 function transitionTiming(variant: PageTransitionVariant, reduceMotion: boolean | null) {
   if (reduceMotion) {
     return { duration: 0, ease: BASE_EASE }
@@ -68,9 +73,10 @@ export function PageTransitionNestedOutlet(props: { className?: string }) {
 
 export function PageTransitionOutlet() {
   const location = useLocation()
+  const transitionKey = getRouteTransitionKey(location.pathname, location.key)
 
   return (
-    <PageTransitionSurface transitionKey={location.key} variant="route">
+    <PageTransitionSurface transitionKey={transitionKey} variant="route">
       <Suspense fallback={<AppLoadingRegistrar label="route-transition-suspense" />}>
         <Outlet />
       </Suspense>

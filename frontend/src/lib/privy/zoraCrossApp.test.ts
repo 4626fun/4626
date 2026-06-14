@@ -23,6 +23,9 @@ describe('isRecoverableCrossAppAuthError', () => {
         new Error('There was an issue connecting your Zora account. Please try again.'),
       ),
     ).toBe(true)
+    expect(
+      isRecoverableCrossAppAuthError(new Error('Authentication failed: Invalid code during cross-app auth flow.')),
+    ).toBe(true)
     expect(isRecoverableCrossAppAuthError(new Error('Popup blocked by browser settings'))).toBe(true)
     expect(isRecoverableCrossAppAuthError(new Error('window.open failed for cross-app flow'))).toBe(true)
     expect(isRecoverableCrossAppAuthError(new Error('plain network error'))).toBe(false)

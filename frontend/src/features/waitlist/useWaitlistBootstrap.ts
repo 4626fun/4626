@@ -8,6 +8,7 @@ import { mergeCanonicalWaitlistAccount, resolveWaitlistStep, type WaitlistStep }
 import { isRecoveryRequiredAuthError } from './waitlistAuthState'
 import {
   FLOW_TIMEOUT_MS,
+  PRIVY_TOKEN_READ_TIMEOUT_MS,
   RECOVERY_REQUIRED_BOOTSTRAP_COOLDOWN_MS,
   RECOVERY_REQUIRED_MESSAGE,
   SESSION_FINALIZING_RETRY_MESSAGE,
@@ -84,7 +85,7 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
 
       const readPrivyToken = async (): Promise<string | null> => {
         try {
-          return await withTimeout(getAccessToken(), FLOW_TIMEOUT_MS, 'Sign-in token')
+          return await withTimeout(getAccessToken(), PRIVY_TOKEN_READ_TIMEOUT_MS, 'Sign-in token')
         } catch (tokenError: unknown) {
           if (isWalletProviderCollisionError(tokenError)) {
             throw new Error(getWalletProviderCollisionMessage())

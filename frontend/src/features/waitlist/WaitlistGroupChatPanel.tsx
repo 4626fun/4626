@@ -18,6 +18,9 @@ type WaitlistGroupChatPanelProps = {
   setupComplete: boolean
   signingReady: boolean
   layout?: 'inline' | 'sidebar' | 'mobile'
+  /** Forwarded to surface for the embedded signer expiry recovery path. */
+  onSignOut?: () => void
+  signOutBusy?: boolean
 }
 
 export function WaitlistGroupChatPanel(props: WaitlistGroupChatPanelProps) {
@@ -27,7 +30,7 @@ export function WaitlistGroupChatPanel(props: WaitlistGroupChatPanelProps) {
 }
 
 function WaitlistGroupChatPanelInner(props: WaitlistGroupChatPanelProps) {
-  const { signingReady, setupComplete, layout = 'inline' } = props
+  const { signingReady, setupComplete, layout = 'inline', onSignOut, signOutBusy } = props
   const statusQuery = useWaitlistXmtpStatus(setupComplete)
   const chatConfig = statusQuery.data
   const identityHintAddress = chatConfig?.xmtpMemberAddress ?? null
@@ -44,6 +47,8 @@ function WaitlistGroupChatPanelInner(props: WaitlistGroupChatPanelProps) {
             signingReady={signingReady}
             statusQuery={statusQuery}
             layout={layout}
+            onSignOut={onSignOut}
+            signOutBusy={signOutBusy}
           />
         )}
       </XmtpChatProvider>
@@ -55,10 +60,14 @@ function WaitlistGroupChatPanelBody({
   signingReady,
   statusQuery,
   layout,
+  onSignOut,
+  signOutBusy,
 }: {
   signingReady: boolean
   statusQuery: ReturnType<typeof useWaitlistXmtpStatus>
   layout: 'inline' | 'sidebar' | 'mobile'
+  onSignOut?: () => void
+  signOutBusy?: boolean
 }) {
   const { status: xmtpStatus } = useXmtp()
   const messagingReady = xmtpStatus === 'connected'
@@ -113,6 +122,8 @@ function WaitlistGroupChatPanelBody({
         join={join}
         groupName={groupName}
         chatReady={serverChatReady}
+        onSignOut={onSignOut}
+        signOutBusy={signOutBusy}
       />
     </WaitlistChatSection>
   )
@@ -126,8 +137,10 @@ function WaitlistGroupChatPanelContent(props: {
   join: { status: WaitlistChatStatus; retryJoin: () => void }
   groupName: string
   chatReady: boolean
+  onSignOut?: () => void
+  signOutBusy?: boolean
 }) {
-  const { signingReady, statusQuery, chatConfig, blockedMessage, join, groupName, chatReady } = props
+  const { signingReady, statusQuery, chatConfig, blockedMessage, join, groupName, chatReady, onSignOut, signOutBusy } = props
   const hasCachedStatus = Boolean(chatConfig)
   const hasStatusErrorWithoutFallback = statusQuery.isError && !hasCachedStatus
   const hasStatusErrorWithFallback = statusQuery.isError && hasCachedStatus
@@ -198,6 +211,8 @@ function WaitlistGroupChatPanelContent(props: {
         xmtpMemberAddress={chatConfig.xmtpMemberAddress}
         retryJoin={join.retryJoin}
         chatReady={surfaceChatReady}
+        onRequestReauth={onSignOut}
+        reauthBusy={signOutBusy}
       />
     </div>
   )

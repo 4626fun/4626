@@ -150,6 +150,8 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
                 setupComplete={chatEnabled}
                 signingReady={signingStepComplete}
                 layout="mobile"
+                onSignOut={onSignOut}
+                signOutBusy={signOutBusy}
               />
             </div>
           ) : null}
@@ -161,6 +163,8 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
               setupComplete={chatEnabled}
               signingReady={signingStepComplete}
               layout="sidebar"
+              onSignOut={onSignOut}
+              signOutBusy={signOutBusy}
             />
           </aside>
         ) : null}

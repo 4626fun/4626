@@ -19,4 +19,13 @@ describe('formatWaitlistChatError', () => {
       'XMTP is rate limiting welcome sync for this network. Wait about a minute, then tap Refresh.',
     )
   })
+
+  it('maps missing auth token (embedded signer session) to re-login guidance', () => {
+    expect(
+      formatWaitlistChatError('UnknownRpcError: An unknown RPC error occurred. Details: Missing auth token.'),
+    ).toBe('Sign-in for chat expired.')
+    expect(formatWaitlistChatError('ei3: Missing auth token.')).toBe(
+      'Sign-in for chat expired.',
+    )
+  })
 })

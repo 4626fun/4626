@@ -54,6 +54,7 @@ export type HyperliquidUserFillDetailed = HyperliquidUserFill & {
   dir: string | null
   side: 'long' | 'short' | null
   startPosition: number | null
+  leverage: number | null
 }
 
 export type HyperliquidCandle = {
@@ -325,6 +326,13 @@ export async function getUserFillsByTimeDetailed(
       dir: dirRaw,
       side,
       startPosition: parseFloatSafe(fill.startPosition),
+      leverage:
+        parseFloatSafe(
+          (fill as { leverage?: unknown }).leverage &&
+            typeof (fill as { leverage?: unknown }).leverage === 'object'
+            ? ((fill as { leverage?: { value?: unknown } }).leverage?.value ?? null)
+            : ((fill as { leverage?: unknown }).leverage ?? null),
+        ),
     })
   }
   return out
