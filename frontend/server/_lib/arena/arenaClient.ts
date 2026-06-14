@@ -8,6 +8,7 @@ import {
   computeAcpSeedFingerprint,
   isEnvSeedConsumed,
   markAcpSeedConsumed,
+  runAcpAuthBootstrap,
   resolveAcpStateEnv,
 } from './acpAuthBootstrap.js'
 import { readArenaConfig, type ArenaConfig } from './arenaConfig.js'
@@ -385,6 +386,69 @@ export async function runArenaStatus(config = readArenaConfig()): Promise<ArenaO
       allowedRoomIds: config.allowedRoomIds,
       hip3PrefixRequired: config.hip3PrefixRequired,
       allowlistEnabled: Boolean(config.assetAllowlist),
+    },
+  }
+}
+
+export async function runArenaAuth(
+  params: { mode?: 'status' | 'refresh' } = {},
+  config = readArenaConfig(),
+): Promise<ArenaOpResult> {
+  const baseValidation = ensureArenaEnabled(config)
+  if (baseValidation) return baseValidation
+  if (!config.acpBin) {
+    return fail('ARENA_ACP_BIN is not configured (needed for ACP auth checks).')
+  }
+
+  const mode = params.mode ?? 'refresh'
+  const stateEnv = resolveAcpStateEnv()
+  const stateDir = stateEnv.HOME ?? null
+  const seedConfigured = Boolean(
+    String(process.env.ACP_ACCESS_TOKEN ?? '').trim() &&
+      String(process.env.ACP_REFRESH_TOKEN ?? '').trim() &&
+      String(process.env.ACP_OWNER_WALLET ?? '').trim(),
+  )
+
+  if (mode === 'status') {
+    const command = buildAcpCommand(config, ['agent', 'whoami'])
+    const run = await runCommand(command, config)
+    const active =
+      run.ok &&
+      !isAcpSessionExpired(run) &&
+      !String(run.stdout ?? '')
+        .toLowerCase()
+        .includes('not_authenticated')
+    return {
+      ok: active,
+      message: active
+        ? 'ACP session looks active on the runtime.'
+        : 'ACP session is not active on the runtime. Run `/arena auth` to bootstrap/re-auth.',
+      run,
+      details: {
+        mode,
+        stateDir,
+        seedConfigured,
+        seedConsumed: isEnvSeedConsumed(),
+      },
+    }
+  }
+
+  const bootstrap = await runAcpAuthBootstrap(config)
+  const ok = bootstrap.authenticated
+  const signerNote = bootstrap.signerReady
+    ? 'Signer is ready.'
+    : 'Signer is missing (one-time add-signer approval required).'
+  return {
+    ok,
+    message: ok
+      ? `ACP auth bootstrap completed. ${signerNote}`
+      : `ACP auth bootstrap incomplete: ${bootstrap.reason ?? 'unknown_reason'}`,
+    details: {
+      mode,
+      stateDir,
+      seedConfigured,
+      seedConsumed: isEnvSeedConsumed(),
+      bootstrap,
     },
   }
 }
