@@ -47,6 +47,7 @@ describe('isAlreadyLoggedInAuthError', () => {
     ).toBe(true)
     expect(isAlreadyLoggedInAuthError({ message: 'already logged in, use a link helper' })).toBe(true)
     expect(isAlreadyLoggedInAuthError('Use a link helper')).toBe(true)
+    expect(isAlreadyLoggedInAuthError(new Error('Error linking account'))).toBe(true)
   })
 
   it('returns false for unrelated errors', () => {

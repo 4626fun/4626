@@ -115,4 +115,6 @@ export type ChartOverlayEvent = {
   isFirstFromSender?: boolean
   /** Reconstructed room/host position state valued at this event's timestamp. */
   contextAtTime?: PositionContextAtTime | null
+  /** Reconstructed position state immediately before this event timestamp. */
+  contextBeforeTime?: PositionContextAtTime | null
 }

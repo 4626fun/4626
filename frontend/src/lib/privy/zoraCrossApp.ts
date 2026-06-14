@@ -29,22 +29,29 @@ export function isUnauthorizedCrossAppLinkError(error: unknown): boolean {
   return message.includes('401') || message.includes('unauthorized') || message.includes('not authorized')
 }
 
+export function isMissingPrivyAuthTokenError(error: unknown): boolean {
+  const message = String((error as any)?.message ?? '').trim().toLowerCase()
+  if (!message) return false
+  return message.includes('missing auth token')
+}
+
 export function isLocalhostPrivyCustomDomainConfigError(error: unknown): boolean {
   if (typeof window === 'undefined') return false
   const host = window.location.hostname.toLowerCase()
   const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '::1'
   if (!isLocal) return false
 
+  const message = String((error as any)?.message ?? '').toLowerCase()
+  if (isMissingPrivyAuthTokenError(error)) return false
   const status = readErrorStatusCode(error)
   if (status === 401 || status === 403) {
-    const msg = String((error as any)?.message ?? '').toLowerCase()
-    if (msg.includes('privy') || msg.includes('oauth') || msg.includes('redirect') || msg.includes('link')) {
-      return true
-    }
-    return true // 401/403 on localhost to custom domain during auth is almost always config
+    return (
+      message.includes('redirect url is not allowed') ||
+      message.includes('redirect') ||
+      message.includes('privy.4626.fun')
+    )
   }
 
-  const message = String((error as any)?.message ?? '').toLowerCase()
   return (
     message.includes('redirect url is not allowed') ||
     (message.includes('oauth') && message.includes('401')) ||
@@ -60,6 +67,7 @@ export function isRecoverableCrossAppAuthError(error: unknown): boolean {
   return (
     message.includes('unknown rpc error occurred') ||
     message.includes('unable to connect to wallet') ||
+    message.includes('error linking account') ||
     message.includes('authentication failed') ||
     message.includes('issue connecting your zora account') ||
     message.includes('issue connecting your account') ||

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   isLocalhostPrivyCustomDomainConfigError,
+  isMissingPrivyAuthTokenError,
   isRecoverableCrossAppAuthError,
   isUserRejectedCrossAppAuthError,
   isUnauthorizedCrossAppLinkError,
@@ -29,6 +30,7 @@ describe('isRecoverableCrossAppAuthError', () => {
     ).toBe(true)
     expect(isRecoverableCrossAppAuthError(new Error('Popup blocked by browser settings'))).toBe(true)
     expect(isRecoverableCrossAppAuthError(new Error('window.open failed for cross-app flow'))).toBe(true)
+    expect(isRecoverableCrossAppAuthError(new Error('Error linking account'))).toBe(true)
     expect(isRecoverableCrossAppAuthError(new Error('plain network error'))).toBe(false)
   })
 })
@@ -47,11 +49,14 @@ describe('isLocalhostPrivyCustomDomainConfigError', () => {
     expect(isLocalhostPrivyCustomDomainConfigError({ status: 401, message: 'oauth/link 401' })).toBe(false)
   })
 
-  it('detects 401/403 on localhost during oauth flows as config issue', () => {
+  it('detects redirect-config 401/403 on localhost as config issue', () => {
     // @ts-expect-error test shim
     globalThis.window = { location: { hostname: 'localhost' } }
-    expect(isLocalhostPrivyCustomDomainConfigError({ status: 401 })).toBe(true)
-    expect(isLocalhostPrivyCustomDomainConfigError(new Error('POST /api/v1/oauth/link 401'))).toBe(true)
+    expect(
+      isLocalhostPrivyCustomDomainConfigError(
+        new Error('POST /api/v1/oauth/link 401 redirect url is not allowed'),
+      ),
+    ).toBe(true)
     expect(isLocalhostPrivyCustomDomainConfigError({ status: 403, message: 'redirect not allowed' })).toBe(true)
   })
 
@@ -59,6 +64,24 @@ describe('isLocalhostPrivyCustomDomainConfigError', () => {
     // @ts-expect-error test shim
     globalThis.window = { location: { hostname: '127.0.0.1' } }
     expect(isLocalhostPrivyCustomDomainConfigError(new Error('redirect url is not allowed'))).toBe(true)
+  })
+
+  it('does not classify missing-auth-token 401s as config issue', () => {
+    // @ts-expect-error test shim
+    globalThis.window = { location: { hostname: 'localhost' } }
+    expect(
+      isLocalhostPrivyCustomDomainConfigError(
+        new Error('POST /api/v1/oauth/link 401 unauthorized {"error":"Missing auth token."}'),
+      ),
+    ).toBe(false)
+  })
+})
+
+describe('isMissingPrivyAuthTokenError', () => {
+  it('detects missing auth token failures', () => {
+    expect(isMissingPrivyAuthTokenError(new Error('Missing auth token.'))).toBe(true)
+    expect(isMissingPrivyAuthTokenError({ message: 'missing auth token' })).toBe(true)
+    expect(isMissingPrivyAuthTokenError(new Error('redirect url is not allowed'))).toBe(false)
   })
 })
 

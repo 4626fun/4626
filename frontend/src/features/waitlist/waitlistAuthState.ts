@@ -75,6 +75,7 @@ export function isAlreadyLoggedInAuthError(error: unknown): boolean {
   return (
     text.includes('attempted to log in, but user is already logged in') ||
     (text.includes('already logged in') && text.includes('link')) ||
+    text.includes('error linking account') ||
     text.includes('use a `link` helper') ||
     text.includes('use a link helper')
   )

@@ -18,6 +18,7 @@ type CliArgs = {
   interval: '1m'
   windowHours: number
   chunkHours: number
+  resumeFromLast: boolean
   dryRun: boolean
 }
 
@@ -84,22 +85,61 @@ function parseArgs(argv: string[]): CliArgs {
     interval: '1m',
     windowHours,
     chunkHours,
+    resumeFromLast: !flags.has('no-resume'),
     dryRun: flags.has('dry-run'),
   }
 }
 
-async function fetchMinuteBarsInChunks(args: CliArgs) {
+async function resolveFetchWindow(args: CliArgs): Promise<{ startTimeMs: number; endTimeMs: number; resumed: boolean }> {
   const endTimeMs = Date.now()
-  const startTimeMs = endTimeMs - args.windowHours * 60 * 60 * 1000
+  const fallbackStart = endTimeMs - args.windowHours * 60 * 60 * 1000
+  if (!args.resumeFromLast) {
+    return { startTimeMs: fallbackStart, endTimeMs, resumed: false }
+  }
+
+  const db = await getDb().catch(() => null)
+  if (!db?.query) {
+    return { startTimeMs: fallbackStart, endTimeMs, resumed: false }
+  }
+
+  const sql = `
+    SELECT max(bar_time) AS max_bar_time
+    FROM public.backtest_market_bars_1m
+    WHERE symbol = $1
+      AND interval = '1m'
+  `
+  const res = await db.query(sql, [args.symbol])
+  const maxBarTimeRaw = (res.rows?.[0] as { max_bar_time?: unknown } | undefined)?.max_bar_time
+  if (!maxBarTimeRaw) {
+    return { startTimeMs: fallbackStart, endTimeMs, resumed: false }
+  }
+
+  const maxBarTimeMs = new Date(String(maxBarTimeRaw)).getTime()
+  if (!Number.isFinite(maxBarTimeMs)) {
+    return { startTimeMs: fallbackStart, endTimeMs, resumed: false }
+  }
+
+  const resumedStart = maxBarTimeMs + 60_000
+  return { startTimeMs: Math.max(0, resumedStart), endTimeMs, resumed: true }
+}
+
+async function fetchMinuteBarsInChunks(args: CliArgs, window: { startTimeMs: number; endTimeMs: number }) {
+  const endTimeMs = Date.now()
+  const startTimeMs = window.startTimeMs
+  const targetEndTimeMs = window.endTimeMs || endTimeMs
   const chunkMs = args.chunkHours * 60 * 60 * 1000
   const byTime = new Map<number, Awaited<ReturnType<typeof getCandleSnapshot>> extends (infer U)[] | null ? U : never>()
 
+  if (startTimeMs >= targetEndTimeMs) {
+    return { rows: [] as CacheRow[], chunks: 0, startTimeMs, endTimeMs: targetEndTimeMs }
+  }
+
   let cursor = startTimeMs
   let chunks = 0
-  while (cursor < endTimeMs) {
+  while (cursor < targetEndTimeMs) {
     chunks += 1
     const chunkStart = cursor
-    const chunkEnd = Math.min(endTimeMs, cursor + chunkMs)
+    const chunkEnd = Math.min(targetEndTimeMs, cursor + chunkMs)
     const candles = await getCandleSnapshot({
       coin: args.symbol,
       interval: args.interval,
@@ -132,7 +172,7 @@ async function fetchMinuteBarsInChunks(args: CliArgs) {
       fetchedAtIso: new Date().toISOString(),
     } satisfies CacheRow))
 
-  return { rows, chunks, startTimeMs, endTimeMs }
+  return { rows, chunks, startTimeMs, endTimeMs: targetEndTimeMs }
 }
 
 async function upsertRows(rows: CacheRow[]) {
@@ -199,9 +239,11 @@ async function main() {
   console.log('[cache-backtest-minute-bars] args', args)
 
   const started = Date.now()
-  const { rows, chunks, startTimeMs, endTimeMs } = await fetchMinuteBarsInChunks(args)
+  const window = await resolveFetchWindow(args)
+  const { rows, chunks, startTimeMs, endTimeMs } = await fetchMinuteBarsInChunks(args, window)
   const elapsedFetchMs = Date.now() - started
   console.log('[cache-backtest-minute-bars] fetched', {
+    resumed: window.resumed,
     chunks,
     rows: rows.length,
     from: new Date(startTimeMs).toISOString(),
