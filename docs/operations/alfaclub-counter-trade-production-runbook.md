@@ -5,7 +5,6 @@ This runbook covers production launch and steady-state operations for the AlfaCl
 - Runtime loop: `frontend/server/_lib/alfaclub/counterTradeRunner.ts`
 - Runtime config: `frontend/server/_lib/alfaclub/counterTradeConfig.ts`
 - **Executor: Railway Hermit in-process ticker** (`frontend/server/_lib/alfaclub/counterTradeTicker.ts`, started from `frontend/server/agents/hermit/index.ts`)
-- Manual ops trigger: `GET|POST /api/v1/alfaclub/counter-trade-run` (cron-secret gated; **not scheduled** — see below)
 - User status endpoint: `GET /api/v1/alfaclub/counter-trade-status`
 - Persistence: `alfaclub.counter_trade_*` tables from migration `20260709000000_alfaclub_counter_trade_engine.sql`
 
@@ -28,9 +27,8 @@ cron produced only `failed` ledger rows. Therefore:
 - The Vercel cron entry was removed from `frontend/vercel.json`. Do not
   re-add it. Keep `ALFACLUB_COUNTER_TRADE_RUNNER_ENABLED` unset/0 on Vercel
   and on any local/standby Hermit so only one executor runs.
-- The `/api/v1/alfaclub/counter-trade-run` endpoint remains for manual
-  smoke/ops invocation with the cron secret, but live execution from Vercel
-  will fail by construction (no dgclaw CLI).
+- There is no Vercel/serverless execution endpoint for this lane; runbook and
+  smoke checks assume Railway ticker-only execution.
 - Room `1659` enforces a single active strategy actor. The runner now auto-pauses
   extra active opt-ins (`pause_reason=room1659_single_actor_enforced`) and logs
   `counter_trade.room1659_multiple_active_optins` whenever drift is detected.
@@ -275,7 +273,6 @@ unless you explicitly prefer missing trades over trading without review.
 ## Prerequisites
 
 - Production deploy from `main` is healthy and the Railway Hermit service is green.
-- `CRON_SECRET` is configured in production Vercel env (manual trigger only).
 - Hyperliquid/Arena execution lane used by `runArenaTrade(...)` is already validated **on the Railway Hermit service** (see `docs/operations/virtuals-arena-railway-runbook.md`): `ARENA_ENABLED=1`, `ARENA_TRADING_ENABLED=1`, `ARENA_DRY_RUN` per rollout phase, `ARENA_DGCLAW_DIR=/app/dgclaw-skill`.
 - Counter-trade env block is configured **on the Railway Hermit service** (see `frontend/.env.example` `ALFACLUB_COUNTER_TRADE_*` section), including `ALFACLUB_COUNTER_TRADE_RUNNER_ENABLED=1`.
 - Railway Hermit has DB access (`DATABASE_URL`) — already required by the chat bridge.
@@ -316,12 +313,6 @@ Use these as launch defaults unless explicit risk approval says otherwise:
 
 ## Preflight checks
 
-Quick path (recommended):
-
-```bash
-CRON_SECRET=... ./scripts/ops/counter-trade-smoke.sh --expect-disabled
-```
-
 ### 1) Schema presence
 
 Run in Supabase SQL editor:
@@ -346,20 +337,10 @@ where room_id = '1659';
 
 If missing, it will be auto-created by first run/status read.
 
-### 3) Endpoint authorization check
+### 3) Runtime health check
 
-Expect `401` without cron secret:
-
-```bash
-curl -i "https://app.4626.fun/api/v1/alfaclub/counter-trade-run"
-```
-
-Expect success/accepted with cron secret:
-
-```bash
-curl -sS -X POST "https://app.4626.fun/api/v1/alfaclub/counter-trade-run" \
-  -H "x-cron-secret: $CRON_SECRET"
-```
+Confirm the Railway Hermit `/healthz` response includes a healthy counter-trade ticker block
+(`counterTrade.started = true` and periodic `counterTrade.lastTickAt` updates).
 
 ## Rollout plan
 
@@ -480,7 +461,6 @@ where room_id = '1659'
 ## Go/No-Go checklist
 
 - Schema tables exist and are queryable.
-- Cron endpoint auth works (`401` without secret, success with secret).
 - Phase 0 shows `reason=disabled`.
 - Phase 1 shows zero execution with no active opt-ins.
 - Canary shows stable execution with no unexplained failures.

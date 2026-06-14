@@ -8,10 +8,10 @@ import {
   getClearinghouseState,
   getSpotUsdcBalance,
   getUserFillsByTimeDetailed,
-  type HyperliquidClearinghouseState,
 } from './hyperliquid.js'
 import { resolveRoom1659HyperliquidUserForSnapshot } from './room1659Market.js'
 import { readCounterTradeRuntimeConfig } from './counterTradeConfig.js'
+import { isCounterTradeEnabledByEnv } from './counterTradeEnv.js'
 import { applyCounterTradeLlmGate } from './counterTradeLlmAdvisor.js'
 import { handleCounterTradeExitFlow } from './counterTradeExitFlow.js'
 import {
@@ -23,6 +23,7 @@ import {
   deriveUserSide,
   isExitFillAction,
 } from './counterTradeEngine.js'
+import { findCoinLeverageFromState } from './counterTradeLeverage.js'
 import {
   formatSpotSweepRoomPost,
 } from './counterTradeRoomPosting.js'
@@ -49,8 +50,6 @@ export type CounterTradeRunResult = {
   failed: number
 }
 
-declare const process: { env: Record<string, string | undefined> }
-
 function parseIsoMs(value: string | null | undefined): number | null {
   if (!value) return null
   const parsed = Date.parse(value)
@@ -68,11 +67,6 @@ export function computeCounterTradeCooldownRemainingMs(params: {
   return Math.max(0, params.cooldownMs - elapsedMs)
 }
 
-function isEnabledByEnv(): boolean {
-  const raw = String(process.env.ALFACLUB_COUNTER_TRADE_ENABLED ?? '').trim().toLowerCase()
-  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
-}
-
 export function resolveCounterTradeFillSourceWallet(params: {
   roomId: string
   senderAddress: string
@@ -84,23 +78,9 @@ export function resolveCounterTradeFillSourceWallet(params: {
   return params.identityHlApiWalletAddress ?? params.senderAddress
 }
 
-function findCoinLeverageFromState(
-  state: HyperliquidClearinghouseState | null,
-  coin: string | null | undefined,
-): number | null {
-  const target = String(coin ?? '').trim().toUpperCase()
-  if (!target) return null
-  for (const leg of state?.assetPositions ?? []) {
-    if (String(leg.coin ?? '').trim().toUpperCase() !== target) continue
-    if (leg.leverage == null || !Number.isFinite(leg.leverage) || leg.leverage <= 0) continue
-    return leg.leverage
-  }
-  return null
-}
-
 export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
   const runtime = readCounterTradeRuntimeConfig()
-  if (!runtime.enabled || !isEnabledByEnv()) {
+  if (!runtime.enabled || !isCounterTradeEnabledByEnv()) {
     return {
       ok: false,
       reason: 'disabled',
@@ -202,7 +182,6 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
       }
 
       const fills = await getUserFillsByTimeDetailed(userWalletForFills, startTimeMs)
-      const userWalletState = await getClearinghouseState(userWalletForFills)
 
       const counterWalletState =
         identity.agentWalletAddress != null ? await getClearinghouseState(identity.agentWalletAddress) : null
@@ -329,6 +308,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
       }
 
       if (!fills?.length) continue
+      const userWalletState = await getClearinghouseState(userWalletForFills)
       const sorted = [...fills].sort((a, b) => a.time - b.time).slice(-runtime.runLimitPerIdentity)
       let lastExecutedAtMs = parseIsoMs(optIn.lastActionAt)
       const bufferRatio = computeBufferRatio(counterWalletState)

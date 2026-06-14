@@ -72,7 +72,6 @@ const counterTradeFileGroups = [
     description: 'Server endpoints and route wiring used by operators/UI.',
     files: [
       { path: 'frontend/api/_handlers/v1/alfaclub/_counter-trade-status.ts', why: 'Status endpoint consumed by /arena/view-status.' },
-      { path: 'frontend/api/_handlers/v1/alfaclub/_counter-trade-run.ts', why: 'Cron/manual trigger endpoint for loop execution.' },
       { path: 'frontend/api/_handlers/_routes.v1.ts', why: 'Registers v1 counter-trade handlers.' },
       { path: 'frontend/src/lib/api/apiEndpoints.ts', why: 'Client endpoint map (`counterTradeStatus`).' },
     ],
@@ -97,7 +96,6 @@ const counterTradeFileGroups = [
       { path: 'supabase/migrations/20260709000000_alfaclub_counter_trade_engine.sql', why: 'Counter-trade schema and ledger tables.' },
       { path: 'frontend/server/_lib/db/schemaBootstrap.ts', why: 'Schema bootstrap integration (`ensureAlfaclubCounterTradeSchema`).' },
       { path: 'frontend/scripts/ops/normalize-counter-trade-room-optins.ts', why: 'Single-actor room hygiene utility.' },
-      { path: 'scripts/ops/counter-trade-smoke.sh', why: 'Smoke test script for lane verification.' },
       { path: 'docs/operations/alfaclub-counter-trade-production-runbook.md', why: 'Primary production runbook.' },
       { path: 'docs/operations/virtuals-arena-railway-runbook.md', why: 'Railway runtime and operational workflow.' },
       { path: 'docs/operations/agent-lane-policy-matrix.md', why: 'Lane ownership and boundary references.' },

@@ -52,7 +52,6 @@ This is the current module map for the AlfaClub counter-trade runtime.
 ## API and UI
 
 - `frontend/api/_handlers/v1/alfaclub/_counter-trade-status.ts`
-- `frontend/api/_handlers/v1/alfaclub/_counter-trade-run.ts`
 - `frontend/src/pages/Arena.tsx`
   - `/arena/counter-trade-files` inventory surface.
 - `frontend/src/hooks/useCounterTradeStatus.ts`

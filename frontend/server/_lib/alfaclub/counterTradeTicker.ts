@@ -7,9 +7,8 @@
  * the dgclaw-skill CLI (`npx ts-node scripts/trade.ts ...`) inside
  * `ARENA_DGCLAW_DIR` (`/app/dgclaw-skill` in the Hermit Docker image). That
  * directory only exists on the Railway Hermit container — Vercel serverless
- * cannot execute it. The original Vercel cron
- * (`/api/v1/alfaclub/counter-trade-run`) could therefore detect fills and
- * derive decisions but never execute: every attempt landed in
+ * cannot execute it. The original Vercel cron-based path could therefore
+ * detect fills and derive decisions but never execute: every attempt landed in
  * `alfaclub.counter_trade_action_ledger` as `failed` with
  * "Arena trading is disabled" (or would ENOENT with trading enabled).
  *
@@ -34,6 +33,7 @@ import {
   runCounterTradeLoop,
   type CounterTradeRunResult,
 } from './counterTradeRunner.js'
+import { isCounterTradeRunnerEnabledByEnv } from './counterTradeEnv.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -56,13 +56,6 @@ export interface CounterTradeTickerHandle {
   readState: () => CounterTradeTickerState
   started: boolean
   reason?: 'disabled'
-}
-
-function isRunnerEnabled(): boolean {
-  const raw = String(process.env.ALFACLUB_COUNTER_TRADE_RUNNER_ENABLED ?? '')
-    .trim()
-    .toLowerCase()
-  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
 }
 
 function readTickIntervalMs(): number {
@@ -89,7 +82,7 @@ export function startCounterTradeTicker(opts?: {
     lastError: null,
   }
 
-  if (!opts?.force && !isRunnerEnabled()) {
+  if (!opts?.force && !isCounterTradeRunnerEnabledByEnv()) {
     state.reason = 'disabled'
     logger.info('[counter-trade-ticker] in-process loop disabled', {
       flag: 'ALFACLUB_COUNTER_TRADE_RUNNER_ENABLED',

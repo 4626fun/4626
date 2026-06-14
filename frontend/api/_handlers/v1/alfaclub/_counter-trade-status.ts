@@ -8,6 +8,7 @@ import {
   readSessionFromRequest,
 } from '@4626/server-core'
 import { readCounterTradeRuntimeConfig } from '../../../../server/_lib/alfaclub/counterTradeConfig.js'
+import { isCounterTradeEnabledByEnv } from '../../../../server/_lib/alfaclub/counterTradeEnv.js'
 import {
   type HarvestWalletSummary,
   summarizeHarvestFills,
@@ -21,8 +22,6 @@ import { getUserFillsByTimeDetailed } from '../../../../server/_lib/alfaclub/hyp
 import { resolveRoom1659HyperliquidUserForSnapshot } from '../../../../server/_lib/alfaclub/room1659Market.js'
 import { readArenaConfig } from '../../../../server/_lib/arena/arenaConfig.js'
 import { resolveArenaIdentityForContext } from '../../../../server/_lib/arena/arenaIdentityMappingStore.js'
-
-declare const process: { env: Record<string, string | undefined> }
 
 function setPublicCors(req: VercelRequest, res: VercelResponse) {
   const originHeader = req.headers.origin
@@ -41,11 +40,6 @@ function setPublicCors(req: VercelRequest, res: VercelResponse) {
 function normalizeAddress(value: string | null | undefined): string | null {
   const trimmed = String(value ?? '').trim().toLowerCase()
   return /^0x[a-f0-9]{40}$/.test(trimmed) ? trimmed : null
-}
-
-function isEnabledByEnv(): boolean {
-  const raw = String(process.env.ALFACLUB_COUNTER_TRADE_ENABLED ?? '').trim().toLowerCase()
-  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
 }
 
 async function resolveProfileWalletCandidates(sessionAddress: string): Promise<string[]> {
@@ -185,7 +179,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     success: true,
     data: {
       roomId,
-      engineEnabled: runtime.enabled && isEnabledByEnv(),
+      engineEnabled: runtime.enabled && isCounterTradeEnabledByEnv(),
       exitEnabled: runtime.exitEnabled,
       strategy,
       user: {

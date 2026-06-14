@@ -2,27 +2,13 @@ import type { ArenaConfig } from '../arena/arenaConfig.js'
 import { runArenaTrade } from '../arena/arenaClient.js'
 import { logger } from '../infra/logger.js'
 import { type CounterTradeFillAction, findCounterPositionForCoin } from './counterTradeEngine.js'
+import { findCoinLeverageFromState } from './counterTradeLeverage.js'
 import { postCounterTradeRoomUpdate } from './counterTradeRoomPosting.js'
 import { recordCounterTradeAction } from './counterTradeStore.js'
 import {
   getClearinghouseState,
-  type HyperliquidClearinghouseState,
   type HyperliquidUserFillDetailed,
 } from './hyperliquid.js'
-
-function findCoinLeverageFromState(
-  state: HyperliquidClearinghouseState | null,
-  coin: string | null | undefined,
-): number | null {
-  const target = String(coin ?? '').trim().toUpperCase()
-  if (!target) return null
-  for (const leg of state?.assetPositions ?? []) {
-    if (String(leg.coin ?? '').trim().toUpperCase() !== target) continue
-    if (leg.leverage == null || !Number.isFinite(leg.leverage) || leg.leverage <= 0) continue
-    return leg.leverage
-  }
-  return null
-}
 
 export type CounterTradeEntryFlowResult = {
   executedDelta: number
