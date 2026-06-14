@@ -895,19 +895,36 @@ export function Positions() {
   )
 
   const filteredTimelineTradeEvents = useMemo(() => timelineTradeEvents, [timelineTradeEvents])
-  const alfaTimelineTradeEvents = useMemo(
+  const timelineTradeRows = useMemo(
     () =>
       filteredTimelineTradeEvents
-        .filter((event) => event.source === 'host')
         .sort((a, b) => b.time - a.time || a.id.localeCompare(b.id)),
     [filteredTimelineTradeEvents],
   )
-  const virtualsTimelineTradeEvents = useMemo(
+  const timelineTradeRowsWithSpacing = useMemo(
     () =>
-      filteredTimelineTradeEvents
-        .filter((event) => event.source === 'counter')
-        .sort((a, b) => b.time - a.time || a.id.localeCompare(b.id)),
-    [filteredTimelineTradeEvents],
+      timelineTradeRows.map((event, index) => {
+        if (index === 0) return { event, spacerPx: 0 }
+        const previousEvent = timelineTradeRows[index - 1]
+        if (!previousEvent) return { event, spacerPx: 0 }
+        const deltaMinutes = Math.max(0, (previousEvent.time - event.time) / 60_000)
+        let spacerPx: number
+        if (deltaMinutes <= 2) {
+          spacerPx = 1
+        } else if (deltaMinutes <= 5) {
+          spacerPx = 2
+        } else if (deltaMinutes <= 15) {
+          spacerPx = 8
+        } else if (deltaMinutes <= 60) {
+          spacerPx = 14
+        } else if (deltaMinutes <= 180) {
+          spacerPx = 24
+        } else {
+          spacerPx = 36
+        }
+        return { event, spacerPx }
+      }),
+    [timelineTradeRows],
   )
 
   const filteredTimelineChatEvents = useMemo(() => {
@@ -1254,174 +1271,107 @@ export function Positions() {
                       <div className="mb-2 px-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
                         Trades ({filteredTimelineTradeEvents.length})
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="px-1 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500 grid grid-cols-[minmax(0,1fr)_16px_minmax(0,1fr)] gap-2">
+                        <span className="text-left">AlfaClub</span>
+                        <span />
+                        <span className="text-right">Virtuals</span>
+                      </div>
+                      <div className="relative">
+                        <div className="pointer-events-none absolute bottom-0 left-1/2 top-0 -translate-x-1/2 w-px bg-white/10" />
                         <div>
-                          <div className="px-1 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
-                            AlfaClub
-                          </div>
-                          <div className="relative pl-3">
-                            <div className="pointer-events-none absolute bottom-0 left-[5px] top-0 w-px bg-sky-300/25" />
-                            <div className="space-y-1.5">
-                              {alfaTimelineTradeEvents.map((event, index) => {
-                                const source = tradeSourceMeta(event.source)
-                                const marketCoin =
-                                  ((event.market ?? effectiveMarket).split('/')[0] ?? '').toUpperCase() || 'TOKEN'
-                                const showRealizedPnl = event.action === 'close' || event.action === 'liquidated'
-                                const hasMeaningfulRealizedPnl = Math.abs(event.closedPnl ?? 0) >= 0.005
-                                const pnlClass = event.closedPnl >= 0 ? 'text-emerald-200' : 'text-rose-200'
-                                const summaryLine = buildTradeSummaryLine(event, marketCoin)
-                                return (
-                                  <div key={`alfa-timeline-row-${event.id}-${index}`} className="relative">
-                                    <span className="pointer-events-none absolute left-[-10px] top-3 block h-2 w-2 rounded-full bg-sky-300/80" />
-                                    <div
-                                      data-event-id={event.id}
-                                      onClick={() => setSelectedEventId(event.id)}
-                                      onKeyDown={(keyboardEvent) => {
-                                        if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') {
-                                          keyboardEvent.preventDefault()
-                                          setSelectedEventId(event.id)
-                                        }
-                                      }}
-                                      role="button"
-                                      tabIndex={0}
-                                      className={`relative w-full overflow-hidden text-left rounded-lg p-2 text-xs transition border border-sky-300/20 bg-sky-400/10 hover:bg-sky-400/14 ${
-                                        selectedEventId === event.id
-                                          ? 'ring-1 ring-sky-300/70'
-                                          : hoveredEventId === event.id
-                                            ? 'ring-1 ring-violet-300/55'
-                                            : ''
-                                      }`}
+                          {timelineTradeRowsWithSpacing.map(({ event, spacerPx }, index) => {
+                            const source = tradeSourceMeta(event.source)
+                            const marketCoin =
+                              ((event.market ?? effectiveMarket).split('/')[0] ?? '').toUpperCase() || 'TOKEN'
+                            const showRealizedPnl = event.action === 'close' || event.action === 'liquidated'
+                            const hasMeaningfulRealizedPnl = Math.abs(event.closedPnl ?? 0) >= 0.005
+                            const pnlClass = event.closedPnl >= 0 ? 'text-emerald-200' : 'text-rose-200'
+                            const summaryLine = buildTradeSummaryLine(event, marketCoin)
+                            const card = (
+                              <div
+                                key={`trade-${event.id}-${index}`}
+                                data-event-id={event.id}
+                                onClick={() => setSelectedEventId(event.id)}
+                                onKeyDown={(keyboardEvent) => {
+                                  if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') {
+                                    keyboardEvent.preventDefault()
+                                    setSelectedEventId(event.id)
+                                  }
+                                }}
+                                role="button"
+                                tabIndex={0}
+                                className={`relative w-full overflow-hidden text-left rounded-lg p-2 text-xs transition border ${
+                                  event.source === 'counter'
+                                    ? 'border-emerald-300/20 bg-emerald-400/12 hover:bg-emerald-400/16'
+                                    : 'border-sky-300/20 bg-sky-400/10 hover:bg-sky-400/14'
+                                } ${
+                                  selectedEventId === event.id
+                                    ? 'ring-1 ring-sky-300/70'
+                                    : hoveredEventId === event.id
+                                      ? 'ring-1 ring-violet-300/55'
+                                      : ''
+                                }`}
+                              >
+                                <div className="relative space-y-1">
+                                  <img
+                                    src={source.logo}
+                                    alt=""
+                                    aria-hidden="true"
+                                    className="pointer-events-none absolute -right-5 -top-3 h-20 w-20 select-none object-contain opacity-[0.15]"
+                                    loading="lazy"
+                                  />
+                                  <div className="flex items-center justify-between gap-1.5">
+                                    <a
+                                      href={source.href}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(clickEvent) => clickEvent.stopPropagation()}
+                                      className="relative z-[1] inline-flex min-w-0 items-center gap-1.5 text-[12px] font-semibold leading-snug text-zinc-100 underline-offset-2 transition hover:text-white hover:underline"
                                     >
-                                      <div className="relative space-y-1">
-                                        <img
-                                          src={source.logo}
-                                          alt=""
-                                          aria-hidden="true"
-                                          className="pointer-events-none absolute -right-5 -top-3 h-20 w-20 select-none object-contain opacity-[0.15]"
-                                          loading="lazy"
-                                        />
-                                        <div className="flex items-center justify-between gap-1.5">
-                                          <a
-                                            href={source.href}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            onClick={(clickEvent) => clickEvent.stopPropagation()}
-                                            className="relative z-[1] inline-flex min-w-0 items-center gap-1.5 text-[12px] font-semibold leading-snug text-zinc-100 underline-offset-2 transition hover:text-white hover:underline"
-                                          >
-                                            <img
-                                              src={source.logo}
-                                              alt={source.logoAlt}
-                                              className="h-3.5 w-3.5 shrink-0 object-contain"
-                                              loading="lazy"
-                                            />
-                                            <span className="truncate whitespace-nowrap">{describeTradeEventAction(event)}</span>
-                                          </a>
-                                          {showRealizedPnl && hasMeaningfulRealizedPnl ? (
-                                            <span className={`relative z-[1] shrink-0 whitespace-nowrap text-[11px] font-medium ${pnlClass}`}>
-                                              {event.closedPnl >= 0 ? '+' : '-'}
-                                              {formatCompactUsd(Math.abs(event.closedPnl))}
-                                            </span>
-                                          ) : null}
-                                        </div>
-                                        <div className="relative z-[1] truncate whitespace-nowrap text-[11px] font-semibold leading-tight text-zinc-100">
-                                          {summaryLine}
-                                        </div>
-                                        <div className="relative z-[1] flex items-center justify-end gap-1.5 pt-0.5 flex-nowrap">
-                                          <span className="shrink-0 whitespace-nowrap text-[10px] text-zinc-300">
-                                            {formatTime(event.time)}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </div>
+                                      <img
+                                        src={source.logo}
+                                        alt={source.logoAlt}
+                                        className="h-3.5 w-3.5 shrink-0 object-contain"
+                                        loading="lazy"
+                                      />
+                                      <span className="truncate whitespace-nowrap">{describeTradeEventAction(event)}</span>
+                                    </a>
+                                    {showRealizedPnl && hasMeaningfulRealizedPnl ? (
+                                      <span className={`relative z-[1] shrink-0 whitespace-nowrap text-[11px] font-medium ${pnlClass}`}>
+                                        {event.closedPnl >= 0 ? '+' : '-'}
+                                        {formatCompactUsd(Math.abs(event.closedPnl))}
+                                      </span>
+                                    ) : null}
                                   </div>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                        <div>
-                          <div className="px-1 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500 text-right">
-                            Virtuals
-                          </div>
-                          <div className="relative pl-3">
-                            <div className="pointer-events-none absolute bottom-0 left-[5px] top-0 w-px bg-emerald-300/25" />
-                            <div className="space-y-1.5">
-                              {virtualsTimelineTradeEvents.map((event, index) => {
-                                const source = tradeSourceMeta(event.source)
-                                const marketCoin =
-                                  ((event.market ?? effectiveMarket).split('/')[0] ?? '').toUpperCase() || 'TOKEN'
-                                const showRealizedPnl = event.action === 'close' || event.action === 'liquidated'
-                                const hasMeaningfulRealizedPnl = Math.abs(event.closedPnl ?? 0) >= 0.005
-                                const pnlClass = event.closedPnl >= 0 ? 'text-emerald-200' : 'text-rose-200'
-                                const summaryLine = buildTradeSummaryLine(event, marketCoin)
-                                return (
-                                  <div key={`virtuals-timeline-row-${event.id}-${index}`} className="relative">
-                                    <span className="pointer-events-none absolute left-[-10px] top-3 block h-2 w-2 rounded-full bg-emerald-300/80" />
-                                    <div
-                                      data-event-id={event.id}
-                                      onClick={() => setSelectedEventId(event.id)}
-                                      onKeyDown={(keyboardEvent) => {
-                                        if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') {
-                                          keyboardEvent.preventDefault()
-                                          setSelectedEventId(event.id)
-                                        }
-                                      }}
-                                      role="button"
-                                      tabIndex={0}
-                                      className={`relative w-full overflow-hidden text-left rounded-lg p-2 text-xs transition border border-emerald-300/20 bg-emerald-400/12 hover:bg-emerald-400/16 ${
-                                        selectedEventId === event.id
-                                          ? 'ring-1 ring-sky-300/70'
-                                          : hoveredEventId === event.id
-                                            ? 'ring-1 ring-violet-300/55'
-                                            : ''
-                                      }`}
-                                    >
-                                      <div className="relative space-y-1">
-                                        <img
-                                          src={source.logo}
-                                          alt=""
-                                          aria-hidden="true"
-                                          className="pointer-events-none absolute -right-5 -top-3 h-20 w-20 select-none object-contain opacity-[0.15]"
-                                          loading="lazy"
-                                        />
-                                        <div className="flex items-center justify-between gap-1.5">
-                                          <a
-                                            href={source.href}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            onClick={(clickEvent) => clickEvent.stopPropagation()}
-                                            className="relative z-[1] inline-flex min-w-0 items-center gap-1.5 text-[12px] font-semibold leading-snug text-zinc-100 underline-offset-2 transition hover:text-white hover:underline"
-                                          >
-                                            <img
-                                              src={source.logo}
-                                              alt={source.logoAlt}
-                                              className="h-3.5 w-3.5 shrink-0 object-contain"
-                                              loading="lazy"
-                                            />
-                                            <span className="truncate whitespace-nowrap">{describeTradeEventAction(event)}</span>
-                                          </a>
-                                          {showRealizedPnl && hasMeaningfulRealizedPnl ? (
-                                            <span className={`relative z-[1] shrink-0 whitespace-nowrap text-[11px] font-medium ${pnlClass}`}>
-                                              {event.closedPnl >= 0 ? '+' : '-'}
-                                              {formatCompactUsd(Math.abs(event.closedPnl))}
-                                            </span>
-                                          ) : null}
-                                        </div>
-                                        <div className="relative z-[1] truncate whitespace-nowrap text-[11px] font-semibold leading-tight text-zinc-100">
-                                          {summaryLine}
-                                        </div>
-                                        <div className="relative z-[1] flex items-center justify-end gap-1.5 pt-0.5 flex-nowrap">
-                                          <span className="shrink-0 whitespace-nowrap text-[10px] text-zinc-300">
-                                            {formatTime(event.time)}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </div>
+                                  <div className="relative z-[1] truncate whitespace-nowrap text-[11px] font-semibold leading-tight text-zinc-100">
+                                    {summaryLine}
                                   </div>
-                                )
-                              })}
-                            </div>
-                          </div>
+                                  <div className="relative z-[1] flex items-center justify-end gap-1.5 pt-0.5 flex-nowrap">
+                                    <span className="shrink-0 whitespace-nowrap text-[10px] text-zinc-300">
+                                      {formatTime(event.time)}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                            return (
+                              <div
+                                key={`timeline-row-${event.id}-${index}`}
+                                className="grid grid-cols-[minmax(0,1fr)_16px_minmax(0,1fr)] gap-2"
+                                style={{ marginTop: index === 0 ? 0 : spacerPx }}
+                              >
+                                {event.source === 'host' ? card : <div />}
+                                <div className="relative flex items-start justify-center">
+                                  <span
+                                    className={`mt-3 block h-2 w-2 rounded-full ${
+                                      event.source === 'counter' ? 'bg-emerald-300/80' : 'bg-sky-300/80'
+                                    }`}
+                                  />
+                                </div>
+                                {event.source === 'counter' ? card : <div />}
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
                     </div>
