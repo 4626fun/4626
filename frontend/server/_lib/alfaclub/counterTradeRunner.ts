@@ -1,46 +1,40 @@
 import { logger } from '../infra/logger.js'
 import { readArenaConfig } from '../arena/arenaConfig.js'
 import { resolveArenaIdentityForContext } from '../arena/arenaIdentityMappingStore.js'
-import { runArenaSpotPerpTransfer, runArenaTrade } from '../arena/arenaClient.js'
+import { runArenaSpotPerpTransfer } from '../arena/arenaClient.js'
 import { sendAlfaClubRoomText } from './chatBridge.js'
+import { executeCounterTradeEntryFlow } from './counterTradeEntryFlow.js'
 import {
   getClearinghouseState,
   getSpotUsdcBalance,
   getUserFillsByTimeDetailed,
   type HyperliquidClearinghouseState,
-  type HyperliquidUserFillDetailed,
 } from './hyperliquid.js'
 import { resolveRoom1659HyperliquidUserForSnapshot } from './room1659Market.js'
 import { readCounterTradeRuntimeConfig } from './counterTradeConfig.js'
 import { applyCounterTradeLlmGate } from './counterTradeLlmAdvisor.js'
+import { handleCounterTradeExitFlow } from './counterTradeExitFlow.js'
 import {
   classifyCounterTradeFillAction,
-  type CounterTradeFillAction,
   deriveCounterTradeDecision,
   deriveEventKeyFromFill,
-  derivePresetDailyNotionalCap,
-  derivePresetHourlyCap,
   deriveUserLeverage,
   deriveUserNotional,
   deriveUserSide,
-  findCounterPositionForCoin,
   isExitFillAction,
 } from './counterTradeEngine.js'
 import {
-  type BankedCloseSummary,
-  formatSignedUsd,
-  resolveBotBankedPnlForClose,
-} from './counterTradeHarvest.js'
+  formatSpotSweepRoomPost,
+} from './counterTradeRoomPosting.js'
 import { computeBufferRatio, runCounterTradeDefenseForIdentity } from './counterTradeDefense.js'
 import {
-  COUNTER_TRADE_EXIT_EXECUTED_REASON,
   enforceSingleActiveCounterTradeActor,
   listActiveCounterTradeOptIns,
-  readCounterTradeUsageWindow,
   readOrCreateCounterTradeRoomStrategy,
   recordCounterTradeAction,
   registerCounterTradeEventIfNew,
 } from './counterTradeStore.js'
+import { initCounterTradeUsageState } from './counterTradeUsageState.js'
 
 export type CounterTradeRunResult = {
   ok: boolean
@@ -90,94 +84,6 @@ export function resolveCounterTradeFillSourceWallet(params: {
   return params.identityHlApiWalletAddress ?? params.senderAddress
 }
 
-function formatCounterTradeRoomPost(params: {
-  pair: string
-  userFill: HyperliquidUserFillDetailed
-  fillAction: CounterTradeFillAction
-  counterSide: 'long' | 'short'
-  counterLeverage: number
-  counterNotionalUsd: number
-  userLeverage: number | null
-}): string {
-  const openedAt = new Date(params.userFill.time).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-  const userSide = params.userFill.side === 'short' ? 'short' : 'long'
-  const counterMarginUsd = params.counterNotionalUsd / Math.max(0.25, params.counterLeverage)
-  const markRaw = params.userFill.px
-  const mark = markRaw != null ? Number(markRaw) : null
-  const oppositeLabel = params.counterSide === 'long' ? 'Long' : 'Short'
-  const userLabel = userSide === 'long' ? 'Long' : 'Short'
-
-  return [
-    `✅ Opened ${oppositeLabel} · ${openedAt}`,
-    '',
-    `${params.pair}/USDC ${params.counterLeverage}x`,
-    '',
-    `Mark ${mark != null && Number.isFinite(mark) ? `$${mark.toFixed(2)}` : 'n/a'}`,
-    `Margin/Size $${counterMarginUsd.toFixed(2)} / $${params.counterNotionalUsd.toFixed(2)}`,
-    `Signal ${params.fillAction}`,
-    '',
-    `User ${userLabel}${params.userLeverage != null ? ` ${params.userLeverage}x` : ''} · bot opened ${oppositeLabel}`,
-  ].join('\n')
-}
-
-function formatCounterTradeExitRoomPost(params: {
-  pair: string
-  userFill: HyperliquidUserFillDetailed
-  fillAction: CounterTradeFillAction
-  closedSide: 'long' | 'short' | null
-  closedPositionValueUsd: number | null
-  banked: BankedCloseSummary | null
-}): string {
-  const closedAt = new Date(params.userFill.time).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-  const userLabel = params.userFill.side === 'short' ? 'Short' : 'Long'
-  const closedLabel =
-    params.closedSide === 'long' ? 'Long' : params.closedSide === 'short' ? 'Short' : 'position'
-  const userVerb = params.fillAction === 'liquidated' ? 'was liquidated out of' : 'closed'
-
-  return [
-    `✅ Closed ${closedLabel} · ${closedAt}`,
-    '',
-    `${params.pair}/USDC`,
-    '',
-    params.closedPositionValueUsd != null
-      ? `Closed position ~$${params.closedPositionValueUsd.toFixed(2)}`
-      : 'Closed position',
-    ...(params.banked != null
-      ? [
-          `Banked ${formatSignedUsd(params.banked.netRealizedUsd)} (pnl ${formatSignedUsd(params.banked.realizedPnlUsd)}, fees $${params.banked.feesUsd.toFixed(2)})`,
-        ]
-      : []),
-    `Signal ${params.fillAction}`,
-    '',
-    `User ${userVerb} ${userLabel} · bot closed ${closedLabel}`,
-  ].join('\n')
-}
-
-function formatSpotSweepRoomPost(params: {
-  amountUsd: number
-  agentWalletAddress: string
-  dryRun: boolean
-}): string {
-  const walletLabel = `${params.agentWalletAddress.slice(0, 6)}…${params.agentWalletAddress.slice(-4)}`
-  return [
-    '🐈‍⬛ inverseAKITA',
-    '',
-    '✅ Bridge funds settled',
-    '',
-    `Swept $${params.amountUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} spot -> perp`,
-    `Wallet ${walletLabel}`,
-    params.dryRun ? '[dry-run]' : '',
-  ]
-    .filter(Boolean)
-    .join('\n')
-}
-
 function findCoinLeverageFromState(
   state: HyperliquidClearinghouseState | null,
   coin: string | null | undefined,
@@ -190,75 +96,6 @@ function findCoinLeverageFromState(
     return leg.leverage
   }
   return null
-}
-
-async function postCounterTradeExitRoomUpdate(params: {
-  runtimeRoomId: string
-  postRoomId: string
-  pair: string
-  userFill: HyperliquidUserFillDetailed
-  fillAction: CounterTradeFillAction
-  closedSide: 'long' | 'short' | null
-  closedPositionValueUsd: number | null
-  banked: BankedCloseSummary | null
-}): Promise<void> {
-  const message = formatCounterTradeExitRoomPost({
-    pair: params.pair,
-    userFill: params.userFill,
-    fillAction: params.fillAction,
-    closedSide: params.closedSide,
-    closedPositionValueUsd: params.closedPositionValueUsd,
-    banked: params.banked,
-  })
-  const send = await sendAlfaClubRoomText({
-    roomId: params.postRoomId,
-    text: message,
-  })
-  logger.info('counter_trade.exit_room_posted', {
-    roomId: params.runtimeRoomId,
-    postRoomId: params.postRoomId,
-    lane: send.lane,
-    pair: params.pair,
-    fillAction: params.fillAction,
-    closedSide: params.closedSide,
-    bankedNetUsd: params.banked?.netRealizedUsd ?? null,
-  })
-}
-
-async function postCounterTradeRoomUpdate(params: {
-  runtimeRoomId: string
-  postRoomId: string
-  pair: string
-  userFill: HyperliquidUserFillDetailed
-  fillAction: CounterTradeFillAction
-  counterSide: 'long' | 'short'
-  counterLeverage: number
-  counterNotionalUsd: number
-  userLeverage: number | null
-}): Promise<void> {
-  const message = formatCounterTradeRoomPost({
-    pair: params.pair,
-    userFill: params.userFill,
-    fillAction: params.fillAction,
-    counterSide: params.counterSide,
-    counterLeverage: params.counterLeverage,
-    counterNotionalUsd: params.counterNotionalUsd,
-    userLeverage: params.userLeverage,
-  })
-  const send = await sendAlfaClubRoomText({
-    roomId: params.postRoomId,
-    text: message,
-  })
-  logger.info('counter_trade.room_posted', {
-    roomId: params.runtimeRoomId,
-    postRoomId: params.postRoomId,
-    lane: send.lane,
-    pair: params.pair,
-    fillAction: params.fillAction,
-    counterSide: params.counterSide,
-    counterLeverage: params.counterLeverage,
-    counterNotionalUsd: params.counterNotionalUsd,
-  })
 }
 
 export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
@@ -495,6 +332,14 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
       const sorted = [...fills].sort((a, b) => a.time - b.time).slice(-runtime.runLimitPerIdentity)
       let lastExecutedAtMs = parseIsoMs(optIn.lastActionAt)
       const bufferRatio = computeBufferRatio(counterWalletState)
+      // Hot-path optimization: fetch usage windows once per actor/tick and keep
+      // local counters in sync as this loop records entry executions.
+      const usageState = await initCounterTradeUsageState({
+        roomId: runtime.roomId,
+        senderAddress: optIn.senderAddress,
+        preset: optIn.preset,
+        runtime,
+      })
 
       for (const fill of sorted) {
         scannedEvents += 1
@@ -520,129 +365,23 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
         // and the env/DB kill switches above still apply.
         const fillAction = classifyCounterTradeFillAction(fill)
         if (isExitFillAction(fillAction)) {
-          const exitPair = String(fill.coin ?? '').trim()
-          const exitCoinKey = exitPair.toUpperCase()
-          const recordExitOutcome = async (status: 'executed' | 'skipped' | 'failed', reason: string) => {
-            await recordCounterTradeAction({
-              roomId: runtime.roomId,
-              senderAddress: optIn.senderAddress,
-              eventKey,
-              status,
-              reason,
-              counterSide: null,
-              counterNotionalUsd: null,
-              counterLeverage: null,
-            })
-          }
-
-          if (!runtime.exitEnabled) {
-            skipped += 1
-            await recordExitOutcome('skipped', `exit_disabled:${fillAction}`)
-            continue
-          }
-          if (!exitPair) {
-            skipped += 1
-            await recordExitOutcome('skipped', 'exit_missing_pair')
-            continue
-          }
-          if (closedCoinsThisTick.has(exitCoinKey)) {
-            skipped += 1
-            await recordExitOutcome('skipped', 'exit_already_closed_this_tick')
-            continue
-          }
-
-          const botLeg = findCounterPositionForCoin(counterWalletState, exitPair)
-          if (!botLeg && !openedCoinsThisTick.has(exitCoinKey)) {
-            skipped += 1
-            await recordExitOutcome('skipped', 'exit_no_position')
-            continue
-          }
-
-          const closeSubmittedAtMs = Date.now()
-          const closeResult = await runArenaTrade({ action: 'close', pair: exitPair }, identityConfig)
-          if (closeResult.ok) {
-            executed += 1
-            closedCoinsThisTick.add(exitCoinKey)
-            openedCoinsThisTick.delete(exitCoinKey)
-            await recordCounterTradeAction({
-              roomId: runtime.roomId,
-              senderAddress: optIn.senderAddress,
-              eventKey,
-              status: 'executed',
-              reason: COUNTER_TRADE_EXIT_EXECUTED_REASON,
-              counterSide: botLeg?.side ?? null,
-              counterNotionalUsd: null,
-              counterLeverage: null,
-            })
-
-            // Harvest accounting: best-effort read of what this round trip
-            // banked on the bot wallet (realized PnL net of fees). Null when
-            // the close fill has not landed in the fills API yet.
-            let banked: BankedCloseSummary | null = null
-            if (identityConfig.agentWalletAddress) {
-              try {
-                banked = await resolveBotBankedPnlForClose({
-                  botWalletAddress: identityConfig.agentWalletAddress,
-                  coin: exitPair,
-                  closeSubmittedAtMs,
-                })
-              } catch (harvestError) {
-                logger.warn('counter_trade.harvest_lookup_failed', {
-                  roomId: runtime.roomId,
-                  pair: exitPair,
-                  message: harvestError instanceof Error ? harvestError.message : String(harvestError),
-                })
-              }
-            }
-            logger.info('counter_trade.harvest', {
-              roomId: runtime.roomId,
-              senderAddress: optIn.senderAddress,
-              pair: exitPair,
-              fillAction,
-              closedSide: botLeg?.side ?? null,
-              closedPositionValueUsd: botLeg?.positionValue ?? null,
-              bankedRealizedPnlUsd: banked?.realizedPnlUsd ?? null,
-              bankedFeesUsd: banked?.feesUsd ?? null,
-              bankedNetUsd: banked?.netRealizedUsd ?? null,
-              bankedFillCount: banked?.fillCount ?? 0,
-            })
-
-            if (runtime.chatPostEnabled) {
-              try {
-                await postCounterTradeExitRoomUpdate({
-                  runtimeRoomId: runtime.roomId,
-                  postRoomId: runtime.chatPostRoomId,
-                  pair: exitPair,
-                  userFill: fill,
-                  fillAction,
-                  closedSide: botLeg?.side ?? null,
-                  closedPositionValueUsd: botLeg?.positionValue ?? null,
-                  banked,
-                })
-              } catch (postError) {
-                logger.warn('counter_trade.exit_room_post_failed', {
-                  roomId: runtime.roomId,
-                  postRoomId: runtime.chatPostRoomId,
-                  senderAddress: optIn.senderAddress,
-                  pair: exitPair,
-                  message: postError instanceof Error ? postError.message : String(postError),
-                })
-              }
-            }
-          } else {
-            failed += 1
-            await recordExitOutcome(
-              'failed',
-              `exit_failed:${String(closeResult.message ?? 'arena_close_failed')}`,
-            )
-            logger.warn('counter_trade.exit_execution_failed', {
-              roomId: runtime.roomId,
-              senderAddress: optIn.senderAddress,
-              eventKey,
-              pair: exitPair,
-              reason: closeResult.message,
-            })
-          }
+          const exitResult = await handleCounterTradeExitFlow({
+            roomId: runtime.roomId,
+            senderAddress: optIn.senderAddress,
+            eventKey,
+            fill,
+            fillAction,
+            runtimeExitEnabled: runtime.exitEnabled,
+            chatPostEnabled: runtime.chatPostEnabled,
+            chatPostRoomId: runtime.chatPostRoomId,
+            openedCoinsThisTick,
+            closedCoinsThisTick,
+            counterWalletState,
+            identityConfig,
+          })
+          executed += exitResult.executedDelta
+          skipped += exitResult.skippedDelta
+          failed += exitResult.failedDelta
           continue
         }
 
@@ -667,20 +406,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
           continue
         }
 
-        const hourlyUsage = await readCounterTradeUsageWindow({
-          roomId: runtime.roomId,
-          senderAddress: optIn.senderAddress,
-          sinceMs: Date.now() - 60 * 60_000,
-        })
-        const dailyUsage = await readCounterTradeUsageWindow({
-          roomId: runtime.roomId,
-          senderAddress: optIn.senderAddress,
-          sinceMs: Date.now() - 24 * 60 * 60_000,
-        })
-
-        const hourlyCap = derivePresetHourlyCap({ preset: optIn.preset, runtime })
-        const dailyCap = derivePresetDailyNotionalCap({ preset: optIn.preset, runtime })
-        if (hourlyUsage.executedCount >= hourlyCap) {
+        if (!usageState.canExecuteByHourlyCap()) {
           blocked += 1
           await recordCounterTradeAction({
             roomId: runtime.roomId,
@@ -742,7 +468,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
           continue
         }
 
-        const remainingDailyNotional = Math.max(0, dailyCap - dailyUsage.notionalUsd)
+        const remainingDailyNotional = usageState.remainingDailyNotionalUsd()
         if (remainingDailyNotional <= 0) {
           blocked += 1
           await recordCounterTradeAction({
@@ -789,10 +515,10 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
           counterLeverage: decision.counterLeverage,
           counterNotionalUsd: cappedCounterNotionalUsd,
           counterWalletState,
-          hourlyExecutedCount: hourlyUsage.executedCount,
-          hourlyCap,
-          dailyNotionalUsedUsd: dailyUsage.notionalUsd,
-          dailyNotionalCapUsd: dailyCap,
+          hourlyExecutedCount: usageState.hourlyUsage.executedCount,
+          hourlyCap: usageState.hourlyCap,
+          dailyNotionalUsedUsd: usageState.dailyUsage.notionalUsd,
+          dailyNotionalCapUsd: usageState.dailyCap,
         })
         if (!llmGate.proceed) {
           skipped += 1
@@ -824,93 +550,30 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
           continue
         }
 
-        const tradeResult = await runArenaTrade(
-          {
-            action: 'open',
-            pair,
-            side: decision.counterSide,
-            sizeUsd: counterNotionalUsd,
-            leverage: decision.counterLeverage,
-          },
+        const entryResult = await executeCounterTradeEntryFlow({
+          roomId: runtime.roomId,
+          senderAddress: optIn.senderAddress,
+          eventKey,
+          pair,
+          fill,
+          fillAction: decision.fillAction,
+          counterSide: decision.counterSide,
+          counterLeverage: decision.counterLeverage,
+          counterNotionalUsd,
+          userLeverage: deriveUserLeverage(fill) ?? findCoinLeverageFromState(userWalletState, fill.coin),
+          chatPostEnabled: runtime.chatPostEnabled,
+          chatPostRoomId: runtime.chatPostRoomId,
           identityConfig,
-        )
+        })
 
-        if (tradeResult.ok) {
-          let resolvedCounterNotionalUsd = counterNotionalUsd
-          let resolvedCounterLeverage = decision.counterLeverage
-          if (identity.agentWalletAddress) {
-            try {
-              const postTradeState = await getClearinghouseState(identity.agentWalletAddress)
-              const postTradePosition = findCounterPositionForCoin(postTradeState, pair)
-              const postTradeLeverage = findCoinLeverageFromState(postTradeState, pair)
-              if (postTradePosition?.positionValue != null && Number.isFinite(postTradePosition.positionValue)) {
-                resolvedCounterNotionalUsd = postTradePosition.positionValue
-              }
-              if (postTradeLeverage != null && Number.isFinite(postTradeLeverage)) {
-                resolvedCounterLeverage = postTradeLeverage
-              }
-            } catch {
-              // Best effort: fall back to intended execution values.
-            }
-          }
-          executed += 1
+        if (entryResult.executedDelta > 0 && entryResult.resolvedCounterNotionalUsd != null) {
+          executed += entryResult.executedDelta
           lastExecutedAtMs = nowMs
+          usageState.recordExecutedEntry(entryResult.resolvedCounterNotionalUsd)
           openedCoinsThisTick.add(pair.toUpperCase())
           closedCoinsThisTick.delete(pair.toUpperCase())
-          await recordCounterTradeAction({
-            roomId: runtime.roomId,
-            senderAddress: optIn.senderAddress,
-            eventKey,
-            status: 'executed',
-            reason: 'executed',
-            counterSide: decision.counterSide,
-            counterNotionalUsd: resolvedCounterNotionalUsd,
-            counterLeverage: resolvedCounterLeverage,
-          })
-          if (runtime.chatPostEnabled) {
-            try {
-              await postCounterTradeRoomUpdate({
-                runtimeRoomId: runtime.roomId,
-                postRoomId: runtime.chatPostRoomId,
-                pair,
-                userFill: fill,
-                fillAction: decision.fillAction,
-                counterSide: decision.counterSide,
-                counterLeverage: resolvedCounterLeverage,
-                counterNotionalUsd: resolvedCounterNotionalUsd,
-                userLeverage:
-                  deriveUserLeverage(fill) ?? findCoinLeverageFromState(userWalletState, fill.coin),
-              })
-            } catch (postError) {
-              logger.warn('counter_trade.room_post_failed', {
-                roomId: runtime.roomId,
-                postRoomId: runtime.chatPostRoomId,
-                senderAddress: optIn.senderAddress,
-                pair,
-                message: postError instanceof Error ? postError.message : String(postError),
-              })
-            }
-          }
-        } else {
-          failed += 1
-          await recordCounterTradeAction({
-            roomId: runtime.roomId,
-            senderAddress: optIn.senderAddress,
-            eventKey,
-            status: 'failed',
-            reason: String(tradeResult.message ?? 'arena_trade_failed'),
-            counterSide: decision.counterSide,
-            counterNotionalUsd,
-            counterLeverage: decision.counterLeverage,
-          })
-          logger.warn('counter_trade.execution_failed', {
-            roomId: runtime.roomId,
-            senderAddress: optIn.senderAddress,
-            eventKey,
-            pair,
-            reason: tradeResult.message,
-          })
         }
+        failed += entryResult.failedDelta
       }
     } catch (error) {
       logger.warn('counter_trade.identity_scan_failed', {

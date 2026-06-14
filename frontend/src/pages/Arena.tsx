@@ -33,6 +33,28 @@ const counterTradeFileGroups = [
     ],
   },
   {
+    title: 'Runner helper modules',
+    description: 'Extracted flow modules that keep the runner orchestration-focused.',
+    files: [
+      {
+        path: 'frontend/server/_lib/alfaclub/counterTradeEntryFlow.ts',
+        why: 'Open-entry execution, reconciliation, ledger write, and room post.',
+      },
+      {
+        path: 'frontend/server/_lib/alfaclub/counterTradeExitFlow.ts',
+        why: 'Mirrored-exit execution, harvest telemetry, and exit room post.',
+      },
+      {
+        path: 'frontend/server/_lib/alfaclub/counterTradeUsageState.ts',
+        why: 'Per-actor hourly/daily usage state and cap helpers.',
+      },
+      {
+        path: 'frontend/server/_lib/alfaclub/counterTradeRoomPosting.ts',
+        why: 'Structured room message formatting and posting utilities.',
+      },
+    ],
+  },
+  {
     title: 'Execution and market dependencies',
     description: 'Supporting modules invoked directly by the counter-trade runtime.',
     files: [
@@ -79,6 +101,7 @@ const counterTradeFileGroups = [
       { path: 'docs/operations/alfaclub-counter-trade-production-runbook.md', why: 'Primary production runbook.' },
       { path: 'docs/operations/virtuals-arena-railway-runbook.md', why: 'Railway runtime and operational workflow.' },
       { path: 'docs/operations/agent-lane-policy-matrix.md', why: 'Lane ownership and boundary references.' },
+      { path: 'docs/operations/counter-trade-code-map.md', why: 'Code-level map for current module boundaries.' },
     ],
   },
   {
@@ -687,6 +710,9 @@ export function ArenaCounterTradeFilesPage() {
           <p className="text-base sm:text-lg text-zinc-300 leading-relaxed">
             Living index of the counter-trading bot codepath used by the Arena inverse engine. Grouped by function so
             operators can quickly locate execution logic, API surfaces, data model, and tests.
+          </p>
+          <p className="text-sm text-zinc-500">
+            Updated for the latest runner modularization (entry flow, exit flow, usage state, and room posting helpers).
           </p>
         </section>
 

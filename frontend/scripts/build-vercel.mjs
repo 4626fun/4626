@@ -38,16 +38,34 @@ function gitCommitExists(ref) {
   return result.status === 0
 }
 
+function gitFetch(args) {
+  const result = spawnSync('git', ['fetch', '--no-tags', ...args], {
+    stdio: ['ignore', 'ignore', 'ignore'],
+    env: process.env,
+  })
+  return result.status === 0
+}
+
+function ensureCommitAvailable(ref) {
+  if (!ref) return false
+  if (gitCommitExists(ref)) return true
+  // Fast path: ask origin for exactly this commit-ish.
+  gitFetch(['--depth=1', 'origin', ref])
+  if (gitCommitExists(ref)) return true
+  // Fallback for shallow clones where previous SHA is just outside depth.
+  gitFetch(['--depth=64', 'origin', '+refs/heads/main:refs/remotes/origin/main'])
+  return gitCommitExists(ref)
+}
+
 function resolveCommitRange() {
   const previousSha = process.env.VERCEL_GIT_PREVIOUS_SHA
   const currentSha = process.env.VERCEL_GIT_COMMIT_SHA
-  if (
-    previousSha &&
-    currentSha &&
-    gitCommitExists(previousSha) &&
-    gitCommitExists(currentSha)
-  ) {
+  if (previousSha && currentSha && ensureCommitAvailable(previousSha) && ensureCommitAvailable(currentSha)) {
     return { from: previousSha, to: currentSha }
+  }
+  if (!gitCommitExists('HEAD^')) {
+    gitFetch(['--depth=2', 'origin', 'HEAD'])
+    gitFetch(['--depth=64', 'origin', '+refs/heads/main:refs/remotes/origin/main'])
   }
   if (gitCommitExists('HEAD^') && gitCommitExists('HEAD')) {
     return { from: 'HEAD^', to: 'HEAD' }
@@ -133,6 +151,8 @@ function buildPlan() {
 
 const plan = buildPlan()
 const triggerSuffix = plan.matchedTrigger ? ` [trigger: ${plan.matchedTrigger}]` : ''
+const useParallelAppTelegramBuild =
+  String(process.env.VERCEL_EXPERIMENTAL_PARALLEL_APP_TELEGRAM_BUILD ?? '').trim() === '1'
 console.log(
   `[build:vercel] marketing bundle: ${plan.buildMarketingVault ? 'build' : 'skip'} (${plan.reason})${triggerSuffix}`,
 )
@@ -145,8 +165,15 @@ if ((process.env.VERCEL_FORCE_NO_BUILD_CACHE || '').trim() !== '') {
 if (PLAN_ONLY) process.exit(0)
 
 run('pnpm', ['run', 'build:server-core'])
-run('pnpm', ['run', 'build:app'])
-run('pnpm', ['run', 'build:telegram-link-standalone'])
+if (useParallelAppTelegramBuild) {
+  console.log(
+    '[build:vercel] app+telegram: parallel experimental mode enabled (VERCEL_EXPERIMENTAL_PARALLEL_APP_TELEGRAM_BUILD=1)',
+  )
+  run('pnpm', ['run', 'build:app-and-telegram:parallel-experimental'])
+} else {
+  run('pnpm', ['run', 'build:app'])
+  run('pnpm', ['run', 'build:telegram-link-standalone'])
+}
 
 if (plan.buildMarketingVault) {
   run('pnpm', ['run', 'build:marketing-vault'])

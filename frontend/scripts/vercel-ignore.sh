@@ -18,6 +18,23 @@ if [ -n "${VERCEL_GIT_PREVIOUS_SHA:-}" ] && [ -n "${VERCEL_GIT_COMMIT_SHA:-}" ] 
   && git cat-file -e "${VERCEL_GIT_COMMIT_SHA}^{commit}" 2>/dev/null; then
   from="$VERCEL_GIT_PREVIOUS_SHA"
   to="$VERCEL_GIT_COMMIT_SHA"
+elif [ -n "${VERCEL_GIT_PREVIOUS_SHA:-}" ] && [ -n "${VERCEL_GIT_COMMIT_SHA:-}" ]; then
+  # Shallow clones on Vercel can miss the previous SHA. Do a bounded fetch to
+  # recover diffability instead of forcing conservative full builds.
+  git fetch --no-tags --depth=1 origin "${VERCEL_GIT_PREVIOUS_SHA}" >/dev/null 2>&1 || true
+  git fetch --no-tags --depth=1 origin "${VERCEL_GIT_COMMIT_SHA}" >/dev/null 2>&1 || true
+  git fetch --no-tags --depth=64 origin +refs/heads/main:refs/remotes/origin/main >/dev/null 2>&1 || true
+  if git cat-file -e "${VERCEL_GIT_PREVIOUS_SHA}^{commit}" 2>/dev/null \
+    && git cat-file -e "${VERCEL_GIT_COMMIT_SHA}^{commit}" 2>/dev/null; then
+    from="$VERCEL_GIT_PREVIOUS_SHA"
+    to="$VERCEL_GIT_COMMIT_SHA"
+  elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+    from="HEAD^"
+    to="HEAD"
+  else
+    # Build when we still cannot safely compute a range.
+    exit 1
+  fi
 elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
   from="HEAD^"
   to="HEAD"

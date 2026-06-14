@@ -3,6 +3,34 @@ import { ensureAlfaclubCounterTradeSchema } from '../db/schemaBootstrap.js'
 import { logger } from '../infra/logger.js'
 import type { CounterTradeBias, CounterTradePreset } from './counterTradeConfig.js'
 
+type CounterTradeDb = NonNullable<Awaited<ReturnType<typeof getDb>>>
+
+let counterTradeSchemaReady = false
+let counterTradeSchemaReadyPromise: Promise<void> | null = null
+
+async function ensureCounterTradeSchema(db: CounterTradeDb): Promise<void> {
+  if (counterTradeSchemaReady) return
+  if (counterTradeSchemaReadyPromise) {
+    await counterTradeSchemaReadyPromise
+    return
+  }
+
+  const pending = ensureAlfaclubCounterTradeSchema(db)
+    .then(() => {
+      counterTradeSchemaReady = true
+    })
+    .catch((error) => {
+      counterTradeSchemaReady = false
+      throw error
+    })
+    .finally(() => {
+      counterTradeSchemaReadyPromise = null
+    })
+
+  counterTradeSchemaReadyPromise = pending
+  await pending
+}
+
 export type CounterTradeUserState = 'not_opted_in' | 'active' | 'paused'
 export type CounterTradeActionStatus = 'executed' | 'skipped' | 'blocked' | 'failed'
 
@@ -143,7 +171,7 @@ function mapUserOptInRow(row: UserOptInRow): CounterTradeUserOptIn {
 export async function ensureCounterTradeStorageReady(): Promise<boolean> {
   const db = await getDb()
   if (!db) return false
-  await ensureAlfaclubCounterTradeSchema(db)
+  await ensureCounterTradeSchema(db)
   return true
 }
 
@@ -155,7 +183,7 @@ export async function readOrCreateCounterTradeRoomStrategy(
 
   const db = await getDb()
   if (!db) return null
-  await ensureAlfaclubCounterTradeSchema(db)
+  await ensureCounterTradeSchema(db)
 
   try {
     const result = await db.sql`
@@ -187,7 +215,7 @@ export async function setCounterTradeGlobalBias(params: {
   if (!roomId) return null
   const db = await getDb()
   if (!db) return null
-  await ensureAlfaclubCounterTradeSchema(db)
+  await ensureCounterTradeSchema(db)
 
   try {
     const result = await db.sql`
@@ -224,7 +252,7 @@ export async function upsertCounterTradeOptIn(params: {
 
   const db = await getDb()
   if (!db) return null
-  await ensureAlfaclubCounterTradeSchema(db)
+  await ensureCounterTradeSchema(db)
 
   try {
     const result = await db.sql`
@@ -266,7 +294,7 @@ export async function pauseCounterTradeOptIn(params: {
   if (!roomId || !senderAddress) return null
   const db = await getDb()
   if (!db) return null
-  await ensureAlfaclubCounterTradeSchema(db)
+  await ensureCounterTradeSchema(db)
 
   try {
     const result = await db.sql`
@@ -302,7 +330,7 @@ export async function resumeCounterTradeOptIn(params: {
   if (!roomId || !senderAddress) return null
   const db = await getDb()
   if (!db) return null
-  await ensureAlfaclubCounterTradeSchema(db)
+  await ensureCounterTradeSchema(db)
 
   try {
     const result = await db.sql`
@@ -338,7 +366,7 @@ export async function readCounterTradeUserOptIn(params: {
   if (!roomId || !senderAddress) return null
   const db = await getDb()
   if (!db) return null
-  await ensureAlfaclubCounterTradeSchema(db)
+  await ensureCounterTradeSchema(db)
   try {
     const result = await db.sql`
       SELECT room_id, sender_address, state, preset, pause_reason, paused_at,
@@ -369,7 +397,7 @@ export async function listActiveCounterTradeOptIns(params: {
   if (!roomId) return []
   const db = await getDb()
   if (!db) return []
-  await ensureAlfaclubCounterTradeSchema(db)
+  await ensureCounterTradeSchema(db)
 
   const limit = Math.min(Math.max(1, params.limit ?? 200), 1000)
   try {
@@ -403,7 +431,7 @@ export async function enforceSingleActiveCounterTradeActor(params: {
   if (!roomId || !survivorSenderAddress) return null
   const db = await getDb()
   if (!db) return null
-  await ensureAlfaclubCounterTradeSchema(db)
+  await ensureCounterTradeSchema(db)
 
   try {
     const result = await db.sql`
@@ -449,7 +477,7 @@ export async function registerCounterTradeEventIfNew(params: {
   if (!roomId || !senderAddress || !eventKey) return false
   const db = await getDb()
   if (!db) return false
-  await ensureAlfaclubCounterTradeSchema(db)
+  await ensureCounterTradeSchema(db)
 
   try {
     const result = await db.sql`
@@ -496,7 +524,7 @@ export async function recordCounterTradeAction(params: {
   if (!roomId || !senderAddress) return
   const db = await getDb()
   if (!db) return
-  await ensureAlfaclubCounterTradeSchema(db)
+  await ensureCounterTradeSchema(db)
   try {
     await db.sql`
       INSERT INTO alfaclub.counter_trade_action_ledger (
@@ -545,7 +573,7 @@ export async function readCounterTradeUsageWindow(params: {
 
   const db = await getDb()
   if (!db) return { actionCount: 0, executedCount: 0, notionalUsd: 0 }
-  await ensureAlfaclubCounterTradeSchema(db)
+  await ensureCounterTradeSchema(db)
 
   try {
     const sinceIso = new Date(params.sinceMs).toISOString()
@@ -594,7 +622,7 @@ export async function listRecentCounterTradeActions(params: {
   if (!roomId || !senderAddress) return []
   const db = await getDb()
   if (!db) return []
-  await ensureAlfaclubCounterTradeSchema(db)
+  await ensureCounterTradeSchema(db)
   const limit = Math.min(Math.max(1, params.limit ?? 20), 200)
   try {
     const result = await db.sql`

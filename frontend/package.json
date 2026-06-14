@@ -28,6 +28,7 @@
     "build:vault-glb": "blender --background --python ../tools/vault-images/ethereum_vault_generator.py",
     "build:app": "NODE_OPTIONS=--max-old-space-size=7168 vite build --config vite.config.ts",
     "build:telegram-link-standalone": "NODE_OPTIONS=--max-old-space-size=7168 TELEGRAM_LINK_STANDALONE_BUILD=1 vite build --config vite.config.ts --emptyOutDir=false",
+    "build:app-and-telegram:parallel-experimental": "pnpm generate:html-shells && bash -lc 'NODE_OPTIONS=--max-old-space-size=3584 vite build --config vite.config.ts --emptyOutDir=false & APP_PID=$!; NODE_OPTIONS=--max-old-space-size=3584 TELEGRAM_LINK_STANDALONE_BUILD=1 vite build --config vite.config.ts --emptyOutDir=false & TG_PID=$!; wait $APP_PID && wait $TG_PID'",
     "build:highmem": "pnpm generate:html-shells && pnpm clean:dist && pnpm build:server-core && bash -c 'NODE_OPTIONS=--max-old-space-size=3584 vite build --config vite.config.ts --emptyOutDir=false & APP_PID=$!; NODE_OPTIONS=--max-old-space-size=3584 TELEGRAM_LINK_STANDALONE_BUILD=1 vite build --config vite.config.ts --emptyOutDir=false & TG_PID=$!; wait $APP_PID && wait $TG_PID'",
     "build:highmem:app": "NODE_OPTIONS=--max-old-space-size=7168 vite build --config vite.config.ts",
     "build:highmem:telegram-link-standalone": "NODE_OPTIONS=--max-old-space-size=7168 TELEGRAM_LINK_STANDALONE_BUILD=1 vite build --config vite.config.ts --emptyOutDir=false",
